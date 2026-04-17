@@ -1,10 +1,15 @@
 #lang racket/base
 
-;;; test-per-nogood.rkt — BSP-LE Track 2 Phase 3: per-nogood infrastructure
+;;; test-per-nogood.rkt — BSP-LE Track 2 Phase 3: commitment cell
 ;;;
-;;; Tests: commitment cell merge/contradict/provenance, install-per-nogood-infrastructure,
-;;; commit-tracker fires on decision singleton, narrower fires at threshold,
-;;; contradiction detector fires at full commitment.
+;;; Tests: commitment cell merge/contradict/provenance lattice semantics.
+;;;
+;;; A1 (BSP-LE 2B addendum, 2026-04-16): the `install-per-nogood-infrastructure`
+;;; integration tests were removed along with the dead code they exercised. The
+;;; function + its `nogood-install-request` topology handler had zero producers
+;;; across the codebase (designed in Phase 3 but the wiring was superseded by
+;;; direct `nogood-add` writes from ATMS S1 handlers). Commitment cell lattice
+;;; tests remain — the commitment cell itself is live code.
 
 (require rackunit
          rackunit/text-ui
@@ -66,69 +71,7 @@
 
 
 ;; ============================================================
-;; Per-Nogood Infrastructure Integration Tests
-;; ============================================================
-
-(define per-nogood-tests
-  (test-suite "Phase 3: Per-nogood infrastructure"
-
-    (test-case "install-per-nogood-infrastructure: basic installation succeeds"
-      (define net0 (make-prop-network))
-      ;; Create two decision cells (simulating a 2-way nogood)
-      (define-values (net1 dec-a-cid)
-        (net-new-cell net0 (decision-from-alternatives (list h1 h2))
-                      decision-domain-merge decision-domain-contradicts?))
-      (define-values (net2 dec-b-cid)
-        (net-new-cell net1 (decision-from-alternatives (list h2 h3))
-                      decision-domain-merge decision-domain-contradicts?))
-      ;; Create a nogoods accumulator cell
-      (define-values (net3 nogoods-cid)
-        (net-new-cell net2 nogood-empty nogood-merge))
-      ;; Nogood: {h1, h2} — h1 from group-a, h2 from group-b
-      (define nogood-set (hasheq h1 #t h2 #t))
-      (define group-entries (list (list 'group-a dec-a-cid h1)
-                                  (list 'group-b dec-b-cid h2)))
-      ;; Install infrastructure
-      (define net4 (install-per-nogood-infrastructure
-                    net3 nogood-set group-entries nogoods-cid))
-      ;; Should have more cells and propagators than before
-      (check-true (> (prop-network-next-cell-id net4)
-                     (prop-network-next-cell-id net3)))
-      (check-true (> (prop-network-next-prop-id net4)
-                     (prop-network-next-prop-id net3))))
-
-    (test-case "commitment cell created with correct initial value"
-      (define net0 (make-prop-network))
-      (define-values (net1 dec-a-cid)
-        (net-new-cell net0 (decision-from-alternatives (list h1))
-                      decision-domain-merge decision-domain-contradicts?))
-      (define-values (net2 dec-b-cid)
-        (net-new-cell net1 (decision-from-alternatives (list h2))
-                      decision-domain-merge decision-domain-contradicts?))
-      (define-values (net3 nogoods-cid)
-        (net-new-cell net2 nogood-empty nogood-merge))
-      (define nogood-set (hasheq h1 #t h2 #t))
-      (define group-entries (list (list 'group-a dec-a-cid h1)
-                                  (list 'group-b dec-b-cid h2)))
-      (define net4 (install-per-nogood-infrastructure
-                    net3 nogood-set group-entries nogoods-cid))
-      ;; Run to quiescence — the commit-tracker should fire
-      ;; Both decision cells are singletons (h1 and h2 respectively)
-      ;; So the commitment cell should have both positions filled
-      (define net5 (run-to-quiescence net4))
-      ;; The commitment should be fully committed (both positions set)
-      ;; which means the contradiction detector should have fired
-      ;; and written to the nogoods cell
-      (define ngs (net-cell-read net5 nogoods-cid))
-      ;; Should have at least one nogood written (the commitment provenance)
-      (check-true (pair? ngs)
-                  "contradiction detector should have written to nogoods cell"))
-    ))
-
-
-;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
 (run-tests commitment-cell-tests)
-(run-tests per-nogood-tests)

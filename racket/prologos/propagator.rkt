@@ -35,7 +35,7 @@
 
 (require "champ.rkt"
          "performance-counters.rkt"
-         "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell, nogood-install-request
+         "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell + nogood lattice
          racket/future         ;; for future, touch, processor-count
          racket/set            ;; PAR Track 1: set-union for decomp-request cell
          racket/async-channel  ;; Phase 2d: buffered channel for streaming results
@@ -92,8 +92,6 @@
  ;; BSP-LE Track 2 Phase 2: assumption-tagged dependents
  (struct-out dependent-entry)
  make-branch-pu
- ;; BSP-LE Track 2 Phase 3: per-nogood infrastructure
- install-per-nogood-infrastructure
  ;; BSP-LE Track 2 Phase 5.4: worldview projection propagator
  install-worldview-projection
  ;; PPN Track 4 Phase 1a: component-indexed firing
@@ -1693,101 +1691,12 @@
       ;; Legacy: no worldview initialization (Phase 2 tests don't use tagged cells)
       (values forked assumption-id)))
 
-;; ========================================
-;; Per-Nogood Infrastructure (BSP-LE Track 2 Phase 3)
-;; ========================================
-;;
-;; For each nogood, installs:
-;;   1. Commitment cell (compound, component-indexed by group)
-;;   2. Broadcast commit-tracker (watches decision cells, writes commitment positions)
-;;   3. Narrower (threshold: N-1 committed → narrow remaining)
-;;   4. Contradiction detector (all committed → write provenance to nogoods cell)
-;;
-;; The commitment cell IS the nogood pattern being structurally unified
-;; against decision state. The cell value IS the provenance.
-;;
-;; nogood-set: hasheq assumption-id → #t (the nogood)
-;; group-entries: (listof (list group-id cell-id nogood-member-aid))
-;;   Each entry: group identifier, decision cell-id, and which assumption-id
-;;   from the nogood belongs to this group.
-;; nogoods-cid: cell-id — the shared nogoods accumulator cell
-;; Returns: new network with all infrastructure installed
-(define (install-per-nogood-infrastructure net nogood-set group-entries nogoods-cid)
-  (define groups (map car group-entries))
-  (define ng-size (length groups))
-  ;; Build lookup tables (co-installed with cells, not computed at fire time)
-  (define group->cid (for/hasheq ([e (in-list group-entries)])
-                       (values (car e) (cadr e))))
-  (define group->aid (for/hasheq ([e (in-list group-entries)])
-                       (values (car e) (caddr e))))
-  ;; 1. Create commitment cell (compound, all positions initially #f)
-  ;; NOTE: Do NOT pass commitment-contradicts? as the cell's contradicts? parameter.
-  ;; Network-level contradiction halts all propagation. We want the PROPAGATOR
-  ;; (contradiction detector) to handle the "all committed" case, not the cell itself.
-  (define-values (net1 commitment-cid)
-    (net-new-cell net (commitment-initial groups) commitment-merge))
-  ;; 2. Broadcast commit-tracker: watches decision cells, writes commitment positions
-  (define decision-cids (map cadr group-entries))
-  (define (commit-item-fn group-id input-values)
-    ;; input-values is positional (one per decision cell in group-entries order)
-    (define idx (index-of groups group-id))
-    (define decision-val (list-ref input-values idx))
-    (define expected-aid (hash-ref group->aid group-id))
-    ;; Check: is this group's decision a singleton containing the expected nogood member?
-    (if (and (decision-committed? decision-val)
-             (equal? (decision-committed-assumption decision-val) expected-aid))
-        (hasheq group-id expected-aid)
-        #f))
-  (define (merge-commitment-results acc result)
-    (cond
-      [(not acc) result]
-      [(not result) acc]
-      [(hash? acc) (hash-union acc result)]
-      [else result]))
-  (define-values (net2 _tracker-pid)
-    (net-add-broadcast-propagator net1 decision-cids commitment-cid
-                                  groups commit-item-fn
-                                  merge-commitment-results))
-  ;; 3. Narrower: when N-1 positions committed, narrow the remaining group.
-  ;; FIRE-ONCE (Phase 5.5a): after narrowing the last group, this propagator
-  ;; has done its job. Subsequent fires would be no-ops (all positions filled).
-  (define narrower-fire-fn
-    (lambda (net)
-      (define cv (net-cell-read net commitment-cid))
-      (define filled (commitment-filled-count cv))
-      (cond
-        [(= filled (- ng-size 1))
-         (define remaining-g (commitment-remaining-group cv))
-         (if remaining-g
-             (let ([remaining-cid (hash-ref group->cid remaining-g)]
-                   [member-aid (hash-ref group->aid remaining-g)])
-               (net-cell-write net remaining-cid
-                               (decision-domain-narrow
-                                (net-cell-read net remaining-cid)
-                                member-aid)))
-             net)]
-        [else net])))
-  (define-values (net3 _narrower-pid)
-    (net-add-fire-once-propagator net2 (list commitment-cid) decision-cids narrower-fire-fn))
-  ;; 4. Contradiction detector: all committed → write provenance to nogoods cell.
-  ;; FIRE-ONCE (Phase 5.5a): after writing provenance once, the nogood is
-  ;; recorded. Subsequent fires would produce the same write (no cell change).
-  (define contradiction-fire-fn
-    (lambda (net)
-      (define cv (net-cell-read net commitment-cid))
-      (if (commitment-contradicts? cv)
-          ;; The cell value IS the provenance
-          (let ([provenance (commitment-provenance cv)])
-            (net-cell-write net nogoods-cid
-                            (nogood-add nogood-empty
-                                        (for/hasheq ([aid (in-list provenance)])
-                                          (values aid #t)))))
-          net)))
-  (define-values (net4 _contra-pid)
-    (net-add-fire-once-propagator net3 (list commitment-cid) (list nogoods-cid) contradiction-fire-fn))
-  net4)
-
-;; Topology handler registered below (after register-topology-handler! is defined).
+;; A1 (BSP-LE 2B addendum, 2026-04-16): `install-per-nogood-infrastructure`
+;; deleted as dead code. It was only called by the nogood-install-request
+;; topology handler, which itself had zero producers (struct defined but no
+;; constructor calls). BSP-LE Track 2 Phase 3 designed per-nogood infrastructure
+;; but the producer path was never wired up (nogoods are instead written
+;; directly via `nogood-add` from ATMS S1 handlers). Removed as A1 audit finding.
 
 ;; ========================================
 ;; Broadcast Propagator (BSP-LE Track 2 Phase 1B)
@@ -2513,45 +2422,12 @@
               (let ([net* ((callback-topology-request-callback req) net)])
                 (net-pair-decomp-insert net* pair-key)))))))
 
-;; BSP-LE Track 2 Phase 3: Topology handler for nogood-install-request.
-;; Installs per-nogood infrastructure (commitment cell + commit-tracker + narrower + contradiction detector).
-;; D.7 subcube pruning: before installing, check if the nogood's subcube
-;; intersects active decision domains. If any member is already narrowed out
-;; of its group's domain, the nogood is already resolved — skip installation.
-(register-topology-handler!
- (lambda (net req)
-   (and (nogood-install-request? req)
-        (let ([ng-set (nogood-install-request-nogood-set req)]
-              [group-entries (nogood-install-request-group-entries req)])
-          (define pair-key (cons 'nogood ng-set))
-          (cond
-            ;; Already installed — dedup
-            [(net-pair-decomp? net pair-key) net]
-            ;; Subcube pruning: check if all nogood members are still viable
-            ;; in their respective decision cells. If any member is already
-            ;; narrowed out, this nogood is resolved — no infrastructure needed.
-            [(for/or ([entry (in-list group-entries)])
-               (define group-id (car entry))
-               (define cell-id (cadr entry))
-               (define expected-aid (caddr entry))
-               (define decision-val (net-cell-read net cell-id))
-               ;; Check: is the expected assumption still in the domain?
-               (not (cond
-                      [(decision-bot? decision-val) #t]  ;; bot = all viable
-                      [(decision-top? decision-val) #f]  ;; top = none viable
-                      [(decision-one? decision-val)
-                       (equal? (decision-one-assumption decision-val) expected-aid)]
-                      [(decision-set? decision-val)
-                       (hash-has-key? (decision-set-alternatives decision-val) expected-aid)]
-                      [else #t])))
-             ;; At least one member already narrowed — nogood resolved, skip
-             (net-pair-decomp-insert net pair-key)]  ;; mark as "handled" to prevent future re-checks
-            ;; All members still viable — install infrastructure
-            [else
-             (let ([net* (install-per-nogood-infrastructure
-                          net ng-set group-entries
-                          decomp-request-cell-id)])
-               (net-pair-decomp-insert net* pair-key))])))))
+;; A1 (BSP-LE 2B addendum, 2026-04-16): nogood-install-request handler deleted.
+;; The struct, export, handler registration, and install-per-nogood-infrastructure
+;; function were all dead code — nogood-install-request had a defined struct and
+;; handler but ZERO constructor calls (ZERO producers) across the codebase. This
+;; was designed but never wired up during BSP-LE Track 2 Phase 3. Removed as A1
+;; audit finding; no behavioral change.
 
 ;; BSP run-to-quiescence: two-fixpoint loop (D.4 stratified topology).
 ;; Outer loop: alternates value stratum (BSP rounds) and topology stratum.

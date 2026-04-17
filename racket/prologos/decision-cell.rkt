@@ -86,8 +86,6 @@
  commitment-filled-count
  commitment-provenance
  commitment-remaining-group
- ;; === Nogood Install Request ===
- (struct-out nogood-install-request)
 
  ;; === Nogood Lattice ===
  nogood-empty
@@ -552,18 +550,6 @@
   (for/first ([(g val) (in-hash v)]
               #:when (not val))
     g))
-
-
-;; ============================================================
-;; Nogood Install Request (Phase 3: topology descriptor)
-;; ============================================================
-;; Data-driven topology request — NOT a callback.
-;; Written to the topology-request cell. The topology stratum
-;; pattern-matches on this struct and installs per-nogood infrastructure.
-(struct nogood-install-request
-  (nogood-set       ;; hasheq of assumption-id → #t (the nogood)
-   group-entries)   ;; (listof (list group-id cell-id nogood-member-aid))
-  #:transparent)
 
 
 ;; ============================================================
