@@ -24,28 +24,29 @@
 ;; Test file list: files that exercise defr/solve
 ;; ============================================================
 
-;; Core solver test files (from grep audit)
+;; Core solver test files (Phase T-b: updated categorization)
+;; Category 1: Full pipeline (defr + solve via run-prologos-string/process-file)
+;; Category 2: Direct API (stratified-solve-goal, solve-goal, solve-goal-propagator)
+;; Category 3: Infrastructure (WF engine, solver config — control group)
 (define solver-test-files
-  '("tests/test-relational-e2e.rkt"
+  '(;; Category 1: Full pipeline
+    "tests/test-relational-e2e.rkt"
     "tests/test-stratified-eval.rkt"
     "tests/test-bound-args-01.rkt"
-    "tests/test-relational-types.rkt"
-    "tests/test-generic-arith-03.rkt"
-    "tests/test-punify-integration.rkt"
+    ;; Category 2: Direct API
     "tests/test-relations-runtime.rkt"
-    "tests/test-solver-context.rkt"
-    "tests/test-solver-config.rkt"
     "tests/test-propagator-solver.rkt"
-    "tests/test-global-constraints-01.rkt"
+    "tests/test-multiclause-debug.rkt"
+    "tests/test-explain-provenance-01.rkt"
     "tests/test-search-heuristics-01.rkt"
-    "tests/test-atms-types.rkt"
-    "tests/test-cfa-analysis-02.rkt"
-    ;; Well-founded (uses bilattice path, not strategy dispatch — control group)
+    ;; Category 3: WF + infrastructure (control group — should be strategy-independent)
     "tests/test-wf-engine-01.rkt"
     "tests/test-wf-benchmark-01.rkt"
     "tests/test-wf-comparison-01.rkt"
     "tests/test-wf-errors-01.rkt"
-    "tests/test-wf-literature-01.rkt"))
+    "tests/test-wf-literature-01.rkt"
+    "tests/test-wf-tabling-01.rkt"
+    "tests/test-solver-config.rkt"))
 
 ;; ============================================================
 ;; Runner
