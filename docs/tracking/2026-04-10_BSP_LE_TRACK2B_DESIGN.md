@@ -38,7 +38,7 @@
 | T-a | Parity investigation + correctness fixes | ✅ | `1eb8b8cc`→`35a39865`. 7 fixes: CWA undefined error, ground provability DFS, 0-arity delegation, gating-only success markers, success marker guard, dissolution entry pre-merge, product dedup. 398/398 all pass. |
 | T-b | Systematic DFS↔ATMS parity sweep | ✅ | `a4326539`. 15/15 files BOTH PASS (3 full pipeline, 5 direct API, 7 WF/infra control). Zero parity gaps. |
 | T-c | Parity regression test file | ✅ | `034aa167`. `test-solver-parity.rkt` — 15 tests, 10 divergence classes, both strategies, set-equal with unresolved-var normalization. 399/399, 7765 tests. |
-| PIR | Post-implementation review | ⬜ | |
+| PIR | Post-implementation review | ✅ | [2026-04-16_BSP_LE_TRACK2B_PIR.md](2026-04-16_BSP_LE_TRACK2B_PIR.md) — 10 sections, longitudinal survey of 10 recent PIRs, 10 lessons (1 already codified, 9 pending distillation) |
 
 **Per-phase completion protocol** (from DESIGN_METHODOLOGY.org §4):
 1. Test coverage — if behavior added, tests exist; if not, state why in commit message
