@@ -30,40 +30,70 @@ The narrative arc: D.9 design assumed NAF needed complex probe mechanisms; D.12 
 
 ## 2. Timeline and Phases
 
-| Phase | Status | Commit | Description |
-|---|---|---|---|
-| 0a | ✅ | pre-track | Parity baseline: 19/19 files both strategies; adversarial finds 3 divergence categories |
-| 0b | ✅ | pre-track | 28 micro-benchmarks + overhead decomposition (ATMS 24.5x) |
-| 0c | ✅ | pre-track | A/B executor comparison: sequential wins current workloads, threads at N≥128 |
-| 1a | ✅ | `a1df50f4`→`b47b9787` | Clause selection as decision-cell narrowing; on-network discrimination; Categories 1+2 FIXED |
-| 1b | ✅ | `1eae7eb8` | Position-discriminant analysis; flat installation (reverted step-think tree traversal in `cb4758f4`) |
-| 2a (pre-R) | attempted | `d4f00a4c`→`7ac4cc1a` | NAF via worldview bitmask, probe vars, success cells — all failed for multi-result composition |
-| D.11/D.12 | design | — | NAF as stratified eval, then as worldview assumption with conjunction pre-scan |
-| 2a (D.12) | partial | `e928dbc0`→`472db662` | Basic + variable NAF PASS; multi-result (`both-passed` 1 vs 3) still broken |
-| **Design mantra introduced** | **`a5cde27f`** | Four rules files codified; audit triggered |
-| **R1** | ✅ | `9bf8fff7`→`23041a2e` | Relation store (cell-id 2), config (cell-id 3), discrim-data as on-network cells |
-| **R2** | ✅ | `d4da77de` | Fact-row PU as per-row fire-once propagators with combined bitmask |
-| **R3** | ✅ | `3bdf3322` | All goal installation propagator-mediated (4 sites: unify, is, one-clause, one-clause-concurrent) |
-| **R4** | ✅ | `8fbc342b` | General N-stratum BSP; NAF-pending cell (cell-id 4); S1 fork handler; -90 lines imperative S1 |
-| **R6** | ✅ | `8e8ea659` | PU dissolution → answer-cid egress (NTT SolverNet :outputs alignment) |
-| 2a (R2-R6) | ✅ | `a6b02159`→`4b2e5bdf` | Scope sharing (Resolution B) + product-worldview dissolution; ALL adversarial NAF PASS |
-| 2b | ✅ | `bbf3eb82` | Tree-reduce merge; per-propagator cell-id namespaces; CHAMP diff for new-cell capture |
-| 2c | ✅ | `a7b015dd` | Semaphore-based worker pool; pool config (cell-id 5); crossover N≈256 |
-| 2d | ✅ | `1c691f86` | Streaming BSP investigation: 4 approaches benchmarked, sync pool optimal; Racket thread ceiling documented |
-| 3 | ✅ | `83276b0d` | Guard as worldview assumption (same pattern as NAF); install-conjunction pre-scans both |
-| 5a | ✅ | `333a5667`→`2181fac0` | PROP-FIRE-ONCE + PROP-EMPTY-INPUTS flags; Tier 1 flush; self-clearing fired-set; closure wrapper removed |
-| 5b/5c | ✅ | `d998b06c`→`01de93f5` | Network template; Tier 1 direct fact return (62x speedup); PPN boundary normalization |
-| 5b/5c (universal) | ✅ | `b4001cd7` | Tier 1 lifted to `stratified-solve-goal` — benefits ALL strategies |
-| 6 | ✅ | `7d77d52a` | Adaptive `:auto`: Tier 1 → direct, NAF/guard → ATMS, N≥256 → ATMS, else → DFS |
-| **Handoff** | — | `2392a2d9` | Context compaction boundary; handoff document written |
-| **T-a** | ✅ | `1eb8b8cc`→`35a39865` | 7 correctness fixes: CWA undefined error, ground provability DFS, 0-arity delegation, gating-only markers, marker guard, entry pre-merge, product dedup |
-| T (process) | ✅ | `946a98ac` | Stale .zo detection extended to cover test files |
-| **T-b** | ✅ | `a4326539` | Systematic DFS↔ATMS parity sweep: 15/15 BOTH PASS |
-| **T-c** | ✅ | `034aa167` | `test-solver-parity.rkt`: 15 regression tests across 10 divergence classes |
+| Phase | Status | Commit | Duration | Description |
+|---|---|---|---|---|
+| 0a | ✅ | pre-track | — | Parity baseline: 19/19 files both strategies; adversarial finds 3 divergence categories |
+| 0b | ✅ | pre-track | — | 28 micro-benchmarks + overhead decomposition (ATMS 24.5x) |
+| 0c | ✅ | pre-track | — | A/B executor comparison: sequential wins current workloads, threads at N≥128 |
+| 1a | ✅ | `a1df50f4`→`b47b9787` | ~53 min | Clause selection as decision-cell narrowing; on-network discrimination; Categories 1+2 FIXED |
+| 1b | ✅ | `1eae7eb8`→`cb4758f4` | ~12 min | Tree traversal + revert (step-think caught + fixed) |
+| 2a (pre-R) | attempted | `d4f00a4c`→`7ac4cc1a` | ~60 min | NAF via worldview bitmask, probe vars, success cells — all failed for multi-result composition |
+| D.11/D.12 | design | — | (out-of-band) | NAF as stratified eval, then as worldview assumption with conjunction pre-scan |
+| 2a (D.12) | partial | `e928dbc0`→`472db662` | ~5h 15m (w/ breaks) | D.12 WIP (~32m) → break → basic+variable PASS (~22m active); multi-result still broken |
+| **Design mantra introduced** | — | `a5cde27f` | (interstitial) | Four rules files codified; audit of Track 2B triggered |
+| **R1** | ✅ | `9bf8fff7`→`23041a2e` | ~15 min | Relation store (cell-id 2), config (cell-id 3), discrim-data as on-network cells |
+| **R3** | ✅ | `3bdf3322` | ~17 min (after R1) | All goal installation propagator-mediated (4 sites: unify, is, one-clause, one-clause-concurrent) |
+| **R4** | ✅ | `8fbc342b` | ~4h after R3 | General N-stratum BSP; NAF-pending cell (cell-id 4); S1 fork handler; -90 lines imperative S1 |
+| **R2** | ✅ | `d4da77de` | ~25 min after R4 | Fact-row PU as per-row fire-once propagators with combined bitmask |
+| **R6** | ✅ | `8e8ea659` | next morning | PU dissolution → answer-cid egress (NTT SolverNet :outputs alignment) |
+| 2a (R2-R6) | ✅ | `a6b02159`→`4b2e5bdf` | ~13 min | Scope sharing (Resolution B) + product-worldview dissolution; ALL adversarial NAF PASS |
+| 2b | ✅ | `bbf3eb82`→`8d64954f` | ~22 min | Tree-reduce merge; per-propagator cell-id namespaces; CHAMP diff for new-cell capture |
+| 2c | ✅ | `a7b015dd` | ~62 min (w/ bench) | Semaphore-based worker pool; pool config (cell-id 5); crossover N≈256 |
+| 2d | ✅ | `1c691f86` | ~65 min (4 approaches) | Streaming BSP investigation: 4 approaches benchmarked, sync pool optimal; Racket thread ceiling documented |
+| 3 | ✅ | `83276b0d` | ~2h after 2d | Guard as worldview assumption (same pattern as NAF); install-conjunction pre-scans both |
+| 5a | ✅ | `333a5667`→`2181fac0` | ~27 min | PROP-FIRE-ONCE + PROP-EMPTY-INPUTS flags; Tier 1 flush; self-clearing fired-set; closure wrapper removed |
+| 5b/5c | ✅ | `d998b06c`→`01de93f5` | ~13h (overnight) | Network template; Tier 1 direct fact return (62x speedup); PPN boundary normalization |
+| 5b/5c (universal) | ✅ | `b4001cd7` | ~26 min | Tier 1 lifted to `stratified-solve-goal` — benefits ALL strategies |
+| 6 | ✅ | `7d77d52a` | ~24 min | Adaptive `:auto`: Tier 1 → direct, NAF/guard → ATMS, N≥256 → ATMS, else → DFS |
+| **Handoff** | — | `2392a2d9` | — | Context compaction boundary; handoff document written |
+| **T-a** | ✅ | `1eb8b8cc`→`35a39865` | ~27 min | 7 correctness fixes: CWA undefined error, ground provability DFS, 0-arity delegation, gating-only markers, marker guard, entry pre-merge, product dedup |
+| T (process) | ✅ | `946a98ac` | ~3 min (interstitial) | Stale .zo detection extended to cover test files |
+| **T-b** | ✅ | `a4326539` | ~9 min (after T-a) | Systematic DFS↔ATMS parity sweep: 15/15 BOTH PASS |
+| **T-c** | ✅ | `034aa167` | ~16 min | `test-solver-parity.rkt`: 15 regression tests across 10 divergence classes |
 
-**Design:Implementation ratio**: D.1 through D.13 over ~8 days (April 7 design start → April 10 D.13 → April 16 T-c complete). Design phase: ~2.5 days. Implementation phase: ~5.5 days. **Ratio: 0.45:1** — lower than ideal, partially offset by 13 design iterations (in-flight redesign counts as design investment).
+**Note on durations**: These are wall-clock intervals between commits, which include thinking, debugging, and reviewing — not pure coding time. "After" indicates gap time between a commit and the next, when design conversation or investigation was happening between commits.
 
-**Sessions**: At least 5 distinct working sessions (pre-R, R implementation, 2a-2d optimization, 3-6 dispatch, T parity). Context compacted at Phase T boundary — handoff protocol used to preserve understanding.
+### Working Sessions
+
+Eight distinct working sessions (commits clustered with < 2h gaps), separated by sleep, context compactions, or travel (timezone shifted PDT → HST mid-track):
+
+| Session | Date (local) | Span | Active | Commits | Phases covered |
+|---|---|---|---|---|---|
+| A | Apr 11 PDT morning | 05:15 → 06:35 | 1h 20m | 8 | 1a, 1b |
+| B | Apr 13 PDT afternoon | 14:15 → 15:14 | 1h 0m | 5 | 2a first attempts (D.9/D.10/D.11 failed) |
+| C | Apr 13 PDT evening | 16:59 → 20:30 | ~54m active (3h31m w/ break) | 6 | D.12 WIP, Phase 2a worldview basic |
+| D | Apr 14 HST late evening | 17:21 → 22:10 | 4h 49m | 5 | R1, R3, R4, R2 |
+| E | Apr 15 HST day | 09:24 → 17:13 | 7h 49m | 7 | R6, 2a Res B, 2b, 2c, 2d |
+| F | Apr 15 HST evening | 19:32 → 21:47 | 2h 15m | 4 | 3, 5a, 5a fix, 5b/5c opt |
+| G | Apr 16 HST morning | 10:14 → 11:04 | 50m | 3 | Tier 1 (direct + universal), Phase 6 |
+| H | Apr 16 HST afternoon | 14:23 → 15:15 | 52m | 5 | T-a (3 commits), T-b, T-c |
+
+**Active implementation time**: ~19h 40m across 8 sessions.
+**Wall-clock duration**: April 11 05:15 PDT → April 16 15:15 HST = ~5 days 13 hours (5.54 days).
+**Gap time** (between sessions): ~4 days 18 hours — includes sleep, a travel leg (PDT→HST), and context compaction preparation.
+
+### Design:Implementation Analysis
+
+- **Design phase**: D.1 through D.13 spanning April 7 → April 10 (~3 days wall-clock, variable active time). Self-critique + external critique + critique-response documents written. Design doc grew through 13 iterations responding to findings.
+- **Implementation phase**: ~19h 40m active across 8 sessions over 5.5 days wall-clock.
+- **D:I ratio (conservative)**: ~3 design days : 5.5 implementation wall-clock days = **0.55:1**. Below the 1.5:1 target from longitudinal PIR pattern §5.
+- **D:I ratio (iteration-weighted)**: 13 design iterations × typical iteration cost (several hours each) is a stronger signal than pure calendar time. In-flight redesign (D.11 → D.12 → D.13 mid-implementation) effectively extended design investment into implementation. **Phase R itself was a design iteration triggered by the mantra audit** — the implementation stopped, design redrew 6 architectural components, implementation resumed.
+
+**Interpretation**: 0.55:1 calendar ratio looks low, but 13 design iterations (vs typical 3-5) and multiple mid-flight redesigns indicate high total design investment. The 14 bugs found were mostly implementation-level (closure capture, zip mismatch, AST/raw divergence) rather than architectural — evidence that the design held.
+
+### Compaction Boundary
+
+Context compacted at `2392a2d9` (Phase 6 complete, handoff written) before Phase T. Sessions G and H post-compaction used the handoff protocol — re-read handoff document + design doc (D.13 §T) + dailies to restore understanding, then continued T-a/T-b/T-c. Successful — no re-learning required; the handoff preserved the architectural model.
 
 ---
 
@@ -233,7 +263,9 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 
 | Metric | Value |
 |---|---|
-| Wall-clock duration | April 11 05:15 → April 16 15:15 PDT (~5.4 days, multi-session) |
+| Wall-clock duration | April 11 05:15 PDT → April 16 15:15 HST (~5 days 13 hours, 5.54 days) |
+| Active implementation time | ~19h 40m across 8 distinct working sessions |
+| Working sessions | 8 (Apr 11 / Apr 13 × 2 / Apr 14 / Apr 15 × 2 / Apr 16 × 2) |
 | Design iterations | D.1 through D.13 (13 iterations) |
 | Design docs (not including D.N.md pointers) | 4 (DESIGN, SELF_CRITIQUE, EXTERNAL_CRITIQUE, CRITIQUE_RESPONSE) |
 | Total commits (racket/prologos/) | 43 |
@@ -247,7 +279,7 @@ Track spanned multiple sessions; context compacted at Phase T boundary. The hand
 | Suite wall time (after) | 121s for 7765 tests on 10 batch workers |
 | Bugs found and fixed | 14 (documented) |
 | Bug-fix commits | 7 Phase T-a + ~5 inline during R/2a/5a = ~12 |
-| Design:Implementation ratio | 0.45:1 (2.5 design days : 5.5 implementation days; offset by 13 iterations) |
+| Design:Implementation ratio | ~0.55:1 calendar (3 design days : 5.5 impl wall-clock); iteration-weighted much higher given 13 D.N + mid-flight Phase R redesign |
 | ATMS single-fact performance | 30.6μs → 0.49μs (62x) |
 | ATMS single-fact vs DFS | 23x slower → 2.3x faster (25x relative improvement) |
 | Parity sweep | 15/15 files both strategies BOTH PASS |
