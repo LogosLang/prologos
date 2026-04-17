@@ -47,7 +47,7 @@ PPN consumes.
 | 3.5 | **Grammar Form: Research + Design** | ⬜ | [`grammar` vision](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md). Multi-view spec. DPO structural preservation. Full theory + syntax after Tracks 1-3. **From Track 1**: typed productions (NTT-typed rewrite rules). |
 | 4A | Elaboration as attribute evaluation — typing on-network | ✅ | [Design D.4](2026-04-04_PPN_TRACK4_DESIGN.md), [PIR](2026-04-04_PPN_TRACK4_PIR.md). 46% on-network typing. Ephemeral PU architecture. SRE typing domain (~150 entries). Bidirectional app writes. Context cells. NRC codified. |
 | 4B | Attribute evaluation — typing + constraints + mult + warnings | ✅ | [Design D.2](2026-04-05_PPN_TRACK4B_DESIGN.md). All 5 attribute domains on-network. On-network primary for all command types. Global attribute store on persistent registry (§9). P1/P2/P3 patterns. 7578 tests GREEN, 133s. 6 imperative bridges remain as scaffolding → Track 4C scope. |
-| 4C | Elaboration on-network — retire ALL imperative bridges | ⬜ | [Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md). 6 bridges from 4B: parametric resolution, solve-meta!, infer/err fallback, freeze/zonk, unsolved-dict, warning params. Bridges dissolve when elaboration boundary moves on-network. `:kind` facet separation, parametric-narrowing propagator, attribute-map-based freeze, checkQ retirement, remaining expression kinds. DEPENDS ON BSP-LE 1.5 (cell-based TMS) for union types. SRE 6 for on-network reduction (nf). |
+| 4C | Elaboration on-network — retire ALL imperative bridges | ⬜ | [Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md). 6 bridges from 4B: parametric resolution, solve-meta!, infer/err fallback, freeze/zonk, unsolved-dict, warning params. Bridges dissolve when elaboration boundary moves on-network. `:kind` facet separation, parametric-narrowing propagator, attribute-map-based freeze, checkQ retirement, remaining expression kinds. DEPENDS ON BSP-LE 1.5 (cell-based TMS) for union types. SRE 6 for on-network reduction (nf). **Apply BSP-LE Track 2B cross-cutting lessons** (see §4 below). |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
 | 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization. Track 1 writes error cells; Track 6 adds ATMS repair. |
 | 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE. **Notes from Track 1**: token pattern registry migration from hash to cell needed here (dynamic grammar patterns). DPO framework for structural preservation. |
@@ -373,7 +373,65 @@ PPN consumes from PRN:
 
 [Module Theory on Lattices](../research/2026-03-28_MODULE_THEORY_LATTICES.md): PPN domains form a filtration (Token ⊆ Surface ⊆ Core). Cross-level bridges are module homomorphisms. Parse ambiguity = quotient-module extraction.
 
-## 4. Research: Lossy Bidirectional Typed Grammars
+## 4. Cross-Cutting Lessons from BSP-LE Track 2B (for Track 4C Design)
+
+Captured 2026-04-16 during BSP-LE 2B A2 scoping discussion. These are architectural insights from BSP-LE Track 2B ([PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md)) that should inform the PPN Track 4C design. Track 4C (elaboration on-network — retire all imperative bridges) is the natural vehicle for applying them.
+
+### 4.1 Module Theory scope sharing dissolves bridges
+
+Track 2B had bridges between clause scope and query scope — they collapsed tagged entries under worldview-filtered reads. Resolution B (Module Theory direct sum via bitmask tagging on shared carrier) ELIMINATED bridges entirely. Not "better bridges" — *no bridges*. Reference: BSP-LE 2B PIR §6.3, §12.2, `structural-thinking.md` § Module Theory of Lattices.
+
+**For Track 4C**: the "6 bridges from 4B" that 4C targets to retire are candidates for this treatment. For each bridge, ask: can this be realized as bitmask-tagged layers on a shared carrier cell? Some may already decompose this way; others may need new carriers.
+
+### 4.2 Per-registration evaluators (cross-cutting architectural pattern)
+
+Track 2B's Tier 1 direct fact return delivered 62x by skipping BSP entirely for fact-only relations. The A2 scoping discussion generalized this: *analyze structure at registration/declaration time, install a type-specific evaluator; dispatch is structural (cell-ID → evaluator), not imperative (query-time tiering logic).*
+
+**For Track 4C**: elaboration has the equivalent opportunity. Each AST node kind / typing rule / trait impl could install its inference evaluator at declaration time. Current elaboration pattern-matches on AST type at inference time (imperative dispatch). On-network version: each form's evaluator is co-installed with its registration; dispatch is cell-lookup. This is the structural framing of "elaboration on-network."
+
+**Action for 4C design**: include a "registration-time evaluator framework" as a foundational sub-design. The A2 Pre-0 benchmarks (query distribution by pattern) should be expanded to cover elaboration passes.
+
+### 4.3 Skip the mechanism > optimize the mechanism
+
+Track 2B Phase 5a (BSP ceremony optimization) delivered ~5%; Tier 1 (skip BSP) delivered 62x. The biggest wins come from recognizing when a mechanism isn't needed, not from making it faster. Reference: BSP-LE 2B PIR §6.4, §16.5.
+
+**For Track 4C**: before optimizing elaboration network traversal, ask — is there a class of inputs where full elaboration isn't needed? Known-ground constructors, already-solved traits, identity typings? Bypass paths first.
+
+### 4.4 Per-variable split entries create dissolution cross-products
+
+Track 2B's T-a Fix 6 discovered that writing x and y to the same cell in separate calls created compound-worldview bugs (3|5=7 from product). Pre-merge at the same bitmask before grouping is required. Reference: BSP-LE 2B PIR §8.6, §11.10, §16.8.
+
+**For Track 4C**: any multi-output typing rule writing to shared scope cells faces the same risk. Design scope-write protocols with pre-merge discipline. Hash iteration order can hide the bug — **systematic hash-iteration-order fuzz testing** (PIR §15.6, T1 deferred process improvement) is more valuable here than elsewhere.
+
+### 4.5 Parity regression gate is a design artifact, not regression artifact
+
+Track 2B's T-c (`test-solver-parity.rkt`, 15 tests, 10 divergence classes) encoded divergence classes discovered during bug-hunting as permanent regression tests. Reference: PIR §6.6, §15.3.
+
+**For Track 4C**: build `test-elaboration-parity.rkt` at design time — compare current off-network elaboration outputs to on-network elaboration outputs across N test cases per AST node kind / typing rule. The 6 bridges being retired are each a potential divergence class; enumerate them in the parity test BEFORE implementation. This is the M3 methodology rule (parity tests as design artifact) applied.
+
+### 4.6 Elaborator strata → BSP scheduler unification
+
+The elaborator currently has its own `run-stratified-resolution!` loop (S(-1), L1, L2) independent of the BSP scheduler's stratum mechanism (topology, S1 NAF). BSP-LE Track 2B Phase R4 + Addendum A1 established the generalized `register-stratum-handler!` pattern for the solver network. Reference: `stratification.md` § Unification work (architectural follow-ups).
+
+**For Track 4C**: include unifying the elaborator's sequential strata into the BSP scheduler's stratum mechanism. Both networks (solver + elaborator) would share one orchestration mechanism. This is directly aligned with "elaboration on-network" — "on-network" means using the same network primitives as the rest of the system.
+
+### 4.7 Design mantra at Stage 0 (methodology M1)
+
+The Track 2B mantra audit — *"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK"* — caught 6 architectural violations tests had missed, triggering Phase R redesign mid-track. Now codified as a Stage 0 gate (DESIGN_METHODOLOGY.org).
+
+**For Track 4C**: the mantra audit should happen BEFORE Track 4C's Phase 1, not mid-track. Every component of the design passes through the mantra challenge. Imperative bridges are the archetypal mantra violation — Track 4C's whole purpose is to retire them.
+
+### 4.8 Where to incorporate these into 4C design (process)
+
+When Track 4C's design doc is written (next steps after BSP-LE 2B A1-3 addendum), include:
+
+- **Stage 0**: mantra audit of the current 6 bridges (catalogue each violation)
+- **Stage 2 (gap analysis)**: measurement of elaboration query distribution by AST node kind / typing rule (per-registration evaluator feasibility)
+- **Stage 3 design**: registration-time evaluator framework as foundational; 6 bridges dissolved via Module Theory scope sharing (where applicable) or recast as stratum handlers (where structural); elaborator strata unified with BSP scheduler
+- **Pre-0 benchmarks**: semantic-axis coverage per M2 (not just performance)
+- **Parity skeleton**: `test-elaboration-parity.rkt` encoding the 6 bridge retirements as design-time test cases per M3
+
+## 5. Research: Lossy Bidirectional Typed Grammars
 
 ### The DCG Insight
 
