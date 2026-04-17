@@ -280,8 +280,9 @@
      (if (constraint-one? cv)
          ;; PAR Track 1 D.4: dual-path BSP/DFS
          (if (current-bsp-fire-round?)
-             ;; BSP: emit callback request (topology stratum calls install-fn)
-             (net-cell-write n decomp-request-cell-id
+             ;; BSP: emit callback request to constraint-propagators topology cell
+             ;; (A1: per-subsystem topology cell, was shared decomp-request-cell-id)
+             (net-cell-write n constraint-propagators-topology-cell-id
                              (set (callback-topology-request
                                    (lambda (net2) (install-fn net2 (constraint-one-candidate cv)))
                                    (list 'constraint-method constraint-cell))))

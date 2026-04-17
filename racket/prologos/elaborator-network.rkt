@@ -849,8 +849,9 @@
      (define pair-key (decomp-key cell-a cell-b))
      ;; PAR Track 1 D.4: dual-path BSP/DFS
      (if (current-bsp-fire-round?)
-         ;; BSP: emit decomposition request (topology stratum processes)
-         (net-cell-write net decomp-request-cell-id
+         ;; BSP: emit decomposition request to elaborator topology cell
+         ;; (A1: per-subsystem cell, was shared decomp-request-cell-id)
+         (net-cell-write net elaborator-topology-cell-id
                          (set (sre-decomp-request pair-key
                                                   #f  ;; no SRE domain — elaborator path
                                                   cell-a cell-b
@@ -1052,29 +1053,36 @@
 ;; ========================================================================
 ;; Handles sre-decomp-request with domain=#f (elaborator path, not SRE).
 ;; Calls the same decomposition functions as the DFS maybe-decompose path.
-(register-topology-handler!
- (lambda (net req)
-   (and (sre-decomp-request? req)
-        (not (sre-decomp-request-domain req))  ;; domain=#f → elaborator path
-        (let ([pair-key (sre-decomp-request-pair-key req)]
-              [cell-a (sre-decomp-request-cell-a req)]
-              [cell-b (sre-decomp-request-cell-b req)])
-          (if (net-pair-decomp? net pair-key)
-              net  ;; Already processed — dedup
-              ;; Re-read cell values and decompose
-              (let* ([va (net-cell-read net cell-a)]
-                     [vb (net-cell-read net cell-b)]
-                     [unified (type-lattice-merge va vb)])
-                (if (type-top? unified)
-                    (net-cell-write net cell-a type-top)
-                    (let ([tag (type-constructor-tag unified)])
-                      (if (not tag) net
-                          (case tag
-                            [(Pi)    (decompose-pi    net cell-a cell-b va vb unified pair-key)]
-                            [(Sigma) (decompose-sigma net cell-a cell-b va vb unified pair-key)]
-                            [(lam)   (decompose-lam   net cell-a cell-b va vb unified pair-key)]
-                            [else
-                             (let ([desc (lookup-ctor-desc tag #:domain 'type)])
-                               (if (and desc (= (ctor-desc-binder-depth desc) 0))
-                                   (decompose-generic net cell-a cell-b va vb unified pair-key desc)
-                                   net))]))))))))))
+;; A1 (BSP-LE 2B addendum, 2026-04-16): migrated to per-subsystem stratum
+;; handler on elaborator-topology-cell-id (was shared decomp-request-cell).
+(register-stratum-handler!
+ elaborator-topology-cell-id
+ (lambda (net req-set)
+   (for/fold ([n net]) ([req (in-set req-set)])
+     (cond
+       [(net-pair-decomp? n (sre-decomp-request-pair-key req)) n]
+       [else
+        (define pair-key (sre-decomp-request-pair-key req))
+        (define cell-a (sre-decomp-request-cell-a req))
+        (define cell-b (sre-decomp-request-cell-b req))
+        (define va (net-cell-read n cell-a))
+        (define vb (net-cell-read n cell-b))
+        (define unified (type-lattice-merge va vb))
+        (cond
+          [(type-top? unified) (net-cell-write n cell-a type-top)]
+          [else
+           (define tag (type-constructor-tag unified))
+           (cond
+             [(not tag) n]
+             [else
+              (case tag
+                [(Pi)    (decompose-pi    n cell-a cell-b va vb unified pair-key)]
+                [(Sigma) (decompose-sigma n cell-a cell-b va vb unified pair-key)]
+                [(lam)   (decompose-lam   n cell-a cell-b va vb unified pair-key)]
+                [else
+                 (define desc (lookup-ctor-desc tag #:domain 'type))
+                 (if (and desc (= (ctor-desc-binder-depth desc) 0))
+                     (decompose-generic n cell-a cell-b va vb unified pair-key desc)
+                     n)])])])])))
+ #:tier 'topology
+ #:reset-value (set))

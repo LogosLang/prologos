@@ -2411,16 +2411,24 @@
 (define (stratum-handler-tier       entry) (caddr entry))
 (define (stratum-handler-reset-val  entry) (cadddr entry))
 
-;; PAR Track 1: Built-in handler for callback-topology-request.
+;; PAR Track 1: Built-in topology handler for callback-topology-request.
 ;; Calls the opaque callback outside BSP fire rounds.
-(register-topology-handler!
- (lambda (net req)
-   (and (callback-topology-request? req)
-        (let ([pair-key (callback-topology-request-pair-key req)])
-          (if (net-pair-decomp? net pair-key)
-              net  ;; Already processed — dedup
-              (let ([net* ((callback-topology-request-callback req) net)])
-                (net-pair-decomp-insert net* pair-key)))))))
+;; A1 (BSP-LE 2B addendum, 2026-04-16): migrated from register-topology-handler!
+;; (legacy try-each chain on shared decomp-request-cell) to register-stratum-handler!
+;; with :tier 'topology and its own subsystem cell (cell-id 6).
+(register-stratum-handler!
+ constraint-propagators-topology-cell-id
+ (lambda (net req-set)
+   (for/fold ([n net]) ([req (in-set req-set)])
+     (cond
+       [(net-pair-decomp? n (callback-topology-request-pair-key req))
+        n]  ;; Already processed — dedup
+       [else
+        (define pair-key (callback-topology-request-pair-key req))
+        (define n* ((callback-topology-request-callback req) n))
+        (net-pair-decomp-insert n* pair-key)])))
+ #:tier 'topology
+ #:reset-value (set))
 
 ;; A1 (BSP-LE 2B addendum, 2026-04-16): nogood-install-request handler deleted.
 ;; The struct, export, handler registration, and install-per-nogood-infrastructure

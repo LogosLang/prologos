@@ -72,33 +72,43 @@
 ;; PAR Track 1: Register narrowing topology handlers at module load time.
 ;; These handle narrowing-branch-request and narrowing-rule-request
 ;; in the BSP topology stratum.
-(register-topology-handler!
- (lambda (net req)
-   (cond
-     [(narrowing-branch-request? req)
-      (define key (narrowing-branch-request-pair-key req))
-      (if (net-pair-decomp? net key)
-          net  ;; Already processed — dedup
-          (let ([net* (install-narrowing-propagators
-                       net
+;; A1 (BSP-LE 2B addendum, 2026-04-16): migrated to per-subsystem stratum
+;; handler on narrowing-topology-cell-id (was shared decomp-request-cell).
+;; Dispatches internally on request type (branch vs rule) — both request
+;; types share one subsystem cell since they're both narrowing-owned.
+(register-stratum-handler!
+ narrowing-topology-cell-id
+ (lambda (net req-set)
+   (for/fold ([n net]) ([req (in-set req-set)])
+     (cond
+       [(narrowing-branch-request? req)
+        (define key (narrowing-branch-request-pair-key req))
+        (cond
+          [(net-pair-decomp? n key) n]
+          [else
+           (define n* (install-narrowing-propagators
+                       n
                        (narrowing-branch-request-tree req)
                        (narrowing-branch-request-arg-cells req)
                        (narrowing-branch-request-result-cell req)
-                       (narrowing-branch-request-bindings req))])
-            (net-pair-decomp-insert net* key)))]
-     [(narrowing-rule-request? req)
-      (define key (narrowing-rule-request-pair-key req))
-      (if (net-pair-decomp? net key)
-          net  ;; Already processed — dedup
-          (let-values ([(net1 result-term)
-                        (eval-rhs (narrowing-rule-request-rhs req)
-                                  (narrowing-rule-request-bindings req)
-                                  net)])
-            (define net2 (net-pair-decomp-insert net1 key))
-            (if (term-bot? result-term)
-                net2
-                (net-cell-write net2 (narrowing-rule-request-result-cell req) result-term))))]
-     [else #f])))  ;; Not a narrowing request — return #f to try next handler
+                       (narrowing-branch-request-bindings req)))
+           (net-pair-decomp-insert n* key)])]
+       [(narrowing-rule-request? req)
+        (define key (narrowing-rule-request-pair-key req))
+        (cond
+          [(net-pair-decomp? n key) n]
+          [else
+           (define-values (n1 result-term)
+             (eval-rhs (narrowing-rule-request-rhs req)
+                       (narrowing-rule-request-bindings req)
+                       n))
+           (define n2 (net-pair-decomp-insert n1 key))
+           (if (term-bot? result-term)
+               n2
+               (net-cell-write n2 (narrowing-rule-request-result-cell req) result-term))])]
+       [else n])))  ;; Unexpected request type — ignore
+ #:tier 'topology
+ #:reset-value (set))
 
 ;; ========================================
 ;; Term construction from ground expressions
@@ -278,10 +288,11 @@
              ;; Use decomp-key format for pair-decomps compatibility
              (define branch-key (decomp-key watched-cell result-cell 'narrow-branch))
              (if (current-bsp-fire-round?)
-                 ;; BSP: emit topology request (with dedup via pair-decomps)
+                 ;; BSP: emit topology request to narrowing subsystem cell
+                 ;; (A1: per-subsystem, was shared decomp-request-cell-id)
                  (if (net-pair-decomp? net branch-key)
                      net  ;; Already emitted — skip
-                     (net-cell-write net decomp-request-cell-id
+                     (net-cell-write net narrowing-topology-cell-id
                                      (set (narrowing-branch-request
                                            branch-key
                                            child-tree arg-cells result-cell new-bindings))))
@@ -329,10 +340,11 @@
         net
         ;; PAR Track 1 D.4: dual-path BSP/DFS
         (if (current-bsp-fire-round?)
-            ;; BSP: emit rule-eval request (with dedup via pair-decomps)
+            ;; BSP: emit rule-eval request to narrowing subsystem cell
+            ;; (A1: per-subsystem, was shared decomp-request-cell-id)
             (if (net-pair-decomp? net rule-key)
                 net  ;; Already emitted — skip
-                (net-cell-write net decomp-request-cell-id
+                (net-cell-write net narrowing-topology-cell-id
                                 (set (narrowing-rule-request
                                       rule-key rhs bindings result-cell))))
             ;; DFS: evaluate inline (unchanged)
