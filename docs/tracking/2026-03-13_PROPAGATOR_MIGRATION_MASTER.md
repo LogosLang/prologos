@@ -450,6 +450,40 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 - **First-class module network data** — module networks should be treated as first-class pure data, enabling reuse and composition. The CHAMP-based `prop-network` is already immutable/persistent, supporting this. Design for module networks as composable data structures, not just caching artifacts.
 - **Data-oriented invalidation** — use invalidation descriptors interpreted at explicit control boundaries rather than imperative "iterate and write" patterns.
 
+### Track 12: Module Loading on Network — Residual Parameters → Cells
+
+**Goal**: Complete the PM agenda by moving module-loading state from parameters to cells. Closes out the remaining non-solver-specific `make-parameter` uses in the module-load path, enabling: (a) incremental module re-elaboration (foundation for Track 11 LSP), (b) correct-by-construction test isolation (eliminates the longitudinal pattern 7 "two-context boundary bugs" recurrence across 6+ PIRs), (c) on-network self-hosting prerequisite.
+
+**Scope** (candidates — mini-audit required at Stage 2):
+- `current-module-registry` → module-registry cell (per-file persistent network)
+- `current-prelude-env` → prelude-env cell
+- `current-lib-paths` → lib-paths cell (or config cell)
+- `current-ns-context` → ns-context cell (completes Track 5's per-module networks)
+- `current-module-definitions-content` → already flows through Track 5's module-network-ref cells, but source still parameter-backed
+- `current-preparse-registry` → preparse-registry cell
+- Review remaining `current-*` parameters in `test-support.rkt` parameterize blocks; classify each as (migrate / keep-as-debug / keep-as-config)
+
+**Why this solves the test-isolation problem as a side effect**: Parameters leak between tests in the batch worker's shared process (pattern surfaced repeatedly as longitudinal pattern 7). Moving state to cells on per-test-forked networks gives automatic isolation by construction — no checklist, no linter, no runtime reset. See BSP-LE Track 2B PIR §11.14, §15 A3 scoping discussion (2026-04-16).
+
+**Dependencies**:
+- Track 7 ✅ (persistent registry network as prior art)
+- Track 5 ✅ (per-module networks + dep-edges)
+- Ideally before Track 11 LSP Integration (module-loading must be on-network for incremental re-elaboration)
+
+**Apply cross-cutting BSP-LE Track 2B lessons** (see [PPN Master §4](../tracking/2026-03-26_PPN_MASTER.md)):
+- Module Theory scope sharing dissolves bridges (§4.1)
+- Skip-the-mechanism > optimize-the-mechanism (§4.3)
+- Parity regression gate at design time, not PIR time (§4.5)
+- Design mantra audit at Stage 0 (§4.7)
+
+**Relationship to A3 (BSP-LE Track 2B addendum)**: A3's static-lint tactical protection (Option C) is the near-term safety net while PM Track 12 is pending. Once PM Track 12 delivers, the lint is no longer needed — cell-based state is isolated by construction.
+
+**Residual solver-config parameters**: `current-solver-strategy-override`, `current-is-eval-fn`, and other solver-specific parameters may be better addressed in a BSP-LE series sub-track or continue as parameters with test-harness registration (they're solver-local, less entangled with module loading). Scope decision at PM 12 Stage 2.
+
+**Risk**: Medium. Module loading is foundational; regressions are visible. Track 5/7 prior art de-risks the approach — same pattern, different state.
+
+**Design document**: TBD.
+
 ---
 
 ## Track Dependency Graph
