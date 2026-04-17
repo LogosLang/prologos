@@ -571,3 +571,64 @@ the guard makes the invariant structural (error on violation) rather
 than maintained by discipline (hoping fire functions don't add cells).
 
 See commit =af35f5e= (CALM topology guard implementation).
+
+** Racket Parallelism Has a Hard ~8μs Floor — Measure Before Parallelizing
+
+Racket's cross-thread communication has a measured ~8μs floor (OS
+thread wakeup cost). Sync-pool crossover against sequential execution
+for ~0.5μs per-propagator work is N≈256. No Racket-level mechanism
+beats this floor:
+
+- Spin-wait: workers sleep during merge phase — spin window too short
+- Sync events: 15–20μs dispatch per call
+- Async-channel: ~30μs per call
+- Spin-poll done-semaphores: 2400μs catastrophic busy-spin
+
+*The arithmetic*: parallelism only helps when per-propagator work
+exceeds a multiple of the wakeup cost. Below ~16× the floor
+(~125μs per propagator), thread overhead dominates — parallelism is
+a regression, not a speedup.
+
+*Methodology — measure before parallelizing*:
+- Measure actual per-propagator work (μs) at typical workloads
+- Benchmark sync-pool vs sequential at multiple N values
+- Don't trust design-time crossover estimates — Phase 0c estimated
+  thread crossover at N≈128 with 1.9× speedup; actual is N≈256 and
+  payoff only at N≥512
+- Run 4+ alternative approaches before concluding (spin/sync/async/poll)
+
+*Memory cost is a separate axis, measure it too*: parallel
+infrastructure allocates even when unused (worker pool threads,
+channels, per-worker state). Racket's GC pauses also affect
+cross-thread coordination — a GC in one worker stalls others at
+the barrier. Measure allocation rates AND retention, not just
+wall-clock:
+- Worker pool baseline: memory for K threads + channels (regardless of use)
+- Per-dispatch allocation: channel write + thread wake + CHAMP fork
+- GC amplification: parallel rounds have K× allocation pressure
+  vs sequential for the same work
+
+*Implications*:
+- Parallelism in Phase 0 (Racket) pays off only for specific workloads
+  (N≥256, per-propagator work ≥ ~5μs)
+- True parallelism gains are a compiler/runtime problem, not a
+  library problem — self-hosted Prologos with lighter threads shifts
+  this boundary
+- Parallel infrastructure should be threshold-gated: install the
+  infrastructure, but don't use it below measured crossover
+- Architecture design should NOT assume free parallelism even if the
+  theoretical structure is parallelizable
+
+*Discovered in*: BSP-LE Track 2B Phase 2d (streaming BSP
+investigation — 4 approaches benchmarked exhaustively, all worse
+than sync pool). Full decomposition in Track 2B PIR §7 (Where We Got
+Lucky), §8.1 (surprise), §12.5 (what we learned), §16.6. Strategic
+decision: wait for self-hosting. Research note:
+=docs/research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md=.
+
+*Actionable guidance*: for any parallel-targeting design, measure the
+work/wakeup ratio and run the 4-approach benchmark suite (sync pool,
+spin-wait, sync events, async-channel) before committing. If work
+< 16× wakeup floor, design as threshold-gated infrastructure with
+sequential default — not as a parallel mechanism with sequential
+fallback.

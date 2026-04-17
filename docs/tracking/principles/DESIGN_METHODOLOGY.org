@@ -922,6 +922,48 @@ boundaries with no batched updates.
   cleanup + PIR"). This is not optional --- it is the data that makes
   the PIR quantitative rather than anecdotal.
 
+- *Measure before, during, AND after — and include memory cost*: Pre-0
+  (before) and post-implementation A/B (after) are already mandatory.
+  Add: measurement DURING implementation, at every phase boundary,
+  AND along the memory axis in addition to wall-clock.
+
+  *Per-phase measurement*: each implementation phase ends with a small
+  measurement set, not just tests GREEN. Regressions caught at the
+  phase where they appear are cheap; regressions caught at the final
+  A/B are expensive to root-cause (which of the N phases introduced
+  the issue?). The minimum per-phase measurement set:
+  - Wall-clock: a fixed micro-benchmark or the full suite wall time
+  - Allocation: bytes allocated per representative query (via
+    =PERF-COUNTERS= heartbeats or a targeted memory profile)
+  - Observability signal: one domain-specific counter (e.g.,
+    prop-firings, cell-allocs, constraint-retries) that should NOT
+    regress per phase
+  If the phase has no measurement, the phase is not complete.
+
+  *Memory cost is a separate axis from wall-clock*: different axes
+  catch different problems. Phase R (BSP-LE Track 2B) caused a
+  33% wall-clock regression (caught) and would have caught a memory
+  regression only with separate memory measurement. Parallel
+  infrastructure is especially memory-sensitive (worker pool threads,
+  channels, per-worker CHAMP forks, GC amplification across threads).
+  Required measurements per phase:
+  - Allocation bytes per representative query or per suite run
+  - Live retention (post-GC memory) — use =mem_retained_bytes= from
+    heartbeat counters
+  - GC activity — count + duration — for parallel phases especially
+
+  *Continuous observability during implementation*: use =PERF-COUNTERS=
+  (JSON-lines heartbeats in data/benchmarks/timings.jsonl), the
+  propagator network observer (=current-bsp-observer=), and per-phase
+  micro-benchmarks as continuous signal — not only at phase boundaries.
+  Anomalies surface in real time.
+
+  *Discovered in*: BSP-LE Track 2B PIR §16.6 (measure before AND after
+  as extension of Pre-0 rule); Phase R 33% regression caught by
+  per-phase micro-benchmark; Phase 2d parallel-infrastructure memory
+  cost surfaced only through separate memory measurement. Strengthens
+  the M2 Pre-0 rule with during+after + memory axis.
+
 - *Write PIR per methodology*: After the final verification phase,
   write the PIR following [[file:POST_IMPLEMENTATION_REVIEW.org][POST_IMPLEMENTATION_REVIEW.org]] (the 16 questions,
   template sections §1--§19). Re-read the methodology BEFORE writing

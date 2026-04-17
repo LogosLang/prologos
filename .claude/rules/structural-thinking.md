@@ -92,6 +92,18 @@ A collection of lattices with morphisms between them forms a MODULE. The module 
 
 4. **Self-hosting**: the compiler's registries (module, relation, trait) form a module of modules. Information about the language's structure IS lattice-valued information flowing through cells.
 
+### Direct Sum Has Two Realizations — Prefer Tagging Over Bridges
+
+A direct sum decomposition R = C₁ ⊕ C₂ ⊕ ... ⊕ Cₙ is an algebraic fact. Its *realization* on the propagator network is a design choice. There are two:
+
+**Realization (A): Separate cells with bridge morphisms.** Each Cᵢ is its own cell. Bridges propagate values between them via morphisms. Worldview-filtered reads during speculation COLLAPSE tagged entries on the bridge — the bridge sees only the merged value at the current worldview, losing per-branch identity. **This is a real failure mode**, not theoretical — BSP-LE Track 2B Phase 2a fought 3 design iterations (D.9 probe, D.10 bitmask, D.11 stratified) before recognizing that bridges were the root cause.
+
+**Realization (B): Bitmask-tagged layers on a shared carrier cell.** One cell holds all components; each component's identity is a bitmask tag in the value's tagged-cell-value entries. Reconciliation is automatic through the cell's merge function. No bridges, no tag collapse.
+
+**Heuristic**: when designing "bridges between X cells," always ask — *is there a shared-carrier-with-tagging realization?* For value-level decomposition with worldview semantics, realization (B) is structurally simpler AND eliminates the tag-collapse bug class. Bridges are the right answer only when the Cᵢ carry genuinely different types or live at different strata.
+
+**Exemplar (Track 2B Phase 2a "Resolution B")**: clause params share the query scope cell directly. Instead of clause-scope cells + bridges to query-scope, all clause variables are bitmask-tagged layers on the shared query-scope carrier. The module decomposition (relation = coproduct of clauses) is realized by tagging, not by bridges. Reference: `.claude/rules/on-network.md`, Track 2B PIR §6.3, §12.2, §16.4.
+
 ## Structural Unification (PUnify)
 
 Structural unification is a lattice MEET operation. Two tree-shaped values are unified by computing the greatest lower bound in the tree lattice.

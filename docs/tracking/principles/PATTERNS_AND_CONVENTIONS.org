@@ -362,3 +362,26 @@ Propagators must be tagged with their stratum layer at creation time:
 
 The layered scheduler processes propagators in layer order. Untagged
 propagators default to ~'propagation~ (S0) for backward compatibility.
+
+** Boundary Normalization (Anti-Pattern: Per-Consumer Normalization)
+When values cross a representation boundary (e.g., AST nodes from
+elaboration vs raw Racket values from test stores entering the solver
+domain), normalize ONCE at the domain boundary — not at each comparison
+or consumer site.
+
+*Anti-pattern*: per-consumer ~normalize-for-compare~ calls scattered
+across N sites. Some normalize, some forget — bugs surface when a
+consumer reads a value without normalizing and =equal?= fails on
+representation mismatch (AST =(expr-string "alice")= ≠ raw ="alice"=).
+
+*Pattern*: one normalization function at data entry, called at every
+site where foreign values arrive. All consumers within the domain see
+the canonical form.
+
+Exemplar: BSP-LE Track 2B Phase 5b/5c (PIR §16.3). =normalize-solver-value=
+at 3 boundary sites (fact-row writes, discrimination-data build, NAF env
+resolution); all downstream consumers use raw form. Eliminated a bug
+class of AST/raw =equal?= mismatches.
+
+Applies to any cross-domain bridge: type↔session, module↔file, AST↔
+runtime, serialize↔deserialize.

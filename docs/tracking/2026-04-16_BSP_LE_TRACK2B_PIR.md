@@ -742,15 +742,15 @@ Per the PIR methodology, every lesson should flow to where future work will enco
 | Lesson | Distilled To | Status |
 |---|---|---|
 | Design mantra as live challenge (§16.1) | `on-network.md`, `propagator-design.md`, `workflow.md`, `structural-thinking.md` | ✅ Done pre-Phase R (`a5cde27f`) |
-| Belt-and-suspenders masks bugs (§16.2) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — extend existing "Validated ≠ Deployed" section with belt-and-suspenders as a specific anti-pattern |
-| Normalize at the domain boundary (§16.3) | `PATTERNS_AND_CONVENTIONS.org` | ⬜ Pending — codify as "PPN Boundary Normalization" pattern; reference sites in relations.rkt |
-| Module Theory for scope decomposition (§16.4) | `structural-thinking.md` | ⬜ Pending — extend "Module Theory of Lattices" with concrete direct-sum-via-tagging pattern |
-| Skip the mechanism, don't optimize (§16.5) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "N+1 Principle in Optimization" |
-| Racket parallelism hard floor (§16.6) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — document the 8μs ceiling, measurement methodology, self-hosting implication |
-| Measure before AND after (§16.7) | `DESIGN_METHODOLOGY.org` (Stage 4, implementation protocol) | ⬜ Pending — elevate Pre-0 measurement rule to include phase-end measurement |
-| Hash iteration Heisenbug → missing invariant (§16.8) | `DEVELOPMENT_LESSONS.org` | ⬜ Pending — new section "Heisenbugs Point to Missing Determinism Invariants" |
-| `raco make driver.rkt` test `.zo` gap (§16.9) | `testing.md` rules | ⬜ Pending — document the `--no-precompile` trap, reference the extended stale .zo detection |
-| Context compaction via handoff (§16.10) | `HANDOFF_PROTOCOL.org` | ⬜ Pending — add "Post-compaction reload" section based on this track's successful instance |
+| Belt-and-suspenders masks bugs (§16.2) | `workflow.md` blocking red-flag rule | ✅ Done (M3 process improvement, `aeeb5fcb`) |
+| Normalize at the domain boundary (§16.3) | `PATTERNS_AND_CONVENTIONS.org` — Boundary Normalization anti-pattern | ✅ Done (small one-liner) |
+| Module Theory for scope decomposition (§16.4) | `structural-thinking.md` — Direct Sum Has Two Realizations | ✅ Done (extends "Module Theory of Lattices") |
+| Skip the mechanism, don't optimize (§16.5) | (none) | ⏹ Rejected as generalization — Tier 1 was a special case, not a principle; "skipping the mechanism" potentially conflicts with other design principles (validated in discussion 2026-04-17) |
+| Racket parallelism hard floor + memory cost (§16.6) | `DEVELOPMENT_LESSONS.org` — Racket Parallelism ~8μs Floor | ✅ Done (with memory-cost axis) |
+| Measure before, during, AND after; memory axis (§16.7) | `DESIGN_METHODOLOGY.org` Stage 4 | ✅ Done (extends Pre-0 rule with per-phase + memory) |
+| Hash iteration Heisenbug → missing invariant (§16.8) | `DEVELOPMENT_LESSONS.org` | ⬜ Deferred — future codification candidate |
+| `raco make driver.rkt` test `.zo` gap (§16.9) | `testing.md` rules | ✅ Done (W2 + I1 process improvements, `aeeb5fcb` + `0932fa49`) |
+| Context compaction via handoff (§16.10) | `HANDOFF_PROTOCOL.org` | ⬜ Deferred — nice-to-have |
 
 ### Meta-lesson (Patterns Across 3+ PIRs)
 
