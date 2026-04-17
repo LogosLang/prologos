@@ -18,7 +18,7 @@
 
 Track 2B delivered three interlocking things:
 
-**(a) On-network solver architecture.** Phase R migrated 6 solver infrastructure pieces from off-network state to propagator cells: relation store, config, discrimination data, NAF-pending accumulator, pool config, and answer egress cell. Every goal installation is now propagator-mediated — no construction-time direct writes. General N-stratum BSP infrastructure with request-accumulator pattern (same as the existing topology stratum). NAF and guard unified as worldview assumptions under a single pattern. Clause-level scope sharing (Resolution B, Module Theory) eliminates bridge propagators and the tag-collapse bug class.
+**(a) On-network solver architecture.** Phase R migrated 6 solver infrastructure pieces from off-network state to propagator cells: relation store, config, discrimination data, NAF-pending accumulator, pool config, and answer egress cell. Every goal installation is now propagator-mediated — no construction-time direct writes. **General N-stratum BSP infrastructure**: Track 2B extracted the single-stratum topology pattern (PAR Track 1) into a general (request-accumulator cell + handler) mechanism, then added S1 NAF as the second concrete stratum. This is the first Prologos piece where multiple concrete stratifications coexist on the same propagator base under a uniform mechanism — architecturally reusable for future strata (well-founded semantics, cost-bounded exploration, self-hosting passes). NAF and guard unified as worldview assumptions under a single pattern. Clause-level scope sharing (Resolution B, Module Theory) eliminates bridge propagators and the tag-collapse bug class.
 
 **(b) Parallel BSP infrastructure.** Hypercube tree-reduce merge with per-propagator cell-id namespaces (high-bit encoding). Semaphore-based persistent worker pool replacing per-round thread creation. Exhaustive streaming BSP investigation (4 approaches, all worse than sync pool due to Racket's ~8μs cross-thread wakeup floor). Parallel crossover at N≈256 accepted for Phase 0; infrastructure ready for self-hosting where per-propagator work increases.
 
@@ -364,9 +364,29 @@ Phase R6 aligned PU dissolution with NTT's `interface SolverNet :outputs [answer
 
 **Dissolution's cross-product of per-variable entries was a subtle gap.** Fact-row propagators write x and y to the scope cell in separate writes; dissolution treated them as independent branching sites. The pre-merge step (§13, T-a Fix 6) bridges the gap — but the underlying design assumption (one entry per branch) doesn't hold when propagators write multiple variables separately. This is a friction between the design intuition and the implementation reality.
 
-### 9.6 Net architectural assessment
+### 9.6 Multi-stratification as a first-class architectural pattern
 
-Track 2 + PAR Track 1 infrastructure provided sufficient abstraction for Track 2B's scope. The modifications Track 2B made (propagator flags, well-known cells, per-propagator namespaces, general strata) are *extensions*, not *changes*. The core propagator model held. **The mantra audit was the architectural validation**: the system as designed supported on-network computation; the violations were implementation drift, not architectural gaps.
+Track 2B is the first Prologos piece to deliver **multiple stratifications coexisting on the same propagator base**, using a unified generalized mechanism:
+
+| Stratum | Kind | Introduced | Handler |
+|---|---|---|---|
+| S0 | monotone propagator firing within a BSP round | pre-track | (no handler — base stratum) |
+| Topology | structural changes between rounds (new cells, new propagators) | PAR Track 1 (`775de006`, 2026-03-28) | `register-topology-handler!` (special-cased) |
+| S1 NAF | non-monotone worldview validation via fork+BSP+nogood | Track 2B Phase R4 (`8fbc342b`, 2026-04-14) | `register-stratum-handler!` (generalized) |
+| S0 Guard | monotone condition evaluation with worldview assumption | Track 2B Phase 3 (`83276b0d`) | Embedded in S0 via worldview bitmask (no separate handler) |
+
+**Two things landed in Phase R4**, not one:
+
+1. **The second concrete stratum** — S1 NAF joined topology as a stratum above S0
+2. **The stratification itself as a general pattern** — Phase R4 extracted the pattern from PAR Track 1's topology-specific handler and generalized it to N strata with a uniform (request-accumulator cell + handler function) interface. Topology is now one application of the general mechanism, not a privileged special case.
+
+**Architectural significance**: stratification on the propagator base is now first-class, composable, and uniform. Future strata plug in via the same pattern — no gate cells, no per-stratum special mechanisms, no new primitives. Candidate future strata include well-founded semantics (S2 for odd cycles), cost-bounded exploration (tropical thresholds), constraint propagation at different activation levels, and self-hosting compiler passes. All would use the same infrastructure.
+
+**Verification**: see `racket/prologos/propagator.rkt:2439-2444` (`stratum-handlers` box, `register-stratum-handler!`) and the BSP outer loop at line 2665 which processes `(unbox stratum-handlers)` uniformly. The topology handler at line 2448 registers via the same mechanism (though it predates the generalization and uses its own box — a cleanup candidate for unifying topology into the general strata list).
+
+### 9.7 Net architectural assessment
+
+Track 2 + PAR Track 1 infrastructure provided sufficient abstraction for Track 2B's scope. The modifications Track 2B made (propagator flags, well-known cells, per-propagator namespaces, general strata) are *extensions*, not *changes*. The core propagator model held. **The mantra audit was the architectural validation**: the system as designed supported on-network computation; the violations were implementation drift, not architectural gaps. The multi-stratification generalization (§9.6) is the track's most reusable architectural contribution — it's infrastructure for a class of future problems, not just NAF.
 
 ---
 
@@ -483,6 +503,14 @@ Phase 0b estimated ATMS overhead at 24.5x (single-fact); actual decomposition (s
 ### 12.7 Workload characteristics drive dispatch choice
 
 Single-fact queries: ATMS 2.3x faster via Tier 1. Multi-clause queries: DFS 6-11x faster. Multi-clause queries with NAF: ATMS required (worldview). Large clause sets (N≥256): ATMS pays off via parallelism. **Problem insight**: there is no universal best strategy. Adaptive dispatch is architecturally correct; "flip to propagator" was always the wrong framing.
+
+### 12.8 Stratification is a general pattern, not a specific mechanism
+
+PAR Track 1 introduced the topology stratum — useful, but special-cased. Track 2B needed S1 NAF for non-monotone evaluation. The design mantra challenge ("no gate cells, no per-stratum flags") pushed toward a general mechanism: request-accumulator cell + handler function, same shape as topology, uniformly invoked by the BSP outer loop. **The problem insight**: what looked like "topology is its own thing and NAF needs its own thing" was actually "both are instances of a single pattern." Recognizing the pattern turned two mechanisms into one.
+
+This has a deeper consequence: **the propagator base can host arbitrarily many strata** via the same pattern. Non-monotone retraction (S-1), well-founded semantics for odd cycles (S2), cost-bounded exploration, self-hosting compilation passes — all of these are candidate future strata that plug into the same mechanism. The infrastructure is one-for-all, not one-per-stratum.
+
+**Problem insight**: multi-stratification on a propagator base isn't a collection of special cases; it's a compositional feature of the base itself. This reframes future work: when a new computation is non-monotone, context-dependent, or order-sensitive, the question becomes "which stratum does this belong in?" — not "what new mechanism does this need?"
 
 ---
 
