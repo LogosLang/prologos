@@ -458,8 +458,12 @@
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
 
-  ;; Track 10B: Stale .zo detection when --no-precompile is used.
-  ;; Checks if driver.rkt's .zo is older than driver.rkt source.
+  ;; Track 10B + Phase T: Stale .zo detection when --no-precompile is used.
+  ;; Checks driver.rkt AND test files against their compiled .zo timestamps.
+  ;; Phase T lesson: `raco make driver.rkt` recompiles production code but NOT
+  ;; test files (they're not in driver.rkt's dependency graph). The batch worker
+  ;; uses dynamic-require which trusts cached .zo — stale test .zo produces
+  ;; wrong results silently (not linklet errors, just old behavior).
   ;; If stale, warn (don't fail — the user explicitly said --no-precompile).
   (unless (do-precompile?)
     (let* ([driver-src (build-path project-root "driver.rkt")]
@@ -468,7 +472,29 @@
         (when (> (file-or-directory-modify-seconds driver-src)
                  (file-or-directory-modify-seconds driver-zo))
           (printf "⚠ WARNING: driver.rkt is newer than compiled/driver_rkt.zo\n")
-          (printf "  Run `raco make driver.rkt` or remove --no-precompile\n")))))
+          (printf "  Run `raco make driver.rkt` or remove --no-precompile\n"))))
+    ;; Phase T: Also check test files against production .zo.
+    ;; If any production .zo is newer than a test .zo, the test was compiled
+    ;; against old production code. This catches the "raco make driver.rkt
+    ;; + --no-precompile" pattern that leaves test .zo stale.
+    (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
+           [driver-ts (and (file-exists? driver-zo)
+                           (file-or-directory-modify-seconds driver-zo))]
+           [tests-dir (build-path project-root "tests")]
+           [stale-count 0])
+      (when (and driver-ts (directory-exists? tests-dir))
+        (for ([f (in-directory tests-dir)]
+              #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
+          (define test-zo
+            (let* ([fname (file-name-from-path f)]
+                   [zo-name (string-append (regexp-replace #rx"\\.rkt$" (path->string fname) "_rkt") ".zo")])
+              (build-path (path-only f) "compiled" zo-name)))
+          (when (and (file-exists? test-zo)
+                     (< (file-or-directory-modify-seconds test-zo) driver-ts))
+            (set! stale-count (add1 stale-count))))
+        (when (positive? stale-count)
+          (printf "⚠ WARNING: ~a test .zo files are older than production .zo\n" stale-count)
+          (printf "  Test results may reflect old code. Remove --no-precompile to fix.\n")))))
 
   ;; .pnet cache: set env var for batch workers, check/generate cache
   (cond
