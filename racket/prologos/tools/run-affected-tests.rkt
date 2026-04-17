@@ -461,8 +461,7 @@
     (printf "Pre-compiled in ~as\n"
             (real->decimal-string (/ precomp-ms 1000.0) 1)))
 
-  ;; Track 10B + Phase T: Stale .zo detection when --no-precompile is used.
-  ;; Checks driver.rkt AND test files against their compiled .zo timestamps.
+  ;; Track 10B + Phase T: Stale .zo detection + auto-repair when --no-precompile is used.
   ;; Phase T lesson (BSP-LE Track 2B PIR §11.5): `raco make driver.rkt`
   ;; recompiles production code but NOT test files (they're not in driver.rkt's
   ;; dependency graph). The batch worker uses dynamic-require which trusts
@@ -470,28 +469,26 @@
   ;; errors, just old behavior). Multiple cycles of "passes individually, fails
   ;; in batch" during Track 2B Phase T-a tracked to this exact gap.
   ;;
-  ;; I1 (Track 2B process): upgrade warning → BLOCK. Stale .zo silently
-  ;; corrupts test results. Blocking forces the user to either (a) remove
-  ;; --no-precompile (let the runner handle compilation), (b) compile test
-  ;; files explicitly (`raco make tests/*.rkt`), or (c) opt-in via
-  ;; --force-stale-zo (for intentional reproduction of old behavior).
+  ;; I1 (Track 2B process, revised): AUTO-RECOMPILE stale files rather than
+  ;; block. The existing `precompile-modules!` compiles driver + all test
+  ;; files in a single `raco make` call. When staleness is detected under
+  ;; --no-precompile, invoke it on the stale subset. Fast (already-fresh
+  ;; files are no-ops). Preserves --no-precompile's purpose (skip full
+  ;; recompile) while auto-fixing the silent-corruption trap.
+  ;; Override via --force-stale-zo for intentional reproduction of old behavior.
   (unless (do-precompile?)
-    (define staleness-found? #f)
+    (define stale-files '())
     (let* ([driver-src (build-path project-root "driver.rkt")]
            [driver-zo  (build-path project-root "compiled" "driver_rkt.zo")])
       (when (and (file-exists? driver-src) (file-exists? driver-zo))
         (when (> (file-or-directory-modify-seconds driver-src)
                  (file-or-directory-modify-seconds driver-zo))
-          (set! staleness-found? #t)
-          (eprintf "✗ BLOCKED: driver.rkt is newer than compiled/driver_rkt.zo\n")
-          (eprintf "  Run: raco make driver.rkt\n")
-          (eprintf "  Or: remove --no-precompile to let the runner compile\n"))))
+          (set! stale-files (cons (path->string driver-src) stale-files)))))
     ;; Test files against production .zo.
     (let* ([driver-zo (build-path project-root "compiled" "driver_rkt.zo")]
            [driver-ts (and (file-exists? driver-zo)
                            (file-or-directory-modify-seconds driver-zo))]
-           [tests-dir (build-path project-root "tests")]
-           [stale-count 0])
+           [tests-dir (build-path project-root "tests")])
       (when (and driver-ts (directory-exists? tests-dir))
         (for ([f (in-directory tests-dir)]
               #:when (regexp-match? #rx"\\.rkt$" (path->string f)))
@@ -501,16 +498,27 @@
               (build-path (path-only f) "compiled" zo-name)))
           (when (and (file-exists? test-zo)
                      (< (file-or-directory-modify-seconds test-zo) driver-ts))
-            (set! stale-count (add1 stale-count))))
-        (when (positive? stale-count)
-          (set! staleness-found? #t)
-          (eprintf "✗ BLOCKED: ~a test .zo file(s) older than production .zo\n" stale-count)
-          (eprintf "  Test results would silently reflect OLD code (not linklet errors).\n")
-          (eprintf "  Fix: remove --no-precompile (runner compiles both)\n")
-          (eprintf "  Or: raco make tests/*.rkt  (compile test files explicitly)\n"))))
-    (when (and staleness-found? (not (force-stale-zo?)))
-      (eprintf "\nOverride with --force-stale-zo (for intentional old-code reproduction).\n")
-      (exit 2)))
+            (set! stale-files (cons (path->string f) stale-files))))))
+    (when (pair? stale-files)
+      (cond
+        [(force-stale-zo?)
+         (eprintf "⚠ --force-stale-zo: proceeding with ~a stale .zo file(s) (results may reflect OLD code)\n"
+                  (length stale-files))]
+        [else
+         (printf "Detected ~a stale .zo file(s); auto-recompiling...\n" (length stale-files))
+         (define repair-t0 (current-inexact-monotonic-milliseconds))
+         (define raco-path (find-raco-path))
+         (define-values (proc out in err)
+           (apply subprocess #f #f #f raco-path "make" (reverse stale-files)))
+         (close-output-port in)
+         (subprocess-wait proc)
+         (close-input-port out)
+         (close-input-port err)
+         (unless (zero? (subprocess-status proc))
+           (eprintf "✗ Auto-recompile failed. Run `raco make` manually.\n")
+           (exit 2))
+         (define repair-ms (- (current-inexact-monotonic-milliseconds) repair-t0))
+         (printf "Repaired in ~as\n" (real->decimal-string (/ repair-ms 1000.0) 1))])))
 
   ;; .pnet cache: set env var for batch workers, check/generate cache
   (cond
