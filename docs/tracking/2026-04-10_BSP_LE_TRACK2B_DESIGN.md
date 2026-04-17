@@ -37,7 +37,7 @@
 | 6 | `:auto` adaptive dispatch | ✅ | `7d77d52a`. Adaptive: Tier 1 (facts), NAF/guard → ATMS, N≥threshold(256) → ATMS, else → DFS. Configurable threshold. 2 known wf-comparison parity issues (Phase T). |
 | T-a | Parity investigation + correctness fixes | ✅ | `1eb8b8cc`→`35a39865`. 7 fixes: CWA undefined error, ground provability DFS, 0-arity delegation, gating-only success markers, success marker guard, dissolution entry pre-merge, product dedup. 398/398 all pass. |
 | T-b | Systematic DFS↔ATMS parity sweep | ✅ | `a4326539`. 15/15 files BOTH PASS (3 full pipeline, 5 direct API, 7 WF/infra control). Zero parity gaps. |
-| T-c | Parity regression test file | ⬜ | `test-solver-parity.rkt` — representative queries, BOTH strategies, set-equal results |
+| T-c | Parity regression test file | ✅ | `034aa167`. `test-solver-parity.rkt` — 15 tests, 10 divergence classes, both strategies, set-equal with unresolved-var normalization. 399/399, 7765 tests. |
 | PIR | Post-implementation review | ⬜ | |
 
 **Per-phase completion protocol** (from DESIGN_METHODOLOGY.org §4):
