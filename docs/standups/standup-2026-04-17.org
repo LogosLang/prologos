@@ -121,13 +121,7 @@ a single fixpoint computation by bringing elaboration fully on-network.
 PPN Master §4 already captures 7 cross-cutting lessons from BSP-LE
 Track 2B for Track 4C design. No design doc yet — next step.
 
-** Possibly: PM Track 12 (Module Loading on Network)
 
-Alternative sequencing: PM Track 12 before PPN 4C. Module-loading on
-network benefits both incremental LSP (Track 11) and elaboration-on
--network (provides on-network module state for 4C to consume).
-
-Decision point: scope + sequence PPN 4C vs PM 12.
 
 * Notes
 
