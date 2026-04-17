@@ -1,0 +1,140 @@
+#+TITLE: Standup — 2026-04-17
+#+DATE: 2026-04-17
+
+* Yesterday (since 2026-04-12 standup)
+
+** BSP-LE Track 2B Complete — Parity Deployment + Parallel + On-Network
+
+Completed all implementation phases (Phases 1a → T-c), PIR, process
+improvements, Addendum A1, A2/A3 scoping, A3 tactical static lint,
+and lesson distillation. 5-day stretch of post-design work.
+
+** Phase R: On-Network Redesign (mid-track)
+
+- Design mantra introduced as first-class design gate: "All-at-once,
+  all in parallel, structurally emergent information flow ON-NETWORK"
+- Codified in 4 rules files (on-network.md, propagator-design.md,
+  workflow.md, structural-thinking.md)
+- Mantra audit of existing Track 2B work found 6 architectural
+  violations tests had missed (relation store as parameter, fact-row
+  PU using for/fold, imperative S1, etc.)
+- Phase R fixed all 6 violations in 6 sub-phases (R1-R6)
+- Module Theory Resolution B: scope sharing eliminated bridges
+  entirely — direct-sum-via-tagging pattern; no bridges, no tag
+  collapse
+
+** Phases 2a-2d: NAF + Parallel BSP Infrastructure
+
+- 2a: NAF + scope sharing + product-worldview dissolution. ALL
+  adversarial NAF cases pass (basic, variable, both-passed 3,
+  cross-relation 6)
+- 2b: Hypercube tree-reduce merge with per-propagator cell-id
+  namespaces. Racket parallelism ceiling measured: ~8μs OS thread
+  wakeup floor dominates
+- 2c: Semaphore-based worker pool. Crossover at N≈256
+- 2d: Streaming BSP investigation — 4 approaches benchmarked
+  exhaustively; all worse than sync pool. Infrastructure correct;
+  payoff deferred to self-hosting
+
+** Phases 3, 5a-5c, 6: Guard + Tier 1 + Adaptive Dispatch
+
+- Phase 3: Guard as worldview assumption (same pattern as NAF)
+- Phase 5a: Propagator flags (FIRE-ONCE, EMPTY-INPUTS) + Tier 1
+  flush + self-clearing. Belt-and-suspenders incident caught and
+  corrected
+- Phase 5b/5c: Tier 1 direct fact return (62x speedup: 30.6μs →
+  0.49μs; ATMS now 2.3x faster than DFS for facts)
+- PPN boundary normalization insight applied
+- Phase 6: Adaptive :auto dispatch (Tier 1 / NAF→ATMS / N≥256→ATMS /
+  else→DFS)
+
+** Phase T: Parity Regression (T-a/T-b/T-c)
+
+- T-a: 7 correctness fixes (undefined relation error, ground
+  provability via DFS, 0-arity delegation, gating-only success
+  markers, success marker guard, dissolution entry pre-merge,
+  product dedup)
+- T-b: systematic DFS↔ATMS parity sweep, 15/15 files BOTH PASS
+- T-c: test-solver-parity.rkt — 15 regression tests across 10
+  divergence classes
+
+** PIR + Process Improvements
+
+- PIR written per POST_IMPLEMENTATION_REVIEW.org methodology:
+  20 sections, 14 bugs with root cause, 10 design decisions with
+  rationale, 10 lessons, longitudinal survey of 10 prior PIRs
+- 7 process improvements codified:
+  - M1-M3 (DESIGN_METHODOLOGY.org): mantra Stage 0 gate, Pre-0
+    benchmarks per semantic axis, parity tests as design artifact
+  - W1-W2 (workflow.md, testing.md): belt-and-suspenders blocking
+    rule, --no-precompile trap codified
+  - I1-I2 (run-affected-tests.rkt): stale .zo auto-recompile,
+    diagnostic protocol reminder when 3+ test failures
+  - C2 (stratification.md): multi-stratification pattern codified
+
+** Addendum A1: Topology → General Stratum Unification
+
+4 code phases. Found nogood-install-request was dead code (struct +
+handler + function with ZERO producers) — deleted (~125 LOC). 4
+surviving handlers + 9 writer sites migrated from legacy shared
+decomp-request-cell + try-each chain to per-subsystem request cells
+(cells 6-9) registered via register-stratum-handler! with :tier
+'topology. Legacy register-topology-handler! retired. BSP outer
+loop now has uniform stratum view.
+
+** A2/A3 Scoping + A3 Static Lint
+
+- A2 (per-relation evaluators): reframed as cross-cutting pattern
+  for PPN Track 4C (elaboration-on-network). Captured 7 cross-cutting
+  lessons on PPN Master §4.
+- A3 (two-context boundary bugs): architecturally a parameters →
+  cells migration; belongs with PM series. Added PM Track 12: Module
+  Loading on Network to PM Master.
+- A3 tactical: tools/lint-parameters.rkt with baseline approach.
+  225 parameters classified (12 private, 22 test-registered, 191
+  baselined-unclassified). Warning-only; never blocks push.
+  Self-obsoleting when PM 12 lands.
+
+** Lesson Distillation (selected 4 of 9)
+
+- structural-thinking.md: Direct Sum — Prefer Tagging Over Bridges
+  (foundational theoretic lens; shapes concrete engineering)
+- DEVELOPMENT_LESSONS.org: Racket Parallelism ~8μs Floor + memory
+- DESIGN_METHODOLOGY.org: Measure Before/During/After + memory
+- PATTERNS_AND_CONVENTIONS.org: Boundary Normalization anti-pattern
+- Rejected: "Skip the mechanism" generalization (conflicts with
+  optimization principle; Tier 1 was a special case)
+- Deferred: Hash iteration Heisenbug, Context compaction handoff
+
+** Final Suite State
+
+399/399 files, 7763 tests, all pass. BSP-LE Master + PPN Master + PM
+Master all updated. Three architectural follow-ups (A1 ✅, A2-future,
+A3-future) now converge on the same agenda at different layers.
+
+* Today
+
+** Next: PPN Track 4C — Elaboration on-network
+
+Priority for next major track work: collapse the parsing pipeline to
+a single fixpoint computation by bringing elaboration fully on-network.
+PPN Master §4 already captures 7 cross-cutting lessons from BSP-LE
+Track 2B for Track 4C design. No design doc yet — next step.
+
+** Possibly: PM Track 12 (Module Loading on Network)
+
+Alternative sequencing: PM Track 12 before PPN 4C. Module-loading on
+network benefits both incremental LSP (Track 11) and elaboration-on
+-network (provides on-network module state for 4C to consume).
+
+Decision point: scope + sequence PPN 4C vs PM 12.
+
+* Notes
+
+- BSP-LE Track 2B is one of the larger tracks to date (13 design
+  iterations, 43+ commits, 5.4 days wall-clock across 8 working
+  sessions, ~150 LOC A1 addendum)
+- Cross-cutting lessons from this track inform PPN 4C + PM 12 going
+  forward — captured on master roadmaps so insights aren't lost
+- Process improvements land as a set; validated by I2 firing
+  correctly during A1 test fix cycle
