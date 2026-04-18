@@ -10,6 +10,7 @@
 - D.2 refinement (2026-04-17, R1+P4 incorporation from [self-critique](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md)): A8 enforcement restructured from cell-level `:lattice` annotation (D.2 original) to Tier 1/2/3 architecture with **merge-function inheritance** and **`#:domain` override**. Classification belongs to the lattice (Tier 1) via SRE domain registration, implemented by registered merge functions (Tier 2), inherited by cells (Tier 3). Cell-level `:lattice` language retired as conceptually wrong ("a cell is not a lattice"). Production migration scope clarified: **101 call sites / 37 merge functions** (not 666 — original figure included tests/benchmarks/cache), top 10 merge functions cover 70% of production calls. Override keyword `#:domain` takes a named registered domain; no anonymous classification tags.
 - D.2 refinement (2026-04-17, S1 incorporation): TypeToWarnings bridge added to §4.3 (one-way α covering coercion + deprecation). Multi-source warning propagators (multiplicity, capability) documented in §4.4 as propagators (not bridges). Egress convention noted: driver reading `:warnings` is network output, not a bridge. ConstraintsToWarnings audit flagged for Phase 2.
 - D.2 refinement (2026-04-17, M2+R4 incorporation — PUnify audit): audit of unify.rkt (1028 lines) confirms "PUnify IS the match operation" claims across 6 sections map directly to existing infrastructure (`sre-structural-classify`, `unify-union-components`, `type-tensor-core`, `subtype-lattice-merge`, `current-structural-meta-lookup`, flex-app machinery). **Variance support is already first-class via `'subtype` relation name** — no new PUnify work required. New §6.13 captures the audit; §6.1/§6.2/§6.4/§6.5/§6.6/§6.10/§6.12 cite specific existing mechanisms. Net-new PUnify work: ~150-200 lines of composition wiring across phases, no algorithm development.
+- D.2 refinement (2026-04-18, M5 incorporation — residuation check timing): **lazy evaluation of cross-tag residuation check**, refined and verified correct. "Lazy" means skipped-when-unnecessary AND re-fired-on-narrowing, executed synchronously within the merge function (not deferred to a separate propagator). Trigger: cross-tag present AND (CLASSIFIER narrowed OR INHABITANT narrowed). Case 2 (narrowing re-check) is the subtle case naive lazy-cache-and-skip would miss. Option 4 (separate propagator for the check) dismissed — would create a timing window with unverified cross-tag state. Correctness compatible with BSP/CALM/ATMS. Verification plan: parity test cases (Phase 0) + property inference (Phase 2) + A/B micro-bench (Phase 3). Details in §6.2.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -553,6 +554,47 @@ Expected lattice-law corner cases (candidates property inference may flag):
 - **Multi-layer nesting**: when the carrier is itself a compound type (e.g., `Pi`), residuation must descend structurally — SRE ctor-desc provides the decomposition; verify it composes with tag-dispatch at every level.
 
 If any property fails, the fix is in the merge function — same iteration cycle as Track 3 §12's spec-cell associativity fix.
+
+**Lazy evaluation of the cross-tag residuation check** (M5 resolution 2026-04-18):
+
+"Lazy" here does not mean "deferred to a separate propagator" (see dismissed Option 4 below). It means the check is skipped when unnecessary and re-fired when required. The check executes *synchronously within the merge function call* — no timing window with unverified cross-tag state.
+
+**Trigger condition**:
+
+```
+trigger-check?(current, result) =
+  AND
+    (has-classifier? result)
+    (has-inhabitant? result)
+    (OR
+      (not (equal? (classifier-layer current) (classifier-layer result)))  ;; CLASSIFIER narrowed
+      (not (equal? (inhabitant-layer current) (inhabitant-layer result)))) ;; INHABITANT narrowed
+```
+
+The check fires in these cases:
+1. **New cross-tag**: CLASSIFIER written to a record that had INHABITANT (or vice versa).
+2. **CLASSIFIER narrows**: the record had both tags; narrowing may invalidate previously-compatible INHABITANT. **Re-check required** — this is the subtle case naive "cache and skip" would miss.
+3. **INHABITANT narrows**: rare, but re-verify.
+
+The check is skipped when:
+4. **Unchanged merge**: both tag layers unchanged (idempotent merge). No new information.
+5. **Only one tag present**: no cross-tag situation.
+
+**Correctness guarantees**:
+
+- **BSP compatibility**: merge function fires synchronously at BSP round-merge boundary. `result` is returned already-verified (or replaced with `type-top` on failure). Downstream reads see post-check state; no timing window.
+- **CALM monotonicity**: the check's outcome moves only one direction — toward "compatible" or "contradiction" (type-top). Never back from contradiction to compatible. CALM-safe.
+- **ATMS compatibility**: under cell-based TMS (Phase 9), worldview-filtered reads mean cross-tag check fires per-branch. Branches don't cross-check each other (CLASSIFIER in branch A invisible to INHABITANT in branch B). S2 commit merge is where branches converge; that merge's check catches cross-branch inconsistency.
+- **Property inference**: merge function passes commutativity/associativity/idempotence verification because the check is deterministic and argument-order-independent (subsumption direction is fixed: inhabitant inhabits classifier).
+
+**Why not Option 4 (separate propagator for the check)**: a deferred propagator would create a timing window where cross-tag records exist un-verified. Other propagators reading `:type` in that window would see unchecked data. Adds per-position propagator count with no offsetting benefit. Dismissed.
+
+**Verification plan** (implementation-time, not design-time):
+
+Before Phase 3 commits to the lazy implementation:
+1. **Parity test cases** covering all 5 conditions (new cross-tag, classifier narrows, inhabitant narrows, unchanged, single-tag). Scope: Phase 0 parity skeleton.
+2. **Property inference run** on the lazy merge function (Phase 2, A9). Any failure is a bug to fix.
+3. **A/B micro-benchmark** comparing lazy vs eager (always-check-on-cross-tag). If eager overhead is <5%, eager's simplicity may win; if ≥10%, lazy's trigger refinement is worth the additional logic. Decision locked at Phase 3 based on data.
 
 #### §6.2.1 γ hole-fill propagator — reactive, not iterative (D.2 mantra reframe)
 
