@@ -3,7 +3,7 @@
 **Date**: 2026-04-17
 **Target**: [PPN 4C Design D.2](2026-04-17_PPN_TRACK4C_DESIGN.md) as of commit `006a83dc`.
 **Methodology**: [CRITIQUE_METHODOLOGY.org](principles/CRITIQUE_METHODOLOGY.org) — three lenses (P/R/M) + SRE lattice lens.
-**Status**: Draft for review. User + author to decide which findings incorporate into D.3.
+**Status**: Round closed (2026-04-18). All findings resolved; see §8 for summary. D.2 ready for external critique round (D.3+).
 
 ---
 
@@ -256,7 +256,7 @@ Grouped by decision point for user review:
 | M3 | Clarify Hasse-registry lookup as helper | Minor | §6.12 clarification | **✅ RESOLVED** (minors batch 2026-04-18). §6.12.1 notes lookup is a helper function invoked synchronously from consuming propagators' fire bodies, not a standalone propagator. |
 | M4 | Union ATMS framing is conceptual, not impl change | Minor | §6.10 clarification | **✅ RESOLVED** (minors batch 2026-04-18). §6.10 adds framing note: "ATMS branching IS ⊕ ctor-desc decomposition" is conceptual lens; Phase 10 uses existing `atms-amb` machinery. |
 | M5 | Residuation check lazy-vs-eager | Substantive | §6.2 specification | **✅ RESOLVED** (commit TBD). Lazy (skipped-when-unnecessary + re-fired-on-narrowing, synchronous within merge) committed for D.3. Trigger condition specified in §6.2 with full correctness analysis for BSP/CALM/ATMS. Option 4 (separate propagator) dismissed. Verification plan: parity tests (Phase 0) + property inference (Phase 2) + A/B bench (Phase 3). Decision locked pending verification. |
-| P1 | Option A scaffold period — lint rule candidate | Minor | Optional; discipline-based | ⬜ pending |
+| P1 | Option A scaffold period — lint rule candidate | Minor | Optional; discipline-based | **✅ RESOLVED-BY-DESIGN** (2026-04-18). Phase sequencing itself provides the guarantee: cell-refs don't exist until Phase 12; any freeze-like read during Phases 9-11b necessarily uses Option A (tree walk on `:term`), which is correct for those phases. There is no parallel code path to converge. Phase 12 retires Option A atomically — not staged. Lint rule would catch nothing because there's no alternative to misuse. P3 (couple A8 to CHAMP retirement) already structurally prevents the related concern of residual CHAMP reads post-Phase-4. |
 | P2 | `:lattice` annotation immutability documented | Minor | One sentence | **✅ RESOLVED** by R1+P4 (cell-level `:lattice` retired) |
 | P3 | Couple A8 to CHAMP retirement deletion | Minor | §6.3 wording | **✅ RESOLVED** (minors batch 2026-04-18). §6.3 Phase 3 close now states CHAMP code path + meta-info lattice fields deleted entirely; residual reads become compile errors. Explicit coupling to A8 enforcement. |
 | R3 | Phase 9 `current-speculation-stack` scope confirmed | Confirmation | No action | ✅ confirmed (21 sites/6 files) |
@@ -273,6 +273,29 @@ Grouped by decision point for user review:
 - 2026-04-18: Minors batch resolved (M1, M3, M4, P3, R5). M1 language polish removes "walks" step-think wording from §6.5/§6.12. M3 clarifies Hasse-registry `lookup` as helper function (invoked from consuming propagators' fire bodies), not standalone propagator. M4 frames "ATMS branching IS ⊕ ctor-desc" as conceptual lens explaining principled connection; Phase 10 impl uses existing `atms-amb` machinery. P3 couples A8 enforcement to A2 retirement: CHAMP deletion is hard-delete, residual reads are compile errors. R5 names `current-meta-source-registry` as side registry for lattice-irrelevant source-loc metadata; explicit non-facetization choice documented.
 - 2026-04-18: O2 resolved via new §6.11.8 comprehensive lens catalog. Applies SRE (6 questions) + Module Theory + PUnify + Hasse-adjacency lens uniformly to all non-facet lattices: AttributeRecord (product of facets), AttributeMap (position-indexed compound), impl coherence (Phase 7), inhabitant catalog (Phase 9b), Hasse-registry ambient L (§6.12), worldview Q_n (Phase 9/10 hypercube), ready-queue actions (S1), retraction request set (S(-1)), tagged-cell-value layers (pervasive Module Theory Realization B carrier). Two structural insights surfaced by the systematic treatment: (1) impl coherence + inhabitant catalog are structurally identical Hasse-registry instances differing only in parameterization — §6.12 primitive abstracts the identity for compositional win; (2) tagged-cell-value layer lattice is the structural generalization of Module Theory Realization B — every "shared-carrier + tags" application in 4C (`:type`/`:term`, `:constraints` by trait, worldview by assumption, attribute-map by position) is one instance of this lattice. Per CRITIQUE_METHODOLOGY § "SRE Lattice Lens is Mandatory": uniform application achieved.
 - 2026-04-18: O3 resolved via provenance-as-structural-emergence framing, per user-identified research: Module Theory on Lattices §5-6 + Hypergraph Rewriting Research §6.3 ("dependency graph IS a proof object — the network naturally maintains provenance"). New §6.1.1 specifies: three structural sources (ATMS assumption tagging from Phase 9, `:trace :structural` mode from NTT §7.6, source-loc registry from Phase 4 R5). Error-reporting via backward residuation IS in 4C scope per user direction (push for better human-/machine-traceable errors/warnings/feedback; first-class compiler/error features; precise source mapping; IDE/LSP tooling support). New Phase 11b (diagnostic infrastructure) added to Progress Tracker, positioned after Phase 11 orchestration so all supporting infrastructure is in place. `derivation-chain-for(position, tag)` helper API shape deferred to phase-time mini-design per user direction.
+- 2026-04-18: P1 resolved-by-design. Option A scaffold-period concern dissolves under phase sequencing: cell-refs don't exist until Phase 12; freeze-like reads during Phases 9-11b necessarily use Option A (correct for those phases); no alternative to misuse during the window. Phase 12 retires Option A atomically (not staged). Lint rule unnecessary. Related concern (residual CHAMP reads) already structurally prevented by P3 (A8 enforcement coupled to A2 hard-delete).
+
+---
+
+## §8 Self-Critique Round Closed (2026-04-18)
+
+All findings from the P/R/M/SRE self-critique round resolved:
+
+- **Major findings**: R1, P4, S1, M2+R4, M5 — all resolved with substantive design refinements.
+- **Minor findings**: M1, M3, M4, P3, R5, P1, P2 — resolved via clarifications or absorbed by major refinements.
+- **Follow-up observations**: O1, O2, O3 — all resolved, with O2 extending lens coverage and O3 adding a new Phase 11b for diagnostic infrastructure.
+- **Confirmations**: R2, R3 — no action required.
+
+**Structural insights surfaced by the critique round**:
+
+1. **Tier 1/2/3 lattice architecture** (from R1+P4) separates lattice-type classification from merge-function implementation from cell-instance inheritance. `#:domain` keyword for override. Aligns with NTT `impl Lattice L` directly.
+2. **Two Hasse-registry instances are structurally identical** (from O2) — impl coherence (Phase 7) and inhabitant catalog (Phase 9b) both PUnify-with-`'subtype` over Hasse-indexed entries; §6.12 primitive abstracts the identity.
+3. **Tagged-cell-value layer lattice is the structural generalization of Module Theory Realization B** (from O2) — every "shared-carrier + tags" application in 4C (`:type`/`:term`, `:constraints` by trait, worldview by assumption, attribute-map by position) is one instance.
+4. **Provenance is structurally emergent** (from O3) — the propagator-firing dependency graph IS the proof object; no new data structure needed. Error-reporting via backward residuation (Module-Theory-principled).
+5. **PUnify's reach covers all D.2 claims** (from M2+R4) — audit of unify.rkt confirmed variance (via `'subtype` relation), union operands, tensor, metas, flex-app all already supported. Net-new PUnify work: ~150-200 lines of composition wiring.
+6. **Production migration scope is 10× smaller than D.2 original implied** (from R1) — 101 production call sites, 37 merge functions, not 666 cells.
+
+**D.2 is ready for external critique round** per CRITIQUE_METHODOLOGY §"Integration with Design Methodology" — D.3+ via external critique.
 
 **Proposed order of discussion**:
 1. R1 + P4 together — scope decision.
