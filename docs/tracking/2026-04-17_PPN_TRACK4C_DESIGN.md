@@ -8,6 +8,8 @@
 - D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
 - D.2 refinement (2026-04-17, SRE+PUnify lens pass): Hasse-registry extracted as a first-class primitive (new §6.12) — foundational infrastructure used by Phase 7 parametric resolution and Phase 9b γ hole-fill, consumed by future tracks. New Phase 2b (primitive) and Phase 9b (γ hole-fill) added to Progress Tracker — γ previously had no explicit phase. "Realization A → B collapse" named as cross-cutting pattern. PUnify named explicitly in §6.1/§6.4/§6.6/§6.10 (previously implicit). Stratification framed as module composition in §6.7/§6.11.1. Union ATMS branching framed as ⊕ ctor-desc decomposition in §6.10. SRE ctor-desc auto-derivation flagged as simplification opportunity in §6.4.
 - D.2 refinement (2026-04-17, R1+P4 incorporation from [self-critique](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md)): A8 enforcement restructured from cell-level `:lattice` annotation (D.2 original) to Tier 1/2/3 architecture with **merge-function inheritance** and **`#:domain` override**. Classification belongs to the lattice (Tier 1) via SRE domain registration, implemented by registered merge functions (Tier 2), inherited by cells (Tier 3). Cell-level `:lattice` language retired as conceptually wrong ("a cell is not a lattice"). Production migration scope clarified: **101 call sites / 37 merge functions** (not 666 — original figure included tests/benchmarks/cache), top 10 merge functions cover 70% of production calls. Override keyword `#:domain` takes a named registered domain; no anonymous classification tags.
+- D.2 refinement (2026-04-17, S1 incorporation): TypeToWarnings bridge added to §4.3 (one-way α covering coercion + deprecation). Multi-source warning propagators (multiplicity, capability) documented in §4.4 as propagators (not bridges). Egress convention noted: driver reading `:warnings` is network output, not a bridge. ConstraintsToWarnings audit flagged for Phase 2.
+- D.2 refinement (2026-04-17, M2+R4 incorporation — PUnify audit): audit of unify.rkt (1028 lines) confirms "PUnify IS the match operation" claims across 6 sections map directly to existing infrastructure (`sre-structural-classify`, `unify-union-components`, `type-tensor-core`, `subtype-lattice-merge`, `current-structural-meta-lookup`, flex-app machinery). **Variance support is already first-class via `'subtype` relation name** — no new PUnify work required. New §6.13 captures the audit; §6.1/§6.2/§6.4/§6.5/§6.6/§6.10/§6.12 cite specific existing mechanisms. Net-new PUnify work: ~150-200 lines of composition wiring across phases, no algorithm development.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -490,10 +492,10 @@ Realization B: one facet `:classify-and-inhabit` on the shared TypeFacet carrier
 - **CLASSIFIER tag** — this layer holds the classifying type of the position (what it *must have*).
 - **INHABITANT tag** — this layer holds the specific inhabitant (what *solves* this position).
 
-Merge is tag-dispatched:
-- CLASSIFIER × CLASSIFIER → type-lattice-merge (unification of classifiers).
-- INHABITANT × INHABITANT → α-equivalence strict merge; mismatch → type-top.
-- CLASSIFIER × INHABITANT → **quantale residuation check via PUnify with variance**: does the inhabitant inhabit the classifier? The check `type-of(INHABITANT) ⊑ CLASSIFIER` IS a PUnify invocation with one-direction variance (subsumption, not unification) — driven by SRE ctor-desc decomposition on the shared carrier. PUnify success → compatible; failure → type-top (contradiction).
+Merge is tag-dispatched, composing existing unify.rkt relations (§6.13 PUnify audit):
+- **CLASSIFIER × CLASSIFIER → `unify-core` with `'equality` relation** (dispatch through [type-merge-table](../../racket/prologos/unify.rkt) `'equality` → `type-lattice-merge`). Standard unification.
+- **INHABITANT × INHABITANT → α-equivalence strict merge**; mismatch → type-top.
+- **CLASSIFIER × INHABITANT → `unify-core` with `'subtype` relation**. The check `type-of(INHABITANT) ⊑ CLASSIFIER` dispatches through `type-merge-table` `'subtype` → [`subtype-lattice-merge`](../../racket/prologos/subtype-predicate.rkt). This IS the "PUnify with variance" — variance is already first-class via the relation name. PUnify success → compatible; failure → type-top (contradiction).
 
 The residuation structure lives *inside* the quantale, not as a bridge. This is §6.2's subject.
 
@@ -611,7 +613,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 **Problem**: 76 `register-typing-rule!` entries vs ~326 `expr-*` structs. `infer/err` fallback catches the rest imperatively.
 
-**Fix**: enumerate uncovered AST kinds, register one propagator per kind. Dispatch is structural (cell-ID → propagator), not imperative. **Matching/unification within typing rules IS PUnify** — app-typing's arg-domain unification, reduce-arm classifier matching, etc. all invoke PUnify via SRE ctor-desc decomposition on the shared TypeFacet carrier.
+**Fix**: enumerate uncovered AST kinds, register one propagator per kind. Dispatch is structural (cell-ID → propagator), not imperative. **Matching/unification within typing rules IS PUnify** — app-typing's arg-domain unification invokes `unify-core` via [`sre-structural-classify`](../../racket/prologos/unify.rkt) (unify.rkt:127) which dispatches through ctor-desc decomposition. No hand-rolled pattern matcher needed; existing SRE ctor-desc infrastructure drives the unification. See §6.13 for the full PUnify mechanism audit.
 
 **Methodology**:
 
@@ -652,7 +654,7 @@ Not all typing rules fit (some need bidirectional flow, constraint generation, e
 
 3. **Hasse-indexed impl registry** (§6.11.4) — **implemented via the Hasse-registry primitive (§6.12)**. Each parametric impl is registered once at declaration time, placed in a specificity Hasse diagram over impl patterns. At resolution time, lookup is structural index navigation (O(log N) via Hasse height), not scan. Coherence — no overlapping impls at same specificity — is critical-pair analysis on the impl-pattern DPO structure ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)); zero critical pairs verified at registration.
 
-4. **PUnify for pattern matching**. "Does candidate impl pattern `P` match target type `T`?" is a **PUnify invocation** on the TypeFacet quantale — not a hand-rolled pattern matcher. Impl-level type vars (e.g., `E` in `Seqable (List E)`) become fresh CLASSIFIER-tagged metas during the match attempt. PUnify's structural decomposition via SRE ctor-desc handles recursive matching (`List Int` vs `List E` → decompose → `Int` vs `E` → E solves to Int). On success, the substitution σ emerges as meta bindings on the shared carrier; the resolved dict term is constructed via structural cell reads.
+4. **PUnify for pattern matching**. "Does candidate impl pattern `P` match target type `T`?" is a **PUnify invocation** on the TypeFacet quantale — specifically `unify-core` ([unify.rkt:463](../../racket/prologos/unify.rkt)) with `'equality` relation for strict pattern match, dispatched through `sre-structural-classify` (unify.rkt:127) for ctor-desc decomposition. Not a hand-rolled pattern matcher. Impl-level type vars (e.g., `E` in `Seqable (List E)`) become fresh CLASSIFIER-tagged metas during the match attempt, resolved via `current-structural-meta-lookup`. PUnify's `decompose-meta-app` + `pattern-check` + `solve-flex-app` (unify.rkt:795-830) handle the flex-app case (Miller's pattern). On success, the substitution σ emerges as meta bindings on the shared carrier; the resolved dict term is constructed via structural cell reads. See §6.13 for the PUnify audit.
 
 **Mechanism**:
 
@@ -715,7 +717,7 @@ propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
 
 **DPO contribution**: substitution, β-reduction, η-expansion become graph rewrites on the cell-ref network. The adhesive-category rewriting primitives ([Adhesive Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)) apply directly. These primitives are the infrastructure SRE Track 6 builds on — Option C in 4C means SRE 6 doesn't re-invent elaboration-specific DPO machinery.
 
-**PUnify becomes universal for expressions**: under Option C, cell-ref dereferencing IS a one-step PUnify operation; expression reduction IS graph rewriting via ctor-desc dispatch. "Reading the expression" IS PUnify with the current cell state. Zonking dissolves because reading already does the substitution structurally. Every expression operation (type inference, reduction, pattern matching, display) becomes PUnify + ctor-desc on the cell-ref graph. Same machinery that handles types (§6.1, §6.2, §6.5) now handles expressions (§6.6) — unified computational substrate.
+**PUnify becomes universal for expressions**: under Option C, cell-ref dereferencing IS a one-step PUnify operation invoking `unify-core` with `'equality` relation on the resolved cell value; expression reduction IS graph rewriting via `sre-structural-classify` ctor-desc dispatch. "Reading the expression" IS PUnify with the current cell state. Zonking dissolves because reading already does the substitution structurally via the existing `current-structural-meta-lookup` mechanism. Every expression operation (type inference, reduction, pattern matching, display) becomes PUnify + ctor-desc on the cell-ref graph. Same machinery that handles types (§6.1, §6.2, §6.5) now handles expressions (§6.6) — unified computational substrate. See §6.13 for the PUnify audit confirming this reuse.
 
 ### §6.7 Elaborator strata → BSP scheduler unification (A7) — module composition
 
@@ -906,6 +908,8 @@ merge-viable-branches:
 
 **Connection to existing infrastructure**: BSP-LE Track 2B's per-propagator worldview bitmask + S1 NAF handler pattern (fork+BSP+nogood) IS this shape. ATMS assumption management is the BSP-LE ATMS solver; the only difference is the lattice on which merge occurs. The framing "ATMS union branching IS ctor-desc decomposition of ⊕" makes Phase 10 a natural extension of SRE ctor-desc dispatch — not a special case requiring new machinery.
 
+**PUnify within each branch**: per-branch elaboration invokes [`unify-union-components`](../../racket/prologos/unify.rkt) (unify.rkt:777) for compound-type unification under the branch's tagged worldview. Pre-existing: the function flattens/sorts/dedupes components and PUnifies pairwise. Reused as-is. See §6.13 for audit.
+
 ---
 
 ### §6.11 Design Lenses — Hyperlattice Conjecture / SRE / Hypercube Applied
@@ -1025,9 +1029,9 @@ The primitive composes the three lenses natively — which is why it's small:
 
 - **SRE**: the Hasse graph IS a structural lattice. Entries are nodes; transitive-reduction edges are the partial-order structure. Registration = cell write; lookup = structural read via SRE ctor-desc on the Hasse graph's decomposition.
 - **Module Theory**: entries at each Hasse node form an independent group. The registry = ⊕_{node} EntryGroup(node) — direct sum with Hasse-node-tagged layers on the shared carrier (Realization B by construction). No bridges between nodes; merges are per-node structurally independent.
-- **PUnify**: lookup IS structural subsumption checking — "does `position-fn(entry)` subsume `query`?" = PUnify with variance direction. Per-candidate PUnify via ctor-desc. The primitive implements lookup by invoking PUnify against the Hasse neighborhood of the query, returning all PUnify-successful entries.
+- **PUnify**: lookup IS structural subsumption checking — "does `position-fn(entry)` subsume `query`?" = PUnify with variance direction, specifically `unify-core` ([unify.rkt:463](../../racket/prologos/unify.rkt)) with `'subtype` relation (registered in `type-merge-table` at unify.rkt:70-73). Per-candidate PUnify via `sre-structural-classify` ctor-desc decomposition. The primitive implements lookup by invoking PUnify against the Hasse neighborhood of the query, returning all PUnify-successful entries.
 
-The three lenses compose structurally. The primitive is ~150-200 lines Racket because each lens contributes existing machinery (SRE domain, tagged direct-sum merge, PUnify).
+The three lenses compose structurally. The primitive is ~150-200 lines Racket because each lens contributes existing machinery (SRE domain, tagged direct-sum merge, PUnify). See §6.13 for the audit confirming PUnify coverage.
 
 #### §6.12.3 4C instances
 
@@ -1066,6 +1070,79 @@ registry ParametricImpls
 ```
 
 4C-level implementation is Racket infrastructure; future NTT makes it declarative syntax. No migration cost — the primitive IS the declarative form; NTT just surfaces it.
+
+### §6.13 PUnify infrastructure audit (from self-critique M2+R4)
+
+Audit of [`unify.rkt`](../../racket/prologos/unify.rkt) (1028 lines) conducted 2026-04-17 to verify D.2's "PUnify IS the match operation" claims across §6.1, §6.2, §6.4, §6.5, §6.6, §6.10, §6.12. **Verdict: PUnify's reach already covers all D.2 claims via existing infrastructure.** Extension work is minimal composition wiring, not new algorithm development.
+
+#### §6.13.1 Capability map — D.2 claims to existing unify.rkt infrastructure
+
+| D.2 claim (where used) | Existing unify.rkt mechanism |
+|---|---|
+| **Structural unification via ctor-desc** (§6.4 aspect, §6.5 parametric, §6.6 Option C) | `sre-structural-classify` (line 127) — dispatches through `ctor-desc-tag` + `ctor-desc-extract-fn`. Same ctor-desc that decomposes SRE lattices decomposes expressions for unification. |
+| **Union operand unification** (§6.10 ATMS per-branch, §6.1 CLASSIFIER ⊕) | `unify-union-components` (line 777). Flattens, sorts, dedupes, pairs components; PUnifies pairwise. Imported from `union-types.rkt` (SRE Track 2H Phase 1). |
+| **Tensor operation** (§6.1 quantale, §6.4 app-type) | `type-tensor-core` registered in `type-sre-domain` (line 102-106) as binary operation with declared properties `(distributes-over-join associative has-identity)`. |
+| **Subsumption / variance** (§6.2 CLASSIFIER × INHABITANT residuation, §6.2.1 γ hole-fill) | `subtype-lattice-merge` registered for `'subtype` and `'subtype-reverse` relations (line 72-73). **Variance is already first-class via the relation name** — `'equality` for strict unification, `'subtype` for variance. `subtype-predicate.rkt` is the supporting module. |
+| **Meta handling** (§6.5 impl-level fresh metas, §6.2.1 γ candidates) | `expr-meta?` as meta-recognizer; `current-structural-meta-lookup` as meta-resolver (line 87-89). Cell-based resolution. |
+| **Flex-app / Miller's pattern** (§6.5 parametric meta unification) | `decompose-meta-app`, `pattern-check`, `solve-flex-app` (lines 795-830). Applied metas handled structurally. |
+| **Level unification** (§6.1 Type(n) levels) | `unify-level` (line 935). Separate unification domain. |
+| **Multiplicity unification** (§6.4 Pi mults) | `unify-mult` (line 968). Separate unification domain. |
+
+#### §6.13.2 The `type-sre-domain` declarative structure (already in place)
+
+```racket
+;; From unify.rkt:78-106 — already registered
+(define type-sre-domain
+  (make-sre-domain
+    #:name 'type
+    #:merge-registry type-merge-registry    ;; 'equality | 'subtype | 'subtype-reverse
+    #:meta-recognizer expr-meta?
+    #:meta-resolver ...                      ;; cell-based via current-structural-meta-lookup
+    #:declared-properties                    ;; per-relation algebraic properties
+      (hasheq 'equality  (hasheq ...)
+              'subtype   (hasheq 'commutative-join prop-confirmed
+                                 'associative-join prop-confirmed
+                                 'idempotent-join  prop-confirmed
+                                 'has-meet         prop-confirmed
+                                 'distributive     prop-confirmed
+                                 'has-pseudo-complement prop-confirmed))
+    #:operations
+      (hasheq 'tensor (hasheq 'fn type-tensor-core
+                              'properties '(distributes-over-join associative has-identity)))))
+```
+
+This IS the Tier 1 lattice declaration we'd want for the A9 registration. More complete than D.2's original scoping assumed.
+
+#### §6.13.3 What's actually new in 4C (vs existing infrastructure)
+
+A short list:
+
+1. **Tag-dispatched merge on shared TypeFacet carrier** (§6.1, D.2 restructure). The CLASSIFIER/INHABITANT tag distinction is a 4C addition. Merge dispatches on tag:
+   - CLASSIFIER × CLASSIFIER → `unify-core` with `'equality` relation (exists)
+   - INHABITANT × INHABITANT → α-equivalence merge (may need new case; trivial if not)
+   - CLASSIFIER × INHABITANT → `unify-core` with `'subtype` relation (exists)
+
+   **Composition work, ~50-100 lines.** No new algorithm. The merge function dispatches by tag; each tag-case calls existing unify-core with the appropriate relation.
+
+2. **Explicit `:preserves [Residual]` declaration** (§6.1 NTT model). The quantale residual concept isn't named as a distinct operation in current `type-sre-domain`. But `subtype-lattice-merge` IS essentially a residual computation (narrowing toward consistent subtype). **Naming/documentation only**, not implementation. Add `:preserves [Residual]` to the domain declaration.
+
+3. **Hasse-registry integration** (§6.12). Lookup invokes `unify-core` with `'subtype` relation. **New call site for existing API.** ~30-50 lines within the primitive.
+
+4. **γ hole-fill per-candidate PUnify** (§6.2.1, Phase 9b). Invokes existing PUnify against inhabitant catalog entries. **New use of existing infrastructure.** ~30 lines in the γ propagator.
+
+5. **Property inference for tag-dispatched merge laws** (Phase 2, A9). Runs on the new merge function to verify commutativity/associativity/idempotence. **Infrastructure exists** (Track 2G property inference); needs to run against the new composition.
+
+#### §6.13.4 Net-new PUnify work total
+
+~150-200 lines across phases, all composition wiring or naming refinement. **No new PUnify algorithm.** The claim "PUnify IS the match operation" was accurate for existing infrastructure; D.2's usage leverages capabilities already in unify.rkt.
+
+#### §6.13.5 Implications
+
+- **M2 + R4 closed.** PUnify reach audit confirms D.2 claims stand as-is.
+- **Risk level low** for phases that claim PUnify use (§6.1, §6.4, §6.5, §6.6, §6.10, §6.12). No scope expansion needed.
+- **Phase 3 (A5) scope**: the tag-dispatched merge implementation is ~50-100 lines of wiring; straightforward.
+- **Phase 2 (A9) scope**: add `:preserves [Residual]` declaration and run property inference on the new merge — mechanical.
+- **`'subtype` relation** is the key reusable mechanism: existing variance support via relation name means "PUnify with variance" needs no extension.
 
 ---
 
