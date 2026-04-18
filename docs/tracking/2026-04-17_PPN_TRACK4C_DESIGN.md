@@ -21,11 +21,13 @@
 
 - Everything not delivered in 4A/4B is in scope.
 - The 6 imperative bridges retire.
+- **Zonk retirement ENTIRELY** — `zonk-intermediate`, `zonk-final`, `zonk-level` (~1,300 lines in [zonk.rkt](../../racket/prologos/zonk.rkt)) deleted. This was the original PPN 4 Phase 4b target ([Track 4 Design §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md)) unmet in 4B; owned by 4C Phase 12 via Option C (cell-refs replace `expr-meta`, reading the expression IS zonking).
 - Union types via ATMS delivered (BSP-LE 1.5 cell-based TMS pulled in as 4C sub-track).
 - Elaborator strata (S(-1)/L1/L2) unified onto BSP scheduler via `register-stratum-handler!`.
 - `:type` / `:term` facet split (Coq-style metavariable discipline, MLTT-grounded).
-- Option A and Option C for freeze/zonk — Option C contributes DPO-style rewriting primitives to SRE Track 6.
+- Option A AND Option C for freeze/zonk — Option A is a staging scaffold; Option C is the zonk-retirement phase. Option C contributes DPO-style rewriting primitives to SRE Track 6.
 - `:component-paths` enforcement at registration time (in 4C; NTT type-error formalization deferred to NTT work).
+- **Parameter+cell dual-store sweep**: catalogue all Racket-parameter + propagator-cell dual stores in the codebase (like `current-coercion-warnings` + `...-cell-id`). Pre-0 finding: `that-read` is ~1400× faster than CHAMP reads, suggesting similar latent wins in other dual-store sites. Retire dual-stores uniformly — not just the 6 named bridges.
 
 **Out of scope**:
 
@@ -55,7 +57,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
 | 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
-| 12 | A4 Option C cell-ref expression representation | ⬜ | Replace `expr-meta` with `expr-cell-ref`; 14-file pipeline update; DPO primitives to SRE 6 |
+| 12 | A4 Option C — **zonk retirement entirely** via cell-refs | ⬜ | Replace `expr-meta` with `expr-cell-ref`. Reading expression IS zonking. `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). 14-file pipeline update. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
 | T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
 | V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
 
@@ -482,11 +484,18 @@ At facet merge: when `:term` is updated to `term-val e` and `:type` is already `
 3. Register one fire function per AST kind. Use SRE-derived decomposition where applicable (structural lattice rules handle N AST kinds via one decomposition template).
 4. Verify: after registration, the `infer/err` fallback should be reachable only for genuinely unrepresentable cases (e.g., elaboration errors, not missing rules).
 
-### §6.5 Parametric trait-resolution propagator (A1)
+### §6.5 Parametric trait-resolution propagator (A1) — **rebuilt for efficiency**
 
-**Problem**: `resolve-trait-constraints!` is an imperative function called from `infer-on-network/err`. Parametric impl pattern matching is not a propagator.
+**Problem**: `resolve-trait-constraints!` is an imperative function called from `infer-on-network/err`. Parametric impl pattern matching is not a propagator. Pre-0 finding E2 shows this path allocates **343 MB / 19× baseline** for a single `[head '[1N 2N 3N]]` call — ~325 MB/123 ms unique to the parametric path, driven by retry loops + candidate-list allocation + CHAMP updates + intermediate-type construction.
 
-**Fix**: register `parametric-trait-resolution` as an S1 propagator. It reads `:type` facet of type-arg positions + `:constraints` facet of constraint position; writes narrowed constraint set or resolved dict term to `:term`.
+**Posture** (per user direction 2026-04-17): *rebuilt for efficiency*, not retrofit. Design for the efficient propagator architecture from the start rather than lifting the imperative algorithm into a propagator wrapper.
+
+**Fix**: register `parametric-trait-resolution` as an S1 propagator. Key efficiency choices:
+
+1. **Pre-compute candidate sets at impl registration time** — not at resolution time. When a parametric impl is registered, compute its type-arg pattern and index it. At resolution time, the propagator matches against a pre-indexed structure rather than iterating over all impls.
+2. **Monotone narrowing** — the `:constraints` facet shrinks monotonically as type-args become ground. No retry loops; the propagator fires at readiness thresholds.
+3. **No intermediate type allocation** — match against pre-indexed patterns; emit the winning dict term directly. Structural sharing (SRE + Module Theory lens, §6.11) allows candidate patterns to share type subterms rather than copying them.
+4. **Fire-once at ground-readiness** — `:component-paths` targets type-arg ground thresholds. Zero re-firing on partial input.
 
 **Mechanism**:
 
@@ -494,28 +503,32 @@ At facet merge: when `:term` is updated to `term-val e` and `:type` is already `
 propagator parametric-trait-resolution
   :reads  [(meta-pos :type), (meta-pos :constraints)]
   :writes [(meta-pos :term), (meta-pos :constraints)]
+  :fire-once-on-threshold (and ground? (non-empty? :constraints))
   fire-parametric-resolve:
-    (when (and (constraint-domain-has-parametric? constraints)
-               (type-args-ground? type))
-      (define matches (match-parametric-impls constraints type))
-      (cond
-        [(empty? matches) (that-write pos :constraints constraint-top)]  ;; failure
-        [(singleton? matches)
-         (that-write pos :term (dict-for-impl (first matches)))
-         (that-write pos :constraints (narrow-to (first matches)))]
-        [else
-         (that-write pos :constraints (narrow-to-subset matches))]))  ;; ambiguous — S2 handles
+    ;; Pre-indexed at registration: parametric-impl-index ↦ pattern trie
+    (define matches (index-lookup parametric-impl-index type))  ;; O(log N) via trie
+    (cond
+      [(empty? matches) (that-write pos :constraints constraint-top)]       ;; failure
+      [(singleton? matches)
+       (that-write pos :term      (dict-for-impl (first matches)))          ;; resolved
+       (that-write pos :constraints (narrow-to (first matches)))]
+      [else
+       (that-write pos :constraints (narrow-to-subset matches))])            ;; ambiguous — S2
 ```
 
-**SRE connection**: impl coherence = critical-pair analysis on impl patterns ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). Each parametric impl IS a DPO rule. Coherence = zero critical pairs at registration time.
+**Pre-0 expected improvement**: post-phase A/B measurement target is **~60-80% reduction** in E2 allocation (343 MB → ~70-140 MB), with similar wall-clock gains. The target is set conservatively; the pre-indexing + fire-once combination plausibly achieves more. Measured in V phase.
 
-### §6.6 Option A and Option C for freeze/zonk (A4)
+**SRE connection**: impl coherence = critical-pair analysis on impl patterns ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). Each parametric impl IS a DPO rule. Coherence = zero critical pairs at registration time. The pre-computed pattern index IS the critical-pair-free decomposition of the registry — indexing STRUCTURE (not ALGORITHM).
 
-**Option A** (Phase 7): `freeze`/`zonk` tree walk reads `:term` facet instead of CHAMP. Same walk structure. Low-risk. After A2 (CHAMP retirement), `:term` is authoritative; A4-A is mechanical.
+### §6.6 Option A and Option C for freeze/zonk (A4) — **zonk retirement entirely**
 
-*Staging scaffold label*: Option A tree walk is off-network (stateless, reads cells). Retirement in Option C.
+**Context — unmet PPN 4 expectation**: the original [Track 4 Design §3.4b "Phase 4b: Zonk Retirement"](2026-04-04_PPN_TRACK4_DESIGN.md) targeted elimination of all three zonk functions (`zonk-intermediate`, `zonk-final`, `zonk-level`, ~1,300 lines) with cell-refs replacing `expr-meta`. Phase 4b-i (readiness infrastructure) landed; Phase 4b-ii-b (zonk deletion) was blocked on the Track 4 Phase 2-3 redo and deferred. Track 4B PIR §12 reconfirmed this as still-deferred. **4C completes this.**
 
-**Option C** (Phase 11): expression representation changes. `expr-meta id` becomes `expr-cell-ref cell-id`. Reading an `expr-cell-ref` auto-resolves via cell dereference to `:term` facet.
+**Option A** (Phase 8): staging scaffold. `freeze`/`zonk` tree walk reads `:term` facet instead of CHAMP. Same walk structure; different data source. Low-risk, mechanical after A2 (CHAMP retirement).
+
+*Scaffold label*: Option A keeps the tree walk. It is NOT the target; it exists only to unblock Axes 1–7 with minimal churn. Retired in Phase 12 (Option C).
+
+**Option C** (Phase 12): **the zonk retirement phase.** Expression representation changes — `expr-meta id` becomes `expr-cell-ref cell-id`. Reading an `expr-cell-ref` auto-resolves via cell dereference to `:term` facet. *Reading the expression IS zonking.* No tree walk. `zonk.rkt` functions deleted.
 
 **14-file pipeline impact**:
 
@@ -634,6 +647,67 @@ merge-viable-branches:
 
 ---
 
+### §6.11 Design Lenses — Hyperlattice Conjecture / SRE / Hypercube Applied
+
+Per user direction 2026-04-17: apply the SRE lens ([`structural-thinking.md`](../../.claude/rules/structural-thinking.md)) + Hypercube perspective ([BSP-LE Hypercube Addendum](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)) to strengthen the Hyperlattice Conjecture argument specifically within 4C.
+
+The Conjecture ([DESIGN_PRINCIPLES.org](principles/DESIGN_PRINCIPLES.org) §Hyperlattice Conjecture) has two parts:
+1. **Universal computational substrate** — every computable function is a fixpoint on lattices.
+2. **Parallel optimality** — the Hasse diagram IS the optimal parallel decomposition.
+
+#### §6.11.1 SRE lens: every facet is a lattice embedding
+
+Per the SRE Lens's 6 questions (`structural-thinking.md`), each of the 6 facets receives an algebraic classification. This is **mandatory** per DESIGN_METHODOLOGY — the SRE lattice lens is required for all lattice design decisions, and property-inference verifies lattice laws.
+
+| Facet | VALUE vs STRUCTURAL | Algebraic properties | Primary or Derived | Hasse diagram structure |
+|---|---|---|---|---|
+| `:type` | STRUCTURAL (quantale) | Join-semilattice, ⊗ tensor, ⊕ union-join, Heyting (ground sublattice), left/right residuals | PRIMARY | product of ctor-lattices; width = # type constructors; height = nesting depth |
+| `:term` | STRUCTURAL (expression carrier) | Join-semilattice, idempotent | DERIVED from `:type` via `TermInhabitsType` bridge | Tree lattice over Expr structure |
+| `:context` | VALUE (list) | Chain lattice (extension only); monotone growth | DERIVED from enclosing scope | Linear chain; height = scope depth |
+| `:usage` | STRUCTURAL (vector semiring) | Component-wise QTT semiring (m0, m1, mw + add + scale) | PRIMARY | Product of per-binding mult chains; width = # bindings |
+| `:constraints` | STRUCTURAL (Heyting powerset) | Heyting lattice, distributive, set intersection narrowing | PRIMARY | Boolean lattice over candidate set; complement structure |
+| `:warnings` | VALUE (monotone set union) | Free join-semilattice | DERIVED (side output) | Flat — union of independent warnings |
+
+**Bridges between facets are Galois connections** (§4.3) — left adjoint preserves joins. `TermInhabitsType` preserves Residual (quantale morphism). This IS the Universal Substrate argument for 4C: *every facet is a lattice embedding; every cross-facet flow is a verified Galois connection; elaboration IS fixpoint on the product of embedded algebraic structures.*
+
+#### §6.11.2 Hypercube perspective: parallel optimality of the AttributeRecord
+
+The AttributeRecord is a **product** of 6 facet lattices. Its Hasse diagram is the product of per-facet Hasse diagrams. By the Conjecture's optimality claim, *the parallel decomposition of attribute computation IS this product structure*:
+
+- **Per-facet propagators fire independently** — component-wise merge means `:type` and `:warnings` updates don't block each other. This is CALM-safe + structurally parallel by construction, not by discipline.
+- **Cross-facet bridges (Galois connections) are the coordination points** — the Hasse diagram's edges between product components. Only bridges (not all propagators) coordinate.
+- **Hasse diameter bounds BSP round count** — for an elaboration producing N facet writes with cross-facet dependency depth D, BSP reaches fixpoint in O(D) rounds (not O(N)). The Hasse diagram's vertical height bounds iteration count.
+
+#### §6.11.3 Phase 10 (union types via ATMS) — hypercube structure explicit
+
+The worldview space for N union branches IS Q_N (Boolean lattice = hypercube), per [Hypercube Addendum §1](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md). This STRUCTURAL IDENTITY — not metaphor — implies three optimizations to incorporate in Phase 10 design:
+
+1. **Gray-code branch traversal** (Hypercube Addendum §2.1). When `atms-amb` creates M branches, explore them in Gray-code order (one-assumption-change between successors). CHAMP structural sharing reuses O(affected cells) per fork instead of O(all cells). Phase 10's fork strategy follows Gray-code.
+
+2. **Subcube pruning for nogoods** (§2.2). When a contradiction in branch A produces a nogood `{h_A, h_B, h_C}`, the subcube of worldviews containing that assumption combination is STRUCTURALLY identifiable as a bitmask `(worldview & nogood-mask) == nogood-mask` — O(1). For worldviews up to 64 bits, a single 64-bit AND + compare. Phase 10's retraction uses bitmask subcube membership, not hash lookups.
+
+3. **Hypercube all-reduce for S(-1) retraction barrier** (§2.3). When retraction affects multiple branches, use hypercube all-reduce (log₂(W) rounds of pairwise merge) instead of flat synchronization. Bounded for BSP-LE 1.5 sub-track's parallel execution paths.
+
+#### §6.11.4 Phase 7 parametric-trait-resolution — Hasse-based index
+
+The parametric impl registry (§6.5 "rebuilt for efficiency") indexes impls by type-arg pattern. The SRE lens identifies this index as the *Hasse diagram of the impl coherence lattice* — where each impl is a node, and the partial order is *specificity* (`Eq Int` is more specific than `Eq A`). Matching at resolution time walks the Hasse diagram from most-specific candidates downward:
+
+- **O(log N) lookup** for N impls, via the Hasse height (not N scan).
+- **Coherence = antichain** of maximal specific impls; zero critical pairs.
+- **Specificity resolution** IS the Hasse order — most-specific match wins.
+
+This is what the "rebuilt for efficiency" posture means concretely: the candidate-index IS the Hasse decomposition of the impl coherence lattice. The efficiency gain vs current E2 (343 MB) comes from walking the Hasse structure, not the algorithm.
+
+#### §6.11.5 Implications for 4C
+
+Applying these lenses changes three concrete design elements:
+
+1. **Every propagator declaration should name its lattice properties** (Value/Structural, Primary/Derived, algebraic properties). This makes the NTT conformance check (§15) richer than "is it expressible?" — it becomes "does the lattice classification match the SRE lens's structural analysis?"
+2. **Hasse-diagram diameter bounds appear in termination arguments** (§8). The existing `:fuel 100` is a safety net; the Hasse bound is the structural argument. Strengthens Conjecture's optimality claim per stratum.
+3. **Phase 10 design uses hypercube algorithms by construction** — not as an optimization pass. Gray-code, bitmask subcube, hypercube all-reduce are in the D.2 refinement.
+
+---
+
 ## §7 Termination Arguments
 
 Per [GÖDEL_COMPLETENESS.org](principles/GÖDEL_COMPLETENESS.org) — each new/modified propagator and stratum needs a termination argument.
@@ -742,40 +816,53 @@ At design time, encode divergence classes as regression tests. Pre-4C elaboratio
 
 ---
 
-## §10 Pre-0 Benchmarks per Semantic Axis (M2)
+## §10 Pre-0 Benchmarks — Results and Implications
 
-Semantic compositions, not just performance. For each axis, adversarial examples exercise the composition *before* implementation. The data reshapes D.2 design.
+**Full report**: [`2026-04-17_PPN_TRACK4C_PRE0_REPORT.md`](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md).
+**Artifacts**: [`racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt`](../../racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt) (M/A/E/V tiers, wall-clock + memory per DESIGN_METHODOLOGY.org), [`racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos`](../../racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos).
 
-### Axis 1 (parametric resolution) semantic axes
+### §10.1 Static analyses
 
-- Parametric impl with compound type args: `Seqable (List Int)`, `Foldable (Tree Nat)`.
-- Parametric impl with polymorphic type args: `Seqable (f A)` for higher-kinded.
-- Multiple parametric candidates: `Num Int` and `Num Rat` — specificity resolution.
+- **A3 aspect-coverage gap**: 96 unique `expr-*` structs in syntax.rkt, 35 registered via `register-typing-rule!`, **75 unregistered (upper bound)**. Concrete actionable list produced in Phase 5 sub-audit.
+- **Meta-info struct fields**: 7 total — `id`, `ctx`, `type`, `status`, `solution`, `constraints`, `source`. **5 map directly to facets**; `status` derives from `:term`; `source` is lattice-irrelevant debug metadata. *D.1 decision (answering §13 Q3): side registry for `source`; facets for the rest.*
+- **A9 facet SRE domain registration**: 4 of 5 current facet lattices (`:context`, `:usage`, `:constraints`, `:warnings`) unregistered. `:type` alone runs through property inference. Phase 2 registers all 6 facets (incl. new `:term`); budget for ≥1 lattice bug found per Track 3 §12 + SRE 2G precedent.
 
-### Axis 3 (aspect coverage) semantic axes
+### §10.2 Measured baselines
 
-- Session expressions: `proc p { !! Nat ; ?? Bool ; end }`.
-- ATMS-ops in current 4B fallback: `union branches with narrowing`.
-- Narrowing expressions: `[add ?a 3 = 5]`.
+| Measurement | Value | Implication |
+|---|---|---|
+| **M1a `that-read :type`** | 27 ns/call | Post-A2 authoritative hot path |
+| **M2c `meta-solution` CHAMP read** | 40 μs/call | ~**1400× slower** than `that-read` |
+| **M2b `solve-meta!` (CHAMP + cell)** | 39 μs/call | Dual-store cost — halved post-A2 |
+| **M3 `infer` core forms** | 382–606 μs/call | Per-call fallback cost; Axis 3 coverage attacks this |
+| **A1b 20 metas solve** | 8.5 ms / 24 MB | Linear scaling ~1.3 MB/meta |
+| **A2 10 speculation cycles** | 80 μs / 56 KB | Speculation is CHEAP — Phase 10 2^N bounded for N ≤ 10-15 |
+| **E1 simple (floor)** | 55 ms / 18 MB | 4C target: measure delta above floor |
+| **E2 parametric Seqable** | 178 ms / **343 MB** | **19× floor allocation** — Axis 1 rebuilt-for-efficiency target |
+| **E3 polymorphic id** | 98 ms / 63 MB | Delta above floor: 43 ms / 45 MB — Axis 5 target |
+| **E4 generic arithmetic** | 101 ms / 53 MB | Delta above floor: 46 ms / 35 MB |
+| **Retention (all E cases)** | 20–25 KB | Allocation is GC-friendly garbage; no leaks |
 
-### Axis 5 (`:type`/`:term`) semantic axes
+### §10.3 Design refinements driven by Pre-0
 
-- Type-variable meta with concrete solution: `[id 'nat 3N]`.
-- Value-meta with polymorphic type: `?e : Nat -> Nat`.
-- Nested metas: `?e1 = app ?e2 ?e3`.
+1. **Parametric propagator posture**: *rebuilt for efficiency* (§6.5) — E2's 343 MB motivates pre-computed impl index (Hasse-based, §6.11.4) over imperative-retrofit.
+2. **CHAMP retirement is a hot-path win, not a neutral migration** — 1400× `that-read` advantage makes A2 one of the highest-leverage axes, not just a cleanup.
+3. **Parallel phasing of Option A freeze (Phase 8) and BSP-LE 1.5 TMS (Phase 9) is safe** — speculation is cheap enough that concurrent infrastructure churn doesn't thrash.
+4. **ATMS fuel stance**: `:fuel 100` sufficient (§13 Q5 answered). Separate ATMS-fuel unneeded.
+5. **Parameter+cell dual-store sweep** in §1 scope — informed by the 1400× finding: other dual-stores (beyond the 6 named bridges) likely hide similar latent wins.
 
-### Phase 8 (union types) semantic axes
+### §10.4 Per-axis A/B targets (for V-phase validation)
 
-- `Int | String` narrowed by `Eq` constraint → `Int`.
-- `List Int | Vector Int` intersected with `Indexed` → both viable.
-- Contradictory union: `Int | Bool` with `Num` → `Int` branch survives.
-- Deep union in compound types: `List (Int | String)`.
+| Axis | Pre-0 baseline | D.1 target after 4C lands |
+|---|---|---|
+| A1 (parametric) | E2 at 343 MB / 178 ms | ≤ 140 MB / ≤ 100 ms (≥ 60% reduction) |
+| A2 (CHAMP retirement) | 40 μs CHAMP read / 513 sites | `that-read` replaces all; wall-clock improvement measurable in E3 |
+| A5 (`:type`/`:term`) | E3 at 98 ms / 63 MB | ≤ 40 MB / ≤ 75 ms |
+| A6 (warnings) | Parameter + cell dual | Single facet; E4 allocation ≤ 40 MB |
+| Phase 10 (union types) | Not measurable (not supported) | E2E programs with union types succeed; speculation overhead tracked |
+| Phase 12 (zonk retirement) | zonk.rkt 513 call sites | **0 zonk call sites**; ~1,300 lines deleted; E3 freeze cost → 0 |
 
-### Performance axes (concurrent)
-
-- Per-facet access cost: `that-read/write` hot-path measurement.
-- Attribute-map cell allocation: compound component-paths overhead.
-- BSP outer loop with elaborator handlers: stratum iteration cost vs sequential `run-stratified-resolution-pure`.
+V-phase (acceptance + A/B benchmarks) re-runs `bench-ppn-track4c.rkt` for post-4C comparison. Each axis target is reassessed against measured data; regressions investigated before PIR.
 
 ---
 
@@ -826,17 +913,21 @@ ns ppn-track4c
 
 Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measurements have supplied data-driven answers for some; others remain for discussion. Critique rounds (P/R/M self + external) happen later, not here.
 
-1. **Residuation formalization**: is `TermInhabitsType` as merge invariant (D.1) sufficient, or should `:alpha` / `:gamma` be explicit propagators in D.2? The latter enables hole-fill / proof search via `:gamma` but doubles the propagator count for this bridge. Lean D.1: invariant at merge time; D.2 question: when is proof search triggered?
+1. **Residuation formalization** — OPEN: is `TermInhabitsType` as merge invariant (D.1) sufficient, or should `:alpha` / `:gamma` be explicit propagators in D.2? The latter enables hole-fill / proof search via `:gamma` but doubles the propagator count for this bridge. Lean D.1: invariant at merge time; D.2 question: when is proof search triggered?
 
-2. **Option A ↔ Option C staging granularity**: is Phase 8 (Option A freeze) in parallel with Phase 9 (BSP-LE 1.5 TMS)? Or sequential to reduce concurrent infrastructure churn? D.1 sequences them; parallel possibly risks test parity — critique welcome.
+2. **Option A ↔ Option C staging granularity** — **LOOSENED by Pre-0**: speculation is cheap (~8 μs/cycle, §10.2) so Phase 8 (Option A freeze) and Phase 9 (BSP-LE 1.5 TMS) can be parallelized without thrashing. D.1 sequences them as a default; D.2 can relax to parallel if it buys a timing win.
 
-3. **Meta metadata (source-loc, kind hint) after CHAMP retirement**: proposal is side registry or `:meta-metadata` facet. Side registry is simpler but re-introduces off-network state. Facet is on-network but increases facet count. Which?
+3. **Meta metadata after CHAMP retirement** — **ANSWERED by Pre-0**: 5 of 7 `meta-info` fields map directly to facets; `source` alone is lattice-irrelevant debug metadata. **D.1 decision: side registry for `source`, facets for the rest**. Closed.
 
-4. **Component-paths detection predicate**: `structural-lattice?` predicate checks cell value shape. False-positive risk: `hasheq`-valued cells that are NOT structural lattices (e.g., simple map cells). Proposal: explicit `:lattice :structural` annotation on cell registration. Requires new registration API.
+4. **Component-paths detection predicate** — OPEN: `structural-lattice?` predicate checks cell value shape. False-positive risk: `hasheq`-valued cells that are NOT structural lattices (e.g., simple map cells). Proposal: explicit `:lattice :structural` annotation on cell registration. Requires new registration API. Dialogue needed.
 
-5. **Termination argument for ATMS branching (Phase 10)**: worst-case branch count = 2^N for N unions. Does `:fuel 100` bound this acceptably, or do we need a separate ATMS-fuel?
+5. **Termination argument for ATMS branching (Phase 10)** — **ANSWERED by Pre-0**: speculation cost ~8 μs/cycle means `:fuel 100` bounds 2^N worst-case acceptably for N ≤ 10-15 unions. No separate ATMS-fuel needed. Hypercube Gray-code traversal (§6.11.3) further amortizes via CHAMP sharing. Closed.
 
-6. **Elaborator stratum handler vs propagator**: S1 parametric-trait-resolution — is it a single stratum handler (iterate over all ready constraints) or multiple per-constraint propagators (fire when individual constraints become ready)? D.1 leans propagator-per-constraint for composability; critique: does this scale with large impl registries?
+6. **Elaborator stratum handler vs propagator** — OPEN: S1 parametric-trait-resolution — single stratum handler (iterate over all ready constraints) or multiple per-constraint propagators (fire when individual constraints become ready)? D.1 leans per-constraint + rebuilt-for-efficiency indexing (§6.5), motivated by E2's 343 MB observation. Open: does this scale for very large impl registries? Depends on index structure — Hasse index (§6.11.4) should scale log N. Dialogue + phase-level measurement.
+
+### Remaining for dialogue
+
+Q1 (residuation), Q4 (component-paths detection), Q6 (handler vs per-constraint — scaling). These are genuine design choices Pre-0 doesn't resolve directly; discussed in D.2 iteration or phase-level mini-design as appropriate (per user direction on O2, O4: delegate specifics to per-phase mini-design).
 
 ---
 
