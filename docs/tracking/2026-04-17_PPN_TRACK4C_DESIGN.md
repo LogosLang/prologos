@@ -49,7 +49,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | 🔄 | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
-| 1 | A8 `:component-paths` registration-time enforcement | ⬜ | `net-add-propagator` modified; detection predicate |
+| 1 | A8 `:component-paths` enforcement via cell `:lattice` annotation | ⬜ | `net-new-cell` extended with `#:lattice` keyword (structural / value / unclassified). `net-add-propagator` enforcement reads annotation. Audit + migration of all cell-creation sites. `tools/lint-cells.rkt` baseline tool (mirrors lint-parameters). NTT-aligned (`:lattice :structural` syntax matches NTT §3). |
 | 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
 | 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires |
 | 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
@@ -658,31 +658,57 @@ propagator parametric-trait-resolution
 
 **Readiness propagators already populate the ready-queue cell** — L1's `collect-ready-constraints-via-cells` scan dissolves (readiness is already cell-valued; the scan was a leftover pattern).
 
-### §6.8 `:component-paths` registration-time enforcement (A8)
+### §6.8 `:component-paths` registration-time enforcement (A8) — cell `:lattice` annotation
 
-**Problem**: the rule ("propagators reading compound cells MUST declare `:component-paths`") is discipline-maintained, per [propagator-design.md](../../.claude/rules/propagator-design.md). In-session it's easy to forget on newly-written propagators.
+**Problem**: the rule "propagators reading compound cells MUST declare `:component-paths`" has been discipline-maintained ([propagator-design.md](../../.claude/rules/propagator-design.md)). Multiple design/implementation audits have repeatedly re-checked component-path coverage; things have slipped through. Correctness-by-construction required.
 
-**Fix**: modify `net-add-propagator` (and `net-add-broadcast-propagator`) to check at registration time:
+**Fix (D.2 resolution for Q4)**: explicit `:lattice` annotation at cell creation. Detection is by annotation, not by shape heuristic. Two layers of enforcement cooperate:
+
+**Layer 1 — Cell-level annotation (primary enforcement)**: `net-new-cell` accepts `#:lattice` naming the cell's lattice classification. Matches [NTT Syntax Design §3.1-3.2](2026-03-22_NTT_SYNTAX_DESIGN.md) syntax — `:lattice :structural` / `:lattice :value` — so the Racket-level annotation lifts directly to NTT when that work resumes.
 
 ```racket
-(define (net-add-propagator net inputs outputs fire-fn
-                            #:component-paths [paths '()]
-                            . opts)
-  ;; A8 enforcement: any input cell whose value is structural MUST have
-  ;; a :component-paths entry covering it.
-  (for ([cell-id (in-list inputs)])
-    (define cell-val (net-cell-read net cell-id))
-    (when (and (structural-lattice? cell-val)
-               (not (any-path-covers? paths cell-id)))
-      (error 'net-add-propagator
-             "structural cell ~a reads require :component-paths (see propagator-design.md)"
-             cell-id)))
-  ...)
+;; D.2 API
+(net-new-cell net initial-value merge-fn
+              #:lattice 'structural)   ;; or 'value, 'unclassified
 ```
 
-*Detection predicate*: `structural-lattice?` recognizes compound cell values (hasheq, RRB, decisions-state, scope-cell). Attribute-map cells match by construction.
+Classifications:
+- **`:value`** — chain, flat, or finite enumeration. No component-paths apply.
+- **`:structural`** — compound (hasheq / vector / RRB / struct-with-ctor-desc). **Propagators reading MUST declare `:component-paths`.**
+- **`:unclassified`** — explicit opt-out for cells under migration. Baseline-tracked.
 
-*NTT refinement*: §7 of [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) will eventually make this a type error via `:lattice :structural` on cells. 4C's registration-time check is the bridge until NTT design resumes.
+`net-add-propagator` enforcement:
+
+```
+For each input cell:
+  read cell's :lattice annotation
+  if :lattice = :structural AND no :component-paths entry for this cell:
+    error 'net-add-propagator
+          "structural cell ~a reads require :component-paths"
+  if :lattice = :unclassified: emit warning (tracked baseline)
+  if :lattice = :value: no check
+```
+
+This gives type-check-like correctness at registration time. No heuristics, no shape guessing — the annotation is authoritative.
+
+**Layer 2 — SRE domain registration (complementary, §6.9)**: the SRE domain for a lattice declares its algebraic properties (Heyting / quantale / etc.) + VALUE/STRUCTURAL classification as one of the 6 SRE lens questions. Layer 2 gives property-inference verification; Layer 1 gives enforcement. They're at different layers (cell-level vs domain-level), not redundant.
+
+**Migration strategy (mirrors the A3 lint pattern)**:
+
+1. **API extension**: add `#:lattice` keyword to `net-new-cell`. Defaults to `:unclassified` with a warning during migration window; flips to hard-required post-migration.
+2. **Grep all `net-new-cell` call sites**. Classify each:
+   - Atomic / flat values → `:value`
+   - hasheq / vector / RRB / struct-with-ctor-desc → `:structural`
+   - Ambiguous → `:unclassified`, added to audit baseline
+3. **`tools/lint-cells.rkt`** — modeled on [`tools/lint-parameters.rkt`](../../racket/prologos/tools/lint-parameters.rkt). Baseline-tracks unclassified cells. `--strict` mode flags NEW `:unclassified` additions. Existing baseline shrinks as cells get classified.
+4. **Hard-error flip**: once baseline is empty (or acceptable close), flip from optional-with-warning to required.
+
+**Expected secondary wins from the audit**:
+- Propagators reading compound cells without `:component-paths` — caught as bugs to fix during migration.
+- Ambiguous-shape cells (hasheq used as simple map vs. structural lattice) — forced classification resolves the ambiguity.
+- Dead / obsolete cell creation sites — cleanup candidates.
+
+**NTT alignment**: `:lattice :structural` and `:lattice :value` are exactly the NTT syntax from [§3.1-3.2](2026-03-22_NTT_SYNTAX_DESIGN.md). When NTT design resumes, cell annotations lift into the type system unchanged — the compiler becomes the type-checker. Until then, the Racket-level enforcement does the work.
 
 ### §6.9 Per-facet SRE domain registration (A9)
 
@@ -1019,7 +1045,7 @@ Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measur
 
 3. **Meta metadata after CHAMP retirement** — **ANSWERED by Pre-0**: 5 of 7 `meta-info` fields map directly to facets; `source` alone is lattice-irrelevant debug metadata. **D.1 decision: side registry for `source`, facets for the rest**. Closed.
 
-4. **Component-paths detection predicate** — OPEN: `structural-lattice?` predicate checks cell value shape. False-positive risk: `hasheq`-valued cells that are NOT structural lattices (e.g., simple map cells). Proposal: explicit `:lattice :structural` annotation on cell registration. Requires new registration API. Dialogue needed.
+4. **Component-paths detection predicate** — **CLOSED (2026-04-17 dialogue)**: explicit `:lattice` annotation at `net-new-cell` creation time. Authoritative, type-check-like, not heuristic. Layered with SRE domain registration (A9) — cell annotation gives enforcement (Layer 1); domain registration gives property inference (Layer 2). No shape-guessing. Bundled with migration audit and baseline lint (`tools/lint-cells.rkt`, mirrors A3 parameter lint pattern). NTT-aligned syntax — lifts unchanged when NTT work resumes. See §6.8.
 
 5. **Termination argument for ATMS branching (Phase 10)** — **ANSWERED by Pre-0**: speculation cost ~8 μs/cycle means `:fuel 100` bounds 2^N worst-case acceptably for N ≤ 10-15 unions. No separate ATMS-fuel needed. Hypercube Gray-code traversal (§6.11.3) further amortizes via CHAMP sharing. Closed.
 
