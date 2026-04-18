@@ -2,9 +2,9 @@
 
 **Date**: 2026-04-17
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Status**: D.1 — first draft; ready for P/R/M self-critique round, then external critique.
+**Status**: D.1 — first draft; Pre-0 benchmarks + adversarial testing in progress before critique rounds.
 **Version history**: D.1 (this document).
-**Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md) (commit `881d2282`), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
+**Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
 
@@ -13,8 +13,8 @@
 **Bring elaboration completely on-network.** Designed with the mantra as north star. Guided by the ten load-bearing design principles. NTT is guiderails and verification that we are doing this correctly.
 
 - **Mantra** ([`on-network.md`](../../.claude/rules/on-network.md)): *"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."* Every propagator install, cell allocation, loop, parameter, return value is filtered against this.
-- **Principles**: the ten load-bearing principles ([`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org)). Infrastructure choices and design trade-offs are annotated with which principle they serve (§7).
-- **NTT**: *guiderails*. Every structural piece must be expressible in [NTT syntax](2026-03-22_NTT_SYNTAX_DESIGN.md). Pieces not expressible are mantra violations with scaffolding labels. The NTT model is the north-star shape; prose follows from it (§3 NTT model → §5 prose).
+- **Principles**: the ten load-bearing principles ([`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org)). Infrastructure choices and design trade-offs are annotated with which principle they serve (§8).
+- **NTT**: *guiderails*. Every structural piece must be expressible in [NTT syntax](2026-03-22_NTT_SYNTAX_DESIGN.md). Pieces not expressible are mantra violations with scaffolding labels. The NTT model is the north-star shape; prose follows from it (§4 NTT model → §6 prose).
 - **Solver infrastructure**: BSP-LE Tracks 2+2B built the orchestration, ATMS, stratification, and scope-sharing primitives specifically so PPN 4 can use them for elaboration. Elaboration IS constraint satisfaction over a quantale-structured domain — the same problem the solver solves, lifted by the richness of the lattice (types, terms, contexts, usage, constraints, warnings).
 
 **Scope** (per user direction 2026-04-17):
@@ -35,7 +35,67 @@
 
 ---
 
-## §2 Design Mantra Audit (Stage 0 gate — M1)
+## §2 Progress Tracker and Phased Roadmap
+
+Each phase completes with the 5-step blocking checklist (tests, commit, tracker, dailies, proceed). Each phase ends with a dialogue checkpoint (Conversational Implementation Cadence). NTT-conformance check per phase alongside tests-green.
+
+### Progress Tracker
+
+| Phase | Description | Status | Notes |
+|---|---|---|---|
+| 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | 🔄 | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
+| 1 | A8 `:component-paths` registration-time enforcement | ⬜ | `net-add-propagator` modified; detection predicate |
+| 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
+| 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires |
+| 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
+| 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired |
+| 6 | A3 Aspect-coverage completion | ⬜ | Audit uncovered AST kinds; register typing rules per kind |
+| 7 | A1 Parametric trait-resolution propagator | ⬜ | New S1 propagator; retires Bridge 1 |
+| 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
+| 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note |
+| 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
+| 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
+| 12 | A4 Option C cell-ref expression representation | ⬜ | Replace `expr-meta` with `expr-cell-ref`; 14-file pipeline update; DPO primitives to SRE 6 |
+| T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
+| V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
+
+### Phase dependency graph
+
+```
+Phase 0
+  ↓
+Phase 1 (A8 enforcement) — foundation for all subsequent propagators
+  ↓
+Phase 2 (A9 facet registration) — property inference catches bugs early
+  ↓
+Phase 3 (A5 :type/:term split)
+  ↓
+Phase 4 (A2 CHAMP retirement) — depends on :term facet
+  ↓
+Phase 5 (A6 warnings) — small independent piece
+  ↓
+Phase 6 (A3 aspect coverage) — independent; can parallel with 5
+  ↓
+Phase 7 (A1 parametric resolution)
+  ↓
+Phase 8 (A4 Option A freeze) — depends on CHAMP retirement
+  ↓
+Phase 9 (BSP-LE 1.5 TMS) — sub-track
+  ↓
+Phase 10 (Phase 8 union types)
+  ↓
+Phase 11 (A7 BSP orchestration) — can parallel with 10
+  ↓
+Phase 12 (A4 Option C cell-refs) — largest single phase; 14-file pipeline
+  ↓
+Phase T (dedicated tests) — partly per-phase via parity skeleton, consolidated here
+  ↓
+Phase V (acceptance + A/B + demo + PIR)
+```
+
+---
+
+## §3 Design Mantra Audit (Stage 0 gate — M1)
 
 From audit §3. Each violation has a named resolution axis.
 
@@ -51,15 +111,15 @@ From audit §3. Each violation has a named resolution axis.
 | V8 | `:component-paths` discipline-maintained | *structurally emergent* | [propagator-design.md](../../.claude/rules/propagator-design.md) | A8 |
 | V9 | 4/5 facet lattices unregistered as SRE domains | *structurally emergent* | Only `type-sre-domain` registered | A9 |
 
-Each violation has a named axis in §3-§5; retirement is structural, not by discipline.
+Each violation has a named axis in §4–§6; retirement is structural, not by discipline.
 
 ---
 
-## §3 NTT Speculative Model — Post-4C State
+## §4 NTT Speculative Model — Post-4C State
 
 The NTT model is the architectural north star. Prose follows from it.
 
-### §3.1 Core facet lattices
+### §4.1 Core facet lattices
 
 ```
 ;; :type — the classifier facet. Quantale from Track 2H.
@@ -144,7 +204,7 @@ impl Lattice WarningFacet
   bot  (warning-set (empty-set))
 ```
 
-### §3.2 Attribute record as product lattice
+### §4.2 Attribute record as product lattice
 
 ```
 ;; Product of 6 facet lattices per AST-node position
@@ -166,7 +226,7 @@ data AttributeMap := map-pos-to-record (HashMap Position AttributeRecord)
   ;; Merge: per-position component-wise per facet
 ```
 
-### §3.3 Cross-facet bridges (Galois connections)
+### §4.3 Cross-facet bridges (Galois connections)
 
 Each cross-facet information flow is a verified `bridge` — not an imperative function.
 
@@ -202,7 +262,7 @@ bridge UsageToType
   :gamma type-to-mult-demand          ;; (partial) Pi → expected mult
 ```
 
-### §3.4 Propagator declarations (examples; full list per AST kind)
+### §4.4 Propagator declarations (examples; full list per AST kind)
 
 Every propagator is typed, with `:reads` / `:writes` / `:component-paths` derived or declared. Propagators are pure `net → net` fire functions.
 
@@ -253,7 +313,7 @@ propagator meta-default
   fire-meta-default    ;; writes default (lzero, mw, sess-end) if :term = term-bot
 ```
 
-### §3.5 Stratification `ElabLoop`
+### §4.5 Stratification `ElabLoop`
 
 ```
 stratification ElabLoop
@@ -293,14 +353,14 @@ exchange S0 <-> S-neg1
   :right retract-contradicted  ;; S-neg1: retract branch on contradiction
 ```
 
-### §3.6 NTT Observations (gaps found, impurities caught)
+### §4.6 NTT Observations (gaps found, impurities caught)
 
 Per M1+NTT methodology, every NTT model ends with an Observations section.
 
-1. **Everything on-network?** Yes, except one staging scaffold: Option A freeze tree walk (§5.6). Labeled as scaffold retired by Option C in a later phase of 4C itself. No other off-network state.
+1. **Everything on-network?** Yes, except one staging scaffold: Option A freeze tree walk (§6.6). Labeled as scaffold retired by Option C in a later phase of 4C itself. No other off-network state.
 
 2. **Architectural impurities revealed by the NTT model?**
-   - `TermInhabitsType` bridge surfaces the residuation structure (§3.3 + §5.2). This was implicit in Track 2H's quantale; making it a bridge forces naming. Also surfaces Residual as a `:preserves` keyword candidate — NTT refinement candidate (deferred to NTT design work).
+   - `TermInhabitsType` bridge surfaces the residuation structure (§4.3 + §6.2). This was implicit in Track 2H's quantale; making it a bridge forces naming. Also surfaces Residual as a `:preserves` keyword candidate — NTT refinement candidate (deferred to NTT design work).
    - Meta-default and usage-validator as `:non-monotone` propagators require barrier stratum assignment. This catches any attempt to run them on S0 or S1 at type-check time.
    - `parametric-trait-resolution` in S1 requires readiness-trigger. The NTT model makes this explicit; without it, mid-implementation I might have installed it on S0 and had it fire on bot inputs, producing thrashing.
 
@@ -314,7 +374,7 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
 
 ---
 
-## §4 Correspondence Table: NTT → Racket (post-4C)
+## §5 Correspondence Table: NTT → Racket (post-4C)
 
 | NTT construct | Racket implementation | File |
 |---|---|---|
@@ -327,13 +387,13 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
 | Facet `:constraints` | `that-read/write ... :constraints` | typing-propagators.rkt |
 | Facet `:warnings` | `that-read/write ... :warnings` | typing-propagators.rkt |
 | `TypeFacet` lattice | `type-lattice-merge` | type-lattice.rkt / unify.rkt |
-| `TermFacet` lattice | new — see §5.1 | typing-propagators.rkt (new) |
+| `TermFacet` lattice | new — see §6.1 | typing-propagators.rkt (new) |
 | `ConstraintFacet` lattice | constraint-cell.rkt Heyting | constraint-cell.rkt |
 | `WarningFacet` lattice | monotone set union | warnings.rkt |
 | `bridge TypeToConstraints` | constraint-creation propagator + dict feedback | typing-propagators.rkt, trait-resolution.rkt |
-| `bridge TermInhabitsType` | new merge-bridge; §5.2 | typing-propagators.rkt (new) |
+| `bridge TermInhabitsType` | new merge-bridge; §6.2 | typing-propagators.rkt (new) |
 | `propagator typing-*` | Fire functions registered via `register-typing-rule!` | typing-propagators.rkt |
-| `propagator parametric-trait-resolution` | new S1 propagator; §5.5 | typing-propagators.rkt (new) |
+| `propagator parametric-trait-resolution` | new S1 propagator; §6.5 | typing-propagators.rkt (new) |
 | `stratification ElabLoop` | BSP scheduler + registered stratum handlers | propagator.rkt, typing-propagators.rkt (reorg) |
 | Stratum handler S(-1) | `register-stratum-handler! :tier 'value retraction-request-cid` | metavar-store.rkt → propagator.rkt |
 | Stratum handler S1 | `register-stratum-handler! :tier 'value ready-queue-cid` | metavar-store.rkt → propagator.rkt |
@@ -343,9 +403,9 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
 
 ---
 
-## §5 Architecture Details
+## §6 Architecture Details
 
-### §5.1 The `:type` / `:term` facet split (A5)
+### §6.1 The `:type` / `:term` facet split (A5)
 
 **Problem**: Track 4B conflates classifier and solution in `:type`. A type-variable meta's *classifier* (`Type(0)`) and its *solution* (`Nat`) merge to `type-top` (contradiction), forcing Option C (skip downward write for meta positions) — architectural impurity.
 
@@ -359,13 +419,13 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
   - A type-variable meta `?A` solved to `Nat` has `:term = term-val (expr-Nat)`.
   - A value meta `?e` solved to `(expr-add 1 2)` has `:term = term-val (expr-add 1 2)`.
 
-**Invariant** (enforced by `TermInhabitsType` bridge, §5.2): if `:term = term-val e` is known and `:type = T` is known, then `type-of(e) ⊑ T` in the type lattice. Violation = `:type` facet merges to `type-top`.
+**Invariant** (enforced by `TermInhabitsType` bridge, §6.2): if `:term = term-val e` is known and `:type = T` is known, then `type-of(e) ⊑ T` in the type lattice. Violation = `:type` facet merges to `type-top`.
 
 **Consequence**: Option C skip retires. The downward write on APP goes to `:type` of the arg position (classifier — "this arg position must have type `dom`"). Feedback from unification writes to `:type` as well (also classifier — "arg's actual type is `T`"). Merge computes the unifier. If the arg position is a meta, its `:term` facet remains `term-bot` until structurally resolved. No conflict; no skip.
 
 **Naming precedent**: Coq's `evar_map` fields `concl` (goal type) and `body` (optional solution). Agda/Idris/Lean follow similar two-field separation. MLTT-native (not System-F-kinds).
 
-### §5.2 The `TermInhabitsType` bridge — residuation (A5, S3)
+### §6.2 The `TermInhabitsType` bridge — residuation (A5, S3)
 
 The type lattice is a quantale ([Track 2H](2026-04-02_SRE_TRACK2H_DESIGN.md)): ⊕ = union-join, ⊗ = type-tensor (function application distributing over unions). Quantales have left/right residuals: `A \ B` (left) and `A / B` (right), satisfying `A ⊗ X ⊑ B ⟺ X ⊑ A \ B`.
 
@@ -395,7 +455,7 @@ At facet merge: when `:term` is updated to `term-val e` and `:type` is already `
 
 **Design decision D.1**: implement the bridge as a declarative `merge-invariant` function attached to the AttributeRecord lattice. Don't separate α/γ as explicit propagators at D.1 — the invariant is computed at merge time. If residuation needs explicit propagators (e.g., for hole-fill search), scope as D.2 refinement.
 
-### §5.3 CHAMP retirement (A2)
+### §6.3 CHAMP retirement (A2)
 
 **Problem**: `meta-info` CHAMP is a duplicate store of the `:type` and `:term` facets, authoritative for downstream consumers.
 
@@ -409,7 +469,7 @@ At facet merge: when `:term` is updated to `term-val e` and `:type` is already `
 
 **No belt-and-suspenders**: the migration window Phase 2→3 is a labeled staging scaffold with explicit retirement in Phase 3 close. Not permanent.
 
-### §5.4 Aspect-coverage completion (A3)
+### §6.4 Aspect-coverage completion (A3)
 
 **Problem**: 76 `register-typing-rule!` entries vs ~326 `expr-*` structs. `infer/err` fallback catches the rest imperatively.
 
@@ -422,7 +482,7 @@ At facet merge: when `:term` is updated to `term-val e` and `:type` is already `
 3. Register one fire function per AST kind. Use SRE-derived decomposition where applicable (structural lattice rules handle N AST kinds via one decomposition template).
 4. Verify: after registration, the `infer/err` fallback should be reachable only for genuinely unrepresentable cases (e.g., elaboration errors, not missing rules).
 
-### §5.5 Parametric trait-resolution propagator (A1)
+### §6.5 Parametric trait-resolution propagator (A1)
 
 **Problem**: `resolve-trait-constraints!` is an imperative function called from `infer-on-network/err`. Parametric impl pattern matching is not a propagator.
 
@@ -449,7 +509,7 @@ propagator parametric-trait-resolution
 
 **SRE connection**: impl coherence = critical-pair analysis on impl patterns ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). Each parametric impl IS a DPO rule. Coherence = zero critical pairs at registration time.
 
-### §5.6 Option A and Option C for freeze/zonk (A4)
+### §6.6 Option A and Option C for freeze/zonk (A4)
 
 **Option A** (Phase 7): `freeze`/`zonk` tree walk reads `:term` facet instead of CHAMP. Same walk structure. Low-risk. After A2 (CHAMP retirement), `:term` is authoritative; A4-A is mechanical.
 
@@ -473,7 +533,7 @@ propagator parametric-trait-resolution
 
 **DPO contribution**: substitution, β-reduction, η-expansion become graph rewrites on the cell-ref network. The adhesive-category rewriting primitives ([Adhesive Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)) apply directly. These primitives are the infrastructure SRE Track 6 builds on — Option C in 4C means SRE 6 doesn't re-invent elaboration-specific DPO machinery.
 
-### §5.7 Elaborator strata → BSP scheduler unification (A7)
+### §6.7 Elaborator strata → BSP scheduler unification (A7)
 
 **Problem**: `run-stratified-resolution-pure` ([metavar-store.rkt:1915](../../racket/prologos/metavar-store.rkt)) is a sequential orchestrator parallel to the BSP scheduler. The BSP scheduler already has `register-stratum-handler!` ([propagator.rkt:2392](../../racket/prologos/propagator.rkt)) with `:tier 'topology | 'value` dispatch.
 
@@ -502,7 +562,7 @@ propagator parametric-trait-resolution
 
 **Readiness propagators already populate the ready-queue cell** — L1's `collect-ready-constraints-via-cells` scan dissolves (readiness is already cell-valued; the scan was a leftover pattern).
 
-### §5.8 `:component-paths` registration-time enforcement (A8)
+### §6.8 `:component-paths` registration-time enforcement (A8)
 
 **Problem**: the rule ("propagators reading compound cells MUST declare `:component-paths`") is discipline-maintained, per [propagator-design.md](../../.claude/rules/propagator-design.md). In-session it's easy to forget on newly-written propagators.
 
@@ -528,7 +588,7 @@ propagator parametric-trait-resolution
 
 *NTT refinement*: §7 of [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md) will eventually make this a type error via `:lattice :structural` on cells. 4C's registration-time check is the bridge until NTT design resumes.
 
-### §5.9 Per-facet SRE domain registration (A9)
+### §6.9 Per-facet SRE domain registration (A9)
 
 **Problem**: only `type-sre-domain` is registered ([unify.rkt:109](../../racket/prologos/unify.rkt)). Four facet lattices unverified.
 
@@ -536,7 +596,7 @@ propagator parametric-trait-resolution
 
 **Expected outcome**: based on Track 3 §12 and SRE 2G precedent (each found ~1 lattice bug), property inference likely finds ≥1 facet-lattice bug. Budget for fixes.
 
-### §5.10 Union types via ATMS + cell-based TMS (Phase 8)
+### §6.10 Union types via ATMS + cell-based TMS (Phase 8)
 
 **BSP-LE 1.5 as 4C sub-track** (per audit §9.5 recommendation):
 
@@ -574,7 +634,7 @@ merge-viable-branches:
 
 ---
 
-## §6 Termination Arguments
+## §7 Termination Arguments
 
 Per [GÖDEL_COMPLETENESS.org](principles/GÖDEL_COMPLETENESS.org) — each new/modified propagator and stratum needs a termination argument.
 
@@ -591,7 +651,7 @@ Per [GÖDEL_COMPLETENESS.org](principles/GÖDEL_COMPLETENESS.org) — each new/m
 
 ---
 
-## §7 Principles Challenge (per decision)
+## §8 Principles Challenge (per decision)
 
 Per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3 Lens P — each major decision annotated with principle served.
 
@@ -612,11 +672,11 @@ Per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3 Lens P �
 
 ---
 
-## §8 P/R/M Self-Critique
+## §9 P/R/M Self-Critique
 
 Lens outputs at D.1. Full P/R/M cycle happens with the critique round producing D.2.
 
-### §8.1 Lens P — Principles challenged
+### §9.1 Lens P — Principles challenged
 
 - **Completeness**: are all 9 axes concretely scoped? Yes — each has a phase and test plan. Union types + cell-based TMS inline. Option C in 4C.
 - **Correct-by-Construction**: is `TermInhabitsType` invariant structural or discipline? **Answer: structural**. Invariant is computed at attribute-record merge time, not in separate call sites. Violation = `:type → type-top` automatically.
@@ -624,7 +684,7 @@ Lens outputs at D.1. Full P/R/M cycle happens with the critique round producing 
 - **Propagator-First**: is Option A freeze on-network? Strictly: it's a tree walk reading cells. It's the last off-network state; retired in Option C.
 - **Data Orientation**: are actions descriptors? L1/L2 actions are data in the ready-queue cell. S1/S2 handlers process them. Matches Data Orientation pattern from DESIGN_PRINCIPLES.org.
 
-### §8.2 Lens R — Reality check (file:line verification)
+### §9.2 Lens R — Reality check (file:line verification)
 
 Counts from audit §2-§5 were grep-backed. Reconfirmed in D.1:
 
@@ -637,9 +697,9 @@ Counts from audit §2-§5 were grep-backed. Reconfirmed in D.1:
 - `run-stratified-resolution!` / `run-stratified-resolution-pure`: [metavar-store.rkt:1863, 1915](../../racket/prologos/metavar-store.rkt). ✓
 - `current-coercion-warnings` + `current-coercion-warnings-cell-id`: both in [warnings.rkt:122, 62](../../racket/prologos/warnings.rkt). ✓
 
-**Gap**: aspect-coverage precise count (A3 Phase 5 pre-audit) not yet done. D.2 pre-audit produces the concrete list.
+**Gap**: aspect-coverage precise count (A3 Phase 5 pre-audit) — feeds into Phase 0 Pre-0 measurements.
 
-### §8.3 Lens M — Propagator mindspace
+### §9.3 Lens M — Propagator mindspace
 
 - **Network Reality Check per new component**:
   - `parametric-trait-resolution` propagator: `net-add-propagator` — yes. `net-cell-write` to `:term`/`:constraints` — yes. Trace: `:type` + `:constraints` input → fire → `:term` + narrowed `:constraints` output via cell write. ✓
@@ -648,68 +708,6 @@ Counts from audit §2-§5 were grep-backed. Reconfirmed in D.1:
   - `TermInhabitsType` bridge: merge invariant at attribute-record lattice. Structural. ✓
   - ATMS fork-on-union: worldview cell read + per-branch propagator spawn. Cell-based TMS required. ✓
 - **Red flags scan**: `for/fold`, `let loop`, scan-and-dispatch, imperative queues — present only in S1/S2 handler internals processing discrete action sets, and in the ElabLoop outer fuel loop (which BSP already implements). No new `for/fold` over independent items that should be broadcasts.
-
----
-
-## §9 Phased Roadmap
-
-### Progress Tracker
-
-| Phase | Description | Status | Notes |
-|---|---|---|---|
-| 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | ⬜ | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
-| 1 | A8 `:component-paths` registration-time enforcement | ⬜ | `net-add-propagator` modified; detection predicate |
-| 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
-| 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires |
-| 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
-| 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired |
-| 6 | A3 Aspect-coverage completion | ⬜ | Audit uncovered AST kinds; register typing rules per kind |
-| 7 | A1 Parametric trait-resolution propagator | ⬜ | New S1 propagator; retires Bridge 1 |
-| 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
-| 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note |
-| 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
-| 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
-| 12 | A4 Option C cell-ref expression representation | ⬜ | Replace `expr-meta` with `expr-cell-ref`; 14-file pipeline update; DPO primitives to SRE 6 |
-| T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
-| V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
-
-### Per-phase summary
-
-Each phase completes with the 5-step blocking checklist (tests, commit, tracker, dailies, proceed). Each phase ends with a dialogue checkpoint (Conversational Implementation Cadence). NTT-conformance check per phase alongside tests-green.
-
-**Phase dependencies**:
-
-```
-Phase 0
-  ↓
-Phase 1 (A8 enforcement) — foundation for all subsequent propagators
-  ↓
-Phase 2 (A9 facet registration) — property inference catches bugs early
-  ↓
-Phase 3 (A5 :type/:term split)
-  ↓
-Phase 4 (A2 CHAMP retirement) — depends on :term facet
-  ↓
-Phase 5 (A6 warnings) — small independent piece
-  ↓
-Phase 6 (A3 aspect coverage) — independent; can parallel with 5
-  ↓
-Phase 7 (A1 parametric resolution)
-  ↓
-Phase 8 (A4 Option A freeze) — depends on CHAMP retirement
-  ↓
-Phase 9 (BSP-LE 1.5 TMS) — sub-track
-  ↓
-Phase 10 (Phase 8 union types)
-  ↓
-Phase 11 (A7 BSP orchestration) — can parallel with 10
-  ↓
-Phase 12 (A4 Option C cell-refs) — largest single phase; 14-file pipeline
-  ↓
-Phase T (dedicated tests) — partly per-phase via parity skeleton, consolidated here
-  ↓
-Phase V (acceptance + A/B + demo + PIR)
-```
 
 ---
 
@@ -865,7 +863,7 @@ ns ppn-track4c
 
 ## §14 Open Questions for External Critique
 
-These are genuine decision points for the critique round. The P/R/M self-critique does not resolve them; external eyes needed.
+These are genuine decision points for the critique round. The P/R/M self-critique does not resolve them; external eyes needed. Phase 0 Pre-0 measurements feed answers where possible.
 
 1. **Residuation formalization**: is `TermInhabitsType` as merge invariant (D.1) sufficient, or should `:alpha` / `:gamma` be explicit propagators in D.2? The latter enables hole-fill / proof search via `:gamma` but doubles the propagator count for this bridge. Lean D.1: invariant at merge time; D.2 question: when is proof search triggered?
 
@@ -883,13 +881,15 @@ These are genuine decision points for the critique round. The P/R/M self-critiqu
 
 ## §15 What's Next
 
-1. **P/R/M critique round** → D.2 (refinements from Lens P/R/M outputs).
-2. **External critique** (10-point structure, adversarial) → D.3.
-3. **Propagator-Mindspace challenge** (Lens M at Stage 3 rigor) → D.4 if needed.
-4. **Pre-0 benchmark setup** — actual bench runs feed D.4 or D.5.
-5. **Acceptance file skeleton** — uncomment target expressions per phase.
-6. **Parity test skeleton** — `test-elaboration-parity.rkt` committed.
-7. Stage 4 Phase 0 begins only when the design converges (no open questions in §14 demanding redesign).
+1. **Phase 0: Pre-0 benchmark + adversarial testing** (immediately). Concrete measurements per §11 semantic axes against current 4B. Data reshapes D.2 design.
+2. **Discuss findings** with user; feed into design refinements.
+3. **Open-question dialogue**: address §14 questions with data from Pre-0.
+4. **P/R/M critique round** → D.2 (refinements from Lens P/R/M outputs).
+5. **External critique** (10-point structure, adversarial) → D.3.
+6. **Propagator-Mindspace challenge** (Lens M at Stage 3 rigor) → D.4 if needed.
+7. **Acceptance file skeleton** — uncomment target expressions per phase.
+8. **Parity test skeleton** — `test-elaboration-parity.rkt` committed.
+9. Stage 4 Phase 0 begins only when the design converges (no open questions in §14 demanding redesign).
 
 ---
 
