@@ -2,8 +2,10 @@
 
 **Date**: 2026-04-17
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Status**: D.1 — first draft; Pre-0 complete ([report](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md)); design-dialogue in progress before critique rounds.
-**Version history**: D.1 (this document).
+**Status**: D.2 — refined from D.1 via Pre-0 findings + Hyperlattice/SRE/Hypercube lens application + Module Theory Realization B restructure for `:type`/`:term`.
+**Version history**:
+- D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
+- D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -151,18 +153,34 @@ impl Quantale TypeFacet
   top  type-top
   tensor type-tensor        ;; Track 2H function application ⊗
 
-;; :term — the inhabitant facet. Coq-style body. NEW in 4C.
-type TermFacet := term-bot                 ;; unknown solution
-                | term-val Expr            ;; specific inhabiting term
-                | term-top                 ;; contradictory — multiple inconsistent values merged
+;; D.2 restructure: `:type` and `:term` are NOT separate facets/lattices.
+;; They are tag-layers on the shared TypeFacet carrier (Module Theory
+;; Realization B — direct sum via tagging on shared carrier; BSP-LE 2B
+;; Resolution B pattern applied here). The MLTT foundation grounds this:
+;; there is one universe hierarchy, and "type" and "term" are terms at
+;; adjacent universe levels. The bitmask tag distinguishes:
+;;
+;;   tag CLASSIFIER : this layer is the classifying type of the position
+;;   tag INHABITANT : this layer is the value inhabiting the classifier
+;;
+;; The merge function dispatches on tag:
+;;   (CLASSIFIER × CLASSIFIER) → type-lattice-merge (unification)
+;;   (INHABITANT × INHABITANT) → α-equivalence strict merge; top on mismatch
+;;   (CLASSIFIER × INHABITANT) → residuation check: inhabitant ⊑ classifier
+;;                                violation → contradiction → type-top
+;;
+;; Residuation laws are internal to the quantale and verified by SRE
+;; property inference (§6.9).
 
-impl Lattice TermFacet
-  join
-    | term-bot x                    -> x
-    | x term-bot                    -> x
-    | [term-val a] [term-val b]     -> if (expr-equal? a b) [term-val a] term-top
-    | _ _                            -> term-top
-  bot -> term-bot
+;; `:preserves [Residual]` extends the quantale declaration with the
+;; structural commitment that the carrier supports residuation
+;; (both left \ and right /). This is a candidate NTT refinement
+;; (§6.11 Observations).
+impl Quantale TypeFacet
+  ;; ... (previous declarations)
+  :preserves [Residual]
+  left-residual  type-left-residual   ;; A \ B — "what X satisfies X ⊗ A ⊑ B"
+  right-residual type-right-residual  ;; B / A — "what X satisfies A ⊗ X ⊑ B"
 
 ;; :context — binding stack with distinguishable bot
 ;; (Track 4B fix: #f facet-bot distinct from valid empty context)
@@ -209,15 +227,20 @@ impl Lattice WarningFacet
 
 ### §4.2 Attribute record as product lattice
 
+Under D.2 restructure, the AttributeRecord is a product of **5 facets** (not 6):
+`:classify-and-inhabit` replaces separate `:type` + `:term`. The tag scheme
+within that facet preserves the user-visible `:type`/`:term` surface.
+
 ```
-;; Product of 6 facet lattices per AST-node position
+;; Product of 5 facet lattices per AST-node position
 data AttributeRecord := record
-  :fields   {:type TypeFacet, :term TermFacet, :context ContextFacet,
-             :usage UsageFacet, :constraints ConstraintFacet, :warnings WarningFacet}
+  :fields   {:classify-and-inhabit TypeFacet,  ;; tagged: CLASSIFIER | INHABITANT
+             :context ContextFacet, :usage UsageFacet,
+             :constraints ConstraintFacet, :warnings WarningFacet}
   :lattice :structural     ;; component-wise per facet
-  :bot     {:type type-bot, :term term-bot, :context context-bot,
-            :usage (usage-vector {}), :constraints constraint-bot,
-            :warnings (warning-set (empty-set))}
+  :bot     {:classify-and-inhabit (tagged-empty TypeFacet),
+            :context context-bot, :usage (usage-vector {}),
+            :constraints constraint-bot, :warnings (warning-set (empty-set))}
   :top     any-facet-at-top    ;; contradiction: if any facet hits top, record is top
 
 ;; Attribute map: position → AttributeRecord
@@ -231,24 +254,17 @@ data AttributeMap := map-pos-to-record (HashMap Position AttributeRecord)
 
 ### §4.3 Cross-facet bridges (Galois connections)
 
-Each cross-facet information flow is a verified `bridge` — not an imperative function.
+Under D.2, cross-facet bridges are Galois connections between distinct facets. The `TermInhabitsType` bridge from D.1 **dissolves** — it was a hint that `:type` and `:term` shared algebraic structure, and under Realization B that structure is the quantale residuation *internal to the shared carrier*, not a bridge between two lattices.
+
+Remaining cross-facet bridges (each a verified Galois connection):
 
 ```
-;; Type↔Constraints: when :type is known, trait obligations can be generated
+;; Type↔Constraints: when classifier is known, trait obligations can be generated
 bridge TypeToConstraints
-  :from TypeFacet
+  :from TypeFacet  (CLASSIFIER layer)
   :to   ConstraintFacet
-  :alpha infer-trait-obligations      ;; type → required constraints
+  :alpha infer-trait-obligations      ;; classifier → required constraints
   :gamma resolved-dict-to-type        ;; resolved dict → witness type
-
-;; Term inhabits Type: when :term known, check it inhabits :type
-;; Residuation reading: :type = T, :term = e ⇒ constraint: e : T (i.e., T \ e in quantale)
-bridge TermInhabitsType
-  :from TermFacet
-  :to   TypeFacet
-  :alpha term-classifier              ;; term → its classifying type
-  :gamma type-inhabitant-search       ;; type → search space for inhabitants
-  :preserves [Residual]               ;; Quantale residuation; formalizes bidirectional typing
 
 ;; Context provides types for bvar lookups
 bridge ContextToType
@@ -408,55 +424,121 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
 
 ## §6 Architecture Details
 
-### §6.1 The `:type` / `:term` facet split (A5)
+### §6.1 `:type` / `:term` as tag-layers on the shared TypeFacet carrier (A5, D.2 restructure)
 
-**Problem**: Track 4B conflates classifier and solution in `:type`. A type-variable meta's *classifier* (`Type(0)`) and its *solution* (`Nat`) merge to `type-top` (contradiction), forcing Option C (skip downward write for meta positions) — architectural impurity.
+**Problem** (from 4B): conflating classifier and inhabitant in `:type` facet. A type-variable meta's classifier (`Type(0)`) and its solution (`Nat`) merge to `type-top` (contradiction), forcing Option C skip (D.1).
 
-**Fix**: two facets.
+**D.1 fix** (superseded): two separate facets `TypeFacet` + `TermFacet` with a `TermInhabitsType` bridge.
 
-- `:type` carries the classifier — the type this position *must have*. Always meaningful:
-  - For a term-level expression `e : T`, `:type` holds `T`.
-  - For a type-variable meta `?A : Type(0)`, `:type` holds `Type(0)`.
-  - For a value meta `?e : Nat`, `:type` holds `Nat`.
-- `:term` carries the solution — the specific inhabitant when known. Often unknown for term-level expressions (we care about the type, not the specific value). Load-bearing for metas:
-  - A type-variable meta `?A` solved to `Nat` has `:term = term-val (expr-Nat)`.
-  - A value meta `?e` solved to `(expr-add 1 2)` has `:term = term-val (expr-add 1 2)`.
+**D.2 fix (Module Theory Realization B)**: one carrier, two tag-layers.
 
-**Invariant** (enforced by `TermInhabitsType` bridge, §6.2): if `:term = term-val e` is known and `:type = T` is known, then `type-of(e) ⊑ T` in the type lattice. Violation = `:type` facet merges to `type-top`.
+The MLTT foundation grounds this. There is one universe hierarchy; `Nat`, `Type(0)`, `Type(1)`, etc. are all terms at adjacent levels. "Type" and "term" are a *layer* distinction, not a *lattice* distinction. Attempting to separate them into two lattices in D.1 duplicates the carrier: both `TermFacet`'s `term-val Expr` and `TypeFacet`'s classifier-values hold `Expr`. The duplication is the scent.
 
-**Consequence**: Option C skip retires. The downward write on APP goes to `:type` of the arg position (classifier — "this arg position must have type `dom`"). Feedback from unification writes to `:type` as well (also classifier — "arg's actual type is `T`"). Merge computes the unifier. If the arg position is a meta, its `:term` facet remains `term-bot` until structurally resolved. No conflict; no skip.
+Realization B: one facet `:classify-and-inhabit` on the shared TypeFacet carrier. Every entry carries a bitmask tag:
 
-**Naming precedent**: Coq's `evar_map` fields `concl` (goal type) and `body` (optional solution). Agda/Idris/Lean follow similar two-field separation. MLTT-native (not System-F-kinds).
+- **CLASSIFIER tag** — this layer holds the classifying type of the position (what it *must have*).
+- **INHABITANT tag** — this layer holds the specific inhabitant (what *solves* this position).
 
-### §6.2 The `TermInhabitsType` bridge — residuation (A5, S3)
+Merge is tag-dispatched:
+- CLASSIFIER × CLASSIFIER → type-lattice-merge (unification of classifiers).
+- INHABITANT × INHABITANT → α-equivalence strict merge; mismatch → type-top.
+- CLASSIFIER × INHABITANT → **quantale residuation check**: does the inhabitant inhabit the classifier? Enforced via left residual `type-of(INHABITANT) ⊑ CLASSIFIER`. Violation → type-top (contradiction).
+
+The residuation structure lives *inside* the quantale, not as a bridge. This is §6.2's subject.
+
+**User-visible surface is preserved**: `that-read pos :type` reads the CLASSIFIER-tagged entries; `that-read pos :term` reads the INHABITANT-tagged entries. The tag distinction is implementation — `:type` and `:term` remain distinct surface names with distinct semantics. Error messages say "expected type T, got term e : Int" just as before; the tag-dispatched merge knows which side is which.
+
+**Consequence**: Option C skip dissolves (as in D.1) but via a different mechanism. The APP downward write tags the arg-position entry as CLASSIFIER with value `dom`. The feedback from unification tags with CLASSIFIER (both merge cleanly via type-lattice-merge). If a meta is later solved to a specific term (e.g., `(expr-Nat)`), that entry is tagged INHABITANT — the cross-tag merge enforces `type-of(expr-Nat) ⊑ Type(0)` which holds (`Nat : Type(0)`). No contradiction.
+
+**What changed vs D.1**: `:term` as its own lattice/facet is retired. `TermInhabitsType` bridge is retired (§4.3). SRE lens table (§6.11.1) updated accordingly (§6.11.1).
+
+**Mitigations for the "cons" of Realization B** (addressing user's 1A concern):
+
+1. **Surface clarity**: user-facing `:type`/`:term` names unchanged; tag distinction is internal. Type-error diagnostics can still say "expected T, got e : S" because the tag-dispatched merge knows which entry is which layer.
+2. **Lattice-law verification**: SRE property inference on the tag-dispatched merge verifies commutativity (merge is tag-order-independent), associativity across tag combinations, idempotence per tag, and the residuation laws (`A ⊗ (A \ B) ⊑ B`, `(B / A) ⊗ A ⊑ B`, distribution). Track 3 §12 + SRE 2G precedent says inference catches bugs tests miss — actively invited here, not a risk.
+3. **Provenance as first-class**: each tagged entry carries its derivation chain (source-loc + producer propagator + ATMS assumption). Error messages walk the chain. Richer provenance because the lattice-structured carrier IS a derivation DAG by construction.
+
+**Naming precedent**: Coq's `evar_map` has `concl` (goal type) and `body` (optional solution) as separate fields — but Coq stores them in one meta-info record per meta, not two independent stores. Agda/Idris/Lean follow similar patterns. Realization B matches how elaboration with metavariables is done in the reference systems, rendered in propagator-network terms.
+
+### §6.2 Residuation — internal to the TypeFacet quantale (A5, S3, D.2)
+
+D.2 change: residuation is *internal* to the TypeFacet quantale (not a bridge between two facets). Bidirectional type-checking emerges from the quantale's own left/right residual operations applied at tag-dispatched merge.
 
 The type lattice is a quantale ([Track 2H](2026-04-02_SRE_TRACK2H_DESIGN.md)): ⊕ = union-join, ⊗ = type-tensor (function application distributing over unions). Quantales have left/right residuals: `A \ B` (left) and `A / B` (right), satisfying `A ⊗ X ⊑ B ⟺ X ⊑ A \ B`.
 
-Bidirectional type checking is residuation:
+Bidirectional type checking falls out of residuation:
 
-- `check T e` = demand `e ⊑ T` in the term-inhabits-type relation. Computation: the residual `T \ (type-of e)` — "what must e's structure satisfy."
-- `infer e` = synthesize `T = type-of(e)`. Computation: `(type-of e) / ?` where `?` is the position-context demand.
+- `check T e` = demand `e inhabits T`. Tag-dispatched merge of CLASSIFIER(T) × INHABITANT(e) computes the left residual `T \ type-of(e)` — if the result is bot, `e : T` holds; if top, contradiction.
+- `infer e` = synthesize T from e. Tag-dispatched merge writes CLASSIFIER(type-of(e)) when INHABITANT(e) is known and no prior CLASSIFIER exists. Merge with any existing CLASSIFIER T' unifies (type-lattice-merge).
 
-**The bridge** (D.1 implementation — residuation as declarative structure, not explicit computation):
+The "α" direction (check) is the merge itself. The "γ" direction (hole-fill) is a separate propagator that reads CLASSIFIER-tagged entries at positions where INHABITANT is bot, and produces candidate INHABITANT entries — see §6.6 and the audit in [§13 Q1](#13-open-questions).
+
+**Structural basis for the tag-dispatched merge** (corner-case check for §13 Q1 sub-question):
 
 ```
-bridge TermInhabitsType
-  :from TermFacet
-  :to   TypeFacet
-  :alpha (lambda (term-val)
-           (if (eq? term-val term-bot)
-               type-bot
-               (type-of-expr term-val)))  ;; compute classifier of given term
-  :gamma (lambda (type-val)
-           ;; Given expected type, the search space for inhabitants.
-           ;; Used by hole-fill / proof search. D.1 stub: identity.
-           type-val)
-  :preserves [Residual]
+merge(X-CLASSIFIER, Y-CLASSIFIER) = type-lattice-merge(X, Y)            ;; unification
+merge(X-INHABITANT, Y-INHABITANT) = if α-equiv(X, Y) X else type-top    ;; strict equality up to α
+merge(X-CLASSIFIER, Y-INHABITANT):
+  ;; Cross-tag: the inhabitant Y must satisfy classifier X
+  ;; Compute residual: does Y's classifier embed in X?
+  let Y-classifier = type-of-expr(Y)
+  let residual = type-left-residual(X, Y-classifier)  ;; X \ type-of(Y)
+  if residual ⊑ type-bot  -> no constraint (Y is compatible); merge accepts both entries
+  else if residual is type-top  -> contradiction; facet → type-top
+  else  -> partial constraint recorded (narrowing case)
 ```
 
-At facet merge: when `:term` is updated to `term-val e` and `:type` is already `T`, the merge invariant checks `(type-of-expr e) ⊑ T`. If violated, `:type` merges to `type-top` (contradiction). This IS the bridge firing as a propagator — no separate imperative check.
+Property inference verifies at A9 facet registration (Phase 2):
+- Commutativity of all three merge cases.
+- Associativity across tag combinations (this is the non-trivial one; must check `merge(X-C, merge(Y-I, Z-C)) = merge(merge(X-C, Y-I), Z-C)`).
+- Idempotence of the per-tag cases.
+- Residuation distribution: `X \ (Y ⊓ Z) = (X \ Y) ⊓ (X \ Z)`.
 
-**Design decision D.1**: implement the bridge as a declarative `merge-invariant` function attached to the AttributeRecord lattice. Don't separate α/γ as explicit propagators at D.1 — the invariant is computed at merge time. If residuation needs explicit propagators (e.g., for hole-fill search), scope as D.2 refinement.
+Expected lattice-law corner cases (candidates property inference may flag):
+- **Order-of-operations when multiple tag combinations cascade**: if INHABITANT is written before its corresponding CLASSIFIER, the residual computation must be deferred/retriggered when CLASSIFIER arrives. Solution: retrigger propagators watching the facet's cross-tag merge.
+- **Residuation with type-top intermediates**: `X \ type-top` should be type-bot (trivially satisfied); `type-top \ X` should be type-top (nothing inhabits contradiction). Edge cases to explicitly verify.
+- **Multi-layer nesting**: when the carrier is itself a compound type (e.g., `Pi`), residuation must descend structurally — SRE ctor-desc provides the decomposition; verify it composes with tag-dispatch at every level.
+
+If any property fails, the fix is in the merge function — same iteration cycle as Track 3 §12's spec-cell associativity fix.
+
+#### §6.2.1 γ hole-fill propagator — reactive, not iterative (D.2 mantra reframe)
+
+D.1 described γ as "walks type-env + ctor-desc catalogue." That's step-think: *walk*, *iterate*, *search* — all violations of "all-at-once, all in parallel, structurally emergent." D.2 reframes.
+
+**Mantra-compliant γ design**:
+
+The γ propagator is a reactive propagator on the attribute-map that fires when *two conditions* hold simultaneously — both of which are detected by cell readership, not by iteration:
+
+1. A position's CLASSIFIER-tagged layer is ground (no unresolved metas within the type). This is detected by a *readiness threshold* on the CLASSIFIER entry — the same pattern Axis 1 parametric-trait-resolution uses (§6.5).
+2. The same position's INHABITANT-tagged layer is still `bot` (no inhabitant known).
+
+When both hold, the propagator fires — **once**, per position, at threshold. It does not walk.
+
+**Pre-indexed inhabitant catalog**:
+
+The fact pool (what could inhabit a given type) is a **pre-indexed Hasse structure** registered at declaration time — exactly parallel to the parametric impl registry in §6.11.4 and §6.5. The catalog has two halves, both registered as SRE domains with Hasse indices keyed by classifying type:
+
+- **Type-env index**: bindings in scope (from the `:context` facet) classified by their type. When a binding `x : T` enters scope, it's added to the index at classifier `T`. *This is a monotone cell write*, not a walk — the scope cell's merge function maintains the index.
+- **Constructor signature index**: each data constructor's codomain type is registered at declaration time. `zero : Nat` indexes at `Nat`; `suc : Nat -> Nat` indexes at `Nat` with a pending sub-goal for its argument.
+
+Lookup at propagator fire time is **Hasse-structured**, not iterative: the classifier `T` indexes directly into the Hasse graph; the adjacent nodes (most-specific-matching-subsumed by T) are the candidate inhabitants. O(log N) via Hasse height, not O(N) scan.
+
+**Structural decomposition propagates via SRE ctor-desc**:
+
+When the classifier is compound (e.g., `Pi(m, dom, cod)`), γ does not "walk into" the Pi type. Instead, SRE ctor-desc decomposition installs sub-propagators at the structural components:
+
+- A λ-abstraction propagator fires when a `Pi(m, dom, cod)`-classifier cell becomes ground. It creates sub-cells for `dom` and `body`, classifies body with `cod`. The sub-cells are γ-propagator-watched independently. This is SRE's decomposition doing the structural work — all-at-once over sub-components, all in parallel.
+
+**Multi-candidate case fires ATMS fork**:
+
+When the Hasse index returns multiple candidates at the same specificity level, γ writes one candidate per branch via ATMS assumption-tagging (Phase 10 substrate: [cell-based TMS](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) + worldview bitmask). Branch contradiction retracts via S(-1). Single-candidate case writes INHABITANT directly.
+
+**Network Reality Check** (Track 4 §9 methodology):
+- `net-add-propagator` calls: 1 γ-propagator per position (fire-once at readiness); 1 SRE ctor-desc propagator per compound-classifier decomposition.
+- `net-cell-write` calls: INHABITANT writes to attribute-map; ATMS tag writes on multi-candidate branches.
+- Trace: CLASSIFIER cell read + INHABITANT cell read → propagator fires → Hasse-index lookup → INHABITANT write. Everything through cells.
+
+No walks. No scan loops. No iteration. The "search" is the Hasse structural lookup, which is an index read — a cell operation, not a traversal.
 
 ### §6.3 CHAMP retirement (A2)
 
@@ -662,14 +744,15 @@ Per the SRE Lens's 6 questions (`structural-thinking.md`), each of the 6 facets 
 
 | Facet | VALUE vs STRUCTURAL | Algebraic properties | Primary or Derived | Hasse diagram structure |
 |---|---|---|---|---|
-| `:type` | STRUCTURAL (quantale) | Join-semilattice, ⊗ tensor, ⊕ union-join, Heyting (ground sublattice), left/right residuals | PRIMARY | product of ctor-lattices; width = # type constructors; height = nesting depth |
-| `:term` | STRUCTURAL (expression carrier) | Join-semilattice, idempotent | DERIVED from `:type` via `TermInhabitsType` bridge | Tree lattice over Expr structure |
+| `:classify-and-inhabit` (shared carrier for `:type` + `:term` surface names; see §6.1) | STRUCTURAL (quantale) | Join-semilattice, ⊗ tensor, ⊕ union-join, Heyting (ground sublattice), **left/right residuals** (`:preserves [Residual]`). Tag-dispatched merge for CLASSIFIER vs INHABITANT layers. | PRIMARY | Product of ctor-lattices; width = # type constructors; height = nesting depth. Residuation is internal — tag-cross merge IS quantale residual computation |
 | `:context` | VALUE (list) | Chain lattice (extension only); monotone growth | DERIVED from enclosing scope | Linear chain; height = scope depth |
 | `:usage` | STRUCTURAL (vector semiring) | Component-wise QTT semiring (m0, m1, mw + add + scale) | PRIMARY | Product of per-binding mult chains; width = # bindings |
 | `:constraints` | STRUCTURAL (Heyting powerset) | Heyting lattice, distributive, set intersection narrowing | PRIMARY | Boolean lattice over candidate set; complement structure |
 | `:warnings` | VALUE (monotone set union) | Free join-semilattice | DERIVED (side output) | Flat — union of independent warnings |
 
-**Bridges between facets are Galois connections** (§4.3) — left adjoint preserves joins. `TermInhabitsType` preserves Residual (quantale morphism). This IS the Universal Substrate argument for 4C: *every facet is a lattice embedding; every cross-facet flow is a verified Galois connection; elaboration IS fixpoint on the product of embedded algebraic structures.*
+**D.2 consolidation**: 6 facets → 5 facets. `TermFacet` retires; `:type` and `:term` tag-layer on the shared TypeFacet carrier. `TermInhabitsType` bridge retires; replaced by internal quantale residuation (§6.2).
+
+**Bridges between facets are Galois connections** (§4.3) — left adjoint preserves joins. This IS the Universal Substrate argument for 4C: *every facet is a lattice embedding; every cross-facet flow is a verified Galois connection; elaboration IS fixpoint on the product of embedded algebraic structures.*
 
 #### §6.11.2 Hypercube perspective: parallel optimality of the AttributeRecord
 
@@ -924,13 +1007,13 @@ ns ppn-track4c
 
 Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measurements have supplied data-driven answers for some; others remain for discussion. Critique rounds (P/R/M self + external) happen later, not here.
 
-1. **Residuation formalization** — **NARROWED by BSP-LE solver genericity audit (2026-04-17)**:
-   - **Check direction (α)** — merge invariant on the shared carrier (D.1 default). Residuation structure is internal to the quantale; `:type × :term` merge computes classifier consistency automatically.
-   - **Hole-fill direction (γ)** — an explicit propagator on the attribute-map. Watches `:type` cells with `:term = term-bot`, walks type-env + SRE ctor-desc catalogue, writes candidate `:term` values via ATMS branching when multi-inhabitant. Fires on S1 at readiness. Reuses BSP + stratification + ATMS + worldview-bitmask substrate already in use by typing-propagators — does **NOT** invoke the BSP-LE relational solver.
-   - **Why not general solver invocation**: audit showed BSP-LE's search machinery (goal-desc, clause-info, unify-terms, discrimination) is structurally relation-with-atoms, not lattice-parameterized. Generalization is a future BSP-LE track, not 4C scope. 4C uses the substrate (stratification + ATMS + cells) directly.
-   - **Shared-carrier tag scheme** (§6.1): `:type` and `:term` merge via tag-dispatched quantale algebra; residuation laws (verified by SRE property inference, §6.9) are the algebraic backbone. D.2 refinement moves this from separate-facets framing to tag-layers on TypeFacet carrier.
+1. **Residuation formalization** — **RESOLVED by D.2 restructure + BSP-LE solver audit (2026-04-17)**:
+   - **Check direction (α)** — tag-dispatched merge on the shared TypeFacet carrier (D.2 §6.1, §6.2). Residuation is internal to the quantale; CLASSIFIER × INHABITANT cross-tag merge IS the quantale residual computation.
+   - **Hole-fill direction (γ)** — reactive propagator on the attribute-map (§6.2.1). Fires at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Hasse-indexed inhabitant catalog (type-env + constructor signatures). SRE ctor-desc decomposition handles compound-classifier structure. ATMS-branching on multi-candidate. Reuses BSP + stratification + ATMS + worldview substrate — **NO** general BSP-LE solver invocation.
+   - **Why not general solver invocation**: audit showed BSP-LE's search machinery is structurally relation-with-atoms (goal-desc kinds, clause-info, unify-terms, discrimination). Generalization is future BSP-LE Track 6 ([BSP-LE Master](2026-03-21_BSP_LE_MASTER.md)), not 4C scope.
+   - **Shared-carrier tag scheme** (D.2 §6.1): `:type` and `:term` as tag-layers, not separate facets. Residuation laws verified by SRE property inference (§6.9). Status: implementation-ready; lattice-law corner cases enumerated in §6.2 for verification at Phase 2.
 
-   Q1 is now scoped. Remaining sub-question: does the shared-carrier tag scheme pass property-inference verification cleanly, or are there lattice-law corner cases to address in D.2? Answer emerges when Phase 2 (A9 facet SRE registration) runs inference.
+   Q1 CLOSED. Sub-question remaining: property inference pass at Phase 2 (A9 facet SRE registration) may surface specific lattice-law corner cases to address; expected based on Track 3 §12 + SRE 2G precedent.
 
 2. **Option A ↔ Option C staging granularity** — **LOOSENED by Pre-0**: speculation is cheap (~8 μs/cycle, §10.2) so Phase 8 (Option A freeze) and Phase 9 (BSP-LE 1.5 TMS) can be parallelized without thrashing. D.1 sequences them as a default; D.2 can relax to parallel if it buys a timing win.
 
