@@ -26,6 +26,7 @@
 - Elaborator strata (S(-1)/L1/L2) unified onto BSP scheduler via `register-stratum-handler!`.
 - `:type` / `:term` facet split (Coq-style metavariable discipline, MLTT-grounded).
 - Option A AND Option C for freeze/zonk — Option A is a staging scaffold; Option C is the zonk-retirement phase. Option C contributes DPO-style rewriting primitives to SRE Track 6.
+- **Hole-fill (γ residuation direction)** in scope via reuse of existing proof-search substrate (BSP + stratification + ATMS + worldview bitmask) as a dedicated propagator on the attribute-map. Does NOT depend on general residual solver (future BSP-LE track); uses substrate directly, matching how typing-propagators.rkt already consumes it.
 - `:component-paths` enforcement at registration time (in 4C; NTT type-error formalization deferred to NTT work).
 - **Parameter+cell dual-store sweep**: catalogue all Racket-parameter + propagator-cell dual stores in the codebase (like `current-coercion-warnings` + `...-cell-id`). Pre-0 finding: `that-read` is ~1400× faster than CHAMP reads, suggesting similar latent wins in other dual-store sites. Retire dual-stores uniformly — not just the 6 named bridges.
 
@@ -706,6 +707,16 @@ Applying these lenses changes three concrete design elements:
 2. **Hasse-diagram diameter bounds appear in termination arguments** (§8). The existing `:fuel 100` is a safety net; the Hasse bound is the structural argument. Strengthens Conjecture's optimality claim per stratum.
 3. **Phase 10 design uses hypercube algorithms by construction** — not as an optimization pass. Gray-code, bitmask subcube, hypercube all-reduce are in the D.2 refinement.
 
+#### §6.11.6 Note on the General Residual Solver (future BSP-LE scope)
+
+During D.1 dialogue (2026-04-17), a cross-application pattern surfaced: PUnify, FL-Narrowing, BSP-LE, trait resolution, bidirectional type-checking, parse disambiguation, ATMS narrowing — **each is a residual computation on a quantale/lattice with a stratified + ATMS-tagged + CALM-compliant solver**. A general solver parameterized by `:lattice`, `:composition`, `:decomposition`, `:facts` would unify these as instances.
+
+**Scoping**: the generalization is **out of 4C scope**. Audit of [BSP-LE 2/2B's search machinery](racket/prologos/relations.rkt) (2026-04-17) confirmed it is structurally a *relation-with-atoms solver*: `goal-desc` kinds, `clause-info`, `unify-terms`, discrimination are coupled to the relation model. Generalizing to arbitrary quantales requires lifting these primitives into a lattice-parameterized abstraction — a future **BSP-LE series track**, not 4C.
+
+**What 4C DOES consume**: the *substrate* — BSP scheduler, `register-stratum-handler!`, worldview bitmask, ATMS assumption management, stratification. These are lattice-agnostic and already used by typing-propagators.rkt + elaborator-network.rkt. Hole-fill γ (Q1), parametric trait resolution (Axis 1), union-type ATMS (Phase 10) all use the substrate directly with specific propagators — not by invoking the BSP-LE relational solver.
+
+**Forward reference**: the general residual solver track (when designed) consumes 4C's lattice specifications as example instances. PPN 5 (type-directed disambiguation), future FL-Narrowing refinements, and future PPN work that needs residual search inherit the general solver once it exists. Captured here so the insight isn't lost.
+
 ---
 
 ## §7 Termination Arguments
@@ -913,7 +924,13 @@ ns ppn-track4c
 
 Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measurements have supplied data-driven answers for some; others remain for discussion. Critique rounds (P/R/M self + external) happen later, not here.
 
-1. **Residuation formalization** — OPEN: is `TermInhabitsType` as merge invariant (D.1) sufficient, or should `:alpha` / `:gamma` be explicit propagators in D.2? The latter enables hole-fill / proof search via `:gamma` but doubles the propagator count for this bridge. Lean D.1: invariant at merge time; D.2 question: when is proof search triggered?
+1. **Residuation formalization** — **NARROWED by BSP-LE solver genericity audit (2026-04-17)**:
+   - **Check direction (α)** — merge invariant on the shared carrier (D.1 default). Residuation structure is internal to the quantale; `:type × :term` merge computes classifier consistency automatically.
+   - **Hole-fill direction (γ)** — an explicit propagator on the attribute-map. Watches `:type` cells with `:term = term-bot`, walks type-env + SRE ctor-desc catalogue, writes candidate `:term` values via ATMS branching when multi-inhabitant. Fires on S1 at readiness. Reuses BSP + stratification + ATMS + worldview-bitmask substrate already in use by typing-propagators — does **NOT** invoke the BSP-LE relational solver.
+   - **Why not general solver invocation**: audit showed BSP-LE's search machinery (goal-desc, clause-info, unify-terms, discrimination) is structurally relation-with-atoms, not lattice-parameterized. Generalization is a future BSP-LE track, not 4C scope. 4C uses the substrate (stratification + ATMS + cells) directly.
+   - **Shared-carrier tag scheme** (§6.1): `:type` and `:term` merge via tag-dispatched quantale algebra; residuation laws (verified by SRE property inference, §6.9) are the algebraic backbone. D.2 refinement moves this from separate-facets framing to tag-layers on TypeFacet carrier.
+
+   Q1 is now scoped. Remaining sub-question: does the shared-carrier tag scheme pass property-inference verification cleanly, or are there lattice-law corner cases to address in D.2? Answer emerges when Phase 2 (A9 facet SRE registration) runs inference.
 
 2. **Option A ↔ Option C staging granularity** — **LOOSENED by Pre-0**: speculation is cheap (~8 μs/cycle, §10.2) so Phase 8 (Option A freeze) and Phase 9 (BSP-LE 1.5 TMS) can be parallelized without thrashing. D.1 sequences them as a default; D.2 can relax to parallel if it buys a timing win.
 
