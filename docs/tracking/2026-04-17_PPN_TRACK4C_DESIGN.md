@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-17
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Status**: D.2 — refined from D.1 via Pre-0 findings + Hyperlattice/SRE/Hypercube lens application + Module Theory Realization B restructure for `:type`/`:term`.
+**Status**: D.2 — refined from D.1 via Pre-0 findings + Hyperlattice/SRE/Hypercube lens application + Module Theory Realization B restructure for `:type`/`:term`. P/R/M self-critique completed; findings in [`2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md`](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md), pending incorporation into D.3.
 **Version history**:
 - D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
 - D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
