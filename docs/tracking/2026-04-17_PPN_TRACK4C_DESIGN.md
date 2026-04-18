@@ -11,6 +11,7 @@
 - D.2 refinement (2026-04-17, S1 incorporation): TypeToWarnings bridge added to §4.3 (one-way α covering coercion + deprecation). Multi-source warning propagators (multiplicity, capability) documented in §4.4 as propagators (not bridges). Egress convention noted: driver reading `:warnings` is network output, not a bridge. ConstraintsToWarnings audit flagged for Phase 2.
 - D.2 refinement (2026-04-17, M2+R4 incorporation — PUnify audit): audit of unify.rkt (1028 lines) confirms "PUnify IS the match operation" claims across 6 sections map directly to existing infrastructure (`sre-structural-classify`, `unify-union-components`, `type-tensor-core`, `subtype-lattice-merge`, `current-structural-meta-lookup`, flex-app machinery). **Variance support is already first-class via `'subtype` relation name** — no new PUnify work required. New §6.13 captures the audit; §6.1/§6.2/§6.4/§6.5/§6.6/§6.10/§6.12 cite specific existing mechanisms. Net-new PUnify work: ~150-200 lines of composition wiring across phases, no algorithm development.
 - D.2 refinement (2026-04-18, M5 incorporation — residuation check timing): **lazy evaluation of cross-tag residuation check**, refined and verified correct. "Lazy" means skipped-when-unnecessary AND re-fired-on-narrowing, executed synchronously within the merge function (not deferred to a separate propagator). Trigger: cross-tag present AND (CLASSIFIER narrowed OR INHABITANT narrowed). Case 2 (narrowing re-check) is the subtle case naive lazy-cache-and-skip would miss. Option 4 (separate propagator for the check) dismissed — would create a timing window with unverified cross-tag state. Correctness compatible with BSP/CALM/ATMS. Verification plan: parity test cases (Phase 0) + property inference (Phase 2) + A/B micro-bench (Phase 3). Details in §6.2.
+- D.2 refinement (2026-04-18, minors batch — M1/M3/M4/P3/R5): Language polish and clarifications. M1: "walks the Hasse diagram" → "dispatches through Hasse structural index" (§6.5, §6.12) — removes step-think wording. M3: `lookup` in Hasse-registry is a helper function invoked synchronously from consuming propagators' fire bodies, not a standalone propagator (§6.12). M4: "ATMS union branching IS ⊕ ctor-desc" framed as a conceptual lens, not an implementation change — Phase 10 uses existing `atms-amb` machinery (§6.10). P3: CHAMP retirement deletes the code path entirely; residual reads are compile errors, coupling A8 enforcement to A2 retirement (§6.3). R5: `current-meta-source-registry` Racket parameter explicitly declared as the side registry for meta source-loc metadata (§6.3).
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -647,9 +648,16 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 1. **Introduction** (Phase 2): `:term` facet added. `solve-meta-core!` writes to BOTH CHAMP and attribute-map `:term` during migration window.
 2. **Reader migration** (Phase 3): all CHAMP readers migrated to read `:term` facet. Grep-verified (79 `solve-meta!` sites, 513 zonk.rkt sites).
-3. **CHAMP retirement** (Phase 3 close): CHAMP code path deleted. `meta-info` struct retained only for non-lattice metadata (origin, source-loc, kind metadata) — move to a separate `:meta-metadata` facet or a side registry.
+3. **CHAMP retirement** (Phase 3 close): **CHAMP code path + `meta-info` struct's lattice fields (ctx, type, status, solution, constraints) deleted entirely.** Any lingering reference becomes a compile error — hard-fails at build time, not a discipline-maintained contract. This couples A8 enforcement (Phase 1) to A2 retirement: post-retirement, no new code can inadvertently read the retired CHAMP.
 
-**No belt-and-suspenders**: the migration window Phase 2→3 is a labeled staging scaffold with explicit retirement in Phase 3 close. Not permanent.
+**Meta source metadata (R5 resolution 2026-04-18)**: Pre-0 analysis (5 of 7 meta-info fields map to facets; `source` is the one lattice-irrelevant debug field — see [Pre-0 report](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md) §2). Design commitment:
+
+- **`current-meta-source-registry`** — a single Racket parameter holding a `hasheq` of `meta-id → source-info` (source-loc + creation context string). Pure debug metadata; not participating in lattice evaluation or network flow.
+- Written once at meta creation (`fresh-meta`); read on-demand for diagnostic output. No propagator dependencies.
+- Explicit choice NOT to make it a facet: source-loc doesn't have meaningful lattice structure, and facetizing it would force through property-inference verification for no algebraic gain. Side registry is the lightweight and principled choice.
+- Test-harness awareness: the registry parameter must be added to `test-support.rkt` + `batch-worker.rkt` save/restore per [pipeline.md Two-Context Audit](../../.claude/rules/pipeline.md). Phase 4 migration scope includes this addition.
+
+**No belt-and-suspenders**: the migration window Phase 2→3 is a labeled staging scaffold with explicit retirement in Phase 3 close. Not permanent. Post-Phase 3 close, any `meta-info-ref` call outside the side registry fails to compile.
 
 ### §6.4 Aspect-coverage completion (A3)
 
@@ -950,6 +958,8 @@ merge-viable-branches:
 
 **Connection to existing infrastructure**: BSP-LE Track 2B's per-propagator worldview bitmask + S1 NAF handler pattern (fork+BSP+nogood) IS this shape. ATMS assumption management is the BSP-LE ATMS solver; the only difference is the lattice on which merge occurs. The framing "ATMS union branching IS ctor-desc decomposition of ⊕" makes Phase 10 a natural extension of SRE ctor-desc dispatch — not a special case requiring new machinery.
 
+**Framing note (M4 clarification 2026-04-18)**: "ATMS branching IS ⊕ ctor-desc decomposition" is a *conceptual lens* explaining why the ATMS mechanism applies cleanly to union types. The Phase 10 implementation uses the existing `atms-amb` / assumption-creation / worldview-forking machinery from BSP-LE 2+2B — not a new ctor-desc-driven mechanism. The lens justifies the principled connection without claiming an implementation change.
+
 **PUnify within each branch**: per-branch elaboration invokes [`unify-union-components`](../../racket/prologos/unify.rkt) (unify.rkt:777) for compound-type unification under the branch's tagged worldview. Pre-existing: the function flattens/sorts/dedupes components and PUnifies pairwise. Reused as-is. See §6.13 for audit.
 
 ---
@@ -1002,13 +1012,13 @@ The worldview space for N union branches IS Q_N (Boolean lattice = hypercube), p
 
 The parametric impl registry is an instance of the **Hasse-registry primitive (§6.12)**. Lattice = impl-pattern specificity order; entries = impl bodies; `position-fn` = impl's pattern type; `lookup-fn` does O(log N) structural navigation via PUnify on Hasse neighbors.
 
-The SRE lens identifies this index as the *Hasse diagram of the impl coherence lattice* — where each impl is a node, and the partial order is *specificity* (`Eq Int` is more specific than `Eq A`). Matching at resolution time walks the Hasse diagram from most-specific candidates downward:
+The SRE lens identifies this index as the *Hasse diagram of the impl coherence lattice* — where each impl is a node, and the partial order is *specificity* (`Eq Int` is more specific than `Eq A`). Matching at resolution time dispatches through the Hasse diagram's structural index from most-specific candidates:
 
 - **O(log N) lookup** for N impls, via the Hasse height (not N scan).
 - **Coherence = antichain** of maximal specific impls; zero critical pairs.
 - **Specificity resolution** IS the Hasse order — most-specific match wins.
 
-This is what the "rebuilt for efficiency" posture means concretely: the candidate-index IS the Hasse decomposition of the impl coherence lattice. The efficiency gain vs current E2 (343 MB) comes from walking the Hasse structure, not the algorithm. Post-§6.12 extraction: Phase 7's impl registry is ~30-50 lines (`position-fn` + post-lookup dict construction) built on the ~150-200-line primitive, rather than ~150 lines of ad-hoc Hasse implementation.
+This is what the "rebuilt for efficiency" posture means concretely: the candidate-index IS the Hasse decomposition of the impl coherence lattice. The efficiency gain vs current E2 (343 MB) comes from the Hasse diagram's structural navigation, not an iterative algorithm. Post-§6.12 extraction: Phase 7's impl registry is ~30-50 lines (`position-fn` + post-lookup dict construction) built on the ~150-200-line primitive, rather than ~150 lines of ad-hoc Hasse implementation.
 
 #### §6.11.5 Implications for 4C
 
@@ -1058,12 +1068,14 @@ struct hasse-registry
 **Operations**:
 
 - `register!(entry)` — monotone. Compute Hasse position via `position-fn`; insert into CHAMP-backed Hasse graph.
-- `lookup(query)` — structural navigation. Walk from most-specific candidates; return the antichain of Hasse-minimal entries subsuming `query`. O(log N) via Hasse height.
+- `lookup(query)` — structural index navigation. Reads the Hasse neighborhood of `query` (most-specific candidates subsuming the query point). Returns the antichain of Hasse-minimal entries subsuming `query`. O(log N) via Hasse height — not a traversal, a single structural index read.
 
 **Correctness discipline**: the primitive is registered as an SRE domain (A9). Property inference verifies:
 - Hasse order is a valid partial order (antisymmetric, transitive).
 - Monotone registration: entries only add, never remove (CALM-safe).
 - Lookup is structural: ctor-desc-driven navigation; no scan internals.
+
+**Lookup as helper function, not propagator** (M3 clarification 2026-04-18): `lookup` is invoked synchronously from within the fire functions of consuming propagators (Phase 7 parametric resolution, Phase 9b γ hole-fill). It is NOT a standalone propagator that fires independently. The consuming propagator's `:reads` includes the registry cell (which updates rarely — only on new entry registration); the propagator's fire body calls `lookup` as a library operation. This avoids unnecessary propagator proliferation (no per-query propagator) and keeps the lookup's timing deterministic (executes when the consumer fires). The registry cell's on-network status is preserved — the cell itself is stored in the propagator network and read via `that-read`; only the lookup computation is a synchronous helper.
 
 #### §6.12.2 SRE / Module Theory / PUnify composition
 
