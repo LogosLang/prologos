@@ -12,6 +12,7 @@
 - D.2 refinement (2026-04-17, M2+R4 incorporation — PUnify audit): audit of unify.rkt (1028 lines) confirms "PUnify IS the match operation" claims across 6 sections map directly to existing infrastructure (`sre-structural-classify`, `unify-union-components`, `type-tensor-core`, `subtype-lattice-merge`, `current-structural-meta-lookup`, flex-app machinery). **Variance support is already first-class via `'subtype` relation name** — no new PUnify work required. New §6.13 captures the audit; §6.1/§6.2/§6.4/§6.5/§6.6/§6.10/§6.12 cite specific existing mechanisms. Net-new PUnify work: ~150-200 lines of composition wiring across phases, no algorithm development.
 - D.2 refinement (2026-04-18, M5 incorporation — residuation check timing): **lazy evaluation of cross-tag residuation check**, refined and verified correct. "Lazy" means skipped-when-unnecessary AND re-fired-on-narrowing, executed synchronously within the merge function (not deferred to a separate propagator). Trigger: cross-tag present AND (CLASSIFIER narrowed OR INHABITANT narrowed). Case 2 (narrowing re-check) is the subtle case naive lazy-cache-and-skip would miss. Option 4 (separate propagator for the check) dismissed — would create a timing window with unverified cross-tag state. Correctness compatible with BSP/CALM/ATMS. Verification plan: parity test cases (Phase 0) + property inference (Phase 2) + A/B micro-bench (Phase 3). Details in §6.2.
 - D.2 refinement (2026-04-18, minors batch — M1/M3/M4/P3/R5): Language polish and clarifications. M1: "walks the Hasse diagram" → "dispatches through Hasse structural index" (§6.5, §6.12) — removes step-think wording. M3: `lookup` in Hasse-registry is a helper function invoked synchronously from consuming propagators' fire bodies, not a standalone propagator (§6.12). M4: "ATMS union branching IS ⊕ ctor-desc" framed as a conceptual lens, not an implementation change — Phase 10 uses existing `atms-amb` machinery (§6.10). P3: CHAMP retirement deletes the code path entirely; residual reads are compile errors, coupling A8 enforcement to A2 retirement (§6.3). R5: `current-meta-source-registry` Racket parameter explicitly declared as the side registry for meta source-loc metadata (§6.3).
+- D.2 refinement (2026-04-18, O2 incorporation — comprehensive lens catalog): new §6.11.8 applies the SRE lens uniformly to all non-facet lattices in 4C (AttributeRecord, AttributeMap, impl coherence, inhabitant catalog, Hasse-registry ambient L, worldview Q_n, ready-queue, retraction request set, tagged-cell-value layers). Surfaces two structural insights: (a) impl coherence lattice (Phase 7) and inhabitant catalog (Phase 9b) are **structurally identical Hasse-registry instances** — both PUnify-with-`'subtype` over Hasse-indexed entries; §6.12 primitive abstracts the identity. (b) tagged-cell-value layer lattice is the **structural generalization** of Module Theory Realization B — every "shared-carrier + tags" situation in 4C is an instance (`:type`/`:term`, `:constraints` by trait, worldview by assumption, attribute-map by position). Pre-existing subsections (§6.11.2, §6.11.3, §6.11.4) cross-referenced; catalog provides the full lens applied to every lattice.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -1043,6 +1044,112 @@ During D.1 dialogue (2026-04-17), a cross-application pattern surfaced: PUnify, 
 **What 4C DOES consume**: the *substrate* — BSP scheduler, `register-stratum-handler!`, worldview bitmask, ATMS assumption management, stratification. These are lattice-agnostic and already used by typing-propagators.rkt + elaborator-network.rkt. Hole-fill γ (Q1), parametric trait resolution (Axis 1), union-type ATMS (Phase 10) all use the substrate directly with specific propagators — not by invoking the BSP-LE relational solver.
 
 **Forward reference**: the general residual solver track (when designed) consumes 4C's lattice specifications as example instances. PPN 5 (type-directed disambiguation), future FL-Narrowing refinements, and future PPN work that needs residual search inherit the general solver once it exists. Captured here so the insight isn't lost.
+
+---
+
+### §6.11.8 Full lattice catalog — lens applied comprehensively (O2 resolution)
+
+O2 finding: §6.11.1 applies the SRE lens to the 5 facets, but other lattices in the design (AttributeRecord, AttributeMap, worldview, impl coherence, inhabitant catalog, Hasse-registry ambient L, tagged-cell-value layers, stratum-handler request cells) aren't uniformly characterized. Per CRITIQUE_METHODOLOGY §"SRE Lattice Lens (Mandatory for All Lattice Design Decisions)" — every lattice in a design needs the lens applied. This subsection closes that gap.
+
+Deeper per-lattice treatments live in referenced subsections; this catalog is the consolidated lens reference.
+
+#### Compound / aggregate lattices
+
+**AttributeRecord** (§4.2, §6.11.2)
+
+- **Classification**: STRUCTURAL — product of 5 facet lattices.
+- **Algebra**: component-wise merge per facet; inherits properties from components (e.g., if one facet is Heyting, the product has component-wise Heyting).
+- **Primary/Derived**: PRIMARY — central information store per AST position.
+- **Hasse**: product Hasse of the 5 facet lattices. Vertical height = max component depth; width = sum of component widths.
+- **Module Theory**: direct sum ⊕_{facet} FacetLattice. Component-wise independent merges. Facets are modules over AttributeRecord's base.
+- **PUnify**: operates at the facet level (per-facet merge), not at the record level. The record aggregates facet-local PUnify results.
+- **Hasse compute topology**: per-facet propagators fire independently on their component (§6.11.2). Cross-facet bridges coordinate at Galois-connection edges.
+
+**AttributeMap** (§4.2)
+
+- **Classification**: STRUCTURAL — hashmap of position → AttributeRecord.
+- **Algebra**: per-position compound merge (each position's AttributeRecord merges component-wise).
+- **Primary/Derived**: PRIMARY — global elaboration state on the persistent registry network.
+- **Hasse**: two-level compound — outer per-position Hasse (position growth is monotone addition); inner per-facet Hasse (product structure).
+- **Module Theory**: direct sum ⊕_{position} AttributeRecord(position). Each position is a module. Compound component-paths `(cons cell-id (cons position facet))` address the product structure for targeted propagator firing.
+- **PUnify**: per-facet per-position.
+
+#### Registry / catalog lattices
+
+**Impl coherence lattice** (§6.11.4, Phase 7)
+
+- **Classification**: STRUCTURAL — partial order over impl patterns by specificity.
+- **Algebra**: poset at minimum; may be a lattice if meet/join (most-general-instance / most-specific-subsumer) are well-defined for arbitrary impl patterns.
+- **Primary/Derived**: PRIMARY within trait-resolution mechanism.
+- **Hasse**: specificity order — more-specific-below. Coherence = antichain at each level = zero critical pairs (verified at registration via Adhesive DPO analysis).
+- **Module Theory**: entries at each Hasse node form an independent group; ⊕_{node} ImplSet(node) via Hasse-node tagging.
+- **PUnify**: lookup IS `unify-core` with `'subtype` relation against Hasse-neighborhood impls (§6.13). Per-candidate PUnify via SRE ctor-desc decomposition.
+- **Hasse compute topology**: O(log N) structural index lookup, not N-scan.
+
+**Inhabitant catalog lattice** (§6.2.1, Phase 9b)
+
+- **Classification**: STRUCTURAL — classifier-type order over inhabitant entries.
+- **Algebra**: same subtype poset as TypeFacet's `'subtype` relation — reuses the existing quantale structure. Entries are (term, classifier-type) pairs indexed by classifier.
+- **Primary/Derived**: PRIMARY for γ hole-fill; conceptually DERIVED from the TypeFacet quantale structure (inhabitant catalog uses TypeFacet's subtype lattice for its Hasse).
+- **Hasse**: subtype order over classifying types. Navigation for candidate matching.
+- **Module Theory**: entries (type-env bindings + registered constructor signatures) tagged by classifier. ⊕_{classifier} InhabitantSet(classifier).
+- **PUnify**: lookup IS `unify-core` with `'subtype` relation via SRE ctor-desc (§6.13).
+
+**Lens observation**: impl coherence and inhabitant catalog are STRUCTURALLY IDENTICAL Hasse-registry instances — both are PUnify-with-`'subtype` lookups on Hasse-indexed entries. The §6.12 primitive abstracts this identity; 4C builds ONE primitive + TWO parameterizations (impl-pattern Hasse vs classifier-type Hasse). Compositional win.
+
+**Hasse-registry ambient lattice L** (§6.12, generic)
+
+- **Classification**: depends on instance — typically STRUCTURAL for the use cases in 4C (impl patterns, classifier types).
+- **Algebra**: partial order at minimum. May be a full lattice. Per-instance SRE domain registration declares properties.
+- **Primary/Derived**: PRIMARY from the registry's perspective.
+- **Hasse**: by construction, the lattice's Hasse IS the Hasse used for navigation. Compute topology: O(log N) via Hasse height.
+- **Module Theory**: ⊕_{node} EntryGroup(node) — direct sum via Hasse-node tagging (Realization B).
+- **PUnify**: registry lookup IS PUnify (typically with `'subtype` relation for subsumption-based matching).
+
+#### Speculation lattice
+
+**Worldview Q_n** (§6.10, Phase 9, BSP-LE 1.5)
+
+- **Classification**: VALUE (bitmask) — but with rich hypercube adjacency structure per [BSP-LE Track 2 Hypercube Addendum](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md).
+- **Algebra**: Boolean, complemented, distributive, Heyting, frame. Q_n for n assumptions.
+- **Primary/Derived**: **DERIVED** from decision cells (per BSP-LE Track 2 D.1 self-critique finding — decision cells are primary, worldview is the union of committed assumption bits). The derivation is reflected in the A/B commitment flow: worldview = reduce(OR, committed-bits).
+- **Hasse**: hypercube Q_n. Each worldview is a vertex; edges = Hamming distance 1 (one assumption differs). Adjacency structure enables Gray-code traversal, bitmask subcube membership (O(1) nogood containment), hypercube all-reduce (log₂ diameter).
+- **Module Theory**: bitmask tag-layers on shared worldview cell. Each assumption is a tag-layer. ⊕_{assumption} AssumptionLayer.
+- **PUnify**: not directly — worldview is atomic from PUnify's view. PUnify applies to cell values TAGGED BY worldview (per-branch PUnify in Phase 10).
+- **Hasse-derived algorithms** (from hypercube addendum §2): Gray-code branch exploration maximizes CHAMP reuse; bitmask subcube check for nogood containment; hypercube all-reduce for S(-1) barrier synchronization when parallel.
+
+#### BSP stratum handler request lattices
+
+**Ready-queue actions** (§6.7, L1 readiness)
+
+- **Classification**: VALUE — set of action descriptors (data orientation, not state).
+- **Algebra**: monotone set union (free join-semilattice).
+- **Primary/Derived**: PRIMARY for S1 action dispatch.
+- **Hasse**: flat — actions accumulate without subsumption.
+- **Module Theory**: N/A (atomic descriptors; flat monotone accumulation).
+- **PUnify**: N/A at the lattice level; applies within action execution.
+
+**Retraction request set** (§6.7, S(-1))
+
+- **Classification**: VALUE — set of retracted assumption-ids.
+- **Algebra**: monotone set union; consumed at barrier (S(-1) processes and clears).
+- **Primary/Derived**: PRIMARY for S(-1) cleanup triggers.
+- **Hasse**: flat set order.
+- **Module Theory**: same algebraic structure as worldview (assumption-id set); used as barrier trigger rather than worldview state.
+- **PUnify**: N/A.
+
+#### Tag-layer lattice (the Module Theory Realization B carrier)
+
+**Tagged-cell-value layers** (§6.1, §6.10 — pervasive in 4C)
+
+- **Classification**: STRUCTURAL — tag → value hashmap as a carrier.
+- **Algebra**: per-tag merge (tag-specific lattice); cross-tag trigger (e.g., CLASSIFIER × INHABITANT residuation in §6.2).
+- **Primary/Derived**: PRIMARY — this IS the Module Theory Realization B mechanism. 4C's consolidation from "separate cells with bridges" to "shared carrier with tag-layers" applies throughout.
+- **Hasse**: per-tag Hasse lifts to the compound; cross-tag merges may introduce additional structure (e.g., residuation check).
+- **Module Theory**: THE direct-sum-via-tagging structure. Applied to: `:type`/`:term` (§6.1), `:constraints` by trait (§6.5), worldview by assumption (§6.10), attribute-map by position (§4.2).
+- **PUnify**: per-layer PUnify operations; cross-layer triggers residuation or structural coherence checks.
+
+**Key lens insight**: the tagged-cell-value layer lattice is the **structural generalization** of 4C's Module Theory Resolution B applications. Every "shared-carrier + tags" situation in 4C is an instance of this lattice, with domain-specific tag schemes and per-tag merge functions.
 
 ---
 
