@@ -6,6 +6,7 @@
 **Version history**:
 - D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
 - D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
+- D.2 refinement (2026-04-17, SRE+PUnify lens pass): Hasse-registry extracted as a first-class primitive (new §6.12) — foundational infrastructure used by Phase 7 parametric resolution and Phase 9b γ hole-fill, consumed by future tracks. New Phase 2b (primitive) and Phase 9b (γ hole-fill) added to Progress Tracker — γ previously had no explicit phase. "Realization A → B collapse" named as cross-cutting pattern. PUnify named explicitly in §6.1/§6.4/§6.6/§6.10 (previously implicit). Stratification framed as module composition in §6.7/§6.11.1. Union ATMS branching framed as ⊕ ctor-desc decomposition in §6.10. SRE ctor-desc auto-derivation flagged as simplification opportunity in §6.4.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -31,6 +32,14 @@
 - **Hole-fill (γ residuation direction)** in scope via reuse of existing proof-search substrate (BSP + stratification + ATMS + worldview bitmask) as a dedicated propagator on the attribute-map. Does NOT depend on general residual solver (future BSP-LE track); uses substrate directly, matching how typing-propagators.rkt already consumes it.
 - `:component-paths` enforcement at registration time (in 4C; NTT type-error formalization deferred to NTT work).
 - **Parameter+cell dual-store sweep**: catalogue all Racket-parameter + propagator-cell dual stores in the codebase (like `current-coercion-warnings` + `...-cell-id`). Pre-0 finding: `that-read` is ~1400× faster than CHAMP reads, suggesting similar latent wins in other dual-store sites. Retire dual-stores uniformly — not just the 6 named bridges.
+- **Hasse-registry primitive** (§6.12): extracted as first-class infrastructure. SRE-registered lattice + registration/structural-lookup interface. Used by Phase 7 (parametric impl registry) and Phase 9b (γ inhabitant catalog). Consumed by future tracks (general residual solver, PPN 5 disambiguation, FL-Narrowing refinement). User observation: *virtually every track will be designing for its own Hasse diagram.*
+
+**Cross-cutting pattern — "Realization A → B collapse"**: several axes follow the same pattern of moving from Module Theory Realization A (separate cells with bridges) to Realization B (shared-carrier-with-tagging). Named here so the consistency is explicit across axes:
+- A5 (`:type`/`:term`): two facets with `TermInhabitsType` bridge → tag-layers on shared TypeFacet carrier.
+- A2 (CHAMP retirement): CHAMP as separate store → `:term` tag-layer on shared carrier.
+- A6 (warnings): Racket-parameter + cell dual → single `:warnings` facet.
+- A1 (constraints decomposition): flat `:constraints` set → trait-tagged layers on shared `:constraints` carrier.
+- O1 sweep: every dual-store discovered in the codebase — same pattern applied uniformly.
 
 **Out of scope**:
 
@@ -51,6 +60,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | 🔄 | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
 | 1 | A8 `:component-paths` enforcement via cell `:lattice` annotation | ⬜ | `net-new-cell` extended with `#:lattice` keyword (structural / value / unclassified). `net-add-propagator` enforcement reads annotation. Audit + migration of all cell-creation sites. `tools/lint-cells.rkt` baseline tool (mirrors lint-parameters). NTT-aligned (`:lattice :structural` syntax matches NTT §3). |
 | 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
+| 2b | Hasse-registry primitive (NEW in D.2) | ⬜ | SRE-registered lattice with registration + structural-navigation lookup. ~150-200 lines Racket. Foundational infrastructure used by Phase 7 (impl registry) + Phase 9b (inhabitant catalog) + all future tracks needing Hasse-indexed lookup. See §6.12. |
 | 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires |
 | 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
 | 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired |
@@ -58,6 +68,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 7 | A1 Parametric trait-resolution — per-(meta, trait) propagators | ⬜ | `:constraints` facet tagged by trait (Module Theory Realization B). Per-(meta, trait) propagator on tagged layer. Hasse-indexed impl registry. PUnify for match (via SRE ctor-desc). ATMS branching on multi-candidate (via Phase 9 cell-based TMS). Set-latch fan-in for dict aggregation. Retires Bridge 1. |
 | 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
 | 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note |
+| 9b | γ hole-fill propagator (NEW in D.2) | ⬜ | Reactive propagator at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Consumes Phase 2b Hasse-registry for inhabitant catalog (type-env + constructor signatures). PUnify via ctor-desc for match. ATMS branching on multi-candidate via Phase 9 cell-based TMS. Set-latch fan-in for aggregation. Previously architecturally described in §6.2.1 but unphased; D.2 makes it explicit. |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
 | 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
 | 12 | A4 Option C — **zonk retirement entirely** via cell-refs | ⬜ | Replace `expr-meta` with `expr-cell-ref`. Reading expression IS zonking. `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). 14-file pipeline update. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
@@ -73,6 +84,8 @@ Phase 1 (A8 enforcement) — foundation for all subsequent propagators
   ↓
 Phase 2 (A9 facet registration) — property inference catches bugs early
   ↓
+Phase 2b (Hasse-registry primitive) — foundation for Phase 7 + Phase 9b
+  ↓
 Phase 3 (A5 :type/:term split)
   ↓
 Phase 4 (A2 CHAMP retirement) — depends on :term facet
@@ -81,13 +94,15 @@ Phase 5 (A6 warnings) — small independent piece
   ↓
 Phase 6 (A3 aspect coverage) — independent; can parallel with 5
   ↓
-Phase 7 (A1 parametric resolution)
+Phase 7 (A1 parametric resolution) — uses Phase 2b Hasse-registry
   ↓
 Phase 8 (A4 Option A freeze) — depends on CHAMP retirement
   ↓
 Phase 9 (BSP-LE 1.5 TMS) — sub-track
   ↓
-Phase 10 (Phase 8 union types)
+Phase 9b (γ hole-fill propagator) — uses Phase 2b + Phase 3 + Phase 4 + Phase 9
+  ↓
+Phase 10 (Phase 8 union types) — can parallel with 9b
   ↓
 Phase 11 (A7 BSP orchestration) — can parallel with 10
   ↓
@@ -442,7 +457,7 @@ Realization B: one facet `:classify-and-inhabit` on the shared TypeFacet carrier
 Merge is tag-dispatched:
 - CLASSIFIER × CLASSIFIER → type-lattice-merge (unification of classifiers).
 - INHABITANT × INHABITANT → α-equivalence strict merge; mismatch → type-top.
-- CLASSIFIER × INHABITANT → **quantale residuation check**: does the inhabitant inhabit the classifier? Enforced via left residual `type-of(INHABITANT) ⊑ CLASSIFIER`. Violation → type-top (contradiction).
+- CLASSIFIER × INHABITANT → **quantale residuation check via PUnify with variance**: does the inhabitant inhabit the classifier? The check `type-of(INHABITANT) ⊑ CLASSIFIER` IS a PUnify invocation with one-direction variance (subsumption, not unification) — driven by SRE ctor-desc decomposition on the shared carrier. PUnify success → compatible; failure → type-top (contradiction).
 
 The residuation structure lives *inside* the quantale, not as a bridge. This is §6.2's subject.
 
@@ -516,7 +531,7 @@ When both hold, the propagator fires — **once**, per position, at threshold. I
 
 **Pre-indexed inhabitant catalog**:
 
-The fact pool (what could inhabit a given type) is a **pre-indexed Hasse structure** registered at declaration time — exactly parallel to the parametric impl registry in §6.11.4 and §6.5. The catalog has two halves, both registered as SRE domains with Hasse indices keyed by classifying type:
+The fact pool (what could inhabit a given type) is implemented via the **Hasse-registry primitive (§6.12)** — same primitive as the parametric impl registry in §6.5. The catalog has two halves, both registered as `hasse-registry` instances with lattices keyed by classifying type:
 
 - **Type-env index**: bindings in scope (from the `:context` facet) classified by their type. When a binding `x : T` enters scope, it's added to the index at classifier `T`. *This is a monotone cell write*, not a walk — the scope cell's merge function maintains the index.
 - **Constructor signature index**: each data constructor's codomain type is registered at declaration time. `zero : Nat` indexes at `Nat`; `suc : Nat -> Nat` indexes at `Nat` with a pending sub-goal for its argument.
@@ -560,7 +575,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 **Problem**: 76 `register-typing-rule!` entries vs ~326 `expr-*` structs. `infer/err` fallback catches the rest imperatively.
 
-**Fix**: enumerate uncovered AST kinds, register one propagator per kind. Dispatch is structural (cell-ID → propagator), not imperative.
+**Fix**: enumerate uncovered AST kinds, register one propagator per kind. Dispatch is structural (cell-ID → propagator), not imperative. **Matching/unification within typing rules IS PUnify** — app-typing's arg-domain unification, reduce-arm classifier matching, etc. all invoke PUnify via SRE ctor-desc decomposition on the shared TypeFacet carrier.
 
 **Methodology**:
 
@@ -568,6 +583,24 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 2. Enumerate gaps by category: ATMS ops, union-type forms, session expressions, narrowing expressions, auto-implicits, rare elaboration helpers.
 3. Register one fire function per AST kind. Use SRE-derived decomposition where applicable (structural lattice rules handle N AST kinds via one decomposition template).
 4. Verify: after registration, the `infer/err` fallback should be reachable only for genuinely unrepresentable cases (e.g., elaboration errors, not missing rules).
+
+**Simplification opportunity — SRE ctor-desc auto-derivation**: many of the 76 existing `register-typing-rule!` entries follow the pattern "given constructor C with N fields typed T₁..Tₙ, result type is f(T₁..Tₙ) for some simple f." SRE ctor-desc ALREADY decomposes constructors structurally (`(struct expr-C ... #:property prop:ctor-desc-tag '(type . C))`). If the typing rule's result-type function is registered alongside the ctor-desc, the propagator can be auto-derived:
+
+```
+;; Today: separate ctor-desc + typing rule
+(struct expr-Pi (mult domain codomain) #:transparent #:property prop:ctor-desc-tag '(type . Pi))
+(register-typing-rule! expr-Pi? 2 (list expr-Pi-domain expr-Pi-codomain)
+                       (lambda (dom cod) (expr-Type (lmax (type-of dom) (type-of cod))))
+                       'Pi)
+
+;; Possible consolidation:
+(register-ctor-desc-with-typing!
+  Pi
+  :fields '(mult domain codomain)
+  :result-type (lambda (_m dom cod) (expr-Type (lmax (type-of dom) (type-of cod)))))
+```
+
+Not all typing rules fit (some need bidirectional flow, constraint generation, etc.) — but the core/primitive-type ones largely do. A Phase 6 sub-design should assess how many of the 75 unregistered AST kinds fit the auto-derivation pattern. If high proportion, the simplification compresses Phase 6 significantly. Flagged here for Phase 6 decision.
 
 ### §6.5 Parametric trait-resolution propagator (A1) — **rebuilt for efficiency** (D.2)
 
@@ -581,7 +614,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 2. **Per-(meta, trait) propagator**, not per-meta and not per-individual-constraint. Each propagator watches exactly its own tag-layer on the meta's `:constraints` facet via targeted `:component-paths`. Independent firing, no internal iteration. When a meta has N traits, N propagators fire concurrently once the type grounds — true parallelism, not batched processing.
 
-3. **Hasse-indexed impl registry** (§6.11.4). Each parametric impl is registered once at declaration time, placed in a specificity Hasse diagram over impl patterns. At resolution time, lookup is structural index navigation (O(log N) via Hasse height), not scan. Coherence — no overlapping impls at same specificity — is critical-pair analysis on the impl-pattern DPO structure ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)); zero critical pairs verified at registration.
+3. **Hasse-indexed impl registry** (§6.11.4) — **implemented via the Hasse-registry primitive (§6.12)**. Each parametric impl is registered once at declaration time, placed in a specificity Hasse diagram over impl patterns. At resolution time, lookup is structural index navigation (O(log N) via Hasse height), not scan. Coherence — no overlapping impls at same specificity — is critical-pair analysis on the impl-pattern DPO structure ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)); zero critical pairs verified at registration.
 
 4. **PUnify for pattern matching**. "Does candidate impl pattern `P` match target type `T`?" is a **PUnify invocation** on the TypeFacet quantale — not a hand-rolled pattern matcher. Impl-level type vars (e.g., `E` in `Seqable (List E)`) become fresh CLASSIFIER-tagged metas during the match attempt. PUnify's structural decomposition via SRE ctor-desc handles recursive matching (`List Int` vs `List E` → decompose → `Int` vs `E` → E solves to Int). On success, the substitution σ emerges as meta bindings on the shared carrier; the resolved dict term is constructed via structural cell reads.
 
@@ -646,9 +679,13 @@ propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
 
 **DPO contribution**: substitution, β-reduction, η-expansion become graph rewrites on the cell-ref network. The adhesive-category rewriting primitives ([Adhesive Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)) apply directly. These primitives are the infrastructure SRE Track 6 builds on — Option C in 4C means SRE 6 doesn't re-invent elaboration-specific DPO machinery.
 
-### §6.7 Elaborator strata → BSP scheduler unification (A7)
+**PUnify becomes universal for expressions**: under Option C, cell-ref dereferencing IS a one-step PUnify operation; expression reduction IS graph rewriting via ctor-desc dispatch. "Reading the expression" IS PUnify with the current cell state. Zonking dissolves because reading already does the substitution structurally. Every expression operation (type inference, reduction, pattern matching, display) becomes PUnify + ctor-desc on the cell-ref graph. Same machinery that handles types (§6.1, §6.2, §6.5) now handles expressions (§6.6) — unified computational substrate.
+
+### §6.7 Elaborator strata → BSP scheduler unification (A7) — module composition
 
 **Problem**: `run-stratified-resolution-pure` ([metavar-store.rkt:1915](../../racket/prologos/metavar-store.rkt)) is a sequential orchestrator parallel to the BSP scheduler. The BSP scheduler already has `register-stratum-handler!` ([propagator.rkt:2392](../../racket/prologos/propagator.rkt)) with `:tier 'topology | 'value` dispatch.
+
+**Module-theoretic framing (§6.11.6)**: each stratum is a **module over the base propagator network**; `register-stratum-handler!` is module composition. A7 consolidates two orchestration mechanisms into one by realizing that BSP's solver strata (topology, S1 NAF) and the elaborator's strata (S(-1), L1, L2) are both modules over the same base network. The A1 addendum (BSP-LE 2B) established this pattern for the topology stratum; 4C extends it to the elaborator's strata.
 
 **Fix**: register elaborator strata as BSP stratum handlers.
 
@@ -746,22 +783,26 @@ This gives type-check-like correctness at registration time. No heuristics, no s
 
 See [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md) for the detailed migration path. Scope estimate: ~450 lines.
 
-**Phase 8 (union types via ATMS)** builds on cell-based TMS:
+**Phase 8 (union types via ATMS)** builds on cell-based TMS. **Mechanistically, ATMS branching on a union type IS applying SRE ctor-desc to the ⊕ constructor**: a union type `A | B` is `A ⊕ B` in the TypeFacet quantale; ctor-desc of the ⊕ constructor yields two components; ATMS branching instantiates the structural decomposition into per-component branches. Each branch is ONE COMPONENT of the ⊕ structural decomposition, tagged with its own assumption. **PUnify within each branch** resolves sub-expressions against the component type.
 
 ```
 ;; When :type facet at position becomes union A | B:
+;; This IS ctor-desc decomposition of the ⊕ constructor.
 fork-on-union:
+  ;; SRE ctor-desc for ⊕ (union-join) decomposes: components [A, B]
+  ;; Each component gets its own assumption + tagged worldview
   aid-a := fresh-assumption
   aid-b := fresh-assumption
-  branch-a := tag-worldview aid-a
-  branch-b := tag-worldview aid-b
+  branch-a := tag-worldview aid-a   ;; structural: component-1 of ⊕
+  branch-b := tag-worldview aid-b   ;; structural: component-2 of ⊕
   ;; Both branches elaborate concurrently under their tagged worldview.
+  ;; PUnify within each branch resolves sub-expressions against the component type.
   ;; Facet writes are TMS-tagged with the branch assumption.
 
 ;; On contradiction in branch-a (:type → type-top):
 retract-contradicted:
   narrow :type facet by removing tagged entries for aid-a.
-  emit narrowed :type = B.
+  emit narrowed :type = B.   ;; residual component after failed branch retracted
 
 ;; On both branches succeeding:
 merge-viable-branches:
@@ -769,7 +810,7 @@ merge-viable-branches:
   S2 barrier commits surviving branch(es) to base worldview.
 ```
 
-**Connection to existing infrastructure**: BSP-LE Track 2B's per-propagator worldview bitmask + S1 NAF handler pattern (fork+BSP+nogood) IS this shape. ATMS assumption management is the BSP-LE ATMS solver; the only difference is the lattice on which merge occurs.
+**Connection to existing infrastructure**: BSP-LE Track 2B's per-propagator worldview bitmask + S1 NAF handler pattern (fork+BSP+nogood) IS this shape. ATMS assumption management is the BSP-LE ATMS solver; the only difference is the lattice on which merge occurs. The framing "ATMS union branching IS ctor-desc decomposition of ⊕" makes Phase 10 a natural extension of SRE ctor-desc dispatch — not a special case requiring new machinery.
 
 ---
 
@@ -815,15 +856,17 @@ The worldview space for N union branches IS Q_N (Boolean lattice = hypercube), p
 
 3. **Hypercube all-reduce for S(-1) retraction barrier** (§2.3). When retraction affects multiple branches, use hypercube all-reduce (log₂(W) rounds of pairwise merge) instead of flat synchronization. Bounded for BSP-LE 1.5 sub-track's parallel execution paths.
 
-#### §6.11.4 Phase 7 parametric-trait-resolution — Hasse-based index
+#### §6.11.4 Phase 7 parametric-trait-resolution — Hasse-based index via §6.12 primitive
 
-The parametric impl registry (§6.5 "rebuilt for efficiency") indexes impls by type-arg pattern. The SRE lens identifies this index as the *Hasse diagram of the impl coherence lattice* — where each impl is a node, and the partial order is *specificity* (`Eq Int` is more specific than `Eq A`). Matching at resolution time walks the Hasse diagram from most-specific candidates downward:
+The parametric impl registry is an instance of the **Hasse-registry primitive (§6.12)**. Lattice = impl-pattern specificity order; entries = impl bodies; `position-fn` = impl's pattern type; `lookup-fn` does O(log N) structural navigation via PUnify on Hasse neighbors.
+
+The SRE lens identifies this index as the *Hasse diagram of the impl coherence lattice* — where each impl is a node, and the partial order is *specificity* (`Eq Int` is more specific than `Eq A`). Matching at resolution time walks the Hasse diagram from most-specific candidates downward:
 
 - **O(log N) lookup** for N impls, via the Hasse height (not N scan).
 - **Coherence = antichain** of maximal specific impls; zero critical pairs.
 - **Specificity resolution** IS the Hasse order — most-specific match wins.
 
-This is what the "rebuilt for efficiency" posture means concretely: the candidate-index IS the Hasse decomposition of the impl coherence lattice. The efficiency gain vs current E2 (343 MB) comes from walking the Hasse structure, not the algorithm.
+This is what the "rebuilt for efficiency" posture means concretely: the candidate-index IS the Hasse decomposition of the impl coherence lattice. The efficiency gain vs current E2 (343 MB) comes from walking the Hasse structure, not the algorithm. Post-§6.12 extraction: Phase 7's impl registry is ~30-50 lines (`position-fn` + post-lookup dict construction) built on the ~150-200-line primitive, rather than ~150 lines of ad-hoc Hasse implementation.
 
 #### §6.11.5 Implications for 4C
 
@@ -833,7 +876,13 @@ Applying these lenses changes three concrete design elements:
 2. **Hasse-diagram diameter bounds appear in termination arguments** (§8). The existing `:fuel 100` is a safety net; the Hasse bound is the structural argument. Strengthens Conjecture's optimality claim per stratum.
 3. **Phase 10 design uses hypercube algorithms by construction** — not as an optimization pass. Gray-code, bitmask subcube, hypercube all-reduce are in the D.2 refinement.
 
-#### §6.11.6 Note on the General Residual Solver (future BSP-LE scope)
+#### §6.11.6 Stratification IS module composition over the base network
+
+Applying the Module Theory lens to §6.7 (elaborator strata → BSP scheduler): each stratum is a module over the base propagator network; `register-stratum-handler!` is the composition operator. The full `stratification ElabLoop` declaration (§4.5) IS a composed module — S(-1)/S0/S1/S2 are independent modules composed by the BSP outer loop's orchestration.
+
+This makes §6.7's "elaborator strata → BSP handlers" consolidation not just a mechanism unification but a module-theoretic realization: both BSP's solver strata (topology, S1 NAF) and elaborator's strata (S(-1), L1, L2) are modules over the same base. A1 addendum (BSP-LE 2B) established this for topology; 4C extends it to elaborator strata. Under the lens, the NTT `stratification` form IS module declaration + composition. Future NTT refinement: explicit module semantics for stratification.
+
+#### §6.11.7 Note on the General Residual Solver (future BSP-LE scope)
 
 During D.1 dialogue (2026-04-17), a cross-application pattern surfaced: PUnify, FL-Narrowing, BSP-LE, trait resolution, bidirectional type-checking, parse disambiguation, ATMS narrowing — **each is a residual computation on a quantale/lattice with a stratified + ATMS-tagged + CALM-compliant solver**. A general solver parameterized by `:lattice`, `:composition`, `:decomposition`, `:facts` would unify these as instances.
 
@@ -842,6 +891,85 @@ During D.1 dialogue (2026-04-17), a cross-application pattern surfaced: PUnify, 
 **What 4C DOES consume**: the *substrate* — BSP scheduler, `register-stratum-handler!`, worldview bitmask, ATMS assumption management, stratification. These are lattice-agnostic and already used by typing-propagators.rkt + elaborator-network.rkt. Hole-fill γ (Q1), parametric trait resolution (Axis 1), union-type ATMS (Phase 10) all use the substrate directly with specific propagators — not by invoking the BSP-LE relational solver.
 
 **Forward reference**: the general residual solver track (when designed) consumes 4C's lattice specifications as example instances. PPN 5 (type-directed disambiguation), future FL-Narrowing refinements, and future PPN work that needs residual search inherit the general solver once it exists. Captured here so the insight isn't lost.
+
+---
+
+### §6.12 Hasse-registry primitive (D.2) — foundational infrastructure
+
+Two places in the 4C design consume the same structural pattern:
+
+- §6.5 / §6.11.4: parametric impl registry — Hasse-ordered by specificity; lookup by target type.
+- §6.2.1: γ hole-fill inhabitant catalog — Hasse-ordered by classifying type; lookup by expected type.
+
+Rather than implement the pattern twice (with drift risk between the two), D.2 extracts it as a first-class primitive. User observation (2026-04-17): *"virtually every track will be designing for its own Hasse diagram, so having this generally available is a boon."* This section specifies the primitive.
+
+#### §6.12.1 What the primitive IS
+
+```
+struct hasse-registry
+  :lattice       L              ;; SRE-registered lattice with Hasse structure (§6.9)
+  :entries       (Set Entry)    ;; registered items (monotone: only additions)
+  :position-fn   (Entry → L)    ;; where each entry sits in the Hasse order
+  :lookup-fn     (L → Set Entry)  ;; structural-navigation query
+```
+
+**Operations**:
+
+- `register!(entry)` — monotone. Compute Hasse position via `position-fn`; insert into CHAMP-backed Hasse graph.
+- `lookup(query)` — structural navigation. Walk from most-specific candidates; return the antichain of Hasse-minimal entries subsuming `query`. O(log N) via Hasse height.
+
+**Correctness discipline**: the primitive is registered as an SRE domain (A9). Property inference verifies:
+- Hasse order is a valid partial order (antisymmetric, transitive).
+- Monotone registration: entries only add, never remove (CALM-safe).
+- Lookup is structural: ctor-desc-driven navigation; no scan internals.
+
+#### §6.12.2 SRE / Module Theory / PUnify composition
+
+The primitive composes the three lenses natively — which is why it's small:
+
+- **SRE**: the Hasse graph IS a structural lattice. Entries are nodes; transitive-reduction edges are the partial-order structure. Registration = cell write; lookup = structural read via SRE ctor-desc on the Hasse graph's decomposition.
+- **Module Theory**: entries at each Hasse node form an independent group. The registry = ⊕_{node} EntryGroup(node) — direct sum with Hasse-node-tagged layers on the shared carrier (Realization B by construction). No bridges between nodes; merges are per-node structurally independent.
+- **PUnify**: lookup IS structural subsumption checking — "does `position-fn(entry)` subsume `query`?" = PUnify with variance direction. Per-candidate PUnify via ctor-desc. The primitive implements lookup by invoking PUnify against the Hasse neighborhood of the query, returning all PUnify-successful entries.
+
+The three lenses compose structurally. The primitive is ~150-200 lines Racket because each lens contributes existing machinery (SRE domain, tagged direct-sum merge, PUnify).
+
+#### §6.12.3 4C instances
+
+**Instance 1 — parametric impl registry (Phase 7 / A1)**:
+- Lattice `L` = impl-pattern lattice, ordered by specificity. Most-specific-bottom, least-specific-top.
+- Entries = impl bodies (their types + dict constructors).
+- `position-fn` = impl's pattern type (e.g., `Seqable (List E)` sits at the Hasse node corresponding to "Lists").
+- `lookup(target-type)` = PUnify each Hasse-neighbor pattern against `target-type`; return successful matches. Coherence property (verified at impl registration): no two entries at the same Hasse node → zero critical pairs → unambiguous lookup.
+
+**Instance 2 — γ hole-fill inhabitant catalog (Phase 9b)**:
+- Lattice `L` = type lattice (classifier types), ordered by subtype.
+- Entries = (term, classifier) pairs — from type-env bindings AND registered constructor signatures.
+- `position-fn` = entry's classifying type.
+- `lookup(expected-type)` = PUnify each Hasse-neighbor entry's classifier against `expected-type`; return candidates. Multi-candidate → ATMS branching (Phase 9 cell-based TMS); single-candidate → write `:term` directly.
+
+Both instances are concise because the primitive does the structural work; each instance only specifies `position-fn` and the post-lookup action. Compare: without the primitive, each instance implements its own ~100-150 lines of Hasse construction + lookup. Net: the primitive pays for itself within 4C and leaves reusable infrastructure.
+
+#### §6.12.4 Future consumers
+
+- **General residual solver** (future BSP-LE Track 6, §6.11.7): lifts the BSP-LE low-level search to arbitrary lattices. The Hasse-registry primitive is the fact-indexing substrate it consumes.
+- **PPN Track 5 (type-directed disambiguation)**: parse forest lattice Hasse-indexed; type context = query; lookup = type-compatible parses.
+- **FL-Narrowing refinement**: rewrite-rule registry Hasse-indexed by LHS structure; target = query; lookup = applicable rules.
+- **PM future work (module/trait registries)**: trait coherence checking IS Hasse registration + lookup.
+- **SRE Track 6 (reduction on-network)**: rewrite rules Hasse-indexed.
+
+User observation makes this sharper: *virtually every track needs a Hasse diagram over its domain's structure.* The primitive generalizes once; every subsequent track inherits.
+
+#### §6.12.5 NTT connection
+
+The `hasse-registry` primitive is an SRE-registered lattice with a registration/query interface. Under NTT syntax ([§3.1 NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md)), this is a `:lattice :structural` declaration with the Hasse structure as its `:lattice` property. When NTT design resumes, `hasse-registry` lifts to an NTT form — probably something like:
+
+```
+registry ParametricImpls
+  :lattice ImplPatternLattice
+  :position impl-pattern-type
+```
+
+4C-level implementation is Racket infrastructure; future NTT makes it declarative syntax. No migration cost — the primitive IS the declarative form; NTT just surfaces it.
 
 ---
 
