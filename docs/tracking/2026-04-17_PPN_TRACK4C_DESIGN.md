@@ -5,7 +5,7 @@
 **Status**: D.2 — refined from D.1 via Pre-0 findings + Hyperlattice/SRE/Hypercube lens application + Module Theory Realization B restructure for `:type`/`:term`.
 **Version history**:
 - D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
-- D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6.
+- D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -55,7 +55,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
 | 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired |
 | 6 | A3 Aspect-coverage completion | ⬜ | Audit uncovered AST kinds; register typing rules per kind |
-| 7 | A1 Parametric trait-resolution propagator | ⬜ | New S1 propagator; retires Bridge 1 |
+| 7 | A1 Parametric trait-resolution — per-(meta, trait) propagators | ⬜ | `:constraints` facet tagged by trait (Module Theory Realization B). Per-(meta, trait) propagator on tagged layer. Hasse-indexed impl registry. PUnify for match (via SRE ctor-desc). ATMS branching on multi-candidate (via Phase 9 cell-based TMS). Set-latch fan-in for dict aggregation. Retires Bridge 1. |
 | 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
 | 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
@@ -540,6 +540,8 @@ When the Hasse index returns multiple candidates at the same specificity level, 
 
 No walks. No scan loops. No iteration. The "search" is the Hasse structural lookup, which is an index read — a cell operation, not a traversal.
 
+**Symmetry with §6.5 parametric-trait-resolution**: γ hole-fill and parametric trait resolution are the *same* architectural pattern — PUnify-against-Hasse-indexed-catalog, differing only in the catalog content. §6.5's catalog is impl patterns; §6.2.1's catalog is inhabitant patterns (type-env bindings + constructor signatures). Both use ctor-desc decomposition, ATMS branching on ambiguity, and set-latch fan-in for downstream aggregation. This compositional unity is load-bearing — it means future tracks (SRE 6, PPN 5) inherit one pattern, not two. See §6.11.6 note on general residual solver unification.
+
 ### §6.3 CHAMP retirement (A2)
 
 **Problem**: `meta-info` CHAMP is a duplicate store of the `:type` and `:term` facets, authoritative for downstream consumers.
@@ -567,41 +569,56 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 3. Register one fire function per AST kind. Use SRE-derived decomposition where applicable (structural lattice rules handle N AST kinds via one decomposition template).
 4. Verify: after registration, the `infer/err` fallback should be reachable only for genuinely unrepresentable cases (e.g., elaboration errors, not missing rules).
 
-### §6.5 Parametric trait-resolution propagator (A1) — **rebuilt for efficiency**
+### §6.5 Parametric trait-resolution propagator (A1) — **rebuilt for efficiency** (D.2)
 
 **Problem**: `resolve-trait-constraints!` is an imperative function called from `infer-on-network/err`. Parametric impl pattern matching is not a propagator. Pre-0 finding E2 shows this path allocates **343 MB / 19× baseline** for a single `[head '[1N 2N 3N]]` call — ~325 MB/123 ms unique to the parametric path, driven by retry loops + candidate-list allocation + CHAMP updates + intermediate-type construction.
 
 **Posture** (per user direction 2026-04-17): *rebuilt for efficiency*, not retrofit. Design for the efficient propagator architecture from the start rather than lifting the imperative algorithm into a propagator wrapper.
 
-**Fix**: register `parametric-trait-resolution` as an S1 propagator. Key efficiency choices:
+**Resolved architecture (D.2)**. Four mechanisms compose on-network, all-at-once, all-in-parallel:
 
-1. **Pre-compute candidate sets at impl registration time** — not at resolution time. When a parametric impl is registered, compute its type-arg pattern and index it. At resolution time, the propagator matches against a pre-indexed structure rather than iterating over all impls.
-2. **Monotone narrowing** — the `:constraints` facet shrinks monotonically as type-args become ground. No retry loops; the propagator fires at readiness thresholds.
-3. **No intermediate type allocation** — match against pre-indexed patterns; emit the winning dict term directly. Structural sharing (SRE + Module Theory lens, §6.11) allows candidate patterns to share type subterms rather than copying them.
-4. **Fire-once at ground-readiness** — `:component-paths` targets type-arg ground thresholds. Zero re-firing on partial input.
+1. **Module-theoretic decomposition of `:constraints` facet by trait tag** ([BSP-LE 2B Resolution B pattern](../../.claude/rules/structural-thinking.md) § Direct Sum Has Two Realizations). The `:constraints` facet at a meta is a direct sum over trait identifiers: `{Seqable, Num, Ord}` on meta A = three bitmask-tagged layers on the shared `:constraints` cell. Each trait is a module over the constraint base. Per-trait merges are algebraically independent — no cross-trait interference.
+
+2. **Per-(meta, trait) propagator**, not per-meta and not per-individual-constraint. Each propagator watches exactly its own tag-layer on the meta's `:constraints` facet via targeted `:component-paths`. Independent firing, no internal iteration. When a meta has N traits, N propagators fire concurrently once the type grounds — true parallelism, not batched processing.
+
+3. **Hasse-indexed impl registry** (§6.11.4). Each parametric impl is registered once at declaration time, placed in a specificity Hasse diagram over impl patterns. At resolution time, lookup is structural index navigation (O(log N) via Hasse height), not scan. Coherence — no overlapping impls at same specificity — is critical-pair analysis on the impl-pattern DPO structure ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)); zero critical pairs verified at registration.
+
+4. **PUnify for pattern matching**. "Does candidate impl pattern `P` match target type `T`?" is a **PUnify invocation** on the TypeFacet quantale — not a hand-rolled pattern matcher. Impl-level type vars (e.g., `E` in `Seqable (List E)`) become fresh CLASSIFIER-tagged metas during the match attempt. PUnify's structural decomposition via SRE ctor-desc handles recursive matching (`List Int` vs `List E` → decompose → `Int` vs `E` → E solves to Int). On success, the substitution σ emerges as meta bindings on the shared carrier; the resolved dict term is constructed via structural cell reads.
 
 **Mechanism**:
 
 ```
-propagator parametric-trait-resolution
-  :reads  [(meta-pos :type), (meta-pos :constraints)]
-  :writes [(meta-pos :term), (meta-pos :constraints)]
-  :fire-once-on-threshold (and ground? (non-empty? :constraints))
+propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
+  :reads  [(meta-pos :type),
+           (meta-pos :constraints) @ trait-tag-layer]
+  :writes [(meta-pos :term),
+           (meta-pos :constraints) @ trait-tag-layer]
+  :component-paths [(meta-pos :type), (meta-pos :constraints trait-tag)]
+  :fire-once-on-threshold (and ground? (trait-tag-layer-non-empty?))
   fire-parametric-resolve:
-    ;; Pre-indexed at registration: parametric-impl-index ↦ pattern trie
-    (define matches (index-lookup parametric-impl-index type))  ;; O(log N) via trie
-    (cond
-      [(empty? matches) (that-write pos :constraints constraint-top)]       ;; failure
-      [(singleton? matches)
-       (that-write pos :term      (dict-for-impl (first matches)))          ;; resolved
-       (that-write pos :constraints (narrow-to (first matches)))]
-      [else
-       (that-write pos :constraints (narrow-to-subset matches))])            ;; ambiguous — S2
+    ;; Hasse-index narrows to candidates at target's specificity (O(log N))
+    (define candidates (hasse-lookup impl-registry trait type))
+    ;; Each candidate is PUnify'd against the target; impl-level metas
+    ;; are fresh CLASSIFIER-tagged entries on the shared carrier.
+    ;; Multi-candidate at same specificity → ATMS branching (cell-based TMS):
+    ;;   each branch runs PUnify under a tagged assumption;
+    ;;   contradiction retracts the assumption (S(-1)), surviving branch commits.
+    ;; PUnify success writes `impl-level-metas ↦ values` via cell merges.
+    ;; Resolved dict = impl body under σ, constructed via structural cell reads.
+    (punify-candidates-with-atms candidates type trait-tag-layer))
 ```
 
-**Pre-0 expected improvement**: post-phase A/B measurement target is **~60-80% reduction** in E2 allocation (343 MB → ~70-140 MB), with similar wall-clock gains. The target is set conservatively; the pre-indexing + fire-once combination plausibly achieves more. Measured in V phase.
+**Set-latch fan-in for dict aggregation** (prior art: Track 4 §3.4b meta-readiness bitmask pattern). When a meta has N traits, the N per-(meta, trait) propagators run concurrently. Each writes its resolved dict-fragment. A per-meta set-latch bitmask tracks completion: each trait-propagator flips its bit on success (monotone bitwise-OR). A single fan-in propagator watches the bitmask; when all bits are set, it fires once and assembles the full dict term for the meta into `:term`. No iteration; aggregation by structural composition of already-resolved components.
 
-**SRE connection**: impl coherence = critical-pair analysis on impl patterns ([Adhesive §6](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)). Each parametric impl IS a DPO rule. Coherence = zero critical pairs at registration time. The pre-computed pattern index IS the critical-pair-free decomposition of the registry — indexing STRUCTURE (not ALGORITHM).
+**End-to-end on-network trace**: meta's `:type` cell grounds → per-trait propagators fire concurrently → Hasse lookup + PUnify per candidate (with ATMS on ambiguity) → per-trait dict fragments written → bitmask set-latch bits flip → fan-in fires at completion → dict term aggregated into `:term`. Every step is cell reads and cell writes; no scan, no for-fold, no handler-with-iteration.
+
+**Pre-0 expected improvement**: post-phase A/B measurement target is **~60-80% reduction** in E2 allocation (343 MB → ~70-140 MB), with similar wall-clock gains. The module-theoretic decomposition + Hasse-indexed registry + PUnify-via-ctor-desc combination plausibly exceeds this. Measured in V phase.
+
+**SRE + Module Theory + Adhesive alignment**:
+- Module Theory: `:constraints` = ⊕_trait TraitLattice (direct sum via tagging); zero-cost per-trait independence.
+- SRE ctor-desc: drives PUnify's structural decomposition. No separate pattern-matching code.
+- Adhesive DPO: impl coherence = zero critical pairs (verified at registration).
+- Hasse diagram: specificity order captured structurally; "tiebreaker" becomes Hasse traversal, not algorithm.
 
 ### §6.6 Option A and Option C for freeze/zonk (A4) — **zonk retirement entirely**
 
@@ -1049,11 +1066,20 @@ Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measur
 
 5. **Termination argument for ATMS branching (Phase 10)** — **ANSWERED by Pre-0**: speculation cost ~8 μs/cycle means `:fuel 100` bounds 2^N worst-case acceptably for N ≤ 10-15 unions. No separate ATMS-fuel needed. Hypercube Gray-code traversal (§6.11.3) further amortizes via CHAMP sharing. Closed.
 
-6. **Elaborator stratum handler vs propagator** — OPEN: S1 parametric-trait-resolution — single stratum handler (iterate over all ready constraints) or multiple per-constraint propagators (fire when individual constraints become ready)? D.1 leans per-constraint + rebuilt-for-efficiency indexing (§6.5), motivated by E2's 343 MB observation. Open: does this scale for very large impl registries? Depends on index structure — Hasse index (§6.11.4) should scale log N. Dialogue + phase-level measurement.
+6. **Parametric resolution decomposition granularity** — **CLOSED (2026-04-17 dialogue)**: originally posed as "handler vs propagator" — mis-framing. Single stratum handler is off-network (for/fold within handler body = step-think). Per-meta propagator has the same problem internally. Correct decomposition is **per-(meta, trait)**:
+   - `:constraints` facet uses module-theoretic tagging by trait identifier (BSP-LE 2B Resolution B).
+   - Per-(meta, trait) propagator, each with targeted `:component-paths` on its tag-layer.
+   - Hasse-indexed impl registry (§6.11.4) for specificity-ordered lookup.
+   - **PUnify** for the match operation itself — structural unification via SRE ctor-desc, with impl-level metas as fresh CLASSIFIER-tagged entries on the shared carrier.
+   - ATMS branching on multi-candidate at same specificity (cell-based TMS, Phase 9).
+   - Set-latch fan-in per meta for dict aggregation (prior art: Track 4 §3.4b meta-readiness bitmask).
+   - Symmetric with §6.2.1 γ hole-fill — same PUnify-against-Hasse-indexed-catalog pattern, different catalog.
+
+   See §6.5 for full mechanism. No scaling concern at any level: meta counts bounded per expression; traits-per-meta typically small; Hasse lookup O(log N); PUnify structural; ATMS handles ambiguity.
 
 ### Remaining for dialogue
 
-Q1 (residuation), Q4 (component-paths detection), Q6 (handler vs per-constraint — scaling). These are genuine design choices Pre-0 doesn't resolve directly; discussed in D.2 iteration or phase-level mini-design as appropriate (per user direction on O2, O4: delegate specifics to per-phase mini-design).
+All six open questions have been worked through. No open items remaining at D.2. Phase-level mini-design (per user direction O2, O4) handles implementation-specific refinements as they arise during Stage 4.
 
 ---
 
