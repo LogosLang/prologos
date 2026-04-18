@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-17
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Status**: D.1 — first draft; Pre-0 benchmarks + adversarial testing in progress before critique rounds.
+**Status**: D.1 — first draft; Pre-0 complete ([report](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md)); design-dialogue in progress before critique rounds.
 **Version history**: D.1 (this document).
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
@@ -13,7 +13,7 @@
 **Bring elaboration completely on-network.** Designed with the mantra as north star. Guided by the ten load-bearing design principles. NTT is guiderails and verification that we are doing this correctly.
 
 - **Mantra** ([`on-network.md`](../../.claude/rules/on-network.md)): *"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."* Every propagator install, cell allocation, loop, parameter, return value is filtered against this.
-- **Principles**: the ten load-bearing principles ([`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org)). Infrastructure choices and design trade-offs are annotated with which principle they serve (§8).
+- **Principles**: the ten load-bearing principles ([`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org)). Infrastructure choices and design trade-offs will be annotated with principle served during the critique round; D.1 states them informally as rationale.
 - **NTT**: *guiderails*. Every structural piece must be expressible in [NTT syntax](2026-03-22_NTT_SYNTAX_DESIGN.md). Pieces not expressible are mantra violations with scaffolding labels. The NTT model is the north-star shape; prose follows from it (§4 NTT model → §6 prose).
 - **Solver infrastructure**: BSP-LE Tracks 2+2B built the orchestration, ATMS, stratification, and scope-sharing primitives specifically so PPN 4 can use them for elaboration. Elaboration IS constraint satisfaction over a quantale-structured domain — the same problem the solver solves, lifted by the richness of the lattice (types, terms, contexts, usage, constraints, warnings).
 
@@ -672,46 +672,7 @@ Per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3 Lens P �
 
 ---
 
-## §9 P/R/M Self-Critique
-
-Lens outputs at D.1. Full P/R/M cycle happens with the critique round producing D.2.
-
-### §9.1 Lens P — Principles challenged
-
-- **Completeness**: are all 9 axes concretely scoped? Yes — each has a phase and test plan. Union types + cell-based TMS inline. Option C in 4C.
-- **Correct-by-Construction**: is `TermInhabitsType` invariant structural or discipline? **Answer: structural**. Invariant is computed at attribute-record merge time, not in separate call sites. Violation = `:type → type-top` automatically.
-- **First-Class by Default**: is `:term` facet first-class? Yes — it's a reified facet in the attribute record, declarable by SRE domain, subject to property inference, accessible via `that-read/write`.
-- **Propagator-First**: is Option A freeze on-network? Strictly: it's a tree walk reading cells. It's the last off-network state; retired in Option C.
-- **Data Orientation**: are actions descriptors? L1/L2 actions are data in the ready-queue cell. S1/S2 handlers process them. Matches Data Orientation pattern from DESIGN_PRINCIPLES.org.
-
-### §9.2 Lens R — Reality check (file:line verification)
-
-Counts from audit §2-§5 were grep-backed. Reconfirmed in D.1:
-
-- `resolve-trait-constraints!`: 1 bridge site at [typing-propagators.rkt:1966](../../racket/prologos/typing-propagators.rkt). ✓
-- `solve-meta!`: 79 sites across 18 files. ✓
-- Zonk: 513 `zonk.rkt` sites. ✓
-- `register-stratum-handler!`: 5 registrations incl. [elaborator-network.rkt:1058](../../racket/prologos/elaborator-network.rkt). ✓
-- `register-typing-rule!`: 76 entries. ✓
-- `register-domain!`: 4 registrations. Four facets unregistered. ✓
-- `run-stratified-resolution!` / `run-stratified-resolution-pure`: [metavar-store.rkt:1863, 1915](../../racket/prologos/metavar-store.rkt). ✓
-- `current-coercion-warnings` + `current-coercion-warnings-cell-id`: both in [warnings.rkt:122, 62](../../racket/prologos/warnings.rkt). ✓
-
-**Gap**: aspect-coverage precise count (A3 Phase 5 pre-audit) — feeds into Phase 0 Pre-0 measurements.
-
-### §9.3 Lens M — Propagator mindspace
-
-- **Network Reality Check per new component**:
-  - `parametric-trait-resolution` propagator: `net-add-propagator` — yes. `net-cell-write` to `:term`/`:constraints` — yes. Trace: `:type` + `:constraints` input → fire → `:term` + narrowed `:constraints` output via cell write. ✓
-  - `meta-default` propagator: `net-add-propagator` — yes. Writes `:term`. ✓
-  - S(-1) / S1 / S2 stratum handlers: `register-stratum-handler!` registrations. Handler reads request cell, writes facet cells. ✓
-  - `TermInhabitsType` bridge: merge invariant at attribute-record lattice. Structural. ✓
-  - ATMS fork-on-union: worldview cell read + per-branch propagator spawn. Cell-based TMS required. ✓
-- **Red flags scan**: `for/fold`, `let loop`, scan-and-dispatch, imperative queues — present only in S1/S2 handler internals processing discrete action sets, and in the ElabLoop outer fuel loop (which BSP already implements). No new `for/fold` over independent items that should be broadcasts.
-
----
-
-## §10 Parity Test Skeleton — `test-elaboration-parity.rkt` (M3)
+## §9 Parity Test Skeleton — `test-elaboration-parity.rkt` (M3)
 
 At design time, encode divergence classes as regression tests. Pre-4C elaboration is baseline; post-4C elaboration must match for each class.
 
@@ -781,7 +742,7 @@ At design time, encode divergence classes as regression tests. Pre-4C elaboratio
 
 ---
 
-## §11 Pre-0 Benchmarks per Semantic Axis (M2)
+## §10 Pre-0 Benchmarks per Semantic Axis (M2)
 
 Semantic compositions, not just performance. For each axis, adversarial examples exercise the composition *before* implementation. The data reshapes D.2 design.
 
@@ -818,7 +779,7 @@ Semantic compositions, not just performance. For each axis, adversarial examples
 
 ---
 
-## §12 Acceptance File (Phase 0)
+## §11 Acceptance File (Phase 0)
 
 `examples/2026-04-17-ppn-track4c.prologos` — exercises all 9 axes at Level 3 via `process-file`. Progress per phase: uncomment sections as phases land.
 
@@ -849,7 +810,7 @@ ns ppn-track4c
 
 ---
 
-## §13 External Dependencies + Interactions
+## §12 External Dependencies + Interactions
 
 | Dependency | Interaction |
 |---|---|
@@ -861,9 +822,9 @@ ns ppn-track4c
 
 ---
 
-## §14 Open Questions for External Critique
+## §13 Open Questions
 
-These are genuine decision points for the critique round. The P/R/M self-critique does not resolve them; external eyes needed. Phase 0 Pre-0 measurements feed answers where possible.
+Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measurements have supplied data-driven answers for some; others remain for discussion. Critique rounds (P/R/M self + external) happen later, not here.
 
 1. **Residuation formalization**: is `TermInhabitsType` as merge invariant (D.1) sufficient, or should `:alpha` / `:gamma` be explicit propagators in D.2? The latter enables hole-fill / proof search via `:gamma` but doubles the propagator count for this bridge. Lean D.1: invariant at merge time; D.2 question: when is proof search triggered?
 
@@ -879,21 +840,21 @@ These are genuine decision points for the critique round. The P/R/M self-critiqu
 
 ---
 
-## §15 What's Next
+## §14 What's Next
 
-1. **Phase 0: Pre-0 benchmark + adversarial testing** (immediately). Concrete measurements per §11 semantic axes against current 4B. Data reshapes D.2 design.
-2. **Discuss findings** with user; feed into design refinements.
-3. **Open-question dialogue**: address §14 questions with data from Pre-0.
-4. **P/R/M critique round** → D.2 (refinements from Lens P/R/M outputs).
-5. **External critique** (10-point structure, adversarial) → D.3.
-6. **Propagator-Mindspace challenge** (Lens M at Stage 3 rigor) → D.4 if needed.
+1. **Phase 0: Pre-0 benchmark + adversarial testing** — ✅ done, results in [`2026-04-17_PPN_TRACK4C_PRE0_REPORT.md`](2026-04-17_PPN_TRACK4C_PRE0_REPORT.md).
+2. **Discuss findings** — in progress. Data-driven answers feeding §13.
+3. **Open-question dialogue** — work through §13 with Pre-0 findings + design reasoning.
+4. **D.2 refinement** — incorporate dialogue outcomes + locked-in answers from §13.
+5. **P/R/M self-critique** — after D.2 stabilizes.
+6. **External critique** — after P/R/M.
 7. **Acceptance file skeleton** — uncomment target expressions per phase.
 8. **Parity test skeleton** — `test-elaboration-parity.rkt` committed.
-9. Stage 4 Phase 0 begins only when the design converges (no open questions in §14 demanding redesign).
+9. Stage 4 Phase 0 begins only when the design converges (no open questions in §13 demanding redesign).
 
 ---
 
-## §16 Observations (D.1 NTT model)
+## §15 Observations (D.1 NTT model)
 
 Final observations per M1+NTT methodology:
 
