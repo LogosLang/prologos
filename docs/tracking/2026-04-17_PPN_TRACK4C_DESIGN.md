@@ -13,6 +13,7 @@
 - D.2 refinement (2026-04-18, M5 incorporation — residuation check timing): **lazy evaluation of cross-tag residuation check**, refined and verified correct. "Lazy" means skipped-when-unnecessary AND re-fired-on-narrowing, executed synchronously within the merge function (not deferred to a separate propagator). Trigger: cross-tag present AND (CLASSIFIER narrowed OR INHABITANT narrowed). Case 2 (narrowing re-check) is the subtle case naive lazy-cache-and-skip would miss. Option 4 (separate propagator for the check) dismissed — would create a timing window with unverified cross-tag state. Correctness compatible with BSP/CALM/ATMS. Verification plan: parity test cases (Phase 0) + property inference (Phase 2) + A/B micro-bench (Phase 3). Details in §6.2.
 - D.2 refinement (2026-04-18, minors batch — M1/M3/M4/P3/R5): Language polish and clarifications. M1: "walks the Hasse diagram" → "dispatches through Hasse structural index" (§6.5, §6.12) — removes step-think wording. M3: `lookup` in Hasse-registry is a helper function invoked synchronously from consuming propagators' fire bodies, not a standalone propagator (§6.12). M4: "ATMS union branching IS ⊕ ctor-desc" framed as a conceptual lens, not an implementation change — Phase 10 uses existing `atms-amb` machinery (§6.10). P3: CHAMP retirement deletes the code path entirely; residual reads are compile errors, coupling A8 enforcement to A2 retirement (§6.3). R5: `current-meta-source-registry` Racket parameter explicitly declared as the side registry for meta source-loc metadata (§6.3).
 - D.2 refinement (2026-04-18, O2 incorporation — comprehensive lens catalog): new §6.11.8 applies the SRE lens uniformly to all non-facet lattices in 4C (AttributeRecord, AttributeMap, impl coherence, inhabitant catalog, Hasse-registry ambient L, worldview Q_n, ready-queue, retraction request set, tagged-cell-value layers). Surfaces two structural insights: (a) impl coherence lattice (Phase 7) and inhabitant catalog (Phase 9b) are **structurally identical Hasse-registry instances** — both PUnify-with-`'subtype` over Hasse-indexed entries; §6.12 primitive abstracts the identity. (b) tagged-cell-value layer lattice is the **structural generalization** of Module Theory Realization B — every "shared-carrier + tags" situation in 4C is an instance (`:type`/`:term`, `:constraints` by trait, worldview by assumption, attribute-map by position). Pre-existing subsections (§6.11.2, §6.11.3, §6.11.4) cross-referenced; catalog provides the full lens applied to every lattice.
+- D.2 refinement (2026-04-18, O3 incorporation — provenance as structural emergence): new §6.1.1 specifies the provenance infrastructure. Per [Module Theory §5-6](../research/2026-03-28_MODULE_THEORY_LATTICES.md) + [Hypergraph Rewriting §6.3](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), provenance is structurally emergent from the propagator-firing dependency graph — not a new data structure. Three structural sources compose: ATMS assumption tagging, `:trace :structural` mode, source-location registry. **Error-reporting via backward residuation** on the Module-Theoretic chain structure — in 4C scope per user direction. Intended use case: first-class compiler and error features (not a debugging aid) — precise source-code mapping, human-readable messages with derivation context, machine-readable traces for IDE/LSP tooling. New **Phase 11b** (diagnostic infrastructure) added to Progress Tracker, consuming the provenance infrastructure built in Phases 3/4/9/11. `derivation-chain-for(position, tag)` helper API shape deferred to phase-time mini-design.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -78,6 +79,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 9b | γ hole-fill propagator (NEW in D.2) | ⬜ | Reactive propagator at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Consumes Phase 2b Hasse-registry for inhabitant catalog (type-env + constructor signatures). PUnify via ctor-desc for match. ATMS branching on multi-candidate via Phase 9 cell-based TMS. Set-latch fan-in for aggregation. Previously architecturally described in §6.2.1 but unphased; D.2 makes it explicit. |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
 | 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
+| 11b | Diagnostic infrastructure — residuation-backward error reporting (NEW in D.2) | ⬜ | First-class compiler + error features per user direction 2026-04-18. `derivation-chain-for(position, tag)` helper (API shape phase-time mini-design). Human-readable error messages with source-loc + propagator rationale; machine-readable structured traces for IDE/LSP. Backward residuation over the propagator-firing dependency graph (Module-Theory-principled, not ad-hoc tracker). See §6.1.1. |
 | 12 | A4 Option C — **zonk retirement entirely** via cell-refs | ⬜ | Replace `expr-meta` with `expr-cell-ref`. Reading expression IS zonking. `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). 14-file pipeline update. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
 | T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
 | V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
@@ -112,6 +114,8 @@ Phase 9b (γ hole-fill propagator) — uses Phase 2b + Phase 3 + Phase 4 + Phase
 Phase 10 (Phase 8 union types) — can parallel with 9b
   ↓
 Phase 11 (A7 BSP orchestration) — can parallel with 10
+  ↓
+Phase 11b (diagnostic infrastructure) — consumes :trace + ATMS + source registry; residuation-backward error reporting
   ↓
 Phase 12 (A4 Option C cell-refs) — largest single phase; 14-file pipeline
   ↓
@@ -512,7 +516,36 @@ The residuation structure lives *inside* the quantale, not as a bridge. This is 
 
 1. **Surface clarity**: user-facing `:type`/`:term` names unchanged; tag distinction is internal. Type-error diagnostics can still say "expected T, got e : S" because the tag-dispatched merge knows which entry is which layer.
 2. **Lattice-law verification**: SRE property inference on the tag-dispatched merge verifies commutativity (merge is tag-order-independent), associativity across tag combinations, idempotence per tag, and the residuation laws (`A ⊗ (A \ B) ⊑ B`, `(B / A) ⊗ A ⊑ B`, distribution). Track 3 §12 + SRE 2G precedent says inference catches bugs tests miss — actively invited here, not a risk.
-3. **Provenance as first-class**: each tagged entry carries its derivation chain (source-loc + producer propagator + ATMS assumption). Error messages walk the chain. Richer provenance because the lattice-structured carrier IS a derivation DAG by construction.
+3. **Provenance as first-class — structurally emergent** (O3 resolution 2026-04-18): each tagged entry's derivation chain (source-loc + producer propagator + ATMS assumption) is NOT a new data structure bolted onto entries. It's the propagator-firing dependency graph read as a derivation — structurally emergent from the network topology per [Module Theory §5-6](../research/2026-03-28_MODULE_THEORY_LATTICES.md) (propagator networks are quantale modules; derivation chains are ring-action sequences; backward residuation over chains produces error diagnostics principled, not ad-hoc) and [Hypergraph Rewriting §6.3](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md) ("dependency graph IS a proof object — the network naturally maintains provenance; implementation exposes existing structure"). See §6.1.1 below for full specification.
+
+#### §6.1.1 Provenance infrastructure (O3 resolution)
+
+**Intended use case** (per user direction 2026-04-18): first-class compiler and error features, not a debugging aid. Specifically:
+- Precise source-code mapping from error sites back to their structural origins.
+- Human-readable error/warning messages with derivation context ("this type error arose because propagator X at source-loc L wrote type T, while propagator Y at source-loc L' wrote conflicting type T'").
+- Machine-readable traces for IDE/LSP tooling (jump-to-definition, hover-inspect, error-origin navigation).
+- Residuation-backward as the error-explanation mechanism (Module-Theory-principled).
+
+**Structural sources** (three — all existing or near-existing infrastructure; no new data structures required):
+
+1. **ATMS assumption tagging** (Phase 9 cell-based TMS via BSP-LE 1.5): each `tagged-cell-value` entry carries its `assumption-id`. For a `:type` CLASSIFIER-tagged entry written under branch `A`, the entry records `assumption-id = branch-A-aid`. Retraction at S(-1) narrows by assumption. Already the mechanism for worldview-managed speculation.
+2. **Propagator-firing trace** via `:trace :structural` mode ([NTT Syntax §7.6](2026-03-22_NTT_SYNTAX_DESIGN.md)): each cell write records `(propagator-id, assumption-id)` pair. `:trace :structural` is the minimum mode for provenance; `:trace :full` adds values + timestamps for heavy debugging. Cascade-scoped via the stratification declaration — default `:structural` at ElabLoop level for 4C.
+3. **Source-location registry** (Phase 4 R5): `current-meta-source-registry` holds `meta-id → source-info` for meta-creation sites. Non-meta positions carry source-loc inline through the elaboration pipeline (existing in 4B). Source-loc attachment is part of the AST itself.
+
+**Error-reporting via backward residuation** (in 4C scope per user direction):
+
+When `:type` merges to `type-top` (contradiction detected during cross-tag merge), the error-reporting mechanism residuates backward through the derivation chain:
+
+1. Read the `:type` cell's tagged entries at the contradicting position.
+2. For each conflicting tag entry, retrieve its `(propagator-id, assumption-id, source-loc)` via the three sources above.
+3. Follow each contributing propagator's `:reads` cells to their derivation chain recursively — residuation over the Module-Theoretic chain structure.
+4. Produce both human-readable message (with source-loc highlighting and propagator rationale) and machine-readable structured chain (for tooling).
+
+No separate "error-tracker" mechanism. The error origin IS a residuation computation on the existing network. Module Theory principle: "backward chaining IS residuation" ([Module Theory §5](../research/2026-03-28_MODULE_THEORY_LATTICES.md) point 3).
+
+**Helper API shape**: `derivation-chain-for(position, tag)` or similar — exposes the structural sources through a convenient interface. **Exact API deferred to phase-time mini-design** (per user direction O3.3) — signature considerations (lazy vs eager chain collection, human-readable vs machine-readable formats, LSP integration hooks) are better settled with implementation context than in D.2.
+
+**Diagnostic infrastructure as a dedicated phase**: see Progress Tracker Phase 11b (NEW).
 
 **Naming precedent**: Coq's `evar_map` has `concl` (goal type) and `body` (optional solution) as separate fields — but Coq stores them in one meta-info record per meta, not two independent stores. Agda/Idris/Lean follow similar patterns. Realization B matches how elaboration with metavariables is done in the reference systems, rendered in propagator-network terms.
 
