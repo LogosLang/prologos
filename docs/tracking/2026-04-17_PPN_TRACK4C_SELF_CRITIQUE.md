@@ -267,6 +267,7 @@ Grouped by decision point for user review:
 
 **Resolution log**:
 - 2026-04-17: R1 + P4 resolved via Tier 1/2/3 architecture (§6.8 rewrite). Grep confirmed production scope is 101 sites / 37 merge functions (not 666). Cell-level `:lattice` retired; replaced by Tier 2 merge-function inheritance with `#:domain` override. Absorbs P2 (immutability) and O1 (Phase 1 timing). Dialogue settled `#:domain` keyword (SRE vocabulary alignment; cells are instances not lattices).
+- 2026-04-17: S1 resolved via TypeToWarnings bridge (§4.3) — composed α covering coercion + deprecation; one-way (no γ — warnings don't narrow type info). Dialogue clarified bridge-vs-propagator distinction: bridges are point-to-point Galois connections, multi-input flows are propagators. Multi-source warning detectors (multiplicity, capability) documented as propagators in §4.4 rather than bridges. Network egress (driver reading `:warnings` for display) not a bridge per NTT §5 convention. ConstraintsToWarnings potential gap noted as Phase 2 audit item (§6.9) rather than preemptive declaration.
 
 **Proposed order of discussion**:
 1. R1 + P4 together — scope decision.

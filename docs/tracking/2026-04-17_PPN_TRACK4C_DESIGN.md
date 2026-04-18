@@ -296,7 +296,24 @@ bridge UsageToType
   :to   TypeFacet
   :alpha mult-to-pi-mult              ;; PM Track 8: usage → Pi multiplicity
   :gamma type-to-mult-demand          ;; (partial) Pi → expected mult
+
+;; Coercion + deprecation warnings flow from TypeFacet's classifier/inhabitant
+;; tag layers. One-way — warnings don't narrow type information.
+;; Composed α covers both warning kinds; future refinement can split if needed.
+bridge TypeToWarnings
+  :from TypeFacet
+  :to   WarningFacet
+  :alpha detect-type-warnings
+         ;; Covers: (a) cross-family coercion — type-tensor composition detects
+         ;; mixed-family numeric ops (Int ⊗ Posit32) and emits a coercion warning;
+         ;; (b) deprecated-spec access — TypeFacet entries carrying :deprecated
+         ;; metadata (from resolved specs) emit a deprecation warning.
+  ;; :gamma omitted — one-way. Warnings don't un-warn or narrow type info.
 ```
+
+**Egress is not a bridge** (NTT convention per [§5 `interface`](2026-03-22_NTT_SYNTAX_DESIGN.md)): the driver reads `:warnings` via `(that-read attribute-map pos :warnings)`, formats as strings, outputs for display. That's network-output serialization, not a lattice-to-lattice morphism. No downstream bridge needed from WarningFacet to an external domain.
+
+**Multi-source warning detectors are propagators, not bridges.** When a warning requires reading multiple facets (e.g., multiplicity violation needs both `:usage` and `:type`), the detector is a regular propagator — see §4.4.
 
 ### §4.4 Propagator declarations (examples; full list per AST kind)
 
@@ -347,6 +364,23 @@ propagator meta-default
   :writes [Cell AttributeMap
              :component-paths [(meta-pos :term)]]
   fire-meta-default    ;; writes default (lzero, mw, sess-end) if :term = term-bot
+
+;; Multi-source warning detection — propagators, not bridges (§4.3).
+;; Read multiple facets; write :warnings. Propagator formalism applies
+;; (lattice-pair bridges don't fit multi-source).
+propagator multiplicity-violation-detector
+  :reads  [Cell AttributeMap
+             :component-paths [(pos :usage), (pos :type)]]
+  :writes [Cell AttributeMap
+             :component-paths [(pos :warnings)]]
+  fire-multiplicity-check   ;; QTT violation → warning (vs hard error via :type=top)
+
+propagator capability-requirement-detector
+  :reads  [Cell AttributeMap
+             :component-paths [(pos :context), (pos :type)]]
+  :writes [Cell AttributeMap
+             :component-paths [(pos :warnings)]]
+  fire-capability-check     ;; needed-capability-not-in-scope → warning
 ```
 
 ### §4.5 Stratification `ElabLoop`
@@ -827,6 +861,11 @@ The Racket-level `register-merge-fn!/lattice` IS the Tier 2 declaration that `im
 
 **Expected outcome**: based on Track 3 §12 and SRE 2G precedent (each found ~1 lattice bug), property inference likely finds ≥1 facet-lattice bug. Budget for fixes.
 
+**Audit items to verify during Phase 2** (from self-critique S1 follow-up):
+
+- **ConstraintsToWarnings potential bridge**: today in 4B, unresolved-constraint ERRORS go into error reporting. Post-4C design: hard constraint errors manifest as `:constraints = constraint-top` (contradiction in-facet). Verify during Phase 2: does any soft-diagnostic flow from `:constraints` to `:warnings` exist (e.g., "constraint resolved with warning-worthy narrowing")? If yes, add ConstraintsToWarnings bridge. If no, no action.
+- **Other latent cross-facet flows**: spot-check during property inference whether any facet writes in current 4B code cross a facet boundary without an explicit bridge declaration.
+
 ### §6.10 Union types via ATMS + cell-based TMS (Phase 8)
 
 **BSP-LE 1.5 as 4C sub-track** (per audit §9.5 recommendation):
@@ -887,9 +926,11 @@ Per the SRE Lens's 6 questions (`structural-thinking.md`), each of the 6 facets 
 | `:context` | VALUE (list) | Chain lattice (extension only); monotone growth | DERIVED from enclosing scope | Linear chain; height = scope depth |
 | `:usage` | STRUCTURAL (vector semiring) | Component-wise QTT semiring (m0, m1, mw + add + scale) | PRIMARY | Product of per-binding mult chains; width = # bindings |
 | `:constraints` | STRUCTURAL (Heyting powerset) | Heyting lattice, distributive, set intersection narrowing | PRIMARY | Boolean lattice over candidate set; complement structure |
-| `:warnings` | VALUE (monotone set union) | Free join-semilattice | DERIVED (side output) | Flat — union of independent warnings |
+| `:warnings` | VALUE (monotone set union) | Free join-semilattice | DERIVED (receives from TypeToWarnings bridge + multi-source warning propagators) | Flat — union of independent warnings |
 
 **D.2 consolidation**: 6 facets → 5 facets. `TermFacet` retires; `:type` and `:term` tag-layer on the shared TypeFacet carrier. `TermInhabitsType` bridge retires; replaced by internal quantale residuation (§6.2).
+
+**D.2 refinement (S1)**: TypeToWarnings bridge added to §4.3 — coercion + deprecation warnings flow from TypeFacet (one-way). Multi-source warning detectors (multiplicity violation, capability requirement) remain as propagators, not bridges.
 
 **Bridges between facets are Galois connections** (§4.3) — left adjoint preserves joins. This IS the Universal Substrate argument for 4C: *every facet is a lattice embedding; every cross-facet flow is a verified Galois connection; elaboration IS fixpoint on the product of embedded algebraic structures.*
 
