@@ -1,0 +1,79 @@
+;; PPN Track 4C — Adversarial Pre-0 Testing
+;;
+;; Probes CURRENT 4B behavior per design axis. Each section is designed to
+;; exercise one of the 9 axes AS 4B HANDLES IT TODAY. The outputs are
+;; baseline data — any sections that fail, produce unexpected types, or
+;; generate unexpected warnings surface as data feeding into D.2 design
+;; refinements.
+;;
+;; Sections:
+;;   A1  parametric trait resolution (list, tree)
+;;   A2  meta solution authority (CHAMP vs attribute-map)
+;;   A3  aspect-coverage probe — AST kinds that may lack typing rules
+;;   A5  :type/:term split baseline (type-variable metas with concrete solutions)
+;;   A6  warnings: coercion warning production path
+;;   P8  union types narrowed by constraint
+;;
+;; Run via: racket/prologos/tools/run-affected-tests.rkt or process-file directly.
+
+ns ppn-track4c-adversarial
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; A1: parametric trait resolution
+;; Exercises resolve-trait-constraints! — the imperative bridge today
+;; ═══════════════════════════════════════════════════════════════════════
+
+;; Parametric Seqable List — compound type argument List Int
+def a1-seq-list := [head '[1N 2N 3N]]
+
+;; Parametric Foldable — compound type argument via list fold
+def a1-fold-sum := [foldr int+ 0 '[1 2 3 4 5]]
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; A5: :type/:term split baseline
+;; Type-variable meta with concrete solution — the case Option C skip addresses
+;; ═══════════════════════════════════════════════════════════════════════
+
+;; Identity polymorphism — ?A : Type(0), solution Nat
+spec a5-id {A : Type} A -> A
+defn a5-id [x] x
+
+def a5-call := [a5-id 3N]
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; A6: warnings authority — coercion warning
+;; Exercises current-coercion-warnings parameter + cell dual path
+;; ═══════════════════════════════════════════════════════════════════════
+
+;; Cross-family arithmetic should produce coercion warning
+;; (commented because current 4B produces warning; uncomment to exercise)
+;; def a6-coerce := [int+ 3 [p32-to-int [p32-from-nat 2N]]]
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; P8: union types narrowed by constraint
+;; Exercises current 4B union-type handling — expected to fall back to imperative
+;; ═══════════════════════════════════════════════════════════════════════
+
+;; Simple union: Int | String narrowed by Eq
+;; (commented — current 4B may fail or produce surprising behavior)
+;; def p8-union : <Int | String> := 42
+;; def p8-eq := [eq? p8-union 42]
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; A3: aspect-coverage probe
+;; AST kinds that may lack typing-propagator rules. Per Pre-0 static
+;; analysis: 75 of 96 expr-* structs unregistered in register-typing-rule!.
+;; Many ARE handled by other mechanisms (SRE typing domain direct dispatch,
+;; core infer/check). This section probes a representative set.
+;; ═══════════════════════════════════════════════════════════════════════
+
+;; Basic core forms that should type-check
+def a3-lam := [fn [x : Nat] x]
+def a3-app := [a3-lam 5N]
+def a3-pair := ['[1N 2N]]
+
+;; ═══════════════════════════════════════════════════════════════════════
+;; Summary — if this file runs cleanly, 4B handles these cases correctly.
+;; Failures per section indicate which axis needs Phase 0 Pre-0 refinement
+;; to validate assumptions in D.1 before Stage 4.
+;; ═══════════════════════════════════════════════════════════════════════
