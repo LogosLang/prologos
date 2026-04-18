@@ -7,6 +7,7 @@
 - D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
 - D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
 - D.2 refinement (2026-04-17, SRE+PUnify lens pass): Hasse-registry extracted as a first-class primitive (new §6.12) — foundational infrastructure used by Phase 7 parametric resolution and Phase 9b γ hole-fill, consumed by future tracks. New Phase 2b (primitive) and Phase 9b (γ hole-fill) added to Progress Tracker — γ previously had no explicit phase. "Realization A → B collapse" named as cross-cutting pattern. PUnify named explicitly in §6.1/§6.4/§6.6/§6.10 (previously implicit). Stratification framed as module composition in §6.7/§6.11.1. Union ATMS branching framed as ⊕ ctor-desc decomposition in §6.10. SRE ctor-desc auto-derivation flagged as simplification opportunity in §6.4.
+- D.2 refinement (2026-04-17, R1+P4 incorporation from [self-critique](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md)): A8 enforcement restructured from cell-level `:lattice` annotation (D.2 original) to Tier 1/2/3 architecture with **merge-function inheritance** and **`#:domain` override**. Classification belongs to the lattice (Tier 1) via SRE domain registration, implemented by registered merge functions (Tier 2), inherited by cells (Tier 3). Cell-level `:lattice` language retired as conceptually wrong ("a cell is not a lattice"). Production migration scope clarified: **101 call sites / 37 merge functions** (not 666 — original figure included tests/benchmarks/cache), top 10 merge functions cover 70% of production calls. Override keyword `#:domain` takes a named registered domain; no anonymous classification tags.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -33,6 +34,7 @@
 - `:component-paths` enforcement at registration time (in 4C; NTT type-error formalization deferred to NTT work).
 - **Parameter+cell dual-store sweep**: catalogue all Racket-parameter + propagator-cell dual stores in the codebase (like `current-coercion-warnings` + `...-cell-id`). Pre-0 finding: `that-read` is ~1400× faster than CHAMP reads, suggesting similar latent wins in other dual-store sites. Retire dual-stores uniformly — not just the 6 named bridges.
 - **Hasse-registry primitive** (§6.12): extracted as first-class infrastructure. SRE-registered lattice + registration/structural-lookup interface. Used by Phase 7 (parametric impl registry) and Phase 9b (γ inhabitant catalog). Consumed by future tracks (general residual solver, PPN 5 disambiguation, FL-Narrowing refinement). User observation: *virtually every track will be designing for its own Hasse diagram.*
+- **Tier 1/2/3 lattice architecture** for A8 enforcement (§6.8, refined from self-critique R1+P4): lattice types (Tier 1 via A9) — merge functions (Tier 2 `register-merge-fn!/lattice`) — cells (Tier 3 inherit). Cell-level `:lattice` retired as conceptually wrong; replaced by Tier 2 inheritance with `#:domain` override keyword. Aligns with NTT `impl Lattice L` syntax directly.
 
 **Cross-cutting pattern — "Realization A → B collapse"**: several axes follow the same pattern of moving from Module Theory Realization A (separate cells with bridges) to Realization B (shared-carrier-with-tagging). Named here so the consistency is explicit across axes:
 - A5 (`:type`/`:term`): two facets with `TermInhabitsType` bridge → tag-layers on shared TypeFacet carrier.
@@ -58,7 +60,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | 🔄 | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
-| 1 | A8 `:component-paths` enforcement via cell `:lattice` annotation | ⬜ | `net-new-cell` extended with `#:lattice` keyword (structural / value / unclassified). `net-add-propagator` enforcement reads annotation. Audit + migration of all cell-creation sites. `tools/lint-cells.rkt` baseline tool (mirrors lint-parameters). NTT-aligned (`:lattice :structural` syntax matches NTT §3). |
+| 1 | A8 `:component-paths` enforcement via Tier 2 merge-function inheritance | ⬜ | **Tier 1/2/3 architecture** (§6.8). Tier 1 = SRE-registered lattice type with classification (A9 covers the 6 facets). Tier 2 (NEW): `register-merge-fn!/lattice` registers a merge function `#:for-domain DomainName` — links Tier 2 implementation to Tier 1 type. Tier 3: `net-new-cell` inherits domain from merge function; `#:domain DomainName` keyword for explicit override (rare, must be registered). Audit scope: **~37 production merge functions** (not 666 cell sites). Top 10 cover 70% of production calls. `tools/lint-cells.rkt` baselines unregistered merge functions and `#:domain` overrides. Mini-design during Phase 1 for Tier 2 API shape. |
 | 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
 | 2b | Hasse-registry primitive (NEW in D.2) | ⬜ | SRE-registered lattice with registration + structural-navigation lookup. ~150-200 lines Racket. Foundational infrastructure used by Phase 7 (impl registry) + Phase 9b (inhabitant catalog) + all future tracks needing Hasse-indexed lookup. See §6.12. |
 | 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires |
@@ -712,57 +714,110 @@ propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
 
 **Readiness propagators already populate the ready-queue cell** — L1's `collect-ready-constraints-via-cells` scan dissolves (readiness is already cell-valued; the scan was a leftover pattern).
 
-### §6.8 `:component-paths` registration-time enforcement (A8) — cell `:lattice` annotation
+### §6.8 `:component-paths` registration-time enforcement (A8) — Tier 1/2/3 architecture
 
 **Problem**: the rule "propagators reading compound cells MUST declare `:component-paths`" has been discipline-maintained ([propagator-design.md](../../.claude/rules/propagator-design.md)). Multiple design/implementation audits have repeatedly re-checked component-path coverage; things have slipped through. Correctness-by-construction required.
 
-**Fix (D.2 resolution for Q4)**: explicit `:lattice` annotation at cell creation. Detection is by annotation, not by shape heuristic. Two layers of enforcement cooperate:
+**Fix (D.2 refined after self-critique R1+P4, 2026-04-17)**: three-tier architecture. Classification belongs to the *lattice* (the algebraic type), not the cell (an instance). The declaration point sits at Tier 2 (merge function, which implements the lattice); cells inherit.
 
-**Layer 1 — Cell-level annotation (primary enforcement)**: `net-new-cell` accepts `#:lattice` naming the cell's lattice classification. Matches [NTT Syntax Design §3.1-3.2](2026-03-22_NTT_SYNTAX_DESIGN.md) syntax — `:lattice :structural` / `:lattice :value` — so the Racket-level annotation lifts directly to NTT when that work resumes.
+**Tier 1 — Lattice types as SRE domains (A9, already in scope)**:
+
+The lattice is registered as an SRE domain with its classification (VALUE/STRUCTURAL) and algebraic properties (Heyting, quantale, residuated, etc.). See §6.9.
 
 ```racket
-;; D.2 API
-(net-new-cell net initial-value merge-fn
-              #:lattice 'structural)   ;; or 'value, 'unclassified
+(register-domain! TypeFacetDomain
+  #:lattice :structural
+  #:properties '(Quantale Heyting-ground Residual)
+  ...)
 ```
 
-Classifications:
-- **`:value`** — chain, flat, or finite enumeration. No component-paths apply.
-- **`:structural`** — compound (hasheq / vector / RRB / struct-with-ctor-desc). **Propagators reading MUST declare `:component-paths`.**
-- **`:unclassified`** — explicit opt-out for cells under migration. Baseline-tracked.
+**Tier 2 — Merge functions linked to lattice types (NEW infrastructure)**:
 
-`net-add-propagator` enforcement:
+Each merge function declares which domain (Tier 1 lattice type) it implements:
+
+```racket
+(register-merge-fn!/lattice hasheq-union
+  #:for-domain 'StructuralHasheqDomain)
+
+(register-merge-fn!/lattice type-lattice-merge
+  #:for-domain 'TypeFacetDomain)
+```
+
+The registration links Tier 2 implementation to Tier 1 type. API shape is open for mini-design during Phase 1 (plausible alternatives: merge-fn struct with domain field; coupled to SRE domain registration with merge slot).
+
+**Tier 3 — Cells inherit from their merge function**:
+
+```racket
+;; Default: cell inherits merge function's registered domain
+(net-new-cell net initial hasheq-union)
+;; → cell's domain = 'StructuralHasheqDomain
+;; → classification inferred = :structural
+
+;; Override: explicit alternate registered domain
+(net-new-cell net initial hasheq-union #:domain 'SimpleKeyValueDomain)
+;; → cell's domain = 'SimpleKeyValueDomain (must be separately registered)
+;; → classification follows from override domain's Tier 1 registration
+```
+
+**The `#:domain` keyword** takes a named registered domain. Overrides require the alternate domain to exist in Tier 1 — no anonymous classification tags. Forces exceptions to have a documented home. Pre-registered generic "Anonymous{Value,Structural}Domain" entries are NOT included in Phase 1 scope; added only if real need emerges.
+
+**Why `#:domain` rather than `#:lattice`** (resolved in D.2 refinement 2026-04-17):
+
+The cell is not a lattice — it's an *instance* of a lattice. "Annotate `:lattice` on the cell" conflates instance with type and reads like "is this cell a lattice?" which is incoherent. `#:domain` uses SRE vocabulary consistently: a cell belongs to a domain; the domain is a lattice type; classification is a property of the domain.
+
+**Enforcement at `net-add-propagator`** (semantically unchanged from prior approach):
 
 ```
 For each input cell:
-  read cell's :lattice annotation
-  if :lattice = :structural AND no :component-paths entry for this cell:
+  read cell's domain (inherited or #:domain-overridden)
+  read domain's Tier 1 classification (:structural / :value)
+  if classification = :structural AND :component-paths missing for this cell:
     error 'net-add-propagator
-          "structural cell ~a reads require :component-paths"
-  if :lattice = :unclassified: emit warning (tracked baseline)
-  if :lattice = :value: no check
+          "cells in structural domain ~a require :component-paths"
+  if domain unregistered or :unclassified: warning (tracked baseline)
 ```
 
-This gives type-check-like correctness at registration time. No heuristics, no shape guessing — the annotation is authoritative.
+Type-check-like correctness at registration. Declaration point is the merge function (Tier 2); cells derive structurally.
 
-**Layer 2 — SRE domain registration (complementary, §6.9)**: the SRE domain for a lattice declares its algebraic properties (Heyting / quantale / etc.) + VALUE/STRUCTURAL classification as one of the 6 SRE lens questions. Layer 2 gives property-inference verification; Layer 1 gives enforcement. They're at different layers (cell-level vs domain-level), not redundant.
+**Migration under the Tier 2 approach** (R1 resolved):
 
-**Migration strategy (mirrors the A3 lint pattern)**:
+Production scope measured (grep 2026-04-17):
+- **101 production `net-new-cell` call sites** (D.2 original mentioned 666; that figure included tests, benchmarks, pnet cache).
+- **37 distinct merge functions** in production.
+- **Top 10 merge functions cover ~70% of production calls**.
+- **1% inline lambdas** (1 of 101 production calls).
 
-1. **API extension**: add `#:lattice` keyword to `net-new-cell`. Defaults to `:unclassified` with a warning during migration window; flips to hard-required post-migration.
-2. **Grep all `net-new-cell` call sites**. Classify each:
-   - Atomic / flat values → `:value`
-   - hasheq / vector / RRB / struct-with-ctor-desc → `:structural`
-   - Ambiguous → `:unclassified`, added to audit baseline
-3. **`tools/lint-cells.rkt`** — modeled on [`tools/lint-parameters.rkt`](../../racket/prologos/tools/lint-parameters.rkt). Baseline-tracks unclassified cells. `--strict` mode flags NEW `:unclassified` additions. Existing baseline shrinks as cells get classified.
-4. **Hard-error flip**: once baseline is empty (or acceptable close), flip from optional-with-warning to required.
+Phase 1 work:
+1. **Tier 2 API addition**: `register-merge-fn!/lattice` + `net-new-cell` inheritance reads. Mini-design during Phase 1 settles shape.
+2. **Register the top 10 merge functions** (fast initial coverage of 70% of sites).
+3. **Register remaining 27 merge functions**.
+4. **Test/benchmark cells**: use production merge functions → auto-inherit once Tier 2 registered. Test helpers register if enforcement is desired for them.
+5. **Inline lambdas** (1%): wrap into named merge function (preferred — gives the function a home) or `#:domain` override.
+6. **`tools/lint-cells.rkt`** baseline: unregistered merge functions, `#:domain` overrides (should be justified). Baseline shrinks as merge functions register.
+7. **Hard-error flip**: once baseline is empty, Tier 2 registration becomes required; cells referencing unregistered merge functions fail.
 
-**Expected secondary wins from the audit**:
-- Propagators reading compound cells without `:component-paths` — caught as bugs to fix during migration.
-- Ambiguous-shape cells (hasheq used as simple map vs. structural lattice) — forced classification resolves the ambiguity.
-- Dead / obsolete cell creation sites — cleanup candidates.
+Compare to D.2 original: 666-site annotation → 37-function registration. Order-of-magnitude smaller and more principled.
 
-**NTT alignment**: `:lattice :structural` and `:lattice :value` are exactly the NTT syntax from [§3.1-3.2](2026-03-22_NTT_SYNTAX_DESIGN.md). When NTT design resumes, cell annotations lift into the type system unchanged — the compiler becomes the type-checker. Until then, the Racket-level enforcement does the work.
+**Secondary wins from Tier 2 audit**:
+- Propagators reading compound cells without `:component-paths` — caught as bugs during migration.
+- Merge functions used for different purposes across cells — forced to resolve (split into per-domain variants, or split domain definitions).
+- Ad-hoc inline lambda merges — migration pressure to name and register.
+
+**NTT alignment**: [NTT Syntax §3.1](2026-03-22_NTT_SYNTAX_DESIGN.md) already declares lattice types with `:lattice :structural`:
+
+```prologos
+type TypeExpr := ...
+  :lattice :structural
+
+trait Lattice {L : Type}
+  spec join L L -> L
+
+impl Lattice TypeExpr
+  join type-lattice-merge  ;; ← this IS Tier 2 linking
+  bot  type-bot
+```
+
+The Racket-level `register-merge-fn!/lattice` IS the Tier 2 declaration that `impl Lattice L` with `join fn` syntactically compiles to. When NTT design resumes, Racket migration is zero — the infrastructure IS the compile target of the NTT form.
 
 ### §6.9 Per-facet SRE domain registration (A9)
 
@@ -1190,7 +1245,7 @@ Genuine design decision points to work through in dialogue. Phase 0 Pre-0 measur
 
 3. **Meta metadata after CHAMP retirement** — **ANSWERED by Pre-0**: 5 of 7 `meta-info` fields map directly to facets; `source` alone is lattice-irrelevant debug metadata. **D.1 decision: side registry for `source`, facets for the rest**. Closed.
 
-4. **Component-paths detection predicate** — **CLOSED (2026-04-17 dialogue)**: explicit `:lattice` annotation at `net-new-cell` creation time. Authoritative, type-check-like, not heuristic. Layered with SRE domain registration (A9) — cell annotation gives enforcement (Layer 1); domain registration gives property inference (Layer 2). No shape-guessing. Bundled with migration audit and baseline lint (`tools/lint-cells.rkt`, mirrors A3 parameter lint pattern). NTT-aligned syntax — lifts unchanged when NTT work resumes. See §6.8.
+4. **Component-paths detection predicate** — **CLOSED (2026-04-17 dialogue, refined by self-critique R1+P4)**: Tier 1/2/3 architecture (§6.8). Classification belongs to the lattice type (Tier 1 SRE-domain), implemented by merge functions (Tier 2 `register-merge-fn!/lattice`), inherited by cells (Tier 3). `#:domain DomainName` keyword overrides default inheritance; takes a named registered domain. Cell-level `:lattice` language retired — cells are instances, not lattices. Production migration: **37 merge functions** (not 666 cells; original figure included tests/benchmarks). Authoritative, type-check-like, no shape-guessing. NTT-aligned — Tier 2 registration IS the compile target of NTT `impl Lattice L` with `join fn` syntax.
 
 5. **Termination argument for ATMS branching (Phase 10)** — **ANSWERED by Pre-0**: speculation cost ~8 μs/cycle means `:fuel 100` bounds 2^N worst-case acceptably for N ≤ 10-15 unions. No separate ATMS-fuel needed. Hypercube Gray-code traversal (§6.11.3) further amortizes via CHAMP sharing. Closed.
 

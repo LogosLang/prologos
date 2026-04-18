@@ -247,23 +247,26 @@ Per methodology: "SRE lattice lens is mandatory for all lattice design decisions
 
 Grouped by decision point for user review:
 
-| # | Finding | Severity | Resolution effort |
-|---|---|---|---|
-| **R1 + P4** | 666-site migration + merge-function inheritance option | **Major** | Design decision + possible Phase 1 rescope |
-| **S1** | Missing TypeToWarnings bridge | Major | §4.3 addition + §6.11.1 update |
-| **M2 + R4** | PUnify reach audit for quantale types | Substantive | Phase 3 pre-design includes audit |
-| M1 | Rename "walk" language in §6.5, §6.12 | Minor | Language polish |
-| M3 | Clarify Hasse-registry lookup as helper | Minor | §6.12 clarification |
-| M4 | Union ATMS framing is conceptual, not impl change | Minor | §6.10 clarification |
-| M5 | Residuation check lazy-vs-eager | Substantive | §6.2 specification |
-| P1 | Option A scaffold period — lint rule candidate | Minor | Optional; discipline-based |
-| P2 | `:lattice` annotation immutability documented | Minor | One sentence |
-| P3 | Couple A8 to CHAMP retirement deletion | Minor | §6.3 wording |
-| R3 | Phase 9 `current-speculation-stack` scope confirmed | Confirmation | No action |
-| R5 | Meta `source` side registry named | Minor | §6.3 explicit |
-| O1 | Phase 1 timing interacts with P4 resolution | Follow-up | Depends on P4 decision |
-| O2 | SRE lens applied to more lattices | Substantive | §6.12, §6.10 extensions |
-| O3 | Provenance chain representation | Substantive | §6.1 specification |
+| # | Finding | Severity | Resolution effort | Status |
+|---|---|---|---|---|
+| **R1 + P4** | 666-site migration + merge-function inheritance option | **Major** | Design decision + Phase 1 rescope | **✅ RESOLVED** (commit TBD). Tier 1/2/3 architecture adopted. Cell-level `:lattice` retired; `#:domain` override; ~37 merge functions. §6.8 rewritten. §13 Q4 updated. P2 (immutability) and P3 (coupling to CHAMP) absorbed via architectural clarity. O1 (Phase 1 timing) implicitly resolved. |
+| **S1** | Missing TypeToWarnings bridge | Major | §4.3 addition + §6.11.1 update | ⬜ pending |
+| **M2 + R4** | PUnify reach audit for quantale types | Substantive | Phase 3 pre-design includes audit | ⬜ pending |
+| M1 | Rename "walk" language in §6.5, §6.12 | Minor | Language polish | ⬜ pending |
+| M3 | Clarify Hasse-registry lookup as helper | Minor | §6.12 clarification | ⬜ pending |
+| M4 | Union ATMS framing is conceptual, not impl change | Minor | §6.10 clarification | ⬜ pending |
+| M5 | Residuation check lazy-vs-eager | Substantive | §6.2 specification | ⬜ pending |
+| P1 | Option A scaffold period — lint rule candidate | Minor | Optional; discipline-based | ⬜ pending |
+| P2 | `:lattice` annotation immutability documented | Minor | One sentence | **✅ RESOLVED** by R1+P4 (cell-level `:lattice` retired) |
+| P3 | Couple A8 to CHAMP retirement deletion | Minor | §6.3 wording | ⬜ pending (still applicable to A2) |
+| R3 | Phase 9 `current-speculation-stack` scope confirmed | Confirmation | No action | ✅ confirmed (21 sites/6 files) |
+| R5 | Meta `source` side registry named | Minor | §6.3 explicit | ⬜ pending |
+| O1 | Phase 1 timing interacts with P4 resolution | Follow-up | Depends on P4 decision | **✅ RESOLVED** by R1+P4 (smaller migration; Phase 1 timing unaffected) |
+| O2 | SRE lens applied to more lattices | Substantive | §6.12, §6.10 extensions | ⬜ pending |
+| O3 | Provenance chain representation | Substantive | §6.1 specification | ⬜ pending |
+
+**Resolution log**:
+- 2026-04-17: R1 + P4 resolved via Tier 1/2/3 architecture (§6.8 rewrite). Grep confirmed production scope is 101 sites / 37 merge functions (not 666). Cell-level `:lattice` retired; replaced by Tier 2 merge-function inheritance with `#:domain` override. Absorbs P2 (immutability) and O1 (Phase 1 timing). Dialogue settled `#:domain` keyword (SRE vocabulary alignment; cells are instances not lattices).
 
 **Proposed order of discussion**:
 1. R1 + P4 together — scope decision.
