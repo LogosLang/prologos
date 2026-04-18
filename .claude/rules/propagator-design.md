@@ -28,11 +28,13 @@ Broadcast is the polynomial functor made operational. A/B data: 2.3x faster at N
 
 **MANDATORY**: Any propagator watching a compound cell (hasheq, scope-cell, decisions-state, commitments-state) MUST declare `#:component-paths` specifying which components it watches.
 
-Without component-paths, the propagator fires on EVERY component change — including components it doesn't read. This defeats the purpose of compound cells.
+Without component-paths, the propagator fires on EVERY component change — including components it doesn't read. This defeats the purpose of compound cells and produces thrashing / system degradation.
 
 Pattern: `#:component-paths (list (cons cell-id component-key) ...)`
 
 Also applies to `net-add-broadcast-propagator` (extended in Phase 5.1b to accept `#:component-paths`).
+
+**NTT refinement** (persisted lesson, 2026-04-17): in the NTT `propagator` form ([NTT Syntax Design §4](../../docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md)), `:component-paths` should be an obligation *derivable by the type checker* from any `:reads` / `:writes` cell whose lattice is declared `:lattice :structural`. Omitting it when reading a structural cell should be a **type error**, not a discipline-maintained rule. This refinement is deferred until NTT design work is in scope again (gated on PPN 4 completion) but is load-bearing for the "user-declared propagators type-check for architectural coherence" vision. Recorded here to prevent re-discovery across sessions.
 
 ## Per-Propagator Worldview (`current-worldview-bitmask`)
 
