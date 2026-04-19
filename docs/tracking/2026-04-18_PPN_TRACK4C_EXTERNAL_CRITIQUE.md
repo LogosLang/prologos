@@ -93,8 +93,7 @@ Reproducibility matters because Phase 1 of implementation will re-run the audit 
 
 **Proposed resolution**: append a "Reality-Check artifacts" appendix to D.2 listing the exact grep/rg commands, file inclusion patterns (production-only = which directories), and expected output counts for each quantified claim (101 sites, 37 merge functions, top-10 coverage 70%, 79 `solve-meta!`, 513 `zonk.rkt` reads, 49 `infer/err`, 75 unregistered AST-kinds).
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). §17 "Reality-Check Artifacts" appendix added to D.2 with reproducible grep commands and 2026-04-17 baseline counts for every quantified scope claim. Phase 1 mini-audit re-runs these; drift from baseline signals either code churn or original undercount.
 
 ---
 
@@ -127,8 +126,7 @@ Two concerns. (1) Post-Phase-11, is `run-stratified-resolution!` also deleted, o
 
 **Proposed resolution**: Phase 11 plan must name BOTH orchestrators and commit to deleting BOTH. If any caller remains, name it in the phase plan. If the comment ("superseded by pure") is correct and there are no callers, delete at Phase 11 start as a hygienic prelude.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). Grep run 2026-04-18 confirmed `run-stratified-resolution!` has **zero production callers** — all references are comments, the definition at `metavar-store.rkt:1863`, and one counter reference. Already dead code per the comment at line 1860. `run-stratified-resolution-pure` (production path) has one production caller at `metavar-store.rkt:1699`. Phase 11 Progress Tracker row updated: both orchestrators retire in Phase 11 (`run-stratified-resolution!` as hygienic prelude deletion; `run-stratified-resolution-pure` as main work).
 
 ---
 
@@ -140,8 +138,7 @@ For a phase explicitly flagged low-risk ("Axis 6 — low" in Audit §5.6), the R
 
 **Proposed resolution**: add to D.2 §6.5 (or wherever Phase 5 is detailed) the grep-backed reader inventory: every `(current-coercion-warnings)` read, every `warnings-cell-read` or equivalent, and the specific call sites in `driver.rkt` and elsewhere.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). Grep run 2026-04-18: `current-coercion-warnings` retirement = ~5 edit sites across 2 files (`warnings.rkt` lines 62, 81-82, 105-106, 122, 131-133 + `driver.rkt:467` parameterize). Dual-write pattern confirmed at `warnings.rkt:131+133` (the belt-and-suspenders target). Parallel retirement in scope for `current-deprecation-warnings` and `current-capability-warnings` — same pattern at `warnings.rkt:158, 186, 207`. Phase 5 Progress Tracker row updated with the scope.
 
 ---
 
@@ -151,8 +148,7 @@ D.2 (per handoff §5.3) says Phase 2 expects "find ≥1 lattice bug (per Track 3
 
 **Proposed resolution**: codify a "Phase 2 contingency": up to K lattice bugs are absorbed into Phase 2 with no replanning; K+1 or more opens a Phase 2b repair stratum. State K explicitly (suggest K=2 based on prior-track observation). Also: if zero bugs are found, mandate a property-coverage review — the precedent predicts at least one, so zero means either we got lucky or property inference isn't catching what it should.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). K=2 adopted. Phase 2 Progress Tracker row updated: up to 2 lattice bugs absorbed into Phase 2 with no replanning; ≥3 opens a Phase 2c repair sub-phase; **zero bugs found mandates a property-coverage review** — prior-track precedent predicts at least one, so zero signals property inference isn't catching what it should.
 
 ---
 
@@ -244,8 +240,7 @@ If yes (expected, since each tag is an independent sub-lattice): distributivity 
 
 **Proposed resolution**: add a §6.5.1 stating the distributivity property explicitly and citing the "No Trait Hierarchies" principle as the reason the per-trait sub-lattices are genuinely independent. This closes the SRE Q2 question structurally.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). New §6.5.1 "Tag distributivity across trait layers" added to D.2 stating the distributivity equation `merge((T1:A) ∪ (T2:B), (T1:C)) = (T1: merge(A, C)) ∪ (T2: B)` and citing `DESIGN_PRINCIPLES.org` § "No Trait Hierarchies — Bundles Only" as the structural reason per-trait sub-lattices are genuinely independent. SRE lens Q2 + Q3 answers stated inline. Property inference verifies at A9 facet registration (Phase 2).
 
 ---
 
@@ -257,8 +252,7 @@ The two use cases likely have *different* lattices. "Parameterized by L" is the 
 
 **Proposed resolution**: §6.12 gets a concrete-instantiation subsection showing L_impl (for Phase 7) and L_inhabitant (for Phase 9b) — with bot/meet/join spelled out for each. Phase 7 and Phase 9b then instantiate the primitive with their respective L.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). New §6.12.6 "Concrete instantiations L_impl and L_inhabitant" added to D.2. For each: bot, top, meet, partial order, position-fn, and lookup specified. L_impl = impl specificity lattice (most-general ≤ most-specific); L_inhabitant = constructor subsumption lattice (parent signature ≤ specialized signature). Both share the Hasse-registry API + navigation mechanism — one primitive, two parameterizations.
 
 ---
 
@@ -297,8 +291,7 @@ Progress Tracker lists Phase 11 (elaborator strata→BSP) and Phase 11b (diagnos
 
 **Proposed resolution**: renumber. If they're parallel: Phase 11 (strata→BSP) and Phase 13 (diagnostic). If sequential: state which first and why. Rationale: phase numbering should reflect logical structure, not arrival order of the sub-designs.
 
-**Response**:
-
+**Response**: **Accept with minimal renaming — keep "11b", make sequencing dependency explicit** (2026-04-18, batch). Phase 11b IS sequential-after-11, not parallel and not parent/child. Dependency rationale: Phase 11b's diagnostic infrastructure consumes the unified BSP-stratum orchestration delivered by Phase 11. Dependency graph line updated to state this explicitly. Renaming to Phase 13 was considered but rejected to avoid cascading edits across cross-references; the naming is kept as long as the sequencing dependency is explicit.
 
 ---
 
@@ -308,8 +301,7 @@ Progress Tracker lists Phase 11 (elaborator strata→BSP) and Phase 11b (diagnos
 
 **Proposed resolution**: Phase T gets a subsection listing the planned test files: `test-attribute-tag-layers.rkt`, `test-hasse-registry.rkt`, `test-parametric-resolution-propagator.rkt`, `test-union-atms.rkt`, `test-cell-ref-expressions.rkt`, `test-elaboration-parity.rkt` (already named in §9), etc., with per-file coverage goals tied to axes.
 
-**Response**:
-
+**Response**: **Accept** (2026-04-18, batch). Phase T Progress Tracker row enumerates: `test-elaboration-parity.rkt` (parity skeleton expanded per axis), `test-attribute-tag-layers.rkt` (Phase 3), `test-hasse-registry.rkt` (Phase 2b + both instantiations), `test-parametric-resolution-propagator.rkt` (Phase 7), `test-union-atms.rkt` (Phase 10 + cell-based TMS), `test-cell-ref-expressions.rkt` (Phase 12 Option C), `test-tropical-fuel.rkt` (M2 lean, if adopted), `test-coverage-structural.rkt` (P3 lean, if adopted), `test-warnings-retirement.rkt` (Phase 5). Each file mapped to the axis it covers.
 
 ---
 

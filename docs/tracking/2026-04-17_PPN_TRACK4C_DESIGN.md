@@ -68,24 +68,24 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 |---|---|---|---|
 | 0 | Acceptance file + Pre-0 benchmarks + parity skeleton | 🔄 | `examples/2026-04-17-ppn-track4c.prologos`, Pre-0 bench file, `test-elaboration-parity.rkt` skeleton |
 | 1 | A8 `:component-paths` enforcement via Tier 2 merge-function inheritance | ⬜ | **Tier 1/2/3 architecture** (§6.8). Tier 1 = SRE-registered lattice type with classification (A9 covers the 6 facets). Tier 2 (NEW): `register-merge-fn!/lattice` registers a merge function `#:for-domain DomainName` — links Tier 2 implementation to Tier 1 type. Tier 3: `net-new-cell` inherits domain from merge function; `#:domain DomainName` keyword for explicit override (rare, must be registered). Audit scope: **~37 production merge functions** (not 666 cell sites). Top 10 cover 70% of production calls. `tools/lint-cells.rkt` baselines unregistered merge functions and `#:domain` overrides. Mini-design during Phase 1 for Tier 2 API shape. |
-| 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference |
+| 2 | A9 facet SRE domain registrations | ⬜ | `context`, `usage`, `constraint`, `warning`, `term` domains; property inference. **Lattice-bug contingency (R5 external critique 2026-04-18)**: K=2 bugs absorbed into Phase 2; K+1 (≥3 bugs) opens a Phase 2c repair sub-phase; **zero bugs found mandates a property-coverage review** — prior-track precedent (Track 3 §12 + SRE 2G) predicts at least one; zero means property inference isn't catching what it should. |
 | 2b | Hasse-registry primitive (NEW in D.2) | ⬜ | SRE-registered lattice with registration + structural-navigation lookup. ~150-200 lines Racket. Foundational infrastructure used by Phase 7 (impl registry) + Phase 9b (inhabitant catalog) + all future tracks needing Hasse-indexed lookup. See §6.12. |
 | 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires. **Mini-design decision (S1 external critique 2026-04-18)**: TermFacet lattice specification — choose between (i) TermFacet IS the Track 2H quantale, `:type`/`:term` are role-tags over one carrier lattice, or (ii) TermFacet is a distinct term lattice (α-equivalence-respecting structural meet) bridged to TypeFacet via `type-of-expr`. §6.2 merge spec reads as (ii); §3.8 "residual partners" framing reads as (i). Mini-design picks the reading and states bot/join/top explicitly. Either way, SRE lens Q2+Q3 answers are produced during the phase. **Mini-design decision (P4 external critique 2026-04-18)**: residuation-check merge-reentrancy shape — (a) merge may write to cells *other than* the one being merged (structural constraint enforced via Axis 8), or (b) merge emits a topology/stratum request processed between rounds (matches existing topology-stratum pattern at [`propagator.rkt:2665`](../../racket/prologos/propagator.rkt), keeps merge pure). Lean toward (b) per Correct-by-Construction + mantra-emergent-ordering; tradeoffs (latency, quiescence semantics, Axis 8 widening if (a)) to be investigated at mini-design time. Related to S1 above — both concern what happens inside cross-tag merge at `:type`/`:term` carrier cells. |
 | 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
-| 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired |
+| 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired. **Scope (R4 external critique 2026-04-18)**: `current-coercion-warnings` parameter retirement = ~5 edit sites across 2 files ([`warnings.rkt`](../../racket/prologos/warnings.rkt) lines 62, 81-82, 105-106, 122, 131-133 + [`driver.rkt:467`](../../racket/prologos/driver.rkt) parameterize). Parallel retirement in scope: `current-deprecation-warnings` + `current-capability-warnings` (same dual-write pattern per [`warnings.rkt:158, 186, 207`](../../racket/prologos/warnings.rkt)). |
 | 6 | A3 Aspect-coverage completion | ⬜ | Audit uncovered AST kinds; register typing rules per kind. **Mini-design decision (P3 external critique 2026-04-18)**: coverage guarantee shape — (a) discipline coverage (exhaustive registration + `infer/err` fallback retained for safety) vs. (b) structural coverage (coverage cell with hash-union merge AST-kind → rule-id; network-build-time assertion iterates `syntax.rkt` `expr-*` predicates; `infer/err` deleted as a concept; missing coverage = contradiction at build time). **Lean: (b)** — Correct-by-Construction + Completeness + mantra discipline favor structural; keeping `infer/err` is belt-and-suspenders. Mechanism parallels Axis 8 registration-time enforcement (Phase 1). Mini-design deepens tradeoffs including implementation cost, timing of `infer/err` deletion, interaction with Phase 1's enforcement framework. |
 | 7 | A1 Parametric trait-resolution — per-(meta, trait) propagators | ⬜ | `:constraints` facet tagged by trait (Module Theory Realization B). Per-(meta, trait) propagator on tagged layer. Hasse-indexed impl registry. PUnify for match (via SRE ctor-desc). ATMS branching on multi-candidate (via Phase 9 cell-based TMS). Set-latch fan-in for dict aggregation. Retires Bridge 1. **Mini-design decision (M1 external critique 2026-04-18)**: impl-registry write-path (module-load-time `impl X Y` registration) — cell-write on `impl-registry-cell` with hash-union merge, or imperative `register-impl!` labeled scaffolding owned by PM Track 12. Decision deferred to Phase 7 mini-design; must be consistent with Phase 9b's constructor-catalog write-path. |
 | 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
 | 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note. **Mini-design decision (C2 external critique 2026-04-18)**: relationship to existing ATMS infrastructure (`elab-speculation.rkt`, `save-meta-state`/`restore-meta-state!`, per-propagator worldview-bitmask, S1 NAF fork+BSP, discrimination). Choose between (1) substrate-only — Phase 9 delivers cell-based TMS; Phase 10 consumes; existing ATMS migration owned by a later named track labeled explicitly as scaffolding; (2) substrate + one representative migration as proof-of-concept; (3) wholesale replacement inside 4C via 9a/9b-new/9c split. Belt-and-suspenders steady state rejected by `workflow.md` — whatever shape chosen must avoid two TMS mechanisms as permanent state. Mini-design produces an R-lens inventory of existing ATMS-like call sites before picking shape. **Mini-design decision (M2 external critique 2026-04-18)**: ATMS fuel representation — (a) imperative decrementing counter (existing pattern) vs. (b) **tropical-lattice fuel cell** with min-merge; exhaustion hits tropical bottom → fires fuel-contradiction cell write, structurally indistinguishable from any other contradiction. **Lean: (b)** — on-network mandate + Completeness + composition with backward-residuation (M4). **Significance**: this is the *first practical implementation* of the tropical-lattice/quantale/semiring/cost-optimization structure in Prologos — the pattern has been theorized (Hyperlattice Conjecture, BSP-LE 2 research on tropical semirings, Module Theory §6 e-graphs as quotient modules) but not yet instantiated in production code. Phase 9 mini-design deepens tropical-fuel semantics; the pattern then becomes the template for upcoming PReduce (reductions on propagator networks with cost-optimization via tropical semiring). |
 | 9b | γ hole-fill propagator (NEW in D.2) | ⬜ | Reactive propagator at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Consumes Phase 2b Hasse-registry for inhabitant catalog (type-env + constructor signatures). PUnify via ctor-desc for match. ATMS branching on multi-candidate via Phase 9 cell-based TMS. Set-latch fan-in for aggregation. Previously architecturally described in §6.2.1 but unphased; D.2 makes it explicit. **Mini-design decision (M1 external critique 2026-04-18)**: constructor-catalog write-path — must be consistent with Phase 7's impl-registry write-path decision (both are Hasse-registry instantiations). **Mini-design decision (M3 external critique 2026-04-18)**: γ re-firing on catalog growth — (a) γ fires once per hole at propagator-install time (risk: silent staleness when new constructors arrive), or (b) γ watches catalog cell via `#:component-paths` keyed on hole-type; catalog-growth events re-fire only γ propagators whose hole-type matches newly-arrived constructors. **Lean: (b)** via component-paths — Correct-by-Construction + Completeness + structurally-emergent-dataflow; component-paths guard minimizes spurious re-firing. M1 + M3 are catalog-write and catalog-read duals; mini-design resolves both together. |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
-| 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
+| 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers. **Orchestrator retirement (R3 external critique 2026-04-18)**: BOTH orchestrators retire in Phase 11 — `run-stratified-resolution!` ([metavar-store.rkt:1863](../../racket/prologos/metavar-store.rkt), already dead code per comment at line 1860, zero production callers confirmed by grep 2026-04-18) is deleted as hygienic prelude; `run-stratified-resolution-pure` ([metavar-store.rkt:1915](../../racket/prologos/metavar-store.rkt), production path called at [line 1699](../../racket/prologos/metavar-store.rkt)) is retired as main work. |
 | 11b | Diagnostic infrastructure — residuation-backward error reporting (NEW in D.2) | ⬜ | First-class compiler + error features per user direction 2026-04-18. `derivation-chain-for(position, tag)` helper (API shape phase-time mini-design). Human-readable error messages with source-loc + propagator rationale; machine-readable structured traces for IDE/LSP. Backward residuation over the propagator-firing dependency graph (Module-Theory-principled, not ad-hoc tracker). See §6.1.1. **M4 external-critique lean (2026-04-18)**: read-time derivation (option b) — no error-propagator fires; `derivation-chain-for` is a read-time function over the dependency graph. **Research input**: trace monoidal category theory (Joyal-Street-Verity 1996; Hasegawa 1997; Abramsky-Haghverdi-Scott 2002) — network forms traced SMC, provenance IS trace morphism, backward residuation IS adjoint structure of trace. Consume before mini-design finalization. |
 | 12a | A4 Option C — introduce `expr-cell-ref` struct + dereferencing primitive | ⬜ | No call-site changes yet. New struct in [`syntax.rkt`](../../racket/prologos/syntax.rkt); dereferencing API (cell-ops or similar). Post-R2 external-critique refinement 2026-04-18: pipeline is already collapsed by Tracks 2/3/4A/4B (tree-parser primary; 90% typing on-network); the original "14-file cascade" framing is stale. Phase 12 remains substantial (104 `expr-meta` occurrences across 19 files) but smaller than D.1 assumed. |
 | 12b | A4 Option C — flip `expr-meta` construction to `expr-cell-ref` | ⬜ | Meta installation sites produce `expr-cell-ref`; readers go through the new dereferencing API. Residual `expr-meta` constructors deleted. |
 | 12c | A4 Option C — delete `zonk.rkt` wholesale | ⬜ | `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). Driver `freeze-top`/`zonk-top` plumbing retired. Reading the expression IS zonking via cell-ref dereferencing. |
 | 12d | A4 Option C — acceptance + A/B + integration | ⬜ | L3 acceptance confirms cell-ref path clean; A/B bench shows E3 freeze cost → 0; no regressions. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
-| T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
+| T | Dedicated test files | ⬜ | Enumerated (C4 external critique 2026-04-18): `test-elaboration-parity.rkt` (parity skeleton from §9 expanded per axis), `test-attribute-tag-layers.rkt` (A5 `:type`/`:term` Phase 3), `test-hasse-registry.rkt` (Phase 2b primitive + both instantiations), `test-parametric-resolution-propagator.rkt` (A1/Phase 7), `test-union-atms.rkt` (Phase 10 + cell-based TMS), `test-cell-ref-expressions.rkt` (Phase 12 Option C), `test-tropical-fuel.rkt` (M2 tropical-fuel cell, if adopted), `test-coverage-structural.rkt` (P3 structural coverage, if adopted), `test-warnings-retirement.rkt` (Phase 5 parameter retirement). |
 | V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
 
 ### Phase dependency graph
@@ -119,7 +119,7 @@ Phase 10 (Phase 8 union types) — can parallel with 9b
   ↓
 Phase 11 (A7 BSP orchestration) — can parallel with 10
   ↓
-Phase 11b (diagnostic infrastructure) — consumes :trace + ATMS + source registry; residuation-backward error reporting
+Phase 11b (diagnostic infrastructure) — sequenced AFTER Phase 11 (not parallel, not sub-phase). Dependency: diagnostic consumes unified BSP-stratum orchestration delivered by 11. Also consumes :trace + ATMS + source registry. Residuation-backward error reporting. (C3 external critique 2026-04-18: dependency-based sequencing; "b" naming retained.)
   ↓
 Phase 12a → 12b → 12c → 12d (A4 Option C cell-refs; see §6.6) — sub-split per R2 external-critique refinement 2026-04-18: pipeline already collapsed by PPN 2/3/4A/4B, real scope is ~19 files / 104 `expr-meta` sites + `zonk.rkt` deletion, sub-split respects conversational cadence rule rather than a stale 14-file cascade
   ↓
@@ -783,6 +783,22 @@ propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
 - Adhesive DPO: impl coherence = zero critical pairs (verified at registration).
 - Hasse diagram: specificity order captured structurally; "tiebreaker" becomes Hasse traversal, not algorithm.
 
+#### §6.5.1 Tag distributivity across trait layers (S2 external critique 2026-04-18)
+
+The carrier merge combines per-trait tagged layers via union. Distributivity across trait tags holds:
+
+```
+merge((T1:A) ∪ (T2:B), (T1:C)) = (T1: merge(A, C)) ∪ (T2: B)
+```
+
+Per-trait merge composes without cross-trait interference. The structural reason: [`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org) § "No Trait Hierarchies — Bundles Only" makes per-trait sub-lattices *genuinely independent*. There is no trait that implies or requires another trait, so there are no cross-tag semantic dependencies that would break distributivity. Bundles are set-union syntactic sugar, not algebraic implications.
+
+SRE lens answers:
+- Q2 (Algebraic properties): per-trait sub-lattices are independent join-semilattices; the direct-sum via tagging inherits independence.
+- Q3 (Bridges to other lattices): no cross-trait bridges exist; cross-trait interaction is *only* via carrier-cell union, not via Galois connections between trait sub-lattices.
+
+Property inference verifies distributivity at A9 facet registration (Phase 2).
+
 ### §6.6 Option A and Option C for freeze/zonk (A4) — **zonk retirement entirely**
 
 **Context — unmet PPN 4 expectation**: the original [Track 4 Design §3.4b "Phase 4b: Zonk Retirement"](2026-04-04_PPN_TRACK4_DESIGN.md) targeted elimination of all three zonk functions (`zonk-intermediate`, `zonk-final`, `zonk-level`, ~1,300 lines) with cell-refs replacing `expr-meta`. Phase 4b-i (readiness infrastructure) landed; Phase 4b-ii-b (zonk deletion) was blocked on the Track 4 Phase 2-3 redo and deferred. Track 4B PIR §12 reconfirmed this as still-deferred. **4C completes this.**
@@ -1287,6 +1303,28 @@ registry ParametricImpls
 
 4C-level implementation is Racket infrastructure; future NTT makes it declarative syntax. No migration cost — the primitive IS the declarative form; NTT just surfaces it.
 
+#### §6.12.6 Concrete instantiations L_impl and L_inhabitant (S3 external critique 2026-04-18)
+
+The primitive is parameterized by lattice L. 4C's two instantiations:
+
+**`L_impl` (Phase 7 parametric trait resolution)** — **impl specificity lattice**.
+- **Bot**: most-general parametric impl (e.g., `impl C A` quantifying universally over type variable A).
+- **Top**: contradiction (incoherent impls — two impls at the same specificity claiming the same target pattern).
+- **Meet**: shared common generalization of two impl patterns — the most-specific impl pattern that subsumes both.
+- **Partial order**: `impl1 ≤ impl2` iff `impl1`'s pattern subsumes `impl2`'s (`impl1` is more general).
+- **Position-fn** (for Hasse-registry API): the impl's type-pattern.
+- **Lookup**: from target type T, traverse Hasse from most-specific candidates upward until a match is found via PUnify with `'subtype` relation.
+
+**`L_inhabitant` (Phase 9b γ hole-fill inhabitant catalog)** — **constructor subsumption lattice**.
+- **Bot**: no applicable constructors (the type has no inhabitants in the catalog).
+- **Top**: contradiction (conflicting catalog entries).
+- **Meet**: type-driven intersection — constructors whose signatures match both input type constraints.
+- **Partial order**: `c1 ≤ c2` iff `c1`'s signature is a specialization of `c2`'s (more-specific constructor is below more-general).
+- **Position-fn**: the constructor's classifying type.
+- **Lookup**: from the hole's classifier (CLASSIFIER-tagged entry), Hasse-navigate to constructors matching the type; candidates returned as INHABITANT candidates for γ to propagate.
+
+Both instantiations share the Hasse-registry API + structural-navigation mechanism. The compositional win: one ~150-200 line primitive supports both; each instantiation is ~30-50 lines (`position-fn` + post-lookup action).
+
 ### §6.13 PUnify infrastructure audit (from self-critique M2+R4)
 
 Audit of [`unify.rkt`](../../racket/prologos/unify.rkt) (1028 lines) conducted 2026-04-17 to verify D.2's "PUnify IS the match operation" claims across §6.1, §6.2, §6.4, §6.5, §6.6, §6.10, §6.12. **Verdict: PUnify's reach already covers all D.2 claims via existing infrastructure.** Extension work is minimal composition wiring, not new algorithm development.
@@ -1622,3 +1660,27 @@ Final observations per M1+NTT methodology:
 2. **Architectural impurities caught by NTT modeling**: meta-default and usage-validator correctly marked `:non-monotone`, forcing their assignment to the S2 barrier stratum. Parametric-trait-resolution correctly located in S1 (readiness-triggered). S(-1) retraction correctly structured as `:tier 'value` handler (not `topology`).
 3. **NTT syntax gaps surfaced**: `:preserves [Residual]` as quantale morphism extension; `:component-paths` as structural-lattice-derived obligation; `:fixpoint :stratified` semantics for iterated lfp. All persisted per audit §10.1 note; formalization deferred to NTT resume.
 4. **No components inexpressible** in NTT at D.1. Full P/R/M critique round may find more.
+
+---
+
+## §17 Reality-Check Artifacts (R1 external critique 2026-04-18)
+
+Reproducible grep commands behind each quantified scope claim in D.2. Phase 1's mini-audit ([DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) § Implementation Protocol) re-runs these; drift between the D.2 baseline and Phase 1's numbers signals either code churn since 2026-04-17 or an undercount in the original grep.
+
+| Claim | Location in D.2 | Command (production-only unless noted) | Baseline count (2026-04-17) |
+|---|---|---|---|
+| `net-new-cell` production call sites | §6.8 / Phase 1 row | `rg -c "net-new-cell" racket/prologos/*.rkt \| grep -v "/tests/" \| grep -v "/benchmarks/"` | **101** |
+| Unique merge functions | §6.8 / Phase 1 row | Phase 1 audit script ([`tools/lint-cells.rkt`](../../tools/lint-cells.rkt)) | **37** |
+| Top-10 merge-function coverage | §6.8 | Derived from `tools/lint-cells.rkt` histogram output | **70%** |
+| `solve-meta!` write sites | §6.3 / Phase 4 row | `rg -c "solve-meta\\!" racket/prologos/*.rkt` | **79** |
+| `zonk.rkt` internal read sites | §6.6 / Phase 12 rows | `rg -c "zonk\|freeze" racket/prologos/zonk.rkt` | **513** |
+| `infer/err` fallback sites | §6.4 / Phase 6 row | `rg -c "infer/err\|infer-on-network/err" racket/prologos/*.rkt` | **49** |
+| Unregistered AST-kinds upper bound | §6.4 / Phase 6 row | `expr-*` definitions in `syntax.rkt` minus `register-typing-rule!` entries in `typing-propagators.rkt` | **75** |
+| `expr-meta` occurrences (Phase 12 scope) | §6.6 | `rg -c "expr-meta" racket/prologos/*.rkt` | **104 across 19 files** |
+| `current-coercion-warnings` retirement scope | §6.5 / Phase 5 row | `rg -n "current-coercion-warnings" racket/prologos/*.rkt` | ~5 edit sites across 2 files |
+| `run-stratified-resolution!` production callers | §6.7 / Phase 11 row | `rg -n "run-stratified-resolution\\!" racket/prologos/*.rkt \| grep -v ";"` | **0** (already dead code per metavar-store.rkt:1860 comment) |
+
+**Usage**:
+- Phase 1 implementation re-runs these; significant drift (>±20%) prompts a quick audit of what changed.
+- Each claim in prose is traceable to one command; changing a claim should be matched by updating the relevant row.
+- Commands are conservative (production-only greps) to match D.2's "rescope from 666 to 101" discipline (R1 finding).
