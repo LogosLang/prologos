@@ -1,0 +1,214 @@
+ns examples.ppn-track4c
+
+;; ========================================================================
+;;
+;;  PPN Track 4C: Elaboration Completely On-Network — Acceptance File
+;;
+;;  Broad pipeline exercise for infrastructure-track regression safety.
+;;  Every uncommented expression is LIVE. Run via `process-file` BEFORE
+;;  and AFTER each phase to confirm no across-pipeline regressions.
+;;
+;;  Role: broad safety net, complementary to:
+;;    - 2026-04-17-ppn-track4c-adversarial.prologos (per-axis stress cases)
+;;    - test-elaboration-parity.rkt (divergence-class parity)
+;;    - test suite (unit-level regression)
+;;
+;;  Per workflow.md "Acceptance file as Phase 0" rule: infrastructure
+;;  tracks need a broad .prologos exercise because infrastructure changes
+;;  can regress in ways unit tests miss.
+;;
+;;  Coverage per 4C axis:
+;;    §1 Core elaboration (A3 coverage, A8 enforcement, A9 facets)
+;;    §2 Type inference with metas (A2 CHAMP reads, A5 :type/:term)
+;;    §3 Pattern matching (A3 coverage — data + multi-arity)
+;;    §4 Parametric trait dispatch (A1 parametric resolution)
+;;    §5 Zonking-heavy code (A4 freeze/zonk path)
+;;    §6 Cross-family coercion (A6 warnings authority)
+;;    §7 Nested constraint resolution (A7 elaborator strata)
+;;    §8 Dependent types (A2 + A5 interaction)
+;;    §9 Collections + maps (broad AST coverage)
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; §1 CORE ELABORATION — def, spec, defn, eval (A3/A8/A9)
+;; ========================================================================
+
+def tag : String := "ppn-track4c-acceptance"
+
+def meaning := 42
+
+spec is-zero Int -> Bool
+defn is-zero
+  | 0 -> true
+  | _ -> false
+
+eval [is-zero 0]
+eval [is-zero 7]
+eval [int+ 3 4]
+eval [int* 6 7]
+
+def x := [int+ 10 20]
+eval x
+
+
+;; ========================================================================
+;; §2 TYPE INFERENCE WITH METAS — polymorphic functions (A2/A5)
+;; ========================================================================
+
+spec id {A : Type} A -> A
+defn id [x] x
+
+eval [id 42]
+eval [id "hello"]
+eval [id true]
+
+spec const {A B : Type} A -> B -> A
+defn const [a b] a
+
+eval [const 100 "ignored"]
+
+spec apply-twice {A : Type} [A -> A] A -> A
+defn apply-twice [f x] [f [f x]]
+
+spec inc Int -> Int
+defn inc [n] [int+ n 1]
+
+eval [apply-twice inc 10]
+
+
+;; ========================================================================
+;; §3 PATTERN MATCHING — data, constructors, multi-arity (A3)
+;; ========================================================================
+
+data Color := Red | Green | Blue
+
+spec color-name Color -> String
+defn color-name
+  | Red   -> "red"
+  | Green -> "green"
+  | Blue  -> "blue"
+
+eval [color-name Red]
+eval [color-name Green]
+eval [color-name Blue]
+
+;; Note: constructor-with-args pattern matching is a pre-existing
+;; limitation per Track 4 acceptance file §3 (polymorphic constructor
+;; inference fails; see commented `eval [my-fst (MkPair ...)]` there).
+;; Zero-arg constructors + multi-arity defn is covered above (Color/color-name).
+
+
+;; ========================================================================
+;; §4 PARAMETRIC TRAIT DISPATCH (A1 parametric resolution)
+;; ========================================================================
+
+;; Generic arithmetic — traits resolved from prelude
+eval [+ 3 4]
+eval [- 10 3]
+eval [* 5 6]
+
+;; Polymorphic collection operations via Seqable/Foldable parametric impls
+def nums := '[1 2 3 4 5]
+eval [head nums]
+eval [tail nums]
+eval [length nums]
+
+;; Parametric Foldable — explicit lambda for first-class binary op
+eval [foldr [fn [x : Int] [acc : Int] [int+ x acc]] 0 nums]
+
+
+;; ========================================================================
+;; §5 ZONKING-HEAVY CODE — metas needing resolution (A4 freeze/zonk)
+;; ========================================================================
+
+;; Nested polymorphic calls — each id introduces a type meta
+eval [id [id 99]]
+eval [id [id [id "nested"]]]
+
+;; const with polymorphic argument — type metas + dependent flow
+eval [const [id 1] [id 2]]
+
+;; Compose-style flow
+spec dbl Int -> Int
+defn dbl [n] [int* n 2]
+
+eval [dbl [dbl [dbl 3]]]
+
+
+;; ========================================================================
+;; §6 CROSS-FAMILY COERCION — warnings authority (A6)
+;; ========================================================================
+
+;; Same-family arithmetic (no warning expected)
+eval [int+ 3 4]
+
+;; Cross-family coercion via explicit conversion (warning path exercise)
+;; Commented: keeps broad exercise runnable on current 4B without failure
+;; if coercion plumbing surfaces a new warning. Enable when Phase 5 lands.
+;; eval [int+ 3 [p32-to-int [p32-from-nat 2N]]]
+
+
+;; ========================================================================
+;; §7 NESTED CONSTRAINT RESOLUTION — elaborator strata (A7)
+;; ========================================================================
+
+;; Multi-step generic arithmetic — exercises S(-1)/L1/L2 resolution chain
+;; through the + prelude trait's nested application
+eval [+ [+ 1 2] 3]
+eval [+ [+ 10 20] [+ 30 40]]
+
+;; Fold exercises parametric Foldable + nested resolution
+eval [foldr [fn [x : Int] [acc : Int] [int+ x acc]] 0 '[10 20 30]]
+eval [foldr [fn [x : Int] [acc : Int] [int+ x acc]] 0 '[1 2 3 4 5 6 7 8 9 10]]
+
+
+;; ========================================================================
+;; §8 DEPENDENT TYPES — Pi (A2 + A5)
+;; ========================================================================
+
+spec dep-id (A : Type) -> A -> A
+defn dep-id [A x] x
+
+eval [dep-id Int 42]
+eval [dep-id String "hello"]
+
+;; Poly identity used in several contexts — exercises :type/:term separation
+def forty-two := [id 42]
+def hey       := [id "hey"]
+eval forty-two
+eval hey
+
+
+;; ========================================================================
+;; §9 COLLECTIONS + MAPS — broad AST coverage
+;; ========================================================================
+
+def my-list := '[1 2 3]
+eval [head my-list]
+eval [tail my-list]
+
+def my-map := {:name "alice" :age 30}
+eval my-map.name
+eval my-map.age
+
+;; Partial application
+eval [[int* 2] 21]
+
+;; Composition via nested application
+spec square-plus-one Int -> Int
+defn square-plus-one [x] [int+ [int* x x] 1]
+eval [square-plus-one 5]
+
+
+;; ========================================================================
+;; End of acceptance file.
+;;
+;; If this runs with 0 errors at the close of a phase, the phase has not
+;; introduced across-pipeline regressions. Phase-specific behavior is
+;; verified by:
+;;   - test-elaboration-parity.rkt (divergence-class parity per axis)
+;;   - adversarial file (per-axis stress cases)
+;;   - test suite (unit-level)
+;; ========================================================================
