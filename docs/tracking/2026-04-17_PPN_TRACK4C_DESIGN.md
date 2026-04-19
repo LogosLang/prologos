@@ -491,7 +491,7 @@ Per M1+NTT methodology, every NTT model ends with an Observations section.
 
 ## §6 Architecture Details
 
-### §6.1 `:type` / `:term` as tag-layers on the shared TypeFacet carrier (A5, D.2 restructure)
+### §6.1 `:type` / `:term` as tag-layers on the shared TypeFacet carrier (A5, Phase 3, D.2 restructure)
 
 **Problem** (from 4B): conflating classifier and inhabitant in `:type` facet. A type-variable meta's classifier (`Type(0)`) and its solution (`Nat`) merge to `type-top` (contradiction), forcing Option C skip (D.1).
 
@@ -560,7 +560,7 @@ No separate "error-tracker" mechanism. The error origin IS a residuation computa
 
 **Naming precedent**: Coq's `evar_map` has `concl` (goal type) and `body` (optional solution) as separate fields — but Coq stores them in one meta-info record per meta, not two independent stores. Agda/Idris/Lean follow similar patterns. Realization B matches how elaboration with metavariables is done in the reference systems, rendered in propagator-network terms.
 
-### §6.2 Residuation — internal to the TypeFacet quantale (A5, S3, D.2)
+### §6.2 Residuation — internal to the TypeFacet quantale (A5, Phase 3, S3, D.2)
 
 D.2 change: residuation is *internal* to the TypeFacet quantale (not a bridge between two facets). Bidirectional type-checking emerges from the quantale's own left/right residual operations applied at tag-dispatched merge.
 
@@ -683,7 +683,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 **Symmetry with §6.5 parametric-trait-resolution**: γ hole-fill and parametric trait resolution are the *same* architectural pattern — PUnify-against-Hasse-indexed-catalog, differing only in the catalog content. §6.5's catalog is impl patterns; §6.2.1's catalog is inhabitant patterns (type-env bindings + constructor signatures). Both use ctor-desc decomposition, ATMS branching on ambiguity, and set-latch fan-in for downstream aggregation. This compositional unity is load-bearing — it means future tracks (SRE 6, PPN 5) inherit one pattern, not two. See §6.11.6 note on general residual solver unification.
 
-### §6.3 CHAMP retirement (A2)
+### §6.3 CHAMP retirement (A2, Phase 4)
 
 **Problem**: `meta-info` CHAMP is a duplicate store of the `:type` and `:term` facets, authoritative for downstream consumers.
 
@@ -704,7 +704,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 **No belt-and-suspenders**: the migration window Phase 2→3 is a labeled staging scaffold with explicit retirement in Phase 3 close. Not permanent. Post-Phase 3 close, any `meta-info-ref` call outside the side registry fails to compile.
 
-### §6.4 Aspect-coverage completion (A3)
+### §6.4 Aspect-coverage completion (A3, Phase 6)
 
 **Problem**: 76 `register-typing-rule!` entries vs ~326 `expr-*` structs. `infer/err` fallback catches the rest imperatively.
 
@@ -735,7 +735,7 @@ No walks. No scan loops. No iteration. The "search" is the Hasse structural look
 
 Not all typing rules fit (some need bidirectional flow, constraint generation, etc.) — but the core/primitive-type ones largely do. A Phase 6 sub-design should assess how many of the 75 unregistered AST kinds fit the auto-derivation pattern. If high proportion, the simplification compresses Phase 6 significantly. Flagged here for Phase 6 decision.
 
-### §6.5 Parametric trait-resolution propagator (A1) — **rebuilt for efficiency** (D.2)
+### §6.5 Parametric trait-resolution propagator (A1, Phase 7) — **rebuilt for efficiency** (D.2)
 
 **Problem**: `resolve-trait-constraints!` is an imperative function called from `infer-on-network/err`. Parametric impl pattern matching is not a propagator. Pre-0 finding E2 shows this path allocates **343 MB / 19× baseline** for a single `[head '[1N 2N 3N]]` call — ~325 MB/123 ms unique to the parametric path, driven by retry loops + candidate-list allocation + CHAMP updates + intermediate-type construction.
 
@@ -802,7 +802,7 @@ SRE lens answers:
 
 Property inference verifies distributivity at A9 facet registration (Phase 2).
 
-### §6.6 Option A and Option C for freeze/zonk (A4) — **zonk retirement entirely**
+### §6.6 Option A and Option C for freeze/zonk (A4, Phase 8 + Phase 12a-d) — **zonk retirement entirely**
 
 **Context — unmet PPN 4 expectation**: the original [Track 4 Design §3.4b "Phase 4b: Zonk Retirement"](2026-04-04_PPN_TRACK4_DESIGN.md) targeted elimination of all three zonk functions (`zonk-intermediate`, `zonk-final`, `zonk-level`, ~1,300 lines) with cell-refs replacing `expr-meta`. Phase 4b-i (readiness infrastructure) landed; Phase 4b-ii-b (zonk deletion) was blocked on the Track 4 Phase 2-3 redo and deferred. Track 4B PIR §12 reconfirmed this as still-deferred. **4C completes this.**
 
@@ -844,7 +844,7 @@ Rationale: the split respects `workflow.md` "conversational implementation caden
 
 **PUnify becomes universal for expressions**: under Option C, cell-ref dereferencing IS a one-step PUnify operation invoking `unify-core` with `'equality` relation on the resolved cell value; expression reduction IS graph rewriting via `sre-structural-classify` ctor-desc dispatch. "Reading the expression" IS PUnify with the current cell state. Zonking dissolves because reading already does the substitution structurally via the existing `current-structural-meta-lookup` mechanism. Every expression operation (type inference, reduction, pattern matching, display) becomes PUnify + ctor-desc on the cell-ref graph. Same machinery that handles types (§6.1, §6.2, §6.5) now handles expressions (§6.6) — unified computational substrate. See §6.13 for the PUnify audit confirming this reuse.
 
-### §6.7 Elaborator strata → BSP scheduler unification (A7) — module composition
+### §6.7 Elaborator strata → BSP scheduler unification (A7, Phase 11) — module composition
 
 **Problem**: `run-stratified-resolution-pure` ([metavar-store.rkt:1915](../../racket/prologos/metavar-store.rkt)) is a sequential orchestrator parallel to the BSP scheduler. The BSP scheduler already has `register-stratum-handler!` ([propagator.rkt:2392](../../racket/prologos/propagator.rkt)) with `:tier 'topology | 'value` dispatch.
 
@@ -875,7 +875,7 @@ Rationale: the split respects `workflow.md` "conversational implementation caden
 
 **Readiness propagators already populate the ready-queue cell** — L1's `collect-ready-constraints-via-cells` scan dissolves (readiness is already cell-valued; the scan was a leftover pattern).
 
-### §6.8 `:component-paths` registration-time enforcement (A8) — Tier 1/2/3 architecture
+### §6.8 `:component-paths` registration-time enforcement (A8, Phase 1) — Tier 1/2/3 architecture
 
 **Problem**: the rule "propagators reading compound cells MUST declare `:component-paths`" has been discipline-maintained ([propagator-design.md](../../.claude/rules/propagator-design.md)). Multiple design/implementation audits have repeatedly re-checked component-path coverage; things have slipped through. Correctness-by-construction required.
 
@@ -905,6 +905,18 @@ Each merge function declares which domain (Tier 1 lattice type) it implements:
 ```
 
 The registration links Tier 2 implementation to Tier 1 type. API shape is open for mini-design during Phase 1 (plausible alternatives: merge-fn struct with domain field; coupled to SRE domain registration with merge slot).
+
+**Phase 1 mini-design decision** (captured 2026-04-19 from mini-audit):
+
+SRE's `register-domain!` takes a `sre-domain` STRUCT (not keyword arguments) with a `merge-registry` field mapping `(relation-name → merge-fn)` — the FORWARD mapping. Phase 1 Tier 2 needs the REVERSE mapping: merge-fn → domain. Two realization paths:
+
+- **Option (a) — Independent reverse-lookup registry**. New module-level `(make-hasheq)` keyed by merge-fn (object identity), valued by domain-name. `register-merge-fn!/lattice` writes to this new registry. Independent of SRE's `domain-registry`. **Blast radius**: Phase 1 only, no SRE modifications. **Cost**: one more registry for PM Track 12 to migrate (adds DEFERRED.md row — already captured).
+
+- **Option (b) — Extend SRE domain semantics**. When `register-domain!` fires, iterate the domain's `merge-registry` values and register each merge function reverse into a cross-table (or compute reverse on demand). The SRE domain's `merge-registry` IS the authoritative mapping; reverse is derived. **Blast radius**: touches SRE domain registration semantics. **Cost**: couples Phase 1 to Tier 1 semantics bidirectionally.
+
+**Lean: (a)**. Rationale: smaller blast radius, cleaner Phase 1 boundary; PM Track 12 eventually consolidates both registries anyway; (b)'s principled "single source of truth" benefit is deferred rather than lost.
+
+**Consequence of (a)** — the `:for-domain` keyword in `register-merge-fn!/lattice` references a domain by NAME (symbol), not by struct. The reverse-lookup registry stores `merge-fn-identity → domain-name-symbol`. Lookup chains: `net-new-cell` receives `merge-fn` → reverse registry returns `domain-name` → SRE's `lookup-domain` returns `sre-domain` struct → classification field read.
 
 **Tier 3 — Cells inherit from their merge function**:
 
@@ -980,7 +992,7 @@ impl Lattice TypeExpr
 
 The Racket-level `register-merge-fn!/lattice` IS the Tier 2 declaration that `impl Lattice L` with `join fn` syntactically compiles to. When NTT design resumes, Racket migration is zero — the infrastructure IS the compile target of the NTT form.
 
-### §6.9 Per-facet SRE domain registration (A9)
+### §6.9 Per-facet SRE domain registration (A9, Phase 2)
 
 **Problem**: only `type-sre-domain` is registered ([unify.rkt:109](../../racket/prologos/unify.rkt)). Four facet lattices unverified.
 
@@ -993,7 +1005,7 @@ The Racket-level `register-merge-fn!/lattice` IS the Tier 2 declaration that `im
 - **ConstraintsToWarnings potential bridge**: today in 4B, unresolved-constraint ERRORS go into error reporting. Post-4C design: hard constraint errors manifest as `:constraints = constraint-top` (contradiction in-facet). Verify during Phase 2: does any soft-diagnostic flow from `:constraints` to `:warnings` exist (e.g., "constraint resolved with warning-worthy narrowing")? If yes, add ConstraintsToWarnings bridge. If no, no action.
 - **Other latent cross-facet flows**: spot-check during property inference whether any facet writes in current 4B code cross a facet boundary without an explicit bridge declaration.
 
-### §6.10 Union types via ATMS + cell-based TMS (Phase 8)
+### §6.10 Union types via ATMS + cell-based TMS (Phases 9 + 10)
 
 **BSP-LE 1.5 as 4C sub-track** (per audit §9.5 recommendation):
 
@@ -1227,7 +1239,7 @@ Deeper per-lattice treatments live in referenced subsections; this catalog is th
 
 ---
 
-### §6.12 Hasse-registry primitive (D.2) — foundational infrastructure
+### §6.12 Hasse-registry primitive (Phase 2b, D.2) — foundational infrastructure
 
 Two places in the 4C design consume the same structural pattern:
 
