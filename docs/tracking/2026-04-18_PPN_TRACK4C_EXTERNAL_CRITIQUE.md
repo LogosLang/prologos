@@ -77,8 +77,11 @@ This is adjacent to closed ground (M5 closed "lazy vs eager") but is a new angle
 
 **Proposed resolution**: specify merge-reentrancy policy explicitly. Two viable positions: (a) check may write, but only to cells other than the one being merged — a structural constraint checkable by the registration-time enforcement (Axis 8); (b) check cannot write inside merge — it emits a topology request that the stratum handler processes between rounds. The second is more principled (merge stays pure); the first is cheaper. Pick one and state why.
 
-**Response**:
+**Response**: **Accept problem, defer to Phase 3 mini-design alongside S1** (2026-04-18). Merge-reentrancy is related to S1's TermFacet-spec question — both concern the internal semantics of cross-tag merge at `:type`/`:term` carrier cells. Mini-design investigates (a) vs (b) together with S1's reading choice.
 
+Lean toward (b) — merge emits stratum request — on principled grounds (Correct-by-Construction favors merge purity; mantra-emergent-ordering favors explicit stratum boundaries over synchronous-inside-function-call). Tradeoffs to investigate at mini-design: (a)-side — Axis 8 widening to enforce "may write to other cells only," implementation cost of cross-cell vs same-cell distinction in merge; (b)-side — latency (narrowing information arrives one stratum round later), BSP quiescence semantics when requests remain unfilled, interaction with BSP scheduler's topology-stratum pattern at `propagator.rkt:2665`.
+
+D.2 updated: Progress Tracker row 3 carries both S1 and P4 mini-design items with the cross-reference.
 
 ---
 
