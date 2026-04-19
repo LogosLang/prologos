@@ -1,8 +1,8 @@
-# PPN Track 4C — Design (D.1)
+# PPN Track 4C — Design (D.3)
 
-**Date**: 2026-04-17
+**Date**: 2026-04-17 (original) / 2026-04-18 (D.3 version stamp)
 **Series**: PPN (Propagator-Parsing-Network) — Track 4C
-**Status**: D.2 — refined from D.1 via Pre-0 findings + Hyperlattice/SRE/Hypercube lens application + Module Theory Realization B restructure for `:type`/`:term`. **Self-critique round closed** (2026-04-18) — all P/R/M/SRE findings resolved; see [`2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md`](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md) §8 for summary. Ready for external critique (D.3+).
+**Status**: **D.3 — external critique round closed** (2026-04-18). All 17 findings from [`2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md`](2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md) resolved: 6 deferred to phase-time mini-design with obligations captured in Progress Tracker rows, 2 deferred cross-series (PM), 1 rejected by design, 8 accepted as documentation refinements. D.2 self-critique closed 2026-04-18. Ready for Stage 4 implementation (Phase 0 proper).
 **Version history**:
 - D.1 (2026-04-17): initial draft. Full NTT model, 9 axes, 14-phase roadmap.
 - D.2 (2026-04-17): `:type`/`:term` as tag-layers on shared TypeFacet carrier (Module Theory Realization B, not separate facets with bridge). Residuation internal to the quantale. γ hole-fill reframed in propagator-mindspace (no "walks"). General Residual Solver scoped to future BSP-LE Track 6. Q4 closed (cell `:lattice` annotation; SRE domain registration layered). Q6 closed (per-(meta, trait) propagators + module-theoretic decomposition + PUnify + Hasse-indexed registry + ATMS + set-latch fan-in). All six open questions from D.1 now closed.
@@ -15,6 +15,7 @@
 - D.2 refinement (2026-04-18, O2 incorporation — comprehensive lens catalog): new §6.11.8 applies the SRE lens uniformly to all non-facet lattices in 4C (AttributeRecord, AttributeMap, impl coherence, inhabitant catalog, Hasse-registry ambient L, worldview Q_n, ready-queue, retraction request set, tagged-cell-value layers). Surfaces two structural insights: (a) impl coherence lattice (Phase 7) and inhabitant catalog (Phase 9b) are **structurally identical Hasse-registry instances** — both PUnify-with-`'subtype` over Hasse-indexed entries; §6.12 primitive abstracts the identity. (b) tagged-cell-value layer lattice is the **structural generalization** of Module Theory Realization B — every "shared-carrier + tags" situation in 4C is an instance (`:type`/`:term`, `:constraints` by trait, worldview by assumption, attribute-map by position). Pre-existing subsections (§6.11.2, §6.11.3, §6.11.4) cross-referenced; catalog provides the full lens applied to every lattice.
 - D.2 refinement (2026-04-18, O3 incorporation — provenance as structural emergence): new §6.1.1 specifies the provenance infrastructure. Per [Module Theory §5-6](../research/2026-03-28_MODULE_THEORY_LATTICES.md) + [Hypergraph Rewriting §6.3](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), provenance is structurally emergent from the propagator-firing dependency graph — not a new data structure. Three structural sources compose: ATMS assumption tagging, `:trace :structural` mode, source-location registry. **Error-reporting via backward residuation** on the Module-Theoretic chain structure — in 4C scope per user direction. Intended use case: first-class compiler and error features (not a debugging aid) — precise source-code mapping, human-readable messages with derivation context, machine-readable traces for IDE/LSP tooling. New **Phase 11b** (diagnostic infrastructure) added to Progress Tracker, consuming the provenance infrastructure built in Phases 3/4/9/11. `derivation-chain-for(position, tag)` helper API shape deferred to phase-time mini-design.
 - D.2 self-critique round closed (2026-04-18): P1 resolved-by-design — Option A scaffold-period concern dissolves under phase sequencing (no alternative code path exists during Phases 9-11b; Phase 12 retires atomically). All P/R/M/SRE findings now resolved. D.2 ready for external critique. Full round summary in [`2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md`](2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md) §8.
+- **D.3 (2026-04-18) — external critique round closed**: all 17 findings from [`2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md`](2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md) resolved. Notable outcomes absorbed into D.2 structure as in-place refinements: **R2** Phase 12 sub-split 12a/b/c/d + pipeline premise refined (post-Tracks-2/3/4A/4B, not 14-file cascade). **M2** tropical-lattice fuel cell adopted as lean — first practical tropical-lattice in Prologos production; template for upcoming PReduce. **M4** Phase 11b diagnostic as read-time derivation (option b); **trace monoidal category theory** (Joyal-Street-Verity 1996, Hasegawa 1997, Abramsky-Haghverdi-Scott 2002) raised as research input to the Phase 11b mini-design. **P3** Phase 6 structural-coverage lean over discipline coverage. **S2** §6.5.1 added (tag distributivity); **S3** §6.12.6 added (L_impl and L_inhabitant instantiations). **R1** §17 Reality-Check Artifacts appendix added (reproducible grep commands). Six findings (P3, P4, M1, M3, S1, C1, C2) deferred to phase-time mini-design with obligation lists in Progress Tracker rows. Parity skeleton [`test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) committed at D.3 per M3 methodology.
 **Prior art**: [4C Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [4C Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [PPN Master](2026-03-26_PPN_MASTER.md), [PPN 4 PIR](2026-04-04_PPN_TRACK4_PIR.md), [PPN 4B PIR](2026-04-07_PPN_TRACK4B_PIR.md), [BSP-LE 2B PIR](2026-04-16_BSP_LE_TRACK2B_PIR.md), [Cell-Based TMS Design Note](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md), [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md), [Hypergraph Rewriting Research](../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md), [Adhesive Categories Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md), [Attribute Grammars Research](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md), [Prologos Attribute Grammar](../research/2026-04-05_PROLOGOS_ATTRIBUTE_GRAMMAR.md), [Grammar Toplevel Form](../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md), [SEXP IR to Propagator Compiler](../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md).
 
 ---
@@ -61,6 +62,8 @@
 ## §2 Progress Tracker and Phased Roadmap
 
 Each phase completes with the 5-step blocking checklist (tests, commit, tracker, dailies, proceed). Each phase ends with a dialogue checkpoint (Conversational Implementation Cadence). NTT-conformance check per phase alongside tests-green.
+
+**Parity test obligations per phase**: see §9.1 "Per-phase parity-test enablement" — each phase that produces a divergence class is responsible for enabling and populating the corresponding tests in [`test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt). Phase-completion step (a') = "parity tests for this phase enabled and passing."
 
 ### Progress Tracker
 
@@ -1505,6 +1508,37 @@ At design time, encode divergence classes as regression tests. Pre-4C elaboratio
 ```
 
 **Per-axis test count**: 3-5 tests per axis × 9 axes = 27-45 tests. Encoded as regression harness at design time; expanded as phases land.
+
+**Status**: minimal skeleton committed at D.3 (2026-04-18) as [`racket/prologos/tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt). All tests SKIP-tagged pending their axis's phase; harness `setup-parity-harness` and `check-parity-equal?` stubs raise until Phase 3 wires them.
+
+### §9.1 Per-phase parity-test enablement (D.3 addendum)
+
+Each phase is responsible for enabling and populating the parity tests for the axis it lands. The phase is not DONE until its parity tests pass on identical input through both paths.
+
+| Phase | Axis | Parity tests to enable | Wire-up at this phase |
+|---|---|---|---|
+| 0 | — | (skeleton committed) | — |
+| 1 (A8) | — | (infrastructure; no divergence class) | — |
+| 2 (A9) | — | (property inference; no parity test per se — bugs found here are lattice-law violations, not path divergences) | — |
+| 2b | — | (Hasse-registry primitive; no divergence class) | — |
+| **3 (A5)** | **5** | `type-meta-split` + `:type`/`:term`-split variants (2-3 tests) | **Wires `setup-parity-harness` for the first time** — pre-4C path vs post-split path. Dual-path flag mechanism lands here. |
+| **4 (A2)** | **2** | `meta-solution-zonk` + CHAMP-reader migration variants (3-5 tests) | CHAMP reader migration; extends harness to cover meta-solution authority paths. |
+| **5 (A6)** | **6** | `coercion-warning-facet` + parallel retirements for deprecation/capability warnings | Warnings authority variants. |
+| **6 (A3)** | **3** | `session-typing` + uncovered-AST-kind coverage variants | Per P3 lean: under structural coverage, parity tests verify no `infer/err` fallback is reachable post-phase. |
+| **7 (A1)** | **1** | `parametric-seqable-list` + `parametric-foldable` + parametric impl variants | Per-(meta, trait) propagator output ≡ imperative `resolve-trait-constraints!` output. |
+| **8 (A4 Opt A)** | **4** | `freeze-option-a` + `:term`-facet-read variants | Tree walk reading `:term` produces equivalent output to tree walk reading CHAMP. |
+| **9** | — | (cell-based TMS substrate; Phase 10 consumes) | — |
+| **9b** | γ | `gamma-hole-fill` + multi-candidate ATMS variants | Inhabitant synthesis produces expected single-candidate or ATMS-branched outputs. |
+| **10** | union | `union-narrow-by-constraint` + ATMS narrow-and-retract variants | Union-type elaboration under ATMS equivalent to pre-ATMS speculation rollback. |
+| **11 (A7)** | **7** | `orchestration-strata` + strata-equivalence variants | Behavior identical pre- and post-unification (ordering may differ but outputs match). |
+| **11b** | — | `error-provenance-chain` + diagnostic-message variants | Error messages at contradiction equivalent under read-time derivation; tests verify `derivation-chain-for` output shape. |
+| **12 (A4 Opt C)** | **4** | `cell-ref-option-c` + cell-ref-dereference variants | Reading expression IS zonking — output equivalent to pre-12 tree-walk zonk. 12d acceptance checks parity green. |
+| **T** | — | **ALL parity tests enabled and green**; the parity file is the Phase T acceptance gate. | Final expansion + property regression; no SKIP markers remain. |
+| **V** | — | Acceptance includes parity-suite GREEN as a capstone check. | — |
+
+**Enablement discipline**: each phase's 5-step completion checklist ([`workflow.md`](../../.claude/rules/workflow.md) "Phase completion is a BLOCKING checklist") now includes "parity tests for this phase enabled and passing" as step (a'). Implementation phases that modify elaboration behavior but pass no parity test flag a divergence class we missed.
+
+**Progress Tracker integration**: each phase's row should reference the parity-enablement obligation via "See §9.1" — added inline as part of D.3.
 
 ---
 
