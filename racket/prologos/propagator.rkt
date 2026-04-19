@@ -36,6 +36,7 @@
 (require "champ.rkt"
          "performance-counters.rkt"
          "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell + nogood lattice
+         "merge-fn-registry.rkt"  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
          racket/future         ;; for future, touch, processor-count
          racket/set            ;; PAR Track 1: set-union for decomp-request cell
          racket/async-channel  ;; Phase 2d: buffered channel for streaming results
@@ -68,6 +69,8 @@
  prop-network-cell-decomps
  prop-network-pair-decomps
  prop-network-cell-dirs
+ prop-network-cell-domains  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
+ lookup-cell-domain          ;; PPN 4C Phase 1c: cell-id → domain-name-symbol or #f
  ;; Hash helpers (for CHAMP keying)
  cell-id-hash
  prop-id-hash
@@ -314,7 +317,8 @@
 (struct prop-net-warm (cells contradiction) #:transparent)
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
-                       cell-decomps pair-decomps cell-dirs)
+                       cell-decomps pair-decomps cell-dirs
+                       cell-domains)  ;; PPN 4C Phase 1c: Tier 3 domain inheritance (cell-id → domain-name-symbol)
   #:transparent)
 (struct prop-network (hot warm cold) #:transparent)
 
@@ -397,6 +401,9 @@
   (prop-net-cold-pair-decomps (prop-network-cold net)))
 (define-syntax-rule (prop-network-cell-dirs net)
   (prop-net-cold-cell-dirs (prop-network-cold net)))
+;; PPN 4C Phase 1c: Tier 3 domain inheritance — cell-id → domain-name-symbol
+(define-syntax-rule (prop-network-cell-domains net)
+  (prop-net-cold-cell-domains (prop-network-cold net)))
 
 ;; ========================================
 ;; Trace Data Types (Visualization Phase 0)
@@ -647,7 +654,8 @@
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
-                  champ-empty)))     ;;   cell-dirs
+                  champ-empty        ;;   cell-dirs
+                  champ-empty)))     ;;   cell-domains (PPN 4C Phase 1c)
 
 ;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
 ;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
@@ -689,7 +697,13 @@
 ;; merge-fn: (old-val new-val → merged-val) — the lattice join
 ;; contradicts?: optional (val → Bool) predicate for contradiction detection
 ;; Returns: (values new-network cell-id)
-(define (net-new-cell net initial-value merge-fn [contradicts? #f])
+;; PPN 4C Phase 1c: Tier 3 domain inheritance.
+;; #:domain overrides inheritance. Default #f → inherit via
+;; lookup-merge-fn-domain. Unknown merge-fn stays unclassified (#f).
+;; Phase 1f consumes via lookup-cell-domain to drive structural enforcement.
+(define (net-new-cell net initial-value merge-fn
+                      [contradicts? #f]
+                      #:domain [explicit-domain #f])
   ;; PAR Track 1 D.3: net-new-cell is CALM-safe during BSP fire rounds.
   ;; Cells without dependents don't affect scheduling topology.
   ;; Phase 2b: during parallel BSP fire, cell-ids are namespaced by propagator
@@ -701,13 +715,20 @@
                           (+ (arithmetic-shift ns 32) local-id))))
   (define cell (prop-cell initial-value champ-empty))
   (define h (cell-id-hash id))
+  ;; Tier 3 domain resolution: override else inherited from merge-fn else #f
+  (define resolved-domain
+    (or explicit-domain (lookup-merge-fn-domain merge-fn)))
   (define net*
     (struct-copy prop-network net
       [warm (struct-copy prop-net-warm (prop-network-warm net)
               [cells (champ-insert (prop-network-cells net) h id cell)])]
       [cold (struct-copy prop-net-cold (prop-network-cold net)
               [merge-fns (champ-insert (prop-network-merge-fns net) h id merge-fn)]
-              [next-cell-id (+ 1 (prop-network-next-cell-id net))])]))
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))]
+              [cell-domains (if resolved-domain
+                                (champ-insert (prop-network-cell-domains net)
+                                              h id resolved-domain)
+                                (prop-network-cell-domains net))])]))
   (values
    (if contradicts?
        (struct-copy prop-network net*
@@ -718,12 +739,22 @@
        net*)
    id))
 
+;; PPN 4C Phase 1c: lookup cell's resolved domain (from override or inheritance).
+;; Returns domain-name symbol or #f for unclassified cells.
+;; Phase 1f uses this at net-add-propagator time to drive structural enforcement.
+(define (lookup-cell-domain net cid)
+  (define h (cell-id-hash cid))
+  (define result (champ-lookup (prop-network-cell-domains net) h cid))
+  (if (eq? result 'none) #f result))
+
 ;; Create a new descending cell (starts at top, refines downward via meet).
 ;; top-value: the lattice top (initial value)
 ;; meet-fn: (old-val new-val -> met-val) — the lattice meet (used as merge-fn)
 ;; contradicts?: optional (val -> Bool) — for descending, typically (lambda (v) (eq? v bot))
 ;; Returns: (values new-network cell-id)
-(define (net-new-cell-desc net top-value meet-fn [contradicts? #f])
+(define (net-new-cell-desc net top-value meet-fn
+                            [contradicts? #f]
+                            #:domain [explicit-domain #f])
   (perf-inc-cell-alloc!)  ;; Track 7 Phase 0b
   (define ns (current-cell-id-namespace))
   (define local-id (prop-network-next-cell-id net))
@@ -731,6 +762,9 @@
                           (+ (arithmetic-shift ns 32) local-id))))
   (define cell (prop-cell top-value champ-empty))
   (define h (cell-id-hash id))
+  ;; PPN 4C Phase 1c: Tier 3 domain inheritance (meet-fn functions as merge-fn for lookup).
+  (define resolved-domain
+    (or explicit-domain (lookup-merge-fn-domain meet-fn)))
   (define net*
     (struct-copy prop-network net
       [warm (struct-copy prop-net-warm (prop-network-warm net)
@@ -738,7 +772,11 @@
       [cold (struct-copy prop-net-cold (prop-network-cold net)
               [merge-fns (champ-insert (prop-network-merge-fns net) h id meet-fn)]
               [cell-dirs (champ-insert (prop-network-cell-dirs net) h id 'descending)]
-              [next-cell-id (+ 1 (prop-network-next-cell-id net))])]))
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))]
+              [cell-domains (if resolved-domain
+                                (champ-insert (prop-network-cell-domains net)
+                                              h id resolved-domain)
+                                (prop-network-cell-domains net))])]))
   (values
    (if contradicts?
        (struct-copy prop-network net*
@@ -769,7 +807,12 @@
   (define t-cells (champ-transient (prop-network-cells net)))
   (define t-merge (champ-transient (prop-network-merge-fns net)))
   (define t-contra (champ-transient (prop-network-contradiction-fns net)))
+  ;; PPN 4C Phase 1c: Tier 3 domain inheritance for batch-allocated cells.
+  ;; Batch spec format does not currently carry an override; inheritance only.
+  ;; Future override support: extend spec to (list init merge-fn contradicts? domain).
+  (define t-domains (champ-transient (prop-network-cell-domains net)))
   (define has-contra? #f)
+  (define has-domain? #f)
   ;; Allocate all cells into transients
   (define ids
     (for/list ([spec (in-list specs)]
@@ -786,20 +829,38 @@
       (when (and (pair? (cddr spec)) (caddr spec))
         (set! has-contra? #t)
         (tchamp-insert! t-contra h id (caddr spec)))
+      ;; Tier 3 inheritance: lookup merge-fn's registered domain, if any
+      (define inherited-domain (lookup-merge-fn-domain merge-fn))
+      (when inherited-domain
+        (set! has-domain? #t)
+        (tchamp-insert! t-domains h id inherited-domain))
       id))
   ;; Freeze all transients at once
   (define new-net
     (struct-copy prop-network net
       [warm (struct-copy prop-net-warm (prop-network-warm net)
               [cells (tchamp-freeze t-cells)])]
-      [cold (if has-contra?
-                (struct-copy prop-net-cold (prop-network-cold net)
-                  [merge-fns (tchamp-freeze t-merge)]
-                  [contradiction-fns (tchamp-freeze t-contra)]
-                  [next-cell-id (+ start-id n)])
-                (struct-copy prop-net-cold (prop-network-cold net)
-                  [merge-fns (tchamp-freeze t-merge)]
-                  [next-cell-id (+ start-id n)]))]))
+      [cold (cond
+              [(and has-contra? has-domain?)
+               (struct-copy prop-net-cold (prop-network-cold net)
+                 [merge-fns (tchamp-freeze t-merge)]
+                 [contradiction-fns (tchamp-freeze t-contra)]
+                 [cell-domains (tchamp-freeze t-domains)]
+                 [next-cell-id (+ start-id n)])]
+              [has-contra?
+               (struct-copy prop-net-cold (prop-network-cold net)
+                 [merge-fns (tchamp-freeze t-merge)]
+                 [contradiction-fns (tchamp-freeze t-contra)]
+                 [next-cell-id (+ start-id n)])]
+              [has-domain?
+               (struct-copy prop-net-cold (prop-network-cold net)
+                 [merge-fns (tchamp-freeze t-merge)]
+                 [cell-domains (tchamp-freeze t-domains)]
+                 [next-cell-id (+ start-id n)])]
+              [else
+               (struct-copy prop-net-cold (prop-network-cold net)
+                 [merge-fns (tchamp-freeze t-merge)]
+                 [next-cell-id (+ start-id n)])])]))
   (values new-net ids))
 
 ;; Query a cell's direction. Returns 'ascending (default) or 'descending.
@@ -3035,8 +3096,11 @@
 ;; Convenience combining net-new-cell + net-set-widen-point.
 ;; Returns: (values new-network cell-id)
 (define (net-new-cell-widen net initial-value merge-fn
-                            widen-fn narrow-fn [contradicts? #f])
-  (define-values (net1 cid) (net-new-cell net initial-value merge-fn contradicts?))
+                            widen-fn narrow-fn [contradicts? #f]
+                            #:domain [explicit-domain #f])
+  ;; PPN 4C Phase 1c: pass-through to net-new-cell which handles Tier 3 domain inheritance.
+  (define-values (net1 cid)
+    (net-new-cell net initial-value merge-fn contradicts? #:domain explicit-domain))
   (values (net-set-widen-point net1 cid widen-fn narrow-fn) cid))
 
 ;; Write to a cell with widening: if the cell is a widening point,
