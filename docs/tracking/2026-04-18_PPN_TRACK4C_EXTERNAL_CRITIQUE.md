@@ -200,8 +200,11 @@ If propagator: the error propagator's installation discipline (where, reads-what
 
 **Proposed resolution**: pick the path. Recommendation: contradiction cells carry a provenance tag (ATMS assumption bits + `:trace` slice); a single `explain-contradiction(cell-id)` function reads the tag and walks the dependency graph backward to produce a human-readable chain. The walk IS structural navigation on the proof object — not a propagator. Phase 11b's NTT model should show the contradiction cell → `explain-contradiction` read path as an interface, not a `propagator`.
 
-**Response**:
+**Response**: **Accept problem, accept lean toward (b), deepen mini-design with research input** (2026-04-18). The shape question is real and D.2 §3.10 closure didn't resolve it. Accepted lean: **read-time derivation (option b)** — `derivation-chain-for(position, tag)` is a read-time function over the dependency graph; no error-propagator fires on contradiction. Rationale captured in §6.1.1 addendum: transient contradictions (speculation, ATMS retractions) would create propagator noise; proof-object IS the data per §3.10 closure; Data Orientation + Most General Interface favor one read-time function over propagator-plus-output-cell wiring.
 
+**Research input to Phase 11b mini-design — trace monoidal categories** (user direction 2026-04-18). The backward-residuation framing has formal grounding through traced symmetric monoidal category theory: propagator networks form a traced SMC (cells tensor, propagators morphisms, cell feedback is trace); provenance IS the trace morphism of the contradiction path; backward residuation IS the adjoint structure of the trace. Classical references added to §6.1.1 and Progress Tracker row 11b: Joyal-Street-Verity 1996 (axiomatization); Hasegawa 1997 (trace ↔ recursion correspondence, directly relevant to cyclic-sharing propagator fixpoints); Abramsky-Haghverdi-Scott 2002 (Geometry of Interaction). Consume before Phase 11b mini-design finalization.
+
+D.2 updated: §6.1.1 architectural-shape paragraph + research-input paragraph; Progress Tracker row 11b carries the lean + research pointer.
 
 ---
 
