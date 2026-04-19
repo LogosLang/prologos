@@ -158,8 +158,11 @@ If imperative: the *runtime* resolution is on-network, but the *structural growt
 
 **Proposed resolution**: D.2 should specify the impl-registration path as a cell write — likely `impl-registry-cell` with hash-union merge, component-indexed by trait name. The `impl X Y` surface form compiles to a registration write; the Hasse-registry propagator recomputes the Hasse-index on change. If registration-as-cell-write is out of scope for 4C (PM Track 12), label it explicitly as scaffolding to retire, not silently rely on "registration happens at module load."
 
-**Response**:
+**Response**: **Accept problem, defer decision to Phase 7 mini-design** (2026-04-18). The decision-point is real and the handoff's silence on it was a gap. But no earlier phase constrains the choice — Phase 2b (Hasse-registry primitive) is lattice-agnostic; Phases 1, 3, 4, 5, 6 do not touch impl-registry semantics. So the decision is a genuine Phase 7 mini-design concern rather than a D.2 obligation.
 
+One adjacency captured: **Phase 9b** (γ hole-fill, constructor inhabitant catalog) faces the symmetric question. Both are Hasse-registry instantiations; their registration-write paths should be consistent. Phase 7's mini-design chooses; Phase 9b inherits.
+
+D.2 updated: Phase 7 and Phase 9b Progress Tracker rows now name the registration-write-path as an explicit mini-design decision with cross-reference. Options at mini-design time will be (a) cell-write with hash-union merge, or (b) imperative `register-impl!`/`register-constructor!` labeled as scaffolding owned by PM Track 12 (mirrors the P2 resolution).
 
 ---
 
