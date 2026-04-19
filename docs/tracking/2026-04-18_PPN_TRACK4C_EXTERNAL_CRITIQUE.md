@@ -264,8 +264,9 @@ D.2 Progress Tracker treats the phases as sequential but does not specify whethe
 
 **Proposed resolution**: state Phase 6 as a quiescence point — "Phase 7 does not start until coverage cell has no ⊥ entries for AST kinds reachable from the Phase 7 test set." Alternatively, if rolling: identify the coverage subset that Phase 7 actually depends on and require that subset at Phase 6's gate.
 
-**Response**:
+**Response**: **Accept problem, subsume into Phase 6 mini-design alongside P3** (2026-04-18). C1 is downstream of P3's coverage-shape decision. Under P3's accepted lean (structural coverage via coverage cell + build-time assertion), C1 resolves as a side effect: the assertion IS the quiescence gate — Phase 7 cannot start until the assertion passes, so "Phase 6 reached quiescence" is automatic, not discipline-maintained. If P3's Phase 6 mini-design ultimately picks discipline coverage (a) instead of the structural lean (b), C1 regains independent status and the mini-design owes an explicit quiescence-gate answer.
 
+D.2 updated: Phase 6 Progress Tracker row notes C1 as a mini-design consideration with the conditional "resolves-as-side-effect-of-P3" framing.
 
 ---
 
