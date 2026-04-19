@@ -196,8 +196,11 @@ If γ propagators don't re-fire on catalog growth, hole-fill is silently stale w
 
 **Proposed resolution**: specify the re-firing trigger in §6.2.1. Recommendation: the γ propagator watches the catalog cell via `#:component-paths` (keyed on the hole's type), so a catalog write fires only γ propagators for holes whose types were newly matched.
 
-**Response**:
+**Response**: **Accept lean toward (b) via `#:component-paths`, defer to Phase 9b mini-design alongside M1** (2026-04-18). M1 (catalog-write path) and M3 (catalog-read re-firing) are duals — catalog growth produces both the write-path question and the consumer re-firing question. Mini-design resolves both together.
 
+Lean: γ watches catalog cell via `#:component-paths` keyed on hole-type; catalog-growth events re-fire only γ propagators whose hole-type matches newly-arrived constructors. Component-paths guard minimizes spurious re-firing; matches existing `.claude/rules/propagator-design.md` discipline.
+
+D.2 updated: Progress Tracker row 9b carries M3 lean + the M1/M3 duality note.
 
 ---
 
