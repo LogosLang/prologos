@@ -1,0 +1,132 @@
+#+TITLE: Standup — 2026-04-19
+#+DATE: 2026-04-19
+
+* Yesterday (since 2026-04-17 standup)
+
+** PPN Track 4C — Stage 2 audit → D.3 (ready for Stage 4)
+
+A single sustained arc: Stage 2 audit through full design iteration to D.3
+close. 35 commits covering audit, D.1, D.2 (self-critique round, 16
+findings resolved), D.3 (external critique round, 17 findings resolved),
+Pre-0 benchmarks, parity skeleton.
+
+** Stage 2 audit (2026-04-17)
+
+- =docs/tracking/2026-04-17_PPN_TRACK4C_AUDIT.md= (507 lines, commit
+  =881d2282=)
+- 9 axes reframing of the "6 bridges" design note
+- Grep-backed gap analysis: 79 =solve-meta!= sites, 513 zonk reads, 76
+  typing rules vs ~326 expr-* structs, 4/5 facet lattices unregistered
+- Mantra audit with file:line violations
+- NTT conformance check: 5 pieces expressible today, 5 mantra violations
+
+** Pre-0 benchmarks + adversarial (2026-04-17)
+
+- =racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt= (M/A/E/V tier
+  with wall-clock + memory measurements per DESIGN_METHODOLOGY.org
+  "measure before/during/after + memory")
+- =racket/prologos/examples/2026-04-17-ppn-track4c-adversarial.prologos=
+  (per-axis stress cases)
+- =docs/tracking/2026-04-17_PPN_TRACK4C_PRE0_REPORT.md= (findings)
+- Three standout data points shaped D.2: =that-read= ~1400× faster than
+  CHAMP reads (hot-path win for A2); E2 parametric path allocates 343 MB
+  (19× baseline — motivates A1 rebuild); speculation primitives ~8 μs
+  per cycle (union-type ATMS fuel bound analysis).
+
+** D.1 → D.2 (self-critique round, 2026-04-17 → 04-18)
+
+- D.1 draft: commit =b552bd76= (with Pre-0 findings + Hyperlattice/SRE/
+  Hypercube lens application)
+- Structural restructure: =:type=/=:term= as tag-layers on shared
+  TypeFacet carrier (Module Theory Realization B), not separate facets
+  with bridge. "Cell is not a lattice" user insight drove Tier 1/2/3
+  architecture.
+- Lens refinements (SRE + PUnify + Module Theory + Hasse-diagram)
+  surfaced Hasse-registry as first-class primitive (§6.12).
+- Self-critique round closed =a9027740=: 16 findings resolved. Structural
+  insights: impl coherence and inhabitant catalog are structurally
+  identical Hasse-registry instances; tagged-cell-value layers are the
+  generalization of Module Theory Realization B.
+- Provenance resolved as structural emergence: the propagator-firing
+  dependency graph IS the proof object (per Module Theory §5-6 +
+  Hypergraph Rewriting §6.3). No new data structure.
+- PUnify audit (M2+R4): existing infrastructure covers all D.2 claims —
+  no new algorithm needed; variance via ='subtype= relation first-class.
+
+** D.2 → D.3 (external critique round, 2026-04-18)
+
+17 findings across P/R/M/S/C lenses, all resolved:
+
+- P1 rejected (staging-duration risk doesn't accrue); P2 deferred to PM
+  series (registration surface proliferation)
+- R1 (grep commands appendix) + R3 (orchestrator retirement inventory) +
+  R4 (warnings reader count) + R5 (lattice-bug contingency) +
+  S2 (distributivity) + S3 (L_impl/L_inhabitant) + C3 (Phase 11b
+  sequencing) + C4 (Phase T enumeration) — accepted as documentation
+  refinements (one commit batch, =5b5cf039=)
+- R2 Phase 12 pipeline split (12a/b/c/d) — premise refined (pipeline
+  already collapsed by PPN 2/3/4A/4B, not stale 14-file cascade)
+- M4 Phase 11b diagnostic: lean (b) read-time derivation; *trace
+  monoidal category theory* (Joyal-Street-Verity, Hasegawa,
+  Abramsky-Haghverdi-Scott) raised as research input to Phase 11b
+  mini-design
+- M2 fuel representation: lean toward tropical-lattice fuel cell —
+  *first practical tropical-lattice implementation in Prologos
+  production*; template for upcoming PReduce
+- P3, P4, M1, M3, S1, C1, C2 deferred to phase-time mini-design with
+  explicit obligation lists in Progress Tracker rows
+
+** D.3 close + parity skeleton + per-phase parity obligations (2026-04-18)
+
+- D.2 → D.3 version stamp (commit =aaba1b23=)
+- Parity skeleton =racket/prologos/tests/test-elaboration-parity.rkt=
+  (~170 lines, 14 SKIP-tagged tests across 9 axes + γ + union +
+  diagnostic) committed as design artifact per M3 methodology
+- New §9.1 "Per-phase parity-test enablement" table in D.3 — maps each
+  phase to parity tests, wire-up, acceptance criteria
+- Phase completion step (a') codified: "parity tests for this phase
+  enabled and passing"
+
+** External critique handoff note
+
+Full context + decision log in:
+- =docs/tracking/handoffs/2026-04-18_PPN_4C_D2_EXTERNAL_CRITIQUE_HANDOFF.md=
+  (D.2 → external handoff, 459 lines)
+- =docs/tracking/2026-04-17_PPN_TRACK4C_SELF_CRITIQUE.md= (self-critique
+  round, closed)
+- =docs/tracking/2026-04-18_PPN_TRACK4C_EXTERNAL_CRITIQUE.md= (external
+  round, all 17 responses populated)
+
+* Today
+
+** Priority: Open Stage 4 implementation — Phase 0 wrap, then Phase 1
+
+Phase 0 status:
+- Pre-0 benchmarks: ✅ done
+- Parity skeleton: ✅ committed
+- Acceptance file: pending decision (user proposes skip; workflow rule
+  tension — see dailies)
+
+Phase 1 (A8 =:component-paths= enforcement via Tier 2 merge-function
+inheritance) is the first implementation phase. Requires mini-audit per
+DESIGN_METHODOLOGY.org Stage 4 Implementation Protocol.
+
+* Notes
+
+- PPN 4C design arc (Stage 2 through D.3) was one concentrated session
+  — kicked off 2026-04-17 at ~08:36, D.3 closed by 2026-04-18. Critique
+  discipline held throughout: self-critique caught 16 items, external
+  critique caught 17 more, most via leaning on research foundations
+  (Module Theory, Hypergraph Rewriting, Adhesive Categories, NTT Syntax,
+  Attribute Grammars, Hypercube addendum)
+- D.3 leaves 7 mini-design items distributed across phases
+  (P3/Phase 6, P4+S1/Phase 3, M1/Phase 7, M3/Phase 9b, C1/Phase 6 (subsumed),
+  C2/Phase 9) — each with explicit obligation lists. Mini-designs happen
+  at phase start, not at D.3 time, per user direction.
+- Trace monoidal category research raised as Phase 11b input. Not
+  prerequisite to implementation; becomes relevant when the diagnostic
+  helper's algebra needs to be finalized
+- Tropical-lattice fuel will be Prologos's first production tropical
+  lattice — aligns with Hyperlattice Conjecture's cost-optimization
+  structure. Template pattern will recur in PReduce (reductions via
+  tropical cost-optimization for normal-form selection)
