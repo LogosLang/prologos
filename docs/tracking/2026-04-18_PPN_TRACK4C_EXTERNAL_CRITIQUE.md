@@ -89,7 +89,7 @@ D.2 updated: Progress Tracker row 3 carries both S1 and P4 mini-design items wit
 
 D.2 §6.8 and Self-Critique R1 state the production-only scope as 101 `net-new-cell` sites using 37 merge functions. The reframe from 666 was accepted (Self-Critique §8 summary item 2). But the grep command that produced 101 / 37 is not cited in D.2 or in the self-critique. Per Reality-Check discipline ([CRITIQUE_METHODOLOGY.org](principles/CRITIQUE_METHODOLOGY.org) § R): "If a Stage 2 document says '~N sites' without grep evidence, it is incomplete."
 
-Reproducibility matters because Phase 1 of implementation will re-run the audit ([Implementation Protocol step 1 in DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org)). A drift between the design's 101 and Phase 1's actual count signals either code churn since the D.2 audit or an undercount in the original grep.
+Reproducibility matters because Phase 1 of implementation will re-run the audit ([Implementation Protocol step 2 "Mini-audit (codebase)" in DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org)). A drift between the design's 101 and Phase 1's actual count signals either code churn since the D.2 audit or an undercount in the original grep.
 
 **Proposed resolution**: append a "Reality-Check artifacts" appendix to D.2 listing the exact grep/rg commands, file inclusion patterns (production-only = which directories), and expected output counts for each quantified claim (101 sites, 37 merge functions, top-10 coverage 70%, 79 `solve-meta!`, 513 `zonk.rkt` reads, 49 `infer/err`, 75 unregistered AST-kinds).
 

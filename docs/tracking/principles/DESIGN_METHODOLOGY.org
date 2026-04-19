@@ -814,14 +814,47 @@ became bugs.
 
 For each implementation phase:
 
-1. *Mini-audit*: Before writing any code, audit the immediate phase
-   needs against the ACTUAL codebase. Produce a concrete list: which
-   structs, functions, and call sites does this phase touch? Which
-   files, which line numbers? Do not work from memory or assumptions
-   --- read the code. The audit prevents wrong assumptions that cause
-   mid-phase pivots.
+1. *Mini-design audit* (NEW 2026-04-19): Before any codebase audit or
+   code, re-internalize the design target for THIS phase. No code, no
+   grep, no measurements yet. Produce a "Phase N design target" note
+   in the current dailies that answers:
 
-2. *Principles challenge mid-flight*: Every design decision made during
+   - /Design reference/: which section(s) of the current design
+     document govern this phase? (Cite the §X.Y references; open the
+     doc and read them fresh.)
+   - /Obligations carried/: which external-critique findings or
+     self-critique decisions assigned mini-design items to this phase?
+     (Check Progress Tracker row; check critique doc responses.)
+   - /Principles in play/: which of the ten load-bearing principles
+     are most load-bearing for this phase's work? (Name them.)
+   - /Mantra check/: run each word of "All-at-once, all in parallel,
+     structurally emergent information flow ON-NETWORK" against the
+     phase's intended shape. Flag any word that feels uncertain.
+   - /Drift risks/: where is this phase most likely to slip into
+     step-think, imperative workarounds, or scope creep? Name them
+     BEFORE writing any code — the named risks become checkpoints
+     during mid-flight principles challenge.
+
+   The mini-design audit bookends the phase alongside the Vision
+   Alignment Gate: open aligned, close aligned. Cost: ~10 minutes.
+   Output: dailies note scoping everything that follows.
+
+   Origin: PPN Track 4C implementation kickoff (2026-04-19). The
+   practice had been informally guiding multi-phase design tracks
+   (4C's 10+ external-critique deferrals to mini-design prove it) but
+   wasn't a codified step. Codified here to make "mini-design audit"
+   a first-class phase-opening discipline parallel to the codebase
+   mini-audit.
+
+2. *Mini-audit (codebase)*: After the mini-design audit scopes what
+   to measure, audit the ACTUAL codebase. Produce a concrete list:
+   which structs, functions, and call sites does this phase touch?
+   Which files, which line numbers? Do not work from memory or
+   assumptions --- read the code. The audit prevents wrong
+   assumptions that cause mid-phase pivots. The mini-design audit
+   (step 1) tells you WHAT to measure; this step produces the numbers.
+
+3. *Principles challenge mid-flight*: Every design decision made during
    implementation --- "should I add a field?", "should I use a hash or
    a cell?", "should I loop or fold?" --- is filtered through the
    principles. Especially:
@@ -832,14 +865,16 @@ For each implementation phase:
      What emerges?
    - Check the *red flags table* (§3 above): am I reaching for a loop?
      A queue? A left-to-right scan? If so, where is the lattice?
+   - Cross-reference the drift risks named in step 1's design-target
+     note. If a decision touches a flagged risk, scrutinize harder.
 
-3. *Diagnostic protocol on snag*: If stuck after 2-3 attempts, STOP
+4. *Diagnostic protocol on snag*: If stuck after 2-3 attempts, STOP
    iterating and apply the diagnostic protocol (see ~workflow.md~):
    audit the domain → hypothesize from data → test narrowly →
    challenge by principles → reframe if still stuck. Do not iterate
    fix-and-retry.
 
-4. *Vision Alignment Gate*: Before committing, verify the phase
+5. *Vision Alignment Gate*: Before committing, verify the phase
    against the design's stated vision. Three questions, all must pass:
 
    a. /On-network?/ Is information flowing through cells on the
@@ -859,14 +894,20 @@ For each implementation phase:
       does. The shortcut may be correct --- but it must be named as
       scaffolding, not rationalized as permanent.
 
+   d. /Drift-risks-cleared?/ Check each risk named in step 1's
+      mini-design audit note. Has it materialized? If yes, was it
+      named and handled, or did it slip past? Drift that slipped
+      past must be addressed before commit, not after.
+
    Origin: PPN Track 3 had two major deviations (§11 datum-canonical
    instead of tree-canonical on-network, §12 SRE integration
    designed-but-not-implemented). Both passed code correctness checks
    but failed vision alignment. Question (a) catches §11-type
    deviations. Question (b) catches §12-type deviations. Question (c)
-   is the general guard against incremental pragmatic drift.
+   is the general guard against incremental pragmatic drift. Question
+   (d) closes the bookend with step 1.
 
-5. *Phase completion* (5 steps IN ORDER):
+6. *Phase completion* (5 steps IN ORDER):
    a. /Test coverage/: If the phase added behavior, it needs tests. If
       no tests are needed (pure refactor, design-only, verification
       phase), state why in the commit message. "No tests: refactor with
