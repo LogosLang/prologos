@@ -216,8 +216,11 @@ If same: the carrier hosts one quantale with tag-layers distinguishing "classifi
 
 **Proposed resolution**: add a §6.1.2 "TermFacet Lattice Specification" stating bot (unsolved), join (most-specific-common-solution, i.e., structural unification meet), top (contradiction), AND the relationship to TypeFacet. Recommend: TermFacet IS the same quantale as TypeFacet, with tag-layer distinguishing roles — making the "`:type` and `:term` are residual partners" claim (§3.8) algebraically clean.
 
-**Response**:
+**Response**: **Accept problem, defer decision to Phase 3 mini-design** (2026-04-18). The ambiguity between reading (i) "one quantale, role-tagged entries — residual partners algebraically clean" and reading (ii) "distinct TermFacet lattice bridged via `type-of-expr`" is real; §6.2's merge spec as written leans (ii), §3.8's framing leans (i). Rather than pick in D.2 without implementation context, the choice belongs in Phase 3's mini-design alongside the facet-split work itself.
 
+Mini-design obligations at Phase 3: (a) choose reading (i) or (ii) with rationale; (b) state TermFacet bot/join/top explicitly regardless of reading; (c) if (ii), name the `type-of-expr` bridge and its α-equivalence-respecting meet; (d) produce SRE lens Q2 (algebraic properties) + Q3 (bridges) answers for the chosen reading.
+
+D.2 updated: Progress Tracker row 3 carries the S1 mini-design obligation list.
 
 ---
 
