@@ -59,8 +59,11 @@ If discipline: Phase 6 is scaffolding against human error, not correct-by-constr
 
 **Proposed resolution**: make Phase 6 produce a *structural* coverage guarantee, not an *enumerated* one. Add a coverage cell (an instance of the aspect-coverage lattice) that propagators' registrations write to. A missing registration yields a contradiction when the AST kind appears, with a concrete error location for the uncovered kind. This eliminates `infer/err` as a concept rather than shrinking its footprint.
 
-**Response**:
+**Response**: **Accept problem, lean (b), defer depth to Phase 6 mini-design** (2026-04-18). Lean toward structural coverage: Correct-by-Construction + Completeness + the mantra-discipline that drives 4C's whole story favor structural over discipline; retaining `infer/err` fallback after Phase 6 would be belt-and-suspenders. Mechanism parallels Axis 8 registration-time enforcement (Phase 1) — a coverage cell with hash-union merge + build-time assertion iterating `syntax.rkt` `expr-*` predicates.
 
+Tradeoffs deeper in Phase 6 mini-design: implementation cost of the coverage cell + build-time check; timing of `infer/err` deletion (end of Phase 6 or in Phase 12 alongside other retirements?); interaction with Phase 1's Axis 8 enforcement framework (can Phase 1's infrastructure extend to typing-rule coverage, or is it a separate registration-time check?).
+
+D.2 updated: Progress Tracker row 6 carries the lean toward (b) + mini-design depth items.
 
 ---
 
