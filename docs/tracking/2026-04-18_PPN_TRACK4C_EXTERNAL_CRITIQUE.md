@@ -271,8 +271,11 @@ If replace: the existing ATMS tests and call sites need migration — an R-lens 
 
 **Proposed resolution**: state the target explicitly. Recommendation: Phase 9 delivers the cell-based TMS as the *only* TMS substrate; existing ATMS call sites migrate in Phase 9. If migration is large enough to warrant its own sub-phase (say, >50 call sites), split into Phase 9a (build) + 9b (migrate) — renumbering the existing 9b γ hole-fill to 9c.
 
-**Response**:
+**Response**: **Accept problem, defer decision to Phase 9 mini-design** (2026-04-18). The shape question (replace / augment / phased-migration) is real and the R-lens inventory of existing ATMS-like call sites (`elab-speculation.rkt`, `save-meta-state`/`restore-meta-state!`, per-propagator worldview-bitmask, S1 NAF handler, discrimination) has not been done. Doing that inventory inside D.2 is premature; doing it at Phase 9 mini-design time with implementation context is correct.
 
+Mini-design obligations at Phase 9: (a) produce R-lens inventory of every existing ATMS-like call site; (b) choose between shape (1) substrate-only with migration owned by later named track, (2) substrate + representative migration, or (3) wholesale replacement via 9a/9b-new/9c split — ruling out belt-and-suspenders steady state per `workflow.md`; (c) if not wholesale, name the later owning track and label scaffolding explicitly.
+
+D.2 updated: Progress Tracker row 9 carries the mini-design obligation list + shape options + explicit rule-out of belt-and-suspenders.
 
 ---
 
