@@ -180,8 +180,11 @@ This is adjacent to closed ground (fuel bound value = 100) but is a new angle: t
 
 **Proposed resolution**: specify fuel as a tropical-lattice cell in D.2 §6.7 (Phase 10). The cell's value is "remaining fuel"; min-merge ensures any fork can only *decrease* fuel. Reaching 0 fires a fuel-exhausted contradiction, which is structurally indistinguishable from any other contradiction cell write. No imperative counter.
 
-**Response**:
+**Response**: **Accept lean toward (b), subsume into Phase 9 mini-design** (2026-04-18). Tropical-lattice fuel cell adopted as the lean. Mechanism lives inside whichever TMS substrate is chosen at Phase 9 mini-design (C2), so M2's resolution falls out of C2's shape — both tracked on Phase 9.
 
+**Significance beyond the finding**: this is the *first practical implementation* of the tropical-lattice/quantale/semiring/cost-optimization structure in Prologos production code. The pattern has been theorized extensively (Hyperlattice Conjecture's optimality claim, BSP-LE Track 2 research on tropical semirings for ATMS search, Module Theory §6 e-graphs as quotient modules with tropical extraction) but not yet instantiated. Phase 9 mini-design deepens the tropical-fuel semantics; the resulting pattern becomes the template for upcoming **PReduce** (reductions on propagator networks with tropical cost-optimization for normal-form selection).
+
+D.2 updated: Progress Tracker row 9 carries M2 lean; §6.11.5 item 2 adds M2 note connecting `:fuel` to the tropical lattice and flagging PReduce forward reference.
 
 ---
 
