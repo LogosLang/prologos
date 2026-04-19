@@ -81,7 +81,10 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
 | 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers; `run-stratified-resolution-pure` retires |
 | 11b | Diagnostic infrastructure — residuation-backward error reporting (NEW in D.2) | ⬜ | First-class compiler + error features per user direction 2026-04-18. `derivation-chain-for(position, tag)` helper (API shape phase-time mini-design). Human-readable error messages with source-loc + propagator rationale; machine-readable structured traces for IDE/LSP. Backward residuation over the propagator-firing dependency graph (Module-Theory-principled, not ad-hoc tracker). See §6.1.1. |
-| 12 | A4 Option C — **zonk retirement entirely** via cell-refs | ⬜ | Replace `expr-meta` with `expr-cell-ref`. Reading expression IS zonking. `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). 14-file pipeline update. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
+| 12a | A4 Option C — introduce `expr-cell-ref` struct + dereferencing primitive | ⬜ | No call-site changes yet. New struct in [`syntax.rkt`](../../racket/prologos/syntax.rkt); dereferencing API (cell-ops or similar). Post-R2 external-critique refinement 2026-04-18: pipeline is already collapsed by Tracks 2/3/4A/4B (tree-parser primary; 90% typing on-network); the original "14-file cascade" framing is stale. Phase 12 remains substantial (104 `expr-meta` occurrences across 19 files) but smaller than D.1 assumed. |
+| 12b | A4 Option C — flip `expr-meta` construction to `expr-cell-ref` | ⬜ | Meta installation sites produce `expr-cell-ref`; readers go through the new dereferencing API. Residual `expr-meta` constructors deleted. |
+| 12c | A4 Option C — delete `zonk.rkt` wholesale | ⬜ | `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). Driver `freeze-top`/`zonk-top` plumbing retired. Reading the expression IS zonking via cell-ref dereferencing. |
+| 12d | A4 Option C — acceptance + A/B + integration | ⬜ | L3 acceptance confirms cell-ref path clean; A/B bench shows E3 freeze cost → 0; no regressions. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
 | T | Dedicated test files | ⬜ | `test-elaboration-parity.rkt` expanded; per-axis test files |
 | V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
 
@@ -118,7 +121,7 @@ Phase 11 (A7 BSP orchestration) — can parallel with 10
   ↓
 Phase 11b (diagnostic infrastructure) — consumes :trace + ATMS + source registry; residuation-backward error reporting
   ↓
-Phase 12 (A4 Option C cell-refs) — largest single phase; 14-file pipeline
+Phase 12a → 12b → 12c → 12d (A4 Option C cell-refs; see §6.6) — sub-split per R2 external-critique refinement 2026-04-18: pipeline already collapsed by PPN 2/3/4A/4B, real scope is ~19 files / 104 `expr-meta` sites + `zonk.rkt` deletion, sub-split respects conversational cadence rule rather than a stale 14-file cascade
   ↓
 Phase T (dedicated tests) — partly per-phase via parity skeleton, consolidated here
   ↓
@@ -786,19 +789,33 @@ propagator parametric-trait-resolution[trait]  ;; one per (meta, trait) pair
 
 **Option C** (Phase 12): **the zonk retirement phase.** Expression representation changes — `expr-meta id` becomes `expr-cell-ref cell-id`. Reading an `expr-cell-ref` auto-resolves via cell dereference to `:term` facet. *Reading the expression IS zonking.* No tree walk. `zonk.rkt` functions deleted.
 
-**14-file pipeline impact**:
+**Pipeline impact — post-2/3/4A/4B state** (refined by R2 external-critique response 2026-04-18):
 
-- [`syntax.rkt`](../../racket/prologos/syntax.rkt): new `expr-cell-ref` struct.
+The "14-file pipeline" framing that appeared in earlier drafts and in [`.claude/rules/pipeline.md`](../../.claude/rules/pipeline.md) reflects a pre-PPN-series state. Track 2 deleted `reader.rkt`; Track 3 retired `parser.rkt` from WS dispatch; Track 4A/4B moved 90% of typing on-network via `typing-propagators.rkt`. Phase 12's actual surface:
+
+- [`syntax.rkt`](../../racket/prologos/syntax.rkt) (1157 lines): new `expr-cell-ref` struct; `expr-meta` eventually deleted.
 - [`surface-syntax.rkt`](../../racket/prologos/surface-syntax.rkt): no change (surface doesn't see cell-refs).
-- [`parser.rkt`](../../racket/prologos/parser.rkt): produces `expr-meta` initially; the elaborator converts to `expr-cell-ref` at meta installation.
-- [`elaborator.rkt`](../../racket/prologos/elaborator.rkt): meta installation produces `expr-cell-ref`.
-- [`typing-core.rkt`](../../racket/prologos/typing-core.rkt) / [`typing-propagators.rkt`](../../racket/prologos/typing-propagators.rkt): propagators read `:type` facet via cell-ref.
+- [`tree-parser.rkt`](../../racket/prologos/tree-parser.rkt) (1856 lines, primary WS parser post-Track-2/3): no change (parses surface, not core).
+- [`parser.rkt`](../../racket/prologos/parser.rkt) (6605 lines, now sexp-path + expression-parsing-via-datum only): produces `expr-meta` initially; elaborator converts to `expr-cell-ref` at meta installation.
+- [`elaborator.rkt`](../../racket/prologos/elaborator.rkt) (4156 lines): meta installation produces `expr-cell-ref`. Residual imperative elaboration paths (shrinking).
+- [`typing-core.rkt`](../../racket/prologos/typing-core.rkt) / [`typing-propagators.rkt`](../../racket/prologos/typing-propagators.rkt): propagators read `:type` facet via cell-ref; residual ~10% imperative infer/check.
 - [`qtt.rkt`](../../racket/prologos/qtt.rkt): inferQ/checkQ handle cell-ref.
 - [`reduction.rkt`](../../racket/prologos/reduction.rkt): β/δ/ι handle cell-ref (dereference before reducing).
 - [`substitution.rkt`](../../racket/prologos/substitution.rkt): substitution follows cell-refs.
-- [`zonk.rkt`](../../racket/prologos/zonk.rkt): **most zonk call sites dissolve** — reading a cell-ref IS zonking. `freeze-top` becomes trivial.
+- [`zonk.rkt`](../../racket/prologos/zonk.rkt) (1372 lines): **DELETED wholesale** — reading a cell-ref IS zonking. `freeze-top`/`zonk-top` driver plumbing retired.
 - [`pretty-print.rkt`](../../racket/prologos/pretty-print.rkt): dereferences cell-refs for display.
-- Optional: `unify.rkt`, `macros.rkt`, `foreign.rkt`.
+- Optional/peripheral: `unify.rkt`, `macros.rkt`, `foreign.rkt`.
+
+Grep-backed scope: `expr-meta` has **104 occurrences across 19 files** (grep command: `rg -c "expr-meta" racket/prologos/*.rkt`). Many sites *simplify* because they used to walk through zonk; the deletion is dominant over the substitution.
+
+**Phase 12 sub-split (post-R2 response 2026-04-18)**:
+
+- **12a** — Add `expr-cell-ref` struct ([`syntax.rkt`](../../racket/prologos/syntax.rkt)) + dereferencing primitive. No call-site changes.
+- **12b** — Flip all `expr-meta` construction sites to `expr-cell-ref`; readers go through the new dereferencing API. Residual `expr-meta` constructors deleted.
+- **12c** — Delete [`zonk.rkt`](../../racket/prologos/zonk.rkt) wholesale (~1,300 lines) + driver `freeze-top`/`zonk-top` plumbing.
+- **12d** — Acceptance (L3) + A/B bench (E3 freeze cost → 0) + integration confirmation.
+
+Rationale: the split respects `workflow.md` "conversational implementation cadence" (max 1h autonomous stretch before checkpoint). 104 sites across 19 files is work-volume-dense, not pipeline-surface-wide.
 
 **DPO contribution**: substitution, β-reduction, η-expansion become graph rewrites on the cell-ref network. The adhesive-category rewriting primitives ([Adhesive Research](../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md)) apply directly. These primitives are the infrastructure SRE Track 6 builds on — Option C in 4C means SRE 6 doesn't re-invent elaboration-specific DPO machinery.
 
