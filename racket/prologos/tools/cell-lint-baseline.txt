@@ -5,30 +5,9 @@
 # (PPN Track 4C Tier 2 `register-merge-fn!/lattice`).
 # Regenerate with: racket tools/lint-cells.rkt --save-baseline
 
-answer-merge
-assumptions-merge
-attribute-map-merge-fn
-cap-set-join
-choice-lattice-merge
-counter-merge
-discrimination-data-merge
-eff-pos-merge
-io-state-merge
 logic-var-merge
-merge-hasheq-union
 merge-last-write-wins
-merge-list-append
-merge-set-union
-meta-solution-merge
-msg-lattice-merge
-nogood-merge
-parse-lattice-merge
 racket-merge
-rrb-embedded-merge
-scope-cell-merge
-session-lattice-merge
 table-answer-merge
 table-registry-merge
-term-merge
-type-lattice-merge
 viability-merge
