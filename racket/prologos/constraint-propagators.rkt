@@ -23,7 +23,9 @@
          "global-env.rkt"
          "macros.rkt"
          "propagator.rkt"
-         "syntax.rkt")
+         "syntax.rkt"
+         (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2
+         (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))  ;; PPN 4C Phase 2
 
 (provide
  ;; Registry query
@@ -306,3 +308,35 @@
                 [refined (refine-constraint-by-type-tag cv tag)])
            (net-cell-write n constraint-cell refined))
          n))))
+
+;; ============================================================
+;; PPN 4C Phase 2: :constraints facet SRE domain registration (A9)
+;; ============================================================
+;;
+;; Registration placed here (not in constraint-cell.rkt) to preserve
+;; constraint-cell.rkt's "PURE LEAF" status (racket/base + racket/set only).
+;;
+;; D2 framework per §6.9.2:
+;;   Aspirational: commutative, associative, idempotent, Heyting powerset
+;;   Declared (γ): none initially; let inference confirm
+;;   Expected inference: confirm comm + assoc + idem
+;;   Delta: none expected — constraint-merge IS set intersection,
+;;     canonical powerset lattice
+
+(define constraints-merge-registry
+  (lambda (rel-name)
+    (case rel-name
+      [(equality) constraint-merge]
+      [else (error 'constraints-merge-registry "no merge for relation: ~a" rel-name)])))
+
+(define constraints-sre-domain
+  (make-sre-domain
+   #:name 'constraints
+   #:merge-registry constraints-merge-registry
+   #:contradicts? constraint-top?
+   #:bot? constraint-bot?
+   #:bot-value constraint-bot
+   #:top-value constraint-top))
+
+(register-domain! constraints-sre-domain)
+(register-merge-fn!/lattice constraint-merge #:for-domain 'constraints)

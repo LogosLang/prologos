@@ -25,7 +25,9 @@
          "typing-core.rkt"
          "metavar-store.rkt"
          "elab-speculation-bridge.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2
+         (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))  ;; PPN 4C Phase 2
 
 (provide
  ;; Usage context operations
@@ -62,6 +64,45 @@
 ;; Scalar multiplication of usage context
 (define (scale-usage m u)
   (map (lambda (x) (mult-mul m x)) u))
+
+;; ============================================================
+;; PPN 4C Phase 2: :usage facet SRE domain registration (A9)
+;; ============================================================
+;;
+;; D2 framework per §6.9.2:
+;;   Aspirational (original): commutative, associative, idempotent
+;;     under same-vector (as if join-semilattice)
+;;   Declared (γ): none initially; let inference inform
+;;   Inference result (empirical, 2026-04-19): confirm comm + assoc;
+;;     REFUTE idempotence — (add-usage '(m1) '(m1)) = '(mw), not '(m1)
+;;   Delta: ACCEPT as design — :usage is a commutative MONOID (QTT
+;;     semiring addition: m0+m1=m1, m1+m1=mw), not a join-semilattice.
+;;     Each write contributes incrementally; cell accumulation is
+;;     linear, not order-independent in the lattice sense.
+;;     This is analogous to :context's accepted non-commutativity —
+;;     monoidal structure, quantale-adjacent, not a simple lattice.
+;;     R5 contingency: counted as 1 bug-found (accepted design); still
+;;     within K=2 absorption.
+
+(define usage-merge-registry
+  (lambda (rel-name)
+    (case rel-name
+      [(equality) add-usage]
+      [else (error 'usage-merge-registry "no merge for relation: ~a" rel-name)])))
+
+(define (usage-bot? v) (and (list? v) (null? v)))
+(define (usage-contradicts? v) #f)  ;; no top-like contradiction state in usage vectors
+
+(define usage-sre-domain
+  (make-sre-domain
+   #:name 'usage
+   #:merge-registry usage-merge-registry
+   #:contradicts? usage-contradicts?
+   #:bot? usage-bot?
+   #:bot-value '()))
+
+(register-domain! usage-sre-domain)
+(register-merge-fn!/lattice add-usage #:for-domain 'usage)
 
 ;; Head and tail
 (define (uhead u) (car u))

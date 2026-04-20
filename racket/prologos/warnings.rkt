@@ -45,11 +45,15 @@
          ;; Track 3 Phase 4: cell-primary readers
          read-coercion-warnings
          read-deprecation-warnings
-         read-capability-warnings)
+         read-capability-warnings
+         ;; PPN 4C Phase 2: facet SRE registration
+         warnings-facet-merge)
 
 (require "infra-cell.rkt"        ;; merge-list-append
          "propagator.rkt"        ;; Track 7 Phase 2: net-new-cell, net-cell-read, net-cell-write
-         "metavar-store.rkt")    ;; Track 7 Phase 2: current-persistent-registry-net-box
+         "metavar-store.rkt"     ;; Track 7 Phase 2: current-persistent-registry-net-box
+         (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2
+         (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))  ;; PPN 4C Phase 2
 
 ;; ========================================
 ;; Phase 2c: Propagator-First Migration — Warning Cell Infrastructure
@@ -212,3 +216,50 @@
           (process-cap-warning-code w)
           (process-cap-warning-name w)
           (process-cap-warning-message w)))
+
+;; ============================================================
+;; PPN 4C Phase 2: :warnings facet SRE domain registration (A9)
+;; ============================================================
+;;
+;; D2 framework per §6.9.2:
+;;   Aspirational: commutative + idempotent (SET LATTICE with srcloc-
+;;     in-value per D1 resolution); associative
+;;   Declared (γ, pre-Phase-5): associative only — warning structs
+;;     don't yet carry srcloc field; current merge is list-append
+;;     which is non-commutative and non-idempotent
+;;   Expected inference (pre-Phase-5): confirm associative; refute
+;;     commutative + idempotent
+;;   Delta: RESOLVED IN PHASE 5 — add srcloc field to warning
+;;     structs, thread srcloc at emit sites (uses Phase 1.5
+;;     current-source-loc API), switch merge to merge-set-union,
+;;     re-run inference → should then confirm comm + assoc + idem.
+;;
+;; warnings-facet-merge wraps raw `append` as a named function so
+;; Phase 1d Tier 2 registration has a concrete name to link to a
+;; domain (unnamed `append` isn't registerable).
+
+(define (warnings-facet-merge old new)
+  (cond
+    [(null? old) new]  ;; '() is bot
+    [(null? new) old]
+    [else (append old new)]))
+
+(define warnings-merge-registry
+  (lambda (rel-name)
+    (case rel-name
+      [(equality) warnings-facet-merge]
+      [else (error 'warnings-merge-registry "no merge for relation: ~a" rel-name)])))
+
+(define (warnings-bot? v) (and (list? v) (null? v)))
+(define (warnings-contradicts? v) #f)  ;; warnings accumulate; no contradiction state
+
+(define warnings-sre-domain
+  (make-sre-domain
+   #:name 'warnings
+   #:merge-registry warnings-merge-registry
+   #:contradicts? warnings-contradicts?
+   #:bot? warnings-bot?
+   #:bot-value '()))
+
+(register-domain! warnings-sre-domain)
+(register-merge-fn!/lattice warnings-facet-merge #:for-domain 'warnings)

@@ -33,6 +33,8 @@
                   current-persistent-registry-net-box)
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
+         (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2: facet SRE registration
+         (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; PPN 4C Phase 2: Tier 2 linkage
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
          (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
@@ -52,6 +54,7 @@
  context-lookup-type
  context-lookup-mult
  context-cell-merge
+ context-facet-merge  ;; PPN 4C Phase 2: bot-safe wrapper for :context SRE registration
  context-cell-contradicts?
  ;; Track 4B Phase 1: Attribute Record PU
  attribute-map-merge-fn
@@ -194,6 +197,58 @@
     [else old]))
 
 (define (context-cell-contradicts? v) #f)
+
+;; ============================================================
+;; PPN 4C Phase 2: :context facet SRE domain registration (A9)
+;; ============================================================
+;;
+;; D2 framework per §6.9.2:
+;;   Aspirational: associative; NON-commutative (binding-stack order has
+;;     scope semantics); idempotent under same-depth bindings
+;;   Declared (γ, conservative): minimal — don't declare algebraic
+;;     properties initially; inference informs what holds
+;;   Expected inference: confirm associative; refute commutative
+;;   Delta: ACCEPT non-commutativity as design (quantale-like monoidal
+;;     structure; analogous to session types)
+
+;; Bot-safe wrapper: context-cell-merge assumes both args are
+;; context-cell-value structs (facet-merge handles bot before
+;; dispatching). For SRE registration (which invokes merge with
+;; arbitrary samples including bot), wrap to handle bot explicitly.
+;; This mirrors the :context case in facet-merge.
+(define (context-facet-merge old new)
+  (cond
+    [(not old) new]                  ;; #f (bot) + X = X
+    [(not new) old]                  ;; X + #f (bot) = X
+    [(equal? old new) old]           ;; idempotent
+    [else (context-cell-merge old new)]))
+
+(define context-merge-registry
+  (lambda (rel-name)
+    (case rel-name
+      [(equality) context-facet-merge]
+      [else (error 'context-merge-registry "no merge for relation: ~a" rel-name)])))
+
+(define (context-bot? v)
+  (or (not v)  ;; #f is bot (distinguishable from empty context)
+      (and (context-cell-value? v)
+           (null? (context-cell-value-bindings v)))))
+
+(define context-sre-domain
+  (make-sre-domain
+   #:name 'context
+   #:merge-registry context-merge-registry
+   #:contradicts? context-cell-contradicts?
+   #:bot? context-bot?
+   #:bot-value #f
+   #:top-value #f))  ;; no distinct top — contradictions don't arise for context
+
+;; Eager registration at module load
+(register-domain! context-sre-domain)
+;; Register the bot-safe wrapper (context-facet-merge), not the raw
+;; context-cell-merge — the wrapper is what cells actually invoke
+;; through facet-merge dispatch.
+(register-merge-fn!/lattice context-facet-merge #:for-domain 'context)
 
 
 ;; ============================================================
