@@ -26,6 +26,10 @@
          "propagator.rkt"
          "champ.rkt"
          "atms.rkt")
+;; NOTE (PPN 4C Phase 1d): SRE domain + Tier 2 registrations for this
+;; module's merge functions live in `infra-cell-sre-registrations.rkt`
+;; to avoid the import cycle (infra-cell → sre-core →
+;; ctor-registry → sessions → substitution → namespace → infra-cell).
 
 (provide
  ;; Merge functions — pure (content × content → content)
@@ -425,3 +429,4 @@
 ;; not in a separate TMS cell map. Use net-cell-read-raw for introspection.
 (define (infra-read-all-supported is cell-key)
   '())
+
