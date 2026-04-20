@@ -238,7 +238,8 @@
    #:merge-registry hasse-registry-merge-registry
    #:contradicts? hasse-registry-contradicts?
    #:bot? hasse-registry-bot?
-   #:bot-value (hasheq)))
+   #:bot-value (hasheq)
+   #:classification 'structural))  ;; PPN 4C Phase 1f: position-keyed compound
 
 (register-domain! hasse-registry-sre-domain)
 (register-merge-fn!/lattice hasse-merge-hash-union #:for-domain 'hasse-registry)

@@ -983,7 +983,8 @@
                         [else (error 'meta-solve-merge "no merge: ~a" r)]))
    #:contradicts? meta-solve-contradiction?
    #:bot? (lambda (v) (eq? v 'unsolved))
-   #:bot-value 'unsolved))
+   #:bot-value 'unsolved
+   #:classification 'value))  ;; PPN 4C Phase 1f: single atomic value (solved meta)
 (register-domain! meta-solve-sre-domain)
 (register-merge-fn!/lattice merge-meta-solve-identity #:for-domain 'meta-solve)
 

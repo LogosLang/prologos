@@ -72,6 +72,8 @@
  prop-network-cell-dirs
  prop-network-cell-domains  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
  lookup-cell-domain          ;; PPN 4C Phase 1c: cell-id → domain-name-symbol or #f
+ current-domain-classification-lookup  ;; PPN 4C Phase 1f: callback for structural enforcement
+ enforce-component-paths!   ;; PPN 4C Phase 1f: structural-cell component-paths enforcement
  ;; Hash helpers (for CHAMP keying)
  cell-id-hash
  prop-id-hash
@@ -763,6 +765,39 @@
   (define h (cell-id-hash cid))
   (define result (champ-lookup (prop-network-cell-domains net) h cid))
   (if (eq? result 'none) #f result))
+
+;; PPN 4C Phase 1f (2026-04-20): classification-lookup callback parameter.
+;; A module that can import both propagator.rkt and sre-core.rkt
+;; (e.g., infra-cell-sre-registrations.rkt) wires this at load time.
+;; Function signature: (domain-name → 'structural | 'value | 'unclassified | #f).
+;; #f = parameter unset (no enforcement). 'unclassified = domain exists but
+;; unclassified. 'structural/'value = classified; structural triggers
+;; :component-paths enforcement.
+(define current-domain-classification-lookup (make-parameter #f))
+
+;; PPN 4C Phase 1f: enforce :component-paths for structural-domain cells.
+;; Error-level: hard. Skips unclassified / value domains (progressive rollout).
+(define (enforce-component-paths! net input-ids component-paths)
+  (define lookup (current-domain-classification-lookup))
+  (when lookup  ;; skip if no classification wiring yet
+    (for ([cid (in-list input-ids)])
+      (define domain-name (lookup-cell-domain net cid))
+      (when domain-name
+        (define classification (lookup domain-name))
+        (when (eq? classification 'structural)
+          ;; Check if :component-paths declares any path for this cell
+          (define declared?
+            (for/or ([pair (in-list component-paths)])
+              (equal? (car pair) cid)))
+          (unless declared?
+            (error 'net-add-propagator
+                   (string-append
+                    "Propagator reading structural-domain cell ~a "
+                    "(domain '~a) must declare :component-paths for it. "
+                    "Structural cells require component-path specification "
+                    "to avoid firing on unrelated component changes "
+                    "(Correct-by-Construction, PPN 4C Phase 1f).")
+                   cid domain-name)))))))
 
 ;; Create a new descending cell (starts at top, refines downward via meet).
 ;; top-value: the lattice top (initial value)
@@ -1653,6 +1688,11 @@
                             #:decision-cell [decision-cell-id #f]
                             #:flags [flags 0]
                             #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5: on-network srcloc
+  ;; PPN 4C Phase 1f (2026-04-20): structural-enforcement check.
+  ;; For each input cell whose domain is classified 'structural, require
+  ;; :component-paths declared for that cell. Unclassified domains skip
+  ;; (progressive rollout). Value domains skip by definition.
+  (enforce-component-paths! net input-ids component-paths)
   ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
   ;; but the new propagator is NOT scheduled on the worklist. It exists
   ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures

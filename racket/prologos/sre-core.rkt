@@ -46,6 +46,7 @@
  ;; Track 2G: domain registry
  register-domain!
  lookup-domain
+ lookup-domain-classification  ;; PPN 4C Phase 1f
  all-registered-domains
  ;; Track 2G: property inference
  axiom-confirmed axiom-confirmed? axiom-confirmed-count
@@ -129,6 +130,14 @@
    operations          ; SRE Track 2H: (hasheq op-name → (hasheq 'name sym 'fn proc 'arity nat 'properties list))
                        ; Discoverable operations: tensor, pseudo-complement, residual (future).
                        ; Track 4 looks up operations generically via this field.
+   classification      ; PPN 4C Phase 1f (2026-04-20): 'structural | 'value | 'unclassified
+                       ; Drives net-add-propagator :component-paths enforcement.
+                       ;   'structural — cell holds compound value with independent components;
+                       ;     propagators reading it MUST declare :component-paths (or get error).
+                       ;   'value — cell holds single evolving value; no :component-paths needed.
+                       ;   'unclassified (default) — legacy domains, no enforcement (progressive rollout).
+                       ; Adding classification to existing domain sites is a per-session activity
+                       ; as architectural understanding solidifies.
    )
   #:transparent)
 
@@ -147,10 +156,13 @@
                           #:dual-pairs [dual-pairs #f]
                           #:property-cell-ids [property-cell-ids (hasheq)]
                           #:declared-properties [declared-properties (hasheq)]
-                          #:operations [operations (hasheq)])
+                          #:operations [operations (hasheq)]
+                          ;; PPN 4C Phase 1f: classification drives enforcement.
+                          #:classification [classification 'unclassified])
   (sre-domain name merge-registry contradicts? bot? bot-value top-value
               meta-recognizer meta-resolver dual-pairs
-              property-cell-ids declared-properties operations))
+              property-cell-ids declared-properties operations
+              classification))
 
 ;; Merge lookup: gets the merge function for a given relation from the domain registry.
 (define (sre-domain-merge domain relation)
@@ -226,6 +238,14 @@
 
 (define (all-registered-domains)
   (hash-values domain-registry))
+
+;; PPN 4C Phase 1f (2026-04-20): classification lookup for enforcement.
+;; Returns 'structural | 'value | 'unclassified. #f if domain unregistered.
+;; A loader module wires this into propagator.rkt's
+;; `current-domain-classification-lookup` parameter at initialization.
+(define (lookup-domain-classification name)
+  (define d (lookup-domain name))
+  (if d (sre-domain-classification d) #f))
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 5: Property Inference (Pocket Universe Evidence)

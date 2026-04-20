@@ -196,6 +196,7 @@
                                      "no merge for relation: ~a" r)]))
    #:contradicts? timestamp-contradiction?
    #:bot? (lambda (v) (eq? v 'infra-bot))
-   #:bot-value 'infra-bot))
+   #:bot-value 'infra-bot
+   #:classification 'value))  ;; PPN 4C Phase 1f: wraps a single payload value
 (register-domain! timestamped-cell-sre-domain)
 (register-merge-fn!/lattice merge-by-timestamp-max #:for-domain 'timestamped-cell)
