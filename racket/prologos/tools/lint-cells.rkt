@@ -14,9 +14,15 @@
 ;;;   - unregistered     : named merge fn, no registration yet
 ;;;   - inline-lambda    : `(lambda ...)` appears at call site (Phase 1d target:
 ;;;                        rename to a registered function)
-;;;   - ambiguous-name   : merge fn is a single-word name like `merge` or
-;;;                        `merge-fn` that may be a local binding or parameter
-;;;                        rather than a registered function (manual review)
+;;;   - parameterized-passthrough   : merge fn identifier at call site is a
+;;;                        local binding or parameter carrying a merge fn
+;;;                        (e.g., `merge`, `merge-fn`). These sites are
+;;;                        ARCHITECTURALLY CORRECT — runtime Tier 3
+;;;                        inheritance resolves the actual merge fn's domain
+;;;                        via lookup-merge-fn-domain. Forcing #:domain
+;;;                        override would BREAK inheritance. D3 resolution
+;;;                        2026-04-19: leave as-is; the "ambiguous" framing
+;;;                        from earlier D.2 drafts was misleading.
 ;;;   - multi-line       : can't parse merge fn from single-line grep; review
 ;;;                        manually (rare; typically when initial-value is long)
 ;;;   - domain-override  : site uses explicit `#:domain` keyword (should stay
@@ -64,7 +70,7 @@
 ;; than counting them as merge functions. A local binding named
 ;; `merge` or a parameter `merge-fn` may NOT be a registerable
 ;; function.
-(define ambiguous-names (list "merge" "merge-fn"))
+(define parameterized-passthroughs (list "merge" "merge-fn"))
 
 ;; ============================================================
 ;; Source scanning
@@ -92,7 +98,7 @@
 ;;   (list 'lambda)              — inline lambda
 ;;   (list 'domain-override)     — site uses #:domain keyword
 ;;   (list 'multi-line)          — can't parse from this line
-;;   (list 'ambiguous name)      — named but name is ambiguous
+;;   (list 'parameterized-passthrough name)      — named but name is parameterized-passthrough
 (define (extract-merge-fn line variant)
   (cond
     ;; batch: can't classify from single line
@@ -114,8 +120,8 @@
      (define m (regexp-match pattern line))
      (cond
        [(not m) '(multi-line)]
-       [(member (cadr m) ambiguous-names)
-        (list 'ambiguous (cadr m))]
+       [(member (cadr m) parameterized-passthroughs)
+        (list 'parameterized-passthrough (cadr m))]
        [else
         (list 'named (cadr m))])]))
 
@@ -187,7 +193,7 @@
    #:once-each
    ["--strict" "Exit non-zero if NEW unregistered sites appear beyond baseline"
     (strict-mode? #t)]
-   ["--verbose" "Also list registered + ambiguous + override sites with locations"
+   ["--verbose" "Also list registered + parameterized-passthrough + override sites with locations"
     (verbose-mode? #t)]
    ["--save-baseline" "Regenerate the baseline from current unregistered set"
     (save-baseline? #t)])
@@ -210,7 +216,7 @@
   (define registered-sites '())
   (define unregistered-sites '())
   (define lambda-sites '())
-  (define ambiguous-sites '())
+  (define parameterized-passthrough-sites '())
   (define override-sites '())
   (define multi-line-sites '())
 
@@ -230,8 +236,8 @@
              (set! unregistered-sites (cons (cons name location) unregistered-sites)))]
         [(lambda)
          (set! lambda-sites (cons location lambda-sites))]
-        [(ambiguous)
-         (set! ambiguous-sites (cons (cons (cadr cls) location) ambiguous-sites))]
+        [(parameterized-passthrough)
+         (set! parameterized-passthrough-sites (cons (cons (cadr cls) location) parameterized-passthrough-sites))]
         [(domain-override)
          (set! override-sites (cons location override-sites))]
         [(multi-line)
@@ -262,7 +268,7 @@
   (define total-sites (+ (length registered-sites)
                          (length unregistered-sites)
                          (length lambda-sites)
-                         (length ambiguous-sites)
+                         (length parameterized-passthrough-sites)
                          (length override-sites)
                          (length multi-line-sites)))
 
@@ -280,9 +286,9 @@
           (hash-count new-unregistered-names))
   (printf "  inline-lambda   : ~a (Phase 1d: rename to registered fn)\n"
           (length lambda-sites))
-  (printf "  ambiguous-name  : ~a (manual review: ~a)\n"
-          (length ambiguous-sites)
-          (string-join ambiguous-names ", "))
+  (printf "  parameterized-passthrough  : ~a (manual review: ~a)\n"
+          (length parameterized-passthrough-sites)
+          (string-join parameterized-passthroughs ", "))
   (printf "  domain-override : ~a (each should be justified)\n"
           (length override-sites))
   (printf "  multi-line      : ~a (manual review — can't parse from line)\n"
@@ -294,9 +300,9 @@
       (for ([entry (in-list (sort registered-sites string<? #:key car))])
         (printf "  ~a (~a:~a ~a)\n"
                 (car entry) (cadr entry) (caddr entry) (cadddr entry))))
-    (when (pair? ambiguous-sites)
+    (when (pair? parameterized-passthrough-sites)
       (printf "\nAmbiguous-name sites:\n")
-      (for ([entry (in-list (sort ambiguous-sites string<? #:key car))])
+      (for ([entry (in-list (sort parameterized-passthrough-sites string<? #:key car))])
         (printf "  ~a (~a:~a ~a)\n"
                 (car entry) (cadr entry) (caddr entry) (cadddr entry))))
     (when (pair? override-sites)
