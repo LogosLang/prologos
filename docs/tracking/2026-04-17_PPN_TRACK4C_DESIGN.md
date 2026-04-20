@@ -74,13 +74,13 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | **1.5** | **srcloc infrastructure** | ✅ (2026-04-19) | **Foundational srcloc infrastructure for compiler + tooling.** Design: hybrid (α)+(η) — `current-source-loc` parameter (read convenience) derived from on-network state. [`source-location.rkt`](../../racket/prologos/source-location.rkt) gains `current-source-loc` parameter. `propagator` struct gains `srcloc` field (on-network). `fire-propagator` wrapper parameterizes from propagator's srcloc field — fire functions stay stateless. [`surface-syntax.rkt`](../../racket/prologos/surface-syntax.rkt) gains `surf-node-srcloc` generic extractor (uses `struct->vector`; srcloc is always last field in `#:transparent` surf-* structs). `elaborate` wraps body with `parameterize` from surf-node srcloc. `driver.rkt::process-command` parameterizes from command surf-node srcloc. `net-add-propagator` + `-broadcast` + `-fire-once` gain `#:srcloc [srcloc #f]` kwarg. 6 scheduler fire-call sites replaced with `(fire-propagator prop net)` helper. Pipeline impact minimal (0 `struct-copy propagator` sites, 2 positional constructor updates). Forward-enables: Phase 2 `:warnings` correct-first-time registration, Phase 5 warnings authority (srcloc struct field + merge-set-union switch), Phase 11b diagnostic (M4), LSP tooling (PM Track 11), error recovery (PPN Track 6), type-directed disambiguation (PPN Track 5). [`tests/test-source-loc-infrastructure.rkt`](../../racket/prologos/tests/test-source-loc-infrastructure.rkt) 12/12 GREEN. Affected suite: 6379 tests GREEN, 111.2s (no regression). DEFERRED.md row added for `current-source-loc` parameter (PM Track 12 evaluates retention during scoping phase — parameter-shaped concept may remain). |
 | 2 | A9 facet SRE domain registrations | ✅ (2026-04-19) | 4 facet domains registered: `:context`, `:usage`, `:constraints`, `:warnings`. `:term` deferred to Phase 3. Each facet = atomic Tier 1 + Tier 2 registration (Q7 resolved post-audit 2026-04-19 — Completeness). **Tests**: [`test-facet-sre-registration.rkt`](../../racket/prologos/tests/test-facet-sre-registration.rkt) 21/21 GREEN. **Suite**: 4945 affected-tests GREEN, 104.7s, no regression. **R5 contingency**: 1 real finding within K=2 — `:usage` idempotence refuted (accepted design — QTT semiring addition is a commutative MONOID, not join-semilattice). **D2 delta resolutions**: `:context` non-commutative accepted (quantale-like binding-stack semantics); `:usage` non-idempotent accepted (semiring monoid); `:warnings` comm+idem refuted → Phase 5 fixes via srcloc-in-value; `:constraints` + `:type` no delta. Bot-safe `context-facet-merge` wrapper added (Tier 2 registration needs total merge fn; raw `context-cell-merge` assumed bot-handling at facet-merge layer). **Per-facet merge functions** (audit 2026-04-19): `:context` → `context-cell-merge`, `:usage` → `add-usage`, `:constraints` → `constraint-merge`, `:warnings` → `warnings-facet-merge` (Phase 2 wraps raw `append` as named function). **D2 framework**: each facet ships aspirational / declared / inference / delta table as commit artifact (see §6.9.2). Property inference explicitly invoked (not auto-triggered). **Phase 1.5 unblocks** set-lattice ambition for `:warnings`, but Phase 2 registers current state (append + minimal properties + delta → Phase 5 fixes). **D1 resolution**: `:warnings` as set lattice with srcloc-in-value (target, Phase 5 completes); `:context` accepts non-commutative monoidal structure (binding-stack scope semantics, quantale-like). **R5 contingency**: K=2 bugs absorbed in Phase 2; K+1 opens Phase 2c repair. Predicted real bugs: 0 (both predicted refutations are accepted design or scoped to Phase 5). **S1 audit cleared**: no ConstraintsToWarnings bridge needed (no such flow in 4B). |
 | 2b | Hasse-registry primitive | ✅ (2026-04-19) | Thin wrapper on existing infrastructure. [`hasse-registry.rkt`](../../racket/prologos/hasse-registry.rkt) (~240 lines). Cell uses `hasse-merge-hash-union` (equal?-based; positions are structured values — types, patterns, pairs — requiring equal? semantics not eq?). Handle struct carries cell-id + l-domain-name + position-fn + subsume-fn; consumer-provided subsume-fn (canonical impl uses PUnify+SRE; Q_n lattices override with bitmask per prior art). No materialized edges — Hasse order implicit in subsume-fn. Register = O(1) cell write; Lookup = O(N × subsume-cost) generic, O(1) bitmask for Q_n. SRE domain `'hasse-registry` registered (D2: comm + assoc + idem expected, no delta). Tier 2 linkage: `hasse-merge-hash-union` → `'hasse-registry`. [`tests/test-hasse-registry.rkt`](../../racket/prologos/tests/test-hasse-registry.rkt) 14/14 GREEN including bitmask-override test demonstrating Q_n pattern. Generalizes existing Hasse practice (tagged-cell-value across 10+ files; ATMS subcube bitmask from hypercube research). Foundational for Phase 7 (L_impl) + Phase 9b (L_inhabitant) + future tracks (PPN 5, FL-Narrowing, PM trait coherence, SRE Track 6, General Residual Solver). See §6.12. Handle struct = Racket-level scaffolding noted in DEFERRED.md (PM Track 12 evaluates). |
-| 3 | A5 `:type` / `:term` facet split | ⬜ | `:term` facet added; `TermInhabitsType` bridge invariant; Option C skip retires. **Mini-design decision (S1 external critique 2026-04-18)**: TermFacet lattice specification — choose between (i) TermFacet IS the Track 2H quantale, `:type`/`:term` are role-tags over one carrier lattice, or (ii) TermFacet is a distinct term lattice (α-equivalence-respecting structural meet) bridged to TypeFacet via `type-of-expr`. §6.2 merge spec reads as (ii); §3.8 "residual partners" framing reads as (i). Mini-design picks the reading and states bot/join/top explicitly. Either way, SRE lens Q2+Q3 answers are produced during the phase. **Mini-design decision (P4 external critique 2026-04-18)**: residuation-check merge-reentrancy shape — (a) merge may write to cells *other than* the one being merged (structural constraint enforced via Axis 8), or (b) merge emits a topology/stratum request processed between rounds (matches existing topology-stratum pattern at [`propagator.rkt:2665`](../../racket/prologos/propagator.rkt), keeps merge pure). Lean toward (b) per Correct-by-Construction + mantra-emergent-ordering; tradeoffs (latency, quiescence semantics, Axis 8 widening if (a)) to be investigated at mini-design time. Related to S1 above — both concern what happens inside cross-tag merge at `:type`/`:term` carrier cells. |
-| 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path |
+| 3 | A5 `:type` / `:term` facet split | 🔄 | See **§6.15** for full Phase 3 mini-design (2026-04-20). **S1 resolved**: reading (i) — TermFacet IS the SRE 2H quantale; `:type`/`:term` are role-tags over ONE carrier lattice with tag-dispatched merge. SRE lens Q1-Q6 answered in §6.15.1. **P4 resolved**: path (b) — cross-tag merge emits stratum request; merge stays pure `(v × v → v)`. Worldview-tagging of the request is a Phase 3+9 joint mini-design item tracked in §6.15.6. **Sub-phase partition**: 3a+3b atomic (facet infra + tag-dispatched merge), 3c migration of typing-propagators, 3d parity tests + lazy-vs-eager A/B bench, 3e Phase 1f classification to `'structural`, 3V Vision Alignment Gate. **PU audit**: Phase 3 is PU-aligned (attribute-map already compound; only VALUE SHAPE changes). Per-meta-cell consolidation deferred to Phase 4 mini-design. **Drift risks** at §6.15.8. |
+| 4 | A2 CHAMP retirement | ⬜ | Migrate `solve-meta!` writes; migrate all CHAMP readers; delete code path. **Mini-design decision (NEW 2026-04-20, Phase 3 mini-design surfaced)**: per-meta-cell authority vs compound meta-cell. Currently elaborator-network.rkt allocates N cells for N metas (`elab-fresh-type-cell`, etc.). PU pattern would suggest consolidation into ONE compound meta-cell with `hasheq meta-id → meta-value`, component-indexed by meta-id. Phase 4 is where this decision locks because CHAMP retirement forces meta-solution authority into cells. Options: (α) keep per-meta cells — status quo, simpler; (β) compound meta-cell — PU-aligned, better CHAMP structural sharing, component-paths by meta-id; (γ) hybrid — per-meta for cells that participate in many propagator reads, compound for rarer accesses. Decision at Phase 4 start informed by read-site audit + allocation profiling. Tag-layer scheme from Phase 3 works in all three options. |
 | 5 | A6 Warnings authority | ⬜ | `:warnings` facet authoritative; parameter retired. **Scope (R4 external critique 2026-04-18)**: `current-coercion-warnings` parameter retirement = ~5 edit sites across 2 files ([`warnings.rkt`](../../racket/prologos/warnings.rkt) lines 62, 81-82, 105-106, 122, 131-133 + [`driver.rkt:467`](../../racket/prologos/driver.rkt) parameterize). Parallel retirement in scope: `current-deprecation-warnings` + `current-capability-warnings` (same dual-write pattern per [`warnings.rkt:158, 186, 207`](../../racket/prologos/warnings.rkt)). **Scope addition (2026-04-19)**: add srcloc field to warning structs (`coercion-warning`, `deprecation-warning`, `capability-warning`, `process-cap-warning`) + thread srcloc at emit sites (~10-12 callers, uses Phase 1.5 srcloc API) + update format functions to sort-by-srcloc + switch merge from `merge-list-append` to `merge-set-union` (already in lint baseline). Re-runs `:warnings` property inference — should confirm commutative + idempotent + associative now that position is in-value. Resolves Phase 2 `:warnings` D2 delta. |
 | 6 | A3 Aspect-coverage completion | ⬜ | Audit uncovered AST kinds; register typing rules per kind. **Mini-design decision (P3 external critique 2026-04-18)**: coverage guarantee shape — (a) discipline coverage (exhaustive registration + `infer/err` fallback retained for safety) vs. (b) structural coverage (coverage cell with hash-union merge AST-kind → rule-id; network-build-time assertion iterates `syntax.rkt` `expr-*` predicates; `infer/err` deleted as a concept; missing coverage = contradiction at build time). **Lean: (b)** — Correct-by-Construction + Completeness + mantra discipline favor structural; keeping `infer/err` is belt-and-suspenders. Mechanism parallels Axis 8 registration-time enforcement (Phase 1). Mini-design deepens tradeoffs including implementation cost, timing of `infer/err` deletion, interaction with Phase 1's enforcement framework. **Mini-design consideration (C1 external critique 2026-04-18)**: Phase 6 → Phase 7 sequencing gate — if structural coverage (P3 lean (b)) is adopted, the gate is automatic: Phase 7 cannot start until the Phase 6 build-time assertion passes (no ⊥ entries in coverage cell for any `expr-*` kind reachable from Phase 7's acceptance tests). If P3 mini-design picks (a) discipline coverage instead, C1 needs its own explicit quiescence-gate treatment. C1 resolves as side-effect of P3's structural-coverage decision when (b) is chosen. |
 | 7 | A1 Parametric trait-resolution — per-(meta, trait) propagators | ⬜ | `:constraints` facet tagged by trait (Module Theory Realization B). Per-(meta, trait) propagator on tagged layer. Hasse-indexed impl registry. PUnify for match (via SRE ctor-desc). ATMS branching on multi-candidate (via Phase 9 cell-based TMS). Set-latch fan-in for dict aggregation. Retires Bridge 1. **Mini-design decision (M1 external critique 2026-04-18)**: impl-registry write-path (module-load-time `impl X Y` registration) — cell-write on `impl-registry-cell` with hash-union merge, or imperative `register-impl!` labeled scaffolding owned by PM Track 12. Decision deferred to Phase 7 mini-design; must be consistent with Phase 9b's constructor-catalog write-path. |
 | 8 | A4 Option A freeze | ⬜ | Tree walk reads `:term` facet; scaffold labeled for Option C retirement |
-| 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note. **Mini-design decision (C2 external critique 2026-04-18)**: relationship to existing ATMS infrastructure (`elab-speculation.rkt`, `save-meta-state`/`restore-meta-state!`, per-propagator worldview-bitmask, S1 NAF fork+BSP, discrimination). Choose between (1) substrate-only — Phase 9 delivers cell-based TMS; Phase 10 consumes; existing ATMS migration owned by a later named track labeled explicitly as scaffolding; (2) substrate + one representative migration as proof-of-concept; (3) wholesale replacement inside 4C via 9a/9b-new/9c split. Belt-and-suspenders steady state rejected by `workflow.md` — whatever shape chosen must avoid two TMS mechanisms as permanent state. Mini-design produces an R-lens inventory of existing ATMS-like call sites before picking shape. **Mini-design decision (M2 external critique 2026-04-18)**: ATMS fuel representation — (a) imperative decrementing counter (existing pattern) vs. (b) **tropical-lattice fuel cell** with min-merge; exhaustion hits tropical bottom → fires fuel-contradiction cell write, structurally indistinguishable from any other contradiction. **Lean: (b)** — on-network mandate + Completeness + composition with backward-residuation (M4). **Significance**: this is the *first practical implementation* of the tropical-lattice/quantale/semiring/cost-optimization structure in Prologos — the pattern has been theorized (Hyperlattice Conjecture, BSP-LE 2 research on tropical semirings, Module Theory §6 e-graphs as quotient modules) but not yet instantiated in production code. Phase 9 mini-design deepens tropical-fuel semantics; the pattern then becomes the template for upcoming PReduce (reductions on propagator networks with cost-optimization via tropical semiring). |
+| 9 | BSP-LE 1.5 sub-track (cell-based TMS) | ⬜ | Phases A-D from design note. **Joint mini-design item from Phase 3 (NEW 2026-04-20, §6.15.6)**: P4(b)'s stratum-request mechanism (from Phase 3) carries worldview assumption-id as metadata. Phase 9 refines how the stratum handler binds worldview during request processing, how writes to destination cells get worldview-tagged, how S(-1) retraction narrows dependent writes. Pattern precedent: S1 NAF handler in relations.rkt. Phase 3 ships mechanism; Phase 9 adds worldview overlay. Hypercube / Hasse-diagram considerations (BSP-LE hypercube addendum: Q_n worldview lattice, Gray-code traversal, bitmask subcube pruning) revisit at Phase 9 mini-design. **Mini-design decision (C2 external critique 2026-04-18)**: relationship to existing ATMS infrastructure (`elab-speculation.rkt`, `save-meta-state`/`restore-meta-state!`, per-propagator worldview-bitmask, S1 NAF fork+BSP, discrimination). Choose between (1) substrate-only — Phase 9 delivers cell-based TMS; Phase 10 consumes; existing ATMS migration owned by a later named track labeled explicitly as scaffolding; (2) substrate + one representative migration as proof-of-concept; (3) wholesale replacement inside 4C via 9a/9b-new/9c split. Belt-and-suspenders steady state rejected by `workflow.md` — whatever shape chosen must avoid two TMS mechanisms as permanent state. Mini-design produces an R-lens inventory of existing ATMS-like call sites before picking shape. **Mini-design decision (M2 external critique 2026-04-18)**: ATMS fuel representation — (a) imperative decrementing counter (existing pattern) vs. (b) **tropical-lattice fuel cell** with min-merge; exhaustion hits tropical bottom → fires fuel-contradiction cell write, structurally indistinguishable from any other contradiction. **Lean: (b)** — on-network mandate + Completeness + composition with backward-residuation (M4). **Significance**: this is the *first practical implementation* of the tropical-lattice/quantale/semiring/cost-optimization structure in Prologos — the pattern has been theorized (Hyperlattice Conjecture, BSP-LE 2 research on tropical semirings, Module Theory §6 e-graphs as quotient modules) but not yet instantiated in production code. Phase 9 mini-design deepens tropical-fuel semantics; the pattern then becomes the template for upcoming PReduce (reductions on propagator networks with cost-optimization via tropical semiring). |
 | 9b | γ hole-fill propagator (NEW in D.2) | ⬜ | Reactive propagator at two-threshold readiness (CLASSIFIER ground + INHABITANT bot). Consumes Phase 2b Hasse-registry for inhabitant catalog (type-env + constructor signatures). PUnify via ctor-desc for match. ATMS branching on multi-candidate via Phase 9 cell-based TMS. Set-latch fan-in for aggregation. Previously architecturally described in §6.2.1 but unphased; D.2 makes it explicit. **Mini-design decision (M1 external critique 2026-04-18)**: constructor-catalog write-path — must be consistent with Phase 7's impl-registry write-path decision (both are Hasse-registry instantiations). **Mini-design decision (M3 external critique 2026-04-18)**: γ re-firing on catalog growth — (a) γ fires once per hole at propagator-install time (risk: silent staleness when new constructors arrive), or (b) γ watches catalog cell via `#:component-paths` keyed on hole-type; catalog-growth events re-fire only γ propagators whose hole-type matches newly-arrived constructors. **Lean: (b)** via component-paths — Correct-by-Construction + Completeness + structurally-emergent-dataflow; component-paths guard minimizes spurious re-firing. M1 + M3 are catalog-write and catalog-read duals; mini-design resolves both together. |
 | 10 | Phase 8 union types via ATMS | ⬜ | Fork-on-union, TMS-tagged branches, S(-1) retract |
 | 11 | A7 Elaborator strata → BSP scheduler | ⬜ | S(-1)/S1/S2 as BSP handlers. **Orchestrator retirement (R3 external critique 2026-04-18)**: BOTH orchestrators retire in Phase 11 — `run-stratified-resolution!` ([metavar-store.rkt:1863](../../racket/prologos/metavar-store.rkt), already dead code per comment at line 1860, zero production callers confirmed by grep 2026-04-18) is deleted as hygienic prelude; `run-stratified-resolution-pure` ([metavar-store.rkt:1915](../../racket/prologos/metavar-store.rkt), production path called at [line 1699](../../racket/prologos/metavar-store.rkt)) is retired as main work. |
@@ -1668,6 +1668,134 @@ Named 2026-04-20 from mini-design audit:
 6. atms.rkt:761 needs narrower-correct documentation, NOT rewrite to identity-or-error
 7. Timestamp primitive over-engineering — E1 Lamport is justified by 3-5 consumers + future-proof shape; not building Vector clocks (E2) or wall-clock variants
 8. current-process-id as permanent parameter — documented scaffolding with PM Track 12 retirement path
+
+---
+
+### §6.15 Phase 3 — `:type`/`:term` tag-layer split (design 2026-04-20)
+
+Phase 3 delivers A5 (§6.1, §6.2): tag-layer dispatch on the shared TypeFacet carrier, replacing D.1's separate-facets-with-bridge approach. This subsection captures the 2026-04-20 mini-design dialogue resolutions (S1, P4) + sub-phase partition + PU audit + Phase 9 coherence note.
+
+#### §6.15.1 S1 resolution — TermFacet IS the SRE 2H quantale (reading i)
+
+Two readings under consideration:
+- **(i)** TermFacet is the Track 2H quantale itself; `:type` and `:term` are role-tags over the ONE carrier lattice; residuation is the tag-cross-product operation on the one quantale.
+- **(ii)** TermFacet is a distinct α-equivalence-respecting lattice bridged to TypeFacet via `type-of-expr`.
+
+**Adopted: reading (i) with tag-dispatch nuance** (2026-04-20). Rationale:
+- **MLTT foundation grounds this**: there's one universe hierarchy; "type" and "term" are layers at adjacent universe levels, not fundamentally different algebraic spaces
+- **(ii) reduces to (i) with extra framing cost**: the "distinct lattice" framing in (ii) is really "distinct merge relation within the same carrier" — which (i) captures via tag-dispatch
+- **SRE 2H quantale at play**: re-uses the full quantale machinery (⊕ union-join, ⊗ tensor, `'equality` and `'subtype` relations)
+
+**Tag-dispatched merge** composes existing `unify.rkt` relations on the same carrier:
+
+```
+merge(X-CLASSIFIER, Y-CLASSIFIER) = unify-core X Y 'equality
+  (standard unification on the quantale)
+
+merge(X-INHABITANT, Y-INHABITANT) = α-equivalence strict merge
+  (identity up to α; mismatch → carrier top)
+
+merge(X-CLASSIFIER, Y-INHABITANT) = unify-core X (type-of-expr Y) 'subtype
+  (residuation: does inhabitant inhabit classifier?)
+```
+
+SRE lens answers:
+- **Q1 Classification**: STRUCTURAL (carrier holds tag-layered compound) + the per-tag merges operate on the underlying quantale
+- **Q2 Algebraic properties**: Quantale (⊕ join, ⊗ tensor, left/right residuals). Per-tag merges inherit from the SRE 2H quantale; cross-tag merge is the residuation computation.
+- **Q3 Bridges**: no new bridge. The `TermInhabitsType` bridge from D.1 is retired; residuation is internal to the quantale (subtype relation dispatched via tag).
+- **Q4 Composition**: cross-facet bridges (TypeToConstraints, ContextToType, UsageToType, TypeToWarnings) operate on the CLASSIFIER layer; INHABITANT layer is mostly internal to elaboration.
+- **Q5 Primary/Derived**: PRIMARY — this IS the classifying-and-inhabiting state.
+- **Q6 Hasse diagram**: inherited from SRE 2H quantale's Hasse; tag-layer distinction adds a trivial factor-2 dimension (each position has 2 possible tag-populations).
+
+#### §6.15.2 P4 resolution — merge emits stratum request (path b)
+
+Two paths for cross-tag residuation check side effects:
+- **(a)** merge may write to cells *other than* the one being merged (structurally enforced via Axis 8 widening)
+- **(b)** merge emits a topology/stratum request processed between rounds
+
+**Adopted: (b) stratum request + merge stays pure** (2026-04-20). Rationale:
+- **Merge purity is load-bearing**: BSP scheduling, speculation-safety, worldview-filtered reads all assume merge is `(v × v → v)` pure
+- **Correct-by-Construction**: pure merge's correctness argument is straightforward; (a) would require per-merge reentrancy reasoning
+- **Pattern consistency**: S1 NAF handler (relations.rkt) and topology stratum (PAR Track 1) already use stratum-request pattern — matches established precedent
+- **Latency acceptable**: one-BSP-round delay for cross-tag writes is bounded; not a hot-path concern
+
+**Phase 3 + Phase 9 joint mini-design item (see §6.15.6)**: the stratum request carries the worldview assumption-id under which it was emitted. Processing under the right worldview is the Phase 9-era concern.
+
+#### §6.15.3 Sub-phase partition
+
+Adopted partition (2026-04-20 dialogue):
+
+- **3a + 3b atomic** (facet infrastructure + tag-dispatched merge):
+  - Register/extend the carrier domain with tag-layer awareness
+  - Implement `merge-type-classify-inhabit` with tag-dispatch + invoke `unify-core` per case
+  - Add cross-tag stratum-request helper (mechanism-only; worldview tagging refined at Phase 9 joint mini-design)
+  - Register as SRE domain with full property declarations
+- **3c** — Migration of typing-propagators.rkt:
+  - Type-variable metas become CLASSIFIER-tagged entries (e.g., `?A : Type(0)` writes `(CLASSIFIER (expr-Type 0))` at meta's position)
+  - Value-position metas become INHABITANT-tagged entries
+  - `that-read pos :type` reads CLASSIFIER layer; `that-read pos :term` reads INHABITANT layer (user surface preserved)
+- **3d** — Parity tests for `type-meta-split` divergence class per §9.1. Also: A/B bench for lazy-vs-eager residuation check (§6.2 verification plan). Decision-locks lazy vs eager per data.
+- **3e** — Phase 1f enforcement: classify carrier domain as `'structural` (per §6.15.5 below). Any newly-uncovered `:component-paths` gaps treated as Phase 3 findings.
+- **3V** — Vision Alignment Gate for Phase 3.
+
+Rationale for atomic 3a+3b: the facet infrastructure and the tag-dispatched merge are too tightly coupled to ship separately. The merge function IS the facet's semantics.
+
+#### §6.15.4 Property inference budget + R5 contingency
+
+Property inference at 3b close runs on `merge-type-classify-inhabit`. Expected verifications:
+- **Commutativity** per-tag-case (symmetric merges)
+- **Associativity across tag combinations** — the NON-TRIVIAL one. Verify `merge(C, merge(I, C)) = merge(merge(C, I), C)` among all 9 tag triples.
+- **Idempotence** per-tag
+- **Residuation laws** (Track 2H quantale): `A ⊗ (A \ B) ⊑ B`; `(B / A) ⊗ A ⊑ B`; distribution over ⊓
+- **Cross-tag transitivity**: residuation under cascading tag writes
+
+Expected bugs: 0-1 (Track 3 §12 + SRE 2G precedent predicts ≥1 per lattice; tag-dispatch may be more or less robust). R5 contingency: K=2 absorbed; K+1 opens Phase 3c repair sub-phase.
+
+Any delta between aspirational and inference-result is worth a design discussion — it may reveal the tag-dispatch needs refinement (not a bug to fix in isolation).
+
+#### §6.15.5 Phase 1f enforcement timing
+
+At Phase 3 start, the carrier domain stays `'unclassified` (no new enforcement firing). At **3e**, classify as `'structural` and observe any existing propagators that need `:component-paths`. Each gap is either:
+- Missing declaration → add it (was a latent bug anyway; Phase 1f catches it)
+- Genuinely whole-cell-reading propagator → that's rare for structural cells; if it exists, it's a design question (should this propagator be two propagators with different component-paths?)
+
+This matches Phase 1f's progressive rollout pattern — classification reveals latent enforcement violations as real findings.
+
+#### §6.15.6 Phase 9 coherence (joint mini-design item carried)
+
+Per D.3 §6.2 analysis, Phase 3's tag-dispatched merge is **mostly orthogonal** to Phase 9's cell-based TMS. Two independent tag-dimensions on each cell entry:
+- Worldview assumption-id (Phase 9 `tagged-cell-value`)
+- CLASSIFIER/INHABITANT role (Phase 3 tag-dispatch)
+
+Reads filter by worldview first; tag-dispatched merge fires on within-branch entries. Cross-branch contradictions detected only at S2 commit merge.
+
+**ONE explicit joint design item**: P4(b)'s stratum request carries worldview assumption-id under which the emitting merge fired. The stratum handler processes under that worldview; writes to destination are worldview-tagged; S(-1) retraction narrows if the assumption is retracted.
+
+Pattern precedent: S1 NAF handler in relations.rkt already has exactly this shape. Phase 9 mini-design (not Phase 3) formalizes: stratum-request struct includes assumption-id field; stratum handler binds worldview during request processing.
+
+Phase 3 ships the MECHANISM of stratum-request emission without worldview-specificity (unified API); Phase 9 refines with worldview-tagging overlay. No redesign of Phase 3's interfaces expected.
+
+**Hypercube / Hasse-diagram considerations** noted for Phase 9 mini-design: the worldview lattice IS Q_n hypercube per BSP-LE hypercube addendum; Phase 3's per-branch merge fires map onto hypercube vertices; Gray-code traversal + bitmask subcube pruning applicable. Out of scope for Phase 3 design.
+
+#### §6.15.7 PU audit finding (cell-cost check 2026-04-20)
+
+Phase 3 is PU-aligned: the attribute-map is already ONE compound cell with component-indexed access (position × facet). Phase 3 adds tag-layers to the `:type` facet's VALUE SHAPE, not new cells.
+
+**Broader track-level question surfaced**: per-meta TMS cells (elaborator-network.rkt `elab-fresh-type-cell`, etc.) allocate N cells for N metas. Potential PU consolidation target: ONE compound meta-cell holding `hasheq meta-id → meta-value`, component-indexed by meta-id. This is NOT Phase 3 scope — it's a Phase 4 mini-design question (when CHAMP retirement forces the meta-cell authority decision).
+
+Captured in Phase 4 Progress Tracker row (§2) as a mini-design item.
+
+#### §6.15.8 Drift risks (VAG 5d checklist for Phase 3)
+
+Named 2026-04-20 from mini-design audit:
+
+1. **TermInhabitsType bridge artifacts linger** — grep + confirm no residual references to the D.1 bridge; 3a housekeeping
+2. **Tag-dispatch complexity obscures algebraic clarity** — keep property inference live; treat any surprising result as a design question, not a bug-to-fix
+3. **Merge-reentrancy sneaks via stratum-request implementation** — the stratum handler must itself be BSP-stratified (not fire within the same round)
+4. **Premature Phase 9 coupling** — Phase 3's merge stays worldview-agnostic; stratum-request carries assumption-id as metadata, not as merge-function input
+5. **`:component-paths` enforcement surfaces structural-read gaps at 3e** — treat as real findings; don't paper over
+6. **Property inference divergence from aspirational** — discuss as design signal per the user's 2026-04-20 guidance
+7. **A/B bench outcome forces rework** — lazy-vs-eager decision locked by data (threshold ≥10%); have both implementations ready for toggle
 
 ---
 
