@@ -31,7 +31,8 @@
          "surface-rewrite.rkt"  ;; PPN Track 2: tag refinement + rewrite rules
          "tree-parser.rkt"     ;; PPN Track 2 Phase 6c: tree → surf-* directly
          "form-cells.rkt"     ;; PPN Track 3 Phase 6+3a: per-form cells + spec cells
-         "infra-cell-sre-registrations.rkt"  ;; PPN 4C Phase 1d: generic merge fn SRE registrations
+         "infra-cell-sre-registrations.rkt"  ;; PPN 4C Phase 1d-A: generic merge fn SRE registrations
+         "phase1d-registrations.rkt"  ;; PPN 4C Phase 1d-B: per-subsystem merge fn registrations
          "namespace.rkt"
          "metavar-store.rkt"
          "zonk.rkt"
