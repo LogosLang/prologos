@@ -141,20 +141,33 @@
     (define classification (extract-merge-fn line variant))
     (list line-num variant classification)))
 
-;; Find merge functions that are already registered via register-merge-fn!/lattice.
+;; Find merge functions that are already registered.
+;; Two registration patterns detected:
+;;   (a) (register-merge-fn!/lattice NAME #:for-domain DOMAIN) — literal
+;;   (b) (register/minimal 'DOMAIN NAME ...) — helper in phase1d-registrations.rkt
+;;       which internally calls register-merge-fn!/lattice. The helper shape
+;;       hides the NAME from the literal regex, so we match the helper form
+;;       too. If more helper shapes emerge, add them here.
 ;; Returns a hash from merge-fn-name to #t.
 (define (find-registered-merge-fns source-files)
   (define registered (make-hash))
-  (for ([f (in-list source-files)])
-    (define content (file->string f))
+  (define (collect-matches! pattern content)
     (define matches
-      (regexp-match*
-       #px"\\(register-merge-fn!/lattice\\s+([a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*)"
-       content
-       #:match-select cadr))
+      (regexp-match* pattern content #:match-select cadr))
     (for ([m (in-list matches)])
       (hash-set! registered m #t)))
+  (for ([f (in-list source-files)])
+    (define content (file->string f))
+    ;; Pattern (a): literal register-merge-fn!/lattice call.
+    (collect-matches!
+     #px"\\(register-merge-fn!/lattice\\s+([a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*)"
+     content)
+    ;; Pattern (b): register/minimal helper (3rd positional arg is the fn name).
+    (collect-matches!
+     #px"\\(register/minimal\\s+'[a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*\\s+([a-zA-Z][a-zA-Z0-9!?*/<>+=:-]*)"
+     content))
   registered)
+
 
 ;; ============================================================
 ;; Baseline I/O

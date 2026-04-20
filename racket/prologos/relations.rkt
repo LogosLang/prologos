@@ -26,7 +26,8 @@
          "provenance.rkt"
          "syntax.rkt"
          "performance-counters.rkt"
-         "ctor-registry.rkt")
+         "ctor-registry.rkt"
+         (only-in "infra-cell.rkt" merge-list-append))  ;; PPN 4C Phase 1d-F: answer accumulator merge
 
 (provide
  ;; Core structs
@@ -2921,10 +2922,12 @@
        (define-values (net-ctx ctx) (make-solver-context net0b))
        (define-values (net1 query-env) (build-var-env net-ctx query-vars))
 
-       ;; Answer accumulator cell
-       (define (answer-merge old new)
-         (cond [(null? old) new] [(null? new) old] [else (append old new)]))
-       (define-values (net2 answer-cid) (net-new-cell net1 '() answer-merge))
+       ;; Answer accumulator cell (PPN 4C Phase 1d-F: uses registered
+       ;; merge-list-append for 'accumulator-list domain inheritance;
+       ;; semantically equivalent to the former local answer-merge for
+       ;; cells initialized with '() — null-old/null-new short-circuits
+       ;; match, 'infra-bot handling is dead for this init).
+       (define-values (net2 answer-cid) (net-new-cell net1 '() merge-list-append))
 
        ;; D.12: Promote query scope cells to tagged-cell-value upfront.
        ;; Required for NAF worldview-assumption approach: NAF-dependent writes
