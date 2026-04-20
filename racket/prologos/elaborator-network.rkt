@@ -20,7 +20,8 @@
          racket/set
          "propagator.rkt"
          "type-lattice.rkt"
-         (only-in "sre-core.rkt" sre-equality)  ;; PAR Track 1: for request emission
+         (only-in "sre-core.rkt" sre-equality make-sre-domain register-domain!)  ;; PAR Track 1: for request emission; Phase 1e-β-i: meta-solve domain
+         (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; Phase 1e-β-i: Tier 2 linkage
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
@@ -948,22 +949,49 @@
 ;;
 ;; Per-meta TMS cells for level and session metavariables, paralleling
 ;; type metas (Phase 2) and mult metas (P5b, now TMS).
-;; These use last-write-wins merge: once solved, the value is final.
-;; Initial value is 'unsolved (a sentinel, not a lattice element).
+;; PPN 4C Phase 1e-β-i (2026-04-20): identity-or-error semantics.
+;; Once a meta is solved, a subsequent solve to a DIFFERENT value is a
+;; double-solve-with-inconsistency BUG — not legitimate replace. Former
+;; local merge-last-write-wins silently absorbed such bugs; replaced
+;; with merge-meta-solve-identity which returns a contradiction sentinel
+;; recognized by the 'meta-solve SRE domain's #:contradicts? predicate.
+;; Initial value is 'unsolved (bot); 'meta-solve-contradiction is top.
 
-;; Last-write-wins merge for level/session metas.
-;; 'unsolved is the bottom element; any non-unsolved value overwrites.
-(define (merge-last-write-wins old new)
+;; Identity-or-error merge for level/session/mult metas.
+;;   'unsolved (bot) ⊔ value = value (monotone solve)
+;;   value ⊔ value (equal?) = value (identity)
+;;   value1 ⊔ value2 (not equal?) = 'meta-solve-contradiction (top)
+(define (merge-meta-solve-identity old new)
   (cond
     [(eq? old 'unsolved) new]
     [(eq? new 'unsolved) old]
-    [else new]))
+    [(eq? old 'meta-solve-contradiction) old]  ;; top absorbs
+    [(eq? new 'meta-solve-contradiction) new]
+    [(equal? old new) old]  ;; same-value: identity
+    [else 'meta-solve-contradiction]))
+
+(define (meta-solve-contradiction? v)
+  (eq? v 'meta-solve-contradiction))
+
+;; Register as SRE 'meta-solve domain (Tier 1 + Tier 2).
+(define meta-solve-sre-domain
+  (make-sre-domain
+   #:name 'meta-solve
+   #:merge-registry (lambda (r)
+                      (case r
+                        [(equality) merge-meta-solve-identity]
+                        [else (error 'meta-solve-merge "no merge: ~a" r)]))
+   #:contradicts? meta-solve-contradiction?
+   #:bot? (lambda (v) (eq? v 'unsolved))
+   #:bot-value 'unsolved))
+(register-domain! meta-solve-sre-domain)
+(register-merge-fn!/lattice merge-meta-solve-identity #:for-domain 'meta-solve)
 
 ;; Allocate a level cell on the network. Returns (values elab-network* cell-id).
 (define (elab-fresh-level-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net 'unsolved merge-last-write-wins))
+    (net-new-tms-cell net 'unsolved merge-meta-solve-identity))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
@@ -979,7 +1007,7 @@
 (define (elab-fresh-sess-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net 'unsolved merge-last-write-wins))
+    (net-new-tms-cell net 'unsolved merge-meta-solve-identity))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
