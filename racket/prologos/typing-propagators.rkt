@@ -33,6 +33,7 @@
                   current-persistent-registry-net-box)
          "constraint-cell.rkt"  ;; Track 4B Phase 2: reuse existing constraint lattice
          "constraint-propagators.rkt"  ;; Track 4B Phase 2: build-trait-constraint, refine-constraint-by-type-tag
+         (only-in "infra-cell.rkt" merge-list-append)  ;; PPN 4C Phase 1d-C: named merge fn for warning-output cell
          (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2: facet SRE registration
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; PPN 4C Phase 2: Tier 2 linkage
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
@@ -1939,7 +1940,7 @@
   (define-values (net1 output-cid)
     (net-new-cell net0 '() meta-solution-merge))
   (define-values (net1b warning-output-cid)
-    (net-new-cell net1 '() (lambda (old new) (append old new))))
+    (net-new-cell net1 '() merge-list-append))
   ;; 3. Install ALL attribute propagators (typing + constraints + usage + meta-bridge)
   (parameterize ([current-meta-solution-output-cell-id output-cid])
     (define net2 (install-typing-network net1b tm-cid expr ctx-val))
