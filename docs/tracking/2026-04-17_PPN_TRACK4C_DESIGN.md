@@ -1785,7 +1785,65 @@ Phase 3 is PU-aligned: the attribute-map is already ONE compound cell with compo
 
 Captured in Phase 4 Progress Tracker row (§2) as a mini-design item.
 
-#### §6.15.8 Drift risks (VAG 5d checklist for Phase 3)
+#### §6.15.8 Phase 3c sub-design (2026-04-20)
+
+Dialogue refined Phase 3c's shape.
+
+**Q1 migration strategy — (C) hybrid reshape with shim**: the existing `:type` facet's VALUE SHAPE changes from raw type-value → `classify-inhabit-value`. `(that-read ... :type)` transparently returns the CLASSIFIER layer (auto-unwrap); `(that-read ... :term)` returns the INHABITANT layer. `:term` is a MAGIC KEYWORD alias routed to the same facet's INHABITANT layer — 5 facets preserved per §4.2. Writers explicitly choose their tag via the surface keyword. Existing reader callers continue working unchanged.
+
+**Q2 residuation check — PUnify + SRE + quantale MEET (lens-refined)**:
+
+The cross-tag residuation check is a **quantale MEET operation** (greatest lower bound) on the Track 2H TypeFacet carrier. Under the quantale structure, MEET is derivable from ⊗ + ⊸ (residual). The check IS the quantale residual computation, grounded algebraically.
+
+The propagator's fire function reduces to ~10-15 LoC via **PUnify reuse**:
+- `unify-core classifier (type-of-expr inhabitant) 'subtype`
+- `sre-structural-classify` → ctor-desc decomposition → structural walk (existing code)
+- Three outcomes fall out of PUnify naturally:
+  - Success no-narrowing → compatible (no-op)
+  - Success with narrowing → the refined type IS the PUnify result; emit stratum request to narrow classifier layer (per P4(b))
+  - Failure (contradiction) → write `'classify-inhabit-contradiction` sentinel to cell
+
+Under **Module Theory**, the narrowing writes are NOT arbitrary cross-cell mutations — they're **module endomorphism** actions (quantale MEET result propagated to one side). The stratum request carries an algebraically-principled write.
+
+**Q3 migration order — reader-first**: reshape `:type` facet's value to `classify-inhabit-value`; add shims; existing `(that-read ... :type)` continues returning the classifier layer (same value as before under CLASSIFIER-only init). Writer migration is per-rule; each writer explicitly picks CLASSIFIER or INHABITANT.
+
+**Q4 `:term` is magic keyword** — attribute-map's dispatch recognizes `:term` and routes to INHABITANT layer of the `:type` facet. No new facet in the AttributeRecord struct; no schema migration.
+
+**Q5 α-equivalence proxy**: ship 3c with `equal?` as α-equiv proxy. Refinement to ctor-desc-based α-walk deferred to follow-up — gain is **correctness-by-construction** (no false-positive contradictions on α-variants) not performance. Refine when property inference or real-world usage surfaces a false-positive. Same scope-reduction pattern as Phase 1e-α.
+
+**Q6 sub-phase partition**:
+
+- **3c-i** (~30-50 LoC): reshape `:type` facet value + reader-first shim. `:type` facet initializes with `(classify-inhabit-value 'bot 'bot)`. `(that-read ... :type)` returns classifier layer (auto-unwrap); `(that-read ... :term)` returns inhabitant. Writes via `(that-write ... :type val)` go to CLASSIFIER; `(that-write ... :term val)` go to INHABITANT. The dispatch lives in typing-propagators.rkt's that-read / that-write implementations.
+
+- **3c-ii** (~50-100 LoC): migrate typing-propagators.rkt's writes to use the correct tag. Typing rules for literals/constants → INHABITANT. Type-variable meta classifier writes → CLASSIFIER. Per-rule changes; verify per-rule via tests.
+
+- **3c-iii** (~30-50 LoC): cross-tag residuation propagator. Watches `:type` facet at each position with `#:component-paths`. Fires at threshold (both layers populated). Fire function invokes PUnify via unify-core with 'subtype; dispatches on outcome. On narrowing: emits stratum request carrying the narrowed classifier value. Stratum handler (also in typing-propagators.rkt or a dedicated file) processes the request between BSP rounds, writing the narrowed value back.
+
+- **3c-iv (deferred)**: α-equivalence refinement via ctor-desc.
+
+- **3c-close**: tests for each sub-phase + 3c tracker update.
+
+**Estimated 3c total**: ~120-200 LoC across 3 commits + tests.
+
+**Design payoff from the lens**: Q2's SRE+PUnify+Module-Theory framing reduced residuation propagator LoC from initial ~60-100 estimate to ~30-50, because:
+- No new unification algorithm needed (reuses unify-core + 'subtype)
+- No new ctor-desc logic needed (reuses SRE decomposition)
+- The "narrowing write" is a clean module action (stratum-request carrier)
+
+#### §6.15.9 Drift risks (VAG 5d checklist for Phase 3c)
+
+Named 2026-04-20 from 3c sub-design:
+
+1. **Value-shape cascade**: reshaping `:type` facet value breaks callers expecting raw type-value. Shim must cover ALL read paths. Mini-audit: grep `that-read ... :type` + `type-map-read` + direct attribute-map reads.
+2. **Magic `:term` keyword** — dispatch must be explicit in read/write implementations; silent failure if keyword not recognized.
+3. **Cross-tag propagator infinite loop**: residuation check propagator fires at threshold; its write (narrowing) could re-trigger threshold → loop. Prevention: write goes via stratum request NEXT round, not same round.
+4. **Stratum handler semantics under speculation**: Phase 9 joint item. For 3c, stratum handler processes without worldview-awareness; Phase 9 refines.
+5. **PUnify cost at cross-tag**: unify-core invocation at every propagator fire. Expected cost bounded by structural depth. Benchmark if pathological.
+6. **α-equivalence false positive**: document as known limitation of `equal?` proxy; upgrade to ctor-desc when found.
+7. **Migration-order test coverage**: each writer migration (3c-ii) should have tests confirming correct tag. Don't migrate blindly.
+8. **Option C skip dissolution verification**: post-3c, the classifier/inhabitant tag distinction should make the Option C skip unreachable. Verify at 3c close.
+
+#### §6.15.10 Drift risks (VAG 5d checklist for Phase 3 overall)
 
 Named 2026-04-20 from mini-design audit:
 
