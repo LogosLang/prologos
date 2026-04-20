@@ -8,6 +8,4 @@
 logic-var-merge
 merge-last-write-wins
 racket-merge
-table-answer-merge
-table-registry-merge
 viability-merge

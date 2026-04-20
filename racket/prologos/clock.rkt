@@ -154,7 +154,8 @@
 ;; `(current-clock-cell-id)`). Returns (values new-net cell-id).
 (define (net-new-timestamped-cell net clock-cid init-payload)
   (define-values (net1 ts) (fresh-timestamp net clock-cid))
-  (net-new-cell net1 (timestamped-value ts init-payload) merge-by-timestamp-max))
+  (define initial-wrapped (timestamped-value ts init-payload))
+  (net-new-cell net1 initial-wrapped merge-by-timestamp-max))
 
 ;; Write a new timestamped value to an existing timestamped cell.
 ;; Reads clock, increments, tags payload with fresh timestamp.

@@ -503,6 +503,44 @@ All currently use `merge-hasheq-replace` (honest labeling of today's semantics u
 4. Test-isolation via submodule forking — flows from scope structure, not discipline
 5. 32 identity-candidate sites pre-identified (above) become clean migration targets
 
+**Additional design input from PPN 4C Phase 1e-β-iii (2026-04-20)**: the Lamport timestamped-cell primitive is built and ready for activation. Consumer migration of 5 parameter-snapshot-cells awaits PM Track 12 for TWO reasons (both architectural, not effort-driven):
+
+(1) **Snapshot-cell pattern**: each of the 5 cells is initialized from a Racket parameter at network-init time and never further updated by runtime code. The Racket parameter is the LIVE state; the cell is a snapshot. Migrating these cells to timestamp-semantics today gives decorative wrapping but doesn't change runtime behavior because the cell path is secondary. When PM Track 12 retires the parameters and makes cells primary, timestamp-semantics become load-bearing:
+
+| Snapshot cell | Live parameter | Site | Migration candidate |
+|---|---|---|---|
+| `current-narrow-var-constraints-cell-id` | `current-narrow-var-constraints` | [global-constraints.rkt:104](../../racket/prologos/global-constraints.rkt) | → `net-new-timestamped-cell` |
+| `current-ns-context-cell-id` | `current-ns-context` | [namespace.rkt:757](../../racket/prologos/namespace.rkt) | → `net-new-timestamped-cell` |
+| `current-defn-param-names-cell-id` | `current-defn-param-names` | [global-env.rkt:358](../../racket/prologos/global-env.rkt) | → `net-new-timestamped-cell` |
+| per-name definition cells (via `current-definition-cell-ids` map) | `current-definition-cell-ids` | [global-env.rkt:121, 354](../../racket/prologos/global-env.rkt) | → `net-new-timestamped-cell` per-name allocation |
+
+(2) **Scope coupling**: with submodule-scope, the "global clock" primitive may be scoped per-submodule (each submodule has its own monotone counter for its cells). PM Track 12's scope design naturally determines clock granularity:
+- Global clock today gives session-wide ordering
+- Per-submodule clock gives within-module ordering + cross-module via scope chain
+- E1 Lamport shape survives either choice (pid dimension stays; counter location varies)
+
+**Primitive ready for activation** at [`clock.rkt`](../../racket/prologos/clock.rkt) (PPN 4C Phase 1e-β-iii-a, commit `4205b0ad`):
+- `timestamp` struct (counter, pid) + lex-total-order compare
+- `timestamped-value` struct + `merge-by-timestamp-max`
+- `'timestamped-cell` SRE domain registered (Tier 1 + Tier 2)
+- `net-allocate-clock-cell` / `net-new-timestamped-cell` / `net-write-timestamped` / `net-read-timestamped-payload` API
+- `current-process-id` + `current-clock-cell-id` scaffolding parameters (flagged in DEFERRED.md)
+- Topology-stratum write discipline documented (inherited from ATMS counter at [decision-cell.rkt:609-610](../../racket/prologos/decision-cell.rkt))
+- Test coverage: [`test-clock.rkt`](../../racket/prologos/tests/test-clock.rkt), 17/17 GREEN
+
+**Activation by PM Track 12**:
+- When PM 12 retires `current-X` parameters, the 5 snapshot-cells become primary state holders
+- PM 12 either keeps the global clock (simple; works for single-scope) OR scopes per-submodule (richer)
+- In either case, consumer migration is: `(net-new-cell ... merge-replace) → (net-new-timestamped-cell clock-cid ...)`; reads change to `net-read-timestamped-payload`; writes to `net-write-timestamped`
+- No redesign of clock.rkt expected — the API is scope-agnostic (consumers pass `clock-cid`)
+- If submodule-scope is adopted, `net-allocate-clock-cell` may be called per-submodule instead of globally; no API change
+
+**Track 12 now has TWO complementary unlocks from PPN 4C Phase 1e**:
+- 1e-α's 32 identity-or-error migration candidates (macros.rkt registries)
+- 1e-β-iii's 5 timestamp-ordered migration candidates (parameter-snapshot cells)
+
+Both migrations flow from the same architectural act: making cells primary (retiring parameters) and establishing scope structure.
+
 **Residual solver-config parameters**: `current-solver-strategy-override`, `current-is-eval-fn`, and other solver-specific parameters may be better addressed in a BSP-LE series sub-track or continue as parameters with test-harness registration (they're solver-local, less entangled with module loading). Scope decision at PM 12 Stage 2.
 
 **Risk**: Medium. Module loading is foundational; regressions are visible. Track 5/7 prior art de-risks the approach — same pattern, different state.
