@@ -31,7 +31,12 @@
                   assumptions-merge
                   counter-merge
                   nogood-merge
-                  scope-cell-merge)
+                  scope-cell-merge
+                  decisions-state-merge        ;; Phase 1d-D: compound decisions cell merge
+                  commitments-state-merge)     ;; Phase 1d-D: compound commitments cell merge
+         ;; Tabling
+         (only-in "tabling.rkt"
+                  wf-all-mode-merge)           ;; Phase 1d-D: well-founded tabling all-answers mode
          ;; Relations
          (only-in "relations.rkt"
                   discrimination-data-merge)
@@ -95,13 +100,29 @@
 (register/minimal 'scope-cell scope-cell-merge
                   (lambda (v) (eq? v 'infra-bot)) 'infra-bot)
 
+;; Phase 1d-D: compound state cells from decision-cell.rkt
+;; Both are STRUCTURAL lattices — per-component monotone merge.
+;; bot values are (decisions-state-empty N) / (commitments-state-empty)
+;; — opaque to this registration (N varies by assumption-id-n at site).
+(register/minimal 'decisions-state decisions-state-merge
+                  (lambda (v) #f) #f)  ;; bot is per-site-N; opaque
+(register/minimal 'commitments-state commitments-state-merge
+                  (lambda (v) #f) #f)  ;; bot is struct; opaque
+
 ;; ============================================================
 ;; Relations
 ;; ============================================================
 
 ;; logic-var-merge — deferred (not exported from relations.rkt)
+;; solver-term-merge — deferred (not exported from relations.rkt;
+;;   Phase 1d-D follow-up alongside logic-var-merge — both are
+;;   relations.rkt internal merge fns not currently surfaced).
 (register/minimal 'discrimination-data discrimination-data-merge
                   (lambda (v) #f) #f)
+
+;; Phase 1d-D: well-founded tabling all-answers mode
+(register/minimal 'wf-all-mode wf-all-mode-merge
+                  (lambda (v) (and (list? v) (null? v))) '())
 
 ;; ============================================================
 ;; Session runtime + session lattice + IO + effects
