@@ -442,7 +442,7 @@
 
 (test-case "eq? identity: elab-cell-write returns same enet on no-op"
   (define enet0 (make-elaboration-network))
-  (define-values (enet1 cid) (elab-new-infra-cell enet0 (hasheq) merge-hasheq-union))
+  (define-values (enet1 cid) (elab-new-infra-cell enet0 (hasheq) merge-hasheq-identity))
   ;; Write empty hash to a cell that's already empty — merge = union(∅,∅) = ∅
   (define enet2 (elab-cell-write enet1 cid (hasheq)))
   (check-eq? enet2 enet1

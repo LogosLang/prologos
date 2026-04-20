@@ -17,7 +17,7 @@
          racket/list
          racket/set
          racket/path
-         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-union, mod-status, net-new-mod-status-cell
+         "infra-cell.rkt"    ;; merge-replace, merge-hasheq-replace, mod-status, net-new-mod-status-cell
          "propagator.rkt")   ;; make-prop-network, net-cell-read, net-cell-write
 
 (provide
@@ -750,7 +750,7 @@
 (define (register-namespace-cells! net-box new-cell-fn)
   (when (and net-box new-cell-fn)
     ;; Module registry cell
-    (define-values (enet1 mr-cid) (new-cell-fn (unbox net-box) (current-module-registry) merge-hasheq-union))
+    (define-values (enet1 mr-cid) (new-cell-fn (unbox net-box) (current-module-registry) merge-hasheq-replace))
     (current-module-registry-cell-id mr-cid)
     ;; Ns-context cell (snapshot — not dual-written per-mutation)
     (define ns-ctx (current-ns-context))

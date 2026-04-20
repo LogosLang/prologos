@@ -50,8 +50,9 @@
 ;; equal?-based hash union (hasse-registry uses `hash`, not `hasheq`,
 ;; because positions are typically structured values — types, patterns,
 ;; pairs — that require equal? semantics, not eq?). The existing
-;; merge-hasheq-union in infra-cell.rkt is eq?-keyed, which drops
-;; collisions between structurally-equal-but-not-eq pairs.
+;; merge-hasheq-identity / merge-hasheq-replace in infra-cell.rkt are
+;; eq?-keyed, which drops collisions between structurally-equal-but-
+;; not-eq pairs.
 (define (hasse-merge-hash-union old new)
   (cond
     [(zero? (hash-count new)) old]
@@ -215,7 +216,7 @@
 ;;     accumulation of entries per position)
 ;;   Declared: none initially (γ)
 ;;   Expected inference: confirm all three
-;;   Delta: none expected — merge-hasheq-union has these properties
+;;   Delta: none expected — hasseq-union over hash-keys has these properties
 ;;
 ;; Merge function is hasse-merge-hash-union (equal?-based, defined above).
 ;; Tier 2 linkage for hasse-merge-hash-union registered at module load.

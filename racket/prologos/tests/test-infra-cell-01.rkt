@@ -17,30 +17,53 @@
 ;; Merge Function Tests
 ;; ========================================
 
-;; --- merge-hasheq-union ---
+;; --- merge-hasheq-identity ---
 
-(test-case "merge-hasheq-union: bot + value = value"
-  (define result (merge-hasheq-union 'infra-bot (hasheq 'a 1)))
+(test-case "merge-hasheq-identity: bot + value = value"
+  (define result (merge-hasheq-identity 'infra-bot (hasheq 'a 1)))
   (check-equal? result (hasheq 'a 1)))
 
-(test-case "merge-hasheq-union: value + bot = value"
-  (define result (merge-hasheq-union (hasheq 'a 1) 'infra-bot))
+(test-case "merge-hasheq-identity: value + bot = value"
+  (define result (merge-hasheq-identity (hasheq 'a 1) 'infra-bot))
   (check-equal? result (hasheq 'a 1)))
 
-(test-case "merge-hasheq-union: disjoint keys merge"
-  (define result (merge-hasheq-union (hasheq 'a 1 'b 2) (hasheq 'c 3)))
+(test-case "merge-hasheq-identity: disjoint keys merge"
+  (define result (merge-hasheq-identity (hasheq 'a 1 'b 2) (hasheq 'c 3)))
   (check-equal? (hash-ref result 'a) 1)
   (check-equal? (hash-ref result 'b) 2)
   (check-equal? (hash-ref result 'c) 3)
   (check-equal? (hash-count result) 3))
 
-(test-case "merge-hasheq-union: overlapping keys — right wins"
-  (define result (merge-hasheq-union (hasheq 'a 1 'b 2) (hasheq 'a 99)))
+(test-case "merge-hasheq-identity: overlapping keys same value — identity"
+  (define result (merge-hasheq-identity (hasheq 'a 1 'b 2) (hasheq 'a 1)))
+  (check-equal? (hash-ref result 'a) 1)
+  (check-equal? (hash-ref result 'b) 2))
+
+(test-case "merge-hasheq-identity: overlapping keys different values — contradiction"
+  (define result (merge-hasheq-identity (hasheq 'a 1 'b 2) (hasheq 'a 99)))
+  (check-true (hasheq-identity-contradiction? result)))
+
+;; --- merge-hasheq-replace (explicit last-write-wins) ---
+
+(test-case "merge-hasheq-replace: bot + value = value"
+  (check-equal? (merge-hasheq-replace 'infra-bot (hasheq 'a 1))
+                (hasheq 'a 1)))
+
+(test-case "merge-hasheq-replace: value + bot = value"
+  (check-equal? (merge-hasheq-replace (hasheq 'a 1) 'infra-bot)
+                (hasheq 'a 1)))
+
+(test-case "merge-hasheq-replace: disjoint keys merge"
+  (define result (merge-hasheq-replace (hasheq 'a 1 'b 2) (hasheq 'c 3)))
+  (check-equal? (hash-count result) 3))
+
+(test-case "merge-hasheq-replace: overlapping keys — right wins"
+  (define result (merge-hasheq-replace (hasheq 'a 1 'b 2) (hasheq 'a 99)))
   (check-equal? (hash-ref result 'a) 99)
   (check-equal? (hash-ref result 'b) 2))
 
-(test-case "merge-hasheq-union: empty + empty = empty"
-  (define result (merge-hasheq-union (hasheq) (hasheq)))
+(test-case "merge-hasheq-identity: empty + empty = empty"
+  (define result (merge-hasheq-identity (hasheq) (hasheq)))
   (check-equal? (hash-count result) 0))
 
 ;; --- merge-list-append ---
@@ -96,7 +119,7 @@
 
 (test-case "net-new-cell-with-merge: general factory creates cell"
   (define net0 (make-prop-network))
-  (define-values (net1 cid) (net-new-cell-with-merge net0 merge-hasheq-union (hasheq)))
+  (define-values (net1 cid) (net-new-cell-with-merge net0 merge-hasheq-identity (hasheq)))
   (check-equal? (net-cell-read net1 cid) (hasheq)))
 
 (test-case "net-new-registry-cell: creates hasheq cell with union merge"
@@ -274,9 +297,9 @@
 ;; Merge Function Properties
 ;; ========================================
 
-(test-case "merge-hasheq-union: idempotent (same data merged twice)"
+(test-case "merge-hasheq-identity: idempotent (same data merged twice)"
   (define h (hasheq 'a 1 'b 2))
-  (check-equal? (merge-hasheq-union h h) h))
+  (check-equal? (merge-hasheq-identity h h) h))
 
 (test-case "merge-list-append: identity element is empty list"
   (check-equal? (merge-list-append '(x) '()) '(x))
@@ -291,13 +314,13 @@
   (define s2 (seteq 'c 'd))
   (check-equal? (merge-set-union s1 s2) (merge-set-union s2 s1)))
 
-(test-case "merge-hasheq-union: associative"
+(test-case "merge-hasheq-identity: associative"
   (define h1 (hasheq 'a 1))
   (define h2 (hasheq 'b 2))
   (define h3 (hasheq 'c 3))
   ;; (h1 ∪ h2) ∪ h3 = h1 ∪ (h2 ∪ h3)
-  (define lhs (merge-hasheq-union (merge-hasheq-union h1 h2) h3))
-  (define rhs (merge-hasheq-union h1 (merge-hasheq-union h2 h3)))
+  (define lhs (merge-hasheq-identity (merge-hasheq-identity h1 h2) h3))
+  (define rhs (merge-hasheq-identity h1 (merge-hasheq-identity h2 h3)))
   (check-equal? lhs rhs))
 
 ;; ========================================

@@ -71,7 +71,7 @@
 
 (require racket/list        ;; remove-duplicates
          racket/set         ;; seteq, set-add (Phase 3b dependency recording)
-         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-union
+         "infra-cell.rkt")  ;; merge-replace, merge-hasheq-identity (Phase 1e-α split)
 
 ;; ========================================
 ;; Layer 2: Prelude/module definitions (legacy)

@@ -33,7 +33,12 @@
 
 (provide
  ;; Merge functions — pure (content × content → content)
- merge-hasheq-union
+ ;; PPN 4C Phase 1e-α: merge-hasheq-union retired; use merge-hasheq-identity
+ ;; (for identity-or-error registries) or merge-hasheq-replace (for
+ ;; explicit last-write-wins per-elab stores).
+ merge-hasheq-identity
+ hasheq-identity-contradiction?
+ merge-hasheq-replace
  merge-hasheq-list-append
  merge-list-append
  merge-set-union
@@ -85,10 +90,53 @@
 ;; Merge Functions
 ;; ========================================
 
-;; Monotonic hash union: for registries where each key is registered once.
-;; Conflicts use right-hand-side (latest registration wins).
-;; Both arguments must be hasheq (immutable eq-based hash).
-(define (merge-hasheq-union old new)
+;; PPN 4C Phase 1e-α: η split of the former merge-hasheq-union.
+;; The former merge-hasheq-union was non-commutative by mechanics
+;; (new wins on collision) but commutative by intent at ~25/32 call
+;; sites (registries where same-key-same-value is the invariant).
+;; The ambiguity silently absorbed redefinition bugs at identity sites.
+;; Retired 2026-04-20 in favor of two named variants:
+;;   merge-hasheq-identity  — identity-or-error (contradiction sentinel
+;;                            on same-key-different-value)
+;;   merge-hasheq-replace   — explicit last-write-wins (non-commutative
+;;                            by intent)
+
+;; Sentinel for identity-or-error contradiction.
+;; `#:contradicts?` predicate at SRE domain registration recognizes this.
+(define hasheq-identity-contradiction
+  (let ([tag 'hasheq-identity-contradiction])
+    tag))
+
+(define (hasheq-identity-contradiction? v)
+  (eq? v 'hasheq-identity-contradiction))
+
+;; Identity-or-error merge: same-key-same-value = identity; same-key-
+;; different-value = contradiction sentinel. Commutative + associative
+;; + idempotent by construction. For registries where each key maps to
+;; a single unchanging value (module-load-time registrations, name bindings).
+(define (merge-hasheq-identity old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(hasheq-identity-contradiction? old) old]  ;; top absorbs
+    [(hasheq-identity-contradiction? new) new]
+    [(zero? (hash-count new)) old]  ;; Identity preservation: empty new → return old
+    [else
+     (for/fold ([acc old])
+               ([(k v) (in-hash new)])
+       (cond
+         [(hash-has-key? acc k)
+          (if (equal? (hash-ref acc k) v)
+              acc  ;; same-key-same-value: identity
+              hasheq-identity-contradiction)]  ;; collision: top
+         [else (hash-set acc k v)]))]))
+
+;; Explicit last-write-wins: new wins on collision. Non-commutative by
+;; intent. For cells where same-key-different-value is legitimate
+;; (per-elab evolving stores, state transitions). Use this variant
+;; ONLY when replace semantics is intentional; otherwise prefer
+;; merge-hasheq-identity to catch redefinition bugs.
+(define (merge-hasheq-replace old new)
   (cond
     [(eq? old 'infra-bot) new]
     [(eq? new 'infra-bot) old]
@@ -217,11 +265,15 @@
 ;; Convenience Cell Factories
 ;; ========================================
 
-;; Registry cell: hasheq with union merge, starts empty.
+;; Registry cell: hasheq with identity-or-error merge, starts empty.
 ;; For: schema-registry, ctor-registry, impl-registry, etc.
+;; PPN 4C Phase 1e-α: registries are identity-or-error by design —
+;; same-key-different-value is a redefinition bug. Use merge-hasheq-replace
+;; directly if replace semantics is genuinely intended (per-elab evolving
+;; stores).
 ;; Returns: (values new-network cell-id)
 (define (net-new-registry-cell net)
-  (net-new-cell-with-merge net merge-hasheq-union (hasheq)))
+  (net-new-cell-with-merge net merge-hasheq-identity (hasheq)))
 
 ;; List cell: list with append merge, starts empty.
 ;; For: constraint-store, coercion-warnings, deprecation-warnings, etc.

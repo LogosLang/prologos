@@ -22,12 +22,13 @@
 ;;;     call-site audit; refactor paths (timestamp-ordered / identity-
 ;;;     or-error / accept-as-non-lattice) decided per site.
 ;;;
-;;; δ approach for merge-hasheq-union (D1 resolution 2026-04-19):
-;;;   Registered under 'monotone-registry with honest D2 delta.
-;;;   Non-commutative mechanically (new-wins on collision) but
-;;;   commutative by intent (registry identity semantics: same-key
-;;;   collisions should be identity-or-error). Phase 1e η split
-;;;   refactors into identity + replace variants per-site.
+;;; PPN 4C Phase 1e-α (2026-04-20): η split of merge-hasheq-union.
+;;; Retired 'monotone-registry domain; replaced with two domains:
+;;;   'hasheq-identity — merge-hasheq-identity, identity-or-error
+;;;     (commutative, associative, idempotent by construction;
+;;;      `#:contradicts?` recognizes the hasheq-identity-contradiction sentinel)
+;;;   'hasheq-replace  — merge-hasheq-replace, explicit last-write-wins
+;;;     (non-commutative by intent; named so ambiguity is gone)
 ;;;
 
 (require racket/set
@@ -35,19 +36,42 @@
          "sre-core.rkt"
          "merge-fn-registry.rkt")
 
-;; 'monotone-registry — merge-hasheq-union with D1-δ framing
-(define monotone-registry-sre-domain
+;; 'hasheq-identity — merge-hasheq-identity (identity-or-error)
+;; Contradiction sentinel: 'hasheq-identity-contradiction — returned
+;; when same-key writes carry different values. SRE domain's
+;; `#:contradicts?` predicate recognizes the sentinel so downstream
+;; propagators see contradiction and halt (path A per §6.14.6;
+;; Phase 11b upgrades to path C provenance-rich contradict-record).
+(define hasheq-identity-sre-domain
   (make-sre-domain
-   #:name 'monotone-registry
+   #:name 'hasheq-identity
    #:merge-registry (lambda (r)
                       (case r
-                        [(equality) merge-hasheq-union]
-                        [else (error 'monotone-registry-merge "no merge: ~a" r)]))
+                        [(equality) merge-hasheq-identity]
+                        [else (error 'hasheq-identity-merge "no merge: ~a" r)]))
+   #:contradicts? hasheq-identity-contradiction?
+   #:bot? (lambda (v) (and (hash? v) (zero? (hash-count v))))
+   #:bot-value (hasheq)))
+(register-domain! hasheq-identity-sre-domain)
+(register-merge-fn!/lattice merge-hasheq-identity #:for-domain 'hasheq-identity)
+
+;; 'hasheq-replace — merge-hasheq-replace (explicit last-write-wins)
+;; D2 delta: non-commutative by intent at sites where same-key-different-
+;; value is legitimate (per-elab evolving stores). Named so that the
+;; intent is explicit; not registered as identity domain because
+;; collision is not an error here.
+(define hasheq-replace-sre-domain
+  (make-sre-domain
+   #:name 'hasheq-replace
+   #:merge-registry (lambda (r)
+                      (case r
+                        [(equality) merge-hasheq-replace]
+                        [else (error 'hasheq-replace-merge "no merge: ~a" r)]))
    #:contradicts? (lambda (v) #f)
    #:bot? (lambda (v) (and (hash? v) (zero? (hash-count v))))
    #:bot-value (hasheq)))
-(register-domain! monotone-registry-sre-domain)
-(register-merge-fn!/lattice merge-hasheq-union #:for-domain 'monotone-registry)
+(register-domain! hasheq-replace-sre-domain)
+(register-merge-fn!/lattice merge-hasheq-replace #:for-domain 'hasheq-replace)
 
 ;; 'hash-of-lists-accumulator — merge-hasheq-list-append
 (define hash-of-lists-accumulator-sre-domain

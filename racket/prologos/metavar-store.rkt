@@ -1038,7 +1038,7 @@
       #f))
 
 ;; Track 6 Phase 1c: Write a single constraint update to the store (functional).
-;; Merges a single-entry hash — merge-hasheq-union replaces the entry.
+;; Merges a single-entry hash — merge-hasheq-replace replaces the entry.
 ;; Track 7 Phase 7b: Pure variant — takes/returns enet.
 ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
 (define (write-constraint-to-store-pure enet updated-c)
@@ -1359,7 +1359,7 @@
           )))
 
 ;; Remove entries tagged with retracted assumptions from a hasheq cell value.
-;; For merge-hasheq-union cells: filter by value's assumption-id.
+;; For merge-hasheq-replace cells: filter by value's assumption-id.
 (define (retract-hasheq-entries h retracted-set)
   (if (or (not (hash? h)) (zero? (hash-count h)))
       h
@@ -1469,7 +1469,7 @@
 (define current-constraint-cell-id (make-parameter #f))
 
 ;; Phase 1b: Cell IDs for trait/hasmethod/capability constraint registry cells.
-;; Each is a registry cell with merge-hasheq-union, mirroring the legacy hasheq maps.
+;; Each is a registry cell with merge-hasheq-replace, mirroring the legacy hasheq maps.
 (define current-trait-constraint-cell-id (make-parameter #f))
 (define current-trait-cell-map-cell-id (make-parameter #f))
 (define current-hasmethod-constraint-cell-id (make-parameter #f))
@@ -1483,7 +1483,7 @@
 (define current-hasmethod-wakeup-cell-id (make-parameter #f))
 
 ;; Track 2 Phase 6: HasMethod cell-map cell (mirrors trait-cell-map).
-;; Maps hasmethod-meta-id → (listof cell-id), using merge-hasheq-union.
+;; Maps hasmethod-meta-id → (listof cell-id), using merge-hasheq-replace.
 (define current-hasmethod-cell-map-cell-id (make-parameter #f))
 
 ;; Track 2 Phase 2: Constraint status cell.
@@ -2560,16 +2560,16 @@
         (current-prop-net-box (box (make-elaboration-network))))
       (define nb (current-prop-net-box))
       (define enet0 (unbox nb))
-      (define-values (enet1 cstore-cid) (new-cell-fn enet0 (hasheq) merge-hasheq-union))
+      (define-values (enet1 cstore-cid) (new-cell-fn enet0 (hasheq) merge-hasheq-replace))
       (current-constraint-cell-id cstore-cid)
       ;; Phase 1b: Create registry cells for trait/hasmethod/capability constraints.
-      (define-values (enet2 tc-cid) (new-cell-fn enet1 (hasheq) merge-hasheq-union))
+      (define-values (enet2 tc-cid) (new-cell-fn enet1 (hasheq) merge-hasheq-replace))
       (current-trait-constraint-cell-id tc-cid)
-      (define-values (enet3 tcm-cid) (new-cell-fn enet2 (hasheq) merge-hasheq-union))
+      (define-values (enet3 tcm-cid) (new-cell-fn enet2 (hasheq) merge-hasheq-replace))
       (current-trait-cell-map-cell-id tcm-cid)
-      (define-values (enet4 hm-cid) (new-cell-fn enet3 (hasheq) merge-hasheq-union))
+      (define-values (enet4 hm-cid) (new-cell-fn enet3 (hasheq) merge-hasheq-replace))
       (current-hasmethod-constraint-cell-id hm-cid)
-      (define-values (enet5 cap-cid) (new-cell-fn enet4 (hasheq) merge-hasheq-union))
+      (define-values (enet5 cap-cid) (new-cell-fn enet4 (hasheq) merge-hasheq-replace))
       (current-capability-constraint-cell-id cap-cid)
       ;; Phase 1c: Create wakeup registry cells (merge-hasheq-list-append).
       (define-values (enet6 wr-cid) (new-cell-fn enet5 (hasheq) merge-hasheq-list-append))
@@ -2583,13 +2583,13 @@
       (define-values (enet9 cs-cid) (new-cell-fn enet8 (hasheq) merge-constraint-status-map))
       (current-constraint-status-cell-id cs-cid)
       ;; Track 2 Phase 6: HasMethod cell-map (meta-id → (listof cell-id)).
-      (define-values (enet10 hcm-cid) (new-cell-fn enet9 (hasheq) merge-hasheq-union))
+      (define-values (enet10 hcm-cid) (new-cell-fn enet9 (hasheq) merge-hasheq-replace))
       (current-hasmethod-cell-map-cell-id hcm-cid)
       ;; Track 2 Phase 7: Error descriptor cell (meta-id → no-instance-error).
       (define-values (enet11 ed-cid) (new-cell-fn enet10 (hasheq) merge-error-descriptor-map))
       (current-error-descriptor-cell-id ed-cid)
       ;; Track 6 Phase 1d: Unsolved metas tracking cell (meta-id → #t/#f).
-      (define-values (enet12 um-cid) (new-cell-fn enet11 (hasheq) merge-hasheq-union))
+      (define-values (enet12 um-cid) (new-cell-fn enet11 (hasheq) merge-hasheq-replace))
       (current-unsolved-metas-cell-id um-cid)
       ;; Track 7 Phase 8a: Ready-queue channel cell for L1 readiness propagators.
       (define-values (enet13 rq-cid) (new-cell-fn enet12 '() merge-list-append))
