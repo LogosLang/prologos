@@ -90,7 +90,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 12c | A4 Option C — delete `zonk.rkt` wholesale | ⬜ | `zonk-intermediate`/`zonk-final`/`zonk-level` deleted (~1,300 lines). Driver `freeze-top`/`zonk-top` plumbing retired. Reading the expression IS zonking via cell-ref dereferencing. |
 | 12d | A4 Option C — acceptance + A/B + integration | ⬜ | L3 acceptance confirms cell-ref path clean; A/B bench shows E3 freeze cost → 0; no regressions. DPO primitives contributed to SRE 6. Meets original [Track 4 §3.4b](2026-04-04_PPN_TRACK4_DESIGN.md) expectation unmet in 4B. |
 | 1d | Registration campaign (Phase 1 sub-phase) | ✅ | Register remaining ~22 unregistered merge functions + 1 inline lambda rewrite + triage 11 multi-line sites + lint-tool category refinement for parameterized-passthrough sites. **δ approach (D1 resolution 2026-04-19)**: `merge-hasheq-union` registered under `'monotone-registry` domain with honest D2 delta documenting non-commutative-by-mechanics / commutative-by-intent gap. **Decentralized (β)**: each merge fn registers where it lives (atms.rkt, session-runtime.rkt, relations.rkt, tabling.rkt, infra-cell.rkt, etc.). Ambiguous-name sites (6) left as-is per D3 resolution — runtime Tier 3 inheritance is correct; lint tool rename to "parameterized-passthrough" category. Lint baseline shrinks; goal: `--strict` green. **1d-A ✅** (commit `f9345fd6`) infra-cell generic merges; **1d-B ✅** (commit `6ce7a50d`) per-subsystem merges; **1d-C ✅** (commit `99d9acad`) inline lambda → `merge-list-append`; inline-lambda count 1 → 0. **1d-D ✅** (commit `bb6046b5`) 11 multi-line sites classified: 3 new registrations (`decisions-state-merge`, `commitments-state-merge`, `wf-all-mode-merge`) + `solver-term-merge` noted as internal-unexported follow-up + 6 parameterized-passthrough confirmed + atms.rkt:761 replace-lambda scoped to Phase 1e. **1d-E ✅** (commit `4c0a250e`) lint category rename `ambiguous-name → parameterized-passthrough` per D3. **1d-F ✅** (commit `7675517c`) lint helper detection for `register/minimal` shape (registered count 36 → 78 — 17 helper-registered fns now correctly tracked) + `answer-merge` replaced with `merge-list-append` (same pattern as 1d-C). **1d-close ✅** (this row) — baseline shrunk 27 → 6; `--strict` exits 0. Remaining baseline: `logic-var-merge` (1d-B follow-up), `merge-last-write-wins` (Phase 1e), `racket-merge` + `viability-merge` (fundamentally parameterized closures — further lint improvement or category extension possible), `table-answer-merge` + `table-registry-merge` (Phase 1e hoist). Phase 1d COMPLETE. |
-| 1e | Correctness refactors (Phase 1 sub-phase, NEW 2026-04-19) | ⬜ | **η split** of `merge-hasheq-union` into `merge-hasheq-identity` + `merge-hasheq-replace`; audit 23 sites per semantic intent; substitute variant per site. May surface collision-with-non-equal-value bugs (real findings). **Replace-cell audit**: each `merge-last-write-wins` + `merge-replace` call site classified per refactor path — (1) **timestamp-ordered lattice** (commutative+assoc+idem upgrade via `(value, timestamp)` pairs — may warrant timestamped-cell primitive if reusable, analogous to Hasse-registry), (2) **identity-or-error flat lattice** (contradiction on conflict), (3) **accept as non-lattice** with documented rationale. Per-site classification first as design artifact; refactors follow. Captures D2 resolution 2026-04-19 — no DEFERRED dodging; correctness refactors scoped here. |
+| 1e | Correctness refactors (Phase 1 sub-phase, NEW 2026-04-19; sub-phases designed 2026-04-20) | 🔄 | See **§6.14** for full design. Sub-phase partition: **1e-α** η split of `merge-hasheq-union` → `merge-hasheq-identity` + `merge-hasheq-replace`, retire old name, audit ~30 sites + migrate. **1e-β-i** meta-solve identity-or-error at [elaborator-network.rkt:966, 982](../../racket/prologos/elaborator-network.rkt). **1e-β-ii** per-site classification of remaining replace-cell sites per §6.14.4 table (global-env ×3, namespace ×1, global-constraints ×1, atms.rkt:761 doc-only, atms table-* hoist+register). **1e-β-iii** timestamped-cell primitive — **E1 Lamport** (`(counter, pid)` pair timestamps with `current-process-id` default 0 scaffolding), dedicated clock cell on main network (Option Y), reuses `counter-merge` / `'counter` prior art (decision-cell.rkt:612; live at atms.rkt:489). Topology-stratum write discipline inherited. Phase 11b upgrades identity-or-error sentinel to provenance-rich contradict-record (path C per §6.1.1). **Expected**: η split surfaces real bugs (silent redefinitions); meta-solve bug-expose at 1e-β-i; 3-5 timestamp consumers in 1e-β-iii. **Drift risks** named at §6.14.7. |
 | 1f | Structural enforcement at `net-add-propagator` + hard-error flip | ⬜ | Gated by 1d+1e completion (lint baseline empty). Flip the `net-add-propagator` check: structural domain + missing `:component-paths` = registration error. Remove `infer/err`-equivalent fallback paths for unregistered cells. |
 | 1V | Vision Alignment Gate for Phase 1 | ⬜ | Phase 1's completion gate per Stage 4 step 5. Check all named drift risks from Phase 1's mini-design audit (2026-04-19 dailies). Confirm registration complete, enforcement live, no belt-and-suspenders, scaffolding labeled. |
 | T | Dedicated test files | ⬜ | Enumerated (C4 external critique 2026-04-18): `test-elaboration-parity.rkt` (parity skeleton from §9 expanded per axis), `test-attribute-tag-layers.rkt` (A5 `:type`/`:term` Phase 3), `test-hasse-registry.rkt` (Phase 2b primitive + both instantiations), `test-parametric-resolution-propagator.rkt` (A1/Phase 7), `test-union-atms.rkt` (Phase 10 + cell-based TMS), `test-cell-ref-expressions.rkt` (Phase 12 Option C), `test-tropical-fuel.rkt` (M2 tropical-fuel cell, if adopted), `test-coverage-structural.rkt` (P3 structural coverage, if adopted), `test-warnings-retirement.rkt` (Phase 5 parameter retirement). |
@@ -1535,6 +1535,116 @@ A short list:
 - **Phase 3 (A5) scope**: the tag-dispatched merge implementation is ~50-100 lines of wiring; straightforward.
 - **Phase 2 (A9) scope**: add `:preserves [Residual]` declaration and run property inference on the new merge — mechanical.
 - **`'subtype` relation** is the key reusable mechanism: existing variance support via relation name means "PUnify with variance" needs no extension.
+
+---
+
+### §6.14 Phase 1e — Correctness Refactors (design 2026-04-20)
+
+Phase 1e was un-folded from Phase 1d (D2 resolution 2026-04-19, no DEFERRED dodging) as a dedicated sub-phase for correctness refactors that surfaced during Phase 1d execution. This section captures the design decisions from the 2026-04-20 mini-design dialogue.
+
+#### §6.14.1 Scope and sub-phase partition
+
+Mini-audit (2026-04-20) surfaced three distinct concerns under the 1e umbrella. Each gets its own sub-phase for commit discipline:
+
+- **1e-α**: η split of `merge-hasheq-union`. Retire the ambiguous single function; replace with two named variants distinguishing identity-or-error from explicit last-write-wins. Audit ~30 call sites; substitute per intent.
+- **1e-β-i**: meta-solve identity-or-error fix. [elaborator-network.rkt:966, 982](../../racket/prologos/elaborator-network.rkt) currently use `merge-last-write-wins` at cells that should be identity-or-error (monotonic `'unsolved` → solution); current mechanics silently absorb bugs where a meta is solved twice with different values.
+- **1e-β-ii**: per-site classification of remaining replace-cell sites (global-env × 3, namespace × 1, global-constraints × 1, atms.rkt:761 tagged-scope, atms.rkt table-* hoist + register).
+- **1e-β-iii**: timestamped-cell primitive. Used by 1e-β-ii sites classified as "timestamp-ordered lattice" path.
+- **1e-close**: baseline, `--strict` green, tracker ✅.
+
+#### §6.14.2 1e-α — η split
+
+Current state: `merge-hasheq-union` registered under `'monotone-registry` with D1-δ framing (non-commutative by mechanics; commutative by intent at most sites). ~30 production sites, audit (2026-04-20) classified:
+- 24 module-load-time registries in [macros.rkt:579-631](../../racket/prologos/macros.rkt)
+- 1 module registry at [namespace.rkt:753](../../racket/prologos/namespace.rkt)
+- 7 per-elab meta stores in [metavar-store.rkt:2563-2592](../../racket/prologos/metavar-store.rkt)
+
+Near-universal intent: **identity-or-error** (same key → same value; collision = bug). The non-commutative new-wins mechanics silently absorb redefinition bugs.
+
+**Split**:
+- `merge-hasheq-identity` — same-key collision: `(equal? old-v new-v)` → keep; else → `'hasheq-identity-contradiction` sentinel. Commutative + associative + idempotent by construction. Registered as `'hasheq-identity` domain with `#:contradicts?` recognizing the sentinel.
+- `merge-hasheq-replace` — explicit last-write-wins (new wins on collision). Registered as `'hasheq-replace` domain with honest D2 delta (non-commutative; named so intent is explicit).
+
+**Retire `merge-hasheq-union`** (no alias) — force every call site to choose explicitly. The ambiguity was the bug; migration pressure is the cure.
+
+**Expected findings during migration**: real bugs where same-key-different-value writes occur. Handle as findings, not obstacles — treat each as a design question.
+
+#### §6.14.3 1e-β-i — meta-solve identity-or-error
+
+Two sites at [elaborator-network.rkt:966, 982](../../racket/prologos/elaborator-network.rkt) allocate TMS cells with `'unsolved` initial and `merge-last-write-wins` merge. Semantically this should be identity-or-error:
+- `'unsolved` → `value`: monotone solve (fine)
+- `value1` → `value2` (same cell): if `value1 = value2` identity-safe; if different, **this is a double-solve-with-inconsistency bug**, currently absorbed silently.
+
+**Refactor**: register `'meta-solve` domain with identity-or-error merge. Treat current code as potentially bug-hiding; any collision that surfaces post-refactor is a real finding to investigate.
+
+#### §6.14.4 1e-β-ii — replace-cell per-site classification
+
+Remaining sites classified per the three refactor paths from the un-fold resolution:
+
+| Site | Classification | Path |
+|---|---|---|
+| [global-env.rkt:121, 354, 358](../../racket/prologos/global-env.rkt) | Shadowing semantics (later def wins) | **(1) timestamp-ordered** |
+| [namespace.rkt:757](../../racket/prologos/namespace.rkt) | Scope-context change | **(1) timestamp-ordered** |
+| [global-constraints.rkt:104](../../racket/prologos/global-constraints.rkt) | Narrow-var-constraints (pending site-read) | TBD at implementation (likely (1)) |
+| [atms.rkt:761](../../racket/prologos/atms.rkt) | Tagged-scoped identity (within-branch same-value write) | **(3) accept + document as narrower-correct**; tagged-cell-value mechanism handles worldview distinction |
+| [atms.rkt:496](../../racket/prologos/atms.rkt) `table-registry-merge` | Identity-or-error (same relation → same cell) | **(2) identity-or-error** via hoist + register under `'hasheq-identity` |
+| [atms.rkt:611](../../racket/prologos/atms.rkt) `table-answer-merge` | Set-union with dedup | Not strictly replace — hoist + register under `'dedup-set` or reuse `merge-set-union`-equivalent; NOT timestamp-ordered |
+
+4-5 timestamp-ordered consumers justify building the primitive per user direction 2026-04-20.
+
+#### §6.14.5 1e-β-iii — timestamped-cell primitive (E1 Lamport, on-network)
+
+**Design decision summary (user dialogue 2026-04-20)**:
+- Reuse existing `counter-merge` / `'counter` domain (prior art at [decision-cell.rkt:612](../../racket/prologos/decision-cell.rkt), live at [atms.rkt:489](../../racket/prologos/atms.rkt) for assumption-id generation)
+- **Dedicated clock cell** on main network (Option Y) — NOT shared with ATMS counter (separate lifecycles; clock must be available outside ATMS context)
+- **E1 Lamport shape** — `(counter, pid)` pair timestamps, total order via lex compare. `current-process-id` parameter default 0 today. Future parallel workers parameterize per-worker without shape migration.
+
+**Primitive components**:
+
+```racket
+;; clock.rkt (new module)
+(define current-process-id (make-parameter 0))  ;; scaffolding; PM Track 12
+(struct timestamp (counter pid) #:transparent)
+(define (timestamp<? t1 t2)
+  (or (< (timestamp-counter t1) (timestamp-counter t2))
+      (and (= (timestamp-counter t1) (timestamp-counter t2))
+           (< (timestamp-pid t1) (timestamp-pid t2)))))
+(struct timestamped-value (ts payload) #:transparent)
+(define (merge-by-timestamp-max old new) ...)  ;; newer wins; equal-ts equal-payload identity; equal-ts diff-payload contradiction
+(define (net-new-timestamped-cell net clock-cid init-payload) ...)
+(define (net-write-timestamped net clock-cid cid value) ...)
+```
+
+**SRE registration**:
+- `'timestamped-cell` domain with `merge-by-timestamp-max`
+- `#:contradicts?` recognizes `'timestamp-contradiction` sentinel (path A; Phase 11b upgrades to path C per §6.1.1 scope addition 2026-04-20)
+
+**Concurrency discipline** (inherited from ATMS prior art at decision-cell.rkt:609-610):
+> "Written ONLY at topology stratum (sequential) to prevent concurrent ID collision."
+
+Timestamp writes happen at topology stratum OR in clearly-sequential elaboration context. Multi-propagator same-BSP-round writes to same timestamped cell would race on the counter; topology-stratum discipline makes this structurally impossible. Documented as a load-bearing invariant for timestamped-cell users.
+
+**Rejected alternatives** (from design dialogue):
+- **Option D (scalar timestamps)**: simplest today but forces every cell-shape migration when parallel workers arrive. ~10 LoC saved today; unbounded migration cost later.
+- **Option E2 (Vector clocks)**: partial order with concurrent-write detection. Overkill — no use case for "incomparable timestamps" in single-BSP Prologos today. If distributed execution surfaces, E1 extends to E2 by replacing pid with pid-set.
+- **Option X (reuse ATMS counter-cid)**: couples clock availability to ATMS context lifecycle; non-ATMS contexts need timestamps (e.g., global-env shadowing). Cleaner to keep independent.
+
+#### §6.14.6 Phase 11b upgrade path (Q4-C capture)
+
+Per Q4 resolution 2026-04-20 and §6.1.1 addition: Phase 1e identity-or-error sites use path (A) sentinel + `#:contradicts?` in the short term. Phase 11b upgrades to path (C) provenance-rich contradiction descriptors (conflicting values + srclocs + producer propagator IDs). Non-breaking: contradict-record's `contradicts?` predicate still returns true; the sentinel just carries more data.
+
+#### §6.14.7 Drift risks (VAG 5d checklist for Phase 1e)
+
+Named 2026-04-20 from mini-design audit:
+
+1. Classify-then-declare-done without refactoring — Phase 1e ships correctness fixes, not just classifications
+2. Uniform timestamp-everywhere — path (1) isn't universally right; per-site classification preserved
+3. Silent semantic change on η split — EXPECTED to surface real bugs; treat as findings
+4. Timestamped-cell scope creep into Hasse-registry territory — timestamps are linear order, Hasse is partial order; keep distinct
+5. `racket-merge` / `viability-merge` sneaking into 1e — fundamentally parameterized closures; OUT of 1e scope
+6. atms.rkt:761 needs narrower-correct documentation, NOT rewrite to identity-or-error
+7. Timestamp primitive over-engineering — E1 Lamport is justified by 3-5 consumers + future-proof shape; not building Vector clocks (E2) or wall-clock variants
+8. current-process-id as permanent parameter — documented scaffolding with PM Track 12 retirement path
 
 ---
 
