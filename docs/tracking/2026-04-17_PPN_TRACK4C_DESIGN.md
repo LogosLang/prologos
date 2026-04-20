@@ -1573,7 +1573,14 @@ Final migration (preserves existing semantics; the η split itself is the main 1
 - 7 metavar-store.rkt sites → `merge-hasheq-replace`
 - 1 test-readiness-propagator.rkt site → `merge-hasheq-identity`
 
-**Per-site identity-vs-replace classification deferred** to a follow-up sub-phase (tentatively Phase 1e-γ or a separate track after Phase 1f). Each registry needs individual investigation: is its production (module-load-time) usage identity? Is its test-fixture usage a legitimate replace pattern? Is cross-test re-registration an acceptable behavior or a test-isolation anti-pattern that should be fixed separately?
+**Per-site identity-vs-replace classification deferred** to PM Track 12 delivery. See [PM series master Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) — the submodule-scope primitive PM Track 12 introduces is the structural answer to "identity *within what scope*?" Today's flat shared-persistent network conflates module-load-time scope with session/test scope, so "identity-or-error" silently mis-fires under the shared-fixture test pattern. When PM Track 12 scopes registry cells per module-submodule:
+- Prelude's definitions live in the prelude submodule's scope → identity-or-error correct
+- Each test's definitions live in its own submodule's scope → no cross-test pollution
+- Module reload = retract-and-reassert at submodule scope (S(-1) pattern extension)
+
+The 32 migration-candidate sites (23 macros.rkt + 1 namespace.rkt + 7 metavar-store.rkt — all on `merge-hasheq-replace` today) are pre-identified in DEFERRED.md § "PM Track 12 design input from PPN 4C Phase 1e-α." Substitution to `merge-hasheq-identity` becomes mechanical once submodule scope lands.
+
+**The submodule-as-sharing-primitive framing generalizes** beyond tests: LSP edits, REPL sessions, multi-module compilation all benefit from the same scope hierarchy. The SCOPE HIERARCHY is itself a lattice (submodules refine parents; scope lookup walks the lattice) — aligns with Hyperlattice Conjecture framing.
 
 **Principle honored**: η split addresses the ambiguity of one overloaded name. `merge-hasheq-identity` is AVAILABLE as a named tool for future per-site refactoring. The decision to APPLY identity at each call site is a separate per-site classification, correctly not bundled with the ambiguity retirement.
 

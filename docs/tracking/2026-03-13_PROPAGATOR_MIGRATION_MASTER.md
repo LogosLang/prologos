@@ -478,6 +478,31 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 
 **Relationship to A3 (BSP-LE Track 2B addendum)**: A3's static-lint tactical protection (Option C) is the near-term safety net while PM Track 12 is pending. Once PM Track 12 delivers, the lint is no longer needed — cell-based state is isolated by construction.
 
+**Design input from PPN 4C Phase 1e-α (2026-04-20)**: submodule-scope as a cell-space primitive is load-bearing for identity-or-error semantics at module-load-time registries. See PPN 4C [`2026-04-17_PPN_TRACK4C_DESIGN.md`](../tracking/2026-04-17_PPN_TRACK4C_DESIGN.md) §6.14.2 for the scope-conflation finding — the η split of `merge-hasheq-union` surfaced that "identity-or-error" needs an answer to "identity *within what scope*?" Today's flat shared-persistent network can't answer this; tests legitimately redefine names across runs, so identity contradicts what is actually correct behavior. PM Track 12's submodule-scope mechanism is the structural answer:
+
+- Each module gets its own cell-space (a sub-network or scoped region); definitions live in their module's scope
+- The prelude is a shared "base module" imported by others
+- Module reload = retract + reassert at the module's scope (extends S(-1) retraction pattern)
+- Tests become submodules that inherit from the prelude submodule without polluting siblings
+- Scope resolution for registry reads walks the scope chain (not flat hash lookup)
+- Cross-module shadowing is handled by scope RESOLUTION, not by same-cell replace
+
+**32 migration-candidate sites pre-identified** for the identity-or-error substitution once submodule-scope lands:
+- 23 `macros.rkt` registry sites (schema, ctor, type-meta, subtype, coercion, capability, property, functor, trait, trait-laws, impl, param-impl, bundle, specialization, selection, session, preparse, spec, strategy, process, user-precedence, user-operators, macro)
+- 1 `namespace.rkt` module-registry site
+- 7 `metavar-store.rkt` per-elab store sites (cstore, trait-constraint, trait-cell-map, hasmethod-constraint, capability-constraint, hasmethod-cell-map, unsolved-metas)
+
+All currently use `merge-hasheq-replace` (honest labeling of today's semantics under flat scope). When PM Track 12 provides submodule-scope, these become straightforward `merge-hasheq-replace → merge-hasheq-identity` substitutions — `merge-hasheq-identity` is already defined, registered as `'hasheq-identity` SRE domain, and ready for use.
+
+**The submodule-as-sharing-primitive framing generalizes**: tests (each test = submodule, shares prelude), LSP edits (each edit cycle = submodule reload), REPL sessions (each form = submodule), multi-module compilation (dependency tree = submodule hierarchy). The SCOPE HIERARCHY is itself a lattice — submodules refine parent modules; scope lookup walks the lattice. This aligns with the Hyperlattice Conjecture framing: the scope-structure that solves test-isolation also unlocks identity-or-error semantics at production sites.
+
+**Track 12 design inputs to absorb** (from this finding):
+1. Submodule as a cell-space primitive — structural, not namespacing convention
+2. Scope resolution for registry reads — walks the scope chain
+3. Module reload via retract-and-reassert (S(-1)-like mechanism at submodule scope)
+4. Test-isolation via submodule forking — flows from scope structure, not discipline
+5. 32 identity-candidate sites pre-identified (above) become clean migration targets
+
 **Residual solver-config parameters**: `current-solver-strategy-override`, `current-is-eval-fn`, and other solver-specific parameters may be better addressed in a BSP-LE series sub-track or continue as parameters with test-harness registration (they're solver-local, less entangled with module loading). Scope decision at PM 12 Stage 2.
 
 **Risk**: Medium. Module loading is foundational; regressions are visible. Track 5/7 prior art de-risks the approach — same pattern, different state.
