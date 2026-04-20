@@ -22,7 +22,8 @@
 ;;; Design reference: docs/tracking/2026-03-11_1800_PROPAGATOR_FIRST_MIGRATION.md §Phase 0a
 ;;;
 
-(require racket/set
+(require racket/list  ;; PPN 4C Phase 1e-β-ii: remove-duplicates for dedup-append
+         racket/set
          "propagator.rkt"
          "champ.rkt"
          "atms.rkt")
@@ -41,6 +42,7 @@
  merge-hasheq-replace
  merge-hasheq-list-append
  merge-list-append
+ merge-list-dedup-append   ;; PPN 4C Phase 1e-β-ii: dedup-append list merge
  merge-set-union
  merge-replace
  merge-last-write-wins
@@ -167,6 +169,18 @@
     [(eq? new 'infra-bot) old]
     [(null? new) old]  ;; Identity preservation: empty new → return old
     [else (append old new)]))
+
+;; PPN 4C Phase 1e-β-ii (2026-04-20): deduplicating list append.
+;; Appends new items to existing list, removing duplicates by equal?.
+;; Commutative + associative + idempotent up to equal?-equivalence.
+;; Pattern previously duplicated at 4+ sites (atms.rkt, tabling.rkt,
+;; bilattice.rkt, tests); consolidated here for reuse + SRE registration.
+(define (merge-list-dedup-append old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(null? new) old]  ;; Identity preservation: empty new → return old
+    [else (remove-duplicates (append old new))]))
 
 ;; Monotonic set union: for propagated-specs, visited sets.
 ;; Both must be sets (seteq or similar).

@@ -21,11 +21,14 @@
 ;;; Design reference: docs/tracking/2026-02-24_LOGIC_ENGINE_DESIGN.org §5
 ;;;
 
-(require racket/list  ;; Phase 8: remove-duplicates for table-answer-merge
+(require racket/list  ;; Phase 8: remove-duplicates; PPN 4C 1e-β-ii: dedup append
          "propagator.rkt"
          "decision-cell.rkt")  ;; Phase 5.6: compound cells
 
 (provide
+ ;; PPN 4C Phase 1e-β-ii: hoisted merge functions for SRE registration
+ table-registry-merge
+ table-answer-merge
  ;; Core structs
  (struct-out assumption-id)
  (struct-out assumption)
@@ -97,6 +100,31 @@
  solver-state-explain
  solver-state-assumptions
  solver-state-minimal-diagnoses)
+
+;; ========================================
+;; Module-level merge functions
+;; ========================================
+;;
+;; PPN 4C Phase 1e-β-ii (2026-04-20): hoisted from `make-solver-context`
+;; and `solver-table-register` so they can be registered as named SRE
+;; domains via phase1d-registrations.rkt (Tier 1 + Tier 2 linkage).
+;; Semantics unchanged from local definitions.
+
+;; table-registry-merge: per-key new-wins on hasheq registry.
+;; Under per-solver-context scope, relation-name collisions don't
+;; normally occur; the new-wins mechanics are safe within that scope.
+(define (table-registry-merge old new)
+  (cond
+    [(eq? old (hasheq)) new]
+    [(eq? new (hasheq)) old]
+    [else (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-set acc k v))]))
+
+;; table-answer-merge: dedup-append of list entries. Commutative +
+;; associative + idempotent up to equal?-equivalence — proper join-
+;; semilattice over the finite equal?-classes of list elements.
+(define (table-answer-merge old new)
+  (remove-duplicates (append old new)))
 
 ;; ========================================
 ;; Core structs
@@ -490,15 +518,11 @@
   ;; 6. Install worldview projection: decisions → worldview cache cell-id 1
   (define-values (net6 _proj-pid)
     (install-worldview-projection net5 dec-cid))
-  ;; 7. Phase 8.4: Table registry cell (hasheq name → table-cell-id, hash-union merge)
-  ;; Monotone: table registrations only accumulate. Self-hosting path:
-  ;; this pattern generalizes to all compiler registries.
-  (define (table-registry-merge old new)
-    (cond
-      [(eq? old (hasheq)) new]
-      [(eq? new (hasheq)) old]
-      [else (for/fold ([acc old]) ([(k v) (in-hash new)])
-              (hash-set acc k v))]))
+  ;; 7. Phase 8.4: Table registry cell (hasheq relation-name → table-cell-id)
+  ;; PPN 4C Phase 1e-β-ii (2026-04-20): local table-registry-merge hoisted
+  ;; to module level (see below) so it can be registered under an SRE
+  ;; domain via phase1d-registrations.rkt. Semantics unchanged: per-key
+  ;; new-wins within the per-solver-context scope.
   (define-values (net7 reg-cid)
     (net-new-cell net6 (hasheq) table-registry-merge))
   ;; Return network with all cells allocated + solver-context phone book
@@ -607,9 +631,11 @@
 ;; Returns: (values new-network table-cell-id)
 (define (solver-table-register ctx net rel-name)
   (define reg-cid (solver-context-table-registry-cid ctx))
-  ;; Allocate table cell (answer accumulator: list with set-union merge)
-  (define (table-answer-merge old new)
-    (remove-duplicates (append old new)))
+  ;; PPN 4C Phase 1e-β-ii (2026-04-20): local table-answer-merge hoisted
+  ;; to module level (see below) so it can be registered under an SRE
+  ;; domain via phase1d-registrations.rkt. Semantics unchanged: dedup-
+  ;; append of list entries (commutative+associative+idempotent up to
+  ;; equal?-equivalence — proper join-semilattice).
   (define-values (net1 table-cid) (net-new-cell net '() table-answer-merge))
   ;; Register: write name→cell-id mapping to registry cell
   (define net2 (net-cell-write net1 reg-cid (hasheq rel-name table-cid)))
@@ -755,9 +781,19 @@
                           (solver-state-amb-groups ss))
             ;; New key — allocate tagged-cell-value cell with bot base, then write
             ;; through net-cell-write so the worldview bitmask auto-tags the entry.
-            ;; Uses make-tagged-merge with last-write-wins domain merge to avoid
-            ;; entry duplication (plain tagged-cell-merge would double entries
-            ;; because net-cell-write produces a delta, merge combines old+delta).
+            ;;
+            ;; PPN 4C Phase 1e-β-ii classification (2026-04-20) per §6.14.4 table:
+            ;; this site's lambda (`old new → new`) is path (3) ACCEPT-AS-
+            ;; NARROWER-CORRECT, NOT a general replace-semantics violation.
+            ;; Under worldview-bitmask tagging, within a single branch the
+            ;; SAME (assumption, value) pair is never written twice with
+            ;; different values — the make-tagged-merge outer mechanism
+            ;; handles cross-branch isolation via bitmask tags. The inner
+            ;; replace is TAG-SCOPED identity (per-tag, same value). Cross-
+            ;; branch distinct values are separate tagged entries, not a
+            ;; same-cell collision. Not a candidate for merge-hasheq-identity
+            ;; or timestamped-cell upgrade — the tagged-cell-value mechanism
+            ;; IS the structural correctness here.
             (let-values ([(net-alloc new-cid) (net-new-cell (solver-state-net ss)
                                                              (tagged-cell-value 'bot '())
                                                              (make-tagged-merge

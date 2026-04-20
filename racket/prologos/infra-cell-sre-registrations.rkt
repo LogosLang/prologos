@@ -101,6 +101,22 @@
 (register-domain! accumulator-list-sre-domain)
 (register-merge-fn!/lattice merge-list-append #:for-domain 'accumulator-list)
 
+;; PPN 4C Phase 1e-β-ii: 'dedup-list-append — merge-list-dedup-append
+;; (commutative + associative + idempotent up to equal?-equivalence —
+;; proper join-semilattice over finite equal?-classes of list elements)
+(define dedup-list-append-sre-domain
+  (make-sre-domain
+   #:name 'dedup-list-append
+   #:merge-registry (lambda (r)
+                      (case r
+                        [(equality) merge-list-dedup-append]
+                        [else (error 'dedup-list-append-merge "no merge: ~a" r)]))
+   #:contradicts? (lambda (v) #f)
+   #:bot? (lambda (v) (and (list? v) (null? v)))
+   #:bot-value '()))
+(register-domain! dedup-list-append-sre-domain)
+(register-merge-fn!/lattice merge-list-dedup-append #:for-domain 'dedup-list-append)
+
 ;; 'monotone-set — merge-set-union (proper join-semilattice)
 (define monotone-set-sre-domain
   (make-sre-domain

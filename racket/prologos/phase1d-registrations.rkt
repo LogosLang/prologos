@@ -34,6 +34,9 @@
                   scope-cell-merge
                   decisions-state-merge        ;; Phase 1d-D: compound decisions cell merge
                   commitments-state-merge)     ;; Phase 1d-D: compound commitments cell merge
+         (only-in "atms.rkt"
+                  table-registry-merge         ;; Phase 1e-β-ii: hoisted hasheq new-wins
+                  table-answer-merge)          ;; Phase 1e-β-ii: hoisted dedup-append
          ;; Tabling
          (only-in "tabling.rkt"
                   wf-all-mode-merge)           ;; Phase 1d-D: well-founded tabling all-answers mode
@@ -108,6 +111,17 @@
                   (lambda (v) #f) #f)  ;; bot is per-site-N; opaque
 (register/minimal 'commitments-state commitments-state-merge
                   (lambda (v) #f) #f)  ;; bot is struct; opaque
+
+;; Phase 1e-β-ii: ATMS table-* cells (hoisted from local defines).
+;; table-registry-merge has replace-hasheq semantics — register under
+;; existing 'hasheq-replace domain (same as infra-cell's merge-hasheq-
+;; replace). atms.rkt can't import infra-cell (cycle), so the function
+;; is a separate instance with equivalent semantics.
+(register-merge-fn!/lattice table-registry-merge #:for-domain 'hasheq-replace)
+;; table-answer-merge has dedup-append semantics — register under
+;; existing 'dedup-list-append domain (same as infra-cell's merge-
+;; list-dedup-append). Ditto cycle-avoidance rationale.
+(register-merge-fn!/lattice table-answer-merge #:for-domain 'dedup-list-append)
 
 ;; ============================================================
 ;; Relations
