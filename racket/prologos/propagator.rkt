@@ -37,6 +37,7 @@
          "performance-counters.rkt"
          "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell + nogood lattice
          "merge-fn-registry.rkt"  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
+         "source-location.rkt"  ;; PPN 4C Phase 1.5: current-source-loc for on-network srcloc
          racket/future         ;; for future, touch, processor-count
          racket/set            ;; PAR Track 1: set-union for decomp-request cell
          racket/async-channel  ;; Phase 2d: buffered channel for streaming results
@@ -89,6 +90,7 @@
  net-add-propagator
  net-add-fire-once-propagator     ;; BSP-LE Track 2 Phase 5: general fire-once with flag-guard
  net-add-broadcast-propagator     ;; BSP-LE Track 2 Phase 1B: ONE propagator, N items, scheduler-decomposable
+ fire-propagator                  ;; PPN 4C Phase 1.5: scheduler fire helper — parameterizes current-source-loc
  net-add-parallel-map-propagator  ;; BSP-LE Track 2 Phase 1A: (DEPRECATED — use broadcast)
  ;; Broadcast profile
  (struct-out broadcast-profile)
@@ -276,7 +278,22 @@
 (define PROP-FIRE-ONCE 1)
 (define PROP-EMPTY-INPUTS 2)
 
-(struct propagator (inputs outputs fire-fn broadcast-profile flags) #:transparent)
+;; PPN 4C Phase 1.5: srcloc field added for on-network source-location tracking.
+;; The scheduler's fire-propagator wrapper parameterizes current-source-loc from
+;; this field, so fire functions remain stateless (read the parameter, don't
+;; capture srcloc in closure).
+(struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc) #:transparent)
+
+;; PPN 4C Phase 1.5: scheduler fire-wrapping helper.
+;; Invokes the propagator's fire function under `current-source-loc`
+;; parameterized to the propagator's srcloc field. This keeps fire
+;; functions stateless — they read (current-source-loc) at emit points
+;; rather than capturing srcloc in a closure. The parameter value is
+;; DERIVED from on-network state (propagator struct srcloc field), not
+;; external scaffolding.
+(define (fire-propagator prop net)
+  (parameterize ([current-source-loc (propagator-srcloc prop)])
+    ((propagator-fire-fn prop) net)))
 
 ;; BSP-LE Track 2 Phase 1B: Broadcast profile metadata.
 ;; Enables the scheduler to recognize and decompose data-indexed
@@ -1634,14 +1651,15 @@
                             #:component-paths [component-paths '()]
                             #:assumption [assumption-id #f]
                             #:decision-cell [decision-cell-id #f]
-                            #:flags [flags 0])
+                            #:flags [flags 0]
+                            #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5: on-network srcloc
   ;; PAR Track 1: During BSP fire rounds, propagator creation is allowed
   ;; but the new propagator is NOT scheduled on the worklist. It exists
   ;; in the result-net's propagator CHAMP. fire-and-collect-writes captures
   ;; it via next-prop-id comparison. The topology stratum applies new
   ;; propagators to the canonical network and schedules them.
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-ids output-ids fire-fn #f flags))
+  (define prop (propagator input-ids output-ids fire-fn #f flags srcloc))
   (define ph (prop-id-hash pid))
   ;; CHAMP Performance Phase 7: Owner-ID transient for dependency registration.
   ;; BSP-LE Track 0 Phase 5 attempted hash-table transient here and regressed 44%.
@@ -1708,7 +1726,8 @@
                                       [_watched-cid #f]  ;; legacy positional param (ignored)
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
-                                      #:decision-cell [decision-cell-id #f])
+                                      #:decision-cell [decision-cell-id #f]
+                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
   ;; Flags: scheduler implements fire-once. No closure wrapper.
   (define flags (bitwise-ior PROP-FIRE-ONCE
                              (if (null? inputs) PROP-EMPTY-INPUTS 0)))
@@ -1717,7 +1736,8 @@
                         #:component-paths cpaths
                         #:assumption assumption-id
                         #:decision-cell decision-cell-id
-                        #:flags flags))
+                        #:flags flags
+                        #:srcloc srcloc))
   (values net* pid))
 
 ;; ========================================
@@ -1791,7 +1811,8 @@
                                       items item-fn result-merge-fn
                                       #:component-paths [component-paths '()]
                                       #:assumption [assumption-id #f]
-                                      #:decision-cell [decision-cell-id #f])
+                                      #:decision-cell [decision-cell-id #f]
+                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
   (define profile (broadcast-profile items item-fn result-merge-fn))
   (define fire-fn
     (lambda (net)
@@ -1815,7 +1836,7 @@
           (net-cell-write net output-cid results))))
   ;; Install ONE propagator with the broadcast profile
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-cids (list output-cid) fire-fn profile 0))
+  (define prop (propagator input-cids (list output-cid) fire-fn profile 0 srcloc))
   (define ph (prop-id-hash pid))
   ;; Register propagator + dependencies (same as net-add-propagator but with profile)
   ;; BSP-LE Track 2 Phase 5.1b: component-paths + assumption + decision-cell support.
@@ -2040,7 +2061,7 @@
                                      (prop-id-hash pid) pid))
          (if (eq? prop 'none)
              (loop net)
-             (let ([net* ((propagator-fire-fn prop) net)])
+             (let ([net* (fire-propagator prop net)])  ;; PPN 4C Phase 1.5: wraps with current-source-loc
                (perf-inc-prop-firing!)  ;; Track 7 Phase 0b
                ;; Drain: fire fn may have added to net*'s worklist via net-cell-write.
                ;; Move those new entries into our mutable box.
@@ -2075,7 +2096,7 @@
                                    (prop-id-hash pid) pid))
        (if (eq? prop 'none)
            (loop net fired)
-           (let ([net* ((propagator-fire-fn prop) net)])
+           (let ([net* (fire-propagator prop net)])  ;; PPN 4C Phase 1.5
              (define new-wl-entries (prop-network-worklist net*))
              (unless (null? new-wl-entries)
                (set-box! wl (append new-wl-entries (unbox wl))))
@@ -2143,7 +2164,7 @@
   (define result-net
     (parameterize ([current-bsp-fire-round? #t]
                    [current-cell-id-namespace namespace-idx])
-      ((propagator-fire-fn prop) snapshot-net)))
+      (fire-propagator prop snapshot-net)))  ;; PPN 4C Phase 1.5
   (define result-next-id (prop-network-next-cell-id result-net))
   ;; Diff output cells for value writes (correct delta for merge-based cells).
   ;; A1: previously added decomp-request-cell-id unconditionally as a catch-all
@@ -2535,7 +2556,7 @@
          (define prop (champ-lookup (prop-network-propagators n)
                                     (prop-id-hash pid) pid))
          (if (eq? prop 'none) n
-             ((propagator-fire-fn prop) n))))
+             (fire-propagator prop n))))  ;; PPN 4C Phase 1.5
      ;; Clear worklist after flush
      (struct-copy prop-network result
        [hot (struct-copy prop-net-hot (prop-network-hot result)
@@ -3190,7 +3211,7 @@
        (if (eq? prop 'none)
            (run-widen-phase net*)
            ;; Fire propagator, but capture writes and apply via net-cell-write-widen
-           (let* ([result-net ((propagator-fire-fn prop) net*)]
+           (let* ([result-net (fire-propagator prop net*)]  ;; PPN 4C Phase 1.5
                   ;; Diff output cells to find changes
                   [writes (for/fold ([ws '()])
                                     ([cid (in-list (propagator-outputs prop))])
@@ -3244,7 +3265,7 @@
            (run-narrow-phase net*)
            ;; Fire propagator against a snapshot with passthrough merge for widen cells
            (let* ([snapshot (make-narrow-snapshot net*)]
-                  [result-net ((propagator-fire-fn prop) snapshot)]
+                  [result-net (fire-propagator prop snapshot)]  ;; PPN 4C Phase 1.5
                   ;; Diff output cells — snapshot has passthrough merge, so
                   ;; we see the raw transfer function output
                   [writes (for/fold ([ws '()])

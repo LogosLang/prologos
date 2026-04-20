@@ -8,7 +8,27 @@
 
 (require "source-location.rkt")
 
+;; PPN 4C Phase 1.5: generic srcloc extractor for surf-* nodes.
+;; All surf-* structs are #:transparent with srcloc as the LAST field
+;; (verified across 360+ surf-* struct definitions in this file).
+;; `struct->vector` returns (vector struct-name field0 field1 ...);
+;; the last element is the last field. For non-struct values or
+;; non-surf structs, returns #f (caller treats as "srcloc unknown").
+(define (surf-node-srcloc node)
+  (cond
+    [(not (struct? node)) #f]
+    [else
+     (define v (struct->vector node 'not-a-struct))
+     (cond
+       [(eq? v 'not-a-struct) #f]
+       [(<= (vector-length v) 1) #f]
+       [else
+        (define last (vector-ref v (sub1 (vector-length v))))
+        (if (srcloc? last) last #f)])]))
+
 (provide
+ ;; PPN 4C Phase 1.5: generic srcloc extractor for surf-* nodes
+ surf-node-srcloc
  ;; Surface expression structs
  (struct-out surf-var)
  (struct-out surf-nat-lit)

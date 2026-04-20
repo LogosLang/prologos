@@ -754,7 +754,11 @@
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
 (define (elaborate surf [env '()] [depth 0])
   (perf-inc-elaborate!)
-  (match surf
+  ;; PPN 4C Phase 1.5: parameterize current-source-loc from surf-node's srcloc field.
+  ;; Generic extractor from surface-syntax.rkt. Falls back to #f if unknown struct;
+  ;; parameter inherits parent value in that case (preserves precision for most nodes).
+  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+    (match surf
     ;; Variable: look up name, compute de Bruijn index
     ;; For globals with ALL-implicit type params (e.g., nil : Pi(A :0 Type). List A),
     ;; auto-apply with holes so bare `nil` becomes `(nil _)`.
@@ -2899,7 +2903,7 @@
      (elaborate-foreign-block lang code-datums captures return-type loc env depth)]
 
     ;; Fallback
-    [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))]))
+    [_ (prologos-error srcloc-unknown (format "Cannot elaborate: ~a" surf))])))  ;; PPN 4C Phase 1.5: close parameterize
 
 ;; ========================================
 ;; Elaborate a list of arguments into nested application

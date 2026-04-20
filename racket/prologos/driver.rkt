@@ -441,7 +441,12 @@
 ;; When a namespace context is active, def stores names both as
 ;; bare symbols (for local use) and as fully-qualified names (for export).
 (define (process-command surf)
-  (reset-meta-store!)  ;; clear metavariables from previous command
+  ;; PPN 4C Phase 1.5: seed current-source-loc from the command's surf-node.
+  ;; Elaborate-level parameterize sharpens further; this covers top-level
+  ;; warnings/errors that fire outside elaborate (e.g., from process-command
+  ;; bookkeeping before elaborate runs).
+  (parameterize ([current-source-loc (or (surf-node-srcloc surf) (current-source-loc))])
+    (reset-meta-store!)  ;; clear metavariables from previous command
   ;; Track 7 Phase 3: Registry cells (macros, warnings, narrowing) now live in the
   ;; persistent registry network — no per-command cell creation needed.
   ;; Per-definition and namespace cells still created per-command in elab-network.
@@ -1035,7 +1040,7 @@
       result
       (string-join
        (cons result all-warning-strs)
-       "\n"))))
+       "\n")))))  ;; PPN 4C Phase 1.5: close parameterize
 
 ;; Process a def command with split elaboration for recursive support.
 ;; 1. Elaborate type first
