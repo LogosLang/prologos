@@ -20,7 +20,9 @@
    "Track 4B Phase 1: Attribute Record PU"
 
    (test-case "facet-bot: each facet has a distinct bot value"
-     (check-equal? (facet-bot ':type) type-bot)
+     ;; PPN 4C Phase 3c-i: :type facet bot is classify-inhabit-value with both
+     ;; layers empty. facet-bot? predicate recognizes it semantically.
+     (check-true (facet-bot? ':type (facet-bot ':type)))
      (check-equal? (facet-bot ':context) #f)
      (check-true (constraint-bot? (facet-bot ':constraints)))
      (check-equal? (facet-bot ':usage) '())
@@ -66,10 +68,22 @@
      (check-equal? (that-read merged 'pos-a ':type) (expr-Int))
      (check-equal? (that-read merged 'pos-b ':type) (expr-Bool)))
 
-   (test-case "facet-merge :type uses type-lattice-merge"
-     (check-equal? (facet-merge ':type type-bot (expr-Int)) (expr-Int))
-     (check-equal? (facet-merge ':type (expr-Int) (expr-Int)) (expr-Int))
-     (check-true (type-top? (facet-merge ':type (expr-Int) (expr-Bool)))))
+   (test-case "facet-merge :type uses merge-classify-inhabit (tag-dispatched)"
+     ;; PPN 4C Phase 3c-i: :type facet merges via tag-dispatched accumulation.
+     ;; Raw type-values at the boundary are upgraded to classifier-only.
+     ;; Semantic round-trip: write via that-write, read via that-read.
+     (define net0 (make-prop-network))
+     (define-values (net1 cid) (net-new-cell net0 (hasheq) attribute-map-merge-fn))
+     ;; Identity: writing expr-Int then reading gives expr-Int via classifier layer
+     (define net2 (that-write net1 cid 'p1 ':type (expr-Int)))
+     (check-equal? (that-read (net-cell-read net2 cid) 'p1 ':type) (expr-Int))
+     ;; Idempotent: writing the same value twice preserves it
+     (define net3 (that-write net2 cid 'p1 ':type (expr-Int)))
+     (check-equal? (that-read (net-cell-read net3 cid) 'p1 ':type) (expr-Int))
+     ;; Contradiction: writing conflicting types surfaces type-top via shim
+     (define net4 (that-write net1 cid 'p2 ':type (expr-Int)))
+     (define net5 (that-write net4 cid 'p2 ':type (expr-Bool)))
+     (check-true (type-top? (that-read (net-cell-read net5 cid) 'p2 ':type))))
 
    (test-case "facet-merge :constraints uses constraint-merge (intersection)"
      (define c1 (constraint-from-candidates

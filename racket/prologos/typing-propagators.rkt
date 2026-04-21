@@ -36,6 +36,18 @@
          (only-in "infra-cell.rkt" merge-list-append)  ;; PPN 4C Phase 1d-C: named merge fn for warning-output cell
          (only-in "sre-core.rkt" make-sre-domain register-domain!)  ;; PPN 4C Phase 2: facet SRE registration
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; PPN 4C Phase 2: Tier 2 linkage
+         ;; PPN 4C Phase 3c-i: tag-layer shim for :type facet value + :term magic keyword.
+         ;; `:type` facet's VALUE SHAPE is now classify-inhabit-value; that-read unwraps
+         ;; the classifier layer; that-write wraps raw values as classifier-only. `:term`
+         ;; is a magic keyword routing to the inhabitant layer of the same facet.
+         (only-in "classify-inhabit.rkt"
+                  classify-inhabit-value classify-inhabit-value?
+                  classify-inhabit-value-bot?
+                  classify-inhabit-value-classifier-or-bot
+                  classify-inhabit-value-inhabitant-or-bot
+                  classifier-only inhabitant-only
+                  merge-classify-inhabit
+                  classify-inhabit-contradiction?)
          (only-in "qtt.rkt" zero-usage single-usage add-usage scale-usage)  ;; Track 4B Phase 4
          (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
@@ -338,14 +350,31 @@
 
 ;; --- Facet definitions: merge function + bot per facet ---
 
+;; PPN 4C Phase 3c-i: :type facet value is classify-inhabit-value with tag layers
+;; (CLASSIFIER + INHABITANT). The :type facet's bot is the empty-layers record.
+;; Module-level constant (avoid per-call allocation).
+(define classify-inhabit-bot-value (classify-inhabit-value 'bot 'bot))
+
+;; Module Theory embedding: the base type lattice embeds into the tag-layered
+;; lattice as "classifier-only." Sites that construct :type facet values directly
+;; (e.g., test fixtures via (hasheq ':type T) without that-write) continue to
+;; work because the shim upgrades raw values to classifier-only at the boundary.
+;; Raw type-bot maps to the both-layers-empty record for bot-predicate symmetry.
+(define (upgrade-to-classify-inhabit v)
+  (cond
+    [(classify-inhabit-value? v) v]
+    [(classify-inhabit-contradiction? v) v]
+    [(type-bot? v) classify-inhabit-bot-value]
+    [else (classifier-only v)]))
+
 (define (facet-merge facet old-v new-v)
   (case facet
     [(:type)
-     (cond
-       [(type-bot? old-v) new-v]
-       [(type-bot? new-v) old-v]
-       [(equal? old-v new-v) old-v]
-       [else (type-lattice-merge old-v new-v)])]
+     ;; PPN 4C Phase 3c-i: merge-classify-inhabit is the tag-dispatched merge.
+     ;; Raw type-values at direct-construction sites are upgraded at the boundary
+     ;; to preserve module-theoretic embedding (base → classifier-only).
+     (merge-classify-inhabit (upgrade-to-classify-inhabit old-v)
+                             (upgrade-to-classify-inhabit new-v))]
     [(:context)
      (cond
        [(not old-v) new-v]   ;; #f (bot) + X = X
@@ -362,7 +391,7 @@
 
 (define (facet-bot facet)
   (case facet
-    [(:type) type-bot]
+    [(:type) classify-inhabit-bot-value]  ;; PPN 4C Phase 3c-i: tag-layer bot
     [(:context) #f]  ;; #f = not yet written (distinguishes from context-empty-value)
     [(:constraints) constraint-bot]  ;; constraint-cell.rkt: all candidates possible
     [(:usage) '()]               ;; empty usage vector
@@ -371,7 +400,9 @@
 
 (define (facet-bot? facet v)
   (case facet
-    [(:type) (type-bot? v)]
+    ;; PPN 4C Phase 3c-i: accept classify-inhabit-value bot OR raw type-bot
+    ;; (backward-compat for sites constructing :type facet values directly).
+    [(:type) (or (classify-inhabit-value-bot? v) (type-bot? v))]
     [(:context) (not v)]  ;; #f = bot (not yet written)
     [(:constraints) (constraint-bot? v)]
     [(:usage) (null? v)]
@@ -417,17 +448,61 @@
 ;; These are the INTERNAL API for all attribute access.
 ;; §14 of Track 4B design: designed for future user-facing exposure.
 
+;; PPN 4C Phase 3c-i: tag-layer shims for :type / :term.
+;;
+;; The :type facet's VALUE SHAPE is classify-inhabit-value with two tag layers:
+;; CLASSIFIER (the type a position must have) and INHABITANT (the specific value
+;; solving it). Callers see the surface :type and :term keywords; the shim
+;; auto-unwraps the classifier and routes :term to the inhabitant layer of the
+;; SAME :type facet (not a new 6th facet — 5 facets preserved per D.3 §4.2).
+;;
+;; Cascade handling: when the merge produces classify-inhabit-contradiction?
+;; (classifier × classifier → type-top), the :type reader returns type-top so
+;; existing type-top? checks downstream continue firing. The :term reader
+;; returns the sentinel explicitly (new surface; callers can test for it).
+
+(define (read-type-layer v)
+  (cond
+    [(classify-inhabit-contradiction? v) type-top]
+    [(classify-inhabit-value? v)
+     (define c (classify-inhabit-value-classifier-or-bot v))
+     (if (eq? c 'bot) type-bot c)]
+    ;; Raw type-value (legacy direct-construction site): IS the classifier.
+    ;; Module-theoretic embedding base → classifier-only at the read boundary.
+    [else v]))
+
+(define (read-term-layer v)
+  (cond
+    [(classify-inhabit-contradiction? v) 'classify-inhabit-contradiction]
+    [(classify-inhabit-value? v) (classify-inhabit-value-inhabitant-or-bot v)]
+    ;; Raw type-value: no inhabitant layer; return 'bot.
+    [else 'bot]))
+
 (define (that-read attribute-map position facet)
   (if (hash? attribute-map)
       (let ([record (hash-ref attribute-map position (hasheq))])
-        (if (hash? record)
-            (hash-ref record facet (facet-bot facet))
-            (facet-bot facet)))
+        (cond
+          [(not (hash? record)) (facet-bot facet)]
+          ;; :type and :term both read from the :type facet; dispatch on which
+          ;; layer to extract (classifier vs inhabitant).
+          [(eq? facet ':type)
+           (read-type-layer (hash-ref record ':type (facet-bot ':type)))]
+          [(eq? facet ':term)
+           (read-term-layer (hash-ref record ':type (facet-bot ':type)))]
+          [else (hash-ref record facet (facet-bot facet))]))
       (facet-bot facet)))
 
 (define (that-write net cell-id position facet value)
+  ;; :type writes wrap val as classifier-only (populates CLASSIFIER layer);
+  ;; :term writes wrap as inhabitant-only (populates INHABITANT layer). Both
+  ;; write to the :type facet; merge-classify-inhabit composes the tags.
+  (define-values (internal-facet wrapped-value)
+    (cond
+      [(eq? facet ':type) (values ':type (classifier-only value))]
+      [(eq? facet ':term) (values ':type (inhabitant-only value))]
+      [else (values facet value)]))
   (net-cell-write net cell-id
-    (hasheq position (hasheq facet value))))
+    (hasheq position (hasheq internal-facet wrapped-value))))
 
 ;; --- Backward-compatible type-map API ---
 ;;
