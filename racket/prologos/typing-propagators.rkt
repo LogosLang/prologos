@@ -92,6 +92,12 @@
  facet-bot
  facet-bot?
  facet-merge
+ ;; PPN 4C Phase 3c-ii: :term (INHABITANT layer) helpers, symmetric to
+ ;; type-map-read / type-map-write for the :type (CLASSIFIER layer) helpers.
+ type-map-read
+ type-map-write
+ term-map-read
+ term-map-write
  ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
  net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
@@ -520,6 +526,19 @@
 (define (type-map-write net tm-cid position type-val)
   (that-write net tm-cid position ':type type-val))
 
+;; PPN 4C Phase 3c-ii: term-map-read/write are symmetric helpers for the
+;; INHABITANT layer. :term routes to the inhabitant layer of the :type facet
+;; via the that-read/that-write magic keyword dispatch (§6.15.8 Q4).
+;; Used at sites where the semantic intent is "this position IS SOLVED to V"
+;; (meta-feedback, trait-resolution dict assignment) vs. "this position HAS
+;; TYPE T" (classifier, the type-map-* path).
+(define (term-map-read net tm-cid position)
+  (define tm (net-cell-read net tm-cid))
+  (that-read tm position ':term))
+
+(define (term-map-write net tm-cid position term-val)
+  (that-write net tm-cid position ':term term-val))
+
 ;; ============================================================
 ;; Track 4B Phase 2: Constraint Attribute Propagators (S0)
 ;; ============================================================
@@ -695,12 +714,14 @@
        ;; Resolved: extract the single candidate
        (define candidate (constraint-one-candidate constraint-val))
        (define dict-expr (candidate->dict-expr candidate))
-       ;; Write the dict expression to the :type facet at the dict-meta position.
-       ;; This makes the dict type available to app propagators above.
-       (define current-type (that-read tm dict-meta-pos ':type))
-       (if (type-bot? current-type)
-           (that-write net tm-cid dict-meta-pos ':type dict-expr)
-           net)])))  ;; already has a type — don't overwrite
+       ;; PPN 4C Phase 3c-ii: dict-expr is the VALUE that solves the dict-meta.
+       ;; Per §6.15.8 Q6, solver-write goes to INHABITANT layer via :term. Trait
+       ;; resolution reaching a unique candidate IS the solution; the dict-meta's
+       ;; type (classifier) remains governed by its originating trait constraint.
+       (define current-term (that-read tm dict-meta-pos ':term))
+       (if (eq? current-term 'bot)
+           (that-write net tm-cid dict-meta-pos ':term dict-expr)
+           net)])))  ;; already solved — don't overwrite
 
 ;; ============================================================
 ;; Track 4B Phase 6: Meta-Solution Output Propagator
@@ -720,19 +741,26 @@
 (define (meta-solution-merge old new)
   (append old new))
 
-;; Meta-solution output propagator: watches one meta's :type facet,
-;; writes (meta-id . solution) to the output cell when resolved.
+;; Meta-solution output propagator: watches one meta's :term facet
+;; (INHABITANT layer — the meta's SOLUTION per §6.15.8 Q6). Writes
+;; (meta-id . solution) to the output cell when resolved.
+;;
+;; PPN 4C Phase 3c-ii: migrated from :type to :term. The meta's solution
+;; semantic lives in INHABITANT; CLASSIFIER captures the meta's type-constraint
+;; (e.g., Type(0) for a type-variable meta). Cross-tag residuation (3c-iii)
+;; enforces inhabitant-inhabits-classifier. Zonk/substitution downstream
+;; consumes the solution via the output cell, unchanged.
 (define (make-meta-solution-output-fire-fn tm-cid meta-pos meta-id output-cid)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
-    (define type-val (that-read tm meta-pos ':type))
+    (define term-val (that-read tm meta-pos ':term))
     (cond
-      [(type-bot? type-val) net]     ;; not yet resolved
-      [(type-top? type-val) net]     ;; contradiction — don't bridge
-      [(expr-meta? type-val) net]    ;; still a meta — not concrete
+      [(eq? term-val 'bot) net]                         ;; not yet solved
+      [(classify-inhabit-contradiction? term-val) net]  ;; contradiction — don't bridge
+      [(expr-meta? term-val) net]                       ;; still a meta — not concrete
       [else
-       ;; Concrete type at this meta position — write to output cell
-       (net-cell-write net output-cid (list (cons meta-id type-val)))])))
+       ;; Concrete solution at this meta position — write to output cell
+       (net-cell-write net output-cid (list (cons meta-id term-val)))])))
 
 ;; ============================================================
 ;; Track 4B Phase 7: Warning Propagators (S2)
@@ -1013,16 +1041,21 @@
           ;; Structural: domain CONTAINS metas → extract bindings from matching
           ;; domain against arg type, write each binding.
           ;; §3.5: Unification = Merge — the feedback IS the meta-solution.
+          ;;
+          ;; PPN 4C Phase 3c-ii: feedback writes are INHABITANT (per §6.15.8 Q6).
+          ;; Semantic: "this meta IS SOLVED to arg-type." The meta's type/classifier
+          ;; (e.g., Type(0) for a type-variable meta) is orthogonal to its solution;
+          ;; the cross-tag residuation propagator (3c-iii) enforces compatibility.
           (define net2
             (let ([arg-type arg-after-merge])
               (cond
                 [(or (type-bot? arg-type) (expr-meta? arg-type)) net1]
-                [(expr-meta? dom) (type-map-write net1 tm-cid dom arg-type)]
+                [(expr-meta? dom) (term-map-write net1 tm-cid dom arg-type)]
                 [else
                  (let extract-bindings ([d dom] [a arg-type] [n net1])
                    (cond
                      [(and (expr-meta? d) (not (expr-meta? a)) (not (type-bot? a)))
-                      (type-map-write n tm-cid d a)]
+                      (term-map-write n tm-cid d a)]
                      [(and (expr-app? d) (expr-app? a))
                       (extract-bindings
                        (expr-app-func d) (expr-app-func a)
@@ -1550,6 +1583,10 @@
          (if output-cid
              (let-values ([(n _) (net-add-fire-once-propagator net-u (list tm-cid) (list output-cid)
                                    (make-meta-solution-output-fire-fn tm-cid e id output-cid) tm-cid
+                                   ;; PPN 4C Phase 3c-ii: watch :type facet (which stores both
+                                   ;; CLASSIFIER and INHABITANT layers as classify-inhabit-value
+                                   ;; per §4.2/§6.15.8). Fire function reads :term (inhabitant
+                                   ;; layer) for the meta's solution.
                                    #:component-paths
                                    (list (cons tm-cid (cons e ':type))))])
                n)

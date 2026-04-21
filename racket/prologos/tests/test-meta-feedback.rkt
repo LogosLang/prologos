@@ -31,8 +31,11 @@
                       (context-cell-value '() 0)))
        (define net3 (run-to-quiescence net2))
        (define tm (net-cell-read net3 tm-cid))
-       ;; Feedback: ?A → Nat
-       (check-equal? (that-read tm meta-a ':type) (expr-Nat))))
+       ;; PPN 4C Phase 3c-ii: feedback writes to INHABITANT layer via :term.
+       ;; "Meta-a IS SOLVED to Nat" — the VALUE of meta-a is (expr-Nat).
+       ;; Its classifier (e.g., Type(0) for a type variable) is orthogonal;
+       ;; residuation (3c-iii) enforces compatibility.
+       (check-equal? (that-read tm meta-a ':term) (expr-Nat))))
 
    (test-case "Option C: downward write skipped for meta arg positions"
      ;; When arg-pos is a meta, the downward domain write is skipped

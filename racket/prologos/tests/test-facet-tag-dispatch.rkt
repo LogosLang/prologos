@@ -169,3 +169,30 @@
   ;; Other facets still report bot
   (check-equal? (that-read am 'p ':usage) '())
   (check-equal? (that-read am 'p ':warnings) '()))
+
+;; ============================================================
+;; PPN 4C Phase 3c-ii: term-map-read / term-map-write helpers
+;; ============================================================
+;;
+;; Symmetric to type-map-read / type-map-write for the INHABITANT layer.
+;; Used by per-rule writers at sites where the semantic intent is
+;; "this position IS SOLVED to V" (meta-feedback, trait-resolution dict).
+
+(test-case "term-map-write populates inhabitant layer"
+  (define-values (net cid) (make-empty-net))
+  (define net* (term-map-write net cid 'p (expr-nat-val 5)))
+  (check-equal? (term-map-read net* cid 'p) (expr-nat-val 5))
+  ;; Classifier layer stays empty (parallel to type-map-write's
+  ;; effect on inhabitant)
+  (check-equal? (type-map-read net* cid 'p) type-bot))
+
+(test-case "term-map-read returns 'bot on empty cell"
+  (define-values (net cid) (make-empty-net))
+  (check-equal? (term-map-read net cid 'p) 'bot))
+
+(test-case "type-map-write and term-map-write compose"
+  (define-values (net cid) (make-empty-net))
+  (define n1 (type-map-write net cid 'p (expr-Int)))
+  (define n2 (term-map-write n1 cid 'p (expr-nat-val 5)))
+  (check-equal? (type-map-read n2 cid 'p) (expr-Int))
+  (check-equal? (term-map-read n2 cid 'p) (expr-nat-val 5)))
