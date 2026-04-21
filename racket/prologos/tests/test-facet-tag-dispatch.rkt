@@ -196,3 +196,86 @@
   (define n2 (term-map-write n1 cid 'p (expr-nat-val 5)))
   (check-equal? (type-map-read n2 cid 'p) (expr-Int))
   (check-equal? (term-map-read n2 cid 'p) (expr-nat-val 5)))
+
+;; ============================================================
+;; PPN 4C Phase 3e addendum: that-read arity-2 (whole-record view)
+;; ============================================================
+;;
+;; `(that-read am x)` returns a user-facing hash of all facets stored at
+;; position x. The :type facet's internal classify-inhabit-value is
+;; decomposed into user-facing :type (classifier) + :term (inhabitant).
+
+(test-case "that-read arity-2: empty position returns empty hash"
+  (define am (hasheq))
+  (check-equal? (that-read am 'p) (hasheq)))
+
+(test-case "that-read arity-2: non-hash attribute-map returns empty hash"
+  (check-equal? (that-read #f 'p) (hasheq))
+  (check-equal? (that-read '() 'p) (hasheq)))
+
+(test-case "that-read arity-2: :type only → returns :type + :term (term 'bot)"
+  (define am (hasheq 'p (hasheq ':type (classifier-only (expr-Int)))))
+  (define record (that-read am 'p))
+  (check-equal? (hash-ref record ':type) (expr-Int))
+  (check-equal? (hash-ref record ':term) 'bot))
+
+(test-case "that-read arity-2: :term only → returns :type (type-bot) + :term"
+  (define am (hasheq 'p (hasheq ':type (inhabitant-only (expr-nat-val 5)))))
+  (define record (that-read am 'p))
+  (check-equal? (hash-ref record ':type) type-bot)
+  (check-equal? (hash-ref record ':term) (expr-nat-val 5)))
+
+(test-case "that-read arity-2: both layers populated → both in record"
+  (define v (classify-inhabit-value (expr-Int) (expr-int 42)))
+  (define am (hasheq 'p (hasheq ':type v)))
+  (define record (that-read am 'p))
+  (check-equal? (hash-ref record ':type) (expr-Int))
+  (check-equal? (hash-ref record ':term) (expr-int 42)))
+
+(test-case "that-read arity-2: non-:type facets pass through as-is"
+  (define am (hasheq 'p (hasheq ':usage '(m1)
+                                ':warnings '((coercion-warning ...)))))
+  (define record (that-read am 'p))
+  (check-equal? (hash-ref record ':usage) '(m1))
+  (check-equal? (hash-ref record ':warnings) '((coercion-warning ...)))
+  ;; :type / :term NOT synthesized when :type facet absent — honest shape
+  (check-false (hash-has-key? record ':type))
+  (check-false (hash-has-key? record ':term)))
+
+(test-case "that-read arity-2: :type + other facets → all present"
+  (define am (hasheq 'p (hasheq ':type (classifier-only (expr-Int))
+                                ':usage '(m1)
+                                ':warnings '())))
+  (define record (that-read am 'p))
+  (check-equal? (hash-ref record ':type) (expr-Int))
+  (check-equal? (hash-ref record ':term) 'bot)
+  (check-equal? (hash-ref record ':usage) '(m1))
+  (check-equal? (hash-ref record ':warnings) '()))
+
+(test-case "that-read arity-2: contradiction sentinel at :type decomposes"
+  (define am (hasheq 'p (hasheq ':type 'classify-inhabit-contradiction)))
+  (define record (that-read am 'p))
+  (check-true (type-top? (hash-ref record ':type)))
+  (check-true (classify-inhabit-contradiction? (hash-ref record ':term))))
+
+(test-case "that-read arity-2: after that-write round-trip"
+  (define-values (net cid) (make-empty-net))
+  (define n1 (that-write net cid 'p ':type (expr-Int)))
+  (define n2 (that-write n1 cid 'p ':term (expr-int 42)))
+  (define n3 (that-write n2 cid 'p ':usage '(m1)))
+  (define record (that-read (net-cell-read n3 cid) 'p))
+  (check-equal? (hash-ref record ':type) (expr-Int))
+  (check-equal? (hash-ref record ':term) (expr-int 42))
+  (check-equal? (hash-ref record ':usage) '(m1)))
+
+(test-case "that-read arity-2: independent positions"
+  (define-values (net cid) (make-empty-net))
+  (define n1 (that-write net cid 'p1 ':type (expr-Int)))
+  (define n2 (that-write n1 cid 'p2 ':usage '(m1)))
+  (define am (net-cell-read n2 cid))
+  (check-equal? (hash-ref (that-read am 'p1) ':type) (expr-Int))
+  (check-false (hash-has-key? (that-read am 'p1) ':usage))
+  (check-equal? (hash-ref (that-read am 'p2) ':usage) '(m1))
+  (check-false (hash-has-key? (that-read am 'p2) ':type))
+  ;; Unknown position → empty record
+  (check-equal? (that-read am 'p3) (hasheq)))

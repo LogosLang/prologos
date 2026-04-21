@@ -488,19 +488,66 @@
     ;; Raw type-value: no inhabitant layer; return 'bot.
     [else 'bot]))
 
-(define (that-read attribute-map position facet)
-  (if (hash? attribute-map)
-      (let ([record (hash-ref attribute-map position (hasheq))])
+;; that-read has two forms:
+;;
+;;   (that-read attribute-map position)        → whole-record user-facing view
+;;   (that-read attribute-map position facet)  → single-facet value
+;;
+;; The arity-2 form returns a user-facing hash with facet → value entries
+;; for every facet actually stored at the position. The :type facet's
+;; internal classify-inhabit-value is DECOMPOSED: classifier layer appears
+;; under the ':type key, inhabitant layer under ':term. Consumers never see
+;; the internal classify-inhabit-value wrapper through this API.
+;;
+;; Use cases (PPN 4C Phase 3e addendum, 2026-04-20):
+;;   - LSP hover / IDE inspection: dump all attribute info at a cursor
+;;   - Phase 11b diagnostic: read provenance context (srcloc + type + usage)
+;;   - User-facing `that` grammar form: surface all attributes of an
+;;     expression/variable in user programs
+;;   - Debug/observability tooling
+;;
+;; Missing facets are NOT synthesized with bot defaults — iterate or use
+;; hash-ref with (facet-bot facet) fallback if the caller needs a uniform
+;; shape across all 5 facets. Keeps the return shape minimal and honest
+;; (returns what's actually stored, not what might be stored).
+(define that-read
+  (case-lambda
+    [(attribute-map position)
+     (cond
+       [(not (hash? attribute-map)) (hasheq)]
+       [else
+        (define record (hash-ref attribute-map position #f))
         (cond
-          [(not (hash? record)) (facet-bot facet)]
-          ;; :type and :term both read from the :type facet; dispatch on which
-          ;; layer to extract (classifier vs inhabitant).
-          [(eq? facet ':type)
-           (read-type-layer (hash-ref record ':type (facet-bot ':type)))]
-          [(eq? facet ':term)
-           (read-term-layer (hash-ref record ':type (facet-bot ':type)))]
-          [else (hash-ref record facet (facet-bot facet))]))
-      (facet-bot facet)))
+          [(not (hash? record)) (hasheq)]
+          [else
+           ;; Start: all non-:type facets pass through as-is
+           (define base
+             (for/fold ([acc (hasheq)])
+                       ([(facet val) (in-hash record)]
+                        #:unless (eq? facet ':type))
+               (hash-set acc facet val)))
+           ;; If :type facet stored, decompose classify-inhabit-value into
+           ;; user-facing :type (classifier) + :term (inhabitant) entries.
+           (define raw-type-val (hash-ref record ':type #f))
+           (cond
+             [(not raw-type-val) base]
+             [else
+              (hash-set
+               (hash-set base ':type (read-type-layer raw-type-val))
+               ':term (read-term-layer raw-type-val))])])])]
+    [(attribute-map position facet)
+     (if (hash? attribute-map)
+         (let ([record (hash-ref attribute-map position (hasheq))])
+           (cond
+             [(not (hash? record)) (facet-bot facet)]
+             ;; :type and :term both read from the :type facet; dispatch on which
+             ;; layer to extract (classifier vs inhabitant).
+             [(eq? facet ':type)
+              (read-type-layer (hash-ref record ':type (facet-bot ':type)))]
+             [(eq? facet ':term)
+              (read-term-layer (hash-ref record ':type (facet-bot ':type)))]
+             [else (hash-ref record facet (facet-bot facet))]))
+         (facet-bot facet))]))
 
 (define (that-write net cell-id position facet value)
   ;; :type writes wrap val as classifier-only (populates CLASSIFIER layer);
