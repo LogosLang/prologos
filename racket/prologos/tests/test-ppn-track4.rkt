@@ -107,8 +107,13 @@
      ;; Install a literal propagator for an int expression
      (define int-expr (expr-int 42))
      (define-values (net2 _pid)
+       ;; PPN 4C Phase 3e: attribute-map is classified 'structural. Declare
+       ;; whole-cell watch via (cons tm-cid #f) — matches production literal
+       ;; propagator pattern (doesn't read tm-cid value; tm-cid is dep-graph
+       ;; artifact).
        (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                           (make-literal-fire-fn tm-cid int-expr (expr-Int))))
+                           (make-literal-fire-fn tm-cid int-expr (expr-Int))
+                           #:component-paths (list (cons tm-cid #f))))
      ;; Run to quiescence — propagator fires and writes Int to type-map
      (define net3 (run-to-quiescence net2))
      ;; Read result from the type-map cell
@@ -123,8 +128,10 @@
        (net-new-cell net0 (hasheq) type-map-merge-fn))
      (define type-expr (expr-Type (lzero)))
      (define-values (net2 _pid)
+       ;; PPN 4C Phase 3e: universe propagator is another literal-like write.
        (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                           (make-universe-fire-fn tm-cid type-expr (lzero))))
+                           (make-universe-fire-fn tm-cid type-expr (lzero))
+                           #:component-paths (list (cons tm-cid #f))))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      (check-equal? (that-read tm type-expr ':type) (expr-Type (lsuc (lzero)))))

@@ -1324,6 +1324,9 @@
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
+     ;; PPN 4C Phase 3e: watch each child's :type facet for ret-type computation.
+     (define child-type-paths
+       (map (lambda (c) (cons tm-cid (cons c ':type))) child-exprs))
      (define-values (net* _pid)
        (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
          (lambda (net)
@@ -1335,16 +1338,24 @@
               (define result (ret-type child-types))
               (if result
                   (type-map-write net tm-cid e result)
-                  net)]))))  ;; function returned #f — can't compute
+                  net)]))  ;; function returned #f — can't compute
+         #:component-paths child-type-paths))
      net*]
     [else
      ;; Constant return type
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
+     ;; PPN 4C Phase 3e: literal-fire writes a constant; does not read tm-cid.
+     ;; The tm-cid input is a dep-graph artifact (needed for net-add-propagator's
+     ;; cell tracking). (cons tm-cid #f) declares "watches whole cell" per
+     ;; propagator.rkt filter convention, which fires for any change — correct
+     ;; for this fire-once propagator (writes regardless of inputs).
+     ;; Follow-up: a future sub-phase could remove tm-cid from inputs entirely.
      (define-values (net* _pid)
        (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
-                           (make-literal-fire-fn tm-cid e ret-type)))
+                           (make-literal-fire-fn tm-cid e ret-type)
+                           #:component-paths (list (cons tm-cid #f))))
      net*]))
 
 ;; Register ALL known expression kinds.
@@ -1721,11 +1732,16 @@
          [else
           (define trait-name (trait-constraint-info-trait-name tc-info))
           (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
-          ;; 1. Constraint-creation — P2 fire-once
+          ;; 1. Constraint-creation — P2 fire-once.
+          ;; PPN 4C Phase 3e: fire-fn reads static impl registry at fire time,
+          ;; not tm-cid. tm-cid is a dep-graph artifact. Declare whole-cell
+          ;; via (cons tm-cid #f) for Phase 1f enforcement; fire-once semantics
+          ;; make the "watches-whole-cell" firing cost negligible (fires at most
+          ;; once). Follow-up: remove tm-cid from inputs entirely.
           (define-values (net1 _cc-pid)
             (net-add-fire-once-propagator net-r (list tm-cid) (list tm-cid)
                                 (make-constraint-creation-fire-fn tm-cid e trait-name) tm-cid
-                                #:component-paths (list)))
+                                #:component-paths (list (cons tm-cid #f))))
           ;; 2. Type-narrows-constraints bridge (NOT fire-once — may fire multiple times)
           (define net2
             (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])
@@ -2181,9 +2197,19 @@
     (define net2 (install-typing-network net1b tm-cid expr ctx-val))
     ;; Phase 7: Install warning-collection propagator (S2, P2 fire-once).
     ;; Reads all :warnings facets, writes to warning output cell.
+    ;; PPN 4C Phase 3e: genuine whole-cell read — the collection fire iterates
+    ;; every position's :warnings facet. Declared as (cons tm-cid #f) per the
+    ;; propagator.rkt filter convention — explicit whole-cell watch, passes
+    ;; Phase 1f structural enforcement. Design question per §6.15.5: could this
+    ;; be split into per-position warning-emitters? The warning-collection
+    ;; aggregates multi-position findings at elaboration close (S2 stratum),
+    ;; so component-paths per known-positions list isn't natural — new
+    ;; warning positions are emitted dynamically during elaboration. Accepted
+    ;; as whole-cell read.
     (define-values (net2w _w-pid)
       (net-add-fire-once-propagator net2 (list tm-cid) (list warning-output-cid)
-        (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid))
+        (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid
+        #:component-paths (list (cons tm-cid #f))))
     ;; 4. Run to quiescence with fuel limit (save/restore for main network)
     (define saved-fuel (prop-network-fuel net2w))
     (define net2-limited

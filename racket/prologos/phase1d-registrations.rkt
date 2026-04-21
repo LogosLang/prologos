@@ -76,7 +76,12 @@
 ;; is checked elsewhere). Keeping minimal declarations; D2 inference
 ;; later (Phase 1e audit) can refine.
 
-(define (register/minimal domain-name merge-fn bot-predicate bot-value)
+;; PPN 4C Phase 3e (2026-04-20): #:classification kwarg added. Default
+;; 'unclassified preserves the progressive-rollout pattern from Phase 1f.
+;; Pass #:classification 'structural to enable Phase 1f :component-paths
+;; enforcement on cells of this domain.
+(define (register/minimal domain-name merge-fn bot-predicate bot-value
+                          #:classification [classification 'unclassified])
   (define d (make-sre-domain
              #:name domain-name
              #:merge-registry (lambda (r)
@@ -86,7 +91,8 @@
                                                "no merge for relation: ~a" r)]))
              #:contradicts? (lambda (v) #f)
              #:bot? bot-predicate
-             #:bot-value bot-value))
+             #:bot-value bot-value
+             #:classification classification))
   (register-domain! d)
   (register-merge-fn!/lattice merge-fn #:for-domain domain-name))
 
@@ -179,9 +185,18 @@
 ;; (hasheq position → (hasheq facet → value)). Merge is pointwise
 ;; per-facet via facet-merge dispatch. Commutative iff each inner
 ;; facet merge is commutative (D2 delta per facet documents).
+;;
+;; PPN 4C Phase 3e (2026-04-20): classified 'structural. Per §6.15.5,
+;; this enables Phase 1f :component-paths enforcement for propagators
+;; reading attribute-map cells. Each propagator must declare which
+;; (position, facet) pairs it watches, or justify a whole-cell read
+;; (§6.15.5: "rare for structural cells; if it exists, it's a design
+;; question"). Phase 3e audits the typing-propagators.rkt installations
+;; and tightens declarations or defers restructuring.
 (register/minimal 'attribute-map attribute-map-merge-fn
                   (lambda (v) (and (hash? v) (zero? (hash-count v))))
-                  (hasheq))
+                  (hasheq)
+                  #:classification 'structural)
 
 ;; 'meta-solution — list-append semantics for accumulating meta
 ;; solutions. D2 delta: non-commutative list concatenation;
