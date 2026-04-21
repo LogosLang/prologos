@@ -1393,16 +1393,16 @@
      (define net-with-children
        (for/fold ([n net]) ([child-fn (in-list children)])
          (install-typing-network n tm-cid (child-fn e) ctx-pos)))
-     ;; PPN 4C Phase 3e: literal-fire writes a constant; does not read tm-cid.
-     ;; The tm-cid input is a dep-graph artifact (needed for net-add-propagator's
-     ;; cell tracking). (cons tm-cid #f) declares "watches whole cell" per
-     ;; propagator.rkt filter convention, which fires for any change — correct
-     ;; for this fire-once propagator (writes regardless of inputs).
-     ;; Follow-up: a future sub-phase could remove tm-cid from inputs entirely.
+     ;; PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire writes a constant
+     ;; and does NOT read any cell. Inputs = (list) — no dependencies. The
+     ;; propagator still fires exactly once via the scheduler's initial-firing
+     ;; path (net-add-propagator unconditionally enqueues pid at install time).
+     ;; No :component-paths needed (empty input list means no structural
+     ;; inputs to enforce). Cleaner than the (cons tm-cid #f) whole-cell
+     ;; declaration that misleadingly suggested it watches everything.
      (define-values (net* _pid)
-       (net-add-propagator net-with-children (list tm-cid) (list tm-cid)
-                           (make-literal-fire-fn tm-cid e ret-type)
-                           #:component-paths (list (cons tm-cid #f))))
+       (net-add-propagator net-with-children (list) (list tm-cid)
+                           (make-literal-fire-fn tm-cid e ret-type)))
      net*]))
 
 ;; Register ALL known expression kinds.
@@ -1780,15 +1780,19 @@
           (define trait-name (trait-constraint-info-trait-name tc-info))
           (define type-arg-exprs (trait-constraint-info-type-arg-exprs tc-info))
           ;; 1. Constraint-creation — P2 fire-once.
-          ;; PPN 4C Phase 3e: fire-fn reads static impl registry at fire time,
-          ;; not tm-cid. tm-cid is a dep-graph artifact. Declare whole-cell
-          ;; via (cons tm-cid #f) for Phase 1f enforcement; fire-once semantics
-          ;; make the "watches-whole-cell" firing cost negligible (fires at most
-          ;; once). Follow-up: remove tm-cid from inputs entirely.
+          ;; PPN 4C Phase 3e/follow-up (2026-04-20): fire-fn actually reads
+          ;; :constraints at dict-meta-pos to check if still bot before writing
+          ;; (typing-propagators.rkt:687) — NOT a pure write as the prior
+          ;; comment suggested. The whole-cell (cons tm-cid #f) declaration was
+          ;; an over-declaration. Corrected: specific path on :constraints facet
+          ;; at e (dict-meta-pos). Fire-once semantics still preserved via
+          ;; net-add-fire-once-propagator; the path declaration is the accurate
+          ;; propagator-watches-what statement per Phase 1f discipline.
           (define-values (net1 _cc-pid)
             (net-add-fire-once-propagator net-r (list tm-cid) (list tm-cid)
                                 (make-constraint-creation-fire-fn tm-cid e trait-name) tm-cid
-                                #:component-paths (list (cons tm-cid #f))))
+                                #:component-paths
+                                (list (cons tm-cid (cons e ':constraints)))))
           ;; 2. Type-narrows-constraints bridge (NOT fire-once — may fire multiple times)
           (define net2
             (for/fold ([n net1]) ([ta (in-list type-arg-exprs)])

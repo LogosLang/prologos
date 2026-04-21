@@ -107,13 +107,12 @@
      ;; Install a literal propagator for an int expression
      (define int-expr (expr-int 42))
      (define-values (net2 _pid)
-       ;; PPN 4C Phase 3e: attribute-map is classified 'structural. Declare
-       ;; whole-cell watch via (cons tm-cid #f) — matches production literal
-       ;; propagator pattern (doesn't read tm-cid value; tm-cid is dep-graph
-       ;; artifact).
-       (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                           (make-literal-fire-fn tm-cid int-expr (expr-Int))
-                           #:component-paths (list (cons tm-cid #f))))
+       ;; PPN 4C Phase 3e/follow-up (2026-04-20): literal-fire is a pure write
+       ;; (no cell reads). Empty inputs; no :component-paths needed. Matches
+       ;; production install at typing-propagators.rkt. Fire-once via the
+       ;; scheduler's initial-firing path.
+       (net-add-propagator net1 (list) (list tm-cid)
+                           (make-literal-fire-fn tm-cid int-expr (expr-Int))))
      ;; Run to quiescence — propagator fires and writes Int to type-map
      (define net3 (run-to-quiescence net2))
      ;; Read result from the type-map cell
@@ -128,10 +127,10 @@
        (net-new-cell net0 (hasheq) type-map-merge-fn))
      (define type-expr (expr-Type (lzero)))
      (define-values (net2 _pid)
-       ;; PPN 4C Phase 3e: universe propagator is another literal-like write.
-       (net-add-propagator net1 (list tm-cid) (list tm-cid)
-                           (make-universe-fire-fn tm-cid type-expr (lzero))
-                           #:component-paths (list (cons tm-cid #f))))
+       ;; PPN 4C Phase 3e/follow-up (2026-04-20): universe-fire is also a pure
+       ;; write (no cell reads). Empty inputs; no :component-paths needed.
+       (net-add-propagator net1 (list) (list tm-cid)
+                           (make-universe-fire-fn tm-cid type-expr (lzero))))
      (define net3 (run-to-quiescence net2))
      (define tm (net-cell-read net3 tm-cid))
      (check-equal? (that-read tm type-expr ':type) (expr-Type (lsuc (lzero)))))
