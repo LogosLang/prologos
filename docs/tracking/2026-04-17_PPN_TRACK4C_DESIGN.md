@@ -94,6 +94,7 @@ Each phase completes with the 5-step blocking checklist (tests, commit, tracker,
 | 1f | Structural enforcement at `net-add-propagator` + hard-error flip | ✅ | **1f ✅** (commit `25b421fe`) sre-domain gets `#:classification` field ('structural | 'value | 'unclassified); sre-core.rkt's `lookup-domain-classification` exported; propagator.rkt adds `current-domain-classification-lookup` parameter + `enforce-component-paths!`; infra-cell-sre-registrations.rkt wires the callback. Hard-error fires on classified-structural cell read without `:component-paths`. Initial classifications: `'hasse-registry` structural; `'meta-solve`, `'timestamped-cell` value. All other existing domains remain `'unclassified` (progressive rollout). Dedicated test file `test-component-paths-enforcement.rkt` 10/10 GREEN. Full classification of remaining ~25 SRE domains is per-session progressive work. |
 | 1V | Vision Alignment Gate for Phase 1 | ✅ | **1V ✅** (2026-04-20) all 4 VAG questions passed: (a) on-network — all registration infrastructure on-network; off-network scaffolding labeled in DEFERRED.md with PM Track 12 retirement plans. (b) complete — Tier 1/2/3 architecture delivered; 82 registered sites; 5 new SRE domains; hard-error enforcement live; 32 identity-migration + 5 timestamp-migration candidates captured for PM Track 12. (c) vision-advancing — discipline→structure transition for :component-paths rule complete. (d) drift-risks-cleared — all 8 named risks from Phase 1 mini-design audit cleared; scope-reductions (1e-α, 1e-β-iii-b) architecturally correct and captured for PM 12 coordination. **Phase 1 COMPLETE**. Aggregate: ~25 commits, 20+ new SRE domains, 5 new infra modules, lint baseline 27→4 (85% shrink), 6022 affected-tests GREEN, 124+ dedicated tests. Ready for Phase 3. |
 | T | Dedicated test files | ⬜ | Enumerated (C4 external critique 2026-04-18): `test-elaboration-parity.rkt` (parity skeleton from §9 expanded per axis), `test-attribute-tag-layers.rkt` (A5 `:type`/`:term` Phase 3), `test-hasse-registry.rkt` (Phase 2b primitive + both instantiations), `test-parametric-resolution-propagator.rkt` (A1/Phase 7), `test-union-atms.rkt` (Phase 10 + cell-based TMS), `test-cell-ref-expressions.rkt` (Phase 12 Option C), `test-tropical-fuel.rkt` (M2 tropical-fuel cell, if adopted), `test-coverage-structural.rkt` (P3 structural coverage, if adopted), `test-warnings-retirement.rkt` (Phase 5 parameter retirement). |
+| 13 | Progressive SRE domain classification | ⬜ | See **§6.16** for full scope. Cross-cutting Phase 1f follow-up: systematically classify remaining SRE domains from `'unclassified` (default) to `'structural` or `'value` as appropriate. Each classification surfaces latent `:component-paths` gaps; gaps are treated as real findings per Phase 3e precedent. Ongoing ratchet — each sub-phase classifies ONE domain + fixes its surfaced gaps. No flag-day classification (would cascade widely). Candidate domains in priority order (see §6.16 for full checklist): **13-a** `'decisions-state` (BSP-LE compound; high-value); **13-b** `'commitments-state` (same); **13-c** `'hasheq-identity` + `'hasheq-replace` (broadly used carriers); **13-d** remaining (`'atms-assumptions`, `'wf-all-mode`, per-subsystem review). Each sub-phase: audit cells, classify, fix gaps (add `:component-paths` or justify whole-cell per §6.15.5), commit + tracker update. Budget: ~30-60 min per sub-phase based on Phase 3e precedent (5 fixes in typing-propagators.rkt). Opportunistic scheduling — interleave with subsystem work (e.g., Phase 7 trait-resolution would naturally touch `'decisions-state`). Track here so classifications don't slip through cracks. |
 | V | Acceptance + A/B benchmarks + capstone demo + PIR | ⬜ | L3 acceptance green; A/B shows no regression; PIR |
 
 ### Phase dependency graph
@@ -1854,6 +1855,49 @@ Named 2026-04-20 from mini-design audit:
 5. **`:component-paths` enforcement surfaces structural-read gaps at 3e** — treat as real findings; don't paper over
 6. **Property inference divergence from aspirational** — discuss as design signal per the user's 2026-04-20 guidance
 7. **A/B bench outcome forces rework** — lazy-vs-eager decision locked by data (threshold ≥10%); have both implementations ready for toggle
+
+---
+
+### §6.16 Phase 13 — Progressive SRE domain classification (2026-04-20)
+
+Cross-cutting Phase 1f follow-up. Phase 1f shipped classification infrastructure (Tier 1 classification field on SRE domains, Phase 1f enforcement at `net-add-propagator`). Phase 1f initially classified 3 domains (`'hasse-registry`, `'meta-solve`, `'timestamped-cell`); Phase 3a+3b added `'classify-inhabit`; Phase 3e added `'attribute-map`. All other registered SRE domains remain `'unclassified` by default. Phase 13 systematically progresses the remaining domains.
+
+**Why "progressive" (per §6.15.5 pattern)**: Flag-day classification of all domains would cascade `:component-paths` enforcement failures across the codebase simultaneously (each classification surfaces 3-5 gaps per Phase 3e precedent). Per-domain, per-session classification: classify ONE domain, fix its surfaced gaps, commit. Ratchet that never goes backward.
+
+**Pattern per sub-phase** (matching Phase 3e):
+1. Audit propagators reading cells of the target domain
+2. Update the domain's SRE registration with `#:classification 'structural` (or 'value if atomic)
+3. Run targeted tests; iterate on failures
+4. For each gap: declare specific `:component-paths` OR justify whole-cell via `(cons cid #f)` per §6.15.5 design question
+5. Commit + tracker row update + dailies entry
+
+**Candidate checklist** (ordered by expected value / BSP-LE-relevance):
+
+- **13-a** `'decisions-state` → likely `'structural` (compound hash of assumption-id → alternatives). BSP-LE Track 2 core cell. Propagators reading it are ATMS narrowers, speculation bridges. High value — BSP-LE was built with propagator-design.md discipline; classification should surface FEW gaps, confirming the discipline.
+- **13-b** `'commitments-state` → likely `'structural`. Similar shape to decisions-state. ATMS commitment tracking.
+- **13-c** `'hasheq-identity` + `'hasheq-replace` → `'structural`. Broadly used hasheq carriers (module registries, namespace tables). Gaps here reveal whether consumers treat them as dynamic hashmaps (watching specific keys) or as opaque blobs.
+- **13-d** `'atms-assumptions` → needs inspection. If bitmask, 'value; if set-valued, 'structural.
+- **13-e** `'wf-all-mode` → needs inspection.
+- **13-f** Per-subsystem sweep (tabling, relations.rkt internal carriers, etc.) — exhaustive coverage.
+
+**Likely-`'value` domains** (no per-component watching needed):
+- `'counter` — atomic integer
+- `'dedup-list-append` — single accumulator list
+- `'meta-solution` — single append-merge list
+- `'type` — atomic type expression (cell-level; compound structure is in the value, not in cell-level components)
+
+**Scheduling strategy**:
+- **Opportunistic**: during subsystem work, classify that subsystem's domains (e.g., Phase 7 touches trait-resolution which uses `'decisions-state` — classify at the start of Phase 7).
+- **Dedicated**: a focused session can batch 13-a through 13-c (~2-3 hours total based on Phase 3e precedent).
+- **End-of-track**: remaining domains classified before Phase V (capstone) to ensure correct-by-construction discipline is complete before PIR.
+
+**What progressive classification gains**: each structural classification → Phase 1f enforcement on that domain's cells → discipline-to-structure transition. Violations become compile errors rather than silent wrong behavior. Over time, the whole codebase's `:component-paths` discipline is structurally enforced.
+
+**What it doesn't gain** (and shouldn't be pitched as): runtime performance. Phase 1f enforcement fires at `net-add-propagator` registration, not during fire. Zero runtime cost. The value is architectural hygiene — correct-by-construction catching of latent bugs.
+
+**Registration mechanism**: `register/minimal` in `phase1d-registrations.rkt` already accepts `#:classification` kwarg (added in Phase 3e). New classifications: pass `#:classification 'structural` or `#:classification 'value` at the registration call. No infrastructure changes needed; just the per-domain migration work.
+
+**Tracker updates per sub-phase**: mark 13-X ✅ with commit hash + "N gaps surfaced and fixed" note. Each sub-phase is self-contained.
 
 ---
 
