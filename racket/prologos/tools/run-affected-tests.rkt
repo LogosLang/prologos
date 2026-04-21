@@ -179,6 +179,19 @@
 (define bail-timeout-threshold (make-parameter 3))
 (define force-rerun? (make-parameter #f))
 (define force-stale-zo? (make-parameter #f))
+;; PPN 4C Phase 3c process improvement (2026-04-20): --tests FILE...
+;; Targeted test mode. Takes explicit file paths, skips dep-graph inference,
+;; runs precompile-modules! (so test .zo linklets are fresh w.r.t. any
+;; export changes in production), then runs just the listed files. Use this
+;; after ANY production edit — `raco test FILE` directly uses cached .zo and
+;; will hit linklet-mismatch ("reference to a variable that is not exported")
+;; when imported-module exports change.
+(define targeted-tests (make-parameter '()))
+
+;; Internal: suppress the global stale-.zo scan when targeted mode has done
+;; its own scoped precompile. Distinct from --force-stale-zo?, which is a
+;; user-facing "accept stale files" override that emits a warning.
+(define suppress-stale-scan? (make-parameter #f))
 
 (define (main)
   (command-line
@@ -216,7 +229,9 @@
     (force-stale-zo? #t)]
    #:multi
    ["--skip" file "Skip an additional test file (additive with .skip-tests)"
-    (extra-skips (cons (string->symbol file) (extra-skips)))])
+    (extra-skips (cons (string->symbol file) (extra-skips)))]
+   ["--tests" file "Run specific test file(s); precompile ensures linklet freshness. Additive — can appear multiple times."
+    (targeted-tests (cons file (targeted-tests)))])
 
   ;; Anchor from script's own location: tools/ → prologos/
   (define tools-dir
@@ -281,6 +296,73 @@
           (exit 0)))))
 
   (cond
+    ;; --tests FILE...: run specific files with precompile discipline.
+    ;; Use after ANY production edit (especially export changes) to avoid
+    ;; stale-.zo linklet-mismatch errors from bare `raco test`. Precompile
+    ;; is SCOPED to driver.rkt + the listed test files (not the full test
+    ;; directory) to keep targeted iteration fast.
+    [(pair? (targeted-tests))
+     (define files (reverse (targeted-tests)))
+     ;; Normalize each file path against the project root (tolerate relative
+     ;; input like "tests/test-X.rkt" or absolute paths equally).
+     (define normalized-files
+       (for/list ([f (in-list files)])
+         (cond
+           [(absolute-path? f) f]
+           [else (path->string (simplify-path (build-path project-root f)))])))
+     ;; Validate existence — fail fast rather than submit a nonexistent path
+     ;; to the batch worker, which would produce confusing errors.
+     (define missing
+       (filter (lambda (p) (not (file-exists? p))) normalized-files))
+     (cond
+       [(pair? missing)
+        (for ([p (in-list missing)])
+          (eprintf "Error: test file not found: ~a\n" p))
+        (exit 1)]
+       [else
+        (printf "Running ~a targeted test file(s) with scoped precompile...\n"
+                (length normalized-files))
+        (when (dry-run?)
+          (for ([p (in-list normalized-files)])
+            (printf "  ~a\n" p)))
+        (unless (dry-run?)
+          ;; Scoped precompile: driver.rkt + just the targeted tests. This is
+          ;; the linklet-safety guarantee for targeted runs. Fast path ~3-5s
+          ;; typical (vs ~30s full-directory precompile). Skip run-tests's
+          ;; global precompile since we've done the scoped one here.
+          (define driver-path
+            (path->string (simplify-path (build-path project-root "driver.rkt"))))
+          (define compile-paths (cons driver-path normalized-files))
+          (cond
+            [(do-precompile?)
+             (printf "Pre-compiling driver + ~a test file(s)...\n"
+                     (length normalized-files))
+             (define t0 (current-inexact-monotonic-milliseconds))
+             (define-values (proc out in err)
+               (apply subprocess #f #f #f (find-raco-path) "make" compile-paths))
+             (close-output-port in)
+             (subprocess-wait proc)
+             (close-input-port out)
+             (close-input-port err)
+             (define ms (- (current-inexact-monotonic-milliseconds) t0))
+             (printf "Pre-compiled in ~as\n"
+                     (real->decimal-string (/ ms 1000.0) 1))
+             (unless (zero? (subprocess-status proc))
+               (eprintf "Error: raco make failed for targeted precompile.\n")
+               (exit 1))
+             ;; run-tests still invokes precompile-modules! via its own
+             ;; do-precompile? path — temporarily disable to avoid re-running
+             ;; the full-directory precompile we just replaced. Also suppress
+             ;; the stale-.zo scan over the full tests/ directory since we
+             ;; only care about linklet-safety for the targeted files (already
+             ;; fresh post scoped precompile). Global stale detection would
+             ;; recompile ~120 files we won't run.
+             (parameterize ([do-precompile? #f]
+                            [suppress-stale-scan? #t])
+               (run-tests normalized-files project-root))]
+            [else
+             (run-tests normalized-files project-root)]))])]
+
     ;; --all: run everything (subject to skip filter)
     [(run-all?)
      ;; Merge dep-graph entries with any test files on disk not yet in dep-graph
@@ -475,8 +557,12 @@
   ;; --no-precompile, invoke it on the stale subset. Fast (already-fresh
   ;; files are no-ops). Preserves --no-precompile's purpose (skip full
   ;; recompile) while auto-fixing the silent-corruption trap.
+  ;;
+  ;; PPN 4C Phase 3c-close: --tests mode suppresses this via
+  ;; suppress-stale-scan? — scoped precompile already handled the targeted
+  ;; files; scanning other stale .zo wastes time on tests we won't run.
   ;; Override via --force-stale-zo for intentional reproduction of old behavior.
-  (unless (do-precompile?)
+  (unless (or (do-precompile?) (suppress-stale-scan?))
     (define stale-files '())
     (let* ([driver-src (build-path project-root "driver.rkt")]
            [driver-zo  (build-path project-root "compiled" "driver_rkt.zo")])
