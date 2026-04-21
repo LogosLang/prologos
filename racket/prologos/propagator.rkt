@@ -187,6 +187,9 @@
  naf-pending-merge
  register-stratum-handler!
  stratum-handlers
+ ;; PPN 4C Phase 3c-iii: classify-inhabit residuation request cell + merge.
+ classify-inhabit-request-cell-id
+ classify-inhabit-request-merge
  ;; BSP-LE Track 2B Addendum A1: per-subsystem topology cells + shared merge
  constraint-propagators-topology-cell-id
  elaborator-topology-cell-id
@@ -561,6 +564,21 @@
 (define elaborator-topology-cell-id (cell-id 7))
 (define narrowing-topology-cell-id (cell-id 8))
 (define sre-topology-cell-id (cell-id 9))
+;; PPN 4C Phase 3c-iii: cell-id 10 = classify-inhabit residuation request.
+;; Carrier: hasheq (cell-id × position) → narrowing-info.
+;; Merge: hash-union (requests accumulate monotonically per-round).
+;; Read by: classify-inhabit stratum handler (in typing-propagators.rkt)
+;; after S0 quiesces. Handler processes pending narrowing / contradiction
+;; actions per §6.15.8 Q2. Phase 9 joint design item (§6.15.6): narrowing
+;; requests gain worldview assumption-id overlay later.
+(define classify-inhabit-request-cell-id (cell-id 10))
+(define (classify-inhabit-request-merge old new)
+  (if (hash? old)
+      (if (hash? new)
+          (for/fold ([acc old]) ([(k v) (in-hash new)])
+            (hash-set acc k v))
+          old)
+      new))
 ;; Shared merge for all topology request cells: SET-valued, set-union.
 (define (topology-request-merge old new)
   (set-union old new))
@@ -639,6 +657,10 @@
   (define sre-cid sre-topology-cell-id)
   (define sre-h  (cell-id-hash sre-cid))
   (define sre-cell (prop-cell (set) champ-empty))
+  ;; PPN 4C Phase 3c-iii: cell-id 10 = classify-inhabit residuation request.
+  (define cir-cid classify-inhabit-request-cell-id)
+  (define cir-h (cell-id-hash cir-cid))
+  (define cir-cell (prop-cell (hasheq) champ-empty))  ;; empty hasheq, no dependents
   (prop-network
    (prop-net-hot '() fuel)
    (prop-net-warm (for/fold ([acc champ-empty])
@@ -651,7 +673,8 @@
                                                   (cons cp-h (cons cp-cid cp-cell))
                                                   (cons elab-h (cons elab-cid elab-cell))
                                                   (cons narr-h (cons narr-cid narr-cell))
-                                                  (cons sre-h (cons sre-cid sre-cell))))])
+                                                  (cons sre-h (cons sre-cid sre-cell))
+                                                  (cons cir-h (cons cir-cid cir-cell))))])
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   #f)
    (prop-net-cold (for/fold ([acc champ-empty])
@@ -664,12 +687,13 @@
                                                   (cons cp-h (cons cp-cid topology-request-merge))
                                                   (cons elab-h (cons elab-cid topology-request-merge))
                                                   (cons narr-h (cons narr-cid topology-request-merge))
-                                                  (cons sre-h (cons sre-cid topology-request-merge))))])
+                                                  (cons sre-h (cons sre-cid topology-request-merge))
+                                                  (cons cir-h (cons cir-cid classify-inhabit-request-merge))))])
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   champ-empty        ;;   contradiction-fns
                   champ-empty        ;;   widen-fns
                   champ-empty        ;;   propagators
-                  10                 ;;   next-cell-id (0-5 well-known; 6-9 topology subsystem)
+                  11                 ;;   next-cell-id (0-5 well-known; 6-9 topology; 10 classify-inhabit request)
                   0                  ;;   next-prop-id
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps

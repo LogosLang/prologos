@@ -107,7 +107,7 @@
 
 (test-case "serialize-network-topology: empty network"
   (define js (serialize-network-topology (make-prop-network)))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 10)  ;; A1: 10 well-known cells (0-5 + 6-9 topology subsystem)
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 11)  ;; PPN 4C 3c-iii: 11 well-known cells (0-5 well-known, 6-9 topology, 10 classify-inhabit-request)
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 0)
   (check-equal? (hash-ref (hash-ref js 'stats) 'contradiction) (json-null)))
 
@@ -121,7 +121,7 @@
     (if (eq? v 'bot) net (net-cell-write net cid-b v)))
   (define-values (net3 pid) (net-add-propagator net2 (list cid-a) (list cid-b) copy-fn))
   (define js (serialize-network-topology net3))
-  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 12)  ;; A1: 10 well-known (0-5 + 6-9 topology) + 2 user (cid-a, cid-b)
+  (check-equal? (hash-ref (hash-ref js 'stats) 'totalCells) 13)  ;; PPN 4C 3c-iii: 11 well-known (0-5 well-known, 6-9 topology, 10 classify-inhabit-request) + 2 user (cid-a, cid-b)
   (check-equal? (hash-ref (hash-ref js 'stats) 'totalPropagators) 1)
   ;; Check propagator has correct inputs/outputs
   (define prop-json (car (hash-ref js 'propagators)))
