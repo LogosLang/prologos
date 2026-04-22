@@ -2,8 +2,19 @@
 
 **Date**: 2026-04-21
 **Stage**: 3 — Design per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3
-**Version**: D.2 — refined from D.1 per user review 2026-04-21
+**Version**: D.3 — scope revision from D.2 per Phase 1A mini-design audit 2026-04-21
 **Scope**: PPN 4C Phase 9+10+11 combined addendum (renumbered to Phase 1, 2, 3 for this addendum)
+
+**D.2 → D.3 changes** (applied 2026-04-21, per Phase 1A mini-design audit finding):
+- Phase 1A scope revised based on mini-audit finding: `current-speculation-stack` is MORE alive than the Stage 2 audit indicated. Key discoveries:
+  * `wrap-with-assumption` (correct name; audit's "wrap-with-assumption-stack" was a typo) has ZERO production callers — dead code
+  * `promote-cell-to-tms` has ZERO production callers — dead code
+  * `net-new-tms-cell` has 4 PRODUCTION callers in `elaborator-network.rkt` (type cells, mult cells, meta-solution cells) — these create TMS-wrapped cells that route through the fallback path
+  * Retiring `current-speculation-stack` therefore requires retiring the TMS-cell mechanism it serves, which means migrating these 4 elaborator-network.rkt sites to tagged-cell-value-based cells
+- Phase 1A now sub-split into 1A-i, 1A-ii, 1A-iii (see §7.3, §7.4, §7.5)
+- Phase 1 total LoC estimate revised upward: ~530-850 (was ~350-550) because Phase 1A grew from ~100-150 to ~280-450
+- Track total LoC estimate revised: ~830-1450 (was ~650-1150)
+- BSP-LE Track 2 PIR's "RETIRED" claim on `current-speculation-stack` is now contextualized: it retired the SPECULATION uses via `with-speculative-rollback`, NOT the TMS-cell-mechanism uses via `net-new-tms-cell`. This addendum track completes the retirement.
 
 **D.1 → D.2 changes** (applied 2026-04-21):
 - Added Phase 10 to explicit scope (D.1 mentioned only 9 and 11)
@@ -33,8 +44,11 @@ PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 
 
 ### §1.2 Phase scope
 
-**Phase 1 — Substrate reconciliation + tropical fuel primitive** (~300-500 LoC)
-- Retire `current-speculation-stack` parameter + 3 fallback sites in propagator.rkt + 1 active `wrap-with-assumption-stack` in typing-propagators.rkt
+**Phase 1 — Substrate reconciliation + tropical fuel primitive** (~530-850 LoC, revised per Phase 1A mini-audit)
+- Retire `wrap-with-assumption` (dead) + `promote-cell-to-tms` (dead)
+- Migrate 4 `net-new-tms-cell` sites in `elaborator-network.rkt` to tagged-cell-value-based cells
+- Retire `net-new-tms-cell` factory + `tms-cell-value` struct + `tms-read`/`tms-write` (as their sole consumer goes away)
+- Retire `current-speculation-stack` parameter + 3 fallback sites in propagator.rkt
 - Ship tropical fuel primitive (SRE domain + primitive API) per Q-A2 resolution
 - Migrate `prop-network-fuel` field + 15+ decrement/check sites to canonical tropical fuel cell via the primitive
 
@@ -49,7 +63,7 @@ PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 
 - Wire subcube pruning into contradiction propagation
 - Residuation-based error-explanation for all-branch-contradict
 
-**Total estimate**: 650-1150 LoC across 3 phases + their sub-phases.
+**Total estimate**: 830-1450 LoC across 3 phases + their sub-phases (revised D.3 per Phase 1A mini-audit scope finding).
 
 ### §1.3 Out of scope (explicit deferrals)
 
@@ -91,9 +105,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 |---|---|---|---|
 | Stage 1 | Research doc (tropical quantale) | ✅ | commit `de357aa1` |
 | Stage 2 | Audit doc | ✅ | commits `62ce9f83`, `28208613` |
-| Stage 3 | Design doc (this) | 🔄 D.2 | Iterating via P/R/M/S |
+| Stage 3 | Design doc (this) | 🔄 D.3 | Scope revised per Phase 1A mini-audit |
 | 0 | Uses PPN 4C existing acceptance file + Pre-0 bench (no new artifacts needed) | ✅ | `examples/2026-04-17-ppn-track4c.prologos`; `benchmarks/micro/bench-ppn-track4c.rkt` |
-| 1A | Retire `current-speculation-stack` + fallbacks | ⬜ | Mini-design at phase start |
+| 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ⬜ | ~30-50 LoC, low risk |
+| 1A-ii | Migrate 4 `net-new-tms-cell` sites in `elaborator-network.rkt` to tagged-cell-value | ⬜ | ~150-200 LoC, highest risk; mini-audit at phase start |
+| 1A-iii | Retire `net-new-tms-cell` + `tms-cell-value` + `tms-read`/`tms-write` + `current-speculation-stack` + fallback paths | ⬜ | ~100-200 LoC |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
@@ -373,28 +389,91 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 
 ### §7.2 Sub-phase partition
 
-- **Phase 1A — Retire `current-speculation-stack` + fallback paths** (~100-150 LoC)
+- **Phase 1A-i — Retire dead code** (~30-50 LoC)
+- **Phase 1A-ii — Migrate elaborator-network.rkt TMS cells to tagged-cell-value** (~150-200 LoC)
+- **Phase 1A-iii — Retire TMS-cell mechanism + `current-speculation-stack`** (~100-200 LoC)
 - **Phase 1B — Tropical fuel primitive + SRE registration** (~150-200 LoC)
 - **Phase 1C — Migrate `prop-network-fuel` → canonical tropical fuel cell** (~100-200 LoC)
 - **Phase 1V — Vision Alignment Gate**
 
-### §7.3 Phase 1A deliverables
+### §7.3 Phase 1A-i deliverables (dead-code cleanup)
 
-**Retirement targets** (per audit §3.1.5):
-1. Delete `current-speculation-stack` parameter definition at `propagator.rkt:1621` and export at `:155`
-2. Delete `tms-read`/`tms-write` fallback branches at `propagator.rkt:995` (net-cell-read), `:1251` (net-cell-write), `:3225` (net-cell-write-widen)
-3. Delete `wrap-with-assumption-stack` helper in `typing-propagators.rkt:316-328`
-4. Migrate its single active site (find during Phase 1A mini-design)
-5. Delete comment-only references in `cell-ops.rkt:62, 103`
-6. Update `test-tms-cell.rkt` (9 active parameterize sites, lines 273-333) — rewrite tests to use `worldview-cache-cell-id` or `current-worldview-bitmask`
+**Retirement targets** (per Phase 1A mini-design audit 2026-04-21):
+1. Delete `wrap-with-assumption` helper at `typing-propagators.rkt:325-329` — ZERO production callers (D.2's "wrap-with-assumption-stack" name was a typo; correct name is `wrap-with-assumption`)
+2. Delete `promote-cell-to-tms` helper at `typing-propagators.rkt:334-338` — ZERO production callers (sole reference at `typing-propagators.rkt:1918` is a comment)
+3. Update exports in `typing-propagators.rkt` if these are exported
+4. No comment-only scrubs required (audit §3.1.1's claim about `cell-ops.rkt:62, 103` — re-verify at phase start; may be comments to leave or update)
 
 **Deliverables**:
-- All 6 retirement targets completed
-- `tms-read`/`tms-write` functions themselves RETAIN (they're pure functions over stack argument; used internally by TMS cell mechanisms for parameter-free call sites)
-- Affected-tests suite GREEN
+- Both dead helpers deleted
+- Exports updated
+- Affected-tests GREEN
 - Per-phase regression: acceptance file clean via `process-file`
 
-### §7.4 Phase 1B deliverables
+**Low risk**: pure deletion of dead code. Verification is whether the deletion triggers any unexpected test or module-load failures (i.e., confirmation that dead really means dead).
+
+### §7.4 Phase 1A-ii deliverables (elaborator-network.rkt TMS cell migration)
+
+**Migration targets** (per mini-audit finding):
+1. `elaborator-network.rkt:114` — type cell: `(net-new-tms-cell net type-bot type-lattice-merge type-lattice-contradicts?)`
+2. `elaborator-network.rkt:921` — mult cell: `(net-new-tms-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?)`
+3. `elaborator-network.rkt:995` — meta solution cell (variant A): `(net-new-tms-cell net 'unsolved merge-meta-solve-identity)`
+4. `elaborator-network.rkt:1011` — meta solution cell (variant B): `(net-new-tms-cell net 'unsolved merge-meta-solve-identity)`
+
+**Migration target shape** (each site):
+```
+;; BEFORE
+(net-new-tms-cell net INITIAL DOMAIN-MERGE [CONTRADICTS?])
+
+;; AFTER
+(net-new-cell net INITIAL
+              (make-tagged-merge DOMAIN-MERGE)
+              [CONTRADICTS?])
+```
+
+The tagged-cell-value mechanism (BSP-LE 2B infrastructure) handles speculation-tagging via `current-worldview-bitmask`. `with-speculative-rollback` continues to work because it reads/writes via the bitmask path which is the primary path for tagged-cell-value cells.
+
+**Risk area**: ensuring `with-speculative-rollback` semantics are preserved post-migration. `with-speculative-rollback` callers (qtt.rkt, typing-errors.rkt, typing-core.rkt — 4 sites per audit §3.2.2) must continue to work identically. Parity tests target this.
+
+**Deliverables**:
+- 4 sites migrated
+- `with-speculative-rollback` continues to work for all 4 production callers
+- Affected-tests GREEN
+- New parity tests (axis: speculation-mechanism-parity) confirming pre-1A-ii == post-1A-ii for representative speculation scenarios
+- Per-phase regression: acceptance file clean
+
+**Mini-design items at Phase 1A-ii start** (per methodology Stage 4 step 1):
+- Confirm `make-tagged-merge` handles domain-specific merge composition correctly for all 4 domain merges (type-lattice-merge, mult-lattice-merge, merge-meta-solve-identity)
+- Decide whether to retain `net-new-tms-cell` signature as-is (with migration internally to tagged-cell-value) OR expose `net-new-cell` directly
+- Parity test design for speculation semantics
+- Determine whether `with-speculative-rollback` needs any updates (audit §3.2.2 says "bitmask only" already per Phase 11, so likely no change)
+
+### §7.5 Phase 1A-iii deliverables (TMS mechanism retirement)
+
+**Retirement targets**:
+1. Delete `current-speculation-stack` parameter definition at `propagator.rkt:1621` and export at `:155`
+2. Delete `tms-read`/`tms-write` fallback branches at `propagator.rkt:995` (net-cell-read), `:1251` (net-cell-write), `:3225` (net-cell-write-widen)
+3. Delete `net-new-tms-cell` factory at `propagator.rkt:1593-1607`
+4. Delete `tms-cell-value` struct (if nothing else references it post-1A-ii)
+5. Delete `tms-read` / `tms-write` function definitions (if net-cell-read fallback is the sole consumer post-1A-ii)
+6. Delete `tms-commit`, `merge-tms-cell`, `make-tms-merge` if their sole consumers were the retired mechanism
+7. Update `test-tms-cell.rkt` (9 parameterize sites, lines 273-333) — rewrite tests to use `worldview-cache-cell-id` / `current-worldview-bitmask` semantics, OR retire entirely if redundant with `test-tagged-cell-value.rkt`
+
+**Mini-design items at Phase 1A-iii start**:
+- **Q-1A-3** (test-tms-cell.rkt disposition): rewrite, partial-retire, or full-retire. Depends on coverage analysis.
+- Dependency grep: what else transitively depends on `tms-cell-value`, `tms-read`, `tms-write`, `tms-commit`, `merge-tms-cell`, `make-tms-merge` post-1A-ii? If anything unexpected, it becomes a follow-up migration target OR a scope expansion decision.
+- **Q-1A-4** safety-net approach: use error-stub on `current-speculation-stack` for one commit to catch missed callers.
+
+**Deliverables**:
+- Full TMS-cell mechanism retired from production
+- `current-speculation-stack` parameter deleted
+- Fallback paths removed from `net-cell-read` / `net-cell-write` / `net-cell-write-widen`
+- `test-tms-cell.rkt` resolved (per mini-design Q-1A-3)
+- Affected-tests GREEN
+- Lint suite clean
+- Acceptance file clean via `process-file`
+
+### §7.6 Phase 1B deliverables
 
 **Tropical fuel primitive**:
 1. New module `racket/prologos/tropical-fuel.rkt`:
@@ -418,7 +497,7 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 4. Module imports / provides per codebase conventions
 5. `tropical-fuel.rkt` imports only from `sre-core.rkt`, `merge-fn-registry.rkt`, `propagator.rkt` (no higher-level dependencies — primitive is foundational)
 
-### §7.5 Phase 1C deliverables
+### §7.7 Phase 1C deliverables
 
 **Canonical BSP fuel instance migration**:
 1. Allocate canonical fuel-cost cell at `cell-id 11` in `make-prop-network` (next contiguous after `classify-inhabit-request-cell-id = 10`) using the primitive
@@ -433,7 +512,7 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 8. Update test read-only usage (15+ test sites per audit) to use `(net-cell-read net fuel-cost-cell-id)`
 9. `pretty-print.rkt:462` fix (prints fuel; update to cell read)
 
-### §7.6 Phase 1V — Vision Alignment Gate
+### §7.8 Phase 1V — Vision Alignment Gate
 
 4 VAG questions per DESIGN_METHODOLOGY Step 5:
 - **On-network?** — yes; substrate retired; tropical fuel lives in cells; primitive registered at SRE.
@@ -441,16 +520,20 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 - **Vision-advancing?** — substrate unified; tropical fuel enables cross-consumer cost reasoning.
 - **Drift-risks-cleared?** — named in Phase 1 mini-design.
 
-### §7.7 Phase 1 termination arguments
+### §7.9 Phase 1 termination arguments
 
 Per GÖDEL_COMPLETENESS Phase 1's new propagators/cells:
 - Tropical fuel cell — Level 1 (Tarski fixpoint): finite lattice (bounded by budget or +∞); monotone merge (min); per-BSP-round cost accumulation bounded.
 - Threshold propagator — Level 1: fires once at threshold (monotone; cost only increases); contradicts-or-no-op.
 - No new strata added; no cross-stratum feedback; no well-founded measure needed.
 
-### §7.8 Phase 1 parity-test strategy
+### §7.10 Phase 1 parity-test strategy
 
-Axis: tropical-fuel parity (new axis). One-two tests confirming tropical fuel exhausts at same point as decrementing counter for representative workloads. Per D.3 §9.1 convention, wire into `test-elaboration-parity.rkt`.
+Axes:
+- **speculation-mechanism-parity** (new, Phase 1A-ii): confirm `with-speculative-rollback` behavior identical pre/post TMS-cell migration
+- **tropical-fuel-parity** (new, Phase 1C): confirm tropical fuel exhausts at same point as decrementing counter for representative workloads
+
+Per D.3 §9.1 convention, wire into `test-elaboration-parity.rkt`.
 
 ---
 
@@ -880,4 +963,4 @@ Per user direction: phase-specific questions deferred to mini-design at phase st
 
 ## Document status
 
-**Stage 3 Design D.2** — refined per user review 2026-04-21. Next: if D.2 is stable, proceed to Phase 1A mini-design (§16.1) with code in hand. Otherwise iterate to D.3 on specific feedback.
+**Stage 3 Design D.3** — scope revised per Phase 1A mini-design audit finding (2026-04-21). Next: Phase 1A-i implementation (dead-code cleanup, ~30-50 LoC). Phase 1A-ii (elaborator-network.rkt migration) gets its own mini-design audit at phase start per Stage 4 methodology.
