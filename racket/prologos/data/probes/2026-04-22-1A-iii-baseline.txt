@@ -1,0 +1,40 @@
+PERF-COUNTERS:{"cell_allocs":1074,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":73,"meta_created":19,"meta_solved":19,"prop_allocs":0,"prop_firings":0,"reduce_steps":339,"resolution_cycles":19,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":79,"zonk_steps":284}
+PHASE-TIMINGS:{"elaborate_ms":38,"parse_ms":0,"qtt_ms":45,"reduce_ms":90,"trait_resolve_ms":0,"type_check_ms":80,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":17,"atms_nogood_count":6,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":12,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":73,"mem_after_bytes":132811264,"mem_before_bytes":129394440,"mem_retained_bytes":3416824}
+CELL-METRICS:{"cells":50,"propagators":0}
+#t
+#t
+#t
+#t
+#t
+0: p1-x : Int defined.
+1: 42 : Int
+2: p1-y : String defined.
+3: "hello" : String
+4: p1-z : Int defined.
+5: 10 : Int
+6: p1-inc : Int -> Int defined.
+7: 42 : Int
+8: p2-double : Int -> Int defined.
+9: 42 : Int
+10: p2-compose : [Int -> Int] [Int -> Int] Int -> Int defined.
+11: 21 : Int
+12: p3-my-map : (Map Keyword Int | String) defined.
+13: {:name "alice", :age 30} : (Map Keyword Int | String)
+14: "alice" : Int | String
+15: 30 : Int | String
+16: p4-nested : (Map Keyword Bool | (Map Keyword String | Int)) defined.
+17: {:data {:y "two", :x 1}, :flag true} : (Map Keyword Bool | (Map Keyword String | Int))
+18: p5-list : [prologos::data::list::List Int] defined.
+19: '[1 2 3 4 5] : [prologos::data::list::List Int]
+20: [prologos::data::option::some Int 1] : [prologos::data::option::Option Int]
+21: [prologos::data::option::some [prologos::data::list::List Int] '[2 3 4 5]] : [prologos::data::option::Option [prologos::data::list::List Int]]
+22: p5-chain : Int defined.
+23: 16 : Int
+24: p6-id : [Pi [x :0 <[Type 0]>] x -> x] defined.
+25: 99 : Int
+26: "world" : String
+27: true : Bool
+
+--- 0 errors ---

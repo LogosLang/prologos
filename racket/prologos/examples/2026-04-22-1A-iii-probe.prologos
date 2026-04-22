@@ -1,0 +1,150 @@
+ns examples.ppn-track4c.1A-iii-probe
+
+;; ========================================================================
+;;
+;;  PPN Track 4C Phase 1A-iii Pre-0 Behavioral Probe
+;;
+;;  Purpose:
+;;    Captures baseline semantic output BEFORE Phase 1A-iii implementation
+;;    (Step 1 TMS retirement + Step 2 PU refactor). Re-run after each step
+;;    to verify no regression. Diff against baseline = any semantic change
+;;    requires investigation.
+;;
+;;  Background:
+;;    1A-ii attempt 1 introduced a broad regression (~10 test files)
+;;    because the algebraic audit missed the load-bearing TMS dispatch at
+;;    net-cell-write:1248 for union-type inference. A minimal behavioral
+;;    probe pre-edit would have caught the regression in minutes instead
+;;    of via full-suite diagnostics.
+;;
+;;    This file IS that probe — applied pre-1A-iii-a-wide so we have
+;;    concrete semantic fingerprints to compare against.
+;;
+;;  Protocol:
+;;    1. Pre-Step-1: run this file, capture output to
+;;       data/probes/2026-04-22-1A-iii-baseline.txt
+;;    2. Post-Step-1: run, diff against baseline. Any semantic change
+;;       investigate.
+;;    3. Post-Step-2: run, diff against baseline. Any semantic change
+;;       investigate.
+;;    4. Full suite run at Steps 1 and 2 as regression gate.
+;;
+;;  6 scenarios, each exercising a distinct speculation/meta path:
+;;    §1 Baseline — no speculation, simple metas
+;;    §2 Mult cells — QTT mult-check interaction
+;;    §3 Union types via mixed-type map (attempt-1 failure canary)
+;;    §4 Nested union (deep mixed types)
+;;    §5 Multi-meta solving (many metas solved together)
+;;    §6 Level + session meta exercise
+;;
+;; ========================================================================
+
+
+;; ========================================================================
+;; §1 Baseline — no speculation, simple type metas
+;; ========================================================================
+;;
+;; Each of these exercises type meta creation and solving in non-speculative
+;; contexts. Regression here means TMS retirement / type cell migration
+;; broke something fundamental.
+
+def p1-x := 42
+eval p1-x
+
+def p1-y := "hello"
+eval p1-y
+
+def p1-z : Int := 10
+eval p1-z
+
+spec p1-inc Int -> Int
+defn p1-inc [n] [int+ n 1]
+eval [p1-inc 41]
+
+
+;; ========================================================================
+;; §2 Mult cells — QTT interaction
+;; ========================================================================
+;;
+;; Function definitions exercise mult metas (already 1A-ii-a migrated to
+;; tagged-cell-value; regression canary for that work).
+
+spec p2-double Int -> Int
+defn p2-double [x] [int* x 2]
+eval [p2-double 21]
+
+spec p2-compose [Int -> Int] [Int -> Int] Int -> Int
+defn p2-compose [f g x] [f [g x]]
+eval [p2-compose p1-inc p2-double 10]
+
+
+;; ========================================================================
+;; §3 Union types via mixed-type map (attempt-1 FAILURE CANARY)
+;; ========================================================================
+;;
+;; This is THE failure signature from attempt 1. If this works pre-edit
+;; and fails post-edit, we've regressed. If this works post-edit, Path (b)
+;; union-inference adaptation succeeded.
+;;
+;; Expected inference: map value type = `Int | String` union.
+;; Expected elaboration: my-map : (Map Keyword Int | String) defined.
+;; Expected reads: each field returns `Int | String` union (overapproximate).
+
+def p3-my-map := {:name "alice" :age 30}
+eval p3-my-map
+eval p3-my-map.name
+eval p3-my-map.age
+
+
+;; ========================================================================
+;; §4 Nested union (deeper mixed types)
+;; ========================================================================
+;;
+;; Stresses union-inference with nested structure. Top-level map has
+;; two keys, one with a mixed-type submap, one with a Bool. Union depth > 1.
+
+def p4-nested := {:data {:x 1 :y "two"} :flag true}
+eval p4-nested
+
+
+;; ========================================================================
+;; §5 Multi-meta solving (many metas in one expression)
+;; ========================================================================
+;;
+;; Exercises the per-meta-cell allocation pattern at scale. Many metas
+;; created + solved in single elaboration. Regression here means something
+;; broke in multi-meta path (relevant to Step 2 PU refactor).
+
+def p5-list := '[1 2 3 4 5]
+eval p5-list
+eval [head p5-list]
+eval [tail p5-list]
+
+;; Multi-arg arithmetic chain — creates multiple type metas at app sites
+def p5-chain := [int+ [int* 3 4] [int- 10 [int* 2 3]]]
+eval p5-chain
+
+
+;; ========================================================================
+;; §6 Level + session meta exercise
+;; ========================================================================
+;;
+;; Exercises level metas (universe levels) and polymorphic / dependent
+;; type constructs. Level and session cells were 1A-ii-a migrated;
+;; regression here is a canary for that work + Step 2's universe
+;; consolidation.
+
+spec p6-id {A : Type} A -> A
+defn p6-id [x] x
+
+eval [p6-id 99]
+eval [p6-id "world"]
+eval [p6-id true]
+
+
+;; ========================================================================
+;; End of probe.
+;;
+;; Baseline output should have 0 errors and identical values/types
+;; across all 3 runs (pre-step-1, post-step-1, post-step-2).
+;; ========================================================================
