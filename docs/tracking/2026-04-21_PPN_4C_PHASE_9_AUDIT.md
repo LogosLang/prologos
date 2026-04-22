@@ -3,7 +3,7 @@
 **Date**: 2026-04-21
 **Stage**: 2 — Reality-check audit per [`DESIGN_METHODOLOGY.org`](principles/DESIGN_METHODOLOGY.org) Stage 2
 **Status**: Audit complete; feeds Phase 9+10 Design document (to follow)
-**Scope**: Combined PPN 4C Phase 9+10 (cell-based TMS substrate reconciliation + hypercube algorithms integration + union types via ATMS + tropical fuel cell cross-cutting)
+**Scope**: Combined PPN 4C Phase 9+10+11 (cell-based TMS substrate reconciliation + hypercube algorithms integration + union types via ATMS + tropical fuel cell cross-cutting + elaborator strata to BSP scheduler orchestration unification) — Phase 11 added 2026-04-21 during design dialogue per user direction; see §3.9.
 **Prior research**: [`2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (Stage 1 foundational research, commit `de357aa1`)
 
 ---
@@ -16,13 +16,16 @@ Stage 2 audit per the design methodology: grounds the Phase 9+10 design in concr
 
 ### §1.2 Scope
 
-Combined PPN 4C Phase 9+10 per framing B (2026-04-20) and the combination decision (2026-04-21). Covers:
+Combined PPN 4C Phase 9+10+11 per framing B (2026-04-20), the 9+10 combination decision (2026-04-21), and the Phase 11 inclusion decision (2026-04-21). Covers:
 
 - **9A**: substrate reconciliation (three worldview paths → one bitmask substrate)
 - **9B**: hypercube algorithms integration (Gray code, bitmask subcube, all-reduce)
 - **9C**: union types via ATMS (fork-on-union, tagged branches, S(-1) retract)
+- **11**: elaborator strata → BSP scheduler orchestration unification (per D.3 §6.7)
 - **Cross-cutting**: tropical fuel cell (integrates with 9A cell infrastructure, 9B cost-per-branch, 9C cost-bounded branching)
-- **Not in scope** (downstream): Phase 9b γ hole-fill (consumes Phase 9+10 output but is its own phase row)
+- **Not in scope** (downstream): Phase 9b γ hole-fill (consumes Phase 9+10+11 output but is its own phase row)
+
+Phase 11 included because the architectural theme is the same (unify mechanisms): Phase 9+10 unifies the speculation substrate; Phase 11 unifies the scheduler orchestration. Both use `register-stratum-handler!` as the bridge — designing them together ensures consistency across the ~9-12 stratum handlers the combined track produces.
 
 ### §1.3 Methodology
 
@@ -453,6 +456,78 @@ Phase 9+10 scope includes the tropical-fuel-cell migration as cross-cutting work
 
 ---
 
+### §3.9 Phase 11 — elaborator strata → BSP scheduler orchestration
+
+**Added 2026-04-21** per user direction to include Phase 11 in this addendum track. Architectural parallel to §3.1-§3.8: Phase 9+10 unifies the speculation SUBSTRATE; Phase 11 unifies the scheduler ORCHESTRATION. Same move, different subsystem.
+
+#### §3.9.1 Current orchestration state
+
+The elaborator has THREE strata (S(-1), L1, L2) executed by a sequential Racket function, NOT registered as BSP stratum handlers.
+
+- **Production orchestrator**: `run-stratified-resolution-pure` at [`metavar-store.rkt:1915`](../../racket/prologos/metavar-store.rkt)
+  - Called from [`metavar-store.rkt:1699`](../../racket/prologos/metavar-store.rkt) (primary production path)
+  - Signature: `(run-stratified-resolution-pure enet trigger-meta-id resolution-executor)`
+  - Sequential outer loop: S(-1) → S0 (monotone) → L1 (readiness scan) → L2 (action execution) → repeat until quiescence
+- **Dead code sibling**: `run-stratified-resolution!` at [`metavar-store.rkt:1863`](../../racket/prologos/metavar-store.rkt)
+  - Marked at line 1860: "Mostly dead code — superseded by run-stratified-resolution-pure"
+  - Zero production callers confirmed by grep
+  - R3 external critique finding (D.3): both retire in Phase 11
+
+#### §3.9.2 Three elaborator strata — current implementations
+
+| Stratum | Function | Location | Mechanism |
+|---|---|---|---|
+| S(-1) retraction | `run-retraction-stratum!` | [`metavar-store.rkt:1392`](../../racket/prologos/metavar-store.rkt) | Side-effecting Racket function, called sequentially from `run-stratified-resolution-pure:1876` |
+| L1 readiness | `collect-ready-constraints-via-cells` | [`metavar-store.rkt:904`](../../racket/prologos/metavar-store.rkt) | Pure scan function; reads ready-queue cell; produces action descriptors |
+| L2 resolution | `execute-resolution-actions!` | [`metavar-store.rkt:998`](../../racket/prologos/metavar-store.rkt) | Action interpreter (dispatches to `resolution.rkt` for action execution) |
+
+**Request-accumulator cells already exist**:
+- `retracted-assumptions` box at [`metavar-store.rkt:1332`](../../racket/prologos/metavar-store.rkt) — set of retracted aids; `record-assumption-retraction!` (line 1336) adds; `run-retraction-stratum!` (line 1392) consumes
+- `current-ready-queue-cell-id` parameter at [`metavar-store.rkt:1510`](../../racket/prologos/metavar-store.rkt) — cell-id for the ready-queue; populated by readiness propagators (Track 7 Phase 8a)
+
+#### §3.9.3 What's missing for Phase 11
+
+- **Stratum handler registrations** for the three elaborator strata
+  - S(-1): register `run-retraction-stratum!` as handler for a new retraction-request cell-id (currently: set-box! + side-effect)
+  - L1: register readiness action collection as handler for `current-ready-queue-cell-id`
+  - L2: register action execution as handler (may be same cell as L1, or chained)
+- **Retirement of `run-stratified-resolution-pure`** — once handlers are registered, BSP outer loop iterates them uniformly (per [`propagator.rkt:2746-2790`](../../racket/prologos/propagator.rkt))
+- **Retirement of `run-stratified-resolution!`** dead code
+
+#### §3.9.4 Relationship to Phase 9+10 substrate
+
+The retraction stratum (S(-1)) integrates with speculation-rollback:
+- [`elab-speculation-bridge.rkt:272`](../../racket/prologos/elab-speculation-bridge.rkt) calls `record-assumption-retraction!` on failed speculation
+- Phase 9+10 substrate reconciliation (retiring `current-speculation-stack`) does NOT change retraction semantics — the retracted-assumption set accumulation is orthogonal to the worldview bitmask
+- Phase 11 migrating S(-1) to a stratum handler preserves this integration; no coupling change
+
+**Parameter coupling**: `current-ready-queue-cell-id` is a Racket parameter (#f by default, set per elaboration). This is OFF-network state — candidate for further retirement (PM Track 12 territory, NOT Phase 11 scope). Phase 11 preserves current parameter shape.
+
+#### §3.9.5 Phase 11 scope and work estimate
+
+Scope:
+- Add 3 stratum handler registrations (~50-100 lines)
+- Retire `run-stratified-resolution-pure` (~50 lines deleted + callers updated)
+- Delete `run-stratified-resolution!` dead code (~50 lines deleted)
+- Preserve retraction semantics (no functional change in S(-1))
+- Preserve readiness + action execution semantics (no functional change in L1/L2)
+
+Estimated: **~150-250 lines** work-volume, modest risk.
+
+**Dependencies**:
+- Phase 11 independent of Phase 9+10 substrate work (different subsystem)
+- Phase 9+10's speculation-bridge integration with S(-1) (`record-assumption-retraction!`) is preserved
+- Phase 11 and Phase 9A are architecturally INDEPENDENT — can proceed in parallel or either order
+
+#### §3.9.6 Existing stratum handler count — revised
+
+Pre-Phase-11: 6 registered stratum handlers (per §3.4.1)
+Post-Phase-11: 9 registered stratum handlers (adding S(-1), L1, L2)
+
+BSP scheduler iterates all handlers per `#:tier` ('topology or 'value) per outer-loop iteration. Adding 3 more follows the established pattern.
+
+---
+
 ## §4 Reconciliation and migration plan
 
 ### §4.1 Three worldview paths → two-layer bitmask substrate
@@ -479,6 +554,8 @@ The "one bitmask" reconciliation is NOT "one path" — it is two layers of the s
 | `atms-empty` | atms.rkt | Phase 9A? (optional) | With atms struct retirement |
 | `prop-network-fuel` field + decrement/check sites | propagator.rkt (15+ sites) | Phase 9 cross-cutting | Replaced by tropical fuel cell |
 | `elab-speculation.rkt` (dead library code) | elab-speculation.rkt (189 lines) + test-elab-speculation.rkt | Phase 9C? (optional) | Either delete or migrate to pure-bitmask |
+| `run-stratified-resolution-pure` | metavar-store.rkt:1915 | Phase 11 | Retire once stratum handlers registered |
+| `run-stratified-resolution!` (dead code) | metavar-store.rkt:1863 | Phase 11 | Delete; zero production callers (R3 external critique) |
 
 ### §4.3 Migration sequencing (dependency graph)
 
@@ -663,7 +740,8 @@ Post-audit revision:
 - Tropical fuel cell: ~150-250 lines (new cell, new threshold propagator, retire counter + 15 sites)
 - Hypercube integration: ~50-100 lines (wire Gray code, complete subcube coverage)
 - Union-types via ATMS: ~100-200 lines (branch ordering + error-explanation)
-- **Total: ~500-850 lines** — higher than pre-audit estimate because substrate reconciliation has more residual sites than the handoff suggested
+- **Phase 11 orchestration** (added 2026-04-21): ~150-250 lines (3 stratum handler registrations; retire `run-stratified-resolution-pure`; delete dead code)
+- **Total: ~650-1100 lines** — higher than pre-audit estimate because substrate reconciliation has more residual sites than the handoff suggested, plus Phase 11 inclusion
 
 ### §8.4 What Design (Stage 3) should produce
 
