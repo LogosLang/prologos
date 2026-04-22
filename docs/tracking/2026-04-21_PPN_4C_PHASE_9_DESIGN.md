@@ -110,8 +110,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ✅ | commit `5cf9a262` — 29 lines deleted across 2 files; 85 tests pass; acceptance file clean |
 | 1A-ii-a | Migrate 3 of 4 `net-new-tms-cell` sites: mult, level, session cells | ✅ | commit `7052f590` — 25 insertions; acceptance file clean; 111 targeted tests pass |
 | 1A-ii follow-up | Register `'mult` SRE domain + extend `register/minimal` with `#:contradicts?` kwarg | ✅ | commit `8b85b28a` — Option Y + 2b; enables Phase 13 ratchet; 77 targeted tests pass |
-| 1A-ii-b | Type cell migration + union-inference adaptation (pulled into 1A-iii scope) | ⬜ | Root cause: TMS dispatch at net-cell-write:1248 is load-bearing for union semantics (see 2026-04-19 dailies 2026-04-22 section) |
-| 1A-iii | Retire TMS mechanism + `current-speculation-stack` + fallback paths + test-tms-cell.rkt + **type cell migration (1A-ii-b)** + **union-inference adaptation at typing-propagators.rkt:1878+** | ⬜ | Expanded scope per 1A-ii root-cause finding |
+| 1A-iii-probe | Pre-0 behavioral probe (`.prologos` file) capturing baseline pre-1A-iii-a-wide | ⬜ | Per 1A-ii lesson: behavioral probe is essential pre-check |
+| 1A-iii-a-wide Step 1 | TMS retirement + type cell migration + union-inference adaptation (Path b) — per-cell tagged-cell-value | ⬜ | Cells remain one-per-meta shape; retires TMS mechanism |
+| 1A-iii-a-wide Step 2 | PU refactor (4 per-domain universe cells) + hasse-registry integration (shared handle, Q_n subsume-fn) | ⬜ | Collapses per-meta cells → 4 compound PU cells; `elab-meta-read/write` API; Architecture B per-component tagging |
+| 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | atms.rkt + test-atms.rkt + benchmark migrations |
+| 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | syntax / surface-syntax / parser / elaborator / reduction / zonk / pretty-print / typing-core / etc. |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
@@ -473,30 +476,242 @@ The tagged-cell-value mechanism (BSP-LE 2B infrastructure) handles speculation-t
 - Parity test design for speculation semantics
 - Determine whether `with-speculative-rollback` needs any updates (audit §3.2.2 says "bitmask only" already per Phase 11, so likely no change)
 
-### §7.5 Phase 1A-iii deliverables (TMS mechanism retirement)
+### §7.5 Phase 1A-iii — EXPANDED SCOPE (revised 2026-04-22)
 
-**Retirement targets**:
-1. Delete `current-speculation-stack` parameter definition at `propagator.rkt:1621` and export at `:155`
-2. Delete `tms-read`/`tms-write` fallback branches at `propagator.rkt:995` (net-cell-read), `:1251` (net-cell-write), `:3225` (net-cell-write-widen)
-3. Delete `net-new-tms-cell` factory at `propagator.rkt:1593-1607`
-4. Delete `tms-cell-value` struct (if nothing else references it post-1A-ii)
-5. Delete `tms-read` / `tms-write` function definitions (if net-cell-read fallback is the sole consumer post-1A-ii)
-6. Delete `tms-commit`, `merge-tms-cell`, `make-tms-merge` if their sole consumers were the retired mechanism
-7. Update `test-tms-cell.rkt` (9 parameterize sites, lines 273-333) — rewrite tests to use `worldview-cache-cell-id` / `current-worldview-bitmask` semantics, OR retire entirely if redundant with `test-tagged-cell-value.rkt`
+**Scope decisions** (resolved via mini-design dialogue 2026-04-22 per Path Z + Z-wide + Framing C):
 
-**Mini-design items at Phase 1A-iii start**:
-- **Q-1A-3** (test-tms-cell.rkt disposition): rewrite, partial-retire, or full-retire. Depends on coverage analysis.
-- Dependency grep: what else transitively depends on `tms-cell-value`, `tms-read`, `tms-write`, `tms-commit`, `merge-tms-cell`, `make-tms-merge` post-1A-ii? If anything unexpected, it becomes a follow-up migration target OR a scope expansion decision.
-- **Q-1A-4** safety-net approach: use error-stub on `current-speculation-stack` for one commit to catch missed callers.
+- **Z-wide** (user direction 2026-04-22): "we want to land in greater completeness and correctness, architecturally — without concern of the implementation cost. Pragmatic implementation shortcuts should never be on the table for our consideration." 1A-iii absorbs PU refactor + hasse-registry integration in addition to TMS retirement.
+- **Framing C** (Pocket Universe refactor + hasse-registry integration): per-meta cells collapse to 4 per-domain compound PU cells; shared hasse-registry-handle across domains with Q_n subsume-fn; per-component tagged-cell-value semantics.
+
+**Architectural rationale**:
+
+Per `propagator-design.md` § "Cell Allocation Efficiency" + `structural-thinking.md` § "Direct Sum Has Two Realizations" (Realization B — shared carrier with tagged layers), per-meta cells (N-separate-cells pattern) violate the PU principle now that we have mature PU infrastructure (decisions-state, commitments-state, scope-cell, attribute-map, worldview-cache — all N→1 compound cells). Per-meta cells are the last holdout; 1A-iii brings them into alignment.
+
+The 1A-ii root cause (TMS dispatch at net-cell-write:1248 being load-bearing for union inference) also requires union-inference adaptation at typing-propagators.rkt:1878-1920 — Path (b) read-time merge via `tagged-cell-read(v, combined-bitmask, type-lattice-merge)`. Path (b) explicitly expresses union construction as a **hypercube read-time merge** — SRE ⊕ ctor-desc × Q_n hypercube structure × type-lattice-merge as domain-merge. This aligns with `structural-thinking.md` § "Hyperlattice Conjecture" and opens the groundwork for Phase 3 (fork-on-union + hypercube integration) to reuse the infrastructure.
+
+### §7.5.1 PU sub-architecture resolutions
+
+| Q | Decision | Rationale |
+|---|---|---|
+| Q-PU-1 Tagging | **Architecture B** — per-component tagged-cell-value inside the compound PU | Module Theory Realization B applied at the component level; O(1) speculative write cost vs Architecture A's O(N-metas) |
+| Q-PU-2 Universe count | **4 per-domain universes** — `type-meta-universe`, `mult-meta-universe`, `level-meta-universe`, `session-meta-universe` | Decomplection: each domain has its own merge semantics (type-lattice-merge / mult-lattice-merge / merge-meta-solve-identity); collapsing entangles. 4→1 collapse is negligible benefit. |
+| Q-PU-3 Hasse-registry | **Shared hasse-registry-handle** across all 4 universes | Q_n subsume-fn is uniform (bitmask subset check); one source of truth |
+| Q-PU-4 API shape | **(a)** — return meta-id, introduce `elab-meta-read`/`elab-meta-write` | Names meta-id as the identity; cid becomes implementation detail of where the meta's data lives |
+| Q-PU-5 Sequencing | **Two-step within 1A-iii-a-wide** — Step 1: TMS retirement + per-cell tagged-cell-value migration + union-inference adaptation; Step 2: PU refactor + hasse-registry integration | Per 1A-ii lesson: one architectural move at a time. Step 1 lands us at per-cell tagged-cell-value (BSP-LE 2B architecture); Step 2 lifts to PU. |
+| Q-PU-6 Pre-0 probe | **Required** | Per 1A-ii lesson: behavioral probe captures baseline pre-edit; compares post-edit. ~15-30 min investment for the larger scope. |
+
+### §7.5.2 NTT model for the PU compound cell + hasse-registry
+
+Per NTT Syntax Design §3.2 (structural lattices) + §5.1 (interface declaration) + Hasse-registry integration:
+
+```ntt
+;; Per-domain meta universe — one compound cell per domain.
+;; Example: type meta universe. Analogous definitions for 'mult, 'level, 'session.
+
+type TypeMetaUniverseValue
+  := (hasheq MetaId → TaggedCellValue[TypeExpr])
+  :lattice :structural
+  :bot (hasheq)
+
+;; Compound merge function: per-component tagged-cell-merge with domain-merge
+;; at the base level. Composition of:
+;;   (a) hasheq pointwise per meta-id
+;;   (b) tagged-cell-merge at each meta-id's TaggedCellValue
+;;   (c) type-lattice-merge at each tagged-cell-value's base
+trait Lattice TypeMetaUniverseValue
+  spec compound-tagged-merge
+    TypeMetaUniverseValue TypeMetaUniverseValue -> TypeMetaUniverseValue
+  ;; Defined as: for each meta-id in union of keys, merge the per-meta
+  ;; tagged-cell-values via make-tagged-merge(type-lattice-merge)
+
+;; Cell declaration — one per domain, pre-allocated at make-prop-network.
+cell type-meta-universe
+  :type TypeMetaUniverseValue
+  :lattice :structural
+  :merge compound-tagged-merge
+  :classification :structural  ;; PPN 4C Phase 1f: component-path enforcement
+  :cell-id type-meta-universe-cell-id
+
+;; Shared hasse-registry handle across all 4 universes.
+;; Single instance, used by all per-domain lookups for worldview-bitmask
+;; subset check. Per hasse-registry.rkt lines 28-31 + 88 — the Q_n
+;; specialization explicitly called out as an override target.
+cell shared-worldview-hasse-registry
+  :handle (hasse-registry-handle
+           :cell-id worldview-entries-cell-id
+           :l-domain 'worldview     ;; SRE-registered Q_n lattice (TBD: register in 1A-iii-a Step 2)
+           :position-fn (λ (entry) (car entry))   ;; entry = (cons bitmask value); position = bitmask
+           :subsume-fn (λ (pos query) (= (bitwise-and pos query) query)))  ;; Q_n subset
+
+;; Per-meta read — component-indexed access via meta-id.
+spec elab-meta-read
+  :reads [Cell TypeMetaUniverseValue (at type-meta-universe-cell-id)]
+  :reads [Cell Bitmask (at worldview-cache-cell-id)]
+  ElabNetwork MetaId -> TypeExpr
+  ;; Resolution:
+  ;;   1. universe ← read(type-meta-universe-cell-id)
+  ;;   2. tagged ← (hash-ref universe meta-id (tagged-cell-value type-bot '()))
+  ;;   3. wv ← current-worldview-bitmask OR read(worldview-cache-cell-id)
+  ;;   4. return tagged-cell-read(tagged, wv, type-lattice-merge)
+
+;; Per-meta write — component-indexed write via meta-id.
+spec elab-meta-write
+  :reads [Cell TypeMetaUniverseValue (at type-meta-universe-cell-id)]
+  :writes [Cell TypeMetaUniverseValue (at type-meta-universe-cell-id)]
+  :component-paths [(cons type-meta-universe-cell-id meta-id)]
+  ElabNetwork MetaId TypeExpr -> ElabNetwork
+  ;; Resolution:
+  ;;   1. Build (hasheq meta-id new-val) as delta
+  ;;   2. Universe merge fn (compound-tagged-merge) handles:
+  ;;      - Union keys from old and delta
+  ;;      - For each meta-id, merge existing tagged-cell-value with
+  ;;        (tagged-cell-value new-val '()) via make-tagged-merge(type-lattice-merge)
+  ;;   3. Component-indexed dependent firing: propagators declaring
+  ;;      :component-paths (cons type-meta-universe-cell-id meta-id)
+  ;;      fire only if THIS meta changed, not if sibling metas changed.
+```
+
+**Observations** (per NTT methodology):
+
+1. **Everything on-network?** Yes. All meta state in compound PU cells; worldview entries in shared hasse-registry cell; zero off-network mirroring. `current-worldview-bitmask` remains as per-propagator-parameter scaffolding (PM Track 12 retirement).
+
+2. **Architectural impurities?** None in the target state. The step-2 migration from per-cell to per-universe is the architectural move; step-1 (per-cell tagged-cell-value) is a transitional state clearly labeled as such.
+
+3. **NTT syntax gaps surfaced?**
+   - `compound-tagged-merge` is a new merge-function pattern (per-component tagged-cell-merge). May warrant NTT primitive notation.
+   - Shared hasse-registry-handle across multiple cells: NTT has `hasse-registry-handle` struct but unclear whether "shared handle" is first-class in NTT. Flagged for NTT refinement.
+   - `:component-paths` for compound-keyed paths (meta-id as key): NTT supports this via `structural-thinking.md`'s Realization B pattern, but explicit NTT notation for `(cons cell-id meta-id)` paths isn't formally spec'd.
+
+4. **Components NTT cannot express?** None at the target state.
+
+### §7.5.3 Step 1 deliverables (TMS retirement + per-cell tagged-cell-value migration + union-inference adaptation)
+
+Per-cell tagged-cell-value migration (retains one-cell-per-meta shape; prerequisite for Step 2's PU refactor).
+
+**Retirement targets** (propagator.rkt):
+1. `current-speculation-stack` parameter definition + export
+2. 3 fallback branches: `net-cell-read:991`, `net-cell-write:1248`, `net-cell-write-widen:3208+`
+3. `net-new-tms-cell` factory
+4. `tms-cell-value` struct
+5. `tms-read` / `tms-write` / `tms-commit` function definitions
+6. `make-tms-merge` / `merge-tms-cell`
+7. `propagator.rkt` exports at :143-155 (TMS cell block)
+
+**Type cell migration**:
+- `elaborator-network.rkt:114` — `elab-fresh-meta` migrated to `net-new-cell` + `(tagged-cell-value type-bot '())` + `(make-tagged-merge type-lattice-merge)` (matching 1A-ii-a pattern for mult/level/session).
+
+**Union-inference adaptation at typing-propagators.rkt:1878-1920** (Path b):
+- Verify lines 1912-1913 `combined-bitmask = bitwise-ior left-bitmask right-bitmask` writes to `worldview-cache-cell-id` correctly
+- Verify subsequent reads with combined-bitmask invoke `tagged-cell-read(v, combined-bitmask, type-lattice-merge)` (implicit via domain-merge in Path C of net-cell-read:981-989)
+- Post-migration, with type cells = tagged-cell-value, two branches' entries tagged with left-bitmask and right-bitmask respectively; combined-bitmask read finds both entries → domain-merge yields union type via type-lattice-merge
+- **Explicit design note**: document this as hypercube read-time merge (Q_n subset lookup with domain-merge composition) — the architecturally-aligned explicit form replacing the pre-migration accidental-of-mechanism TMS dispatch shortcut
+
+**Serialization cleanup** (`pnet-serialize.rkt:392`): remove `(auto-cache! tms-cell-value d d)` — struct being retired; no tagged-cell-value caches exist in production (verified: tagged cells are transient/command-scoped, not in persistent .pnet caches). Old caches invalidate naturally on first load post-retirement.
+
+**test-tms-cell.rkt disposition** (Q-1A-iii-4): delete + rewrite as tagged-cell-value parity tests for representative scenarios (baseline no-speculation, single-branch commit, union-type 2-branch merge, nested speculation, worldview-cache read).
 
 **Deliverables**:
-- Full TMS-cell mechanism retired from production
-- `current-speculation-stack` parameter deleted
-- Fallback paths removed from `net-cell-read` / `net-cell-write` / `net-cell-write-widen`
-- `test-tms-cell.rkt` resolved (per mini-design Q-1A-3)
-- Affected-tests GREEN
-- Lint suite clean
-- Acceptance file clean via `process-file`
+- All TMS mechanism retired
+- Type cells at tagged-cell-value (per-cell shape, same as 1A-ii-a'd mult/level/session)
+- Union-inference works end-to-end via Path b
+- Pre-0 probe + acceptance file + full suite all pass post-step-1
+
+### §7.5.4 Step 2 deliverables (PU refactor + hasse-registry integration)
+
+Per Q-PU-1–Q-PU-5 resolutions.
+
+**New infrastructure**:
+1. **4 per-domain PU compound cells** allocated in `make-prop-network` or equivalent setup:
+   - `type-meta-universe-cell-id` — value `(hasheq meta-id → tagged-cell-value-of-type)`, merge `compound-tagged-merge(type-lattice-merge)`, classification `'structural`
+   - `mult-meta-universe-cell-id` — analogous, `mult-lattice-merge`
+   - `level-meta-universe-cell-id` — analogous, `merge-meta-solve-identity`
+   - `session-meta-universe-cell-id` — analogous, `merge-meta-solve-identity`
+
+2. **`compound-tagged-merge`** merge-function factory — new (per Q-PU-1 Architecture B). Takes a domain-merge, returns a merge function for `(hasheq meta-id → tagged-cell-value)`. For each meta-id in the union of keys, merges per-meta tagged-cell-values via `make-tagged-merge(domain-merge)` at the base level. Zero propagation cost for untouched metas.
+
+3. **Shared hasse-registry-handle** — one instance, used by reads across all 4 universes for worldview-bitmask subset check. Q_n subsume-fn specialized per `hasse-registry.rkt` lines 28-31 + 88.
+
+**API migration**:
+4. **`elab-meta-read enet meta-id domain`**, **`elab-meta-write enet meta-id domain value`** — new domain-parameterized meta-access API. Internally dispatches on `domain` to select the right universe cell-id.
+5. **`elab-fresh-meta`** etc. now register meta-id in the universe cell (component initialization) instead of allocating new cells. Returns meta-id (no more cell-id per meta).
+6. **`prop-meta-id->cell-id`** — retires OR returns universe-cell-id with meta-id as component-path component. Call sites updated.
+
+**Call-site migration** across ~5-10 files:
+- `solve-meta-core!` / `solve-meta-core-pure` in metavar-store.rkt
+- `elab-cell-read` / `elab-cell-write` callers (propagator fire functions, typing-propagators.rkt, etc.)
+- Propagator installations that reference meta cell-ids — update `:component-paths` declarations to `(cons universe-cell-id meta-id)`
+
+**SRE registration for `'worldview` domain** (if not already registered) — provides Q_n lattice identity for hasse-registry's `:l-domain`.
+
+**Deliverables**:
+- 4 per-domain PU cells
+- Shared hasse-registry-handle
+- `elab-meta-read/write` API + call-site migration complete
+- Propagator dependency indexing uses compound paths
+- Pre-0 probe + acceptance file + full suite all pass post-step-2
+- Cell count reduction: per-domain from N → 1 (~hundreds → 4 total cells for meta state)
+
+### §7.5.5 Pre-0 behavioral probe spec
+
+Per Q-PU-6 + 1A-ii lesson. Focused `.prologos` file at `racket/prologos/examples/2026-04-22-1A-iii-probe.prologos` exercising:
+
+1. **Baseline** (no speculation): simple def bindings, plain type metas
+2. **Mult cell interaction**: function definition + application (QTT mult-check)
+3. **Union types via mixed-type map** (the attempt-1 failure canary): `{:name "alice" :age 30}` + map-get access; expect `Int | String` union inference
+4. **Nested union**: `{:a {:b 1 :c "x"} :d #t}` with deep mixed types
+5. **Multi-meta solving**: expression with many metas solved together
+6. **Level + session meta exercise**: sessionful / level-explicit constructs
+
+**Protocol**:
+- Run probe pre-edit (current HEAD post-1A-ii-a + 'mult SRE) — capture output as baseline in `data/probes/2026-04-22-1A-iii-baseline.txt`
+- Run probe after Step 1 commit — diff against baseline; any semantic change investigated
+- Run probe after Step 2 commit — diff against baseline; any semantic change investigated
+- Probe file itself is committed as part of the 1A-iii-probe phase
+
+### §7.5.6 1A-iii-b deliverables (Tier 2 — deprecated atms internal cleanup)
+
+Per Q-1A-iii-5 full-completeness direction.
+
+**atms.rkt retirement**:
+- `atms` struct (lines 37, 159-) — delete
+- `atms-believed` field — deleted with struct
+- `atms-empty` constructor — delete
+- Deprecated API functions (all call-sites migrated to solver-context/solver-state):
+  - `atms-assume` / `atms-retract` / `atms-add-nogood` / `atms-consistent?` / `atms-with-worldview` / `atms-amb`
+  - `atms-read-cell` / `atms-write-cell` / `atms-solve-all`
+  - `atms-explain-hypothesis` / `atms-explain`
+  - `atms-minimal-diagnoses` / `atms-conflict-graph`
+  - `atms-amb-groups` accessor
+
+**Test migrations**:
+- `tests/test-atms.rkt` — audit + delete or rewrite using `solver-state`
+- `tests/test-atms-types.rkt` — same
+
+**Benchmark migrations**:
+- `benchmarks/micro/bench-ppn-track0.rkt` (3+ sites) — migrate or delete cases
+- `benchmarks/micro/bench-bsp-le-track2.rkt` (3+ sites) — migrate or delete cases
+
+### §7.5.7 1A-iii-c deliverables (Tier 3 — surface ATMS AST retirement across pipeline)
+
+Per Q-1A-iii-5 full-completeness direction. 14-file pipeline consistency.
+
+**Struct definitions**:
+- `syntax.rkt:204-206, 752-755` — delete `expr-atms-*` struct definitions (6 structs)
+- `surface-syntax.rkt:925-933` — delete `surf-atms-*` structs (10 structs)
+
+**Pipeline stages**:
+- `parser.rkt:2537-2574` — delete surface atms parse rules
+- `elaborator.rkt:2438-2466` — delete surface atms elaboration
+- `reduction.rkt:2842-3635` — delete surface atms evaluation (~100 lines)
+- `zonk.rkt:358-1258` — delete surface atms traversal (~50 lines)
+- `pretty-print.rkt` — delete surface atms printing
+- `typing-core.rkt` — delete surface atms type-check
+
+**Dependency cleanup**:
+- `typing-errors.rkt` / `substitution.rkt` / `qtt.rkt` / `trait-resolution.rkt` / `capability-inference.rkt` / `union-types.rkt` — grep + remove references
+
+**Tests**:
+- `tests/test-atms-types.rkt` — delete
 
 ### §7.6 Phase 1B deliverables
 
