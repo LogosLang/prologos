@@ -22,6 +22,9 @@
          "type-lattice.rkt"
          (only-in "sre-core.rkt" sre-equality make-sre-domain register-domain!)  ;; PAR Track 1: for request emission; Phase 1e-β-i: meta-solve domain
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; Phase 1e-β-i: Tier 2 linkage
+         (only-in "decision-cell.rkt"
+                  tagged-cell-value tagged-cell-value? tagged-cell-value-base
+                  make-tagged-merge)  ;; PPN 4C Phase 1A-ii-a: mult/level/session cell migration
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
@@ -915,10 +918,20 @@
 
 ;; Allocate a mult cell on the network. Returns (values elab-network* cell-id).
 ;; Track 4 Phase 3: Now creates a TMS cell (paralleling type metas).
+;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Mult cells don't
+;; participate in union-type inference (mult lattice merge is flat
+;; identity-or-top), so branch-isolation under tagged semantics is correct.
+;; Type cells remain TMS-wrapped pending 1A-ii-b's union-inference adaptation.
 (define (elab-fresh-mult-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?))
+    (net-new-cell net
+                  (tagged-cell-value mult-bot '())
+                  (make-tagged-merge mult-lattice-merge)
+                  (lambda (v)
+                    (if (tagged-cell-value? v)
+                        (mult-lattice-contradicts? (tagged-cell-value-base v))
+                        (mult-lattice-contradicts? v)))))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
@@ -989,10 +1002,15 @@
 (register-merge-fn!/lattice merge-meta-solve-identity #:for-domain 'meta-solve)
 
 ;; Allocate a level cell on the network. Returns (values elab-network* cell-id).
+;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Level cells use
+;; identity-or-error merge (merge-meta-solve-identity); branches typically
+;; infer the same level, so branch-isolation under tagged semantics is safe.
 (define (elab-fresh-level-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net 'unsolved merge-meta-solve-identity))
+    (net-new-cell net
+                  (tagged-cell-value 'unsolved '())
+                  (make-tagged-merge merge-meta-solve-identity)))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
@@ -1005,10 +1023,14 @@
    cid))
 
 ;; Allocate a session cell on the network. Returns (values elab-network* cell-id).
+;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Same rationale as
+;; elab-fresh-level-cell above.
 (define (elab-fresh-sess-cell enet source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net 'unsolved merge-meta-solve-identity))
+    (net-new-cell net
+                  (tagged-cell-value 'unsolved '())
+                  (make-tagged-merge merge-meta-solve-identity)))
   (define info (elab-cell-info '() #f source))
   (define h (cell-id-hash cid))
   (values
