@@ -2,13 +2,22 @@
 
 **Date**: 2026-04-21
 **Stage**: 3 — Design per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3
-**Version**: D.1 — initial draft, subject to iterative P/R/M/S critique
+**Version**: D.2 — refined from D.1 per user review 2026-04-21
 **Scope**: PPN 4C Phase 9+10+11 combined addendum (renumbered to Phase 1, 2, 3 for this addendum)
+
+**D.1 → D.2 changes** (applied 2026-04-21):
+- Added Phase 10 to explicit scope (D.1 mentioned only 9 and 11)
+- Moved Progress Tracker from §16 to §3 (immediately after research/audit references), per new methodology discipline
+- Removed pre-committed resolutions for Q-A3, Q-A4, Q-A5, Q-A6 from §6 — these become phase-time mini-design items (§16)
+- NTT syntax cross-referenced against [`2026-03-22_NTT_SYNTAX_DESIGN.md`](2026-03-22_NTT_SYNTAX_DESIGN.md): §4 updated — `:preserves [Quantale]` removed from lattice declarations (NTT's `:preserves` is for BRIDGES per NTT §6, not lattices); quantale properties declared via `trait Quantale` instance per NTT §3.1; `:fires-once-at-threshold` flagged as sketch-extension
+- Phase 0 acceptance file requirement removed — PPN 4C's existing acceptance file (`examples/2026-04-17-ppn-track4c.prologos`) serves this track
+- All subsequent section numbers shifted by +1 (§3→§4, §4→§5, ..., §15→§16); old §16 Progress Tracker deleted; §17 References unchanged after cascade
+
 **Prior stages**:
 - Stage 1 (research): [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (commit `de357aa1`)
 - Stage 2 (audit): [`docs/tracking/2026-04-21_PPN_4C_PHASE_9_AUDIT.md`](2026-04-21_PPN_4C_PHASE_9_AUDIT.md) (commits `62ce9f83`, `28208613`)
 
-**Parent design**: [PPN 4C D.3](2026-04-17_PPN_TRACK4C_DESIGN.md). This addendum refines Phase 9+10+11 as a coherent sub-track; D.3 §6.7 (Phase 11), §6.10 (Phase 9+10), §6.11.3 (hypercube) are superseded by this document for implementation planning. D.3's Progress Tracker Phase 9 and Phase 11 rows point here.
+**Parent design**: [PPN 4C D.3](2026-04-17_PPN_TRACK4C_DESIGN.md). This addendum refines Phase 9+10+11 as a coherent sub-track; D.3 §6.7 (Phase 11), §6.10 (Phase 9+10 including union types via ATMS), §6.11.3 (hypercube), §6.15.6 (Phase 3+9 joint item) are superseded by this document for implementation planning. D.3's Progress Tracker Phase 9, Phase 10, and Phase 11 rows all point here (all three absorb into the Phase 1/2/3 structure of this addendum).
 
 ---
 
@@ -44,16 +53,15 @@ PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 
 
 ### §1.3 Out of scope (explicit deferrals)
 
-- **Deprecated `atms` struct retirement + `atms-believed` field** (Q-A3 resolution Option A): substrate reconciliation and ATMS API retirement are separable architectural concerns; ATMS retirement becomes a named future track. See §5.3 for detailed scope reasoning + deferral tracking.
-- **Surface ATMS AST migration** (`expr-atms-*` forms in parser/elaborator/reduction/zonk): pipeline-wide change gated on the atms struct retirement; deferred alongside.
-- **Phase 9b γ hole-fill propagator**: downstream consumer; interface specified here (§14), detailed design in Phase 9b's own cycle.
-- **PReduce cost-guided rewriting**: future consumer of the tropical fuel primitive; out-of-scope design.
-- **Self-hosted language-level surface for tropical quantale** (Polynomial Lawvere Logic, Rational Lawvere Logic per research §4.4): out of scope; infrastructure-only.
-- **General residual solver** (BSP-LE Track 6 forward reference): out of scope; Phase 9+10+11 consumes BSP-LE 2B substrate without coupling to relational layer.
+- **Phase-specific scope questions**: ATMS retirement scope (Q-A3), `elab-speculation.rkt` disposition (Q-A4), `atms-believed` retirement timing (Q-A5), residuation error-explanation placement (Q-A6). These emerge at phase mini-design time (§16), not in this design document.
+- **Phase 9b γ hole-fill propagator**: downstream consumer; interface specified here (§15), detailed design in Phase 9b's own cycle.
+- **PReduce cost-guided rewriting**: future consumer of the tropical fuel primitive.
+- **Self-hosted language-level surface for tropical quantale** (Polynomial Lawvere Logic, Rational Lawvere Logic per research §4.4): infrastructure-only in this track.
+- **General residual solver** (BSP-LE Track 6 forward reference): Phase 9+10+11 consumes BSP-LE 2B substrate without coupling to relational layer.
 
 ### §1.4 Relationship to PPN 4C D.3
 
-This document is an addendum to D.3, not a replacement. D.3's Progress Tracker continues to own track-level state; the Phase 9 row and Phase 11 row point to this document. D.3 §6.10 (Phase 9 design text), §6.11.3 (hypercube), §6.15.6 (Phase 3+9 joint item), and §6.7 (Phase 11) are SUPERSEDED by this document for implementation planning — but retain their conceptual framing.
+This document is an addendum to D.3, not a replacement. D.3's Progress Tracker continues to own track-level state; the Phase 9, Phase 10, and Phase 11 rows all point to this document (all three absorb into the Phase 1/2/3 structure here). D.3 §6.10 (Phase 9 + Phase 10 design text), §6.11.3 (hypercube), §6.15.6 (Phase 3+9 joint item), and §6.7 (Phase 11) are SUPERSEDED by this document for implementation planning — but retain their conceptual framing as research inputs.
 
 ---
 
@@ -71,62 +79,111 @@ This document is an addendum to D.3, not a replacement. D.3's Progress Tracker c
 - Hypercube addendum (2026-04-08) — Gray code, bitmask subcube, hypercube all-reduce
 - Module Theory research (2026-03-28) — quantale modules, backward residuation
 - Phase 3c shipped (2026-04-20) — demonstrates stratum-request + stratum-handler pattern for cross-tag residuation; Phase 1 uses similar pattern for tropical fuel threshold
+- NTT Syntax Design (2026-03-22) — NTT forms referenced in §4 of this design
 
 ---
 
-## §3 NTT Model — post-Phase-1-3 state
+## §3 Progress Tracker
 
-Per DESIGN_METHODOLOGY Stage 3 NTT Model Requirement, here is the NTT speculative syntax for the architectural substrate after Phase 1-3.
+Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — placed near top as the single source of truth for implementation state.
 
-### §3.1 Tropical fuel primitive (Phase 1 delivery)
+| Phase | Description | Status | Notes |
+|---|---|---|---|
+| Stage 1 | Research doc (tropical quantale) | ✅ | commit `de357aa1` |
+| Stage 2 | Audit doc | ✅ | commits `62ce9f83`, `28208613` |
+| Stage 3 | Design doc (this) | 🔄 D.2 | Iterating via P/R/M/S |
+| 0 | Uses PPN 4C existing acceptance file + Pre-0 bench (no new artifacts needed) | ✅ | `examples/2026-04-17-ppn-track4c.prologos`; `benchmarks/micro/bench-ppn-track4c.rkt` |
+| 1A | Retire `current-speculation-stack` + fallbacks | ⬜ | Mini-design at phase start |
+| 1B | Tropical fuel primitive + SRE registration | ⬜ | |
+| 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
+| 1V | Vision Alignment Gate Phase 1 | ⬜ | |
+| 2A | Register S(-1), L1, L2 as stratum handlers | ⬜ | |
+| 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
+| 2V | Vision Alignment Gate Phase 2 | ⬜ | |
+| 3A | Fork-on-union basic mechanism | ⬜ | |
+| 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
+| 3C | Residuation error-explanation | ⬜ | |
+| 3V | Vision Alignment Gate Phase 3 | ⬜ | |
+| V | Capstone + PIR | ⬜ | |
+
+---
+
+## §4 NTT Model — post-Phase-1-3 state
+
+Per DESIGN_METHODOLOGY Stage 3 NTT Model Requirement. Cross-referenced against [NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md). Notation follows NTT conventions; extensions to NTT are flagged explicitly.
+
+### §4.1 Tropical fuel primitive (Phase 1 delivery)
+
+Per NTT §3.1 (value lattices) + §3.4 (`Quantale` extends `Lattice` with tensor):
 
 ```ntt
-;; Tropical fuel lattice (Lawvere quantale — research doc §4.3, §9.1)
-type TropicalFuel := Nat | +inf
-  :lattice :structural
-  :properties '(Quantale Integral Residuated Commutative)
-  :preserves [Join Tensor Residual]
+;; Tropical fuel lattice — atomic extended-real
+type TropicalFuel := Nat | Infty
+  :lattice :value
 
-;; Tropical merge = min-join on extended non-negative reals
-spec tropical-fuel-merge TropicalFuel TropicalFuel -> TropicalFuel
-defn tropical-fuel-merge
-  | +inf   _   -> +inf
-  | _      +inf -> +inf
-  | a      b   -> (nat-min a b)
+;; Tropical quantale instance: min-plus algebra.
+;; Per research doc §9.1 (commutative integral residuated quantale).
+;; Aligns with NTT §3.1's Quantale trait pattern.
+trait Lattice TropicalFuel
+  spec tropical-join TropicalFuel TropicalFuel -> TropicalFuel
+  defn tropical-join [a b] -> (min a b)  ;; min ∨ semantics
+  spec tropical-bot -> TropicalFuel
+  defn tropical-bot -> 0
 
-;; Canonical fuel cell factory (consumer-instantiable primitive)
-spec net-new-tropical-fuel-cell
+trait BoundedLattice TropicalFuel
+  :extends [Lattice TropicalFuel]
+  spec tropical-top -> TropicalFuel
+  defn tropical-top -> Infty
+
+trait Quantale TropicalFuel
+  :extends [Lattice TropicalFuel]
+  spec tropical-tensor TropicalFuel TropicalFuel -> TropicalFuel
+  defn tropical-tensor [a b] -> (+ a b)  ;; + ⊗ semantics
+
+;; Residuation: per research doc §9.3
+trait Residuated TropicalFuel
+  :extends [Quantale TropicalFuel]
+  spec tropical-left-residual TropicalFuel TropicalFuel -> TropicalFuel
+  defn tropical-left-residual [a b]
+    -> (if (>= b a) (- b a) 0)  ;; b / a = b - a when b >= a else bot
+
+;; Primitive cell factory (consumer-instantiable)
+propagator net-new-tropical-fuel-cell
   :reads  []
   :writes [Cell TropicalFuel :init 0]
-  PropNetwork Nat -> [PropNetwork * CellId]
 
 ;; Canonical budget cell factory (paired with fuel cell)
-spec net-new-tropical-budget-cell
+propagator net-new-tropical-budget-cell
   :reads  []
   :writes [Cell TropicalFuel :init Budget]
-  PropNetwork TropicalFuel -> [PropNetwork * CellId]
 
-;; Threshold propagator (installed per fuel/budget pair)
-propagator tropical-fuel-threshold
+;; Threshold propagator factory
+;; NOTE: "fires once at threshold" is an NTT-extension sketch;
+;; the current NTT has :fires-once-on-threshold (for fire-once propagators)
+;; but not parameterized over runtime condition. Flagged as NTT refinement
+;; candidate (§4.5 Observations).
+propagator tropical-fuel-threshold  :extension-note
   :reads  [Cell TropicalFuel (at fuel-cid)
            Cell TropicalFuel (at budget-cid)]
   :writes [Cell Contradiction]
-  :fires-once-at-threshold (ge? fuel-cost budget)
-  fire-fn: if (ge? cost budget) then write-contradiction else net
+  :component-paths [(cons fuel-cid #f) (cons budget-cid #f)]
+  fire-fn: if (>= fuel-cost budget) then write-contradiction else net
 ```
 
-### §3.2 Worldview substrate post-retirement (Phase 1 delivery)
+### §4.2 Worldview substrate post-retirement (Phase 1 delivery)
 
 ```ntt
-;; Post-Phase-1 worldview architecture: TWO LAYERS (not three paths)
+;; Post-Phase-1 worldview architecture: two layers of the same bitmask
 
 ;; Layer 1: on-network authoritative cell (unchanged from BSP-LE 2B)
 cell worldview-cache
-  :type Bitmask  ;; Q_n Boolean lattice
+  :type Bitmask  ;; Q_n Boolean lattice (hypercube)
+  :lattice :value
   :merge worldview-cache-merge  ;; equality-check replacement
   :cell-id 1
 
 ;; Layer 2: per-propagator override (parameter, scoped inside fire functions)
+;; NOTE: Racket parameter = scaffolding; PM Track 12 migration target
 parameter current-worldview-bitmask :type Bitmask
   :default 0
   :scope fire-function
@@ -135,7 +192,9 @@ parameter current-worldview-bitmask :type Bitmask
 ;; Retired: tms-read/tms-write fallback paths in net-cell-read/write
 ```
 
-### §3.3 Stratum handler topology post-unification (Phase 2 delivery)
+### §4.3 Stratum handler topology post-unification (Phase 2 delivery)
+
+Per NTT §7 (Level 5: Stratification) — `stratification` with `:fiber` forms:
 
 ```ntt
 ;; 9 registered stratum handlers post-Phase-2 (was 6 pre-Phase-2)
@@ -160,18 +219,21 @@ stratum-handlers := [
 ;; Retired: run-stratified-resolution! (dead code)
 ```
 
-### §3.4 Union-type branching via ATMS (Phase 3 delivery)
+### §4.4 Union-type branching via ATMS (Phase 3 delivery)
+
+Per D.3 §6.10 + NTT §7.6 (`:speculation :atms`, `:branch-on [union-types]`):
 
 ```ntt
-;; Union type A | B elaboration via ATMS fork-on-⊕
+;; ATMS-based branching on union type A | B
+;; Per D.3 §6.10 framing: "ATMS branching on a union type IS applying
+;; SRE ctor-desc to the ⊕ constructor"
 
-;; Branching mechanism
 propagator fork-on-union
   :reads  [(meta-pos :type)  ;; classifier cell (sees union)
            Cell Bitmask (at worldview-cache-cell-id)]
-  :writes [Cell Assumption :tagged branch-a-aid
-           Cell Assumption :tagged branch-b-aid
-           Cell TropicalFuel (per-branch cost)]
+  :writes [Cell TaggedCellValue :tagged branch-a-aid
+           Cell TaggedCellValue :tagged branch-b-aid
+           Cell TropicalFuel (per-branch cost via primitive)]
   :fires-once-when (union-ctor-desc? classifier)
   fire-fn:
     let [a, b] = ctor-desc-decompose ⊕ classifier
@@ -182,47 +244,50 @@ propagator fork-on-union
     ;; Per-branch elaboration happens structurally via worldview-filtered reads
     ;; Cost accumulation via tropical fuel primitive per-branch
 
+;; NTT extension: :writes :tagged annotation — branch-tagged writes.
+;; Flagged as NTT refinement candidate (§4.5 Observations).
+
 ;; Gray-code branch traversal (Phase 3B integration)
+;; NTT extension: :execution ordering annotation. Flagged as refinement.
 spec traverse-branches
   :reads  [list-of-branches]
   :execution :gray-code-order
-  ;; Successive branches differ by 1 assumption bit → O(affected cells) fork
-  
+
 ;; Subcube pruning on nogood (Phase 3B integration)
+;; Existing Prologos primitive (decision-cell.rkt), exposed via NTT.
 spec prune-nogood-subcube
   :reads  [nogood-bitmask, worldview-bitmask]
   :predicate (= (bitwise-and wv ng) ng)
-  ;; O(1) bitmask check; prunes whole subcube of worldviews containing nogood
 
 ;; Residuation-based error-explanation (Phase 3C)
+;; Read-time function, not propagator (per D.3 §6.1.1 M4 critique).
 spec derivation-chain-for
   :reads  [contradicting-cell, all-branches]
   :output ErrorChain
-  ;; Backward-residuation walk on Module-Theoretic dependency graph
-  ;; per research §10.3
 ```
 
-### §3.5 NTT Observations
+### §4.5 NTT Observations
 
-Per the NTT methodology "Observations" subsection requirement:
+Per NTT methodology "Observations" subsection requirement:
 
 1. **Everything on-network?** Yes, with one fully-documented scaffolding: `current-worldview-bitmask` parameter remains as a per-fire-function override of the `worldview-cache` cell. Retirement plan: PM Track 12 (module loading on network), which migrates the scoping model. Not Phase 1-3 scope.
 
 2. **Architectural impurities revealed by the NTT model?**
-   - `tropical-fuel-threshold` requires `fires-once-at-threshold` behavior — NTT models this via `:fires-once-when`. Matches existing Phase 3c-iii residuation propagator pattern.
-   - Fork-on-union propagator writes multiple tagged cells — reveals need for NTT's `:writes :tagged` syntax (not currently formalized). Persisted as NTT refinement candidate (deferred).
+   - `tropical-fuel-threshold` requires "fires when runtime condition," beyond NTT's current `:fires-once-on-threshold`. Matches existing Phase 3c-iii residuation propagator pattern — precedent for extending NTT.
+   - Fork-on-union propagator writes multiple tagged cells — reveals need for NTT's `:writes :tagged` syntax (not currently formalized).
    - Tropical fuel primitive writes to multiple cells (cost + budget) — NTT models as two separate cell factories. Clean.
 
-3. **NTT syntax gaps surfaced?**
+3. **NTT syntax gaps surfaced**:
    - `:writes :tagged branch-aid` — branch-tagging annotation for fork propagators. Flagged for NTT design resumption.
    - `:execution :gray-code-order` — execution-order annotation for branch traversal. Flagged.
-   - `:preserves [Residual]` was already flagged in PPN 4C D.3 §15; confirmed relevant for tropical fuel.
+   - `:fires-once-when (predicate)` — runtime-condition-gated fire. Flagged as generalization of `:fires-once-on-threshold`.
+   - `:preserves [Residual]` was already flagged in PPN 4C D.3 §15; confirmed relevant for tropical fuel quantale. Per NTT §13.3 "Quantale morphism syntax" known-unknown — this work provides concrete use case.
 
-4. **Components the NTT cannot express?** None at D.1 level. P/R/M/S critique (§10) may surface more.
+4. **Components the NTT cannot express?** None at D.2 level that isn't noted as refinement candidate. P/R/M/S critique (§11) may surface more.
 
 ---
 
-## §4 Design Mantra Audit (Stage 0 gate)
+## §5 Design Mantra Audit (Stage 0 gate)
 
 Per DESIGN_METHODOLOGY Stage 0 Design Mantra Audit requirement. The mantra: *"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK."*
 
@@ -239,30 +304,30 @@ For each major design component:
 | Subcube pruning | N/A (filtering order) | ✓ O(1) per-branch | ✓ from bitmask structure | ✓ via worldview filter | ✓ |
 | Residuation error-explanation | N/A (read-time) | — | ✓ from dep graph | ✓ backward residual walk | read-time only |
 
-**Findings**: all components satisfy mantra. `current-worldview-bitmask` parameter is scoped-inside-fire-fn scaffolding (§3.2 note), with retirement plan to PM Track 12.
+**Findings**: all components satisfy mantra. `current-worldview-bitmask` parameter is scoped-inside-fire-fn scaffolding (§4.2 note), with retirement plan to PM Track 12.
 
 ---
 
-## §5 Architectural decisions
+## §6 Architectural decisions
 
-Each architectural question (Q-A1 through Q-A8) gets an explicit resolution here, with lens justifications. Phase-specific decisions (Q-A3 ATMS retirement scope, Q-A6 residuation placement details) committed here as D.1 baseline, subject to phase mini-design refinement.
+Architectural commitments for this addendum. Phase-specific scope questions (Q-A3 ATMS retirement scope, Q-A4 elab-speculation.rkt disposition, Q-A5 atms-believed timing, Q-A6 residuation error-explanation placement) emerge at phase mini-design time (§16) — not pre-resolved here.
 
-### §5.1 Q-A1 — Phase partitioning (RESOLVED 2026-04-21)
+### §6.1 Q-A1 — Phase partitioning (RESOLVED 2026-04-21)
 
-**Decision**: 3 phases, sequential, sub-phases labeled A-Z as needed. Phase names: 1 (substrate + tropical fuel), 2 (orchestration), 3 (union types + hypercube). Hypercube embedded in Phase 3 (not standalone) because primitives already implemented per audit §3.5.
+**Decision**: 3 phases, sequential (single-agent process constraint), sub-phases labeled A-Z as needed. Phase names: 1 (substrate + tropical fuel), 2 (orchestration), 3 (union types + hypercube). Hypercube embedded in Phase 3 (not standalone) because primitives already implemented per audit §3.5.
 
 **Lens justification**:
 - **P (Principles)**: Decomplection — Phase 1 substrate, Phase 2 orchestration, Phase 3 features are separable. Most Generalizable Interface — Phase 1 substrate stabilizes first so 3 consumes.
 - **R (Reality)**: Work-volume per audit §8.3 fits ~200-400 LoC per sub-phase at this partitioning.
-- **M (Mindspace)**: dependency ordering is substrate → consumers; Phase 2 independent subsystem but sequenced for single-agent process constraint.
-- **S (Structural)**: Hasse of sub-phase dependencies has 9A below 9C, 11 independent — 3 sub-phase partition captures this faithfully.
+- **M (Mindspace)**: dependency ordering is substrate → consumers.
+- **S (Structural)**: Hasse of sub-phase dependencies has Phase 3 below Phase 1, Phase 2 independent — 3 sub-phase partition captures this faithfully.
 
-### §5.2 Q-A2 — Tropical fuel cell placement (RESOLVED 2026-04-21)
+### §6.2 Q-A2 — Tropical fuel cell placement (RESOLVED 2026-04-21)
 
 **Decision**: Option 3 with canonical instance. Substrate-level tropical quantale registered as SRE domain; primitive API for consumer instantiation; canonical BSP scheduler instance allocated in `make-prop-network` using the primitive.
 
 **Concretely**:
-- `'tropical-fuel` SRE domain (Tier 1) with tropical quantale properties
+- `'tropical-fuel` SRE domain (Tier 1) with tropical quantale properties (Commutative, Unital, Integral, Residuated)
 - `net-new-tropical-fuel-cell` + `net-new-tropical-budget-cell` + threshold propagator factory (primitive API)
 - Canonical BSP instance at well-known cell-ids (fuel-cost = cell-id 11, budget = cell-id 12)
 - Consumer instances (future PReduce, Phase 9b) allocate their own cells via primitive — no well-known IDs needed
@@ -273,81 +338,9 @@ Each architectural question (Q-A1 through Q-A8) gets an explicit resolution here
 - **M**: Information flow via per-consumer cells, all consuming the same quantale algebra; cross-consumer reasoning via Galois bridges in quantale module theory.
 - **S**: Module Theory — each fuel cell is a quantale-module over shared tropical quantale; cross-consumer cost queries are module morphisms. Research doc §6.5-§6.7 codifies this.
 
-### §5.3 Q-A3 — Retirement scope for Phase 1
+### §6.3 Q-A7 — Phase 4 β2 substrate contract (interface specification)
 
-**Decision**: Option A — pure substrate retirement. ATMS retirement (deprecated struct + `atms-believed` + surface AST migration) deferred as its own future track.
-
-**Scope IN Phase 1**:
-- Retire `current-speculation-stack` parameter + 3 fallback read sites + 1 active `wrap-with-assumption-stack`
-- Retire `prop-network-fuel` field + 15+ decrement/check sites
-- Migrate both to substrate tropical fuel + worldview-bitmask-only flow
-
-**Scope OUT Phase 1 (deferred)**:
-- Deprecated `atms` struct
-- `atms-believed` field (gated on struct retirement)
-- Surface AST `expr-atms-*` forms (pipeline-wide migration)
-
-**Deferral tracking**:
-- Add to DEFERRED.md: "ATMS Retirement — post-PPN-4C Phase 1-3" with Q-A3 reasoning
-- Future candidates for this work: dedicated ATMS retirement track, OR absorbed into BSP-LE general residual solver track when that lands
-- BSP-LE 2B D.1 self-critique finding remains tracked; deferred alongside atms-believed
-
-**Mini-design item for Phase 1 start**: grep for remaining internal consumers of deprecated ATMS API (atms-assume, atms-retract, atms-amb outside surface-AST evaluation). If any found, decide opportunistic-migrate vs leave-with-deferral.
-
-**Lens justification**:
-- **P**: Decomplection — substrate and ATMS API are separable concerns; Simplicity of Foundation — smaller sub-phase scope; Scope discipline per D.3 §1 charter.
-- **R**: ATMS retirement is ~300-400 additional LoC (struct + pipeline); bundling expands Phase 1 substantially.
-- **M**: Not a mindspace issue — both substrate and ATMS are architecturally defensible; decomplection drives separation.
-- **S**: Module-theoretic — deprecated `atms` and modern `solver-context` are parallel module implementations; consolidation is a natural track but independent from substrate reconciliation.
-
-### §5.4 Q-A4 — elab-speculation.rkt disposition
-
-**Decision**: Retain and migrate to pure-bitmask semantics in Phase 3. Treat as library primitives for union-type ATMS branching.
-
-**Rationale**: the file provides structured speculation API (`speculation-begin`, `speculation-try-branch`, `speculation-commit`, `speculate-first-success`) built on `solver-state`. Phase 3's union-type branching naturally consumes this — fork-on-union creates one branch per union component, tries each, commits the viable one. The API is designed for exactly this use case.
-
-**Migration in Phase 3**:
-- `speculation-try-branch` currently uses `branch-hypothesis-id` (assumption-id) and forked networks. Migrate to bitmask-first semantics (worldview-cache-cell-id writes, `current-worldview-bitmask` parameterize).
-- Keep `speculation` / `branch` / `speculation-result` structs; they're natural descriptors.
-- Make the file's tests actually exercise production paths by wiring union-type branching through this API.
-
-**Lens justification**:
-- **P**: Completeness Over Deferral — 189 lines of designed-API dead code is debt; migrate rather than delete.
-- **R**: No production consumers today; tests exist; migration surface known.
-- **M**: structured speculation API matches fork-on-union's operational shape.
-- **S**: Module Theory — `speculation` struct is a container over `solver-state`; Phase 3 branching naturally maps onto it.
-
-### §5.5 Q-A5 — atms-believed retirement timing
-
-**Decision**: Coupled to Q-A3 Option A (deferred). `atms-believed` retires when the deprecated `atms` struct retires, which is future-track work.
-
-**Rationale**: structural coupling — the field is used by the deprecated struct's methods; cannot retire independently.
-
-### §5.6 Q-A6 — Residuation for error-explanation placement
-
-**Decision**: Phase 3C (final sub-phase of Phase 3). Ships residuation-based error-explanation for all-branch-contradict case, leveraging union-type branching's structural information.
-
-**Rationale**: union-type ATMS branching is exactly where residuation-based error-explanation has immediate applicability — when all branches contradict, the user deserves a principled "why" via the backward residual walk over the dependency graph (research §10.3, Module Theory §5).
-
-**Scope**:
-- `derivation-chain-for(contradicting-cell, all-branches)` helper (read-time, not propagator — per D.3 §6.1.1 M4 critique lean)
-- Walks the propagator-firing dependency graph backward from contradiction
-- Uses Phase 1.5 srcloc infrastructure + ATMS assumption tagging + `:trace :structural` mode
-- Outputs both human-readable message + machine-readable structured chain
-
-**What about non-union contradictions?** The mechanism generalizes, but Phase 3C ships it only for the union-type all-branch-contradict case. Broader applicability (fuel exhaustion, type contradictions in general) is Phase 11b (diagnostic infrastructure) territory — referenced but not duplicated here.
-
-**Mini-design item for Phase 3C**: API signature for `derivation-chain-for` per Phase 11b cross-reference; human-readable vs machine-readable output format; LSP integration hooks (forward reference).
-
-**Lens justification**:
-- **P**: Completeness — union-type branching without error-explanation ships an incomplete experience; Correct-by-Construction — structural explanation from dependency graph is principled, not ad-hoc.
-- **R**: Infrastructure already in place (ATMS assumption tags, source-loc registry, `:trace :structural` mode from Phase 1.5).
-- **M**: Information flow — backward walk on existing dep graph, not new mechanism.
-- **S**: Module Theory §5 — "backward chaining IS residuation" applies directly.
-
-### §5.7 Q-A7 — Phase 4 β2 substrate contract
-
-**Decision**: Specify the contract here (§13). Phase 4 β2 consumes:
+**Decision**: Specify the contract here (§14). Phase 4 β2 consumes:
 - The tropical fuel primitive (meta-elaboration cost tracking optional)
 - The `worldview-cache-cell-id` (meta entries bitmask-tagged per branch for ATMS speculation)
 - `classify-inhabit-value` Module Theory Realization B tag-dispatch (already shipped in Phase 3 of PPN 4C)
@@ -356,33 +349,36 @@ Each architectural question (Q-A1 through Q-A8) gets an explicit resolution here
 Phase 4 β2 does NOT consume:
 - `current-speculation-stack` (retired by Phase 1)
 - `prop-network-fuel` field (retired by Phase 1)
-- Deprecated `atms` struct (retained for surface AST but not for β2)
 
-### §5.8 Q-A8 — Phase 9b interface specification
+### §6.4 Q-A8 — Phase 9b interface specification
 
-**Decision**: HIGH-level specification in §14; detailed design owned by Phase 9b's own design cycle.
+**Decision**: HIGH-level specification in §15; detailed design owned by Phase 9b's own design cycle.
 
 Phase 9b γ hole-fill consumes from Phase 1-3:
 - Tagged-cell-value for multi-candidate ATMS branching (Phase 3 deliverable, on-network)
 - Tropical fuel primitive (if γ wants cost-bounded hole-fill — optional)
 - Phase 2b Hasse-registry primitive (from PPN 4C Phase 2b, already shipped)
 
+### §6.5 Phase-specific questions (deferred to mini-design)
+
+Per user direction 2026-04-21: Q-A3 (retirement scope), Q-A4 (elab-speculation.rkt disposition), Q-A5 (atms-believed timing), Q-A6 (residuation placement) are phase-specific scope decisions with architectural tradeoffs best addressed at the phase mini-design step with code in hand. This design document does NOT pre-resolve them; they are mini-design items listed in §16.
+
 ---
 
-## §6 Phase 1 — Substrate + Tropical Fuel
+## §7 Phase 1 — Substrate + Tropical Fuel
 
-### §6.1 Scope and rationale
+### §7.1 Scope and rationale
 
 Phase 1 is the foundational sub-phase — retires legacy substrate (current-speculation-stack, prop-network-fuel counter) and ships the tropical fuel primitive that Phase 2, Phase 3, and downstream consumers build on.
 
-### §6.2 Sub-phase partition
+### §7.2 Sub-phase partition
 
 - **Phase 1A — Retire `current-speculation-stack` + fallback paths** (~100-150 LoC)
 - **Phase 1B — Tropical fuel primitive + SRE registration** (~150-200 LoC)
 - **Phase 1C — Migrate `prop-network-fuel` → canonical tropical fuel cell** (~100-200 LoC)
 - **Phase 1V — Vision Alignment Gate**
 
-### §6.3 Phase 1A deliverables
+### §7.3 Phase 1A deliverables
 
 **Retirement targets** (per audit §3.1.5):
 1. Delete `current-speculation-stack` parameter definition at `propagator.rkt:1621` and export at `:155`
@@ -398,12 +394,7 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 - Affected-tests suite GREEN
 - Per-phase regression: acceptance file clean via `process-file`
 
-**Mini-design items for Phase 1A start**:
-- Exact grep of `wrap-with-assumption-stack` call sites (1 known; confirm count)
-- Decision: migrate or delete if single caller can be replaced by direct bitmask parameterize
-- `test-tms-cell.rkt` rewrite: update to bitmask semantics OR retire if redundant with `test-tagged-cell-value.rkt`
-
-### §6.4 Phase 1B deliverables
+### §7.4 Phase 1B deliverables
 
 **Tropical fuel primitive**:
 1. New module `racket/prologos/tropical-fuel.rkt`:
@@ -427,12 +418,7 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 4. Module imports / provides per codebase conventions
 5. `tropical-fuel.rkt` imports only from `sre-core.rkt`, `merge-fn-registry.rkt`, `propagator.rkt` (no higher-level dependencies — primitive is foundational)
 
-**Mini-design items for Phase 1B start**:
-- Decision on API names (`net-new-tropical-fuel-cell` vs `net-new-fuel-cell` vs other)
-- Decision on whether threshold propagator contradiction is separate cell or reuses `prop-network-contradiction`
-- Representation: use Racket's `+inf.0` directly, or a sentinel like `'tropical-fuel-exhausted`? (Lean: `+inf.0` — native Racket representation, clean arithmetic)
-
-### §6.5 Phase 1C deliverables
+### §7.5 Phase 1C deliverables
 
 **Canonical BSP fuel instance migration**:
 1. Allocate canonical fuel-cost cell at `cell-id 11` in `make-prop-network` (next contiguous after `classify-inhabit-request-cell-id = 10`) using the primitive
@@ -447,44 +433,40 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 8. Update test read-only usage (15+ test sites per audit) to use `(net-cell-read net fuel-cost-cell-id)`
 9. `pretty-print.rkt:462` fix (prints fuel; update to cell read)
 
-**Mini-design items for Phase 1C start**:
-- A/B microbench: old decrement counter vs new cell-based min-merge. Target: performance-neutral (within 5% noise). If regression >5%, investigate before committing (per Post-Implementation Protocol).
-- Decision: do the 15+ decrement sites all switch to cell writes, or can some be consolidated via the BSP scheduler writing fuel at round-end? (Lean: keep per-firing decrement for compatibility; scheduler writes aggregated cost per round.)
-
-### §6.6 Phase 1V — Vision Alignment Gate
+### §7.6 Phase 1V — Vision Alignment Gate
 
 4 VAG questions per DESIGN_METHODOLOGY Step 5:
 - **On-network?** — yes; substrate retired; tropical fuel lives in cells; primitive registered at SRE.
-- **Complete?** — all retirement targets + primitive + canonical instance delivered; deferrals explicit.
+- **Complete?** — all retirement targets + primitive + canonical instance delivered.
 - **Vision-advancing?** — substrate unified; tropical fuel enables cross-consumer cost reasoning.
-- **Drift-risks-cleared?** — named in Phase 1 mini-design (audit; silent-write-drop; belt-and-suspenders).
+- **Drift-risks-cleared?** — named in Phase 1 mini-design.
 
-### §6.7 Phase 1 termination arguments
+### §7.7 Phase 1 termination arguments
 
 Per GÖDEL_COMPLETENESS Phase 1's new propagators/cells:
 - Tropical fuel cell — Level 1 (Tarski fixpoint): finite lattice (bounded by budget or +∞); monotone merge (min); per-BSP-round cost accumulation bounded.
 - Threshold propagator — Level 1: fires once at threshold (monotone; cost only increases); contradicts-or-no-op.
 - No new strata added; no cross-stratum feedback; no well-founded measure needed.
 
-### §6.8 Phase 1 parity-test strategy
+### §7.8 Phase 1 parity-test strategy
 
 Axis: tropical-fuel parity (new axis). One-two tests confirming tropical fuel exhausts at same point as decrementing counter for representative workloads. Per D.3 §9.1 convention, wire into `test-elaboration-parity.rkt`.
 
 ---
 
-## §7 Phase 2 — Orchestration Unification
+## §8 Phase 2 — Orchestration Unification
 
-### §7.1 Scope and rationale
+### §8.1 Scope and rationale
 
 Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 resolution) into BSP stratum handler registrations, retiring the sequential `run-stratified-resolution-pure` orchestrator. Architectural parallel to Phase 1: unify the mechanisms.
 
-### §7.2 Sub-phase partition
+### §8.2 Sub-phase partition
 
 - **Phase 2A — Register S(-1), L1, L2 as stratum handlers** (~75-125 LoC)
 - **Phase 2B — Retire orchestrators** (~50-100 LoC)
 - **Phase 2V — Vision Alignment Gate**
 
-### §7.3 Phase 2A deliverables
+### §8.3 Phase 2A deliverables
 
 1. Introduce 3 new request-accumulator cells in `make-prop-network`:
    - `retraction-stratum-request-cell-id` (cell-id 13; set-valued, set-union merge)
@@ -503,12 +485,7 @@ Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 r
    - `process-resolution net actions` wraps `execute-resolution-actions!`
 5. Invariant: handler behavior observationally equivalent to sequential orchestrator (parity axis)
 
-**Mini-design items for Phase 2A start**:
-- Exact cell-id allocation (13, 14, 15 proposed; confirm next available)
-- Invariant: retraction-handler clears request set after processing (precedent: S1 NAF handler `net-cell-reset`)
-- Decision: L1 / L2 may share a single request cell, OR separate for clarity. Lean: separate (explicit strata).
-
-### §7.4 Phase 2B deliverables
+### §8.4 Phase 2B deliverables
 
 1. Delete `run-stratified-resolution-pure` at `metavar-store.rkt:1915` (after confirming no test callers)
 2. Delete `run-stratified-resolution!` at `metavar-store.rkt:1863` (dead code; R3 external critique finding)
@@ -516,37 +493,33 @@ Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 r
 4. Clean up exports at `metavar-store.rkt:172, 218, 221-222`
 5. Update performance-counters.rkt:137 reference
 
-**Mini-design items for Phase 2B start**:
-- A/B microbench: sequential orchestrator vs BSP-scheduler-iterated handlers. Target: performance-neutral.
-- Decision: if scheduler iteration is slower, investigate tier grouping OR keep sequential internally but make it handler-registered (still unifies API)
-
-### §7.5 Phase 2 termination arguments
+### §8.5 Phase 2 termination arguments
 
 - S(-1) retraction handler — Level 1: finite assumption set; narrowing only.
 - L1 readiness handler — Level 1 (Tarski): pure scan, observation only.
 - L2 resolution handler — Level 2 (well-founded): cross-stratum feedback decreases type depth (inherited from current implementation).
 - BSP scheduler outer loop — finite because fuel-budgeted (Phase 1 tropical fuel).
 
-### §7.6 Phase 2 parity-test strategy
+### §8.6 Phase 2 parity-test strategy
 
 Axis: orchestration parity. Confirm elaboration results identical pre-Phase-2 and post-Phase-2 for representative workloads. Parity tests wire into `test-elaboration-parity.rkt`.
 
 ---
 
-## §8 Phase 3 — Union Types via ATMS + Hypercube Integration
+## §9 Phase 3 — Union Types via ATMS + Hypercube Integration
 
-### §8.1 Scope and rationale
+### §9.1 Scope and rationale
 
-Phase 3 ships union types via ATMS branching (D.3 §6.10), exploiting already-implemented hypercube primitives (audit §3.5) and residuation-based error-explanation (research §10.3, Q-A6 resolution).
+Phase 3 ships union types via ATMS branching (D.3 §6.10), exploiting already-implemented hypercube primitives (audit §3.5) and residuation-based error-explanation (research §10.3).
 
-### §8.2 Sub-phase partition
+### §9.2 Sub-phase partition
 
 - **Phase 3A — Fork-on-union basic mechanism** (~100-150 LoC)
 - **Phase 3B — Hypercube integration (Gray code, subcube pruning)** (~50-100 LoC)
 - **Phase 3C — Residuation error-explanation** (~75-150 LoC)
 - **Phase 3V — Vision Alignment Gate**
 
-### §8.3 Phase 3A deliverables
+### §9.3 Phase 3A deliverables
 
 1. Fork-on-union propagator: watches `:type` facet (classifier layer) per position; when classifier is a ⊕ compound, SRE ctor-desc decomposes into components
 2. For each component: fresh assumption-id via ATMS, tag worldview, elaborate per-branch with worldview-filtered reads
@@ -554,15 +527,11 @@ Phase 3 ships union types via ATMS branching (D.3 §6.10), exploiting already-im
 4. Contradiction in branch → nogood on main network worldview-cache (S1 NAF handler pattern)
 5. All branches contradict → fall through to error-explanation (Phase 3C)
 6. Winning branch → commit (worldview narrows; tagged entries become authoritative)
-7. Migrate `elab-speculation.rkt` to pure-bitmask semantics per Q-A4 resolution; wire union-type branching through its API
-8. Tests (`tests/test-union-types-atms.rkt`): axis 7 parity (union branch elaboration)
+7. Tests (`tests/test-union-types-atms.rkt`): axis union parity
 
-**Mini-design items for Phase 3A start**:
-- Decision: per-branch fuel cells use separate budget OR shared budget with per-branch cost accumulation into shared? (Lean: separate per-branch; cross-branch aggregation is future generalization)
-- Decision: tagged cells for per-branch state — which cells promote to tagged-cell-value? (Follow `promote-cell-to-tagged` precedent from relations.rkt)
-- Integration point: which elaboration function dispatches to fork-on-union? (Lean: `infer`/`check` dispatch recognizes union-classifier positions)
+Note: `elab-speculation.rkt` disposition (Q-A4) is a Phase 3A mini-design item (§16.3).
 
-### §8.4 Phase 3B deliverables
+### §9.4 Phase 3B deliverables
 
 Hypercube integration leveraging already-implemented primitives (audit §3.5):
 
@@ -571,11 +540,7 @@ Hypercube integration leveraging already-implemented primitives (audit §3.5):
 3. Subcube pruning on contradictions: when branch X contradicts, writes nogood; subsequent branches containing the same nogood-bits skipped via `subcube-member?` check (already implemented in `decision-cell.rkt:368`)
 4. Tests: performance + correctness (structural sharing benefit measurable via heartbeat counters)
 
-**Mini-design items for Phase 3B start**:
-- A/B microbench: Gray-code ordering vs naive ordering — target CHAMP-reuse improvement per hypercube addendum
-- Decision: bitmask subcube representation — does 9-bit limit (2^9 = 512 worldviews) suffice, or extend to bitvector? Lean: 9-bit for Phase 3 (matches BSP-LE 2 decisions-state bitmask), bitvector as future extension
-
-### §8.5 Phase 3C deliverables
+### §9.5 Phase 3C deliverables
 
 Residuation-based error-explanation for all-branch-contradict:
 
@@ -586,12 +551,9 @@ Residuation-based error-explanation for all-branch-contradict:
 5. Integration: error message output at Phase 3A's all-branch-contradict fall-through
 6. Tests (`tests/test-union-error-explanation.rkt`): axis error-provenance-chain per D.3 §9.1 Phase 11b row
 
-**Mini-design items for Phase 3C start**:
-- API signature: `derivation-chain-for` exact inputs/outputs (chain structure shape)
-- Human-readable format: per-line, markdown, or structured JSON with renderer?
-- LSP integration hooks: forward-reference for Phase 11 or PM Track 11
+Note: Q-A6 (placement of residuation error-explanation — this track or Phase 11b diagnostic) is a Phase 3C mini-design item (§16.3).
 
-### §8.6 Phase 3V — Vision Alignment Gate
+### §9.6 Phase 3V — Vision Alignment Gate
 
 Per 4 VAG questions:
 - **On-network?** — branching via fork-prop-network (O(1) CHAMP share); tagged-cell-value worldview; residuation via on-network dep graph.
@@ -599,23 +561,23 @@ Per 4 VAG questions:
 - **Vision-advancing?** — union types via ATMS is exactly the Track 4B blocked feature; hypercube + tropical + ATMS compose naturally per Hyperlattice Conjecture.
 - **Drift-risks-cleared?** — named at Phase 3 mini-design start.
 
-### §8.7 Phase 3 termination arguments
+### §9.7 Phase 3 termination arguments
 
 - Fork-on-union propagator — Level 2: branch count bounded by union component count; per-branch cost-bounded via tropical fuel primitive.
 - Gray-code traversal — finite permutation of finite branch set.
 - Residuation walk — finite dependency graph; walk terminates when all deps traversed.
 
-### §8.8 Phase 3 parity-test strategy
+### §9.8 Phase 3 parity-test strategy
 
 Axes: union (per D.3 §9.1); error-provenance-chain (added). Parity: pre-Phase-3 union-type elaboration currently fails (not supported); post-Phase-3 succeeds. Parity tests verify narrow-by-constraint cases (`<Int | String>` narrowed by `eq?` to `Int`) per D.3 §9 §9.1.
 
 ---
 
-## §9 Tropical quantale — implementation details
+## §10 Tropical quantale — implementation details
 
 (Consolidates the tropical-specific design across all three phases)
 
-### §9.1 SRE domain registration
+### §10.1 SRE domain registration
 
 ```racket
 (define tropical-fuel-sre-domain
@@ -631,7 +593,7 @@ Axes: union (per D.3 §9.1); error-provenance-chain (added). Parity: pre-Phase-3
 (register-merge-fn!/lattice tropical-fuel-merge #:for-domain 'tropical-fuel)
 ```
 
-### §9.2 Primitive API
+### §10.2 Primitive API
 
 ```racket
 ;; Allocate a fuel cost cell (initial 0; merge min)
@@ -652,7 +614,7 @@ Axes: union (per D.3 §9.1); error-provenance-chain (added). Parity: pre-Phase-3
         net)))
 ```
 
-### §9.3 Canonical BSP scheduler instance
+### §10.3 Canonical BSP scheduler instance
 
 ```racket
 ;; In make-prop-network (propagator.rkt)
@@ -663,7 +625,7 @@ Axes: union (per D.3 §9.1); error-provenance-chain (added). Parity: pre-Phase-3
 ;; Export fuel-cost-cell-id = 11, fuel-budget-cell-id = 12
 ```
 
-### §9.4 Migration of `prop-network-fuel` decrement sites
+### §10.4 Migration of `prop-network-fuel` decrement sites
 
 15+ sites pattern rewrite:
 
@@ -687,49 +649,46 @@ Check sites:
 
 (The threshold propagator writes the contradiction when `cost >= budget`, so `net-contradiction?` is already checking the right thing.)
 
-### §9.5 Residuation for error-explanation
+### §10.5 Residuation for error-explanation
 
-Per research §10.3. When threshold propagator writes contradiction (fuel exhausted), the `derivation-chain-for` helper can be invoked (from Phase 3C) to walk backward. For pure fuel exhaustion (outside union-branching context), the chain is the sequence of propagators that consumed fuel — in order, with per-step costs. Production use: Phase 11b diagnostic.
+Per research §10.3. When threshold propagator writes contradiction (fuel exhausted), the `derivation-chain-for` helper can be invoked (from Phase 3C, subject to Q-A6 mini-design) to walk backward. For pure fuel exhaustion (outside union-branching context), the chain is the sequence of propagators that consumed fuel — in order, with per-step costs. Broader applicability (non-union contradictions) is Phase 11b diagnostic territory per Q-A6 mini-design decision.
 
-Phase 1-3 ships `derivation-chain-for` for union-branch contradictions; broader applicability (pure fuel exhaustion, general type contradictions) is Phase 11b territory per Q-A6.
-
-### §9.6 Future multi-quantale composition
+### §10.6 Future multi-quantale composition
 
 Primitive API supports cross-consumer cost queries via shared quantale algebra (Module Theory §6.4 tensor products). Not shipped in Phase 1-3; primitive enables without requiring. Future PReduce or other tracks can allocate their own fuel cells and reason about combined costs via quantale morphisms.
 
 ---
 
-## §10 P/R/M/S Self-Critique
+## §11 P/R/M/S Self-Critique
 
-Applied inline during decision-making; consolidated here per DESIGN_METHODOLOGY Stage 3 requirement.
+Applied inline during decision-making; consolidated here per DESIGN_METHODOLOGY Stage 3 requirement. The S lens (SRE Structural Thinking: PUnify / SRE / Hyperlattice+Hasse / Module-theoretic / Algebraic-structure-on-lattices) is an addition per user direction 2026-04-21, codified in DESIGN_METHODOLOGY.org Stage 3 §6 Lens S.
 
-### §10.1 P — Principles challenged
+### §11.1 P — Principles challenged
 
 Decisions reviewed against the 10 load-bearing principles:
 
 | Decision | Principle served | Potential conflict | Resolved? |
 |---|---|---|---|
 | Substrate-level tropical fuel primitive (Q-A2) | Most Generalizable Interface, First-Class by Default | — | ✓ |
-| Option A retirement scope (Q-A3) | Decomplection, Simplicity of Foundation | Completeness — ATMS retirement defers | ✓ deferred tracking explicit |
-| Retain + migrate `elab-speculation.rkt` (Q-A4) | Completeness Over Deferral | — | ✓ |
-| Residuation in Phase 3C (Q-A6) | Completeness, Correct-by-Construction | — | ✓ |
-| 3-phase sequential partition (Q-A1) | Decomplection | "all in parallel" mantra — not a process concern | ✓ (per user clarification) |
+| 3-phase sequential partition (Q-A1) | Decomplection | — | ✓ |
+| Phase 4 β2 contract specified here (Q-A7) | Decomplection, Completeness | — | ✓ |
+| Phase 9b interface specified here (Q-A8) | Decomplection | — | ✓ |
 
-**Red-flag scrutiny**: no "temporary bridge," "belt-and-suspenders," "pragmatic shortcut" in Phase 1-3 scope. Deferrals (ATMS retirement) are explicit with tracking.
+**Red-flag scrutiny**: no "temporary bridge," "belt-and-suspenders," "pragmatic shortcut" in Phase 1-3 architectural commitments. Phase-specific scope (Q-A3-A6) deferred to mini-design per user direction — not pre-committed.
 
-### §10.2 R — Reality check (code audit)
+### §11.2 R — Reality check (code audit)
 
 Audit §3 (Stage 2) grounded the design in concrete code. Highlights:
-- Q-A3 Option A justified by audit §3.3 (surface AST migration is pipeline-wide)
-- Q-A6 Phase 3C placement justified by audit §3.6 (union-type infrastructure 90% in place)
 - Phase 2 scope matches audit §3.9 findings (3 strata, 1 orchestrator to retire)
 - Phase 1C migration sites count matches audit §3.8 (15+ `prop-network-fuel` sites)
+- Phase 3 infrastructure matches audit §3.6 (90% union-type machinery in place)
+- Audit §3.5 confirms hypercube primitives already implemented; Phase 3B is integration
 
 Scope claims tied to grep-backed audit data; no speculation floats above the codebase.
 
-### §10.3 M — Propagator mindspace
+### §11.3 M — Propagator mindspace
 
-Design mantra check (§4) passed for all components. Highlights:
+Design mantra check (§5) passed for all components. Highlights:
 - Tropical fuel cell: pure cell-based, merge via `min`; no hidden state
 - Threshold propagator: fires once at threshold; monotone
 - Fork-on-union: all-at-once decomposition via ctor-desc; per-branch elaboration structurally emergent
@@ -739,35 +698,38 @@ Design mantra check (§4) passed for all components. Highlights:
 
 No "scan" / "walk" / "iterate" in propagator design (all operations are cell reads/writes or structural decomposition).
 
-### §10.4 S — SRE Structural Thinking (new lens)
+### §11.4 S — SRE Structural Thinking
 
-PUnify, SRE, Hyperlattice/Hasse, Module-theoretic, Algebraic-structure-on-lattices applied:
+PUnify, SRE, Hyperlattice/Hasse, Module-theoretic, Algebraic-structure-on-lattices applied per new DESIGN_METHODOLOGY Lens S:
 
 **PUnify**:
 - Per-branch union elaboration invokes `unify-union-components` (audit §3.6); reuses existing PUnify infrastructure (research doc §6.4)
 - No new unification algorithm
 
 **SRE**:
-- Tropical fuel is an SRE-registered domain (§9.1); property inference runs at registration
+- Tropical fuel is an SRE-registered domain (§10.1); property inference runs at registration
 - Union-type branching uses SRE ctor-desc decomposition (D.3 §6.10); no hand-rolled pattern matcher
+- Tagged-cell-value (Module Theory Realization B) carries per-branch state
 
 **Hyperlattice / Hasse**:
-- Worldview lattice IS Q_n hypercube; Gray code + subcube pruning exploit this structural identity
+- Worldview lattice IS Q_n hypercube; Gray code + subcube pruning exploit this structural identity (per `structural-thinking.md` mandate for Boolean lattices)
 - Phase 2's stratum handler topology Hasse: 9 handlers in 2 tiers, BSP scheduler iterates uniformly
 
 **Module theoretic**:
 - Cells are Q-modules (research §6.5); propagators are Q-module morphisms
-- Tropical fuel cell is a trivial 1-dim tropical-quantale module
-- Cross-consumer fuel cells compose via quantale tensor products
+- Tropical fuel cell is a 1-dim tropical-quantale module
+- Cross-consumer fuel cells compose via quantale tensor products (research §6.4)
+- Residuation native in quantale modules (research §6.4)
 
 **Algebraic structure on lattices**:
 - Tropical quantale registered with full property declaration (Quantale, Integral, Residuated, Commutative)
-- Residuation native (research §5.1, §9.3); error-explanation uses the quantale residual
+- Residuation formula: `a \ b = b - a` when b ≥ a else bot (research §9.3)
+- Error-explanation uses the quantale left-residual (research §5.6, §10.3)
 - TypeFacet quantale (SRE 2H) + tropical fuel quantale compose via Galois bridges (future work; primitive enables)
 
 ---
 
-## §11 Parity test skeleton
+## §12 Parity test skeleton
 
 Per D.3 §9.1, each phase enables its parity axis tests in `test-elaboration-parity.rkt`:
 
@@ -783,7 +745,7 @@ Phase V (capstone): all parity tests GREEN.
 
 ---
 
-## §12 Termination arguments
+## §13 Termination arguments
 
 Consolidated per DESIGN_METHODOLOGY requirement.
 
@@ -803,9 +765,9 @@ BSP scheduler outer loop finite via canonical tropical fuel cell (Phase 1 depend
 
 ---
 
-## §13 Phase 4 β2 substrate contract
+## §14 Phase 4 β2 substrate contract
 
-Per Q-A7 resolution. Phase 4 (PPN 4C CHAMP retirement with β2 scope — attribute-map becomes sole meta store) consumes from Phase 1-3 the following:
+Per Q-A7 resolution (§6.3). Phase 4 (PPN 4C CHAMP retirement with β2 scope — attribute-map becomes sole meta store) consumes from Phase 1-3 the following:
 
 **Consumes (read-only or read-write per-meta)**:
 - `worldview-cache-cell-id` + per-propagator `current-worldview-bitmask` (for meta worldview-tagging)
@@ -817,7 +779,6 @@ Per Q-A7 resolution. Phase 4 (PPN 4C CHAMP retirement with β2 scope — attribu
 **Does NOT consume (retired by Phase 1-3)**:
 - `current-speculation-stack` (retired Phase 1)
 - `prop-network-fuel` field (retired Phase 1C)
-- Deprecated `atms` struct (retained but β2 uses modern API only)
 
 **Invariants Phase 1-3 guarantees for Phase 4**:
 - Substrate worldview bitmask read/write is stable and cell-based
@@ -831,9 +792,9 @@ Per Q-A7 resolution. Phase 4 (PPN 4C CHAMP retirement with β2 scope — attribu
 
 ---
 
-## §14 Phase 9b interface specification
+## §15 Phase 9b interface specification
 
-Per Q-A8 resolution. Phase 9b γ hole-fill propagator (D.3 §6.2.1, §6.10) consumes from Phase 1-3:
+Per Q-A8 resolution (§6.4). Phase 9b γ hole-fill propagator (D.3 §6.2.1, §6.10) consumes from Phase 1-3:
 
 **Consumes**:
 - Tagged-cell-value multi-candidate ATMS branching mechanism (Phase 3A delivery)
@@ -849,24 +810,31 @@ Per Q-A8 resolution. Phase 9b γ hole-fill propagator (D.3 §6.2.1, §6.10) cons
 
 ---
 
-## §15 Open questions — mini-design scope (not blockers)
+## §16 Open questions — mini-design scope (not blockers)
 
 Per user direction: phase-specific questions deferred to mini-design at phase start. Listed here for traceability; each question has its mini-design trigger point.
 
-### §15.1 Phase 1 mini-design items
-- Option A retirement scope: grep remaining internal ATMS consumers; decide opportunistic migrate or leave
+### §16.1 Phase 1 mini-design items
+
+- **Q-A3** (Retirement scope for Phase 1): how much of ATMS retirement (deprecated `atms` struct, `atms-believed` field per BSP-LE 2B D.1 finding, surface AST migration) is in Phase 1 vs deferred? A/B-microbench alternatives if performance-relevant; Q-A5 (atms-believed) is architecturally coupled.
+- **Q-A5** (atms-believed retirement timing): structurally coupled to Q-A3 — retires with the deprecated struct, if at all.
 - API naming for tropical fuel primitive
 - Representation: `+inf.0` vs sentinel for fuel-exhausted
 - `wrap-with-assumption-stack` migration: single caller replacement strategy
 - A/B microbench: decrement counter vs min-merge cell (fuel cost migration)
+- Remaining internal deprecated-atms consumers audit (grep for opportunistic migration)
 
-### §15.2 Phase 2 mini-design items
+### §16.2 Phase 2 mini-design items
+
 - Request cell-id allocation (13, 14, 15 proposed; confirm next available)
 - Retraction handler request-clearing invariant
 - L1 / L2 shared cell vs separate cells
 - A/B microbench: sequential orchestrator vs BSP-iterated handlers
 
-### §15.3 Phase 3 mini-design items
+### §16.3 Phase 3 mini-design items
+
+- **Q-A4** (elab-speculation.rkt disposition): delete dead library, retain as library primitives for union branching, or migrate its API to pure-bitmask? Phase 3A decides with code in hand.
+- **Q-A6** (residuation for error-explanation placement): ships with Phase 3C for union all-branch-contradict, or deferred entirely to Phase 11b diagnostic? Phase 3C decides, informed by union branching implementation complexity.
 - Per-branch fuel: separate budget vs shared
 - Cell-to-tagged promotion discipline
 - `infer`/`check` dispatch integration point for union fork
@@ -874,34 +842,10 @@ Per user direction: phase-specific questions deferred to mini-design at phase st
 - `derivation-chain-for` API signature + output format
 - LSP integration hooks (forward ref)
 
-### §15.4 Cross-phase (all)
+### §16.4 Cross-phase (all)
+
 - Drift risks per phase (named at phase start per VAG step 5d)
 - Parity test detailed cases per axis
-
----
-
-## §16 Progress tracker
-
-Per DESIGN_METHODOLOGY Stage 3 requirement. Initial state:
-
-| Phase | Description | Status | Notes |
-|---|---|---|---|
-| Stage 1 | Research doc | ✅ | commit `de357aa1` |
-| Stage 2 | Audit doc | ✅ | commits `62ce9f83`, `28208613` |
-| Stage 3 | Design doc (this) | 🔄 D.1 | Iterating via P/R/M/S |
-| 0 | Acceptance file + Pre-0 + parity skeleton | ⬜ | Follow D.3 §9.1 parity skeleton pattern |
-| 1A | Retire `current-speculation-stack` + fallbacks | ⬜ | Mini-design at phase start |
-| 1B | Tropical fuel primitive | ⬜ | |
-| 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
-| 1V | Vision Alignment Gate Phase 1 | ⬜ | |
-| 2A | Register S(-1), L1, L2 as stratum handlers | ⬜ | |
-| 2B | Retire orchestrators | ⬜ | |
-| 2V | Vision Alignment Gate Phase 2 | ⬜ | |
-| 3A | Fork-on-union basic mechanism | ⬜ | |
-| 3B | Hypercube integration | ⬜ | |
-| 3C | Residuation error-explanation | ⬜ | |
-| 3V | Vision Alignment Gate Phase 3 | ⬜ | |
-| V | Capstone + PIR | ⬜ | |
 
 ---
 
@@ -913,6 +857,7 @@ Per DESIGN_METHODOLOGY Stage 3 requirement. Initial state:
 
 ### §17.2 Parent and adjacent design docs
 - [`docs/tracking/2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) (D.3)
+- [`docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md`](2026-03-22_NTT_SYNTAX_DESIGN.md) (NTT syntax reference for §4)
 - [`docs/research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md`](../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md)
 - [`docs/research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
 - [`docs/research/2026-03-28_MODULE_THEORY_LATTICES.md`](../research/2026-03-28_MODULE_THEORY_LATTICES.md)
@@ -923,7 +868,7 @@ Per DESIGN_METHODOLOGY Stage 3 requirement. Initial state:
 - PPN Track 4B PIR — Phase 8 union types blocked on cell-based TMS
 
 ### §17.4 Methodology and rules
-- [`docs/tracking/principles/DESIGN_METHODOLOGY.org`](principles/DESIGN_METHODOLOGY.org) Stage 3
+- [`docs/tracking/principles/DESIGN_METHODOLOGY.org`](principles/DESIGN_METHODOLOGY.org) Stage 3 (incl. new Lens S)
 - [`docs/tracking/principles/DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org)
 - [`docs/tracking/principles/CRITIQUE_METHODOLOGY.org`](principles/CRITIQUE_METHODOLOGY.org)
 - [`.claude/rules/on-network.md`](../../.claude/rules/on-network.md)
@@ -935,11 +880,4 @@ Per DESIGN_METHODOLOGY Stage 3 requirement. Initial state:
 
 ## Document status
 
-**Stage 3 Design D.1** — initial draft. Subject to P/R/M/S critique iteration. User feedback welcome on:
-- Phase scope and sub-phase partition (§6, §7, §8)
-- Architectural decisions in §5 (especially Q-A3, Q-A6)
-- NTT model adequacy (§3)
-- Termination arguments (§12)
-- Interface specifications (§13, §14)
-
-Next step: user review → D.2 refinement if needed → Phase 0 artifact setup (acceptance file + Pre-0 bench + parity skeleton) → Phase 1A implementation mini-design.
+**Stage 3 Design D.2** — refined per user review 2026-04-21. Next: if D.2 is stable, proceed to Phase 1A mini-design (§16.1) with code in hand. Otherwise iterate to D.3 on specific feedback.

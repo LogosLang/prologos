@@ -162,7 +162,7 @@ This is an iterative cycle:
    critique. Include the propagator-mindspace orientation (see
    [[file:CRITIQUE_METHODOLOGY.org][CRITIQUE_METHODOLOGY.org]] § Orientation for External Critics).
 5. *Respond*: Address critiques --- accept, refine, or justify
-6. *Self-Critique (D.2/D.4)*: Three explicit lenses (P/R/M), all
+6. *Self-Critique (D.2/D.4)*: Four explicit lenses (P/R/M/S), all
    mandatory. See [[file:CRITIQUE_METHODOLOGY.org][CRITIQUE_METHODOLOGY.org]] for the full methodology.
    Brief summary:
 
@@ -191,6 +191,36 @@ This is an iterative cycle:
    result? PPN Track 4 demonstrated the failure mode: three critique
    rounds validated a "propagator-native" design that was actually
    function-call wrappers --- the M lens catches this.
+
+   *Lens S — Structural (SRE / PUnify / Hyperlattice+Hasse / Module-
+   theoretic / Algebraic-structure-on-lattices)*: Apply structural
+   thinking to every lattice design decision. For each lattice or
+   algebraic-structure choice in the design:
+   - *SRE lens*: is the domain registered? are its algebraic properties
+     declared? does the decomposition use ~ctor-desc~ rather than hand-
+     rolled pattern matching?
+   - *PUnify*: does unification use ~unify-core~ with the appropriate
+     relation (~'equality~ / ~'subtype~) via ~sre-structural-classify~?
+     No hand-rolled matchers.
+   - *Hyperlattice Conjecture + Hasse*: is the Hasse diagram of the
+     lattice explicit? Does our propagator topology follow its adjacency
+     structure? Can Hasse primitives (Gray code, bitmask subcube,
+     hypercube all-reduce) apply? This is mandatory for Boolean
+     lattices (= hypercubes Q_n) per ~structural-thinking.md~.
+   - *Module-theoretic*: are cells Q-modules? Are propagators Q-module
+     morphisms? Is the composition (tensor, direct sum) explicit? Does
+     residuation apply for backward reasoning? See
+     [[file:../../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]].
+   - *Algebraic structure on lattices*: is the algebra named (semiring,
+     quantale, residuated quantale, tropical quantale)? Are its
+     properties (commutative, integral, residuated) declared? Does the
+     design exploit the algebra (e.g., residuals for error-explanation)?
+
+   The S lens is NOT redundant with M — M catches step-think;
+   S catches missing structural machinery or hand-rolled algebra that
+   should consume existing primitives. Origin: PPN 4C Phase 9+10+11
+   addendum design (2026-04-21), where the S lens surfaced during
+   dialogue as a distinct concern from P/R/M.
 7. *Repeat*: Continue until all parties have clarity and confidence
 
 *** Key practices
@@ -651,6 +681,28 @@ The Logic Engine Design went through a similar cycle:
 - Phase-specific test strategies and success criteria
 - Record of critique and responses (preserved in standups)
 
+*** Progress Tracker Placement (MANDATORY)
+
+The Progress Tracker table (per ~workflow.md~ "Progress tracker for
+phased designs") MUST be placed near the TOP of the design document ---
+typically as ~§2~ or ~§3~, immediately after the purpose/scope section
+and research/audit inputs section. Do NOT bury it at the bottom.
+
+Rationale: the tracker is the single source of truth for implementation
+state. Readers (including future-you) need to find it IMMEDIATELY upon
+opening the design document --- it answers "where are we in this work?"
+which is the most common question. Burying it at §16 or later forces
+scrolling past all design prose to find the current state, which:
+
+1. Makes the tracker easy to overlook when updating after a phase commit
+2. Hides progress from reviewers doing quick check-ins
+3. Violates the principle that the most-accessed information should be
+   most-accessible
+
+Codified 2026-04-21 during PPN 4C Phase 9+10+11 addendum D.1 review ---
+D.1 placed the tracker at §16, and the user flagged the placement as a
+design-document hygiene issue. Applied to D.2 (tracker moved to §3).
+
 ** Stage 4: Implementation
 
 /Goal/: Execute the phased roadmap, shipping complete and sound solutions
@@ -865,6 +917,13 @@ For each implementation phase:
      What emerges?
    - Check the *red flags table* (§3 above): am I reaching for a loop?
      A queue? A left-to-right scan? If so, where is the lattice?
+   - *Apply Lens S (Structural)*: for any lattice or algebraic-structure
+     decision mid-implementation, consult the SRE/PUnify/Hyperlattice+
+     Hasse/Module-theoretic/Algebraic-structure checklist from Stage 3
+     §6 Lens S. Structural mistakes at implementation time (e.g., hand-
+     rolled pattern match where ~sre-structural-classify~ applies,
+     Boolean-lattice work without hypercube primitives, quantale without
+     declaring residuation) are the class of drift the S lens catches.
    - Cross-reference the drift risks named in step 1's design-target
      note. If a decision touches a flagged risk, scrutinize harder.
 
