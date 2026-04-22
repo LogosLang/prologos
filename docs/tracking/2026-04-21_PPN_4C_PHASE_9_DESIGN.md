@@ -783,27 +783,150 @@ If `type-lattice-merge` has set-union semantics:
 
 ### §7.6 Path T-3 — Type lattice set-union merge redesign
 
-Placeholder for T-3 research/design work (Stage 1→4). Content accrues as T-3 progresses.
+Mini-design resolved in dialogue 2026-04-22. Scope, semantics, and architectural principles captured below. Stage 2 audit (Role A/B call-site classification) is the next concrete work item.
 
-**Design target** (preliminary, 2026-04-22):
-- `type-lattice-merge` becomes a set-union join operation over the type domain
-- `type-top` reserved for logical contradictions explicitly signaled (not structural mismatch)
-- Union construction via `build-union-type` integrated into the lattice join (not only as an explicit typing-core rule)
-- Consumers (subtype-lattice-merge, unify-core, narrowing, QTT) adapt to the new semantics
+#### §7.6.1 Core semantics — set-union merge (Q-T3-1)
 
-**Stage 1 targets** (to be filled as research accrues):
-- Lattice theory on free/distributive lattices with set-union join
-- Abstract interpretation foundations for union-typed lattices
-- Practical language systems with union types (TypeScript, Flow, Pony, Ceylon)
-- Meta-theory: dependent type system + union merge interactions
-- Prologos-specific: union-types.rkt, subtype-predicate.rkt, narrowing.rkt prior art
+`type-lattice-merge` becomes a set-union join over the type domain:
 
-**Stage 2 targets** (to be filled after Stage 1):
-- Audit all call sites of `type-lattice-merge` + `type-lattice-meet`
-- Identify which are "join" (should produce union) vs "check" (subtyping test)
-- Identify which consumers treat `type-top` specially
+| Case | Behavior |
+|---|---|
+| `merge(bot, x)` | `x` (bot is join-identity) |
+| `merge(top, x)` | `top` (top is absorbing) |
+| `merge(A, A)` | `A` (idempotent) |
+| `merge(Int, String)` | `Int \| String` (union via `build-union-type`) |
+| `merge(Int \| String, Bool)` | `Int \| String \| Bool` (dedup-append) |
+| `merge(Int \| String, Int)` | `Int \| String` (absorption) |
+| `merge(Pi a b, Pi c d)` | structural: `Pi merge(a,c) meet(b,d)` if metas/compatibility permit; else `(Pi a b) \| (Pi c d)` |
+| `merge(Pi a b, Sigma c d)` | `(Pi a b) \| (Sigma c d)` (structurally incompatible → union at outer level) |
+| `merge(?T, Int)` | `Int` (metas unify, don't union; conservative solve — same as current) |
+| `merge(?T₁, ?T₂)` | unify → single meta (unchanged) |
 
-**Stage 3 / Stage 4**: TBD after Stages 1 + 2.
+**Key principle**: the lattice's join is the powerset/free-distributive completion of the domain. Metas still unify. Atoms and structurally-incompatible types union via `build-union-type`.
+
+#### §7.6.2 `type-top` legitimacy (Q-T3-2)
+
+Post-T-3, `type-top` appears only for **explicit annotation violations during `check`**:
+- `(the Int "foo")` — check fails; writer explicitly writes `type-top` to signal contradiction
+- Role B callers that enforce equality and find incompatible types (see §7.6.4)
+
+Merge NEVER produces top from structural mismatch. All non-check contradictions surface via the Role B migration (§7.6.4).
+
+#### §7.6.3 Meet dual semantics (Q-T3-3)
+
+Meet becomes set-intersection, dualizing cleanly:
+- `meet(Int \| String, Int \| Bool)` = `Int` (intersection)
+- `meet(Int, Nat)` = `Nat` if `Nat <: Int` (subtype-preserving; matches existing `type-lattice-meet`)
+- `meet(Int, String)` = `bot` (empty intersection)
+- `meet(Pi a b, Sigma c d)` = `bot` (structurally empty intersection)
+
+Largely matches current `type-lattice-meet`. Audit verifies that structurally-incompatible meet already produces `bot` (not `top`); if any case produces `top`, adjust to `bot` for consistency.
+
+#### §7.6.4 Q-T3-8 — **CRITICAL: Decouple merge (Role A) from unify-check (Role B)**
+
+Your Q-T3-8 finding identified the **conflation risk** that could turn T-3 into a bug-pocalypse. `type-lattice-merge` currently serves two semantically opposite roles:
+
+**Role A — Lattice join (accumulate)**:
+- Incompatible concrete types → **union** (set-union semantics)
+- Used when: multiple writes accumulate type information (narrowing, value-type cells, numeric-join, etc.)
+- Correct behavior under set-union redesign
+
+**Role B — Unify-check (enforce equality)**:
+- Incompatible concrete types → **top** (contradiction)
+- Used when: two cells or positions MUST have the same type (make-unify-propagator, check ctx e T, solve-meta! unification)
+- **Under naive set-union merge: would silently produce union instead of top, losing contradiction detection**
+
+**Architectural decomplection**:
+- `type-lattice-merge(A, B)` = JOIN (Role A — accumulate)
+- `try-unify-pure(A, B)` = UNIFICATION check (returns unified OR `#f`)
+- Role B callers explicitly use `try-unify-pure` + write `type-top` on `#f`
+
+**Known Role B site**: `make-unify-propagator` at elaborator-network.rkt:152-170 — writes `type-lattice-merge(va, vb)` to both cells; under set-union redesign would silently union instead of contradict. Must migrate.
+
+**Implementation ordering enforcement**:
+1. Stage 2 audit: classify every `type-lattice-merge` call site as Role A or Role B
+2. Stage 3 design: migration spec for Role B sites
+3. Stage 4 implementation (two atomic commits):
+   - **Commit A**: migrate ALL Role B call sites to `try-unify-pure + type-top-on-#f` (no semantic change at this point — same behavior, different dispatch)
+   - **Commit B**: change `type-lattice-merge` semantics to set-union (Role A call sites gain new semantics; Role B sites already migrated so unaffected)
+
+This ordering is **load-bearing**. Commit B MUST NOT land before Commit A — if it does, Role B silently union where they should contradict.
+
+#### §7.6.5 Meta interactions (Q-T3-5)
+
+**Option (a) eager unify, confirmed**: metas still eagerly unify on merge.
+- `merge(?T, Int)` → solve `?T = Int` (conservative; non-meta wins)
+- `merge(?T₁, ?T₂)` → unify T₁ and T₂
+- Metas don't become first-class union components
+
+Rationale: preserves bidirectional inference semantics. Only structurally-incompatible CONCRETE types produce union.
+
+#### §7.6.6 Q-T3-9 — BSP-LE 2B prior art correctly/incorrectly reused
+
+BSP-LE 2B shipped branch-exploration substrate (`tagged-cell-value`, `worldview-cache-cell-id`, `current-worldview-bitmask`, `fork-prop-network`, hypercube primitives, assumption-tagged dependents). This is the correct substrate for **true branch exploration** (N alternatives, each tagged, committing or retracting).
+
+**Correct reuse** (no architectural change):
+- `expr-union` branching at typing-propagators.rkt:1878-1920 — uses `current-worldview-bitmask` parameterize + `worldview-cache` writes directly. This IS branch exploration.
+- `atms-amb` / choice points — uses `solver-state-amb` via `fork-prop-network`. True branching.
+- NAF handler forks via `fork-prop-network`. True branching.
+
+**Misapplied** (architectural fix needed — T-1):
+- `with-speculative-rollback` at elab-speculation-bridge.rkt. Uses BSP-LE 2B branching machinery (bitmask parameterize + worldview-cache writes) plus a SEPARATE `elab-network` snapshot mechanism. The bitmask layer is vestigial scaffolding from TMS-era code; the snapshot layer does the actual rollback work. Under set-union merge (T-3) + proper Role A/B separation, the bitmask layer is not needed for try-rollback semantics.
+
+**T-1 post-T-3 scope**:
+- Audit 4 `with-speculative-rollback` callers (qtt.rkt:2425, typing-errors.rkt:78, typing-core.rkt 1205/1291/1325/2439)
+- Identify which become unnecessary post-T-3 (likely map-assoc at typing-core.rkt:1205 — set-union merge handles it naturally)
+- For remaining callers: remove bitmask parameterize + worldview-cache writes; keep ONLY elab-net snapshot/restore
+- Clean decoupling: branch-exploration substrate (BSP-LE 2B) for branching cases; transactional-rollback substrate (elab-net snapshot) for try-rollback cases; no conflation
+
+**Principle** (for the lessons list): *BSP-LE 2B's branch-exploration substrate is distinct from transactional rollback. Applying both to a use case that needs only one is scaffolding conflation.*
+
+#### §7.6.7 Implications for T-2 (Map open-world)
+
+With T-3 landed:
+- Set-union merge handles "accumulate types via writes" correctly — map-assoc could write value types and let union emerge naturally
+- But ergonomics design says Maps should be open-world (`Map Keyword _`) — narrower unions are misalignment
+- T-2 would then decide: does map-assoc still explicitly `build-union-type`, or migrate to open-world (`_` value type)?
+
+Open-world decision: explicit `_` value type unless a schema narrows. `build-union-type` in map-assoc becomes redundant (wrong kind of narrowing).
+
+T-2 is a separate dialogue post-T-3 landing, but T-3 clears the path (no more speculation scaffolding driving the narrow-union path).
+
+#### §7.6.8 Stage 2 audit scope (next step)
+
+**Audit target**: every `type-lattice-merge` call site in the codebase.
+
+**Classification per site**:
+- **Role A (accumulate / join)**: multiple writes to a cell that legitimately may have different types; OR narrowing accumulation; OR numeric-join. Site stays on `type-lattice-merge` → gains set-union behavior in Commit B.
+- **Role B (enforce equality / unify)**: writes that must agree; OR unification propagators; OR check-style constraints. Site migrates to `try-unify-pure + type-top-on-#f` in Commit A.
+
+**Audit outputs** (persist in §7.6.9):
+- Full call-site list with classification
+- Migration pattern for Role B sites
+- Any ambiguous sites requiring design clarification
+
+**Known starting points**:
+- `make-unify-propagator` (elaborator-network.rkt:152-170) — Role B (confirmed)
+- `numeric-join` (typing-core.rkt:52) — Role A (join semantics in name)
+- `type-lattice-meet` (type-lattice.rkt:178+) — NOT in merge audit but may need consistency check
+- External callers: `unify.rkt`, `subtype-predicate.rkt`, etc. — Role A/B TBD per audit
+
+#### §7.6.9 Stage 2 audit findings (to be filled)
+
+**Status**: pending audit execution.
+
+#### §7.6.10 Stage 3 design (to be filled post-audit)
+
+**Status**: pending Stage 2 completion.
+
+#### §7.6.11 Stage 4 implementation plan (preliminary)
+
+Two atomic commits (per §7.6.4 ordering):
+- **Commit A**: Role B call sites migrate to `try-unify-pure + type-top-on-#f` — no semantic change (current merge behavior preserved for these sites via explicit dispatch)
+- **Commit B**: `type-lattice-merge` gains set-union behavior — Role A call sites gain union construction; Role B sites already migrated so unaffected
+
+Post-implementation validation:
+- Probe (§7.5.5) + acceptance file + full suite at baseline (commit Commit A: no semantic change) + at final (commit Commit B: Role A callers' semantics changed, Role B callers' unchanged)
 
 ### §7.7 Phase 1B deliverables
 
