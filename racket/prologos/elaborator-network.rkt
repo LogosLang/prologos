@@ -19,7 +19,7 @@
 (require racket/list
          racket/set
          "propagator.rkt"
-         "type-lattice.rkt"
+         "type-lattice.rkt"     ;; type-lattice-merge (Role A), type-unify-or-top (Role B, T-3 Commit A)
          (only-in "sre-core.rkt" sre-equality make-sre-domain register-domain!)  ;; PAR Track 1: for request emission; Phase 1e-β-i: meta-solve domain
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; Phase 1e-β-i: Tier 2 linkage
          (only-in "decision-cell.rkt"
@@ -159,9 +159,11 @@
       ;; One bot: propagate the known value
       [(type-bot? va) (net-cell-write net cell-a vb)]
       [(type-bot? vb) (net-cell-write net cell-b va)]
-      ;; Both have values: compute lattice join
+      ;; Both have values: equality-enforcement (Role B).
+      ;; PPN 4C Path T-3 Commit A: use type-unify-or-top (equality semantics)
+      ;; instead of type-lattice-merge (which becomes set-union in Commit B).
       [else
-       (define unified (type-lattice-merge va vb))
+       (define unified (type-unify-or-top va vb))
        (if (type-top? unified)
            ;; Contradiction: signal via type-top write
            (net-cell-write net cell-a type-top)
@@ -179,11 +181,14 @@
   (define va (elab-cell-read enet cell-a))
   (define vb (elab-cell-read enet cell-b))
   (cond
-    ;; Fast path: both cells ground AND no unsolved metas — merge eagerly
+    ;; Fast path: both cells ground AND no unsolved metas — merge eagerly.
+    ;; Role B (equality-enforcement): PPN 4C Path T-3 Commit A uses
+    ;; type-unify-or-top. Incompatible types produce type-top → the
+    ;; cells' contradicts? predicate fires on read.
     [(and (not (type-bot? va)) (not (type-bot? vb))
           (not (type-top? va)) (not (type-top? vb))
           (not (has-unsolved-meta? va)) (not (has-unsolved-meta? vb)))
-     (define merged (type-lattice-merge va vb))
+     (define merged (type-unify-or-top va vb))
      (define enet* (elab-cell-write (elab-cell-write enet cell-a merged) cell-b merged))
      (values enet* #f)]
     ;; Standard path: create structural bidirectional propagator
@@ -897,9 +902,9 @@
       [(type-bot? vb)
        (let ([net* (net-cell-write net cell-b va)])
          (maybe-decompose net* cell-a cell-b va vb va))]
-      ;; Both have values: compute lattice join
+      ;; Both have values: equality-enforcement (Role B, T-3 Commit A).
       [else
-       (define unified (type-lattice-merge va vb))
+       (define unified (type-unify-or-top va vb))
        (if (type-top? unified)
            ;; Contradiction: signal via type-top write
            (net-cell-write net cell-a type-top)
@@ -1118,7 +1123,9 @@
         (define cell-b (sre-decomp-request-cell-b req))
         (define va (net-cell-read n cell-a))
         (define vb (net-cell-read n cell-b))
-        (define unified (type-lattice-merge va vb))
+        ;; Role B (equality-enforcement) — pair-decomp requires unification.
+        ;; PPN 4C Path T-3 Commit A: use type-unify-or-top.
+        (define unified (type-unify-or-top va vb))
         (cond
           [(type-top? unified) (net-cell-write n cell-a type-top)]
           [else

@@ -36,6 +36,7 @@
 
 (provide type-bot type-top type-bot? type-top?
          type-lattice-merge
+         type-unify-or-top           ;; PPN 4C Path T-3 Commit A: Role B equality-enforce helper
          type-lattice-meet           ;; Track 2G: lattice meet (greatest lower bound)
          type-lattice-contradicts?
          try-unify-pure
@@ -153,6 +154,40 @@
        ;; contradiction yet — keep the more concrete value. When the meta
        ;; is solved, solve-meta! writes to its cell, the unify propagator
        ;; fires again, and merge re-runs with the resolved type.
+       [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
+        (if (has-unsolved-meta? v1) v2 v1)]
+       [else type-top])]))
+
+;; ========================================
+;; PPN 4C Path T-3 Commit A (2026-04-22) — equality-enforcement helper
+;; ========================================
+;; type-unify-or-top: encodes the CURRENT type-lattice-merge semantics
+;; (returns type-top for structurally-incompatible concrete types).
+;;
+;; Used by Role B callers (unify propagators, equality-enforcement
+;; constraints) that require contradiction signaling on structural
+;; mismatch. Post-T-3 Commit B, type-lattice-merge gains set-union
+;; semantics (Role A / accumulate); Role B callers preserve equality
+;; enforcement via this function.
+;;
+;; Semantic: identical to current type-lattice-merge. This function
+;; exists to decouple Role B (equality-enforce) from Role A (accumulate)
+;; at the API level — per D.3 §7.6.4. Commit B's merge change does not
+;; affect this function.
+(define (type-unify-or-top v1 v2)
+  (cond
+    [(type-bot? v1) v2]
+    [(type-bot? v2) v1]
+    [(type-top? v1) type-top]
+    [(type-top? v2) type-top]
+    [(eq? v1 v2) v1]
+    [(equal? v1 v2) v1]
+    [else
+     (define result (try-unify-pure v1 v2))
+     (cond
+       [result result]
+       ;; Conservative meta handling (same as type-lattice-merge):
+       ;; if either side has unsolved metas, keep concrete side
        [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
         (if (has-unsolved-meta? v1) v2 v1)]
        [else type-top])]))
