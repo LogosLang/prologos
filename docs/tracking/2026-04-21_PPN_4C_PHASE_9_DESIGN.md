@@ -113,6 +113,12 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1A-iii-probe | Pre-0 behavioral probe (`.prologos` file) capturing baseline pre-1A-iii-a-wide | ✅ | commit `329d4f30` — 6 scenarios, 28 expressions, 0 errors baseline captured |
 | 1A-iii Sub-A | Type cell migration experiment: tagged-cell-value at elab-fresh-meta | ⏸️ REVERTED | Probe showed regression; root cause is deeper than Path (b) — see §7.5.8 |
 | **Path T-3** | **Type lattice set-union merge redesign — PREREQUISITE** (Stage 1→4) | 🔄 | Point 3 architectural finding: `type-lattice-merge(Int, String)` → `type-top` is lattice design inadequacy. Set-union semantics required. |
+| T-3 mini-design | Set-union semantics, Role A/B decomplection, type-unify-or-top helper | ✅ | commit `9c3172e0` — Q-T3-1 through Q-T3-9 resolved; subtype-lattice-merge prior art template |
+| T-3 Stage 2 audit | Classify type-lattice-merge call sites (Role A/B) | ✅ (INCOMPLETE) | commit `6fddc5f7` — 4 Role B + 8 Role A + dispatch tables. MISSED contradiction-detection-as-fallback sites — see §7.6.12/§7.6.13 |
+| T-3 probe baseline | Pre-0 behavioral probe (6 scenarios) | ✅ | commit `329d4f30` |
+| T-3 Commit A | Role B migration (4 sites) + type-unify-or-top helper | ✅ | commit `37aaba2b` — zero behavior change; probe diff 0; 129 targeted tests pass |
+| **T-3 Commit B** | `type-lattice-merge` set-union fallthrough | ⏸️ PAUSED | test-union-types regression exposed 3rd accidentally-load-bearing mechanism; T3-C3 re-audit required before retry |
+| **T-3 T3-C3 re-audit** | Systematic audit for contradiction-detection-as-fallback sites | ⬜ | §7.6.12/§7.6.13 — NEXT SESSION |
 | Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ | Deferred until T-3 resolves — T-3 likely obviates need for try-rollback speculation in map-assoc |
 | Path T-2 | Map type inference open-world realignment | ⬜ | Deferred until T-3 resolves — T-3 + open-world may land `_` value type by default |
 | 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⏸️ PAUSED | Pending Path T resolution. T-3's set-union merge likely simplifies this significantly. |
@@ -1047,14 +1053,68 @@ Two atomic commits. Each validated against probe + acceptance file + full suite.
 - T-2 (Map open-world): typing-core.rkt:1196-1217's explicit `build-union-type` becomes redundant (merge does it automatically) OR map-assoc migrates to `_` open-world value type (user's ergonomics choice)
 - 1A-iii-a-wide: type cell migration becomes straightforward since the conflated mechanisms are now decoupled
 
-#### §7.6.11 Stage 4 implementation plan (preliminary)
+#### §7.6.11 Stage 4 implementation
 
 Two atomic commits (per §7.6.4 ordering):
-- **Commit A**: Role B call sites migrate to `try-unify-pure + type-top-on-#f` — no semantic change (current merge behavior preserved for these sites via explicit dispatch)
+- **Commit A**: Role B call sites migrate to `type-unify-or-top + type-top-on-#f` — no semantic change (current merge behavior preserved for these sites via explicit dispatch)
 - **Commit B**: `type-lattice-merge` gains set-union behavior — Role A call sites gain union construction; Role B sites already migrated so unaffected
 
-Post-implementation validation:
-- Probe (§7.5.5) + acceptance file + full suite at baseline (commit Commit A: no semantic change) + at final (commit Commit B: Role A callers' semantics changed, Role B callers' unchanged)
+**Commit A DELIVERED** (commit `37aaba2b`, 2026-04-22):
+- Added `type-unify-or-top` helper in type-lattice.rkt (encodes current merge semantics)
+- Migrated 4 Role B sites in elaborator-network.rkt (make-unify-propagator, elab-add-unify-constraint fast path, make-structural-unify-propagator, pair-decomp topology handler)
+- Zero semantic change — probe diff = 0, 129 targeted tests pass
+- Stable; ready for Commit B
+
+**Commit B PAUSED** (2026-04-22) — see §7.6.12 for rationale.
+
+#### §7.6.12 Third accidentally-load-bearing mechanism finding + T3-C3 decision (2026-04-22)
+
+Commit B (`type-lattice-merge` set-union fallthrough) was implemented and tested. Post-change, `test-union-types.rkt:234` regressed: `(infer <Nat | Bool>)` returned `"Bool | Nat"` instead of `"[Type 0]"`.
+
+**Diagnostic**: reverted only Commit B's fallthrough change (keeping Commit A, keeping type-type-lattice.rkt's test updates temporarily) — test PASSED. Confirmed regression source is specifically Commit B's set-union change.
+
+**Root cause — THIRD accidentally-load-bearing mechanism in the series**:
+
+At typing-propagators.rkt:1907/1919, the on-network expr-union typing writes the branch component types (Nat, Bool) to position `e`'s `:type` classifier facet under bitmask-tagged branches. Pre-T-3 Commit B, `type-lattice-merge(Nat, Bool) = type-top` → cell accumulates `type-top` → downstream logic detects this and falls back to the sexp-based `infer` at typing-core.rkt:459, which correctly returns `[Type 0]` via `infer-level`.
+
+Post-T-3 Commit B, merge produces `Bool | Nat` → cell has valid union → no contradiction signal → no fallback → returns garbage union value as the TYPE of the union-type expression (which should be `[Type 0]`, the universe).
+
+**Pattern confirmed across this addendum** (third occurrence):
+
+1. **Attempt 1** (1A-ii attempt 1 reverted): TMS dispatch at net-cell-write:1248 was load-bearing for union-type inference via `tms-write old '() new` updating BASE regardless of bitmask.
+2. **Sub-A** (reverted): `with-speculative-rollback`'s bitmask parameterize was redundant when TMS path was active; became load-bearing when tagged-cell-value activated.
+3. **Commit B** (paused): expr-union typing's `type-lattice-merge → type-top` was load-bearing for `[Type 0]` fallback via contradiction-detection path.
+
+Each mechanism did its real work through a different pipe than its obvious API. Migrating the obvious API surfaces the hidden dependency. This vindicates the "correct-by-construction via decomplection" direction — hidden fallback dependencies are the bug source.
+
+**User direction 2026-04-22 (accepting Path T3-C3)**: before landing Commit B, perform a **systematic re-audit** to identify ALL similar hidden dependencies. Avoid the whack-a-mole pattern of fixing one at a time.
+
+**T3-C3 re-audit scope** (NEXT SESSION):
+
+1. **Grep for inline `(type-top? ...)` checks** that might be contradiction-detection-as-fallback in contexts where `type-lattice-merge` result is inspected (direct or indirect via `net-cell-read` on cells using `type-lattice-merge` as merge-fn + `type-lattice-contradicts?` as the predicate).
+2. **Grep for `(type-lattice-contradicts? ...)` consumers** — what triggers downstream when this fires? Are any consumers depending on spurious contradictions from structural mismatch (not real contradictions)?
+3. **Audit typing-propagators.rkt:1878-1920 (expr-union typing)**: the writes at 1907/1919 ARE wrong — they write component types instead of `[Type 0]`. Fix to write `(expr-Type (infer-level ...))` or similar. This is architecturally correct AND removes the type-top fallback dependency.
+4. **Audit other expr-foo typing in typing-propagators.rkt** for similar patterns: writing component types that rely on merge-produces-top-on-incompat to get the real answer via fallback.
+5. **Audit cell merge-fn uses with `type-lattice-contradicts?`**: these cells' behavior changes under set-union semantics. Any logic that relied on the cell going to type-top for incompatible writes is Role B in disguise.
+
+**Commit B blocked pending audit completion and Role B migrations for all discovered sites.**
+
+**Principle surfaced** (for codification after next session):
+> **Contradiction-detection-as-fallback is a hidden Role B pattern.** When code writes a value and expects `type-top` to trigger a downstream fallback (instead of explicitly signaling the intent via `type-unify-or-top + type-top-on-#f`), it's relying on merge-produces-top-on-incompat as an implicit contradiction signal. Under set-union merge (Role A), this contradiction signal disappears. All such sites must be audited and explicitly migrated to Role B semantics.
+
+#### §7.6.13 Stage 2 audit COMPLETION criteria (for next session)
+
+Original §7.6.9 audit found 4 Role B sites via grep for inline `(type-top? ...)` after `type-lattice-merge`. **Incomplete** — missed:
+
+- **Contradiction-detection-as-fallback sites**: code that writes via type-lattice-merge without inline check but relies on downstream type-top-detection for correctness
+- **Cell merge-fn sites with behavioral dependency**: cells with merge-fn = type-lattice-merge that have consumers expecting type-top propagation for specific semantics
+
+Enhanced audit criteria:
+- **Audit item 1 (inline checks — DONE §7.6.9)**: sites with `(type-top? unified)` after calling type-lattice-merge or reading a cell that uses it
+- **Audit item 2 (downstream fallback — NEW)**: sites that write to cells using type-lattice-merge and rely on downstream type-top detection for semantic correctness. Requires tracing merge results through cell writes to consumer reads.
+- **Audit item 3 (cell contradicts? consumers — NEW)**: consumers of `type-lattice-contradicts?` or `net-contradiction?` downstream of cells using type-lattice-merge as merge-fn.
+
+Each site identified in items 2/3 needs migration analysis — might be Role B (migrate to explicit contradiction signal) OR might be architecturally wrong (like typing-propagators.rkt:1907/1919, which should write the universe type not the component types).
 
 ### §7.7 Phase 1B deliverables
 
