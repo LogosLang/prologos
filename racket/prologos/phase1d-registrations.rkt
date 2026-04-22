@@ -65,7 +65,13 @@
                   meta-solution-merge)
          ;; Type lattice (already Tier 1-registered as type-sre-domain;
          ;; Phase 1d adds the Tier 2 merge-fn linkage)
-         (only-in "type-lattice.rkt" type-lattice-merge))
+         (only-in "type-lattice.rkt" type-lattice-merge)
+         ;; Mult lattice — PPN 4C Phase 1A-ii follow-up (2026-04-22):
+         ;; previously unregistered; this track adds SRE Tier 1 + Tier 2
+         ;; registration using the extended register/minimal helper.
+         (only-in "mult-lattice.rkt"
+                  mult-lattice-merge mult-lattice-contradicts?
+                  mult-bot mult-bot?))
 
 ;; ============================================================
 ;; Helper: minimal-declaration SRE domain + Tier 2 link
@@ -80,8 +86,20 @@
 ;; 'unclassified preserves the progressive-rollout pattern from Phase 1f.
 ;; Pass #:classification 'structural to enable Phase 1f :component-paths
 ;; enforcement on cells of this domain.
+;;
+;; PPN 4C Phase 1A-ii follow-up (2026-04-22): #:contradicts? kwarg added.
+;; Default (lambda (v) #f) preserves byte-for-byte behavior for all
+;; existing callers (they had the hardcoded no-op contradicts predicate).
+;; New callers can declare proper contradicts? to enable the SRE to
+;; detect contradiction state — important for domains with a top element
+;; (e.g., 'mult has mult-top, 'type has type-top).
+;;
+;; Phase 13 (progressive classification) will audit existing callers to
+;; identify which should declare contradicts? rather than using the
+;; default — a follow-up ratchet enabled by this kwarg's existence.
 (define (register/minimal domain-name merge-fn bot-predicate bot-value
-                          #:classification [classification 'unclassified])
+                          #:classification [classification 'unclassified]
+                          #:contradicts? [contradicts? (lambda (v) #f)])
   (define d (make-sre-domain
              #:name domain-name
              #:merge-registry (lambda (r)
@@ -89,7 +107,7 @@
                                   [(equality) merge-fn]
                                   [else (error 'phase1d-registration
                                                "no merge for relation: ~a" r)]))
-             #:contradicts? (lambda (v) #f)
+             #:contradicts? contradicts?
              #:bot? bot-predicate
              #:bot-value bot-value
              #:classification classification))
@@ -214,3 +232,20 @@
 ;; the 'type domain automatically.
 
 (register-merge-fn!/lattice type-lattice-merge #:for-domain 'type)
+
+;; ============================================================
+;; Mult lattice — PPN 4C Phase 1A-ii follow-up (2026-04-22)
+;; ============================================================
+;; Flat 5-element lattice {mult-bot, m0, m1, mw, mult-top}; bot-identity,
+;; commutative, associative, idempotent lattice join (pure leaf per
+;; mult-lattice.rkt's invariants). Classification 'value: atomic scalar.
+;; Uses the #:contradicts? kwarg added in this phase to declare mult-top
+;; as the contradiction state — enabling SRE contradiction detection on
+;; mult cells (previously detected only at cell level via the contradicts?
+;; predicate passed to net-new-cell; now also queryable via SRE domain
+;; metadata).
+
+(register/minimal 'mult mult-lattice-merge
+                  mult-bot? mult-bot
+                  #:classification 'value
+                  #:contradicts? mult-lattice-contradicts?)
