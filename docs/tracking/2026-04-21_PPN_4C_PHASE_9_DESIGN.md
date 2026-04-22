@@ -911,13 +911,141 @@ T-2 is a separate dialogue post-T-3 landing, but T-3 clears the path (no more sp
 - `type-lattice-meet` (type-lattice.rkt:178+) — NOT in merge audit but may need consistency check
 - External callers: `unify.rkt`, `subtype-predicate.rkt`, etc. — Role A/B TBD per audit
 
-#### §7.6.9 Stage 2 audit findings (to be filled)
+#### §7.6.9 Stage 2 audit findings (2026-04-22)
 
-**Status**: pending audit execution.
+**Role B sites (4) — MIGRATE to `try-unify-pure + type-top-on-#f` in Commit A**:
 
-#### §7.6.10 Stage 3 design (to be filled post-audit)
+All 4 sites compute `(type-lattice-merge va vb)` then check `(type-top? unified)` inline — the equality-enforcement pattern.
 
-**Status**: pending Stage 2 completion.
+1. `elaborator-network.rkt:152-170` — `make-unify-propagator` (bidirectional unify between two cells)
+2. `elaborator-network.rkt:178-188` — `elab-add-unify-constraint` FAST PATH (eager merge when both cells ground, no metas)
+3. `elaborator-network.rkt:~895-909` — `make-structural-unify-propagator` (unify + structural decomposition)
+4. `elaborator-network.rkt:1110-1141` — elaborator-topology stratum handler for pair-decomp
+
+**Role A sites (8) — stay on `type-lattice-merge`, GAIN set-union in Commit B**:
+
+Cell-level merge-fn allocations (accumulate semantics):
+
+5. `elaborator-network.rkt:117` — type meta cells merge-fn
+6. `elaborator-network.rkt:332, 335, 338` — structural decomposition sub-cells (3 sites)
+7. `cap-type-bridge.rkt:191` — cap-type cell merge-fn
+8. `session-type-bridge.rkt:115, 124` — session-type cell merge-fns (2 sites)
+9. `classify-inhabit.rkt:163` — classifier × classifier quantale join
+
+**Internal meet-recurse (2) — stay on `type-lattice-merge` (Role A in context)**:
+
+10. `type-lattice.rkt:245` — Pi domain merge (contravariant = join inside `try-intersect-pure`)
+11. `type-lattice.rkt:291` — generic descriptor-driven meet, contravariant components → join
+
+**SRE dispatch tables (2) — reference `type-lattice-merge` as `'equality` merge**:
+
+12. `subtype-predicate.rkt:359` — `subtype-query-merge-table`
+13. `unify.rkt:71` — similar hasheq dispatch table
+
+These are indirect call sites; SRE consumers resolve 'equality and call the returned merge. Under set-union redesign, SRE's 'equality merge gains union semantics for incompatible atoms. Consumer audit needed to confirm no Role B consumers — likely Role A based on SRE's "equality relation as accumulation" framing.
+
+**Tests (7 assertions) — MUST UPDATE in Commit B**:
+
+14. `tests/test-type-lattice.rkt:39` — `(check-equal? (type-lattice-merge (expr-Nat) (expr-Bool)) type-top)` → `(expr-union (expr-Bool) (expr-Nat))` (dedup-sorted)
+15. `tests/test-type-lattice.rkt:42-44` — top absorbing tests (unchanged — top absorbing stays)
+16. `tests/test-type-lattice.rkt:72` — `merge(Pi, Sigma) = type-top` → expect union
+17. `tests/test-type-lattice.rkt:85` — similar
+
+**Prior art template** (subtype-predicate.rkt:339-353 `subtype-lattice-merge`):
+
+SRE Track 2H already applied set-union redesign to the SUBTYPE relation. T-3 applies the same pattern to the EQUALITY relation. The only structural difference: equality drops the `(subtype? a b)` + `(subtype? b a)` absorptions; keeps `equal?` absorption + meta conservative + union fallback.
+
+**Audit summary**:
+
+| Category | Count | Action |
+|---|---|---|
+| Role B (equality-enforce, inline type-top check) | 4 | Commit A: migrate to `try-unify-pure + explicit type-top-on-#f` |
+| Role A (cell merge-fn, accumulate) | 8 | Commit B: gain set-union semantics automatically |
+| Internal meet-recurse | 2 | No change needed (Role A in context) |
+| SRE dispatch tables | 2 | Consumer audit; likely Role A |
+| Tests | 7 assertions | Commit B: update expected values to unions |
+| Benchmarks | 1 file | No change; performance validation reference |
+
+**Scope is well-contained**: 4 Role B sites to migrate + 7 test assertions to update + one ~3-line change to `type-lattice-merge`. The `subtype-lattice-merge` prior art validates the pattern.
+
+#### §7.6.10 Stage 3 design (2026-04-22)
+
+**Target `type-lattice-merge` implementation** (applies `subtype-lattice-merge` template to equality relation):
+
+```racket
+(define (type-lattice-merge a b)
+  (cond
+    [(type-bot? a) b]                              ;; identity
+    [(type-bot? b) a]
+    [(type-top? a) type-top]                       ;; top absorbing
+    [(type-top? b) type-top]
+    [(eq? a b) a]                                  ;; pointer-equal fast path
+    [(equal? a b) a]                               ;; structurally equal
+    [(or (has-unsolved-meta? a) (has-unsolved-meta? b))
+     ;; Meta handling (conservative): keep non-meta side
+     (if (has-unsolved-meta? a) b a)]
+    [else
+     ;; Structurally compatible → try structural merge; else → union
+     (or (try-unify-pure a b)
+         (build-union-type-with-absorption (list a b)))]))
+```
+
+Net change from current (type-lattice.rkt:140-158): replace the final `[else type-top]` (line 158) with `(or (try-unify-pure a b) (build-union-type-with-absorption (list a b)))`. Lines 149-157 stay as-is (top absorbing, eq?, equal?, metas). Approximately **3-line change**.
+
+**Role B migration pattern** (for Commit A):
+
+```racket
+;; BEFORE (current make-unify-propagator at elaborator-network.rkt:163-170):
+(define unified (type-lattice-merge va vb))
+(if (type-top? unified)
+    (net-cell-write net cell-a type-top)
+    (let ([net* (net-cell-write net cell-a unified)])
+      (net-cell-write net* cell-b unified)))
+
+;; AFTER (Commit A migration — try-unify-pure + explicit top-on-#f):
+(define unified-opt (try-unify-pure va vb))
+(cond
+  [(not unified-opt)
+   ;; Incompatible — write type-top explicitly (equality enforcement)
+   (net-cell-write net cell-a type-top)]
+  [else
+   ;; Compatible — write unified to both
+   (let ([net* (net-cell-write net cell-a unified-opt)])
+     (net-cell-write net* cell-b unified-opt))])
+```
+
+Same migration for lines 186, 902, 1121 (minor variations per context).
+
+**Why Commit A first is safe**: `try-unify-pure` is called internally by current `type-lattice-merge` (line 149 of type-lattice.rkt), so its semantics are already load-bearing. Migrating Role B sites to call it directly doesn't change behavior — same unified-or-#f outcome. The explicit `type-top` write on `#f` matches what the merge-then-check-top flow produces under the current `[else type-top]` fallthrough. **Zero behavior change**; preparation for Commit B.
+
+**Why Commit B is safe after Commit A**: Role A sites call `type-lattice-merge` and accept ANY result (union is fine for accumulation). Role B sites no longer call `type-lattice-merge` for equality checks. So changing merge's `[else type-top]` to set-union only affects Role A callers — who welcome the union.
+
+**Test updates (Commit B)**:
+- `tests/test-type-lattice.rkt`: update 7 assertions expecting type-top for incompatible atoms → expect unions
+- Update absorption tests to include new "incompatible → union" cases
+- Add tests confirming `merge(Int | String, Bool) = Int | String | Bool` and `merge(Int | String, Int) = Int | String`
+
+#### §7.6.11 Stage 4 implementation plan (confirmed)
+
+Two atomic commits. Each validated against probe + acceptance file + full suite.
+
+**Commit A — Role B migration** (~100-150 LoC across elaborator-network.rkt):
+- Migrate 4 Role B sites to `try-unify-pure + type-top-on-#f` pattern
+- NO change to `type-lattice-merge` semantics
+- NO change to tests (Role B sites preserved behavior exactly)
+- Validation: probe diff = 0; acceptance file 0 errors; full suite unchanged
+
+**Commit B — Merge semantics change** (~10-15 LoC across type-lattice.rkt + ~30-50 LoC test updates):
+- Change `type-lattice-merge` fallthrough from `type-top` to `build-union-type-with-absorption`
+- Update 7 test assertions + add new cases for union production
+- Validation: probe may change (map-assoc behavior now produces union via merge not speculation); full suite regression investigated
+
+**Consumer audit for SRE dispatch tables** (during Commit A): verify `subtype-query-merge-table` and `unify.rkt`'s dispatch table consumers are Role A (they call merge and accept any result). If any Role B consumer exists, migrate in Commit A.
+
+**Post-implementation**: T-3 ships. Then revisit:
+- T-1 (speculation mechanism consolidation): now simplified — many try-rollback sites become unnecessary since set-union merge handles type-incompatibility naturally
+- T-2 (Map open-world): typing-core.rkt:1196-1217's explicit `build-union-type` becomes redundant (merge does it automatically) OR map-assoc migrates to `_` open-world value type (user's ergonomics choice)
+- 1A-iii-a-wide: type cell migration becomes straightforward since the conflated mechanisms are now decoupled
 
 #### §7.6.11 Stage 4 implementation plan (preliminary)
 
