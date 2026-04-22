@@ -1,0 +1,209 @@
+#+TITLE: Standup — 2026-04-22
+#+DATE: 2026-04-22
+
+* Yesterday (since 2026-04-19 standup)
+
+** PPN Track 4C Phase 9+10+11 Addendum — substrate + orchestration unification
+
+Single arc across three sessions: 2026-04-19 (Stage 4 kickoff + Phase 1
+Tier 2 infrastructure), 2026-04-21 (Stage 1 research → Stage 2 audit →
+Stage 3 design D.1→D.2→D.3 + Phase 1A scope revision + 1A-i dead-code
+cleanup), 2026-04-22 (1A-ii attempt 1 reverted → Path Z split → 1A-ii-a
+delivered → ='mult= SRE registration → 1A-iii mini-design → Sub-A
+reverted → Path T pivot → T-3 mini-design → T-3 Stage 2 audit →
+Commit A → Commit B paused). Many branches, much learning.
+
+** 2026-04-19 session — Stage 4 kickoff + Phase 1A/B/C/D infrastructure (commits =d28e6029= through =99d9acad=)
+
+Phase 0 closed with acceptance file
+=examples/2026-04-17-ppn-track4c.prologos= (9 sections / 9 axes).
+Phase 1 structural enforcement infrastructure shipped across 1a–1d
+sub-phases: =tools/lint-cells.rkt= + baseline (27 unregistered merge
+fns), =merge-fn-registry.rkt= (Tier 2 registry with scaffolding label +
+PM Track 12 retirement plan), =prop-net-cold= =cell-domains= field
+(parallel CHAMP), =#:domain= kwarg on all =net-new-cell= variants,
+hasse-registry primitive. Phase 1.5 srcloc infrastructure pulled
+forward: =current-source-loc= parameter + propagator struct srcloc field
++ surf-node srcloc extractor + per-command parameterize in driver +
+elaborator. Mini-design audit codified as Stage 4 Step 1 in
+=DESIGN_METHODOLOGY.org=.
+
+** 2026-04-21 session — Phase 9+10+11 Addendum Stage 1/2/3 design
+
+Stage 1 research =docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md=
+(~1000 lines, 12 sections, commit =de357aa1=). Stage 2 audit
+=docs/tracking/2026-04-21_PPN_4C_PHASE_9_AUDIT.md= (~800 lines, commits
+=62ce9f83= + =28208613=) — grep-backed 8+1 target survey including
+BSP-LE 2B PIR overclaim on =current-speculation-stack=. Stage 3 design
+through D.3 at
+=docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md= covering Phase 1
+(substrate + tropical fuel), Phase 2 (orchestration), Phase 3 (union
+types + hypercube). D.2 refined via self-critique; D.3 via Phase 1A
+mini-audit scope revision (=net-new-tms-cell= was LIVE in production
+via 4 =elaborator-network.rkt= sites, contradicting BSP-LE 2 PIR's
+"retired" claim). Lens S (Structural) added to DESIGN_METHODOLOGY.org
+Stage 3/4 + Progress Tracker Placement discipline codified. Phase 1A-i
+(dead code retirement =wrap-with-assumption= + =promote-cell-to-tms=)
+delivered (commit =5cf9a262=, 29 lines across 2 files, 85 tests pass).
+
+** 2026-04-22 session — Phase 1A-ii + Path T-3 architectural pivot (commits =7052f590= through =f42434ea=)
+
+*** 1A-ii attempt 1 REVERTED — attempt1 broad regression
+
+Factory body rewrite per Option A caused ~10 test files to regress.
+Root cause via (e) deepen + (a) instrument + (b) incremental parallel
+diagnostic: =tms-write old '() new-val= at =propagator.rkt:1248= was
+accidentally load-bearing for union-type inference. Union inference
+parameterizes =current-worldview-bitmask= (not speculation-stack) —
+TMS path treated stack=empty as "update base", both branches
+accumulated to base via =make-tms-merge(type-lattice-merge)= producing
+=Int | String=. Reverted.
+
+*** Path Z split: 1A-ii-a DELIVERED, 1A-ii-b pulled into 1A-iii
+
+Commit =7052f590= migrated 3 of 4 =net-new-tms-cell= sites (mult,
+level, session — don't entangle with union inference) to
+=tagged-cell-value=. Type cell (site 4) deferred to 1A-iii where
+union-inference adaptation is co-designed.
+
+*** ='mult= SRE registration follow-up DELIVERED (commits =8b85b28a= + =dc2d2fca=)
+
+Extended =register/minimal= with =#:contradicts?= kwarg (default no-op,
+preserves all 19 existing callers). Registered ='mult= domain via
+extended helper — bot = mult-bot, contradicts = mult-top?. Closes Lens
+S audit gap: mult algebraic properties now SRE-queryable.
+
+*** 1A-iii mini-design RESOLVED — Z-wide + Framing C (commits =21b52027= design + =329d4f30= probe)
+
+User direction: "without concern of the implementation cost. Pragmatic
+implementation shortcuts should never be on the table for our
+consideration." 1A-iii absorbs PU refactor + hasse-registry integration
++ Tier 2 deprecated atms cleanup + Tier 3 surface ATMS AST retirement.
+Path (b) for union inference: hypercube read-time merge via
+=tagged-cell-read(v, combined-bitmask, type-lattice-merge)=. PU
+sub-architecture: 4 per-domain compound cells + shared hasse-registry
+handle + =elab-meta-read=/=elab-meta-write= API. Pre-0 behavioral probe
+captured at =data/probes/2026-04-22-1A-iii-baseline.txt= — 28
+expressions, 0 errors.
+
+*** 1A-iii Sub-A REVERTED → Path T pivot (commit =e3551658=)
+
+Sub-A experiment (migrate ONLY =elab-fresh-meta= type cell) reproduced
+attempt-1 regression signature. Root cause analysis with user surfaced
+three interrelated architectural findings: (1) multiple competing
+sources of truth for speculation worldview (4 mechanisms); (2) Map
+open-world typing misalignment (narrow unions vs ergonomics design);
+(3) type lattice set-union merge inadequacy (=merge(Int, String) =
+type-top= is design error under union-including domain). User
+direction: work through T-3 first as PREREQUISITE — persist findings
+in D.3 (not separate doc).
+
+*** T-3 mini-design RESOLVED — set-union + Role A/B decomplection (commit =9c3172e0=)
+
+Q-T3-1 through Q-T3-9 settled in dialogue. Core: =type-lattice-merge=
+gains set-union semantics (Role A, accumulate); equality-enforcement
+callers (Role B) explicitly decomplect via =type-unify-or-top= helper.
+Load-bearing two-commit ordering: Commit A (Role B migration) MUST
+precede Commit B (merge semantics change). Q-T3-8 was the "Are we
+conflating two separate concerns?" user question that saved T-3 from
+being a bug-pocalypse.
+
+*** T-3 Stage 2 audit INCOMPLETE + Stage 3 design (commit =6fddc5f7=)
+
+Audit found 4 Role B sites + 8 Role A sites + 2 SRE dispatch tables.
+Prior art =subtype-lattice-merge= at =subtype-predicate.rkt:339-353=
+identified as THE template (SRE Track 2H applied same set-union pattern
+to subtype relation; T-3 applies it to equality relation — drops
+=subtype?= absorption, keeps =equal?=). Audit MISSED
+contradiction-detection-as-fallback sites — this emerged in Commit B.
+
+*** T-3 Commit A DELIVERED (commit =37aaba2b=)
+
+=type-unify-or-top= helper in =type-lattice.rkt= + 4 Role B sites
+migrated in =elaborator-network.rkt= (=make-unify-propagator=,
+=elab-add-unify-constraint= fast path, =make-structural-unify-propagator=,
+elaborator-topology pair-decomp handler). Zero semantic change verified
+— probe diff = 0; 129 targeted tests pass.
+
+*** T-3 Commit B PAUSED — third accidentally-load-bearing mechanism (commit =17d26e74= design update, =fa1a7b9c= dailies, =f42434ea= handoff)
+
+Set-union fallthrough regressed =test-union-types.rkt:234=
+(=(infer <Nat | Bool>)= returned "Bool | Nat" instead of "[Type 0]").
+Reverted only the fallthrough — test passed. Confirmed source.
+
+Root cause = 3rd accidentally-load-bearing mechanism in the series:
+=typing-propagators.rkt:1907/1919= writes COMPONENT types (Nat, Bool)
+to position =e='s =:type= facet under bitmask-tagged branches.
+Pre-T-3, =merge(Nat, Bool) = type-top= → downstream detects
+contradiction → falls back to sexp =infer= at =typing-core.rkt:459=
+returning =[Type 0]= via =infer-level=. Post-Commit-B, merge produces
+=Bool | Nat= → cell has "valid" union → no contradiction → no fallback
+→ returns garbage union as the TYPE of a union-type expression.
+
+User direction: Path T3-C3 systematic re-audit before Commit B retry.
+Avoid whack-a-mole whack-a-fix. Enhanced §7.6.13 audit criteria added
+to D.3.
+
+*** Handoff document written (commit =f42434ea=)
+
+=docs/tracking/handoffs/2026-04-22_PPN_4C_T-3_HANDOFF.md= (360 lines, 8
+sections per HANDOFF_PROTOCOL) captures full context for seamless
+continuation.
+
+* Today
+
+** Priority: T-3 T3-C3 systematic re-audit, then retry Commit B
+
+Per D.3 §7.6.13 enhanced audit criteria:
+
+1. Audit contradiction-detection-as-fallback sites downstream of cells
+   using =type-lattice-merge= as merge-fn
+2. Audit =type-lattice-contradicts?= / =net-contradiction?= consumers
+3. Fix =typing-propagators.rkt:1878-1920= expr-union architectural error
+   (write =[Type lv]= directly, not component types)
+4. Audit other =expr-foo= typing cases in typing-propagators.rkt for
+   similar patterns
+5. Migrate newly-found Role B sites (likely Commit A extension)
+6. Retry Commit B + update 5 =test-type-lattice.rkt= assertions
+7. Validate: probe diff = 0, =test-union-types:234= passes, full suite
+   regression check
+
+** Post-T-3 forward plan
+
+- T-1 speculation consolidation (=with-speculative-rollback= simpler
+  post-T-3; map-assoc likely becomes unnecessary)
+- T-2 Map open-world realignment (typing-core.rkt:1196-1217;
+  =build-union-type= becomes redundant OR migrate to =_= open-world)
+- 1A-iii-a-wide Step 2 PU refactor (4 per-domain universes + shared
+  hasse-registry + =elab-meta-read=/=elab-meta-write= API)
+- 1A-iii-b Tier 2 atms cleanup (independent of Path T)
+- 1A-iii-c Tier 3 surface ATMS AST retirement (independent of Path T)
+
+* Notes
+
+- **Three consecutive accidentally-load-bearing findings** (attempt 1,
+  Sub-A, Commit B) constitute a confirmed pattern. The enhancement to
+  Stage 2 audit criteria (D.3 §7.6.13) is the corrective response.
+  Codification candidate after T3-C3: "Contradiction-detection-as-fallback
+  is a hidden Role B pattern."
+- **subtype-lattice-merge (SRE Track 2H) prior art** validated the T-3
+  pattern pre-implementation. The set-union redesign for equality
+  relation is a direct template application. The Stage 2 audit's failure
+  was not in identifying the pattern (it did) but in missing downstream
+  fallback consumers — which the prior art didn't have.
+- **User observations decisive** this session arc: "multiple different
+  mechanisms competing for truth" (Finding 1); "Maps should be open-world"
+  (Finding 2); "merge producing top suggests lattice design is inadequate"
+  (Finding 3); "Are we unintentionally conflating two separate concerns?"
+  (Q-T3-8 Role A/B); "we have prior art in BSP-LE 2B" (Q-T3-9); "PU
+  efficiency target whenever N-separate cells" (PU refactor). Each
+  redirected toward better architectural framings.
+- **Per-commit dailies discipline sustained** this session arc: 10+
+  commits each had corresponding dailies entries. Watching if it sticks
+  across multi-session tracks.
+- **Conversational mini-design in existing design doc** (user correction:
+  "we are not doing a full Stage 1-3 design document separate from our
+  current efforts") — T-3 mini-design resolved entirely in D.3 §7.6
+  dialogue. Watching if this remains productive.
+- **Context-awareness delegated to user** per CLAUDE.local.md rule —
+  handoff at 85–90% context per user monitoring, not my suggestion.
