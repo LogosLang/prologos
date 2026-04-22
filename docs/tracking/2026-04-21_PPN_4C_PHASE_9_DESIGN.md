@@ -111,10 +111,13 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1A-ii-a | Migrate 3 of 4 `net-new-tms-cell` sites: mult, level, session cells | ✅ | commit `7052f590` — 25 insertions; acceptance file clean; 111 targeted tests pass |
 | 1A-ii follow-up | Register `'mult` SRE domain + extend `register/minimal` with `#:contradicts?` kwarg | ✅ | commit `8b85b28a` — Option Y + 2b; enables Phase 13 ratchet; 77 targeted tests pass |
 | 1A-iii-probe | Pre-0 behavioral probe (`.prologos` file) capturing baseline pre-1A-iii-a-wide | ✅ | commit `329d4f30` — 6 scenarios, 28 expressions, 0 errors baseline captured |
-| 1A-iii-a-wide Step 1 | TMS retirement + type cell migration + union-inference adaptation (Path b) — per-cell tagged-cell-value | ⬜ | Cells remain one-per-meta shape; retires TMS mechanism |
-| 1A-iii-a-wide Step 2 | PU refactor (4 per-domain universe cells) + hasse-registry integration (shared handle, Q_n subsume-fn) | ⬜ | Collapses per-meta cells → 4 compound PU cells; `elab-meta-read/write` API; Architecture B per-component tagging |
-| 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | atms.rkt + test-atms.rkt + benchmark migrations |
-| 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | syntax / surface-syntax / parser / elaborator / reduction / zonk / pretty-print / typing-core / etc. |
+| 1A-iii Sub-A | Type cell migration experiment: tagged-cell-value at elab-fresh-meta | ⏸️ REVERTED | Probe showed regression; root cause is deeper than Path (b) — see §7.5.8 |
+| **Path T-3** | **Type lattice set-union merge redesign — PREREQUISITE** (Stage 1→4) | 🔄 | Point 3 architectural finding: `type-lattice-merge(Int, String)` → `type-top` is lattice design inadequacy. Set-union semantics required. |
+| Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ | Deferred until T-3 resolves — T-3 likely obviates need for try-rollback speculation in map-assoc |
+| Path T-2 | Map type inference open-world realignment | ⬜ | Deferred until T-3 resolves — T-3 + open-world may land `_` value type by default |
+| 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⏸️ PAUSED | Pending Path T resolution. T-3's set-union merge likely simplifies this significantly. |
+| 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
+| 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
@@ -713,7 +716,96 @@ Per Q-1A-iii-5 full-completeness direction. 14-file pipeline consistency.
 **Tests**:
 - `tests/test-atms-types.rkt` — delete
 
-### §7.6 Phase 1B deliverables
+### §7.5.8 Sub-A experiment + three architectural findings → Path T pivot (2026-04-22)
+
+**Sub-A experiment** (incremental migration probe per Step 1 plan):
+- Migrated only `elab-fresh-meta` at elaborator-network.rkt:114 to `(tagged-cell-value type-bot '())` + `(make-tagged-merge type-lattice-merge)`
+- Ran 1A-iii-probe — 6/6 errors reproduced the attempt-1 regression signature (multiplicity violations + unbound variables cascading from unsolved type metas)
+- Reverted via `git checkout` (baseline restored, probe diff clean)
+
+**Root cause analysis** revealed three interrelated architectural findings (per user observations in mini-design dialogue 2026-04-22):
+
+#### Finding 1 — Multiple competing sources of truth for speculation worldview
+
+Four mechanisms claim ownership of "what worldview is this read/write under":
+1. `current-speculation-stack` parameter (legacy TMS; retiring)
+2. `current-worldview-bitmask` parameter (per-propagator, lexically-scoped)
+3. `worldview-cache-cell-id` on-network cell (network-wide)
+4. `elab-network` snapshot (whole-network rollback state)
+
+Dispatch order determines which is load-bearing. When TMS was load-bearing at net-cell-write:1248 (pre-1A-iii), the bitmask parameterize was harmless. When tagged-cell-value becomes load-bearing, bitmask parameterize activates and breaks try-rollback semantics. This is the "accidental-of-mechanism" pattern hit twice (attempt-1, Sub-A) — a fingerprint of **correct-by-construction violation**.
+
+`with-speculative-rollback` conflates two orthogonal concerns:
+- **Speculation tagging**: which worldview is this in? → bitmask parameterize + worldview-cache writes
+- **Rollback**: restore pre-speculation state on failure? → elab-net snapshot + restore
+
+These two concerns serve DIFFERENT speculation semantics:
+- **Try-rollback** (map-assoc, Church folds, 4 production sites): write provisionally; revert on failure via elab-net snapshot
+- **Branch exploration** (expr-union at typing-propagators.rkt:1878-1920): worldview-tagged alternatives; both commit; read-time merge
+
+Pre-migration TMS path IGNORED the bitmask → `with-speculative-rollback` was effectively elab-net-snapshot-only for type cells. That "accidental" correctness breaks post-migration.
+
+#### Finding 2 — Map open-world typing misalignment
+
+Per Prologos ergonomics design, `{:name "Alice" :age 30}` should infer to `Map Keyword _` (open-world, heterogeneous), with `schema Person` providing tighter typing where desired. Current typing-core.rkt:1187-1217 produces `(Map Keyword Int | String)` via explicit `build-union-type` — **overly narrow, contradicts language vision**.
+
+This load-bearing misfeature drives the complicated `with-speculative-rollback` machinery at map-assoc (line 1205). Under open-world typing, there's no reason to try-and-rollback — the value type is `_` regardless of what's written.
+
+#### Finding 3 — Type lattice set-union merge inadequacy
+
+`type-lattice-merge(Int, String) = type-top` (contradiction) is the lattice design issue. A join over a type domain that includes unions SHOULD produce the union for structurally-incompatible atoms, not a contradiction. `type-top` should be reserved for REAL logical contradictions, not the absence of structural unification.
+
+Proposed semantics (set-union merge):
+- `merge(Int, String)` = `Int | String` (union via build-union-type)
+- `merge(Int | String, Bool)` = `Int | String | Bool` (idempotent over union)
+- `merge(Pi a b, Pi c d)` = `Pi (merge a c) (merge b d)` (structural — unchanged)
+- `merge(Pi a b, Sigma c d)` = `(Pi a b) | (Sigma c d)` (structurally incompatible → union)
+- `type-top` reserved for explicit contradiction signals (certain QTT states, explicit user annotations violated)
+
+If `type-lattice-merge` has set-union semantics:
+- Meta double-solve with different types produces union — no contradiction, no speculation needed
+- `with-speculative-rollback` for map-assoc becomes unnecessary
+- Aligns with Open World principle — merging accumulates options
+- Schemas + explicit annotations still produce errors via `check` (subtyping fails)
+
+### §7.5.9 Path T — Work through lattice design first, then reconsider
+
+**User direction 2026-04-22**: "I think we work through T, persisting where designs land back into our current design document ... and see where that lands us in terms of addressing the other points."
+
+**Scoping**:
+- **Path T-3** (type lattice set-union redesign) is the **PREREQUISITE** — lattice correctness is foundational; it likely simplifies T-1 and T-2
+- **Path T-1** (speculation mechanism consolidation) deferred until T-3 resolves — T-3 may obviate the need for try-rollback speculation in map-assoc, reducing T-1 scope
+- **Path T-2** (Map open-world realignment) deferred until T-3 resolves — T-3 + explicit open-world choice may land `_` value type naturally
+
+**1A-iii downstream**:
+- **1A-iii-a-wide PAUSED** pending Path T (type cell migration is blocked by the lattice design issue)
+- **1A-iii-b (Tier 2 atms cleanup) + 1A-iii-c (Tier 3 surface ATMS AST)** can proceed in parallel with Path T work (independent concerns)
+
+### §7.6 Path T-3 — Type lattice set-union merge redesign
+
+Placeholder for T-3 research/design work (Stage 1→4). Content accrues as T-3 progresses.
+
+**Design target** (preliminary, 2026-04-22):
+- `type-lattice-merge` becomes a set-union join operation over the type domain
+- `type-top` reserved for logical contradictions explicitly signaled (not structural mismatch)
+- Union construction via `build-union-type` integrated into the lattice join (not only as an explicit typing-core rule)
+- Consumers (subtype-lattice-merge, unify-core, narrowing, QTT) adapt to the new semantics
+
+**Stage 1 targets** (to be filled as research accrues):
+- Lattice theory on free/distributive lattices with set-union join
+- Abstract interpretation foundations for union-typed lattices
+- Practical language systems with union types (TypeScript, Flow, Pony, Ceylon)
+- Meta-theory: dependent type system + union merge interactions
+- Prologos-specific: union-types.rkt, subtype-predicate.rkt, narrowing.rkt prior art
+
+**Stage 2 targets** (to be filled after Stage 1):
+- Audit all call sites of `type-lattice-merge` + `type-lattice-meet`
+- Identify which are "join" (should produce union) vs "check" (subtyping test)
+- Identify which consumers treat `type-top` specially
+
+**Stage 3 / Stage 4**: TBD after Stages 1 + 2.
+
+### §7.7 Phase 1B deliverables
 
 **Tropical fuel primitive**:
 1. New module `racket/prologos/tropical-fuel.rkt`:
@@ -737,7 +829,7 @@ Per Q-1A-iii-5 full-completeness direction. 14-file pipeline consistency.
 4. Module imports / provides per codebase conventions
 5. `tropical-fuel.rkt` imports only from `sre-core.rkt`, `merge-fn-registry.rkt`, `propagator.rkt` (no higher-level dependencies — primitive is foundational)
 
-### §7.7 Phase 1C deliverables
+### §7.8 Phase 1C deliverables
 
 **Canonical BSP fuel instance migration**:
 1. Allocate canonical fuel-cost cell at `cell-id 11` in `make-prop-network` (next contiguous after `classify-inhabit-request-cell-id = 10`) using the primitive
@@ -752,7 +844,7 @@ Per Q-1A-iii-5 full-completeness direction. 14-file pipeline consistency.
 8. Update test read-only usage (15+ test sites per audit) to use `(net-cell-read net fuel-cost-cell-id)`
 9. `pretty-print.rkt:462` fix (prints fuel; update to cell read)
 
-### §7.8 Phase 1V — Vision Alignment Gate
+### §7.9 Phase 1V — Vision Alignment Gate
 
 4 VAG questions per DESIGN_METHODOLOGY Step 5:
 - **On-network?** — yes; substrate retired; tropical fuel lives in cells; primitive registered at SRE.
@@ -760,14 +852,14 @@ Per Q-1A-iii-5 full-completeness direction. 14-file pipeline consistency.
 - **Vision-advancing?** — substrate unified; tropical fuel enables cross-consumer cost reasoning.
 - **Drift-risks-cleared?** — named in Phase 1 mini-design.
 
-### §7.9 Phase 1 termination arguments
+### §7.10 Phase 1 termination arguments
 
 Per GÖDEL_COMPLETENESS Phase 1's new propagators/cells:
 - Tropical fuel cell — Level 1 (Tarski fixpoint): finite lattice (bounded by budget or +∞); monotone merge (min); per-BSP-round cost accumulation bounded.
 - Threshold propagator — Level 1: fires once at threshold (monotone; cost only increases); contradicts-or-no-op.
 - No new strata added; no cross-stratum feedback; no well-founded measure needed.
 
-### §7.10 Phase 1 parity-test strategy
+### §7.11 Phase 1 parity-test strategy
 
 Axes:
 - **speculation-mechanism-parity** (new, Phase 1A-ii): confirm `with-speculative-rollback` behavior identical pre/post TMS-cell migration
