@@ -107,7 +107,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Stage 2 | Audit doc | ✅ | commits `62ce9f83`, `28208613` |
 | Stage 3 | Design doc (this) | 🔄 D.3 | Scope revised per Phase 1A mini-audit |
 | 0 | Uses PPN 4C existing acceptance file + Pre-0 bench (no new artifacts needed) | ✅ | `examples/2026-04-17-ppn-track4c.prologos`; `benchmarks/micro/bench-ppn-track4c.rkt` |
-| 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ⬜ | ~30-50 LoC, low risk |
+| 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ✅ | commit `5cf9a262` — 29 lines deleted across 2 files; 85 tests pass; acceptance file clean |
 | 1A-ii | Migrate 4 `net-new-tms-cell` sites in `elaborator-network.rkt` to tagged-cell-value | ⬜ | ~150-200 LoC, highest risk; mini-audit at phase start |
 | 1A-iii | Retire `net-new-tms-cell` + `tms-cell-value` + `tms-read`/`tms-write` + `current-speculation-stack` + fallback paths | ⬜ | ~100-200 LoC |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
