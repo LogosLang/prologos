@@ -110,7 +110,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ✅ | commit `5cf9a262` — 29 lines deleted across 2 files; 85 tests pass; acceptance file clean |
 | 1A-ii-a | Migrate 3 of 4 `net-new-tms-cell` sites: mult, level, session cells | ✅ | commit `7052f590` — 25 insertions; acceptance file clean; 111 targeted tests pass |
 | 1A-ii follow-up | Register `'mult` SRE domain + extend `register/minimal` with `#:contradicts?` kwarg | ✅ | commit `8b85b28a` — Option Y + 2b; enables Phase 13 ratchet; 77 targeted tests pass |
-| 1A-iii-probe | Pre-0 behavioral probe (`.prologos` file) capturing baseline pre-1A-iii-a-wide | ⬜ | Per 1A-ii lesson: behavioral probe is essential pre-check |
+| 1A-iii-probe | Pre-0 behavioral probe (`.prologos` file) capturing baseline pre-1A-iii-a-wide | ✅ | commit `329d4f30` — 6 scenarios, 28 expressions, 0 errors baseline captured |
 | 1A-iii-a-wide Step 1 | TMS retirement + type cell migration + union-inference adaptation (Path b) — per-cell tagged-cell-value | ⬜ | Cells remain one-per-meta shape; retires TMS mechanism |
 | 1A-iii-a-wide Step 2 | PU refactor (4 per-domain universe cells) + hasse-registry integration (shared handle, Q_n subsume-fn) | ⬜ | Collapses per-meta cells → 4 compound PU cells; `elab-meta-read/write` API; Architecture B per-component tagging |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | atms.rkt + test-atms.rkt + benchmark migrations |
