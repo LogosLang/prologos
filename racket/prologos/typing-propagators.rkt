@@ -310,34 +310,6 @@
 ;; Re-exported from this module for backward compatibility.
 
 ;; ============================================================
-;; Track 4B Phase 8: Assumption-Capturing Propagator Wrapper
-;; ============================================================
-;;
-;; Wraps a fire function to parameterize current-speculation-stack
-;; with a captured assumption. Used by Option D union branching:
-;; two sets of propagators fire concurrently under different
-;; assumptions within the same BSP quiescence.
-;;
-;; net-cell-write auto-wraps plain values via tms-write under
-;; the parameterized stack. net-cell-read uses tms-read to
-;; navigate to the correct branch. Both are TMS-transparent.
-
-(define (wrap-with-assumption fire-fn assumption-id)
-  (lambda (net)
-    (parameterize ([current-speculation-stack
-                    (cons assumption-id (current-speculation-stack))])
-      (fire-fn net))))
-
-;; Promote a cell's plain value to TMS-wrapped, enabling speculation.
-;; The current value becomes the TMS base; branches start empty.
-;; Must be called BEFORE speculative propagators fire.
-(define (promote-cell-to-tms net cid)
-  (define val (net-cell-read-raw net cid))
-  (if (tms-cell-value? val)
-      net  ;; already TMS — no-op
-      (net-cell-reset net cid (tms-cell-value val (hasheq)))))
-
-;; ============================================================
 ;; Track 4B Phase 1: Attribute Record PU
 ;; ============================================================
 ;;

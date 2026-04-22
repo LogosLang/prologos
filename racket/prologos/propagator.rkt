@@ -1147,7 +1147,6 @@
             [cells (champ-insert cells h cid new-cell)])]))
 
 ;; BSP-LE Track 2 Phase 5.9b: Promote a cell to tagged-cell-value.
-;; Analogous to promote-cell-to-tms (typing-propagators.rkt).
 ;; The current value becomes the base; entries start empty.
 ;; Must be called BEFORE speculative writes under a non-zero worldview.
 ;; No-op if the cell already holds a tagged-cell-value.
