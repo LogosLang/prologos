@@ -109,6 +109,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 0 | Uses PPN 4C existing acceptance file + Pre-0 bench (no new artifacts needed) | ✅ | `examples/2026-04-17-ppn-track4c.prologos`; `benchmarks/micro/bench-ppn-track4c.rkt` |
 | 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ✅ | commit `5cf9a262` — 29 lines deleted across 2 files; 85 tests pass; acceptance file clean |
 | 1A-ii-a | Migrate 3 of 4 `net-new-tms-cell` sites: mult, level, session cells | ✅ | commit `7052f590` — 25 insertions; acceptance file clean; 111 targeted tests pass |
+| 1A-ii follow-up | Register `'mult` SRE domain + extend `register/minimal` with `#:contradicts?` kwarg | ✅ | commit `8b85b28a` — Option Y + 2b; enables Phase 13 ratchet; 77 targeted tests pass |
 | 1A-ii-b | Type cell migration + union-inference adaptation (pulled into 1A-iii scope) | ⬜ | Root cause: TMS dispatch at net-cell-write:1248 is load-bearing for union semantics (see 2026-04-19 dailies 2026-04-22 section) |
 | 1A-iii | Retire TMS mechanism + `current-speculation-stack` + fallback paths + test-tms-cell.rkt + **type cell migration (1A-ii-b)** + **union-inference adaptation at typing-propagators.rkt:1878+** | ⬜ | Expanded scope per 1A-ii root-cause finding |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
