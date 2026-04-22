@@ -108,8 +108,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Stage 3 | Design doc (this) | 🔄 D.3 | Scope revised per Phase 1A mini-audit |
 | 0 | Uses PPN 4C existing acceptance file + Pre-0 bench (no new artifacts needed) | ✅ | `examples/2026-04-17-ppn-track4c.prologos`; `benchmarks/micro/bench-ppn-track4c.rkt` |
 | 1A-i | Retire dead code: `wrap-with-assumption` + `promote-cell-to-tms` | ✅ | commit `5cf9a262` — 29 lines deleted across 2 files; 85 tests pass; acceptance file clean |
-| 1A-ii | Migrate 4 `net-new-tms-cell` sites in `elaborator-network.rkt` to tagged-cell-value | ⬜ | ~150-200 LoC, highest risk; mini-audit at phase start |
-| 1A-iii | Retire `net-new-tms-cell` + `tms-cell-value` + `tms-read`/`tms-write` + `current-speculation-stack` + fallback paths | ⬜ | ~100-200 LoC |
+| 1A-ii-a | Migrate 3 of 4 `net-new-tms-cell` sites: mult, level, session cells | ✅ | commit `7052f590` — 25 insertions; acceptance file clean; 111 targeted tests pass |
+| 1A-ii-b | Type cell migration + union-inference adaptation (pulled into 1A-iii scope) | ⬜ | Root cause: TMS dispatch at net-cell-write:1248 is load-bearing for union semantics (see 2026-04-19 dailies 2026-04-22 section) |
+| 1A-iii | Retire TMS mechanism + `current-speculation-stack` + fallback paths + test-tms-cell.rkt + **type cell migration (1A-ii-b)** + **union-inference adaptation at typing-propagators.rkt:1878+** | ⬜ | Expanded scope per 1A-ii root-cause finding |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
@@ -412,13 +413,36 @@ Phase 1 is the foundational sub-phase — retires legacy substrate (current-spec
 
 **Low risk**: pure deletion of dead code. Verification is whether the deletion triggers any unexpected test or module-load failures (i.e., confirmation that dead really means dead).
 
-### §7.4 Phase 1A-ii deliverables (elaborator-network.rkt TMS cell migration)
+### §7.4 Phase 1A-ii — SPLIT into 1A-ii-a and 1A-ii-b (revised 2026-04-22)
 
-**Migration targets** (per mini-audit finding):
-1. `elaborator-network.rkt:114` — type cell: `(net-new-tms-cell net type-bot type-lattice-merge type-lattice-contradicts?)`
-2. `elaborator-network.rkt:921` — mult cell: `(net-new-tms-cell net mult-bot mult-lattice-merge mult-lattice-contradicts?)`
-3. `elaborator-network.rkt:995` — meta solution cell (variant A): `(net-new-tms-cell net 'unsolved merge-meta-solve-identity)`
-4. `elaborator-network.rkt:1011` — meta solution cell (variant B): `(net-new-tms-cell net 'unsolved merge-meta-solve-identity)`
+**Root cause finding** (attempt 1 reverted): migrating ALL 4 `net-new-tms-cell` sites at once via factory-body rewrite introduced a broad regression (union-type inference failures, unsolved type metas, cascading multiplicity violations). Post-revert diagnostic via (e) deep audit + (a) code trace identified the cause:
+
+Union-type inference at typing-propagators.rkt:1878-1920 parameterizes `current-worldview-bitmask` (not `current-speculation-stack`). Pre-migration, type meta cell writes during union speculation fell through to `net-cell-write`'s TMS legacy branch at line 1248 (`(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))`), which invokes `tms-write old '() new-val` — updating the BASE (not a branch) because `current-speculation-stack = '()`. Both union branches' writes accumulated in the same base via `make-tms-merge(type-lattice-merge)` → produced `Int | String` etc. Post-migration, tagged-cell-value writes under non-zero `current-worldview-bitmask` go to per-branch tagged entries — branches are isolated; base stays at type-bot; type metas read as unsolved.
+
+BSP-LE Track 2 PIR's "`current-speculation-stack` RETIRED" claim was about parameterize usage (which IS retired). But the TMS STRUCTURE's dispatch at net-cell-write:1248 was providing load-bearing semantics for union inference independently of the parameter — a subtlety the PIR didn't capture.
+
+**Path Z split**:
+
+**Phase 1A-ii-a (DELIVERED 2026-04-22, commit `7052f590`)**: migrate 3 of 4 sites — mult, level, session cells. These don't participate in union-type inference the same way:
+- `elaborator-network.rkt:921` — mult cell: flat lattice (identity-or-top); both union branches typically infer same mult
+- `elaborator-network.rkt:995` — level cell: identity-or-error; both branches typically infer same level
+- `elaborator-network.rkt:1011` — session cell: same as level
+
+Branch-isolation under tagged-cell-value is semantically correct for these cells.
+
+**Phase 1A-ii-b (PULLED INTO 1A-iii SCOPE)**: type cell migration — requires union-inference adaptation at typing-propagators.rkt:1878-1920. The migration must co-design:
+- Type cell creation (line 114) → tagged-cell-value
+- Union inference write path → either (a) write to base directly (not per-branch entries) OR (b) commit both branches' entries and rely on read-time merge via `tagged-cell-read(v, combined-bitmask, type-lattice-merge)`
+
+Option (b) aligns with the lines 1912-1913 existing pattern (`combined-bitmask = bitwise-ior left-bitmask right-bitmask`) but requires verifying the read-time merge produces the expected union types. Option (a) preserves the pre-migration base-write semantic explicitly.
+
+**1A-ii-a migration sites (DELIVERED)**:
+1. `elaborator-network.rkt:921` — mult cell migrated ✓
+2. `elaborator-network.rkt:995` — level cell migrated ✓
+3. `elaborator-network.rkt:1011` — session cell migrated ✓
+
+**1A-ii-b migration sites (DEFERRED to 1A-iii)**:
+4. `elaborator-network.rkt:114` — type cell (paired with typing-propagators.rkt:1878+ adaptation)
 
 **Migration target shape** (each site):
 ```
