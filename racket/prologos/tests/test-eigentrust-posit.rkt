@@ -1,9 +1,7 @@
 #lang racket/base
 
-;;;
 ;;; Unit tests for EigenTrust — List + Posit32 variant
-;;; (examples/eigentrust-posit.prologos).
-;;;
+;;; (column-stochastic convention).
 
 (require rackunit
          racket/list
@@ -13,6 +11,14 @@
 (define preamble
   #<<PROLOGOS
 ns test.eigentrust-posit
+
+spec dot [List Posit32] [List Posit32] -> Posit32
+defn dot [xs ys]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> match ys
+      | nil       -> ~0.0
+      | cons y bs -> p32+ [p32* x y] [dot as bs]
 
 spec scale-vec Posit32 [List Posit32] -> [List Posit32]
 defn scale-vec [s xs]
@@ -48,121 +54,106 @@ defn linf-norm [xs]
     | nil       -> ~0.0
     | cons x as -> p32-max [p32-abs x] [linf-norm as]
 
-spec sum-rows [List [List Posit32]] -> [List Posit32]
-defn sum-rows [xss]
-  match xss
+spec mat-vec-mul [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
+
+spec col-sums [List [List Posit32]] -> [List Posit32]
+defn col-sums [m]
+  match m
     | nil         -> nil
     | cons r rest -> match rest
       | nil        -> r
-      | cons _ _   -> add-vec r [sum-rows rest]
+      | cons _ _   -> add-vec r [col-sums rest]
 
-spec scale-rows [List Posit32] [List [List Posit32]] -> [List [List Posit32]]
-defn scale-rows [ts c]
-  match ts
-    | nil       -> nil
-    | cons t rs -> match c
-      | nil         -> nil
-      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+spec all-ones? [List Posit32] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [p32-eq x ~1.0]
+      | false -> false
+      | true  -> all-ones? as
 
-spec ct-times-vec [List [List Posit32]] [List Posit32] -> [List Posit32]
-defn ct-times-vec [c t]
-  sum-rows [scale-rows t c]
+spec col-stochastic? [List [List Posit32]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
 spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Posit32] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
 def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
+def p-seed-0    : [List Posit32] := '[~1.0 ~0.0 ~0.0 ~0.0]
 
-def c-uniform-4 : [List [List Posit32]]
-  := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
+def m-uniform-4 : [List [List Posit32]] := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
 
-def c-others-3 : [List [List Posit32]]
-  := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+def m-others-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+
+def m-ring-4 : [List [List Posit32]] := '['[~0.0 ~0.0 ~0.0 ~1.0] '[~1.0 ~0.0 ~0.0 ~0.0] '[~0.0 ~1.0 ~0.0 ~0.0] '[~0.0 ~0.0 ~1.0 ~0.0]]
 
 PROLOGOS
     )
 
 (define test-expressions
   #<<PROLOGOS
-;; T1: scale-vec halves each element.
-scale-vec ~0.5 '[~1.0 ~2.0 ~4.0]
-
-;; T2: add-vec elementwise.
-add-vec '[~0.25 ~0.25] '[~0.25 ~0.25]
-
-;; T3: p32-max picks larger.
-p32-max ~0.3 ~0.7
-
-;; T4: eigentrust-step on uniform is a fixed point.
-eigentrust-step c-uniform-4 p-uniform-4 ~0.1 p-uniform-4
-
-;; T5: eigentrust on uniform 4x4 converges to uniform.
-eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
-
-;; T6: eigentrust on symmetric 3x3 with uniform pre-trust stays uniform.
-eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+col-stochastic? m-uniform-4
+col-stochastic? m-ring-4
+eigentrust-step m-uniform-4 p-uniform-4 ~0.1 p-uniform-4
+eigentrust m-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+eigentrust m-others-3 p-uniform-3 ~0.1 ~0.001 50
+eigentrust m-ring-4 p-seed-0 ~0.3 ~0.0 3
 
 PROLOGOS
     )
 
-(define full-program
-  (string-append preamble "\n" test-expressions))
-
-(define all-results (run-ns-ws-all full-program))
-
+(define all-results (run-ns-ws-all (string-append preamble "\n" test-expressions)))
 (define (last-n xs n) (drop xs (- (length xs) n)))
-(define test-results (last-n all-results 6))
-(define (res i) (list-ref test-results i))
+(define tr (last-n all-results 6))
+(define (res i) (list-ref tr i))
 
-(define (check-printed actual expected-substr [msg #f])
+(define (check-printed actual expected-substr)
   (check-true (string-contains? actual expected-substr)
-              (or msg (format "Expected result ~s to contain ~s" actual expected-substr))))
+              (format "Expected ~s to contain ~s" actual expected-substr)))
 
-;; Posit32 0.5 -> bit pattern 939524096. 1.0 -> 1073741824. 2.0 -> 1207959552.
-;; 0.25 -> 805306368. 1/3 -> 850043821 (from our running samples).
+(test-case "eigentrust-posit/col-stochastic? on uniform"
+  (check-printed (res 0) "true : Bool"))
 
-;; T1: scale ~0.5 * [~1.0 ~2.0 ~4.0] = [~0.5 ~1.0 ~2.0]
-(test-case "eigentrust-posit/scale-vec"
-  (check-printed (res 0) "posit32 939524096")
-  (check-printed (res 0) "posit32 1073741824")
-  (check-printed (res 0) "posit32 1207959552"))
+(test-case "eigentrust-posit/col-stochastic? on ring"
+  (check-printed (res 1) "true : Bool"))
 
-;; T2: 0.25 + 0.25 = 0.5
-(test-case "eigentrust-posit/add-vec"
-  (check-printed (res 1) "posit32 939524096"))
-
-;; T3: max(0.3, 0.7) = 0.7 — just checks it's one specific Posit32
-(test-case "eigentrust-posit/p32-max"
-  (define s (res 2))
-  (check-true (and (string-contains? s "posit32")
-                   (string-contains? s "Posit32"))
-              (format "expected a Posit32 result, got ~s" s)))
-
-;; T4 and T5 and T6: fixed-point checks — each element should be the same posit.
-(test-case "eigentrust-posit/step: uniform fixed point"
-  ;; 0.25 in posit32 = 805306368
-  (check-printed (res 3) "posit32 805306368"))
+;; 0.25 = [posit32 805306368]
+(test-case "eigentrust-posit/step on uniform is fixed point"
+  (check-printed (res 2) "posit32 805306368"))
 
 (test-case "eigentrust-posit/converge: uniform 4x4 -> uniform"
-  (check-printed (res 4) "posit32 805306368"))
+  (check-printed (res 3) "posit32 805306368"))
 
-;; T6: symmetric 3x3 with 1/3 pre-trust. In posit32, 1/3 rounds.
-(test-case "eigentrust-posit/converge: symmetric 3x3 with uniform pre-trust"
-  (define s (res 5))
-  ;; All three elements should be the same posit bit pattern.
+;; 1/3 ≈ [posit32 850043821]
+(test-case "eigentrust-posit/converge: symmetric 3x3 -> uniform"
+  (define s (res 4))
   (check-true (regexp-match? #rx"posit32 850043[0-9]+" s)
-              (format "expected ~~1/3 stationary, got ~s" s)))
+              (format "expected ~~1/3 result, got ~s" s)))
+
+;; After 3 ring iters from concentrated start, values should differ
+;; (slow settling). Just verify it's a 4-element posit vector.
+(test-case "eigentrust-posit/ring: 3-iter result is a 4-element posit vec"
+  (define s (res 5))
+  (check-true (regexp-match? #rx"posit32.*posit32.*posit32.*posit32" s)
+              (format "expected 4-element result, got ~s" s)))

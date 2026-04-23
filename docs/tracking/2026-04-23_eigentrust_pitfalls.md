@@ -334,6 +334,37 @@ of a `spec` would say `[PVec Rat]`. Not a correctness issue, but a
 cosmetic divergence between how types are *read* (`[...]`) and how
 they're *printed* (`(...)`).
 
+### 16. EigenTrust wants column-stochastic, not row-stochastic
+
+**Observation:** the original 2003 paper defines `c_{ij}` as
+"peer i's normalized trust in peer j" — this gives a **row-stochastic**
+matrix `C`. The global-trust update is then `t_{k+1} = C^T · t_k`,
+i.e. the matrix that actually gets multiplied by `t` is `C^T`, which
+is **column-stochastic**.
+
+In my first implementation I took `C` (row-stochastic) as input and
+computed `(C^T · t)` internally via "sum of row-scaled rows" (a trick
+to avoid an explicit transpose). This worked but made the invariant
+awkward to state: users had to pass a row-stochastic matrix and
+trust the algorithm to do the right dance.
+
+**Fix:** take the column-stochastic matrix `M` directly as input. The
+update is plain matrix-vector multiply `y[i] = dot(M[i], t)`. The
+invariant is clear: each column of M sums to 1. `col-stochastic?`
+checks it in O(n²) by summing rows (columns-sums-of-M = sum of M's
+rows element-wise). `eigentrust` panics if the invariant fails.
+
+This also simplifies the implementation: no more `sum-rows` /
+`scale-rows` helpers, just `dot` + standard `mat-vec-mul`.
+
+**Ring fixture:** a column-stochastic ring of size n is the
+permutation matrix where column j has a single 1 in row (j+1) mod n.
+It's doubly stochastic so uniform is stationary, but if pre-trust is
+concentrated on one node, damping settles the distribution slowly
+(rate ≈ 1-α). This is a better "slow iteration" fixture than an
+asymmetric row-stochastic matrix whose geometry happens to produce
+interesting dynamics under the transpose trick.
+
 ### 15. Multi-line `def X : T := body` silently suppresses evaluation of downstream top-level expressions
 
 **Observation:** when a `def` with a type annotation is split across

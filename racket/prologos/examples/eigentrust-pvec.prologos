@@ -2,35 +2,45 @@ ns examples.eigentrust-pvec
 
 ;; ========================================================================
 ;;
-;;     E I G E N T R U S T   ( P V E C   +   R A T   V A R I A N T )
-;;     ---------------------------------------------------------------
+;;     E I G E N T R U S T   ( P V E C   +   R A T )
+;;     -----------------------------------------------
 ;;
-;;     Same algorithm as examples/eigentrust.prologos, but with PVec
-;;     (persistent RRB vector) instead of List. PVec gives O(log32 n)
-;;     random access vs List's O(n); for small n both do one hop per
-;;     level, so the constant factor dominates.
-;;
-;;     Unlike List's `'[...]`, PVec's `@[...]` literal preserves Rat
-;;     element types — `@[0/1 1/2]` stays `PVec Rat` without the
-;;     `rz : Rat := 0/1` splice trick that List literals need.
-;;
-;;     PVec indexing is via Nat, not Int, so all the counters below
-;;     are Nat (0N, suc i, nat-eq? i n).
+;;     Column-stochastic convention (see examples/eigentrust.prologos).
+;;     This variant uses PVec instead of List. PVec indexing is Nat-only,
+;;     so every helper carries an `i : Nat` counter and builds its result
+;;     by `pvec-push` onto an accumulator.
 ;;
 ;; ========================================================================
 
 
-;; ============================================================
-;; Vector primitives — index-based recursion over PVec
-;;
-;; We cannot pass primitive `rat+`-family operators to `pvec-map` or
-;; `pvec-fold` (they are not first-class) AND a closure capturing a
-;; scalar triggers a QTT multiplicity error, so every primitive is
-;; written as explicit Nat-indexed recursion with an accumulator
-;; PVec built via `pvec-push`.
-;; ============================================================
+;; --- Dot product ---
 
-;; scale-vec-go: acc <- acc + [scaled element at index i]
+spec dot-go Nat Nat [PVec Rat] [PVec Rat] Rat -> Rat
+defn dot-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> dot-go [suc i] n xs ys [rat+ acc [rat* [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec dot [PVec Rat] [PVec Rat] -> Rat
+defn dot [xs ys]
+  dot-go zero [pvec-length xs] xs ys 0/1
+
+
+;; --- Sum of a vector ---
+
+spec vec-sum-go Nat Nat [PVec Rat] Rat -> Rat
+defn vec-sum-go [i n xs acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> vec-sum-go [suc i] n xs [rat+ acc [pvec-nth xs i]]
+
+spec vec-sum [PVec Rat] -> Rat
+defn vec-sum [xs]
+  vec-sum-go zero [pvec-length xs] xs 0/1
+
+
+;; --- Elementwise operations ---
+
 spec scale-vec-go Nat Nat Rat [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn scale-vec-go [i n s xs acc]
   match [nat-eq? i n]
@@ -40,7 +50,6 @@ defn scale-vec-go [i n s xs acc]
 spec scale-vec Rat [PVec Rat] -> [PVec Rat]
 defn scale-vec [s xs]
   scale-vec-go zero [pvec-length xs] s xs (pvec-empty Rat)
-
 
 spec add-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn add-vec-go [i n xs ys acc]
@@ -52,7 +61,6 @@ spec add-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn add-vec [xs ys]
   add-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
 
-
 spec sub-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn sub-vec-go [i n xs ys acc]
   match [nat-eq? i n]
@@ -63,15 +71,12 @@ spec sub-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn sub-vec [xs ys]
   sub-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
 
-
 spec rat-max Rat Rat -> Rat
 defn rat-max [a b]
   match [rat-lt a b]
     | true  -> b
     | false -> a
 
-
-;; L-infinity norm via index accumulator.
 spec linf-norm-go Nat Nat [PVec Rat] Rat -> Rat
 defn linf-norm-go [i n xs acc]
   match [nat-eq? i n]
@@ -83,87 +88,103 @@ defn linf-norm [xs]
   linf-norm-go zero [pvec-length xs] xs 0/1
 
 
-;; ============================================================
-;; Matrix-vector multiply: (C^T * t)[j] = sum_i C[i][j] * t[i]
-;;
-;; For PVec we compute each column-dot directly via an inner
-;; index loop — no "sum scaled rows" trick — because PVec indexing
-;; makes column access cheap.
-;; ============================================================
+;; --- Matrix-vector multiply: (M * t)[i] = dot(M[i], t) ---
 
-;; Accumulate column-j dot product over rows 0..n.
-spec col-dot-go Nat Nat Nat [PVec [PVec Rat]] [PVec Rat] Rat -> Rat
-defn col-dot-go [i n j c t acc]
+spec mat-vec-mul-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn mat-vec-mul-go [i n m t acc]
   match [nat-eq? i n]
     | true  -> acc
-    | false -> col-dot-go [suc i] n j c t [rat+ acc [rat* [pvec-nth [pvec-nth c i] j] [pvec-nth t i]]]
+    | false -> mat-vec-mul-go [suc i] n m t [pvec-push acc [dot [pvec-nth m i] t]]
 
-spec col-dot Nat [PVec [PVec Rat]] [PVec Rat] -> Rat
-defn col-dot [j c t]
-  col-dot-go zero [pvec-length t] j c t 0/1
+spec mat-vec-mul [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn mat-vec-mul [m t]
+  mat-vec-mul-go zero [pvec-length m] m t (pvec-empty Rat)
 
 
-;; Build the result vector by walking columns.
-spec ct-times-vec-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
-defn ct-times-vec-go [j n c t acc]
-  match [nat-eq? j n]
+;; --- Column-stochastic invariant check ---
+;; col-sums = for each column j, sum over rows i of M[i][j].
+;; We build a result of length n (= row length) by accumulating across
+;; rows.
+
+spec col-sums-fold Nat Nat [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn col-sums-fold [i n m acc]
+  match [nat-eq? i n]
     | true  -> acc
-    | false -> ct-times-vec-go [suc j] n c t [pvec-push acc [col-dot j c t]]
+    | false -> col-sums-fold [suc i] n m [add-vec acc [pvec-nth m i]]
 
-spec ct-times-vec [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
-defn ct-times-vec [c t]
-  ct-times-vec-go zero [pvec-length t] c t (pvec-empty Rat)
+;; Returns a PVec Rat of length (pvec-length of a row) with zero seeds.
+spec zeros-go Nat Nat [PVec Rat] -> [PVec Rat]
+defn zeros-go [i n acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> zeros-go [suc i] n [pvec-push acc 0/1]
+
+spec zeros Nat -> [PVec Rat]
+defn zeros [n]
+  zeros-go zero n (pvec-empty Rat)
+
+spec col-sums [PVec [PVec Rat]] -> [PVec Rat]
+defn col-sums [m]
+  match [nat-eq? [pvec-length m] zero]
+    | true  -> (pvec-empty Rat)
+    | false -> col-sums-fold zero [pvec-length m] m [zeros [pvec-length [pvec-nth m zero]]]
+
+spec all-ones?-go Nat Nat [PVec Rat] -> Bool
+defn all-ones?-go [i n xs]
+  match [nat-eq? i n]
+    | true  -> true
+    | false -> match [rat-eq [pvec-nth xs i] 1/1]
+      | false -> false
+      | true  -> all-ones?-go [suc i] n xs
+
+spec all-ones? [PVec Rat] -> Bool
+defn all-ones? [xs]
+  all-ones?-go zero [pvec-length xs] xs
+
+spec col-stochastic? [PVec [PVec Rat]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
 
-;; ============================================================
-;; Damped EigenTrust step and fixpoint iteration.
-;; ============================================================
+;; --- Power iteration ---
 
 spec eigentrust-step [PVec [PVec Rat]] [PVec Rat] Rat [PVec Rat] -> [PVec Rat]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [PVec [PVec Rat]] [PVec Rat] Rat Rat Int [PVec Rat] [PVec Rat] -> [PVec Rat]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [PVec [PVec Rat]] [PVec Rat] Rat Rat Int -> [PVec Rat]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [PVec Rat] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 
 ;; ========================================================================
 ;; Worked examples
 ;; ========================================================================
 
-;; Uniform 4x4 — `@[0/1 ...]` inside nested `@[...]` survives unlike
-;; List's `'[0/1 ...]`, so no `rz` workaround is needed here either.
-
-def c-uniform-4 : [PVec [PVec Rat]]
-  := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
-
+def m-uniform-4 : [PVec [PVec Rat]] := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
 def p-uniform-4 : [PVec Rat] := @[1/4 1/4 1/4 1/4]
 
-eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50
-;; => @[1/4 1/4 1/4 1/4] : PVec Rat
+[col-stochastic? m-uniform-4]
+[eigentrust m-uniform-4 p-uniform-4 1/10 1/1000 50]
 
-def c-others-3 : [PVec [PVec Rat]]
-  := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
-
+def m-others-3 : [PVec [PVec Rat]] := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
 def p-uniform-3 : [PVec Rat] := @[1/3 1/3 1/3]
 
-eigentrust c-others-3 p-uniform-3 1/10 1/1000 50
-;; => @[1/3 1/3 1/3] : PVec Rat
+[col-stochastic? m-others-3]
+[eigentrust m-others-3 p-uniform-3 1/10 1/1000 50]
 
-eigentrust-step c-others-3 p-uniform-3 1/10 p-uniform-3
-;; => @[1/3 1/3 1/3] : PVec Rat
+def m-ring-4 : [PVec [PVec Rat]] := @[@[0/1 0/1 0/1 1/1] @[1/1 0/1 0/1 0/1] @[0/1 1/1 0/1 0/1] @[0/1 0/1 1/1 0/1]]
+def p-seed-0 : [PVec Rat] := @[1/1 0/1 0/1 0/1]
 
-scale-vec 1/2 @[1/2 1/3 1/4]
-
-add-vec @[1/4 1/4] @[1/4 1/4]
-
-linf-norm [sub-vec @[1/2 1/3] @[1/4 1/3]]
+[col-stochastic? m-ring-4]
+[eigentrust m-ring-4 p-seed-0 3/10 1/1000 3]

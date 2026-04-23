@@ -5,6 +5,14 @@ ns benchmarks::comparative::eigentrust-list-posit
 ;; See eigentrust-list-rat.prologos for the workload specification.
 ;; ============================================================
 
+spec dot [List Posit32] [List Posit32] -> Posit32
+defn dot [xs ys]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> match ys
+      | nil       -> ~0.0
+      | cons y bs -> p32+ [p32* x y] [dot as bs]
+
 spec scale-vec Posit32 [List Posit32] -> [List Posit32]
 defn scale-vec [s xs]
   match xs
@@ -39,41 +47,49 @@ defn linf-norm [xs]
     | nil       -> ~0.0
     | cons x as -> p32-max [p32-abs x] [linf-norm as]
 
-spec sum-rows [List [List Posit32]] -> [List Posit32]
-defn sum-rows [xss]
-  match xss
+spec mat-vec-mul [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
+
+spec col-sums [List [List Posit32]] -> [List Posit32]
+defn col-sums [m]
+  match m
     | nil         -> nil
     | cons r rest -> match rest
       | nil        -> r
-      | cons _ _   -> add-vec r [sum-rows rest]
+      | cons _ _   -> add-vec r [col-sums rest]
 
-spec scale-rows [List Posit32] [List [List Posit32]] -> [List [List Posit32]]
-defn scale-rows [ts c]
-  match ts
-    | nil       -> nil
-    | cons t rs -> match c
-      | nil         -> nil
-      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+spec all-ones? [List Posit32] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [p32-eq x ~1.0]
+      | false -> false
+      | true  -> all-ones? as
 
-spec ct-times-vec [List [List Posit32]] [List Posit32] -> [List Posit32]
-defn ct-times-vec [c t]
-  sum-rows [scale-rows t c]
+spec col-stochastic? [List [List Posit32]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
 spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Posit32] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 
 ;; ============================================================
@@ -82,25 +98,25 @@ defn eigentrust [c p alpha eps max-iter]
 
 def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
 def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
+def p-seed-0    : [List Posit32] := '[~1.0 ~0.0 ~0.0 ~0.0]
 
-def c-uniform-4 : [List [List Posit32]] := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
+def m-uniform-4 : [List [List Posit32]] := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
 
-def c-others-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+def m-others-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
 
-def c-asym-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.0 ~0.0 ~1.0] '[~1.0 ~0.0 ~0.0]]
+def m-ring-4 : [List [List Posit32]] := '['[~0.0 ~0.0 ~0.0 ~1.0] '[~1.0 ~0.0 ~0.0 ~0.0] '[~0.0 ~1.0 ~0.0 ~0.0] '[~0.0 ~0.0 ~1.0 ~0.0]]
 
 
 ;; ============================================================
-;; Workloads (identical to eigentrust-list-rat.prologos)
+;; Workloads
 ;; ============================================================
 
-eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
-eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
-;; W3: 3 FORCED iters on asym, alpha = 3/10, eps = 0 (never converges
-;; because the diff is strictly positive across posit round-off too).
-eigentrust c-asym-3 p-uniform-3 ~0.3 ~0.0 3
-eigentrust-step c-uniform-4 p-uniform-4 ~0.1 p-uniform-4
-ct-times-vec c-uniform-4 p-uniform-4
+eigentrust m-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+eigentrust m-others-3 p-uniform-3 ~0.1 ~0.001 50
+eigentrust m-ring-4 p-seed-0 ~0.3 ~0.0 3
+col-stochastic? m-uniform-4
+eigentrust-step m-uniform-4 p-uniform-4 ~0.1 p-uniform-4
+mat-vec-mul m-uniform-4 p-uniform-4
 scale-vec ~0.5 '[~0.5 ~0.33333 ~0.25]
 add-vec '[~0.25 ~0.25] '[~0.25 ~0.25]
 linf-norm [sub-vec '[~0.5 ~0.33333] '[~0.25 ~0.33333]]

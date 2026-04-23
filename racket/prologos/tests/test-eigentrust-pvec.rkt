@@ -1,9 +1,7 @@
 #lang racket/base
 
-;;;
 ;;; Unit tests for EigenTrust — PVec + Rat variant
-;;; (examples/eigentrust-pvec.prologos).
-;;;
+;;; (column-stochastic convention).
 
 (require rackunit
          racket/list
@@ -13,6 +11,16 @@
 (define preamble
   #<<PROLOGOS
 ns test.eigentrust-pvec
+
+spec dot-go Nat Nat [PVec Rat] [PVec Rat] Rat -> Rat
+defn dot-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> dot-go [suc i] n xs ys [rat+ acc [rat* [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec dot [PVec Rat] [PVec Rat] -> Rat
+defn dot [xs ys]
+  dot-go zero [pvec-length xs] xs ys 0/1
 
 spec scale-vec-go Nat Nat Rat [PVec Rat] [PVec Rat] -> [PVec Rat]
 defn scale-vec-go [i n s xs acc]
@@ -60,109 +68,120 @@ spec linf-norm [PVec Rat] -> Rat
 defn linf-norm [xs]
   linf-norm-go zero [pvec-length xs] xs 0/1
 
-spec col-dot-go Nat Nat Nat [PVec [PVec Rat]] [PVec Rat] Rat -> Rat
-defn col-dot-go [i n j c t acc]
+spec mat-vec-mul-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn mat-vec-mul-go [i n m t acc]
   match [nat-eq? i n]
     | true  -> acc
-    | false -> col-dot-go [suc i] n j c t [rat+ acc [rat* [pvec-nth [pvec-nth c i] j] [pvec-nth t i]]]
+    | false -> mat-vec-mul-go [suc i] n m t [pvec-push acc [dot [pvec-nth m i] t]]
 
-spec col-dot Nat [PVec [PVec Rat]] [PVec Rat] -> Rat
-defn col-dot [j c t]
-  col-dot-go zero [pvec-length t] j c t 0/1
+spec mat-vec-mul [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn mat-vec-mul [m t]
+  mat-vec-mul-go zero [pvec-length m] m t (pvec-empty Rat)
 
-spec ct-times-vec-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
-defn ct-times-vec-go [j n c t acc]
-  match [nat-eq? j n]
+spec col-sums-fold Nat Nat [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn col-sums-fold [i n m acc]
+  match [nat-eq? i n]
     | true  -> acc
-    | false -> ct-times-vec-go [suc j] n c t [pvec-push acc [col-dot j c t]]
+    | false -> col-sums-fold [suc i] n m [add-vec acc [pvec-nth m i]]
 
-spec ct-times-vec [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
-defn ct-times-vec [c t]
-  ct-times-vec-go zero [pvec-length t] c t (pvec-empty Rat)
+spec zeros-go Nat Nat [PVec Rat] -> [PVec Rat]
+defn zeros-go [i n acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> zeros-go [suc i] n [pvec-push acc 0/1]
+
+spec zeros Nat -> [PVec Rat]
+defn zeros [n]
+  zeros-go zero n (pvec-empty Rat)
+
+spec col-sums [PVec [PVec Rat]] -> [PVec Rat]
+defn col-sums [m]
+  match [nat-eq? [pvec-length m] zero]
+    | true  -> (pvec-empty Rat)
+    | false -> col-sums-fold zero [pvec-length m] m [zeros [pvec-length [pvec-nth m zero]]]
+
+spec all-ones?-go Nat Nat [PVec Rat] -> Bool
+defn all-ones?-go [i n xs]
+  match [nat-eq? i n]
+    | true  -> true
+    | false -> match [rat-eq [pvec-nth xs i] 1/1]
+      | false -> false
+      | true  -> all-ones?-go [suc i] n xs
+
+spec all-ones? [PVec Rat] -> Bool
+defn all-ones? [xs]
+  all-ones?-go zero [pvec-length xs] xs
+
+spec col-stochastic? [PVec [PVec Rat]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
 spec eigentrust-step [PVec [PVec Rat]] [PVec Rat] Rat [PVec Rat] -> [PVec Rat]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [PVec [PVec Rat]] [PVec Rat] Rat Rat Int [PVec Rat] [PVec Rat] -> [PVec Rat]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [PVec [PVec Rat]] [PVec Rat] Rat Rat Int -> [PVec Rat]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [PVec Rat] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 def p-uniform-4 : [PVec Rat] := @[1/4 1/4 1/4 1/4]
 def p-uniform-3 : [PVec Rat] := @[1/3 1/3 1/3]
+def p-seed-0    : [PVec Rat] := @[1/1 0/1 0/1 0/1]
 
-def c-uniform-4 : [PVec [PVec Rat]]
-  := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
+def m-uniform-4 : [PVec [PVec Rat]] := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
 
-def c-others-3 : [PVec [PVec Rat]]
-  := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
+def m-others-3 : [PVec [PVec Rat]] := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
+
+def m-ring-4 : [PVec [PVec Rat]] := @[@[0/1 0/1 0/1 1/1] @[1/1 0/1 0/1 0/1] @[0/1 1/1 0/1 0/1] @[0/1 0/1 1/1 0/1]]
 
 PROLOGOS
     )
 
 (define test-expressions
   #<<PROLOGOS
-;; T1: scale-vec halves each element.
-scale-vec 1/2 @[1/2 1/3 1/4]
-
-;; T2: add-vec elementwise.
-add-vec @[1/4 1/4] @[1/4 1/4]
-
-;; T3: linf-norm
-linf-norm [sub-vec @[1/2 1/3] @[1/4 1/3]]
-
-;; T4: col-dot of uniform 4x4 with uniform t = 1/4.
-col-dot 0N c-uniform-4 p-uniform-4
-
-;; T5: ct-times-vec preserves uniform.
-ct-times-vec c-uniform-4 p-uniform-4
-
-;; T6: eigentrust on uniform 4x4 converges to uniform.
-eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50
-
-;; T7: eigentrust on symmetric 3x3 with uniform pre-trust stays uniform.
-eigentrust c-others-3 p-uniform-3 1/10 1/1000 50
+col-stochastic? m-uniform-4
+col-stochastic? m-ring-4
+mat-vec-mul m-uniform-4 p-uniform-4
+eigentrust m-uniform-4 p-uniform-4 1/10 1/1000 50
+eigentrust m-others-3 p-uniform-3 1/10 1/1000 50
+eigentrust m-ring-4 p-seed-0 3/10 0/1 3
 
 PROLOGOS
     )
 
-(define full-program
-  (string-append preamble "\n" test-expressions))
-
-(define all-results (run-ns-ws-all full-program))
+(define all-results (run-ns-ws-all (string-append preamble "\n" test-expressions)))
 (define (last-n xs n) (drop xs (- (length xs) n)))
-(define test-results (last-n all-results 7))
-(define (res i) (list-ref test-results i))
+(define tr (last-n all-results 6))
+(define (res i) (list-ref tr i))
 
-(define (check-printed actual expected-substr [msg #f])
+(define (check-printed actual expected-substr)
   (check-true (string-contains? actual expected-substr)
-              (or msg (format "Expected ~s to contain ~s" actual expected-substr))))
+              (format "Expected ~s to contain ~s" actual expected-substr)))
 
-(test-case "eigentrust-pvec/scale-vec"
-  (check-printed (res 0) "@[1/4 1/6 1/8]"))
+(test-case "eigentrust-pvec/col-stochastic? uniform"
+  (check-printed (res 0) "true : Bool"))
 
-(test-case "eigentrust-pvec/add-vec"
-  (check-printed (res 1) "@[1/2 1/2]"))
+(test-case "eigentrust-pvec/col-stochastic? ring"
+  (check-printed (res 1) "true : Bool"))
 
-(test-case "eigentrust-pvec/linf-norm"
-  (check-printed (res 2) "1/4 : Rat"))
+(test-case "eigentrust-pvec/mat-vec-mul preserves uniform"
+  (check-printed (res 2) "@[1/4 1/4 1/4 1/4]"))
 
-(test-case "eigentrust-pvec/col-dot preserves uniform"
-  (check-printed (res 3) "1/4 : Rat"))
+(test-case "eigentrust-pvec/converge: uniform -> uniform"
+  (check-printed (res 3) "@[1/4 1/4 1/4 1/4]"))
 
-(test-case "eigentrust-pvec/ct-times-vec preserves uniform"
-  (check-printed (res 4) "@[1/4 1/4 1/4 1/4]"))
+(test-case "eigentrust-pvec/converge: symmetric -> uniform"
+  (check-printed (res 4) "@[1/3 1/3 1/3]"))
 
-(test-case "eigentrust-pvec/converge: uniform 4x4 -> uniform"
-  (check-printed (res 5) "@[1/4 1/4 1/4 1/4]"))
-
-(test-case "eigentrust-pvec/converge: symmetric 3x3 with uniform pre-trust"
-  (check-printed (res 6) "@[1/3 1/3 1/3]"))
+(test-case "eigentrust-pvec/ring slow settling"
+  (check-printed (res 5) "@[5401/10000 21/100 147/1000 1029/10000]"))

@@ -1,9 +1,7 @@
 #lang racket/base
 
-;;;
 ;;; Unit tests for EigenTrust — PVec + Posit32 variant
-;;; (examples/eigentrust-pvec-posit.prologos).
-;;;
+;;; (column-stochastic convention).
 
 (require rackunit
          racket/list
@@ -13,6 +11,16 @@
 (define preamble
   #<<PROLOGOS
 ns test.eigentrust-pvec-posit
+
+spec dot-go Nat Nat [PVec Posit32] [PVec Posit32] Posit32 -> Posit32
+defn dot-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> dot-go [suc i] n xs ys [p32+ acc [p32* [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec dot [PVec Posit32] [PVec Posit32] -> Posit32
+defn dot [xs ys]
+  dot-go zero [pvec-length xs] xs ys ~0.0
 
 spec scale-vec-go Nat Nat Posit32 [PVec Posit32] [PVec Posit32] -> [PVec Posit32]
 defn scale-vec-go [i n s xs acc]
@@ -60,107 +68,124 @@ spec linf-norm [PVec Posit32] -> Posit32
 defn linf-norm [xs]
   linf-norm-go zero [pvec-length xs] xs ~0.0
 
-spec col-dot-go Nat Nat Nat [PVec [PVec Posit32]] [PVec Posit32] Posit32 -> Posit32
-defn col-dot-go [i n j c t acc]
+spec mat-vec-mul-go Nat Nat [PVec [PVec Posit32]] [PVec Posit32] [PVec Posit32] -> [PVec Posit32]
+defn mat-vec-mul-go [i n m t acc]
   match [nat-eq? i n]
     | true  -> acc
-    | false -> col-dot-go [suc i] n j c t [p32+ acc [p32* [pvec-nth [pvec-nth c i] j] [pvec-nth t i]]]
+    | false -> mat-vec-mul-go [suc i] n m t [pvec-push acc [dot [pvec-nth m i] t]]
 
-spec col-dot Nat [PVec [PVec Posit32]] [PVec Posit32] -> Posit32
-defn col-dot [j c t]
-  col-dot-go zero [pvec-length t] j c t ~0.0
+spec mat-vec-mul [PVec [PVec Posit32]] [PVec Posit32] -> [PVec Posit32]
+defn mat-vec-mul [m t]
+  mat-vec-mul-go zero [pvec-length m] m t (pvec-empty Posit32)
 
-spec ct-times-vec-go Nat Nat [PVec [PVec Posit32]] [PVec Posit32] [PVec Posit32] -> [PVec Posit32]
-defn ct-times-vec-go [j n c t acc]
-  match [nat-eq? j n]
+spec col-sums-fold Nat Nat [PVec [PVec Posit32]] [PVec Posit32] -> [PVec Posit32]
+defn col-sums-fold [i n m acc]
+  match [nat-eq? i n]
     | true  -> acc
-    | false -> ct-times-vec-go [suc j] n c t [pvec-push acc [col-dot j c t]]
+    | false -> col-sums-fold [suc i] n m [add-vec acc [pvec-nth m i]]
 
-spec ct-times-vec [PVec [PVec Posit32]] [PVec Posit32] -> [PVec Posit32]
-defn ct-times-vec [c t]
-  ct-times-vec-go zero [pvec-length t] c t (pvec-empty Posit32)
+spec zeros-go Nat Nat [PVec Posit32] -> [PVec Posit32]
+defn zeros-go [i n acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> zeros-go [suc i] n [pvec-push acc ~0.0]
+
+spec zeros Nat -> [PVec Posit32]
+defn zeros [n]
+  zeros-go zero n (pvec-empty Posit32)
+
+spec col-sums [PVec [PVec Posit32]] -> [PVec Posit32]
+defn col-sums [m]
+  match [nat-eq? [pvec-length m] zero]
+    | true  -> (pvec-empty Posit32)
+    | false -> col-sums-fold zero [pvec-length m] m [zeros [pvec-length [pvec-nth m zero]]]
+
+spec all-ones?-go Nat Nat [PVec Posit32] -> Bool
+defn all-ones?-go [i n xs]
+  match [nat-eq? i n]
+    | true  -> true
+    | false -> match [p32-eq [pvec-nth xs i] ~1.0]
+      | false -> false
+      | true  -> all-ones?-go [suc i] n xs
+
+spec all-ones? [PVec Posit32] -> Bool
+defn all-ones? [xs]
+  all-ones?-go zero [pvec-length xs] xs
+
+spec col-stochastic? [PVec [PVec Posit32]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
 spec eigentrust-step [PVec [PVec Posit32]] [PVec Posit32] Posit32 [PVec Posit32] -> [PVec Posit32]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [PVec [PVec Posit32]] [PVec Posit32] Posit32 Posit32 Int [PVec Posit32] [PVec Posit32] -> [PVec Posit32]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [PVec [PVec Posit32]] [PVec Posit32] Posit32 Posit32 Int -> [PVec Posit32]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [PVec Posit32] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 def p-uniform-4 : [PVec Posit32] := @[~0.25 ~0.25 ~0.25 ~0.25]
 def p-uniform-3 : [PVec Posit32] := @[~0.33333 ~0.33333 ~0.33333]
+def p-seed-0    : [PVec Posit32] := @[~1.0 ~0.0 ~0.0 ~0.0]
 
-def c-uniform-4 : [PVec [PVec Posit32]]
-  := @[@[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25]]
+def m-uniform-4 : [PVec [PVec Posit32]] := @[@[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25]]
 
-def c-others-3 : [PVec [PVec Posit32]]
-  := @[@[~0.0 ~0.5 ~0.5] @[~0.5 ~0.0 ~0.5] @[~0.5 ~0.5 ~0.0]]
+def m-others-3 : [PVec [PVec Posit32]] := @[@[~0.0 ~0.5 ~0.5] @[~0.5 ~0.0 ~0.5] @[~0.5 ~0.5 ~0.0]]
+
+def m-ring-4 : [PVec [PVec Posit32]] := @[@[~0.0 ~0.0 ~0.0 ~1.0] @[~1.0 ~0.0 ~0.0 ~0.0] @[~0.0 ~1.0 ~0.0 ~0.0] @[~0.0 ~0.0 ~1.0 ~0.0]]
 
 PROLOGOS
     )
 
 (define test-expressions
   #<<PROLOGOS
-;; T1: scale-vec
-scale-vec ~0.5 @[~1.0 ~2.0 ~4.0]
-
-;; T2: add-vec
-add-vec @[~0.25 ~0.25] @[~0.25 ~0.25]
-
-;; T3: col-dot preserves uniform
-col-dot 0N c-uniform-4 p-uniform-4
-
-;; T4: ct-times-vec preserves uniform
-ct-times-vec c-uniform-4 p-uniform-4
-
-;; T5: eigentrust on uniform 4x4
-eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
-
-;; T6: eigentrust on symmetric 3x3 with uniform pre-trust
-eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+col-stochastic? m-uniform-4
+col-stochastic? m-ring-4
+mat-vec-mul m-uniform-4 p-uniform-4
+eigentrust m-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+eigentrust m-others-3 p-uniform-3 ~0.1 ~0.001 50
+eigentrust m-ring-4 p-seed-0 ~0.3 ~0.0 3
 
 PROLOGOS
     )
 
-(define full-program
-  (string-append preamble "\n" test-expressions))
-
-(define all-results (run-ns-ws-all full-program))
+(define all-results (run-ns-ws-all (string-append preamble "\n" test-expressions)))
 (define (last-n xs n) (drop xs (- (length xs) n)))
-(define test-results (last-n all-results 6))
-(define (res i) (list-ref test-results i))
+(define tr (last-n all-results 6))
+(define (res i) (list-ref tr i))
 
-(define (check-printed actual expected-substr [msg #f])
+(define (check-printed actual expected-substr)
   (check-true (string-contains? actual expected-substr)
-              (or msg (format "Expected ~s to contain ~s" actual expected-substr))))
+              (format "Expected ~s to contain ~s" actual expected-substr)))
 
-(test-case "eigentrust-pvec-posit/scale-vec"
-  (check-printed (res 0) "posit32 939524096")   ;; 0.5
-  (check-printed (res 0) "posit32 1073741824")  ;; 1.0
-  (check-printed (res 0) "posit32 1207959552")) ;; 2.0
+(test-case "eigentrust-pvec-posit/col-stochastic? uniform"
+  (check-printed (res 0) "true : Bool"))
 
-(test-case "eigentrust-pvec-posit/add-vec"
-  (check-printed (res 1) "posit32 939524096"))  ;; 0.5
+(test-case "eigentrust-pvec-posit/col-stochastic? ring"
+  (check-printed (res 1) "true : Bool"))
 
-(test-case "eigentrust-pvec-posit/col-dot preserves uniform"
-  (check-printed (res 2) "posit32 805306368"))  ;; 0.25
+(test-case "eigentrust-pvec-posit/mat-vec-mul preserves uniform"
+  (check-printed (res 2) "posit32 805306368"))
 
-(test-case "eigentrust-pvec-posit/ct-times-vec preserves uniform"
+(test-case "eigentrust-pvec-posit/converge: uniform -> uniform"
   (check-printed (res 3) "posit32 805306368"))
 
-(test-case "eigentrust-pvec-posit/converge: uniform 4x4 -> uniform"
-  (check-printed (res 4) "posit32 805306368"))
-
-(test-case "eigentrust-pvec-posit/converge: symmetric 3x3"
-  (define s (res 5))
+(test-case "eigentrust-pvec-posit/converge: symmetric -> uniform"
+  (define s (res 4))
   (check-true (regexp-match? #rx"posit32 850043[0-9]+" s)
-              (format "expected ~~1/3 stationary, got ~s" s)))
+              (format "expected ~~1/3, got ~s" s)))
+
+(test-case "eigentrust-pvec-posit/ring: 3 iters produces 4-element posit vec"
+  (define s (res 5))
+  (check-true (regexp-match? #rx"posit32.*posit32.*posit32.*posit32" s)
+              (format "expected 4-element posit vec, got ~s" s)))

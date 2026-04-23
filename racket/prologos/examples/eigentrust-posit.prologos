@@ -2,27 +2,36 @@ ns examples.eigentrust-posit
 
 ;; ========================================================================
 ;;
-;;     E I G E N T R U S T   ( P O S I T 3 2   V A R I A N T )
-;;     -------------------------------------------------------
+;;     E I G E N T R U S T   ( L I S T   +   P O S I T 3 2 )
+;;     ------------------------------------------------------
 ;;
-;;     Same algorithm as examples/eigentrust.prologos, but with hardware
-;;     posit arithmetic (Posit32) instead of exact Rat. Advantages:
-;;       - No denominator blow-up; each step is O(1) hardware ops.
-;;       - Posit32 literals (~0.0, ~1.0, ~0.5) survive nested '[...]
-;;         unchanged, so no `rz : Rat := 0/1` splice trick is needed.
-;;       - The convergence check uses p32-lt on finite fractions.
+;;     Column-stochastic convention (see examples/eigentrust.prologos):
+;;         t_{k+1} = (1 - alpha) * M * t_k + alpha * p
+;;     where M is column-stochastic (every column sums to 1) and p is
+;;     a probability distribution.
 ;;
-;;     Brackets are dropped wherever WS mode accepts a bare
-;;     application: tail-position bodies of `defn`/match arms can be
-;;     `foo x y` instead of `[foo x y]`. Sub-expressions (arguments of
-;;     an enclosing application) still need `[...]`.
+;;     This variant swaps Rat for Posit32 (hardware floating point).
+;;     Posit32 is inexact, so the column-sum check uses exact equality
+;;     to `~1.0` — small round-off in the matrix literals would fail it.
+;;     For the fixtures here every entry is representable exactly
+;;     (powers of 2 or 0), so the check succeeds.
 ;;
 ;; ========================================================================
 
 
-;; ============================================================
-;; Vector primitives (over [List Posit32])
-;; ============================================================
+spec dot [List Posit32] [List Posit32] -> Posit32
+defn dot [xs ys]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> match ys
+      | nil       -> ~0.0
+      | cons y bs -> p32+ [p32* x y] [dot as bs]
+
+spec vec-sum [List Posit32] -> Posit32
+defn vec-sum [xs]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> p32+ x [vec-sum as]
 
 spec scale-vec Posit32 [List Posit32] -> [List Posit32]
 defn scale-vec [s xs]
@@ -58,118 +67,73 @@ defn linf-norm [xs]
     | nil       -> ~0.0
     | cons x as -> p32-max [p32-abs x] [linf-norm as]
 
+spec mat-vec-mul [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
 
-;; ============================================================
-;; (C^T * t) as a row-weighted sum.
-;;   (C^T * t)[j] = sum_i (t[i] * row_i(C))[j]
-;; Avoids an explicit transpose.
-;; ============================================================
 
-spec sum-rows [List [List Posit32]] -> [List Posit32]
-defn sum-rows [xss]
-  match xss
+;; Column-stochastic invariant check.
+spec col-sums [List [List Posit32]] -> [List Posit32]
+defn col-sums [m]
+  match m
     | nil         -> nil
     | cons r rest -> match rest
       | nil        -> r
-      | cons _ _   -> add-vec r [sum-rows rest]
+      | cons _ _   -> add-vec r [col-sums rest]
 
-spec scale-rows [List Posit32] [List [List Posit32]] -> [List [List Posit32]]
-defn scale-rows [ts c]
-  match ts
-    | nil       -> nil
-    | cons t rs -> match c
-      | nil         -> nil
-      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+spec all-ones? [List Posit32] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [p32-eq x ~1.0]
+      | false -> false
+      | true  -> all-ones? as
 
-spec ct-times-vec [List [List Posit32]] [List Posit32] -> [List Posit32]
-defn ct-times-vec [c t]
-  sum-rows [scale-rows t c]
+spec col-stochastic? [List [List Posit32]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
 
-
-;; ============================================================
-;; Damped EigenTrust update:
-;;     t_new = (1 - alpha) * (C^T * t) + alpha * p
-;; ============================================================
 
 spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
-defn eigentrust-step [c p alpha t]
-  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
-
-
-;; ============================================================
-;; Power iteration with both (t, tnew) carried as arguments so each
-;; round computes eigentrust-step exactly once (no mutual recursion,
-;; no let-binding).
-;; ============================================================
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
 
 spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
-defn eigentrust-iterate [c p alpha eps budget t tnew]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
   match [int-le budget 0]
     | true  -> tnew
     | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
-
-
-;; ============================================================
-;; Top-level entry. Seeds the iterator with one step so the (t, tnew)
-;; pair is well-defined before round 1.
-;; ============================================================
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
 
 spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
-defn eigentrust [c p alpha eps max-iter]
-  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Posit32] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
 
 
 ;; ========================================================================
 ;; Worked examples
-;;
-;; Posit32 output prints as `[posit32 BITPATTERN]`, which is unfriendly
-;; to eyeball but survives round-trips cleanly. For reference:
-;;     [posit32 1073741824] = 1.0
-;;     [posit32 939524096]  = 0.5
-;;     [posit32 805306368]  = 0.25
-;;     [posit32 850045611]  = 1/3 (rounded)
-;;
-;; Note: with non-converging workloads the iterator argument tree grows
-;; across rounds (Prologos reduces the argument lazily), so deep
-;; iteration on an asymmetric matrix is surprisingly expensive even
-;; though the Posit arithmetic itself is O(1). The examples here all
-;; converge in one step; see tests/test-eigentrust-posit.rkt for
-;; explicit iter-count workloads.
 ;; ========================================================================
 
-;; --- Example 1: uniform matrix is a fixed point of uniform pre-trust ---
-
-def c-uniform-4 : [List [List Posit32]]
-  := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
-
+def m-uniform-4 : [List [List Posit32]] := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
 def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
 
-eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+[col-stochastic? m-uniform-4]
+[eigentrust m-uniform-4 p-uniform-4 ~0.1 ~0.001 50]
 
-
-;; --- Example 2: 3-peer "uniform-on-others" matrix ---
-;;
-;; Zeros `~0.0` survive nested '[...] unchanged — no `rz` trick needed.
-
-def c-others-3 : [List [List Posit32]]
-  := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
-
+def m-others-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
 def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
 
-eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+[col-stochastic? m-others-3]
+[eigentrust m-others-3 p-uniform-3 ~0.1 ~0.001 50]
 
+;; Ring (already column-stochastic: each column has a single 1).
+def m-ring-4 : [List [List Posit32]] := '['[~0.0 ~0.0 ~0.0 ~1.0] '[~1.0 ~0.0 ~0.0 ~0.0] '[~0.0 ~1.0 ~0.0 ~0.0] '[~0.0 ~0.0 ~1.0 ~0.0]]
+def p-seed-0 : [List Posit32] := '[~1.0 ~0.0 ~0.0 ~0.0]
 
-;; --- Example 3: one step of the update operator in isolation ---
-
-eigentrust-step c-others-3 p-uniform-3 ~0.1 p-uniform-3
-
-
-;; --- Example 4: a handful of the underlying primitives ---
-
-scale-vec ~0.5 '[~1.0 ~2.0 ~3.0]
-
-add-vec '[~0.25 ~0.25] '[~0.25 ~0.25]
-
-linf-norm [sub-vec '[~0.5 ~0.33333] '[~0.25 ~0.33333]]
+[col-stochastic? m-ring-4]
+[eigentrust m-ring-4 p-seed-0 ~0.3 ~0.001 3]
