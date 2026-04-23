@@ -28,7 +28,7 @@
          racket/list
          "syntax.rkt"               ;; expr structs
          "macros.rkt"               ;; capability-type?, subtype-pair?
-         "type-lattice.rkt"         ;; type-bot, type-top, type-lattice-merge, type-lattice-contradicts?
+         "type-lattice.rkt"         ;; type-bot, type-top, type-lattice-merge, type-unify-or-top, type-lattice-contradicts?
          "capability-inference.rkt" ;; cap-set, cap-set-bot, cap-set-join, build-call-graph, etc.
          "global-env.rkt"           ;; current-prelude-env
          "propagator.rkt")          ;; prop-network, net-new-cell, net-add-cross-domain-propagator, etc.
@@ -182,13 +182,19 @@
               ([(name _) (in-hash call-graph)])
       (define entry (hash-ref env name #f))
 
-      ;; Type cell: seeded with function's type (or type-bot if no entry)
+      ;; Type cell: seeded with function's type (or type-bot if no entry).
+      ;; PPN 4C Path T-3 Commit A.2-c (2026-04-22): Role B merge-fn.
+      ;; Each function has exactly ONE type. Conflicting writes are a real
+      ;; type error, not a union of possible types. type-unify-or-top
+      ;; preserves equality-enforce semantics under post-T-3 Commit B set-union
+      ;; merge (where type-lattice-merge would silently union incompatible
+      ;; function types, losing the contradiction signal).
       (define func-type
         (if (and entry (pair? entry))
             (car entry)
             type-bot))
       (define-values (net1 type-cid)
-        (net-new-cell net func-type type-lattice-merge type-lattice-contradicts?))
+        (net-new-cell net func-type type-unify-or-top type-lattice-contradicts?))
 
       ;; Cap cell: seeded with declared capabilities (from type spec)
       (define initial-caps

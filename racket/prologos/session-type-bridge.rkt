@@ -110,18 +110,25 @@
 ;; Returns (values net type-cell-id).
 
 ;; Create a type cell bridged to a session cell for Send message type.
+;; PPN 4C Path T-3 Commit A.2-c (2026-04-22): Role B merge-fn.
+;; Each channel has exactly ONE message type per direction. Conflicting
+;; writes are a real session-type error, not a union of possible message
+;; types. type-unify-or-top preserves equality-enforce semantics under
+;; post-T-3 Commit B set-union merge. The type-top check at line 337+
+;; (msg-type-constraint resolution) relies on this signal.
 (define (add-send-type-bridge net sess-cell)
   (define-values (net1 type-cell)
-    (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?))
+    (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))
   (define-values (net2 _pid-alpha _pid-gamma)
     (net-add-cross-domain-propagator net1 sess-cell type-cell
       send-type-alpha type-to-session-gamma))
   (values net2 type-cell))
 
 ;; Create a type cell bridged to a session cell for Recv message type.
+;; Same Role B rationale as add-send-type-bridge above.
 (define (add-recv-type-bridge net sess-cell)
   (define-values (net1 type-cell)
-    (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?))
+    (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))
   (define-values (net2 _pid-alpha _pid-gamma)
     (net-add-cross-domain-propagator net1 sess-cell type-cell
       recv-type-alpha type-to-session-gamma))

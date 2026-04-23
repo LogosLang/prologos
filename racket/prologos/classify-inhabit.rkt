@@ -29,7 +29,7 @@
 ;;; coupling this module to Phase 9.
 ;;;
 
-(require (only-in "type-lattice.rkt" type-lattice-merge type-bot type-bot? type-top type-top?)
+(require (only-in "type-lattice.rkt" type-lattice-merge type-unify-or-top type-bot type-bot? type-top type-top?)
          (only-in "sre-core.rkt" make-sre-domain register-domain!)
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice))
 
@@ -154,13 +154,21 @@
      (define c2 (classify-inhabit-value-classifier v2))
      (define i1 (classify-inhabit-value-inhabitant v1))
      (define i2 (classify-inhabit-value-inhabitant v2))
-     ;; Classifier × classifier: use type-lattice-merge (the quantale's
-     ;; 'equality relation).
+     ;; Classifier × classifier: equality-enforcement (Role B).
+     ;; PPN 4C Path T-3 Commit A.2-c (2026-04-22): migrated from
+     ;; type-lattice-merge (Role A accumulate) to type-unify-or-top (Role B
+     ;; equality-enforce). Classifier semantics: position has exactly ONE
+     ;; expected type; two propagators asserting different classifiers is a
+     ;; conflict (→ type-top → classify-inhabit-contradiction), not an
+     ;; accumulation (Q5 2026-04-22 confirmed). Under post-T-3 Commit B
+     ;; set-union merge, type-lattice-merge would silently produce unions
+     ;; for conflicting classifier assertions, losing the contradiction signal
+     ;; the check at line 196+ relies on.
      (define merged-classifier
        (cond
          [(eq? c1 'bot) c2]
          [(eq? c2 'bot) c1]
-         [else (type-lattice-merge c1 c2)]))
+         [else (type-unify-or-top c1 c2)]))
      ;; Inhabitant × inhabitant: α-equivalence strict merge.
      ;; For Phase 3a+3b MVP, use equal? as the α-equivalence proxy;
      ;; 3c can refine to full α-equiv via ctor-desc decomposition.
