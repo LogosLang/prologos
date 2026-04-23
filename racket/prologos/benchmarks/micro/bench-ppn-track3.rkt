@@ -369,13 +369,14 @@
 
 ;; Simulate FormCell creation and merge using form-pipeline-value
 ;; (Already exists in surface-rewrite.rkt)
+;; D.5b: transforms is a seteq of stage symbols (dependency-set lattice).
 (define (make-test-form-pv stage)
-  (form-pipeline-value stage #f '() 1 (hasheq)))
+  (form-pipeline-value (seteq stage) #f '() 1 (hasheq)))
 
 (bench "form-pipeline-value creation x1000"
        (lambda ()
          (for ([_ (in-range 1000)])
-           (form-pipeline-value 'raw #f '() 1 (hasheq))))
+           (form-pipeline-value (seteq 'raw) #f '() 1 (hasheq))))
        #:runs 20 #:warmup 5)
 
 (bench "form-pipeline-merge x1000 (raw→tagged)"
@@ -712,7 +713,7 @@
 
 (define (random-pv)
   (define stage (list-ref test-stages (random (length test-stages))))
-  (form-pipeline-value stage #f '() (random 100) (hasheq)))
+  (form-pipeline-value (seteq stage) #f '() (random 100) (hasheq)))
 
 ;; V1a: Commutativity
 (define v1a-failures 0)
@@ -721,8 +722,8 @@
   (define b (random-pv))
   (define ab (form-pipeline-merge a b))
   (define ba (form-pipeline-merge b a))
-  (unless (equal? (form-pipeline-value-stage ab)
-                  (form-pipeline-value-stage ba))
+  (unless (equal? (form-pipeline-value-transforms ab)
+                  (form-pipeline-value-transforms ba))
     (set! v1a-failures (+ v1a-failures 1))))
 (printf "  V1a commutativity: ~a failures / 500 tests\n" v1a-failures)
 
@@ -734,8 +735,8 @@
   (define c (random-pv))
   (define ab-c (form-pipeline-merge (form-pipeline-merge a b) c))
   (define a-bc (form-pipeline-merge a (form-pipeline-merge b c)))
-  (unless (equal? (form-pipeline-value-stage ab-c)
-                  (form-pipeline-value-stage a-bc))
+  (unless (equal? (form-pipeline-value-transforms ab-c)
+                  (form-pipeline-value-transforms a-bc))
     (set! v1b-failures (+ v1b-failures 1))))
 (printf "  V1b associativity: ~a failures / 500 tests\n" v1b-failures)
 
@@ -744,8 +745,8 @@
 (for ([_ (in-range 500)])
   (define a (random-pv))
   (define aa (form-pipeline-merge a a))
-  (unless (equal? (form-pipeline-value-stage aa)
-                  (form-pipeline-value-stage a))
+  (unless (equal? (form-pipeline-value-transforms aa)
+                  (form-pipeline-value-transforms a))
     (set! v1c-failures (+ v1c-failures 1))))
 (printf "  V1c idempotence: ~a failures / 500 tests\n" v1c-failures)
 
