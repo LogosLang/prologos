@@ -208,10 +208,10 @@ deep-iteration benchmarks. A future `Float` / `Posit32` variant of the
 same algorithm would let us benchmark at larger n and deeper iteration
 counts.
 
-## Summary of the implementation-shape constraints
+## Summary of the implementation-shape constraints (List + Rat)
 
-After all of the above, the EigenTrust implementation obeys these
-rules:
+After all of the above, the List + Rat EigenTrust implementation obeys
+these rules:
 * Every vector/matrix helper is explicit structural recursion; no
   `map`, `zip-with`, or `foldr` over Rat lists.
 * Every `fn` closure avoids capturing by inlining the captured value
@@ -225,3 +225,111 @@ rules:
   mutual recursion and the broken WS `let`.
 * Benchmark matrices are small (3×3, 4×4) with modest iteration
   counts (≤ 15) so exact-Rat arithmetic stays tractable.
+
+
+## Addendum (2026-04-23, same day): Posit32 and PVec variants
+
+After the initial List+Rat version shipped, the user asked for Posit
+variants and PVec variants to compare performance across
+{List, PVec} × {Rat, Posit32}. That surfaced several more behaviors.
+
+### 9. Posit32 literals survive nested list/PVec literals — `Rat` quirks do not apply
+
+**Observation:** where `'[0/1 1/2]` fails (`0/1` reads as Int `0`) and
+`@[0/1 1/2]` succeeds (PVec preserves Rat type), `'[~0.0 ~0.5]` and
+`@[~0.0 ~0.5]` *both* preserve `Posit32`. The `~0.0` / `~1.0` literal
+form does not have a bare-Int alias, so the preparser cannot silently
+reinterpret it.
+
+**Consequence:** the Posit variants can write matrices directly
+without the `rz : Rat := 0/1` splice workaround. One less line of
+ceremony.
+
+### 10. PVec `@[...]` literals preserve element types where `'[...]` does not
+
+**Observation:** `@[0/1 1/2]` elaborates as `PVec Rat` with `0/1`
+stored as the Rat value whose numerator is 0. The List literal
+`'[0/1 1/2]` silently coerces the same `0/1` to Int. Either a reader
+difference or a type-propagation difference in elaboration; either
+way the PVec path is more permissive.
+
+**Consequence:** for Rat-typed matrices, PVec is more ergonomic than
+List — no splice workaround is needed. For Posit-typed matrices both
+containers are equally ergonomic.
+
+### 11. Lazy argument reduction makes deep iteration scale as O(k²) for
+    non-fixed-point iterates
+
+**Observation:** `eigentrust-iterate` passes its recursive call the
+expression `[eigentrust-step c p alpha tnew]` *unreduced* as the new
+`tnew`. Each subsequent iteration forces reduction of the whole
+argument chain. When every intermediate value differs bit-for-bit
+(Posit32, or non-fixed-point Rat), the reducer redoes O(n) levels on
+every iteration — total ~O(k²) terms expanded across k rounds — plus
+whatever constant the pattern-match compiler adds on top.
+
+Concretely:
+- List+Rat, 10 iters on 4×4 uniform (starting *at* the fixed point
+  where every step returns exactly the same Rat): ~36 s total (fine,
+  because the term tree collapses to a single repeated value).
+- List+Posit, 10 iters on the same workload (starting at the fixed
+  point, but Posit32 step introduces tiny rounding so the tree does
+  *not* collapse): does not terminate within 2 min.
+- List+Posit, 5 iters on an asymmetric 3×3 matrix: does not terminate
+  within 3 min.
+
+**Workaround:** use converging workloads (eps > 0) where the iterator
+exits after 1–2 rounds, or use exact-Rat fixed-point matrices where
+every step returns the identical value. Deep iter-budget-driven
+workloads blow up regardless of matrix size.
+
+**Suggested fix:** force reduction of the `tnew` argument before the
+recursive tail call — either via a primitive `seq`/`force` form, or
+by making the reducer aggressively normalise `eigentrust-step` results
+to `[posit32 bitpattern]` / `'[rat literals]` WHNF.
+
+### 12. PVec indexing is Nat-only; Int indices and `from-int` don't bridge
+
+**Observation:** `pvec-nth : PVec A → Nat → A`. There is no
+`pvec-nth-int` (unlike `nth-int` for Lists). There is `from-nat :
+Nat → Int` but no `from-int : Int → Nat`. So an algorithm that already
+has Int counters (for `int-le budget 0` termination checks) has to
+carry a second Nat counter in parallel when it wants to index a PVec.
+
+**Workaround:** use `zero`/`suc i` Nat counters for PVec indexing and
+keep `Int` only for the iteration budget. The PVec variants of this
+algorithm do exactly this and it doubles the arity of every inner
+helper (`-go` functions now take both `i : Nat` and `n : Nat`).
+
+**Suggested fix:** add `pvec-nth-int`, `pvec-length-int`, and friends
+— mirror the `nth-int` / `length-int` / `take-int` / `drop-int`
+quartet that already exists for List.
+
+### 13. Index-based recursion over PVec is forced because `pvec-map`
+    and `pvec-fold` have the same closure-capture issue as `map`
+
+**Observation:** every `pvec-map`/`pvec-fold` call that wants to
+capture a scalar (e.g. `pvec-map (fn [x] [rat* s x]) v`) would hit
+the QTT multiplicity issue from gotcha #2. Since there's no
+`zip-with` equivalent for PVec (i.e. no `pvec-zip-with`), elementwise
+operations on two PVecs must be written as explicit
+index-threaded-accumulator recursion: `acc` grows via `pvec-push`,
+inputs are read via `pvec-nth`.
+
+**Consequence:** the PVec variants each have one extra `*-go`
+function per primitive (scale-vec-go, add-vec-go, sub-vec-go,
+linf-norm-go, col-dot-go, ct-times-vec-go) that the List variants
+don't need. That's 6 extra top-level defns, roughly doubling the
+file size.
+
+**Suggested fix:** either fix closure multiplicity inference, add
+a `pvec-zip-with` primitive, or both.
+
+### 14. PVec does not print with the same syntax it reads
+
+**Observation:** the reader accepts `@[1/4 1/4 1/4 1/4]` and the
+type-checker reports the value as `(PVec Rat)` — but the output
+pretty-printer writes `(PVec Rat)` in parens where the type signature
+of a `spec` would say `[PVec Rat]`. Not a correctness issue, but a
+cosmetic divergence between how types are *read* (`[...]`) and how
+they're *printed* (`(...)`).

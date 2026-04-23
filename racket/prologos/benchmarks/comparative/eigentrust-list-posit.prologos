@@ -1,0 +1,103 @@
+ns benchmarks::comparative::eigentrust-list-posit
+
+;; ============================================================
+;; Benchmark: EigenTrust — List + Posit32 variant
+;; See eigentrust-list-rat.prologos for the workload specification.
+;; ============================================================
+
+spec scale-vec Posit32 [List Posit32] -> [List Posit32]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [p32* s x] [scale-vec s as]
+
+spec add-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32+ x y] [add-vec as bs]
+
+spec sub-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32- x y] [sub-vec as bs]
+
+spec p32-max Posit32 Posit32 -> Posit32
+defn p32-max [a b]
+  match [p32-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm [List Posit32] -> Posit32
+defn linf-norm [xs]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> p32-max [p32-abs x] [linf-norm as]
+
+spec sum-rows [List [List Posit32]] -> [List Posit32]
+defn sum-rows [xss]
+  match xss
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> add-vec r [sum-rows rest]
+
+spec scale-rows [List Posit32] [List [List Posit32]] -> [List [List Posit32]]
+defn scale-rows [ts c]
+  match ts
+    | nil       -> nil
+    | cons t rs -> match c
+      | nil         -> nil
+      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+
+spec ct-times-vec [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn ct-times-vec [c t]
+  sum-rows [scale-rows t c]
+
+spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
+defn eigentrust-step [c p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+
+spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+
+spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
+defn eigentrust [c p alpha eps max-iter]
+  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+
+
+;; ============================================================
+;; Fixtures
+;; ============================================================
+
+def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
+def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
+
+def c-uniform-4 : [List [List Posit32]]
+  := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
+
+def c-others-3 : [List [List Posit32]]
+  := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+
+
+;; ============================================================
+;; Workloads (identical to eigentrust-list-rat.prologos)
+;; ============================================================
+
+eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+eigentrust-step c-uniform-4 p-uniform-4 ~0.1 p-uniform-4
+ct-times-vec c-uniform-4 p-uniform-4
+scale-vec ~0.5 '[~0.5 ~0.33333 ~0.25]
+add-vec '[~0.25 ~0.25] '[~0.25 ~0.25]
+linf-norm [sub-vec '[~0.5 ~0.33333] '[~0.25 ~0.33333]]

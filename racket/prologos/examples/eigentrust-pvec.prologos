@@ -1,0 +1,169 @@
+ns examples.eigentrust-pvec
+
+;; ========================================================================
+;;
+;;     E I G E N T R U S T   ( P V E C   +   R A T   V A R I A N T )
+;;     ---------------------------------------------------------------
+;;
+;;     Same algorithm as examples/eigentrust.prologos, but with PVec
+;;     (persistent RRB vector) instead of List. PVec gives O(log32 n)
+;;     random access vs List's O(n); for small n both do one hop per
+;;     level, so the constant factor dominates.
+;;
+;;     Unlike List's `'[...]`, PVec's `@[...]` literal preserves Rat
+;;     element types — `@[0/1 1/2]` stays `PVec Rat` without the
+;;     `rz : Rat := 0/1` splice trick that List literals need.
+;;
+;;     PVec indexing is via Nat, not Int, so all the counters below
+;;     are Nat (0N, suc i, nat-eq? i n).
+;;
+;; ========================================================================
+
+
+;; ============================================================
+;; Vector primitives — index-based recursion over PVec
+;;
+;; We cannot pass primitive `rat+`-family operators to `pvec-map` or
+;; `pvec-fold` (they are not first-class) AND a closure capturing a
+;; scalar triggers a QTT multiplicity error, so every primitive is
+;; written as explicit Nat-indexed recursion with an accumulator
+;; PVec built via `pvec-push`.
+;; ============================================================
+
+;; scale-vec-go: acc <- acc + [scaled element at index i]
+spec scale-vec-go Nat Nat Rat [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn scale-vec-go [i n s xs acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> scale-vec-go [suc i] n s xs [pvec-push acc [rat* s [pvec-nth xs i]]]
+
+spec scale-vec Rat [PVec Rat] -> [PVec Rat]
+defn scale-vec [s xs]
+  scale-vec-go zero [pvec-length xs] s xs (pvec-empty Rat)
+
+
+spec add-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn add-vec-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> add-vec-go [suc i] n xs ys [pvec-push acc [rat+ [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec add-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn add-vec [xs ys]
+  add-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
+
+
+spec sub-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn sub-vec-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> sub-vec-go [suc i] n xs ys [pvec-push acc [rat- [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec sub-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn sub-vec [xs ys]
+  sub-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
+
+
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+
+;; L-infinity norm via index accumulator.
+spec linf-norm-go Nat Nat [PVec Rat] Rat -> Rat
+defn linf-norm-go [i n xs acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> linf-norm-go [suc i] n xs [rat-max acc [rat-abs [pvec-nth xs i]]]
+
+spec linf-norm [PVec Rat] -> Rat
+defn linf-norm [xs]
+  linf-norm-go zero [pvec-length xs] xs 0/1
+
+
+;; ============================================================
+;; Matrix-vector multiply: (C^T * t)[j] = sum_i C[i][j] * t[i]
+;;
+;; For PVec we compute each column-dot directly via an inner
+;; index loop — no "sum scaled rows" trick — because PVec indexing
+;; makes column access cheap.
+;; ============================================================
+
+;; Accumulate column-j dot product over rows 0..n.
+spec col-dot-go Nat Nat Nat [PVec [PVec Rat]] [PVec Rat] Rat -> Rat
+defn col-dot-go [i n j c t acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> col-dot-go [suc i] n j c t [rat+ acc [rat* [pvec-nth [pvec-nth c i] j] [pvec-nth t i]]]
+
+spec col-dot Nat [PVec [PVec Rat]] [PVec Rat] -> Rat
+defn col-dot [j c t]
+  col-dot-go zero [pvec-length t] j c t 0/1
+
+
+;; Build the result vector by walking columns.
+spec ct-times-vec-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn ct-times-vec-go [j n c t acc]
+  match [nat-eq? j n]
+    | true  -> acc
+    | false -> ct-times-vec-go [suc j] n c t [pvec-push acc [col-dot j c t]]
+
+spec ct-times-vec [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn ct-times-vec [c t]
+  ct-times-vec-go zero [pvec-length t] c t (pvec-empty Rat)
+
+
+;; ============================================================
+;; Damped EigenTrust step and fixpoint iteration.
+;; ============================================================
+
+spec eigentrust-step [PVec [PVec Rat]] [PVec Rat] Rat [PVec Rat] -> [PVec Rat]
+defn eigentrust-step [c p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+
+spec eigentrust-iterate [PVec [PVec Rat]] [PVec Rat] Rat Rat Int [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+
+spec eigentrust [PVec [PVec Rat]] [PVec Rat] Rat Rat Int -> [PVec Rat]
+defn eigentrust [c p alpha eps max-iter]
+  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+
+
+;; ========================================================================
+;; Worked examples
+;; ========================================================================
+
+;; Uniform 4x4 — `@[0/1 ...]` inside nested `@[...]` survives unlike
+;; List's `'[0/1 ...]`, so no `rz` workaround is needed here either.
+
+def c-uniform-4 : [PVec [PVec Rat]]
+  := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
+
+def p-uniform-4 : [PVec Rat] := @[1/4 1/4 1/4 1/4]
+
+eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50
+;; => @[1/4 1/4 1/4 1/4] : PVec Rat
+
+def c-others-3 : [PVec [PVec Rat]]
+  := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
+
+def p-uniform-3 : [PVec Rat] := @[1/3 1/3 1/3]
+
+eigentrust c-others-3 p-uniform-3 1/10 1/1000 50
+;; => @[1/3 1/3 1/3] : PVec Rat
+
+eigentrust-step c-others-3 p-uniform-3 1/10 p-uniform-3
+;; => @[1/3 1/3 1/3] : PVec Rat
+
+scale-vec 1/2 @[1/2 1/3 1/4]
+
+add-vec @[1/4 1/4] @[1/4 1/4]
+
+linf-norm [sub-vec @[1/2 1/3] @[1/4 1/3]]

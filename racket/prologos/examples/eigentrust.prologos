@@ -82,7 +82,7 @@ spec linf-norm [List Rat] -> Rat
 defn linf-norm [xs]
   match xs
     | nil       -> 0/1
-    | cons x as -> [rat-max [rat-abs x] [linf-norm as]]
+    | cons x as -> rat-max [rat-abs x] [linf-norm as]
 
 
 ;; ============================================================
@@ -100,7 +100,7 @@ defn sum-rows [xss]
     | nil         -> nil
     | cons r rest -> match rest
       | nil        -> r
-      | cons _ _   -> [add-vec r [sum-rows rest]]
+      | cons _ _   -> add-vec r [sum-rows rest]
 
 ;; Scale each row of a matrix by the corresponding entry of a vector.
 ;; Zips by index: scaled-row[i] = t[i] * row_i(C).
@@ -115,7 +115,7 @@ defn scale-rows [ts c]
 ;; (C^T * t) — the "column sum" via transposed interpretation.
 spec ct-times-vec [List [List Rat]] [List Rat] -> [List Rat]
 defn ct-times-vec [c t]
-  [sum-rows [scale-rows t c]]
+  sum-rows [scale-rows t c]
 
 
 ;; ============================================================
@@ -125,9 +125,7 @@ defn ct-times-vec [c t]
 
 spec eigentrust-step [List [List Rat]] [List Rat] Rat [List Rat] -> [List Rat]
 defn eigentrust-step [c p alpha t]
-  [add-vec
-    [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]]
-    [scale-vec alpha p]]
+  add-vec [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]] [scale-vec alpha p]
 
 
 ;; ============================================================
@@ -143,10 +141,7 @@ defn eigentrust-iterate [c p alpha eps budget t tnew]
     | true  -> tnew
     | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
       | true  -> tnew
-      | false -> [eigentrust-iterate c p alpha eps
-                                      [int- budget 1]
-                                      tnew
-                                      [eigentrust-step c p alpha tnew]]
+      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
 
 
 ;; ============================================================
@@ -157,7 +152,7 @@ defn eigentrust-iterate [c p alpha eps budget t tnew]
 ;; pair to compare from the first round.
 spec eigentrust [List [List Rat]] [List Rat] Rat Rat Int -> [List Rat]
 defn eigentrust [c p alpha eps max-iter]
-  [eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]]
+  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
 
 
 ;; ========================================================================

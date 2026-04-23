@@ -1,0 +1,120 @@
+ns benchmarks::comparative::eigentrust-pvec-rat
+
+;; ============================================================
+;; Benchmark: EigenTrust — PVec + Rat variant
+;; See eigentrust-list-rat.prologos for the workload specification.
+;; ============================================================
+
+spec scale-vec-go Nat Nat Rat [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn scale-vec-go [i n s xs acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> scale-vec-go [suc i] n s xs [pvec-push acc [rat* s [pvec-nth xs i]]]
+
+spec scale-vec Rat [PVec Rat] -> [PVec Rat]
+defn scale-vec [s xs]
+  scale-vec-go zero [pvec-length xs] s xs (pvec-empty Rat)
+
+
+spec add-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn add-vec-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> add-vec-go [suc i] n xs ys [pvec-push acc [rat+ [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec add-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn add-vec [xs ys]
+  add-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
+
+
+spec sub-vec-go Nat Nat [PVec Rat] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn sub-vec-go [i n xs ys acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> sub-vec-go [suc i] n xs ys [pvec-push acc [rat- [pvec-nth xs i] [pvec-nth ys i]]]
+
+spec sub-vec [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn sub-vec [xs ys]
+  sub-vec-go zero [pvec-length xs] xs ys (pvec-empty Rat)
+
+
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm-go Nat Nat [PVec Rat] Rat -> Rat
+defn linf-norm-go [i n xs acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> linf-norm-go [suc i] n xs [rat-max acc [rat-abs [pvec-nth xs i]]]
+
+spec linf-norm [PVec Rat] -> Rat
+defn linf-norm [xs]
+  linf-norm-go zero [pvec-length xs] xs 0/1
+
+
+spec col-dot-go Nat Nat Nat [PVec [PVec Rat]] [PVec Rat] Rat -> Rat
+defn col-dot-go [i n j c t acc]
+  match [nat-eq? i n]
+    | true  -> acc
+    | false -> col-dot-go [suc i] n j c t [rat+ acc [rat* [pvec-nth [pvec-nth c i] j] [pvec-nth t i]]]
+
+spec col-dot Nat [PVec [PVec Rat]] [PVec Rat] -> Rat
+defn col-dot [j c t]
+  col-dot-go zero [pvec-length t] j c t 0/1
+
+spec ct-times-vec-go Nat Nat [PVec [PVec Rat]] [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn ct-times-vec-go [j n c t acc]
+  match [nat-eq? j n]
+    | true  -> acc
+    | false -> ct-times-vec-go [suc j] n c t [pvec-push acc [col-dot j c t]]
+
+spec ct-times-vec [PVec [PVec Rat]] [PVec Rat] -> [PVec Rat]
+defn ct-times-vec [c t]
+  ct-times-vec-go zero [pvec-length t] c t (pvec-empty Rat)
+
+
+spec eigentrust-step [PVec [PVec Rat]] [PVec Rat] Rat [PVec Rat] -> [PVec Rat]
+defn eigentrust-step [c p alpha t]
+  add-vec [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+
+spec eigentrust-iterate [PVec [PVec Rat]] [PVec Rat] Rat Rat Int [PVec Rat] [PVec Rat] -> [PVec Rat]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+
+spec eigentrust [PVec [PVec Rat]] [PVec Rat] Rat Rat Int -> [PVec Rat]
+defn eigentrust [c p alpha eps max-iter]
+  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+
+
+;; ============================================================
+;; Fixtures
+;; ============================================================
+
+def p-uniform-4 : [PVec Rat] := @[1/4 1/4 1/4 1/4]
+def p-uniform-3 : [PVec Rat] := @[1/3 1/3 1/3]
+
+def c-uniform-4 : [PVec [PVec Rat]]
+  := @[@[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4] @[1/4 1/4 1/4 1/4]]
+
+def c-others-3 : [PVec [PVec Rat]]
+  := @[@[0/1 1/2 1/2] @[1/2 0/1 1/2] @[1/2 1/2 0/1]]
+
+
+;; ============================================================
+;; Workloads
+;; ============================================================
+
+eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50
+eigentrust c-others-3 p-uniform-3 1/10 1/1000 50
+eigentrust-step c-uniform-4 p-uniform-4 1/10 p-uniform-4
+ct-times-vec c-uniform-4 p-uniform-4
+scale-vec 1/2 @[1/2 1/3 1/4]
+add-vec @[1/4 1/4] @[1/4 1/4]
+linf-norm [sub-vec @[1/2 1/3] @[1/4 1/3]]

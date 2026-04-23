@@ -1,0 +1,175 @@
+ns examples.eigentrust-posit
+
+;; ========================================================================
+;;
+;;     E I G E N T R U S T   ( P O S I T 3 2   V A R I A N T )
+;;     -------------------------------------------------------
+;;
+;;     Same algorithm as examples/eigentrust.prologos, but with hardware
+;;     posit arithmetic (Posit32) instead of exact Rat. Advantages:
+;;       - No denominator blow-up; each step is O(1) hardware ops.
+;;       - Posit32 literals (~0.0, ~1.0, ~0.5) survive nested '[...]
+;;         unchanged, so no `rz : Rat := 0/1` splice trick is needed.
+;;       - The convergence check uses p32-lt on finite fractions.
+;;
+;;     Brackets are dropped wherever WS mode accepts a bare
+;;     application: tail-position bodies of `defn`/match arms can be
+;;     `foo x y` instead of `[foo x y]`. Sub-expressions (arguments of
+;;     an enclosing application) still need `[...]`.
+;;
+;; ========================================================================
+
+
+;; ============================================================
+;; Vector primitives (over [List Posit32])
+;; ============================================================
+
+spec scale-vec Posit32 [List Posit32] -> [List Posit32]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [p32* s x] [scale-vec s as]
+
+spec add-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32+ x y] [add-vec as bs]
+
+spec sub-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32- x y] [sub-vec as bs]
+
+spec p32-max Posit32 Posit32 -> Posit32
+defn p32-max [a b]
+  match [p32-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm [List Posit32] -> Posit32
+defn linf-norm [xs]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> p32-max [p32-abs x] [linf-norm as]
+
+
+;; ============================================================
+;; (C^T * t) as a row-weighted sum.
+;;   (C^T * t)[j] = sum_i (t[i] * row_i(C))[j]
+;; Avoids an explicit transpose.
+;; ============================================================
+
+spec sum-rows [List [List Posit32]] -> [List Posit32]
+defn sum-rows [xss]
+  match xss
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> add-vec r [sum-rows rest]
+
+spec scale-rows [List Posit32] [List [List Posit32]] -> [List [List Posit32]]
+defn scale-rows [ts c]
+  match ts
+    | nil       -> nil
+    | cons t rs -> match c
+      | nil         -> nil
+      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+
+spec ct-times-vec [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn ct-times-vec [c t]
+  sum-rows [scale-rows t c]
+
+
+;; ============================================================
+;; Damped EigenTrust update:
+;;     t_new = (1 - alpha) * (C^T * t) + alpha * p
+;; ============================================================
+
+spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
+defn eigentrust-step [c p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [ct-times-vec c t]] [scale-vec alpha p]
+
+
+;; ============================================================
+;; Power iteration with both (t, tnew) carried as arguments so each
+;; round computes eigentrust-step exactly once (no mutual recursion,
+;; no let-binding).
+;; ============================================================
+
+spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate c p alpha eps [int- budget 1] tnew [eigentrust-step c p alpha tnew]
+
+
+;; ============================================================
+;; Top-level entry. Seeds the iterator with one step so the (t, tnew)
+;; pair is well-defined before round 1.
+;; ============================================================
+
+spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
+defn eigentrust [c p alpha eps max-iter]
+  eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]
+
+
+;; ========================================================================
+;; Worked examples
+;;
+;; Posit32 output prints as `[posit32 BITPATTERN]`, which is unfriendly
+;; to eyeball but survives round-trips cleanly. For reference:
+;;     [posit32 1073741824] = 1.0
+;;     [posit32 939524096]  = 0.5
+;;     [posit32 805306368]  = 0.25
+;;     [posit32 850045611]  = 1/3 (rounded)
+;;
+;; Note: with non-converging workloads the iterator argument tree grows
+;; across rounds (Prologos reduces the argument lazily), so deep
+;; iteration on an asymmetric matrix is surprisingly expensive even
+;; though the Posit arithmetic itself is O(1). The examples here all
+;; converge in one step; see tests/test-eigentrust-posit.rkt for
+;; explicit iter-count workloads.
+;; ========================================================================
+
+;; --- Example 1: uniform matrix is a fixed point of uniform pre-trust ---
+
+def c-uniform-4 : [List [List Posit32]]
+  := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
+
+def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
+
+eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
+
+
+;; --- Example 2: 3-peer "uniform-on-others" matrix ---
+;;
+;; Zeros `~0.0` survive nested '[...] unchanged — no `rz` trick needed.
+
+def c-others-3 : [List [List Posit32]]
+  := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+
+def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
+
+eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+
+
+;; --- Example 3: one step of the update operator in isolation ---
+
+eigentrust-step c-others-3 p-uniform-3 ~0.1 p-uniform-3
+
+
+;; --- Example 4: a handful of the underlying primitives ---
+
+scale-vec ~0.5 '[~1.0 ~2.0 ~3.0]
+
+add-vec '[~0.25 ~0.25] '[~0.25 ~0.25]
+
+linf-norm [sub-vec '[~0.5 ~0.33333] '[~0.25 ~0.33333]]
