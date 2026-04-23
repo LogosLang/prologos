@@ -46,88 +46,93 @@ all four variants in the same ~40–50 s envelope. See the pitfalls doc
 ## Performance
 
 Measured 2026-04-23 on the machine that built this repo's Racket 9.0.
-Three runs per variant plus one warmup, reported as median.
+Medians across 2 measured runs (plus one warmup) via
+`tools/bench-phases.rkt`, which parses the `PHASE-TIMINGS:{json}` line
+that `driver.rkt` already emits on stderr.
 
-### Wall time (initial view, misleading)
+**First-round disclaimer.** An earlier version of this doc reported
+PVec as 4.6× *slower* than List. Those numbers were an artifact of
+pitfall #15 in the pitfalls doc: the benchmark fixtures used multi-line
+`def c-asym-3 : TYPE \n := BODY` syntax, which silently suppresses
+evaluation of downstream top-level expressions. The W3 workload
+(3 forced iterations of power iteration) never actually ran, so
+`reduce_ms` reflected only the trivial converging W1/W2 workloads.
+After collapsing every `def` to one physical line, real reduce times
+reveal the opposite conclusion.
 
-| Variant        | median wall | vs list+rat |
-| -------------- | ----------: | ----------: |
-| list + rat     |    47.66 s  |      0.0 %  |
-| list + posit32 |    44.86 s  |     −5.9 %  |
-| pvec + rat     |    44.32 s  |     −7.0 %  |
-| pvec + posit32 |    44.78 s  |     −6.0 %  |
+### Workloads
 
-On its face this suggests PVec+Rat wins and Posit32 gives a modest
-edge. But wall time is a poor signal here because each run is a cold
-start that spends most of its time outside user code.
+Every benchmark runs the same W1..W8 set:
+* **W1.** `eigentrust c-uniform-4 p-uniform-4 α=1/10 ε=1/1000 50` —
+  uniform matrix; converges in one step (uniform is the fixed point).
+* **W2.** `eigentrust c-others-3 p-uniform-3 α=1/10 ε=1/1000 50` —
+  symmetric 3×3; uniform is also the stationary distribution.
+* **W3.** `eigentrust c-asym-3 p-uniform-3 α=3/10 ε=0 3` — asymmetric
+  3×3, forced 3 iterations (`ε=0` prevents convergence). This is the
+  workload that dominates `reduce_ms`. `α=3/10` follows the standard
+  EigenTrust convention (`t_new = (1−α)·Cᵀt + α·p`): 70% network
+  weight, 30% pre-trust anchor. Larger budgets grow the term tree as
+  O(k²) in Prologos's reducer (pitfall #11), so k=3 is the sweet spot.
+* **W4.** `eigentrust-step c-uniform-4 p-uniform-4 α p-uniform-4`
+* **W5.** `ct-times-vec c-uniform-4 p-uniform-4`
+* **W6–W8.** `scale-vec`, `add-vec`, `linf-norm ∘ sub-vec` on small
+  vectors.
 
-### Phase breakdown (the real story)
+### Phase breakdown
 
-Obtained via `tools/bench-phases.rkt` which parses the
-`PHASE-TIMINGS:{json}` that `driver.rkt` already emits to stderr, and
-aggregates medians across runs. All numbers are median ms of 3 runs.
+| Variant        | wall  | elaborate | type_check | qtt | reduce      | user sum | outside |
+| -------------- | ----: | --------: | ---------: | --: | ----------: | -------: | ------: |
+| list + rat     | 86599 |      208  |       748  | 412 | **33 699**  |  35 070  |  51 529 |
+| list + posit32 | 87847 |      200  |       664  | 384 | **34 874**  |  36 124  |  51 723 |
+| pvec + rat     | 76472 |      138  |       355  | 140 | **22 260**  |  22 896  |  53 576 |
+| pvec + posit32 | 78226 |      142  |       334  | 136 | **22 428**  |  23 042  |  55 184 |
 
-| Variant        | wall   | elaborate | type_check | qtt  | reduce     | all user | outside (prelude+startup) |
-| -------------- | -----: | --------: | ---------: | ---: | ---------: | -------: | -----------------------:  |
-| list + rat     | 47 657 |      109  |       372  | 105  |    **250** |    837   |               46 820      |
-| list + posit32 | 44 856 |      104  |       337  |  91  |    **245** |    778   |               44 078      |
-| pvec + rat     | 44 319 |      109  |       311  | 108  |  **1 144** |  1 673   |               42 646      |
-| pvec + posit32 | 44 779 |      111  |       314  | 105  |  **1 134** |  1 665   |               43 114      |
+All values are median ms of 2 measured runs. The `reduce_ms` column is
+the actual algorithm runtime — the reducer evaluating W1..W8.
+"outside" is the residual (wall − sum of phases): prelude load +
+Racket startup + I/O, roughly constant across variants.
 
-The `reduce_ms` column is the algorithm runtime (Prologos's reducer
-evaluating the W1–W7 workload); everything else is compile-time work
-or fixed-cost overhead.
+### Observations
 
-Observations:
-* **~95–98 % of wall time is "outside phases"**: prelude load, Racket
-  startup, I/O. This is a fixed cost independent of the variant.
-  Wall-time comparisons are dominated by noise in this bucket.
-* **All four variants elaborate in ~800–1 700 ms.** Elaboration cost
-  is nearly identical across (container, scalar) combinations —
-  `elaborate_ms` is ~110 ms in all four; `type_check_ms` is 310–370
-  ms in all four. The container and scalar choice do not
-  materially change elaboration cost for this algorithm.
-* **Algorithm runtime (`reduce_ms`) tells a totally different story
-  than wall time:**
-  - List + Rat: 250 ms (baseline)
-  - List + Posit32: 245 ms (2 % faster than List+Rat — posit and
-    rat are essentially equivalent here because the workloads
-    converge in one step, so only ~8 arithmetic ops per workload
-    actually fire)
-  - PVec + Rat: **1 144 ms — 4.6× slower than List+Rat**
-  - PVec + Posit32: **1 134 ms — 4.5× slower than List+Rat**
-* The **PVec variants are substantially slower at the algorithm
-  level**, despite being faster at wall time. The wall-time win
-  was noise in prelude/startup; the algorithm itself pays for
-  index-based access and `pvec-push`-per-element accumulator
-  construction, which costs ~900 ms more than structural
-  list-recursion at n=3 and n=4. PVec's `O(log₃₂ n)` asymptotic
-  advantage doesn't pay off until much larger n.
-* **Posit32 vs Rat at the algorithm level is a wash** for these
-  workloads — within 5 ms in both containers. The workloads all
-  converge in one iteration so only a handful of arithmetic ops
-  fire. For iter-budget-driven workloads (disabled because of
-  pitfall #11) the picture would likely differ — but those don't
-  complete for Posit32 at all.
-* The `bench-ab.rkt` framework timed out (20 min budget) trying to
-  do full A/B stability across all 4 benchmarks: the per-run
-  overhead plus its git-stash/checkout cycle ate the budget, and
-  it wouldn't have given phase data anyway. `tools/bench-phases.rkt`
-  is the right tool for phase-level comparison.
+* **PVec is ~35 % faster than List on `reduce_ms`** (22 s vs 34 s).
+  For the 3-iter workload, the index-based PVec iteration with a
+  `pvec-push` accumulator shapes the reducer's work better than
+  structural `cons`-chain recursion — the `cons`-chain version
+  passes an unreduced `tnew = [eigentrust-step ... (prev-tnew)]`
+  that the reducer has to walk deeper on each round.
+* **Posit32 vs Rat at `reduce_ms` is within noise** (~3 % difference
+  in both containers). At α=3/10 each W3 iteration does roughly 20
+  Rat operations; the hardware-posit vs arbitrary-precision-rat gap
+  doesn't materially matter for denominators as small as `10×` those
+  of the input (α=3/10 means denominators compound only by factor 10
+  per step; after 3 steps they're in the thousands — still tiny).
+* **Elaboration is cheaper for PVec** (user sum ~23 s vs 35 s) —
+  `type_check_ms` halves (334 vs 748) and `qtt_ms` thirds (140 vs
+  412). The PVec helpers use `Nat`-indexed counters and build one
+  uniform accumulator; the List helpers use nested structural
+  patterns that the type/multiplicity checkers work harder on.
+* **"outside phases" is ~52 s and near-constant.** Racket startup
+  (~2 s) plus Prologos prelude load (~50 s) are the dominant
+  costs at any given wall time.
 
 ### What this implies for the "which is fastest?" question
 
-* **If the question is wall time** (someone clicks a button and
-  waits): all four are within 5 s of each other, dominated by
-  fixed-cost startup. Pick based on ergonomics.
-* **If the question is algorithm runtime** (amortised across many
-  calls, e.g. running from the REPL with the prelude already
-  loaded): **List + Rat (or List + Posit32) wins 4.5× over PVec**
-  at these matrix sizes. PVec is the wrong data structure for
-  small-n matrix algebra in Prologos right now.
-* **If the question is scalability**: none of these have been
-  tested at larger n because the lazy-argument-reduction issue
-  (pitfall #11) makes deep iteration infeasible for all variants.
+* **Wall time** is dominated by the ~52 s prelude-load overhead. All
+  four variants complete in 76–88 s. Pick based on ergonomics or
+  on an amortised-startup-cost model.
+* **Algorithm runtime** (`reduce_ms` — what you'd pay per call in a
+  REPL with the prelude already loaded): **PVec beats List by
+  ~1.5× at these matrix sizes.** This is the opposite of the
+  earlier reading.
+* **Container choice matters more than scalar choice.** `list+rat`
+  vs `pvec+rat` differs by 11 s of reduce time. `list+rat` vs
+  `list+posit32` differs by ~1 s. For this shape of algorithm,
+  the data structure dominates.
+* **Scalability caveat:** the O(k²) reduce-tree growth (pitfall #11)
+  makes budgets larger than 3 impractical for all four variants.
+  Real-world EigenTrust runs (hundreds of iterations on thousand-
+  peer networks) would need either a strict-tail-recursion
+  primitive in Prologos or a compiled implementation.
 
 ## When to pick which
 

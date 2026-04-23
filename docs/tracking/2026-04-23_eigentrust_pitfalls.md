@@ -333,3 +333,47 @@ pretty-printer writes `(PVec Rat)` in parens where the type signature
 of a `spec` would say `[PVec Rat]`. Not a correctness issue, but a
 cosmetic divergence between how types are *read* (`[...]`) and how
 they're *printed* (`(...)`).
+
+### 15. Multi-line `def X : T := body` silently suppresses evaluation of downstream top-level expressions
+
+**Observation:** when a `def` with a type annotation is split across
+two lines —
+```prologos
+def c-asym-3 : [List [List Rat]]
+  := '['[rz 1/2 1/2] '[rz rz ro] '[ro rz rz]]
+```
+— subsequent top-level expressions in the file that depend on the
+bound name appear to execute (they type-check, they return values) but
+the reducer never fires. `PHASE-TIMINGS` reports `reduce_ms = 0`, and
+the computed value is never printed to stdout by `driver.rkt`. The
+same file with the def collapsed to one line —
+```prologos
+def c-asym-3 : [List [List Rat]] := '['[rz 1/2 1/2] '[rz rz ro] '[ro rz rz]]
+```
+— reduces normally (`reduce_ms = 38_855` for a 3-iter benchmark).
+
+**How it was surfaced:** `bench-phases.rkt` reported `reduce_ms = 0`
+for a benchmark file whose algorithm was clearly expensive. Running
+the same expressions via `process-string-ws` (the test-support path)
+reduced correctly. Diffing a working scratch file against the benchmark
+file narrowed the trigger to the two-line `def` form, specifically the
+form
+```
+def NAME : TYPE
+  := BODY
+```
+
+**Consequence:** benchmarks that use multi-line `def`s for fixtures
+silently measure zero reduce time, regardless of workload. This is
+load-bearing for benchmark validity.
+
+**Workaround:** collapse every `def NAME : TYPE := BODY` to one
+physical line. All four EigenTrust benchmark files have been updated
+accordingly; see the bench-phases numbers go from "~250 ms reduce_ms"
+(silent bug) to "20–40 s reduce_ms" (real) after the change.
+
+**Suggested fix:** either make the WS reader produce identical surf
+trees for the one-line and two-line forms, OR have the
+elaborator/preparser reject the broken form with a clear error. The
+current failure mode (silent suppression of evaluation) is the worst
+of both worlds.

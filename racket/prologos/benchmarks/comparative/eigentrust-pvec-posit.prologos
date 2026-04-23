@@ -100,11 +100,11 @@ defn eigentrust [c p alpha eps max-iter]
 def p-uniform-4 : [PVec Posit32] := @[~0.25 ~0.25 ~0.25 ~0.25]
 def p-uniform-3 : [PVec Posit32] := @[~0.33333 ~0.33333 ~0.33333]
 
-def c-uniform-4 : [PVec [PVec Posit32]]
-  := @[@[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25]]
+def c-uniform-4 : [PVec [PVec Posit32]] := @[@[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25] @[~0.25 ~0.25 ~0.25 ~0.25]]
 
-def c-others-3 : [PVec [PVec Posit32]]
-  := @[@[~0.0 ~0.5 ~0.5] @[~0.5 ~0.0 ~0.5] @[~0.5 ~0.5 ~0.0]]
+def c-others-3 : [PVec [PVec Posit32]] := @[@[~0.0 ~0.5 ~0.5] @[~0.5 ~0.0 ~0.5] @[~0.5 ~0.5 ~0.0]]
+
+def c-asym-3 : [PVec [PVec Posit32]] := @[@[~0.0 ~0.5 ~0.5] @[~0.0 ~0.0 ~1.0] @[~1.0 ~0.0 ~0.0]]
 
 
 ;; ============================================================
@@ -113,6 +113,8 @@ def c-others-3 : [PVec [PVec Posit32]]
 
 eigentrust c-uniform-4 p-uniform-4 ~0.1 ~0.001 50
 eigentrust c-others-3 p-uniform-3 ~0.1 ~0.001 50
+;; W3: 3 FORCED iters on asym, alpha = 3/10.
+eigentrust c-asym-3 p-uniform-3 ~0.3 ~0.0 3
 eigentrust-step c-uniform-4 p-uniform-4 ~0.1 p-uniform-4
 ct-times-vec c-uniform-4 p-uniform-4
 scale-vec ~0.5 @[~0.5 ~0.33333 ~0.25]
