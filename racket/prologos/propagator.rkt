@@ -1336,18 +1336,11 @@
             net*))))
 
 ;; ========================================
-;; TMS Speculation Stack
+;; TMS Speculation Stack — RETIRED 2026-04-22 (PPN 4C 1A-iii-a-wide Step 1 S1.d)
 ;; ========================================
-
-;; The current speculation nesting, outermost first.
-;; '() = not speculating (depth 0).
-;; Pushed on speculation entry (parameterize), popped automatically on exit.
-;; Used by tms-read/tms-write to navigate the recursive CHAMP tree.
-;;
-;; Lives here (not in elab-speculation-bridge.rkt) to avoid circular deps:
-;; metavar-store.rkt needs this for TMS-aware reads, but
-;; elab-speculation-bridge.rkt depends on metavar-store.rkt.
-(define current-speculation-stack (make-parameter '()))
+;; current-speculation-stack parameter removed. TMS mechanism retired (S1.a-c);
+;; speculation-tagging now flows exclusively through current-worldview-bitmask +
+;; worldview-cache-cell-id + tagged-cell-value substrate (BSP-LE 2/2B).
 
 ;; Phase 6+7: Per-propagator worldview bitmask.
 ;; When non-zero, net-cell-write uses this bitmask for tagged-cell-value tagging
