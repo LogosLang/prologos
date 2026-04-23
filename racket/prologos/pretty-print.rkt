@@ -76,6 +76,7 @@
     [(expr-nil) "nil"]
     [(expr-hole) "_"]
     [(expr-typed-hole name) (if name (format "??~a" name) "??")]
+    [(expr-Open) "Open"]
     ;; PPN Track 4 Phase 4b: cell-id fast path (cells authoritative)
     [(expr-meta id cell-id)
      (let ([sol (meta-solution/cell-id cell-id id)])
@@ -901,6 +902,7 @@
     [(expr-Type _) #f]
     [(expr-hole) #f]
     [(expr-typed-hole _) #f]
+    [(expr-Open) #f]
     [(expr-meta _ _) #f]
     [(expr-error) #f]
     [(expr-tycon _) #f]

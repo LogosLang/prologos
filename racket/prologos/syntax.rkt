@@ -279,6 +279,13 @@
  (struct-out expr-hole)
  ;; Typed hole (?? or ??name — reports expected type)
  (struct-out expr-typed-hole)
+ ;; Open type — universal type for "Open by Design" Maps (PPN 4C T-2, 2026-04-23).
+ ;; Used as Map value type for unannotated heterogeneous literals. No user-writable
+ ;; syntax — only arises from inference. α-semantic: compatible with any type in
+ ;; both directions (bidirectional trust). Narrowing at use site is per-reference,
+ ;; never globally pinned. Contrast with expr-hole (inference hole; gets solved)
+ ;; and type-top (lattice contradiction sentinel). Display: "Open".
+ (struct-out expr-Open)
  ;; Panic (runtime abort — inhabits any type)
  (struct-out expr-panic)
  ;; Metavariable (to be solved during elaboration/unification)
@@ -929,6 +936,30 @@
 (struct expr-hole () #:transparent)
 
 ;; ========================================
+;; Open type (PPN 4C T-2, 2026-04-23)
+;; ========================================
+;; "Open by Design" — universal type for unannotated heterogeneous Map values.
+;; α-semantic (per T-2 Decision 2): compatible with any type in both directions.
+;; - check ctx v (expr-Open) = #t always (any value fits Open)
+;; - check ctx e T where (infer e) = (expr-Open) succeeds via unify Open T = T
+;; - unify with Open absorbs to the other side, never fails
+;; - is-type ctx (expr-Open) = #t; infer-level = (lzero)
+;;
+;; No user-writable surface syntax — Open only arises from elaboration
+;; (surf-map-literal without annotation). Users wanting narrow types annotate
+;; explicitly (e.g., (Map Keyword Int) or (Map Keyword <Int | String>)).
+;; The schema system provides structured validation when needed.
+;;
+;; Distinct from:
+;; - expr-hole: inference hole that gets solved to a specific type
+;; - type-top: lattice-level contradiction sentinel
+;; - expr-typed-hole: user conversation hole (??)
+;;
+;; Reference: PPN 4C Phase 9+10+11 Addendum D.3 §7.6.7 T-2 decision (2026-04-23),
+;; overriding docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md §8 D7.
+(struct expr-Open () #:transparent)
+
+;; ========================================
 ;; Typed hole (?? or ??name — reports expected type to stderr)
 ;; ========================================
 ;; name is #f (unnamed ??) or a symbol (named ??goal)
@@ -1109,7 +1140,7 @@
       (expr-solver-config? x) (expr-cut? x)
       (expr-opaque? x)
       (expr-panic? x)
-      (expr-hole? x) (expr-typed-hole? x) (expr-meta? x) (expr-reduce? x)
+      (expr-hole? x) (expr-typed-hole? x) (expr-Open? x) (expr-meta? x) (expr-reduce? x)
       (expr-union? x) (expr-tycon? x) (expr-error? x)))
 
 ;; ========================================

@@ -189,7 +189,7 @@
   ;; --- Zero-arg (atoms) ---
   (reg0! expr-zero) (reg0! expr-refl) (reg0! expr-Nat) (reg0! expr-Bool)
   (reg0! expr-true) (reg0! expr-false) (reg0! expr-Unit) (reg0! expr-unit)
-  (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-error)
+  (reg0! expr-Nil) (reg0! expr-nil) (reg0! expr-hole) (reg0! expr-Open) (reg0! expr-error)
   (reg0! expr-Int) (reg0! expr-Rat) (reg0! expr-Char) (reg0! expr-String)
   (reg0! expr-Keyword) (reg0! lzero)
 

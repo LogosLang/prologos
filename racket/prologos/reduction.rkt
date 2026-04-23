@@ -1311,6 +1311,7 @@
            (expr-app? e)            ;; application, could produce a map
            (expr-hole? e)           ;; hole, unknown
            (expr-typed-hole? e)    ;; typed hole, unknown
+           (expr-Open? e)           ;; Open type — unknown value at runtime
            (expr-map-empty? e)      ;; map constructor
            (expr-map-assoc? e)      ;; map operation
            (expr-map-get? e)        ;; nested map-get
@@ -1385,7 +1386,7 @@
       (expr-derivation-type? e)
       (expr-schema-type? e) (expr-answer-type? e) (expr-relation-type? e)
       ;; Error / holes (stuck)
-      (expr-error? e) (expr-hole? e) (expr-typed-hole? e)))
+      (expr-error? e) (expr-hole? e) (expr-typed-hole? e) (expr-Open? e)))
 
 (define (whnf-impl e)
   (perf-inc-reduce!)
@@ -3217,6 +3218,7 @@
     [(expr-Type _) e]
     [(expr-hole) e]
     [(expr-typed-hole _) e]
+    [(expr-Open) e]
     [(expr-meta _ _) e]
     [(expr-error) e]
     [(? ns-context?) e]  ;; namespace metadata — pass-through
