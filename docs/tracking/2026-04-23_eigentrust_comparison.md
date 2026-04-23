@@ -43,56 +43,131 @@ all four variants in the same ~40–50 s envelope. See the pitfalls doc
 | Lines of prim helpers                         | ~60                                 | ~60               | ~120 (extra `-go` functions)    | ~120              |
 | Source file size                              | 234 LOC                             | 192 LOC           | 176 LOC                         | 176 LOC           |
 
-## Performance (3 direct runs of `racket driver.rkt FILE.prologos`)
+## Performance
 
 Measured 2026-04-23 on the machine that built this repo's Racket 9.0.
-Each run is a cold start: prelude load + user-code elaboration +
-example evaluation. Most of the wall time is prelude + elaboration
-(~40 s); the actual EigenTrust workload is the tail ~3–5 s.
+Three runs per variant plus one warmup, reported as median.
 
-| Variant        | run 1   | run 2   | run 3   | median  | vs list+rat |
-| -------------- | ------: | ------: | ------: | ------: | ----------: |
-| list + rat     | 47.28 s | 47.91 s | 48.01 s | 47.91 s |      0.0 %  |
-| list + posit32 | 45.45 s | 46.04 s | 44.07 s | 45.45 s |     −5.1 %  |
-| pvec + rat     | 43.94 s | 42.95 s | 43.58 s | 43.58 s |     −9.0 %  |
-| pvec + posit32 | 44.88 s | 43.57 s | 46.51 s | 44.88 s |     −6.3 %  |
+### Wall time (initial view, misleading)
 
-Observations (careful — these wall times are dominated by ~40 s of
-fixed-cost elaboration; the variable algorithm cost is a few seconds):
-* List + Rat is the slowest. Exact rational arithmetic on nested
-  lists is the reference baseline.
-* Posit32 alone (same List container) saves ~2.5 s — consistent with
-  the expectation that `p32+/-/*` is a single hardware op vs Rat's
-  numerator/denominator simplification.
-* PVec wins over List despite the index-based inner loops. The RRB
-  tree is presumably cheaper to reduce than chains of `cons` cells
-  for the workload sizes here (n=3 and n=4).
-* PVec + Posit32 is NOT strictly the fastest — it's within noise of
-  PVec + Rat and slightly slower than PVec alone. Possibly the
-  Posit32 reducer has higher per-op overhead than Rat on these
-  small vectors where denominators stay small. With larger matrices
-  or deeper iteration the ordering would likely flip.
-* The bench-ab.rkt framework timed out (20 min budget) trying to do
-  the full A/B stability test across all 4 benchmarks — the per-run
-  overhead plus git-stash/checkout cycle ate the budget. Direct
-  timing is used instead.
+| Variant        | median wall | vs list+rat |
+| -------------- | ----------: | ----------: |
+| list + rat     |    47.66 s  |      0.0 %  |
+| list + posit32 |    44.86 s  |     −5.9 %  |
+| pvec + rat     |    44.32 s  |     −7.0 %  |
+| pvec + posit32 |    44.78 s  |     −6.0 %  |
+
+On its face this suggests PVec+Rat wins and Posit32 gives a modest
+edge. But wall time is a poor signal here because each run is a cold
+start that spends most of its time outside user code.
+
+### Phase breakdown (the real story)
+
+Obtained via `tools/bench-phases.rkt` which parses the
+`PHASE-TIMINGS:{json}` that `driver.rkt` already emits to stderr, and
+aggregates medians across runs. All numbers are median ms of 3 runs.
+
+| Variant        | wall   | elaborate | type_check | qtt  | reduce     | all user | outside (prelude+startup) |
+| -------------- | -----: | --------: | ---------: | ---: | ---------: | -------: | -----------------------:  |
+| list + rat     | 47 657 |      109  |       372  | 105  |    **250** |    837   |               46 820      |
+| list + posit32 | 44 856 |      104  |       337  |  91  |    **245** |    778   |               44 078      |
+| pvec + rat     | 44 319 |      109  |       311  | 108  |  **1 144** |  1 673   |               42 646      |
+| pvec + posit32 | 44 779 |      111  |       314  | 105  |  **1 134** |  1 665   |               43 114      |
+
+The `reduce_ms` column is the algorithm runtime (Prologos's reducer
+evaluating the W1–W7 workload); everything else is compile-time work
+or fixed-cost overhead.
+
+Observations:
+* **~95–98 % of wall time is "outside phases"**: prelude load, Racket
+  startup, I/O. This is a fixed cost independent of the variant.
+  Wall-time comparisons are dominated by noise in this bucket.
+* **All four variants elaborate in ~800–1 700 ms.** Elaboration cost
+  is nearly identical across (container, scalar) combinations —
+  `elaborate_ms` is ~110 ms in all four; `type_check_ms` is 310–370
+  ms in all four. The container and scalar choice do not
+  materially change elaboration cost for this algorithm.
+* **Algorithm runtime (`reduce_ms`) tells a totally different story
+  than wall time:**
+  - List + Rat: 250 ms (baseline)
+  - List + Posit32: 245 ms (2 % faster than List+Rat — posit and
+    rat are essentially equivalent here because the workloads
+    converge in one step, so only ~8 arithmetic ops per workload
+    actually fire)
+  - PVec + Rat: **1 144 ms — 4.6× slower than List+Rat**
+  - PVec + Posit32: **1 134 ms — 4.5× slower than List+Rat**
+* The **PVec variants are substantially slower at the algorithm
+  level**, despite being faster at wall time. The wall-time win
+  was noise in prelude/startup; the algorithm itself pays for
+  index-based access and `pvec-push`-per-element accumulator
+  construction, which costs ~900 ms more than structural
+  list-recursion at n=3 and n=4. PVec's `O(log₃₂ n)` asymptotic
+  advantage doesn't pay off until much larger n.
+* **Posit32 vs Rat at the algorithm level is a wash** for these
+  workloads — within 5 ms in both containers. The workloads all
+  converge in one iteration so only a handful of arithmetic ops
+  fire. For iter-budget-driven workloads (disabled because of
+  pitfall #11) the picture would likely differ — but those don't
+  complete for Posit32 at all.
+* The `bench-ab.rkt` framework timed out (20 min budget) trying to
+  do full A/B stability across all 4 benchmarks: the per-run
+  overhead plus its git-stash/checkout cycle ate the budget, and
+  it wouldn't have given phase data anyway. `tools/bench-phases.rkt`
+  is the right tool for phase-level comparison.
+
+### What this implies for the "which is fastest?" question
+
+* **If the question is wall time** (someone clicks a button and
+  waits): all four are within 5 s of each other, dominated by
+  fixed-cost startup. Pick based on ergonomics.
+* **If the question is algorithm runtime** (amortised across many
+  calls, e.g. running from the REPL with the prelude already
+  loaded): **List + Rat (or List + Posit32) wins 4.5× over PVec**
+  at these matrix sizes. PVec is the wrong data structure for
+  small-n matrix algebra in Prologos right now.
+* **If the question is scalability**: none of these have been
+  tested at larger n because the lazy-argument-reduction issue
+  (pitfall #11) makes deep iteration infeasible for all variants.
 
 ## When to pick which
 
 * **List + Rat** — correctness-first: exact arithmetic, golden-output
-  testing is trivial. Limited to small matrices (denominators compound
-  across deep iterations). The canonical reference implementation.
-* **List + Posit32** — hardware-speed arithmetic, but Prologos's lazy
-  argument reduction makes the iteration loop unusable for
-  non-converging workloads (§11 in pitfalls doc). For converging
-  cases it's as fast as Rat and has cleaner literals.
-* **PVec + Rat** — if the algorithm needed `O(log n)` random access
-  (e.g. gradient descent with sparse updates), PVec would win. For
-  this algorithm (linear scans of small vectors) the extra `-go`
-  helpers add overhead for no asymptotic benefit.
-* **PVec + Posit32** — same inheritance: PVec's index-loop style +
-  Posit's lazy-reduction issue. Useful only as the fourth corner of
-  the grid for comparison.
+  testing is trivial. **Also the fastest algorithm runtime** per
+  `tools/bench-phases.rkt`. The canonical reference implementation.
+  Limited to small matrices (denominators compound across deep
+  iterations).
+* **List + Posit32** — hardware-speed arithmetic, statistically tied
+  with List + Rat on `reduce_ms` here (250 vs 245 ms). The `~0.0`
+  literal is immune to the `0/1 → Int 0` reader quirk, which is a
+  nice ergonomic win. But Prologos's lazy argument reduction makes
+  the iteration loop unusable for non-converging workloads (§11 in
+  pitfalls doc).
+* **PVec + Rat** — ~4.6× slower algorithm runtime than List + Rat
+  at n=3 and n=4, despite identical elaboration cost. The
+  index-based `-go` helpers + `pvec-push` accumulator construction
+  have higher constants than structural list recursion for small n.
+  PVec would pay off only at much larger n (and probably requires
+  `pvec-nth-int` / `pvec-zip-with` primitives to be competitive).
+* **PVec + Posit32** — same 4.5× algorithm-runtime penalty as
+  PVec + Rat. Only useful as the fourth corner of the grid for
+  comparison.
+
+## How to run the phase-breakdown yourself
+
+```
+racket tools/bench-phases.rkt --runs 3 \
+  benchmarks/comparative/eigentrust-list-rat.prologos \
+  benchmarks/comparative/eigentrust-list-posit.prologos \
+  benchmarks/comparative/eigentrust-pvec-rat.prologos \
+  benchmarks/comparative/eigentrust-pvec-posit.prologos
+```
+
+The tool is ~170 lines. It shells out to `racket driver.rkt FILE`
+N times per program, greps the cumulative `PHASE-TIMINGS:{json}`
+that `process-file` emits to stderr, and computes the median of
+each phase across runs. No modification to the algorithm files,
+no edits to `driver.rkt` — all the data was already being emitted,
+just not aggregated. See `tools/bench-phases.rkt` for details.
 
 ## Lessons / pointers
 
