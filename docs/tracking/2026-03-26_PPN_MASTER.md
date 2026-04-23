@@ -48,6 +48,7 @@ PPN consumes.
 | 4A | Elaboration as attribute evaluation — typing on-network | ✅ | [Design D.4](2026-04-04_PPN_TRACK4_DESIGN.md), [PIR](2026-04-04_PPN_TRACK4_PIR.md). 46% on-network typing. Ephemeral PU architecture. SRE typing domain (~150 entries). Bidirectional app writes. Context cells. NRC codified. |
 | 4B | Attribute evaluation — typing + constraints + mult + warnings | ✅ | [Design D.2](2026-04-05_PPN_TRACK4B_DESIGN.md). All 5 attribute domains on-network. On-network primary for all command types. Global attribute store on persistent registry (§9). P1/P2/P3 patterns. 7578 tests GREEN, 133s. 6 imperative bridges remain as scaffolding → Track 4C scope. |
 | 4C | Elaboration completely on-network — 9 axes | 🔄 | [Design Note](../research/2026-04-07_PPN_TRACK4C_DESIGN_NOTE.md), [Audit](2026-04-17_PPN_TRACK4C_AUDIT.md), [Design D.1](2026-04-17_PPN_TRACK4C_DESIGN.md). Thesis: bring elaboration completely on-network with mantra as north star, NTT as guiderails, solver infrastructure (BSP-LE 2+2B) as substrate. 9 axes: parametric-resolution propagator, CHAMP retirement, aspect-coverage completion, freeze/zonk (Option A + Option C with DPO contribution to SRE 6), `:type`/`:term` facet split (Coq-style), warning authority, elaborator-strata→BSP unification, `:component-paths` enforcement, per-facet SRE domain registration. Union types via ATMS **IN SCOPE** (pulls in BSP-LE 1.5 cell-based TMS as 4C sub-track). **Apply BSP-LE Track 2B cross-cutting lessons** (see §4 below). |
+| 4D | **Attribute Grammar Substrate Unification** | ⬜ | [Vision Research](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md). Collapse fragmented typing/elaboration/reduction subsystems into a unified attribute-grammar substrate; each typing rule as a declarative grammar production with attribute-equations compiled to propagator installations. **Motivated by PPN 4C Addendum T-3's three accidentally-load-bearing findings** (the structural fingerprint of sources-of-truth fragmentation). Prerequisite to Track 7. Scope comparable to 4C (multi-month). Prerequisites: 4C complete + T-3 landed + PM Track 12 scoping decided. |
 | 5 | Type-directed disambiguation | ⬜ | Backward type→parse flow via Galois bridges. Bilattice (gfp/elimination) added here via WF-LE newtype pattern. |
 | 6 | Error recovery as lattice repair | ⬜ | Tropical semiring optimization. Track 1 writes error cells; Track 6 adds ATMS repair. |
 | 7 | User-defined grammar extensions (`grammar` form) | ⬜ | CAPSTONE. **Notes from Track 1**: token pattern registry migration from hash to cell needed here (dynamic grammar patterns). DPO framework for structural preservation. |
@@ -259,6 +260,39 @@ Track 4's design should include a "scaffolding retirement" phase that replaces e
 **From Track 2B scaffolding (design considerations for Track 4)**:
 - *Eager Pocket Universe → BSP strata*: The mixfix claim lattice (from Track 2B) executes eagerly. Track 4's elaboration network could host mixfix resolution cells alongside type cells — precedence resolution and type checking as concurrent information flow on the same network. The lattice design from Track 2B is the foundation; Track 4 distributes it across actual BSP strata.
 - *Per-form lattice join as cell merge*: Track 2B's `merge-form` function (§12.6) is the permanent per-form lattice join for merging pipeline outputs. Track 4 inherits this as the cell merge function when parse and elaboration cells coexist on the same network. The join logic (tree parser > preparse for user forms, preparse > tree parser for spec-annotated/generated) encodes pipeline preference as lattice ordering — both pipelines write, the lattice resolves. No "choice function" — the ordering IS the merge.
+
+### Track 4D: Attribute Grammar Substrate Unification
+
+**Status**: ⬜ Stage 0 vision (research note 2026-04-22). Prerequisites: PPN 4C complete (including addendum + T-3 landed) + PM Track 12 scoping decided.
+
+**Vision Research**: [Attribute Grammar Unification Vision](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md) — full motivation, vision, relationship to existing tracks, research inputs, and preliminary scope.
+
+**Thesis**: Collapse fragmented typing/elaboration/reduction subsystems (currently distributed across `syntax.rkt`, `typing-core.rkt` sexp-based, `typing-propagators.rkt` on-network ad-hoc, `elaborator-network.rkt` meta cells, `zonk.rkt`, `unify.rkt`, `reduction.rkt`) into a unified attribute-grammar substrate. Each typing rule expressed as a declarative grammar production with attribute-equations, compiled to propagator installations. The propagator network IS the attribute grammar runtime.
+
+**Motivation** (concrete data): PPN Track 4C Addendum T-3 produced **three consecutive "accidentally-load-bearing mechanism" findings** in a single cycle (attempt 1 TMS dispatch at `propagator.rkt:1248`; Sub-A `with-speculative-rollback` bitmask scaffolding; Commit B `type-lattice-merge → type-top` fallback to sexp `typing-core.rkt:459`). The pattern is not bad luck — it is the **structural fingerprint of fragmentation**: when multiple locations each hold partial views of the same information, correctness becomes a conspiracy between them, and migrations expose which one was load-bearing. Correct-by-Construction (DESIGN_PRINCIPLES.org) requires structural fix, not disciplined migration.
+
+**Core proposition**: Every expression position carries an attribute-record. Every typing rule is a declarative grammar production with attribute-equations over this record. Grammar rules compile to propagator installations. Parsing, elaboration, typing, QTT, reduction, and zonking become COMPONENT ATTRIBUTES of the same unified substrate.
+
+**Relationship to adjacent tracks**:
+- **4A/B/C prerequisites** — the cell-based attribute-record substrate must exist first
+- **Track 3.5 (`grammar` form research)** — user-facing syntax; can proceed in parallel once 4C complete
+- **Track 7 (CAPSTONE user-defined grammar extensions)** — 4D is the structural prerequisite; without it, Track 7's user surface would still require 14-file pipeline touches per extension
+- **SRE ctor-desc** — structural decomposition IS the parsing-direction of a grammar production; 4D attaches attribute-equations
+- **BSP-LE 2B Realization B** — tagged-cell-value mechanism; 4D's attribute-records use this pattern for per-facet tagged access
+
+**Preliminary phase structure** (to be refined in Stage 1-2):
+- Phase A: Grammar rule representation (declarative form)
+- Phase B: Grammar rule compiler (interpret → propagator installations)
+- Phase C: Migration of ~30 existing typing rules to grammar form
+- Phase D: Sexp-infer retirement (`typing-core.rkt:440+`)
+- Phase E: Unification consolidation (PUnify ← attribute-equation dispatch)
+- Phase F: Zonking as attribute-grammar readiness stratum
+- Phase G: Reduction as `:whnf` facet
+- Phase V: Vision alignment + PIR
+
+**Scope estimate**: Comparable to PPN 4C (multi-month, multi-sub-phase track). Proper Stage 1 research + Stage 2 audit + Stage 3 design cycle required before implementation.
+
+**Principle to codify post-T-3** (DEVELOPMENT_LESSONS.org candidate): *Fragmentation of sources of truth is architectural debt; accidentally-load-bearing patterns are its fingerprint. The structural fix is unification under one substrate, not more-careful-migration.*
 
 ### Track 5: Type-Directed Disambiguation
 
