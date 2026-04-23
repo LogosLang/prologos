@@ -35,8 +35,12 @@
    (test-case "merge(Nat, Nat) = Nat [idempotent]"
      (check-equal? (type-lattice-merge (expr-Nat) (expr-Nat)) (expr-Nat)))
 
-   (test-case "merge(Nat, Bool) = top [contradiction]"
-     (check-equal? (type-lattice-merge (expr-Nat) (expr-Bool)) type-top))
+   (test-case "merge(Nat, Bool) = Bool | Nat [set-union semantics, T-3 Commit B]"
+     ;; PPN 4C Path T-3 Commit B: structurally-incompatible concrete types
+     ;; produce the union (Role A accumulate), not type-top. Sorted by
+     ;; union-sort-key ("0:Bool" < "0:Nat").
+     (check-equal? (type-lattice-merge (expr-Nat) (expr-Bool))
+                   (expr-union (expr-Bool) (expr-Nat))))
 
    (test-case "merge(top, anything) = top [absorbing]"
      (check-equal? (type-lattice-merge type-top (expr-Nat)) type-top)
@@ -66,10 +70,13 @@
      (check-not-equal? result type-top)
      (check-true (expr-Sigma? result)))
 
-   (test-case "Pi Nat Bool vs Pi Nat Int = top [codomain mismatch]"
+   (test-case "Pi Nat Bool vs Pi Nat Int = union [T-3 Commit B: codomain mismatch → union]"
      (define pi1 (expr-Pi 'mw (expr-Nat) (expr-Bool)))
      (define pi2 (expr-Pi 'mw (expr-Nat) (expr-Int)))
-     (check-equal? (type-lattice-merge pi1 pi2) type-top))
+     ;; PPN 4C Path T-3 Commit B: structurally-incompatible Pis → union.
+     ;; Sorted by union-sort-key: "3:Pi:0:Nat:0:Bool" < "3:Pi:0:Nat:0:Int" (B<I).
+     (check-equal? (type-lattice-merge pi1 pi2)
+                   (expr-union pi1 pi2)))
 
    (test-case "List Nat = List Nat [via app decomposition]"
      ;; (List Nat) = (app (tycon List) Nat)
@@ -79,10 +86,14 @@
      (check-not-equal? result type-top)
      (check-true (expr-app? result)))
 
-   (test-case "List Nat vs List Bool = top"
+   (test-case "List Nat vs List Bool = union [T-3 Commit B: arg mismatch → union]"
      (define t1 (expr-app (expr-tycon 'List) (expr-Nat)))
      (define t2 (expr-app (expr-tycon 'List) (expr-Bool)))
-     (check-equal? (type-lattice-merge t1 t2) type-top))
+     ;; PPN 4C Path T-3 Commit B: structurally-incompatible apps → union.
+     ;; Both apps have sort-key "4:app" (no component subkey); stable sort
+     ;; preserves input order [t1, t2].
+     (check-equal? (type-lattice-merge t1 t2)
+                   (expr-union t1 t2)))
 
    (test-case "suc zero = suc zero"
      (define t1 (expr-suc (expr-zero)))
@@ -177,13 +188,31 @@
      ;; No contradiction
      (check-false (net-contradiction? net4)))
 
-   (test-case "Contradictory writes: Nat then Bool → contradiction"
+   (test-case "Incompatible writes under type-lattice-merge (Role A): Nat then Bool → union [T-3 Commit B]"
+     ;; PPN 4C Path T-3 Commit B: type-lattice-merge is Role A (accumulate).
+     ;; Structurally-incompatible writes produce the union, NOT type-top.
+     ;; No contradiction fires for Role A cells on type mismatch.
      (define net0 (make-prop-network))
      (define-values (net1 cid) (net-new-cell net0 type-bot type-lattice-merge type-lattice-contradicts?))
      ;; Write Nat
      (define net2 (net-cell-write net1 cid (expr-Nat)))
      (check-equal? (net-cell-read net2 cid) (expr-Nat))
-     ;; Write Bool → contradiction
+     ;; Write Bool → union (Role A accumulate semantics)
+     (define net3 (net-cell-write net2 cid (expr-Bool)))
+     (check-equal? (net-cell-read net3 cid)
+                   (expr-union (expr-Bool) (expr-Nat)))
+     ;; No contradiction — cell holds a valid union value
+     (check-false (net-contradiction? net3)))
+
+   (test-case "Role B cell: Nat then Bool → type-top contradiction [T-3 equality enforcement]"
+     ;; Role B cells (equality enforcement) use type-unify-or-top as merge-fn.
+     ;; Incompatible writes produce type-top → contradicts? fires.
+     ;; Covers classify-inhabit, cap-type-bridge, session-type-bridge pattern.
+     (define net0 (make-prop-network))
+     (define-values (net1 cid)
+       (net-new-cell net0 type-bot type-unify-or-top type-lattice-contradicts?))
+     (define net2 (net-cell-write net1 cid (expr-Nat)))
+     (check-equal? (net-cell-read net2 cid) (expr-Nat))
      (define net3 (net-cell-write net2 cid (expr-Bool)))
      (check-true (net-contradiction? net3)))))
 
@@ -247,11 +276,20 @@
        (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
        (check-equal? result (expr-Nat))))
 
-   (test-case "merge: solved meta with mismatch = top"
-     ;; Meta 'a solved to Bool → merge(Nat, ?a) = top
+   (test-case "merge: solved meta with mismatch = union [T-3 Commit B: set-union semantics]"
+     ;; Meta 'a solved to Bool → merge(Nat, ?a) = Bool | Nat.
+     ;; PPN 4C Path T-3 Commit B: solved meta is followed via callback.
+     ;; When both sides resolve to concrete incompatible types (Nat vs Bool),
+     ;; Role A type-lattice-merge produces the union. Role B callers use
+     ;; type-unify-or-top for equality enforcement.
      (parameterize ([current-lattice-meta-solution-fn
                      (lambda (id) (if (eq? id 'a) (expr-Bool) #f))])
        (define result (type-lattice-merge (expr-Nat) (expr-meta 'a #f)))
+       (check-equal? result (expr-union (expr-Bool) (expr-Nat))))
+     ;; Role B equivalent: type-unify-or-top preserves type-top for equality checks
+     (parameterize ([current-lattice-meta-solution-fn
+                     (lambda (id) (if (eq? id 'a) (expr-Bool) #f))])
+       (define result (type-unify-or-top (expr-Nat) (expr-meta 'a #f)))
        (check-equal? result type-top)))
 
    (test-case "try-unify-pure follows solved mult-meta in Pi"

@@ -139,11 +139,18 @@
 
 (define (sre-subtype-check t1 t2)
   "Create mini-network, install subtype-relate, quiesce, return #t if no contradiction."
+  ;; PPN 4C Path T-3 Commit B (2026-04-22): cells migrated from
+  ;; type-lattice-merge (Role A accumulate — unions under set-union semantics)
+  ;; to type-unify-or-top (Role B equality-enforce — type-top on incompat).
+  ;; The subtype propagator writes expected types to these cells; incompatible
+  ;; writes must trigger contradiction for the check to correctly signal
+  ;; subtype failure. Under Role A, mismatched types union instead of
+  ;; contradicting, hiding the subtype failure signal.
   (define net0 (make-prop-network))
   (define-values (net1 cell-a)
-    (net-new-cell net0 t1 type-lattice-merge type-lattice-contradicts?))
+    (net-new-cell net0 t1 type-unify-or-top type-lattice-contradicts?))
   (define-values (net2 cell-b)
-    (net-new-cell net1 t2 type-lattice-merge type-lattice-contradicts?))
+    (net-new-cell net1 t2 type-unify-or-top type-lattice-contradicts?))
   (define-values (net3 _pid)
     (net-add-propagator net2 (list cell-a cell-b) (list cell-a cell-b)
       (sre-make-structural-relate-propagator type-domain cell-a cell-b

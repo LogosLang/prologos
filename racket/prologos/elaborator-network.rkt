@@ -111,10 +111,20 @@
 ;; At depth 0, TMS-transparent read/write in net-cell-read/write provides
 ;; identical behavior to the previous monotonic cell.
 ;; Returns (values elab-network* cell-id).
+;;
+;; PPN 4C Path T-3 Commit B (2026-04-22): merge-fn migrated from
+;; type-lattice-merge (Role A accumulate) to type-unify-or-top (Role B
+;; equality-enforce). Type metas represent ONE type; two propagators
+;; writing incompatible types is an unsound inference state (type error),
+;; not an accumulation of possibilities. Under post-T-3 Commit B set-union,
+;; type-lattice-merge would silently produce unions for conflicting meta
+;; writes, hiding type errors. Rationale: B6 finding, surfaced by
+;; test-elaborator-network.rkt contradictory-values test failure during
+;; Commit B integration.
 (define (elab-fresh-meta enet ctx type source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net type-bot type-lattice-merge type-lattice-contradicts?))
+    (net-new-tms-cell net type-bot type-unify-or-top type-lattice-contradicts?))
   (define info (elab-cell-info ctx type source))
   (define h (cell-id-hash cid))
   (values
@@ -325,6 +335,13 @@
 ;; - type-bot: fresh bot cell (no information yet)
 ;; - Ground/compound: fresh cell initialized to the expression value
 ;; Returns (values net* cell-id).
+;;
+;; PPN 4C Path T-3 Commit B (2026-04-22): merge-fn migrated from
+;; type-lattice-merge (Role A) to type-unify-or-top (Role B). Sub-cells
+;; hold the types of structural components (e.g., a Pi's domain or
+;; codomain). Two propagators writing incompatible types to the same
+;; component is a type error, not an accumulation. Same B6 rationale as
+;; elab-fresh-meta above.
 (define (identify-sub-cell net expr)
   (define meta-lookup (current-structural-meta-lookup))
   (cond
@@ -334,13 +351,13 @@
      (if cid
          (values net cid)
          ;; Meta not mapped (shouldn't happen in practice) → fresh bot cell
-         (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?))]
+         (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?))]
     ;; type-bot → fresh bot cell
     [(type-bot? expr)
-     (net-new-cell net type-bot type-lattice-merge type-lattice-contradicts?)]
+     (net-new-cell net type-bot type-unify-or-top type-lattice-contradicts?)]
     ;; Non-meta → fresh cell initialized to expression value
     [else
-     (net-new-cell net expr type-lattice-merge type-lattice-contradicts?)]))
+     (net-new-cell net expr type-unify-or-top type-lattice-contradicts?)]))
 
 ;; Get or create sub-cells for a cell's structural components.
 ;; Checks decomp registry first — if cell already decomposed, reuse sub-cells.

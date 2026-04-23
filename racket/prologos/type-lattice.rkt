@@ -136,8 +136,19 @@
 ;; - merge(x, ⊥)  = x           (commutativity of identity)
 ;; - merge(⊤, x)  = ⊤           (absorbing element)
 ;; - merge(x, x)  = x           (idempotent)
-;; - merge(T1, T2) = unify(T1,T2) if structurally compatible, else ⊤
-
+;; - merge(T1, T2) = unify(T1,T2) if structurally compatible, else UNION
+;;
+;; PPN 4C Path T-3 Commit B (2026-04-22): set-union semantics for Role A
+;; (accumulate). Structurally-incompatible concrete types produce the union
+;; `T1 | T2` via `build-union-type`, NOT `type-top`. Rationale: a join over
+;; a type domain that includes unions should produce the union for
+;; structurally-incompatible atoms — not a contradiction. `type-top` is
+;; reserved for REAL contradictions (explicit annotation violations via
+;; check, Role B equality-enforcement via `type-unify-or-top`), not the
+;; absence of structural unification. Mirrors SRE Track 2H's
+;; `subtype-lattice-merge` which applied the same pattern to the subtype
+;; relation. Role B callers (equality enforcement) use `type-unify-or-top`
+;; explicitly (see typing-propagators.rkt:type-map-write-unified).
 (define (type-lattice-merge v1 v2)
   (cond
     [(type-bot? v1) v2]
@@ -156,7 +167,18 @@
        ;; fires again, and merge re-runs with the resolved type.
        [(or (has-unsolved-meta? v1) (has-unsolved-meta? v2))
         (if (has-unsolved-meta? v1) v2 v1)]
-       [else type-top])]))
+       ;; Role A set-union: structurally-incompatible concrete types → union.
+       ;; PPN 4C T-3 Commit B: resolve top-level solved metas (via Phase E1
+       ;; callback) before building the union, so the resulting value is
+       ;; self-contained (no raw meta references when the meta is already
+       ;; solved via callback).
+       [else
+        (define sol-fn (current-lattice-meta-solution-fn))
+        (define (resolve-top v)
+          (if (and sol-fn (expr-meta? v))
+              (or (sol-fn (expr-meta-id v)) v)
+              v))
+        (build-union-type (list (resolve-top v1) (resolve-top v2)))])]))
 
 ;; ========================================
 ;; PPN 4C Path T-3 Commit A (2026-04-22) — equality-enforcement helper
