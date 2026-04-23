@@ -4,19 +4,53 @@ These checklists prevent the recurring class of bugs where a new construct is ad
 
 ## New AST Node
 
-When adding a new AST node (e.g., `expr-foo`), update all 14 pipeline files:
+When adding a new AST node, the set of files to update depends on **whether the node has user-facing surface syntax** vs being internal-only (produced by elaboration or inference).
 
-1. `syntax.rkt` — struct definition
-2. `surface-syntax.rkt` — surface struct if user-facing
-3. `parser.rkt` — parse rule
-4. `elaborator.rkt` — elaboration case
-5. `typing-core.rkt` — `infer`/`check` cases
-6. `qtt.rkt` — `inferQ`/`checkQ` cases (must parallel typing-core)
-7. `reduction.rkt` — reduction/normalization
-8. `substitution.rkt` — substitution traversal
-9. `zonk.rkt` — all three zonk functions (intermediate, final, level)
-10. `pretty-print.rkt` — display
-11. Possibly: `unify.rkt`, `macros.rkt`, `foreign.rkt`
+### Core pipeline — every AST node touches these
+
+These are the always-touch files. No exceptions.
+
+1. `syntax.rkt` — struct definition + `provide struct-out` + `expr?` predicate entry
+2. `substitution.rkt` — `shift` and `subst` (identity case for atomic nodes; recursive for nodes with sub-exprs; binder-respecting for nodes with binders)
+3. `zonk.rkt` — all three zonk functions (`zonk`, `zonk-at-depth`, `default-metas`)
+4. `reduction.rkt` — `whnf` (at minimum, add to `trivially-whnf?` set for stuck/atomic nodes; add `nf` identity case). Check `definitely-not-map?` if the node could appear as a value.
+5. `pretty-print.rkt` — `pp-expr` display + `uses-bvar0?` recursion
+6. `pnet-serialize.rkt` — `reg0!` / `reg1!` / `regN!` for auto-cache serialization. **REQUIRED post-PM 10** — module caching depends on this. (Pre-PM-10 checklists missed this; don't.)
+7. `typing-core.rkt` — `infer` / `check` / `is-type` / `infer-level` cases
+8. `qtt.rkt` — `inferQ` / `checkQ` cases (must parallel typing-core)
+
+### User-facing surface syntax — add these if the node has surface form
+
+If users can write the construct directly in `.prologos` files, also update:
+
+9. `surface-syntax.rkt` — surf-* struct + provides (surf-* structs carry `loc` field)
+10. `parser.rkt` / `tree-parser.rkt` — parse rule (WS mode goes through tree-parser; sexp mode through parser)
+11. `elaborator.rkt` — `elaborate` case (surf-* → expr-*)
+12. If the construct desugars or has preparse rewrites: `macros.rkt`
+
+### On-network typing — add this if the node needs typed propagator machinery
+
+13. `typing-propagators.rkt` — `install-typing-network` case + fire-function factory. **Only needed if the node introduces new structural typing behavior not handled by SRE ctor-desc decomposition.** Most new AST nodes with `ctor-desc` registration in `ctor-registry.rkt` get automatic on-network typing via generic structural decomposition.
+
+### Unification + FFI — add these if applicable
+
+14. `unify.rkt` — `classify-whnf-problem` + `unify-whnf` dispatch. Required if the node participates in unification at the structural level (vs being handled by SRE).
+15. `foreign.rkt` — only if the node represents a runtime interop concept (foreign values, opaque handles, etc.)
+
+### Internal-only nodes — the shorter path
+
+Nodes produced only by elaboration/inference (no user surface syntax, no user writability) typically need files 1-8 + maybe 14. Examples:
+- `expr-Open` (PPN 4C T-2, 2026-04-23): 10 files actually touched (1-7, 8, 11, 14) — skipped surface-syntax, parser, macros, foreign, typing-propagators.
+- `expr-meta` (inference placeholder): 1-8 + special handling in resolution
+- `expr-error` (elaboration error): 1-5 + explicit error-propagation cases
+
+### Post-addition verification
+
+- Run `tools/check-parens.sh <file>` after every `.rkt` edit (instant, ~100ms, catches mismatched brackets before `raco make`)
+- `raco make driver.rkt` — compiles ALL transitive dependents; resolves stale `.zo` issues
+- Targeted tests for the module via `racket tools/run-affected-tests.rkt --tests tests/test-X.rkt` (uses scoped precompile to refresh test `.zo` linklets after production export changes)
+- Probe file (if one exists for the current track) before AND after the change
+- Full suite as regression gate (not for diagnostics)
 
 ## New Racket Parameter
 
