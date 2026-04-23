@@ -124,8 +124,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **T-3 Commit A.2-c** | Cell merge-fn swaps: B3 (classify-inhabit), B4 (cap-type-bridge), B5 (session-type-bridge) | ✅ | commit `105bcdae` — Role B cell merge-fn semantics; 242 targeted tests across 11 files pass |
 | **T-3 COMPLETE** | — | ✅ | **DONE** 2026-04-22. 4 commits, staged A→B. Set-union merge live; contradiction signal preserved via Role A/B decomplection chain. |
 | **Re-sequencing 2026-04-22** | Post-T-3 task dependency clarified per charter-alignment dialogue | — | Tactical T-1/T-2 cleanup was framed against end-state (Phase 9 substrate + Phase 4 CHAMP retirement + PM 12 on-network migrations). Result: **1A-iii-a-wide Step 1 precedes T-1/T-2** because it IS the addendum's Phase 1 substrate-migration charter continuation. T-1 post-Step-1 becomes "scaffolding retirement plan," not "API redesign." See §7.5.10 for the framing. |
-| **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ⬜ **NEXT** | Continues addendum Phase 1 per D.3 §7.5.3. T-3 resolved prerequisites. Union-inference adaptation ALREADY DELIVERED via T-3 Commit A.2-a (make-union-fire-fn). Remaining: migrate elab-fresh-meta factory at line 114 + retire TMS fallback branches (propagator.rkt:991, 1248, 3208+) + retire TMS API (net-new-tms-cell, tms-cell-value, tms-read/write, make-tms-merge) + retire current-speculation-stack + test-tms-cell.rkt disposition. |
-| Path T-1 | `with-speculative-rollback` scaffolding retirement plan (post-Step-1) | ⬜ | Reframed 2026-04-22 per charter alignment. Post-Step-1, the bitmask layer becomes architecturally sound (writes tagged directly on the new substrate). Scope reduces: (a) verify map-assoc becomes redundant via T-3 set-union merge (also T-2 scope); (b) name elab-net snapshot as scaffolding with explicit retirement tied to Phase 4 (main track) + PM Track 12; (c) simplify any callers whose use becomes trivial. Full retirement of `with-speculative-rollback` itself is NOT in-scope for this addendum — it's gated on Phase 4 migration of meta-info CHAMP + PM 12 migration of constraint store + id-map. |
+| **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ✅ | **DONE** 2026-04-22. 5 commits S1.a-e. See §7.5.11 for full summary. S1.a (`3b6aefdb`) elab-fresh-meta → tagged-cell-value + 4th accidentally-load-bearing finding fix (visibility scope in `with-speculative-rollback` parameterize). S1.b (`2c8871ec`) retired 3 TMS fallback branches. S1.c (`d220ca51`) retired TMS API wholesale (~258 lines deleted). S1.d (`9f47ffe9`) retired current-speculation-stack parameter. S1.e (`b1468220`) peripheral cleanup (test-tms-cell.rkt deleted, cell-ops stale comments updated). Full suite: 7908 tests, 126.7s, 1 pre-existing batch contamination (unrelated). |
+| Path T-1 | `with-speculative-rollback` scaffolding retirement plan (post-Step-1) | ⬜ **NEXT** | Reframed 2026-04-22 per charter alignment. Post-Step-1, the bitmask layer becomes architecturally sound (writes tagged directly on the new substrate — verified via S1.a's visibility fix). Scope reduces: (a) verify map-assoc becomes redundant via T-3 set-union merge (also T-2 scope); (b) name elab-net snapshot as scaffolding with explicit retirement tied to Phase 4 (main track) + PM Track 12; (c) simplify any callers whose use becomes trivial. Full retirement of `with-speculative-rollback` itself is NOT in-scope for this addendum — it's gated on Phase 4 migration of meta-info CHAMP + PM 12 migration of constraint store + id-map. |
 | Path T-2 | Map type inference open-world realignment (post-Step-1 verification) | ⬜ | Reframed 2026-04-22. T-3 + open-world may land `_` value type by default; verify typing-core.rkt:1196-1217's explicit `build-union-type` becomes redundant OR migrate to `_` per ergonomics. Mostly mechanical post-Step-1. |
 | **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4. Follows T-1 + T-2. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
@@ -1204,6 +1204,52 @@ Rationale:
 
 **Framing principle codified** (candidate for DEVELOPMENT_LESSONS.org, see dailies 2026-04-22):
 > *Tactical cleanup tracks should be framed against end-state architecture, not as local optimizations.* When a tactical task (simplify X, decouple Y) surfaces, first check whether X or Y is a LOCAL view of a LARGER architectural change already planned. If yes, frame the tactical work as a way-station toward the end-state — naming scaffolding with explicit retirement plans tied to specific follow-on tracks. Designing in isolation produces MORE infrastructure that preserves the current mechanism indefinitely; framing against end-state produces SCAFFOLDING with retirement plans. Origin: T-1 scope dialogue 2026-04-22 — isolated framing would have built a new `with-transactional-rollback` API; charter-aligned framing recognizes `with-speculative-rollback` as vestigial en route to ATMS-tagged writes, and reduces T-1 to a scaffolding-retirement-plan labeling exercise.
+
+### §7.5.11 1A-iii-a-wide Step 1 summary (2026-04-22) — DELIVERED
+
+Phase 1 substrate migration charter (§7.5.3) complete. 5 atomic sub-phase commits delivered the TMS-to-tagged-cell-value migration for the type meta cell (the last TMS consumer).
+
+**Sub-phase commits**:
+
+| Sub-phase | Commit | Delivery |
+|---|---|---|
+| S1.a | `3b6aefdb` | `elab-fresh-meta` factory migrated: `net-new-tms-cell` → `net-new-cell` + `(tagged-cell-value type-bot '())` + `(make-tagged-merge type-unify-or-top)` + custom contradicts? wrapper. **4th "accidentally-load-bearing mechanism" finding FIXED inline** via `with-speculative-rollback` parameterize scope (include worldview-cache bits, not just hyp-bit — see below). Localized fix preserves BSP-LE 2/2B clause-propagator isolation for global net-cell-read. |
+| S1.b | `2c8871ec` | Retired 3 TMS fallback branches in propagator.rkt (net-cell-read:991-996, net-cell-write:1248-1250, net-cell-write-widen:3222-3225). Dead code post-S1.a. |
+| S1.c | `d220ca51` | Retired TMS API wholesale (~258 lines from propagator.rkt): `tms-cell-value` struct, `tms-read`/`tms-write`/`tms-commit` functions, `net-commit-assumption`, `tms-retract`/`net-retract-assumption`, `merge-tms-cell`/`make-tms-merge`, `net-new-tms-cell` factory. Plus pnet-serialize.rkt cleanup (import + auto-cache). |
+| S1.d | `9f47ffe9` | Retired `current-speculation-stack` parameter from propagator.rkt. Zero live consumers post-S1.c. |
+| S1.e | `b1468220` | Peripheral cleanup: deleted `tests/test-tms-cell.rkt` (370 lines, 34 tests — mechanism-specific for retired API); updated stale comments in cell-ops.rkt (worldview-visible? rationale, elab-cell-read-worldview docstring) to reflect post-TMS semantics. |
+
+**Fourth accidentally-load-bearing mechanism — details for codification**:
+
+S1.a's initial migration surfaced a latent architectural issue in `with-speculative-rollback`. Pre-S1.a, type meta cells were TMS-wrapped. Writes during speculation hit propagator.rkt:1248's TMS fallback (`tms-write old (current-speculation-stack='()) new`) which updated BASE regardless of the bitmask parameterize. Prior-committed speculation results were trivially visible.
+
+Post-S1.a, the bitmask layer activates. But `with-speculative-rollback` parameterized `current-worldview-bitmask` to ONLY `hyp-bit`, which under net-cell-read's tagged-cell-value dispatch (propagator.rkt:968-975) **OVERRIDES** worldview-cache entirely (per-propagator isolation semantic for BSP-LE 2/2B clause propagators). Result: prior-committed speculation results INVISIBLE during subsequent speculation — back-to-back `map-assoc` broke (canary: test-mixed-map failures on nested/mixed maps).
+
+This is the **4th instance** of the "accidentally-load-bearing mechanism" pattern in this addendum (attempt-1 TMS dispatch → Sub-A with-speculative-rollback bitmask scaffolding → Commit B expr-union typing contradiction-fallback → S1.a visibility scope). Significantly, it was surfaced by BEHAVIOR (test-mixed-map failure), not static audit. Confirms the Stage 2 audit discipline needs integration-test coverage, not just grep-based site enumeration.
+
+**Fix** (localized, preserves clause-propagator isolation): parameterize `current-worldview-bitmask` to the FULL worldview (`outer-active | worldview-cache | hyp-bit`) instead of just `hyp-bit`. Fix is in `with-speculative-rollback`, not in global `net-cell-read`. Documented with full rationale in elab-speculation-bridge.rkt.
+
+**Vision Alignment Gate (all 4 questions pass)**:
+
+- **(a) On-network?** YES. TMS mechanism fully retired. Speculation-tagging flows through tagged-cell-value + worldview-cache-cell + current-worldview-bitmask (all on-network except the parameter, which is per-propagator scaffolding tied to PM Track 12 retirement). Remaining scaffolding explicitly labeled: elab-net snapshot for off-network residue (meta-info CHAMP + constraint store + id-map) — retires with Phase 4 + PM 12.
+- **(b) Complete?** YES. All 5 sub-phases landed per plan. Union-inference adaptation (originally in Step 1 scope per §7.5.3) was already delivered via T-3 Commit A.2-a's `make-union-fire-fn` — no additional work required. Zero TMS consumers in production code.
+- **(c) Vision-advancing?** YES. Completes the addendum's Phase 1 substrate migration charter. BSP-LE 2/2B's tagged-cell-value is now the sole speculation mechanism for on-network state. Aligns with PPN 4C end-state (§6.3, §6.10). Brings us closer to Level-3 ideal (pure branch-exploration, no rollback concept) per §7.5.10 charter alignment.
+- **(d) Drift-risks-cleared?** YES. The 4th accidentally-load-bearing finding was discovered mid-S1.a and FIXED inline (not deferred). No other drift detected across 5 sub-phases.
+
+**Aggregate statistics**:
+
+| Metric | Value |
+|---|---|
+| Sub-phase commits | 5 (S1.a-e) |
+| Production files modified | 4 (elaborator-network.rkt, propagator.rkt, elab-speculation-bridge.rkt, pnet-serialize.rkt, cell-ops.rkt) |
+| Lines deleted from propagator.rkt | ~258 (TMS API block) |
+| Tests deleted | 34 (test-tms-cell.rkt; mechanism obsolete) |
+| Full suite | 7908 tests, 126.7s (down from 7942 — matches test-tms-cell.rkt deletion) |
+| Probe diff vs baseline | 0 (28 expressions identical) |
+
+**Fourth-finding codification candidate** (dailies 2026-04-22 watching list, promote if 5th instance observed):
+
+> *Accidentally-load-bearing mechanisms are often surfaced by integration-test behavior, not static audit.* Stage 2 audits that grep for inline predicates (e.g., `(type-top? ...)`, `(tms-cell-value? ...)`) catch SOME sites. They miss sites where a mechanism's BEHAVIOR — not its obvious API — is load-bearing downstream. B6 (T-3 Commit B, type meta cell merge-fn) and S1.a (visibility scope in with-speculative-rollback parameterize) were both surfaced by test-failure-during-integration, not by static audit. Implication: Stage 2 audits for API migrations must include integration-test runs of realistic workloads, not just static site enumeration.
 
 ### §7.7 Phase 1B deliverables
 
