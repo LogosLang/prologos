@@ -224,46 +224,60 @@ Honestly flagged:
 
 ---
 
-## §6 Measurement discipline (proposed)
+## §6 Measurement discipline — bounce-back, not automatic gate
 
-Per dialogue 2026-04-23: "more data-driven and informed decisions." Lightweight discipline — not every phase, but more often than we currently do.
+Per dialogue 2026-04-23: "more data-driven and informed decisions" — BUT "bounce back to me whether we should invest into it. Could be undue tax on time and development iterations; needs to balance with needs, not just be an automatic gate."
 
-### Trigger: phase completion with expected perf impact
+### The rule
 
-When a phase is expected to change a perf characteristic (allocation pattern, cell count, meta cost, elaboration path), include a **measurement note** with:
-- Pre-phase baseline (link or numbers)
-- Post-phase measurement
-- Deltas observed
-- Deltas vs predictions (if hypotheses were stated)
-- Unexpected deltas investigated
+**Per-phase Claude→user bounce-back**: when Claude identifies a phase as plausibly perf-material, Claude proposes measurement (what to measure, why, rough cost) → user decides. NOT an automatic trigger. Balance investment against development velocity on a case-by-case basis.
 
-### Where
+### Claude's responsibility
 
-- Small deltas: in the phase's commit message or dailies entry
-- Major phase (like Step 2): dedicated baseline + hypotheses doc like this one
-- Post-implementation validation: add a "§N — Actual vs predicted" section
+For each phase, Claude evaluates:
+1. **Is this phase plausibly perf-material?** (e.g., changes allocation pattern, elaboration path, hot-function dispatch)
+2. **If yes**: propose measurement scope (which micros, estimated cost, what hypothesis the measurement would validate)
+3. **If no**: proceed without proposing measurement; note in commit message that perf was deemed out-of-scope
 
-### What to measure (minimum)
+### User's decision criteria (informative, not prescriptive)
 
-- `bench-meta-lifecycle` if meta infrastructure changes
-- `bench-alloc` if cell/prop allocation pattern changes
-- `bench-ppn-track4c` M/A/E tiers if elaboration path changes
-- Probe with `--verbose` always (captures phase breakdowns, cell_allocs, memory)
-- Full suite timing via `timings.jsonl` comparison (always)
+Reasonable grounds for user to decline measurement:
+- Phase is on critical path; measurement delay isn't worth the information
+- Hypothesis from prior phases already covers what this phase would reveal
+- Measurement infrastructure isn't ready (e.g., new micros needed would exceed phase scope)
+- Enough context exists to trust the perf outcome without dedicated measurement
 
-### What NOT to measure (avoid overhead)
+Reasonable grounds to approve measurement:
+- Phase transitions a major architectural pattern (compound cells, new API)
+- Phase retires a significant mechanism (old path now dead)
+- Prior measurements flagged this area as sensitive
+- Stage 4 Step 5 VAG (vision-advancing?) criterion requires numeric validation
 
-- Pure-refactor phases that only move code without changing paths — skip formal measurement, just verify suite green
-- Documentation-only phases — skip
-- Bug fixes with no performance dimension — skip
-- Micro that would take > 5 minutes to run for a phase that's < 1 hour of work — use judgment
+### What Claude WILL always do (without needing user approval)
 
-### Cadence
+- Probe verbose run after any phase that touches typing/elaboration (cheap, <1s)
+- Full-suite timing comparison against `timings.jsonl` (free, automatic)
+- Note significant-feeling deltas in dailies even absent formal measurement
 
-- **Measure before starting**: capture baseline for any phase touching perf-relevant code
-- **Predict in hypotheses**: numeric expectations when possible
-- **Validate after**: compare actual vs predicted; investigate deltas
-- **Narrate in dailies**: one line of delta per phase is enough
+### What Claude WILL propose but wait for approval
+
+- Running `bench-meta-lifecycle` / `bench-alloc` / `bench-ppn-track4c` micros (~3-10 min each)
+- A/B comparison via `bench-ab.rkt` (~5-15 min)
+- New micros specifically constructed for a phase (variable cost)
+- Hypothesis documents like this one (substantial writing time)
+
+### Pre-negotiated measurement plan for Step 2
+
+Already approved per 2026-04-23 dialogue:
+- **Measurement at S2.b close** (first domain migration — validates the PU pattern): `bench-meta-lifecycle` + `bench-alloc` + relevant slice of `bench-ppn-track4c`; compare vs §2/§3/§11 baselines
+- **Measurement at S2.e close** (retirement of old factories — final validation): full baseline re-run; compare vs all §5 hypotheses; §12 "Actual vs Predicted" section added to this doc
+- **Skipped for S2.a, S2.c, S2.d, S2.f**: no measurement unless anomaly surfaces
+
+Subsequent phases (Phase 1E, 1B, etc.): Claude proposes when the phase opens; user decides.
+
+### What this doc serves (self-reference)
+
+This baseline doc IS the `2026-04-23`-snapshot reference for post-Step-2 validation. Its §5 hypotheses + §2/§3/§11 baselines are the explicit acceptance criteria. At Step 2 close, §12 "Actual vs Predicted" gets added inline.
 
 ---
 

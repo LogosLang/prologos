@@ -127,10 +127,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ✅ | **DONE** 2026-04-22. 5 commits S1.a-e. See §7.5.11 for full summary. S1.a (`3b6aefdb`) elab-fresh-meta → tagged-cell-value + 4th accidentally-load-bearing finding fix (visibility scope in `with-speculative-rollback` parameterize). S1.b (`2c8871ec`) retired 3 TMS fallback branches. S1.c (`d220ca51`) retired TMS API wholesale (~258 lines deleted). S1.d (`9f47ffe9`) retired current-speculation-stack parameter. S1.e (`b1468220`) peripheral cleanup (test-tms-cell.rkt deleted, cell-ops stale comments updated). Full suite: 7908 tests, 126.7s, 1 pre-existing batch contamination (unrelated). |
 | Path T-1 | `with-speculative-rollback` scaffolding retirement plan | ✅ | **DONE** 2026-04-22 (commit TBD). Documentation-only pass per charter alignment. Labeled elab-net snapshot as scaffolding with retirement plan in elab-speculation-bridge.rkt module docstring + inline comments; cleaned up stale Phase 11 retirement-journey comments. PM Master updated with "PPN 4C 1A-iii-a-wide Step 1 + T-1 (2026-04-22) — `with-speculative-rollback` retirement handoff" section specifying light cleanup sub-phase for PM 12 (6 caller migrations to `speculate` form, ~20-30 min mechanical work). DEFERRED.md updated. No code changes; no caller simplifications warranted post-Step-1. Full retirement gated on Phase 4 (meta-info CHAMP) + PM 12 (constraint store + id-map). |
 | Path T-2 | Map type inference open-world realignment ("Open by Design") | ✅ | **DONE** 2026-04-23. 3 commits. See §7.6.15 for full summary. Commit 1/3 (`4bfbd141`): `expr-Open` AST + pipeline integration (7 files: syntax/substitution/zonk/reduction/pretty-print/pnet-serialize/unify). Commit 2/3 (`246d4c2e`): typing semantics + map-op Open cases + map-assoc speculation retirement (typing-core + qtt). Commit 3/3 (`07fda438`): elaborator `surf-map-literal` emits Open for unannotated value type + test-mixed-map rewrite (21→25 tests) + test-path-expressions update + probe baseline refreshed. Full suite 7912 tests / 118.4s / 0 failures (pre-existing batch contamination cleared). speculation_count 12→0 in probe. Overrides 2026-03-20 CIU §8 D7. |
-| **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4. Follows T-1 + T-2. |
+| **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + compound-tagged-merge + cell-access helper) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4 (revised 2026-04-23 to Option B per architectural dialogue: NO new elab-meta-* API; uses existing elab-cell-read/write + compound-cell-component-ref helper). Follows T-1 + T-2. Baseline + hypotheses at `2026-04-23_STEP2_BASELINE.md`. |
+| **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
-| 1B | Tropical fuel primitive + SRE registration | ⬜ | |
+| 1B | Tropical fuel primitive + SRE registration | ⬜ | Follows Phase 1E per revised 2026-04-23 sequence. |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
 | 2A | Register S(-1), L1, L2 as stratum handlers | ⬜ | |
@@ -633,11 +634,11 @@ Per-cell tagged-cell-value migration (retains one-cell-per-meta shape; prerequis
 
 ### §7.5.4 Step 2 deliverables (PU refactor + hasse-registry integration)
 
-Per Q-PU-1–Q-PU-5 resolutions.
+Per Q-PU-1–Q-PU-5 resolutions. **Revised 2026-04-23 (Option B)**: dropped the proposed `elab-meta-read/write` API in favor of using existing `elab-cell-read/write` + a minimal `compound-cell-component-ref` helper. Rationale: the `elab-meta-*` API would have been a parallel to `that-*` at a different abstraction level, creating a migration cost for Track 4D's eventual storage unification. Step 2 focuses on the STORAGE architectural move (compound PU cells); storage-unification with `that-*` is its own dedicated Phase 1E (§7.6.16). See 2026-04-23 dialogue + `2026-04-23_STEP2_BASELINE.md` for architectural framing.
 
 **New infrastructure**:
-1. **4 per-domain PU compound cells** allocated in `make-prop-network` or equivalent setup:
-   - `type-meta-universe-cell-id` — value `(hasheq meta-id → tagged-cell-value-of-type)`, merge `compound-tagged-merge(type-lattice-merge)`, classification `'structural`
+1. **4 per-domain PU compound cells** allocated in `make-elaboration-network`:
+   - `type-meta-universe-cell-id` — value `(hasheq meta-id → tagged-cell-value-of-type)`, merge `compound-tagged-merge(type-unify-or-top)`, classification `'structural`
    - `mult-meta-universe-cell-id` — analogous, `mult-lattice-merge`
    - `level-meta-universe-cell-id` — analogous, `merge-meta-solve-identity`
    - `session-meta-universe-cell-id` — analogous, `merge-meta-solve-identity`
@@ -646,14 +647,17 @@ Per Q-PU-1–Q-PU-5 resolutions.
 
 3. **Shared hasse-registry-handle** — one instance, used by reads across all 4 universes for worldview-bitmask subset check. Q_n subsume-fn specialized per `hasse-registry.rkt` lines 28-31 + 88.
 
-**API migration**:
-4. **`elab-meta-read enet meta-id domain`**, **`elab-meta-write enet meta-id domain value`** — new domain-parameterized meta-access API. Internally dispatches on `domain` to select the right universe cell-id.
-5. **`elab-fresh-meta`** etc. now register meta-id in the universe cell (component initialization) instead of allocating new cells. Returns meta-id (no more cell-id per meta).
-6. **`prop-meta-id->cell-id`** — retires OR returns universe-cell-id with meta-id as component-path component. Call sites updated.
+4. **`compound-cell-component-ref(enet, cell-id, component-key)` helper** — minimal convenience wrapper for reading a component from a compound cell's hasheq value. Encapsulates the `(hash-ref (elab-cell-read enet cid) component-key default)` pattern. Used at meta-access sites.
+
+**API (NO new user-facing API)**:
+- Existing `elab-cell-read(enet, cid)` and `elab-cell-write(enet, cid, val)` stay as the mid-level cell API.
+- `elab-fresh-meta` / `elab-fresh-mult-cell` / `elab-fresh-level-cell` / `elab-fresh-sess-cell` migrate to: register meta-id as a component in the appropriate universe cell (not allocate a new cell). Return meta-id (cell-id returned is the universe-cell-id — same for all metas of a domain).
+- `prop-meta-id->cell-id` — returns universe-cell-id for the meta's domain (was per-meta cell-id).
+- Meta-access call sites use `(compound-cell-component-ref enet universe-cid meta-id)` instead of `(elab-cell-read enet meta-cid)`.
 
 **Call-site migration** across ~5-10 files:
 - `solve-meta-core!` / `solve-meta-core-pure` in metavar-store.rkt
-- `elab-cell-read` / `elab-cell-write` callers (propagator fire functions, typing-propagators.rkt, etc.)
+- `elab-cell-read` / `elab-cell-write` callers (propagator fire functions, typing-propagators.rkt, etc.) — for meta-access sites, update to helper form; for infra-cell sites, unchanged
 - Propagator installations that reference meta cell-ids — update `:component-paths` declarations to `(cons universe-cell-id meta-id)`
 
 **SRE registration for `'worldview` domain** (if not already registered) — provides Q_n lattice identity for hasse-registry's `:l-domain`.
@@ -661,10 +665,21 @@ Per Q-PU-1–Q-PU-5 resolutions.
 **Deliverables**:
 - 4 per-domain PU cells
 - Shared hasse-registry-handle
-- `elab-meta-read/write` API + call-site migration complete
+- `compound-cell-component-ref` helper
+- Call-site migrations complete (meta access routes through universe cell + component key)
 - Propagator dependency indexing uses compound paths
 - Pre-0 probe + acceptance file + full suite all pass post-step-2
 - Cell count reduction: per-domain from N → 1 (~hundreds → 4 total cells for meta state)
+- Per-meta `fresh-meta` cost: ≤ 2.5 μs/call (per `2026-04-23_STEP2_BASELINE.md` §5 success criteria)
+
+**Sub-phase plan** (revised 2026-04-23 to Option B — 6 sub-phases + VAG, down from original 7+VAG):
+- **S2.a** — Infrastructure: `compound-tagged-merge` factory + 4 universe cell-ids + `'worldview` SRE domain + shared hasse-registry-handle + `compound-cell-component-ref` helper. Add A/B bench micros to `bench-meta-lifecycle.rkt` for compound-vs-per-cell access costs. No call-site changes.
+- **S2.b** — Migrate `type` domain: `elab-fresh-meta` + call sites. Probe + test. **Measurement checkpoint** (first domain — validates pattern).
+- **S2.c** — Migrate `mult` domain.
+- **S2.d** — Migrate `level` + `session` domains (simpler identity-or-error semantics).
+- **S2.e** — Retire old per-cell factories wholesale. Deletions. **Measurement checkpoint** (final validation vs baselines in `2026-04-23_STEP2_BASELINE.md` §5).
+- **S2.f** — Peripheral cleanup (docstrings, stale comments, obsolete tests).
+- **S2-VAG** — VAG + D.3 §7.5.13 close section + dailies + final baseline doc §12 "Actual vs Predicted" update.
 
 ### §7.5.5 Pre-0 behavioral probe spec
 
@@ -1316,6 +1331,168 @@ Post-T-3 dialogue surfaced the T-2 scope. T-3 Commit B's set-union merge at the 
 > *Retiring narrow-union default maps as the "accidentally-load-bearing" fingerprint.* The narrow-union-widening pathway (map-assoc calling build-union-type in the widening branch) was the SOURCE of three of the four T-3/Step-1 findings. It was architectural debt that kept surfacing as correctness-via-coincidence. Retiring it structurally (via Open-by-Design semantic) eliminated the pattern at that specific site. General lesson: when a feature produces repeated accidentally-load-bearing findings, the ergonomic-correct replacement is often simpler than more-careful-migration.
 
 **Re-sequencing complete**: `1A-iii-a-wide Step 1 → T-1 → T-2 → Step 2` arc has landed Steps 1, T-1, T-2. Next: Step 2 (PU refactor — vision-advancing Phase 1A capstone per §7.5.4).
+
+### §7.6.16 Phase 1E — `that-*` Storage Unification (NEW 2026-04-23)
+
+**Status**: ⬜ Planned. Sequenced between Step 2 and Phase 1B.
+
+**Implementation note** (NOT a Stage 3 design — this section captures the architectural considerations surfaced during 2026-04-23 Step 2 mini-design dialogue, to persist them for the future Phase 1E design cycle).
+
+#### §7.6.16.1 Motivation
+
+During Step 2 mini-design (2026-04-23), user surfaced architectural concern about the relationship between:
+- `that-read` / `that-write` — position-keyed attribute-record API (shipped PPN 4C Phase 3, user-surface-facing per Track 7 `grammar` form vision)
+- Proposed `elab-meta-read` / `elab-meta-write` — meta-id-keyed + domain-parameterized API for Step 2 PU refactor
+- Track 4D's unified attribute-grammar substrate (`2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md`)
+
+**Core concern**: two APIs doing conceptually similar things (both store "what we know about expression X's type"), at different abstraction levels (position vs. meta-id). Absent unification, this is architectural debt — two sources of truth, two sets of lattice merge semantics, two dependency-tracking paths.
+
+**Resolution for Step 2**: drop the proposed `elab-meta-*` API (Option B). Step 2 focuses on compound-cell storage. Storage-layer unification becomes its own dedicated Phase 1E.
+
+#### §7.6.16.2 Scope
+
+**In scope**:
+- Route `that-read(am, pos, :type)` to the appropriate universe-cell component when `pos` corresponds to a meta
+- Route `that-write(net, am-cid, pos, :type, val)` similarly
+- Position-for-meta synthesis: derive a canonical position representation for each meta from `meta-source-info` + disambiguator (multiple metas at same source-loc must have distinct positions)
+- Preserve 27 ns `that-read :type` fast path (per 2026-04-17 PRE0 baseline); meta path may add 50-150 ns routing overhead but fast path for non-meta positions unchanged
+- Meta-id ↔ position mapping (bidirectional, structurally backed — probably a component of `elab-cell-info` or a new side table)
+- Consumers of `that-*` see unified access regardless of whether underlying store is attribute-map or universe cell
+
+**Out of scope** (Track 4D territory):
+- Declarative grammar rule representation (4D Phase A)
+- Grammar rule compiler (4D Phase B)
+- Migration of typing rules to grammar form (4D Phase C)
+- Sexp-infer retirement (4D Phase D)
+- PUnify consolidation via attribute equations (4D Phase E)
+- Zonking as readiness stratum (4D Phase F)
+- Reduction as `:whnf` facet (4D Phase G)
+
+**Phase 1E is STORAGE unification. Track 4D is RULES unification.** Both are needed for the Track 4D vision; Phase 1E is the substrate that Track 4D's rule compiler will target.
+
+#### §7.6.16.3 Key architectural considerations (for Stage 3 design when Phase 1E opens)
+
+**1. Position representation**
+
+Current: position = srcloc + scope-disambiguator (per PPN 4C Phase 3).
+
+Phase 1E options:
+- **(a)** Extend position to encode either "surface position" (existing) OR "meta position" (new variant). Tagged union. Changes position type everywhere it appears.
+- **(b)** Meta-positions use a synthesized srcloc + meta-id as scope-disambiguator. No type change; all consumers treat meta-positions as regular positions.
+- **(c)** Separate position namespaces for surface vs meta; `that-*` dispatches on a predicate.
+
+**Leaning (b)**: least disruptive, preserves existing attribute-map CHAMP shape. Meta-id naturally disambiguates concurrent metas.
+
+**2. Meta-id ↔ position mapping**
+
+Bidirectional mapping required (sometimes from meta-id, sometimes from position). Options:
+- **(a)** Add to `elab-cell-info`: each meta's info includes its canonical position. Reverse map (position → meta-id) maintained in side CHAMP.
+- **(b)** Position IS meta-id for meta-positions (encoding-based); no explicit map needed.
+- **(c)** Extend elab-network with a `meta-position-map` field.
+
+**Leaning (b)**: zero storage overhead; dispatch via position encoding. Depends on position representation choice.
+
+**3. Fast path preservation (27 ns `that-read :type`)**
+
+Current fast path: direct CHAMP lookup in attribute-map for `(position, :type)`. No conditional dispatch.
+
+Phase 1E must preserve this for non-meta positions. Design:
+- **(a)** Branch at top of `that-read`: if position is meta-position → universe-cell path; else → existing attribute-map path. Branch cost: ~1-5 ns (predicate check). Fast path effectively unchanged.
+- **(b)** Type-tagged positions allow the branch to be a cheap pattern-match dispatch.
+
+Validation: `bench-ppn-track4c.rkt` M1 must show `≤ 35 ns/call` (allow 25% margin from 27 ns baseline) for surface positions post-Phase-1E.
+
+**4. Universe cell integration with attribute-map**
+
+Step 2 lands 4 universe cells (`type-meta-universe-cell-id`, etc.). Phase 1E bridges these to `that-*`:
+- `that-read(am, meta-pos, :type)` for meta-pos corresponding to a type meta → `(compound-cell-component-ref enet type-meta-universe-cell-id meta-id)`
+- Analogous for `:mult` / `:level` / `:session` facets (though facet naming may differ — see consideration 5)
+
+**5. Facet naming alignment**
+
+Current facets: `:type`, `:term`, `:context`, `:usage`, `:constraints`, `:warnings`. Step 2 domains: `type`, `mult`, `level`, `session`.
+
+Overlap: `:type` facet ↔ type domain. No direct correspondence for `:mult` / `:level` / `:session` — these are orthogonal inference dimensions not currently represented as facets in attribute-map.
+
+Phase 1E decisions needed:
+- Do mult/level/session get new facets (`:mult`, `:level`, `:session`) on attribute-records? Probably yes for consistency.
+- How do they interact with existing `:usage` facet (which tracks QTT usage — related to mult but different)?
+
+This is substantial design work. Not minor. Stage 2 audit + Stage 3 design warranted when Phase 1E opens.
+
+**6. Write-through semantics**
+
+`that-write(net, am-cid, meta-pos, :type, val)` routes to universe cell. But: universe cells have `compound-tagged-merge` + domain-merge (e.g., `type-unify-or-top` for type metas), while attribute-map uses `classify-inhabit-value` merge via `make-classify-inhabit-merge`. Different lattice semantics.
+
+Question: when routing, does `that-write` use the universe cell's domain merge, or wrap in `classify-inhabit-value` for consistency with non-meta attribute-record writes?
+
+**Leaning**: universe cell's domain merge, since universe cells are the authoritative store for meta values. The `classify-inhabit-value` wrapping is specific to attribute-map positions that carry both CLASSIFIER and INHABITANT layers — metas typically only have classifier (the type). Phase 1E resolves this tension explicitly.
+
+**7. Track 4D compatibility**
+
+Track 4D's §3.1 "Every expression position carries an attribute-record" — under Phase 1E, meta-positions ARE expression positions. Track 4D's grammar-rule compiler targets `that-*` as the access API. After Phase 1E:
+- `that-*` is the unified access layer
+- Underlying storage can be attribute-map cell OR universe cells (transparent to rule compiler)
+- Track 4D can focus on RULES, not storage
+
+This is the architectural payoff — Phase 1E makes Track 4D's substrate work clean.
+
+#### §7.6.16.4 Performance constraints (non-negotiable)
+
+From `2026-04-23_STEP2_BASELINE.md` §11:
+- `that-read :type` surface position: **≤ 35 ns/call** post-Phase-1E (baseline 27 ns + 25% margin)
+- `that-read :type` meta position (NEW): target **≤ 200 ns/call** (covers universe-cell + component ref + tagged-cell-read)
+- `that-write :type` surface position: existing overhead unchanged
+- `that-write :type` meta position (NEW): target **≤ 300 ns/call** (covers universe-cell write + compound-tagged-merge)
+
+Bench harness: extend `bench-ppn-track4c.rkt` M1 with meta-position variants; validate pre-commit.
+
+#### §7.6.16.5 Prerequisites
+
+- **Step 2 complete** (this addendum): compound universe cells + helper + call-site migration. The storage substrate exists.
+- **PPN 4C Phase 4 decided scope-wise** (not necessarily implemented — just decided): meta-info CHAMP retirement affects what data lives where. Phase 1E might coordinate or precede.
+- **Benchmark baseline stable** (✓ `2026-04-23_STEP2_BASELINE.md`): need reference point for fast-path preservation.
+
+#### §7.6.16.6 Stage 2 audit TODO (when Phase 1E opens)
+
+- Inventory: every `that-read` / `that-write` call site and its facet usage pattern
+- Inventory: every meta-access call site (post-Step-2) and the `compound-cell-component-ref` helper usage
+- Position representation: grep for every consumer of `position` values in `attribute-map` context; identify representation-change ripples
+- Facet semantics: audit how `classify-inhabit-value` layers interact with different facets; understand where dual-layer vs single-layer applies
+- Benchmark coverage: identify which micros in `bench-ppn-track4c.rkt` stress `that-*` vs alternate paths
+
+#### §7.6.16.7 Rough sub-phase sketch (pre-design, will be refined at Stage 3)
+
+- **1E.a** — Position representation extension + meta-position synthesis. Add position-type-tagged dispatch in `that-read` / `that-write`. Measurement: fast path unchanged.
+- **1E.b** — Route type-facet meta-positions to `type-meta-universe` via helper. Facet naming decisions.
+- **1E.c** — Route mult/level/session analogously (if new facets adopted).
+- **1E.d** — Retire direct `compound-cell-component-ref` call sites in favor of `that-*` (since `that-*` now handles meta positions transparently).
+- **1E.e** — Cleanup + docs.
+- **1E-VAG** — Vision alignment + D.3 or successor doc close.
+
+Estimated scope: ~800-1200 LoC across 5-8 files. 3-5 sessions. Proper Stage 2 audit + Stage 3 design cycle when opened.
+
+#### §7.6.16.8 Deferral trigger
+
+Phase 1E opens AFTER Step 2 closes (with VAG passing). Defer signals that would push 1E later:
+- Step 2 reveals additional storage-layer concerns requiring their own phase first
+- PM Track 12 (module loading) starts and absorbs 1E as a joint scope item
+- Track 4D opens earlier than anticipated and swallows 1E as its Phase 0
+
+Defer signals that would pull 1E earlier (into Step 2 scope):
+- Two-API cognitive load surfaces as bug source in Step 2 (not expected, but possible)
+- Performance measurement at Step 2 close indicates compound-cell access pattern is significantly suboptimal without the `that-*` fast path — would motivate pulling forward
+
+Default: 1E opens immediately after Step 2 close. Dedicated mini-design + Stage 2 audit + Stage 3 design at that point.
+
+#### §7.6.16.9 References
+
+- Step 2 mini-design dialogue (2026-04-23): architectural option review (A / B / C) + Path 1/2/3 decision on scheduling
+- Performance baseline: [`2026-04-23_STEP2_BASELINE.md`](2026-04-23_STEP2_BASELINE.md) §1 headline, §11 PRE0→post-T-2 A/B
+- Track 4D vision: [`2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md`](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md)
+- Attribute grammar research: [`2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md`](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md) §7.5 `that` operation as AG query
+- PPN 4C Phase 3 delivery: D.3 §6.15 + tracker row "Phase 3" — the `that-*` API shipped
+- PPN 4C Phase 3e classification + `#:component-paths` enforcement: foundation for meta-position component paths
 
 ### §7.7 Phase 1B deliverables
 
