@@ -99,6 +99,9 @@ Per D.3 tracker T-2 row:
 3. [`DESIGN_METHODOLOGY.org`](../principles/DESIGN_METHODOLOGY.org) — Stage 4 Per-Phase Protocol especially
 4. [`DESIGN_PRINCIPLES.org`](../principles/DESIGN_PRINCIPLES.org) — especially Correct-by-Construction + Decomplection + Hyperlattice Conjecture
 5. [`CRITIQUE_METHODOLOGY.org`](../principles/CRITIQUE_METHODOLOGY.org) — P/R/M/S lenses
+5a. [`HANDOFF_PROTOCOL.org`](../principles/HANDOFF_PROTOCOL.org) — updated 2026-04-22: MASTER_ROADMAP.org + current series master now in Always-Load
+5b. [`docs/tracking/MASTER_ROADMAP.org`](../MASTER_ROADMAP.org) — **NEW in Always-Load** (2026-04-22). ~25K tokens. Single source of truth for all series/tracks/design docs/PIRs. For "how it all connects" orientation.
+5c. [`docs/tracking/2026-03-26_PPN_MASTER.md`](../2026-03-26_PPN_MASTER.md) — **current series master** for this track (PPN). Read this for the PPN-series narrative through Track 4C + Track 4D proposed.
 
 ### §2.2 Architectural Rules
 
@@ -538,3 +541,75 @@ Session started with T-3 T3-C3 re-audit pickup (from handoff `2026-04-22_PPN_4C_
 Multiple architectural findings promoted to codification candidates. PM Track 12 handoff spec established for `with-speculative-rollback` retirement. PPN series advanced toward "elaboration completely on-network" charter.
 
 **The context is in safe hands.**
+
+---
+
+## §9 Phase 2 MemPalace Integration (NEW — appended 2026-04-22 post-initial-handoff)
+
+**Status**: Committed as `06d4ab6c`. Activates on next Claude Code session start (after hot-load + restart).
+
+### §9.1 What happened
+
+Phase 1 evaluation: ran 17 queries over 23,497 drawers of `docs/` (91% indexed mine). 12/17 queries ≥4/5 canonical hits. The standout: Q10 ("map open world _ value type ergonomics") returned D.3 §7.6.7 "Implications for T-2 (Map open-world)" as top-1 — the EXACT canonical section for the T-2 mini-design we're about to open. That validates the use case.
+
+Real failure mode confirmed (F7 canary): `mempalace_search "F7 distributivity"` returns the pre-T-3 "F7 conjecture holds" claim from SRE Track 2H D.1 + Track 2H PIR §7 "we got lucky" AHEAD of the 2026-04-22 disproof in dailies. Semantic search has no recency weighting; verbose stale discussion outranks terse recent update. **Use as a hazard-flag, not a veto**: cross-check every result against current dailies/handoff/design-doc before acting.
+
+Temporal graph investigated and rejected as recency mitigation: mempalace ships `knowledge_graph.py` with bitemporal triples (`valid_from`/`valid_to`), but `miner.py` has zero `add_triple` calls — after a full mine, `~/.mempalace/knowledge_graph.sqlite3` does not exist. The KG requires manual fact assertion to be useful. That duplicates what dailies + PIR discipline already does. Don't bother unless a compelling use emerges.
+
+### §9.2 Integration surface (what's committed)
+
+- `.mcp.json` at project root — registers mempalace MCP server via `uv tool run --from mempalace python -m mempalace.mcp_server`. Portable across dev machines with `uv` + `uv tool install mempalace`.
+- `.claude/rules/mempalace.md` (133 lines) — full guardrails: use cases, F7 canary codified, anti-patterns (no hooks, no JSONL mining, no write tools without explicit user direction), cross-check discipline, re-mine cadence, success criteria, uninstall path.
+- `CLAUDE.md` rules line extended with `@.claude/rules/mempalace.md`.
+- `.gitignore` auto-extended by `mempalace init` for `mempalace.yaml` + `entities.json`.
+
+### §9.3 Activation path for the continuation session
+
+1. Verify `.mcp.json` loaded — `mcp__mempalace__search`, `mcp__mempalace__status`, etc. appear in the tool list.
+2. Verify rule loaded — `.claude/rules/mempalace.md` content should be in CLAUDE.md-derived context via the `@` import.
+3. Per-dev setup already done on this machine — local palace at `~/.mempalace/palace/` is 185MB with 23,497 drawers indexed.
+4. If re-mine is needed: `mempalace mine /Users/avanti/dev/projects/prologos/docs --wing prologos` (~42 min first run, incremental after). Only re-mine after substantial `docs/tracking/**` or `docs/research/**` commits.
+
+### §9.4 What to do with mempalace during T-2
+
+- Try `mempalace_search "Map open world ergonomics"` or equivalent before re-reading §7.6 — it returned §7.6.7 as top-1 in Phase 1 eval.
+- Cross-check any result that informs the design decision against the current dailies (`2026-04-22_dailies.md`) + this handoff's §1 + D.3's §7.6 / §7.5.8 Finding 2.
+- If mempalace retrieval saves time, note it in dailies. If it misleads, note that too. Phase 2 is a monitored experiment.
+
+### §9.5 What NOT to do
+
+- DO NOT install the Stop or PreCompact hooks. They inject `"decision": "block"` system messages (prompt-injection path). MCP-only integration is the line.
+- DO NOT mine JSONL session transcripts. Our commit-linked docs are the source of truth, not conversation history.
+- DO NOT use `mempalace_add_drawer` / `mempalace_delete_drawer` without explicit user direction.
+- DO NOT trust mempalace for "current state of X" questions. Those go through current dailies + handoff + design doc.
+
+### §9.6 Broader context-scaling exploration (dialogue 2026-04-22)
+
+User surfaced a meta-pain: "context of our project has grown quite a bit, and each session loses the context of everything it has done before — I'm constantly needing to point to prior art, repeat design principles and restate overarching visions." Concrete ask: is there a practice/tool that helps us "hold in our mind" what we've done and how it connects?
+
+Websearch done 2026-04-22 ([AI coding agent persistent memory MCP markdown](https://github.com/zilliztech/memsearch), [basicmachines-co/basic-memory](https://github.com/basicmachines-co/basic-memory), [Claude Code docs](https://code.claude.com/docs/en/memory), [builder.io CLAUDE.md guide](https://www.builder.io/blog/claude-md-guide), [Claude Memory Bank](https://github.com/russbeye/claude-memory-bank)). Synthesis:
+
+**Patterns we ALREADY use**:
+- Markdown-first persistent memory ✓ (`docs/tracking/**`, principles, dailies)
+- Curated MEMORY.md index ✓
+- Daily session logs ✓ (dailies)
+- Layered CLAUDE.md + per-dir rules ✓ (`.claude/rules/*.md`)
+- `@path/to/file` imports (up to 5 levels) ✓ (we use for rules)
+
+**Concrete improvement landed 2026-04-22 (this session)**:
+- Added MASTER_ROADMAP.org + current series master to HANDOFF_PROTOCOL.org Always-Load. High-leverage, single change. Answers the user's "should the roadmap be a hot-load item?" question — yes, codified.
+
+**Potential further wins (NOT doing now — deferred)**:
+- **Concept-map document** (idea): `docs/tracking/principles/CONCEPT_MAP.org` tracing "principle → tracks that embodied it → PIR lessons → refinements in later tracks." Stitches the narrative the user is missing. PIRs' §16 longitudinal surveys have fragments; DEVELOPMENT_LESSONS.org accumulates; no one doc traces the arc. Would need real work to produce AND maintain. Evaluate after Phase 2 mempalace data arrives.
+- **`@` import MASTER_ROADMAP.org directly into CLAUDE.md** (alternative to handoff-list inclusion): makes it always-loaded without requiring per-handoff listing. Trade-off: 25K tokens loaded every session whether needed or not. Defer until we confirm via practice that the roadmap is consulted ≥50% of sessions.
+- **basic-memory** (alternative tool): markdown-first local knowledge graph built from wiki-links, MCP-accessible. Philosophy "files are source of truth" aligns with us better than mempalace's verbatim vector approach. Complementary, not replacement. Defer — don't add a second memory system before Phase 2 mempalace is evaluated in real use.
+
+**User's stated constraint (firm)**: NO prompt injection. Rules out any tool that modifies outgoing prompts via hooks. All alternatives explored respect this — MCP-only is the architectural gate.
+
+### §9.7 For the continuation session — summary
+
+- Phase 2 mempalace is live. Use `mcp__mempalace__search` as "semantic grep" over our docs.
+- Cross-check every hit against current dailies + handoff.
+- MASTER_ROADMAP.org is now in the Always-Load list — use it for "where does X live" questions.
+- T-2 is still the immediate next work. Start with `mempalace_search` on the T-2 question (expected to return D.3 §7.6.7 per Phase 1 eval).
+- If mempalace is helping, note it in the dailies. If the recency problem bites us even once, note that too — Phase 2 validation needs both positive and negative data points.

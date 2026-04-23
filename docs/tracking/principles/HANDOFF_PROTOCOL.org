@@ -56,7 +56,10 @@ These establish the project's identity and process:
 2. ~MEMORY.md~ — auto-memory index
 3. ~DESIGN_METHODOLOGY.org~ — the 5 stages, implementation protocol
 4. ~DESIGN_PRINCIPLES.org~ — the 10 principles + Hyperlattice Conjecture
-5. ~HANDOFF_PROTOCOL.org~ (this document) — so the session knows the protocol
+5. ~CRITIQUE_METHODOLOGY.org~ — the P/R/M/S lenses + external-critique response format
+6. ~HANDOFF_PROTOCOL.org~ (this document) — so the session knows the protocol
+7. ~docs/tracking/MASTER_ROADMAP.org~ — single source of truth for all series/tracks/design-docs/PIRs; what's done, what's active, what's next. Large (~25K tokens), but load-bearing for "how it all connects" orientation. Added 2026-04-22 after session-pain observation: re-pointing at prior art every session was a recurring tax; the roadmap is the canonical index for "where does X live."
+8. *Current series master* (the one matching the active track's series — PPN, SRE, BSP-LE, CIU, PM, etc. — see MASTER_ROADMAP.org for the list). Not ALL series masters; just the one the active track belongs to. Per-track handoff should name which one.
 
 **** Architectural Rules (every session — loaded via .claude/rules/)
 
