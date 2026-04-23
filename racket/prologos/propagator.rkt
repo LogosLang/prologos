@@ -988,11 +988,10 @@
                  ;; directly as the merge for same-specificity entries.
                  merge-fn-raw))
            (tagged-cell-read v wv-bitmask domain-merge)]
-          [(tms-cell-value? v)
-           ;; Phase 11: TMS fallback — retained for backward compat with any
-           ;; cells that might still be TMS-wrapped (e.g., from old test fixtures).
-           ;; Active consumers use tagged-cell-value exclusively.
-           (tms-read v (current-speculation-stack))]
+          ;; PPN 4C 1A-iii-a-wide Step 1 S1.b (2026-04-22): TMS fallback RETIRED.
+          ;; S1.a migrated elab-fresh-meta (last TMS consumer) to tagged-cell-value.
+          ;; No live consumers of tms-cell-value remain in production; branch is dead.
+          ;; TMS API retired in S1.c; current-speculation-stack in S1.d.
           [else v]))))
 
 ;; Read a cell's raw value without TMS unwrapping.
@@ -1245,9 +1244,8 @@
            (tagged-cell-value new-val '())  ;; unconditional write → update base
            (tagged-cell-value (tagged-cell-value-base old-val)
                               (list (cons wv-bitmask new-val))))]
-      [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
-       ;; Legacy TMS path — still needed during Phase 4 migration
-       (tms-write old-val (current-speculation-stack) new-val)]
+      ;; PPN 4C 1A-iii-a-wide Step 1 S1.b (2026-04-22): TMS fallback RETIRED
+      ;; (net-cell-write). See net-cell-read branch for full retirement rationale.
       [else new-val]))
   (define merged (merge-fn old-val actual-new-val))
   (if (or (eq? merged old-val) (equal? merged old-val))
@@ -3219,9 +3217,8 @@
            (tagged-cell-value new-val '())
            (tagged-cell-value (tagged-cell-value-base old-val)
                               (list (cons wv-bitmask new-val))))]
-      [(and (tms-cell-value? old-val) (not (tms-cell-value? new-val)))
-       ;; Legacy TMS path
-       (tms-write old-val (current-speculation-stack) new-val)]
+      ;; PPN 4C 1A-iii-a-wide Step 1 S1.b (2026-04-22): TMS fallback RETIRED
+      ;; (net-cell-write-widen). See net-cell-read branch for full retirement rationale.
       [else new-val]))
   (define merged (merge-fn old-val actual-new-val))
   ;; If cell is a widening point, apply widen to the merged result
