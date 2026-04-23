@@ -58,17 +58,15 @@
 ;; Worldview-Aware Reads
 ;; ========================================
 
-;; Check if a tagged-entry is visible under the current speculation stack.
-;; The speculation stack (current-speculation-stack from propagator.rkt)
-;; IS the ATMS worldview. Entries tagged with assumptions on the stack
-;; are visible; entries tagged with assumptions NOT on the stack are invisible.
+;; Check if a tagged-entry is visible under the current worldview.
+;; PPN 4C 1A-iii-a-wide Step 1 (2026-04-22): updated post-TMS-retirement.
+;; Previously, visibility was determined by current-speculation-stack (TMS
+;; era). Now, visibility is determined by current-worldview-bitmask (BSP-LE
+;; 2/2B tagged-cell-value substrate).
 ;;
-;; Depth 0 (no speculation): all untagged entries visible. Tagged entries
-;; with #f assumption-id are also visible (created at depth-0).
-;;
-;; Under speculation: the stack is (list innermost-aid ... outermost-aid).
-;; An entry tagged with any aid on the stack is visible (own branch or parent).
-;; An entry tagged with an aid NOT on the stack is from a sibling branch — invisible.
+;; Entries with #f assumption-id are depth-0 / unconditional — always visible.
+;; Entries with an aid are visible iff aid matches the current worldview
+;; bitmask (check implemented in Phase 11 — see body below).
 (define (worldview-visible? entry)
   (cond
     [(not (tagged-entry? entry)) #t]  ;; untagged = always visible
@@ -99,8 +97,9 @@
 ;; Track 8 B2: These replace the callback-based reads in metavar-store.rkt.
 ;; Each reads from the elab-network struct field and applies worldview filtering.
 
-;; Read a cell value from an elab-network. TMS-transparent (uses net-cell-read
-;; which already applies TMS worldview via current-speculation-stack).
+;; Read a cell value from an elab-network. Worldview filtering applied
+;; automatically via net-cell-read's tagged-cell-value dispatch + worldview-
+;; cache-cell + current-worldview-bitmask (post-TMS-retirement 2026-04-22).
 (define (elab-cell-read-worldview enet cid)
   (net-cell-read (elab-network-prop-net enet) cid))
 
