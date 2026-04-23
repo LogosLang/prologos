@@ -541,6 +541,33 @@ All currently use `merge-hasheq-replace` (honest labeling of today's semantics u
 
 Both migrations flow from the same architectural act: making cells primary (retiring parameters) and establishing scope structure.
 
+**Additional design input from PPN 4C Phase 1A-iii-a-wide Step 1 + T-1 (2026-04-22)** — `with-speculative-rollback` retirement handoff:
+
+PPN 4C 1A-iii-a-wide Step 1 ([D.3 §7.5.11](2026-04-21_PPN_4C_PHASE_9_DESIGN.md), commits `3b6aefdb` → `b1468220`) delivered BSP-LE 2/2B tagged-cell-value as the sole speculation mechanism for on-network state. The remaining `elab-net` snapshot in [`with-speculative-rollback`](../../racket/prologos/elab-speculation-bridge.rkt) is **scaffolding** that covers OFF-network state:
+
+| Off-network store | Retirement track |
+|---|---|
+| `meta-info` CHAMP (metavar-store.rkt) | **Main-track PPN 4C Phase 4** (AttributeMap β2) |
+| Constraint store | **PM Track 12** (on-network registry cell) |
+| `id-map` (elab-network struct field) | **PM Track 12** (cell migration) |
+
+When BOTH main-track Phase 4 AND PM Track 12 complete, `with-speculative-rollback` retires entirely. Replacement form: **`speculate label thunk`** — pure assumption-tagged write + nogood recording; no snapshot, no imperative undo. This realizes the Level-3 end-state per [PPN 4C D.3 §7.5.10](2026-04-21_PPN_4C_PHASE_9_DESIGN.md).
+
+**PM 12 light cleanup sub-phase** (when Phase 4 + PM 12 core migration complete):
+1. Audit 6 caller sites that use `with-speculative-rollback`: `typing-core.rkt:1205` (map-assoc), `:1291` + `:1325` (union-map-get-component + nil-safe-get), `:2439` (union-check-left); `typing-errors.rkt:78` (per-branch error enrichment); `qtt.rkt:2425` (checkQ union-left)
+2. Migrate each caller from `(with-speculative-rollback thunk success? label)` to `(speculate label thunk [#:success? success?])` — new form: pure on-network (no snapshot; retract = record-nogood + clear-bit)
+3. Delete `with-speculative-rollback` + elab-net snapshot machinery (lines ~226-270 of elab-speculation-bridge.rkt)
+4. Simplify `elab-speculation-bridge.rkt` to just the ATMS-tagged primitives (hypothesis creation, learned-clause pruning, failure recording, context assumptions)
+
+Expected scope: ~20-30 min mechanical sub-phase. All 6 caller transformations are API substitution; no semantic changes (the Level-3 `speculate` form is observationally equivalent to current `with-speculative-rollback` once off-network residue is gone).
+
+**Track 12 now has THREE complementary unlocks from PPN 4C**:
+- 1e-α's 32 identity-or-error migration candidates (macros.rkt registries)
+- 1e-β-iii's 5 timestamp-ordered migration candidates (parameter-snapshot cells)
+- **1A-iii-a-wide Step 1 + T-1: `with-speculative-rollback` light cleanup** (6 caller migrations + mechanism retirement) — gated on Phase 4 + PM 12 core migration
+
+All three flow from the same architectural act: making cells primary (retiring parameters + off-network stores) and establishing scope structure.
+
 **Residual solver-config parameters**: `current-solver-strategy-override`, `current-is-eval-fn`, and other solver-specific parameters may be better addressed in a BSP-LE series sub-track or continue as parameters with test-harness registration (they're solver-local, less entangled with module loading). Scope decision at PM 12 Stage 2.
 
 **Risk**: Medium. Module loading is foundational; regressions are visible. Track 5/7 prior art de-risks the approach — same pattern, different state.

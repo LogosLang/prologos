@@ -1,33 +1,61 @@
 #lang racket/base
 
 ;;;
-;;; elab-speculation-bridge.rkt — Bridge between imperative speculation and propagator network
+;;; elab-speculation-bridge.rkt — Speculation via tagged-cell-value substrate
+;;;                                + elab-net snapshot for off-network residue
 ;;;
-;;; Wraps the existing save-meta-state/restore-meta-state! mechanism with
-;;; failure tracking. At each speculation site in typing-core.rkt and qtt.rkt,
-;;; `with-speculative-rollback` replaces the manual save/restore pattern.
+;;; `with-speculative-rollback` provides the speculative-check pattern for
+;;; typing-core.rkt + qtt.rkt + typing-errors.rkt use cases: run a predicate
+;;; thunk under a fresh ATMS assumption; on success, commit the assumption
+;;; (visibility preserved via worldview-cache); on failure, record a nogood
+;;; and restore pre-speculation state.
 ;;;
-;;; Since Phase 8b, save-meta-state captures both the propagator network and
-;;; the hash-based meta-info in O(1) (immutable CHAMP snapshots). Rollback
-;;; restores the network state precisely — no shadow forking needed.
+;;; =============================================================================
+;;; ARCHITECTURAL STATE (post PPN 4C Track 1A-iii-a-wide Step 1, 2026-04-22)
+;;; =============================================================================
 ;;;
-;;; Phase D: Optional ATMS integration for dependency-directed error messages.
-;;; When current-command-atms is set (boxed atms), each speculation branch
-;;; creates an ATMS hypothesis. On failure, a nogood is recorded. This enables
-;;; downstream error formatting to show derivation chains ("type mismatch
-;;; because X at line Y, but Z at line W").
+;;; On-network worldview tagging (PERMANENT mechanism, BSP-LE 2/2B substrate):
+;;; - Each speculation creates an ATMS hypothesis → bit in worldview bitmask
+;;; - Writes during the thunk are tagged with the speculation's bit via
+;;;   `current-worldview-bitmask` parameterize + tagged-cell-value write path
+;;; - On success: bit committed to `worldview-cache-cell-id` → tagged entries
+;;;   remain visible under worldviews containing the bit
+;;; - On failure: nogood recorded in solver-state; bit cleared from
+;;;   worldview-cache → tagged entries structurally invisible
+;;; - This is the "ATMS branch exploration" substrate that also serves
+;;;   NAF, union-type checking, and (future) Phase 3 fork-on-union
 ;;;
-;;; Phase D2: Sub-failure capture. When a speculation branch itself triggers
-;;; nested speculations, the inner failures are captured as `sub-failures`
-;;; of the outer failure. This builds a tree of failures for derivation chains.
+;;; Off-network `elab-net` snapshot (SCAFFOLDING, retirement plan below):
+;;; - elab-network struct fields include meta-info CHAMP, constraint store,
+;;;   id-map, cell-info — these DON'T participate in worldview filtering
+;;;   because they're not cell-values
+;;; - On failure, snapshot/restore reverts these off-network fields
+;;; - This scaffolding exists ONLY to cover those off-network stores
+;;; - SCAFFOLDING RETIREMENT PLAN:
+;;;     * main-track Phase 4 (PPN 4C) retires meta-info CHAMP; migrates meta
+;;;       storage to AttributeMap :type facet (on-network, worldview-filtered)
+;;;     * PM Track 12 retires constraint store + id-map (on-network registries
+;;;       via cell-based module loading; identity-or-error semantics per
+;;;       submodule-scope; see PM 12 design inputs from PPN 4C 1e-α and
+;;;       1A-iii-a-wide Step 1 + T-1)
+;;;   When BOTH land, `with-speculative-rollback` itself retires; callers
+;;;   migrate to `speculate label thunk` form (pure assumption-tagged write
+;;;   + nogood recording, no snapshot). Expected: ~20-30 min mechanical
+;;;   sub-phase at the end of PM 12 per PM 12 master §Track 12 light cleanup.
 ;;;
-;;; Phase 4b→6d→7: Constraint state is now fully captured by the propagator
-;;; network snapshot (save-meta-state/restore-meta-state!). All constraint
-;;; writes go to cells (Phase 6); all 8 infrastructure cells are captured
-;;; by the network box snapshot (Phase 7). No separate parameter save/restore needed.
+;;; =============================================================================
 ;;;
-;;; Phase 5+8b+D+D2 of the type inference refactoring.
-;;; Design reference: docs/tracking/2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5
+;;; ATMS integration (Phase D): each speculation creates an ATMS hypothesis;
+;;; failures record nogoods for error derivation chains ("type mismatch because
+;;; X at line Y, but Z at line W"). Sub-failure capture (Phase D2) builds tree
+;;; of nested failures.
+;;;
+;;; Design references:
+;;;   PPN 4C D.3 §7.5.10 — charter-alignment: this mechanism as stepping stone
+;;;   PPN 4C D.3 §7.5.11 — Step 1 delivery (substrate migration)
+;;;   PPN 4C D.3 §6.3 — Phase 4 meta-info CHAMP retirement (next gate)
+;;;   PM Track 12 master — scaffolding retirement gate + PM 12 light cleanup
+;;;   2026-02-25_TYPE_INFERENCE_ON_LOGIC_ENGINE_DESIGN.md §5.5 — original design
 ;;;
 
 (require "metavar-store.rkt"
@@ -48,7 +76,6 @@
  record-speculation-failure!
  ;; Phase D: ATMS integration
  current-command-atms
- ;; Phase 11: current-speculation-stack RETIRED. Worldview bitmask only.
  ;; GDE-1: Context assumptions (user annotations)
  current-context-assumptions
  add-context-assumption!
@@ -76,8 +103,11 @@
 ;; The boxed value is mutated as hypotheses and nogoods are added.
 (define current-command-atms (make-parameter #f))
 
-;; Track 4 Phase 1: current-speculation-stack is defined in propagator.rkt
-;; and re-exported here. See propagator.rkt for documentation.
+;; Historical note: earlier versions re-exported current-speculation-stack
+;; from propagator.rkt. Both TMS mechanism and current-speculation-stack
+;; RETIRED 2026-04-22 (PPN 4C 1A-iii-a-wide Step 1 sub-phases S1.a-d).
+;; Speculation-tagging now flows exclusively through current-worldview-bitmask
+;; + worldview-cache-cell-id + tagged-cell-value (BSP-LE 2/2B substrate).
 
 ;; Initialize per-command speculation tracking.
 ;; Phase D: Also initializes a fresh ATMS for dependency-directed errors.
@@ -206,23 +236,28 @@
      (define failures-before-count
        (let ([b (current-speculation-failures)])
          (if b (length (unbox b)) 0)))
-     ;; Track 8 Phase B1: save-meta-state RETIRED.
-     ;; Worldview-aware reads (cell-ops.rkt) filter tagged entries by the current
-     ;; speculation stack. Entries from sibling branches are invisible to reads —
-     ;; no synchronous restore needed, no timing gap. The speculation stack IS the
-     ;; worldview. S(-1) becomes GC (cleaning invisible entries), not correctness.
+     ;; =============================================================
+     ;; Speculation flow — 3 stages (see module docstring for architecture)
+     ;; =============================================================
      ;;
-     ;; Phase 11.4-6: UNIFIED speculation via worldview cache.
-     ;; TMS path REMOVED. Tagged-cell-value is the sole mechanism.
+     ;; Stage 1 — Save elab-net snapshot (SCAFFOLDING).
+     ;;   Covers off-network stores (meta-info CHAMP, constraint store, id-map).
+     ;;   These retire in main-track Phase 4 (meta-info CHAMP) and PM Track 12
+     ;;   (constraint store, id-map). When both land, this snapshot + restore
+     ;;   block can be deleted entirely; `with-speculative-rollback` itself
+     ;;   retires and is replaced by a `speculate` form with pure ATMS
+     ;;   tagging + nogood recording.
      ;;
-     ;; Write assumption's bit to the elaboration network's worldview cache.
-     ;; This tags all cell writes during the thunk via net-cell-write's tagged path.
-     ;; Commit = worldview cache retains the bit (no explicit operation).
-     ;; Retract = clear bit + restore elab-network snapshot.
+     ;; Stage 2 — Write hypothesis bit to worldview-cache (ON-NETWORK, permanent).
+     ;;   Tags all writes during the thunk via net-cell-write's tagged-cell-value
+     ;;   path. Commit = cache retains the bit (no explicit op). Retract =
+     ;;   clear bit + replay snapshot-restore.
      ;;
-     ;; Save elab-network snapshot for failure rollback. Off-network stores
-     ;; (meta-info CHAMP, constraint store, id-map) aren't worldview-filtered —
-     ;; they need snapshot/restore. Scaffolding until these migrate to cells.
+     ;; Stage 3 — Run thunk under the full worldview bitmask (ON-NETWORK).
+     ;;   Parameterize combines prior-committed bits + outer-active + hyp-bit
+     ;;   so the thunk sees all currently-valid tagged entries.
+     ;;
+     ;; Stage 1 — scaffolding snapshot:
      (define elab-net-box (current-prop-net-box))
      (define saved-enet (and elab-net-box (unbox elab-net-box)))
      (define hyp-bit
@@ -267,16 +302,18 @@
            (thunk)))
      (cond
        [(success? result)
-        ;; Phase 11.4: Commit = NOTHING.
-        ;; Worldview cache retains the assumption's bit. Future reads via
-        ;; net-cell-read find tagged entries visible under the committed worldview.
-        ;; No net-commit-assumption. No fold. O(1).
+        ;; Commit = NOTHING at the network level.
+        ;; Worldview-cache retains the hypothesis bit (set in Stage 2).
+        ;; Future reads via net-cell-read filter tagged entries under the
+        ;; committed worldview. O(1), structural. No fold, no explicit commit.
         result]
        [else
-        ;; Phase 11.5: Retract = restore elab-network snapshot + clear worldview bit.
-        ;; Snapshot restore handles off-network stores (meta-info, constraints, id-map).
-        ;; Worldview bit clear handles tagged-cell-value visibility.
-        ;; Scaffolding: off-network stores will migrate to cells in future tracks.
+        ;; Retract = restore elab-net snapshot (SCAFFOLDING for off-network
+        ;; stores — meta-info CHAMP, constraint store, id-map) + clear the
+        ;; hypothesis bit from worldview-cache (makes tagged entries
+        ;; structurally invisible). Record nogood for ATMS.
+        ;; Post-Phase-4 + post-PM-12, the snapshot-restore block retires;
+        ;; retract becomes just `record-nogood + clear-bit` (pure on-network).
         (when (and elab-net-box saved-enet)
           (set-box! elab-net-box saved-enet))
         ;; Clear the assumption's bit from the restored network's worldview cache
@@ -290,9 +327,6 @@
           (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
         ;; Record retraction for S(-1) GC pass.
         (record-assumption-retraction! hyp-id)
-        ;; Track 8 Phase B1: restore-meta-state! RETIRED.
-        ;; Worldview-aware reads filter by speculation stack — sibling branch
-        ;; entries are invisible. No synchronous restore needed.
         ;; Phase D2: Extract sub-failures (failures added during this thunk)
         ;; The box stores newest-first, so new failures are at the front.
         (define-values (sub-failures support-set)

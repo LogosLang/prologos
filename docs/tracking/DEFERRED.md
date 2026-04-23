@@ -393,6 +393,34 @@ These are "snapshot cells of Racket parameters" — dual-store pattern where the
 
 **Primitive ready** at [`clock.rkt`](../../racket/prologos/clock.rkt) (1e-β-iii-a, commit `4205b0ad`) with 17/17 tests GREEN. PM Track 12 activates: when the parameters retire (making cells primary state), the migration is mechanical and the timestamp-ordering becomes load-bearing. See [PM series master § Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) "Additional design input from PPN 4C Phase 1e-β-iii (2026-04-20)" for full context.
 
+### PM Track 12 design input from PPN 4C Phase 1A-iii-a-wide Step 1 + T-1 (2026-04-22) — `with-speculative-rollback` retirement
+
+PPN 4C 1A-iii-a-wide Step 1 completed TMS→tagged-cell-value substrate migration for on-network state. Remaining `elab-net` snapshot in [`with-speculative-rollback`](../../racket/prologos/elab-speculation-bridge.rkt) is **scaffolding** for off-network residue:
+
+| Off-network store | Retirement track |
+|---|---|
+| `meta-info` CHAMP (metavar-store.rkt) | **Main-track PPN 4C Phase 4** |
+| Constraint store | **PM Track 12** |
+| `id-map` (elab-network struct field) | **PM Track 12** |
+
+**PM 12 light cleanup sub-phase** (after Phase 4 + PM 12 core migration complete): mechanical retirement of `with-speculative-rollback` entirely. 6 caller sites migrate from `(with-speculative-rollback thunk success? label)` to `(speculate label thunk [#:success? success?])` (pure ATMS-tagged write + nogood, no snapshot). Expected ~20-30 min. Full detail in [PM Track 12 master](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) "Additional design input from PPN 4C Phase 1A-iii-a-wide Step 1 + T-1 (2026-04-22)."
+
+6 caller sites:
+- `typing-core.rkt:1205` (map-assoc), `:1291` + `:1325` (union-map-get-component + nil-safe-get), `:2439` (union-check-left)
+- `typing-errors.rkt:78` (per-branch error enrichment)
+- `qtt.rkt:2425` (checkQ union-left)
+
+Replacement API shape (to be finalized at PM 12 cleanup sub-phase):
+```racket
+(speculate label thunk [#:success? success?])
+  ;; Semantic: "provisionally run thunk under a fresh ATMS assumption.
+  ;; If successful, commit; if not, record nogood and return #f."
+  ;; Operational: pure ATMS tagging + nogood recording; no snapshot;
+  ;; no elab-net box save/restore.
+```
+
+Callers don't change beyond form substitution — the `speculate` form is observationally equivalent to the current mechanism once off-network residue is gone (Phase 4 + PM 12 complete).
+
 ---
 
 ### Information PM Track 12 will want
