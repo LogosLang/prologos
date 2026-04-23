@@ -122,10 +122,12 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **T-3 Commit A.2-a** | Architectural fix: `make-union-fire-fn` + expr-union install rewrite + dead scaffolding removal | ✅ | commit `a5a33a71` — paralleling `make-pi-fire-fn`; probe diff = 0; 147 targeted tests pass; standalone-safe |
 | **T-3 Commit A.2-b** | Centralized `type-map-write-unified` helper + B1 (app fire) + B2 (expr-ann) Role B migrations | ✅ | commit `f85dd50a` — Role A/B decomplection at API level; 154 targeted tests pass |
 | **T-3 Commit A.2-c** | Cell merge-fn swaps: B3 (classify-inhabit), B4 (cap-type-bridge), B5 (session-type-bridge) | ✅ | commit `105bcdae` — Role B cell merge-fn semantics; 242 targeted tests across 11 files pass |
-| **T-3 COMPLETE** | — | ✅ | **DONE** 2026-04-22. 4 commits, staged A→B. Set-union merge live; contradiction signal preserved via Role A/B decomplection chain. Unblocks T-1, T-2, 1A-iii-a-wide Step 2. |
-| Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ UNBLOCKED | T-3 complete (`e07b809f`). Now ready: audit 4 `with-speculative-rollback` callers; many likely become unnecessary (set-union merge handles map-assoc type-incompatibility naturally). |
-| Path T-2 | Map type inference open-world realignment | ⬜ UNBLOCKED | T-3 complete. `build-union-type` in typing-core.rkt:1196-1217 likely redundant (merge does it) OR migrate to `_` open-world per ergonomics design. |
-| 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⬜ UNBLOCKED | T-3 complete. Type cells already Role B (B6 migrated in Commit B). Step 2 PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) now ready. |
+| **T-3 COMPLETE** | — | ✅ | **DONE** 2026-04-22. 4 commits, staged A→B. Set-union merge live; contradiction signal preserved via Role A/B decomplection chain. |
+| **Re-sequencing 2026-04-22** | Post-T-3 task dependency clarified per charter-alignment dialogue | — | Tactical T-1/T-2 cleanup was framed against end-state (Phase 9 substrate + Phase 4 CHAMP retirement + PM 12 on-network migrations). Result: **1A-iii-a-wide Step 1 precedes T-1/T-2** because it IS the addendum's Phase 1 substrate-migration charter continuation. T-1 post-Step-1 becomes "scaffolding retirement plan," not "API redesign." See §7.5.10 for the framing. |
+| **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ⬜ **NEXT** | Continues addendum Phase 1 per D.3 §7.5.3. T-3 resolved prerequisites. Union-inference adaptation ALREADY DELIVERED via T-3 Commit A.2-a (make-union-fire-fn). Remaining: migrate elab-fresh-meta factory at line 114 + retire TMS fallback branches (propagator.rkt:991, 1248, 3208+) + retire TMS API (net-new-tms-cell, tms-cell-value, tms-read/write, make-tms-merge) + retire current-speculation-stack + test-tms-cell.rkt disposition. |
+| Path T-1 | `with-speculative-rollback` scaffolding retirement plan (post-Step-1) | ⬜ | Reframed 2026-04-22 per charter alignment. Post-Step-1, the bitmask layer becomes architecturally sound (writes tagged directly on the new substrate). Scope reduces: (a) verify map-assoc becomes redundant via T-3 set-union merge (also T-2 scope); (b) name elab-net snapshot as scaffolding with explicit retirement tied to Phase 4 (main track) + PM Track 12; (c) simplify any callers whose use becomes trivial. Full retirement of `with-speculative-rollback` itself is NOT in-scope for this addendum — it's gated on Phase 4 migration of meta-info CHAMP + PM 12 migration of constraint store + id-map. |
+| Path T-2 | Map type inference open-world realignment (post-Step-1 verification) | ⬜ | Reframed 2026-04-22. T-3 + open-world may land `_` value type by default; verify typing-core.rkt:1196-1217's explicit `build-union-type` becomes redundant OR migrate to `_` per ergonomics. Mostly mechanical post-Step-1. |
+| **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4. Follows T-1 + T-2. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
@@ -1160,6 +1162,48 @@ Executed Q3 C3 full grep classification of every `(type-top? ...)` consumer + Q2
 - **Commit B** (merge semantics change) — `type-lattice-merge` fallthrough: `type-top` → `build-union-type-with-absorption`. All Role B sites insulated by prior commits; Role A sites gain set-union semantics cleanly.
 
 Each commit validated independently (probe diff = 0, targeted tests green). Commit B validated additionally by test-union-types:234 passing (the canary).
+
+### §7.5.10 Charter alignment — re-sequencing post-T-3 (2026-04-22)
+
+**Context**: post-T-3 completion, the active queue had T-1/T-2/1A-iii-a-wide listed as parallel "unblocked" items. Dialogue 2026-04-22 surfaced that this framing treated tactical cleanups (T-1, T-2) in isolation from the larger PPN 4C charter ("bring elaboration completely on-network"). Re-framing against end-state collapsed several design decisions.
+
+**End-state reference** (from [PPN 4C D.3 §1](2026-04-17_PPN_TRACK4C_DESIGN.md), §6.3, §6.10, main-track Phase 4 + Phase 9 + Phase 11 + Phase 12):
+- All elaboration state in AttributeMap `:type` facet (Phase 4 β2)
+- All speculation via BSP-LE 1.5 cell-based TMS (Phase 9 — worldview-cells + tagged-cell-value)
+- `current-speculation-stack` parameter retired (Phase 9 Phase D)
+- `meta-info` CHAMP retired wholesale (Phase 4 close)
+- Union types via ATMS branching on the cell-based-TMS substrate (Phase 10)
+- Stratification orchestrated by BSP scheduler alone (Phase 11)
+- Zonk wholesale deleted (Phase 12)
+- **Under end-state: `with-speculative-rollback` doesn't exist**; replaced by ATMS-tagged writes + nogood-recording. No snapshot. No rollback concept in the user API.
+
+**The gap**: off-network state (meta-info CHAMP + constraint store + id-map). Until migrated, `with-speculative-rollback`'s elab-net snapshot remains as scaffolding for off-network residue.
+
+**What blocks retiring scaffolding**:
+- meta-info CHAMP retirement → **Phase 4 of main track** (immediate follow-on to this addendum)
+- constraint store + id-map retirement → **PM Track 12** (on-network registries)
+
+**Re-sequencing decision**:
+
+```
+CURRENT queue (parallel-unblocked):    T-1 ‖ T-2 ‖ 1A-iii-a-wide Step 1 ‖ Step 2
+
+PIVOTED queue (dependency-ordered):    1A-iii-a-wide Step 1 → T-1 → T-2 → Step 2
+```
+
+Rationale:
+1. **Step 1 IS the addendum's Phase 1 substrate migration charter continuation** (§7.5.3). Type cells migrate to `tagged-cell-value`; TMS mechanism retires; `current-speculation-stack` retires. This is CHARTER work, not tactical cleanup.
+2. **T-1 post-Step-1 becomes tractable cleanup**: bitmask layer becomes architecturally sound (writes tagged directly on the new substrate); elab-net snapshot is named as scaffolding with explicit retirement tied to Phase 4 + PM 12; no new API needed.
+3. **T-2 post-Step-1 becomes mechanical verification**: T-3 set-union merge subsumes map-assoc's explicit `build-union-type`; `_` open-world decision completes the realignment.
+4. **Step 2 (PU refactor)** is the vision-advancing capstone of Phase 1A per §7.5.4.
+
+**Scope boundaries clarified**:
+- **In this addendum**: Step 1 substrate delivery + T-1 scaffolding-plan + T-2 verification + Step 2 PU refactor. Remaining Phases 1B/1C/1V/2/3/V per original plan.
+- **Immediate follow-on (main track Phase 4)**: `meta-info` CHAMP retirement, migrating meta storage entirely onto the Phase 9 substrate + attribute-map `:type` facet. User direction 2026-04-22: Phase 4 immediately follows the addendum; if specific Phase-4 aspects need to be pulled forward into the addendum, that can be evaluated, but absorbing Phase 4 wholesale is not required.
+- **Later tracks**: PM Track 12 (on-network registries), Phase 10/11/12 per main track.
+
+**Framing principle codified** (candidate for DEVELOPMENT_LESSONS.org, see dailies 2026-04-22):
+> *Tactical cleanup tracks should be framed against end-state architecture, not as local optimizations.* When a tactical task (simplify X, decouple Y) surfaces, first check whether X or Y is a LOCAL view of a LARGER architectural change already planned. If yes, frame the tactical work as a way-station toward the end-state — naming scaffolding with explicit retirement plans tied to specific follow-on tracks. Designing in isolation produces MORE infrastructure that preserves the current mechanism indefinitely; framing against end-state produces SCAFFOLDING with retirement plans. Origin: T-1 scope dialogue 2026-04-22 — isolated framing would have built a new `with-transactional-rollback` API; charter-aligned framing recognizes `with-speculative-rollback` as vestigial en route to ATMS-tagged writes, and reduces T-1 to a scaffolding-retirement-plan labeling exercise.
 
 ### §7.7 Phase 1B deliverables
 
