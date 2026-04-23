@@ -118,7 +118,10 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | T-3 probe baseline | Pre-0 behavioral probe (6 scenarios) | ✅ | commit `329d4f30` |
 | T-3 Commit A | Role B migration (4 sites) + type-unify-or-top helper | ✅ | commit `37aaba2b` — zero behavior change; probe diff 0; 129 targeted tests pass |
 | **T-3 Commit B** | `type-lattice-merge` set-union fallthrough | ⏸️ PAUSED | test-union-types regression exposed 3rd accidentally-load-bearing mechanism; T3-C3 re-audit required before retry |
-| **T-3 T3-C3 re-audit** | Systematic audit for contradiction-detection-as-fallback sites | ⬜ | §7.6.12/§7.6.13 — NEXT SESSION |
+| **T-3 T3-C3 re-audit** | Systematic audit for contradiction-detection-as-fallback sites | ✅ | Q3 C3 full grep classification: 5 new Role B sites found (B1-B5); 1 architectural error (C1 expr-union); 1 install-caller audit (Q2: install is infer-only, branching misplaced). See §7.6.14 |
+| **T-3 Commit A.2-a** | Architectural fix: `make-union-fire-fn` + expr-union install rewrite + dead scaffolding removal | ✅ | commit `a5a33a71` — paralleling `make-pi-fire-fn`; probe diff = 0; 147 targeted tests pass; standalone-safe (independent of Commit B) |
+| **T-3 Commit A.2-b** | Centralized `type-map-write-unified` helper + B1 (app fire) + B2 (expr-ann) Role B migrations | ⬜ | next |
+| **T-3 Commit A.2-c** | Cell merge-fn swaps: B3 (classify-inhabit classifier merge), B4 (cap-type-bridge), B5 (session-type-bridge) | ⬜ | |
 | Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ | Deferred until T-3 resolves — T-3 likely obviates need for try-rollback speculation in map-assoc |
 | Path T-2 | Map type inference open-world realignment | ⬜ | Deferred until T-3 resolves — T-3 + open-world may land `_` value type by default |
 | 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⏸️ PAUSED | Pending Path T resolution. T-3's set-union merge likely simplifies this significantly. |
@@ -1115,6 +1118,47 @@ Enhanced audit criteria:
 - **Audit item 3 (cell contradicts? consumers — NEW)**: consumers of `type-lattice-contradicts?` or `net-contradiction?` downstream of cells using type-lattice-merge as merge-fn.
 
 Each site identified in items 2/3 needs migration analysis — might be Role B (migrate to explicit contradiction signal) OR might be architecturally wrong (like typing-propagators.rkt:1907/1919, which should write the universe type not the component types).
+
+#### §7.6.14 T3-C3 re-audit results (2026-04-22)
+
+Executed Q3 C3 full grep classification of every `(type-top? ...)` consumer + Q2 install-caller audit. Findings:
+
+**Category A — MIGRATED Role B sites (Commit A, verified)** — 4 sites in elaborator-network.rkt: make-unify-propagator, elab-add-unify-constraint fast path, make-structural-unify-propagator, pair-decomp topology handler. No changes needed; Commit A preserved these correctly.
+
+**Category B — NEW Role B sites (§7.6.9 audit missed these)** — 5 sites requiring migration:
+
+*Write-expected-type-then-check-merge-top pattern (fix via centralized helper)*:
+- **B1**: `typing-propagators.rkt:1160+1164` — app fire function writes `dom` (expected domain) to arg-pos, checks `arg-after-merge` for type-top. Pattern: write equality constraint via merge, expect merge-produces-top on mismatch.
+- **B2**: `typing-propagators.rkt:1930+1932+1942` — expr-ann writes annotation to term position, contradiction propagator checks term-type for type-top. Same pattern.
+
+*Cell merge-fn using Role A semantics where Role B needed (fix via merge-fn swap)*:
+- **B3**: `classify-inhabit.rkt:163` — classifier × classifier merge uses `type-lattice-merge` inside merge-classify-inhabit; expects equality enforcement (Q5 confirmed Role B).
+- **B4**: `cap-type-bridge.rkt:191` — function-type cell's merge-fn = `type-lattice-merge`; each function has ONE type.
+- **B5**: `session-type-bridge.rkt:115/124` — Send/Recv message-type cells' merge-fns; each channel has ONE message type per direction.
+
+**Category C — Architectural error (not merge semantics)** — 1 site:
+- **C1**: `typing-propagators.rkt:1878-1920` expr-union install — writes COMPONENT types (left, right) to position `e`'s :type, with misplaced Phase 8 Option D worldview-bitmask branching at INFER time. Fix: `make-union-fire-fn` paralleling `make-pi-fire-fn` — writes `(expr-Type (lmax level(left) level(right)))`.
+
+**Category L — LEGITIMATE type-top consumers (no change needed)**:
+- 10 reconstructor propagators in elaborator-network.rkt (decompose-pi/sigma/eq/vec/map/pair/lam, make-*-reconstructor, generic reconstructor) — correctly propagate type-top from child to parent under ANY merge semantics (real contradictions still propagate)
+- 12 readiness checks in metavar-store.rkt — "solved = not bot AND not top" defense
+- Internal lattice operations (type-lattice.rkt, subtype-predicate.rkt)
+- Defense code (cap-type-bridge.rkt:97, session-type-bridge.rkt:337) — fire only for real contradictions under new semantics
+- Root fallback gate (typing-propagators.rkt:2319) — catches REAL failures (annotation violations) after C1 fix; sexp fallback becomes defensive rather than load-bearing
+- Tensor result check (typing-propagators.rkt:1217) — type-tensor-core returns type-top only for genuine tensor contradictions
+
+**Q2 install-caller audit (branching use at check time)** — RESOLVED:
+
+`install-typing-network` has ONE production caller (typing-propagators.rkt:2220, top-level infer entry). No check-time invocation. The expr-union case's Phase 8 Option D branching at INFER time is therefore misplaced. Check-time branching against union types (if needed in future) belongs in typing-errors.rkt:check/err, not install. Confirmed Option A2 (remove branching, install make-union-fire-fn).
+
+**Refined Commit A.2 structure (Q4 S2 staged)**:
+
+- **Commit A.2-a** (architectural fix C1) — standalone-safe under BOTH current and post-Commit-B merge semantics. LANDS FIRST.
+- **Commit A.2-b** (centralized `type-map-write-unified` helper + B1 + B2 migrations) — Role B equality-enforcement writes via explicit helper.
+- **Commit A.2-c** (merge-fn swaps B3 + B4 + B5) — cells that should have Role B semantics use `type-unify-or-top` as merge-fn directly.
+- **Commit B** (merge semantics change) — `type-lattice-merge` fallthrough: `type-top` → `build-union-type-with-absorption`. All Role B sites insulated by prior commits; Role A sites gain set-union semantics cleanly.
+
+Each commit validated independently (probe diff = 0, targeted tests green). Commit B validated additionally by test-union-types:234 passing (the canary).
 
 ### §7.7 Phase 1B deliverables
 
