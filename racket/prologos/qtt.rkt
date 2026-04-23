@@ -174,6 +174,8 @@
     [(expr-Type l) (tu (expr-Type (lsuc l)) (zero-usage n))]
     [(expr-Nat) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-Bool) (tu (expr-Type (lzero)) (zero-usage n))]
+    ;; Open : Type 0 (PPN 4C T-2, 2026-04-23)
+    [(expr-Open) (tu (expr-Type (lzero)) (zero-usage n))]
     [(expr-zero) (tu (expr-Nat) (zero-usage n))]
     [(expr-nat-val _) (tu (expr-Nat) (zero-usage n))]
     [(expr-true) (tu (expr-Bool) (zero-usage n))]
@@ -2129,6 +2131,12 @@
     ;; Holes (_, ??name) don't consume resources — mirrors typing-core check behavior.
     [((expr-hole) _) (bu #t (zero-usage n))]
     [((expr-typed-hole _) _) (bu #t (zero-usage n))]
+
+    ;; ---- Open: α-semantic wildcard (PPN 4C T-2, 2026-04-23) ----
+    ;; Open unifies in both directions with zero resource usage.
+    ;; Mirrors typing-core check behavior. See syntax.rkt expr-Open.
+    [((expr-Open) _) (bu #t (zero-usage n))]
+    [(_ (expr-Open)) (bu #t (zero-usage n))]
 
     ;; ---- Meta expression: optimistically succeed with zero usage ----
     ;; A metavariable (from implicit arg insertion) doesn't consume resources.
