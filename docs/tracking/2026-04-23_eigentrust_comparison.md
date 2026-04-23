@@ -64,8 +64,60 @@ Prologos's reducer (pitfall #11), so k=3 is the sweet spot.
 
 ## Phase breakdown
 
-_Will be populated by `tools/bench-phases.rkt --runs 2` (running in
-the background)._
+Measured 2026-04-23 via `tools/bench-phases.rkt --runs 2`. Medians
+across 2 measured runs (plus one warmup).
+
+| Variant        | wall   | elaborate | type_check | qtt | reduce       | user sum | outside |
+| -------------- | -----: | --------: | ---------: | --: | -----------: | -------: | ------: |
+| list + rat     | 62 475 |      212  |       716  | 400 | **18 372**   |  19 702  |  42 772 |
+| list + posit32 | 61 683 |      210  |       678  | 372 | **17 990**   |  19 252  |  42 431 |
+| pvec + rat     | 76 884 |      144  |       370  | 112 | **33 006**   |  33 634  |  43 250 |
+| pvec + posit32 | 77 039 |      146  |       344  | 108 | **33 198**   |  33 798  |  43 241 |
+
+All values are median ms of 2 measured runs. `reduce_ms` is the
+actual algorithm runtime; `outside` is the residual (Prologos prelude
+load + Racket startup + I/O), near-constant across variants.
+
+### Observations
+
+* **On the ring workload, List beats PVec by ~80%** on `reduce_ms`
+  (18 s vs 33 s). The ring matrix is very sparse — each column has a
+  single non-zero — so dot-product cost is dominated by traversal
+  overhead, not arithmetic. List's structural recursion produces
+  cleaner reducible terms than PVec's nested `pvec-nth` + `pvec-push`
+  accumulator construction.
+* **Posit32 vs Rat is within 2%** in both containers for the ring
+  workload. With the ring's sparse structure, even Rat's denominator
+  growth is bounded (only the damping factor α=3/10 introduces the
+  factor 10 per step), so exact-rational arithmetic stays cheap.
+* **Elaboration is cheaper for PVec** (user sum ~33 s has most of
+  its time in reduce, not elaborate): `type_check_ms` halves for
+  PVec (344–370 vs 678–716 ms), `qtt_ms` drops by 3× (108–112 vs
+  372–400). The index-based PVec helpers type-check with Nat
+  counters, which are simpler for the checkers than List's nested
+  structural patterns.
+* **Earlier asymmetric-matrix result reversed:** on the previous
+  `c-asym-3` workload (non-sparse, row-stochastic row-weighted sum)
+  PVec was ~35% faster. On the ring (sparse, column-stochastic
+  dot-product) List is ~80% faster. Different reducer traversal
+  patterns prefer different data structures.
+
+### What this implies
+
+* **Data structure choice depends on the workload shape, not on
+  abstract asymptotics.** For this algorithm at n=3 or n=4, neither
+  container dominates across all fixtures. Dense matrices with
+  heterogeneous values favor PVec's index-based traversal; sparse
+  matrices with repetitive values favor List's structural recursion.
+* **Posit32 vs Rat at small n is noise** — the arithmetic is a tiny
+  fraction of reducer work at these matrix sizes.
+* **The `col-stochastic?` check cost is visible but not dominant.**
+  Each benchmark runs it 4× (inside `eigentrust` for W1, W2, W3 plus
+  W4 standalone). For List+Rat that's ~600 ms of the 18 s reduce
+  budget; for PVec+Rat it's ~1.5 s (PVec needs the `zeros` builder
+  + more iteration). Removing the enforcement would shave a few
+  percent off reduce_ms, but at the cost of losing the invariant
+  check — not worth the trade.
 
 ## What we learned
 
