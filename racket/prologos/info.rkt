@@ -1,4 +1,4 @@
 #lang info
 (define collection "prologos")
 (define deps '("base"))
-(define build-deps '("rackunit-lib"))
+(define build-deps '("rackunit-lib" "rackcheck"))
