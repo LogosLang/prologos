@@ -185,3 +185,48 @@
    #:bot-value 'mod-loading))
 (register-domain! module-lifecycle-sre-domain)
 (register-merge-fn!/lattice merge-mod-status #:for-domain 'module-lifecycle)
+
+;; ============================================================
+;; 'worldview — Q_n hypercube Boolean lattice for speculation bitmasks
+;; PPN 4C Addendum Step 2 (2026-04-23)
+;; ============================================================
+;;
+;; Registers the lattice identity used by `meta-universe.rkt`'s shared
+;; hasse-registry-handle for worldview-bitmask subsumption queries.
+;; The HANDLE's subsume-fn is the Q_n bitmask subset check
+;; (bitwise-and pos query == query). Bot = 0 (no assumptions), top is
+;; the full bitmask — but in practice worldview bitmasks are bounded
+;; by the number of assumption-ids, not a fixed universal top.
+;;
+;; Classification: 'value (bitmask is a scalar; no sub-components).
+;;
+;; Note: the `worldview-cache-cell-id` (cell-id 1) at propagator.rkt:506
+;; uses `worldview-cache-merge` (equality check with fast-path) — this
+;; is distinct from the 'worldview domain's merge because the cache cell
+;; stores the CURRENT committed bitmask (not a bot-to-top accumulator).
+;; The 'worldview domain here represents the abstract lattice for
+;; hasse-registry-handle referencing; merge is bitwise-ior (monotone
+;; assumption accumulation) which is the natural join on Q_n.
+(define (worldview-merge old new)
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(and (number? old) (number? new)) (bitwise-ior old new)]
+    [(number? old) old]
+    [(number? new) new]
+    [else 0]))
+
+(define (worldview-bot? v) (or (eq? v 'infra-bot) (and (number? v) (zero? v))))
+
+(define worldview-sre-domain
+  (make-sre-domain
+   #:name 'worldview
+   #:merge-registry (lambda (r)
+                      (case r
+                        [(equality) worldview-merge]
+                        [else (error 'worldview-merge "no merge: ~a" r)]))
+   #:contradicts? (lambda (v) #f)  ;; bitmask never "contradicts" — subsumption only
+   #:bot? worldview-bot?
+   #:bot-value 0))
+(register-domain! worldview-sre-domain)
+(register-merge-fn!/lattice worldview-merge #:for-domain 'worldview)

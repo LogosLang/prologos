@@ -314,4 +314,132 @@
 (printf "  Use perf-counter infrastructure from performance-counters.rkt\n")
 (printf "  Existing: perf-meta-created-count, perf-unify-count\n")
 
+;; ========================================
+;; E. PPN 4C Addendum Step 2 A/B: compound-cell vs per-cell access
+;; ========================================
+;;
+;; Measures the core tradeoff for the PU refactor:
+;;   per-cell  — current state (each meta has its own cell)
+;;   compound  — Step 2 state (one compound cell per domain; metas as
+;;               components keyed by meta-id in a hasheq)
+;;
+;; Validates §5 hypotheses in 2026-04-23_STEP2_BASELINE.md:
+;;   - Meta-read may slightly regress (hash-ref + tagged-cell-read vs direct cell-read)
+;;   - Compound write should be competitive or faster than per-cell write
+;;     (hasheq-insert into existing compound cell vs net-new-cell allocation)
+;;
+;; These micros can be run PRE- and POST- Step 2 migration for direct A/B.
+
+(require "../../decision-cell.rkt"  ;; compound-tagged-merge, tagged-cell-value
+         "../../type-lattice.rkt"   ;; type-unify-or-top, type-bot
+         "../../meta-universe.rkt") ;; compound-cell-component-ref
+
+(printf "\n--- E: PPN 4C Step 2 A/B compound-vs-per-cell ---\n")
+
+;; E1: Compound-tagged-merge cost — hasheq pointwise merge with per-component tagged merge.
+;; Synthesize two hasheqs with N overlapping meta-id keys; measure merge cost.
+(define N-merge 1000)
+(define merge-fn (compound-tagged-merge type-unify-or-top))
+
+(for ([N (in-list '(10 50 100 500))])
+  (define (mk-hasheq n)
+    (for/fold ([h (hasheq)]) ([i (in-range n)])
+      (hash-set h i (tagged-cell-value (expr-Int) '()))))
+  (define h1 (mk-hasheq N))
+  (define h2 (mk-hasheq N))
+  (collect-garbage) (collect-garbage)
+  (define t0 (current-inexact-monotonic-milliseconds))
+  (for ([_ (in-range N-merge)]) (merge-fn h1 h2))
+  (define elapsed-us (* (- (current-inexact-monotonic-milliseconds) t0) 1000))
+  (define per-call-ns (* (/ elapsed-us N-merge) 1000))
+  (printf "  compound-tagged-merge (~a overlapping keys): ~a ns/call\n"
+          N (exact->inexact (round per-call-ns))))
+
+;; E2: hash-ref into compound-cell value (simulates compound-cell-component-ref's hot path).
+(printf "  --- E2: hash-ref into compound-cell value (component access hot path) ---\n")
+(for ([N (in-list '(10 50 100 500))])
+  (define h (for/fold ([h (hasheq)]) ([i (in-range N)])
+              (hash-set h i (tagged-cell-value (expr-Int) '()))))
+  ;; Pick a middle key to lookup; access repeatedly
+  (define k (quotient N 2))
+  (collect-garbage) (collect-garbage)
+  (define N-iter 100000)
+  (define t0 (current-inexact-monotonic-milliseconds))
+  (for ([_ (in-range N-iter)]) (hash-ref h k #f))
+  (define elapsed-us (* (- (current-inexact-monotonic-milliseconds) t0) 1000))
+  (define per-call-ns (* (/ elapsed-us N-iter) 1000))
+  (printf "  hash-ref into ~a-key hasheq: ~a ns/call\n"
+          N (exact->inexact (round per-call-ns))))
+
+;; E3: hash-set into compound-cell value (simulates per-component write).
+(printf "  --- E3: hash-set into compound-cell value (component write) ---\n")
+(for ([N (in-list '(10 50 100 500))])
+  (define h (for/fold ([h (hasheq)]) ([i (in-range N)])
+              (hash-set h i (tagged-cell-value (expr-Int) '()))))
+  (define new-val (tagged-cell-value (expr-Bool) '()))
+  (collect-garbage) (collect-garbage)
+  (define N-iter 50000)
+  (define t0 (current-inexact-monotonic-milliseconds))
+  (for ([_ (in-range N-iter)]) (hash-set h (quotient N 2) new-val))
+  (define elapsed-us (* (- (current-inexact-monotonic-milliseconds) t0) 1000))
+  (define per-call-ns (* (/ elapsed-us N-iter) 1000))
+  (printf "  hash-set into ~a-key hasheq (overwrite existing): ~a ns/call\n"
+          N (exact->inexact (round per-call-ns))))
+
+;; E4: compound-cell-component-ref (the full helper including elab-cell-read).
+;; Uses the real helper function against an initialized universe cell.
+(printf "  --- E4: compound-cell-component-ref full helper (includes elab-cell-read) ---\n")
+(with-elab-env
+  (lambda ()
+    ;; Initialize meta universes on the current network
+    (define net-box (current-prop-net-box))
+    (when net-box
+      (define enet (unbox net-box))
+      (define enet* (init-meta-universes! enet))
+      (set-box! net-box enet*)
+      ;; Now populate the type-meta-universe with some metas
+      (for ([N-metas (in-list '(10 50 100 500))])
+        (define enet-current (unbox net-box))
+        (define type-cid (current-type-meta-universe-cell-id))
+        ;; Build a hasheq with N-metas entries
+        (define compound-val
+          (for/fold ([h (hasheq)]) ([i (in-range N-metas)])
+            (hash-set h i (tagged-cell-value (expr-Int) '()))))
+        ;; Write it to the universe cell
+        (define enet-with-data (elab-cell-write enet-current type-cid compound-val))
+        (set-box! net-box enet-with-data)
+        ;; Now benchmark reading a component
+        (define key (quotient N-metas 2))
+        (collect-garbage) (collect-garbage)
+        (define N-iter 50000)
+        (define t0 (current-inexact-monotonic-milliseconds))
+        (for ([_ (in-range N-iter)])
+          (compound-cell-component-ref (unbox net-box) type-cid key))
+        (define elapsed-us (* (- (current-inexact-monotonic-milliseconds) t0) 1000))
+        (define per-call-ns (* (/ elapsed-us N-iter) 1000))
+        (printf "  compound-cell-component-ref (universe with ~a metas): ~a ns/call\n"
+                N-metas (exact->inexact (round per-call-ns)))))))
+
+;; E5: Baseline — direct elab-cell-read cost (for comparison with E4).
+;; This is the "per-cell" baseline: reading from a dedicated per-meta cell.
+(printf "  --- E5: baseline elab-cell-read on a dedicated meta cell (pre-Step-2 path) ---\n")
+(with-elab-env
+  (lambda ()
+    (define m (fresh-meta '() (expr-Int) 'bench))
+    (define cid (prop-meta-id->cell-id (expr-meta-id m)))
+    (define net-box (current-prop-net-box))
+    (collect-garbage) (collect-garbage)
+    (define N-iter 50000)
+    (define t0 (current-inexact-monotonic-milliseconds))
+    (for ([_ (in-range N-iter)]) (elab-cell-read (unbox net-box) cid))
+    (define elapsed-us (* (- (current-inexact-monotonic-milliseconds) t0) 1000))
+    (define per-call-ns (* (/ elapsed-us N-iter) 1000))
+    (printf "  elab-cell-read (per-meta cell): ~a ns/call\n"
+            (exact->inexact (round per-call-ns)))))
+
+(printf "\n  NOTE: E4 ≥ E5 is EXPECTED. compound-cell-component-ref adds\n")
+(printf "        hash-ref to the elab-cell-read cost. The tradeoff: E4's path\n")
+(printf "        uses ONE cell for N metas; E5's path uses N cells. Allocation\n")
+(printf "        cost (not measured here) dominates in real workloads.\n")
+
 (printf "\n=== Done ===\n")

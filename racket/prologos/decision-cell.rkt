@@ -78,6 +78,7 @@
  tagged-cell-write
  tagged-cell-merge
  make-tagged-merge  ;; domain-aware merge wrapper (analogous to make-tms-merge)
+ compound-tagged-merge  ;; PPN 4C Step 2: compound-cell merge for meta universes
 
  ;; === Commitment Cell ===
  commitment-initial
@@ -497,6 +498,62 @@
        (struct-copy tagged-cell-value new
          [base (domain-merge old (tagged-cell-value-base new))])]
       [else (domain-merge old new)])))
+
+;; ============================================================
+;; Compound-tagged-merge (PPN 4C Addendum Step 2, 2026-04-23)
+;; ============================================================
+;; Merge function factory for COMPOUND CELLS whose value is
+;; `(hasheq component-key → tagged-cell-value)`.
+;;
+;; Step 2 uses this for per-domain meta universes:
+;;   type-meta-universe  : (hasheq meta-id → tagged-cell-value-of-type)
+;;   mult-meta-universe  : (hasheq meta-id → tagged-cell-value-of-mult)
+;;   level-meta-universe : (hasheq meta-id → tagged-cell-value-of-level)
+;;   session-meta-universe: (hasheq meta-id → tagged-cell-value-of-session)
+;;
+;; Semantics:
+;;   - bot is `(hasheq)` (empty hasheq)
+;;   - Merging two hasheqs: pointwise by component-key (union of keys)
+;;   - For each key in both sides: merge per-component tagged-cell-values
+;;     via make-tagged-merge(domain-merge) at the base level
+;;   - For keys in only one side: that value (no merge needed)
+;;
+;; This gives per-meta component-indexed dependency tracking via
+;; `:component-paths (cons universe-cell-id meta-id)` — sibling metas
+;; don't trigger propagator firing on each others' updates.
+;;
+;; Zero propagation cost for untouched components: hasheq structural
+;; sharing keeps per-meta subtrees eq?-identical when no merge is needed.
+;;
+;; Reference: D.3 §7.5.4 Step 2 deliverables; 2026-04-23_STEP2_BASELINE.md §5.
+(define (compound-tagged-merge domain-merge)
+  (define per-component-merge (make-tagged-merge domain-merge))
+  (lambda (old new)
+    (cond
+      ;; infra-bot handling (matches make-tagged-merge convention)
+      [(eq? old 'infra-bot) new]
+      [(eq? new 'infra-bot) old]
+      ;; Both sides should be hasheqs in normal operation
+      [(and (hash? old) (hash? new))
+       (cond
+         ;; Fast paths: one side empty → other side
+         [(zero? (hash-count old)) new]
+         [(zero? (hash-count new)) old]
+         ;; Pointwise merge: for each key in new, merge into old
+         [else
+          (for/fold ([acc old])
+                    ([(k v-new) (in-hash new)])
+            (define v-old (hash-ref acc k #f))
+            (cond
+              [(not v-old) (hash-set acc k v-new)]
+              ;; eq?-fast-path: both sides reference same value → no merge needed
+              [(eq? v-old v-new) acc]
+              [else (hash-set acc k (per-component-merge v-old v-new))]))])]
+      ;; Defensive fallback — shouldn't occur if cells only receive hasheq writes
+      [else
+       (error 'compound-tagged-merge
+              "compound-tagged-merge expects hasheq values; got old=~v new=~v"
+              old new)])))
 
 
 ;; ============================================================
