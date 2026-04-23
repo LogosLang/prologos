@@ -24,7 +24,7 @@
          "propagator.rkt"
          "surface-rewrite.rkt"
          (only-in "subtype-predicate.rkt" type-tensor-core subtype-lattice-merge subtype?)
-         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge has-unsolved-meta?)
+         (only-in "type-lattice.rkt" type-bot type-bot? type-top type-top? type-lattice-merge type-unify-or-top has-unsolved-meta?)
          (only-in "metavar-store.rkt" meta-solution/cell-id current-prop-net-box
                   trait-constraint-info trait-constraint-info?
                   trait-constraint-info-trait-name trait-constraint-info-type-arg-exprs
@@ -98,6 +98,7 @@
  ;; type-map-read / type-map-write for the :type (CLASSIFIER layer) helpers.
  type-map-read
  type-map-write
+ type-map-write-unified  ;; PPN 4C Path T-3 Commit A.2-b: Role B equality-enforce write
  term-map-read
  term-map-write
  ;; PPN 4C Phase 3c-iii: cross-tag residuation infrastructure.
@@ -550,6 +551,25 @@
 
 (define (type-map-write net tm-cid position type-val)
   (that-write net tm-cid position ':type type-val))
+
+;; PPN 4C Path T-3 Commit A.2-b (2026-04-22): Role B equality-enforcement write.
+;;
+;; Use when the write semantic is "position MUST have type `expected`"
+;; (unification/check/annotation enforcement). Unlike regular type-map-write
+;; — which under post-T-3 Commit B set-union merge semantics accumulates
+;; unions for structurally-incompatible writes (Role A) — this helper
+;; explicitly unifies via type-unify-or-top, producing type-top on
+;; structural mismatch so downstream type-top consumers reliably fire.
+;;
+;; Preserves the contradiction signal that Role B callers (write-expected-
+;; type-then-check-merge-top pattern) depend on. Both callers at B1 (app
+;; fire arg-pos) and B2 (expr-ann term) previously relied on
+;; merge-produces-top-on-incompat via type-lattice-merge; under set-union
+;; that signal disappears. This helper makes the equality enforcement
+;; explicit at the call site — Role A/B decomplection at the API level.
+(define (type-map-write-unified net tm-cid position expected)
+  (define current (type-map-read net tm-cid position))
+  (type-map-write net tm-cid position (type-unify-or-top current expected)))
 
 ;; PPN 4C Phase 3c-ii: term-map-read/write are symmetric helpers for the
 ;; INHABITANT layer. :term routes to the inhabitant layer of the :type facet
@@ -1156,10 +1176,16 @@
        ;; from elaboration. Writing the kind to :type conflicts with the SOLUTION
        ;; (e.g., Nat) that the feedback mechanism writes. By skipping, the meta's
        ;; :type stays at ⊥ until the feedback writes the solution.
+       ;; PPN 4C Path T-3 Commit A.2-b (2026-04-22): Role B migration.
+       ;; The pattern here is "arg-pos MUST have type dom" (equality enforcement
+       ;; at the call site). Under post-T-3 Commit B set-union merge, a regular
+       ;; type-map-write would union incompatible types instead of producing
+       ;; type-top — losing the contradiction signal the check below relies on.
+       ;; type-map-write-unified preserves equality-enforce semantics.
        (define net1
          (if (expr-meta? arg-pos)
              net  ;; skip downward write for meta positions
-             (type-map-write net tm-cid arg-pos dom)))
+             (type-map-write-unified net tm-cid arg-pos dom)))
        ;; Contradiction check: if arg position merged to type-top → propagate error
        (define arg-after-merge (type-map-read net1 tm-cid arg-pos))
        (cond
@@ -1928,8 +1954,13 @@
        (define net2 (install net1 type-expr ctx-pos))
        ;; Write T as this expression's type (the annotation IS the type)
        (define net3 (type-map-write net2 tm-cid e type-expr))
-       ;; Write T downward to term position (CHECK: term must have type T)
-       (define net4 (type-map-write net3 tm-cid term type-expr))
+       ;; Write T downward to term position (CHECK: term must have type T).
+       ;; PPN 4C Path T-3 Commit A.2-b (2026-04-22): Role B migration.
+       ;; This is explicit equality enforcement — term MUST have type type-expr.
+       ;; type-map-write-unified preserves type-top on structural mismatch so
+       ;; the contradiction-detection propagator below reliably fires under
+       ;; post-T-3 Commit B set-union merge semantics.
+       (define net4 (type-map-write-unified net3 tm-cid term type-expr))
        ;; Quick shape check: if annotation is non-Pi and term is lambda, → contradiction.
        ;; Lambda requires Pi annotation. Non-Pi annotations on lambdas are always errors.
        (if (and (expr-lam? term) (not (expr-Pi? type-expr)))
