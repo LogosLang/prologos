@@ -53,33 +53,19 @@
 ;;;   2026-04-23_STEP2_BASELINE.md §5 hypotheses
 ;;;
 
+;; NOTE on imports: this module is LIGHTWEIGHT — imports only from
+;; leaf modules (propagator.rkt, decision-cell.rkt, elab-network-types.rkt,
+;; hasse-registry.rkt). Does NOT import type-lattice.rkt / mult-lattice.rkt
+;; which would create a cycle via reduction.rkt → metavar-store.rkt.
+;;
+;; Per-domain merge-fn and contradiction predicate definitions live in
+;; elaborator-network.rkt (which is downstream of type-lattice.rkt and
+;; provides them to init-meta-universes! via parameter injection).
 (require racket/match
          "propagator.rkt"
-         "decision-cell.rkt"         ;; compound-tagged-merge, tagged-cell-value
+         "decision-cell.rkt"         ;; compound-tagged-merge, tagged-cell-value, tagged-cell-read
          "elab-network-types.rkt"    ;; elab-network, elab-cell-read, elab-cell-write
-         "hasse-registry.rkt"        ;; hasse-registry-handle, net-new-hasse-registry
-         "type-lattice.rkt"          ;; type-unify-or-top, type-bot
-         "mult-lattice.rkt")         ;; mult-lattice-merge, mult-bot
-
-;; Identity-or-error merge for level/session metas (inlined from
-;; elaborator-network.rkt:1012-1023 to avoid a circular import — later
-;; sub-phases will have elaborator-network.rkt depend on this module).
-;; Semantics:
-;;   'unsolved (bot) ⊔ value = value (monotone solve)
-;;   value ⊔ value (equal?) = value (identity)
-;;   value1 ⊔ value2 (not equal?) = 'meta-solve-contradiction (top)
-;;
-;; KEEP IN SYNC with elaborator-network.rkt's merge-meta-solve-identity.
-;; S2.e (cleanup) may consolidate to a single definition in
-;; elab-network-types.rkt once the circularity is easier to resolve.
-(define (merge-meta-solve-identity old new)
-  (cond
-    [(eq? old 'unsolved) new]
-    [(eq? new 'unsolved) old]
-    [(eq? old 'meta-solve-contradiction) old]
-    [(eq? new 'meta-solve-contradiction) new]
-    [(equal? old new) old]
-    [else 'meta-solve-contradiction]))
+         "hasse-registry.rkt")       ;; hasse-registry-handle, net-new-hasse-registry
 
 (provide
  ;; Cell-id parameters — set by init-meta-universes!; read by call sites
@@ -88,15 +74,24 @@
  current-level-meta-universe-cell-id
  current-session-meta-universe-cell-id
  current-worldview-hasse-registry-handle
+ ;; Parameters for domain merge-fns + contradiction predicates (injected
+ ;; by elaborator-network.rkt at module load time — breaks type-lattice
+ ;; dependency cycle). Defaults to fallback functions.
+ current-type-universe-merge
+ current-mult-universe-merge
+ current-level-universe-merge
+ current-session-universe-merge
+ current-type-universe-contradicts?
+ current-mult-universe-contradicts?
+ current-meta-solve-universe-contradicts?
  ;; Initialization
  init-meta-universes!
- ;; Per-component access helper
+ reset-meta-universe-parameters!
+ ;; Per-component access helpers
  compound-cell-component-ref
- ;; Per-domain merge functions (for external consumers needing direct access)
- type-universe-merge
- mult-universe-merge
- level-universe-merge
- session-universe-merge)
+ compound-cell-component-write
+ ;; Universe-cell predicate — distinguishes universe cells from per-meta cells
+ meta-universe-cell-id?)
 
 ;; ============================================================
 ;; Cell-id parameters
@@ -121,43 +116,37 @@
 (define current-worldview-hasse-registry-handle (make-parameter #f))
 
 ;; ============================================================
-;; Per-domain merge functions
+;; Domain merge-fn and contradiction-predicate parameters (injected)
 ;; ============================================================
-;; These wrap the domain-specific merge via compound-tagged-merge
-;; to produce the compound cell merge function.
+;; These are set by elaborator-network.rkt at module load time with
+;; the real domain-specific merge-fns. Default to conservative fallbacks
+;; that don't require type-lattice.rkt / mult-lattice.rkt imports.
+;;
+;; This breaks the import cycle:
+;;   meta-universe.rkt → type-lattice.rkt → reduction.rkt → metavar-store.rkt
+;;   → (would need) meta-universe.rkt
+;; By deferring merge-fn construction to post-load injection, meta-universe.rkt
+;; stays lightweight.
 
-(define type-universe-merge (compound-tagged-merge type-unify-or-top))
-(define mult-universe-merge (compound-tagged-merge mult-lattice-merge))
-(define level-universe-merge (compound-tagged-merge merge-meta-solve-identity))
-(define session-universe-merge (compound-tagged-merge merge-meta-solve-identity))
+(define (default-pointwise-hasheq-merge old new)
+  ;; Conservative fallback — pointwise hasheq merge without per-value lattice join.
+  ;; Used only if domain-specific merges aren't injected before init.
+  (cond
+    [(eq? old 'infra-bot) new]
+    [(eq? new 'infra-bot) old]
+    [(and (hash? old) (hash? new))
+     (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]
+    [else new]))
 
-;; ============================================================
-;; Contradiction predicates
-;; ============================================================
-;; Each universe contradicts if ANY component has a contradicting
-;; tagged-cell-value at its base. Conservative: scan the hasheq.
-;; In practice, contradiction signals are rare and this scan is cheap.
+(define (default-no-contradicts? v) #f)
 
-(define (type-universe-contradicts? v)
-  (and (hash? v)
-       (for/or ([(_k tcv) (in-hash v)])
-         (and (tagged-cell-value? tcv)
-              (eq? (tagged-cell-value-base tcv) 'type-top)))))
-
-(define (mult-universe-contradicts? v)
-  (and (hash? v)
-       (for/or ([(_k tcv) (in-hash v)])
-         (and (tagged-cell-value? tcv)
-              ;; mult-lattice contradicts when base reaches mult-top
-              (eq? (tagged-cell-value-base tcv) 'mult-top)))))
-
-(define (meta-solve-universe-contradicts? v)
-  ;; For level/session (identity-or-error semantics):
-  ;; merge-meta-solve-identity returns 'meta-solve-contradiction on disagreement.
-  (and (hash? v)
-       (for/or ([(_k tcv) (in-hash v)])
-         (and (tagged-cell-value? tcv)
-              (eq? (tagged-cell-value-base tcv) 'meta-solve-contradiction)))))
+(define current-type-universe-merge (make-parameter default-pointwise-hasheq-merge))
+(define current-mult-universe-merge (make-parameter default-pointwise-hasheq-merge))
+(define current-level-universe-merge (make-parameter default-pointwise-hasheq-merge))
+(define current-session-universe-merge (make-parameter default-pointwise-hasheq-merge))
+(define current-type-universe-contradicts? (make-parameter default-no-contradicts?))
+(define current-mult-universe-contradicts? (make-parameter default-no-contradicts?))
+(define current-meta-solve-universe-contradicts? (make-parameter default-no-contradicts?))
 
 ;; ============================================================
 ;; Initialization
@@ -168,78 +157,131 @@
 ;; Allocates the 4 compound universe cells + shared hasse-registry-handle
 ;; on enet's prop-network. Sets the 5 parameters. Returns updated enet.
 ;;
-;; Idempotent in the sense that re-calling with the same enet+parameters
-;; already set is a no-op (parameters already hold cell-ids).
+;; ALWAYS allocates fresh cells. Does NOT short-circuit based on parameter
+;; state — parameters may hold stale cell-ids from a prior elab-network
+;; (parameters persist across parameterize blocks when not in the scope).
+;; Callers should call `reset-meta-universe-parameters!` inside their
+;; `parameterize` block if they want parameters scoped to the block; OR
+;; just call `init-meta-universes!` once per fresh enet and allow the
+;; per-enet cell allocation cost (4 cells + 1 hasse-registry) — cheap.
 ;;
-;; S2.a: infrastructure only; not yet called from any production pipeline.
-;; S2.b+: driver.rkt (or equivalent) calls this during elab-network setup.
+;; S2.a: infrastructure; not called from production pipeline.
+;; S2.b: called lazily from `fresh-meta` in metavar-store.rkt.
 (define (init-meta-universes! enet)
-  ;; Check if already initialized for this enet
-  (cond
-    [(and (current-type-meta-universe-cell-id)
-          (current-mult-meta-universe-cell-id)
-          (current-level-meta-universe-cell-id)
-          (current-session-meta-universe-cell-id)
-          (current-worldview-hasse-registry-handle))
-     enet]
-    [else
-     (define pnet (elab-network-prop-net enet))
-     ;; Allocate 4 universe cells + 1 hasse-registry
-     (define-values (pnet1 type-cid)
-       (net-new-cell pnet (hasheq) type-universe-merge type-universe-contradicts?))
-     (define-values (pnet2 mult-cid)
-       (net-new-cell pnet1 (hasheq) mult-universe-merge mult-universe-contradicts?))
-     (define-values (pnet3 level-cid)
-       (net-new-cell pnet2 (hasheq) level-universe-merge meta-solve-universe-contradicts?))
-     (define-values (pnet4 session-cid)
-       (net-new-cell pnet3 (hasheq) session-universe-merge meta-solve-universe-contradicts?))
-     ;; Shared hasse-registry-handle for worldview Q_n subsumption.
-     ;; Uses the existing 'hasheq-replace domain for the registry cell merge
-     ;; (registry entries are stored as position→entry hasheq).
-     ;; The SUBSUME-FN is the Q_n bitmask override per hasse-registry.rkt.
-     (define-values (pnet5 handle)
-       (net-new-hasse-registry
-        pnet4
-        #:l-domain 'worldview
-        #:position-fn (lambda (entry) (car entry))
-        #:subsume-fn (lambda (pos query)
-                       ;; Q_n subset check: bitmask intersection == query
-                       (and (number? pos) (number? query)
-                            (= (bitwise-and pos query) query)))))
-     ;; Commit all to elab-network
-     (define enet* (elab-network-rewrap enet pnet5))
-     ;; Set parameters
-     (current-type-meta-universe-cell-id type-cid)
-     (current-mult-meta-universe-cell-id mult-cid)
-     (current-level-meta-universe-cell-id level-cid)
-     (current-session-meta-universe-cell-id session-cid)
-     (current-worldview-hasse-registry-handle handle)
-     enet*]))
+  (define pnet (elab-network-prop-net enet))
+  ;; Read injected per-domain merge-fns + contradiction predicates from parameters.
+  (define type-merge (current-type-universe-merge))
+  (define mult-merge (current-mult-universe-merge))
+  (define level-merge (current-level-universe-merge))
+  (define session-merge (current-session-universe-merge))
+  (define type-cx? (current-type-universe-contradicts?))
+  (define mult-cx? (current-mult-universe-contradicts?))
+  (define ms-cx? (current-meta-solve-universe-contradicts?))
+  ;; Allocate 4 universe cells + 1 hasse-registry
+  (define-values (pnet1 type-cid)
+    (net-new-cell pnet (hasheq) type-merge type-cx?))
+  (define-values (pnet2 mult-cid)
+    (net-new-cell pnet1 (hasheq) mult-merge mult-cx?))
+  (define-values (pnet3 level-cid)
+    (net-new-cell pnet2 (hasheq) level-merge ms-cx?))
+  (define-values (pnet4 session-cid)
+    (net-new-cell pnet3 (hasheq) session-merge ms-cx?))
+  ;; Shared hasse-registry-handle for worldview Q_n subsumption.
+  (define-values (pnet5 handle)
+    (net-new-hasse-registry
+     pnet4
+     #:l-domain 'worldview
+     #:position-fn (lambda (entry) (car entry))
+     #:subsume-fn (lambda (pos query)
+                    ;; Q_n subset check: bitmask intersection == query
+                    (and (number? pos) (number? query)
+                         (= (bitwise-and pos query) query)))))
+  ;; Commit all to elab-network
+  (define enet* (elab-network-rewrap enet pnet5))
+  ;; Set parameters (may overwrite stale values from prior enet)
+  (current-type-meta-universe-cell-id type-cid)
+  (current-mult-meta-universe-cell-id mult-cid)
+  (current-level-meta-universe-cell-id level-cid)
+  (current-session-meta-universe-cell-id session-cid)
+  (current-worldview-hasse-registry-handle handle)
+  enet*)
+
+;; Reset all 5 parameters to #f. Useful at the top of a fresh
+;; `parameterize` block to ensure subsequent `init-meta-universes!`
+;; calls allocate on the fresh enet rather than reusing stale cids.
+;;
+;; Alternative to including all 5 parameters in the driver's parameterize
+;; block (which would be noisier at call sites).
+(define (reset-meta-universe-parameters!)
+  (current-type-meta-universe-cell-id #f)
+  (current-mult-meta-universe-cell-id #f)
+  (current-level-meta-universe-cell-id #f)
+  (current-session-meta-universe-cell-id #f)
+  (current-worldview-hasse-registry-handle #f))
+
+;; Predicate: is this cell-id one of the 4 meta-universe cells?
+;; Used by dispatching call sites (e.g., meta-solution/cell-id) to
+;; decide between compound access and direct cell access paths.
+(define (meta-universe-cell-id? cid)
+  (or (and (current-type-meta-universe-cell-id)
+           (equal? cid (current-type-meta-universe-cell-id)))
+      (and (current-mult-meta-universe-cell-id)
+           (equal? cid (current-mult-meta-universe-cell-id)))
+      (and (current-level-meta-universe-cell-id)
+           (equal? cid (current-level-meta-universe-cell-id)))
+      (and (current-session-meta-universe-cell-id)
+           (equal? cid (current-session-meta-universe-cell-id)))))
 
 ;; ============================================================
 ;; Per-component access helper
 ;; ============================================================
 
 ;; compound-cell-component-ref enet cell-id component-key [default]
-;;   Read a component's value from a compound cell (hasheq-valued).
+;;   Read a component's UNWRAPPED value from a compound cell (hasheq-valued).
 ;;   Returns `default` (or `#f` if not provided) if the component-key
 ;;   is not present.
 ;;
-;; Encapsulates the pattern:
-;;   (hash-ref (elab-cell-read enet cid) component-key default)
+;; Performs 2-level unwrap:
+;;   1. Read compound hasheq from cell
+;;   2. hash-ref for component-key → tagged-cell-value
+;;   3. tagged-cell-read to filter by current worldview bitmask → unwrapped value
 ;;
-;; Used at meta-access sites in S2.b-d to read per-meta values from
-;; universe cells without call-site hasheq-ref boilerplate.
+;; This mirrors what `net-cell-read` does for per-cell tagged-cell-value
+;; cells (the Step-1 substrate), but lifted to the compound-cell case.
 ;;
-;; Complexity: O(1) for the elab-cell-read (direct cell lookup) +
-;; O(log N) for hasheq-ref (CHAMP lookup). N = number of live metas
-;; per domain per elab-network, typically < 100.
+;; Complexity: O(1) cell lookup + O(log N) hasheq-ref + O(K) tagged-cell-read
+;; where K = number of tagged entries (typically small, often zero).
 (define compound-cell-component-ref
   (case-lambda
     [(enet cell-id component-key)
      (compound-cell-component-ref enet cell-id component-key #f)]
     [(enet cell-id component-key default)
      (define compound-val (elab-cell-read enet cell-id))
-     (if (hash? compound-val)
-         (hash-ref compound-val component-key default)
-         default)]))
+     (cond
+       [(not (hash? compound-val)) default]
+       [else
+        (define tcv (hash-ref compound-val component-key #f))
+        (cond
+          [(not tcv) default]
+          [(tagged-cell-value? tcv)
+           (tagged-cell-read tcv (or (current-worldview-bitmask) 0))]
+          [else tcv])])]))
+
+;; compound-cell-component-write enet cell-id component-key value → enet*
+;;   Write a value for `component-key` into the compound cell. Wraps the
+;;   value as a tagged-cell-value entry respecting the current worldview
+;;   bitmask (tagged-cell-write semantics), then writes a delta hasheq to
+;;   the compound cell. The cell's compound-tagged-merge handles pointwise
+;;   merging with the existing hasheq contents.
+;;
+;; If `value` is already a tagged-cell-value, it's used as-is (no re-wrap).
+;;
+;; Returns updated enet (with eq?-preservation if no change occurred).
+(define (compound-cell-component-write enet cell-id component-key value)
+  (define wv (or (current-worldview-bitmask) 0))
+  (define tcv
+    (cond
+      [(tagged-cell-value? value) value]
+      [(zero? wv) (tagged-cell-value value '())]
+      [else (tagged-cell-value 'infra-bot (list (cons wv value)))]))
+  (elab-cell-write enet cell-id (hasheq component-key tcv)))
