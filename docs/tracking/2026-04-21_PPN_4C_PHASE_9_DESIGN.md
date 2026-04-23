@@ -126,7 +126,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **Re-sequencing 2026-04-22** | Post-T-3 task dependency clarified per charter-alignment dialogue | — | Tactical T-1/T-2 cleanup was framed against end-state (Phase 9 substrate + Phase 4 CHAMP retirement + PM 12 on-network migrations). Result: **1A-iii-a-wide Step 1 precedes T-1/T-2** because it IS the addendum's Phase 1 substrate-migration charter continuation. T-1 post-Step-1 becomes "scaffolding retirement plan," not "API redesign." See §7.5.10 for the framing. |
 | **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ✅ | **DONE** 2026-04-22. 5 commits S1.a-e. See §7.5.11 for full summary. S1.a (`3b6aefdb`) elab-fresh-meta → tagged-cell-value + 4th accidentally-load-bearing finding fix (visibility scope in `with-speculative-rollback` parameterize). S1.b (`2c8871ec`) retired 3 TMS fallback branches. S1.c (`d220ca51`) retired TMS API wholesale (~258 lines deleted). S1.d (`9f47ffe9`) retired current-speculation-stack parameter. S1.e (`b1468220`) peripheral cleanup (test-tms-cell.rkt deleted, cell-ops stale comments updated). Full suite: 7908 tests, 126.7s, 1 pre-existing batch contamination (unrelated). |
 | Path T-1 | `with-speculative-rollback` scaffolding retirement plan | ✅ | **DONE** 2026-04-22 (commit TBD). Documentation-only pass per charter alignment. Labeled elab-net snapshot as scaffolding with retirement plan in elab-speculation-bridge.rkt module docstring + inline comments; cleaned up stale Phase 11 retirement-journey comments. PM Master updated with "PPN 4C 1A-iii-a-wide Step 1 + T-1 (2026-04-22) — `with-speculative-rollback` retirement handoff" section specifying light cleanup sub-phase for PM 12 (6 caller migrations to `speculate` form, ~20-30 min mechanical work). DEFERRED.md updated. No code changes; no caller simplifications warranted post-Step-1. Full retirement gated on Phase 4 (meta-info CHAMP) + PM 12 (constraint store + id-map). |
-| Path T-2 | Map type inference open-world realignment (post-Step-1 verification) | ⬜ | Reframed 2026-04-22. T-3 + open-world may land `_` value type by default; verify typing-core.rkt:1196-1217's explicit `build-union-type` becomes redundant OR migrate to `_` per ergonomics. Mostly mechanical post-Step-1. |
+| Path T-2 | Map type inference open-world realignment ("Open by Design") | ✅ | **DONE** 2026-04-23. 3 commits. See §7.6.15 for full summary. Commit 1/3 (`4bfbd141`): `expr-Open` AST + pipeline integration (7 files: syntax/substitution/zonk/reduction/pretty-print/pnet-serialize/unify). Commit 2/3 (`246d4c2e`): typing semantics + map-op Open cases + map-assoc speculation retirement (typing-core + qtt). Commit 3/3 (`07fda438`): elaborator `surf-map-literal` emits Open for unannotated value type + test-mixed-map rewrite (21→25 tests) + test-path-expressions update + probe baseline refreshed. Full suite 7912 tests / 118.4s / 0 failures (pre-existing batch contamination cleared). speculation_count 12→0 in probe. Overrides 2026-03-20 CIU §8 D7. |
 | **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4. Follows T-1 + T-2. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -1250,6 +1250,72 @@ This is the **4th instance** of the "accidentally-load-bearing mechanism" patter
 **Fourth-finding codification candidate** (dailies 2026-04-22 watching list, promote if 5th instance observed):
 
 > *Accidentally-load-bearing mechanisms are often surfaced by integration-test behavior, not static audit.* Stage 2 audits that grep for inline predicates (e.g., `(type-top? ...)`, `(tms-cell-value? ...)`) catch SOME sites. They miss sites where a mechanism's BEHAVIOR — not its obvious API — is load-bearing downstream. B6 (T-3 Commit B, type meta cell merge-fn) and S1.a (visibility scope in with-speculative-rollback parameterize) were both surfaced by test-failure-during-integration, not by static audit. Implication: Stage 2 audits for API migrations must include integration-test runs of realistic workloads, not just static site enumeration.
+
+### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
+
+Post-T-3 dialogue surfaced the T-2 scope. T-3 Commit B's set-union merge at the cell level DID NOT automatically make map-assoc's explicit `build-union-type` (at `typing-core.rkt:1196-1217`) redundant — the widening was a sexp-level TYPE EXPRESSION construction, not a cell-merge. T-2 resolved this by retiring the narrow-union-widening pathway entirely in favor of **"Open by Design"** — a new α-semantic universal type for unannotated heterogeneous map values, inspired by Clojure's practical ergonomics ("The Pragmatic Prover").
+
+**Two architectural decisions** (dialogue 2026-04-23):
+
+**D1 — Override CIU §8 D7**: `docs/tracking/2026-03-20_COLLECTION_INTERFACE_UNIFICATION_DESIGN.md` §8 considered this exact question and recommended Option C (schema-first, keep narrow-union default). User override: CIU is a draft note, not a design commitment; the vision has always been Clojure-ergonomic Maps. Override taken with eyes open.
+
+**D2 — α-semantic for Open** (not β "unknown"-style, not γ "freshen-per-access"):
+- `check ctx v (expr-Open) = #t` always (Open accepts any value)
+- `check ctx e T` where `(infer e) = (expr-Open)` succeeds via `unify Open T = T` (Open passes through)
+- Open unifies in both directions, never fails, never solves
+- Trust at the map-read use site; validation via schema when needed
+
+**Implementation** (3 staged commits):
+
+| Commit | Focus | Hash |
+|---|---|---|
+| 1/3 | `expr-Open` AST + pipeline integration (7 files) | `4bfbd141` |
+| 2/3 | Typing semantics + map-op Open cases + map-assoc speculation retirement | `246d4c2e` |
+| 3/3 | Elaborator emits Open + test rewrites + probe baseline refresh | `07fda438` |
+
+**Files touched** (10 production + 2 test + 1 data):
+- syntax.rkt (struct + provide + predicate)
+- substitution.rkt, zonk.rkt, reduction.rkt, pretty-print.rkt, pnet-serialize.rkt, unify.rkt (identity/wildcard cases)
+- typing-core.rkt (infer/check/infer-level + Open cases for all 9 map operations + map-assoc speculation retirement)
+- qtt.rkt (parallel inferQ/checkQ)
+- elaborator.rkt (`surf-map-literal` emits Open)
+- tests/test-mixed-map.rkt (11 rewrites + 4 new tests, 21→25)
+- tests/test-path-expressions.rkt (1 assertion update)
+- data/probes/2026-04-22-1A-iii-baseline.txt (refreshed to post-T-2 state)
+
+**Aggregate statistics**:
+
+| Metric | Value |
+|---|---|
+| Commits | 3 (Commit 1/2/3 of 3) |
+| Production files modified | 10 |
+| Test files modified | 2 |
+| New tests | +4 (21 → 25 in test-mixed-map) |
+| Full suite | 7912 tests / 118.4s / 0 failures (**pre-existing** test-facet-sre-registration contamination cleared as side-effect) |
+| Probe `speculation_count` | 12 → 0 (complete retirement for map operations) |
+| Probe `atms_hypothesis_count` | 17 → 5 (-70%) |
+| Probe `infer_steps` | 73 → 55 (-24%) |
+| Probe `meta_created` | 19 → 16 (-16%) |
+| Probe `reduce_steps` | 339 → 315 (-7%) |
+
+**Vision Alignment Gate (all 4 questions pass)**:
+
+- **(a) On-network?** YES for new mechanism. `expr-Open` is a pure type-level AST node; no Racket parameters, no mutable state, no off-network registries added. `unify.rkt`'s classify handles Open as a wildcard in the same way `expr-hole` is handled — pure dispatch.
+- **(b) Complete?** YES. All 9 map operations (get, assoc, nil-safe-get, dissoc, size, has-key, keys, vals, generic get) have Open cases. α-semantic applied consistently. Annotation path preserves strict narrow-union checks (Concern B). Schema path preserved (Concern B).
+- **(c) Vision-advancing?** YES. Completes the T-3 → T-2 arc: T-3 removed narrow-union-widening as a lattice-merge obligation; T-2 removes it as a typing-rule obligation. Reframes Maps as Clojure-ergonomic primitives without the Haskell-style narrow-union coercion. One of six `with-speculative-rollback` sites retired; the other five retire naturally at PM 12. Aligns with PPN 4C charter (everything on-network via simple substrates).
+- **(d) Drift-risks-cleared?** YES. All 11 test-mixed-map assertions rewritten; path-expressions updated; probe baseline refreshed with delta documentation. No stale mechanisms left hanging.
+
+**Scope preserved** (not touched):
+- Other 5 `with-speculative-rollback` sites (typing-core.rkt:1291/1325/2439, qtt.rkt:2425, typing-errors.rkt:78) — union-read disambiguation, scheduled for PM 12 light-cleanup sub-phase per T-1 PM Master handoff.
+- Annotated-narrow paths: `def m : (Map K T) := {...}` strict-checks as before. Narrow-union annotations `(Map K <A | B>)` also preserved (Concern B).
+- Schema system: `lookup-schema-by-name` + `selection-field-type` paths unchanged.
+- On-network typing (typing-propagators.rkt): no changes needed — SRE ctor-desc decomposition handles `expr-Open` as any type component.
+
+**Codification candidate** (watching list update — T-2 is the application of the pattern):
+
+> *Retiring narrow-union default maps as the "accidentally-load-bearing" fingerprint.* The narrow-union-widening pathway (map-assoc calling build-union-type in the widening branch) was the SOURCE of three of the four T-3/Step-1 findings. It was architectural debt that kept surfacing as correctness-via-coincidence. Retiring it structurally (via Open-by-Design semantic) eliminated the pattern at that specific site. General lesson: when a feature produces repeated accidentally-load-bearing findings, the ergonomic-correct replacement is often simpler than more-careful-migration.
+
+**Re-sequencing complete**: `1A-iii-a-wide Step 1 → T-1 → T-2 → Step 2` arc has landed Steps 1, T-1, T-2. Next: Step 2 (PU refactor — vision-advancing Phase 1A capstone per §7.5.4).
 
 ### §7.7 Phase 1B deliverables
 
