@@ -117,14 +117,15 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | T-3 Stage 2 audit | Classify type-lattice-merge call sites (Role A/B) | ✅ (INCOMPLETE) | commit `6fddc5f7` — 4 Role B + 8 Role A + dispatch tables. MISSED contradiction-detection-as-fallback sites — see §7.6.12/§7.6.13 |
 | T-3 probe baseline | Pre-0 behavioral probe (6 scenarios) | ✅ | commit `329d4f30` |
 | T-3 Commit A | Role B migration (4 sites) + type-unify-or-top helper | ✅ | commit `37aaba2b` — zero behavior change; probe diff 0; 129 targeted tests pass |
-| **T-3 Commit B** | `type-lattice-merge` set-union fallthrough | ⏸️ PAUSED | test-union-types regression exposed 3rd accidentally-load-bearing mechanism; T3-C3 re-audit required before retry |
-| **T-3 T3-C3 re-audit** | Systematic audit for contradiction-detection-as-fallback sites | ✅ | Q3 C3 full grep classification: 5 new Role B sites found (B1-B5); 1 architectural error (C1 expr-union); 1 install-caller audit (Q2: install is infer-only, branching misplaced). See §7.6.14 |
-| **T-3 Commit A.2-a** | Architectural fix: `make-union-fire-fn` + expr-union install rewrite + dead scaffolding removal | ✅ | commit `a5a33a71` — paralleling `make-pi-fire-fn`; probe diff = 0; 147 targeted tests pass; standalone-safe (independent of Commit B) |
-| **T-3 Commit A.2-b** | Centralized `type-map-write-unified` helper + B1 (app fire) + B2 (expr-ann) Role B migrations | ⬜ | next |
-| **T-3 Commit A.2-c** | Cell merge-fn swaps: B3 (classify-inhabit classifier merge), B4 (cap-type-bridge), B5 (session-type-bridge) | ⬜ | |
-| Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ | Deferred until T-3 resolves — T-3 likely obviates need for try-rollback speculation in map-assoc |
-| Path T-2 | Map type inference open-world realignment | ⬜ | Deferred until T-3 resolves — T-3 + open-world may land `_` value type by default |
-| 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⏸️ PAUSED | Pending Path T resolution. T-3's set-union merge likely simplifies this significantly. |
+| **T-3 Commit B** | `type-lattice-merge` set-union fallthrough + B6 migration + 5 test updates + distributivity finding | ✅ | commit `e07b809f` — probe diff = 0; canary `(infer <Nat | Bool>) = [Type 0]` PASSES; 7942-test suite 1-failure (pre-existing batch contamination, verified via stash test) |
+| **T-3 T3-C3 re-audit** | Systematic audit for contradiction-detection-as-fallback sites | ✅ | Q3 C3 full grep classification: 5 Role B sites (B1-B5) + 1 architectural error (C1 expr-union) + B6 exposed during Commit B integration (elab-fresh-meta + identify-sub-cell). Q2 resolved: install is infer-only. See §7.6.14 |
+| **T-3 Commit A.2-a** | Architectural fix: `make-union-fire-fn` + expr-union install rewrite + dead scaffolding removal | ✅ | commit `a5a33a71` — paralleling `make-pi-fire-fn`; probe diff = 0; 147 targeted tests pass; standalone-safe |
+| **T-3 Commit A.2-b** | Centralized `type-map-write-unified` helper + B1 (app fire) + B2 (expr-ann) Role B migrations | ✅ | commit `f85dd50a` — Role A/B decomplection at API level; 154 targeted tests pass |
+| **T-3 Commit A.2-c** | Cell merge-fn swaps: B3 (classify-inhabit), B4 (cap-type-bridge), B5 (session-type-bridge) | ✅ | commit `105bcdae` — Role B cell merge-fn semantics; 242 targeted tests across 11 files pass |
+| **T-3 COMPLETE** | — | ✅ | **DONE** 2026-04-22. 4 commits, staged A→B. Set-union merge live; contradiction signal preserved via Role A/B decomplection chain. Unblocks T-1, T-2, 1A-iii-a-wide Step 2. |
+| Path T-1 | Speculation mechanism consolidation (correct-by-construction on worldview) | ⬜ UNBLOCKED | T-3 complete (`e07b809f`). Now ready: audit 4 `with-speculative-rollback` callers; many likely become unnecessary (set-union merge handles map-assoc type-incompatibility naturally). |
+| Path T-2 | Map type inference open-world realignment | ⬜ UNBLOCKED | T-3 complete. `build-union-type` in typing-core.rkt:1196-1217 likely redundant (merge does it) OR migrate to `_` open-world per ergonomics design. |
+| 1A-iii-a-wide | Type cell migration + union-inference adaptation + PU refactor | ⬜ UNBLOCKED | T-3 complete. Type cells already Role B (B6 migrated in Commit B). Step 2 PU refactor (4 per-domain universes + shared hasse-registry + elab-meta-read/write API) now ready. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | |
