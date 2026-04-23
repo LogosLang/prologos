@@ -1,0 +1,221 @@
+ns examples.eigentrust
+
+;; ========================================================================
+;;
+;;     E I G E N T R U S T   I N   P R O L O G O S
+;;     --------------------------------------------
+;;
+;;     Kamvar, Schlosser, Garcia-Molina (2003):
+;;     "The EigenTrust Algorithm for Reputation Management in P2P Networks"
+;;
+;;     EigenTrust computes a global trust vector t over n peers from a
+;;     local trust matrix C (row-stochastic: rows sum to 1, C[i][j] is
+;;     peer i's normalized trust in peer j). A pre-trust vector p
+;;     anchors the computation against malicious collectives.
+;;
+;;     The algorithm is a damped power iteration on C^T:
+;;
+;;         t_{k+1} = (1 - alpha) * (C^T * t_k) + alpha * p
+;;
+;;     with damping alpha in (0,1]. The global trust vector is the
+;;     stationary distribution of the damped Markov chain.
+;;
+;;     Implementation notes:
+;;     - Uses exact Rat arithmetic throughout (no float rounding).
+;;     - Represents the matrix as [List [List Rat]] (row-major).
+;;     - Computes (C^T * t)[j] = sum_i C[i][j] * t[i] without explicit
+;;       transpose: (C^T * t) = sum_i (t[i] * row_i(C)). Fold the
+;;       scaled rows element-wise.
+;;     - Convergence: L-infinity norm of (t_{k+1} - t_k) < epsilon.
+;;     - All vector/matrix helpers use explicit structural recursion
+;;       (no closures over map/zip-with) to stay inside QTT linearity.
+;;
+;; ========================================================================
+
+
+;; ============================================================
+;; Vector primitives (explicit recursion over [List Rat])
+;; ============================================================
+
+;; Scale every element of a vector by a Rat scalar.
+spec scale-vec Rat [List Rat] -> [List Rat]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat* s x] [scale-vec s as]
+
+;; Elementwise addition of two Rat vectors.
+;; Truncates to the shorter input.
+spec add-vec [List Rat] [List Rat] -> [List Rat]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat+ x y] [add-vec as bs]
+
+;; Elementwise subtraction.
+spec sub-vec [List Rat] [List Rat] -> [List Rat]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat- x y] [sub-vec as bs]
+
+;; Pointwise absolute value.
+spec abs-vec [List Rat] -> [List Rat]
+defn abs-vec [xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat-abs x] [abs-vec as]
+
+;; Pointwise max of two non-negative Rats.
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+;; L-infinity norm (max absolute value). Seeded at 0/1.
+spec linf-norm [List Rat] -> Rat
+defn linf-norm [xs]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> [rat-max [rat-abs x] [linf-norm as]]
+
+
+;; ============================================================
+;; Matrix-level operation: (C^T * t) as a weighted row sum.
+;;
+;; (C^T * t)[j] = sum_i C[i][j] * t[i] = (sum_i t[i] * row_i(C))[j]
+;; ============================================================
+
+;; Sum a list of Rat vectors element-wise. All rows must have the same
+;; length (the function matches layout by index). Returns nil on the
+;; empty matrix.
+spec sum-rows [List [List Rat]] -> [List Rat]
+defn sum-rows [xss]
+  match xss
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> [add-vec r [sum-rows rest]]
+
+;; Scale each row of a matrix by the corresponding entry of a vector.
+;; Zips by index: scaled-row[i] = t[i] * row_i(C).
+spec scale-rows [List Rat] [List [List Rat]] -> [List [List Rat]]
+defn scale-rows [ts c]
+  match ts
+    | nil       -> nil
+    | cons t rs -> match c
+      | nil         -> nil
+      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+
+;; (C^T * t) — the "column sum" via transposed interpretation.
+spec ct-times-vec [List [List Rat]] [List Rat] -> [List Rat]
+defn ct-times-vec [c t]
+  [sum-rows [scale-rows t c]]
+
+
+;; ============================================================
+;; The EigenTrust step: one damped power-iteration update.
+;;   t_new = (1 - alpha) * (C^T * t) + alpha * p
+;; ============================================================
+
+spec eigentrust-step [List [List Rat]] [List Rat] Rat [List Rat] -> [List Rat]
+defn eigentrust-step [c p alpha t]
+  [add-vec
+    [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]]
+    [scale-vec alpha p]]
+
+
+;; ============================================================
+;; Iterate until convergence (L-infinity norm < epsilon) or budget
+;; exhaustion. We carry both the previous iterate `t` and the current
+;; iterate `tnew` so each round computes `eigentrust-step` exactly
+;; once — no recomputation, no mutual recursion, no `let` needed.
+;; ============================================================
+
+spec eigentrust-iterate [List [List Rat]] [List Rat] Rat Rat Int [List Rat] [List Rat] -> [List Rat]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> [eigentrust-iterate c p alpha eps
+                                      [int- budget 1]
+                                      tnew
+                                      [eigentrust-step c p alpha tnew]]
+
+
+;; ============================================================
+;; Top-level entry point. Initial iterate is the pre-trust vector.
+;; ============================================================
+
+;; Primes the iterator with one step so convergence has a (t, tnew)
+;; pair to compare from the first round.
+spec eigentrust [List [List Rat]] [List Rat] Rat Rat Int -> [List Rat]
+defn eigentrust [c p alpha eps max-iter]
+  [eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]]
+
+
+;; ========================================================================
+;; Worked examples
+;;
+;; Exact-Rat arithmetic with unbounded denominator growth makes deep
+;; power iteration expensive. The examples here exercise the fixed
+;; points and a single step on small matrices; the unit tests
+;; (test-eigentrust.rkt) cover convergence with larger iteration
+;; budgets.
+;; ========================================================================
+
+;; --- Example 1: uniform matrix is a fixed point of uniform pre-trust ---
+;;
+;; If every row of C is [1/n ... 1/n] and p = [1/n ... 1/n], then
+;; (C^T * p) = p, so every step reproduces p regardless of alpha.
+
+def c-uniform-4 : [List [List Rat]]
+  := '['[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4]]
+
+def p-uniform-4 : [List Rat] := '[1/4 1/4 1/4 1/4]
+
+[eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50]
+;; => '[1/4 1/4 1/4 1/4] : [List Rat]
+
+
+;; --- Example 2: 3-peer symmetric "uniform-on-others" matrix ---
+;;
+;; C[i][j] = 1/2 for i != j, 0 otherwise. Symmetric; with uniform
+;; pre-trust [1/3 1/3 1/3] it is the stationary distribution.
+;;
+;; `rz` is a Rat-typed zero constant. The literal `0/1` inside a
+;; nested `'[...]` reads as Int `0`, so we splice `rz` in instead.
+
+def rz : Rat := 0/1
+
+def c-others-3 : [List [List Rat]]
+  := '['[rz 1/2 1/2] '[1/2 rz 1/2] '[1/2 1/2 rz]]
+
+def p-uniform-3 : [List Rat] := '[1/3 1/3 1/3]
+
+[eigentrust c-others-3 p-uniform-3 1/10 1/1000 50]
+;; => '[1/3 1/3 1/3] : [List Rat]
+
+
+;; --- Example 3: one step of the update operator in isolation ---
+
+[eigentrust-step c-others-3 p-uniform-3 1/10 p-uniform-3]
+;; => '[1/3 1/3 1/3] : [List Rat]   (uniform is already stationary)
+
+
+;; --- Example 4: a handful of the underlying primitives ---
+
+[scale-vec 1/2 '[1/2 1/3 1/4]]
+;; => '[1/4 1/6 1/8] : [List Rat]
+
+[add-vec '[1/4 1/4] '[1/4 1/4]]
+;; => '[1/2 1/2] : [List Rat]
+
+[linf-norm [sub-vec '[1/2 1/3] '[1/4 1/3]]]
+;; => 1/4 : Rat

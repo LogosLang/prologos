@@ -1,0 +1,138 @@
+ns benchmarks::comparative::eigentrust
+
+;; ============================================================
+;; Benchmark: EigenTrust reputation algorithm
+;;
+;; Stresses: exact-Rat arithmetic through many iterations, nested
+;; structural recursion over [List [List Rat]], worldview-free
+;; reduction (no speculation, no traits). Driven by the power-method
+;; iteration count, not convergence, so timings are deterministic.
+;;
+;; See examples/eigentrust.prologos for the algorithm narrative and
+;; tests/test-eigentrust.rkt for correctness assertions.
+;; ============================================================
+
+spec scale-vec Rat [List Rat] -> [List Rat]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat* s x] [scale-vec s as]
+
+spec add-vec [List Rat] [List Rat] -> [List Rat]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat+ x y] [add-vec as bs]
+
+spec sub-vec [List Rat] [List Rat] -> [List Rat]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [rat- x y] [sub-vec as bs]
+
+spec abs-vec [List Rat] -> [List Rat]
+defn abs-vec [xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [rat-abs x] [abs-vec as]
+
+spec rat-max Rat Rat -> Rat
+defn rat-max [a b]
+  match [rat-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm [List Rat] -> Rat
+defn linf-norm [xs]
+  match xs
+    | nil       -> 0/1
+    | cons x as -> [rat-max [rat-abs x] [linf-norm as]]
+
+spec sum-rows [List [List Rat]] -> [List Rat]
+defn sum-rows [xss]
+  match xss
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> [add-vec r [sum-rows rest]]
+
+spec scale-rows [List Rat] [List [List Rat]] -> [List [List Rat]]
+defn scale-rows [ts c]
+  match ts
+    | nil       -> nil
+    | cons t rs -> match c
+      | nil         -> nil
+      | cons r rest -> cons [scale-vec t r] [scale-rows rs rest]
+
+spec ct-times-vec [List [List Rat]] [List Rat] -> [List Rat]
+defn ct-times-vec [c t]
+  [sum-rows [scale-rows t c]]
+
+spec eigentrust-step [List [List Rat]] [List Rat] Rat [List Rat] -> [List Rat]
+defn eigentrust-step [c p alpha t]
+  [add-vec
+    [scale-vec [rat- 1/1 alpha] [ct-times-vec c t]]
+    [scale-vec alpha p]]
+
+spec eigentrust-iterate [List [List Rat]] [List Rat] Rat Rat Int [List Rat] [List Rat] -> [List Rat]
+defn eigentrust-iterate [c p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [rat-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> [eigentrust-iterate c p alpha eps
+                                      [int- budget 1]
+                                      tnew
+                                      [eigentrust-step c p alpha tnew]]
+
+spec eigentrust [List [List Rat]] [List Rat] Rat Rat Int -> [List Rat]
+defn eigentrust [c p alpha eps max-iter]
+  [eigentrust-iterate c p alpha eps max-iter p [eigentrust-step c p alpha p]]
+
+
+;; ============================================================
+;; Fixtures
+;; ============================================================
+
+def rz : Rat := 0/1
+
+def p-uniform-4 : [List Rat] := '[1/4 1/4 1/4 1/4]
+def p-uniform-3 : [List Rat] := '[1/3 1/3 1/3]
+
+def c-uniform-4 : [List [List Rat]]
+  := '['[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4] '[1/4 1/4 1/4 1/4]]
+
+def c-others-3 : [List [List Rat]]
+  := '['[rz 1/2 1/2] '[1/2 rz 1/2] '[1/2 1/2 rz]]
+
+;; A perturbed starting vector — forces the step-and-compare loop to
+;; actually iterate (rather than detecting a fixed point on round 1).
+def t-perturbed-3 : [List Rat] := '[1/2 1/3 1/6]
+def t-perturbed-4 : [List Rat] := '[1/2 1/4 1/8 1/8]
+
+
+;; ============================================================
+;; Benchmark workloads
+;; ============================================================
+
+;; W1: full convergence on a 4x4 uniform matrix.
+;; (Starts at pre-trust, detects fixpoint immediately → ~1 step.)
+[eigentrust c-uniform-4 p-uniform-4 1/10 1/1000 50]
+
+;; W2: 10 damped steps on a 4x4 uniform matrix from a perturbed start.
+;; eps = 0 forces the iteration budget to drive the loop deterministically.
+[eigentrust-iterate c-uniform-4 p-uniform-4 1/10 0/1 10 t-perturbed-4
+                    [eigentrust-step c-uniform-4 p-uniform-4 1/10 t-perturbed-4]]
+
+;; W3: 15 damped steps on a 3x3 symmetric "uniform-on-others" matrix
+;; from a perturbed start. Exercises matrix-vector multiply with an
+;; evolving (non-fixed-point) iterate.
+[eigentrust-iterate c-others-3 p-uniform-3 1/10 0/1 15 t-perturbed-3
+                    [eigentrust-step c-others-3 p-uniform-3 1/10 t-perturbed-3]]
+
+;; W4: isolated step operator on c-others-3 from the perturbed start.
+[eigentrust-step c-others-3 p-uniform-3 1/10 t-perturbed-3]
