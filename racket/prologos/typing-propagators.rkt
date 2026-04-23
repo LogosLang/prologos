@@ -52,8 +52,10 @@
          (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
-         (only-in "atms.rkt" assumption-id assumption-id-n
-                  solver-state-assume solver-state?)  ;; Track 4B Phase 8 + Phase 6f
+         ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): imports from
+         ;; atms.rkt (assumption-id, assumption-id-n, solver-state-assume,
+         ;; solver-state?) removed — were only used by the pre-T-3 expr-union
+         ;; install case's worldview-bitmask branching, now retired.
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -1246,6 +1248,31 @@
                        (expr-Type (lmax (expr-Type-level dom-type)
                                         (expr-Type-level cod-type))))])))
 
+;; Union formation: read left and right types (both must be Type(l)).
+;; Mirrors make-pi-fire-fn. PPN 4C Path T-3 (Commit A.2-a, 2026-04-22):
+;; the TYPE of a union-type expression `<A | B>` is the universe
+;; `[Type (lmax level(A) level(B))]`, same as other type-formers.
+;; Prior implementation (Phase 8 Option D) wrote component types (A, B)
+;; to position e's :type and used worldview-bitmask branching at infer
+;; time, which was (a) architecturally wrong — components are not the
+;; type of the union expression, they're its COMPONENTS — and (b)
+;; accidentally load-bearing under pre-T-3 merge semantics via
+;; contradiction-detection-as-fallback. Branching-against-union at
+;; CHECK time is a separate concern handled elsewhere (typing-errors.rkt);
+;; install-typing-network is infer-time and needs no branching here.
+(define (make-union-fire-fn tm-cid position left-pos right-pos)
+  (lambda (net)
+    (define left-type (type-map-read net tm-cid left-pos))
+    (define right-type (type-map-read net tm-cid right-pos))
+    (cond
+      [(or (type-bot? left-type) (type-bot? right-type)) net]
+      [(not (expr-Type? left-type)) net]   ;; left component not a type
+      [(not (expr-Type? right-type)) net]  ;; right component not a type
+      [else
+       (type-map-write net tm-cid position
+                       (expr-Type (lmax (expr-Type-level left-type)
+                                        (expr-Type-level right-type))))])))
+
 ;; --- Pattern 5: Context as cell positions ---
 ;;
 ;; Each scope has a context POSITION in the type-map. A context-extension
@@ -1867,57 +1894,30 @@
                                   (list (cons tm-cid (cons cod ':usage)))))
        net4]
 
-      ;; --- Union type: Phase 8 Option D — branch via assumption-capturing propagators ---
-      ;; Phase 6f: union branching with worldview-scoped writes.
-      ;; Both branches install propagators on the SAME network. Each branch's
-      ;; writes are tagged with its worldview bitmask via the worldview cache cell.
-      ;; Tagged-cell-value entries keep branch values separate.
-      ;; DUAL-WRITE: TMS parameterize kept alongside worldview cache for
-      ;; backward compatibility (cells not yet promoted to tagged still use TMS).
-      ;; Retires gensym assumption-ids → integer IDs via solver-state-assume.
+      ;; --- Union type: type of `<A | B>` IS [Type (lmax level(A) level(B))] ---
+      ;; PPN 4C Path T-3 (Commit A.2-a, 2026-04-22): architectural fix.
+      ;; Previously this case installed branching via worldview-bitmask
+      ;; (Phase 8 Option D) and wrote COMPONENT types (A, B) to position e's
+      ;; :type facet, which was (a) architecturally wrong — components are
+      ;; not the type of the union expression, they're its components — and
+      ;; (b) accidentally load-bearing under pre-T-3 merge semantics via
+      ;; contradiction-detection-as-fallback (merge(A,B)=type-top → sexp
+      ;; typing-core.rkt:459 infer fallback returned correct [Type lv]).
+      ;;
+      ;; Fix: mirror make-pi-fire-fn's pattern. A union expression IS a type
+      ;; former; its type is the universe at level max(level(components)).
+      ;; Check-time branching against a union type (e.g., check expr : A | B)
+      ;; is a distinct code path in typing-errors.rkt:check/err; no branching
+      ;; needed here at infer time.
       [(expr-union left right)
-       ;; Phase 6f: Create assumptions with integer IDs for worldview tagging.
-       ;; Uses a process-local counter for deterministic bit positions.
-       ;; These assumptions are local to this union expression — they don't
-       ;; need to go through the solver-state (which tracks query-level assumptions).
-       (define left-n (begin0 (union-assumption-counter)
-                        (union-assumption-counter (add1 (union-assumption-counter)))))
-       (define right-n (begin0 (union-assumption-counter)
-                         (union-assumption-counter (add1 (union-assumption-counter)))))
-       (define aid-left (assumption-id left-n))
-       (define aid-right (assumption-id right-n))
-       ;; Phase 11.1: tagged-only promotion. TMS promotion REMOVED.
-       ;; Root cause of Phase 9b-4 regression: promote-cell-to-tms AFTER
-       ;; promote-cell-to-tagged created (tms-cell-value (tagged-cell-value ...)).
-       ;; net-cell-read dispatched on outer type (TMS), tagged path never reached.
-       ;; With tagged-only, net-cell-read hits the tagged-cell-value branch,
-       ;; worldview cache persistence provides commit, no TMS needed.
-       (define net-promoted (promote-cell-to-tagged net tm-cid))
-       ;; Phase 11.2: LEFT branch — worldview bitmask only (TMS stack REMOVED).
-       ;; current-worldview-bitmask controls: net-cell-write tagging,
-       ;; net-cell-read filtering, current-speculation-assumption (9b-1),
-       ;; worldview-visible? (9b-2). Worldview cache persistence IS commit.
-       (define left-bitmask (arithmetic-shift 1 (assumption-id-n aid-left)))
-       (define net-left-wv (net-cell-write net-promoted worldview-cache-cell-id left-bitmask))
-       (define net-left
-         (parameterize ([current-worldview-bitmask left-bitmask])
-           (install net-left-wv left ctx-pos)))
-       (define net-left2
-         (parameterize ([current-worldview-bitmask left-bitmask])
-           (type-map-write net-left tm-cid e left)))
-       ;; RIGHT branch — worldview bitmask only.
-       ;; Phase 11: OR with existing worldview (not replace) so BOTH branches'
-       ;; bits are set. tagged-cell-read with the combined bitmask merges entries.
-       (define right-bitmask (arithmetic-shift 1 (assumption-id-n aid-right)))
-       (define combined-bitmask (bitwise-ior left-bitmask right-bitmask))
-       (define net-right-wv (net-cell-write net-left2 worldview-cache-cell-id combined-bitmask))
-       (define net-right
-         (parameterize ([current-worldview-bitmask right-bitmask])
-           (install net-right-wv right ctx-pos)))
-       (define net-right2
-         (parameterize ([current-worldview-bitmask right-bitmask])
-           (type-map-write net-right tm-cid e right)))
-       net-right2]
+       (define net1 (install net left ctx-pos))
+       (define net2 (install net1 right ctx-pos))
+       (define-values (net3 _pid)
+         (net-add-propagator net2 (list tm-cid) (list tm-cid)
+           (make-union-fire-fn tm-cid e left right)
+           #:component-paths (list (cons tm-cid (cons left ':type))
+                                   (cons tm-cid (cons right ':type)))))
+       net3]
 
       ;; --- Type annotation: return type IS the annotation + check term ---
       ;; Phase 9 prep: ann(term, T) → T, with T written downward to term
@@ -2180,9 +2180,10 @@
 ;; Parameters for the persistent global attribute-map cell and per-command output cell.
 (define current-attribute-map-cell-id (make-parameter #f))
 (define current-meta-solution-output-cell-id (make-parameter #f))
-;; Phase 6f: counter for union branching assumption IDs (integer, deterministic).
-;; Reset per command (same scope as attribute-map-cell-id).
-(define union-assumption-counter (make-parameter 0))
+;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): union-assumption-counter
+;; removed — was only used by the pre-T-3 expr-union install case for
+;; worldview-bitmask branching at infer time, which was both architecturally
+;; incorrect and accidentally load-bearing. See typing-propagators.rkt:1878+.
 
 ;; Phase 0c: Initialize the global attribute-map cell on the persistent
 ;; registry network. Called once per file alongside init-macros-cells!,
