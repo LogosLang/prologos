@@ -140,19 +140,10 @@
  net-pair-decomp-insert
  decomp-key
  decomp-key-hash
- ;; TMS cells — Track 4 Phase 1 (assumption-tagged values)
- (struct-out tms-cell-value)
- tms-cell-value?      ;; re-export predicate for external pattern matching
- tms-read
- tms-write
- tms-commit
- merge-tms-cell
- make-tms-merge
- net-new-tms-cell
- ;; TMS speculation stack — Track 4 Phase 1
- ;; Lives in propagator.rkt (not elab-speculation-bridge.rkt) to avoid
- ;; circular dependency: metavar-store.rkt needs it for TMS-aware reads.
- current-speculation-stack
+ ;; TMS cells — Track 4 Phase 1 — RETIRED 2026-04-22 (PPN 4C 1A-iii-a-wide Step 1).
+ ;; BSP-LE 2/2B's tagged-cell-value substrate superseded TMS entirely for speculation.
+ ;; Last consumer (elab-fresh-meta type meta cells) migrated in S1.a.
+ ;; current-speculation-stack parameter retired in S1.d.
  ;; Phase 6+7: Per-propagator worldview bitmask for concurrent clause execution.
  ;; Each clause's fire function sets this before executing. net-cell-write reads
  ;; it for tagged-cell-value tagging. Enables M clauses' propagators on the SAME
@@ -217,13 +208,12 @@
  worker-pool-shutdown!
  ;; BSP-LE Track 2 Phase 5.9b: promote cell to tagged-cell-value
  promote-cell-to-tagged
- ;; Raw cell read (bypasses TMS unwrapping) — for commit/provenance
+ ;; Raw cell read (bypasses TMS unwrapping — now effectively identical to
+ ;; net-cell-read's non-speculation path; kept for explicit provenance intent)
  net-cell-read-raw
- ;; Track 6 Phase 2+3: Network-wide TMS commit
- net-commit-assumption
- ;; Track 6 Phase 4: TMS retraction
- tms-retract
- net-retract-assumption
+ ;; net-commit-assumption, tms-retract, net-retract-assumption RETIRED 2026-04-22
+ ;; (PPN 4C 1A-iii-a-wide Step 1 S1.c). TMS-era commit/retract APIs obsoleted
+ ;; by tagged-cell-value + worldview-cache bitmask mechanism.
  ;; Trace data types (Visualization Phase 0)
  (struct-out bsp-round)
  (struct-out cell-diff)
@@ -1344,264 +1334,6 @@
               [warm (struct-copy prop-net-warm (prop-network-warm net*)
                       [contradiction cid])])
             net*))))
-
-;; ========================================
-;; TMS Cells — Track 4 Phase 1
-;; ========================================
-;;
-;; Assumption-tagged cell values for speculation. A TMS cell stores a
-;; recursive CHAMP tree mirroring the nesting structure of speculation.
-;;
-;; At depth 0 (no active speculation), reads return `base` directly —
-;; single null? check, no overhead. During speculation, reads navigate
-;; the tree via the speculation stack (O(d) CHAMP lookups, d = depth).
-;;
-;; Design reference: docs/tracking/2026-03-16_TRACK4_ATMS_SPECULATION.md §3.2
-
-;; The recursive tree node for TMS cell values.
-;; base: unconditional value (always visible at depth 0)
-;; branches: hasheq assumption-id → (value | tms-cell-value)
-;;   If a branch value is itself a tms-cell-value, that means the
-;;   assumption's speculation had sub-speculations (nesting).
-;;   If it's a plain value, it's a leaf.
-(struct tms-cell-value (base branches) #:transparent)
-
-;; Sentinel for TMS cell initial state (distinguishable from user bots).
-;; Used as the base value for TMS cells created during speculation nesting.
-(define tms-bot 'tms-bot)
-
-;; Read a TMS cell value under the current speculation stack.
-;; stack: (listof assumption-id) — current speculation nesting, outermost first
-;; Returns: the value visible under the current worldview.
-;;
-;; At depth 0 (stack = '()), returns base directly.
-;; At depth d, follows the stack through branches, falling back to base
-;; at each level if no write exists for that assumption.
-(define (tms-read cell-val stack)
-  (cond
-    [(not (tms-cell-value? cell-val)) cell-val]  ;; non-TMS cell — pass through
-    [(null? stack) (tms-cell-value-base cell-val)]
-    [else
-     (define branch (hash-ref (tms-cell-value-branches cell-val)
-                              (car stack) #f))
-     (cond
-       [(not branch) (tms-read cell-val (cdr stack))]   ;; no write at this depth → try outer hypothesis
-       [(tms-cell-value? branch) (tms-read branch (cdr stack))]  ;; recurse into sub-tree
-       ;; Leaf value — but if there are deeper stack entries, we still return
-       ;; the leaf (it was written at this depth, deeper speculation hasn't overridden)
-       [else branch])]))
-
-;; Write a value into a TMS cell at the current speculation depth.
-;; stack: (listof assumption-id) — current speculation nesting, outermost first
-;; value: the value to write
-;; Returns: updated tms-cell-value with the value inserted at the correct depth.
-;;
-;; At depth 0 (stack = '()), updates base (unconditional write).
-;; At depth d, performs nested CHAMP insert following the stack.
-;; O(d) nested CHAMP updates, each creating new nodes with structural sharing.
-(define (tms-write cell-val stack value)
-  (cond
-    [(null? stack)
-     ;; Unconditional write — update base
-     (struct-copy tms-cell-value cell-val [base value])]
-    [(null? (cdr stack))
-     ;; Leaf of stack — insert/update in branches
-     (struct-copy tms-cell-value cell-val
-       [branches (hash-set (tms-cell-value-branches cell-val)
-                           (car stack) value)])]
-    [else
-     ;; Deeper — recurse into existing branch or create new sub-tree
-     (define existing (hash-ref (tms-cell-value-branches cell-val)
-                                (car stack)
-                                #f))
-     (define sub-tree
-       (cond
-         [(tms-cell-value? existing) existing]
-         [existing (tms-cell-value existing (hasheq))]  ;; promote leaf to sub-tree
-         [else (tms-cell-value tms-bot (hasheq))]))      ;; fresh sub-tree
-     (struct-copy tms-cell-value cell-val
-       [branches (hash-set (tms-cell-value-branches cell-val)
-                           (car stack)
-                           (tms-write sub-tree (cdr stack) value))])]))
-
-;; Commit a speculation: promote the speculative value to base.
-;; assumption-id: the assumption being committed
-;; Returns: updated tms-cell-value with base updated.
-;;
-;; The branch entry {H → V} remains for provenance — records that V
-;; came from speculation H. Base is updated to V so depth-0 reads
-;; see the committed value directly.
-(define (tms-commit cell-val assumption-id)
-  (cond
-    [(not (tms-cell-value? cell-val)) cell-val]
-    [else
-     (define branch-val (hash-ref (tms-cell-value-branches cell-val)
-                                  assumption-id #f))
-     (cond
-       [(not branch-val) cell-val]  ;; no write under this assumption — nothing to commit
-       [(tms-cell-value? branch-val)
-        ;; Sub-tree: flatten — merge sub-tree's contents into outer cell.
-        ;; The sub-tree has its own base and branches. Committing means:
-        ;; - If sub-tree base is not tms-bot, promote it to outer base
-        ;; - Merge sub-tree branches into outer branches (sub-tree wins on conflict)
-        ;; - Remove the committed assumption's branch entry
-        ;; This handles nested speculation correctly: inner writes that nested
-        ;; under outer hypotheses get lifted to become direct outer branches.
-        (define sub-base (tms-cell-value-base branch-val))
-        (define new-base
-          (if (eq? sub-base tms-bot)
-              (tms-cell-value-base cell-val)   ;; keep outer base
-              sub-base))                        ;; promote sub-tree's base
-        (define outer-branches-sans-committed
-          (hash-remove (tms-cell-value-branches cell-val) assumption-id))
-        (define new-branches
-          (for/fold ([acc outer-branches-sans-committed])
-                    ([(k v) (in-hash (tms-cell-value-branches branch-val))])
-            (hash-set acc k v)))
-        (tms-cell-value new-base new-branches)]
-       [else
-        ;; Leaf value: promote to base
-        (struct-copy tms-cell-value cell-val
-          [base branch-val])])]))
-
-;; Track 6 Phase 2+3: Commit an assumption across all TMS cells in the network.
-;; For each cell whose value is a tms-cell-value, applies tms-commit to promote
-;; the assumption's branch value to the base. Non-TMS cells are unaffected.
-;; Returns the updated network.
-(define (net-commit-assumption net assumption-id)
-  (define cells (prop-network-cells net))
-  (define new-cells
-    (champ-fold cells
-      (lambda (cid cell acc)
-        (define v (prop-cell-value cell))
-        (if (tms-cell-value? v)
-            (let ([committed (tms-commit v assumption-id)])
-              (if (eq? committed v)
-                  acc  ;; no change
-                  (champ-insert acc (cell-id-hash cid) cid
-                                (struct-copy prop-cell cell [value committed]))))
-            acc))
-      cells))
-  (struct-copy prop-network net
-    [warm (struct-copy prop-net-warm (prop-network-warm net)
-            [cells new-cells])]))
-
-;; Track 6 Phase 4: Retract an assumption from a TMS cell value.
-;; Removes the branch for assumption-id, reverting to the state before
-;; writes under that assumption. If the cell has nested sub-trees,
-;; the entire sub-tree rooted at assumption-id is removed.
-;; Returns: updated tms-cell-value with the assumption's branch removed.
-(define (tms-retract cell-val assumption-id)
-  (cond
-    [(not (tms-cell-value? cell-val)) cell-val]
-    [else
-     (define branches (tms-cell-value-branches cell-val))
-     (define new-branches (hash-remove branches assumption-id))
-     (if (eq? branches new-branches)
-         cell-val  ;; no branch for this assumption — nothing to retract
-         (struct-copy tms-cell-value cell-val [branches new-branches]))]))
-
-;; Track 6 Phase 4: Retract an assumption across all TMS cells in the network.
-;; For each cell whose value is a tms-cell-value, applies tms-retract to remove
-;; the assumption's branch. Non-TMS cells are unaffected.
-;; Returns the updated network.
-(define (net-retract-assumption net assumption-id)
-  (define cells (prop-network-cells net))
-  (define new-cells
-    (champ-fold cells
-      (lambda (cid cell acc)
-        (define v (prop-cell-value cell))
-        (if (tms-cell-value? v)
-            (let ([retracted (tms-retract v assumption-id)])
-              (if (eq? retracted v)
-                  acc  ;; no change
-                  (champ-insert acc (cell-id-hash cid) cid
-                                (struct-copy prop-cell cell [value retracted]))))
-            acc))
-      cells))
-  (struct-copy prop-network net
-    [warm (struct-copy prop-net-warm (prop-network-warm net)
-            [cells new-cells])]))
-
-;; Merge two TMS cell values (recursive tree merge).
-;; Per-branch: latest write wins (same assumption can't produce two
-;; different values at the same depth). Cross-branch: tree preserves both.
-;; Base merge uses identity semantics (new base wins) — for domain-aware
-;; merging, use make-tms-merge with a domain merge function.
-(define (merge-tms-cell old new)
-  (cond
-    [(eq? old 'infra-bot) new]
-    [(eq? new 'infra-bot) old]
-    [(and (tms-cell-value? old) (tms-cell-value? new))
-     ;; Merge trees: union branches, recurse on shared keys
-     (define merged-branches
-       (for/fold ([acc (tms-cell-value-branches old)])
-                 ([(k v) (in-hash (tms-cell-value-branches new))])
-         (define existing (hash-ref acc k #f))
-         (hash-set acc k
-           (cond
-             [(not existing) v]
-             [(and (tms-cell-value? existing) (tms-cell-value? v))
-              (merge-tms-cell existing v)]  ;; recursive merge
-             [else v]))))  ;; leaf: latest write wins
-     (tms-cell-value (tms-cell-value-base new) merged-branches)]
-    ;; If old is tms-cell-value but new isn't (or vice versa), new wins
-    [else new]))
-
-;; Create a TMS merge function that applies a domain merge at base/leaf level.
-;; domain-merge: (old-val new-val → merged-val) — the underlying lattice join.
-;; Returns a merge function suitable for use as a cell's merge-fn.
-;;
-;; This is essential for cells where the domain merge can detect contradictions
-;; (e.g., type-lattice-merge produces type-top when types conflict).
-(define (make-tms-merge domain-merge)
-  (define (tms-merge old new)
-    (cond
-      [(eq? old 'infra-bot) new]
-      [(eq? new 'infra-bot) old]
-      [(and (tms-cell-value? old) (tms-cell-value? new))
-       ;; Merge bases using domain merge
-       (define merged-base (domain-merge (tms-cell-value-base old)
-                                         (tms-cell-value-base new)))
-       ;; Merge branches: union, recurse on shared keys
-       (define merged-branches
-         (for/fold ([acc (tms-cell-value-branches old)])
-                   ([(k v) (in-hash (tms-cell-value-branches new))])
-           (define existing (hash-ref acc k #f))
-           (hash-set acc k
-             (cond
-               [(not existing) v]
-               [(and (tms-cell-value? existing) (tms-cell-value? v))
-                (tms-merge existing v)]  ;; recursive merge
-               [else v]))))  ;; leaf: latest write wins
-       (tms-cell-value merged-base merged-branches)]
-      [else new]))
-  tms-merge)
-
-;; Create a new TMS cell in the network.
-;; initial-value: the starting lattice value (e.g., type-bot)
-;; domain-merge: optional domain merge function for base/leaf values.
-;;   If provided, uses make-tms-merge to create a domain-aware TMS merge.
-;;   If #f, uses merge-tms-cell (new base wins, no domain merge).
-;; contradicts?: optional contradiction predicate (applied to base value after merge)
-;; Returns: (values new-network cell-id)
-;;
-;; The cell is initialized with (tms-cell-value initial-value (hasheq)).
-(define (net-new-tms-cell net initial-value [domain-merge #f] [contradicts? #f])
-  (define tms-merge-fn
-    (if domain-merge
-        (make-tms-merge domain-merge)
-        merge-tms-cell))
-  (define tms-contradicts?
-    (and contradicts?
-         (lambda (v)
-           (if (tms-cell-value? v)
-               (contradicts? (tms-cell-value-base v))
-               (contradicts? v)))))
-  (net-new-cell net
-                (tms-cell-value initial-value (hasheq))
-                tms-merge-fn
-                tms-contradicts?))
 
 ;; ========================================
 ;; TMS Speculation Stack

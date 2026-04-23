@@ -28,7 +28,7 @@
          (only-in "propagator.rkt" cell-id
                   prop-network prop-network? make-prop-network
                   prop-net-hot prop-net-warm prop-net-cold
-                  prop-cell tms-cell-value)
+                  prop-cell)
          (only-in "elab-network-types.rkt" elab-network elab-network? elab-cell-info contradiction-info)
          (only-in "macros.rkt" spec-entry preparse-macro ctor-meta
                   trait-meta trait-method impl-entry param-impl-entry
@@ -388,8 +388,10 @@
     (auto-cache! elab-network d d)
     (auto-cache! elab-cell-info d d)
     (auto-cache! contradiction-info d d)
-    (auto-cache! prop-cell d d)
-    (auto-cache! tms-cell-value d d))
+    (auto-cache! prop-cell d d))
+  ;; tms-cell-value auto-cache RETIRED 2026-04-22 (PPN 4C 1A-iii-a-wide Step 1
+  ;; S1.c): TMS mechanism retired. Old caches with tms-cell-value entries will
+  ;; fail to deserialize and invalidate naturally on first load post-retirement.
 
   (void))
 
