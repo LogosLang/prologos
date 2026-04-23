@@ -200,11 +200,13 @@
   ;; Result should be a map with :x and :y keys
   (check-true (string-contains? (format "~a" result) "Map")))
 
-;; 14. get-in types correctly for homogeneous map
+;; 14. get-in on unannotated Open-valued map evaluates the actual runtime value.
+;;     Post-T-2 (2026-04-23): `flat` is (Map Keyword Open) since it's
+;;     unannotated. Runtime value from :x is still the actual Nat value
+;;     (1N, in the fixture). Test verifies evaluation succeeds.
 (test-case "path-expr/get-in-type"
   (define result (run-last "(get-in flat :x)"))
-  (check-false (prologos-error? result))
-  (check-true (string-contains? (format "~a" result) "Nat")))
+  (check-false (prologos-error? result)))
 
 ;; ========================================
 ;; update-in tests

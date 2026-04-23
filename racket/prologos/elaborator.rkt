@@ -1758,21 +1758,23 @@
     [(surf-map-literal entries loc)
      ;; Elaborate to nested map-assoc on map-empty.
      ;; entries is a list of (parsed-key . parsed-val) pairs.
-     ;; Key and value types use fresh metas — unification will resolve them.
+     ;; Key type uses a fresh meta (keys are typically homogeneous, unified from entries).
+     ;; Value type uses (expr-Open) — "Open by Design" (PPN 4C T-2, 2026-04-23).
+     ;; Per ergonomics direction: unannotated heterogeneous map values are opaque
+     ;; (α-semantic — see syntax.rkt expr-Open docstring). Annotated maps
+     ;; (e.g., `(Map K Int)` or `(Map K <Int | String>)`) check strictly against
+     ;; the annotation via the ann-check path; annotation narrows value types.
+     ;; Schema system provides structured per-field validation.
      (if (null? entries)
-         ;; Empty map: fresh metas for key/value types
+         ;; Empty map: fresh meta for key, Open for value type
          (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))]
-               [vm (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-val-type "value type of empty map literal" #f (env->name-stack env)))])
-           (expr-map-empty km vm))
+                     (meta-source-info loc 'map-key-type "key type of empty map literal" #f (env->name-stack env)))])
+           (expr-map-empty km (expr-Open)))
          ;; Non-empty: elaborate all entries, then fold into map-assoc
          (let ([km (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))]
-               [vm (fresh-meta ctx-empty (expr-hole)
-                     (meta-source-info loc 'map-val-type "value type of map literal" #f (env->name-stack env)))])
+                     (meta-source-info loc 'map-key-type "key type of map literal" #f (env->name-stack env)))])
            (let loop ([remaining entries]
-                      [result (expr-map-empty km vm)])
+                      [result (expr-map-empty km (expr-Open))])
              (cond
                [(null? remaining)
                 result]
