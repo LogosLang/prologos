@@ -37,3 +37,7 @@ racket/prologos/data/benchmarks/report.html
 # Woven stdlib HTML (generated from book chapters)
 docs/stdlib-book/racket/prologos/data/cache/
 racket/prologos/data/cache/
+
+# MemPalace per-project files (issue #185)
+mempalace.yaml
+entities.json

@@ -32,4 +32,4 @@ elaborate -> type-check -> resolve-trait-constraints! -> check-unresolved -> all
 
 ## Rules
 
-See @.claude/rules/testing.md, @.claude/rules/prologos-syntax.md, @.claude/rules/workflow.md
+See @.claude/rules/testing.md, @.claude/rules/prologos-syntax.md, @.claude/rules/workflow.md, @.claude/rules/mempalace.md
