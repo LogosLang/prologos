@@ -228,21 +228,41 @@
      (define hyp-bit
        (and (assumption-id? hyp-id)
             (arithmetic-shift 1 (assumption-id-n hyp-id))))
+     ;; Compute the FULL worldview bitmask (prior committed bits + hyp-bit)
+     ;; to parameterize for the thunk. PPN 4C 1A-iii-a-wide Step 1 Sub-phase
+     ;; S1.a (2026-04-22): fix for the 4th "accidentally-load-bearing mechanism"
+     ;; finding. Pre-S1.a, type meta cells were TMS-wrapped; writes during
+     ;; speculation went through `tms-write` with empty stack which updated
+     ;; BASE (not a tagged entry), making prior-committed speculation bits
+     ;; trivially visible regardless of the bitmask parameterize. Under
+     ;; tagged-cell-value (S1.a), the bitmask parameterize ACTIVATES — but
+     ;; using ONLY hyp-bit would OVERRIDE the worldview-cache in net-cell-read
+     ;; (propagator.rkt:968-975 per-propagator-bitmask-takes-priority design
+     ;; for BSP-LE 2/2B clause-propagator isolation), losing visibility of
+     ;; prior-committed speculation results (e.g., back-to-back `map-assoc`
+     ;; where the first commit solved a meta). Fix: parameterize with the
+     ;; FULL worldview = prior committed + outer-active + hyp-bit, so reads
+     ;; during the thunk see all currently-valid tagged entries. Per-site
+     ;; correction, NOT global read-logic change — preserves clause-propagator
+     ;; isolation semantic.
+     (define new-wv-cache-value 0)
      (when (and elab-net-box (unbox elab-net-box) hyp-bit)
        (define enet (unbox elab-net-box))
        (define pnet (elab-network-prop-net enet))
        (define current-wv (net-cell-read-raw pnet worldview-cache-cell-id))
        (define new-wv (bitwise-ior (if (number? current-wv) current-wv 0) hyp-bit))
+       (set! new-wv-cache-value new-wv)
        (define pnet* (net-cell-write pnet worldview-cache-cell-id new-wv))
        (set-box! elab-net-box (struct-copy elab-network enet [prop-net pnet*])))
      ;;
-     ;; Run the speculation thunk with worldview bitmask set.
-     ;; current-worldview-bitmask enables net-cell-read/write to use the bit
-     ;; for tagged-cell-value operations during the thunk.
+     ;; Run the speculation thunk with FULL worldview bitmask set.
+     ;; Reads during thunk filter tagged entries by (committed | outer-active |
+     ;; hyp-bit); prior-committed speculative writes remain visible.
      (define result
        (if hyp-bit
            (parameterize ([current-worldview-bitmask
-                           (bitwise-ior (current-worldview-bitmask) hyp-bit)])
+                           (bitwise-ior (or (current-worldview-bitmask) 0)
+                                        new-wv-cache-value)])
              (thunk))
            (thunk)))
      (cond

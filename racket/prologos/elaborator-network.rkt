@@ -107,9 +107,6 @@
 ;; ========================================
 
 ;; Allocate a meta as a cell on the network.
-;; Track 4 Phase 2: Creates a TMS cell for assumption-tagged speculation.
-;; At depth 0, TMS-transparent read/write in net-cell-read/write provides
-;; identical behavior to the previous monotonic cell.
 ;; Returns (values elab-network* cell-id).
 ;;
 ;; PPN 4C Path T-3 Commit B (2026-04-22): merge-fn migrated from
@@ -121,10 +118,30 @@
 ;; writes, hiding type errors. Rationale: B6 finding, surfaced by
 ;; test-elaborator-network.rkt contradictory-values test failure during
 ;; Commit B integration.
+;;
+;; PPN 4C 1A-iii-a-wide Step 1 Sub-phase S1.a (2026-04-22): cell factory
+;; migrated from `net-new-tms-cell` (TMS-wrapped) to `net-new-cell` with
+;; `tagged-cell-value` substrate + `make-tagged-merge`, matching the
+;; 1A-ii-a pattern for mult/level/session cells. Completes the addendum's
+;; Phase 1 substrate migration (§7.5.3 charter) for the type meta cell —
+;; the last production consumer of `net-new-tms-cell`. After this migration,
+;; the entire TMS mechanism (struct, read/write/commit, factory,
+;; current-speculation-stack parameter) becomes dead and is retired in
+;; subsequent sub-phases S1.b-e. BSP-LE 2/2B's tagged-cell-value substrate
+;; is now the sole speculation mechanism for on-network state; elab-net
+;; snapshot remains as explicit scaffolding for off-network residue
+;; (meta-info CHAMP + constraint store + id-map), retired by Phase 4 +
+;; PM Track 12 per D.3 §7.5.10.
 (define (elab-fresh-meta enet ctx type source)
   (define net (elab-network-prop-net enet))
   (define-values (net* cid)
-    (net-new-tms-cell net type-bot type-unify-or-top type-lattice-contradicts?))
+    (net-new-cell net
+                  (tagged-cell-value type-bot '())
+                  (make-tagged-merge type-unify-or-top)
+                  (lambda (v)
+                    (if (tagged-cell-value? v)
+                        (type-lattice-contradicts? (tagged-cell-value-base v))
+                        (type-lattice-contradicts? v)))))
   (define info (elab-cell-info ctx type source))
   (define h (cell-id-hash cid))
   (values
