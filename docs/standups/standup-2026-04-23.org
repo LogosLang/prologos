@@ -1,0 +1,282 @@
+#+TITLE: Standup — 2026-04-23
+#+DATE: 2026-04-23
+
+* Yesterday (since 2026-04-22 standup)
+
+** PPN Track 4C Phase 9+10+11 Addendum — Path T complete + Phase 1A Step 1 + T-1 + T-2 + Step 2 S2.a + mempalace Phase 3
+
+Single substantial arc: 2026-04-22 session completed the T-3 T3-C3
+systematic re-audit and landed Commit B (the merge semantics change —
+THE goal of T-3). Then landed 1A-iii-a-wide Step 1 (5 sub-phase
+commits — TMS retirement + =current-speculation-stack= retirement —
+Phase 1 substrate charter completion). Then T-1 as documentation-only
+pass. Then T-2 ("Open by Design" Map ergonomics with =expr-Open=
+α-semantic universal type). Then Step 2 baseline + hypotheses doc,
+Option B revision (no =elab-meta-*= API), Phase 1E added, S2.a
+infrastructure delivered, S2.a-followup lightweight refactor,
+S2.b rescoped to staged. Handoff document written + mempalace
+re-mine. ~20+ commits across the session arc.
+
+** 2026-04-22 session — T-3 COMPLETE (4 staged commits)
+
+T3-C3 full re-audit (D.3 §7.6.14) classified every =(type-top? ...)=
+consumer: Category A (already migrated, 4), Category B (new Role B
+sites, 5 — B1 app fire, B2 expr-ann, B3 classify-inhabit, B4 cap-type,
+B5 session-type), Category C (architectural error, 1 — expr-union
+install), Category L (legitimate contradiction consumers). Commit A.2-a
+(=a5a33a71=) landed the =make-union-fire-fn= architectural fix
+paralleling =make-pi-fire-fn=. Commit A.2-b (=f85dd50a=) added
+=type-map-write-unified= helper + migrated B1/B2. Commit A.2-c
+(=105bcdae=) swapped B3/B4/B5 cell merge-fns to =type-unify-or-top=.
+Commit B (=e07b809f=) THE set-union semantics change — integration
+surfaced B6 (type meta cells), meta-resolution-in-fallthrough fix,
+F7 distributivity DISPROVEN under set-union (mathematical finding
+documented as test regression guard). Probe diff = 0; canary
+=test-union-types:234 (infer <Nat | Bool>) = [Type 0]= PASSES.
+
+** 2026-04-22 session — Track 4D vision research + charter re-sequencing (commits =4812892c= + =16bddd26=)
+
+Draft research note
+=docs/research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md=
+(~300 lines) proposing Track 4D: Attribute Grammar Substrate
+Unification — motivated by the 3-accidentally-load-bearing pattern
+as structural fingerprint of sources-of-truth fragmentation across
+typing/elaboration/reduction subsystems. Thesis: collapse into single
+declarative attribute-grammar substrate where each typing rule is a
+declarative grammar production with attribute-equations compiled to
+propagator installations. Prerequisite to Track 7 (user-defined grammar
+extensions).
+
+Charter-alignment re-sequencing: previous parallel-unblocked queue
+(T-1 ‖ T-2 ‖ Step 1 ‖ Step 2) pivoted to dependency-ordered
+(Step 1 → T-1 → T-2 → Step 2) when user asked "given BSP-LE 2/2B's
+work for speculation, what need is there for rollback at all?" Step 1
+IS the addendum's Phase 1 substrate migration charter continuation;
+T-1 post-Step-1 is tractable cleanup, not new API design. Framing
+principle codified in D.3 §7.5.10 (candidate for
+DEVELOPMENT_LESSONS.org): /tactical cleanup tracks should be framed
+against end-state architecture, not as local optimizations./
+
+** 2026-04-22 session — 1A-iii-a-wide Step 1 DELIVERED (5 sub-phases, =3b6aefdb= through =b1468220= + =c5dc11dc= close)
+
+Phase 1 substrate migration charter complete. S1.a migrated
+=elab-fresh-meta= to =tagged-cell-value= + discovered and fixed the
+4TH accidentally-load-bearing mechanism (visibility scope in
+=with-speculative-rollback= parameterize — fixed by parameterizing
+=current-worldview-bitmask= to FULL worldview bitmask, not just hyp-bit;
+preserves BSP-LE 2/2B clause-propagator isolation). S1.b retired 3 TMS
+fallback branches. S1.c retired TMS API wholesale (~258 lines). S1.d
+retired =current-speculation-stack= parameter. S1.e peripheral cleanup
+(deleted =test-tms-cell.rkt=, cleaned stale comments). VAG 4/4 passes.
+Full suite 7908 tests / 126.7s / 1 pre-existing batch contamination
+(unrelated, test-facet-sre-registration). Strong codification
+candidate: /accidentally-load-bearing mechanisms often surfaced by
+integration-test behavior, not static audit./
+
+** 2026-04-22 session — T-1 DELIVERED as documentation-only pass (=b7f8e58d=)
+
+Charter-alignment reduced T-1 to pure scaffolding-retirement-plan
+labeling: =elab-speculation-bridge.rkt= module docstring restructured
+with "ARCHITECTURAL STATE (post-Step-1)" distinguishing on-network
+substrate (worldview tagging via tagged-cell-value) from SCAFFOLDING
+(=elab-net= snapshot for off-network residue — retires with Phase 4
++ PM 12). PM Master updated with light cleanup sub-phase spec (6
+caller migrations to =speculate= form, ~20-30 min). DEFERRED.md parallel
+entry. Zero code changes; 103 targeted tests GREEN.
+
+** 2026-04-23 session — T-2 DELIVERED ("Open by Design", 3 staged commits)
+
+Path T-2 Map type inference open-world realignment. Architectural
+dialogue resolved: override 2026-03-20 CIU §8 D7 (CIU was a draft,
+not commitment); α-semantic for Open (compatible both directions,
+never fails, never solves — not β "unknown" nor γ per-access
+freshening); display name "Open" (Framing 3 — distinct from Any,
+positioned as "Open by Design"); not user-writable. Motto coined:
+**"The Pragmatic Prover"** (schema/spec for verification; Open for
+ergonomics; Clojure ergonomics within a dependently-typed language).
+
+3 commits: =4bfbd141= (expr-Open AST + pipeline, 7 files), =246d4c2e=
+(typing semantics + map-op Open cases + map-assoc speculation
+retirement, typing-core + qtt), =07fda438= (elaborator surf-map-literal
++ test-mixed-map 21→25 tests + probe baseline refresh). Full suite
+7912 / 118.4s / 0 failures. Probe =speculation_count= 12 → 0 (complete
+retirement for map operations). =atms_hypothesis_count= 17 → 5 (-70%),
+=infer_steps= 73 → 55 (-24%), =meta_created= 19 → 16 (-16%). D.3
+§7.6.15 captures full summary.
+
+** 2026-04-23 session — Step 2 baseline + hypotheses doc (=3ba56387=)
+
+=docs/tracking/2026-04-23_STEP2_BASELINE.md= (412 lines, 12 sections)
+captured pre-Step-2 performance baseline + quantitative hypotheses +
+measurement discipline. §1 headline: meta-lifecycle 11-195× faster
+since PPN 4C started (fresh-meta 38.26 → 3.45 μs ~11×; solve-meta
+38.99 → 8.53 μs ~4.6×; meta-solution 40.08 → 0.205 μs ~195× path
+change). §11 PRE0→post-T-2 A/B on bench-ppn-track4c (11-25% wall
+improvements type-meta-heavy; 2-4% E-tier). §6 measurement discipline
+codified as **bounce-back, not automatic gate** — Claude proposes
+per phase, user decides.
+
+** 2026-04-23 session — Step 2 rescoped Option B + Phase 1E added (=7b602bd8=)
+
+Architectural dialogue revisited D.3 §7.5.4 Step 2 design: original
+=elab-meta-read/write= API (Option A) would be PARALLEL to =that-*=
+(position-keyed user-facing), creating Track 4D migration debt.
+**Option B**: drop the new API. Use existing =elab-cell-read/write=
++ minimal =compound-cell-component-ref/write= helpers.
+**Phase 1E** added as dedicated follow-on (between Step 2 and Phase 1B)
+for =that-*= storage unification — D.3 §7.6.16 captures 7 architectural
+considerations (position representation, meta-id↔position mapping, 27ns
+fast-path preservation, universe-cell integration, facet naming
+alignment, write-through semantics, Track 4D compatibility). 6
+sub-phases (S2.a-f + S2-VAG) planned.
+
+** 2026-04-23 session — Step 2 S2.a DELIVERED + S2.a-followup (=ded412db= + =2bab505a=)
+
+S2.a: =compound-tagged-merge= factory (=decision-cell.rkt:529=);
+=meta-universe.rkt= NEW (170 lines, 4 universe-cell-id parameters +
+init + helpers + predicate); ='worldview= SRE domain registered;
+bench-meta-lifecycle.rkt extended with E1-E5 A/B micros.
+
+**POSITIVE SURPRISE** (contradicted §5 hypothesis which predicted
+250-350 ns/call, slight regression):
+- E4 =compound-cell-component-ref= = 43-52 ns/call
+- E5 =elab-cell-read= per-meta baseline = 113 ns/call
+- **Compound path is ~55% FASTER** across all universe sizes (10-500 metas)
+
+Mechanism: per-meta baseline's outer-CHAMP walks hundreds of cells;
+universe's compact CHAMP + hasheq-ref (13 ns at N=500) dominates.
+Step 2 is a READ-PATH WIN + allocation win. Strengthens the
+architectural case.
+
+S2.a-followup: refactored =meta-universe.rkt= to lightweight imports
+(no type-lattice.rkt dependency). Parameter-injection pattern for
+per-domain merge-fns + contradiction predicates (injected by
+=elaborator-network.rkt= at module load). Breaks potential import
+cycle for S2.b.
+
+** 2026-04-23 session — Step 2 S2.b RESCOPED to staged (revert + handoff)
+
+Attempted full S2.b migration; reverted after scope discovery:
+=match: no matching clause for '#hasheq()= in zonk.rkt:492 via
+unify-core. Scope estimate: 200-400 LoC per D.3 §7.5.4 → reality
+500-900 LoC with many more caller classes than anticipated. Root
+cause principle surfaced (codification candidate): /migrating a
+cell-allocation factory migrates the IDENTITY of those cells across
+the codebase — scope by enumerating IDENTITY CONSUMERS, not just
+READERS./ New plan: staged sub-phases starting with S2.b-i audit.
+
+** 2026-04-23 session — Handoff + mempalace re-mine (=62836430=)
+
+=docs/tracking/handoffs/2026-04-23_PPN_4C_S2b_HANDOFF.md= (562 lines)
+written for next session pickup at S2.b-i. Includes PPN 4C parent D.3
+hot-load request, §5.5 cross-cutting concerns matrix (11 parent-phase
+interactions), §5.1 S2.b-i audit spec with grep commands + category
+enumeration, §4.1 positive measurement surprise. Re-mined =docs/=
+with mempalace (incremental, content-hash dedup).
+
+** 2026-04-23 session (continuation) — process clarification + methodology edits + mempalace Phase 3
+
+Continuation after compaction. Hot-loaded full context per
+HANDOFF_PROTOCOL.org. Ran §5.1 grep enumeration as audit preview
+(5 =prop-meta-id->cell-id= sites, 9 =meta-solution/cell-id= sites,
+4 =expr-meta-cell-id= direct accesses, 2 =elab-fresh-meta= prod sites).
+
+**Process clarification** (commit =d269cd1e= for DESIGN_METHODOLOGY
+edits, =781f83e9= dailies): I had proposed mini-design-audit-in-dailies
+for S2.b-i opening. User corrected: mini-design + mini-audit are
+conversational; outcomes persist to the DESIGN DOC (not dailies, not
+separate audit files); the two steps are CO-DEPENDENT (not sequential).
+Also corrected a wording overreach — the fragmentation thesis
+(Track 4D) applies to CODE sources of truth, not documentation
+process. Three surgical edits to DESIGN_METHODOLOGY.org Stage 4
+Per-Phase Protocol + Conversational Implementation Cadence codify the
+content taxonomy (design doc / dailies / standup = three distinct
+homes) distinguishing from the broader documentation web (audits,
+critiques, research, PIRs — each serves its own purpose).
+
+**mempalace Phase 3** (commit =4ad31ff7= hook infra + =6ee66910=
+dailies): post-commit git hook landed. =tools/git-hooks/post-commit=
+triggers a background =mempalace mine ./docs --wing prologos= when
+commits touch =docs/tracking/**= or =docs/research/**=. Silent
+fast-path for code-only commits; graceful no-op if mempalace missing
+or palace uninitialized. Logs to =/var/tmp/mempalace-auto-mine.log=.
+=tools/install-git-hooks.sh= one-shot installer via symlink (per-dev
+activation; git doesn't track =.git/hooks/=). =.claude/rules/mempalace.md=
+§ Re-mine cadence updated. Hook self-tested on the dailies commit
+(=6ee66910=): 417 files skipped (content-hash dedup), 2 re-filed
+(today's dailies + yesterday's handoff). Works as designed.
+
+**mempalace Phase 3b in progress** — code-wing experiment: mining
+=./racket/prologos= into =prologos-code= wing (742 files). Background
+mine running. Status confirms wings are distinct (=prologos-code= 776+
+drawers and growing, separate from =prologos= 26061). Next: run 5-8
+representative audit queries; score; decide adoption.
+
+* Today
+
+** Priority: complete Phase 3b code-wing eval, then open Step 2 S2.b through conversational mini-design
+
+1. Wait for mine completion notification
+2. Run 5-8 audit queries against =prologos-code= wing (see dailies)
+3. Score hit quality per query (mirroring Phase 1 eval rubric)
+4. Decide adoption: adopt / hybrid / back out
+5. If adopt: extend =tools/git-hooks/post-commit= to also mine code
+   on =.rkt= changes + update =.claude/rules/mempalace.md=
+
+** Step 2 S2.b conversational opening (per refined Stage 4 methodology)
+
+Open S2.b in dialogue: restate design intent from D.3 §7.5.4 (Option B,
+Step 2 deliverables); confirm the 3 caller categories (readers via
+=meta-solution/cell-id= — 9 sites; direct =prop-meta-id->cell-id=
+consumers — 5 sites; propagator installations receiving meta cell-id
+as OUTPUT — primary at =metavar-store.rkt:455= dict-cell-id, :618
+hm-cell-id, :1780 solve-meta-core, plus driver.rkt:2661); propose
+sub-phase partition (S2.b-i through S2.b-v). Outcomes persist into
+D.3 as new §7.5.12 subsection (or similar). Then execute the staged
+sub-phases per conversational cadence (max 1h autonomous stretch).
+
+** Post-S2.b forward plan (unchanged)
+
+- S2.c (mult domain) → S2.d (level + session) → S2.e (retire factories
+  + measurement) → S2.f (cleanup) → S2-VAG
+- Phase 1E (=that-*= storage unification) — dedicated design cycle
+- Phase 1B (tropical fuel primitive) + 1C (canonical BSP instance) + 1V
+- Phase 2 (orchestration) + Phase 3 (union types via ATMS) + V
+
+* Notes
+
+- **Four accidentally-load-bearing findings** across the addendum track
+  (attempt-1 TMS dispatch, Sub-A with-speculative-rollback bitmask,
+  Commit B expr-union typing, S1.a visibility scope in
+  with-speculative-rollback). 2 of 4 surfaced by integration-test
+  behavior (not static audit). Strong codification candidate:
+  /Stage 2 audits for API migrations must include integration-test runs
+  of realistic workloads, not just static site enumeration./ 1 more
+  data point → DEVELOPMENT_LESSONS.org entry.
+- **Process clarification → methodology edit** cycle now at 3 data
+  points this track (charter-alignment 2026-04-22; per-commit dailies
+  discipline 2026-04-22; content-location 2026-04-23). Methodology
+  evolves through use, not just upfront design. Likely DEVELOPMENT_LESSONS
+  candidate after Phase 1A closes.
+- **Conversational mini-design cadence** sustained across 3 session
+  arcs; T-3 and T-2 both used the pattern successfully. 1 more session
+  → codify as formal Stage 4 practice.
+- **mempalace Phase 2 → Phase 3** transition: the CIU §8 D7 retrieval
+  during T-2 validated Phase 2; post-commit hook landed 2026-04-23
+  activates Phase 3 (auto-freshness for docs). Phase 3b code-wing
+  eval in progress today.
+- **"The Pragmatic Prover"** motto (T-2, 2026-04-23): schema/spec for
+  verification; Open for ergonomics. Clojure ergonomics within
+  dependently-typed rigor. Captures the T-2 + T-3 arc decision space.
+- **User observations decisive** across the 2026-04-22 + 2026-04-23 arc:
+  /"multiple different mechanisms competing for truth"/ (Finding 1);
+  /"Maps should be open-world"/ (Finding 2, T-2 spirit);
+  /"merge producing top suggests lattice design is inadequate"/
+  (Finding 3, T-3 core); /"Are we unintentionally conflating two
+  separate concerns?"/ (Q-T3-8 Role A/B decomplection);
+  /"we have prior art in BSP-LE 2B"/ (Q-T3-9);
+  /"given BSP-LE 2/2B's substrate, what need is there for rollback?"/
+  (charter re-sequencing); /"pragmatic implementation shortcuts should
+  never be on the table"/ (Z-wide scope direction);
+  /"process-clarification: designs persist to design doc, not dailies"/
+  (2026-04-23 methodology refinement).
