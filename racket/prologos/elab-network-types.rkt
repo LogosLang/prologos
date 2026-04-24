@@ -39,7 +39,12 @@
  elab-cell-info-ref
  ;; Track 8 B2: rewrap-net (replace prop-net in elab-network)
  elab-network-rewrap
- elab-add-propagator)
+ elab-add-propagator
+ ;; PPN 4C S2.b-iv: enet-level wrappers for fire-once + broadcast variants.
+ ;; Mirror elab-add-propagator pattern (rewrap-after-pnet-call) with
+ ;; full kwarg surface for component-paths + assumption tagging.
+ elab-add-fire-once-propagator
+ elab-add-broadcast-propagator)
 
 ;; ========================================
 ;; Struct Definitions
@@ -170,7 +175,64 @@
 
 ;; Track 8 B2: Add a propagator to the elab-network's prop-net.
 ;; Returns (values elab-network* prop-id).
-(define (elab-add-propagator enet input-ids output-ids fire-fn)
+;;
+;; PPN 4C S2.b-iv (2026-04-24): extended with kwargs (#:component-paths,
+;; #:assumption, #:decision-cell, #:srcloc) mirroring net-add-propagator.
+;; Existing callers without kwargs unaffected (defaults preserve prior behavior).
+(define (elab-add-propagator enet input-ids output-ids fire-fn
+                              #:component-paths [cpaths '()]
+                              #:assumption [aid #f]
+                              #:decision-cell [dcid #f]
+                              #:srcloc [srcloc #f])
   (define pnet (elab-network-prop-net enet))
-  (define-values (pnet* pid) (net-add-propagator pnet input-ids output-ids fire-fn))
+  (define-values (pnet* pid)
+    (net-add-propagator pnet input-ids output-ids fire-fn
+                        #:component-paths cpaths
+                        #:assumption aid
+                        #:decision-cell dcid
+                        #:srcloc srcloc))
+  (values (elab-network-rewrap enet pnet*) pid))
+
+;; Add a fire-once propagator (BSP-LE Track 2 Phase 5) to the elab-network.
+;; Fire-once propagators self-clear from dependents after firing —
+;; correct for nogood narrowers, contradiction detectors, type-writes,
+;; threshold actions, and (PPN 4C S2.b-iv) set-latch per-input watchers.
+;; Returns (values elab-network* prop-id).
+(define (elab-add-fire-once-propagator enet input-ids output-ids fire-fn
+                                        #:component-paths [cpaths '()]
+                                        #:assumption [aid #f]
+                                        #:decision-cell [dcid #f]
+                                        #:srcloc [srcloc #f])
+  (define pnet (elab-network-prop-net enet))
+  (define-values (pnet* pid)
+    (net-add-fire-once-propagator pnet input-ids output-ids fire-fn
+                                   #:component-paths cpaths
+                                   #:assumption aid
+                                   #:decision-cell dcid
+                                   #:srcloc srcloc))
+  (values (elab-network-rewrap enet pnet*) pid))
+
+;; Add a broadcast propagator (BSP-LE Track 2 Phase 1B) to the elab-network.
+;; Broadcast: ONE propagator that processes N items internally, with
+;; broadcast-profile metadata enabling future scheduler-level parallel
+;; decomposition across items. The fire-fn reads input cells once and
+;; processes all items, merging results into the output cell.
+;;
+;; PPN 4C S2.b-iv: used by `add-readiness-set-latch!` for the universe
+;; sub-set of meta-ids (legacy per-cell sub-set still uses fire-once).
+;; Returns (values elab-network* prop-id).
+(define (elab-add-broadcast-propagator enet input-cids output-cid
+                                        items item-fn result-merge-fn
+                                        #:component-paths [cpaths '()]
+                                        #:assumption [aid #f]
+                                        #:decision-cell [dcid #f]
+                                        #:srcloc [srcloc #f])
+  (define pnet (elab-network-prop-net enet))
+  (define-values (pnet* pid)
+    (net-add-broadcast-propagator pnet input-cids output-cid
+                                   items item-fn result-merge-fn
+                                   #:component-paths cpaths
+                                   #:assumption aid
+                                   #:decision-cell dcid
+                                   #:srcloc srcloc))
   (values (elab-network-rewrap enet pnet*) pid))

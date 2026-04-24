@@ -287,7 +287,12 @@
    ctx       ;; Context — typing context at creation
    source    ;; any — debug info (string or constraint-provenance)
    status    ;; 'postponed | 'retrying | 'solved | 'failed
-   cell-ids) ;; (listof cell-id) — propagator cells for metas in lhs/rhs (P1-E3a)
+   cell-ids  ;; (listof cell-id) — propagator cells for metas in lhs/rhs (P1-E3a)
+   meta-ids) ;; (listof symbol) — meta-ids for metas in lhs/rhs. PPN 4C S2.b-iv:
+             ;; per-meta identity under universe model (where multiple metas can
+             ;; share a universe-cid as their cell-id). cell-ids retained for
+             ;; backward-compat readers; meta-ids is the post-S2.b authoritative
+             ;; identity for set-latch readiness fire-once installations.
   #:transparent)
 
 ;; ========================================
@@ -763,8 +768,11 @@
 ;; referenced by metas in lhs/rhs.
 (define (add-constraint! lhs rhs ctx source)
   (perf-inc-constraint!)
-  (define c0 (constraint (gensym 'cst) lhs rhs ctx source 'postponed '()))
-  ;; Collect meta-ids early (needed for wakeup + cell-ids).
+  ;; PPN 4C S2.b-iv: constraint struct gained `meta-ids` field; constructor
+  ;; emits it as initial empty list (populated below in the propagator-path
+  ;; struct-copy if metas exist).
+  (define c0 (constraint (gensym 'cst) lhs rhs ctx source 'postponed '() '()))
+  ;; Collect meta-ids early (needed for wakeup + cell-ids + meta-ids field).
   (define meta-ids (append (collect-meta-ids lhs) (collect-meta-ids rhs)))
   ;; Propagator path: add unify constraints between cells and compute cell-ids.
   (define net-box (current-prop-net-box))
@@ -791,12 +799,18 @@
           (set-box! net-box enet*)
           ;; P1-E3a: Record cell-ids for all metas in constraint.
           ;; Track 6 Phase 1c: immutable constraint with cell-ids populated.
+          ;; PPN 4C S2.b-iv: also populate `meta-ids` — per-meta identity for
+          ;; the set-latch readiness pattern. cell-ids may collapse under
+          ;; universe model (multiple type metas → same universe-cid →
+          ;; remove-duplicates leaves 1); meta-ids preserves identity.
           (define all-cell-ids
             (for*/list ([mid (in-list meta-ids)]
                         [cid (in-value (champ-lookup id-map (prop-meta-id-hash mid) mid))]
                         #:when (not (eq? cid 'none)))
               cid))
-          (struct-copy constraint c0 [cell-ids (remove-duplicates all-cell-ids eq?)]))
+          (struct-copy constraint c0
+                       [cell-ids (remove-duplicates all-cell-ids eq?)]
+                       [meta-ids (remove-duplicates meta-ids eq?)]))
         c0))
   ;; Track 6 Phase 1c: write as hash entry keyed by constraint cid.
   ;; Track 7 Phase 4: tag with current speculation assumption.

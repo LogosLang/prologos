@@ -87,9 +87,14 @@
  ;; Initialization
  init-meta-universes!
  reset-meta-universe-parameters!
- ;; Per-component access helpers
+ ;; Per-component access helpers (enet-level)
  compound-cell-component-ref
  compound-cell-component-write
+ ;; Per-component access helpers (pnet-level — for use inside propagator
+ ;; fire functions where only pnet is available; PPN 4C S2.b-iv)
+ compound-cell-component-ref/pnet
+ compound-cell-component-write/pnet
+ resolve-worldview-bitmask/pnet
  ;; Universe-cell predicate — distinguishes universe cells from per-meta cells
  meta-universe-cell-id?)
 
@@ -311,3 +316,78 @@
       [(zero? wv) (tagged-cell-value value '())]
       [else (tagged-cell-value 'infra-bot (list (cons wv value)))]))
   (elab-cell-write enet cell-id (hasheq component-key tcv)))
+
+;; ============================================================
+;; Per-component access helpers — pnet-level variants (PPN 4C S2.b-iv)
+;; ============================================================
+;;
+;; The enet-level helpers above suffice when we have an elab-network in
+;; hand (e.g., during elaboration top-level dispatch). But propagator
+;; fire functions receive only the pnet (prop-network), not the enet.
+;; Set-latch fire-once propagators and broadcast item-fns need pnet-level
+;; access to compound cells.
+;;
+;; These are functional mirrors of the enet variants, using net-cell-read
+;; / net-cell-write directly. Worldview bitmask resolution mirrors the
+;; b-iii follow-up logic — per-prop bitmask priority, fallback to
+;; worldview-cache-cell.
+;;
+;; Used by:
+;;   - `add-readiness-set-latch!` helper's broadcast item-fn + fire-once
+;;     fire-fns (metavar-store.rkt)
+;;   - Bridge fire-fn factories (resolution.rkt) for component-keyed
+;;     read/write of universe metas
+
+;; Resolve effective worldview bitmask for a pnet-level read.
+;; Mirrors `resolve-worldview-bitmask` (enet variant) but reads via
+;; net-cell-read instead of elab-cell-read. Defensive against missing
+;; worldview-cache cell (early init or test contexts without the cell).
+(define (resolve-worldview-bitmask/pnet pnet)
+  (define per-prop-wv (current-worldview-bitmask))
+  (cond
+    [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
+    [else
+     (with-handlers ([exn:fail? (lambda (_) 0)])
+       (define v (net-cell-read pnet worldview-cache-cell-id))
+       (if (number? v) v 0))]))
+
+;; compound-cell-component-ref/pnet pnet cell-id component-key [default]
+;;   Read a component's UNWRAPPED value from a compound cell (hasheq-valued).
+;;   Returns `default` (or `#f` if not provided) if the component-key is
+;;   not present, the cell value isn't a hasheq, or the tagged-cell-value
+;;   has no entry visible under the resolved worldview bitmask.
+;;
+;; Mirrors compound-cell-component-ref (enet variant) using net-cell-read.
+;; Used inside propagator fire functions where only pnet is in scope.
+(define compound-cell-component-ref/pnet
+  (case-lambda
+    [(pnet cell-id component-key)
+     (compound-cell-component-ref/pnet pnet cell-id component-key #f)]
+    [(pnet cell-id component-key default)
+     (define compound-val (net-cell-read pnet cell-id))
+     (cond
+       [(not (hash? compound-val)) default]
+       [else
+        (define tcv (hash-ref compound-val component-key #f))
+        (cond
+          [(not tcv) default]
+          [(tagged-cell-value? tcv)
+           (tagged-cell-read tcv (resolve-worldview-bitmask/pnet pnet))]
+          [else tcv])])]))
+
+;; compound-cell-component-write/pnet pnet cell-id component-key value → pnet*
+;;   Pnet-level mirror of compound-cell-component-write. Wraps `value` as
+;;   tagged-cell-value entry under the current worldview, writes a delta
+;;   hasheq to the compound cell. The cell's compound-tagged-merge handles
+;;   pointwise merging with existing contents.
+;;
+;; If `value` is already a tagged-cell-value, used as-is (no re-wrap).
+;; Returns updated pnet (with eq?-preservation if no change occurred).
+(define (compound-cell-component-write/pnet pnet cell-id component-key value)
+  (define wv (or (current-worldview-bitmask) 0))
+  (define tcv
+    (cond
+      [(tagged-cell-value? value) value]
+      [(zero? wv) (tagged-cell-value value '())]
+      [else (tagged-cell-value 'infra-bot (list (cons wv value)))]))
+  (net-cell-write pnet cell-id (hasheq component-key tcv)))
