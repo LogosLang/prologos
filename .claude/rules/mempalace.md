@@ -81,17 +81,19 @@ Example cross-check:
 
 ## Re-mine cadence
 
-The palace goes stale unless re-mined after doc changes. Practical rule:
+The palace stays fresh via an automated git hook + manual fallback. Practical rule:
 
-- After completing a phase and updating dailies/design-doc/tracker → re-mine the docs dir:
-  ```
-  mempalace mine ./docs --wing prologos
-  ```
-  mempalace dedupes on content hash, so re-mines are incremental.
-- After a track closes (PIR written) → definitely re-mine.
+- **Automated** (Phase 3, landed 2026-04-23): `tools/git-hooks/post-commit` triggers a background `mempalace mine ./docs --wing prologos` whenever a commit touches `docs/tracking/**` or `docs/research/**`. Silent; fast-path for code-only commits; logs to `/var/tmp/mempalace-auto-mine.log`. Per-developer activation: `./tools/install-git-hooks.sh` after cloning (git does not track `.git/hooks/`).
+- **Manual fallback** — if the hook did not run (hook not installed on this machine, network issue, etc.): `mempalace mine ./docs --wing prologos` from the repo root. Content-hash dedup makes re-mines incremental.
 - Don't sweat real-time freshness. The palace is for lookup, not authority.
 
-Future optimization (not in Phase 2 scope): a git `post-commit` hook that triggers re-mine when `docs/tracking/**` or `docs/research/**` changes. Not a Claude Code hook — a git hook. Silent, no prompt injection.
+Verify the hook is active on your machine:
+```
+ls -la .git/hooks/post-commit        # should be a symlink to tools/git-hooks/post-commit
+tail -40 /var/tmp/mempalace-auto-mine.log  # inspect recent triggers
+```
+
+Design rationale for the git-hook approach (not a Claude Code hook): git post-commit runs out-of-process after the commit lands, with no path to inject content back into a Claude Code session. The prompt-injection constraint (see "Anti-patterns" above) is architecturally satisfied. The hook only calls `mempalace mine` as a subprocess and does not communicate with any running Claude instance.
 
 ## Tool surface (reference)
 

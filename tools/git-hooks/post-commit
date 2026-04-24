@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# post-commit — background mempalace re-mine when docs changed
+#
+# Triggers a silent, backgrounded `mempalace mine ./docs --wing prologos`
+# when the just-completed commit touched `docs/tracking/**` or
+# `docs/research/**`. Commit returns immediately; mine runs in the
+# background and logs to /var/tmp/mempalace-auto-mine.log.
+#
+# Landed as PPN-4C mempalace Phase 3 (2026-04-23). Previously deferred
+# in .claude/rules/mempalace.md § Re-mine cadence.
+#
+# Design:
+# - Git hook, NOT a Claude Code hook. No prompt-injection path.
+# - Fast-path exits silently if no doc changes, mempalace missing, or
+#   palace not initialized — safe on any dev machine.
+# - Content-hash dedup in mempalace makes re-mines incremental.
+# - Log file preserves history for debugging freshness issues.
+
+set -e
+
+# Resolve repo root (hook runs from .git/hooks/ — cd to root for doc paths)
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$REPO_ROOT"
+
+# Did this commit touch docs/tracking/** or docs/research/**?
+CHANGED="$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null \
+  | grep -E '^docs/(tracking|research)/' || true)"
+
+if [ -z "$CHANGED" ]; then
+  # Not a doc-relevant commit — exit silently, fast path
+  exit 0
+fi
+
+# Skip silently if mempalace not installed on this machine
+command -v mempalace >/dev/null 2>&1 || exit 0
+
+# Skip silently if palace not initialized (init has not been run)
+[ -d "$HOME/.mempalace/palace" ] || exit 0
+
+# Background mine; disown so the commit completes immediately
+LOG="/var/tmp/mempalace-auto-mine.log"
+{
+  printf '=== %s post-commit re-mine (HEAD=%s) ===\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "$(git rev-parse HEAD)"
+  printf 'Triggering paths (first 10):\n'
+  printf '%s\n' "$CHANGED" | head -10 | sed 's/^/  /'
+  printf '\n'
+  mempalace mine ./docs --wing prologos
+  printf '=== done at %s ===\n\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >>"$LOG" 2>&1 &
+
+# disown may not exist in sh; guard silently
+disown 2>/dev/null || true
+
+exit 0
