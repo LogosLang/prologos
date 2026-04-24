@@ -24,6 +24,75 @@ Red flags: `for/fold` that threads state through independent iterations. `for/li
 
 Broadcast is the polynomial functor made operational. A/B data: 2.3x faster at N=3, 75.6x at N=100 vs N-propagator model.
 
+## Set-Latch for Fan-In Readiness
+
+**Question**: Does this propagator fan multiple inputs into an "any/N/all inputs ready" signal?
+
+Fan-in is the recurring problem: N independent sources signal "ready"; downstream needs to react when enough of them fire. The imperative instinct is a single propagator that reads all N inputs on every fire and does `for/or` / `count` / `for/and`. This pattern has three defects:
+
+1. **Re-reads ALL inputs on every fire** — even when only one changed. Wasted work.
+2. **Loses WHICH input fired** — identity collapsed into a Bool predicate result.
+3. **Breaks under compound cells** — when multiple "inputs" share a compound carrier (e.g., universe cells holding per-meta components via hasheq), `(net-cell-read pnet cid)` returns the full compound value. The per-input predicate operates on the wrong level. This is exactly why PPN 4C S2.b's universe migration breaks the pre-existing fan-ins in metavar-store.rkt's constraint/trait/hasmethod readiness pipelines.
+
+**The set-latch pattern**: a monotone-set latch cell + N per-input fire-once propagators + 1 threshold consumer.
+
+```
+Per input i ∈ sources:
+  fire-once propagator (on source-i, :component-paths (list i))
+    reads source-i's value via the appropriate dispatch (meta-solution/
+    cell-id, compound-cell-component-ref/pnet, or net-cell-read for per-
+    cell sources). If source-i is ready, writes (seteq i) to latch-cid.
+
+latch-cid (domain 'monotone-set, merge merge-set-union)
+  accumulates which inputs have fired — monotone, idempotent, CALM-safe.
+
+threshold propagator (on latch-cid)
+  fires action when (threshold? (cell-value latch-cid)).
+  Typical: `(lambda (v) (not (set-empty? v)))` for "any ready";
+          `(lambda (v) (>= (set-count v) k))` for "k-of-N";
+          `(lambda (v) (= (set-count v) N))` for "all ready".
+```
+
+**Infrastructure available** (all first-class, tested):
+- `'monotone-set` SRE domain (`infra-cell-sre-registrations.rkt`) — merge via `merge-set-union`, bot-value `(seteq)`
+- `net-add-fire-once-propagator` (`propagator.rkt`, BSP-LE Track 2 Phase 5) — flag-guarded single-firing, supports `:component-paths`
+- `make-threshold-fire-fn` / `net-add-threshold` (`propagator.rkt`) — threshold-gated firing
+
+**Benefits**:
+- **Component-path precision**: each per-input propagator fires ONLY when its input changes. Sibling input changes on a shared compound cell don't wake it up.
+- **Identity preserved**: the latch retains WHICH inputs have fired. Callers can enumerate.
+- **Monotone**: set-union merge is commutative, associative, idempotent. CALM-safe, coordination-free.
+- **Fire-once semantics baked in**: each per-input propagator fires at most once (flag-guard on fire-once + latch is monotone). No spurious re-fires.
+- **Generalizes**: the threshold predicate carries the specific semantics (any / k-of-N / all). Same structure, different thresholds.
+- **Mantra-aligned**: all-at-once (N propagators installed in one pass), all-in-parallel (independent watchers), structurally emergent (latch state IS the readiness signal), information flows through cells, ON-NETWORK.
+
+**Anti-pattern** (the thing this pattern replaces):
+
+```racket
+;; Red flag: fan-in fire-fn doing for/or over all dep reads on every fire
+(define-values (enet-f _) 
+  (elab-add-propagator net dep-cids (list threshold-cid)
+    (lambda (pnet)
+      (define any-ready?
+        (for/or ([cid (in-list dep-cids)])
+          (let ([v (net-cell-read pnet cid)])
+            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
+      (if any-ready? (net-cell-write pnet threshold-cid #t) pnet))))
+```
+
+Replace with set-latch structure as above.
+
+**Applications across Prologos**:
+- Constraint retry readiness (`metavar-store.rkt:826+`) — PPN 4C S2.b-iv target
+- Trait bridge retry (`metavar-store.rkt:466+`, `resolution.rkt:428+`) — same
+- Hasmethod bridge retry (`metavar-store.rkt:618+`) — same
+- Future Phase 10 fork-on-union per-branch ready latches
+- Future Phase 9b γ hole-fill multi-candidate readiness
+
+**Prime design pattern — consult before writing any fan-in.** Three concrete instances in the current codebase share the imperative fan-in shape; all three become failures under PPN 4C S2.b's universe migration. The set-latch is the architecturally-correct replacement, using only first-class primitives we already ship.
+
+Codified 2026-04-24 after PPN 4C S2.b-iii + full-suite measurement surfaced the compound-cell incompatibility of the pre-existing fan-ins. Promoted to "prime design pattern" status — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
+
 ## Component Indexing
 
 **MANDATORY**: Any propagator watching a compound cell (hasheq, scope-cell, decisions-state, commitments-state) MUST declare `#:component-paths` specifying which components it watches.

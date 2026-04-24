@@ -1403,8 +1403,86 @@ Two measurement points during S2.b:
 
 - **S2.b-ii**: scheduler component-path verification outcome; centralized dispatch lands; 9 Category 1 sites work unchanged; probe diff = 0.
 - **S2.b-iii**: `elab-fresh-meta` no longer allocates per-meta cells; all Category 2 sites migrated; probe diff = 0.
-- **S2.b-iv**: Category 3 bridge factories write via `compound-cell-component-write`; `:component-paths` declare `(cons universe-cid meta-id)`; meta-specific dependent firing verified; probe diff = 0.
+- **S2.b-iv**: Category 3 bridge factories write via `compound-cell-component-write`; `:component-paths` declare bare `meta-id` (not cons-pair, per §7.5.12.5 verification); set-latch pattern replaces fan-in propagators (§7.5.12.9); meta-specific dependent firing verified; probe diff = 0; `test-constraint-retry-propagator.rkt` passes.
 - **S2.b-v**: formal measurement against STEP2_BASELINE.md §5 criteria; if hypotheses met → go for S2.c; if regression → investigate before proceeding.
+
+#### §7.5.12.9 S2.b-iv set-latch design decision (2026-04-24)
+
+**Full-suite empirical findings post-S2.b-iii** (commit `997a7896`, includes the b-iii follow-up fixes for `'infra-bot` filter + worldview-cache fallback in `compound-cell-component-ref`):
+
+- Full suite: **7912 tests / 110.7s / 1 file failing** (`test-constraint-retry-propagator.rkt`)
+- 408/409 test files GREEN; 7908/7912 tests GREEN
+- Suite wall time 110.7s vs baseline 118-127s — **7-13% faster, a S2.b win**
+- Acceptance file `examples/2026-04-17-ppn-track4c.prologos`: 0 errors, 28 expected outputs correct
+- Probe `examples/2026-04-22-1A-iii-probe.prologos`: 0 errors, semantic output matches baseline exactly
+
+**The 4 failures in `test-constraint-retry-propagator.rkt`** (all 16 tests in file; 12 pass):
+
+| Test | Expected | Actual | Root cause |
+|---|---|---|---|
+| `constraint-with-two-metas-has-two-cell-ids` (line 47) | `(length cell-ids) = 2` | 1 | 2 distinct type metas → both have same universe-cid → `remove-duplicates` collapses |
+| `retries-when-meta-solved` (line 109) | `'solved` | `'postponed` | Fan-in reads `(net-cell-read pnet universe-cid)` → returns whole hasheq → neither bot nor top → `any-ground?` fires incorrectly → bridge retry path never actually reaches component value |
+| `constraint-postponed-again-on-partial-solve` (line 225) | `(length cell-ids) = 2` | 1 | Same cell-id collapse |
+| `cell-reads-reflect-meta-solutions` (line 262) | `#t` | `#f` | Direct universe-cid read for "is this meta solved?" breaks |
+
+All 4 cluster around **multi-meta constraints + direct `net-cell-read` on universe-cid**. This is the Category 3 (bridge-fn + readiness propagator) territory flagged in §7.5.12.
+
+**Design decision: Option A-refined — set-latch rewrite** (confirmed by user 2026-04-24)
+
+Replace the existing 3-stage fan-in pipeline (threshold-cell + fan-in propagator + readiness propagator) with the **set-latch pattern** codified in [`propagator-design.md`](../../.claude/rules/propagator-design.md) § Set-Latch for Fan-In Readiness. Rationale: the set-latch is architecturally correct under compound universe cells AND the imperative fan-in pattern appears at 3 sites in `metavar-store.rkt` (constraint retry, trait bridge, hasmethod bridge) — the pattern IS recurring. Promoted to "prime design pattern" status in propagator-design.md — consult before writing any fan-in.
+
+**Why set-latch instead of inline per-meta dispatch in the fan-in fire-fn**:
+1. The set-latch uses FIRST-CLASS PRIMITIVES we already ship (`'monotone-set` SRE domain, `net-add-fire-once-propagator`, `make-threshold-fire-fn`) rather than ad-hoc inline dispatch.
+2. Component-path precision: each per-meta propagator declares `:component-paths (list meta-id)` and fires ONLY when its meta changes. Sibling meta changes on the same universe cell don't wake it.
+3. Identity preserved in the latch — we can enumerate which metas are ready.
+4. Fire-once semantics structurally correct (no spurious re-fires on subsequent universe-cell writes).
+5. Mantra-aligned (all-at-once, all-in-parallel, structurally emergent, info-flow-through-cells, on-network).
+6. Same pattern generalizes to Phase 10 fork-on-union per-branch latches + Phase 9b γ hole-fill multi-candidate readiness.
+
+**b-iv concrete scope** (picked up in next session):
+
+1. **constraint struct change** (metavar-store.rkt:283)
+   - Add `meta-ids` field alongside existing `cell-ids` (list of meta-ids for metas in lhs/rhs — per-meta identity under universe model)
+   - `cell-ids` retained for backward-compat + non-universe domain (mult/level/session keep per-meta cells until S2.c/d)
+
+2. **add-constraint!** (metavar-store.rkt — find populator site, around lines 390-460 based on earlier grep)
+   - Walk lhs/rhs for metas (already does this to populate cell-ids)
+   - Populate both `meta-ids` and `cell-ids` from the same walk
+   - De-duplicate each via `remove-duplicates eq?`
+
+3. **Readiness pipeline rewrite** at 3 sites (`metavar-store.rkt:826+` constraint retry, `:466+` trait bridge retry, `:618+` hasmethod bridge retry):
+   - Replace 3-stage (threshold-cell + fan-in + readiness) with set-latch:
+     - Allocate `latch-cid` via `elab-new-infra-cell net (seteq) merge-set-union`
+     - For each meta-id: `net-add-fire-once-propagator net (list universe-cid) (list latch-cid) fire-fn #:component-paths (list meta-id)` where `fire-fn` reads the meta's component value via `compound-cell-component-ref/pnet` (new helper to add) and writes `(seteq meta-id)` to latch if ready
+     - Threshold propagator: `(net-add-threshold net latch-cid (lambda (s) (not (set-empty? s))) ... body-fn)` — body writes action to ready-queue
+   - Factor into helper: `(add-readiness-set-latch! enet meta-ids action-builder)` — used at all 3 sites for consistency
+
+4. **Bridge fire-fn updates** in `resolution.rkt`:
+   - `make-pure-trait-bridge-fire-fn` (line 428): change signature to accept `(universe-cid, dict-meta-id, dep-meta-ids)` instead of `(dict-cell-id, dep-cell-ids)`. Body reads via `compound-cell-component-ref/pnet pnet universe-cid meta-id` for each dep; writes via `compound-cell-component-write/pnet pnet universe-cid dict-meta-id expr`.
+   - `make-pure-hasmethod-bridge-fire-fn` analog.
+
+5. **New helpers in meta-universe.rkt** (pnet-level variants):
+   - `compound-cell-component-ref/pnet pnet cell-id component-key [default]` — mirrors the enet-level helper but takes pnet
+   - `compound-cell-component-write/pnet pnet cell-id component-key value` — mirrors enet-level
+
+6. **Test updates** (`tests/test-constraint-retry-propagator.rkt`):
+   - Line 47, 225: `(length (constraint-cell-ids c))` → `(length (constraint-meta-ids c))` — honest to post-S2.b architecture
+   - Other tests probably need analogous adjustments
+
+7. **Regression validation**:
+   - Full suite: must come back to 7912/0-failure
+   - Probe: diff = 0 (semantic); counters within variance
+   - Targeted bridge tests: green
+
+**Estimated scope**: 250-400 LoC across metavar-store.rkt + resolution.rkt + meta-universe.rkt + tests/test-constraint-retry-propagator.rkt. Multiple install sites share the set-latch pattern — factoring the helper reduces effective LoC.
+
+**Drift risks for b-iv implementation**:
+1. **Fire-once with component-path semantics** — the set-latch depends on `net-add-fire-once-propagator` correctly consuming `:component-paths (list meta-id)`. Verified for `net-add-propagator` in §7.5.12.5; need to confirm the fire-once variant's handling is identical. `enforce-component-paths!` structural check catches mismatches at installation time.
+2. **Bridge fire-fn readers for dep metas** — bridge factory currently iterates `dep-cell-ids` and reads each. Under b-iv with universe-cids, all deps may share the same cid. The factory needs `dep-meta-ids` alongside OR a paired list — cleaner: pass `(listof (cons universe-cid meta-id))` tuples.
+3. **Order preservation in trait resolution** — `impl-key-str` is built from `(map expr->impl-key-str type-arg-vals)` in order. If we move from a plain list of values to a list sourced from meta-ids, preserve the original order from `type-arg-metas` (the caller).
+4. **Transition cohesion** — the 3 install sites share structure but differ in action builders. The helper must parameterize cleanly without introducing callback proliferation.
+
+**Codification**: set-latch pattern persisted to `.claude/rules/propagator-design.md` § "Set-Latch for Fan-In Readiness" (2026-04-24) as prime design pattern. Promoted from implicit prior art to explicit guidance — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
