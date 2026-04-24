@@ -854,6 +854,30 @@ with intermediate checkpoints. The checkpoint surfaces what was built,
 what surprised, and what's next. See ~workflow.md~ §
 "Conversational implementation cadence" for the compact rule.
 
+*Content location during conversational cadence*: Mini-design and
+mini-audit happen through dialogue between contributor and user,
+cycling between design intent and code reality (see Per-Phase Protocol
+steps 1 and 2). The /outcomes/ of that dialogue — classifications,
+sub-phase partitions, migration patterns, resolved questions, audit
+findings — persist into the DESIGN DOC we are working from, as new
+subsections within the doc's structure. Dailies report what was DONE
+after each commit (story, lessons, surprises, references to design-doc
+subsections where decisions landed). The design doc holds the current
+design; the dailies hold the story of getting there; standups hold the
+user's personal notes. Three distinct homes during the Stage 4
+conversational cadence — one for the design, one for the story, one
+for personal narrative.
+
+Other documentation types (Stage 2 audit docs, Stage 3 self-critique
+and external-critique docs, research docs, tracking docs, PIRs, master
+roadmaps) serve their own purposes and form a rich interlinked web.
+They are distinct from the intra-Stage-4 conversational loop, which
+has just those three homes.
+
+Codified 2026-04-23 after a process clarification: Stage 4 mini-design
+and mini-audit produce design outcomes that belong in the design doc,
+not in dailies and not in parallel per-phase audit files.
+
 *** Implementation Protocol
 
 Distilled from SRE Track 2G implementation (2026-03-30), which executed
@@ -866,10 +890,9 @@ became bugs.
 
 For each implementation phase:
 
-1. *Mini-design audit* (NEW 2026-04-19): Before any codebase audit or
-   code, re-internalize the design target for THIS phase. No code, no
-   grep, no measurements yet. Produce a "Phase N design target" note
-   in the current dailies that answers:
+1. *Mini-design* (NEW 2026-04-19, refined 2026-04-23): Before
+   implementation, re-internalize the design target for THIS phase
+   through conversation with the user. Answer:
 
    - /Design reference/: which section(s) of the current design
      document govern this phase? (Cite the §X.Y references; open the
@@ -887,24 +910,46 @@ For each implementation phase:
      BEFORE writing any code — the named risks become checkpoints
      during mid-flight principles challenge.
 
-   The mini-design audit bookends the phase alongside the Vision
-   Alignment Gate: open aligned, close aligned. Cost: ~10 minutes.
-   Output: dailies note scoping everything that follows.
+   The mini-design bookends the phase alongside the Vision Alignment
+   Gate: open aligned, close aligned.
 
-   Origin: PPN Track 4C implementation kickoff (2026-04-19). The
-   practice had been informally guiding multi-phase design tracks
-   (4C's 10+ external-critique deferrals to mini-design prove it) but
-   wasn't a codified step. Codified here to make "mini-design audit"
-   a first-class phase-opening discipline parallel to the codebase
-   mini-audit.
+   /Outputs/: a brief "Phase N design target" bookmark in the current
+   dailies (<10 min) naming which design-doc sections, principles, and
+   drift risks frame this phase — as a REFERENCE, not a design artifact.
+   Design DECISIONS that emerge from the conversational dialogue persist
+   into the DESIGN DOC as new subsections (see canonical examples in
+   [[file:../2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.5.1, §7.5.8,
+   §7.5.10, §7.5.11, §7.6.15). The design doc holds the current design;
+   the dailies hold the commit story.
 
-2. *Mini-audit (codebase)*: After the mini-design audit scopes what
-   to measure, audit the ACTUAL codebase. Produce a concrete list:
-   which structs, functions, and call sites does this phase touch?
-   Which files, which line numbers? Do not work from memory or
-   assumptions --- read the code. The audit prevents wrong
-   assumptions that cause mid-phase pivots. The mini-design audit
-   (step 1) tells you WHAT to measure; this step produces the numbers.
+   This step is *co-dependent* with step 2 (mini-audit codebase): some
+   design decisions need code-reality data to be well-informed; some
+   audit work needs design framing to know what to measure. Cycle
+   between them until the phase scope is clear and coherent — both
+   internally and in relation to the rest of the track and the existing
+   design doc. End when landing on design clarity, not when step 1 is
+   "done" separately from step 2.
+
+   Origin: PPN Track 4C implementation kickoff (2026-04-19). Refined
+   2026-04-23 after a process clarification: mini-design and mini-audit
+   are co-dependent activities whose outcomes persist to the design doc;
+   dailies log only the opening bookmark and the commit story.
+
+2. *Mini-audit (codebase)*: Audit the ACTUAL codebase through
+   conversation. Produce a concrete list: which structs, functions,
+   and call sites does this phase touch? Which files, which line
+   numbers? Do not work from memory or assumptions --- read the
+   code. The audit prevents wrong assumptions that cause mid-phase
+   pivots.
+
+   This step is *co-dependent* with step 1 (mini-design). The mini-
+   design tells you WHAT to measure; this step produces the numbers;
+   the numbers often reshape the mini-design. Cycle between them.
+
+   /Outputs/: persist audit findings INTO the design doc as new
+   subsections alongside the mini-design decisions (see canonical
+   examples in [[file:../2026-04-21_PPN_4C_PHASE_9_DESIGN.md]] §7.6.9,
+   §7.6.14). Not in dailies, not in separate per-phase audit files.
 
 3. *Principles challenge mid-flight*: Every design decision made during
    implementation --- "should I add a field?", "should I use a hash or
