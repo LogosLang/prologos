@@ -478,7 +478,17 @@
                           (not (prop-type-top? v)))
                      (seteq mid)]
                     [else #f]))
-                merge-set-union
+                ;; Result-merge-fn: handles broadcast's hardcoded '() initial
+                ;; accumulator (net-add-broadcast-propagator at propagator.rkt:
+                ;; 1613 starts for/fold acc at '()). Plain merge-set-union
+                ;; calls (set-union '() <seteq>) which mixes list-set and
+                ;; hashset types → in-list contract violation. Wrapping
+                ;; ensures the first non-#f item-fn result becomes acc as-is
+                ;; (since '() is identity for set-union semantically).
+                (lambda (acc new)
+                  (cond
+                    [(null? acc) new]
+                    [else (merge-set-union acc new)]))
                 #:component-paths
                 (for/list ([m (in-list mids)])
                   (cons universe-cid m))
@@ -1004,42 +1014,26 @@
              (hash-set acc id (list (tagged-entry c aid))))])
       ;; Track 8 B2d: direct elab-cell-write.
       (set-box! cstore-net-box (elab-cell-write (unbox cstore-net-box) wr-cid wr-delta))))
-  ;; Track 7 Phase 8a: Install readiness propagators for constraint retry.
-  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
-  (define rq-cid-c (current-ready-queue-cell-id))
-  (define c-cell-ids (constraint-cell-ids c))
-  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and rq-cid-c (not (null? c-cell-ids)))
-    (define dep-cids-c (remove-duplicates c-cell-ids eq?))
-    ;; Stage 1: Threshold cell
-    (define-values (enet-t-c threshold-cid-c)
-      (elab-new-infra-cell (unbox cstore-net-box) #f (lambda (old new) #t)))
-    (set-box! cstore-net-box enet-t-c)
-    ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
-    (define-values (enet-f-c _fc)
-      (elab-add-propagator (unbox cstore-net-box) dep-cids-c (list threshold-cid-c)
-        (lambda (pnet)
-          (define any-ground?
-            (for/or ([cid (in-list dep-cids-c)])
-              (let ([v (net-cell-read pnet cid)])
-                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-          (if any-ground?
-              (net-cell-write pnet threshold-cid-c #t)
-              pnet))))
-    (set-box! cstore-net-box enet-f-c)
-    ;; Stage 3: Readiness propagator (threshold → ready-queue)
-    (define-values (enet-r-c _rc)
-      (elab-add-propagator (unbox cstore-net-box) (list threshold-cid-c) (list rq-cid-c)
-        (lambda (pnet)
-          (define tv (net-cell-read pnet threshold-cid-c))
-          (if tv
-              (net-cell-write pnet rq-cid-c
-                (list (tagged-entry (action-retry-constraint c) aid)))
-              pnet))))
-    (set-box! cstore-net-box enet-r-c))
+  ;; PPN 4C S2.b-iv (2026-04-24): Set-latch readiness pattern.
+  ;; Replaces the prior 3-stage fan-in (threshold-cell + fan-in propagator
+  ;; + readiness propagator, ~32 LoC) with a single helper call. Helper
+  ;; partitions meta-ids into universe-mids (one broadcast install per
+  ;; universe-cid group) + per-cell-mids (legacy fire-once per meta), and
+  ;; installs the threshold fire-once that emits to ready-queue.
+  ;; Per D.3 §7.5.12.9 step 6.
+  (define c-meta-ids (constraint-meta-ids c))
+  (when (not (null? c-meta-ids))
+    (set-box! cstore-net-box
+      (add-readiness-set-latch! (unbox cstore-net-box) c-meta-ids
+                                 (lambda () (action-retry-constraint c)))))
   ;; Track 8 C3: Constraint retry bridge propagator (retries in S0).
-  ;; Same pattern as C1/C2: bridge fire fn syncs enet box, calls retry, returns pnet.
+  ;; Separate concern from S1 readiness — fires on universe-cid changes
+  ;; and invokes the retry-bridge callback for direct unify-retry. Stays
+  ;; on cell-ids for now (retains pre-b-iv shape; no fan-in misfiring
+  ;; risk because the callback is idempotent — it short-circuits if no
+  ;; new info). Phase 9b's bridge-callback architecture will revisit.
   (define retry-bridge-fn (current-constraint-retry-bridge-fn))
+  (define c-cell-ids (constraint-cell-ids c))
   (when (and retry-bridge-fn (not (null? c-cell-ids)))
     (define dep-cids-retry (remove-duplicates c-cell-ids eq?))
     ;; Output: any cell that might be written by retry unification.
