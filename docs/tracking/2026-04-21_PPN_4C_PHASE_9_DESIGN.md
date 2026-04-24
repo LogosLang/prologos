@@ -127,7 +127,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **1A-iii-a-wide Step 1** | Type cell migration to tagged-cell-value + TMS retirement (Phase 1 substrate charter completion) | ✅ | **DONE** 2026-04-22. 5 commits S1.a-e. See §7.5.11 for full summary. S1.a (`3b6aefdb`) elab-fresh-meta → tagged-cell-value + 4th accidentally-load-bearing finding fix (visibility scope in `with-speculative-rollback` parameterize). S1.b (`2c8871ec`) retired 3 TMS fallback branches. S1.c (`d220ca51`) retired TMS API wholesale (~258 lines deleted). S1.d (`9f47ffe9`) retired current-speculation-stack parameter. S1.e (`b1468220`) peripheral cleanup (test-tms-cell.rkt deleted, cell-ops stale comments updated). Full suite: 7908 tests, 126.7s, 1 pre-existing batch contamination (unrelated). |
 | Path T-1 | `with-speculative-rollback` scaffolding retirement plan | ✅ | **DONE** 2026-04-22 (commit TBD). Documentation-only pass per charter alignment. Labeled elab-net snapshot as scaffolding with retirement plan in elab-speculation-bridge.rkt module docstring + inline comments; cleaned up stale Phase 11 retirement-journey comments. PM Master updated with "PPN 4C 1A-iii-a-wide Step 1 + T-1 (2026-04-22) — `with-speculative-rollback` retirement handoff" section specifying light cleanup sub-phase for PM 12 (6 caller migrations to `speculate` form, ~20-30 min mechanical work). DEFERRED.md updated. No code changes; no caller simplifications warranted post-Step-1. Full retirement gated on Phase 4 (meta-info CHAMP) + PM 12 (constraint store + id-map). |
 | Path T-2 | Map type inference open-world realignment ("Open by Design") | ✅ | **DONE** 2026-04-23. 3 commits. See §7.6.15 for full summary. Commit 1/3 (`4bfbd141`): `expr-Open` AST + pipeline integration (7 files: syntax/substitution/zonk/reduction/pretty-print/pnet-serialize/unify). Commit 2/3 (`246d4c2e`): typing semantics + map-op Open cases + map-assoc speculation retirement (typing-core + qtt). Commit 3/3 (`07fda438`): elaborator `surf-map-literal` emits Open for unannotated value type + test-mixed-map rewrite (21→25 tests) + test-path-expressions update + probe baseline refreshed. Full suite 7912 tests / 118.4s / 0 failures (pre-existing batch contamination cleared). speculation_count 12→0 in probe. Overrides 2026-03-20 CIU §8 D7. |
-| **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + compound-tagged-merge + cell-access helper) | ⬜ | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4 (revised 2026-04-23 to Option B per architectural dialogue: NO new elab-meta-* API; uses existing elab-cell-read/write + compound-cell-component-ref helper). Follows T-1 + T-2. Baseline + hypotheses at `2026-04-23_STEP2_BASELINE.md`. |
+| **1A-iii-a-wide Step 2** | PU refactor (4 per-domain universes + shared hasse-registry + compound-tagged-merge + cell-access helper) | 🔄 | Vision-advancing capstone for Phase 1A. Per D.3 §7.5.4 (revised 2026-04-23 to Option B). S2.a ✅ (`ded412db`) + S2.a-followup ✅ (`2bab505a`). S2.b staged per §7.5.12 mini-design (2026-04-24). |
+| Step 2 S2.b-ii | Reader dispatch in `meta-solution/cell-id` + scheduler component-path verification | ⬜ | §7.5.12 |
+| Step 2 S2.b-iii | `elab-fresh-meta` migration + Category 2 direct consumers (TYPE domain) | ⬜ | §7.5.12; probe checkpoint before b-iv |
+| Step 2 S2.b-iv | Category 3 bridge-fn factory + `:component-paths` updates | ⬜ | §7.5.12 |
+| Step 2 S2.b-v | Driver callback residual + formal measurement checkpoint | ⬜ | §7.5.12; STEP2_BASELINE.md §5 hypotheses |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -1265,6 +1269,132 @@ This is the **4th instance** of the "accidentally-load-bearing mechanism" patter
 **Fourth-finding codification candidate** (dailies 2026-04-22 watching list, promote if 5th instance observed):
 
 > *Accidentally-load-bearing mechanisms are often surfaced by integration-test behavior, not static audit.* Stage 2 audits that grep for inline predicates (e.g., `(type-top? ...)`, `(tms-cell-value? ...)`) catch SOME sites. They miss sites where a mechanism's BEHAVIOR — not its obvious API — is load-bearing downstream. B6 (T-3 Commit B, type meta cell merge-fn) and S1.a (visibility scope in with-speculative-rollback parameterize) were both surfaced by test-failure-during-integration, not by static audit. Implication: Stage 2 audits for API migrations must include integration-test runs of realistic workloads, not just static site enumeration.
+
+### §7.5.12 Step 2 S2.b Sub-phase Mini-design (2026-04-24)
+
+Opening conversational mini-design for S2.b per the refined Stage 4 methodology (mini-design + mini-audit outcomes persist to the design doc; see DESIGN_METHODOLOGY.org Stage 4 Per-Phase Protocol edits codified 2026-04-23). Context: post-S2.a-followup (`2bab505a`), S2.b rescoped to Option S2.b-staged (§7.5.4) after the attempted full migration surfaced 3 caller categories exceeding the original 200-400 LoC estimate.
+
+#### §7.5.12.1 Caller categories (grep-verified)
+
+Migration target for S2.b: the TYPE domain (mult/level/session are S2.c/d scope). Three categories of call sites consume meta cell identity:
+
+**Category 1 — Readers via `meta-solution/cell-id`** (9 production sites):
+- `unify.rkt:206`, `:259`, `:430`
+- `zonk.rkt:55`, `:496`
+- `typing-core.rkt:2818`
+- `reduction.rkt:3176`
+- `trait-resolution.rkt:57`, `:119`
+- `pretty-print.rkt:82`
+
+These reach meta values through the centralized reader; dispatch can be added at that centralized site without touching any caller.
+
+**Category 2 — Direct `prop-meta-id->cell-id` + `expr-meta-cell-id` consumers** (the silent class — root cause of the reverted `#hasheq()` failure mode):
+- `metavar-store.rkt:455` — `dict-cell-id` (bridge-fn output target for trait resolution)
+- `metavar-store.rkt:618` — `hm-cell-id` (bridge-fn output target for hasmethod)
+- `metavar-store.rkt:1780` — `solve-meta-core!` write path
+- `metavar-store.rkt:627` — `expr-meta-cell-id` for trait-var-cell-id
+- `metavar-store.rkt:694` — resolve path (internal dispatch)
+- `driver.rkt:2661` — `mult-cid` callback (mult domain — S2.c scope)
+- `driver.rkt:2653` — `expr-meta-cell-id` direct access
+- `unify.rkt:258` — `expr-meta-cell-id` direct access
+
+These treat the returned cell-id as a direct cell, bypassing the centralized reader. Must migrate explicitly to `compound-cell-component-ref`/`compound-cell-component-write` (S2.a helper) with `(universe-cid, meta-id)` as the identity.
+
+**Category 3 — Propagator installations with meta cell-id as OUTPUT target**:
+- `metavar-store.rkt:463` — `elab-add-propagator ... (list dict-cell-id) ...` for trait bridge-fn
+- `metavar-store.rkt:636` — `elab-add-propagator ... (list hm-cell-id) ...` for hasmethod bridge-fn
+- `resolution.rkt:428+` — `make-pure-trait-bridge-fire-fn` factory (fire-fn writes via `net-cell-write pnet dict-cell-id`)
+- `resolution.rkt` — `make-pure-hasmethod-bridge-fire-fn` analog
+
+Under S2.b, the output cell-id becomes a universe-cid; the fire function must route writes through `compound-cell-component-write` (component-keyed by meta-id), and the installation's `:component-paths` declaration becomes `(cons universe-cid meta-id)` so the scheduler's dependent firing is meta-specific (not whole-universe).
+
+#### §7.5.12.2 Migration patterns per category
+
+**Category 1 → centralized dispatch in `meta-solution/cell-id`**:
+```racket
+;; At metavar-store.rkt:2011, inside meta-solution/cell-id:
+(cond
+  [(meta-universe-cell-id? cell-id)
+   (with-handlers ([exn:fail? (lambda (_) (meta-solution id))])
+     (let ([v (compound-cell-component-ref enet cell-id id)])
+       (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
+  ;; ... existing direct-cell-read path for non-universe cell-ids ...)
+```
+All 9 Category 1 callers remain unchanged. Dispatch overhead is a single predicate call + hash-ref (~50 ns per S2.a benchmarks) — negligible vs. the 113 ns baseline direct read.
+
+**Category 2 → explicit compound-cell-component-ref/write at each site**:
+```racket
+;; BEFORE (e.g., solve-meta-core!:1780)
+(set-box! net-box (elab-cell-write (unbox net-box) cid solution))
+
+;; AFTER
+(set-box! net-box (compound-cell-component-write (unbox net-box) cid id solution))
+```
+Each Category 2 site needs the (universe-cid, meta-id) tuple explicit. Where the site receives only a cid (having called `prop-meta-id->cell-id`), we need the meta-id as well — which means updating the callsite to pass both or refactoring the surrounding function signature.
+
+**Category 3 → bridge-fn factory updates + component-paths**:
+```racket
+;; resolution.rkt make-pure-trait-bridge-fire-fn BEFORE
+(net-cell-write pnet dict-cell-id dict-expr)
+
+;; AFTER — factory closes over (universe-cid, meta-id) pair
+(compound-cell-component-write pnet dict-universe-cid dict-meta-id dict-expr)
+
+;; installation site (metavar-store.rkt:463) BEFORE
+(elab-add-propagator net dep-cids (list dict-cell-id) fire-fn
+                     #:component-paths ... )
+
+;; AFTER
+(elab-add-propagator net dep-cids (list type-meta-universe-cell-id) fire-fn
+                     #:component-paths (list (cons type-meta-universe-cell-id dict-meta-id)))
+```
+
+#### §7.5.12.3 Sub-phase partition
+
+| Sub-phase | Scope | Est. LoC | Deliverables |
+|---|---|---|---|
+| **S2.b-ii** | Centralized reader dispatch in `meta-solution/cell-id` + scheduler component-path verification | ~50-100 | Category 1 readers transparent; scheduler's `filter-dependents-by-paths` confirmed supporting cons-pair component-paths (or remediation scope identified) |
+| **S2.b-iii** | `elab-fresh-meta` migration + Category 2 direct consumers (TYPE domain only) | ~200-300 | Factory registers meta-id as universe component; all direct `prop-meta-id->cell-id` consumers updated. **Probe checkpoint** after this sub-phase before b-iv. |
+| **S2.b-iv** | Category 3 propagator installation migration (bridge-fn factories + component-paths) | ~100-150 | Trait bridge + hasmethod bridge factories write via `compound-cell-component-write`; component-paths use `(cons universe-cell-id meta-id)` for meta-specific dependent firing |
+| **S2.b-v** | Driver callback residual + probe + targeted suite + **measurement checkpoint** per §7.5.4 + STEP2_BASELINE §5 | ~50 LoC + measurement | bench-meta-lifecycle E1-E5 + probe diff = 0 vs baseline; compare to hypotheses; go/no-go for S2.c |
+
+**Ordering rationale**: b-ii dispatch-first lets Category 1 keep working while b-iii migrates the factory. b-iv is forced by b-iii because installation sites feed the factory's closed-over cell-ids. b-v closes with measurement.
+
+**Scope boundary**: TYPE domain only. `driver.rkt:2661` mult-cid + level/session migrations are S2.c/d scope.
+
+#### §7.5.12.4 Dispatch strategy (Q1 resolved)
+
+Centralized dispatch in `meta-solution/cell-id` (not per-site inlined), because:
+- Existing dispatch point — smaller surface to review and measure
+- Dispatch overhead (~50 ns per predicate + hash-ref) is negligible vs. the 113 ns baseline direct read
+- Migration proceeds without touching 9 Category 1 callers
+- Future reverts (should we need them) change one function, not 9 sites
+
+#### §7.5.12.5 Scheduler component-path verification (Q3 resolved)
+
+Done DURING S2.b-ii as its first task, not before. A ~5-minute check on `propagator.rkt`'s `filter-dependents-by-paths` to confirm whether cons-pair component-paths (`(cons cell-id component-key)`) are already supported (they should be — the BSP-LE 2B substrate has used this shape) or whether the scheduler needs adapting. If adaptation is needed, scope grows and we reassess partition.
+
+Mantra-check flag on "all in parallel" in this mini-design is gated on this verification.
+
+#### §7.5.12.6 Measurement cadence (Q4 resolved)
+
+Two measurement points during S2.b:
+1. **Probe diff check between S2.b-iii and S2.b-iv** — low cost (~5s probe run against baseline); high signal. Catches Category 2 migration regressions before the Category 3 bridge-factory changes complicate diagnosis.
+2. **Formal measurement checkpoint at S2.b close** (pre-agreed per STEP2_BASELINE.md §6) — bench-meta-lifecycle E1-E5 + probe + targeted suite regression check; compare to §5 hypotheses; go/no-go for S2.c.
+
+#### §7.5.12.7 Drift risks (for mid-flight principles challenge)
+
+1. **Half-migration parallel-sources-of-truth** — if we stop between categories, the 3 categories disagree on what `prop-meta-id->cell-id` returns. Either ALL type-meta sites migrate in one pass, or we don't start.
+2. **Scope creep into Phase 1E** — tempting to route `that-*` through the universe cell too. Guard: Phase 1E is deferred; S2.b must leave 1E clean.
+3. **Real-workload performance regression** — S2.a's +55% read-path win was synthetic. Deep zonk chains, nested meta resolutions, bridge-fn hot paths may behave differently. Measurement cadence (above) is the guard.
+4. **Bridge-fn factory integrity** — resolution.rkt closes over `dict-cell-id` as the output target. If the factory's fire function retains pre-S2.b `(net-cell-write pnet dict-cell-id dict-expr)` shape while the installation declares a universe-cid, writes go to the WHOLE universe cell instead of the meta component. Exactly the subset of the `#hasheq()` failure mode we saw in the reverted first attempt. S2.b-iv's acceptance test must verify the factory writes component-keyed.
+
+#### §7.5.12.8 Sub-phase completion criteria
+
+- **S2.b-ii**: scheduler component-path verification outcome; centralized dispatch lands; 9 Category 1 sites work unchanged; probe diff = 0.
+- **S2.b-iii**: `elab-fresh-meta` no longer allocates per-meta cells; all Category 2 sites migrated; probe diff = 0.
+- **S2.b-iv**: Category 3 bridge factories write via `compound-cell-component-write`; `:component-paths` declare `(cons universe-cid meta-id)`; meta-specific dependent firing verified; probe diff = 0.
+- **S2.b-v**: formal measurement against STEP2_BASELINE.md §5 criteria; if hypotheses met → go for S2.c; if regression → investigate before proceeding.
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
