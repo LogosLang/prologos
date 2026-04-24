@@ -244,10 +244,18 @@
 ;; Performs 2-level unwrap:
 ;;   1. Read compound hasheq from cell
 ;;   2. hash-ref for component-key → tagged-cell-value
-;;   3. tagged-cell-read to filter by current worldview bitmask → unwrapped value
+;;   3. tagged-cell-read to filter by resolved worldview bitmask → unwrapped value
 ;;
 ;; This mirrors what `net-cell-read` does for per-cell tagged-cell-value
 ;; cells (the Step-1 substrate), but lifted to the compound-cell case.
+;;
+;; S2.b-iii fix (2026-04-24): bitmask resolution matches net-cell-read —
+;; per-prop `current-worldview-bitmask` takes priority when non-zero;
+;; otherwise fall back to the worldview-cache-cell. Without the fallback,
+;; committed speculation entries (tagged with a hyp-bit in the cache) were
+;; invisible to reads after `with-speculative-rollback` returned (parameter
+;; reset to 0 but cache retained hyp-bit). Broke test-speculation-bridge.rkt
+;; "Speculative rollback > success — keeps meta-state" until this fix.
 ;;
 ;; Complexity: O(1) cell lookup + O(log N) hasheq-ref + O(K) tagged-cell-read
 ;; where K = number of tagged entries (typically small, often zero).
@@ -264,8 +272,26 @@
         (cond
           [(not tcv) default]
           [(tagged-cell-value? tcv)
-           (tagged-cell-read tcv (or (current-worldview-bitmask) 0))]
+           (tagged-cell-read tcv (resolve-worldview-bitmask enet))]
           [else tcv])])]))
+
+;; Resolve the effective worldview bitmask for a read, matching net-cell-read.
+;; Per-prop bitmask (non-zero) takes priority; otherwise read the worldview-
+;; cache-cell (committed network-wide worldview). Without this fallback,
+;; committed speculation entries are invisible after with-speculative-rollback
+;; returns (parameter reset to 0; cache retains hyp-bit).
+(define (resolve-worldview-bitmask enet)
+  (define per-prop-wv (current-worldview-bitmask))
+  (cond
+    [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
+    [else
+     ;; Fallback: read worldview-cache cell for network-wide committed bitmask.
+     ;; Use a defensive read — if the cache cell is missing (early init),
+     ;; default to 0. elab-cell-read raises on unknown cell-ids; catch with
+     ;; a handler.
+     (with-handlers ([exn:fail? (lambda (_) 0)])
+       (define v (elab-cell-read enet worldview-cache-cell-id))
+       (if (number? v) v 0))]))
 
 ;; compound-cell-component-write enet cell-id component-key value → enet*
 ;;   Write a value for `component-key` into the compound cell. Wraps the

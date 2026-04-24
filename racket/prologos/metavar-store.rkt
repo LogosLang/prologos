@@ -2078,10 +2078,12 @@
           (cond
             [(meta-universe-cell-id? cid)
              (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-               (and v (not (prop-type-bot? v)) (not (prop-type-top? v))))]
+               (and v (not (eq? v 'infra-bot))
+                    (not (prop-type-bot? v)) (not (prop-type-top? v))))]
             [else
              (let ([v (elab-cell-read (unbox net-box) cid)])
-               (and (not (prop-type-bot? v)) (not (prop-type-top? v))))]))]
+               (and (not (eq? v 'infra-bot))
+                    (not (prop-type-bot? v)) (not (prop-type-top? v))))]))]
     [else
      ;; CHAMP path (test context without network)
      (define mi-box (current-prop-meta-info-box))
@@ -2116,12 +2118,23 @@
          ;; haven't entered the universe regime. See D.3 §7.5.12 for S2.b
          ;; migration plan + §7.5.12.5 for the scheduler-path verification
          ;; that justifies the bare-meta-id path shape.
+         ;;
+         ;; S2.b-iii fix (2026-04-24): also filter 'infra-bot — the universal
+         ;; sentinel infra-cell uses for "never written". tagged-cell-read on
+         ;; a tcv with base='infra-bot and entries tagged with non-zero
+         ;; worldview bitmasks returns 'infra-bot when read under wv=0
+         ;; (speculation results after commit/rollback). Treating it as
+         ;; bot-equivalent ("unsolved") matches intent; without this filter,
+         ;; callers (unify-core, zonk-at-depth) get 'infra-bot and crash
+         ;; attempting to match it as an expr-* struct.
          [(meta-universe-cell-id? cell-id)
           (let ([v (compound-cell-component-ref (unbox net-box) cell-id id)])
-            (and v (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
+            (and v (not (eq? v 'infra-bot))
+                 (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
          [else
           (let ([v (elab-cell-read (unbox net-box) cell-id)])
-            (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
+            (and (not (eq? v 'infra-bot))
+                 (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
     [net-box
      ;; cell-id=#f (module-loading meta) — fall back to id-map
      (define cid (prop-meta-id->cell-id id))
@@ -2132,10 +2145,12 @@
           (cond
             [(meta-universe-cell-id? cid)
              (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-               (and v (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
+               (and v (not (eq? v 'infra-bot))
+                    (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
             [else
              (let ([v (elab-cell-read (unbox net-box) cid)])
-               (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
+               (and (not (eq? v 'infra-bot))
+                    (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
     [else
      ;; CHAMP path: no network available (expander.rkt #lang context, or test
      ;; context without process-string). Track 10 Phase 4: RETAINED — the #lang
