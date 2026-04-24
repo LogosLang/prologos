@@ -33,13 +33,21 @@
          "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
          "propagator.rkt"   ;; Track 7 Phase 2: make-prop-network for persistent registry
          "cell-ops.rkt"     ;; Track 8 Phase B1: worldview-aware CHAMP reads
-         ;; PPN 4C Step 2 S2.b-ii (2026-04-24): compound universe cell dispatch
-         ;; for meta-solution/cell-id. meta-universe.rkt is lightweight (imports
-         ;; only leaf modules per S2.a-followup refactor `2bab505a`) — no cycle
-         ;; risk with metavar-store.rkt. See D.3 §7.5.12.
+         ;; PPN 4C Step 2 S2.b (2026-04-24): compound universe cell infrastructure.
+         ;; meta-universe.rkt is lightweight (imports only leaf modules per S2.a-
+         ;; followup refactor `2bab505a`) — no cycle risk with metavar-store.rkt.
+         ;; See D.3 §7.5.12 for the migration design.
+         ;;
+         ;; b-ii imports: meta-universe-cell-id? + compound-cell-component-ref
+         ;;   (centralized dispatch in meta-solution/cell-id)
+         ;; b-iii imports: init-meta-universes! + current-type-meta-universe-cell-id
+         ;;   + compound-cell-component-write (universe allocation + writes)
          (only-in "meta-universe.rkt"
                   meta-universe-cell-id?
-                  compound-cell-component-ref))
+                  compound-cell-component-ref
+                  compound-cell-component-write
+                  init-meta-universes!
+                  current-type-meta-universe-cell-id))
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -1635,34 +1643,62 @@
   ;; elab-network-id-map-set instead of current-prop-meta-info-read/set/id-map-read/set callbacks.
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-meta))
+  ;; PPN 4C Step 2 S2.b-iii (2026-04-24): universe-cell path.
+  ;; If the type-meta universe has been initialized (via init-meta-universes!
+  ;; in reset-meta-store!), register the meta as a component of the universe
+  ;; cell instead of allocating a per-meta cell. The cell-id stored in the
+  ;; expr-meta struct becomes the universe-cid, SHARED across all type metas;
+  ;; the meta-id is the component-key that distinguishes them. See D.3 §7.5.12.
+  (define type-universe-cid (current-type-meta-universe-cell-id))
   ;; PM 8F Phase 1: track cell-id for direct cell access in expr-meta.
   ;; Network path sets cid from fresh-fn; fallback path sets cid=#f.
   (define meta-cell-id
     (cond
-      [(and net-box fresh-fn)
-       ;; Network path: meta-info lives in elab-network struct
-       ;; Track 8 Phase A1: Tag meta-info entry with current speculation assumption.
-       ;; At depth-0 (no speculation): aid=#f → raw entry (no wrapper).
-       ;; Under speculation: aid=gensym → tagged-entry for S(-1) retraction.
+      [(and net-box type-universe-cid)
+       ;; S2.b-iii universe path — no per-meta cell allocation
        (define aid (current-speculation-assumption))
        (define tagged-info (if aid (tagged-entry info aid) info))
        (define enet (unbox net-box))
+       ;; meta-info CHAMP: per-meta metadata (ctx, type, status, solution, source).
+       ;; Unchanged from pre-b-iii — keyed by meta-id hash, stores struct.
        (define enet0 (elab-network-meta-info-set enet (champ-insert (elab-network-meta-info enet) h id tagged-info)))
-       (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
-       ;; Track 6 Phase 1a: id-map is a field of elab-network
-       ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
-       (define id-map-entry (if aid (tagged-entry cid aid) cid))
+       ;; Register meta-id as component of the type-meta universe cell with
+       ;; initial value type-bot. compound-cell-component-write wraps the value
+       ;; in a tagged-cell-value respecting current-worldview-bitmask. The
+       ;; universe cell's compound-tagged-merge handles pointwise merging.
+       (define enet1 (compound-cell-component-write enet0 type-universe-cid id
+                                                    (expr-meta-bot-placeholder)))
+       ;; id-map: meta-id → universe-cid (shared across type metas). All type-
+       ;; meta id-map entries point to the same cid; the meta-id distinguishes.
+       (define id-map-entry (if aid (tagged-entry type-universe-cid aid) type-universe-cid))
        (define enet2 (elab-network-id-map-set enet1
                         (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
-       ;; Track 6 Phase 1d: write to unsolved-metas tracking cell
-       ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+       ;; Track unsolved meta (unchanged).
        (define um-cid (current-unsolved-metas-cell-id))
        (define enet3
          (if um-cid
              (elab-cell-write enet2 um-cid (hasheq id #t))
              enet2))
        (set-box! net-box enet3)
-       cid]  ;; return cell-id
+       type-universe-cid]
+      [(and net-box fresh-fn)
+       ;; Pre-b-iii per-meta cell path (still used when universe not initialized —
+       ;; bare-metavar-store tests that don't load elaborator-network.rkt).
+       (define aid (current-speculation-assumption))
+       (define tagged-info (if aid (tagged-entry info aid) info))
+       (define enet (unbox net-box))
+       (define enet0 (elab-network-meta-info-set enet (champ-insert (elab-network-meta-info enet) h id tagged-info)))
+       (define-values (enet1 cid) (fresh-fn enet0 ctx type source))
+       (define id-map-entry (if aid (tagged-entry cid aid) cid))
+       (define enet2 (elab-network-id-map-set enet1
+                        (champ-insert (elab-network-id-map enet1) h id id-map-entry)))
+       (define um-cid (current-unsolved-metas-cell-id))
+       (define enet3
+         (if um-cid
+             (elab-cell-write enet2 um-cid (hasheq id #t))
+             enet2))
+       (set-box! net-box enet3)
+       cid]
       [else
        ;; Fallback: write to standalone box (test/legacy contexts)
        (define mi-box (current-prop-meta-info-box))
@@ -1670,6 +1706,15 @@
          (set-box! mi-box (champ-insert (unbox mi-box) h id info)))
        #f]))  ;; no cell in fallback path
   (expr-meta id meta-cell-id))
+
+;; S2.b-iii helper: initial value for a newly-registered type meta in the
+;; universe cell. Returns 'type-bot — the exact symbol that type-lattice.rkt
+;; defines as type-bot, so prop-type-bot? recognizes it. Metavar-store.rkt
+;; cannot `require` type-lattice.rkt (would create the circular dependency
+;; metavar-store → type-lattice → reduction → metavar-store), so we use the
+;; symbol literal directly. This is stable because type-lattice's public
+;; definition is `(define type-bot 'type-bot)` — the value IS the symbol.
+(define (expr-meta-bot-placeholder) 'type-bot)
 
 ;; Track 2 Phase 3: Stratified resolution flag.
 ;; When #t, solve-meta! only writes the solution (core) and defers retries
@@ -1783,17 +1828,30 @@
      (when mi-box (set-box! mi-box new-mi-champ))])
   ;; Propagator path: write to cell
   ;; Track 8 B2d: direct elab-cell-write/elab-cell-read instead of callbacks.
+  ;; PPN 4C Step 2 S2.b-iii (2026-04-24): dispatch universe-cid writes to
+  ;; compound-cell-component-write (component-keyed); non-universe cids use
+  ;; direct elab-cell-write (pre-b-iii path).
   (when net-box
     (define cid (prop-meta-id->cell-id id))
     (when cid
-      (set-box! net-box (elab-cell-write (unbox net-box) cid solution))
-      ;; P-U2b: Post-write consistency validation.
-      (define cell-val (elab-cell-read (unbox net-box) cid))
-      (when (and cell-val
-                 (not (equal? cell-val solution))
-                 (not (prop-type-bot? cell-val))
-                 (not (prop-type-top? cell-val)))
-        (perf-inc-cell-write-mismatch!)))
+      (cond
+        [(meta-universe-cell-id? cid)
+         (set-box! net-box (compound-cell-component-write (unbox net-box) cid id solution))
+         ;; Post-write consistency validation via compound-cell-component-ref
+         (define cell-val (compound-cell-component-ref (unbox net-box) cid id))
+         (when (and cell-val
+                    (not (equal? cell-val solution))
+                    (not (prop-type-bot? cell-val))
+                    (not (prop-type-top? cell-val)))
+           (perf-inc-cell-write-mismatch!))]
+        [else
+         (set-box! net-box (elab-cell-write (unbox net-box) cid solution))
+         (define cell-val (elab-cell-read (unbox net-box) cid))
+         (when (and cell-val
+                    (not (equal? cell-val solution))
+                    (not (prop-type-bot? cell-val))
+                    (not (prop-type-top? cell-val)))
+           (perf-inc-cell-write-mismatch!))]))
     ;; Track 6 Phase 1d: mark meta as solved in unsolved-metas tracking cell
     (define um-cid (current-unsolved-metas-cell-id))
     (when um-cid
@@ -1835,23 +1893,36 @@
   (define enet1 (elab-network-meta-info-set enet new-mi-champ))
   ;; Write solution to cell
   ;; Track 8 B2d: direct elab-cell-write/elab-cell-read instead of callbacks.
+  ;; PPN 4C Step 2 S2.b-iii (2026-04-24): dispatch universe-cid writes to
+  ;; compound-cell-component-write — parallel to solve-meta-core! above.
   (define cid (prop-meta-id->cell-id id))
   (define enet2
-    (if cid
-        (let ([enet-w (elab-cell-write enet1 cid solution)])
-          ;; P-U2b: Post-write consistency validation
-          (define cell-val (elab-cell-read enet-w cid))
-          (when (and cell-val
-                     (not (equal? cell-val solution))
-                     (not (prop-type-bot? cell-val))
-                     (not (prop-type-top? cell-val)))
-            (perf-inc-cell-write-mismatch!))
-          ;; Mark meta as solved in unsolved-metas tracking cell
-          (define um-cid (current-unsolved-metas-cell-id))
-          (if um-cid
-              (elab-cell-write enet-w um-cid (hasheq id #f))
-              enet-w))
-        enet1))
+    (cond
+      [(and cid (meta-universe-cell-id? cid))
+       (define enet-w (compound-cell-component-write enet1 cid id solution))
+       (define cell-val (compound-cell-component-ref enet-w cid id))
+       (when (and cell-val
+                  (not (equal? cell-val solution))
+                  (not (prop-type-bot? cell-val))
+                  (not (prop-type-top? cell-val)))
+         (perf-inc-cell-write-mismatch!))
+       (define um-cid (current-unsolved-metas-cell-id))
+       (if um-cid
+           (elab-cell-write enet-w um-cid (hasheq id #f))
+           enet-w)]
+      [cid
+       (let ([enet-w (elab-cell-write enet1 cid solution)])
+         (define cell-val (elab-cell-read enet-w cid))
+         (when (and cell-val
+                    (not (equal? cell-val solution))
+                    (not (prop-type-bot? cell-val))
+                    (not (prop-type-top? cell-val)))
+           (perf-inc-cell-write-mismatch!))
+         (define um-cid (current-unsolved-metas-cell-id))
+         (if um-cid
+             (elab-cell-write enet-w um-cid (hasheq id #f))
+             enet-w))]
+      [else enet1]))
   (values enet2 #t))
 
 ;; Track 7 Phase 7b: Pure read of a constraint by its cid from enet.
@@ -1995,10 +2066,22 @@
   (cond
     [net-box
      ;; Propagator path: check cell value
+     ;; PPN 4C Step 2 S2.b-iii (2026-04-24): universe-cid dispatch. For a type
+     ;; meta registered in the type-meta universe, the cell holds a compound
+     ;; (hasheq meta-id → tagged-cell-value) — a direct elab-cell-read returns
+     ;; that hasheq, which fails both prop-type-bot? and prop-type-top? and
+     ;; would incorrectly report "solved" for an unsolved meta with type-bot as
+     ;; its component value. Dispatch to compound-cell-component-ref for
+     ;; universe cids to read the component's unwrapped value.
      (define cid (prop-meta-id->cell-id id))
      (and cid
-          (let ([v (elab-cell-read (unbox net-box) cid)])
-            (and (not (prop-type-bot? v)) (not (prop-type-top? v)))))]
+          (cond
+            [(meta-universe-cell-id? cid)
+             (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
+               (and v (not (prop-type-bot? v)) (not (prop-type-top? v))))]
+            [else
+             (let ([v (elab-cell-read (unbox net-box) cid)])
+               (and (not (prop-type-bot? v)) (not (prop-type-top? v))))]))]
     [else
      ;; CHAMP path (test context without network)
      (define mi-box (current-prop-meta-info-box))
@@ -2624,7 +2707,16 @@
       ;; Track 7 Phase 8a: Ready-queue channel cell for L1 readiness propagators.
       (define-values (enet13 rq-cid) (new-cell-fn enet12 '() merge-list-append))
       (current-ready-queue-cell-id rq-cid)
-      (set-box! nb enet13)))
+      (set-box! nb enet13)
+      ;; PPN 4C Step 2 S2.b-iii (2026-04-24): initialize compound universe cells.
+      ;; Allocates 4 per-domain universe cells (type/mult/level/session) + shared
+      ;; hasse-registry-handle on the fresh enet. Sets cell-id parameters + the
+      ;; handle parameter. Gated on new-cell-fn availability — if elaborator-
+      ;; network.rkt callbacks weren't wired (rare test contexts), universes
+      ;; aren't allocated and elab-fresh-meta falls through to the pre-b-iii
+      ;; per-meta cell path. This preserves backward-compat for test harnesses
+      ;; that don't load driver.rkt. See D.3 §7.5.12.
+      (set-box! nb (init-meta-universes! (unbox nb)))))
 
 ;; Track 6 Phase 6: save-base-elaboration-network REMOVED by Track 7 Phase 6.
 ;; Persistent cells now in dedicated persistent registry network.
