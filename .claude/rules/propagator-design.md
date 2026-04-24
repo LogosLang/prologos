@@ -34,37 +34,59 @@ Fan-in is the recurring problem: N independent sources signal "ready"; downstrea
 2. **Loses WHICH input fired** — identity collapsed into a Bool predicate result.
 3. **Breaks under compound cells** — when multiple "inputs" share a compound carrier (e.g., universe cells holding per-meta components via hasheq), `(net-cell-read pnet cid)` returns the full compound value. The per-input predicate operates on the wrong level. This is exactly why PPN 4C S2.b's universe migration breaks the pre-existing fan-ins in metavar-store.rkt's constraint/trait/hasmethod readiness pipelines.
 
-**The set-latch pattern**: a monotone-set latch cell + N per-input fire-once propagators + 1 threshold consumer.
+**The set-latch pattern (structural shape)**: a monotone-set latch cell + N-input readiness watcher + 1 threshold consumer.
+
+The STRUCTURE is invariant; the REALIZATION of the per-input watcher layer admits two strategies (broadcast for parallel-ready N items, fire-once for legacy per-cell). For mixed-domain inputs (some shared-carrier-with-tags, some legacy per-cell), partition and use broadcast for the universe sub-set + fire-once for the per-cell sub-set — both share the same latch.
 
 ```
-Per input i ∈ sources:
-  fire-once propagator (on source-i, :component-paths (list i))
-    reads source-i's value via the appropriate dispatch (meta-solution/
-    cell-id, compound-cell-component-ref/pnet, or net-cell-read for per-
-    cell sources). If source-i is ready, writes (seteq i) to latch-cid.
+;; Universe sub-set (shared carrier with component-keyed tagging — preferred when applicable):
+broadcast propagator (on shared-carrier-cid, items = list of input identities)
+  :component-paths (list (cons shared-carrier-cid id-1) (cons shared-carrier-cid id-2) ...)
+  item-fn: (id, input-vals) → if ready (extract id's component from input-vals[0])
+                              then (seteq id) else #f
+  result-merge-fn: merge-set-union
+  output: latch-cid
 
-latch-cid (domain 'monotone-set, merge merge-set-union)
+;; Per-cell legacy sub-set (one cell per input, pre-shared-carrier migration):
+Per input i ∈ legacy-sources:
+  fire-once propagator (on cell-i)
+    reads cell-i's value via net-cell-read.
+    If ready, writes (seteq i) to latch-cid.
+
+latch-cid (domain 'monotone-set, merge merge-set-union, bot (seteq))
   accumulates which inputs have fired — monotone, idempotent, CALM-safe.
 
-threshold propagator (on latch-cid)
-  fires action when (threshold? (cell-value latch-cid)).
+threshold fire-once propagator (on latch-cid)
+  fires action-thunk when (threshold? (cell-value latch-cid)).
   Typical: `(lambda (v) (not (set-empty? v)))` for "any ready";
           `(lambda (v) (>= (set-count v) k))` for "k-of-N";
           `(lambda (v) (= (set-count v) N))` for "all ready".
 ```
 
 **Infrastructure available** (all first-class, tested):
-- `'monotone-set` SRE domain (`infra-cell-sre-registrations.rkt`) — merge via `merge-set-union`, bot-value `(seteq)`
+- `'monotone-set` SRE domain (`infra-cell-sre-registrations.rkt`) — merge via `merge-set-union`, bot-value `(seteq)`, proper join-semilattice
+- `net-add-broadcast-propagator` (`propagator.rkt`, BSP-LE Track 2 Phase 1B) — ONE propagator + N items + broadcast-profile metadata for parallel decomposition; supports `:component-paths` (Phase 5.1b extension at line 1638)
 - `net-add-fire-once-propagator` (`propagator.rkt`, BSP-LE Track 2 Phase 5) — flag-guarded single-firing, supports `:component-paths`
 - `make-threshold-fire-fn` / `net-add-threshold` (`propagator.rkt`) — threshold-gated firing
 
 **Benefits**:
-- **Component-path precision**: each per-input propagator fires ONLY when its input changes. Sibling input changes on a shared compound cell don't wake it up.
+- **Component-path precision**: each watcher fires ONLY when one of its declared inputs changes. Sibling input changes on a shared compound cell don't wake it up. Both broadcast and fire-once support `:component-paths` with cons-pair shape `(cons cell-id path)`.
 - **Identity preserved**: the latch retains WHICH inputs have fired. Callers can enumerate.
 - **Monotone**: set-union merge is commutative, associative, idempotent. CALM-safe, coordination-free.
-- **Fire-once semantics baked in**: each per-input propagator fires at most once (flag-guard on fire-once + latch is monotone). No spurious re-fires.
+- **Fire-once semantics baked in**: each input contributes at most once (broadcast's item-fn returns `#f` when not ready; fire-once flag-guard prevents per-input re-fire; latch is monotone). No spurious re-fires.
 - **Generalizes**: the threshold predicate carries the specific semantics (any / k-of-N / all). Same structure, different thresholds.
-- **Mantra-aligned**: all-at-once (N propagators installed in one pass), all-in-parallel (independent watchers), structurally emergent (latch state IS the readiness signal), information flows through cells, ON-NETWORK.
+- **Mantra-aligned at multiple layers**:
+  - **all-at-once**: all watchers installed in one helper call (broadcast = 1 install for N items; fire-once = N installs sharing structure)
+  - **all-in-parallel**: N items processed in 1 broadcast fire with broadcast-profile metadata enabling future scheduler decomposition; or N independent fire-once propagators that BSP can fire in parallel rounds
+  - **structurally emergent**: latch state IS the readiness signal — no control flow decides "are we ready"
+  - **information flow through cells**: input change → watcher → latch → threshold → output cell
+  - **on-network**: every step is `net-cell-read` / `net-cell-write`
+
+**Why broadcast at install layer (not N fire-once everywhere)**:
+- A/B data per § Broadcast Propagators below: 2.3× faster at N=3, 75.6× at N=100 vs N-propagator model
+- ONE propagator install vs N — saves CHAMP install overhead + worklist entries + filter-dependents-by-paths evaluations per BSP round
+- Broadcast-profile metadata is the polynomial-functor-made-operational: scheduler can partition items across threads at fire time, automatic with no caller code changes
+- For mixed-domain inputs (universe + legacy per-cell), broadcast handles the universe sub-set, fire-once handles the per-cell sub-set — both write to the SAME latch via `merge-set-union`. As legacy domains migrate to shared-carrier, the fire-once branch shrinks naturally.
 
 **Anti-pattern** (the thing this pattern replaces):
 
@@ -80,18 +102,24 @@ threshold propagator (on latch-cid)
       (if any-ready? (net-cell-write pnet threshold-cid #t) pnet))))
 ```
 
-Replace with set-latch structure as above.
+This pattern has three defects (re-reads ALL inputs per fire, loses identity, breaks under compound cells) AND is the N-propagator model's antithesis of broadcast (sequential `for/or` instead of parallel item processing). Replace with the set-latch+broadcast structure above.
 
 **Applications across Prologos**:
 - Constraint retry readiness (`metavar-store.rkt:826+`) — PPN 4C S2.b-iv target
 - Trait bridge retry (`metavar-store.rkt:466+`, `resolution.rkt:428+`) — same
 - Hasmethod bridge retry (`metavar-store.rkt:618+`) — same
-- Future Phase 10 fork-on-union per-branch ready latches
-- Future Phase 9b γ hole-fill multi-candidate readiness
+- Future Phase 10 fork-on-union per-branch ready latches (where N = union arity)
+- Future Phase 9b γ hole-fill multi-candidate readiness (where N = candidate count, potentially large — broadcast's parallel decomposition becomes load-bearing)
 
-**Prime design pattern — consult before writing any fan-in.** Three concrete instances in the current codebase share the imperative fan-in shape; all three become failures under PPN 4C S2.b's universe migration. The set-latch is the architecturally-correct replacement, using only first-class primitives we already ship.
+**Prime design pattern — consult before writing any fan-in.** Three concrete instances in the current codebase share the imperative fan-in shape; all three become failures under PPN 4C S2.b's universe migration. The set-latch + broadcast composition is the architecturally-correct replacement, using only first-class primitives we already ship.
 
-Codified 2026-04-24 after PPN 4C S2.b-iii + full-suite measurement surfaced the compound-cell incompatibility of the pre-existing fan-ins. Promoted to "prime design pattern" status — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
+**Observation: set-latch and broadcast are complementary, not substitutes**:
+- Set-latch is the STRUCTURAL shape for fan-in readiness (where N independent inputs feed an aggregate readiness signal via monotone accumulation + threshold-gated action emission)
+- Broadcast is the REALIZATION strategy for processing N independent items in 1 propagator with parallel decomposition
+
+Both apply at different conceptual layers. The architecturally-aligned fan-in uses BOTH: set-latch's structural shape (latch + threshold + watcher) + broadcast's realization at the watcher layer for the shared-carrier sub-set. Per-cell legacy sub-sets fall back to fire-once until they migrate to shared-carrier.
+
+Codified 2026-04-24 after PPN 4C S2.b-iii + full-suite measurement surfaced the compound-cell incompatibility of the pre-existing fan-ins. Refined 2026-04-24 post-mini-audit to specify broadcast realization at the install layer (per the user prompt: "is this also parallel ready according to the all-at-once, all in parallel part of our propagator mantra?") and document the complementary relationship with broadcast. Promoted to "prime design pattern" status — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
 
 ## Component Indexing
 

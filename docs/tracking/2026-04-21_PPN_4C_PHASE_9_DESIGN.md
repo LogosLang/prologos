@@ -1370,21 +1370,33 @@ Centralized dispatch in `meta-solution/cell-id` (not per-site inlined), because:
 - Migration proceeds without touching 9 Category 1 callers
 - Future reverts (should we need them) change one function, not 9 sites
 
-#### §7.5.12.5 Scheduler component-path verification (Q3 resolved) — COMPLETE 2026-04-24
+#### §7.5.12.5 Scheduler component-path verification (Q3 resolved) — COMPLETE 2026-04-24, **CORRECTED 2026-04-24**
 
 Done as the first task of S2.b-ii. Findings:
 
 **Scheduler supports arbitrary `equal?`-comparable path shapes.** `filter-dependents-by-paths` at `propagator.rkt:1058` uses `member` (equal? comparison) between declared paths and the changed-set. Existing code heavily uses cons-pair paths — notably `typing-propagators.rkt` declares `(cons tm-cid (cons ctx-pos ':context))` (triple-nested) for attribute-map dependent firing; `tests/test-component-paths-enforcement.rkt` uses simple `(cons cid 'path)`. Zero scheduler adaptation needed.
 
-**Refined path shape for compound universe cells**: the initial mini-design proposed `:component-paths (list (cons universe-cid meta-id))`. However, `pu-value-diff` (`propagator.rkt:1008`) emits changed keys as bare hasheq keys for FLAT hashes (line 1038), and only emits `(cons position facet)` pairs for NESTED hash-of-hashes. Our compound universe cell value is `(hasheq meta-id → tagged-cell-value)` — FLAT (tagged-cell-value is a struct, not a hash). So `pu-value-diff` will emit bare `meta-id` symbols as the changed-set.
+**Path shape for compound universe cells — CORRECTED**: declaration is `:component-paths (list (cons universe-cid meta-id))`. The earlier note in this section claiming bare `meta-id` was incorrect — it conflated the WIRE format (changed-set emitted by `pu-value-diff`) with the DECLARATION format (input to `net-add-propagator`). They are different shapes at different layers, both correct as designed:
 
-**Correct declaration**: `:component-paths (list meta-id)` — bare symbol, no cons-pair wrapping. The universe-cid scoping is handled by the propagator's registration against its input-ids (scheduler only runs path filtering against the specific cell's deps-champ), so cross-universe collision is structurally impossible.
+1. **Declaration** at install (`net-add-propagator` lines 1466-1470): `(filter (lambda (pair) (equal? cid (car pair))) component-paths)` then `(map cdr matches)`. The installer expects **cons-pairs** `(cons cell-id path)`. After `(map cdr matches)`, the **stored** path is the bare path-value (the cdr).
+
+2. **Wire format** in `pu-value-diff` (lines 1008-1045): for FLAT hasheq (tagged-cell-value as value), emits **bare keys** as the changed-set; for NESTED hasheq-of-hasheq (attribute-map), emits `(cons position facet)` pairs.
+
+3. **Filter** in `filter-dependents-by-paths` (lines 1108-1110): `(for/or ([p (in-list paths)]) (member p changed-set))`. Compares stored bare paths against bare changed-set keys. Match.
+
+So for our flat compound universe cell `(hasheq meta-id → tagged-cell-value)`:
+- Declare `:component-paths (list (cons universe-cid meta-id))` — cons-pair shape, satisfies installer's `(car pair)` extraction
+- Stored path after `(map cdr matches)` = `(list meta-id)` — bare symbols
+- `pu-value-diff` emits bare meta-ids as changed-set (FLAT hasheq path)
+- `filter-dependents-by-paths` matches bare-stored-path against bare-changed-set → fires correctly
+
+**Why b-ii and b-iii didn't surface this**: neither installed propagators ON universe-cid. Only b-iv installs propagators with `:component-paths` declaring meta-id paths on universe-cid. The earlier verification checked the wire format and filter layer but missed the installer's cons-pair expectation. Audit caught it pre-implementation 2026-04-24.
 
 **`tagged-cell-value` equality**: `#:transparent` struct (`decision-cell.rkt:397`) → `equal?` does field-by-field comparison; merge changes (new bitmask tag entry added to `entries`, base updated) trigger proper diff emission. Verified.
 
 **Mantra-check flag on "all in parallel" → CLEARED.** Confirmed all 5 mantra words satisfied without scheduler adaptation.
 
-The Category 3 migration pattern in §7.5.12.2 is simplified accordingly: `:component-paths (list meta-id)` instead of `(cons universe-cid meta-id)`.
+The Category 3 migration pattern in §7.5.12.2 uses cons-pair paths: `:component-paths (list (cons universe-cid meta-id))`.
 
 #### §7.5.12.6 Measurement cadence (Q4 resolved)
 
@@ -1406,7 +1418,7 @@ Two measurement points during S2.b:
 - **S2.b-iv**: Category 3 bridge factories write via `compound-cell-component-write`; `:component-paths` declare bare `meta-id` (not cons-pair, per §7.5.12.5 verification); set-latch pattern replaces fan-in propagators (§7.5.12.9); meta-specific dependent firing verified; probe diff = 0; `test-constraint-retry-propagator.rkt` passes.
 - **S2.b-v**: formal measurement against STEP2_BASELINE.md §5 criteria; if hypotheses met → go for S2.c; if regression → investigate before proceeding.
 
-#### §7.5.12.9 S2.b-iv set-latch design decision (2026-04-24)
+#### §7.5.12.9 S2.b-iv set-latch design decision (2026-04-24, **EXPANDED 2026-04-24** post-mini-audit)
 
 **Full-suite empirical findings post-S2.b-iii** (commit `997a7896`, includes the b-iii follow-up fixes for `'infra-bot` filter + worldview-cache fallback in `compound-cell-component-ref`):
 
@@ -1427,62 +1439,127 @@ Two measurement points during S2.b:
 
 All 4 cluster around **multi-meta constraints + direct `net-cell-read` on universe-cid**. This is the Category 3 (bridge-fn + readiness propagator) territory flagged in §7.5.12.
 
-**Design decision: Option A-refined — set-latch rewrite** (confirmed by user 2026-04-24)
+**Design decision: set-latch rewrite with broadcast realization at install layer** (refined 2026-04-24 post-mini-audit)
 
-Replace the existing 3-stage fan-in pipeline (threshold-cell + fan-in propagator + readiness propagator) with the **set-latch pattern** codified in [`propagator-design.md`](../../.claude/rules/propagator-design.md) § Set-Latch for Fan-In Readiness. Rationale: the set-latch is architecturally correct under compound universe cells AND the imperative fan-in pattern appears at 3 sites in `metavar-store.rkt` (constraint retry, trait bridge, hasmethod bridge) — the pattern IS recurring. Promoted to "prime design pattern" status in propagator-design.md — consult before writing any fan-in.
+Replace the existing 3-stage fan-in pipeline (threshold-cell + fan-in propagator + readiness propagator) with the **set-latch pattern** codified in [`propagator-design.md`](../../.claude/rules/propagator-design.md) § Set-Latch for Fan-In Readiness, **using broadcast at the install layer for the universe-meta sub-set** (post-mini-audit refinement). Rationale: set-latch's structural shape (latch + threshold + per-input watcher) composed with broadcast's polynomial-functor realization (1 propagator + N items + parallel-decomposition profile) is the architecturally most-aligned fan-in pattern. The imperative fan-in appears at 3 sites in `metavar-store.rkt` (constraint retry, trait bridge, hasmethod bridge) — all benefit; future Phase 10 fork-on-union and Phase 9b γ multi-candidate inherit.
 
-**Why set-latch instead of inline per-meta dispatch in the fan-in fire-fn**:
-1. The set-latch uses FIRST-CLASS PRIMITIVES we already ship (`'monotone-set` SRE domain, `net-add-fire-once-propagator`, `make-threshold-fire-fn`) rather than ad-hoc inline dispatch.
-2. Component-path precision: each per-meta propagator declares `:component-paths (list meta-id)` and fires ONLY when its meta changes. Sibling meta changes on the same universe cell don't wake it.
-3. Identity preserved in the latch — we can enumerate which metas are ready.
+**Why set-latch's STRUCTURAL shape, not inline per-meta dispatch in the fan-in fire-fn**:
+1. The set-latch uses FIRST-CLASS PRIMITIVES we already ship (`'monotone-set` SRE domain, `net-add-broadcast-propagator`, `net-add-fire-once-propagator`, `make-threshold-fire-fn`) rather than ad-hoc inline dispatch.
+2. Component-path precision: each watcher declares `:component-paths (list (cons universe-cid meta-id) ...)` and fires ONLY when one of THIS constraint's metas changes. Sibling meta changes on the same universe cell don't wake it.
+3. Identity preserved in the latch — callers can enumerate which metas are ready.
 4. Fire-once semantics structurally correct (no spurious re-fires on subsequent universe-cell writes).
 5. Mantra-aligned (all-at-once, all-in-parallel, structurally emergent, info-flow-through-cells, on-network).
 6. Same pattern generalizes to Phase 10 fork-on-union per-branch latches + Phase 9b γ hole-fill multi-candidate readiness.
 
-**b-iv concrete scope** (picked up in next session):
+**Why broadcast at install layer, not N fire-once**:
+1. Broadcast's A/B data: 2.3× faster at N=3, 75.6× at N=100 vs N-propagator model (per propagator-design.md § Broadcast Propagators).
+2. ONE propagator install per fan-in site instead of N — saves CHAMP install overhead (~2.7μs × N) + worklist entries.
+3. Broadcast-profile metadata enables future scheduler-level parallel decomposition across items at fire time — automatic, no caller code changes.
+4. Component-paths supported on broadcast (BSP-LE Track 2 Phase 5.1b extension at `propagator.rkt:1638-1642`) — same precision benefits as N fire-once.
+5. The "ONE fire reads all N components" cost is bounded; for typical N=1-5 it's a wash; for large N (Phase 9b γ), parallel decomposition recovers the cost.
 
-1. **constraint struct change** (metavar-store.rkt:283)
+**Why broadcast for universe sub-set + fire-once for per-cell legacy sub-set**:
+
+Under b-iii, only TYPE metas are universe-migrated. Mult/level/session metas are still per-cell (S2.c/d/e scope). A constraint can have MIXED metas: type (universe component) + mult (per-cell). The helper handles this by partitioning meta-ids:
+- `universe-mids` → ONE broadcast propagator on universe-cid with cons-pair component-paths
+- `per-cell-mids` → fire-once propagators per meta on per-cell cids (legacy path; narrows as S2.c/d/e migrate)
+
+This is "scaffolding with named retirement" — not belt-and-suspenders. The fire-once branch handles a DIFFERENT meta storage shape (pre-universe per-cell), not redundant handling of the same. As S2.c/d/e land, `per-cell-mids` shrinks to empty and the helper collapses to broadcast-only.
+
+**Mini-audit findings (2026-04-24)** that reshape the original 7-step plan:
+
+1. **§7.5.12.5 component-path shape was wrong** — corrected this section. Declaration is `(list (cons universe-cid meta-id))` (cons-pair, not bare); installer's `(car pair)` extraction requires it.
+
+2. **Consumer surface broader than the 3 fan-in sites** — `constraint-cell-ids` is also consumed by 2 scan paths with the IDENTICAL universe-cid bug:
+   - `retry-constraints-via-cells!` (metavar-store.rkt:894-908) — Stratum 2 retry scan
+   - `collect-ready-constraints-via-cells` (metavar-store.rkt:919-931) — Stratum 1 readiness scan
+   - And ANALOGOUS for traits/hasmethods: `collect-ready-traits-via-cells` (:942-956) + `collect-ready-hasmethods-via-cells` (:982-996)
+
+3. **The 4 scan functions have ZERO production callers** — verified by grep 2026-04-24. They were Track 7 Phase 8a-era polling mechanisms that became vestigial when the readiness propagators (the 3-stage fan-in) landed. Test files contain the only invocations (5 calls in test-constraint-retry-propagator.rkt).
+
+4. **Scan paths violate Propagator-First** — per DESIGN_PRINCIPLES.org § Stratified Propagator Networks, scan loops are "symptoms of resolution logic living outside the propagator network." The set-latch pattern IS the architecturally-correct S1 readiness mechanism; scans are anti-patterns the architecture was supposed to retire. Track 7 missed this retirement; b-iv closes it.
+
+**b-iv expanded scope** (post-audit refinement):
+
+1. **`constraint` struct change** (metavar-store.rkt:283)
    - Add `meta-ids` field alongside existing `cell-ids` (list of meta-ids for metas in lhs/rhs — per-meta identity under universe model)
-   - `cell-ids` retained for backward-compat + non-universe domain (mult/level/session keep per-meta cells until S2.c/d)
+   - `cell-ids` retained for backward-compat readers (driver/elaborator) until full migration
 
-2. **add-constraint!** (metavar-store.rkt — find populator site, around lines 390-460 based on earlier grep)
-   - Walk lhs/rhs for metas (already does this to populate cell-ids)
-   - Populate both `meta-ids` and `cell-ids` from the same walk
-   - De-duplicate each via `remove-duplicates eq?`
+2. **`add-constraint!` populator** (metavar-store.rkt:764+)
+   - `meta-ids` is ALREADY collected at line 768 via `append (collect-meta-ids lhs) (collect-meta-ids rhs)` — for wakeup purposes. Step 2 stores this existing value into the new struct field.
+   - De-duplicate via `remove-duplicates eq?`
 
-3. **Readiness pipeline rewrite** at 3 sites (`metavar-store.rkt:826+` constraint retry, `:466+` trait bridge retry, `:618+` hasmethod bridge retry):
-   - Replace 3-stage (threshold-cell + fan-in + readiness) with set-latch:
-     - Allocate `latch-cid` via `elab-new-infra-cell net (seteq) merge-set-union`
-     - For each meta-id: `net-add-fire-once-propagator net (list universe-cid) (list latch-cid) fire-fn #:component-paths (list meta-id)` where `fire-fn` reads the meta's component value via `compound-cell-component-ref/pnet` (new helper to add) and writes `(seteq meta-id)` to latch if ready
-     - Threshold propagator: `(net-add-threshold net latch-cid (lambda (s) (not (set-empty? s))) ... body-fn)` — body writes action to ready-queue
-   - Factor into helper: `(add-readiness-set-latch! enet meta-ids action-builder)` — used at all 3 sites for consistency
+3. **Foundation: pnet-level helpers in meta-universe.rkt**
+   - `compound-cell-component-ref/pnet pnet cell-id component-key [default]` — mirrors enet-level using `net-cell-read` and the worldview-bitmask resolver
+   - `compound-cell-component-write/pnet pnet cell-id component-key value` — mirrors enet-level using `net-cell-write`
+   - `resolve-worldview-bitmask/pnet pnet` — pnet variant of the b-iii fallback
 
-4. **Bridge fire-fn updates** in `resolution.rkt`:
-   - `make-pure-trait-bridge-fire-fn` (line 428): change signature to accept `(universe-cid, dict-meta-id, dep-meta-ids)` instead of `(dict-cell-id, dep-cell-ids)`. Body reads via `compound-cell-component-ref/pnet pnet universe-cid meta-id` for each dep; writes via `compound-cell-component-write/pnet pnet universe-cid dict-meta-id expr`.
-   - `make-pure-hasmethod-bridge-fire-fn` analog.
+4. **Foundation: enet-level wrappers in elab-network-types.rkt**
+   - `elab-add-fire-once-propagator` — thin wrapper over `net-add-fire-once-propagator` mirroring `elab-add-propagator`
+   - `elab-add-broadcast-propagator` — thin wrapper over `net-add-broadcast-propagator`
 
-5. **New helpers in meta-universe.rkt** (pnet-level variants):
-   - `compound-cell-component-ref/pnet pnet cell-id component-key [default]` — mirrors the enet-level helper but takes pnet
-   - `compound-cell-component-write/pnet pnet cell-id component-key value` — mirrors enet-level
+5. **Helper: `add-readiness-set-latch! enet meta-ids action-thunk`** in metavar-store.rkt
+   - Allocate latch cell (`'monotone-set` domain, `merge-set-union`, bot `(seteq)`)
+   - Partition `meta-ids` by storage shape (`meta-universe-cell-id?` predicate)
+   - For universe sub-set: install ONE broadcast propagator on universe-cid with `:component-paths (map (lambda (m) (cons universe-cid m)) universe-mids)`; item-fn reads each meta's component from input-vals[0]; result-merge-fn = `merge-set-union`; output → latch-cid
+   - For per-cell sub-set: install N fire-once propagators (one per per-cell meta), each reading its cid via `net-cell-read` and writing `(seteq mid)` to latch
+   - Install threshold fire-once propagator on latch-cid → fires `action-thunk` when latch becomes non-empty, writes to ready-queue
+   - All propagators tagged with `current-speculation-assumption` for branch-isolated firing
 
-6. **Test updates** (`tests/test-constraint-retry-propagator.rkt`):
-   - Line 47, 225: `(length (constraint-cell-ids c))` → `(length (constraint-meta-ids c))` — honest to post-S2.b architecture
-   - Other tests probably need analogous adjustments
+6. **Rewrite 3 fan-in install sites** to use the helper:
+   - Constraint retry (metavar-store.rkt:820-852) — 32 lines deleted; 1-line helper call
+   - Trait bridge readiness (metavar-store.rkt:425-459) — 35 lines deleted; 1-line helper call
+   - Hasmethod bridge readiness (metavar-store.rkt:577-618) — 42 lines deleted; 1-line helper call
 
-7. **Regression validation**:
-   - Full suite: must come back to 7912/0-failure
-   - Probe: diff = 0 (semantic); counters within variance
-   - Targeted bridge tests: green
+7. **Bridge fire-fn factory updates** in `resolution.rkt`:
+   - `make-pure-trait-bridge-fire-fn` (line 428): signature change to accept `dict-meta-id` + `dep-meta-id-pairs` (where each pair is `(cons universe-cid meta-id)` for universe metas, `(cons per-cell-cid #f)` for per-cell). Body uses `compound-cell-component-ref/pnet` for universe components and `net-cell-read` for per-cell. Writes via `compound-cell-component-write/pnet` for universe outputs.
+   - `make-pure-hasmethod-bridge-fire-fn` (line 499): analog. Trait-var, dict-meta, and the meta itself can each be universe or per-cell — handle uniformly.
+   - Order preservation: `impl-key-str` order driven by caller's meta-id list — preserve in factory.
 
-**Estimated scope**: 250-400 LoC across metavar-store.rkt + resolution.rkt + meta-universe.rkt + tests/test-constraint-retry-propagator.rkt. Multiple install sites share the set-latch pattern — factoring the helper reduces effective LoC.
+8. **Retire 4 vestigial scan functions** (Option B per audit):
+   - Delete definitions: `retry-constraints-via-cells!` (:894), `collect-ready-constraints-via-cells` (:919), `collect-ready-traits-via-cells` (:942), `collect-ready-hasmethods-via-cells` (:982)
+   - Remove from `provide` block (metavar-store.rkt:88, :233-235)
+   - Remove related comment references at :437, :561, :662, :759
+   - These have zero production callers; only test-file references retire when the test file is restructured (step 9)
+
+9. **Test rewrite + filename rename**: `tests/test-constraint-retry-propagator.rkt` → `tests/test-constraint-readiness.rkt`
+   - Rename file (honest to post-b-iv mechanism: event-driven readiness, not retry-propagator)
+   - Update header comment: "Tests for set-latch readiness pattern (constraint retry + trait bridge + hasmethod bridge)"
+   - Replace direct `retry-constraints-via-cells!` invocations with event-driven test pattern: write meta solution via `compound-cell-component-write/pnet` + run-to-quiescence + check constraint status
+   - Update identity-per-meta tests: `(length (constraint-cell-ids c))` → `(length (constraint-meta-ids c))` for lines 47, 225
+   - Update direct cell read tests (line 262): use `compound-cell-component-ref` for solution check
+   - Tests covering "skip when nothing solved", "skip already-solved", "skip without cell-ids" become PROPERTIES of the event-driven path: quiescence yields no spurious retries; idempotent latch + fire-once prevents re-fires; no meta-ids = no set-latch installation = no retry
+
+10. **Regression validation**:
+    - Probe (`examples/2026-04-22-1A-iii-probe.prologos`): diff = 0 (semantic output matches baseline)
+    - Targeted tests: `test-constraint-readiness.rkt` (renamed) + bridge tests + speculation-bridge GREEN
+    - Full suite: 7912/0-failure (or better — broadcast install reduction may shave a few seconds off wall time)
+
+**Estimated scope**: ~280-330 LoC net across metavar-store.rkt (-100 LoC deletions, +110 helper) + resolution.rkt (+50) + meta-universe.rkt (+30 pnet helpers) + elab-network-types.rkt (+15 wrappers) + tests/test-constraint-readiness.rkt (rename + ~80 LoC restructuring).
 
 **Drift risks for b-iv implementation**:
-1. **Fire-once with component-path semantics** — the set-latch depends on `net-add-fire-once-propagator` correctly consuming `:component-paths (list meta-id)`. Verified for `net-add-propagator` in §7.5.12.5; need to confirm the fire-once variant's handling is identical. `enforce-component-paths!` structural check catches mismatches at installation time.
-2. **Bridge fire-fn readers for dep metas** — bridge factory currently iterates `dep-cell-ids` and reads each. Under b-iv with universe-cids, all deps may share the same cid. The factory needs `dep-meta-ids` alongside OR a paired list — cleaner: pass `(listof (cons universe-cid meta-id))` tuples.
-3. **Order preservation in trait resolution** — `impl-key-str` is built from `(map expr->impl-key-str type-arg-vals)` in order. If we move from a plain list of values to a list sourced from meta-ids, preserve the original order from `type-arg-metas` (the caller).
-4. **Transition cohesion** — the 3 install sites share structure but differ in action builders. The helper must parameterize cleanly without introducing callback proliferation.
+1. **Component-path shape on broadcast** — broadcast's `:component-paths` extraction at `propagator.rkt:1638-1642` uses `(filter (lambda (pair) (equal? cid (car pair))) ...)` — same shape as `net-add-propagator`. Cons-pairs verified.
+2. **Bridge fire-fn readers for mixed dep metas** — universe deps need `compound-cell-component-ref/pnet`; per-cell deps need `net-cell-read`. Use paired list `(listof (cons cell-id meta-id-or-#f))` in factory closures; dispatch on whether `cell-id` is a universe-cid via `meta-universe-cell-id?`.
+3. **Order preservation in `impl-key-str`** — preserve caller's `type-arg-metas` order through the factory. Build dep-pair list in order; iterate in order during read.
+4. **Universe-cell domain unclassified** — universe cells are not registered with a Tier 1 SRE domain classification yet, so `enforce-component-paths!` skips them. Post-b-iv, classifying as `'structural` would make the component-paths declaration structurally-enforced. NOT in b-iv scope; flagged for a follow-up (post-S2.b-v or S2-VAG).
+5. **Scan retirement test impact** — the 5 test invocations in test-constraint-retry-propagator.rkt are tightly coupled to `retry-constraints-via-cells!`'s direct-write-to-cid pattern. Restructuring tests to event-driven semantics is REQUIRED, not optional.
+6. **Action-thunk closure shape** — the 3 sites differ in action: `action-retry-constraint c`, `action-resolve-trait dict-meta-id info`, `action-resolve-hasmethod meta-id info`. Action-thunk parameterizes per-site without callback proliferation.
+7. **`current-speculation-assumption` propagation** — must be captured at helper-call time (not at fire time) for branch-isolated tagging. The helper closes over `aid` and tags all installed propagators.
 
-**Codification**: set-latch pattern persisted to `.claude/rules/propagator-design.md` § "Set-Latch for Fan-In Readiness" (2026-04-24) as prime design pattern. Promoted from implicit prior art to explicit guidance — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
+**Observation: set-latch + broadcast as complementary patterns**
+
+The set-latch pattern (latch + threshold + per-input readiness) and the broadcast pattern (1 propagator + N items + parallel-decomposition profile) are NOT substitutes — they are complementary:
+- Set-latch is the STRUCTURAL shape for fan-in readiness (where N independent inputs feed an aggregate readiness signal)
+- Broadcast is the REALIZATION strategy for processing N independent items in 1 propagator with parallel decomposition
+
+The architecturally most-aligned fan-in uses BOTH: set-latch's structural shape + broadcast's realization at the per-input watcher layer. The mantra "all-at-once, all in parallel" is satisfied at multiple layers — N propagators installed in one helper call (all-at-once at install), N items processed in one fire-fn with broadcast-profile metadata (all-in-parallel via scheduler decomposition), latch state IS the readiness signal (structurally emergent, on-network). For mixed-domain inputs (some universe-component, some per-cell legacy), partition and use broadcast for the universe sub-set + fire-once for the per-cell sub-set; both share the same latch.
+
+This complementarity should be reflected in `propagator-design.md` § Set-Latch for Fan-In Readiness as the refinement of the 2026-04-24 codification.
+
+**Codification updates** (committed as part of this design correction):
+- `propagator-design.md` § Set-Latch for Fan-In Readiness: refined to specify broadcast realization with mixed-domain transition
+- D.3 §7.5.12.5: corrected component-path shape (cons-pair, not bare)
+- D.3 §7.5.12.9 (this section): expanded to 10 steps; broadcast realization; scan retirement; filename rename; Observation note
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
