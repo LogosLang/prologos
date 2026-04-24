@@ -62,8 +62,31 @@ If we ever want real recency mitigation, we'd have to maintain a parallel triple
 
 - ❌ **Do NOT install the Claude Code Stop or PreCompact hooks.** They can inject `"decision": "block"` system messages into the conversation (prompt-injection path). The silent default is fine but the footgun exists. Keep integration MCP-only.
 - ❌ **Do NOT mine JSONL transcripts** (`~/.claude/projects/*.jsonl` via `mempalace mine --mode convos`). Our conversation transcripts include debugging attempts and false starts that we deliberately didn't commit; retrieving them as "memory" would pollute decisions with discarded material.
+- ❌ **Do NOT mine the Racket source tree** (`mempalace mine ./racket/prologos`) — validated negative 2026-04-23 (see "Phase 3b — code wing: ATTEMPTED, ABANDONED" below). mempalace's `mine --mode projects` has no file-type filter and paragraph-chunks 150M+ of non-source content (.zo compiled binaries, .dep dependency metadata, .json benchmark outputs, .pnet module caches, .golden test fixtures, `~undo-tree~` emacs autosave files). Mine stalls for hours and corrupts the palace. Re-evaluate only if future mempalace versions add extension filtering or AST-aware chunking. For code queries, use `grep`/`ripgrep` — strictly better for identifier lookups.
+- ❌ **Do NOT run `mempalace repair --yes` on a production palace** — validated negative 2026-04-23. Despite the command name suggesting non-destructive index rebuild, repair silently TRUNCATED our 26,161-drawer docs wing to 10,000 drawers (62% data loss). Large files like D.3 (~2000 lines, normally ~100+ drawers) were reduced to a single drawer each, destroying search quality. Recovery path via incremental `mempalace mine` is blocked by file-level content-hash dedup (re-mine sees already-indexed files and skips them). The only reliable recovery is **full wipe + fresh mine**: `rm -rf ~/.mempalace/palace` → `mempalace init . --yes --lang en` → `mempalace mine ./docs --wing prologos`. If `mempalace status` segfaults, do this directly — do NOT run repair.
 - ❌ **Do NOT use mempalace_add_drawer / mempalace_delete_drawer** unless the user explicitly asks for it. Our commit-linked tracking docs are the source of truth; don't write ephemeral content into the palace in parallel.
 - ❌ **Do NOT use mempalace as authoritative** for any decision. Its output is a SEARCH HIT, not a fact. Cross-reference against current dailies/handoff/design-doc sections before using it to inform design or implementation choices.
+
+## Phase 3b — code wing: ATTEMPTED, ABANDONED (2026-04-23)
+
+Evaluated mining the Racket source tree into a separate `prologos-code` wing for semantic code search. Outcome: **negative**. Specific failure modes observed:
+
+1. **Mine stalls on mixed-content directory**. The `mempalace mine ./racket/prologos --wing prologos-code` stalled for 6+ hours without completing. Root cause: no file-type filter in the `mine` subcommand (`mempalace mine --help` shows only `--no-gitignore`, `--include-ignored`, `--limit`, `--dry-run`, `--extract` — no way to exclude by extension or pattern). The Racket tree has 168MB of which most is non-source: 542 `.dep` files, 521 `.zo` compiled binaries, 155 `.json` benchmark outputs, 43 `.pnet` module caches, 110 `.golden` test fixtures, 32 `~undo-tree~` emacs autosaves.
+
+2. **Binary-blind paragraph chunking explodes drawer count**. The code-wing mine reached 114,984 drawers before stalling — vs the docs-wing's 26,887 for comparable file count. Paragraph-chunking treats binary files as single mega-paragraphs, which sometimes chunks differently per pass and inflates drawer count without semantic value.
+
+3. **Killing the stuck mine corrupted the palace**. After `kill` on the stuck mine process: `chroma.sqlite3` ballooned to 881 MB, 438 stale lock files accumulated, `mempalace status` segfaulted (SIGSEGV then SIGBUS). Surgical SQL delete of the 114,984 code-wing drawers + VACUUM brought sqlite back to ~458 MB and status worked again — but then `mempalace repair --yes` truncated the remaining docs wing from 26,161 to 10,000 drawers (see anti-pattern above).
+
+4. **Semantic search on code is hypothetical anyway**. Paragraph-chunking of s-expressions isn't AST-aware — function bodies get severed at blank lines; related `define` forms end up in different chunks. Even if the mine succeeded, semantic retrieval quality for code identifiers would need to beat `grep -rn 'pattern'` which returns in 50ms with perfect recall. The conceptual-query edge cases where semantic search might add value (e.g., "callers treating meta cell-id as output target") remain unvalidated and unlikely to justify the maintenance cost of a per-commit code re-mine hook.
+
+**Conclusion**: do not mine code into mempalace until upstream offers:
+- File-type / extension filtering on `mine`
+- AST-aware chunking for Lisp-family languages
+- Or an explicit code-mode distinct from `projects` mode
+
+Until then: stick to docs-only mining (Phase 2), with the post-commit hook (Phase 3) keeping the docs wing fresh.
+
+**Time cost of this experiment**: ~6h of stalled mine CPU + 30min of diagnosis + recovery via full palace reinit + docs re-mine. Documented here so the next session does not re-attempt without new tooling.
 
 ## Cross-check discipline
 
