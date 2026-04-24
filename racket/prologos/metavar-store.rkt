@@ -32,7 +32,14 @@
          "infra-cell.rkt"   ;; Phase 1a: merge-list-append for constraint cell
          "global-env.rkt"   ;; Phase 3a: current-definition-cells-content for with-fresh-meta-env
          "propagator.rkt"   ;; Track 7 Phase 2: make-prop-network for persistent registry
-         "cell-ops.rkt")   ;; Track 8 Phase B1: worldview-aware CHAMP reads
+         "cell-ops.rkt"     ;; Track 8 Phase B1: worldview-aware CHAMP reads
+         ;; PPN 4C Step 2 S2.b-ii (2026-04-24): compound universe cell dispatch
+         ;; for meta-solution/cell-id. meta-universe.rkt is lightweight (imports
+         ;; only leaf modules per S2.a-followup refactor `2bab505a`) — no cycle
+         ;; risk with metavar-store.rkt. See D.3 §7.5.12.
+         (only-in "meta-universe.rkt"
+                  meta-universe-cell-id?
+                  compound-cell-component-ref))
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -2015,14 +2022,37 @@
      ;; Direct cell read — no id-map lookup (82ns savings per call)
      ;; Guard: cell may be stale (from prior command's network). Fall back gracefully.
      (with-handlers ([exn:fail? (lambda (_) (meta-solution id))])
-       (let ([v (elab-cell-read (unbox net-box) cell-id)])
-         (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
+       (cond
+         ;; PPN 4C Step 2 S2.b-ii (2026-04-24): compound universe dispatch.
+         ;; If cell-id is one of the 4 meta-universe cells, route to the
+         ;; component-indexed read path (hasheq meta-id → tagged-cell-value)
+         ;; via compound-cell-component-ref. Otherwise fall through to the
+         ;; direct per-cell read path (pre-S2.b shape). Predicate returns
+         ;; #f until `init-meta-universes!` has run and set the cell-id
+         ;; parameters — so this dispatch is a NO-OP for networks that
+         ;; haven't entered the universe regime. See D.3 §7.5.12 for S2.b
+         ;; migration plan + §7.5.12.5 for the scheduler-path verification
+         ;; that justifies the bare-meta-id path shape.
+         [(meta-universe-cell-id? cell-id)
+          (let ([v (compound-cell-component-ref (unbox net-box) cell-id id)])
+            (and v (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
+         [else
+          (let ([v (elab-cell-read (unbox net-box) cell-id)])
+            (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
     [net-box
      ;; cell-id=#f (module-loading meta) — fall back to id-map
      (define cid (prop-meta-id->cell-id id))
      (and cid
-          (let ([v (elab-cell-read (unbox net-box) cid)])
-            (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
+          ;; PPN 4C Step 2 S2.b-ii: parallel dispatch for the no-cell-id entry
+          ;; path. After S2.b-iii, prop-meta-id->cell-id for type-domain metas
+          ;; will return the universe-cid; this branch must handle both shapes.
+          (cond
+            [(meta-universe-cell-id? cid)
+             (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
+               (and v (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
+            [else
+             (let ([v (elab-cell-read (unbox net-box) cid)])
+               (and (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
     [else
      ;; CHAMP path: no network available (expander.rkt #lang context, or test
      ;; context without process-string). Track 10 Phase 4: RETAINED — the #lang

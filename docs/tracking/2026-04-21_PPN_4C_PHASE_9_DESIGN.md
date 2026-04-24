@@ -1344,9 +1344,9 @@ Each Category 2 site needs the (universe-cid, meta-id) tuple explicit. Where the
 (elab-add-propagator net dep-cids (list dict-cell-id) fire-fn
                      #:component-paths ... )
 
-;; AFTER
+;; AFTER — path is bare meta-id symbol per §7.5.12.5 verification
 (elab-add-propagator net dep-cids (list type-meta-universe-cell-id) fire-fn
-                     #:component-paths (list (cons type-meta-universe-cell-id dict-meta-id)))
+                     #:component-paths (list dict-meta-id))
 ```
 
 #### §7.5.12.3 Sub-phase partition
@@ -1370,11 +1370,21 @@ Centralized dispatch in `meta-solution/cell-id` (not per-site inlined), because:
 - Migration proceeds without touching 9 Category 1 callers
 - Future reverts (should we need them) change one function, not 9 sites
 
-#### §7.5.12.5 Scheduler component-path verification (Q3 resolved)
+#### §7.5.12.5 Scheduler component-path verification (Q3 resolved) — COMPLETE 2026-04-24
 
-Done DURING S2.b-ii as its first task, not before. A ~5-minute check on `propagator.rkt`'s `filter-dependents-by-paths` to confirm whether cons-pair component-paths (`(cons cell-id component-key)`) are already supported (they should be — the BSP-LE 2B substrate has used this shape) or whether the scheduler needs adapting. If adaptation is needed, scope grows and we reassess partition.
+Done as the first task of S2.b-ii. Findings:
 
-Mantra-check flag on "all in parallel" in this mini-design is gated on this verification.
+**Scheduler supports arbitrary `equal?`-comparable path shapes.** `filter-dependents-by-paths` at `propagator.rkt:1058` uses `member` (equal? comparison) between declared paths and the changed-set. Existing code heavily uses cons-pair paths — notably `typing-propagators.rkt` declares `(cons tm-cid (cons ctx-pos ':context))` (triple-nested) for attribute-map dependent firing; `tests/test-component-paths-enforcement.rkt` uses simple `(cons cid 'path)`. Zero scheduler adaptation needed.
+
+**Refined path shape for compound universe cells**: the initial mini-design proposed `:component-paths (list (cons universe-cid meta-id))`. However, `pu-value-diff` (`propagator.rkt:1008`) emits changed keys as bare hasheq keys for FLAT hashes (line 1038), and only emits `(cons position facet)` pairs for NESTED hash-of-hashes. Our compound universe cell value is `(hasheq meta-id → tagged-cell-value)` — FLAT (tagged-cell-value is a struct, not a hash). So `pu-value-diff` will emit bare `meta-id` symbols as the changed-set.
+
+**Correct declaration**: `:component-paths (list meta-id)` — bare symbol, no cons-pair wrapping. The universe-cid scoping is handled by the propagator's registration against its input-ids (scheduler only runs path filtering against the specific cell's deps-champ), so cross-universe collision is structurally impossible.
+
+**`tagged-cell-value` equality**: `#:transparent` struct (`decision-cell.rkt:397`) → `equal?` does field-by-field comparison; merge changes (new bitmask tag entry added to `entries`, base updated) trigger proper diff emission. Verified.
+
+**Mantra-check flag on "all in parallel" → CLEARED.** Confirmed all 5 mantra words satisfied without scheduler adaptation.
+
+The Category 3 migration pattern in §7.5.12.2 is simplified accordingly: `:component-paths (list meta-id)` instead of `(cons universe-cid meta-id)`.
 
 #### §7.5.12.6 Measurement cadence (Q4 resolved)
 
