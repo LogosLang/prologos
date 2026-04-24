@@ -42,12 +42,22 @@
          ;;   (centralized dispatch in meta-solution/cell-id)
          ;; b-iii imports: init-meta-universes! + current-type-meta-universe-cell-id
          ;;   + compound-cell-component-write (universe allocation + writes)
+         ;; b-iv imports: compound-cell-component-ref/pnet +
+         ;;   compound-cell-component-write/pnet (set-latch helper's broadcast
+         ;;   item-fn + fire-once fire-fns operate at pnet level)
          (only-in "meta-universe.rkt"
                   meta-universe-cell-id?
                   compound-cell-component-ref
                   compound-cell-component-write
+                  compound-cell-component-ref/pnet
+                  compound-cell-component-write/pnet
                   init-meta-universes!
-                  current-type-meta-universe-cell-id))
+                  current-type-meta-universe-cell-id)
+         ;; b-iv: tagged-cell-value primitives for the broadcast item-fn that
+         ;; reads universe-cell components. Used inside the set-latch helper.
+         (only-in "decision-cell.rkt"
+                  tagged-cell-value?
+                  tagged-cell-read))
          ;; NOTE: elaborator-network.rkt and type-lattice.rkt are NOT required
          ;; directly to avoid a circular dependency:
          ;;   metavar-store → elaborator-network → type-lattice → reduction → metavar-store
@@ -357,6 +367,169 @@
   (meta-id        ;; symbol — the hasmethod metavariable
    hm-info)       ;; hasmethod-constraint-info — method details
   #:transparent)
+
+;; ========================================
+;; PPN 4C S2.b-iv: Set-Latch Readiness Helper (2026-04-24)
+;; ========================================
+;;
+;; Replaces the 3-stage imperative fan-in (threshold-cell + fan-in
+;; propagator + readiness propagator) at trait bridge / hasmethod bridge
+;; / constraint retry install sites with the set-latch pattern codified
+;; in `.claude/rules/propagator-design.md` § Set-Latch for Fan-In Readiness.
+;;
+;; STRUCTURE:
+;;   - 1 latch cell ('monotone-set domain, merge-set-union, bot (seteq))
+;;   - 1 broadcast propagator over universe-meta sub-set (parallel-ready)
+;;     OR N fire-once propagators per per-cell-meta (legacy domains)
+;;   - 1 threshold fire-once propagator (latch → ready-queue when non-empty)
+;;
+;; The broadcast at the install layer realizes the polynomial-functor pattern
+;; (per propagator-design.md § Broadcast Propagators: 2.3× faster at N=3,
+;; 75.6× at N=100 vs N-propagator model). Future scheduler-level parallel
+;; decomposition exploits the broadcast-profile metadata automatically.
+;;
+;; All propagators tagged with `current-speculation-assumption` for branch-
+;; isolated firing (BSP-LE 2/2B clause-propagator isolation).
+;;
+;; Mantra alignment:
+;;   - all-at-once: N watchers installed in one helper call
+;;   - all-in-parallel: broadcast item-fn processes N items per fire (with
+;;     parallel decomposition profile); fire-once branch fires independently
+;;   - structurally emergent: latch state IS the readiness signal
+;;   - information flow: input change → watcher → latch → threshold → rq
+;;   - on-network: every step is net-cell-read / net-cell-write
+;;
+;; meta-ids: list of meta-ids whose readiness signals action emission.
+;; action-thunk: zero-arg thunk producing the action descriptor — closes
+;;   over the constraint / dict-meta-id / tc-info / etc. as appropriate
+;;   for the call site.
+;;
+;; Returns: enet* with set-latch installed.
+;;
+;; Per D.3 §7.5.12.9 step 5; consumed by the 3 readiness install sites
+;; (constraint retry, trait bridge, hasmethod bridge).
+(define (add-readiness-set-latch! enet meta-ids action-thunk)
+  (cond
+    [(null? meta-ids) enet]    ;; no metas → no readiness installation
+    [else
+     (define aid (current-speculation-assumption))
+     (define rq-cid (current-ready-queue-cell-id))
+     (cond
+       [(not rq-cid) enet]     ;; no ready-queue → can't emit; skip
+       [else
+        ;; Step 1: Allocate latch cell ('monotone-set: bot (seteq), merge-set-union)
+        (define-values (enet1 latch-cid)
+          (elab-new-infra-cell enet (seteq) merge-set-union))
+        ;; Step 2: Partition meta-ids by storage shape — universe metas group
+        ;; by their universe-cid (one broadcast install per group); per-cell
+        ;; metas (legacy mult/level/session pre-S2.c/d) get fire-once each.
+        ;; A meta-id whose cell-id is #f (no cell allocated yet) is skipped.
+        (define-values (universe-mids-by-cid per-cell-mids)
+          (let loop ([mids meta-ids]
+                     [by-cid (hasheq)]
+                     [pc '()])
+            (cond
+              [(null? mids) (values by-cid pc)]
+              [else
+               (define mid (car mids))
+               (define cid (prop-meta-id->cell-id mid))
+               (cond
+                 [(not cid) (loop (cdr mids) by-cid pc)]  ;; no cell — skip
+                 [(meta-universe-cell-id? cid)
+                  (loop (cdr mids)
+                        (hash-update by-cid cid
+                                     (lambda (lst) (cons mid lst)) '())
+                        pc)]
+                 [else
+                  (loop (cdr mids) by-cid (cons mid pc))])])))
+        ;; Step 3: Install one broadcast propagator per universe-cid group.
+        ;; Each broadcast watches its universe-cid with cons-pair component-
+        ;; paths (per D.3 §7.5.12.5 corrected shape). Item-fn extracts each
+        ;; meta's component from the input-vals[0] hasheq and returns
+        ;; (seteq mid) if ready, #f otherwise. result-merge-fn is set-union
+        ;; (matches the latch cell's domain merge).
+        (define enet2
+          (for/fold ([n enet1])
+                    ([(universe-cid mids) (in-hash universe-mids-by-cid)])
+            (define-values (n* _bcast-pid)
+              (elab-add-broadcast-propagator
+                n
+                (list universe-cid)
+                latch-cid
+                mids
+                (lambda (mid input-vals)
+                  ;; input-vals is (list <universe-hasheq>) — one cell.
+                  ;; Extract mid's tagged-cell-value, read under current
+                  ;; worldview bitmask, check readiness.
+                  (define universe-val (car input-vals))
+                  (define tcv
+                    (and (hash? universe-val)
+                         (hash-ref universe-val mid #f)))
+                  (define v
+                    (cond
+                      [(not tcv) #f]
+                      [(tagged-cell-value? tcv)
+                       (tagged-cell-read tcv (or (current-worldview-bitmask) 0))]
+                      [else tcv]))
+                  (cond
+                    [(and v
+                          (not (eq? v 'infra-bot))
+                          (not (prop-type-bot? v))
+                          (not (prop-type-top? v)))
+                     (seteq mid)]
+                    [else #f]))
+                merge-set-union
+                #:component-paths
+                (for/list ([m (in-list mids)])
+                  (cons universe-cid m))
+                #:assumption aid))
+            n*))
+        ;; Step 4: Install fire-once propagators for per-cell legacy metas.
+        ;; Each fire-once watches one per-cell cid and writes (seteq mid) to
+        ;; the latch when its cell becomes non-bot/non-top. As S2.c/d/e
+        ;; migrate mult/level/session to universes, this branch shrinks to
+        ;; empty and the helper collapses to broadcast-only.
+        (define enet3
+          (for/fold ([n enet2]) ([mid (in-list per-cell-mids)])
+            (define mid-cid (prop-meta-id->cell-id mid))
+            (cond
+              [(not mid-cid) n]   ;; defensive — shouldn't reach here post-partition
+              [else
+               (let-values
+                 ([(n* _fc-pid)
+                   (elab-add-fire-once-propagator
+                     n
+                     (list mid-cid)
+                     (list latch-cid)
+                     (lambda (pnet)
+                       (define v (net-cell-read pnet mid-cid))
+                       (cond
+                         [(and v
+                               (not (prop-type-bot? v))
+                               (not (prop-type-top? v)))
+                          (net-cell-write pnet latch-cid (seteq mid))]
+                         [else pnet]))
+                     #:assumption aid)])
+                 n*)])))
+        ;; Step 5: Install threshold fire-once propagator (latch → ready-queue).
+        ;; Fires exactly once when the latch transitions empty → non-empty.
+        ;; The action-thunk closes over the call-site's specific descriptor
+        ;; constructor (action-retry-constraint / action-resolve-trait /
+        ;; action-resolve-hasmethod).
+        (define-values (enet4 _t-pid)
+          (elab-add-fire-once-propagator
+            enet3
+            (list latch-cid)
+            (list rq-cid)
+            (lambda (pnet)
+              (define v (net-cell-read pnet latch-cid))
+              (cond
+                [(and (set? v) (not (set-empty? v)))
+                 (net-cell-write pnet rq-cid
+                   (list (tagged-entry (action-thunk) aid)))]
+                [else pnet]))
+            #:assumption aid))
+        enet4])]))
 
 ;; ========================================
 ;; Trait constraint tracking (Phase C)

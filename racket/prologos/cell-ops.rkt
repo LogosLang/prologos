@@ -49,6 +49,9 @@
  elab-cell-info-ref
  elab-network-rewrap
  elab-add-propagator
+ ;; PPN 4C S2.b-iv: re-export new fire-once + broadcast wrappers
+ elab-add-fire-once-propagator
+ elab-add-broadcast-propagator
  ;; Worldview-aware elab-network operations
  elab-cell-read-worldview
  elab-meta-info-read-worldview
