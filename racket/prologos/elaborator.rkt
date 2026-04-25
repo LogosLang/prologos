@@ -749,7 +749,89 @@
       ;; suc: Nat -> Nat  (the only non-nullary parser-keyword constructor)
       [(eq? name 'suc)
        (expr-lam 'mw (expr-Nat) (expr-suc (expr-bvar 0)))]
+      ;; Primitive operators as first-class values. Names like int+ / rat-abs
+      ;; are parser keywords backed by expr-int-add-style AST nodes; the
+      ;; parser consumes them directly in application head position. In value
+      ;; position (passed to map/zip-with/foldr, bound to a variable, stored
+      ;; in a list, etc.) the reader leaves the bare identifier as a surf-var
+      ;; that lands here; eta-expand it into a lambda so the operator is
+      ;; first-class. Mirrors the `suc` pattern above.
+      [(primitive-op-eta-expansion name)
+       => (lambda (e) e)]
       [else (unbound-variable-error loc "Unbound variable" name)])))
+
+;; ========================================
+;; Primitive operators as first-class values
+;; ========================================
+;;
+;; Primitive operators (int+, rat-abs, ...) are parser keywords that the
+;; parser rewrites to dedicated AST nodes (expr-int-add, expr-rat-abs, ...)
+;; in application head position. In non-application position (`[map rat-abs xs]`,
+;; `[foldr int+ 0 xs]`, `def f := int+`, `'[int+ int*]`) the reader leaves
+;; the identifier as a bare symbol and the elaborator sees it as a surf-var.
+;;
+;; Eta-expanding such a reference into a lambda whose body re-applies the
+;; primitive AST constructor makes the operator first-class — bindable,
+;; storable, passable to higher-order combinators — while leaving the parser
+;; keyword fast-path for direct calls untouched. Argument multiplicities are
+;; `mw` so closures that capture environment values do not trip QTT
+;; linearity.
+;;
+;; Each entry maps a primitive symbol to a thunk producing the eta-expanded
+;; expr-lam. Thunks (not pre-built constants) keep startup cheap; the lookup
+;; is a single hash-ref.
+
+(define (eta-binary type-formation ctor)
+  ;; Produces (fn [a : T] [b : T] (ctor (bvar 1) (bvar 0))).
+  ;; bvar 1 is the outer-bound `a`, bvar 0 the inner-bound `b`.
+  (expr-lam 'mw type-formation
+    (expr-lam 'mw type-formation
+      (ctor (expr-bvar 1) (expr-bvar 0)))))
+
+(define (eta-unary type-formation ctor)
+  ;; Produces (fn [a : T] (ctor (bvar 0))).
+  (expr-lam 'mw type-formation (ctor (expr-bvar 0))))
+
+(define primitive-op-eta-table
+  (hasheq
+   ;; Int binary arithmetic: Int -> Int -> Int
+   'int+      (lambda () (eta-binary (expr-Int) expr-int-add))
+   'int-      (lambda () (eta-binary (expr-Int) expr-int-sub))
+   'int*      (lambda () (eta-binary (expr-Int) expr-int-mul))
+   'int/      (lambda () (eta-binary (expr-Int) expr-int-div))
+   'int-mod   (lambda () (eta-binary (expr-Int) expr-int-mod))
+   ;; Int unary: Int -> Int
+   'int-neg   (lambda () (eta-unary  (expr-Int) expr-int-neg))
+   'int-abs   (lambda () (eta-unary  (expr-Int) expr-int-abs))
+   ;; Int comparisons: Int -> Int -> Bool
+   'int-lt    (lambda () (eta-binary (expr-Int) expr-int-lt))
+   'int-le    (lambda () (eta-binary (expr-Int) expr-int-le))
+   'int-eq    (lambda () (eta-binary (expr-Int) expr-int-eq))
+   ;; Int conversion: Nat -> Int
+   'from-nat  (lambda () (eta-unary  (expr-Nat) expr-from-nat))
+
+   ;; Rat binary arithmetic: Rat -> Rat -> Rat
+   'rat+      (lambda () (eta-binary (expr-Rat) expr-rat-add))
+   'rat-      (lambda () (eta-binary (expr-Rat) expr-rat-sub))
+   'rat*      (lambda () (eta-binary (expr-Rat) expr-rat-mul))
+   'rat/      (lambda () (eta-binary (expr-Rat) expr-rat-div))
+   ;; Rat unary: Rat -> Rat
+   'rat-neg   (lambda () (eta-unary  (expr-Rat) expr-rat-neg))
+   'rat-abs   (lambda () (eta-unary  (expr-Rat) expr-rat-abs))
+   ;; Rat comparisons: Rat -> Rat -> Bool
+   'rat-lt    (lambda () (eta-binary (expr-Rat) expr-rat-lt))
+   'rat-le    (lambda () (eta-binary (expr-Rat) expr-rat-le))
+   'rat-eq    (lambda () (eta-binary (expr-Rat) expr-rat-eq))
+   ;; Rat conversions
+   'from-int  (lambda () (eta-unary  (expr-Int) expr-from-int))
+   'rat-numer (lambda () (eta-unary  (expr-Rat) expr-rat-numer))
+   'rat-denom (lambda () (eta-unary  (expr-Rat) expr-rat-denom))))
+
+;; Look up a primitive-op name and return the eta-expanded expr-lam, or #f.
+;; Called from elaborate-var as a final fallback before "Unbound variable".
+(define (primitive-op-eta-expansion name)
+  (let ([thunk (hash-ref primitive-op-eta-table name #f)])
+    (and thunk (thunk))))
 
 ;; elaborate: surface-expr, env, depth -> (or/c expr? prologos-error?)
 (define (elaborate surf [env '()] [depth 0])
