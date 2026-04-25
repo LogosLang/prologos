@@ -117,8 +117,12 @@
                 '((eval -42))))
 
 (test-case "neg-lit/roundtrip: eval -3/7"
+  ;; Slash-containing number lexemes are wrapped in a $rat-literal sentinel
+  ;; by the WS reader so that `0/1`, `1/1`, etc. retain Rat-ness even when
+  ;; string->number would simplify them to integers. (See eigentrust pitfalls
+  ;; doc #3 and tests/test-rat-literal-in-list.rkt.)
   (check-equal? (read-all-forms-string "eval -3/7")
-                '((eval -3/7))))
+                '((eval ($rat-literal -3/7)))))
 
 (test-case "neg-lit/roundtrip: def x -5"
   (check-equal? (read-all-forms-string "def x -5")

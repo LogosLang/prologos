@@ -226,10 +226,14 @@
     [(and (> (string-length lex) 1) (char=? (string-ref lex 0) #\:))
      (surf-keyword (string->symbol (substring lex 1)) loc)]
 
-    ;; Number — integer
+    ;; Number — integer or rational.
+    ;; A slash-containing lexeme (e.g. 0/1, 1/2, -3/7) is a Rat literal even
+    ;; when string->number simplifies the value to an integer (e.g. `0/1` → 0).
+    ;; The `/` is a load-bearing source token that survives simplification.
     [(string->number lex)
      => (lambda (n)
           (cond
+            [(and (exact-integer? n) (string-contains? lex "/")) (surf-rat-lit n loc)]
             [(and (exact-integer? n) (>= n 0)) (surf-int-lit n loc)]
             [(exact-integer? n) (surf-int-lit n loc)]
             [(rational? n) (surf-rat-lit n loc)]
@@ -613,7 +617,7 @@
                    item]
                   [(and (pair? item)
                         (not (memq (car item) '($brace-params $angle-type $list-literal
-                                                $nat-literal $approx-literal $decimal-literal
+                                                $nat-literal $rat-literal $approx-literal $decimal-literal
                                                 $set-literal $vec-literal $foreign-block
                                                 $typed-hole $solver-config quote $quote)))
                         (>= (length item) 2)
