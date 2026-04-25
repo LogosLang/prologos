@@ -132,14 +132,16 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Step 2 S2.b-iii | `elab-fresh-meta` migration + Category 2 direct consumers (TYPE domain) | ✅ | `cf60c397` — fresh-meta + solve-meta-core[!/pure] dispatch added; init-meta-universes! wired into reset-meta-store!; bug found+fixed in meta-solved? (direct elab-cell-read was returning raw hasheq → false "solved"); probe PASSES (semantic output matches baseline, 0 errors); 150 targeted tests green |
 | Step 2 S2.b-iv | Set-latch + broadcast realization rewrite of 3 fan-in install sites + factory signature changes + scan retirement + test rename | ✅ | 7 commits `ffb5fd0b` (D.3 corrections + propagator-design refinement) → `dc05f940` (foundation: pnet helpers + elab wrappers + meta-ids field) → `0bfc7dbf` (helper) → `89cdaf89` (site 1/3 + broadcast '() bug fix) → `c76b49e3` (site 2/3 + trait factory) → `34b60155` (site 3/3 + hasmethod factory) → `bddfc3e3` (scan retirement + test file renamed/rewritten) + test-fix commit. **Suite: 7909/0 failure (was 7912/4 failures pre-b-iv); test-rewrite consolidated 5 scan-invocation tests into 13 event-driven tests**. Probe identical to baseline. |
 | Step 2 S2.b-v | Formal measurement vs §5 hypotheses + go/no-go for S2.c | ✅ | bench-meta-lifecycle re-run 2026-04-24; results captured in [STEP2_BASELINE.md §12 "Actual vs Predicted"](2026-04-23_STEP2_BASELINE.md#12). **Suite wall time 119.5s within 118-127s baseline variance band — load-bearing user-facing metric MET**. Mixed micros: fresh-meta improved ~27% (2.534 μs vs 3.45 μs baseline; just barely missed §5 ≤2.5 μs target); solve-meta! REGRESSED ~31% (11.14 μs vs 8.53 μs); read paths slower (~80% on direct-cell-id, ~100% on cell-path). Cell counts transitional (54 vs 50; mult/level/session still per-cell). **Decision: GO for S2.c** — architecture is correct; full hypotheses validation gated on S2.e factory retirement. Solve-meta! regression flagged for follow-up audit post-S2.e. |
-| Step 2 S2.c mini-design (D.3 §7.5.13) | Conversational mini-design + audit-driven scope expansion | ✅ | 4 converging architectural decisions identified: cross-domain bridge component-path, parameter injection gap, cell-id approach (option 1/2/4 microbench-gated), dispatch unification across mult/level/session. See §7.5.13. |
-| **Step 2 S2.precursor** | `net-add-cross-domain-propagator` accepts `:c-component-paths` / `:a-component-paths` / `:assumption` / `:decision-cell` / `:srcloc` (universal fix, 4 production bridges + ~12 test callers preserve backward-compat via empty-default kwargs) | ✅ | Universal infrastructure fix per D.3 §7.5.13.7. Defaults preserve whole-cell firing semantics for non-universe cells. 3 new tests in test-cross-domain-propagator.rkt verify kwargs accepted + bridge installs correctly. **Suite: 7912 tests / 120.7s / 0 failures** (vs 7909/119.5s baseline; +3 new tests, +1.2s within 118-127s variance band). Probe diff = 0. |
-| Step 2 S2.c-i | Audits + measurements: §5 microbench (option 1/2/4), §4 option 3a regression test + 'type 'equality consumer audit, initial-Pi-elaboration path audit | ⬜ | Data-driven decisions documented in D.3 §7.5.13.4-§7.5.13.5. |
-| Step 2 S2.c-ii | Close T-3 'equality gap: `unify.rkt:71` 'equality from `type-lattice-merge` → `type-unify-or-top` + regression tests | ⬜ | ~10 LoC + tests. Closes latent T-3 audit gap (D.3 §7.5.13.4). |
-| Step 2 S2.c-iii | Parameter injection per option 3 (SRE-driven): wire universe-cell merges from SRE registrations at init time | ⬜ | ~40-60 LoC. All 4 universe cells use canonical domain merges. |
-| Step 2 S2.c-iv | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core (per option 4 if microbench supports) | ⬜ | ~150 LoC + -100 LoC duplicated. Backward-compat shims preserve all callers. |
-| Step 2 S2.c-v | `fresh-mult-meta` universe-path branch + cross-domain bridge migration (`current-structural-mult-bridge` declares component-paths) | ⬜ | ~80-120 LoC. Mirrors S2.b-iii pattern. |
-| Step 2 S2.c-vi | Probe + targeted suite + measurement + GO/no-go for S2.d | ⬜ | STEP2_BASELINE.md §12 update. |
+| Step 2 S2.c mini-design (D.3 §7.5.13) | Conversational mini-design + audit-driven scope expansion | ✅ | 4 converging architectural decisions identified: cross-domain bridge component-path, parameter injection gap, cell-id approach (option 1/2/4 microbench-gated), dispatch unification across mult/level/session. See §7.5.13. Commit `107a37c6`. |
+| **Step 2 S2.precursor** | `net-add-cross-domain-propagator` accepts `:c-component-paths` / `:a-component-paths` / `:assumption` / `:decision-cell` / `:srcloc` (universal fix, 4 production bridges + ~12 test callers preserve backward-compat via empty-default kwargs) | ✅ | Universal infrastructure fix per D.3 §7.5.13.7. Defaults preserve whole-cell firing semantics for non-universe cells. 3 new tests in test-cross-domain-propagator.rkt verify kwargs accepted + bridge installs correctly. **Suite: 7912 tests / 120.7s / 0 failures** (vs 7909/119.5s baseline; +3 new tests, +1.2s within 118-127s variance band). Probe diff = 0. Commit `1c3970d0`. |
+| Step 2 S2.c-i Task 2 (T-3 'equality audit) | Audit + permanent regression test (`tests/test-t3-equality-audit.rkt`, 5/5 PASS) | ✅ | **Audit found NO T-3 gap** — option 3a was wrong (would break union-aware structural reasoning). Option 3c adopted (per-domain merges in `meta-domain-info` table). Original S2.c-ii REMOVED. See D.3 §7.5.13.4. |
+| ~~Step 2 S2.c-ii (close T-3 gap)~~ | — | REMOVED | Audit (Task 2) revealed no gap exists. Substituted by permanent regression test in S2.c-i Task 2. |
+| Step 2 S2.c-i Task 1 (microbench) | §5 microbench A/B (option 1/2/4 cell-id approach) | ⬜ | Data-driven decision per §7.5.13.5. |
+| Step 2 S2.c-i Task 3 (initial-Pi audit) | Trace mult-info flow when Pi initially elaborated from AST (verify scenario B understanding) | ⬜ | Confirms or refines §7.5.13.2. |
+| Step 2 S2.c-ii (was iii) | Parameter injection per option 3c: populate `meta-domain-info` table at module load with per-domain merges; update `init-meta-universes!` to consume table | ⬜ | ~40-60 LoC. All 4 universe cells use correct domain merges. |
+| Step 2 S2.c-iii (was iv) | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core (per option 4 if microbench supports) | ⬜ | ~150 LoC + -100 LoC duplicated. Backward-compat shims preserve all callers. |
+| Step 2 S2.c-iv (was v) | `fresh-mult-meta` universe-path branch + cross-domain bridge migration (`current-structural-mult-bridge` declares component-paths) | ⬜ | ~80-120 LoC. Mirrors S2.b-iii pattern. |
+| Step 2 S2.c-v (was vi) | Probe + targeted suite + measurement + GO/no-go for S2.d | ⬜ | STEP2_BASELINE.md §12 update. |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -1664,49 +1666,96 @@ Where `default-pointwise-hasheq-merge` is conservative pointwise-without-domain-
 
 **Resolution**: option 3 (SRE-driven lookup) — see §7.5.13.4. Each domain's SRE registration provides its canonical merge; init-meta-universes! looks them up. Single source of truth.
 
-#### §7.5.13.4 §4 option 3a — SRE-driven merge lookup + closing T-3 gap
+#### §7.5.13.4 §4 SRE-driven merge lookup — audit findings + correction (option 3c, NOT 3a)
 
-**Decision**: SRE-driven lookup. Each domain's SRE registration provides its meta-cell merge under the `'equality` relation tag.
+**Original 3a proposal**: change `unify.rkt:71` `'equality` from `type-lattice-merge` → `type-unify-or-top`. **REJECTED post-audit (S2.c-i Task 2, 2026-04-24)** — would silently break T-3's union-aware structural reasoning.
 
-Audit confirms domain registrations:
-- `'mult` SRE domain — `phase1d-registrations.rkt:248`: `mult-lattice-merge` with `mult-lattice-contradicts?` ✓
-- `'meta-solve` SRE domain — `elaborator-network.rkt:1029`: `merge-meta-solve-identity` with `meta-solve-contradiction?` (used by level + session) ✓
-- `'type` SRE domain — `unify.rkt:78`: `'equality` → `type-lattice-merge` ✗ **needs update**
+##### §7.5.13.4.1 Audit findings (S2.c-i Task 2)
 
-**The T-3 gap** (latent since 2026-04-22, T-3 Commit B): `unify.rkt:71` `type-merge-table` registers `'equality` → `type-lattice-merge`. Post-T-3 Commit B, `type-lattice-merge` has set-union semantics (Role A — accumulate via union for incompat atoms). But `'equality` IS conceptually Role B (equality enforcement). T-3's Stage 2 audit (D.3 §7.6.9) recognized this dispatch table but mis-classified consumers as "likely Role A based on SRE's 'equality relation as accumulation' framing" — the misclassification was the gap.
+Audit traced runtime consumers of `(sre-domain-merge type-sre-domain sre-equality)`:
 
-Audit confirms `'equality` consumers are all Role B:
-- `unify-core` (`unify.rkt:463`) — equality enforcement, returns success/failure
-- `sre-core.rkt:279, 295, 308` — `structural-classify` invocations (SRE structural decomposition during unification)
-- `subtype-predicate.rkt:359` — subtype-query-merge-table (classify-by-subtype)
+1. **`sre-core.rkt:265, 279, 295, 308`** — Property-inference tests (`test-commutative-join`, `test-associative-join`, `test-idempotent-join`, `test-distributive`). NOT runtime; Stage-2 audit tools.
 
-**Latent bug** (currently dormant via path-not-taken):
-```racket
-;; Pre-T-3 (correct): type-top → unify-core fails (correct)
-;; Post-T-3 (current): set-union → unify-core silently succeeds (WRONG)
-(unify-core '() (expr-Int) (expr-String))
-```
+2. **`sre-core.rkt:676`** — `sre-identify-sub-cell` uses merge as cell-creation merge function for sub-cells during structural decomposition. **Role**: cell-merge for accumulation (Role A appropriate).
 
-**Why it hasn't surfaced**: hypothesis (likely) — the 4 explicit Role B migration sites (in `elaborator-network.rkt` from T-3 Commit A) cover the production type-checking surface. The SRE table's mis-set isn't exercised by typical workloads. But it's a real correctness gap waiting for a path that hits it.
+3. **`sre-core.rkt:927`** — `sre-make-equality-propagator`: when two cells have a structural equality relation, fires `(merge va vb)` and writes unified to both. Under T-3's set-union semantics, incompat values → union; **both cells become the union, satisfying "they're equal" (to the same union)**. This is the architecturally-correct behavior under union-aware design.
 
-**S2.c-ii deliverable**: 3-line change at `unify.rkt:71`:
-```racket
-(define type-merge-table
-  (hasheq 'equality type-unify-or-top         ;; Role B equality-enforce (was: type-lattice-merge)
-          'subtype subtype-lattice-merge       ;; Role A — union join with absorption (correct)
-          'subtype-reverse subtype-lattice-merge))
-```
+4. **`sre-core.rkt:998, 1015`** — `sre-make-subtype-propagator` fallback when subtype-merge unavailable. Uses equality merge to compute contradiction signal. Role mixed but operates correctly under post-T-3 semantics.
 
-Plus regression tests:
+5. **`sre-core.rkt:1032`** — `sre-make-duality-propagator` for sessions. Sub-cell merge.
+
+6. **`unify.rkt`'s `unify-core` itself**: traces through `classify-whnf-problem` → `dispatch-unify-whnf`. For ground atom mismatches (`Int` vs `String`), classify returns `'(conv)` → dispatcher calls `(conv-nf a b)` (line 724) → returns `#f`. **Never touches the SRE 'equality merge.** T-3's set-union semantics is structurally invisible to `unify-core`.
+
+##### §7.5.13.4.2 Empirical confirmation (`tests/test-t3-equality-audit.rkt`)
+
+Permanent regression test added 2026-04-24. All 5 tests PASS:
+
 ```racket
 (check-false (unify-ok? (unify '() (expr-Int) (expr-String))))
+(check-false (unify-ok? (unify '() (expr-Int) (expr-Bool))))
 (check-false (unify-ok? (unify '() (expr-Pi 'mw (expr-Int) (expr-Bool))
                                      (expr-Sigma (expr-Int) (expr-Bool)))))
+(check-not-false (unify-ok? (unify '() (expr-Int) (expr-Int))))
+(check-not-false (unify-ok? (unify '() (expr-Pi 'mw (expr-Int) (expr-Bool))
+                                        (expr-Pi 'mw (expr-Int) (expr-Bool)))))
+(check-false (unify-ok? (unify '() (expr-Pi 'mw (expr-Int) (expr-Bool))
+                                     (expr-Pi 'mw (expr-String) (expr-Bool)))))
 ```
 
-**Pre-fix verification**: run regression tests BEFORE applying the fix. If they PASS today, hypothesis (path-not-taken) confirmed; if they FAIL today, latent bug is active. Either way, fix is correct.
+**Confirmation**: `unify-core` correctly fails on ground incompat atoms post-T-3. The audit hypothesis (path-not-taken via `'conv` → `conv-nf`) is validated empirically. The test file remains as a permanent regression guard against future changes that might silently break unify-core's failure detection.
 
-After the fix: 'equality merge for `'type` is `type-unify-or-top` → SRE-driven lookup for type-meta universe cell merge gives the right answer. Symmetric across 'type, 'mult, 'meta-solve.
+##### §7.5.13.4.3 Why option 3a was wrong — design intent of T-3
+
+T-3 Commit B (2026-04-22, `e07b809f`) intentionally redesigned `type-lattice-merge` to set-union for incompat atoms. The user's pushback during S2.c mini-design dialogue (2026-04-24) was protecting this:
+
+> "§4 3a sounds like an issue that we needed to spend a lot of time on recently. **Union types need set-union semantics.** I'm not sure if you're referencing this exactly. But you should check with audits..."
+
+T-3's set-union is the correct semantics for **structural equality between cells** in a union-aware type system: when two cells must be "equal" and contain incompat values, the post-T-3 semantics says "they're both equal to the union of their possibilities." This is union-types-as-first-class.
+
+The Role B (equality-enforce, top-on-incompat) sites are **specific, EXPLICIT** locations where the designer wants strict equality — these are direct callers of `type-unify-or-top`, NOT of SRE 'equality. T-3 Commit A migrated 4 such sites in `elaborator-network.rkt`. The SRE 'equality table was correctly NOT changed (T-3's Stage 2 audit at D.3 §7.6.9's "likely Role A" classification was correct in spirit; the framing "as accumulation" was unclear, but the conclusion to leave it alone was right).
+
+**Conclusion**: there is NO T-3 'equality gap. The SRE 'equality merge for `'type` IS correctly `type-lattice-merge` with set-union semantics. The architecture is sound as-is.
+
+##### §7.5.13.4.4 Option 3c — meta-cell merges in `meta-domain-info` table directly
+
+**Decision (revised)**: don't change SRE 'equality. Per-domain meta-cell merges go DIRECTLY into `meta-domain-info` table, bypassing SRE 'equality dispatch for this purpose:
+
+```racket
+(define meta-domain-info
+  (hasheq
+    'type    (hasheq 'universe-cid current-type-meta-universe-cell-id
+                     'merge type-unify-or-top              ; Role B for type metas (NOT SRE 'equality)
+                     'contradicts? type-lattice-contradicts?
+                     'bot? prop-type-bot? 'top? prop-type-top?)
+    'mult    (hasheq 'universe-cid current-mult-meta-universe-cell-id
+                     'merge mult-lattice-merge              ; lattice join (= 'mult SRE 'equality)
+                     'contradicts? mult-lattice-contradicts?
+                     'bot? mult-bot? 'top? mult-top?)
+    'level   (hasheq 'universe-cid current-level-meta-universe-cell-id
+                     'merge merge-meta-solve-identity       ; identity-or-error (= 'meta-solve SRE 'equality)
+                     'contradicts? meta-solve-contradiction?
+                     'bot? (lambda (v) (eq? v 'unsolved))
+                     'top? meta-solve-contradiction?)
+    'session (hasheq 'universe-cid current-session-meta-universe-cell-id
+                     'merge merge-meta-solve-identity
+                     ...)))
+```
+
+**Why this is correct**:
+- For `'type`: meta-cell merge is **`type-unify-or-top`** (Role B). Type metas represent ONE type by design; double-solve with different value is a type error, not an opportunity to accumulate. This is what `elab-fresh-meta` already uses directly post-T-3 Commit B (S1.a, `3b6aefdb`).
+- For `'mult`: meta-cell merge is `mult-lattice-merge`. Coincides with `'mult` SRE 'equality (mult only has one merge — its lattice join is also its equality merge). Mult metas can accumulate via lattice join (resource semantics).
+- For `'level` / `'session`: meta-cell merge is `merge-meta-solve-identity`. Coincides with `'meta-solve` SRE 'equality (single merge per domain).
+- The merges are EXACTLY what the per-cell factories (`elab-fresh-meta`, `elab-fresh-mult-cell`, `elab-fresh-level-cell`, `elab-fresh-sess-cell`) use today. Option 3c just LIFTS those merges into the universe-init function's data structure.
+
+**Symmetry preserved**: each domain's meta-cell merge is the merge it already uses. No SRE registration changes. No T-3 gap to close (no gap exists).
+
+##### §7.5.13.4.5 Sub-phase impact
+
+- **S2.c-ii** (which was "close T-3 gap") is **REMOVED** from the partition (no T-3 gap to close)
+- The S2.c-i Task 2 outcome is the **audit finding + permanent regression test** (`tests/test-t3-equality-audit.rkt`)
+- **S2.c-iii** simplifies: parameter injection per option 3c just means populating `meta-domain-info` table at module load; no SRE 'equality changes
+
+The corrected sub-phase partition appears in §7.5.13.7 (updated below).
 
 #### §7.5.13.5 §C/§5 option 4 — parameter-read for cell-id (microbench-gated)
 
@@ -1814,19 +1863,21 @@ Per-domain entries:
 
 **Why in S2.c, not deferred**: doing it generically takes only marginally more effort than per-domain mult dispatch. S2.c is already touching these readers' surfaces. S2.d benefits significantly. Two architectural moves at once is acceptable when the second move is "make existing logic generic" rather than "introduce a new architectural pattern."
 
-#### §7.5.13.7 Sub-phase partition (S2.precursor + S2.c-i through S2.c-vi)
+#### §7.5.13.7 Sub-phase partition (revised post-Task-2 audit, S2.precursor + S2.c-i through S2.c-v)
+
+**Revision note (2026-04-24)**: original partition had 6 sub-phases (S2.c-i through S2.c-vi). After S2.c-i Task 2 audit (§7.5.13.4) revealed no T-3 'equality gap exists, the partition collapses to 5 sub-phases. **S2.c-ii is REMOVED** (no fix needed); subsequent sub-phases keep their original semantics but renumber S2.c-iii → S2.c-ii, S2.c-iv → S2.c-iii, S2.c-v → S2.c-iv, S2.c-vi → S2.c-v.
 
 | Sub-phase | Description | Est. LoC | Key gate |
 |---|---|---|---|
 | **S2.precursor** | `net-add-cross-domain-propagator` accepts `:c-component-paths` / `:a-component-paths` kwargs (universal fix for all 6 bridges) + tests | ~50-80 | Lands first; S2.c consumes |
 | **S2.c-i** | Audits + measurements: (a) §5 microbench (option 1/2/4); (b) option 3a regression test + 'type 'equality consumer audit; (c) initial-Pi-elaboration path audit | ~30 + report | Data-driven decisions documented in this design doc |
-| **S2.c-ii** | Close T-3 gap: update `unify.rkt:71` `'equality` from `type-lattice-merge` → `type-unify-or-top`; add regression tests | ~10 + tests | Regression tests pass |
-| **S2.c-iii** | Parameter injection per option 3 (SRE-driven): wire universe-cell merges + contradicts? predicates from SRE domain registrations at init time | ~40-60 | All 4 universe cells use canonical merges |
-| **S2.c-iv** | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core; per option 4 if microbench supports | ~150 + -100 dup | Backward-compat shims preserve all existing call sites |
-| **S2.c-v** | `fresh-mult-meta` universe-path branch (mirrors S2.b-iii pattern) + cross-domain bridge migration (`current-structural-mult-bridge` updated to declare component-paths) | ~80-120 | Probe diff = 0; mult tests green |
-| **S2.c-vi** | Probe + targeted suite + measurement + GO/no-go for S2.d | ~0 + report | Suite within variance band; measurement update to STEP2_BASELINE.md §12 |
+| ~~**S2.c-ii** Close T-3 gap~~ | ~~3-line change at unify.rkt:71~~ | — | **REMOVED 2026-04-24** post-Task-2 audit (§7.5.13.4): no gap exists. Audit's permanent regression test (`tests/test-t3-equality-audit.rkt`) substitutes. |
+| **S2.c-ii** (was iii) | Parameter injection per option 3c: populate `meta-domain-info` table at module load with per-domain meta-cell merges (`type-unify-or-top`, `mult-lattice-merge`, `merge-meta-solve-identity`); update `init-meta-universes!` to consume the table | ~40-60 | All 4 universe cells use correct domain merges |
+| **S2.c-iii** (was iv) | Dispatch unification: generic `meta-domain-solution(domain, id)` core driven by `meta-domain-info` table; option 4 (parameter-read) if microbench supports | ~150 + -100 dup | Backward-compat shims preserve all existing call sites |
+| **S2.c-iv** (was v) | `fresh-mult-meta` universe-path branch (mirrors S2.b-iii pattern) + cross-domain bridge migration (`current-structural-mult-bridge` updated to declare component-paths) | ~80-120 | Probe diff = 0; mult tests green |
+| **S2.c-v** (was vi) | Probe + targeted suite + measurement + GO/no-go for S2.d | ~0 + report | Suite within variance band; measurement update to STEP2_BASELINE.md §12 |
 
-Estimated total: **~400-550 LoC** + measurement reports + tests. Six sub-phases + 1 precursor.
+Estimated total: **~390-540 LoC** (slightly reduced from original 400-550 due to S2.c-ii removal). Five sub-phases + 1 precursor.
 
 #### §7.5.13.8 Audits + measurements required during S2.c-i
 
@@ -1866,15 +1917,18 @@ S2.c-i is the data-collection sub-phase. Outputs are persisted into this design 
 6. **Parameter injection timing** — if init-meta-universes! runs BEFORE the parameters are set (module-load order), allocation uses defaults. Need to verify injection happens at module load, before reset-meta-store! fires init.
 7. **option 4 vs init order** — `(current-type-meta-universe-cell-id)` is set by init-meta-universes!. If a meta-solution call happens BEFORE init (test contexts, early elab), parameter is `#f` → fallback path. Must verify the fallback is correct or guard against premature access.
 
-#### §7.5.13.10 Sub-phase completion criteria
+#### §7.5.13.10 Sub-phase completion criteria (revised post-Task-2 audit)
 
-- **S2.precursor**: `net-add-cross-domain-propagator` accepts kwargs; all 6 bridges' tests still green; new test verifies component-paths support
-- **S2.c-i**: 3 audits/measurements complete and persisted into D.3; option 1/2/4 decision documented; T-3 gap activeness confirmed
-- **S2.c-ii**: T-3 gap closed; regression tests pass post-fix; no new failures elsewhere
-- **S2.c-iii**: 4 universe cells use canonical domain merges via SRE lookup; targeted tests for compound-merge semantics green
-- **S2.c-iv**: Dispatch unification lands; backward-compat shims preserve behavior; targeted tests green for type/mult/level/session readers
-- **S2.c-v**: Mult universe migration complete; cross-domain bridge component-path-aware; probe diff = 0; targeted mult tests green
-- **S2.c-vi**: Suite within 118-127s variance band; STEP2_BASELINE.md §12 updated with S2.c outcomes; GO/no-go for S2.d
+- **S2.precursor**: `net-add-cross-domain-propagator` accepts kwargs; all 6 bridges' tests still green; new test verifies component-paths support ✅ (`1c3970d0`)
+- **S2.c-i**: 3 audits/measurements complete and persisted into D.3
+  - Task 1 (microbench): option 1/2/4 decision documented in §7.5.13.5 ⬜
+  - Task 2 (T-3 audit): findings documented in §7.5.13.4 + permanent regression test in `tests/test-t3-equality-audit.rkt` ✅ (5/5 PASS — option 3c adopted, original S2.c-ii REMOVED)
+  - Task 3 (initial-Pi audit): findings persisted into §7.5.13.2 if surprises emerge ⬜
+- **~~S2.c-ii (close T-3 gap)~~**: REMOVED — no gap exists per §7.5.13.4 audit
+- **S2.c-ii** (was S2.c-iii): `meta-domain-info` table populated with per-domain meta-cell merges (option 3c); `init-meta-universes!` consumes table; targeted tests green for compound-merge semantics
+- **S2.c-iii** (was S2.c-iv): Dispatch unification lands; backward-compat shims preserve behavior; targeted tests green for type/mult/level/session readers
+- **S2.c-iv** (was S2.c-v): Mult universe migration complete; cross-domain bridge component-path-aware; probe diff = 0; targeted mult tests green
+- **S2.c-v** (was S2.c-vi): Suite within 118-127s variance band; STEP2_BASELINE.md §12 updated with S2.c outcomes; GO/no-go for S2.d
 
 #### §7.5.13.11 Codification updates (committed as part of this mini-design)
 
