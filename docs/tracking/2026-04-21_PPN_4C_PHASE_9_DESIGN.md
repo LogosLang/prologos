@@ -140,6 +140,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Step 2 S2.c-i Task 3 (initial-Pi audit) | Trace mult-info flow when Pi initially elaborated from AST (verify scenario B understanding) | ⬜ | Confirms or refines §7.5.13.2. |
 | Step 2 S2.c-ii (was iii) | Parameter injection per option 3c: wire 4 universe-merge parameters at elaborator-network.rkt module load with `compound-tagged-merge`-wrapped per-domain merges | ✅ | All 4 universe cells now use canonical domain merges (`compound-tagged-merge` of `type-unify-or-top` / `mult-lattice-merge` / `merge-meta-solve-identity`). Probe diff = 0 vs baseline. **Suite: 7917 tests / 126.4s / 0 failures** (within 118-127s variance band; +5 tests from test-t3-equality-audit.rkt, +5.7s within normal variance). |
 | Step 2 S2.c-iii (was iv) | Dispatch unification: `meta-domain-info` table (with `'universe-active?` per-domain flag for staged migration correctness) + generic `meta-domain-solution(domain, id)` core (option 4 parameter-read per microbench winner) + retire OR in `unify.rkt:430` (redundant under option 4) | ✅ | 5 commits sub-step (a) docs `d5948677` + (a-dailies) `db616051` + (b1) infrastructure `a01e193b` + (b2) type shims + OR retirement `f4c8db9d` + (b3) mult/level/session shims `48afcce0`. **Net: 9 dispatch functions reduced to 1-2 line shims; -198 LoC of duplicated dispatch absorbed into 215 LoC of shared infrastructure (meta-domain-info table + helpers + cores).** Verification: probe diff = 0 vs S2.c-ii baseline (cells=54, cell_allocs=1195, infer_steps=55, all counters identical); acceptance file 0 errors; full suite **7917 tests / 125.2s / 0 failures** within 118-127s variance. Mini-audit findings + 5 surprises at §7.5.13.6.1. S2.e scope items at §7.5.14. PPN 4C parent Phase 4 + DEFERRED.md updated for cross-cutting (cache-field + callback retirements). |
+| **Step 2 S2.c-iii Move B+ (corrective, 2026-04-24)** | Capture option 4 perf benefit missed by first-pass implementation (drop with-handlers + ignore explicit-cid for universe-active + retire legacy-type-fn). User-surfaced VAG drift via "did we do anything about the cache fields?" External challenge revealed first-pass VAG catalogued instead of challenged. | ✅ | 3 commits: methodology codification (`9f7c0b82`) — adversarial VAG + microbench claim verification across DESIGN_METHODOLOGY/CRITIQUE_METHODOLOGY/workflow.md/MEMORY.md/STEP2_BASELINE.md §6.1; Move B+ code (`c86596e0`) — universe-active path option 4 PURE (no with-handlers, ignore explicit-cid), legacy-type-fn retired; re-VAG documentation (`<this commit>`) — D.3 §7.5.13.6.2 with adversarial framing applied honestly (TWO COLUMN catalogue vs challenge). **Microbench verification**: Path 1 went 625 ns/call → 388 ns/call (Δ −237 ns/call ≈ 80% of predicted 302 ns option 4 benefit). Suite: 7917/128.2s/0 failures within variance. Methodology lesson codified: VAG must be ADVERSARIAL not auditional; microbench claims must be VERIFIED not assumed. |
 | Step 2 S2.c-iv (was v) | `fresh-mult-meta` universe-path branch + cross-domain bridge migration (`current-structural-mult-bridge` declares component-paths) | ⬜ | ~80-120 LoC. Mirrors S2.b-iii pattern. |
 | Step 2 S2.c-v (was vi) | Probe + targeted suite + measurement + GO/no-go for S2.d | ⬜ | STEP2_BASELINE.md §12 update. |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
@@ -1980,6 +1981,70 @@ Per Stage 4 mini-design + mini-audit methodology (§7.5.13 cycle): codebase audi
 Each per-domain migration (S2.c-iv for mult, S2.d for level/session) atomically flips its `'universe-active?` to #t when its `fresh-X-meta` migration lands. The dispatch code is invariant; data drives behavior. This is the correctness-by-construction landing the user's pushback (§5.4) demanded.
 
 **Codification candidate (1 data point this session, watching list)**: "PM 8F-era cache fields + dual surfaces are phantom optimizations under universe migration. Microbench reveals the cache-field path is ~300ns slower than parameter-read due to with-handlers continuation-marker overhead. Pattern repeats: type domain (`expr-meta-cell-id`) AND session domain (`sess-meta.cell-id`). Retirement is structural, not local — both fields go inert post-option-4 + universe migration; cleanup absorbed by Phase 4 (CHAMP retirement) for fields and S2.e for parameter scaffolding."
+
+#### §7.5.13.6.2 Honest re-VAG with adversarial framing applied — Move B+ corrective (2026-04-24)
+
+**Context**: S2.c-iii's first-pass VAG (commit `8f686a6f`) passed cataloguing but didn't catch that the implementation preserved the `with-handlers` wrapper from PM 8F era — the SOURCE of the 302 ns/call delta the S2.c-i Task 1 microbench measured. The architectural shape of option 4 landed; its perf benefit didn't. User external challenge ("did we do anything about the cache fields?") surfaced the drift. Move B+ (commit `c86596e0`) is the corrective.
+
+This subsection re-runs the VAG with the **adversarial framing** codified in the same session arc (commit `9f7c0b82` — DESIGN_METHODOLOGY.org § Vision Alignment Gate, CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging, workflow.md, MEMORY.md). For each of the 4 VAG questions, TWO COLUMNS: catalogue (the first-pass answer that passed) + challenge (what the adversarial framing would surface).
+
+##### Question (a) On-network?
+
+| Catalogue (first-pass S2.c-iii VAG) | Challenge (adversarial framing) |
+|---|---|
+| ✓ All reads via `meta-domain-info` → `compound-cell-component-ref` → cell. CHAMP fallback labeled as scaffolding (Phase 4 retires for type; S2.e + Phase 4 jointly retire mult/level/session). | ❌ The `with-handlers` wrapper IS off-network state — continuation marker held in Racket runtime; defensive guard catching imperative crash, not lattice-flow. Universe migration **structurally mitigates** the stale-cell concern this wrapper guarded against (PM 8F-era per-meta cell-ids could be out-of-range across enets; universe-cid is a constant per domain set per-enet). The wrapper is **belt-and-suspenders defensive scaffolding** (workflow.md anti-pattern) — keeping it for safety when the guarded condition is structurally impossible IS the anti-pattern. **Mantra violation I missed.** |
+
+**Corrective (Move B+)**: dropped `with-handlers` from universe-active path. Stale-cell concern resolved structurally by universe-cid stability across enet copies, not papered over by defensive wrapper.
+
+##### Question (b) Complete?
+
+| Catalogue (first-pass) | Challenge (adversarial) |
+|---|---|
+| ✓ All 9 dispatch functions converted to shims; OR retired; mini-audit at §7.5.13.6.1; S2.e scope at §7.5.14; cross-cutting work captured at PPN 4C parent Phase 4 + DEFERRED.md. | ❌ The microbench confirmed option 4 wins by 302 ns/call **specifically because Path 4 has no `with-handlers` wrapper**. By preserving the wrapper, my generic core sat at ~Path 1 (625 ns/call), not Path 4 (323 ns). **I shipped the architectural SHAPE without the perf BENEFIT.** This is the "Validated ≠ Deployed" anti-pattern applied at the design-target level — I treated "all dispatch converted ✓" as completion, but completion requires the perf claim to land. **Did I treat this as refactor (preserve patterns) OR fresh design (challenge inherited patterns)? Refactor — and that's the gap.** |
+
+**Corrective (Move B+)**: dropped `with-handlers` + ignored explicit-cid for universe-active path. Re-microbench: Path 1 went 625 → 388 ns/call (Δ −237 ns/call ≈ 80% of predicted 302 ns benefit; remaining 50-60 ns is cost of data-driven dispatch via `meta-domain-info` table, accepted for architectural cleanliness).
+
+##### Question (c) Vision-advancing?
+
+| Catalogue (first-pass) | Challenge (adversarial) |
+|---|---|
+| ✓ Single sources of truth (cell-id via parameter, merge per domain, dispatch via table). S2.c-iv flips ONE character per domain. Mantra-aligned: data drives behavior. | ❌ Single source of truth for cell-id was the design's CLAIM. But `(or explicit-cid (parameter))` meant callers passing `(expr-meta-cell-id e)` BYPASSED the parameter — so we had **TWO sources of truth on the hot path** (cache field + parameter, both returning the same value but via different mechanisms). The principle wasn't realized. ❌ "Data drives behavior" was the claim for the `'universe-active?` flag. True at the universe-vs-legacy axis. But within the universe-active branch, **IMPERATIVE control flow** (`with-handlers`) was catching stale-cell errors that universe migration structurally prevents. The data-driven story had an imperative escape hatch. |
+
+**Corrective (Move B+)**: explicit-cid IGNORED for universe-active path → genuinely single source of truth (parameter only). `with-handlers` retired → no imperative escape hatch within the data-driven dispatch.
+
+##### Question (d) Drift-risks-cleared?
+
+| Catalogue (first-pass) | Challenge (adversarial) |
+|---|---|
+| ✓ All 7 named risks cleared (6 from §7.5.13.6.1 + 1 callback identity from §5.1 user pushback). | ❌ The 7 risks I named were ALL about correctness preservation. **None of them were "did we capture the perf benefit option 4 was supposed to deliver?"** That's a design-target-fidelity risk I didn't enumerate. Did I name perf-vs-design-target risks, or only correctness risks? Only correctness. The gap allowed a 302 ns/call drift to land invisibly at the gate. |
+
+**Corrective (Move B+ + microbench claim verification rule)**: re-microbench post-implementation captured the missing benefit (~80%). Codified as Stage 4 step 6 obligation: when a phase's design references a microbench finding as load-bearing for a quantitative claim, the phase MUST re-microbench at close.
+
+##### Methodology gap surfaced + codified
+
+The S2.c-iii first-pass VAG was **rationalization, not challenge**. Each ✓ catalogued the work I did; none of them forced "could this be MORE aligned?" The catalogue→challenge transition is NEVER natural. It must be **actively forced** at every gate.
+
+**4 specific drifts I missed by cataloguing**:
+1. `with-handlers` wrapper preserved (off-network defensive scaffolding under new architecture)
+2. `(or explicit-cid (parameter))` short-circuit (dual sources of truth on hot path)
+3. `legacy-type-fn` written "for symmetry" (speculative scaffolding — workflow.md flag)
+4. `type-champ-fallback` referenced only by retired wrapper post-Move-B+ (would have become dead)
+
+**Codification** (commit `9f7c0b82`):
+- DESIGN_METHODOLOGY.org Stage 4 § VAG: adversarial framing as leading paragraph; cataloguing-vs-challenging examples; red-flag patterns; two-column process discipline
+- DESIGN_METHODOLOGY.org Stage 4 § NEW step 6: microbench claim verification (per-sub-phase obligation when design references microbench finding)
+- CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging: extended scope (BEYOND critique rounds: VAG, Mantra Audit, Principles-First Gate, P/R/M/S)
+- workflow.md: 2 new operational bullets + question (b) updated (shape + benefit)
+- MEMORY.md: 2 quick-reference sections
+- STEP2_BASELINE.md §6.1: exception to "skipped for S2.c/d/f" when sub-phase implements microbench-justified architectural decision
+
+**Corrective implementation** (commit `c86596e0` — Move B+):
+- Universe-active dispatch path: option 4 PURE (parameter-read only, no `with-handlers`, no explicit-cid pickup)
+- `legacy-type-fn` retired
+- `'type` entry in `meta-domain-info` has no `'legacy-fn`
+- Microbench-verified: ~80% of predicted 302 ns/call benefit captured
+
+**Re-VAG outcome (post-Move-B+)**: all 4 questions pass under adversarial framing — universe-active path is genuinely on-network (no defensive wrapper), genuinely complete (perf benefit captured), genuinely vision-advancing (one source of truth on hot path), genuinely drift-risk-cleared (microbench verified the perf claim landed).
 
 #### §7.5.13.7 Sub-phase partition (revised post-Task-2 audit, S2.precursor + S2.c-i through S2.c-v)
 
