@@ -2139,17 +2139,23 @@
        [(expr-hole? a)
         ;; Type hole: accept both the expected domain and multiplicity from the Pi type
         (check (ctx-extend ctx t-dom m2) body b)]
-       ;; Sprint 7: lambda mult is mult-meta → accept Pi's mult
+       ;; Sprint 7: lambda mult is mult-meta → accept Pi's mult.
+       ;; Guard solve calls with `mult-meta-solved?` — under unify-mult's
+       ;; m0/mw lenience this case can be re-entered with already-solved
+       ;; metas.
        [(mult-meta? m)
         (let ([resolved (if (mult-meta? m2) 'mw m2)])
-          (solve-mult-meta! (mult-meta-id m) resolved)
-          (when (mult-meta? m2)
+          (when (not (mult-meta-solved? (mult-meta-id m)))
+            (solve-mult-meta! (mult-meta-id m) resolved))
+          (when (and (mult-meta? m2)
+                     (not (mult-meta-solved? (mult-meta-id m2))))
             (solve-mult-meta! (mult-meta-id m2) resolved))
           (and (unify-ok? (unify ctx a t-dom))
                (check (ctx-extend ctx a resolved) body b)))]
        ;; Sprint 7: Pi mult is mult-meta → accept lambda's mult
        [(mult-meta? m2)
-        (solve-mult-meta! (mult-meta-id m2) m)
+        (when (not (mult-meta-solved? (mult-meta-id m2)))
+          (solve-mult-meta! (mult-meta-id m2) m))
         (and (unify-ok? (unify ctx a t-dom))
              (check (ctx-extend ctx a m) body b))]
        ;; Concrete mults: must match
@@ -2497,7 +2503,11 @@
         (let ([arg-ty (infer ctx arg)])
           (and (not (expr-error? arg-ty))
                (let ([m-resolved (if (mult-meta? m) 'mw m)])
-                 (when (mult-meta? m)
+                 ;; Guard solve with `mult-meta-solved?` — under unify-mult's
+                 ;; m0/mw lenience this case can be re-entered with an
+                 ;; already-solved meta.
+                 (when (and (mult-meta? m)
+                            (not (mult-meta-solved? (mult-meta-id m))))
                    (solve-mult-meta! (mult-meta-id m) m-resolved))
                  (check (ctx-extend ctx arg-ty m-resolved) body
                         (shift 1 0 expected-type)))))]

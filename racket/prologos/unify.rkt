@@ -960,9 +960,24 @@
 
 ;; P-U1b: Pure mult classifier — follows solved metas (pure reads),
 ;; returns a tagged classification:
-;;   '(ok)                         — structurally equal
+;;   '(ok)                         — structurally equal (or compat — see below)
 ;;   (list 'solve-mult id rhs)     — unsolved mult-meta, needs solving
 ;;   '(fail)                       — concrete mismatch
+;;
+;; When BOTH sides are concrete and the pair is {m0, mw}, treat as compatible.
+;; m0 means "erased" (zero runtime uses; type-level / phantom args). mw means
+;; "unrestricted" (any number of runtime uses, including zero). A value used
+;; zero times trivially satisfies "any number of uses," so the pair {m0, mw}
+;; is non-contradictory at the kind level.
+;;
+;; This matters when a type constructor (e.g., List with kind Pi(m0, Type,
+;; Type)) is passed to a polymorphic combinator whose spec elaborated the
+;; kind as Pi(mw, Type, Type) (because surf-arrow defaults `->` to mw); the
+;; lenient case lets QTT unification accept the kind-level mult pairing even
+;; though it isn't structurally equal.
+;;
+;; Conservative rule: ONLY {m0, mw}; {m1, mw} and {m1, m0} remain failures
+;; (linear-vs-other really IS a usage incompatibility at the value level).
 (define (classify-mult-problem m1 m2)
   (cond
     [(equal? m1 m2) '(ok)]
@@ -976,6 +991,11 @@
        (if sol
            (classify-mult-problem m1 sol)
            (list 'solve-mult (mult-meta-id m2) m1)))]
+    ;; {m0, mw} are compatible (both treat their arg as "non-binding" —
+    ;; m0 = zero runtime uses, mw = no upper bound).
+    [(or (and (eq? m1 'm0) (eq? m2 'mw))
+         (and (eq? m1 'mw) (eq? m2 'm0)))
+     '(ok)]
     [else '(fail)]))
 
 ;; Dispatcher: performs side-effecting solve.
