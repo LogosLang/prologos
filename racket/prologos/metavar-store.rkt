@@ -95,7 +95,10 @@
  add-constraint!
  collect-meta-ids
  get-wakeup-constraints
- retry-constraints-via-cells!
+ ;; PPN 4C S2.b-iv (2026-04-24): retry-constraints-via-cells! retired —
+ ;; vestigial polling mechanism with zero production callers (only test
+ ;; invocations); architecturally replaced by event-driven set-latch
+ ;; readiness + ready-queue cell. Per D.3 §7.5.12.9 step 8 + audit grep.
  reset-constraint-store!
  ;; Track 6 Phase 1c: functional constraint updates
  read-constraint-by-cid
@@ -240,9 +243,12 @@
  (struct-out action-retry-constraint)
  (struct-out action-resolve-trait)
  (struct-out action-resolve-hasmethod)
- collect-ready-constraints-via-cells
- collect-ready-traits-via-cells
- collect-ready-hasmethods-via-cells
+ ;; PPN 4C S2.b-iv (2026-04-24): collect-ready-{constraints,traits,
+ ;; hasmethods}-via-cells retired — see comment block at body site.
+ ;; Per-meta variants (collect-ready-*-for-meta) preserved.
+ collect-ready-constraints-for-meta
+ collect-ready-traits-for-meta
+ collect-ready-hasmethods-for-meta
  ;; Track 7 Phase 7a: execute-resolution-action! moved to resolution.rkt
  execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
@@ -1040,77 +1046,44 @@
       (when (and current-c (eq? (constraint-status current-c) 'postponed))
         (executor (action-retry-constraint current-c))))))
 
-;; P1-E3a: Retry postponed constraints using propagator cell state.
-;; After run-to-quiescence, checks ALL postponed constraints that have cell-ids.
-;; A constraint is retried if any of its meta cells has become non-bot
-;; (i.e., some meta was solved, possibly via transitive propagation).
-;; This captures transitive wakeups that the legacy wakeup registry misses.
-;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
-;; Track 7 Phase 7a: uses resolution executor instead of callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (retry-constraints-via-cells!)
-  (define executor (current-resolution-executor))
-  (define net-box (current-prop-net-box))
-  (when (and executor net-box)
-    (define enet (unbox net-box))
-    (for ([c (in-list (read-constraint-store))])
-      (when (and (eq? (constraint-status c) 'postponed)
-                 (not (null? (constraint-cell-ids c))))
-        ;; Check if any meta cell has become non-bot (meta solved)
-        (define any-solved?
-          (for/or ([cid (in-list (constraint-cell-ids c))])
-            (let ([v (elab-cell-read enet cid)])
-              (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-        (when any-solved?
-          (executor (action-retry-constraint c)))))))
-
 ;; ========================================
-;; Track 2 Phase 4: Readiness Scan (Stratum 1)
+;; PPN 4C S2.b-iv (2026-04-24): Scan Functions Retired
 ;; ========================================
-;; Pure scan functions that produce action descriptors without executing.
-;; These implement S1 (readiness detection) — observation only.
+;;
+;; Per D.3 §7.5.12.9 step 8 + audit grep findings (2026-04-24): the 4
+;; readiness scan functions —
+;;   retry-constraints-via-cells!         (Stratum 2 retry scan)
+;;   collect-ready-constraints-via-cells  (Stratum 1 readiness scan)
+;;   collect-ready-traits-via-cells       (trait readiness scan)
+;;   collect-ready-hasmethods-via-cells   (hasmethod readiness scan)
+;; — all had ZERO production callers. They were Track 7 Phase 8a-era
+;; polling mechanisms that became vestigial when the readiness fan-in
+;; propagators (the 3-stage fan-in we just retired in steps 6-7 of
+;; this design phase) landed; they were never deleted.
+;;
+;; Under the set-latch + broadcast realization (steps 5-7), readiness
+;; emerges event-driven via:
+;;   - Per-input watcher (broadcast item-fn or fire-once) → latch cell
+;;   - Threshold fire-once → action descriptor written to ready-queue cell
+;;   - run-stratified-resolution-pure reads ready-queue (Stratum 1) and
+;;     dispatches via current-resolution-executor (Stratum 2)
+;;
+;; This is the architecture DESIGN_PRINCIPLES.org § Stratified Propagator
+;; Networks specifies: "Scan loops that iterate constraint stores to find
+;; ready constraints" are the symptoms of resolution-outside-the-network.
+;; The set-latch IS the architecturally-correct S1 readiness mechanism.
+;;
+;; The collect-ready-*-for-meta variants (3 sibling functions) also have
+;; zero production callers but are NOT in S2.b-iv scope; left in place
+;; for now and may be retired in a follow-up cleanup if confirmed dead.
 
-;; Scan postponed constraints via cell state, return ready ones as descriptors.
-;; Production path: checks which constraints have non-bot meta cells.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (collect-ready-constraints-via-cells)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define enet (unbox net-box))
-     (for*/list ([c (in-list (read-constraint-store))]
-                 #:when (and (eq? (constraint-status c) 'postponed)
-                             (not (null? (constraint-cell-ids c))))
-                 #:when (for/or ([cid (in-list (constraint-cell-ids c))])
-                          (let ([v (elab-cell-read enet cid)])
-                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-       (action-retry-constraint c))]
-    [else '()]))
-
-;; Scan postponed constraints for a specific meta (test fallback path).
+;; Scan postponed constraints for a specific meta (targeted wakeup —
+;; sibling of the retired *-via-cells; preserved for now per scope).
 (define (collect-ready-constraints-for-meta meta-id)
   (define constraints (get-wakeup-constraints meta-id))
   (for/list ([c (in-list constraints)]
              #:when (eq? (constraint-status c) 'postponed))
     (action-retry-constraint c)))
-
-;; Scan trait constraints via cell state, return ready ones as descriptors.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (collect-ready-traits-via-cells)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define enet (unbox net-box))
-     (define tcm (read-trait-cell-map))
-     (for*/list ([(dict-id cell-ids) (in-hash tcm)]
-                 #:when (not (meta-solved? dict-id))
-                 [tc-info (in-value (hash-ref (read-trait-constraints) dict-id #f))]
-                 #:when tc-info
-                 #:when (for/or ([cid (in-list cell-ids)])
-                          (let ([v (elab-cell-read enet cid)])
-                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-       (action-resolve-trait dict-id tc-info))]
-    [else '()]))
 
 ;; Scan trait constraints for a specific meta (targeted wakeup).
 (define (collect-ready-traits-for-meta meta-id)
@@ -1131,26 +1104,6 @@
               [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
               #:when hm-info)
     (action-resolve-hasmethod hm-id hm-info)))
-
-;; Track 2 Phase 6: Scan hasmethod constraints via cell state.
-;; Symmetric to collect-ready-traits-via-cells — reads hasmethod-cell-map
-;; and checks whether any dependency cells have non-bot values.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-(define (collect-ready-hasmethods-via-cells)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define enet (unbox net-box))
-     (define hcm (read-hasmethod-cell-map))
-     (for*/list ([(hm-id cell-ids) (in-hash hcm)]
-                 #:when (not (meta-solved? hm-id))
-                 [hm-info (in-value (hash-ref (read-hasmethod-constraints) hm-id #f))]
-                 #:when hm-info
-                 #:when (for/or ([cid (in-list cell-ids)])
-                          (let ([v (elab-cell-read enet cid)])
-                            (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-       (action-resolve-hasmethod hm-id hm-info))]
-    [else '()]))
 
 ;; ========================================
 ;; Track 2 Phase 4: Action Interpreter (Stratum 2)
