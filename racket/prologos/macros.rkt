@@ -4305,10 +4305,25 @@
   (cond
     ;; --- Branch 1: Bracket format — second element is a list ---
     [(list? (car rest))
-     (unless (= (length rest) 2)
-       (error 'let "let with bracket bindings requires: (let [bindings...] body)"))
+     ;; The outer "(>= (length datum) 3)" check above guarantees
+     ;; (length rest) >= 2, so a bare `(let [bindings])` is rejected before
+     ;; we get here. Branch 1 thus always has a bindings list plus at least
+     ;; one body token.
      (define bindings-datum (car rest))
-     (define body (cadr rest))
+     ;; In WS mode, a multi-line body like
+     ;;   (let [x := 1]
+     ;;     match x | _ -> x)
+     ;; arrives here as `rest` = `((x := 1) match x $pipe _ -> x)` because
+     ;; the enclosing `(...)` makes brackets win over indent grouping in
+     ;; parse-reader's group-items, so the body's continuation tokens are
+     ;; spliced into the let's argument list. Treat any post-bindings tokens
+     ;; beyond the first as an implicit body application — matches the usual
+     ;; "continuation lines are indented further than `let`" rule that
+     ;; defn/match honour at the top level.
+     (define body
+       (cond
+         [(= (length rest) 2) (cadr rest)]
+         [else (cdr rest)]))
      (expand-let-bracket-bindings bindings-datum body)]
 
     ;; --- Branch 2: Inline := format — find := in rest ---
