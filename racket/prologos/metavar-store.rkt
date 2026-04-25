@@ -609,62 +609,55 @@
     (set-box! tc-net-box
               (elab-cell-write (unbox tc-net-box) tcm-cid
                                (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))
-  ;; Track 7 Phase 8a: Install readiness propagators (threshold-cell composition).
-  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
-  (define rq-cid (current-ready-queue-cell-id))
-  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and rq-cid (not (null? cell-ids)))
-    (define dep-cids (remove-duplicates cell-ids eq?))
-    ;; Stage 1: Threshold cell (boolean, one-shot). Merge: (λ _ #t).
-    (define-values (enet-t threshold-cid)
-      (elab-new-infra-cell (unbox tc-net-box) #f (lambda (old new) #t)))
-    (set-box! tc-net-box enet-t)
-    ;; Stage 2: Fan-in propagator (dep cells → threshold cell).
-    ;; Fires when ANY dep cell is non-bot/non-top (at least one type-arg solved).
-    ;; The resolution function does the full ground-check (andmap ground-expr?).
-    ;; This matches collect-ready-traits-via-cells which uses for/or.
-    (define-values (enet-f _fan-pid)
-      (elab-add-propagator (unbox tc-net-box) dep-cids (list threshold-cid)
-        (lambda (pnet)
-          (define any-ground?
-            (for/or ([cid (in-list dep-cids)])
-              (let ([v (net-cell-read pnet cid)])
-                (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-          (if any-ground?
-              (net-cell-write pnet threshold-cid #t)
-              pnet))))
-    (set-box! tc-net-box enet-f)
-    ;; Stage 3: Readiness propagator (threshold cell → ready-queue).
-    ;; Fires exactly once — when threshold transitions #f → #t.
-    (define-values (enet-r _rdy-pid)
-      (elab-add-propagator (unbox tc-net-box) (list threshold-cid) (list rq-cid)
-        (lambda (pnet)
-          (define tv (net-cell-read pnet threshold-cid))
-          (if tv
-              (net-cell-write pnet rq-cid
-                (list (tagged-entry (action-resolve-trait meta-id info) aid)))
-              pnet))))
-    (set-box! tc-net-box enet-r))
-  ;; Track 8D: Pure resolution bridge propagator (resolves in S0, NO enet-box).
-  ;; The bridge-fn callback is a FACTORY: given trait-name, dict-cell-id, dep-cell-ids,
-  ;; and registry cell IDs, it returns a pure (pnet → pnet) fire function that reads
-  ;; cells directly from the prop-network. No unbox, no set-box!, no enet-rewrap.
-  ;; The existing readiness propagators remain as fallback — if the bridge resolves
-  ;; the dict, the readiness action becomes a no-op (meta already solved).
+  ;; PPN 4C S2.b-iv (2026-04-24): Set-latch readiness pattern (replaces
+  ;; the prior 3-stage fan-in, ~35 LoC). Per D.3 §7.5.12.9 step 6.
+  ;; Action-thunk produces (action-resolve-trait meta-id info) when latch
+  ;; becomes non-empty (any type-arg meta solved → trigger resolve attempt).
+  (when (pair? type-arg-metas)
+    (set-box! tc-net-box
+      (add-readiness-set-latch! (unbox tc-net-box) type-arg-metas
+                                 (lambda () (action-resolve-trait meta-id info)))))
+  ;; Track 8D + S2.b-iv: Pure resolution bridge propagator (resolves in S0).
+  ;; Bridge factory updated to take (trait-name dict-cell-id dict-meta-id
+  ;; dep-pairs) where dep-pairs = (listof (cons cell-id meta-id)). Fire-fn
+  ;; uses meta-component-read/write internally to dispatch on whether
+  ;; cell-id is a universe-cid (compound-keyed) or per-cell legacy.
+  ;;
+  ;; The set-latch above provides S1 readiness; this bridge attempts S0
+  ;; resolution directly when type-args ground (race-free — both paths
+  ;; converge to the same dict). dep-pairs use type-arg-metas (the meta-
+  ;; ids in declaration order) to preserve impl-key-str ordering.
   (define bridge-fn (current-trait-resolution-bridge-fn))
-  (when (and bridge-fn (not (null? cell-ids)))
-    (define dep-cids (remove-duplicates cell-ids eq?))
+  (when (and bridge-fn (pair? type-arg-metas))
     ;; The dict-meta's cell receives the resolved dict expression.
     (define dict-cell-id (prop-meta-id->cell-id meta-id))
     (when dict-cell-id
-      ;; Track 8D: Call factory to produce a pure fire function for this constraint.
-      ;; The fire function is a closure over trait-name, dict-cell-id, dep-cell-ids,
-      ;; and registry cell IDs. It reads cells directly — no box access.
+      ;; Build dep-pairs: each (cons cell-id meta-id) for type-arg metas in
+      ;; declaration order (preserved from type-arg-metas list).
+      (define dep-pairs
+        (for*/list ([ta-id (in-list type-arg-metas)]
+                    [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
+                    #:when (not (eq? cid 'none)))
+          (cons cid ta-id)))
+      ;; input-cids: unique cell-ids from dep-pairs (dedupe — under universe,
+      ;; multiple type metas share universe-cid; under per-cell legacy, each
+      ;; meta has its own cell). Output: (list dict-cell-id) — bridge writes
+      ;; the resolved dict to dict-meta's component (or per-cell directly).
+      (define input-cids (remove-duplicates (map car dep-pairs) eq?))
+      ;; Component-paths for universe-cid inputs: (cons universe-cid meta-id)
+      ;; per universe-mapped dep. Per-cell deps don't need component-paths
+      ;; (per-meta cell IS the dependency unit; no compound).
+      (define cpaths
+        (for/list ([p (in-list dep-pairs)]
+                   #:when (meta-universe-cell-id? (car p)))
+          (cons (car p) (cdr p))))
       (define fire-fn (bridge-fn (trait-constraint-info-trait-name info)
-                                  dict-cell-id dep-cids))
+                                  dict-cell-id meta-id dep-pairs))
       (define-values (enet-bridge _bridge-pid)
-        (elab-add-propagator (unbox tc-net-box) dep-cids (list dict-cell-id)
-          fire-fn))
+        (elab-add-propagator (unbox tc-net-box) input-cids (list dict-cell-id)
+          fire-fn
+          #:component-paths cpaths
+          #:assumption aid))
       (set-box! tc-net-box enet-bridge)))
   )
 

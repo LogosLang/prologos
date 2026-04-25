@@ -24,7 +24,16 @@
          "trait-resolution.rkt"
          "macros.rkt"
          "infra-cell.rkt"
-         "performance-counters.rkt")
+         "performance-counters.rkt"
+         ;; PPN 4C S2.b-iv (2026-04-24): pnet-level helpers for universe-cell
+         ;; component-keyed read/write inside bridge fire-fns. Under universe
+         ;; model, dict-meta + dep-metas may share a universe-cid; need
+         ;; per-meta dispatch on (meta-universe-cell-id? cid) for correct
+         ;; component-level access.
+         (only-in "meta-universe.rkt"
+                  meta-universe-cell-id?
+                  compound-cell-component-ref/pnet
+                  compound-cell-component-write/pnet))
 
 (provide retry-unify-constraint!
          resolve-trait-constraint!
@@ -412,30 +421,72 @@
        (not (prop-type-bot? v))
        (not (prop-type-top? v))))
 
+;; PPN 4C S2.b-iv (2026-04-24): meta-component access dispatch.
+;; Under universe model, dict-meta and dep-metas may share a universe-cid
+;; (e.g., all type metas share current-type-meta-universe-cell-id). When
+;; the cell-id is a universe-cid, reads/writes must be component-keyed by
+;; meta-id; otherwise (legacy per-cell mult/level/session pre-S2.c/d) reads
+;; and writes go directly to the per-meta cell.
+(define (meta-component-read pnet cell-id meta-id)
+  (cond
+    [(meta-universe-cell-id? cell-id)
+     (compound-cell-component-ref/pnet pnet cell-id meta-id)]
+    [else
+     (net-cell-read pnet cell-id)]))
+
+(define (meta-component-write pnet cell-id meta-id value)
+  (cond
+    [(meta-universe-cell-id? cell-id)
+     (compound-cell-component-write/pnet pnet cell-id meta-id value)]
+    [else
+     (net-cell-write pnet cell-id value)]))
+
 ;; Pure trait resolution bridge FACTORY.
-;; Returns a factory function: (trait-name dict-cell-id dep-cell-ids → (pnet → pnet))
+;; Returns a factory function:
+;;   (trait-name dict-cell-id dict-meta-id dep-pairs → (pnet → pnet))
+;; where dep-pairs = (listof (cons cell-id meta-id)) — meta-id paired with
+;; its cell-id. For per-cell legacy metas (pre-S2.c/d), meta-id is still
+;; populated; the dispatch in meta-component-read/write handles both cases
+;; transparently via meta-universe-cell-id?.
+;;
 ;; The factory captures registry cell IDs at creation time (from driver.rkt).
 ;; Each call produces a per-constraint fire function that reads cells directly.
+;;
+;; PPN 4C S2.b-iv signature change: dict-cell-id stays as the writeable
+;; cell-id (universe-cid for universe domain, per-cell otherwise); ADDED
+;; dict-meta-id (component key under universe model). dep-cell-ids became
+;; dep-pairs (each (cons cell-id meta-id)) for the same reason.
 (define (make-pure-trait-bridge-factory)
   (define impl-reg-cid (current-impl-registry-cell-id))
   (define param-impl-reg-cid (current-param-impl-registry-cell-id))
-  (lambda (trait-name dict-cell-id dep-cell-ids)
-    (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dep-cell-ids impl-reg-cid param-impl-reg-cid)))
+  (lambda (trait-name dict-cell-id dict-meta-id dep-pairs)
+    (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dict-meta-id
+                                     dep-pairs impl-reg-cid param-impl-reg-cid)))
 
 ;; Pure trait resolution bridge fire function.
-;; Closed over: trait-name, dict-cell-id, dep-cell-ids, impl-registry-cell-id.
+;; Closed over: trait-name, dict-cell-id, dict-meta-id, dep-pairs,
+;; impl-registry-cell-id, param-impl-registry-cell-id.
 ;; Fire function: pnet → pnet (pure).
-(define (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dep-cell-ids impl-reg-cid param-impl-reg-cid)
+;;
+;; PPN 4C S2.b-iv (2026-04-24): reads dict-val + each dep-val via
+;; meta-component-read (universe-cid → compound-cell-component-ref/pnet,
+;; per-cell → net-cell-read). Writes dict-expr via meta-component-write.
+;; Order of dep-pairs preserved through type-arg-vals → impl-key-str
+;; construction (caller's type-arg-metas order is authoritative; helper
+;; preserves via list-of-pairs structure).
+(define (make-pure-trait-bridge-fire-fn trait-name dict-cell-id dict-meta-id
+                                         dep-pairs impl-reg-cid param-impl-reg-cid)
   (lambda (pnet)
     ;; Early exit: dict already solved
-    (define dict-val (net-cell-read pnet dict-cell-id))
+    (define dict-val (meta-component-read pnet dict-cell-id dict-meta-id))
     (cond
       [(resolved-cell-value? dict-val) pnet]  ;; already resolved
       [else
-       ;; Read dependency cell values (type-arg solutions)
+       ;; Read dependency component values (type-arg solutions). Order
+       ;; preserved from caller's dep-pairs construction.
        (define type-arg-vals
-         (for/list ([cid (in-list dep-cell-ids)])
-           (net-cell-read pnet cid)))
+         (for/list ([p (in-list dep-pairs)])
+           (meta-component-read pnet (car p) (cdr p))))
        ;; All resolved? (no bot/top)
        (cond
          [(not (andmap resolved-cell-value? type-arg-vals)) pnet]  ;; not all ground yet
@@ -450,8 +501,9 @@
           (define entry (hash-ref impl-reg impl-key #f))
           (cond
             [entry
-             ;; Monomorphic resolution succeeded — write dict to cell
-             (net-cell-write pnet dict-cell-id (expr-fvar (impl-entry-dict-name entry)))]
+             ;; Monomorphic resolution succeeded — write dict via meta-component-write
+             (meta-component-write pnet dict-cell-id dict-meta-id
+                                    (expr-fvar (impl-entry-dict-name entry)))]
             [else
              ;; Try parametric resolution
              (define param-impl-reg (read-persistent-registry-cell param-impl-reg-cid))
@@ -481,7 +533,7 @@
                      (build-parametric-dict-expr-pure
                        trait-name type-arg-vals pe bindings impl-reg param-impl-reg))
                    (if dict-expr
-                       (net-cell-write pnet dict-cell-id dict-expr)
+                       (meta-component-write pnet dict-cell-id dict-meta-id dict-expr)
                        pnet)])])])])])))
 
 ;; Pure hasmethod resolution bridge FACTORY.
