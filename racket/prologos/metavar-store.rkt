@@ -2255,24 +2255,13 @@
 
 ;; Per-domain legacy-fn — pre-universe-migration dispatch.
 ;; Fires when 'universe-active? = #f. Mirrors existing per-domain function
-;; bodies. Type's legacy-fn is dead code post-S2.b-iii (universe-active? = #t)
-;; but written for symmetry / rollback safety.
-
-(define (legacy-type-fn explicit-cid id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [(and explicit-cid net-box)
-     (with-handlers ([exn:fail? (lambda (_) (legacy-type-fn #f id))])
-       (let ([v (elab-cell-read (unbox net-box) explicit-cid)])
-         (and (not (eq? v 'infra-bot))
-              (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
-    [net-box
-     (define cid (prop-meta-id->cell-id id))
-     (and cid
-          (let ([v (elab-cell-read (unbox net-box) cid)])
-            (and (not (eq? v 'infra-bot))
-                 (not (prop-type-bot? v)) (not (prop-type-top? v)) v)))]
-    [else (type-champ-fallback id)]))
+;; bodies. Type domain has NO legacy-fn entry — 'universe-active? = #t
+;; (always post-S2.b-iii). Move B+ (2026-04-24) retired the speculative
+;; `legacy-type-fn` "for symmetry" scaffolding (workflow.md "Belt-and-
+;; suspenders" anti-pattern). If 'type's 'universe-active? ever needs
+;; to be flipped to #f (rollback / testing), legacy logic is reconstructable
+;; from the legacy mult/level/sess pattern, but we don't keep it as
+;; speculative dead code.
 
 (define (legacy-mult-fn _explicit-cid id)
   ;; explicit-cid not used in production for mult (no PM 8F cache field)
@@ -2333,8 +2322,12 @@
                      'universe-cid-fn (lambda () (current-type-meta-universe-cell-id))
                      'bot? prop-type-bot?
                      'top? prop-type-top?
-                     'champ-fallback type-champ-fallback
-                     'legacy-fn legacy-type-fn)
+                     'champ-fallback type-champ-fallback)
+    ;; NOTE: 'type entry has NO 'legacy-fn — universe-active? = #t always.
+    ;; Move B+ (2026-04-24) retired the speculative legacy-type-fn. If the
+    ;; flag is ever flipped to #f (would need explicit code change), the
+    ;; dispatch will hash-ref-fail with a clear error, rather than silently
+    ;; running stale legacy logic.
     'mult    (hasheq 'universe-active? #f            ;; S2.c-iv flips to #t
                      'universe-cid-fn (lambda () (current-mult-meta-universe-cell-id))
                      'bot? (lambda (v) (or (eq? v 'mult-bot) (eq? v 'unsolved)))
@@ -2356,26 +2349,45 @@
 
 ;; The single dispatch core. Returns the SOLUTION value or #f.
 ;; explicit-cid: legacy-PM-8F backward-compat (e.g., expr-meta-cell-id).
-;; Under option 4 + 'universe-active? = #t, explicit-cid is preferred when
-;; provided (e.g., for legacy callers); otherwise read parameter via thunk.
+;;
+;; Move B+ (2026-04-24): under 'universe-active? = #t, explicit-cid is
+;; IGNORED — option 4 PURE form. Per S2.c-i Task 1 microbench, option 4
+;; wins by 302 ns/call vs the cache-field path. Capturing the full benefit
+;; required (i) NOT consulting explicit-cid (the cache field is functionally
+;; redundant for universe-active domains where universe-cid is a constant
+;; per domain set per-enet by init-meta-universes!), and (ii) NO with-handlers
+;; wrapper (stale-cell concern was the original wrapper's purpose; under
+;; universe migration the universe-cid is structurally stable across enets,
+;; so the wrapper is belt-and-suspenders defensive scaffolding per
+;; workflow.md). Cache field is now functionally INERT for universe-active
+;; domains (still in struct + still passed by 9 callers; Phase 4 retires
+;; struct field + caller surgery per parent design Phase 4 row).
+;;
+;; explicit-cid IS still passed to legacy-fn (for mult/level/session pre-
+;; migration; sess-meta has Track 10B Phase B1b cache field that legacy-sess-fn
+;; uses). When their migrations land (S2.c-iv flips 'mult; S2.d flips
+;; 'level/'session), their cache fields become inert too; full caller
+;; surgery + struct cleanup absorbs into Phase 4.
 (define (meta-domain-solution domain id [explicit-cid #f])
   (define info (hash-ref meta-domain-info domain))
   (cond
     [(hash-ref info 'universe-active?)
-     ;; Universe path (option 4 — parameter-read or explicit-cid)
+     ;; Universe path (option 4 PURE — parameter-read only, no with-handlers).
+     ;; explicit-cid IGNORED for universe-active domains.
      (define net-box (current-prop-net-box))
-     (define cid (or explicit-cid ((hash-ref info 'universe-cid-fn))))
+     (define cid ((hash-ref info 'universe-cid-fn)))
      (cond
        [(and cid net-box)
-        (with-handlers ([exn:fail? (lambda (_) ((hash-ref info 'champ-fallback) id))])
-          (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-            (and v (not (eq? v 'infra-bot))
-                 (not ((hash-ref info 'bot?) v))
-                 (not ((hash-ref info 'top?) v))
-                 v)))]
+        (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
+          (and v (not (eq? v 'infra-bot))
+               (not ((hash-ref info 'bot?) v))
+               (not ((hash-ref info 'top?) v))
+               v))]
        [else ((hash-ref info 'champ-fallback) id)])]
     [else
-     ;; Legacy path (pre-universe-migration for this domain)
+     ;; Legacy path (pre-universe-migration for this domain).
+     ;; explicit-cid IS used here (legacy-sess-fn for Track 10B cache field;
+     ;; legacy-mult/level-fn ignore it).
      ((hash-ref info 'legacy-fn) explicit-cid id)]))
 
 ;; Predicate companion. Returns #t/#f.
