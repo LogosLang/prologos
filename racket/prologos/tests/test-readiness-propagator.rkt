@@ -273,7 +273,7 @@
     (define action1 (action-resolve-trait 'meta-1
       (trait-constraint-info 'Eq '())))
     (define action2 (action-retry-constraint
-      (constraint (gensym 'c) (expr-Nat) (expr-Nat) '() "test" 'postponed '())))
+      (constraint (gensym 'c) (expr-Nat) (expr-Nat) '() "test" 'postponed '() '())))
     (set-box! net-box
       (write-fn (unbox net-box) rq-cid
                 (list (tagged-entry action1 'qa1)
