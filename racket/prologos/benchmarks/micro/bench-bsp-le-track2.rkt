@@ -17,6 +17,16 @@
 ;; is cheap, the filtered nogood watcher is viable. Etc.
 ;;
 ;; Run: racket benchmarks/micro/bench-bsp-le-track2.rkt
+;;
+;; Migrated 2026-04-25 from the pre-D.5b TMS API
+;; (tms-write/tms-cell-value/tms-read/tms-commit, deleted in the refactor
+;; to the tms-cell struct + atms-write-cell interface). Each "depth"
+;; here is realized as an atms with N assumptions, a TMS cell whose
+;; values list grows by depth, and the believed worldview switched to
+;; the full N-assumption set so reads must scan to find a supported
+;; value. tms-commit no longer has a direct analog (the post-refactor
+;; commit story is implicit in worldview narrowing); the closest
+;; behavioural analog (worldview switching cost) is benchmarked instead.
 
 (require "../../tools/bench-micro.rkt"
          "../../propagator.rkt"
@@ -32,7 +42,7 @@
 (define (make-atms-with-assumptions n)
   (for/fold ([a (atms-empty)])
             ([i (in-range n)])
-    (define-values (a* _aid) (atms-assume a (format "h~a" i) i))
+    (define-values (a* _aid) (atms-assume a (string->symbol (format "h~a" i)) i))
     a*))
 
 ;; Build a hasheq of N assumption-ids (used as sets)
@@ -41,64 +51,118 @@
             ([i (in-range n)])
     (hash-set s (assumption-id i) #t)))
 
-;; Build a TMS cell value at depth d
-(define (make-tms-at-depth d base-val)
-  (define stack (for/list ([i (in-range d)]) (assumption-id i)))
-  (tms-write (tms-cell-value base-val (hasheq)) stack 'branch-value))
+;; Build an atms in which a TMS cell at `cell-key` holds `d` distinct
+;; supported values, each justified by a deeper-nested support set.
+;; The believed worldview is the union of all `d` assumptions, so
+;; (atms-read-cell a cell-key) traverses the values list before finding
+;; a supported value — the read cost grows with `d`.
+;;
+;; Mirrors the old `make-tms-at-depth` shape: depth = number of
+;; speculation layers wrapping a single TMS cell.
+(define (atms-at-depth d cell-key)
+  (define a0 (make-atms-with-assumptions d))
+  ;; Write d distinct values, each with progressively larger support.
+  ;; Newest first in the values list, so the FIRST value has full support
+  ;; (depth d) and is the one a read under the believed=all worldview
+  ;; finds — the implementation walks the list head-first.
+  (for/fold ([a a0])
+            ([i (in-range d)])
+    (define support
+      (for/fold ([s (hasheq)])
+                ([j (in-range (add1 i))])
+        (hash-set s (assumption-id j) #t)))
+    (atms-write-cell a cell-key (list 'val i) support)))
+
+;; Stacks of assumption-ids at depths 1, 2, 5, 10 — used to build
+;; support sets for write benchmarks.
+(define (support-set-of-depth d)
+  (for/fold ([s (hasheq)])
+            ([i (in-range d)])
+    (hash-set s (assumption-id i) #t)))
 
 ;; ============================================================
 ;; Benchmark 1: TMS read at varying depths
 ;; ============================================================
+;;
+;; Old `tms-read tcv stack`: cost was O(stack-depth) walk over a
+;; per-cell stack of speculative bindings.
+;;
+;; New `atms-read-cell a key`: cost is O(values-length) walk until a
+;; value's support is a subset of believed. We model "depth d" by an
+;; atms whose target cell carries d supported values, with the believed
+;; worldview = d-element assumption set, so the FIRST values-list entry
+;; matches and the per-call cost is dominated by the hash-subset? check
+;; over a d-element support set.
 
-(define tms-depth-1 (make-tms-at-depth 1 'base))
-(define tms-depth-2 (make-tms-at-depth 2 'base))
-(define tms-depth-5 (make-tms-at-depth 5 'base))
-(define tms-depth-10 (make-tms-at-depth 10 'base))
+(define cell-key 'target)
+(define atms-depth-1 (atms-at-depth 1 cell-key))
+(define atms-depth-2 (atms-at-depth 2 cell-key))
+(define atms-depth-5 (atms-at-depth 5 cell-key))
+(define atms-depth-10 (atms-at-depth 10 cell-key))
 
-(define stack-1 (list (assumption-id 0)))
-(define stack-2 (for/list ([i 2]) (assumption-id i)))
-(define stack-5 (for/list ([i 5]) (assumption-id i)))
-(define stack-10 (for/list ([i 10]) (assumption-id i)))
-
-(bench "tms-read depth=1 x100000"
+(bench "atms-read-cell depth=1 x100000"
     (for ([_ (in-range 100000)])
-    (tms-read tms-depth-1 stack-1)))
+    (atms-read-cell atms-depth-1 cell-key)))
 
-(bench "tms-read depth=5 x100000"
+(bench "atms-read-cell depth=5 x100000"
     (for ([_ (in-range 100000)])
-    (tms-read tms-depth-5 stack-5)))
+    (atms-read-cell atms-depth-5 cell-key)))
 
-(bench "tms-read depth=10 x100000"
+(bench "atms-read-cell depth=10 x100000"
     (for ([_ (in-range 100000)])
-    (tms-read tms-depth-10 stack-10)))
+    (atms-read-cell atms-depth-10 cell-key)))
 
 ;; ============================================================
 ;; Benchmark 2: TMS write at varying depths
 ;; ============================================================
+;;
+;; Old `tms-write tcv stack value`: cost was O(stack-depth) — pushing
+;; a frame keyed on the depth-stack.
+;;
+;; New `atms-write-cell a key value support`: cost is O(1) to build the
+;; supported-value + O(1) hash-set into atms-tms-cells. The "depth" is
+;; encoded in the support set's size; constructing an N-element support
+;; set is the dominant cost. We benchmark write of values whose support
+;; set is depth N.
 
-(bench "tms-write depth=1 x50000"
-    (for ([_ (in-range 50000)])
-    (tms-write (tms-cell-value 'base (hasheq)) stack-1 'val)))
+(define support-1 (support-set-of-depth 1))
+(define support-5 (support-set-of-depth 5))
+(define support-10 (support-set-of-depth 10))
 
-(bench "tms-write depth=5 x50000"
+(bench "atms-write-cell depth=1 x50000"
     (for ([_ (in-range 50000)])
-    (tms-write (tms-cell-value 'base (hasheq)) stack-5 'val)))
+    (atms-write-cell atms-depth-1 cell-key 'new support-1)))
 
-(bench "tms-write depth=10 x50000"
+(bench "atms-write-cell depth=5 x50000"
     (for ([_ (in-range 50000)])
-    (tms-write (tms-cell-value 'base (hasheq)) stack-10 'val)))
+    (atms-write-cell atms-depth-5 cell-key 'new support-5)))
+
+(bench "atms-write-cell depth=10 x50000"
+    (for ([_ (in-range 50000)])
+    (atms-write-cell atms-depth-10 cell-key 'new support-10)))
 
 ;; ============================================================
-;; Benchmark 3: TMS commit
+;; Benchmark 3: Worldview switching
 ;; ============================================================
+;;
+;; Old `tms-commit tcv aid`: promoted a contingent value to permanent
+;; — the operation no longer exists. The closest behavioural analog is
+;; `atms-with-worldview`, which switches the believed set; subsequent
+;; reads then re-resolve against the new worldview. We benchmark the
+;; switch itself (cheap struct-copy) and also a switch + read cycle
+;; (the more meaningful end-to-end shape).
 
-(bench "tms-commit leaf x100000"
+(define narrow-worldview-1 (support-set-of-depth 1))
+(define narrow-worldview-5 (support-set-of-depth 5))
+
+(bench "atms-with-worldview narrow x100000"
     (for ([_ (in-range 100000)])
-    (tms-commit tms-depth-1 (assumption-id 0))))
+    (atms-with-worldview atms-depth-10 narrow-worldview-1)))
 
-(bench "tms-commit nested x50000"
+(bench "atms-with-worldview narrow + read x50000"
     (for ([_ (in-range 50000)])
-    (tms-commit tms-depth-5 (assumption-id 0))))
+    (atms-read-cell (atms-with-worldview atms-depth-10 narrow-worldview-5)
+                    cell-key)))
 
 ;; ============================================================
 ;; Benchmark 4: ATMS operations
