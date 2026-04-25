@@ -441,6 +441,104 @@
 (define current-form-cell-map (make-parameter (hasheq)))
 (define current-spec-cell-map (make-parameter (hasheq)))
 
+;; ========================================
+;; Mutual recursion pre-registration
+;; ========================================
+;;
+;; Top-level forms are processed sequentially by process-command. For a single
+;; defn referencing itself, process-def's global-env-add-type-only call (around
+;; line 1177) installs the name's declared type before elaborating the body —
+;; that handles SELF-recursion. For MUTUAL recursion between two defns A and B,
+;; when A's body is elaborated B's name is not yet visible because A runs
+;; first.
+;;
+;; pre-register-defn-types! runs once before the main process-command loop and
+;; performs Phase A of a two-phase elaboration: for every defn or def with a
+;; declared type (the spec system injects spec types into the def surface form
+;; during preparse), elaborate ONLY the type and pre-register the name in the
+;; global env via global-env-add-type-only. The main loop's body elaboration
+;; (Phase B) then sees all spec'd names in scope, regardless of source order.
+;;
+;; A defn WITHOUT a spec follows the standard sequential path: its name is
+;; only visible after its own process-command call completes, so mutual
+;; recursion without specs surfaces a clear "Unbound variable" error. With
+;; specs on both functions in a mutual cycle (the idiomatic Prologos style),
+;; mutual recursion is supported.
+;;
+;; Each pre-registration runs in a parameterize that resets the meta store and
+;; isolates type-elaboration metas from the main pass; no leakage.
+(define (pre-register-defn-types! surfs)
+  (for ([surf (in-list surfs)])
+    (with-handlers ([exn:fail? (lambda (_) (void))])  ;; never block main pass
+      (pre-register-one-defn-type! surf))))
+
+(define (pre-register-one-defn-type! surf)
+  ;; Skip non-surfs and errors immediately
+  (cond
+    [(prologos-error? surf) (void)]
+    [else
+     ;; Run expand-top-level to convert surf-defn into surf-def or
+     ;; surf-def-group (this is what process-command does first thing).
+     (define expanded
+       (with-handlers ([exn:fail? (lambda (_) #f)])
+         (expand-top-level surf)))
+     (cond
+       [(or (not expanded) (prologos-error? expanded)) (void)]
+       [(surf-def? expanded)
+        (pre-register-single-def! expanded)]
+       [(surf-def-group? expanded)
+        ;; Multi-arity defn: pre-register the dispatch name AND each per-arity
+        ;; clause def. The dispatch table will be re-built by process-def-group
+        ;; in the main pass — pre-registration here just ensures the name is
+        ;; visible during forward references.
+        (define group-name (surf-def-group-name expanded))
+        (define arities (surf-def-group-arities expanded))
+        (define docstring (surf-def-group-docstring expanded))
+        (define arity-map
+          (for/fold ([m (hasheq)])
+                    ([arity (in-list arities)])
+            (hash-set m arity (string->symbol (format "~a::~a" group-name arity)))))
+        (with-handlers ([exn:fail? (lambda (_) (void))])
+          (register-multi-defn! group-name arities arity-map docstring)
+          (when (current-ns-context)
+            (define fqn-ns (ns-context-current-ns (current-ns-context)))
+            (define fqn (qualify-name group-name fqn-ns))
+            (define fqn-arity-map
+              (for/fold ([m (hasheq)])
+                        ([arity (in-list arities)])
+                (hash-set m arity (qualify-name
+                                   (string->symbol (format "~a::~a" group-name arity))
+                                   fqn-ns))))
+            (register-multi-defn! fqn arities fqn-arity-map docstring)))
+        (for ([def (in-list (surf-def-group-defs expanded))])
+          (pre-register-single-def! def))]
+       [else (void)])]))
+
+(define (pre-register-single-def! expanded)
+  ;; Only annotated defs can be pre-registered (we need a type for the env).
+  (define name (surf-def-name expanded))
+  (define type-surf (surf-def-type expanded))
+  (cond
+    [(not type-surf) (void)]  ;; type-inferred def: skip; falls back to current behavior
+    [(not (symbol? name)) (void)]
+    [else
+     ;; Isolate meta state for this type elaboration.
+     (parameterize ([current-meta-store (make-hasheq)]
+                    [current-level-meta-store (make-hasheq)]
+                    [current-mult-meta-store (make-hasheq)])
+       (with-handlers ([exn:fail? (lambda (_) (void))])
+         (define type
+           (with-handlers ([exn:fail? (lambda (_) #f)])
+             (elaborate type-surf)))
+         (when (and type (not (prologos-error? type)))
+           ;; process-def in the main pass will OVERWRITE this with the
+           ;; freshly-elaborated and zonked type, then proceed with the body.
+           (global-env-add-type-only (current-prelude-env) name type)
+           (when (current-ns-context)
+             (define fqn (qualify-name name
+                           (ns-context-current-ns (current-ns-context))))
+             (global-env-add-type-only (current-prelude-env) fqn type)))))]))
+
 ;; Returns a result string, or a prologos-error.
 ;; Side effect: may update current-prelude-env for 'def'.
 ;;
@@ -1473,6 +1571,17 @@
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
+  ;; Pre-register defn names with declared types so that mutual recursion
+  ;; (forward references between top-level defns) works without source-order
+  ;; dependence. See pre-register-defn-types! above.
+  ;; NOTE: deliberately NOT parameterizing current-prelude-env-prop-net-box
+  ;; here. Pre-registration uses the legacy parameter path
+  ;; (writes to current-prelude-env), which:
+  ;;   (a) is properly test-isolated (the standard run-ns-* helpers reset it),
+  ;;   (b) is visible to global-env-lookup-type via the Layer 2 fallback, and
+  ;;   (c) gets overwritten by process-def's normal cell-path write in the
+  ;;       main pass once the body has been elaborated and zonked.
+  (pre-register-defn-types! surfs)
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]
@@ -1671,6 +1780,17 @@
   (define pv (provenance-counters 0 0 0 0 0 0 0 0))
   (define qs (make-quiescence-stats))
   (define mem-before (measure-memory-before))
+  ;; Pre-register defn names with declared types so that mutual recursion
+  ;; (forward references between top-level defns) works without source-order
+  ;; dependence. See pre-register-defn-types! above.
+  ;; NOTE: deliberately NOT parameterizing current-prelude-env-prop-net-box
+  ;; here. Pre-registration uses the legacy parameter path
+  ;; (writes to current-prelude-env), which:
+  ;;   (a) is properly test-isolated (the standard run-ns-* helpers reset it),
+  ;;   (b) is visible to global-env-lookup-type via the Layer 2 fallback, and
+  ;;   (c) gets overwritten by process-def's normal cell-path write in the
+  ;;       main pass once the body has been elaborated and zonked.
+  (pre-register-defn-types! surfs)
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]
@@ -1741,6 +1861,17 @@
     (init-warning-cells! prn-box)
     (init-narrow-cells! prn-box)
     (init-attribute-map-cell! prn-box))  ;; Track 4B Phase 0c: global attribute store
+  ;; Pre-register defn names with declared types so that mutual recursion
+  ;; (forward references between top-level defns) works without source-order
+  ;; dependence. See pre-register-defn-types! above.
+  ;; NOTE: deliberately NOT parameterizing current-prelude-env-prop-net-box
+  ;; here. Pre-registration uses the legacy parameter path
+  ;; (writes to current-prelude-env), which:
+  ;;   (a) is properly test-isolated (the standard run-ns-* helpers reset it),
+  ;;   (b) is visible to global-env-lookup-type via the Layer 2 fallback, and
+  ;;   (c) gets overwritten by process-def's normal cell-path write in the
+  ;;       main pass once the body has been elaborated and zonked.
+  (pre-register-defn-types! surfs)
   (define-values (results pc)
     (parameterize ([current-phase-timings pt]
                    [current-provenance-counters pv]
