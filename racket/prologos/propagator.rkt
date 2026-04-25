@@ -133,6 +133,13 @@
  run-to-quiescence-widen
  ;; Cross-domain propagation (Phase 6c)
  net-add-cross-domain-propagator
+ ;; PPN 4C S2.c-iv (2026-04-24): compound-cell access primitives moved
+ ;; here from meta-universe.rkt to break cycle + own them at the right
+ ;; layer (propagator.rkt owns net-cell-read/write; these are wrappers).
+ ;; meta-universe.rkt re-exports for backward-compat.
+ compound-cell-component-ref/pnet
+ compound-cell-component-write/pnet
+ resolve-worldview-bitmask/pnet
  ;; Structural decomposition registries (Phase 4c)
  net-cell-decomp-lookup
  net-cell-decomp-insert
@@ -3257,37 +3264,197 @@
 ;; Backward compatibility: existing callers without kwargs get empty
 ;; component-paths + #f assumption/decision-cell/srcloc — preserves
 ;; whole-cell firing semantics for non-universe cells.
+;; ========================================
+;; Compound-cell component access (PPN 4C S2.c-iv extension, 2026-04-24)
+;; ========================================
+;;
+;; Generic compound-cell access primitives. A compound cell holds
+;; `(hasheq component-key → tagged-cell-value)` — used by meta-universe
+;; cells, attribute-map cells, and other PU-shaped cells.
+;;
+;; Moved here from meta-universe.rkt (S2.c-iv refactor) to break the
+;; cycle that would otherwise prevent net-add-cross-domain-propagator
+;; from doing component-keyed access internally. propagator.rkt is the
+;; right home: it owns the underlying net-cell-read/write primitives;
+;; these wrappers add hash-ref + tagged-cell unwrap/wrap. meta-universe.rkt
+;; re-exports for backward-compat with existing consumers.
+;;
+;; The component-keyed access is what makes the cross-domain primitive
+;; correct-by-construction for compound cells: callers declare component-
+;; paths, and the primitive automatically uses these helpers (no caller-
+;; side opportunity to read/write the whole hasheq by mistake). NTT future
+;; work will enforce "compound cell touched → component-paths required"
+;; as a typing contract at compile time.
+
+;; Resolve effective worldview bitmask for a pnet-level read. Per-prop
+;; bitmask (non-zero) takes priority; otherwise read worldview-cache cell
+;; for network-wide committed bitmask. Defensive against missing cache
+;; cell (early init or test contexts).
+(define (resolve-worldview-bitmask/pnet pnet)
+  (define per-prop-wv (current-worldview-bitmask))
+  (cond
+    [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
+    [else
+     (with-handlers ([exn:fail? (lambda (_) 0)])
+       (define v (net-cell-read pnet worldview-cache-cell-id))
+       (if (number? v) v 0))]))
+
+;; compound-cell-component-ref/pnet pnet cell-id component-key [default]
+;; Read a component's UNWRAPPED value from a compound cell. Returns
+;; default (or #f) when the component-key is missing, the cell isn't a
+;; hasheq, or the tagged-cell-value has no entry visible under the
+;; resolved worldview.
+;;
+;; 2-level unwrap:
+;;   1. Read compound hasheq from cell
+;;   2. hash-ref for component-key → tagged-cell-value
+;;   3. tagged-cell-read to filter by worldview bitmask → unwrapped value
+(define compound-cell-component-ref/pnet
+  (case-lambda
+    [(pnet cell-id component-key)
+     (compound-cell-component-ref/pnet pnet cell-id component-key #f)]
+    [(pnet cell-id component-key default)
+     (define compound-val (net-cell-read pnet cell-id))
+     (cond
+       [(not (hash? compound-val)) default]
+       [else
+        (define tcv (hash-ref compound-val component-key #f))
+        (cond
+          [(not tcv) default]
+          [(tagged-cell-value? tcv)
+           (tagged-cell-read tcv (resolve-worldview-bitmask/pnet pnet))]
+          [else tcv])])]))
+
+;; compound-cell-component-write/pnet pnet cell-id component-key value → pnet*
+;; Write a value for component-key into the compound cell. Wraps as a
+;; tagged-cell-value entry under the current worldview, writes a delta
+;; hasheq to the compound cell. The cell's compound-tagged-merge handles
+;; pointwise merging with existing contents.
+(define (compound-cell-component-write/pnet pnet cell-id component-key value)
+  (define wv (or (current-worldview-bitmask) 0))
+  (define tcv
+    (cond
+      [(tagged-cell-value? value) value]
+      [(zero? wv) (tagged-cell-value value '())]
+      [else (tagged-cell-value 'infra-bot (list (cons wv value)))]))
+  (net-cell-write pnet cell-id (hasheq component-key tcv)))
+
+;; ========================================
+;; Cross-Domain Propagator (extended for compound cells, S2.c-iv)
+;; ========================================
+
+;; Extract component-key from component-paths declaration for the
+;; cross-domain primitive. The contract:
+;;   '() — non-compound cell; raw read/write
+;;   (list (cons cell-id key)) — compound cell with single key; component-keyed access
+;;   (list k1 k2 ...) or (list (cons cell-id k1) (cons cell-id k2) ...) — error
+;;
+;; The single-key restriction is intentional: each cross-domain bridge
+;; install is per-(c-cell-component, a-cell-component) tuple. Multi-component
+;; bridges should compose by installing N primitives, not by passing N keys.
+;; NTT future work formalizes this as a type-system contract.
+(define (extract-bridge-component-key cell paths label)
+  (cond
+    [(null? paths) #f]
+    [(and (pair? paths) (null? (cdr paths)))
+     (define path (car paths))
+     (cond
+       [(pair? path)
+        (when (not (equal? (car path) cell))
+          (error 'net-add-cross-domain-propagator
+                 "~a: path's cell-id ~v doesn't match the bridge cell ~v"
+                 label (car path) cell))
+        (cdr path)]
+       [else
+        (error 'net-add-cross-domain-propagator
+               "~a: bare-key path ~v not supported; use cons-pair (cons cell-id key) for compound cells"
+               label path)])]
+    [else
+     (error 'net-add-cross-domain-propagator
+            "~a: ~a paths declared; primitive supports 0 (raw access) or 1 (compound at single key)"
+            label (length paths))]))
+
 (define (net-add-cross-domain-propagator net c-cell a-cell alpha-fn gamma-fn
                                           #:c-component-paths [c-cpaths '()]
                                           #:a-component-paths [a-cpaths '()]
                                           #:assumption [aid #f]
                                           #:decision-cell [dcid #f]
                                           #:srcloc [srcloc #f])
+  ;; Create unidirectional propagators connecting a concrete-domain cell
+  ;; and an abstract-domain cell via α/γ functions:
+  ;;   1. c-cell changes → write alpha(c-val) to a-cell
+  ;;   2. a-cell changes → write gamma(a-val) to c-cell
+  ;;
+  ;; Returns: (values new-network pid-alpha pid-gamma) when gamma-fn is
+  ;; provided; (values new-network pid-alpha #f) when gamma-fn = #f
+  ;; (α-only bridge — useful when γ direction would be no-op dead work).
+  ;;
+  ;; PPN 4C S2.precursor (2026-04-24): kwargs added for component-path
+  ;; declarations under universe-cell migration.
+  ;;
+  ;; PPN 4C S2.c-iv (2026-04-24): compound-cell support is now CORRECT-BY-
+  ;; CONSTRUCTION via component-paths. When a side declares cons-pair
+  ;; (cons cell-id key) component-path, the primitive automatically uses
+  ;; component-keyed read/write (compound-cell-component-{ref,write}/pnet)
+  ;; for that side. alpha-fn / gamma-fn receive the COMPONENT VALUE (not
+  ;; the whole hasheq) — the primitive owns the unwrapping/wrapping. A
+  ;; caller cannot accidentally read/write the whole hasheq from a
+  ;; compound cell — declaring component-paths AUTOMATICALLY does the
+  ;; right access. No way to declare paths but get raw access by mistake.
+  ;;
+  ;; gamma-fn = #f → skip γ install (α-only bridge). Used when the γ
+  ;; direction is dead work (e.g., type↔mult bridge's mult->type-gamma
+  ;; was constant type-bot — retired in S2.c-iv).
+  ;;
+  ;; CRITICAL contract (compound cells): if c-cell or a-cell is a compound
+  ;; cell (universe cell, attribute-map, etc.), the corresponding
+  ;; component-paths kwarg MUST be declared with cons-pair (cons cell-id
+  ;; component-key). Without it, the primitive defaults to raw access,
+  ;; which on a compound cell returns/writes the whole hasheq → silent
+  ;; semantic break. This is the same correctness gap that motivated
+  ;; S2.c-iv's primitive extension. NTT future work enforces this at
+  ;; compile time; for now, primitive-side validation catches malformed
+  ;; paths at install time.
+  (define c-key (extract-bridge-component-key c-cell c-cpaths "c-component-paths"))
+  (define a-key (extract-bridge-component-key a-cell a-cpaths "a-component-paths"))
   ;; Propagator 1 (α): C → A (abstraction direction)
-  ;; α reads from c-cell; component-paths declares which c-cell components
-  ;; to watch. For universe c-cell, declare (list (cons c-cell key) ...);
-  ;; for non-universe, leave empty (whole-cell firing).
   (define-values (net1 pid-alpha)
     (net-add-propagator net
       (list c-cell) (list a-cell)
       (lambda (net)
-        (define c-val (net-cell-read net c-cell))
-        (net-cell-write net a-cell (alpha-fn c-val)))
+        (define c-val (if c-key
+                          (compound-cell-component-ref/pnet net c-cell c-key)
+                          (net-cell-read net c-cell)))
+        (cond
+          [(not c-val) net]   ;; component missing or raw value #f — no propagation
+          [a-key
+           (compound-cell-component-write/pnet net a-cell a-key (alpha-fn c-val))]
+          [else
+           (net-cell-write net a-cell (alpha-fn c-val))]))
       #:component-paths c-cpaths
       #:assumption aid
       #:decision-cell dcid
       #:srcloc srcloc))
-  ;; Propagator 2 (γ): A → C (concretization direction)
-  ;; γ reads from a-cell; component-paths declares which a-cell components
-  ;; to watch.
-  (define-values (net2 pid-gamma)
-    (net-add-propagator net1
-      (list a-cell) (list c-cell)
-      (lambda (net)
-        (define a-val (net-cell-read net a-cell))
-        (net-cell-write net c-cell (gamma-fn a-val)))
-      #:component-paths a-cpaths
-      #:assumption aid
-      #:decision-cell dcid
-      #:srcloc srcloc))
-  (values net2 pid-alpha pid-gamma))
+  ;; Propagator 2 (γ): A → C (concretization direction). Skip if gamma-fn = #f.
+  (cond
+    [gamma-fn
+     (define-values (net2 pid-gamma)
+       (net-add-propagator net1
+         (list a-cell) (list c-cell)
+         (lambda (net)
+           (define a-val (if a-key
+                             (compound-cell-component-ref/pnet net a-cell a-key)
+                             (net-cell-read net a-cell)))
+           (cond
+             [(not a-val) net]
+             [c-key
+              (compound-cell-component-write/pnet net c-cell c-key (gamma-fn a-val))]
+             [else
+              (net-cell-write net c-cell (gamma-fn a-val))]))
+         #:component-paths a-cpaths
+         #:assumption aid
+         #:decision-cell dcid
+         #:srcloc srcloc))
+     (values net2 pid-alpha pid-gamma)]
+    [else
+     (values net1 pid-alpha #f)]))

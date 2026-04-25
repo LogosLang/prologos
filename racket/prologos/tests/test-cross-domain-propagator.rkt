@@ -226,11 +226,19 @@
   (define result (run-to-quiescence net4))
   (check-equal? (net-cell-read result a-cell) #t))
 
-(test-case "S2.precursor: kwargs accepted with non-default values; bridge installs"
-  ;; Pass non-default values for path kwargs. The α/γ closures still
-  ;; read whole-cell (this test isn't about filtering — it's about
-  ;; verifying the primitive accepts and registers the propagators
-  ;; without error when paths are supplied).
+(test-case "S2.c-iv: kwargs accepted with non-default values; bridge installs (UPDATED for tightened contract)"
+  ;; Pass non-default values for path kwargs. Under S2.c-iv's tightened
+  ;; contract (correct-by-construction for compound cells), declaring
+  ;; component-paths means compound-keyed access. The primitive uses
+  ;; compound-cell-component-{ref,write}/pnet for the declared sides.
+  ;;
+  ;; This test passes cons-pair component-paths for a NON-compound cell
+  ;; (max-merge cell holding integer 0). Under S2.c-iv, the primitive
+  ;; honors the declaration: it tries compound-keyed access; the cell
+  ;; value isn't a hasheq → read returns #f → α doesn't propagate.
+  ;; This is the CORRECT contract behavior — declaring component-paths
+  ;; commits to compound access; misusing on a non-compound cell is
+  ;; visible as no-propagation, not silent whole-cell read/write.
   (define net0 (make-prop-network 100))
   (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
   (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
@@ -238,13 +246,67 @@
     (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma
       #:c-component-paths (list (cons c-cell 'some-key))
       #:a-component-paths (list (cons a-cell 'other-key))))
-  ;; Both propagator IDs should be valid (non-#f)
+  ;; Both propagator IDs valid — install succeeded
   (check-not-false pid-alpha)
   (check-not-false pid-gamma)
-  ;; The bridge still functions — write to c-cell triggers α
-  ;; (component-paths filtering only kicks in for SRE-registered
-  ;; structural cells; for max-merge cells, paths are inert and
-  ;; whole-cell firing applies)
+  ;; Under S2.c-iv: declaring component-paths means compound-keyed access.
+  ;; c-cell isn't a hasheq → compound-cell-component-ref returns #f →
+  ;; α's `(cond [(not c-val) net] ...)` skips propagation. a-cell stays #f.
+  ;; (Pre-S2.c-iv backward-compat: paths were inert; α fired with whole-
+  ;; cell read; a-cell became #t. That permissive behavior was the gap
+  ;; that S2.c-iv's CBC contract closes.)
+  (define net4 (net-cell-write net3 c-cell 42))
+  (define result (run-to-quiescence net4))
+  (check-equal? (net-cell-read result a-cell) #f))
+
+(test-case "S2.c-iv: gamma-fn = #f → α-only bridge install"
+  ;; When γ direction is dead work (e.g., type↔mult bridge's mult->type-gamma
+  ;; was constant type-bot — retired in S2.c-iv), pass gamma-fn=#f to skip
+  ;; the γ propagator install entirely. Returns (values net pid-alpha #f).
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  (define-values (net3 pid-alpha pid-gamma)
+    (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha #f))
+  ;; α installed (non-#f), γ skipped (#f)
+  (check-not-false pid-alpha)
+  (check-equal? pid-gamma #f)
+  ;; α direction works as expected — write to c-cell propagates
   (define net4 (net-cell-write net3 c-cell 42))
   (define result (run-to-quiescence net4))
   (check-equal? (net-cell-read result a-cell) #t))
+
+(test-case "S2.c-iv: extract-bridge-component-key validates path shape"
+  ;; The primitive validates component-paths at install time:
+  ;;   '() — non-compound; raw access
+  ;;   (list (cons cell-id key)) — compound; component-keyed
+  ;;   (list bare-key) — error (S2.b-iv §7.5.12.5 deprecation)
+  ;;   (list path1 path2) — error (single-key restriction; multi-component
+  ;;     bridges should compose multiple primitive installs)
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  ;; Bare-key path → error
+  (check-exn exn:fail?
+    (lambda ()
+      (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma
+        #:c-component-paths (list 'bare-key))))
+  ;; Multi-path → error
+  (check-exn exn:fail?
+    (lambda ()
+      (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma
+        #:c-component-paths (list (cons c-cell 'k1) (cons c-cell 'k2))))))
+
+(test-case "S2.c-iv: cons-pair cell-id mismatch → error at install"
+  ;; If the cons-pair path declares a cell-id that doesn't match the
+  ;; bridge's c-cell or a-cell, the primitive errors at install time.
+  ;; Catches caller-side declaration mistakes early.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  (define-values (net3 wrong-cell) (net-new-cell net2 0 max-merge))
+  (check-exn exn:fail?
+    (lambda ()
+      (net-add-cross-domain-propagator net3 c-cell a-cell iv-alpha iv-gamma
+        ;; Declaring path against wrong-cell, not c-cell — error
+        #:c-component-paths (list (cons wrong-cell 'some-key))))))
