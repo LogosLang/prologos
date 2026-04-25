@@ -979,7 +979,69 @@ For each implementation phase:
    fix-and-retry.
 
 5. *Vision Alignment Gate*: Before committing, verify the phase
-   against the design's stated vision. Three questions, all must pass:
+   against the design's stated vision. Four questions, all must pass.
+
+   ***The VAG is ADVERSARIAL, not auditional.*** Cataloguing satisfies
+   a checklist; challenging surfaces drift. For each question, force
+   the comparison "could this be MORE aligned?" not "does this satisfy
+   the bar?" The catalogue→challenge transition is NOT natural — it
+   must be actively forced at every gate. The same adversarial framing
+   applies to: Mantra Audit (Stage 0 / mid-implementation), P/R/M/S
+   lenses (critique rounds), Principles-First Design Gate (every
+   decision point). All four are SUBJECT TO THE SAME failure mode —
+   cataloguing instead of challenging — and require the same active
+   resistance.
+
+   *Cataloguing vs challenging examples* (from PPN 4C S2.c-iii drift,
+   2026-04-24):
+
+   - ❌ Catalogue: "(a) On-network: ✓ all reads via cells."
+   - ✓ Challenge: "(a) On-network: are off-network defensive guards
+     preserved 'for safety' from previous architectures? Does the new
+     architecture make those guards STRUCTURALLY redundant?"
+
+   - ❌ Catalogue: "(b) Complete: ✓ all 9 dispatch functions converted."
+   - ✓ Challenge: "(b) Complete: did the implementation deliver the
+     design's QUANTITATIVE targets (perf claims, microbench
+     verifications), or only its STRUCTURAL targets (architectural
+     shape)? Did we ship the SHAPE without the BENEFIT?"
+
+   - ❌ Catalogue: "(c) Vision-advancing: ✓ single sources of truth."
+   - ✓ Challenge: "(c) Vision-advancing: where do MULTIPLE sources of
+     truth still exist on the hot path? Are inherited patterns from
+     prior architectures still active?"
+
+   - ❌ Catalogue: "(d) Drift-risks-cleared: N risks named, all addressed."
+   - ✓ Challenge: "(d) Drift-risks-cleared: did the risks I named
+     cover PERFORMANCE-vs-design-target risks, not just correctness
+     risks? Did I treat this as refactor (preserve patterns) OR fresh
+     design (challenge inherited patterns)?"
+
+   *Red-flag patterns the adversarial VAG catches*:
+   - "preserved for backward-compat" — was the preservation challenged
+     against whether it's still needed under the new architecture?
+   - "for symmetry" / "for safety" / "for testing" — speculative
+     scaffolding (workflow.md anti-pattern), or genuinely required?
+   - "with-handlers" / defensive guards — is the guarded condition
+     STRUCTURALLY POSSIBLE under the new architecture?
+   - "constraint imposed by X" where X is itself off-network — the
+     constraint exists BECAUSE of scaffolding; honest framing names
+     X as scaffolding with retirement plan.
+
+   ***If the VAG passes without challenging at least one inherited
+   pattern, it likely DID NOT challenge — it catalogued.*** Re-run
+   with adversarial framing.
+
+   *Process discipline*: at every VAG (and mantra audit, principles
+   gate, P/R/M/S application), write answers in TWO COLUMNS:
+   - Column 1 (catalogue): the check passes / doesn't
+   - Column 2 (challenge): could this be MORE aligned?
+
+   Column 1 alone is rationalization. Column 2 is where drift
+   surfaces. If Column 2 has no entries, the gate WAS NOT applied
+   adversarially.
+
+   *The four questions* (apply each adversarially):
 
    a. /On-network?/ Is information flowing through cells on the
       network, or am I computing off-network? If off-network, is it
@@ -990,7 +1052,9 @@ For each implementation phase:
    b. /Complete?/ Does this phase's implementation match ALL
       deliverables the design specified? Not just the code --- but
       registrations, property declarations, SRE integration, test
-      coverage. Designed-but-not-implemented is invisible deferral.
+      coverage, AND quantitative perf claims (microbench-verified
+      benefits). Designed-but-not-implemented is invisible deferral.
+      *Shape without benefit is also incomplete.*
 
    c. /Vision-advancing?/ Would the design author recognize this as
       advancing the stated vision? If you need to explain why a
@@ -1000,8 +1064,9 @@ For each implementation phase:
 
    d. /Drift-risks-cleared?/ Check each risk named in step 1's
       mini-design audit note. Has it materialized? If yes, was it
-      named and handled, or did it slip past? Drift that slipped
-      past must be addressed before commit, not after.
+      named and handled, or did it slip past? Did the named risks
+      cover both correctness AND perf-vs-design-target axes? Drift
+      that slipped past must be addressed before commit, not after.
 
    Origin: PPN Track 3 had two major deviations (§11 datum-canonical
    instead of tree-canonical on-network, §12 SRE integration
@@ -1011,7 +1076,46 @@ For each implementation phase:
    is the general guard against incremental pragmatic drift. Question
    (d) closes the bookend with step 1.
 
-6. *Phase completion* (5 steps IN ORDER):
+   Adversarial framing added 2026-04-24 from PPN 4C addendum S2.c-iii
+   drift: VAG passed cataloguing ("all dispatch converted" ✓, "single
+   sources of truth" ✓) but didn't challenge whether the with-handlers
+   wrapper preserved from PM 8F era was preventing option 4's perf
+   benefit (302 ns/call) from landing. User caught the drift by asking
+   "did we do anything about the cache fields?" — the gate as I
+   applied it didn't surface the gap. Only external challenge did.
+   See `D.3 §7.5.13.6.2` (re-VAG with adversarial framing applied
+   honestly) for the corrective.
+
+6. *Microbench claim verification* (NEW 2026-04-24): When a phase's
+   design references a microbench finding as LOAD-BEARING for a
+   quantitative claim (e.g., "option 4 wins by 302 ns/call"), the
+   phase MUST re-microbench at close. Architectural-shape delivery
+   is NOT sufficient — the perf claim must be VERIFIED, not assumed
+   to have landed.
+
+   The catalogue "we shipped the architecture" is NOT the challenge
+   "did we capture the perf benefit the architecture was supposed to
+   deliver?" Closes the Pre-0 microbench → Stage 4 verification loop.
+
+   This is a per-sub-phase obligation, NOT just a track-level
+   post-implementation activity. If sub-phase N's design uses a
+   microbench finding from sub-phase N-K, sub-phase N's CLOSE
+   re-microbenches. Bounce-back measurement discipline still applies
+   for plausibly-perf-material phases that DON'T reference a prior
+   microbench finding (see workflow.md "Benchmark after infrastructure
+   phases"). Microbench claim verification is the ADDITIONAL
+   obligation when a perf claim is load-bearing.
+
+   Origin: PPN 4C S2.c-iii (2026-04-24). The S2.c-i Task 1 microbench
+   showed option 4 wins by 302 ns/call vs Path 1 (cache field path
+   with `with-handlers`). The S2.c-iii implementation preserved the
+   `with-handlers` wrapper, capturing option 4's SHAPE without its
+   BENEFIT. Drift invisible to my own VAG application (I catalogued
+   "✓ all 9 dispatch functions converted" without challenging "did
+   the architecture deliver the perf claim?"). Move B+ re-microbench
+   verified post-implementation, capturing the missed benefit.
+
+7. *Phase completion* (5 steps IN ORDER):
    a. /Test coverage/: If the phase added behavior, it needs tests. If
       no tests are needed (pure refactor, design-only, verification
       phase), state why in the commit message. "No tests: refactor with

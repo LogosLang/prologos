@@ -271,9 +271,29 @@ Reasonable grounds to approve measurement:
 Already approved per 2026-04-23 dialogue:
 - **Measurement at S2.b close** (first domain migration — validates the PU pattern): `bench-meta-lifecycle` + `bench-alloc` + relevant slice of `bench-ppn-track4c`; compare vs §2/§3/§11 baselines
 - **Measurement at S2.e close** (retirement of old factories — final validation): full baseline re-run; compare vs all §5 hypotheses; §12 "Actual vs Predicted" section added to this doc
-- **Skipped for S2.a, S2.c, S2.d, S2.f**: no measurement unless anomaly surfaces
+- **Skipped for S2.a, S2.c, S2.d, S2.f**: no measurement unless anomaly surfaces (BUT see §6.1 exception below — added 2026-04-24)
 
 Subsequent phases (Phase 1E, 1B, etc.): Claude proposes when the phase opens; user decides.
+
+#### §6.1 Microbench claim verification — exception to "skipped for S2.c/d/f" (added 2026-04-24)
+
+When a sub-phase's design implements an architectural decision that was JUSTIFIED by a microbench finding (e.g., S2.c-iii implementing option 4 from S2.c-i Task 1's microbench: "option 4 wins by 302 ns/call"), that sub-phase MUST re-microbench at close — even if it's on the "skipped" list above. **Architectural-shape delivery is NOT sufficient — the perf claim must be VERIFIED, not assumed**.
+
+This exception applies when:
+- The sub-phase's design references a microbench finding as LOAD-BEARING for a quantitative claim (e.g., perf delta in ns/call)
+- The microbench harness already exists (no new bench-writing cost)
+
+The purpose: close the Pre-0 microbench → Stage 4 verification loop. The microbench was used as DESIGN INPUT; it must also be used as IMPLEMENTATION VERIFICATION. The catalogue "we shipped the architecture" is NOT the challenge "did we capture the perf benefit the architecture was supposed to deliver?"
+
+**Origin** (2026-04-24): S2.c-iii implemented option 4 (per S2.c-i Task 1 microbench) but preserved a `with-handlers` wrapper from PM 8F era. The wrapper was the SOURCE of the 302 ns/call delta the microbench measured (the wrapper's continuation-marker overhead is what option 4 was supposed to eliminate). By preserving the wrapper, S2.c-iii captured option 4's SHAPE without its BENEFIT. The drift was invisible to the per-sub-phase VAG (which catalogued "all dispatch converted ✓" without challenging "did the architecture deliver the perf claim?"). User external challenge surfaced the gap; **Move B+** corrected it with re-microbench verification.
+
+This is a generalization of the "Validated ≠ Deployed" anti-pattern (workflow.md): an architectural shape can be DEPLOYED without delivering the perf claim that JUSTIFIED the architectural decision. Codified in `DESIGN_METHODOLOGY.org` § Microbench claim verification + `workflow.md` "Post-implementation microbench-claim verification".
+
+**Updated Step 2 measurement plan**:
+- S2.b close: full baseline re-run (unchanged)
+- S2.c-iii close: **re-microbench Section F (option 1/2/4 paths)** to verify option 4's claim landed (NEW per this exception)
+- S2.e close: final validation (unchanged)
+- S2.c-i / S2.c-ii / S2.d / S2.f: skipped UNLESS another microbench finding becomes load-bearing for those phases
 
 ### What this doc serves (self-reference)
 

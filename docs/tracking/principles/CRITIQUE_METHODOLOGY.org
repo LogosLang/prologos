@@ -234,6 +234,54 @@ us TOWARD or AWAY from the principle? Could it be MORE aligned?"
 Cataloguing is the default mode for both self-critique and LLM-based
 critique. It must be actively resisted.
 
+*** This anti-pattern extends BEYOND critique rounds
+
+The same drift happens at:
+- Vision Alignment Gates (per-phase, post-implementation)
+- Mantra audits (Stage 0 / mid-implementation)
+- Principles-First Design Gates (every decision point)
+- P/R/M/S lens applications
+
+The catalogue→challenge transition is NEVER natural. At every
+application, the implementer must ACTIVELY force the adversarial
+framing. "✓ we use cells" / "✓ all reads on-network" / "✓ dispatch
+converted" are checkbox satisfactions. "could this be MORE
+on-network?" / "what scaffolding did we preserve that could be
+retired?" / "did we capture the BENEFIT or only the SHAPE?" are
+challenges.
+
+*Process discipline*: at every VAG, mantra audit, principles gate,
+write answers in TWO COLUMNS:
+- Column 1 (catalogue): the check passes / doesn't
+- Column 2 (challenge): could this be MORE aligned?
+
+Column 1 alone is rationalization. Column 2 is where drift surfaces.
+If Column 2 has no entries, the gate WAS NOT applied adversarially.
+
+*Red-flag patterns the adversarial framing catches*:
+- "preserved for backward-compat" (was preservation challenged
+  against new architecture's needs?)
+- "for symmetry" / "for safety" / "for testing" (speculative
+  scaffolding, or genuinely required?)
+- "with-handlers" / defensive guards (is the guarded condition
+  STRUCTURALLY POSSIBLE under the new architecture?)
+- "constraint imposed by X" where X is itself off-network (the
+  constraint exists BECAUSE of scaffolding; honest framing names X
+  as scaffolding with retirement plan)
+
+If the gate passes without challenging at least one inherited
+pattern, it likely DID NOT challenge — it catalogued.
+
+Origin (extended scope, 2026-04-24): PPN 4C addendum S2.c-iii VAG
+drift. VAG passed ("all dispatch functions converted" ✓, "single
+sources of truth" ✓) but didn't challenge whether the with-handlers
+wrapper preserved from PM 8F era was preventing the design's option 4
+perf claim (302 ns/call) from landing. User caught the gap by asking
+"did we do anything about the cache fields?" — the gate as applied
+didn't surface the drift. Only external challenge did. Codified
+across DESIGN_METHODOLOGY.org § Vision Alignment Gate, workflow.md,
+MEMORY.md.
+
 ** Floating Above the Codebase
 
 A critique that discusses design decisions in the abstract, without
