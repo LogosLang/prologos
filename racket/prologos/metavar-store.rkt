@@ -2509,64 +2509,18 @@
       (set-box! net-box (elab-cell-write enet cid solution)))))
 
 ;; Check if a level metavariable has been solved.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'level entry's
+;; 'universe-active? = #f → routes to legacy-level-fn which preserves exact
+;; existing semantics (id-map walk + worldview-aware CHAMP fallback). S2.d
+;; flips the flag to #t when level universe migration lands.
 (define (level-meta-solved? id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
-        (define box (current-level-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)))]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (not (eq? v 'unsolved))])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-level-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)))]))
+  (meta-domain-solved? 'level id))
 
 ;; Retrieve the solution of a level metavariable, or #f if unsolved/unknown.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim — same pattern as
+;; level-meta-solved?.
 (define (level-meta-solution id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
-        (define box (current-level-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)) v)]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (and (not (eq? v 'unsolved)) v)])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-level-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)) v)]))
+  (meta-domain-solution 'level id))
 
 ;; Zonk a level: follow solved level-metas, leave unsolved in place.
 ;; Use zonk-level-default for final output (defaults unsolved to lzero).
@@ -2653,64 +2607,18 @@
       (set-box! net-box (write-fn enet cid solution)))))
 
 ;; Check if a mult metavariable has been solved.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'mult entry's
+;; 'universe-active? = #f → routes to legacy-mult-fn which preserves exact
+;; existing semantics (id-map walk + worldview-aware CHAMP fallback). S2.c-iv
+;; flips the flag to #t when fresh-mult-meta universe migration lands.
 (define (mult-meta-solved? id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
-        (define box (current-mult-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)))]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)))])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-mult-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)))]))
+  (meta-domain-solved? 'mult id))
 
 ;; Retrieve the solution of a mult metavariable, or #f if unsolved/unknown.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim — same pattern as
+;; mult-meta-solved?.
 (define (mult-meta-solution id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
-        (define box (current-mult-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)) v)]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v)])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-mult-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)) v)]))
+  (meta-domain-solution 'mult id))
 
 ;; Zonk a multiplicity: follow solved mult-metas, leave unsolved in place.
 ;; Use zonk-mult-default for final output (defaults unsolved to 'mw).
@@ -2794,70 +2702,30 @@
       (set-box! net-box (elab-cell-write enet cid solution)))))
 
 ;; Check if a sess metavariable has been solved.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'session entry's
+;; 'universe-active? = #f → routes to legacy-sess-fn which preserves exact
+;; existing semantics (id-map walk + worldview-aware CHAMP fallback). S2.d
+;; flips the flag to #t when session universe migration lands.
 (define (sess-meta-solved? id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        ;; Track 8 B1: worldview-aware read
-        (define box (current-sess-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)))]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (not (eq? v 'unsolved))])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-sess-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)))]))
+  (meta-domain-solved? 'session id))
 
 ;; Retrieve the solution of a sess metavariable, or #f if unsolved/unknown.
-;; Track 4 Phase 3: Reads from TMS cell when network available, CHAMP fallback.
-;; Track 10B Phase B1b: cell-id fast path for session meta solution.
-;; Same pattern as meta-solution/cell-id (PM 8F).
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim. Track 10B Phase B1b's
+;; PM-8F-style cell-id cache field (sess-meta.cell-id) is preserved through
+;; the explicit-cid arg for backward-compat. Per microbench (S2.c-i Task 1),
+;; the cache field is a phantom optimization (~302ns slower than parameter-
+;; read for type domain — same pattern likely for sess); retirement absorbed
+;; into Phase 4 + S2.e per D.3 §7.5.14.
+;;
+;; INTERNAL-ONLY surface (zonk-session callers only); the dual surface
+;; with sess-meta-solution itself is PM-8F-era scaffolding flagged for
+;; retirement at S2.e (single-surface contraction post-Phase-4).
 (define (sess-meta-solution/cell-id cell-id id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [(and cell-id net-box)
-     ;; Fast path: direct cell read, no id-map lookup
-     (define v (elab-cell-read (unbox net-box) cell-id))
-     (and (not (eq? v 'unsolved)) v)]
-    [net-box
-     ;; Fallback: id-map lookup (cell-id not available)
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none)
-        (define box (current-sess-meta-champ-box))
-        (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-        (define v (cond [(eq? raw 'none) #f]
-                        [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                        [else raw]))
-        (and v (not (eq? v 'unsolved)) v)]
-       [else
-        (define v (elab-cell-read (unbox net-box) cid))
-        (and (not (eq? v 'unsolved)) v)])]
-    [else
-     ;; Track 8 B1: worldview-aware read
-     (define box (current-sess-meta-champ-box))
-     (define raw (champ-lookup (unbox box) (prop-meta-id-hash id) id))
-     (define v (cond [(eq? raw 'none) #f]
-                     [(tagged-entry? raw) (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                     [else raw]))
-     (and v (not (eq? v 'unsolved)) v)]))
+  (meta-domain-solution 'session id cell-id))
 
-;; Backward-compatible: takes bare id (no cell-id fast path)
+;; Backward-compatible: takes bare id (no cell-id fast path).
+;; PPN 4C S2.c-iii (2026-04-24): now a shim of a shim — both delegate to
+;; meta-domain-solution 'session id.
 (define (sess-meta-solution id)
   (sess-meta-solution/cell-id #f id))
 
