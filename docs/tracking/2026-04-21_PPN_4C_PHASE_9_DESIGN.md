@@ -132,6 +132,14 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Step 2 S2.b-iii | `elab-fresh-meta` migration + Category 2 direct consumers (TYPE domain) | ✅ | `cf60c397` — fresh-meta + solve-meta-core[!/pure] dispatch added; init-meta-universes! wired into reset-meta-store!; bug found+fixed in meta-solved? (direct elab-cell-read was returning raw hasheq → false "solved"); probe PASSES (semantic output matches baseline, 0 errors); 150 targeted tests green |
 | Step 2 S2.b-iv | Set-latch + broadcast realization rewrite of 3 fan-in install sites + factory signature changes + scan retirement + test rename | ✅ | 7 commits `ffb5fd0b` (D.3 corrections + propagator-design refinement) → `dc05f940` (foundation: pnet helpers + elab wrappers + meta-ids field) → `0bfc7dbf` (helper) → `89cdaf89` (site 1/3 + broadcast '() bug fix) → `c76b49e3` (site 2/3 + trait factory) → `34b60155` (site 3/3 + hasmethod factory) → `bddfc3e3` (scan retirement + test file renamed/rewritten) + test-fix commit. **Suite: 7909/0 failure (was 7912/4 failures pre-b-iv); test-rewrite consolidated 5 scan-invocation tests into 13 event-driven tests**. Probe identical to baseline. |
 | Step 2 S2.b-v | Formal measurement vs §5 hypotheses + go/no-go for S2.c | ✅ | bench-meta-lifecycle re-run 2026-04-24; results captured in [STEP2_BASELINE.md §12 "Actual vs Predicted"](2026-04-23_STEP2_BASELINE.md#12). **Suite wall time 119.5s within 118-127s baseline variance band — load-bearing user-facing metric MET**. Mixed micros: fresh-meta improved ~27% (2.534 μs vs 3.45 μs baseline; just barely missed §5 ≤2.5 μs target); solve-meta! REGRESSED ~31% (11.14 μs vs 8.53 μs); read paths slower (~80% on direct-cell-id, ~100% on cell-path). Cell counts transitional (54 vs 50; mult/level/session still per-cell). **Decision: GO for S2.c** — architecture is correct; full hypotheses validation gated on S2.e factory retirement. Solve-meta! regression flagged for follow-up audit post-S2.e. |
+| Step 2 S2.c mini-design (D.3 §7.5.13) | Conversational mini-design + audit-driven scope expansion | ✅ | 4 converging architectural decisions identified: cross-domain bridge component-path, parameter injection gap, cell-id approach (option 1/2/4 microbench-gated), dispatch unification across mult/level/session. See §7.5.13. |
+| **Step 2 S2.precursor** | `net-add-cross-domain-propagator` accepts `:c-component-paths` / `:a-component-paths` (universal fix, 6 bridges) | ⬜ NEXT | Lands first; S2.c-v consumes. ~50-80 LoC. |
+| Step 2 S2.c-i | Audits + measurements: §5 microbench (option 1/2/4), §4 option 3a regression test + 'type 'equality consumer audit, initial-Pi-elaboration path audit | ⬜ | Data-driven decisions documented in D.3 §7.5.13.4-§7.5.13.5. |
+| Step 2 S2.c-ii | Close T-3 'equality gap: `unify.rkt:71` 'equality from `type-lattice-merge` → `type-unify-or-top` + regression tests | ⬜ | ~10 LoC + tests. Closes latent T-3 audit gap (D.3 §7.5.13.4). |
+| Step 2 S2.c-iii | Parameter injection per option 3 (SRE-driven): wire universe-cell merges from SRE registrations at init time | ⬜ | ~40-60 LoC. All 4 universe cells use canonical domain merges. |
+| Step 2 S2.c-iv | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core (per option 4 if microbench supports) | ⬜ | ~150 LoC + -100 LoC duplicated. Backward-compat shims preserve all callers. |
+| Step 2 S2.c-v | `fresh-mult-meta` universe-path branch + cross-domain bridge migration (`current-structural-mult-bridge` declares component-paths) | ⬜ | ~80-120 LoC. Mirrors S2.b-iii pattern. |
+| Step 2 S2.c-vi | Probe + targeted suite + measurement + GO/no-go for S2.d | ⬜ | STEP2_BASELINE.md §12 update. |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -1560,6 +1568,320 @@ This complementarity should be reflected in `propagator-design.md` § Set-Latch 
 - `propagator-design.md` § Set-Latch for Fan-In Readiness: refined to specify broadcast realization with mixed-domain transition
 - D.3 §7.5.12.5: corrected component-path shape (cons-pair, not bare)
 - D.3 §7.5.12.9 (this section): expanded to 10 steps; broadcast realization; scan retirement; filename rename; Observation note
+
+### §7.5.13 Step 2 S2.c Sub-phase Mini-design (2026-04-24)
+
+Opening conversational mini-design for S2.c per refined Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc; cycle between them; outcomes drive the design doc). Context: post-S2.b CLOSED (TYPE domain migrated). S2.c migrates the **mult domain** to compound universe cells.
+
+The mini-design surfaced four converging architectural concerns that elevate S2.c from a mechanical S2.b mirror to a more substantial principles-driven track. Each is a real architectural decision with audit + measurement gates before commit.
+
+#### §7.5.13.1 Architectural framing — four converging decisions
+
+S2.c integrates four architectural moves that prior framing (S2.b's "mirror the pattern" plan) treated as mechanical extensions but, on audit, surface real principles questions:
+
+1. **Cross-domain bridge component-path migration** (Q1) — `net-add-cross-domain-propagator` (used by 6 bridges) is universe-blind; needs `:component-paths` support. Lands as **S2.precursor** — independent infrastructure, then S2.c consumes.
+2. **Parameter injection gap** (§B.3) — S2.a-followup's parameter-injection design was set up but never wired. All universe cells silently use `default-pointwise-hasheq-merge`. Type works by coincidence (single Role B write per meta); mult would silently break under multiple writes. Real correctness gap to close.
+3. **Cell-id storage approach** (§C/§5) — S2.b extended PM 8F's expr-meta cell-id cache field. Question: is the cache earning its keep? STEP2_BASELINE numbers suggest no. Microbench-gated decision among options 1 (cache field), 2 (id-map lookup), 4 (parameter-read).
+4. **Dispatch symmetry** (§F4) — current `mult-meta-solved?` / `mult-meta-solution` / level / session dispatch is per-domain code duplication. Opportunity: unify around `meta-domain-solution(domain, id)` parameterized by domain.
+
+These four threads converge on a clean architectural target if all decisions land favorably:
+
+```racket
+;; Single source of truth per principle:
+(define meta-domain-info
+  (hasheq
+    'type    (hasheq 'universe-cid current-type-meta-universe-cell-id  ; option 4: parameter
+                     'merge type-unify-or-top                            ; option 3a: Role B
+                     'bot? prop-type-bot? 'top? prop-type-top?)
+    'mult    (hasheq 'universe-cid current-mult-meta-universe-cell-id
+                     'merge mult-lattice-merge
+                     'bot? mult-bot? 'top? mult-top?)
+    'level   (hasheq ... 'merge merge-meta-solve-identity ...)
+    'session (hasheq ... 'merge merge-meta-solve-identity ...)))
+
+(define (meta-solution domain id)
+  (define net-box (current-prop-net-box))
+  (define cid ((hash-ref (hash-ref meta-domain-info domain) 'universe-cid)))
+  (cond
+    [(and cid net-box) (compound-cell-component-ref (unbox net-box) cid id)]
+    [else (fallback domain id)]))
+```
+
+- Single cell-id source: parameter (option 4)
+- Single merge source: SRE-driven (option 3)
+- Single dispatch site: `meta-domain-info` table (F4 unification)
+- No struct-field cache, no id-map round-trip for type-meta access
+
+This is the architecturally cleanest landing target. Each decision is independently gated; if any fails its check, we fall back to the next-best option for that thread and the rest still land.
+
+#### §7.5.13.2 Q1 cross-domain bridge architecture (scenario B confirmed)
+
+`decompose-pi` (`elaborator-network.rkt:433-493`) is the call site for the bridge — invoked from `make-structural-unify-propagator`'s topology handler at lines 908 and 1171. The flow:
+
+```racket
+(define (decompose-pi net cell-a cell-b va vb unified pair-key)
+  ;; Extract Pi components
+  (define mult-a (expr-Pi-mult src-a))
+  ...
+  ;; PUnify: dom + cod get sub-cells via ctor-desc
+  (define-values (net1 subs-a)
+    (get-or-create-sub-cells net cell-a 'Pi (list dom-a-expr cod-a-expr)))
+  ...
+  ;; Cross-domain bridge: mult goes to mult-cell (different lattice)
+  (define bridge-fn (current-structural-mult-bridge))
+  (for/fold ([n net6])
+            ([type-cell (list cell-a cell-b)] [mult-val (list mult-a mult-b)])
+    (if (mult-meta? mult-val) (bridge-fn n type-cell mult-val) n)))
+```
+
+**Architectural picture**:
+- PUnify's ctor-desc decomposition handles **dom + cod** as first-class sub-cells (same lattice as parent — type lattice).
+- Mult is in a **different lattice** (flat 3-element + bot/top); cannot be a sub-cell of a type-cell.
+- Cross-domain bridge connects type-cell ↔ mult-cell as a Galois projection.
+
+**Verdict**: scenario B (complementary). The bridge is **necessary**. Aligns with `structural-thinking.md` § "Direct Sum Has Two Realizations": "Bridges are the right answer only when the Cᵢ carry genuinely different types or live at different strata." Mult and type DO carry different lattices — Realization B (shared carrier) is not applicable here.
+
+**Implication**: bridge stays; primitive must be component-path-aware under universe migration. Hence S2.precursor.
+
+**Subtle observation** (audit follow-up scoped to S2.c-i): `decompose-pi` only fires from PUnify path. For non-unification type-cell writes (e.g., initial elaboration of a Pi from AST), decompose-pi may not run, so the bridge wouldn't be installed via that path. Worth a 10-min audit before S2.c-v to ensure we understand all invocation paths.
+
+#### §7.5.13.3 §B.3 Parameter injection gap (audit-confirmed)
+
+`grep -n "current-mult-universe-merge\|current-type-universe-merge"` across `elaborator-network.rkt` returns NOTHING. The S2.a-followup parameter-injection design (commit `2bab505a`) declared the parameters but no module ever sets them.
+
+Consequence: `init-meta-universes!` (called in `reset-meta-store!` post-S2.b-iii) reads the parameters at their default values:
+
+```racket
+(define current-mult-universe-merge (make-parameter default-pointwise-hasheq-merge))
+(define current-mult-universe-contradicts? (make-parameter default-no-contradicts?))
+```
+
+Where `default-pointwise-hasheq-merge` is conservative pointwise-without-domain-semantics; `default-no-contradicts?` always returns #f.
+
+**Why type accidentally works**: type metas typically receive ONE Role B solution write per meta-id. Pointwise-hasheq's "new wins" coincidentally produces the right result for single writes. Multiple type writes with different values would silently lose information rather than contradict — but tests don't seem to exercise this.
+
+**Why mult is at risk**: mult lattice has real algebra (`merge('m0, 'm1) = 'm1`, `merge('mw, 'm0) = 'mw`). Multiple writes ARE expected to compose via lattice join (mult inference accumulates resource usage). Without injection, multiple mult writes overwrite rather than join. **Correctness gap.**
+
+**Resolution**: option 3 (SRE-driven lookup) — see §7.5.13.4. Each domain's SRE registration provides its canonical merge; init-meta-universes! looks them up. Single source of truth.
+
+#### §7.5.13.4 §4 option 3a — SRE-driven merge lookup + closing T-3 gap
+
+**Decision**: SRE-driven lookup. Each domain's SRE registration provides its meta-cell merge under the `'equality` relation tag.
+
+Audit confirms domain registrations:
+- `'mult` SRE domain — `phase1d-registrations.rkt:248`: `mult-lattice-merge` with `mult-lattice-contradicts?` ✓
+- `'meta-solve` SRE domain — `elaborator-network.rkt:1029`: `merge-meta-solve-identity` with `meta-solve-contradiction?` (used by level + session) ✓
+- `'type` SRE domain — `unify.rkt:78`: `'equality` → `type-lattice-merge` ✗ **needs update**
+
+**The T-3 gap** (latent since 2026-04-22, T-3 Commit B): `unify.rkt:71` `type-merge-table` registers `'equality` → `type-lattice-merge`. Post-T-3 Commit B, `type-lattice-merge` has set-union semantics (Role A — accumulate via union for incompat atoms). But `'equality` IS conceptually Role B (equality enforcement). T-3's Stage 2 audit (D.3 §7.6.9) recognized this dispatch table but mis-classified consumers as "likely Role A based on SRE's 'equality relation as accumulation' framing" — the misclassification was the gap.
+
+Audit confirms `'equality` consumers are all Role B:
+- `unify-core` (`unify.rkt:463`) — equality enforcement, returns success/failure
+- `sre-core.rkt:279, 295, 308` — `structural-classify` invocations (SRE structural decomposition during unification)
+- `subtype-predicate.rkt:359` — subtype-query-merge-table (classify-by-subtype)
+
+**Latent bug** (currently dormant via path-not-taken):
+```racket
+;; Pre-T-3 (correct): type-top → unify-core fails (correct)
+;; Post-T-3 (current): set-union → unify-core silently succeeds (WRONG)
+(unify-core '() (expr-Int) (expr-String))
+```
+
+**Why it hasn't surfaced**: hypothesis (likely) — the 4 explicit Role B migration sites (in `elaborator-network.rkt` from T-3 Commit A) cover the production type-checking surface. The SRE table's mis-set isn't exercised by typical workloads. But it's a real correctness gap waiting for a path that hits it.
+
+**S2.c-ii deliverable**: 3-line change at `unify.rkt:71`:
+```racket
+(define type-merge-table
+  (hasheq 'equality type-unify-or-top         ;; Role B equality-enforce (was: type-lattice-merge)
+          'subtype subtype-lattice-merge       ;; Role A — union join with absorption (correct)
+          'subtype-reverse subtype-lattice-merge))
+```
+
+Plus regression tests:
+```racket
+(check-false (unify-ok? (unify '() (expr-Int) (expr-String))))
+(check-false (unify-ok? (unify '() (expr-Pi 'mw (expr-Int) (expr-Bool))
+                                     (expr-Sigma (expr-Int) (expr-Bool)))))
+```
+
+**Pre-fix verification**: run regression tests BEFORE applying the fix. If they PASS today, hypothesis (path-not-taken) confirmed; if they FAIL today, latent bug is active. Either way, fix is correct.
+
+After the fix: 'equality merge for `'type` is `type-unify-or-top` → SRE-driven lookup for type-meta universe cell merge gives the right answer. Symmetric across 'type, 'mult, 'meta-solve.
+
+#### §7.5.13.5 §C/§5 option 4 — parameter-read for cell-id (microbench-gated)
+
+**Lean: option 4** (read universe-cid from parameter, no cache field, no id-map round-trip). Decision gated on microbench A/B comparing all three options.
+
+**Architectural rationale**: under universe migration, `(prop-meta-id->cell-id type-meta-id)` ALWAYS returns the same universe-cid. The id-map entry for every type meta is the SAME constant. Caching this in the expr-meta struct (PM 8F's option 1) introduces a denormalized cache with discipline-maintained correctness (`with-handlers` fallback for stale cell-ids). Reading the parameter directly (option 4) is structurally cleaner — the parameter IS the single source of truth, set once at universe init.
+
+**Three options for measurement**:
+
+| Option | Path | Mechanism | Architecture |
+|---|---|---|---|
+| **1** | Cache field | `(expr-meta-cell-id e)` ~3ns + universe dispatch + compound-ref | Denormalized cache, with-handlers fallback (PM 8F current state) |
+| **2** | id-map lookup | `(prop-meta-id->cell-id id)` ~80ns + universe dispatch + compound-ref | No cache, but id-map walk overhead |
+| **4** | Parameter read | `(current-type-meta-universe-cell-id)` ~3ns + compound-ref | No cache, no id-map, no dispatch (universe-cid IS the constant) |
+
+**Why option 4 is mantra-aligned**:
+- *On-network*: universe-cid is the parameter's value (set at init); no off-network state
+- *Single source of truth*: parameter IS the source; no copies in struct fields
+- *Structurally emergent*: dispatch falls out of the parameter lookup; no imperative branch on cache-vs-lookup
+- *Correct-by-construction*: stale cache impossible (no cache); no `with-handlers` discipline needed
+
+**Microbench plan** (S2.c-i Task 2):
+
+Three workloads × three paths × representative scale:
+
+```
+Workload A — single meta access (dispatch-overhead-dominant)
+Workload B — 100 metas, mix of solved/unsolved (typical elaboration)
+Workload C — 1000 metas (large file)
+
+For each workload:
+  Path 1 (cache):       (meta-solution/cell-id (expr-meta-cell-id e) (expr-meta-id e))
+  Path 2 (id-map):      (meta-solution (expr-meta-id e))  
+  Path 4 (parameter):   (meta-solution-via-parameter 'type (expr-meta-id e))  [new helper]
+```
+
+**Decision rules**:
+- Path 4 ≤ Path 1 within 10ns/call → option 4 wins (architectural cleanliness, no perf cost)
+- Path 4 > Path 1 by ≥30ns/call → reconsider; option 1 may be worth keeping for type, option 2 for mult
+- Path 4 ≤ Path 2 by ≥50ns/call → option 4 strictly dominant over option 2 (which we'd otherwise default to)
+
+**Sub-question retroactive type bench**: yes — bench captures both paths anyway. If option 4 wins, follow-up retires expr-meta cell-id field for type metas (path-1 inactive across the whole codebase).
+
+**Estimated cost**: ~60min (read harness, design workloads, run, interpret).
+
+**Decision**: pending microbench data. Captured here so the threading-through-the-design has the architectural target articulated, even though the final answer awaits measurement.
+
+#### §7.5.13.6 §F4 dispatch unification across mult/level/session
+
+**Decision**: unify mult/level/session readers via a single `meta-domain-solution(domain, id)` core, parameterized by a domain registry.
+
+**Current state — duplicated dispatch**:
+- `meta-solution/cell-id` — type meta dispatch (centralized, post-S2.b-ii)
+- `meta-solved?` — type meta dispatch (separate)
+- `mult-meta-solved?` / `mult-meta-solution` — mult dispatch (CHAMP fallback)
+- `level-meta-solved?` / `level-meta-solution` — level dispatch
+- `sess-meta-solved?` / `sess-meta-solution` — session dispatch
+
+Five domain-specific function pairs doing essentially the same thing parameterized by domain.
+
+**Symmetric form** (S2.c-iv deliverable):
+
+```racket
+;; Single dispatch core, parameterized by domain
+(define (meta-domain-solution domain id [explicit-cid #f])
+  (define net-box (current-prop-net-box))
+  (define info (hash-ref meta-domain-info domain))
+  (define cid (or explicit-cid ((hash-ref info 'universe-cid))))   ;; option 4
+  (cond
+    [(and cid net-box)
+     (with-handlers ([exn:fail? (lambda (_) (champ-fallback domain id))])
+       (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
+         (and v (not (eq? v 'infra-bot))
+              (not ((hash-ref info 'bot?) v))
+              (not ((hash-ref info 'top?) v))
+              v)))]
+    [else (champ-fallback domain id)]))
+
+(define (meta-domain-solved? domain id)
+  (and (meta-domain-solution domain id) #t))
+```
+
+Per-domain entries:
+- `'type` — universe-cid getter, type-bot/top predicates, CHAMP-box for fallback
+- `'mult` — universe-cid getter, mult-bot/top predicates, mult CHAMP-box
+- `'level` — universe-cid getter, ('unsolved bot, no top), level CHAMP-box
+- `'session` — same shape as level
+
+**Backward-compat shims** (retained for callers — most are domain-typed):
+- `meta-solution(id)` → `(meta-domain-solution 'type id)`
+- `mult-meta-solution(id)` → `(meta-domain-solution 'mult id)`
+- `level-meta-solution(id)` → `(meta-domain-solution 'level id)`
+- etc.
+
+**Pros**:
+- Single source of truth for dispatch logic
+- S2.d (level + session migration) becomes near-zero work — just register their `meta-domain-info` entries
+- Bug fixes happen in one place
+- Aligns with SRE-domain-registration philosophy (each domain knows its own ops)
+
+**Cons**:
+- Added indirection (one hash-ref per call) — ~5-10ns per call
+- Refactor is larger than just-add-mult-dispatch
+- Some risk of inadvertently changing semantics for level/session (which we're not migrating per se in S2.c)
+
+**Why in S2.c, not deferred**: doing it generically takes only marginally more effort than per-domain mult dispatch. S2.c is already touching these readers' surfaces. S2.d benefits significantly. Two architectural moves at once is acceptable when the second move is "make existing logic generic" rather than "introduce a new architectural pattern."
+
+#### §7.5.13.7 Sub-phase partition (S2.precursor + S2.c-i through S2.c-vi)
+
+| Sub-phase | Description | Est. LoC | Key gate |
+|---|---|---|---|
+| **S2.precursor** | `net-add-cross-domain-propagator` accepts `:c-component-paths` / `:a-component-paths` kwargs (universal fix for all 6 bridges) + tests | ~50-80 | Lands first; S2.c consumes |
+| **S2.c-i** | Audits + measurements: (a) §5 microbench (option 1/2/4); (b) option 3a regression test + 'type 'equality consumer audit; (c) initial-Pi-elaboration path audit | ~30 + report | Data-driven decisions documented in this design doc |
+| **S2.c-ii** | Close T-3 gap: update `unify.rkt:71` `'equality` from `type-lattice-merge` → `type-unify-or-top`; add regression tests | ~10 + tests | Regression tests pass |
+| **S2.c-iii** | Parameter injection per option 3 (SRE-driven): wire universe-cell merges + contradicts? predicates from SRE domain registrations at init time | ~40-60 | All 4 universe cells use canonical merges |
+| **S2.c-iv** | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core; per option 4 if microbench supports | ~150 + -100 dup | Backward-compat shims preserve all existing call sites |
+| **S2.c-v** | `fresh-mult-meta` universe-path branch (mirrors S2.b-iii pattern) + cross-domain bridge migration (`current-structural-mult-bridge` updated to declare component-paths) | ~80-120 | Probe diff = 0; mult tests green |
+| **S2.c-vi** | Probe + targeted suite + measurement + GO/no-go for S2.d | ~0 + report | Suite within variance band; measurement update to STEP2_BASELINE.md §12 |
+
+Estimated total: **~400-550 LoC** + measurement reports + tests. Six sub-phases + 1 precursor.
+
+#### §7.5.13.8 Audits + measurements required during S2.c-i
+
+S2.c-i is the data-collection sub-phase. Outputs are persisted into this design document section as findings (not separate audit files), per refined Stage 4 methodology.
+
+1. **§5 microbench A/B** (option 1 vs 2 vs 4):
+   - Read `bench-meta-lifecycle.rkt` harness fully
+   - Design 3-path × 3-workload comparison (single, 100, 1000 metas; mix solved/unsolved)
+   - Run with `bench` macro; capture ns/call
+   - Decide option per §7.5.13.5 decision rules
+   - Persist results as §7.5.13.5 update
+
+2. **§4 option 3a verification**:
+   - Write regression tests:
+     ```racket
+     (check-false (unify-ok? (unify '() (expr-Int) (expr-String))))
+     (check-false (unify-ok? (unify '() (expr-Pi 'mw (expr-Int) (expr-Bool))
+                                          (expr-Sigma (expr-Int) (expr-Bool)))))
+     ```
+   - Run BEFORE applying fix — confirms whether bug is dormant or active
+   - `grep` `'type` 'equality consumers — confirm all are Role B (no Role A surprises)
+   - Persist confirmation as §7.5.13.4 update
+
+3. **Initial Pi elaboration path audit**:
+   - `grep` for type-cell writes that don't go through `make-structural-unify-propagator`
+   - Trace: how does mult information from `Pi A B` AST reach mult-cells?
+   - Confirms scenario B understanding or surfaces alternate paths
+   - Persist findings as §7.5.13.2 update if surprises emerge
+
+#### §7.5.13.9 Drift risks (for mid-flight principles challenge)
+
+1. **Cross-domain bridge component-path declarations** — under universe migration, the bridge α/γ closures must use `compound-cell-component-{ref,write}/pnet` and declare `:component-paths`. Forgetting either is the same bug class as S2.b-iv's bridge factory work.
+2. **Microbench harness reliability** — STEP2_BASELINE numbers had a confound (`with-handlers` overhead vs id-map cost). New microbench must isolate cleanly. Risk: false signal leads to wrong option.
+3. **'equality regression test outcome surprise** — if pre-fix tests FAIL today (active bug), implications wider than S2.c expected. May surface other consumers; may need broader audit.
+4. **Dispatch unification breaking level/session** — refactor touches level/session readers without migrating them to universe (those are S2.d). Risk: subtle semantic change leaks through. Mitigation: backward-compat shims preserve exact existing behavior; tests catch.
+5. **Phase 4 forward compat** — universe-cell shape `(hasheq meta-id → tagged-cell-value)` is Phase 4-compatible (same as type's). No new compatibility risk.
+6. **Parameter injection timing** — if init-meta-universes! runs BEFORE the parameters are set (module-load order), allocation uses defaults. Need to verify injection happens at module load, before reset-meta-store! fires init.
+7. **option 4 vs init order** — `(current-type-meta-universe-cell-id)` is set by init-meta-universes!. If a meta-solution call happens BEFORE init (test contexts, early elab), parameter is `#f` → fallback path. Must verify the fallback is correct or guard against premature access.
+
+#### §7.5.13.10 Sub-phase completion criteria
+
+- **S2.precursor**: `net-add-cross-domain-propagator` accepts kwargs; all 6 bridges' tests still green; new test verifies component-paths support
+- **S2.c-i**: 3 audits/measurements complete and persisted into D.3; option 1/2/4 decision documented; T-3 gap activeness confirmed
+- **S2.c-ii**: T-3 gap closed; regression tests pass post-fix; no new failures elsewhere
+- **S2.c-iii**: 4 universe cells use canonical domain merges via SRE lookup; targeted tests for compound-merge semantics green
+- **S2.c-iv**: Dispatch unification lands; backward-compat shims preserve behavior; targeted tests green for type/mult/level/session readers
+- **S2.c-v**: Mult universe migration complete; cross-domain bridge component-path-aware; probe diff = 0; targeted mult tests green
+- **S2.c-vi**: Suite within 118-127s variance band; STEP2_BASELINE.md §12 updated with S2.c outcomes; GO/no-go for S2.d
+
+#### §7.5.13.11 Codification updates (committed as part of this mini-design)
+
+- D.3 §7.5.13 (this section): NEW — captures S2.c mini-design + audit findings + sub-phase plan
+- D.3 §3 Progress Tracker: rows for S2.precursor + S2.c-i through S2.c-vi added
+- (Mid-flight) D.3 §7.5.13.4 / §7.5.13.5: updated with audit + measurement findings during S2.c-i
+- (At S2.c close) D.3 §7.5.13: Vision Alignment Gate outcome appended
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
