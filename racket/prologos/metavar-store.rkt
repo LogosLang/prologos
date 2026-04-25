@@ -755,82 +755,65 @@
         (set-box! hm-net-box
                   (elab-cell-write (unbox hm-net-box) hcm-cid
                                    (hasheq meta-id (tagged-entry (remove-duplicates cell-ids eq?) aid)))))))
-  ;; Track 7 Phase 8a: Install readiness propagators for hasmethod (same pattern as trait).
-  ;; Track 8 B2: direct elab-add-propagator instead of current-prop-add-propagator callback.
-  (define rq-cid-hm (current-ready-queue-cell-id))
-  ;; Track 8 B2b: direct elab-network-id-map instead of id-map-read-fn callback.
-  ;; Track 8 B2d: direct elab-new-infra-cell instead of current-prop-new-infra-cell callback.
-  (when (and rq-cid-hm hm-net-box)
-    (define id-map-hm (elab-network-id-map (unbox hm-net-box)))
-    (define dep-cids-hm
-      (remove-duplicates
-       (for*/list ([dep-id (in-list all-dep-metas)]
-                   [cid (in-value (champ-lookup id-map-hm (prop-meta-id-hash dep-id) dep-id))]
-                   #:when (not (eq? cid 'none)))
-         cid)
-       eq?))
-    (when (not (null? dep-cids-hm))
-      ;; Stage 1: Threshold cell
-      ;; Track 8 B2d: direct elab-new-infra-cell.
-      (define-values (enet-t-hm threshold-cid-hm)
-        (elab-new-infra-cell (unbox hm-net-box) #f (lambda (old new) #t)))
-      (set-box! hm-net-box enet-t-hm)
-      ;; Stage 2: Fan-in (any dep non-bot/non-top → threshold)
-      (define-values (enet-f-hm _)
-        (elab-add-propagator (unbox hm-net-box) dep-cids-hm (list threshold-cid-hm)
-          (lambda (pnet)
-            (define any-ground?
-              (for/or ([cid (in-list dep-cids-hm)])
-                (let ([v (net-cell-read pnet cid)])
-                  (and (not (prop-type-bot? v)) (not (prop-type-top? v))))))
-            (if any-ground?
-                (net-cell-write pnet threshold-cid-hm #t)
-                pnet))))
-      (set-box! hm-net-box enet-f-hm)
-      ;; Stage 3: Readiness propagator (threshold → ready-queue)
-      (define-values (enet-r-hm _2)
-        (elab-add-propagator (unbox hm-net-box) (list threshold-cid-hm) (list rq-cid-hm)
-          (lambda (pnet)
-            (define tv (net-cell-read pnet threshold-cid-hm))
-            (if tv
-                (net-cell-write pnet rq-cid-hm
-                  (list (tagged-entry (action-resolve-hasmethod meta-id info) aid)))
-                pnet))))
-      (set-box! hm-net-box enet-r-hm)))
-  ;; Track 8D: Pure hasmethod resolution bridge propagator (resolves in S0, NO enet-box).
-  ;; Same factory pattern as trait bridge.
+  ;; PPN 4C S2.b-iv (2026-04-24): Set-latch readiness pattern (replaces
+  ;; the prior 3-stage fan-in, ~42 LoC). Per D.3 §7.5.12.9 step 6.
+  ;; all-dep-metas = trait-var-metas + type-arg-metas (set above) — any of
+  ;; them solving triggers resolution attempt.
+  (when (and hm-net-box (pair? all-dep-metas))
+    (set-box! hm-net-box
+      (add-readiness-set-latch! (unbox hm-net-box) all-dep-metas
+                                 (lambda () (action-resolve-hasmethod meta-id info)))))
+  ;; Track 8D + S2.b-iv: Pure hasmethod resolution bridge propagator.
+  ;; Bridge factory updated to take paired (cell-id, meta-id) tuples for
+  ;; meta + trait-var + dict-meta + each dep, dispatching universe vs
+  ;; per-cell via meta-component-{read,write}.
   (define hm-bridge-fn (current-hasmethod-resolution-bridge-fn))
   (when (and hm-bridge-fn hm-net-box)
     (define id-map-br (elab-network-id-map (unbox hm-net-box)))
-    (define dep-cids-br
-      (remove-duplicates
-       (for*/list ([dep-id (in-list all-dep-metas)]
-                   [cid (in-value (champ-lookup id-map-br (prop-meta-id-hash dep-id) dep-id))]
-                   #:when (not (eq? cid 'none)))
-         cid)
-       eq?))
-    (when (not (null? dep-cids-br))
+    ;; Build dep-pairs: each (cons cell-id meta-id) for all dep metas in
+    ;; their original order (trait-var metas then type-arg metas).
+    (define dep-pairs
+      (for*/list ([dep-id (in-list all-dep-metas)]
+                  [cid (in-value (champ-lookup id-map-br (prop-meta-id-hash dep-id) dep-id))]
+                  #:when (not (eq? cid 'none)))
+        (cons cid dep-id)))
+    (when (pair? dep-pairs)
       ;; The hasmethod meta's cell receives the projected method expression.
       (define hm-cell-id (prop-meta-id->cell-id meta-id))
       (when hm-cell-id
-        ;; Track 8D: Call factory to produce a pure fire function.
-        ;; Captures: method-name, meta-cell-id, trait-var-cell-id, dict-meta-cell-id,
-        ;; dep-cell-ids, and registry cell IDs.
-        ;; Track 10B Phase A3: use cell-id directly from expr-meta struct,
-        ;; no id-map lookup needed.
-        (define trait-var-cell-id
+        ;; Track 10B Phase A3: trait-var-cell-id from expr-meta struct.
+        ;; S2.b-iv: also extract trait-var-meta-id from same expr-meta.
+        (define-values (trait-var-cell-id trait-var-meta-id)
           (let ([tv-expr (hasmethod-constraint-info-trait-var-expr info)])
-            (and (expr-meta? tv-expr) (expr-meta-cell-id tv-expr))))
+            (cond
+              [(expr-meta? tv-expr)
+               (values (expr-meta-cell-id tv-expr) (expr-meta-id tv-expr))]
+              [else (values #f #f)])))
+        ;; dict-meta pair: cell-id from struct + meta-id from struct.
         (define dict-meta-cell-id
-          ;; D.3 finding: dict-meta-id was bare symbol. Now use dict-meta-cell-id
-          ;; field (added below) which carries the cell-id from creation time.
           (hasmethod-constraint-info-dict-meta-cell-id info))
+        (define dict-meta-id
+          (hasmethod-constraint-info-dict-meta-id info))
+        ;; Call factory with new paired signature.
         (define fire-fn (hm-bridge-fn (hasmethod-constraint-info-method-name info)
-                                       hm-cell-id trait-var-cell-id dict-meta-cell-id
-                                       dep-cids-br))
+                                       (cons hm-cell-id meta-id)
+                                       (and trait-var-cell-id
+                                            (cons trait-var-cell-id trait-var-meta-id))
+                                       (and dict-meta-cell-id
+                                            (cons dict-meta-cell-id dict-meta-id))
+                                       dep-pairs))
+        ;; input-cids: unique cell-ids from dep-pairs. Output: (list hm-cell-id).
+        (define input-cids (remove-duplicates (map car dep-pairs) eq?))
+        ;; Component-paths for universe-cid inputs only.
+        (define cpaths
+          (for/list ([p (in-list dep-pairs)]
+                     #:when (meta-universe-cell-id? (car p)))
+            (cons (car p) (cdr p))))
         (define-values (enet-hm-bridge _hm-bridge-pid)
-          (elab-add-propagator (unbox hm-net-box) dep-cids-br (list hm-cell-id)
-            fire-fn))
+          (elab-add-propagator (unbox hm-net-box) input-cids (list hm-cell-id)
+            fire-fn
+            #:component-paths cpaths
+            #:assumption aid))
         (set-box! hm-net-box enet-hm-bridge))))
   )
 

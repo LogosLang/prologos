@@ -537,38 +537,59 @@
                        pnet)])])])])])))
 
 ;; Pure hasmethod resolution bridge FACTORY.
-;; Returns a factory: (method-name meta-cell-id trait-var-cell-id dict-meta-cell-id dep-cell-ids → (pnet → pnet))
+;;
+;; PPN 4C S2.b-iv signature change: each cell-id paired with its meta-id,
+;; matching the universe-cell component-keyed access pattern. Caller
+;; provides pairs (cons cell-id meta-id); factory dispatches on
+;; (meta-universe-cell-id? cell-id) inside fire-fn via meta-component-
+;; read/write helpers.
+;;
+;; Returns a factory:
+;;   (method-name meta-pair trait-var-pair-or-#f dict-meta-pair-or-#f dep-pairs
+;;     → (pnet → pnet))
+;; where each *-pair = (cons cell-id meta-id).
 (define (make-pure-hasmethod-bridge-factory)
   (define trait-reg-cid (current-trait-registry-cell-id))
   (define impl-reg-cid (current-impl-registry-cell-id))
   (define param-impl-reg-cid (current-param-impl-registry-cell-id))
-  (lambda (method-name meta-cell-id trait-var-cell-id dict-meta-cell-id dep-cell-ids)
-    (make-pure-hasmethod-bridge-fire-fn method-name meta-cell-id trait-var-cell-id
-                                         dict-meta-cell-id dep-cell-ids
+  (lambda (method-name meta-pair trait-var-pair dict-meta-pair dep-pairs)
+    (make-pure-hasmethod-bridge-fire-fn method-name meta-pair trait-var-pair
+                                         dict-meta-pair dep-pairs
                                          trait-reg-cid impl-reg-cid param-impl-reg-cid)))
 
 ;; Pure hasmethod resolution bridge fire function.
-(define (make-pure-hasmethod-bridge-fire-fn method-name meta-cell-id trait-var-cell-id
-                                            dict-meta-cell-id dep-cell-ids
+;; PPN 4C S2.b-iv: reads/writes through meta-component-read/write to
+;; dispatch on universe vs per-cell storage. Order of dep-pairs preserved
+;; for impl-key-str construction.
+(define (make-pure-hasmethod-bridge-fire-fn method-name meta-pair trait-var-pair
+                                            dict-meta-pair dep-pairs
                                             trait-reg-cid impl-reg-cid param-impl-reg-cid)
+  (define meta-cell-id (car meta-pair))
+  (define meta-id (cdr meta-pair))
+  (define trait-var-cell-id (and trait-var-pair (car trait-var-pair)))
+  (define trait-var-meta-id (and trait-var-pair (cdr trait-var-pair)))
+  (define dict-meta-cell-id (and dict-meta-pair (car dict-meta-pair)))
+  (define dict-meta-id (and dict-meta-pair (cdr dict-meta-pair)))
   (lambda (pnet)
     ;; Early exit: already resolved
-    (define meta-val (net-cell-read pnet meta-cell-id))
+    (define meta-val (meta-component-read pnet meta-cell-id meta-id))
     (cond
       [(resolved-cell-value? meta-val) pnet]
       [else
-       ;; Read dependency cell values
+       ;; Read dependency component values (type-arg solutions). Order
+       ;; preserved from caller's dep-pairs construction.
        (define type-arg-vals
-         (for/list ([cid (in-list dep-cell-ids)])
-           (net-cell-read pnet cid)))
+         (for/list ([p (in-list dep-pairs)])
+           (meta-component-read pnet (car p) (cdr p))))
        (cond
          [(not (andmap resolved-cell-value? type-arg-vals)) pnet]
          [else
           ;; Read trait registry to find which trait has this method
           (define trait-reg (read-persistent-registry-cell trait-reg-cid))
           (define resolved-trait-name
-            ;; Check if trait variable is already ground
-            (let ([tv (and trait-var-cell-id (net-cell-read pnet trait-var-cell-id))])
+            ;; Check if trait variable is already ground (component read)
+            (let ([tv (and trait-var-cell-id
+                           (meta-component-read pnet trait-var-cell-id trait-var-meta-id))])
               (if (and tv (resolved-cell-value? tv))
                   (trait-expr->name tv)
                   ;; Search all traits for the method
@@ -614,21 +635,24 @@
                    (cond
                      [(not dict-expr) pnet]
                      [else
-                      ;; Solve trait variable if still unsolved
+                      ;; Solve trait variable if still unsolved (component write)
                       (define pnet1
                         (if (and trait-var-cell-id
-                                 (not (resolved-cell-value? (net-cell-read pnet trait-var-cell-id))))
-                            (net-cell-write pnet trait-var-cell-id (expr-fvar resolved-trait-name))
+                                 (not (resolved-cell-value?
+                                        (meta-component-read pnet trait-var-cell-id trait-var-meta-id))))
+                            (meta-component-write pnet trait-var-cell-id trait-var-meta-id
+                                                   (expr-fvar resolved-trait-name))
                             pnet))
-                      ;; Solve dict meta if present
+                      ;; Solve dict meta if present (component write)
                       (define pnet2
                         (if (and dict-meta-cell-id
-                                 (not (resolved-cell-value? (net-cell-read pnet1 dict-meta-cell-id))))
-                            (net-cell-write pnet1 dict-meta-cell-id dict-expr)
+                                 (not (resolved-cell-value?
+                                        (meta-component-read pnet1 dict-meta-cell-id dict-meta-id))))
+                            (meta-component-write pnet1 dict-meta-cell-id dict-meta-id dict-expr)
                             pnet1))
-                      ;; Project method and solve evidence meta
+                      ;; Project method and write to evidence meta's component
                       (define projected (project-method dict-expr tm method-idx))
-                      (net-cell-write pnet2 meta-cell-id projected)])])])])])])))
+                      (meta-component-write pnet2 meta-cell-id meta-id projected)])])])])])])))
 
 ;; ========================================
 ;; Track 8D: Pure Helper Functions (no box/parameter access)
