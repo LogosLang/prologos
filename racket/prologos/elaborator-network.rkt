@@ -24,7 +24,8 @@
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)  ;; Phase 1e-β-i: Tier 2 linkage
          (only-in "decision-cell.rkt"
                   tagged-cell-value tagged-cell-value? tagged-cell-value-base
-                  make-tagged-merge)  ;; PPN 4C Phase 1A-ii-a: mult/level/session cell migration
+                  make-tagged-merge
+                  compound-tagged-merge)  ;; PPN 4C S2.c-ii: parameter injection per option 3c
          "mult-lattice.rkt"
          "prelude.rkt"       ;; P5c: mult-meta? for Pi mult extraction
          "champ.rkt"
@@ -1039,6 +1040,47 @@
    #:classification 'value))  ;; PPN 4C Phase 1f: single atomic value (solved meta)
 (register-domain! meta-solve-sre-domain)
 (register-merge-fn!/lattice merge-meta-solve-identity #:for-domain 'meta-solve)
+
+;; ========================================
+;; PPN 4C S2.c-ii (2026-04-24): Universe-cell merge parameter injection
+;; ========================================
+;;
+;; Per D.3 §7.5.13.4 (option 3c): wire per-domain meta-cell merges into
+;; the universe-cell parameters declared in meta-universe.rkt. Each
+;; parameter holds the FINAL cell-merge (compound-tagged-merge wrapping
+;; the appropriate domain merge) — used directly by init-meta-universes!
+;; when allocating universe cells.
+;;
+;; Without this injection, init-meta-universes! falls back to
+;; default-pointwise-hasheq-merge, which accidentally works for type
+;; metas (single Role B write per meta) but would silently break mult
+;; metas (multi-write lattice join expected) under universe migration.
+;;
+;; Per-domain merges (matching what per-cell factories use today):
+;;   type     → compound-tagged-merge(type-unify-or-top)        Role B
+;;   mult     → compound-tagged-merge(mult-lattice-merge)       lattice join
+;;   level    → compound-tagged-merge(merge-meta-solve-identity) identity-or-error
+;;   session  → compound-tagged-merge(merge-meta-solve-identity) identity-or-error
+;;
+;; Contradicts? predicates remain at their default (default-no-contradicts?,
+;; always #f). Per-component contradiction detection happens at
+;; compound-cell-component-ref read time via prop-type-bot? / prop-type-top?
+;; checks. Cell-level contradiction for compound cells doesn't have a
+;; meaningful semantics (any single contradicted component shouldn't mark
+;; the entire cell contradicted, because sibling components are independent).
+;;
+;; Module-load timing: this code runs when elaborator-network.rkt loads,
+;; which is before any consumer of init-meta-universes! (the driver
+;; calls reset-meta-store! → init-meta-universes! during process-file).
+;; Parameters are set once at load and remain stable across the session
+;; (they can still be overridden via parameterize blocks for testing).
+
+(require "meta-universe.rkt")  ;; current-type-universe-merge etc.
+
+(current-type-universe-merge    (compound-tagged-merge type-unify-or-top))
+(current-mult-universe-merge    (compound-tagged-merge mult-lattice-merge))
+(current-level-universe-merge   (compound-tagged-merge merge-meta-solve-identity))
+(current-session-universe-merge (compound-tagged-merge merge-meta-solve-identity))
 
 ;; Allocate a level cell on the network. Returns (values elab-network* cell-id).
 ;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Level cells use
