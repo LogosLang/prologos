@@ -196,7 +196,7 @@
 ;; ========================================
 
 (test-case "pretty-print: PVec type"
-  (check-equal? (pp-expr (expr-PVec (expr-Nat)) '()) "(PVec Nat)"))
+  (check-equal? (pp-expr (expr-PVec (expr-Nat)) '()) "[PVec Nat]"))
 
 (test-case "pretty-print: rrb value"
   (check-equal? (pp-expr (expr-rrb rrb-empty) '()) "@[]"))

@@ -185,7 +185,7 @@
   (check-equal? (pp-expr (expr-Keyword) '()) "Keyword" "pp Keyword")
   (check-equal? (pp-expr (expr-keyword 'name) '()) ":name" "pp :name")
   (check-equal? (pp-expr (expr-Map (expr-Keyword) (expr-Nat)) '())
-                "(Map Keyword Nat)" "pp Map Keyword Nat")
+                "[Map Keyword Nat]" "pp Map Keyword Nat")
   (check-equal? (pp-expr (expr-map-assoc (expr-champ champ-empty)
                                           (expr-keyword 'x) (expr-zero)) '())
                 "[map-assoc {} :x 0N]" "pp map-assoc"))
@@ -241,7 +241,7 @@
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def m <(Map Keyword Nat)> (map-assoc (map-empty Keyword Nat) :age (suc (suc zero))))\n(eval (map-get m :age))")])
       (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "m : (Map Keyword Nat) defined"))
+      (check-true (string-contains? (car result) "m : [Map Keyword Nat] defined"))
       (check-equal? (cadr result) "2N : Nat"))))
 
 (test-case "surface: defn with map parameter"

@@ -346,7 +346,7 @@
     [(expr-String) "String"]
     [(expr-string val) (format "~s" val)]
     ;; Map
-    [(expr-Map k v) (format "(Map ~a ~a)" (pp-expr k names) (pp-expr v names))]
+    [(expr-Map k v) (format "[Map ~a ~a]" (pp-expr k names) (pp-expr v names))]
     [(expr-champ c)
      (let ([entries (champ-entries c)])
        (if (null? entries)
@@ -371,30 +371,30 @@
     [(expr-map-keys m) (format "[map-keys ~a]" (pp-expr m names))]
     [(expr-map-vals m) (format "[map-vals ~a]" (pp-expr m names))]
     ;; Set
-    [(expr-Set a) (format "(Set ~a)" (pp-expr a names))]
+    [(expr-Set a) (format "[Set ~a]" (pp-expr a names))]
     [(expr-hset c)
      (let ([keys (champ-keys c)])
        (if (null? keys)
            "#{}"
            (format "#{~a}" (string-join (map (lambda (k) (pp-expr k names)) keys) " "))))]
-    [(expr-set-empty a) (format "(set-empty ~a)" (pp-expr a names))]
-    [(expr-set-insert s a) (format "(set-insert ~a ~a)" (pp-expr s names) (pp-expr a names))]
-    [(expr-set-member s a) (format "(set-member? ~a ~a)" (pp-expr s names) (pp-expr a names))]
-    [(expr-set-delete s a) (format "(set-delete ~a ~a)" (pp-expr s names) (pp-expr a names))]
-    [(expr-set-size s) (format "(set-size ~a)" (pp-expr s names))]
-    [(expr-set-union s1 s2) (format "(set-union ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
-    [(expr-set-intersect s1 s2) (format "(set-intersect ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
-    [(expr-set-diff s1 s2) (format "(set-diff ~a ~a)" (pp-expr s1 names) (pp-expr s2 names))]
-    [(expr-set-to-list s) (format "(set-to-list ~a)" (pp-expr s names))]
+    [(expr-set-empty a) (format "[set-empty ~a]" (pp-expr a names))]
+    [(expr-set-insert s a) (format "[set-insert ~a ~a]" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-member s a) (format "[set-member? ~a ~a]" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-delete s a) (format "[set-delete ~a ~a]" (pp-expr s names) (pp-expr a names))]
+    [(expr-set-size s) (format "[set-size ~a]" (pp-expr s names))]
+    [(expr-set-union s1 s2) (format "[set-union ~a ~a]" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-intersect s1 s2) (format "[set-intersect ~a ~a]" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-diff s1 s2) (format "[set-diff ~a ~a]" (pp-expr s1 names) (pp-expr s2 names))]
+    [(expr-set-to-list s) (format "[set-to-list ~a]" (pp-expr s names))]
 
     ;; PVec
-    [(expr-PVec a) (format "(PVec ~a)" (pp-expr a names))]
+    [(expr-PVec a) (format "[PVec ~a]" (pp-expr a names))]
     [(expr-rrb r)
      (let ([elems (reverse (rrb-fold r (lambda (v acc) (cons (pp-expr v names) acc)) '()))])
        (if (null? elems)
            "@[]"
            (string-append "@[" (string-join elems " ") "]")))]
-    [(expr-pvec-empty a) (format "@[] : (PVec ~a)" (pp-expr a names))]
+    [(expr-pvec-empty a) (format "@[] : [PVec ~a]" (pp-expr a names))]
     [(expr-pvec-push v x) (format "[pvec-push ~a ~a]" (pp-expr v names) (pp-expr x names))]
     [(expr-pvec-fold f init vec) (format "[pvec-fold ~a ~a ~a]" (pp-expr f names) (pp-expr init names) (pp-expr vec names))]
     [(expr-pvec-map f vec) (format "[pvec-map ~a ~a]" (pp-expr f names) (pp-expr vec names))]
@@ -435,9 +435,9 @@
     ;; Transient Builders
     [(expr-transient c) (format "[transient ~a]" (pp-expr c names))]
     [(expr-persist c) (format "[persist! ~a]" (pp-expr c names))]
-    [(expr-TVec a) (format "(TVec ~a)" (pp-expr a names))]
-    [(expr-TMap k v) (format "(TMap ~a ~a)" (pp-expr k names) (pp-expr v names))]
-    [(expr-TSet a) (format "(TSet ~a)" (pp-expr a names))]
+    [(expr-TVec a) (format "[TVec ~a]" (pp-expr a names))]
+    [(expr-TMap k v) (format "[TMap ~a ~a]" (pp-expr k names) (pp-expr v names))]
+    [(expr-TSet a) (format "[TSet ~a]" (pp-expr a names))]
     [(expr-trrb _) "~trrb[...]"]
     [(expr-tchamp _) "~tchamp{...}"]
     [(expr-thset _) "~thset#{...}"]
