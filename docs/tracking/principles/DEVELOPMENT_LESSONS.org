@@ -632,3 +632,139 @@ spin-wait, sync events, async-channel) before committing. If work
 < 16× wakeup floor, design as threshold-gated infrastructure with
 sequential default — not as a parallel mechanism with sequential
 fallback.
+
+** Stage 2 Audits for API Migrations Must Include Integration-Test Runs
+
+Static site enumeration via grep finds the call sites; integration
+tests find the *behavioral* dependencies that aren't visible at the
+call-site level. When migrating an API (cell-allocation factory,
+dispatch function, scaffolding retirement), Stage 2 audits MUST include
+running realistic test workloads against the proposed migration — not
+just counting the sites that need to change.
+
+*Pattern observed across 6+ data points* (PPN 4C T-3 + S2.b + S2.c arc,
+2026-04-22 to 2026-04-25):
+
+1. *Attempt 1 (1A-ii)*: TMS dispatch at ~propagator.rkt:1248~
+   accidentally load-bearing for union inference. Static audit missed
+   the behavioral dependency.
+2. *Sub-A (1A-iii)*: ~with-speculative-rollback~ bitmask scaffolding —
+   ~elab-net~ snapshot was the real work; static audit didn't see the
+   parameter being ignored.
+3. *Commit B (T-3)*: ~type-lattice-merge → type-top~ caused sexp
+   ~typing-core.rkt:459~ fallback to return correct ~[Type 0]~ —
+   accidentally-load-bearing fallback path.
+4. *S2.b-iii ~meta-solved?~*: direct ~elab-cell-read~ on universe-cid
+   returned raw hasheq → false "solved" report. Caught only by
+   integration tests (probe), not by the migration's grep-based audit.
+5. *S2.b-iii follow-up*: ~'infra-bot~ filter + worldview-cache fallback
+   gaps in dispatch — caught by ~test-speculation-bridge~ running real
+   workloads.
+6. *S2.c-iv ~solve-mult-meta!~*: 4-minute infinite hang during testing
+   diagnosed as ~compound-tagged-merge "expects hasheq values"~ error.
+   Integration test surfaced what the static audit of ~fresh-mult-meta~
+   migration alone missed. Diagnosis cost: ~30 min.
+
+*Why static audit isn't enough*: API migrations frequently have
+*accidentally-load-bearing* mechanisms — paths that "work" in production
+not because of the architecturally-stated mechanism but because of a
+coincident side path (callback fallback, default argument, defensive
+wrapper, downstream dispatch). Static grep finds the call sites; it
+doesn't find the behaviors. The behavioral dependencies surface only
+when realistic workloads exercise the full path.
+
+*Integration tests* in this context means:
+- The probe (~examples/2026-04-22-1A-iii-probe.prologos~) — exercises
+  the full elaboration pipeline against a representative set
+- The acceptance file (~examples/2026-04-17-ppn-track4c.prologos~) —
+  broader regression coverage
+- Targeted tests (~tools/run-affected-tests.rkt --tests ...~) for the
+  affected subsystems
+- For dispatch / cell-write changes: ALWAYS test under the universe
+  migration regime AND the legacy regime (dual-path coverage)
+
+*Process discipline added to Stage 2*: when proposing an API migration,
+the audit MUST list:
+1. Static site count (grep-backed)
+2. Integration test plan (which probe/acceptance/targeted tests will
+   exercise the migration)
+3. Expected behavioral changes (what counters or outputs will shift)
+
+If integration tests cannot be specified, the migration is not yet
+audit-complete — return to Stage 2.
+
+*Discovered in*: 6+ instances across PPN 4C T-3 + S2.b + S2.c arc
+(2026-04-22 → 2026-04-25). The pattern was on the watching list for ~3
+sessions before reaching graduation. Final data point (S2.c-iv hang)
+was the costliest. Codifying here prevents recurrence.
+
+See: ~workflow.md~ "Diagnostic protocol when blocked" (the response to
+this pattern after the fact); ~DESIGN_METHODOLOGY.org~ Stage 2 (gap
+analysis); ~.claude/rules/pipeline.md~ § "Per-Domain Universe Migration"
+(the specific co-migration checklist for the recurring shape this
+pattern takes in PPN 4C Step 2).
+
+** Hot-Load Is a Protocol, Not a Prioritization
+
+When picking up a track from a handoff document, the §2 hot-load list
+is NOT a prioritized menu — it is the substrate for the mini-design
+dialogue that follows. Tiering documents as "essential" vs. "lower
+priority" is rationalization for incomplete loading. The full list IS
+what the methodology requires.
+
+*Pattern observed across 3 data points* (2026-04-23 → 2026-04-25):
+
+1. *2026-04-23 S2.b-iv handoff pickup*: Tiered §2 documents by perceived
+   priority and skipped several (parent design, principles docs in full,
+   MASTER_ROADMAP, prior handoff). User caught it: "hot-load is a
+   PROTOCOL, not a prioritization." Re-loaded fully. The skipped parent
+   design contained cross-cutting concerns that informed the next
+   sub-phase scope.
+2. *2026-04-24 S2.c-iii handoff pickup*: Same pattern — initially loaded
+   what I deemed essential, missed PPN 4C parent design. User caught it:
+   "I'm not sure I clocked that you read in the parent design document
+   PPN 4C? That's the track context that we are in." Cross-cutting
+   concerns matrix had to be reconstructed.
+3. *2026-04-25 S2.c-iv adversarial VAG*: Same dynamic at sub-phase scope —
+   I treated S2.c-iv as a refactor (preserve patterns) rather than fresh
+   design (challenge inherited patterns), which is structurally the same
+   pattern as treating the hot-load as prioritized rather than protocol.
+
+*Why tiering is wrong*: the implementer doesn't know in advance which
+documents will be load-bearing for the upcoming dialogue. Cross-cutting
+concerns from the parent design surface during mini-design.
+Architectural context from MASTER_ROADMAP frames the sub-phase scope.
+Prior handoffs contain decision rationale that the current handoff
+cross-references. Skipping any of these because they "feel optional"
+creates a context gap that surfaces during the next mini-design — and
+the implementer often catalogs past the gap rather than challenging it.
+
+*Same anti-pattern shape as*:
+- "Pragmatic" framing for incomplete migration (per
+  [[*"Pragmatic" Is a Rationalization for Incomplete][workflow.md]]
+  codification) — both rationalize partial work as sufficient
+- Cataloguing instead of challenging at gates (per
+  [[file:CRITIQUE_METHODOLOGY.org::*Cataloguing Instead of Challenging][CRITIQUE_METHODOLOGY.org § Cataloguing]])
+- Refactor framing instead of fresh-design framing during sub-phases —
+  preserve inherited patterns rationally (caught in S2.c-iv adversarial
+  VAG: 2 drifts found that catalogue framing missed)
+
+*Process discipline*: handoff §2 lists are PROTOCOL not menus. Read
+every document IN FULL before summarizing understanding back to the
+user. The "I have full context" claim per ~HANDOFF_PROTOCOL.org~ §8.1
+requires having read every document, articulating every decision,
+knowing every surprise. If any of these are unclear, ASK before
+proceeding.
+
+*Operational rule*: at session start with a handoff, batch-read the
+full §2 list in parallel using multiple ~Read~ calls (most documents
+are < 5K tokens; the few large ones can be chunked). Do NOT pick a
+subset. If context budget runs short during loading, surface the issue
+to the user immediately rather than tiering implicitly.
+
+*Discovered in*: 2026-04-23 → 2026-04-25 across 3 sessions. Recurring
+shape. Codifying here so the next session's hot-load is treated as
+protocol, not prioritization.
+
+See: ~HANDOFF_PROTOCOL.org~ § Hot-Load Reading Protocol (the canonical
+process); ~workflow.md~ "Pragmatic" anti-pattern (same shape).

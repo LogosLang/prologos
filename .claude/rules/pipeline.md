@@ -83,8 +83,9 @@ When adding a field to an existing struct:
 1. Run `raco make driver.rkt` to recompile ALL transitive dependents (stale `.zo` caches cause "expected N fields" errors)
 2. Grep for all pattern-matches on that struct — each must handle the new field
 3. **Grep for `struct-copy` of that struct across the ENTIRE codebase** — not just the defining module. External files that `struct-copy` a struct with changed fields will fail silently (batch workers crash with zero test output). BSP-LE Track 0 discovered 4 external `struct-copy prop-network` sites (bilattice.rkt, elaborator-network.rkt, test-propagator-bsp.rkt, bench-alloc.rkt) that were missed by a module-scoped audit.
-4. Check `trace-serialize.rkt` and any other reflection-based consumers
-5. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
+4. **Grep for direct constructor calls `(struct-name field1 field2 ...)` across the ENTIRE codebase** — not just `struct-copy`. PPN 4C S2.b-iv (2026-04-24) added `meta-ids` field to `constraint` struct and missed 4 direct constructor calls in 2 test files (test-infra-cell-constraint-01.rkt + test-readiness-propagator.rkt) that were caught at full-suite regression with "constraint: arity mismatch; expected 8 given 7". Both `struct-copy` AND direct constructor calls need updating; grep for both patterns.
+5. Check `trace-serialize.rkt` and any other reflection-based consumers
+6. If the struct is in `prop-network` or `elab-network`, modules like `session-propagators.rkt` and `trace-serialize.rkt` that import by struct linklet will fail if not recompiled
 
 ## Known Coupling: Meta Resolution Pipeline
 
@@ -101,4 +102,38 @@ When adding a new pattern kind to the pattern compiler:
 1. Update `pattern-is-simple-flat?` — the fast-path classifier. Missing this causes ALL patterns to fall through to the slow `compile-match-tree` path (850s regression observed from missing `'wildcard`)
 2. Update `compile-match-tree` — the full compiler
 3. Update narrowing pattern handlers in `narrowing.rkt` if applicable
+
+## Per-Domain Universe Migration (PPN 4C Step 2 pattern)
+
+When migrating a meta domain (type, mult, level, session) to compound universe-cell dispatch (S2.b-iii, S2.c-iv, future S2.d), the following sites MUST be co-migrated ATOMICALLY in the SAME commit. Missing any one causes a class of failures characterized by:
+- `compound-tagged-merge "expects hasheq values"` errors when raw values hit compound merge (solve-X-meta! gap)
+- `mult-meta-solved? = #f` for all solved metas (universe-active flag flip without storage migration, or vice versa)
+- 4-minute infinite hangs with no clear error signal during testing (caught in S2.c-iv 2026-04-24 — diagnosis took ~30 min after the hang)
+
+**Co-migration sites (checklist)**:
+
+1. **`fresh-X-meta`** — universe-path branch: register meta-id as component of `(current-X-meta-universe-cell-id)` via `compound-cell-component-write`; record `meta-id → universe-cid` in id-map; SKIP per-meta cell allocation. Legacy per-meta path preserved for pre-init test contexts.
+
+2. **`solve-X-meta!`** — universe-cid dispatch: when cell-id from id-map IS the universe-cid (`meta-universe-cell-id?` returns #t), use `compound-cell-component-write` at component=meta-id. Writing the raw value via legacy callback (`current-prop-X-cell-write`) under universe migration triggers `compound-tagged-merge "expects hasheq values"` error since the cell is now compound. **THIS IS THE MOST COMMONLY MISSED STEP** — both S2.b-iii (type) and S2.c-iv (mult) had to be diagnosed via runtime hang. Proactively check during mini-design.
+
+3. **`'X-meta-info` table `'universe-active? = #t` flip** in `meta-domain-info` (metavar-store.rkt). The CORRECTNESS GATE codified per S2.c-iii §5.4: data-driven dispatch flag flips ATOMICALLY with storage migration. Pre-flip = legacy path; post-flip = universe path. Naive flip without storage migration → all solved metas appear unsolved (universe is empty). Naive storage migration without flip → reads still go through legacy CHAMP fallback (silent miss).
+
+4. **Cross-domain bridge callback** (if applicable, e.g., `current-structural-mult-bridge` at driver.rkt:2658) — universe-aware install with `:a-component-paths (list (cons X-universe-cid X-meta-id))`. Per S2.precursor++ correct-by-construction contract, the primitive uses `compound-cell-component-{ref,write}/pnet` automatically when component-paths declared. If the γ direction is dead work (e.g., constant bot), pass `gamma-fn=#f` to skip the install.
+
+5. **Retire dead γ closures** if applicable — e.g., `mult->type-gamma` was constant `type-bot` (dead work, retired in S2.c-iv). Check whether the domain's α/γ closures have meaningful work in both directions; retire dead ones.
+
+**Verification procedure**:
+
+- Targeted test set MUST include: `test-X-inference.rkt`, `test-X-propagator.rkt`, the bridge consumers (e.g., `test-tycon.rkt`, `test-trait-tycon-01.rkt` for type-related dispatch).
+- Run probe (`examples/2026-04-22-1A-iii-probe.prologos`) — expect counter changes related to the domain (e.g., `cell_allocs` decrease as per-meta cells consolidate into the universe).
+- Run acceptance file (`examples/2026-04-17-ppn-track4c.prologos`) — 0 errors.
+- Full suite as final regression gate.
+
+**If hung during testing** (4-minute timeout with no progress, dead workers): the most likely cause is a missed `solve-X-meta!` dispatch (#2 above). Diagnose by running a single targeted test in foreground and checking for `compound-tagged-merge "expects hasheq values"` error in the stderr. The fix: add the universe-cid dispatch to `solve-X-meta!` mirroring `solve-meta-core!`'s pattern (S2.b-iii type-domain template).
+
+**Cross-cutting**: `'universe-active?` flip in `meta-domain-info` MUST be in the same commit as `fresh-X-meta` AND `solve-X-meta!` migrations. Splitting across commits leaves the codebase in an inconsistent state where dispatch + storage + writes don't agree.
+
+Origin: PPN 4C S2.b-iii (type-domain migration, 2026-04-24) had the same gap shape; S2.c-iv (mult-domain migration, 2026-04-24) repeated it because the pattern wasn't codified. Codified here after S2.c-iv close so S2.d (level + session migrations) lands cleanly. 2 data points; codify proactively to prevent the 3rd.
+
+See: D.3 §7.5.13.6.1 (S2.c-iii mini-audit findings) + §7.5.14.3 (S2.e cleanup notes from S2.c-iv adversarial VAG).
 4. Update `narrow-match` and `narrow-subst-bvars` if the pattern contains sub-expressions
