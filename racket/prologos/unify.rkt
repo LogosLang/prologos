@@ -425,9 +425,16 @@
 ;; PPN Track 4 Phase 4b: added cell-id parameter for fast path
 (define (solve-flex-rigid id rhs ctx #:cell-id [cell-id #f])
   (cond
-    ;; Already solved? Check consistency by unifying solution with rhs
+    ;; Already solved? Check consistency by unifying solution with rhs.
+    ;; PPN 4C S2.c-iii (2026-04-24): retired (or X (meta-solution id)) fallback.
+    ;; Pre-S2.c-iii pattern: (or (meta-solution/cell-id cell-id id) (meta-solution id))
+    ;; was a defensive double-fallback for stale cell-ids. Under option 4 + the
+    ;; meta-domain-solution generic core, both calls dispatch through the same
+    ;; parameter-read path → both compute the same value. The OR is genuinely
+    ;; redundant. Stale-cell defensive handling is preserved by the with-handlers
+    ;; wrapper inside meta-domain-solution itself (falls back to type-champ-fallback).
     [(meta-solved? id)
-     (unify-core ctx (or (meta-solution/cell-id cell-id id) (meta-solution id)) rhs)]
+     (unify-core ctx (meta-solution/cell-id cell-id id) rhs)]
     ;; Occur check: prevent infinite types
     [(occurs? id rhs) #f]
     ;; Solve!

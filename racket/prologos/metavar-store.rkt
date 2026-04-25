@@ -2383,109 +2383,36 @@
   (and (meta-domain-solution domain id) #t))
 
 ;; Check if a metavariable has been solved.
-;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim delegating to meta-domain-solved?.
+;; Backward-compat: external behavior identical, including:
+;;   - signature (id) -> #t/#f preserved (load-bearing for type-lattice.rkt's
+;;     `current-lattice-meta-solution-fn` callback parameter at driver.rkt:2633;
+;;     see DEFERRED.md "Off-Network Registry Scaffolding" for retirement plan)
+;;   - top-level definition (NOT a closure / let-binding) so callback installation
+;;     captures the right identity
 (define (meta-solved? id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     ;; Propagator path: check cell value
-     ;; PPN 4C Step 2 S2.b-iii (2026-04-24): universe-cid dispatch. For a type
-     ;; meta registered in the type-meta universe, the cell holds a compound
-     ;; (hasheq meta-id → tagged-cell-value) — a direct elab-cell-read returns
-     ;; that hasheq, which fails both prop-type-bot? and prop-type-top? and
-     ;; would incorrectly report "solved" for an unsolved meta with type-bot as
-     ;; its component value. Dispatch to compound-cell-component-ref for
-     ;; universe cids to read the component's unwrapped value.
-     (define cid (prop-meta-id->cell-id id))
-     (and cid
-          (cond
-            [(meta-universe-cell-id? cid)
-             (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-               (and v (not (eq? v 'infra-bot))
-                    (not (prop-type-bot? v)) (not (prop-type-top? v))))]
-            [else
-             (let ([v (elab-cell-read (unbox net-box) cid)])
-               (and (not (eq? v 'infra-bot))
-                    (not (prop-type-bot? v)) (not (prop-type-top? v))))]))]
-    [else
-     ;; CHAMP path (test context without network)
-     (define mi-box (current-prop-meta-info-box))
-     (if (not mi-box) #f  ;; No meta store initialized — treat as unsolved
-         (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
-           (and v (eq? (meta-info-status v) 'solved))))]))
+  (meta-domain-solved? 'type id))
 
 ;; Retrieve the solution of a metavariable, or #f if unsolved/unknown.
-;; Hash removal: Propagator cell (primary), CHAMP meta-info (fallback).
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-;; PM 8F Phase 1: Fast path that uses cell-id directly (skips 82ns id-map lookup).
-;; Called by callers that have the expr-meta struct (zonk, unify, etc.)
-;; PPN Track 4 Phase 4b: guarded cell read — if cell-id references a cell from a
-;; previous command's network (stale reference), fall back to id-map or CHAMP path
-;; instead of crashing. This happens when expr-meta structs persist in the global
-;; environment across command boundaries.
+;; PPN 4C S2.c-iii (2026-04-24): converted to shim delegating to meta-domain-solution.
+;; The 'type entry's 'universe-active? = #t flag (set by S2.b-iii) routes through
+;; the universe-cid (via option 4 parameter-read OR explicit cell-id arg for
+;; PM-8F-era backward-compat). Stale-cell fallback to type-champ-fallback is
+;; preserved via with-handlers in the generic core.
+;;
+;; PM 8F backward-compat: callers with an expr-meta struct in hand pass
+;; (expr-meta-cell-id e) as cell-id; the explicit-cid arg is plumbed through but
+;; doesn't change dispatch (option 4 wins per microbench — 302ns/call faster
+;; than the cache-field path). The cache field becomes inert post-S2.c-iii;
+;; Phase 4 retires it (see PPN 4C parent design Phase 4 tracker row).
 (define (meta-solution/cell-id cell-id id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [(and cell-id net-box)
-     ;; Direct cell read — no id-map lookup (82ns savings per call)
-     ;; Guard: cell may be stale (from prior command's network). Fall back gracefully.
-     (with-handlers ([exn:fail? (lambda (_) (meta-solution id))])
-       (cond
-         ;; PPN 4C Step 2 S2.b-ii (2026-04-24): compound universe dispatch.
-         ;; If cell-id is one of the 4 meta-universe cells, route to the
-         ;; component-indexed read path (hasheq meta-id → tagged-cell-value)
-         ;; via compound-cell-component-ref. Otherwise fall through to the
-         ;; direct per-cell read path (pre-S2.b shape). Predicate returns
-         ;; #f until `init-meta-universes!` has run and set the cell-id
-         ;; parameters — so this dispatch is a NO-OP for networks that
-         ;; haven't entered the universe regime. See D.3 §7.5.12 for S2.b
-         ;; migration plan + §7.5.12.5 for the scheduler-path verification
-         ;; that justifies the bare-meta-id path shape.
-         ;;
-         ;; S2.b-iii fix (2026-04-24): also filter 'infra-bot — the universal
-         ;; sentinel infra-cell uses for "never written". tagged-cell-read on
-         ;; a tcv with base='infra-bot and entries tagged with non-zero
-         ;; worldview bitmasks returns 'infra-bot when read under wv=0
-         ;; (speculation results after commit/rollback). Treating it as
-         ;; bot-equivalent ("unsolved") matches intent; without this filter,
-         ;; callers (unify-core, zonk-at-depth) get 'infra-bot and crash
-         ;; attempting to match it as an expr-* struct.
-         [(meta-universe-cell-id? cell-id)
-          (let ([v (compound-cell-component-ref (unbox net-box) cell-id id)])
-            (and v (not (eq? v 'infra-bot))
-                 (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
-         [else
-          (let ([v (elab-cell-read (unbox net-box) cell-id)])
-            (and (not (eq? v 'infra-bot))
-                 (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
-    [net-box
-     ;; cell-id=#f (module-loading meta) — fall back to id-map
-     (define cid (prop-meta-id->cell-id id))
-     (and cid
-          ;; PPN 4C Step 2 S2.b-ii: parallel dispatch for the no-cell-id entry
-          ;; path. After S2.b-iii, prop-meta-id->cell-id for type-domain metas
-          ;; will return the universe-cid; this branch must handle both shapes.
-          (cond
-            [(meta-universe-cell-id? cid)
-             (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-               (and v (not (eq? v 'infra-bot))
-                    (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]
-            [else
-             (let ([v (elab-cell-read (unbox net-box) cid)])
-               (and (not (eq? v 'infra-bot))
-                    (not (prop-type-bot? v)) (not (prop-type-top? v)) v))]))]
-    [else
-     ;; CHAMP path: no network available (expander.rkt #lang context, or test
-     ;; context without process-string). Track 10 Phase 4: RETAINED — the #lang
-     ;; expander doesn't use process-string, so no network exists. CHAMP is the
-     ;; correct fallback until expander.rkt is network-aware (Phase 5+).
-     (define mi-box (current-prop-meta-info-box))
-     (if (not mi-box) #f
-         (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
-           (and v (meta-info-solution v))))]))
+  (meta-domain-solution 'type id cell-id))
 
-;; Original API: takes meta id (symbol). Delegates to cell-id path when possible.
+;; Original API: takes meta id (symbol). Delegates to cell-id path with #f.
+;; PPN 4C S2.c-iii (2026-04-24): now a shim of a shim — both delegate to
+;; meta-domain-solution 'type id. Kept as a separate definition for backward-compat
+;; (driver.rkt:2633 installs `meta-solution` as a callback into type-lattice.rkt;
+;; the top-level definition's identity is captured at install time).
 (define (meta-solution id)
   (meta-solution/cell-id #f id))
 
