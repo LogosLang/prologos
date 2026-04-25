@@ -2328,7 +2328,7 @@
     ;; flag is ever flipped to #f (would need explicit code change), the
     ;; dispatch will hash-ref-fail with a clear error, rather than silently
     ;; running stale legacy logic.
-    'mult    (hasheq 'universe-active? #f            ;; S2.c-iv flips to #t
+    'mult    (hasheq 'universe-active? #t            ;; S2.c-iv landed (2026-04-24)
                      'universe-cid-fn (lambda () (current-mult-meta-universe-cell-id))
                      'bot? (lambda (v) (or (eq? v 'mult-bot) (eq? v 'unsolved)))
                      'top? (lambda (_v) #f)
@@ -2563,7 +2563,18 @@
 
 ;; Create a fresh mult metavariable, register in store, return mult-meta.
 ;; Hash removal: Always writes to CHAMP.
-;; P5b: Optionally allocates a mult cell on the propagator network.
+;; PPN 4C S2.c-iv (2026-04-24): universe-cell path. Mirrors S2.b-iii's
+;; fresh-meta migration. When mult-meta universe is initialized (via
+;; init-meta-universes! in reset-meta-store!), register the meta as a
+;; component of the universe cell instead of allocating a per-meta cell.
+;; The id-map entry maps mult-meta-id → universe-cid (shared across all
+;; mult metas); the meta-id is the component-key that distinguishes.
+;;
+;; Atomic with 'universe-active? = #t flip for 'mult in meta-domain-info
+;; (this commit). Pre-S2.c-iv flip was #f; legacy id-map walk path was
+;; correct. Post-flip, dispatch routes through universe via meta-domain-
+;; solution generic core. This commit migrates BOTH the storage (here)
+;; AND the dispatch (table flag) atomically.
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
   (define box (current-mult-meta-champ-box))
@@ -2571,26 +2582,47 @@
   (define aid (current-speculation-assumption))
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
-  ;; P5b: Allocate mult cell on propagator network if available
   (define net-box (current-prop-net-box))
-  (define fresh-fn (current-prop-fresh-mult-cell))
-  (when (and net-box fresh-fn)
-    (define enet (unbox net-box))
-    (define-values (enet* cid) (fresh-fn enet source))
-    (set-box! net-box enet*)
-    ;; Record mapping: mult-meta-id → cell-id in the prop id-map
-    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
-    (when net-box
-      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
-      (define id-map-entry-mm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                          (champ-insert (elab-network-id-map (unbox net-box))
-                                        (prop-meta-id-hash id) id id-map-entry-mm)))))
+  (define mult-universe-cid (current-mult-meta-universe-cell-id))
+  (cond
+    ;; S2.c-iv universe path — no per-meta cell allocation
+    [(and net-box mult-universe-cid)
+     (define enet (unbox net-box))
+     ;; Register meta-id as component of mult-meta universe cell with
+     ;; initial value 'mult-bot. compound-cell-component-write wraps the
+     ;; value in a tagged-cell-value respecting current-worldview-bitmask.
+     ;; The universe cell's compound-tagged-merge handles pointwise merging.
+     (define enet1 (compound-cell-component-write enet mult-universe-cid id 'mult-bot))
+     ;; id-map: mult-meta-id → universe-cid (shared across mult metas).
+     ;; All mult-meta id-map entries point to the same cid; meta-id distinguishes.
+     (define id-map-entry (if aid (tagged-entry mult-universe-cid aid) mult-universe-cid))
+     (define enet2 (elab-network-id-map-set enet1
+                      (champ-insert (elab-network-id-map enet1)
+                                    (prop-meta-id-hash id) id id-map-entry)))
+     (set-box! net-box enet2)]
+    ;; Legacy path: per-meta cell allocation (pre-init contexts: bare-
+    ;; metavar-store tests that don't load elaborator-network.rkt).
+    [else
+     (define fresh-fn (current-prop-fresh-mult-cell))
+     (when (and net-box fresh-fn)
+       (define enet (unbox net-box))
+       (define-values (enet* cid) (fresh-fn enet source))
+       (set-box! net-box enet*)
+       (when net-box
+         (define id-map-entry-mm (if aid (tagged-entry cid aid) cid))
+         (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                             (champ-insert (elab-network-id-map (unbox net-box))
+                                           (prop-meta-id-hash id) id id-map-entry-mm)))))])
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
-;; Hash removal: Always reads/writes CHAMP.
-;; P5b: Also writes to propagator mult cell if available.
+;; PPN 4C S2.c-iv (2026-04-24): universe-cid dispatch. Mirrors the
+;; solve-meta-core! pattern (S2.b-iii) for type domain — under universe
+;; migration, cell-id from id-map IS the universe-cid (constant per
+;; domain). Writing the raw mult value via the legacy write-fn would
+;; trigger compound-tagged-merge's "expects hasheq values" error since
+;; the cell is compound. Dispatch to compound-cell-component-write at
+;; component=mult-id for universe-active mult dispatch.
 (define (solve-mult-meta! id solution)
   (define box (current-mult-meta-champ-box))
   ;; Track 8 A3a: unwrap tagged-entry for status check
@@ -2607,16 +2639,21 @@
   (define aid (or entry-aid (current-speculation-assumption)))
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; P5b: Write to propagator mult cell
-  ;; Note: current-prop-mult-cell-write is kept (separate mult-cell write callback, not a general cell-write).
+  ;; Write to propagator mult cell
   (define net-box (current-prop-net-box))
-  (define write-fn (current-prop-mult-cell-write))
-  (when (and net-box write-fn)
-    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
-    (when (and (not (eq? cid 'none)) cid)
-      (define enet (unbox net-box))
-      (set-box! net-box (write-fn enet cid solution)))))
+  (when net-box
+    (define enet (unbox net-box))
+    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
+    (when (and cid (not (eq? cid 'none)))
+      (cond
+        ;; Universe path (S2.c-iv): cid is universe-cid; write via component-keyed access
+        [(meta-universe-cell-id? cid)
+         (set-box! net-box (compound-cell-component-write enet cid id solution))]
+        ;; Legacy path: cid is per-meta cell; raw write via callback
+        [else
+         (define write-fn (current-prop-mult-cell-write))
+         (when write-fn
+           (set-box! net-box (write-fn enet cid solution)))]))))
 
 ;; Check if a mult metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'mult entry's

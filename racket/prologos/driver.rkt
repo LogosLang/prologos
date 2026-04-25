@@ -47,6 +47,10 @@
          "performance-counters.rkt"
          "elab-speculation-bridge.rkt"
          "elaborator-network.rkt"
+         ;; PPN 4C S2.c-iv (2026-04-24): import current-mult-meta-universe-cell-id
+         ;; for the universe-aware mult bridge install. meta-universe.rkt is
+         ;; lightweight (S2.a-followup); no cycle risk.
+         (only-in "meta-universe.rkt" current-mult-meta-universe-cell-id)
          "type-lattice.rkt"
          "propagator.rkt"
          "typing-propagators.rkt"  ;; PPN Track 4 D.4: propagator-native typing
@@ -2653,20 +2657,46 @@
         (expr-meta-cell-id e))))
 
 ;; Track 8 Phase A3d: Mult bridge callback for decompose-pi.
-;; Looks up the mult-meta's cell-id from the id-map and creates a cross-domain
-;; bridge between the type cell and the mult cell.
+;; PPN 4C S2.c-iv (2026-04-24): universe-aware bridge install.
+;;   - Universe path (post init-meta-universes!): install bridge with
+;;     :a-component-paths declaring (cons mult-universe-cid mult-id) so
+;;     the primitive uses compound-cell-component-{ref,write}/pnet for the
+;;     mult side. γ direction retired (gamma-fn=#f) — mult->type-gamma was
+;;     constant type-bot, dead work everywhere.
+;;   - Legacy path (pre-init test contexts): per-meta cell-id from id-map
+;;     walk; raw access (cell isn't compound). γ also retired here for
+;;     consistency.
+;;   - Pre-S2.c-iv: passed mult->type-gamma (no-op) and didn't declare
+;;     component-paths. The S2.precursor++ correct-by-construction contract
+;;     would have caught the missing component-paths if mult-universe-cid
+;;     had been the bridge cell — but pre-S2.c-iv dispatch used per-meta
+;;     cell-ids from id-map walk, so component-paths didn't apply.
 (current-structural-mult-bridge
  (lambda (net type-cell mult-val)
    (define mult-id (mult-meta-id mult-val))
-   (define mult-cid (prop-meta-id->cell-id mult-id))
-   (if mult-cid
-       (let-values ([(net* _pa _pg)
-                     (net-add-cross-domain-propagator net
-                       type-cell mult-cid
-                       type->mult-alpha
-                       mult->type-gamma)])
-         net*)
-       net)))  ;; mult cell not in id-map — skip (test context)
+   (define mult-universe-cid (current-mult-meta-universe-cell-id))
+   (cond
+     ;; S2.c-iv universe path: bridge between type-cell and mult universe
+     ;; cell at the specific mult-id component.
+     [mult-universe-cid
+      (let-values ([(net* _pa _pg)
+                    (net-add-cross-domain-propagator net
+                      type-cell mult-universe-cid
+                      type->mult-alpha
+                      #f   ;; γ direction retired — was constant type-bot
+                      #:a-component-paths (list (cons mult-universe-cid mult-id)))])
+        net*)]
+     ;; Legacy path: per-meta cell-id from id-map walk (test contexts).
+     [else
+      (define mult-cid (prop-meta-id->cell-id mult-id))
+      (if mult-cid
+          (let-values ([(net* _pa _pg)
+                        (net-add-cross-domain-propagator net
+                          type-cell mult-cid
+                          type->mult-alpha
+                          #f)])   ;; γ retired here too (was no-op)
+            net*)
+          net)])))  ;; mult cell not in id-map — skip (test context)
 
 ;; Track 7 Phase 7a: Install unified resolution executor from resolution.rkt.
 ;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)

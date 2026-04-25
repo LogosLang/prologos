@@ -71,10 +71,10 @@
  reset-elab-network-command-state
  ;; P5b: Multiplicity cells
  elab-fresh-mult-cell
- ;; Track 8 A3d: Mult bridge callback + α/γ functions
+ ;; Track 8 A3d: Mult bridge callback + α function (γ retired in S2.c-iv,
+ ;; 2026-04-24 — was constant type-bot, dead work everywhere).
  current-structural-mult-bridge
  type->mult-alpha
- mult->type-gamma
  elab-mult-cell-read
  elab-mult-cell-write
  ;; Track 4 Phase 3: Level and session cells
@@ -1154,22 +1154,31 @@
        [else mult-bot])]
     [else mult-bot]))
 
-;; Gamma: no-op — returns the current type cell value unchanged.
-;; Future work (P5c-gamma) may reconstruct Pi types with solved mults.
-(define (mult->type-gamma _mult-val)
-  ;; Identity on the type cell: gamma returns type-bot to avoid
-  ;; writing to the type cell (bot ⊔ x = x, no change).
-  type-bot)
+;; mult->type-gamma RETIRED (PPN 4C S2.c-iv, 2026-04-24).
+;; Was a constant function returning type-bot — γ direction was dead work
+;; everywhere (bot ⊔ x = x via lattice merge → no propagation, just
+;; per-mult-change wasted propagator firings). The user's directive in
+;; S2.c-iv mini-design: "Fine to dismantle, if it's not doing anything."
+;; net-add-cross-domain-propagator now accepts gamma-fn=#f to skip the γ
+;; install entirely (S2.precursor++ extension, commit 22866050). Both
+;; the production callback (driver.rkt:2658) and elab-add-type-mult-bridge
+;; below pass gamma-fn=#f.
+;; If a future P5c-gamma needs to reconstruct Pi types with solved mults,
+;; it adds a fresh γ closure here — no preserved scaffolding to confuse.
 
 ;; Add a cross-domain propagator pair bridging a type cell and a mult cell.
-;; Returns (values elab-network* pid-alpha pid-gamma).
+;; PPN 4C S2.c-iv (2026-04-24): γ retired (mult->type-gamma was no-op);
+;; returns (values elab-network* pid-alpha #f) — pid-gamma is always #f.
+;; Test callers (test-mult-propagator.rkt:124) destructure with
+;; `_pid-gamma` (ignored), so the API change is backward-compatible at
+;; usage sites.
 (define (elab-add-type-mult-bridge enet type-cell-id mult-cell-id)
   (define net (elab-network-prop-net enet))
-  (define-values (net* pid-alpha pid-gamma)
+  (define-values (net* pid-alpha _pid-gamma)
     (net-add-cross-domain-propagator net
       type-cell-id mult-cell-id
       type->mult-alpha
-      mult->type-gamma))
+      #f))   ;; γ retired (was constant type-bot, dead work)
   (values
    (elab-network
     net*
@@ -1178,7 +1187,7 @@
     (elab-network-id-map enet)
     (elab-network-meta-info enet))
    pid-alpha
-   pid-gamma))
+   #f))   ;; pid-gamma always #f post-S2.c-iv
 
 ;; ========================================================================
 ;; PAR Track 1: Elaborator-network topology handler (self-registering)
