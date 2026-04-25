@@ -184,6 +184,9 @@
     [(expr-fst e1) (format "[fst ~a]" (pp-expr e1 names))]
     [(expr-snd e1) (format "[snd ~a]" (pp-expr e1 names))]
 
+    ;; Force (strict normalization)
+    [(expr-force e1) (format "[force ~a]" (pp-expr e1 names))]
+
     ;; Annotation
     [(expr-ann term type)
      (format "[the ~a ~a]" (pp-expr type names) (pp-expr term names))]
@@ -914,6 +917,7 @@
     [(expr-pair e1 e2) (or (uses-bvar0? e1) (uses-bvar0? e2))]
     [(expr-fst e1) (uses-bvar0? e1)]
     [(expr-snd e1) (uses-bvar0? e1)]
+    [(expr-force e1) (uses-bvar0? e1)]
     [(expr-ann term type) (or (uses-bvar0? term) (uses-bvar0? type))]
     [(expr-Eq t e1 e2) (or (uses-bvar0? t) (uses-bvar0? e1) (uses-bvar0? e2))]
     [(expr-boolrec m tc fc t) (or (uses-bvar0? m) (uses-bvar0? tc) (uses-bvar0? fc) (uses-bvar0? t))]

@@ -588,6 +588,11 @@
          [(expr-Sigma _ b) (subst 0 (expr-fst e1) b)]
          [_ (expr-error)]))]
 
+    ;; ---- Force (strict normalization) — type identity ----
+    ;; [force e] has the same type as e; force is purely an evaluation
+    ;; hint that affects whnf, not the type system.
+    [(expr-force e1) (infer ctx e1)]
+
     ;; ---- Bool eliminator (boolrec) ----
     ;; boolrec(motive, true-case, false-case, target)
     ;; motive : Bool -> Type(l)

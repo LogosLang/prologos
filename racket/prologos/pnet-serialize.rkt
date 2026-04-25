@@ -196,6 +196,7 @@
   ;; --- One-arg ---
   (reg1! expr-bvar 0) (reg1! expr-fvar 'x) (reg1! expr-suc (expr-zero))
   (reg1! expr-nat-val 0) (reg1! expr-fst (expr-unit)) (reg1! expr-snd (expr-unit))
+  (reg1! expr-force (expr-unit))
   (reg1! expr-Type (lzero)) (reg1! expr-typed-hole (expr-Nat))
   (reg1! expr-int 0) (reg1! expr-rat 1/2)
   (reg1! expr-char #\a) (reg1! expr-string "")

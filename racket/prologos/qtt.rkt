@@ -329,6 +329,14 @@
             [_ (tu-error)])]
          [_ (tu-error)]))]
 
+    ;; ---- force (strict normalization) ----
+    ;; [force e] is QTT-transparent: same type and same usage as e.
+    ;; The body is evaluated exactly once (whnf reduces force(e) to
+    ;; nf(e) and erases the wrapper), so usage equals the inner usage.
+    ;; This preserves linearity for linear (m1) values: a force around
+    ;; a linear value still consumes it exactly once.
+    [(expr-force e1) (inferQ ctx e1)]
+
     ;; ---- natrec ----
     ;; Usage = U_target + U_base + U_step (motive is type-level)
     [(expr-natrec mot base step target)

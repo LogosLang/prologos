@@ -44,6 +44,7 @@
  (struct-out surf-pair)
  (struct-out surf-fst)
  (struct-out surf-snd)
+ (struct-out surf-force)
  (struct-out surf-ann)
  (struct-out surf-refl)
  (struct-out surf-eq)
@@ -460,6 +461,11 @@
 ;; Projections: (fst e), (snd e)
 (struct surf-fst (expr srcloc) #:transparent)
 (struct surf-snd (expr srcloc) #:transparent)
+
+;; Force: [force e] — strict normalization combinator (surface form).
+;; Type identity, runtime forces full NF of the argument before
+;; returning. Lets users break lazy-argument chains in deep iteration.
+(struct surf-force (expr srcloc) #:transparent)
 
 ;; Type annotation: (the T e)
 (struct surf-ann (type term srcloc) #:transparent)

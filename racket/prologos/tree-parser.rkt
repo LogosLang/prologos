@@ -318,6 +318,8 @@
    "negate" surf-generic-negate  "abs" surf-generic-abs
    ;; Pair projections
    "fst" surf-fst  "snd" surf-snd
+   ;; Strict normalization
+   "force" surf-force
    ;; Boolean
    "not" surf-not
    ;; Nat

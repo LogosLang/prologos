@@ -1022,6 +1022,11 @@
      (let ([e1 (elaborate e env depth)])
        (if (prologos-error? e1) e1 (expr-snd e1)))]
 
+    ;; Force (strict normalization)
+    [(surf-force e loc)
+     (let ([e1 (elaborate e env depth)])
+       (if (prologos-error? e1) e1 (expr-force e1)))]
+
     ;; Annotation: (the T e) -> ann(elab-e, elab-T)
     [(surf-ann type term loc)
      (let ([t (elaborate type env depth)]

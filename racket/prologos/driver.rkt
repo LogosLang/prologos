@@ -232,6 +232,7 @@
     [(expr-pair a b) (or (contains-unsupported-qtt? a) (contains-unsupported-qtt? b))]
     [(expr-fst e) (contains-unsupported-qtt? e)]
     [(expr-snd e) (contains-unsupported-qtt? e)]
+    [(expr-force e) (contains-unsupported-qtt? e)]
     [(expr-ann e t) (or (contains-unsupported-qtt? e) (contains-unsupported-qtt? t))]
     [(expr-suc e) (contains-unsupported-qtt? e)]
     [(expr-natrec m b s t) (or (contains-unsupported-qtt? m) (contains-unsupported-qtt? b)
@@ -346,6 +347,7 @@
      (expr-pair (rewrite-spec a) (rewrite-spec b))]
     [(expr-fst x) (expr-fst (rewrite-spec x))]
     [(expr-snd x) (expr-snd (rewrite-spec x))]
+    [(expr-force x) (expr-force (rewrite-spec x))]
     [(expr-ann x t) (expr-ann (rewrite-spec x) (rewrite-spec t))]
     [(expr-suc x) (expr-suc (rewrite-spec x))]
     [(expr-natrec m b s t)
