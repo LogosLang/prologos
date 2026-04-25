@@ -442,4 +442,118 @@
 (printf "        uses ONE cell for N metas; E5's path uses N cells. Allocation\n")
 (printf "        cost (not measured here) dominates in real workloads.\n")
 
+;; ========================================
+;; F. PPN 4C S2.c-i Task 1: cell-id approach A/B (option 1/2/4)
+;; ========================================
+;;
+;; Per D.3 §7.5.13.5: Decide between three approaches to cell-id access
+;; under universe migration. Each meta-solution call must produce the
+;; universe-cid before invoking compound-cell-component-ref. Three options:
+;;
+;;   Option 1 (cache field, current PM 8F): cell-id is stored in the
+;;     expr-meta struct as a fast-path cache. Read via (expr-meta-cell-id e).
+;;     Stale-detection via with-handlers fallback.
+;;
+;;   Option 2 (id-map lookup): cell-id retrieved via id-map CHAMP walk.
+;;     No cache; ~80ns lookup overhead per call.
+;;
+;;   Option 4 (parameter-read, NEW): under universe model, the universe-cid
+;;     is constant per domain (set at init-meta-universes! time). Read via
+;;     (current-type-meta-universe-cell-id) — ~3ns. Single source of truth.
+;;     No struct field, no id-map, no cache discipline.
+;;
+;; Decision rules (from §7.5.13.5):
+;;   - Path 4 ≤ Path 1 within 10ns/call → option 4 wins (cleaner architecture)
+;;   - Path 4 > Path 1 by ≥30ns/call → option 1 may be worth keeping
+;;   - Path 4 ≤ Path 2 by ≥50ns/call → option 4 strictly dominant over 2
+
+(printf "\n--- F: PPN 4C S2.c-i Task 1 — cell-id approach A/B (option 1/2/4) ---\n")
+
+;; Option 4 simulation helper. Reads universe-cid from the parameter directly,
+;; then calls compound-cell-component-ref. This is what option 4 would be in
+;; production (without the with-handlers wrapper, since the parameter is
+;; never stale once init-meta-universes! has run).
+(define (bench-prop-type-bot? v) (eq? v 'type-bot))
+(define (bench-prop-type-top? v) (eq? v 'type-top))
+
+(define (meta-solution-via-parameter id)
+  ;; Type domain only for this bench — option 4 generalizes via meta-domain-info
+  (define cid (current-type-meta-universe-cell-id))
+  (define net-box (current-prop-net-box))
+  (cond
+    [(and cid net-box)
+     (define v (compound-cell-component-ref (unbox net-box) cid id))
+     (and v (not (eq? v 'infra-bot))
+          (not (bench-prop-type-bot? v)) (not (bench-prop-type-top? v)) v)]
+    [else #f]))
+
+;; Workloads:
+;; - W1 single: 1 meta, dispatch overhead dominant
+;; - W2 medium: 100 metas, typical elaboration size
+;; - W3 large: 1000 metas, large file stress
+(define N-bench-iter 50000)
+
+(for ([N-metas (in-list '(1 100 1000))])
+  (printf "\n  --- F.W~a: ~a meta(s) on the type-meta universe ---\n"
+          (cond [(= N-metas 1) "1"]
+                [(= N-metas 100) "2"]
+                [else "3"])
+          N-metas)
+  (with-elab-env
+    (lambda ()
+      ;; Create N-metas type metas (all post-S2.b-iii: register as components
+      ;; on the type-universe cell; cell-id stored in struct as the universe-cid).
+      (define metas
+        (for/list ([_ (in-range N-metas)])
+          (define m (fresh-meta '() (expr-Int) 'bench))
+          (solve-meta! (expr-meta-id m) (expr-Int))
+          m))
+      ;; Pick a representative meta for each path's per-call benchmark
+      ;; (use the middle one to avoid CHAMP-walk artifacts at edges).
+      (define m (list-ref metas (quotient N-metas 2)))
+      (define id (expr-meta-id m))
+      (define cell-id (expr-meta-cell-id m))
+
+      ;; Path 1 — cache field (current PM 8F path)
+      (collect-garbage) (collect-garbage)
+      (define t1 (current-inexact-monotonic-milliseconds))
+      (for ([_ (in-range N-bench-iter)])
+        (meta-solution/cell-id cell-id id))
+      (define elapsed1-us (* (- (current-inexact-monotonic-milliseconds) t1) 1000))
+      (define ns1 (* (/ elapsed1-us N-bench-iter) 1000))
+      (printf "  Path 1 (cache field):    ~a ns/call\n"
+              (exact->inexact (round ns1)))
+
+      ;; Path 2 — id-map lookup (no cache)
+      (collect-garbage) (collect-garbage)
+      (define t2 (current-inexact-monotonic-milliseconds))
+      (for ([_ (in-range N-bench-iter)])
+        (meta-solution id))
+      (define elapsed2-us (* (- (current-inexact-monotonic-milliseconds) t2) 1000))
+      (define ns2 (* (/ elapsed2-us N-bench-iter) 1000))
+      (printf "  Path 2 (id-map lookup):  ~a ns/call\n"
+              (exact->inexact (round ns2)))
+
+      ;; Path 4 — parameter-read (no cache, no id-map)
+      (collect-garbage) (collect-garbage)
+      (define t4 (current-inexact-monotonic-milliseconds))
+      (for ([_ (in-range N-bench-iter)])
+        (meta-solution-via-parameter id))
+      (define elapsed4-us (* (- (current-inexact-monotonic-milliseconds) t4) 1000))
+      (define ns4 (* (/ elapsed4-us N-bench-iter) 1000))
+      (printf "  Path 4 (parameter-read): ~a ns/call\n"
+              (exact->inexact (round ns4)))
+
+      ;; Decision summary per workload
+      (define delta41 (- ns4 ns1))
+      (define delta42 (- ns4 ns2))
+      (printf "  Δ(4-1) = ~a ns ; Δ(4-2) = ~a ns\n"
+              (exact->inexact (round delta41))
+              (exact->inexact (round delta42))))))
+
+(printf "\n  Decision rules (per D.3 §7.5.13.5):\n")
+(printf "  - Path 4 ≤ Path 1 within 10ns/call → option 4 wins (cleaner)\n")
+(printf "  - Path 4 > Path 1 by ≥30ns/call    → reconsider; option 1 keeps\n")
+(printf "  - Path 4 ≤ Path 2 by ≥50ns/call    → option 4 strictly dominant\n")
+
 (printf "\n=== Done ===\n")

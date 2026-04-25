@@ -1645,7 +1645,24 @@ This is the architecturally cleanest landing target. Each decision is independen
 
 **Implication**: bridge stays; primitive must be component-path-aware under universe migration. Hence S2.precursor.
 
-**Subtle observation** (audit follow-up scoped to S2.c-i): `decompose-pi` only fires from PUnify path. For non-unification type-cell writes (e.g., initial elaboration of a Pi from AST), decompose-pi may not run, so the bridge wouldn't be installed via that path. Worth a 10-min audit before S2.c-v to ensure we understand all invocation paths.
+##### §7.5.13.2.1 Initial-Pi-elaboration audit (S2.c-i Task 3, 2026-04-24) — scenario B confirmed exhaustively
+
+Audit verified `decompose-pi` is the sole mult-bridge installer and traced ALL paths that write Pi values to cells:
+
+**Bridge install sites**: only `decompose-pi` at `elaborator-network.rkt:482-491`. No other module installs cross-domain bridges between type and mult cells.
+
+**Pi-writing-to-cells paths** (production code):
+1. **`make-pi-reconstructor`** (`elaborator-network.rkt:416`) — installed by `decompose-pi` at lines 471 + 475. The reconstructor uses the FIXED mult value captured at `decompose-pi` time (it doesn't introduce new mult-metas). When it fires, the bridge is ALREADY installed for any in-scope mult-metas. No additional bridge installation needed.
+2. **`solve-meta!` writing `expr-Pi` literals** — `grep` found ZERO production sites that pass a literal `expr-Pi` as the second arg to `solve-meta!`. In practice, Pi values reach metas via unification's structural decomposition path (where `decompose-pi` fires), not via direct `solve-meta!` calls.
+
+**Conclusion**: scenario B (complementary) holds exhaustively. Every path that writes a Pi value to a type cell either:
+- Goes through `decompose-pi` (which installs the bridge), OR
+- Goes through `make-pi-reconstructor` (which `decompose-pi` already installed with the bridge), OR
+- Doesn't exist in production (the hypothetical `solve-meta!` direct-Pi-write path has no callers)
+
+S2.c-iv's bridge migration covers all the paths that currently exist. No additional invocation paths need to be handled.
+
+**Caveat**: if a future code path writes Pi values to type cells without going through unification (e.g., a yet-unwritten elaboration shortcut), it would NOT trigger bridge installation. Mult propagation for mult-metas inside such Pi values would defer to the next unification involving that cell — same behavior pre/post universe migration. This is acceptable because mult propagation works correctly via unification anyway; the bridge is an OPTIMIZATION for eager propagation when the type cell changes outside unification context.
 
 #### §7.5.13.3 §B.3 Parameter injection gap (audit-confirmed)
 
@@ -1801,7 +1818,43 @@ For each workload:
 
 **Estimated cost**: ~60min (read harness, design workloads, run, interpret).
 
-**Decision**: pending microbench data. Captured here so the threading-through-the-design has the architectural target articulated, even though the final answer awaits measurement.
+##### §7.5.13.5.1 Microbench results (S2.c-i Task 1, 2026-04-24) — option 4 wins
+
+Bench harness: section F added to `benchmarks/micro/bench-meta-lifecycle.rkt`. 50000 iterations per path × workload, GC between trials. Measurement uses universe-cells initialized via `init-meta-universes!` post-S2.b-iii.
+
+| Workload | Path 1 (cache field) | Path 2 (id-map lookup) | **Path 4 (parameter-read)** |
+|---|---|---|---|
+| W1 — 1 meta | 625 ns/call | 423 ns/call | **323 ns/call** |
+| W2 — 100 metas | 628 ns/call | 436 ns/call | **325 ns/call** |
+| W3 — 1000 metas | 632 ns/call | 454 ns/call | **328 ns/call** |
+
+**Deltas** (Path 4 vs others, negative = Path 4 faster):
+- vs Path 1 (cache): −302 to −304 ns/call across all workloads
+- vs Path 2 (id-map): −100 to −125 ns/call across all workloads
+
+**Decision (per §7.5.13.5 rules)**:
+- Path 4 ≤ Path 2 by ≥50ns ✓ → **option 4 strictly dominant over option 2**
+- Path 4 ≤ Path 1 by ≥10ns ✓ → **option 4 wins over option 1**
+- Path 4 is BOTH the architecturally cleanest AND the fastest path
+
+**Mechanistic explanation**:
+- Path 1 (cache): goes through `meta-solution/cell-id`'s `with-handlers` wrapper at line 2219 (per `metavar-store.rkt` audit). The continuation-marker overhead from `with-handlers` adds ~300ns vs the no-handler paths.
+- Path 2 (id-map): does CHAMP walk (~80ns per `prop-meta-id->cell-id` per A4 measurement) + the universe dispatch + compound-cell-component-ref. No `with-handlers`.
+- Path 4 (parameter): single parameter read (~3ns) + compound-cell-component-ref. Skips both id-map walk AND with-handlers.
+
+**Sub-question** (retire PM 8F's expr-meta cell-id field for type metas retroactively):
+**Strong yes, eventually.** The cell-id field is now provably a perf regression (302ns/call slower than parameter-read). However:
+- Retiring the field requires touching the `expr-meta` struct definition (pipeline.md "New Struct Field" cascade)
+- Touches every site that reads `expr-meta-cell-id`
+- Out of S2.c scope; flag as a follow-up (call it **`expr-meta-cell-id` retirement**, gated on Phase 4 CHAMP retirement which already touches this surface)
+
+For S2.c, option 4 is achievable WITHOUT retiring the field. The new dispatch helper `meta-domain-solution(domain, id)` reads from parameters and never references `expr-meta-cell-id`. The field becomes inert (still set, never used). Phase 4 cleanup retires it.
+
+##### §7.5.13.5.2 Final decision — option 4 adopted
+
+The dispatch unification table in §7.5.13.6 uses option 4 (parameter-read) for all 4 domains. The `meta-solution/cell-id` and `meta-solution` (no-args) backward-compat shims continue to exist for callers that have an `expr-meta` struct in hand, but they delegate to the new generic `meta-domain-solution(domain, id)` core.
+
+**Codification candidate** (post-S2.c codify): "phantom optimization detected via microbench — PM 8F's cache field was 302ns SLOWER than the no-cache path under universe migration." Pattern: cached optimizations from earlier-architecture eras may become net-negative after substrate changes. Microbench should be standard practice when migrating substrates that touch heavily-cached paths. 1 data point this session.
 
 #### §7.5.13.6 §F4 dispatch unification across mult/level/session
 
