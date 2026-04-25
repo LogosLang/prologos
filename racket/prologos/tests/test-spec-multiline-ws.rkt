@@ -3,7 +3,7 @@
 ;;;
 ;;; Regression tests for multi-line `spec` forms in WS mode.
 ;;;
-;;; Background — the eigentrust pitfalls memo (2026-04-23) reported that
+;;; Background — the eigentrust pitfalls doc (2026-04-23) #6 reported that
 ;;; a multi-line spec like
 ;;;
 ;;;     spec eigentrust-step
@@ -52,8 +52,8 @@
   ;; Body tokens: (A B -> C). The `->` MUST be at the top level (not buried
   ;; inside a sub-list) for split-on-arrow-datum to find it.
   (check-equal? d '(spec foo A B -> C))
-  (check-true (memq '-> (cddr d))
-              "arrow must appear at top level of spec body tokens"))
+  (check-not-false (memq '-> (cddr d))
+                   "arrow must appear at top level of spec body tokens"))
 
 (test-case "multi-line spec: bracket-grouped types preserved as sub-lists"
   (define d (ws-read "spec eigentrust-step\n     [List [List Rat]]\n     [List Rat]\n     Rat\n     [List Rat]\n     -> [List Rat]"))
@@ -67,11 +67,11 @@
                        Rat
                        (List Rat)
                        -> (List Rat)))
-  (check-true (memq '-> (cddr d))
-              "arrow must appear at top level of spec body tokens"))
+  (check-not-false (memq '-> (cddr d))
+                   "arrow must appear at top level of spec body tokens"))
 
 (test-case "multi-line spec: line comments between tokens do not break it"
-  ;; The original eigentrust pitfall #6 reproducer — with trailing line
+  ;; The eigentrust pitfalls doc #6 reproducer — with trailing line
   ;; comments on every continuation line.
   (define src
     (string-append
@@ -146,6 +146,40 @@
      "     :doc \"description\"\n"))
   (define d (ws-read src))
   (check-equal? d '(spec foo A -> B (:doc "description"))))
+
+(test-case "spec with forall (brace-params) + where + :doc, all multi-line"
+  ;; Cover the dependent-type / trait-constraint / docstring keywords
+  ;; together. The forall-style brace binder `{A : Type}` rides along on
+  ;; the spec name's line, type tokens splice across continuation lines,
+  ;; the bare `where` keyword splices flat (along with its trait
+  ;; constraints), and the keyword-like `:doc` continuation is wrapped
+  ;; per the metadata path.
+  (define src
+    (string-append
+     "spec compare {A : Type}\n"
+     "     A\n"
+     "     A\n"
+     "     -> Ord\n"
+     "     where (Eq A)\n"
+     "     :doc \"compare two values\"\n"))
+  (define d (ws-read src))
+  (check-equal? d '(spec compare ($brace-params A : Type)
+                         A A -> Ord
+                         where (Eq A)
+                         (:doc "compare two values"))))
+
+(test-case "spec multi-line forall+where+:doc matches one-line shape (modulo :doc wrap)"
+  ;; Same content on a single line produces the same flat token stream up
+  ;; to the `:doc` continuation — single-line `:doc` is bare, multi-line
+  ;; `:doc` becomes `(:doc ...)` wrapped. Both shapes are accepted by
+  ;; `process-spec`'s metadata loop.
+  (define one-line
+    "spec compare {A : Type} A A -> Ord where (Eq A) :doc \"compare two values\"")
+  (check-equal? (ws-read one-line)
+                '(spec compare ($brace-params A : Type)
+                       A A -> Ord
+                       where (Eq A)
+                       :doc "compare two values")))
 
 ;; ========================================
 ;; Other forms are unaffected (defn, def, match, etc. still wrap
