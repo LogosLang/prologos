@@ -139,7 +139,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Step 2 S2.c-i Task 1 (microbench) | §5 microbench A/B (option 1/2/4 cell-id approach) | ⬜ | Data-driven decision per §7.5.13.5. |
 | Step 2 S2.c-i Task 3 (initial-Pi audit) | Trace mult-info flow when Pi initially elaborated from AST (verify scenario B understanding) | ⬜ | Confirms or refines §7.5.13.2. |
 | Step 2 S2.c-ii (was iii) | Parameter injection per option 3c: wire 4 universe-merge parameters at elaborator-network.rkt module load with `compound-tagged-merge`-wrapped per-domain merges | ✅ | All 4 universe cells now use canonical domain merges (`compound-tagged-merge` of `type-unify-or-top` / `mult-lattice-merge` / `merge-meta-solve-identity`). Probe diff = 0 vs baseline. **Suite: 7917 tests / 126.4s / 0 failures** (within 118-127s variance band; +5 tests from test-t3-equality-audit.rkt, +5.7s within normal variance). |
-| Step 2 S2.c-iii (was iv) | Dispatch unification: `meta-domain-info` table + generic `meta-domain-solution(domain, id)` core (per option 4 if microbench supports) | ⬜ | ~150 LoC + -100 LoC duplicated. Backward-compat shims preserve all callers. |
+| Step 2 S2.c-iii (was iv) | Dispatch unification: `meta-domain-info` table (with `'universe-active?` per-domain flag for staged migration correctness) + generic `meta-domain-solution(domain, id)` core (option 4 parameter-read per microbench winner) + retire OR in `unify.rkt:430` (redundant under option 4) | ⬜ | ~150 LoC + -100 LoC duplicated. Backward-compat shims preserve all callers. **Mini-audit findings + 5 surprises persisted at §7.5.13.6.1.** S2.e scope items captured at §7.5.14. PPN 4C parent Phase 4 + DEFERRED.md updated for cross-cutting work. |
 | Step 2 S2.c-iv (was v) | `fresh-mult-meta` universe-path branch + cross-domain bridge migration (`current-structural-mult-bridge` declares component-paths) | ⬜ | ~80-120 LoC. Mirrors S2.b-iii pattern. |
 | Step 2 S2.c-v (was vi) | Probe + targeted suite + measurement + GO/no-go for S2.d | ⬜ | STEP2_BASELINE.md §12 update. |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
@@ -1916,6 +1916,71 @@ Per-domain entries:
 
 **Why in S2.c, not deferred**: doing it generically takes only marginally more effort than per-domain mult dispatch. S2.c is already touching these readers' surfaces. S2.d benefits significantly. Two architectural moves at once is acceptable when the second move is "make existing logic generic" rather than "introduce a new architectural pattern."
 
+#### §7.5.13.6.1 Mini-audit findings (S2.c-iii, 2026-04-24)
+
+Per Stage 4 mini-design + mini-audit methodology (§7.5.13 cycle): codebase audit run before S2.c-iii implementation, persisted here.
+
+**Production caller enumeration** (grep-verified 2026-04-24):
+
+| Function | Production callers | Test callers |
+|---|---|---|
+| `meta-solution` (no-args) | driver.rkt:2633 (callback install — see Surprise #1), unify.rkt:224, metavar-store.rkt:2219 (with-handlers fallback inside `meta-solution/cell-id`) — ~3-5 sites | ~25 |
+| `meta-solution/cell-id` | pretty-print.rkt:82, zonk.rkt:55+496, unify.rkt:206+259+430, trait-resolution.rkt:57+119, typing-core.rkt:2818, reduction.rkt:3176, metavar-store.rkt:879 — **~9 production sites**, all pass `(expr-meta-cell-id e)` | ~5 |
+| `meta-solved?` | qtt.rkt (mult-meta? gate), unify.rkt:429+814, resolution.rkt (~12 sites), trait-resolution.rkt (~6 sites), metavar-store.rkt internal (~3) — **~25 production sites** | ~30 |
+| `mult-meta-solution` / `mult-meta-solved?` | unify.rkt:963+968 (mult solve-flex), qtt.rkt:2106+2108 (mult-meta finite check), metavar-store.rkt:2578+2585 (zonk-mult/zonk-mult-default) | ~10 |
+| `level-meta-solution` / `level-meta-solved?` | unify.rkt:928+933 (level solve-flex), metavar-store.rkt:2435+2444 (zonk-level/zonk-level-default). `level-meta-solved?` has **NO production callers** | ~5 |
+| `sess-meta-solution` / `sess-meta-solved?` / `sess-meta-solution/cell-id` | typing-sessions.rkt:78+83 (no-args only); `sess-meta-solution/cell-id` is **INTERNAL-ONLY** (metavar-store.rkt:2729+2749 zonk-session); `sess-meta-solved?` has **NO production callers** | ~10 |
+
+**Surprises (5)**:
+
+1. **`current-lattice-meta-solution-fn` is OFF-NETWORK SCAFFOLDING (mantra violation)**. driver.rkt:2633 installs `meta-solution` as a Racket-parameter callback to type-lattice.rkt for `is-meta-unsolved?`-style checks (type-lattice.rkt:86, 176, 399, 403, 421). Exists to break import cycle (type-lattice.rkt is leaf; can't import metavar-store.rkt → callback parameter installed by driver). **Mantra check: ❌ off-network, ❌ not structurally emergent, ❌ not info flow through cells**. Don't rationalize the "constraint on shim signature" as a feature — the constraint exists BECAUSE of the scaffolding. **Retirement plan**: gated on PM Track 12 (module loading on network) + import restructuring; PPN 4C parent Phase 4 (CHAMP retirement) provides the natural reframing point. Captured in DEFERRED.md § "Off-Network Registry Scaffolding" + PPN 4C parent Phase 4 tracker row.
+
+2. **`sess-meta-solution/cell-id` is internal-only** — only zonk-session and zonk-session-default invoke it (metavar-store.rkt:2729+2749); not exported, no external callers. The dual surface (`sess-meta-solution` + `sess-meta-solution/cell-id`) is PM 8F-era scaffolding mirroring type's. **Both shims delegate to the SAME generic core** (`meta-domain-solution 'session id`); the cell-id arg is accepted for backward-compat but doesn't route differently from the no-args form.
+
+3. **`unify.rkt:430` `(or (meta-solution/cell-id cell-id id) (meta-solution id))` becomes redundant** under option 4. Both calls go through the same generic core; both compute the same value via parameter-read. The OR is genuinely dead. **Retired in S2.c-iii** as part of the dispatch unification (added to S2.c-iii scope).
+
+4. **CORRECTNESS GATE — `'universe-active?` per-domain flag required**. All 4 universe-cid parameters are SET post-S2.c-ii (`init-meta-universes!` allocates all 4 universe cells). But `fresh-X-meta` only registers TYPE metas in their universe (S2.b-iii landed); mult/level/session universes are EMPTY. Naive routing of all dispatch through `meta-universe-cell-id?` would return #f for all solved mult/level/session metas. **Fix**: `meta-domain-info` table includes `'universe-active?` field per domain. Type = #t (S2.b-iii landed); mult/level/session = #f. The flag flips ATOMICALLY with each domain's universe migration (S2.c-iv flips 'mult; S2.d flips 'level/'session). Correctness-by-construction: the table's flag IS the source of truth for "is this domain using universe dispatch." Dispatch code is invariant; data drives behavior.
+
+5. **Session domain has the SAME PM 8F debt as type** (mantra violation, multi-instance pattern). `sess-meta` struct's `cell-id` field (Track 10B Phase B1b) is the SAME phantom optimization as `expr-meta-cell-id`. Per microbench (S2.c-i Task 1), the cache field path is ~302ns SLOWER than parameter-read (with-handlers continuation-marker overhead exceeds 80ns id-map savings). Plus session has `current-sess-meta-store` parameter (off-network hasheq, line 2595) and `current-sess-meta-champ-box` parameter (off-network CHAMP-box). **Retirement plan distributed across phases**:
+   - `sess-meta.cell-id` field retirement → **PPN 4C parent Phase 4 tracker row** (alongside `expr-meta-cell-id` retirement; same phantom-optimization pattern)
+   - `current-sess-meta-store` + `current-sess-meta-champ-box` parameter retirement → **§7.5.14 (S2.e Forward Scope Notes)**
+   - `sess-meta-solution/cell-id` dual-surface retirement → **§7.5.14 (S2.e Forward Scope Notes)**
+
+**Refined `meta-domain-info` shape (with `'universe-active?` correctness fix)**:
+
+```racket
+(define meta-domain-info
+  (hasheq
+    'type    (hasheq 'universe-active? #t            ; S2.b-iii landed
+                     'universe-cid current-type-meta-universe-cell-id  ; option 4 thunk
+                     'merge type-unify-or-top
+                     'contradicts? type-lattice-contradicts?
+                     'bot? prop-type-bot? 'top? prop-type-top?
+                     'champ-box current-prop-meta-info-box)
+    'mult    (hasheq 'universe-active? #f            ; S2.c-iv flips
+                     'universe-cid current-mult-meta-universe-cell-id
+                     'merge mult-lattice-merge
+                     'contradicts? mult-lattice-contradicts?
+                     'bot? mult-bot? 'top? mult-top?
+                     'champ-box current-mult-meta-champ-box)
+    'level   (hasheq 'universe-active? #f            ; S2.d flips
+                     ...)
+    'session (hasheq 'universe-active? #f            ; S2.d flips
+                     ...)))
+
+(define (meta-domain-solution domain id [explicit-cid #f])
+  (define info (hash-ref meta-domain-info domain))
+  (cond
+    [(hash-ref info 'universe-active?)
+     ... universe dispatch via option 4 / explicit-cid ...]
+    [else
+     ... legacy id-map walk via per-domain CHAMP fallback ...]))
+```
+
+Each per-domain migration (S2.c-iv for mult, S2.d for level/session) atomically flips its `'universe-active?` to #t when its `fresh-X-meta` migration lands. The dispatch code is invariant; data drives behavior. This is the correctness-by-construction landing the user's pushback (§5.4) demanded.
+
+**Codification candidate (1 data point this session, watching list)**: "PM 8F-era cache fields + dual surfaces are phantom optimizations under universe migration. Microbench reveals the cache-field path is ~300ns slower than parameter-read due to with-handlers continuation-marker overhead. Pattern repeats: type domain (`expr-meta-cell-id`) AND session domain (`sess-meta.cell-id`). Retirement is structural, not local — both fields go inert post-option-4 + universe migration; cleanup absorbed by Phase 4 (CHAMP retirement) for fields and S2.e for parameter scaffolding."
+
 #### §7.5.13.7 Sub-phase partition (revised post-Task-2 audit, S2.precursor + S2.c-i through S2.c-v)
 
 **Revision note (2026-04-24)**: original partition had 6 sub-phases (S2.c-i through S2.c-vi). After S2.c-i Task 2 audit (§7.5.13.4) revealed no T-3 'equality gap exists, the partition collapses to 5 sub-phases. **S2.c-ii is REMOVED** (no fix needed); subsequent sub-phases keep their original semantics but renumber S2.c-iii → S2.c-ii, S2.c-iv → S2.c-iii, S2.c-v → S2.c-iv, S2.c-vi → S2.c-v.
@@ -1988,7 +2053,37 @@ S2.c-i is the data-collection sub-phase. Outputs are persisted into this design 
 - D.3 §7.5.13 (this section): NEW — captures S2.c mini-design + audit findings + sub-phase plan
 - D.3 §3 Progress Tracker: rows for S2.precursor + S2.c-i through S2.c-vi added
 - (Mid-flight) D.3 §7.5.13.4 / §7.5.13.5: updated with audit + measurement findings during S2.c-i
+- (Mid-flight) D.3 §7.5.13.6.1: NEW — mini-audit findings for S2.c-iii + 5 surprises (added 2026-04-24)
 - (At S2.c close) D.3 §7.5.13: Vision Alignment Gate outcome appended
+
+### §7.5.14 S2.e Forward Scope Notes (NEW 2026-04-24)
+
+Captured during S2.c-iii mini-design + audit. S2.e is the factory-retirement + final-measurement sub-phase of Step 2. This section accumulates scope notes ahead of S2.e mini-design open. Items will be folded into a proper S2.e mini-design when that sub-phase opens (~end-of-Step-2 sequence). Persisting in D.3 (rather than DEFERRED.md) because these are **track-internal scope items** — they belong to the design that is currently active, not to the cross-track deferred backlog.
+
+#### §7.5.14.1 Session-domain off-network parameter retirements
+
+Surfaced by S2.c-iii mini-audit (§7.5.13.6.1 Surprise #5). The session domain accumulated multiple PM 8F-era off-network state patterns parallel to type's:
+
+- **`current-sess-meta-store` parameter** (`metavar-store.rkt:2595`): Racket parameter holding `(make-hasheq)`. Off-network mantra violation; legacy from pre-network meta storage era.
+- **`current-sess-meta-champ-box` parameter**: Racket parameter holding box of CHAMP for sess-meta status tracking. Same off-network pattern as `current-prop-meta-info-box` (type) and `current-mult-meta-champ-box` (mult).
+
+**S2.e retirement plan**: when session universe migration (S2.d) is complete and the universe is the authoritative store, both parameters become unused (the `'champ-box` entry in `meta-domain-info` for `'session` is no longer consulted because `'universe-active? = #t`). Retire alongside the per-cell factory retirement.
+
+Mantra check post-retirement: ✓ on-network (universe cell), ✓ structurally emergent (dispatch via table), ✓ info flow through cells (compound-cell-component-ref).
+
+#### §7.5.14.2 Session-domain dual-surface retirement
+
+The `sess-meta-solution/cell-id` (PM 8F-style fast path with `sess-meta.cell-id` cache field) becomes redundant under option 4 dispatch:
+
+- Both `sess-meta-solution` and `sess-meta-solution/cell-id` shims delegate to `meta-domain-solution 'session id` (as designed in S2.c-iii)
+- The cell-id arg is accepted for backward-compat but doesn't change dispatch (parameter-read wins)
+- The 2 internal-only callers in metavar-store.rkt (zonk-session at :2729, zonk-session-default at :2749) currently pass `(sess-meta-cell-id s)` → after Phase 4's `sess-meta.cell-id` field retirement, they stop passing it → only `sess-meta-solution` remains
+
+**S2.e retirement plan** (post-Phase-4): once `sess-meta.cell-id` field is deleted, retire `sess-meta-solution/cell-id` shim entirely. Single-surface contraction matches the option-4 mantra-aligned shape; the dual surface was scaffolding tracking PM 8F's cache-field optimization.
+
+#### §7.5.14.3 Other potential S2.e items (placeholder)
+
+Future findings during S2.c-iv / S2.d / S2.f may surface additional retirement candidates — e.g., dual-surface patterns for mult/level analogous to session's, factory functions that become near-trivial post-universe-migration, parameter scaffolding that the universe migration makes unused. This subsection accumulates them as they arise. Mini-design at S2.e open consolidates and partitions.
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
