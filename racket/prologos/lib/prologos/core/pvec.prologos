@@ -8,7 +8,7 @@ require [prologos::core::collection-traits :refer [Seqable
                                                     Functor]]
 require [prologos::data::lseq          :refer [LSeq]]
 require [prologos::data::lseq-ops      :refer [list-to-lseq lseq-to-list]]
-require [prologos::data::list           :refer [List nil cons zip-with]]
+require [prologos::data::list           :refer [List nil cons zip-with nth-int take-int drop-int]]
 require [prologos::data::option        :refer [Option some none]]
 require [prologos::data::nat            :refer [lt?]]
 
@@ -146,3 +146,50 @@ spec pvec-zip-with {A B C : Type} [A -> B -> C] [PVec A] [PVec B] -> [PVec C]
   :doc "Combine two PVecs element-wise with a function; truncates to shorter."
 defn pvec-zip-with [f xs ys]
   pvec-from-list [zip-with f [pvec-to-list xs] [pvec-to-list ys]]
+
+;; ========================================
+;; Int-Indexed Operations
+;; ========================================
+;; Mirrors the nth-int / length-int / take-int / drop-int quartet on List
+;; (see prologos::data::list). Use these when your algorithm carries Int
+;; counters (e.g. a budget compared via int-le) and you'd otherwise have
+;; to maintain a parallel Nat counter just to index a PVec.
+;;
+;; Negative indices are treated as out-of-range / clamped-to-zero per the
+;; List convention — they never panic. Out-of-bounds reads return none.
+;;
+;; Implementation note: these helpers route through pvec-to-list / List's
+;; existing Int-indexed helpers, then back via pvec-from-list when needed.
+;; This bridges the Int↔Nat gap exactly the way the List versions handle
+;; it (pure recursion, no Int→Nat conversion primitive). The cost is
+;; O(n) for take-int/drop-int (matching the List counterparts) and O(n)
+;; for nth-int (also matching List nth-int). pvec-length-int is O(log32 n)
+;; — it composes pvec-length (O(log32 n)) with from-nat (O(1) on Nat
+;; literals).
+
+;; pvec-length-int : PVec A -> Int
+;; Number of elements as Int (for computational contexts). Mirrors List length-int.
+spec pvec-length-int {A : Type} [PVec A] -> Int
+defn pvec-length-int [v]
+  from-nat [pvec-length v]
+
+;; pvec-nth-int : PVec A -> Int -> Option A
+;; Element at Int index (0-based). Negative indices return none;
+;; out-of-bounds indices return none. Mirrors List nth-int.
+spec pvec-nth-int {A : Type} [PVec A] Int -> [Option A]
+defn pvec-nth-int [v i]
+  nth-int i [pvec-to-list v]
+
+;; pvec-take-int : Int -> PVec A -> PVec A
+;; Take first n elements. Non-positive n returns the empty pvec; n larger
+;; than the length returns the whole pvec. Mirrors List take-int.
+spec pvec-take-int {A : Type} Int [PVec A] -> [PVec A]
+defn pvec-take-int [n v]
+  pvec-from-list [take-int n [pvec-to-list v]]
+
+;; pvec-drop-int : Int -> PVec A -> PVec A
+;; Drop first n elements. Non-positive n returns the pvec unchanged; n
+;; larger than the length returns the empty pvec. Mirrors List drop-int.
+spec pvec-drop-int {A : Type} Int [PVec A] -> [PVec A]
+defn pvec-drop-int [n v]
+  pvec-from-list [drop-int n [pvec-to-list v]]
