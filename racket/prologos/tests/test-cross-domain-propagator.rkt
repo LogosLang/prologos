@@ -184,3 +184,67 @@
   (define net4 (net-cell-write net3 c-cell 10))
   (define result (run-to-quiescence-widen net4))
   (check-equal? (net-cell-read result a-cell) #t))
+
+;; ========================================
+;; 8. Component-paths kwargs (PPN 4C S2.precursor, 2026-04-24)
+;; ========================================
+;;
+;; Verify the new kwargs (#:c-component-paths, #:a-component-paths,
+;; #:assumption, #:decision-cell, #:srcloc) are accepted and forwarded
+;; to the underlying net-add-propagator calls without breaking existing
+;; behavior. Behavioral component-path FILTERING under universe cells
+;; is tested for real in S2.c-v (when actual universe-cell migration
+;; lands); here we verify the contract: kwargs accepted, defaults
+;; preserve backward compat, the bridge functions correctly with them.
+
+(test-case "S2.precursor: existing callers without kwargs work unchanged"
+  ;; Backward compat: the most common pattern (no kwargs) must produce
+  ;; the same behavior as pre-precursor. Mirror test-case 1.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  (define-values (net3 _p-alpha _p-gamma)
+    (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma))
+  (define net4 (net-cell-write net3 c-cell 42))
+  (define result (run-to-quiescence net4))
+  (check-equal? (net-cell-read result a-cell) #t))
+
+(test-case "S2.precursor: kwargs accepted; bridge fires correctly with empty paths"
+  ;; Pass empty-list paths explicitly + null assumption — equivalent to defaults.
+  ;; Must produce same behavior as no-kwargs case.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  (define-values (net3 _p-alpha _p-gamma)
+    (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma
+      #:c-component-paths '()
+      #:a-component-paths '()
+      #:assumption #f
+      #:decision-cell #f
+      #:srcloc #f))
+  (define net4 (net-cell-write net3 c-cell 42))
+  (define result (run-to-quiescence net4))
+  (check-equal? (net-cell-read result a-cell) #t))
+
+(test-case "S2.precursor: kwargs accepted with non-default values; bridge installs"
+  ;; Pass non-default values for path kwargs. The α/γ closures still
+  ;; read whole-cell (this test isn't about filtering — it's about
+  ;; verifying the primitive accepts and registers the propagators
+  ;; without error when paths are supplied).
+  (define net0 (make-prop-network 100))
+  (define-values (net1 c-cell) (net-new-cell net0 0 max-merge))
+  (define-values (net2 a-cell) (net-new-cell net1 #f or-merge))
+  (define-values (net3 pid-alpha pid-gamma)
+    (net-add-cross-domain-propagator net2 c-cell a-cell iv-alpha iv-gamma
+      #:c-component-paths (list (cons c-cell 'some-key))
+      #:a-component-paths (list (cons a-cell 'other-key))))
+  ;; Both propagator IDs should be valid (non-#f)
+  (check-not-false pid-alpha)
+  (check-not-false pid-gamma)
+  ;; The bridge still functions — write to c-cell triggers α
+  ;; (component-paths filtering only kicks in for SRE-registered
+  ;; structural cells; for max-merge cells, paths are inert and
+  ;; whole-cell firing applies)
+  (define net4 (net-cell-write net3 c-cell 42))
+  (define result (run-to-quiescence net4))
+  (check-equal? (net-cell-read result a-cell) #t))

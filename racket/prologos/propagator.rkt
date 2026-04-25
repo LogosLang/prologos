@@ -3230,19 +3230,64 @@
 ;; Termination is guaranteed by net-cell-write's no-change guard:
 ;; if alpha(c) = a-cell's current value, no change → no propagation.
 ;; Requires alpha and gamma to be monotone.
-(define (net-add-cross-domain-propagator net c-cell a-cell alpha-fn gamma-fn)
-  ;; Propagator 1: C → A (abstraction direction)
+;;
+;; PPN 4C S2.precursor (2026-04-24): kwargs added for component-path
+;; declarations under universe-cell migration. When c-cell or a-cell is
+;; a compound (universe) cell, the corresponding `:component-paths`
+;; declaration narrows dependent firing to specific components.
+;;
+;; #:c-component-paths — paths the α propagator watches on c-cell.
+;;   Empty list (default) = whole-cell semantics (any change fires α).
+;;   For universe c-cell, declare (list (cons c-cell component-key) ...)
+;;   so α fires only when the specific component changes.
+;; #:a-component-paths — paths the γ propagator watches on a-cell. Same
+;;   pattern as c-component-paths.
+;; #:assumption — speculation assumption-id for branch-isolated firing
+;;   (BSP-LE 2/2B clause-propagator pattern).
+;; #:decision-cell — decision cell for ATMS branching (rarely used here).
+;; #:srcloc — source location for diagnostic + LSP integration.
+;;
+;; CRITICAL: when c-cell or a-cell is a universe cell, the α/γ closures
+;; MUST use compound-cell-component-{ref,write}/pnet for component-keyed
+;; access. Raw net-cell-read/write returns/writes the whole hasheq, which
+;; breaks the bridge silently. The primitive doesn't enforce this — it's
+;; the caller's responsibility, paralleling how propagator fire functions
+;; that read structural cells must use component-keyed access.
+;;
+;; Backward compatibility: existing callers without kwargs get empty
+;; component-paths + #f assumption/decision-cell/srcloc — preserves
+;; whole-cell firing semantics for non-universe cells.
+(define (net-add-cross-domain-propagator net c-cell a-cell alpha-fn gamma-fn
+                                          #:c-component-paths [c-cpaths '()]
+                                          #:a-component-paths [a-cpaths '()]
+                                          #:assumption [aid #f]
+                                          #:decision-cell [dcid #f]
+                                          #:srcloc [srcloc #f])
+  ;; Propagator 1 (α): C → A (abstraction direction)
+  ;; α reads from c-cell; component-paths declares which c-cell components
+  ;; to watch. For universe c-cell, declare (list (cons c-cell key) ...);
+  ;; for non-universe, leave empty (whole-cell firing).
   (define-values (net1 pid-alpha)
     (net-add-propagator net
       (list c-cell) (list a-cell)
       (lambda (net)
         (define c-val (net-cell-read net c-cell))
-        (net-cell-write net a-cell (alpha-fn c-val)))))
-  ;; Propagator 2: A → C (concretization direction)
+        (net-cell-write net a-cell (alpha-fn c-val)))
+      #:component-paths c-cpaths
+      #:assumption aid
+      #:decision-cell dcid
+      #:srcloc srcloc))
+  ;; Propagator 2 (γ): A → C (concretization direction)
+  ;; γ reads from a-cell; component-paths declares which a-cell components
+  ;; to watch.
   (define-values (net2 pid-gamma)
     (net-add-propagator net1
       (list a-cell) (list c-cell)
       (lambda (net)
         (define a-val (net-cell-read net a-cell))
-        (net-cell-write net c-cell (gamma-fn a-val)))))
+        (net-cell-write net c-cell (gamma-fn a-val)))
+      #:component-paths a-cpaths
+      #:assumption aid
+      #:decision-cell dcid
+      #:srcloc srcloc))
   (values net2 pid-alpha pid-gamma))
