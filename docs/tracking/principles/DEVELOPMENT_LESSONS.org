@@ -768,3 +768,393 @@ protocol, not prioritization.
 
 See: ~HANDOFF_PROTOCOL.org~ § Hot-Load Reading Protocol (the canonical
 process); ~workflow.md~ "Pragmatic" anti-pattern (same shape).
+
+** Pipeline.md "Per-Domain Universe Migration" Checklist Works Prophylactically
+
+When a procedural rule is codified after one painful instance, applying
+it prophylactically to subsequent sites pays off measurably. The
+"Per-Domain Universe Migration" checklist (~.claude/rules/pipeline.md~,
+codified after S2.c-iv's 4-minute hang) was applied prophylactically to
+S2.d-level and S2.d-session — both landed in ~20 min vs S2.c-iv's ~50 min
+that included the diagnostic detour.
+
+*Pattern observed across 3 data points* (PPN 4C addendum Step 2,
+2026-04-25):
+
+1. *S2.c-iv (pre-checklist)*: ~50 min total including 4-minute diagnostic
+   hang due to missed ~solve-X-meta!~ dispatch update co-migration.
+   Painful surface; checklist codified here.
+2. *S2.d-level (post-checklist)*: ~20 min clean landing. Atomic
+   3-edit pattern applied (fresh + solve + flag flip).
+3. *S2.d-session (post-checklist)*: ~20 min clean landing. Same
+   pattern, no rediscovery.
+
+*The principle*: codified procedural rules MULTIPLY in value as more
+sites adopt them. The first painful instance is the cost; each
+subsequent prophylactic application is the dividend. Procedural
+rules with concrete checklists (atomic co-migration sites enumerated)
+are higher-leverage than abstract principles because they prevent
+re-discovery of the same bug shape.
+
+*Application*: when a bug shape is structural (will recur for similar
+migrations), codify as a checklist in =.claude/rules/= immediately.
+Don't wait for the second instance — the first painful instance IS
+the validation that the structure is real.
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 (2026-04-25).
+S2.c-iv pain → checklist codification → S2.d-level + S2.d-session
+prophylactic application = 30 min × 2 sites saved = ~60 min recovered
+on the next 2 applications alone, plus prevented bug recurrence.
+
+** Capture-Gap Pattern: "Future Phase X Handles Y" Requires Verification
+
+When naming a future phase as the home for work — "Phase X handles Y",
+"deferred to Track 4D", "Phase 4 absorbs this" — VERIFY the work is
+actually captured in that phase's design doc OR explicitly create the
+capture at the time of the claim. Otherwise the work gets missed.
+
+*Pattern's structural fingerprint*: parallel surfaces in sibling
+domains/phases that the narrow framing misses. The audit reveals
+the parallel surfaces; the design's narrow framing did not.
+
+*Pattern observed across 3 data points* (PPN 4C Phase 9+10+11
+addendum Step 2, 2026-04-25):
+
+1. *S2.d-followup §7.5.14.1 expansion*: design framed
+   "session-domain off-network parameter retirements" but mult/level
+   had parallel patterns not captured. Audit revealed 10 off-network
+   parameters across all 3 non-type domains. Expanded design + added
+   4 DEFERRED.md PM 12 entries.
+2. *S2.e mini-design §7.5.14.4 transient finding*: I claimed "Phase
+   4D / 4 / 1E will handle per-command transient consolidation" —
+   none of those phases actually captured the work. Fix: 4 captures
+   (D.3 §7.5.14.4 + §7.5.15 + Track 4D research §5.4 + DEFERRED.md
+   "Future Track 4D Scope" entry).
+3. *S2.e-v audit-driven 2→6 scope expansion*: design (D.3 §7.5.14.3)
+   named only 2 functions for retirement (~elab-add-type-mult-bridge~ +
+   ~elab-mult-cell-write~); audit revealed 6 test-only/dead-code
+   surfaces (added: ~elab-fresh-mult-cell~ + ~elab-mult-cell-read~ +
+   ~elab-fresh-level-cell~ + ~elab-fresh-sess-cell~). User-directed
+   Wide retirement vs Narrow's design-literal scope.
+
+*The principle*: every "future phase will handle X" claim requires
+capture verification (or explicit capture creation) at the time of
+the claim. Design framing is fallible; audit grounds it.
+
+*The structural cause*: humans (and LLMs) frame design narrowly to
+keep cognitive load manageable. The narrow framing is locally
+correct (per-domain analysis is sound) but globally incomplete
+(parallel domains have parallel patterns). The audit-first methodology
+catches this; without audit, the parallel surfaces persist as
+deferred-but-not-tracked work that drifts over time.
+
+*Same anti-pattern shape as*:
+- "Pragmatic" rationalization for incomplete migration (workflow.md)
+- Cataloguing instead of challenging at gates
+  ([[file:CRITIQUE_METHODOLOGY.org][CRITIQUE_METHODOLOGY.org]])
+- Hot-Load Is a Protocol, Not a Prioritization (above)
+
+All four are species of the same family: NARROW FRAMING that misses
+parallel/sibling work the broader scope would have captured.
+
+*Process discipline*: when a design says "X handles Y", grep for Y
+in X's design doc. If absent, either (a) add the capture now, or
+(b) honestly say "deferred to X but not yet captured — opening a
+TODO for X's mini-design to absorb this." Either is principled;
+deferring without capture is the anti-pattern.
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 (2026-04-25).
+3 data points across the same session arc — graduation-ready
+threshold met. Codification here.
+
+** Partial-State Regression Unwinds When Architecture Completes
+
+Micro-benchmark regressions in PARTIAL-migration states often UNWIND
+when the architecture completes the cross-cutting migration. Don't
+treat partial-state regressions as failures requiring immediate
+resolution; treat them as data points for the architecture's
+amortization curve.
+
+*Pattern observed across 3 data points* (PPN 4C addendum Step 2 arc,
+2026-04-23 → 2026-04-25):
+
+1. *S2.a (positive surprise)*: compound-cell-component-ref measured
+   55% FASTER than per-cell baseline (E4: 43-52 ns vs E5: 113 ns) —
+   contradicted §5 hypothesis which predicted 250-350 ns regression.
+   Read-path WIN at the infrastructure introduction.
+2. *S2.b-iv (mixed)*: ~fresh-meta~ improved ~27% but ~solve-meta!~
+   regressed ~31% (8.53 → 11.14 μs). Half-migrated state: TYPE on
+   universe, MULT/LEVEL/SESSION still per-cell. Each solve paid
+   dispatch overhead AND legacy per-meta cell allocation.
+3. *S2.c-iv → S2.e-v (regression UNWOUND past baseline)*: atomic
+   mult-domain migration unified dispatch + eliminated mult per-meta
+   cells; dispatch overhead amortizes across more meta-solve calls
+   AND mult-domain allocation eliminates per-meta cells. Result:
+   ~solve-meta!~ went 11.14 μs → 7.67 μs (S2.c-iv) → 7.832 μs
+   (S2.e-v) — now -8% PAST baseline.
+
+*The principle*: full-suite wall time is the load-bearing metric for
+go/no-go; per-sub-phase micros inform investigation but don't gate
+decisions. Trends matter more than single-phase absolutes. Treat
+partial-state regressions as data points for the architecture's
+amortization curve, not as failures requiring immediate resolution.
+
+*Operational rule (extends ~workflow.md~ "Bounce-back not gate")*:
+when a sub-phase shows micro regression but full suite is within
+variance, name the regression in the dailies as a "watching-list"
+candidate; expect amortization unless the architecture leaves the
+half-migrated state permanently. If 2 subsequent sub-phases land
+WITHOUT amortization, escalate; otherwise let architecture
+completion resolve it.
+
+*Why this matters*: the alternative discipline ("any regression
+gates the next sub-phase") would have stopped Step 2 at S2.b-iv
+for a regression that was structurally guaranteed to unwind. The
+~31% regression looked alarming but was a half-migration artifact.
+Treating it as a gate would have either (a) stopped the architecture
+and yielded the wrong outcome, or (b) wasted time investigating
+a transient signal. The trend-based discipline is more architecturally
+honest.
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 arc
+(2026-04-23 → 2026-04-25). 3 data points across S2.a → S2.b-iv →
+S2.c-iv → S2.e-v — graduation-ready threshold met. Reinforces the
+~workflow.md~ "bounce-back not gate" measurement discipline.
+
+** Audit-First Methodology Prevents Under-Scoped Implementation
+
+When the design specifies a narrow scope (named retirement targets,
+specific call sites, particular files), pre-implementation audit
+reveals if there's hidden architectural work AND/OR parallel surfaces
+the design's framing missed. This is graduation of the audit-first
+methodology user-directed at S2.e-i opening, validated across the
+session arc.
+
+*Pattern observed across 4 data points* (PPN 4C addendum Step 2 arc,
+2026-04-25):
+
+1. *S2.e-i pre-implementation audit*: revealed driver.rkt:2010's bare
+   prop-network was a placeholder (process-command replaces it),
+   preventing over-engineered defensive guards.
+2. *S2.e-iv pre-implementation audit*: revealed 3-category structure
+   with divergent complexity (Cat A vestigial; Cat B architectural
+   refactor; Cat C cleanup). Design's "deletion" framing missed Cat
+   B. Sub-phase splitting (a/b/c) provided cleaner conversational
+   checkpoints.
+3. *S2.e-iv-c pre-implementation audit*: revealed 100% pattern
+   uniformity (~current-mult-meta-store~ in 169 test files, all using
+   ~[current-mult-meta-store (make-hasheq)]~). Enabled confident
+   batch surgery (sed) instead of per-file Read+Edit; saved ~80 min.
+4. *S2.e-v pre-implementation audit*: revealed 6 test-only/dead-code
+   surfaces vs design's named 2. User-directed Wide retirement.
+
+*The principle*: when design scope is described as "deletion" or
+names a narrow set of call sites/functions, audit reveals if there's
+hidden architectural work (S2.e-iv Cat B) AND/OR parallel surfaces
+the design's framing missed (S2.e-v 4 audit-discovered surfaces)
+AND/OR pattern uniformity for safe batch operations (S2.e-iv-c
+sed-suitability).
+
+*Process discipline*: per Stage 4 Per-Phase Protocol Step 2 —
+mini-audit (codebase) is a co-dependent activity with mini-design
+(Step 1). The audit's outputs persist into the design doc as
+findings (per refined methodology codified 2026-04-23). Findings
+that expand scope (Wide vs Narrow) are presented to user for
+decision; findings that catch hidden work (Cat B) restructure the
+sub-phase plan.
+
+*Why this matters*: the alternative (skip audit, trust design's
+narrow framing) would have left the parallel surfaces, hidden
+work, and missed batch opportunities. The audit cost is small
+(~5-15 min for grep enumeration); the benefit is structural
+correctness AND avoidance of mid-implementation surprises.
+
+*Connection to capture-gap pattern* (above): audit IS the
+capture-gap discovery mechanism. The capture-gap pattern names
+WHAT goes wrong (parallel surfaces missed); audit-first names HOW
+to catch it (run grep enumeration before implementation, present
+Wide vs Narrow if scope expands).
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 arc
+(2026-04-25). User-directed at S2.e-i opening ("audit first, then
+review shortly before heading into implementation"); validated
+across 4 sub-phases. Graduation-ready threshold met. Codification
+here makes audit-first an explicit Stage 4 Per-Phase Protocol
+discipline rather than a per-track preference.
+
+** Audit-Driven Scope Expansion: Wide vs Narrow Decision Point
+
+When pre-implementation audit reveals more surfaces than the design
+names, present **Wide vs Narrow** as a decision point to the user.
+
+- *Wide* = comprehensive cleanup atomically (retire all
+  audit-discovered surfaces in one sub-phase)
+- *Narrow* = retire only design-named surfaces; defer
+  audit-discovered surfaces to follow-up sub-phase or future phase
+
+*Pattern observed across 2 data points* (PPN 4C Phase 9+10+11
+addendum Step 2 arc, 2026-04-25):
+
+1. *S2.e-iv split (Wide variant)*: design's "deletion" estimate
+   became Cat A + Cat B + Cat C sub-phases. User-directed
+   "stick to the design; breaking into multiple subphases is fine."
+   Wide-by-decomposition: same scope, finer-grained sub-phases.
+2. *S2.e-v Wide retirement*: design named 2 functions; audit
+   revealed 6. User-directed Wide ("Wide + Migrate, I agree
+   with your lean on these"). All 6 retired atomically.
+
+*Decision recommendation*: recommend Wide unless cost prohibitive.
+Reasons:
+- Capture-gap pattern (above) makes deferred audit-discovered
+  surfaces drift-prone — they get missed in subsequent sub-phases
+  unless explicitly re-captured.
+- Atomic cleanup is more architecturally coherent than serialized
+  cleanup across multiple sub-phases.
+- The cost difference is usually small — audit-discovered surfaces
+  are typically parallel patterns that share retirement mechanics
+  with the design-named ones.
+
+*Cost-prohibitive criteria* (when Narrow is appropriate):
+- Audit-discovered surfaces require fundamentally different
+  mechanism than design-named ones (rare; usually they're parallel)
+- Sub-phase scope balloon would push past the 1-hour conversational
+  cadence rule (split via S2.e-iv pattern instead)
+- User context-window or implementation cost concerns
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 arc
+(2026-04-25). 2 data points; codification here so the decision
+point is explicit at every audit-driven scope expansion.
+
+*Connection to other patterns*:
+- Audit-first (above) is the discovery mechanism
+- Capture-gap (above) names the failure mode of Narrow without
+  re-capture
+- Wide is the principled response that prevents drift
+
+** Sed-Deletion of Parameterize Bindings Is Error-Prone for Last-Binding Lines
+
+When sed-deleting parameterize bindings, MUST use 2-pass pattern:
+substitution preserves the closing paren for last-binding-in-block;
+deletion removes plain bindings. Single-pass deletion breaks the
+parameterize blocks where the deleted line had the closing paren.
+
+*The bug*:
+
+#+begin_src bash
+# WRONG — matches both `(make-hasheq)]` (regular) AND
+# `(make-hasheq)])` (last-binding-in-parameterize-block).
+# For the latter, deletes the closing `)` → unbalanced parameterize.
+sed -i '' '/\[X (make-hasheq)\]/d' file.rkt
+#+end_src
+
+*The fix (2-pass pattern)*:
+
+#+begin_src bash
+sed -i '' \
+  -e 's/^\([[:space:]]*\)\[X[[:space:]][[:space:]]*(make-hasheq)\])/\1)/' \
+  -e '/\[X[[:space:]][[:space:]]*(make-hasheq)\]/d' \
+  file.rkt
+#+end_src
+
+The first line (substitution) handles `(make-hasheq)])` — replaces
+the entire binding (preserving leading whitespace via captured `\1`)
+with just the closing `)`. The second line (deletion) handles
+`(make-hasheq)]` (no trailing paren).
+
+*Verification before batch*: test on 1 file via copy to /tmp, run
+sed, then ~tools/check-parens.sh~ to verify balance. Don't apply
+batch sed to many files without single-file verification.
+
+*Pattern observed in PPN 4C S2.e-iv-c (2026-04-25)*: initial
+single-pass sed broke 94 parameterize blocks. Detection only via
+FULL SUITE (test-session-runtime-03.rkt read-syntax error;
+targeted tests on the metavar-store/universe domains all PASSED
+because the broken parameterize blocks were in OTHER test files).
+Recovery via ~git checkout HEAD --~ revert + smart 2-pass sed.
+
+*Why this matters*: large-scale test fixture surgery is high-leverage
+when pattern uniformity is verified (audit-first), but high-risk
+when sed patterns have edge cases. The 2-pass pattern removes the
+edge case. Test-mode isolation (1 file via copy + check-parens)
+catches the bug before batch.
+
+*Operational rule*:
+1. Audit-first to verify 100% pattern uniformity across target files
+2. Test sed on 1 file copy in /tmp before batch
+3. Use 2-pass pattern (substitution + deletion) for parameterize
+   bindings
+4. Run check-parens after batch to verify balance
+5. Run FULL SUITE as regression gate (NOT just targeted tests —
+   the bug may manifest in unrelated test files via cascading
+   read-syntax errors)
+
+*Reinforces existing rule*: ~workflow.md~ "full suite as regression
+gate when touching code is RULE." This sed-mistake is a strong
+data point for that rule — targeted tests on the directly-affected
+files all PASSED while the regression was real.
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 S2.e-iv-c
+(2026-04-25). 1 high-confidence data point — codifying as
+operational rule because the failure mode is structural (parameterize
+bindings universally have this shape) and the fix is mechanical
+(2-pass pattern).
+
+** Microbench-Claim Verification Pays Off Across Sub-Phase Arcs
+
+When a phase's design references a microbench finding as load-bearing
+for a quantitative claim (e.g., "option 4 wins by 302 ns/call"), the
+phase's CLOSE must include re-microbench to verify the claim landed
+AND maintained through subsequent sub-phases. Architectural-shape
+delivery is NOT sufficient — the perf claim must be VERIFIED, not
+assumed to have landed AND not assumed to have persisted.
+
+*Pattern observed across 3 data points* (PPN 4C addendum Step 2 arc,
+2026-04-24 → 2026-04-25):
+
+1. *S2.c-iii first-pass*: implemented option 4 architectural shape
+   but preserved ~with-handlers~ wrapper from PM 8F era (which was
+   the SOURCE of the 302 ns/call delta). User external challenge
+   ("did we do anything about the cache fields?") surfaced the gap.
+   First-pass VAG passed cataloguing without challenging.
+2. *S2.c-iii Move B+ corrective (commit ~c86596e0~)*: dropped the
+   ~with-handlers~ wrapper + ignored explicit-cid for universe-active
+   path. Re-microbench: Path 1 went 625 → 388 ns/call (~80% of
+   predicted 302 ns benefit captured).
+3. *S2.c-iv close re-microbench*: Move B+ benefit SURVIVED the next
+   sub-phase. Path 1 stayed at ~372 ns/call (~84% of predicted
+   benefit retained). This confirmed the architectural change held
+   through subsequent retirement work.
+4. *S2.e-v close re-microbench*: Move B+ benefit MAINTAINED through
+   5 subsequent sub-phases (S2.c-iv → S2.d-level → S2.d-session →
+   S2.d-followup → S2.e-i → S2.e-ii → S2.e-iii → S2.e-iv-a/b/c → S2.e-v).
+   Path 1 at 367-373 ns/call across 3 workloads; Path 4 still
+   strictly dominant.
+
+*The principle*: closes the Pre-0 microbench → Stage 4 verification
+loop. Per-sub-phase obligation, NOT just track-level post-implementation
+activity. When a perf claim is load-bearing for an architectural
+decision, verify at EACH subsequent sub-phase that could affect it.
+
+*Operational rule* (codified at ~workflow.md~ "Post-implementation
+microbench-claim verification" via commit ~9f7c0b82~): when a phase's
+design references a microbench finding as load-bearing, the phase's
+CLOSE re-microbenches. This rule pays off; codify the extension that
+"verification at EACH subsequent sub-phase that could affect the
+perf claim" is the discipline.
+
+*Why this matters*: the alternative (verify once at the implementing
+sub-phase, assume held thereafter) would have missed any subsequent
+regression. The Move B+ verification across 5 sub-phases gave
+confidence the architectural change was DURABLE, not just
+momentarily achieved.
+
+*Discovered in*: PPN 4C Phase 9+10+11 addendum Step 2 S2.c-iii Move
+B+ corrective (2026-04-24) → S2.c-iv close (2026-04-25) → S2.e-v
+close (2026-04-25). 3 data points; codification here extends the
+existing rule with the per-sub-phase-arc discipline.
+
+*Catalogue vs Challenge framing*: the catalogue "we shipped the
+architecture" is NOT the challenge "did we capture the perf benefit
+the architecture was supposed to deliver, AND did we MAINTAIN it
+through subsequent sub-phases?" Both Catalogue1 (shipped) and
+Catalogue2 (initially captured) miss the Challenge (durably maintained).
