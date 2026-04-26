@@ -2340,7 +2340,7 @@
                      'top? (lambda (v) (eq? v 'meta-solve-contradiction))
                      'champ-fallback level-champ-fallback
                      'legacy-fn legacy-level-fn)
-    'session (hasheq 'universe-active? #f            ;; S2.d flips to #t
+    'session (hasheq 'universe-active? #t            ;; S2.d landed (2026-04-25)
                      'universe-cid-fn (lambda () (current-session-meta-universe-cell-id))
                      'bot? (lambda (v) (eq? v 'unsolved))
                      'top? (lambda (v) (eq? v 'meta-solve-contradiction))
@@ -2732,7 +2732,24 @@
 
 ;; Create a fresh sess metavariable, register in store, return sess-meta.
 ;; Hash removal: Always writes to CHAMP.
-;; Track 4 Phase 3: Allocates a TMS cell on the propagator network if available.
+;; PPN 4C S2.d (2026-04-25): universe-cell path. Mirrors S2.d-level (which
+;; mirrored S2.c-iv mult). When session-meta universe is initialized (via
+;; init-meta-universes! in reset-meta-store!), register the meta as a
+;; component of the universe cell instead of allocating a per-meta cell.
+;; The id-map entry maps session-meta-id → universe-cid (shared across all
+;; session metas); the meta-id is the component-key that distinguishes.
+;;
+;; Atomic with 'universe-active? = #t flip for 'session in meta-domain-info
+;; (this commit). Per pipeline.md "Per-Domain Universe Migration" checklist
+;; — fresh-sess-meta + solve-sess-meta! + flag flip MUST land together.
+;;
+;; Note on sess-meta.cell-id field (Track 10B Phase B1b PM-8F-style cache):
+;; under universe-active, the cell-id field receives the universe-cid (NOT
+;; a per-meta cell-id). It is functionally INERT per Move B+ (explicit-cid
+;; ignored under universe-active dispatch in meta-domain-solution); the
+;; field is preserved for backward-compat with callers passing
+;; (sess-meta-cell-id s) to sess-meta-solution/cell-id. Field retirement
+;; absorbed into Phase 4 + S2.e per D.3 §7.5.14.2.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
   (define box (current-sess-meta-champ-box))
@@ -2740,28 +2757,55 @@
   (define aid (current-speculation-assumption))
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
-  ;; Track 4 Phase 3: Allocate session cell on propagator network if available
   (define net-box (current-prop-net-box))
-  (define fresh-fn (current-prop-fresh-sess-cell))
-  ;; Track 10B Phase B1a: capture cell-id for sess-meta struct
+  (define sess-universe-cid (current-session-meta-universe-cell-id))
+  ;; cell-id field for sess-meta struct (functionally inert under universe-
+  ;; active per Move B+; receives universe-cid for backward-compat)
   (define cell-id
-    (if (and net-box fresh-fn)
-        (let ()
-          (define enet (unbox net-box))
-          (define-values (enet* cid) (fresh-fn enet source))
-          (set-box! net-box enet*)
-          ;; Record mapping: sess-meta-id → cell-id in the prop id-map
-          (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
-          (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                              (champ-insert (elab-network-id-map (unbox net-box))
-                                            (prop-meta-id-hash id) id id-map-entry-sm)))
-          cid)
-        #f))
+    (cond
+      ;; S2.d universe path — no per-meta cell allocation
+      [(and net-box sess-universe-cid)
+       (define enet (unbox net-box))
+       ;; Register meta-id as component of session-meta universe cell with
+       ;; initial value 'unsolved (matches the bot? predicate for 'session domain).
+       ;; compound-cell-component-write wraps the value in a tagged-cell-value
+       ;; respecting current-worldview-bitmask. The universe cell's
+       ;; compound-tagged-merge handles pointwise merging via merge-meta-solve-identity.
+       (define enet1 (compound-cell-component-write enet sess-universe-cid id 'unsolved))
+       ;; id-map: session-meta-id → universe-cid (shared across session metas).
+       (define id-map-entry (if aid (tagged-entry sess-universe-cid aid) sess-universe-cid))
+       (define enet2 (elab-network-id-map-set enet1
+                        (champ-insert (elab-network-id-map enet1)
+                                      (prop-meta-id-hash id) id id-map-entry)))
+       (set-box! net-box enet2)
+       ;; Return universe-cid as sess-meta.cell-id (inert under universe-active)
+       sess-universe-cid]
+      ;; Legacy path: per-meta cell allocation (pre-init contexts)
+      [else
+       (define fresh-fn (current-prop-fresh-sess-cell))
+       (if (and net-box fresh-fn)
+           (let ()
+             (define enet (unbox net-box))
+             (define-values (enet* cid) (fresh-fn enet source))
+             (set-box! net-box enet*)
+             (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
+             (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                                 (champ-insert (elab-network-id-map (unbox net-box))
+                                               (prop-meta-id-hash id) id id-map-entry-sm)))
+             cid)
+           #f)]))
   (sess-meta id cell-id))
 
 ;; Assign a solution to a sess metavariable.
 ;; Hash removal: Always reads/writes CHAMP.
-;; Track 4 Phase 3: Also writes to propagator TMS cell if available.
+;; PPN 4C S2.d (2026-04-25): universe-cid dispatch. Mirrors solve-level-meta!
+;; pattern (which mirrored solve-mult-meta! from S2.c-iv). Under universe
+;; migration, cell-id from id-map IS the universe-cid (constant per domain).
+;; Writing the raw session value via the legacy elab-cell-write would trigger
+;; compound-tagged-merge's "expects hasheq values" error since the cell is
+;; compound. Dispatch to compound-cell-component-write at component=session-id
+;; for universe-active session dispatch. Per pipeline.md atomic-pairing rule:
+;; this dispatch update lands together with fresh-sess-meta + flag flip.
 (define (solve-sess-meta! id solution)
   (define box (current-sess-meta-champ-box))
   ;; Track 8 Phase A3c: unwrap tagged-entry for status check
@@ -2778,15 +2822,19 @@
   (define aid (or entry-aid (current-speculation-assumption)))
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; Track 4 Phase 3: Write to propagator session cell
-  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+  ;; Write to propagator session cell
   (define net-box (current-prop-net-box))
   (when net-box
-    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
+    (define enet (unbox net-box))
+    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
-      (define enet (unbox net-box))
-      (set-box! net-box (elab-cell-write enet cid solution)))))
+      (cond
+        ;; S2.d universe path: cid is universe-cid; write via component-keyed access
+        [(meta-universe-cell-id? cid)
+         (set-box! net-box (compound-cell-component-write enet cid id solution))]
+        ;; Legacy path: cid is per-meta cell; raw write
+        [else
+         (set-box! net-box (elab-cell-write enet cid solution))]))))
 
 ;; Check if a sess metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'session entry's
