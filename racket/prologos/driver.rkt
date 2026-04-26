@@ -2600,15 +2600,16 @@
 (current-ns-prop-cell-write elab-cell-write)
 (current-ns-prop-new-cell elab-new-infra-cell)
 
-;; P5b: Install multiplicity cell callbacks
-(current-prop-fresh-mult-cell elab-fresh-mult-cell)
+;; P5b/Track 4 Phase 3: Multiplicity, level, and session cell callbacks.
 ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write install RETIRED.
-;; Parameter retired in metavar-store.rkt; solve-mult-meta! legacy [else] path
-;; now uses direct elab-cell-write (symmetric with level/sess). Per D.3 §7.5.14.3.
-
-;; Track 4 Phase 3: Install level and session cell callbacks
-(current-prop-fresh-level-cell elab-fresh-level-cell)
-(current-prop-fresh-sess-cell elab-fresh-sess-cell)
+;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-{mult,level,sess}-cell
+;; installs ALL RETIRED. Per D.3 §7.5.14.1 + §7.5.15.2 — these were Racket
+;; parameter callbacks holding fresh-cell allocation closures used by the
+;; legacy fresh-X-meta [else] branches. Post-S2.e-i lazy init, the legacy
+;; [else] branches are unreachable in any context with net-box; branches +
+;; parameter installs retired together. The elab-fresh-X-cell functions
+;; remain in elaborator-network.rkt (1 test consumer for elab-fresh-mult-cell;
+;; S2.e-v / Phase 4 will handle the function-level retirement).
 
 ;; P1-G2: Contradiction check callback removed (PUnify Phase 7).
 ;; unify.rkt now uses punify-has-contradiction? directly via current-prop-net-box,

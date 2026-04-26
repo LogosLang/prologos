@@ -262,13 +262,14 @@
  execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
  ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
- ;; Asymmetry with level/sess (which used direct elab-cell-write) was a legacy
- ;; artifact. solve-mult-meta!'s legacy [else] branch now uses direct
- ;; elab-cell-write for symmetry. Per D.3 §7.5.14.3 + §7.5.15.2.
- current-prop-fresh-mult-cell
- ;; Track 4 Phase 3: Level and session cell callbacks
- current-prop-fresh-level-cell
- current-prop-fresh-sess-cell
+ ;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-{mult,level,sess}-cell
+ ;; ALL RETIRED. Per D.3 §7.5.14.1 + §7.5.15.2 — these were Racket parameter
+ ;; callbacks holding fresh-cell allocation closures for the legacy fresh-X-meta
+ ;; [else] branches. Post-S2.e-i (lazy init), the legacy [else] branches are
+ ;; unreachable in any context with net-box. The [else] branches themselves
+ ;; were also removed in S2.e-iii (fresh-mult-meta + fresh-level-meta simplified
+ ;; from cond to when; fresh-sess-meta kept cond [else #f] for cell-id binding).
+ ;; The elab-fresh-X-cell functions remain (1 test consumer; S2.e-v retires).
  ;; P1-G2: Network contradiction check
  current-prop-has-contradiction?
  ;; Propagator quiescence + rewrap (used by solve-meta!)
@@ -1647,18 +1648,22 @@
 (define current-ready-queue-cell-id (make-parameter #f))
 
 ;; P5b: Multiplicity cell callbacks
-(define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
 ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
-;; Was Racket parameter holding `(enet cell-id value → enet*)` for the
-;; mult solve-cell-write path. Asymmetry with level/sess (which used direct
-;; elab-cell-write) was a legacy artifact. Post-S2.c-iv (mult universe-active)
-;; + S2.e-i (lazy init), the legacy [else] branch in solve-mult-meta! is
-;; unreachable in any context with net-box. Replaced inline with direct
-;; elab-cell-write for symmetry with level/sess. Per D.3 §7.5.14.3 + §7.5.15.2.
+;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-mult-cell RETIRED.
+;; Per D.3 §7.5.14.1 + §7.5.15.2 — Racket parameter holding
+;; `(enet source → (values enet* cell-id))` for the legacy fresh-mult-meta
+;; [else] branch (per-meta cell allocation in pre-init test contexts). Post-
+;; S2.e-i (lazy init), the [else] branch is unreachable in any context with
+;; net-box; branch was retired in fresh-mult-meta (cond simplified to when).
+;; The elab-fresh-mult-cell function (elaborator-network.rkt:965) remains for
+;; 1 test consumer (test-mult-propagator.rkt:122); S2.e-v / Phase 4 retires.
 
 ;; Track 4 Phase 3: Level and session cell callbacks
-(define current-prop-fresh-level-cell (make-parameter #f))  ;; (enet source → (values enet* cell-id))
-(define current-prop-fresh-sess-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
+;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-level-cell +
+;; current-prop-fresh-sess-cell ALSO RETIRED. Same rationale as mult-cell —
+;; per D.3 §7.5.14.1 + §7.5.15.2 — Racket parameters for legacy fresh-X-meta
+;; [else] branches; post-S2.e-i lazy init, branches unreachable; retired
+;; alongside their legacy [else] branches.
 
 ;; P1-G2: Network contradiction check (set by driver.rkt).
 ;; Returns #t if the current propagator network has a contradiction, #f otherwise.
@@ -2518,36 +2523,27 @@
   (when (and net-box (not (current-level-meta-universe-cell-id)))
     (set-box! net-box (init-meta-universes! (unbox net-box))))
   (define level-universe-cid (current-level-meta-universe-cell-id))
-  (cond
-    ;; S2.d universe path — no per-meta cell allocation
-    [(and net-box level-universe-cid)
-     (define enet (unbox net-box))
-     ;; Register meta-id as component of level-meta universe cell with
-     ;; initial value 'unsolved (matches the bot? predicate for 'level domain).
-     ;; compound-cell-component-write wraps the value in a tagged-cell-value
-     ;; respecting current-worldview-bitmask. The universe cell's
-     ;; compound-tagged-merge handles pointwise merging via merge-meta-solve-identity.
-     (define enet1 (compound-cell-component-write enet level-universe-cid id 'unsolved))
-     ;; id-map: level-meta-id → universe-cid (shared across level metas).
-     ;; All level-meta id-map entries point to the same cid; meta-id distinguishes.
-     (define id-map-entry (if aid (tagged-entry level-universe-cid aid) level-universe-cid))
-     (define enet2 (elab-network-id-map-set enet1
-                      (champ-insert (elab-network-id-map enet1)
-                                    (prop-meta-id-hash id) id id-map-entry)))
-     (set-box! net-box enet2)]
-    ;; Legacy path: per-meta cell allocation (pre-init contexts: bare-
-    ;; metavar-store tests that don't load elaborator-network.rkt).
-    [else
-     (define fresh-fn (current-prop-fresh-level-cell))
-     (when (and net-box fresh-fn)
-       (define enet (unbox net-box))
-       (define-values (enet* cid) (fresh-fn enet source))
-       (set-box! net-box enet*)
-       (when net-box
-         (define id-map-entry-lm (if aid (tagged-entry cid aid) cid))
-         (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                             (champ-insert (elab-network-id-map (unbox net-box))
-                                           (prop-meta-id-hash id) id id-map-entry-lm)))))])
+  ;; PPN 4C S2.e-iii (2026-04-25): legacy [else] branch RETIRED per
+  ;; D.3 §7.5.15.2. Post-S2.e-i (lazy init), `level-universe-cid` is always
+  ;; populated when net-box is set, so the [else] branch was unreachable.
+  ;; Simplified from cond to when. The current-prop-fresh-level-cell parameter
+  ;; was retired alongside this branch.
+  (when (and net-box level-universe-cid)
+    ;; S2.d universe path — no per-meta cell allocation.
+    ;; Register meta-id as component of level-meta universe cell with
+    ;; initial value 'unsolved (matches the bot? predicate for 'level domain).
+    ;; compound-cell-component-write wraps the value in a tagged-cell-value
+    ;; respecting current-worldview-bitmask. The universe cell's
+    ;; compound-tagged-merge handles pointwise merging via merge-meta-solve-identity.
+    (define enet (unbox net-box))
+    (define enet1 (compound-cell-component-write enet level-universe-cid id 'unsolved))
+    ;; id-map: level-meta-id → universe-cid (shared across level metas).
+    ;; All level-meta id-map entries point to the same cid; meta-id distinguishes.
+    (define id-map-entry (if aid (tagged-entry level-universe-cid aid) level-universe-cid))
+    (define enet2 (elab-network-id-map-set enet1
+                     (champ-insert (elab-network-id-map enet1)
+                                   (prop-meta-id-hash id) id id-map-entry)))
+    (set-box! net-box enet2))
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
@@ -2659,35 +2655,26 @@
   (when (and net-box (not (current-mult-meta-universe-cell-id)))
     (set-box! net-box (init-meta-universes! (unbox net-box))))
   (define mult-universe-cid (current-mult-meta-universe-cell-id))
-  (cond
-    ;; S2.c-iv universe path — no per-meta cell allocation
-    [(and net-box mult-universe-cid)
-     (define enet (unbox net-box))
-     ;; Register meta-id as component of mult-meta universe cell with
-     ;; initial value 'mult-bot. compound-cell-component-write wraps the
-     ;; value in a tagged-cell-value respecting current-worldview-bitmask.
-     ;; The universe cell's compound-tagged-merge handles pointwise merging.
-     (define enet1 (compound-cell-component-write enet mult-universe-cid id 'mult-bot))
-     ;; id-map: mult-meta-id → universe-cid (shared across mult metas).
-     ;; All mult-meta id-map entries point to the same cid; meta-id distinguishes.
-     (define id-map-entry (if aid (tagged-entry mult-universe-cid aid) mult-universe-cid))
-     (define enet2 (elab-network-id-map-set enet1
-                      (champ-insert (elab-network-id-map enet1)
-                                    (prop-meta-id-hash id) id id-map-entry)))
-     (set-box! net-box enet2)]
-    ;; Legacy path: per-meta cell allocation (pre-init contexts: bare-
-    ;; metavar-store tests that don't load elaborator-network.rkt).
-    [else
-     (define fresh-fn (current-prop-fresh-mult-cell))
-     (when (and net-box fresh-fn)
-       (define enet (unbox net-box))
-       (define-values (enet* cid) (fresh-fn enet source))
-       (set-box! net-box enet*)
-       (when net-box
-         (define id-map-entry-mm (if aid (tagged-entry cid aid) cid))
-         (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                             (champ-insert (elab-network-id-map (unbox net-box))
-                                           (prop-meta-id-hash id) id id-map-entry-mm)))))])
+  ;; PPN 4C S2.e-iii (2026-04-25): legacy [else] branch RETIRED per
+  ;; D.3 §7.5.15.2. Post-S2.e-i (lazy init), `mult-universe-cid` is always
+  ;; populated when net-box is set, so the [else] branch was unreachable.
+  ;; Simplified from cond to when. The current-prop-fresh-mult-cell parameter
+  ;; was retired alongside this branch.
+  (when (and net-box mult-universe-cid)
+    ;; S2.c-iv universe path — no per-meta cell allocation.
+    ;; Register meta-id as component of mult-meta universe cell with
+    ;; initial value 'mult-bot. compound-cell-component-write wraps the
+    ;; value in a tagged-cell-value respecting current-worldview-bitmask.
+    ;; The universe cell's compound-tagged-merge handles pointwise merging.
+    (define enet (unbox net-box))
+    (define enet1 (compound-cell-component-write enet mult-universe-cid id 'mult-bot))
+    ;; id-map: mult-meta-id → universe-cid (shared across mult metas).
+    ;; All mult-meta id-map entries point to the same cid; meta-id distinguishes.
+    (define id-map-entry (if aid (tagged-entry mult-universe-cid aid) mult-universe-cid))
+    (define enet2 (elab-network-id-map-set enet1
+                     (champ-insert (elab-network-id-map enet1)
+                                   (prop-meta-id-hash id) id id-map-entry)))
+    (set-box! net-box enet2))
   (mult-meta id))
 
 ;; Assign a solution to a mult metavariable.
@@ -2834,20 +2821,14 @@
        ;; Move B+; honest signaling per docstring above). Field itself awaits
        ;; Phase 4 retirement.
        #f]
-      ;; Legacy path: per-meta cell allocation (pre-init contexts)
-      [else
-       (define fresh-fn (current-prop-fresh-sess-cell))
-       (if (and net-box fresh-fn)
-           (let ()
-             (define enet (unbox net-box))
-             (define-values (enet* cid) (fresh-fn enet source))
-             (set-box! net-box enet*)
-             (define id-map-entry-sm (if aid (tagged-entry cid aid) cid))
-             (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                                 (champ-insert (elab-network-id-map (unbox net-box))
-                                               (prop-meta-id-hash id) id id-map-entry-sm)))
-             cid)
-           #f)]))
+      ;; PPN 4C S2.e-iii (2026-04-25): legacy per-meta cell branch RETIRED
+      ;; per D.3 §7.5.15.2. Post-S2.e-i (lazy init), `sess-universe-cid` is
+      ;; always populated when net-box is set, so this branch was unreachable.
+      ;; Returning #f preserves cell-id semantics (functionally inert per
+      ;; Move B+ — sess-meta-solution/cell-id ignores explicit-cid under
+      ;; universe-active dispatch). The current-prop-fresh-sess-cell parameter
+      ;; was retired alongside this branch.
+      [else #f]))
   (sess-meta id cell-id))
 
 ;; Assign a solution to a sess metavariable.
