@@ -2334,7 +2334,7 @@
                      'top? (lambda (_v) #f)
                      'champ-fallback mult-champ-fallback
                      'legacy-fn legacy-mult-fn)
-    'level   (hasheq 'universe-active? #f            ;; S2.d flips to #t
+    'level   (hasheq 'universe-active? #t            ;; S2.d landed (2026-04-25)
                      'universe-cid-fn (lambda () (current-level-meta-universe-cell-id))
                      'bot? (lambda (v) (eq? v 'unsolved))
                      'top? (lambda (v) (eq? v 'meta-solve-contradiction))
@@ -2466,7 +2466,17 @@
 
 ;; Create a fresh level metavariable, register in store, return level-meta.
 ;; Hash removal: Always writes to CHAMP.
-;; Track 4 Phase 3: Allocates a TMS cell on the propagator network if available.
+;; PPN 4C S2.d (2026-04-25): universe-cell path. Mirrors S2.c-iv's
+;; fresh-mult-meta migration. When level-meta universe is initialized (via
+;; init-meta-universes! in reset-meta-store!), register the meta as a
+;; component of the universe cell instead of allocating a per-meta cell.
+;; The id-map entry maps level-meta-id → universe-cid (shared across all
+;; level metas); the meta-id is the component-key that distinguishes.
+;;
+;; Atomic with 'universe-active? = #t flip for 'level in meta-domain-info
+;; (this commit). Per pipeline.md "Per-Domain Universe Migration" checklist
+;; — fresh-level-meta + solve-level-meta! + flag flip MUST land together.
+;; The S2.c-iv 4-min hang would have surfaced if we'd split the migration.
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
   (define box (current-level-meta-champ-box))
@@ -2474,26 +2484,50 @@
   (define aid (current-speculation-assumption))
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
-  ;; Track 4 Phase 3: Allocate level cell on propagator network if available
   (define net-box (current-prop-net-box))
-  (define fresh-fn (current-prop-fresh-level-cell))
-  (when (and net-box fresh-fn)
-    (define enet (unbox net-box))
-    (define-values (enet* cid) (fresh-fn enet source))
-    (set-box! net-box enet*)
-    ;; Record mapping: level-meta-id → cell-id in the prop id-map
-    ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
-    (when net-box
-      ;; Track 8 Phase A4b: Tag id-map entry with speculation assumption.
-      (define id-map-entry-lm (if aid (tagged-entry cid aid) cid))
-      (set-box! net-box (elab-network-id-map-set (unbox net-box)
-                          (champ-insert (elab-network-id-map (unbox net-box))
-                                        (prop-meta-id-hash id) id id-map-entry-lm)))))
+  (define level-universe-cid (current-level-meta-universe-cell-id))
+  (cond
+    ;; S2.d universe path — no per-meta cell allocation
+    [(and net-box level-universe-cid)
+     (define enet (unbox net-box))
+     ;; Register meta-id as component of level-meta universe cell with
+     ;; initial value 'unsolved (matches the bot? predicate for 'level domain).
+     ;; compound-cell-component-write wraps the value in a tagged-cell-value
+     ;; respecting current-worldview-bitmask. The universe cell's
+     ;; compound-tagged-merge handles pointwise merging via merge-meta-solve-identity.
+     (define enet1 (compound-cell-component-write enet level-universe-cid id 'unsolved))
+     ;; id-map: level-meta-id → universe-cid (shared across level metas).
+     ;; All level-meta id-map entries point to the same cid; meta-id distinguishes.
+     (define id-map-entry (if aid (tagged-entry level-universe-cid aid) level-universe-cid))
+     (define enet2 (elab-network-id-map-set enet1
+                      (champ-insert (elab-network-id-map enet1)
+                                    (prop-meta-id-hash id) id id-map-entry)))
+     (set-box! net-box enet2)]
+    ;; Legacy path: per-meta cell allocation (pre-init contexts: bare-
+    ;; metavar-store tests that don't load elaborator-network.rkt).
+    [else
+     (define fresh-fn (current-prop-fresh-level-cell))
+     (when (and net-box fresh-fn)
+       (define enet (unbox net-box))
+       (define-values (enet* cid) (fresh-fn enet source))
+       (set-box! net-box enet*)
+       (when net-box
+         (define id-map-entry-lm (if aid (tagged-entry cid aid) cid))
+         (set-box! net-box (elab-network-id-map-set (unbox net-box)
+                             (champ-insert (elab-network-id-map (unbox net-box))
+                                           (prop-meta-id-hash id) id id-map-entry-lm)))))])
   (level-meta id))
 
 ;; Assign a solution to a level metavariable.
 ;; Hash removal: Always reads/writes CHAMP.
-;; Track 4 Phase 3: Also writes to propagator TMS cell if available.
+;; PPN 4C S2.d (2026-04-25): universe-cid dispatch. Mirrors solve-mult-meta!
+;; pattern from S2.c-iv — under universe migration, cell-id from id-map IS
+;; the universe-cid (constant per domain). Writing the raw level value via
+;; the legacy elab-cell-write would trigger compound-tagged-merge's "expects
+;; hasheq values" error since the cell is compound. Dispatch to
+;; compound-cell-component-write at component=level-id for universe-active
+;; level dispatch. Per pipeline.md atomic-pairing rule: this dispatch update
+;; lands together with fresh-level-meta + flag flip in same commit.
 (define (solve-level-meta! id solution)
   (define box (current-level-meta-champ-box))
   ;; Track 8 A3b: unwrap tagged-entry for status check
@@ -2510,15 +2544,19 @@
   (define aid (or entry-aid (current-speculation-assumption)))
   (define tagged-solution (if aid (tagged-entry solution aid) solution))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; Track 4 Phase 3: Write to propagator level cell
-  ;; Track 8 B2d: direct elab-cell-write instead of current-prop-cell-write callback.
+  ;; Write to propagator level cell
   (define net-box (current-prop-net-box))
   (when net-box
-    ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-    (define cid (champ-lookup (elab-network-id-map (unbox net-box)) (prop-meta-id-hash id) id))
+    (define enet (unbox net-box))
+    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
     (when (and cid (not (eq? cid 'none)))
-      (define enet (unbox net-box))
-      (set-box! net-box (elab-cell-write enet cid solution)))))
+      (cond
+        ;; S2.d universe path: cid is universe-cid; write via component-keyed access
+        [(meta-universe-cell-id? cid)
+         (set-box! net-box (compound-cell-component-write enet cid id solution))]
+        ;; Legacy path: cid is per-meta cell; raw write
+        [else
+         (set-box! net-box (elab-cell-write enet cid solution))]))))
 
 ;; Check if a level metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'level entry's
