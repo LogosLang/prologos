@@ -1762,12 +1762,21 @@
   ;; elab-network-id-map-set instead of current-prop-meta-info-read/set/id-map-read/set callbacks.
   (define net-box (current-prop-net-box))
   (define fresh-fn (current-prop-fresh-meta))
+  ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
+  ;; Per D.3 §7.5.15.1 — when net-box is set but the type-meta universe-cid
+  ;; is not yet populated (bare-metavar-store test contexts that don't load
+  ;; elaborator-network.rkt + driver), trigger init-meta-universes!. Production
+  ;; + with-fresh-meta-env: noop (init already done by reset-meta-store!).
+  ;; Eliminates the legacy fresh-fn fallback path STRUCTURALLY.
+  (when (and net-box (not (current-type-meta-universe-cell-id)))
+    (set-box! net-box (init-meta-universes! (unbox net-box))))
   ;; PPN 4C Step 2 S2.b-iii (2026-04-24): universe-cell path.
   ;; If the type-meta universe has been initialized (via init-meta-universes!
-  ;; in reset-meta-store!), register the meta as a component of the universe
-  ;; cell instead of allocating a per-meta cell. The cell-id stored in the
-  ;; expr-meta struct becomes the universe-cid, SHARED across all type metas;
-  ;; the meta-id is the component-key that distinguishes them. See D.3 §7.5.12.
+  ;; in reset-meta-store! OR lazy init above), register the meta as a component
+  ;; of the universe cell instead of allocating a per-meta cell. The cell-id
+  ;; stored in the expr-meta struct becomes the universe-cid, SHARED across all
+  ;; type metas; the meta-id is the component-key that distinguishes them.
+  ;; See D.3 §7.5.12 + §7.5.15.
   (define type-universe-cid (current-type-meta-universe-cell-id))
   ;; PM 8F Phase 1: track cell-id for direct cell access in expr-meta.
   ;; Network path sets cid from fresh-fn; fallback path sets cid=#f.
@@ -2494,6 +2503,11 @@
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
+  ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
+  ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
+  ;; fresh-fn fallback path STRUCTURALLY for bare-metavar-store test contexts.
+  (when (and net-box (not (current-level-meta-universe-cell-id)))
+    (set-box! net-box (init-meta-universes! (unbox net-box))))
   (define level-universe-cid (current-level-meta-universe-cell-id))
   (cond
     ;; S2.d universe path — no per-meta cell allocation
@@ -2630,6 +2644,11 @@
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
+  ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
+  ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
+  ;; fresh-fn fallback path STRUCTURALLY for bare-metavar-store test contexts.
+  (when (and net-box (not (current-mult-meta-universe-cell-id)))
+    (set-box! net-box (init-meta-universes! (unbox net-box))))
   (define mult-universe-cid (current-mult-meta-universe-cell-id))
   (cond
     ;; S2.c-iv universe path — no per-meta cell allocation
@@ -2773,6 +2792,11 @@
   (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
   (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
+  ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
+  ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
+  ;; fresh-fn fallback path STRUCTURALLY for bare-metavar-store test contexts.
+  (when (and net-box (not (current-session-meta-universe-cell-id)))
+    (set-box! net-box (init-meta-universes! (unbox net-box))))
   (define sess-universe-cid (current-session-meta-universe-cell-id))
   ;; cell-id field for sess-meta struct (functionally inert under universe-
   ;; active per Move B+; receives universe-cid for backward-compat)
