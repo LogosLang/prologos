@@ -591,3 +591,38 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 - **Not blocked on**: Track 4B mechanism is correct (all pass individually). This is a test-runner infrastructure issue.
 - **Next step**: Audit `current-prop-net-box` lifecycle in batch-worker vs individual test runs. Check whether `infer-on-network/err` is even reached in batch context or falls back immediately.
 - **Source**: Track 4B Phase 3 (commit `74f79506`), batch-worker fix (commit `70a5763f`)
+
+---
+
+## Future Track 4D Scope: Per-Command Transient Cell Consolidation
+
+**Source**: PPN 4C addendum Step 2 S2.e mini-design (2026-04-25). Surfaced during S2.e measurement audit — `cell_allocs` cumulative measurement reveals the dominant cell allocation cost is per-command transient elaboration, not persistent meta storage. Step 2's universe consolidation addressed PERSISTENT meta cells (the right charter), but the bottleneck the §5 hypothesis was framed for (cells/cell_allocs targets) is in per-command transients.
+
+**Concrete data** (from probe verbose, post-S2.d at HEAD `34972bac`):
+- Persistent network: 54 cells (was 50 pre-Step-2 — only +4 net change because per-meta consolidation savings approximately offset by universe + hasse-registry + compound-merge infrastructure cells)
+- `cell_allocs` cumulative: 1181 (was 1071 pre-Step-2 — +110)
+- Per-command breakdown: ~30-50 cells per command × 28 commands = ~1100 transient allocations dominating cell_allocs
+
+**Per-command cell sources** (each allocates ~30-50 transient cells):
+- Attribute-record cells per AST position
+- SRE structural decomposition sub-cells (`decompose-pi` allocates dom + cod + mult per Pi)
+- Per-command spec/FormCell registration cells
+- Typing-propagator scratch cells (per-command typing sub-network)
+
+**Why this is Track 4D scope (not S2.e or any current track)**:
+- Step 2's PU consolidation pattern (4 universe cells for N metas) APPLIES to other repeated allocation sites — but they're broader than meta storage
+- Track 4D's thesis ("collapse fragmented typing/elaboration/reduction subsystems into a unified attribute-grammar substrate") subsumes per-command consolidation conceptually
+- Per-command attribute-record allocations could share an enclosing namespace-level PU under the unified substrate
+- This is research-stage; concrete designs await Track 4D's Stage 1-3 cycle
+
+**Forward scope candidates** (not exhaustive — Track 4D's mini-design will refine):
+- **Per-command attribute-record PU**: each command's positions could share a per-command compound cell
+- **SRE structural decomposition sub-cell consolidation**: Pi-PU consolidates dom + cod + mult sub-cells
+- **Per-command spec/FormCell registration**: subsumed into Track 4D's grammar-rule compilation
+
+**Cross-references**:
+- PPN 4C Phase 9 Design §7.5.14.4 (track-internal capture; full per-command breakdown table)
+- Track 4D research vision §5.4 (forward-pointer in 4D's research doc; added 2026-04-25)
+- This DEFERRED.md entry (cross-track tracking — ensures the work isn't missed across the multi-month Track 4D timeline)
+
+**Track 4D Stage 2 audit obligation**: when Track 4D's Stage 2 (gap analysis) opens, measure transient allocation patterns to characterize the consolidation opportunity quantitatively (concrete site enumeration with allocation counts).

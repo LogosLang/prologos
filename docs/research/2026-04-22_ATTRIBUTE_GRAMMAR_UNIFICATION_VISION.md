@@ -184,6 +184,29 @@ PRN is the abstract theory of propagator-rewriting networks. 4D contributes back
 - **Module Theory direct-sum tagging** (PPN Master §4.1): bitmask layers on shared carrier. Track 4D's attribute-record IS this pattern.
 - **Skip-the-mechanism over optimize** (PPN Master §4.3): if a typing rule's output is ground at registration time, skip propagator installation entirely.
 
+### 5.4 Per-command transient cell consolidation (forward-pointer from PPN 4C addendum S2.e mini-design 2026-04-25)
+
+**Source finding**: PPN 4C addendum Step 2 (PU refactor for meta domains) measured cell allocation patterns at S2.e mini-design open. Persistent meta cells consolidated as expected (4 universe cells covering all type/mult/level/session metas). However, `cell_allocs` cumulative measurement reveals the dominant cell allocation cost is **per-command transient elaboration**, not persistent meta storage:
+
+- Each top-level command allocates ~30-50 cells during elaboration (attribute-record cells per AST position, SRE structural decomposition sub-cells from `decompose-pi`, per-command spec/FormCell instances, typing-propagator scratch cells)
+- Probe with 28 commands → ~1100 transient allocations dominating cell_allocs
+- Persistent network grows by only +4 cells from Step 2 baseline (universe cells + hasse-registry minus per-meta consolidation savings)
+
+**Implication for Track 4D scope**: per-command transient consolidation is a CANDIDATE for the unified attribute-grammar substrate. Track 4D's thesis ("collapse fragmented typing/elaboration/reduction subsystems into a unified attribute-grammar substrate") subsumes this — per-command attribute-record allocations could share an enclosing namespace-level PU under the unified substrate.
+
+**Forward scope candidates** (research-stage; concrete designs await Track 4D's Stage 1-3 cycle):
+
+- **Per-command attribute-record PU**: each command's positions could share a per-command compound cell (similar to how attribute-map is already a position-keyed compound)
+- **SRE structural decomposition sub-cell consolidation**: `decompose-pi` allocates dom + cod + mult sub-cells per Pi; could be consolidated into a Pi-PU
+- **Per-command spec/FormCell registration**: Phase 4D's grammar-rule compilation might subsume these into the unified substrate
+
+**Cross-references**:
+- PPN 4C Phase 9 Design §7.5.14.4 (track-internal capture of the finding, with per-command breakdown table)
+- DEFERRED.md (cross-track tracking entry)
+- This subsection (Track 4D vision-level forward-pointer)
+
+Track 4D's eventual Stage 2 audit should measure transient allocation patterns to characterize the consolidation opportunity quantitatively.
+
 ---
 
 ## 6. Proposed Track Scope (Preliminary)

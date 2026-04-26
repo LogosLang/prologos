@@ -145,7 +145,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | Step 2 S2.c-v (was vi) | Probe + targeted suite + measurement + GO/no-go for S2.d | ✅ | **DONE** 2026-04-25 (this commit). Probe diff = 0 semantically (28 result strings IDENTICAL to baseline; cell_allocs 1183 = mult win -12 from S2.b); acceptance file 0 errors; Section F microbench verified Move B+ ~80% gain SURVIVED S2.c-iv (Path 1 went 625→372 ns at W1, ~84% of predicted 302 ns benefit retained). **3 of 6 §5 criteria MET**: fresh-meta 2.13 μs ≤2.5 ✓ (improved past target); solve-meta! 7.67 μs ≤8 ✓ (S2.b-iv regression UNWOUND, -10% PAST baseline); meta-solution 0.383 μs ≤0.4 ✓. cells=54 + cell_allocs=1183 transitional (S2.d/e). Suite 124.2s within 118-127s variance. **Surprising finding**: solve-meta! regression unwound — partial-migration micros often resolve when architecture completes (codification candidate extending §12.3). [STEP2_BASELINE.md §12.4](2026-04-23_STEP2_BASELINE.md#124-s2c-iv-close-measurement-2026-04-25) added with full data. **GO for S2.d** (apply `pipeline.md` Per-Domain Universe Migration checklist prophylactically). |
 | **Step 2 S2.d-level** | LEVEL domain universe migration (3 atomic sites per pipeline.md "Per-Domain Universe Migration": fresh-level-meta + solve-level-meta! + 'universe-active? flip) | ✅ | 1 commit `badf5fa9`. **Atomic per checklist** — fresh + solve + flag flip in same commit; pipeline.md checklist applied prophylactically (would have prevented S2.c-iv 4-min hang). NO cross-domain bridge for level (self-contained); NO γ retirement applicable. Probe: cell_allocs **1181** (-2 from S2.c-iv 1183 = level win); semantic diff = 0 (all 28 result strings IDENTICAL); 132 targeted tests across 6 files (test-metavar + test-meta-feedback + test-mult-propagator + test-tycon + test-elaborator-network + test-sess-inference) all GREEN in 7.1s. |
 | **Step 2 S2.d-session** | SESSION domain universe migration (3 atomic sites per checklist) | ✅ | 2 commits: S2.d-session core (`440e6139`) + S2.d-followup honesty reframe (this). Same atomic pattern as S2.d-level. **Slight complication**: `sess-meta` struct has `cell-id` field (Track 10B Phase B1b PM-8F-style cache). **S2.d-followup correction (2026-04-25)**: under universe-active path, cell-id field is set to **#f** (was misleadingly set to universe-cid in initial S2.d-session commit). Per Move B+ (S2.c-iii commit `c86596e0`), meta-domain-solution IGNORES explicit-cid under universe-active dispatch — the field is functionally INERT. Setting to #f honestly signals "no per-meta cell allocated"; setting to universe-cid was misleading scaffolding. The 2 production callers (zonk-session + zonk-session-default at metavar-store.rkt:2873/2893) pass `(sess-meta-cell-id s)` to `sess-meta-solution/cell-id` which under universe-active routes via parameter-read for universe-cid — explicit-cid arg is unused. Field itself awaits Phase 4 retirement per D.3 §7.5.14.2 (cache-field cleanup absorbed into CHAMP retirement coherent unit). **Same reframe applied to expr-meta.cell-id (S2.b-iii path)** — was set to type-universe-cid; now #f under universe-active for parallel honesty. NO cross-domain bridge; NO γ retirement applicable. Probe: cell_allocs 1181 (no change — session metas not exercised in probe); semantic diff = 0; acceptance file 0 errors; targeted tests all GREEN. **All 4 domains now universe-active** ('type + 'mult + 'level + 'session); meta-domain-info dispatch fully unified. |
-| **Step 2 S2.e** | Factory retirement + final formal measurement vs §5 hypotheses + S2.c/d/e codifications | ⬜ NEXT | Per D.3 §7.5.14: retire per-domain `current-prop-fresh-X-cell` factory parameters + `current-prop-X-cell-write` callbacks (off-network scaffolding for pre-init paths) + `sess-meta.cell-id` cache field (cooperative with Phase 4) + `elab-add-type-mult-bridge` test-only retirement (§7.5.14.3) + final §5 hypotheses validation (cells ≤ 42, cell_allocs ≤ 1000 — these were S2.e-deferred per S2.c-v §12.4.5). |
+| **Step 2 S2.e** | Factory retirement + final formal measurement + 4 codifications (Step 2 close) | 🔄 **mini-design landed** | **Mini-design persisted at D.3 §7.5.15** (this commit, 2026-04-25). 7 sub-phases: S2.e-i (Option C-4 lazy init, ZERO test fixture surgery) → S2.e-ii (retire mult write callback) → S2.e-iii (retire 3 factory callbacks) → S2.e-iv (retire 6 store/champ-box params + 4 fallback fns + clean meta-domain-info) → S2.e-v (elab-add-type-mult-bridge test-only retirement per §7.5.14.3) → S2.e-vi (§5 measurement + honest hypothesis reframing per §7.5.14.4 + 4 codifications) → S2.e-VAG (adversarial close). Total scope ~-200-300 LoC NET (mostly deletions). **Critical finding from mini-design audit (§7.5.14.4)**: §5 hypothesis (cells ≤ 42, cell_allocs ≤ 1000) was framed for PERSISTENT meta cells; measurement reveals the bottleneck is per-command TRANSIENT cells (~30-50 cells per command × 28 commands = ~1100 transient allocations dominating cell_allocs). Step 2 met its actual charter (persistent meta consolidation + dispatch unification + Move B+ benefit retained); per-command transient consolidation is captured as Track 4D scope (§7.5.14.4 + Track 4D research forward-pointer + DEFERRED.md entry — all 3 captured this commit). **S2.e-vi is most important**: honest reframing rather than rationalizing "the architecture is right, the metric was framed wrong." |
 | **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -2177,9 +2177,142 @@ Surfaced by S2.c-iv adversarial VAG (per the new methodology codified at commit 
 
 **S2.c-iv methodology lesson**: adversarial VAG with two-column discipline surfaced these refactor-preservation drifts that the catalogue framing would have missed. Both are MINOR (test-only surfaces + known scaffolding with retirement plan) — not blocking S2.c-iv close, but worth capturing for future cleanup. The methodology IS catching drift; the gate is working.
 
-#### §7.5.14.4 Other potential S2.e items (placeholder)
+#### §7.5.14.4 Per-command transient cell consolidation — NEW finding for future track scope (added 2026-04-25 from S2.e measurement)
 
-Future findings during S2.d / S2.f may surface additional retirement candidates. This subsection accumulates them as they arise. Mini-design at S2.e open consolidates and partitions.
+**Finding**: Step 2's universe consolidation addressed PERSISTENT meta cells (4 universes per the meta-domain-info architecture). However, S2.e measurement revealed that the persistent-cell delta is ~+4 (50→54 in the probe), while `cell_allocs` (cumulative `net-new-cell` calls) is +110 (1071→1181). The `cell_allocs` counter only tracks `net-new-cell` invocations — NOT cell-version-updates from `net-cell-write`. So the +110 increment is from new cells being created, not more writes to existing cells.
+
+**Where the +110 cells go**: PER-COMMAND TRANSIENT ELABORATION. Each top-level command (~28 in the probe) allocates ~30-50 cells during elaboration (attribute-record cells per AST position, SRE structural decomposition sub-cells from `decompose-pi`, per-command spec/FormCell instances, typing-propagator scratch cells). These cells are created in the persistent network but are functionally per-command — their lifetime is bounded by command processing.
+
+**Per-command breakdown** (from probe verbose 2026-04-25, post-S2.d):
+| Command | cell_allocs (delta) | What it represents |
+|---|---|---|
+| `def p1-x := 42` (cmd 0) | 37 | Simple literal def → still 37 cells of attribute-record + structural decomposition |
+| `defn p1-inc [n] [int+ n 1]` (cmd 6) | 35 | Function def with type sig |
+| `def p5-list := '[1 2 3 4 5]` (cmd 18) | 47 | List with 5 cons calls — multiple meta creations |
+| `defn p6-id {A : Type} A -> A` (cmd 24) | 51 | Polymorphic function → more sub-cells |
+
+Even simple commands allocate 30-50 cells. The probe's 28 commands × ~40 avg = ~1100 transient allocations dominating the cell_allocs metric.
+
+**Architectural insight**: Step 2's PU consolidation pattern (4 universe cells for N metas) APPLIES to other repeated allocation sites. The per-command attribute-record allocation, SRE Pi/Sigma decomposition sub-cells, and spec registration all fit the "many per-N-X cells consolidate to compound PU" pattern. Each is a candidate for further PU consolidation.
+
+**Why this isn't S2.e scope**: S2.e's charter is META universe completion (Step 2 close). Per-command transient consolidation is a SEPARATE optimization concern affecting elaboration substrate broadly, not just meta storage. It belongs to a future track — most naturally Track 4D (Attribute Grammar Substrate Unification) since 4D's thesis IS substrate unification across typing/elaboration/reduction.
+
+**Why this IS captured now (vs deferred informally)**: per the capture-gap pattern (S2.d-followup lesson + this session reinforcement), naming a future phase without verifying capture means the work gets missed. This subsection ensures the finding is anchored in:
+1. D.3 (this section) — track-internal scope notes; survives S2 close
+2. Track 4D research vision — forward-pointer to the natural conceptual home (this commit adds the link)
+3. DEFERRED.md — cross-track tracking entry (this commit adds the entry)
+
+**S2.e measurement reframing**: §5 hypothesis "cells ≤ 42, cell_allocs ≤ 1000" was framed for persistent meta cells. The measurement reveals the metric is dominated by per-command transients, not persistent metas. Step 2 met its actual charter (persistent meta consolidation, dispatch unification, Move B+ benefit retained); the §5 metric was framed for a different bottleneck. S2.e-vi captures this honest reframing.
+
+**Forward scope candidates** (not exhaustive — Track 4D's mini-design will refine):
+- **Per-command attribute-record PU**: each command's positions could share a per-command compound cell (similar to how attribute-map is already a position-keyed compound)
+- **SRE structural decomposition sub-cell consolidation**: `decompose-pi` allocates dom + cod + mult sub-cells per Pi; could be consolidated into a Pi-PU
+- **Per-command spec/FormCell registration**: Phase 4D's grammar-rule compilation might subsume these into the unified substrate
+
+These are research-stage forward scope; concrete designs await Track 4D's Stage 1-3 cycle.
+
+#### §7.5.14.5 Other potential S2.e items (placeholder)
+
+Future findings during S2.e implementation may surface additional retirement candidates. This subsection accumulates them as they arise.
+
+### §7.5.15 Step 2 S2.e Sub-phase Mini-design (2026-04-25)
+
+Conversational mini-design opened post-S2.d close per refined Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc; co-dependent cycle). Context: post-S2.d-session + S2.d-followup, all 4 meta domains universe-active; meta-domain-info dispatch fully unified; cell-id fields functionally inert under universe-active per Move B+; S2.e is the closing sub-phase of Step 2.
+
+#### §7.5.15.1 Architecture decision — Option C-4 (lazy universe init in fresh-X-meta)
+
+Mini-audit of pre-init test contexts surfaced 3 candidate paths for fallback retirement:
+
+- **Option A (full retirement + test fixture surgery)**: force ALL test contexts to call `init-meta-universes!` setup. Touches N test files (audit-pending count); high scope; "clean" choice.
+- **Option B (preserve fallback)**: keep meta-store + champ-box parameters; retire only the dead `current-prop-mult-cell-write` callback. Minimal scope; preserves dual mechanism (workflow.md belt-and-suspenders concern).
+- **Option C-4 (architectural lift — lazy init)**: lazy-init universe cells in fresh-X-meta when net-box is set but universe-cid is not. Eliminates pre-init fallback need without test fixture surgery.
+
+**Decision: Option C-4 adopted** (user direction 2026-04-25). Rationale:
+- Eliminates fallback path STRUCTURALLY (no `(and cid net-box)` fallback condition needed under universe-active dispatch)
+- Eliminates need for `current-prop-fresh-X-cell` factory callbacks AND `current-prop-mult-cell-write` write callback
+- Eliminates need for `current-X-meta-store` + `current-X-meta-champ-box` parameters (their consumers — champ-fallback functions — become dead code)
+- Eliminates `'champ-fallback` and `'legacy-fn` entries in `meta-domain-info` (dead-pointers cleanup)
+- ZERO test fixture surgery required (lazy init handles bare-metavar-store contexts uniformly)
+- Architecturally cleanest landing — matches Track 4D vision of "everything on universe substrate"
+
+**Implementation sketch** (per fresh-X-meta domain):
+
+```racket
+(define (fresh-meta ctx type source)
+  ...
+  (define net-box (current-prop-net-box))
+  ;; C-4 lazy init: ensure universe cells exist for this network
+  (when (and net-box (not (current-type-meta-universe-cell-id)))
+    (set-box! net-box (init-meta-universes! (unbox net-box))))
+  (define type-universe-cid (current-type-meta-universe-cell-id))
+  ...)
+```
+
+Same pattern for fresh-mult/level/sess-meta. After this:
+- Test contexts with a network: get universe cells lazily on first meta creation
+- Test contexts with no network (bare CHAMP, no net-box): correctly skip both paths
+- Production: lazy init never triggers because driver already called init explicitly
+
+**Caveats** (drift risks named):
+- **D1**: `init-meta-universes!` modifies the network — verify it's safe to call mid-fresh-meta (atomic; no in-flight network state)
+- **D2**: lazy init happens once per network; if a test creates multiple networks, each gets init on first meta — still only +5 cells per network init (4 universes + 1 hasse-registry)
+- **D3**: Step ordering — if init happens AFTER current speculation-assumption is set, cells inherit that assumption-tagging which may not match what the test expects. Mitigation: init-meta-universes! is pure cell allocation; the cells are EMPTY at init, no values to tag.
+
+#### §7.5.15.2 Sub-phase partition
+
+7 sub-phases ordered by dependency (each unlocks the next):
+
+| Sub-phase | Scope | Est. LoC | Key gate |
+|---|---|---|---|
+| **S2.e-i** | Implement Option C-4 lazy init in 4 fresh-X-meta sites | ~20-40 | Probe diff = 0; fresh-X-meta tests green |
+| **S2.e-ii** | Retire `current-prop-mult-cell-write` write callback (1 site) | -10 deletion | Mult-only; dead post-S2.c-iv + lazy init; trivial |
+| **S2.e-iii** | Retire 3 factory callbacks `current-prop-fresh-{mult,level,sess}-cell` | -30-50 deletion | Dead code post-lazy-init; unused parameter declarations + driver install sites |
+| **S2.e-iv** | Retire 3 meta-store parameters + 3 champ-box parameters + 4 champ-fallback functions + clean meta-domain-info entries (`'champ-fallback`, `'legacy-fn`) | -150-250 deletion | Dead code post-lazy-init; coordinated meta-domain-info cleanup |
+| **S2.e-v** | Retire `elab-add-type-mult-bridge` test-only surface (per §7.5.14.3) | -20-30 deletion + test rewrite | Migrate test-mult-propagator.rkt:124 to use driver callback path OR retire test if S2.c-iv coverage is sufficient |
+| **S2.e-vi** | Final §5 measurement + **honest hypothesis reframing** (persistent vs transient cell distinction per §7.5.14.4) + 4 codifications from S2 arc | ~0 LoC + measurement + docs | THE most important deliverable — captures honest framing + lessons |
+| **S2.e-VAG** | Adversarial Vision Alignment Gate close | ~0 LoC | Per codified rule (TWO-COLUMN catalogue vs challenge); marks S2 close |
+
+**Total estimated scope**: ~-200-300 LoC NET (mostly deletions) + S2.e-vi documentation.
+
+**S2.e-vi codifications** (4 from S2 arc):
+1. **Pipeline.md "Per-Domain Universe Migration" checklist works prophylactically** — 3 data points (S2.c-iv 4-min hang prevention; S2.d-level + S2.d-session clean landings)
+2. **Capture-gap pattern** — when a sub-phase audit surfaces work for one domain, parallel domains should be captured at the same time. 2 data points this session (S2.d-followup §7.5.14.1 expansion; this S2.e mini-design §7.5.14.4 capture for transient consolidation)
+3. **Partial-state regression unwinds when architecture completes** — 3 data points (S2.a positive surprise; S2.b-iv→S2.c-iv solve-meta! recovery; S2.c-iv→S2.d follow-through)
+4. **Backward-compat-as-rationalization audit pattern** — 1 data point (S2.d-followup Path B reframe). The workflow.md "preserved for backward-compat" red-flag phrase IS the test; audit consumer dependencies before claiming preservation
+
+**S2.e measurement (S2.e-vi)**:
+- Re-run probe + acceptance to verify retirements landed without semantic regression
+- Re-run bench-meta-lifecycle.rkt full sequence; compare against §5 hypotheses
+- **Honest reframe of §5**: persistent meta cells (delta target) vs transient per-command cells (the bottleneck driving cell_allocs). Step 2 met its actual charter; the §5 metric was framed for a different bottleneck. Per-command transient consolidation is captured in §7.5.14.4 for Track 4D scope.
+
+#### §7.5.15.3 Drift risks (for mid-flight principles challenge)
+
+1. **D1 — Lazy init timing**: init-meta-universes! must be safe to call mid-fresh-X-meta. Verify by audit + targeted tests during S2.e-i.
+2. **D2 — Champ-fallback dead-pointer cleanup**: `meta-domain-info` entries reference `'champ-fallback` + `'legacy-fn`; entries must be cleaned (not just functions retired) to avoid stale references.
+3. **D3 — Test fixture surprise**: some tests may explicitly set/test the meta-store / champ-box parameters. Mitigation: targeted tests for each retirement sub-phase catch unexpected dependencies.
+4. **D4 — §5 hypothesis temptation to rationalize**: cells/cell_allocs targets are still NOT met after S2.e (per §7.5.14.4 finding — bottleneck is transients, not metas). S2.e-vi MUST honestly reframe rather than rationalize "the architecture is right, the metric was wrong is good enough." The honest answer is: the metric was framed for the wrong bottleneck; capture that finding; point forward to Track 4D for the real fix.
+5. **D5 — Capture discipline regression**: each sub-phase touching a parameter retirement should capture per-domain analogs uniformly (the §7.5.14.1 capture-gap pattern from S2.d-followup). Apply prophylactically.
+
+#### §7.5.15.4 Sub-phase completion criteria
+
+- **S2.e-i**: Lazy init works in all 4 fresh-X-meta sites; probe diff = 0; targeted fresh-meta tests pass; full suite GREEN
+- **S2.e-ii**: `current-prop-mult-cell-write` deleted; mult tests green; full suite GREEN
+- **S2.e-iii**: 3 factory callbacks deleted; mult/level/session targeted tests green; full suite GREEN
+- **S2.e-iv**: 6 parameters + 4 fallback functions + meta-domain-info entries cleaned; comprehensive targeted tests; full suite GREEN
+- **S2.e-v**: elab-add-type-mult-bridge surface decision (migrate test or retire) + tests green
+- **S2.e-vi**: §5 measurement run; STEP2_BASELINE.md §12.5 added with post-S2.e data + honest hypothesis reframe; 4 codifications captured (in DEVELOPMENT_LESSONS.org graduation candidates)
+- **S2.e-VAG**: TWO-COLUMN adversarial VAG; if challenges surface drift, address before commit; otherwise pass
+
+#### §7.5.15.5 Cross-cutting captures (verified during this mini-design)
+
+Per the capture-gap discipline (1 data point reinforced this session — second occurrence after S2.d-followup), verifying ALL future-work claims have explicit capture:
+
+- ✅ Per-command transient cell consolidation → §7.5.14.4 (added this commit) + Track 4D research forward-pointer + DEFERRED.md entry
+- ✅ Cache field retirements (expr-meta.cell-id, sess-meta.cell-id) → Phase 4 row in parent design
+- ✅ Dual-surface retirements (sess-meta-solution/cell-id, meta-solution/cell-id) → Phase 4 + S2.e cooperative per §7.5.14.2
+- ✅ Off-network parameter retirements (10 total) → §7.5.14.1 expanded + DEFERRED.md PM 12 entries
+
+No remaining capture gaps surfaced by S2.e mini-design audit.
 
 ### §7.6.15 Path T-2 — "Open by Design" Map semantics (2026-04-23) — DELIVERED
 
