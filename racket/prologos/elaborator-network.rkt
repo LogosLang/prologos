@@ -69,19 +69,21 @@
  elab-network-meta-info-set
  ;; Track 6 Phase 6: Network reset for persistent cells
  reset-elab-network-command-state
- ;; P5b: Multiplicity cells
- elab-fresh-mult-cell
  ;; Track 8 A3d: Mult bridge callback + α function (γ retired in S2.c-iv,
  ;; 2026-04-24 — was constant type-bot, dead work everywhere).
  current-structural-mult-bridge
  type->mult-alpha
- elab-mult-cell-read
- elab-mult-cell-write
- ;; Track 4 Phase 3: Level and session cells
- elab-fresh-level-cell
- elab-fresh-sess-cell
- ;; P5c: Cross-domain bridge (type ↔ multiplicity)
- elab-add-type-mult-bridge
+ ;; PPN 4C S2.e-v (2026-04-25): RETIRED test-only/dead-code surfaces:
+ ;;   - elab-fresh-mult-cell, elab-mult-cell-read, elab-mult-cell-write
+ ;;     (test-only post-S2.c-iv; production uses fresh-mult-meta +
+ ;;     mult-meta-solution + direct elab-cell-write); test-mult-propagator.rkt
+ ;;     migrated to use net-add-cross-domain-propagator + type->mult-alpha
+ ;;     directly (mirrors production callback at driver.rkt:2674).
+ ;;   - elab-add-type-mult-bridge (test-only; same migration path)
+ ;;   - elab-fresh-level-cell, elab-fresh-sess-cell (DEAD CODE — zero
+ ;;     production AND test consumers; production uses fresh-level-meta +
+ ;;     fresh-sess-meta from metavar-store.rkt).
+ ;; Per D.3 §7.5.14.3 + audit-driven scope expansion (capture-gap pattern).
  ;; Phase 4c: Structural decomposition support
  current-structural-meta-lookup
  ;; PUnify Phase 3: sub-cell creation for Pi decomposition
@@ -956,45 +958,23 @@
 ;; These are separate from type cells but live on the same prop-network.
 ;; Cross-domain propagators (P5c) will bridge type cells and mult cells.
 
-;; Allocate a mult cell on the network. Returns (values elab-network* cell-id).
-;; Track 4 Phase 3: Now creates a TMS cell (paralleling type metas).
-;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Mult cells don't
-;; participate in union-type inference (mult lattice merge is flat
-;; identity-or-top), so branch-isolation under tagged semantics is correct.
-;; Type cells remain TMS-wrapped pending 1A-ii-b's union-inference adaptation.
-(define (elab-fresh-mult-cell enet source)
-  (define net (elab-network-prop-net enet))
-  (define-values (net* cid)
-    (net-new-cell net
-                  (tagged-cell-value mult-bot '())
-                  (make-tagged-merge mult-lattice-merge)
-                  (lambda (v)
-                    (if (tagged-cell-value? v)
-                        (mult-lattice-contradicts? (tagged-cell-value-base v))
-                        (mult-lattice-contradicts? v)))))
-  (define info (elab-cell-info '() #f source))
-  (define h (cell-id-hash cid))
-  (values
-   (elab-network
-    net*
-    (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet))
-    (elab-network-id-map enet)
-    (elab-network-meta-info enet))
-   cid))
-
-;; Read a mult cell's current value.
-(define (elab-mult-cell-read enet cid)
-  (net-cell-read (elab-network-prop-net enet) cid))
-
-;; Write a multiplicity value to a cell (lattice join via mult-lattice-merge).
-(define (elab-mult-cell-write enet cid val)
-  (elab-network
-   (net-cell-write (elab-network-prop-net enet) cid val)
-   (elab-network-cell-info enet)
-   (elab-network-next-meta-id enet)
-   (elab-network-id-map enet)
-   (elab-network-meta-info enet)))
+;; PPN 4C S2.e-v (2026-04-25): elab-fresh-mult-cell + elab-mult-cell-read +
+;; elab-mult-cell-write RETIRED per D.3 §7.5.14.3 + audit-driven scope expansion
+;; (capture-gap pattern, 3rd data point this session — graduation-ready).
+;;
+;; All 3 functions were test-only post-S2.c-iv (mult universe migration) +
+;; S2.e-ii (mult write callback retirement). Production code uses:
+;;   - fresh-mult-meta (metavar-store.rkt) for mult-meta creation
+;;   - mult-meta-solution / meta-domain-solution for reads
+;;   - solve-mult-meta! / direct elab-cell-write for writes
+;;
+;; Test consumer (test-mult-propagator.rkt's make-bridged-network helper)
+;; migrated to use net-add-cross-domain-propagator + type->mult-alpha
+;; directly (mirrors production callback at driver.rkt:2674; γ retired in
+;; S2.c-iv → gamma-fn=#f). Test bodies use elab-cell-read instead of
+;; elab-mult-cell-read. The bridge/gamma-noop test was retired alongside
+;; elab-mult-cell-write (γ direction is no longer a meaningful test target
+;; post-S2.c-iv γ retirement).
 
 ;; ========================================
 ;; Track 4 Phase 3: Level and Session Cells
@@ -1082,46 +1062,14 @@
 (current-level-universe-merge   (compound-tagged-merge merge-meta-solve-identity))
 (current-session-universe-merge (compound-tagged-merge merge-meta-solve-identity))
 
-;; Allocate a level cell on the network. Returns (values elab-network* cell-id).
-;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Level cells use
-;; identity-or-error merge (merge-meta-solve-identity); branches typically
-;; infer the same level, so branch-isolation under tagged semantics is safe.
-(define (elab-fresh-level-cell enet source)
-  (define net (elab-network-prop-net enet))
-  (define-values (net* cid)
-    (net-new-cell net
-                  (tagged-cell-value 'unsolved '())
-                  (make-tagged-merge merge-meta-solve-identity)))
-  (define info (elab-cell-info '() #f source))
-  (define h (cell-id-hash cid))
-  (values
-   (elab-network
-    net*
-    (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet))
-    (elab-network-id-map enet)
-    (elab-network-meta-info enet))
-   cid))
-
-;; Allocate a session cell on the network. Returns (values elab-network* cell-id).
-;; PPN 4C Phase 1A-ii-a: migrated to tagged-cell-value. Same rationale as
-;; elab-fresh-level-cell above.
-(define (elab-fresh-sess-cell enet source)
-  (define net (elab-network-prop-net enet))
-  (define-values (net* cid)
-    (net-new-cell net
-                  (tagged-cell-value 'unsolved '())
-                  (make-tagged-merge merge-meta-solve-identity)))
-  (define info (elab-cell-info '() #f source))
-  (define h (cell-id-hash cid))
-  (values
-   (elab-network
-    net*
-    (champ-insert (elab-network-cell-info enet) h cid info)
-    (+ 1 (elab-network-next-meta-id enet))
-    (elab-network-id-map enet)
-    (elab-network-meta-info enet))
-   cid))
+;; PPN 4C S2.e-v (2026-04-25): elab-fresh-level-cell + elab-fresh-sess-cell
+;; RETIRED — DEAD CODE per audit (zero production AND zero test consumers).
+;; Production code uses fresh-level-meta / fresh-sess-meta from metavar-store.rkt
+;; (which now allocate components in their domain's universe cell post-S2.d).
+;; Audit-driven scope expansion per capture-gap pattern (3rd data point this
+;; session — graduation-ready); the design's named retirement targets
+;; (D.3 §7.5.14.3) covered only the mult-domain test surfaces but the parallel
+;; level/session functions were dead-code peers awaiting cleanup.
 
 ;; ========================================
 ;; P5c: Cross-Domain Bridge (Type ↔ Multiplicity)
@@ -1160,34 +1108,21 @@
 ;; per-mult-change wasted propagator firings). The user's directive in
 ;; S2.c-iv mini-design: "Fine to dismantle, if it's not doing anything."
 ;; net-add-cross-domain-propagator now accepts gamma-fn=#f to skip the γ
-;; install entirely (S2.precursor++ extension, commit 22866050). Both
-;; the production callback (driver.rkt:2658) and elab-add-type-mult-bridge
-;; below pass gamma-fn=#f.
+;; install entirely (S2.precursor++ extension, commit 22866050).
+;; The production callback (driver.rkt:2674 current-structural-mult-bridge)
+;; passes gamma-fn=#f.
 ;; If a future P5c-gamma needs to reconstruct Pi types with solved mults,
 ;; it adds a fresh γ closure here — no preserved scaffolding to confuse.
 
-;; Add a cross-domain propagator pair bridging a type cell and a mult cell.
-;; PPN 4C S2.c-iv (2026-04-24): γ retired (mult->type-gamma was no-op);
-;; returns (values elab-network* pid-alpha #f) — pid-gamma is always #f.
-;; Test callers (test-mult-propagator.rkt:124) destructure with
-;; `_pid-gamma` (ignored), so the API change is backward-compatible at
-;; usage sites.
-(define (elab-add-type-mult-bridge enet type-cell-id mult-cell-id)
-  (define net (elab-network-prop-net enet))
-  (define-values (net* pid-alpha _pid-gamma)
-    (net-add-cross-domain-propagator net
-      type-cell-id mult-cell-id
-      type->mult-alpha
-      #f))   ;; γ retired (was constant type-bot, dead work)
-  (values
-   (elab-network
-    net*
-    (elab-network-cell-info enet)
-    (elab-network-next-meta-id enet)
-    (elab-network-id-map enet)
-    (elab-network-meta-info enet))
-   pid-alpha
-   #f))   ;; pid-gamma always #f post-S2.c-iv
+;; PPN 4C S2.e-v (2026-04-25): elab-add-type-mult-bridge RETIRED
+;; per D.3 §7.5.14.3.
+;;
+;; Test-only post-S2.c-iv (production code uses current-structural-mult-bridge
+;; callback at driver.rkt:2674 with universe-aware :a-component-paths +
+;; gamma-fn=#f). The single test consumer (test-mult-propagator.rkt's
+;; make-bridged-network helper at line 122) was migrated to use
+;; net-add-cross-domain-propagator + type->mult-alpha directly (mirrors
+;; production callback pattern; no test-only API surface needed).
 
 ;; ========================================================================
 ;; PAR Track 1: Elaborator-network topology handler (self-registering)
