@@ -2238,176 +2238,80 @@
       (let ([v (unwrap-meta-info (champ-lookup (unbox mi-box) (prop-meta-id-hash id) id))])
         (and v (meta-info-solution v)))))
 
-(define (mult-champ-fallback id)
-  ;; Mult CHAMP holds raw values + 'unsolved sentinel; tagged-entry wrapping
-  ;; for worldview-tagged speculation entries.
-  (define box (current-mult-meta-champ-box))
-  (and box
-       (let* ([raw (champ-lookup (unbox box) (prop-meta-id-hash id) id)]
-              [v (cond [(eq? raw 'none) #f]
-                       [(tagged-entry? raw)
-                        (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                       [else raw])])
-         (and v (not (eq? v 'unsolved)) v))))
+;; PPN 4C S2.e-iv-b (2026-04-25): mult/level/sess champ-fallback functions
+;; RETIRED per D.3 §7.5.15.2. Post-S2.e-iv-a (champ-box status migration to
+;; universe cell), the mult/level/sess champ-boxes are no longer written;
+;; reading them always returned #f. The functions were dead code.
+;; type-champ-fallback (above) remains — type-meta CHAMP is still active
+;; (Phase 4 retires meta-info CHAMP, then type-champ-fallback retires too).
 
-(define (level-champ-fallback id)
-  ;; Level CHAMP: same shape as mult — raw values + 'unsolved + tagged-entry.
-  (define box (current-level-meta-champ-box))
-  (and box
-       (let* ([raw (champ-lookup (unbox box) (prop-meta-id-hash id) id)]
-              [v (cond [(eq? raw 'none) #f]
-                       [(tagged-entry? raw)
-                        (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                       [else raw])])
-         (and v (not (eq? v 'unsolved)) v))))
-
-(define (sess-champ-fallback id)
-  ;; Session CHAMP: same shape as mult/level.
-  (define box (current-sess-meta-champ-box))
-  (and box
-       (let* ([raw (champ-lookup (unbox box) (prop-meta-id-hash id) id)]
-              [v (cond [(eq? raw 'none) #f]
-                       [(tagged-entry? raw)
-                        (if (worldview-visible? raw) (tagged-entry-value raw) #f)]
-                       [else raw])])
-         (and v (not (eq? v 'unsolved)) v))))
-
-;; Per-domain legacy-fn — pre-universe-migration dispatch.
-;; Fires when 'universe-active? = #f. Mirrors existing per-domain function
-;; bodies. Type domain has NO legacy-fn entry — 'universe-active? = #t
-;; (always post-S2.b-iii). Move B+ (2026-04-24) retired the speculative
-;; `legacy-type-fn` "for symmetry" scaffolding (workflow.md "Belt-and-
-;; suspenders" anti-pattern). If 'type's 'universe-active? ever needs
-;; to be flipped to #f (rollback / testing), legacy logic is reconstructable
-;; from the legacy mult/level/sess pattern, but we don't keep it as
-;; speculative dead code.
-
-(define (legacy-mult-fn _explicit-cid id)
-  ;; explicit-cid not used in production for mult (no PM 8F cache field)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box))
-                               (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none) (mult-champ-fallback id)]
-       [else
-        (let ([v (elab-cell-read (unbox net-box) cid)])
-          (and (not (eq? v 'mult-bot)) (not (eq? v 'unsolved)) v))])]
-    [else (mult-champ-fallback id)]))
-
-(define (legacy-level-fn _explicit-cid id)
-  (define net-box (current-prop-net-box))
-  (cond
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box))
-                               (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none) (level-champ-fallback id)]
-       [else
-        (let ([v (elab-cell-read (unbox net-box) cid)])
-          (and (not (eq? v 'unsolved)) v))])]
-    [else (level-champ-fallback id)]))
-
-(define (legacy-sess-fn explicit-cid id)
-  ;; Session has explicit-cid surface (Track 10B Phase B1b sess-meta.cell-id
-  ;; cache field). PM 8F-era pattern; phantom optimization per microbench
-  ;; (same as type's expr-meta-cell-id). Retired in Phase 4 + S2.e per
-  ;; D.3 §7.5.14 + parent Phase 4 row.
-  (define net-box (current-prop-net-box))
-  (cond
-    [(and explicit-cid net-box)
-     (let ([v (elab-cell-read (unbox net-box) explicit-cid)])
-       (and (not (eq? v 'unsolved)) v))]
-    [net-box
-     (define cid (champ-lookup (elab-network-id-map (unbox net-box))
-                               (prop-meta-id-hash id) id))
-     (cond
-       [(eq? cid 'none) (sess-champ-fallback id)]
-       [else
-        (let ([v (elab-cell-read (unbox net-box) cid)])
-          (and (not (eq? v 'unsolved)) v))])]
-    [else (sess-champ-fallback id)]))
+;; PPN 4C S2.e-iv-b (2026-04-25): legacy-{mult,level,sess}-fn functions
+;; RETIRED per D.3 §7.5.15.2. These were the pre-universe-migration dispatch
+;; functions, called via meta-domain-info `'legacy-fn` entries. Since all 4
+;; domains have `'universe-active? = #t` (post-S2.d), the [else] branch in
+;; meta-domain-solution that dispatched to legacy-fn was unreachable. The
+;; functions were dead code; their entries in meta-domain-info also retired.
 
 ;; The per-domain dispatch table.
-;; 'universe-active? — CORRECTNESS GATE for staged migration (see header).
 ;; 'universe-cid-fn — thunk reading the parameter at call time (option 4).
 ;; 'bot? / 'top? — domain-specific predicates filtering universe-path values.
-;; 'champ-fallback — pure CHAMP read used as defensive fallback.
-;; 'legacy-fn — full pre-universe-migration dispatch (id-map walk + CHAMP).
+;; 'champ-fallback — pure CHAMP read for "no network" or "no universe-cid"
+;;                    cases. ONLY type domain has this entry — mult/level/sess
+;;                    champ-fallbacks were retired in S2.e-iv-b (returned #f
+;;                    always post-S2.e-iv-a). Type retains it pending Phase 4
+;;                    (meta-info CHAMP retirement).
+;;
+;; PPN 4C S2.e-iv-b (2026-04-25): table simplified — `'universe-active?` and
+;; `'legacy-fn` entries RETIRED. All 4 domains are universe-active (post-S2.d);
+;; the staged-migration correctness gate is no longer needed. Legacy-fn was
+;; only consumed via meta-domain-solution's [else] branch which is now
+;; unreachable. Per D.3 §7.5.15.2 + §7.5.14.1.
 (define meta-domain-info
   (hasheq
-    'type    (hasheq 'universe-active? #t            ;; S2.b-iii landed
-                     'universe-cid-fn (lambda () (current-type-meta-universe-cell-id))
+    'type    (hasheq 'universe-cid-fn (lambda () (current-type-meta-universe-cell-id))
                      'bot? prop-type-bot?
                      'top? prop-type-top?
                      'champ-fallback type-champ-fallback)
-    ;; NOTE: 'type entry has NO 'legacy-fn — universe-active? = #t always.
-    ;; Move B+ (2026-04-24) retired the speculative legacy-type-fn. If the
-    ;; flag is ever flipped to #f (would need explicit code change), the
-    ;; dispatch will hash-ref-fail with a clear error, rather than silently
-    ;; running stale legacy logic.
-    'mult    (hasheq 'universe-active? #t            ;; S2.c-iv landed (2026-04-24)
-                     'universe-cid-fn (lambda () (current-mult-meta-universe-cell-id))
+    'mult    (hasheq 'universe-cid-fn (lambda () (current-mult-meta-universe-cell-id))
                      'bot? (lambda (v) (or (eq? v 'mult-bot) (eq? v 'unsolved)))
-                     'top? (lambda (_v) #f)
-                     'champ-fallback mult-champ-fallback
-                     'legacy-fn legacy-mult-fn)
-    'level   (hasheq 'universe-active? #t            ;; S2.d landed (2026-04-25)
-                     'universe-cid-fn (lambda () (current-level-meta-universe-cell-id))
+                     'top? (lambda (_v) #f))
+    'level   (hasheq 'universe-cid-fn (lambda () (current-level-meta-universe-cell-id))
                      'bot? (lambda (v) (eq? v 'unsolved))
-                     'top? (lambda (v) (eq? v 'meta-solve-contradiction))
-                     'champ-fallback level-champ-fallback
-                     'legacy-fn legacy-level-fn)
-    'session (hasheq 'universe-active? #t            ;; S2.d landed (2026-04-25)
-                     'universe-cid-fn (lambda () (current-session-meta-universe-cell-id))
+                     'top? (lambda (v) (eq? v 'meta-solve-contradiction)))
+    'session (hasheq 'universe-cid-fn (lambda () (current-session-meta-universe-cell-id))
                      'bot? (lambda (v) (eq? v 'unsolved))
-                     'top? (lambda (v) (eq? v 'meta-solve-contradiction))
-                     'champ-fallback sess-champ-fallback
-                     'legacy-fn legacy-sess-fn)))
+                     'top? (lambda (v) (eq? v 'meta-solve-contradiction)))))
 
 ;; The single dispatch core. Returns the SOLUTION value or #f.
-;; explicit-cid: legacy-PM-8F backward-compat (e.g., expr-meta-cell-id).
 ;;
-;; Move B+ (2026-04-24): under 'universe-active? = #t, explicit-cid is
-;; IGNORED — option 4 PURE form. Per S2.c-i Task 1 microbench, option 4
-;; wins by 302 ns/call vs the cache-field path. Capturing the full benefit
-;; required (i) NOT consulting explicit-cid (the cache field is functionally
-;; redundant for universe-active domains where universe-cid is a constant
-;; per domain set per-enet by init-meta-universes!), and (ii) NO with-handlers
-;; wrapper (stale-cell concern was the original wrapper's purpose; under
-;; universe migration the universe-cid is structurally stable across enets,
-;; so the wrapper is belt-and-suspenders defensive scaffolding per
-;; workflow.md). Cache field is now functionally INERT for universe-active
-;; domains (still in struct + still passed by 9 callers; Phase 4 retires
-;; struct field + caller surgery per parent design Phase 4 row).
+;; explicit-cid: PM-8F-era backward-compat parameter (e.g., expr-meta-cell-id).
+;; IGNORED post-Move-B+ (S2.c-iii commit c86596e0). Universe-cid is the single
+;; source of truth — constant per domain set per-enet by init-meta-universes!.
+;; Cache field is functionally INERT (still in struct + still passed by callers;
+;; Phase 4 retires struct field + caller surgery per parent design Phase 4 row).
 ;;
-;; explicit-cid IS still passed to legacy-fn (for mult/level/session pre-
-;; migration; sess-meta has Track 10B Phase B1b cache field that legacy-sess-fn
-;; uses). When their migrations land (S2.c-iv flips 'mult; S2.d flips
-;; 'level/'session), their cache fields become inert too; full caller
-;; surgery + struct cleanup absorbs into Phase 4.
+;; PPN 4C S2.e-iv-b (2026-04-25): simplified — outer `cond` on `'universe-active?`
+;; RETIRED (all 4 domains universe-active post-S2.d, so [else] branch was
+;; unreachable). The function now does pure universe dispatch with champ-fallback
+;; for "no network" / "no universe-cid" cases (only meaningful for type domain
+;; pre-Phase-4; mult/level/sess return #f via the defensive default).
 (define (meta-domain-solution domain id [explicit-cid #f])
   (define info (hash-ref meta-domain-info domain))
+  (define net-box (current-prop-net-box))
+  (define cid ((hash-ref info 'universe-cid-fn)))
   (cond
-    [(hash-ref info 'universe-active?)
-     ;; Universe path (option 4 PURE — parameter-read only, no with-handlers).
-     ;; explicit-cid IGNORED for universe-active domains.
-     (define net-box (current-prop-net-box))
-     (define cid ((hash-ref info 'universe-cid-fn)))
-     (cond
-       [(and cid net-box)
-        (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
-          (and v (not (eq? v 'infra-bot))
-               (not ((hash-ref info 'bot?) v))
-               (not ((hash-ref info 'top?) v))
-               v))]
-       [else ((hash-ref info 'champ-fallback) id)])]
+    [(and cid net-box)
+     (let ([v (compound-cell-component-ref (unbox net-box) cid id)])
+       (and v (not (eq? v 'infra-bot))
+            (not ((hash-ref info 'bot?) v))
+            (not ((hash-ref info 'top?) v))
+            v))]
     [else
-     ;; Legacy path (pre-universe-migration for this domain).
-     ;; explicit-cid IS used here (legacy-sess-fn for Track 10B cache field;
-     ;; legacy-mult/level-fn ignore it).
-     ((hash-ref info 'legacy-fn) explicit-cid id)]))
+     ;; champ-fallback for "no network" or "no universe-cid" cases.
+     ;; Only type domain has a meaningful champ-fallback (reads meta-info CHAMP);
+     ;; mult/level/sess fall through to #f via the defensive default lambda.
+     ;; Phase 4 retires type-champ-fallback alongside meta-info CHAMP.
+     ((hash-ref info 'champ-fallback (lambda (_id) #f)) id)]))
 
 ;; Predicate companion. Returns #t/#f.
 (define (meta-domain-solved? domain id)
