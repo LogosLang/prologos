@@ -261,8 +261,11 @@
  ;; Track 7 Phase 7a: execute-resolution-action! moved to resolution.rkt
  execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
+ ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
+ ;; Asymmetry with level/sess (which used direct elab-cell-write) was a legacy
+ ;; artifact. solve-mult-meta!'s legacy [else] branch now uses direct
+ ;; elab-cell-write for symmetry. Per D.3 §7.5.14.3 + §7.5.15.2.
  current-prop-fresh-mult-cell
- current-prop-mult-cell-write
  ;; Track 4 Phase 3: Level and session cell callbacks
  current-prop-fresh-level-cell
  current-prop-fresh-sess-cell
@@ -1645,7 +1648,13 @@
 
 ;; P5b: Multiplicity cell callbacks
 (define current-prop-fresh-mult-cell (make-parameter #f))   ;; (enet source → (values enet* cell-id))
-(define current-prop-mult-cell-write (make-parameter #f))   ;; (enet cell-id value → enet*)
+;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
+;; Was Racket parameter holding `(enet cell-id value → enet*)` for the
+;; mult solve-cell-write path. Asymmetry with level/sess (which used direct
+;; elab-cell-write) was a legacy artifact. Post-S2.c-iv (mult universe-active)
+;; + S2.e-i (lazy init), the legacy [else] branch in solve-mult-meta! is
+;; unreachable in any context with net-box. Replaced inline with direct
+;; elab-cell-write for symmetry with level/sess. Per D.3 §7.5.14.3 + §7.5.15.2.
 
 ;; Track 4 Phase 3: Level and session cell callbacks
 (define current-prop-fresh-level-cell (make-parameter #f))  ;; (enet source → (values enet* cell-id))
@@ -2715,11 +2724,15 @@
         ;; Universe path (S2.c-iv): cid is universe-cid; write via component-keyed access
         [(meta-universe-cell-id? cid)
          (set-box! net-box (compound-cell-component-write enet cid id solution))]
-        ;; Legacy path: cid is per-meta cell; raw write via callback
+        ;; Legacy path: cid is per-meta cell; direct elab-cell-write.
+        ;; PPN 4C S2.e-ii (2026-04-25): replaced callback dispatch with direct
+        ;; write for symmetry with solve-level-meta!/solve-sess-meta!. Post-
+        ;; S2.c-iv + S2.e-i this branch is unreachable in any context with
+        ;; net-box (lazy init ensures cid is universe-cid). Retained as
+        ;; defensive fallback only; will be removed in S2.e-iv with the rest
+        ;; of the legacy paths.
         [else
-         (define write-fn (current-prop-mult-cell-write))
-         (when write-fn
-           (set-box! net-box (write-fn enet cid solution)))]))))
+         (set-box! net-box (elab-cell-write enet cid solution))]))))
 
 ;; Check if a mult metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'mult entry's

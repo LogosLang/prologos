@@ -2602,7 +2602,9 @@
 
 ;; P5b: Install multiplicity cell callbacks
 (current-prop-fresh-mult-cell elab-fresh-mult-cell)
-(current-prop-mult-cell-write elab-mult-cell-write)
+;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write install RETIRED.
+;; Parameter retired in metavar-store.rkt; solve-mult-meta! legacy [else] path
+;; now uses direct elab-cell-write (symmetric with level/sess). Per D.3 §7.5.14.3.
 
 ;; Track 4 Phase 3: Install level and session cell callbacks
 (current-prop-fresh-level-cell elab-fresh-level-cell)
