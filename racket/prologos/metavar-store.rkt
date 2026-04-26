@@ -1799,7 +1799,16 @@
              (elab-cell-write enet2 um-cid (hasheq id #t))
              enet2))
        (set-box! net-box enet3)
-       type-universe-cid]
+       ;; expr-meta.cell-id field: #f under universe-active path. Per Move B+
+       ;; (S2.c-iii commit c86596e0), meta-domain-solution IGNORES explicit-cid
+       ;; under universe-active; the field is functionally inert. Setting to
+       ;; universe-cid would be misleading (implies "looks meaningful");
+       ;; setting to #f honestly signals "no per-meta cell allocated". The
+       ;; field itself is scaffolding awaiting Phase 4 retirement per parent
+       ;; design 4C Phase 4 row (cache-field cleanup absorbed into CHAMP
+       ;; retirement coherent unit). Consumers already handle #f — pre-init
+       ;; contexts always set it to #f when no fresh-fn is available.
+       #f]
       [(and net-box fresh-fn)
        ;; Pre-b-iii per-meta cell path (still used when universe not initialized —
        ;; bare-metavar-store tests that don't load elaborator-network.rkt).
@@ -2744,12 +2753,18 @@
 ;; — fresh-sess-meta + solve-sess-meta! + flag flip MUST land together.
 ;;
 ;; Note on sess-meta.cell-id field (Track 10B Phase B1b PM-8F-style cache):
-;; under universe-active, the cell-id field receives the universe-cid (NOT
-;; a per-meta cell-id). It is functionally INERT per Move B+ (explicit-cid
-;; ignored under universe-active dispatch in meta-domain-solution); the
-;; field is preserved for backward-compat with callers passing
-;; (sess-meta-cell-id s) to sess-meta-solution/cell-id. Field retirement
-;; absorbed into Phase 4 + S2.e per D.3 §7.5.14.2.
+;; under universe-active, the cell-id field is set to #f. Per Move B+ (S2.c-iii
+;; commit c86596e0), meta-domain-solution IGNORES explicit-cid under universe-
+;; active dispatch; the field is functionally INERT. Setting to universe-cid
+;; would be misleading (implies "looks meaningful"); setting to #f honestly
+;; signals "no per-meta cell allocated" — consistent with how pre-init contexts
+;; have always populated it. The field itself is scaffolding awaiting Phase 4
+;; retirement per D.3 §7.5.14.2 (sess-meta-solution/cell-id dual-surface) +
+;; parent design 4C Phase 4 row (cache-field cleanup absorbed into CHAMP
+;; retirement coherent unit). The 2 production callers (zonk-session +
+;; zonk-session-default at metavar-store.rkt:2873/2893) pass (sess-meta-cell-id
+;; s) to sess-meta-solution/cell-id which under universe-active routes via
+;; parameter-read for universe-cid — the explicit-cid arg is unused.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
   (define box (current-sess-meta-champ-box))
@@ -2778,8 +2793,10 @@
                         (champ-insert (elab-network-id-map enet1)
                                       (prop-meta-id-hash id) id id-map-entry)))
        (set-box! net-box enet2)
-       ;; Return universe-cid as sess-meta.cell-id (inert under universe-active)
-       sess-universe-cid]
+       ;; sess-meta.cell-id = #f under universe-active (functionally inert per
+       ;; Move B+; honest signaling per docstring above). Field itself awaits
+       ;; Phase 4 retirement.
+       #f]
       ;; Legacy path: per-meta cell allocation (pre-init contexts)
       [else
        (define fresh-fn (current-prop-fresh-sess-cell))
