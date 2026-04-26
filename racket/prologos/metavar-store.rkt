@@ -1565,27 +1565,14 @@
         (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
         (unless (equal? mi-champ cleaned-mi)
           (set-box! net-box (elab-network-meta-info-set (unbox net-box) cleaned-mi)))
-        ;; Track 8 Phase A3a: Retract tagged mult-meta entries from CHAMP box.
-        (define mult-box (current-mult-meta-champ-box))
-        (when mult-box
-          (define mult-champ (unbox mult-box))
-          (define cleaned-mult (retract-hasheq-entries mult-champ retracted))
-          (unless (equal? mult-champ cleaned-mult)
-            (set-box! mult-box cleaned-mult)))
-        ;; Track 8 Phase A3b: Retract tagged level-meta entries from CHAMP box.
-        (define level-box (current-level-meta-champ-box))
-        (when level-box
-          (define level-champ (unbox level-box))
-          (define cleaned-level (retract-hasheq-entries level-champ retracted))
-          (unless (equal? level-champ cleaned-level)
-            (set-box! level-box cleaned-level)))
-        ;; Track 8 Phase A3c: Retract tagged sess-meta entries from CHAMP box.
-        (define sess-box (current-sess-meta-champ-box))
-        (when sess-box
-          (define sess-champ (unbox sess-box))
-          (define cleaned-sess (retract-hasheq-entries sess-champ retracted))
-          (unless (equal? sess-champ cleaned-sess)
-            (set-box! sess-box cleaned-sess)))
+        ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box retraction blocks RETIRED
+        ;; per D.3 §7.5.15.2. Post-S2.e-iv-a (status migration), mult/level/
+        ;; sess champ-boxes are no longer written. Universe cells (4 domains)
+        ;; handle speculation rollback via tagged-cell-value worldview filtering
+        ;; at read time — the same pattern type-meta universe has used since
+        ;; S2.b-iii without explicit retraction. Note: type-meta-info CHAMP
+        ;; (line 1564-1567 above) and id-map (line 1592-1596 below) still
+        ;; require explicit retraction; both are Phase 4 scope.
         ;; Track 8 Phase A4b: Retract tagged id-map entries.
         ;; id-map is a struct field of elab-network, not a cell.
         ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
@@ -2511,11 +2498,12 @@
 ;; The S2.c-iv 4-min hang would have surfaced if we'd split the migration.
 (define (fresh-level-meta source)
   (define id (gensym 'lvl))
-  (define box (current-level-meta-champ-box))
-  ;; Track 8 Phase A3b: Tag level entry with current speculation assumption.
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box write RETIRED per D.3 §7.5.15.2.
+  ;; Status tracking now lives in the universe cell via tagged-cell-value
+  ;; semantics (per-worldview entries). The champ-box was a dual store with
+  ;; the universe cell post-S2.d; eliminating it makes the universe cell the
+  ;; single source of truth for level-meta status.
   (define aid (current-speculation-assumption))
-  (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
   ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
   ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
@@ -2557,34 +2545,29 @@
 ;; level dispatch. Per pipeline.md atomic-pairing rule: this dispatch update
 ;; lands together with fresh-level-meta + flag flip in same commit.
 (define (solve-level-meta! id solution)
-  (define box (current-level-meta-champ-box))
-  ;; Track 8 A3b: unwrap tagged-entry for status check
-  (define raw-entry
-    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? v 'none) #f v)))
-  (define status (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
-  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
-  (unless status
-    (error 'solve-level-meta! "unknown level-meta: ~a" id))
-  (when (not (eq? status 'unsolved))
-    (error 'solve-level-meta! "level-meta ~a already solved" id))
-  ;; Track 8 A3b: re-tag with original or current assumption
-  (define aid (or entry-aid (current-speculation-assumption)))
-  (define tagged-solution (if aid (tagged-entry solution aid) solution))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; Write to propagator level cell
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box status tracking RETIRED per
+  ;; D.3 §7.5.15.2. Status check now reads the universe cell directly.
+  ;; Universe cell + tagged-cell-value semantics handle per-worldview state
+  ;; correctly via worldview-bitmask filtering at read time. The legacy
+  ;; id-map lookup + cond [universe / else] dispatch is also retired —
+  ;; post-S2.d (level universe-active = #t) + S2.e-i (lazy init), the
+  ;; cell write is unconditionally to the universe cell.
   (define net-box (current-prop-net-box))
-  (when net-box
+  (define cid (current-level-meta-universe-cell-id))
+  (when (and net-box cid)
     (define enet (unbox net-box))
-    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
-    (when (and cid (not (eq? cid 'none)))
-      (cond
-        ;; S2.d universe path: cid is universe-cid; write via component-keyed access
-        [(meta-universe-cell-id? cid)
-         (set-box! net-box (compound-cell-component-write enet cid id solution))]
-        ;; Legacy path: cid is per-meta cell; raw write
-        [else
-         (set-box! net-box (elab-cell-write enet cid solution))]))))
+    ;; "Unknown meta" check: raw existence in compound cell hasheq
+    ;; (regardless of worldview)
+    (define compound-val (elab-cell-read enet cid))
+    (unless (and (hash? compound-val) (hash-has-key? compound-val id))
+      (error 'solve-level-meta! "unknown level-meta: ~a" id))
+    ;; "Already solved" check: worldview-filtered solution read
+    (when (level-meta-solution id)
+      (error 'solve-level-meta! "level-meta ~a already solved" id))
+    ;; Write solution to universe cell via component-keyed access.
+    ;; compound-cell-component-write handles tagged-cell-value wrapping per
+    ;; current-worldview-bitmask (committed → base; speculation → entry).
+    (set-box! net-box (compound-cell-component-write enet cid id solution))))
 
 ;; Check if a level metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'level entry's
@@ -2643,11 +2626,12 @@
 ;; AND the dispatch (table flag) atomically.
 (define (fresh-mult-meta source)
   (define id (gensym 'mmeta))
-  (define box (current-mult-meta-champ-box))
-  ;; Track 8 Phase A3a: Tag mult entry with current speculation assumption.
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box write RETIRED per D.3 §7.5.15.2.
+  ;; Status tracking now lives in the universe cell via tagged-cell-value
+  ;; semantics (per-worldview entries). The champ-box was a dual store with
+  ;; the universe cell post-S2.c-iv; eliminating it makes the universe cell
+  ;; the single source of truth for mult-meta status.
   (define aid (current-speculation-assumption))
-  (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
   ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
   ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
@@ -2686,40 +2670,29 @@
 ;; the cell is compound. Dispatch to compound-cell-component-write at
 ;; component=mult-id for universe-active mult dispatch.
 (define (solve-mult-meta! id solution)
-  (define box (current-mult-meta-champ-box))
-  ;; Track 8 A3a: unwrap tagged-entry for status check
-  (define raw-entry
-    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? v 'none) #f v)))
-  (define status (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
-  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
-  (unless status
-    (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
-  (when (not (eq? status 'unsolved))
-    (error 'solve-mult-meta! "mult-meta ~a already solved" id))
-  ;; Track 8 A3a: re-tag with original or current assumption
-  (define aid (or entry-aid (current-speculation-assumption)))
-  (define tagged-solution (if aid (tagged-entry solution aid) solution))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; Write to propagator mult cell
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box status tracking RETIRED per
+  ;; D.3 §7.5.15.2. Status check now reads the universe cell directly.
+  ;; Universe cell + tagged-cell-value semantics handle per-worldview state
+  ;; correctly via worldview-bitmask filtering at read time. The legacy
+  ;; id-map lookup + cond [universe / else] dispatch is also retired —
+  ;; post-S2.c-iv (mult universe-active = #t) + S2.e-i (lazy init), the
+  ;; cell write is unconditionally to the universe cell.
   (define net-box (current-prop-net-box))
-  (when net-box
+  (define cid (current-mult-meta-universe-cell-id))
+  (when (and net-box cid)
     (define enet (unbox net-box))
-    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
-    (when (and cid (not (eq? cid 'none)))
-      (cond
-        ;; Universe path (S2.c-iv): cid is universe-cid; write via component-keyed access
-        [(meta-universe-cell-id? cid)
-         (set-box! net-box (compound-cell-component-write enet cid id solution))]
-        ;; Legacy path: cid is per-meta cell; direct elab-cell-write.
-        ;; PPN 4C S2.e-ii (2026-04-25): replaced callback dispatch with direct
-        ;; write for symmetry with solve-level-meta!/solve-sess-meta!. Post-
-        ;; S2.c-iv + S2.e-i this branch is unreachable in any context with
-        ;; net-box (lazy init ensures cid is universe-cid). Retained as
-        ;; defensive fallback only; will be removed in S2.e-iv with the rest
-        ;; of the legacy paths.
-        [else
-         (set-box! net-box (elab-cell-write enet cid solution))]))))
+    ;; "Unknown meta" check: raw existence in compound cell hasheq
+    ;; (regardless of worldview)
+    (define compound-val (elab-cell-read enet cid))
+    (unless (and (hash? compound-val) (hash-has-key? compound-val id))
+      (error 'solve-mult-meta! "unknown mult-meta: ~a" id))
+    ;; "Already solved" check: worldview-filtered solution read
+    (when (mult-meta-solution id)
+      (error 'solve-mult-meta! "mult-meta ~a already solved" id))
+    ;; Write solution to universe cell via component-keyed access.
+    ;; compound-cell-component-write handles tagged-cell-value wrapping per
+    ;; current-worldview-bitmask (committed → base; speculation → entry).
+    (set-box! net-box (compound-cell-component-write enet cid id solution))))
 
 ;; Check if a mult metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'mult entry's
@@ -2786,11 +2759,12 @@
 ;; parameter-read for universe-cid — the explicit-cid arg is unused.
 (define (fresh-sess-meta source)
   (define id (gensym 'smeta))
-  (define box (current-sess-meta-champ-box))
-  ;; Track 8 Phase A3c: Tag sess entry with current speculation assumption.
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box write RETIRED per D.3 §7.5.15.2.
+  ;; Status tracking now lives in the universe cell via tagged-cell-value
+  ;; semantics (per-worldview entries). The champ-box was a dual store with
+  ;; the universe cell post-S2.d-session; eliminating it makes the universe
+  ;; cell the single source of truth for sess-meta status.
   (define aid (current-speculation-assumption))
-  (define entry (if aid (tagged-entry 'unsolved aid) 'unsolved))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id entry))
   (define net-box (current-prop-net-box))
   ;; PPN 4C Step 2 S2.e-i (2026-04-25): Option C-4 lazy universe init.
   ;; See fresh-meta for full rationale (D.3 §7.5.15.1). Eliminates the legacy
@@ -2842,34 +2816,29 @@
 ;; for universe-active session dispatch. Per pipeline.md atomic-pairing rule:
 ;; this dispatch update lands together with fresh-sess-meta + flag flip.
 (define (solve-sess-meta! id solution)
-  (define box (current-sess-meta-champ-box))
-  ;; Track 8 Phase A3c: unwrap tagged-entry for status check
-  (define raw-entry
-    (let ([v (champ-lookup (unbox box) (prop-meta-id-hash id) id)])
-      (if (eq? v 'none) #f v)))
-  (define status (if (tagged-entry? raw-entry) (tagged-entry-value raw-entry) raw-entry))
-  (define entry-aid (if (tagged-entry? raw-entry) (tagged-entry-assumption-id raw-entry) #f))
-  (unless status
-    (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
-  (when (not (eq? status 'unsolved))
-    (error 'solve-sess-meta! "sess-meta ~a already solved" id))
-  ;; Track 8 Phase A3c: re-tag with original or current assumption
-  (define aid (or entry-aid (current-speculation-assumption)))
-  (define tagged-solution (if aid (tagged-entry solution aid) solution))
-  (set-box! box (champ-insert (unbox box) (prop-meta-id-hash id) id tagged-solution))
-  ;; Write to propagator session cell
+  ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box status tracking RETIRED per
+  ;; D.3 §7.5.15.2. Status check now reads the universe cell directly.
+  ;; Universe cell + tagged-cell-value semantics handle per-worldview state
+  ;; correctly via worldview-bitmask filtering at read time. The legacy
+  ;; id-map lookup + cond [universe / else] dispatch is also retired —
+  ;; post-S2.d-session (session universe-active = #t) + S2.e-i (lazy init),
+  ;; the cell write is unconditionally to the universe cell.
   (define net-box (current-prop-net-box))
-  (when net-box
+  (define cid (current-session-meta-universe-cell-id))
+  (when (and net-box cid)
     (define enet (unbox net-box))
-    (define cid (champ-lookup (elab-network-id-map enet) (prop-meta-id-hash id) id))
-    (when (and cid (not (eq? cid 'none)))
-      (cond
-        ;; S2.d universe path: cid is universe-cid; write via component-keyed access
-        [(meta-universe-cell-id? cid)
-         (set-box! net-box (compound-cell-component-write enet cid id solution))]
-        ;; Legacy path: cid is per-meta cell; raw write
-        [else
-         (set-box! net-box (elab-cell-write enet cid solution))]))))
+    ;; "Unknown meta" check: raw existence in compound cell hasheq
+    ;; (regardless of worldview)
+    (define compound-val (elab-cell-read enet cid))
+    (unless (and (hash? compound-val) (hash-has-key? compound-val id))
+      (error 'solve-sess-meta! "unknown sess-meta: ~a" id))
+    ;; "Already solved" check: worldview-filtered solution read
+    (when (sess-meta-solution id)
+      (error 'solve-sess-meta! "sess-meta ~a already solved" id))
+    ;; Write solution to universe cell via component-keyed access.
+    ;; compound-cell-component-write handles tagged-cell-value wrapping per
+    ;; current-worldview-bitmask (committed → base; speculation → entry).
+    (set-box! net-box (compound-cell-component-write enet cid id solution))))
 
 ;; Check if a sess metavariable has been solved.
 ;; PPN 4C S2.c-iii (2026-04-24): converted to shim. 'session entry's
