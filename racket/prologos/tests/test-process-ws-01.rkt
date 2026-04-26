@@ -41,7 +41,7 @@
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
                  [current-capability-warnings '()]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string s))
     (if (and (list? results) (not (null? results)))
         (last results)

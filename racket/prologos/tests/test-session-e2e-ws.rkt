@@ -30,7 +30,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file path)))
 
 ;; ========================================
@@ -62,7 +62,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file (build-path here "ws-session-e2e-01.prologos"))
     ;; Greeting and Echo sessions should be registered
     (check-true (session-entry? (lookup-session 'Greeting)))
@@ -93,7 +93,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file (build-path here "ws-session-e2e-02.prologos"))
     ;; Server session
     (define entry (lookup-session 'Server))

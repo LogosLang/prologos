@@ -26,7 +26,6 @@
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry prelude-preparse-registry])
     (install-module-loader!)
     (process-string s)))

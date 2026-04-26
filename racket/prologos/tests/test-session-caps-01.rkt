@@ -38,7 +38,7 @@
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
                  [current-capability-warnings '()]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string s))
     (if (and (list? results) (not (null? results)))
         (last results)
@@ -53,7 +53,7 @@
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
                  [current-capability-warnings '()]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string
                      (string-append
                       "(capability NetCap)\n"
@@ -73,7 +73,7 @@
                  [current-module-registry (hasheq)]
                  [current-capability-registry (hasheq)]
                  [current-capability-warnings '()]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string
      (string-append
       "(capability NetCap)\n"

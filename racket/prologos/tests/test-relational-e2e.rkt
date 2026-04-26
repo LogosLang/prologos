@@ -48,7 +48,6 @@
                    [current-ns-context #f]
                    [current-module-registry (hasheq)]
                    [current-lib-paths (list lib-dir)]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-relation-store (make-relation-store)]
                    [current-preparse-registry (current-preparse-registry)]
                    [current-trait-registry (current-trait-registry)]

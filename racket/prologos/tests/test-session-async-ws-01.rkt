@@ -25,7 +25,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string-ws s))
     (if (list? results) (last results) results)))
 
@@ -37,7 +37,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string-ws s)
     (lookup-session name)))
 
@@ -111,7 +111,7 @@
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string-ws "session AS\n  !! Nat\n  end\ndual AS\n")))
   (check-true (list? result))
   (check-equal? (length result) 2)
@@ -130,7 +130,7 @@
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string-ws
        (string-append
         "session AsyncGreet\n"
@@ -152,7 +152,7 @@
                    [current-session-registry (hasheq)]
                    [current-strategy-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string-ws
        (string-append
         "session AsyncListen\n"

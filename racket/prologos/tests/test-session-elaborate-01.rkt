@@ -28,7 +28,7 @@
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string s))
     (if (list? results)
         (car (reverse results))
@@ -41,7 +41,7 @@
                  [current-ns-context #f]
                  [current-session-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string s)))
 
 ;; ========================================
@@ -107,7 +107,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Greeting (Send String End))\n(defproc greeter : Greeting (proc-send self \"hello\" (proc-stop)))")))
   (check-true (list? result))
@@ -131,7 +131,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Echo (Send String (Recv String End)))\n(dual Echo)")))
   (check-true (list? result))
@@ -147,7 +147,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Counter (Choice ((inc (Send Nat End)) (done End))))\n(dual Counter)")))
   (check-true (list? result))
@@ -165,7 +165,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Greeting (Send String End))\n(defproc g : Greeting (proc-send self \"hi\" (proc-stop)))")))
   (check-true (list? result))
@@ -196,7 +196,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Counter (Offer ((inc (Recv Nat End)) (done End))))\n(defproc handler : Counter (proc-case self ((inc (proc-recv self x (proc-stop))) (done (proc-stop)))))")))
   (check-true (list? result))
@@ -214,7 +214,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Counter (Choice ((inc (Send Nat End)) (done End))))\n(defproc chooser : Counter (proc-sel self inc (proc-send self 42N (proc-stop))))")))
   (check-true (list? result))
@@ -231,7 +231,7 @@
                    [current-ns-context #f]
                    [current-session-registry (hasheq)]
                    [current-module-registry (hasheq)]
-                   [current-mult-meta-store (make-hasheq)])
+                   )
       (process-string
        "(session Greeting (Send String End))\n(defproc composed (proc-new Greeting (proc-par (proc-send c \"hi\" (proc-stop)) (proc-recv c x (proc-stop)))))")))
   ;; Should elaborate (not fail) — no session type annotation on defproc, no type-check

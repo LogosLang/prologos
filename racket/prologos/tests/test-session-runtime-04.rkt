@@ -29,7 +29,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string s))
     (last results)))
 
@@ -42,7 +42,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string s)))
 
 ;; ========================================

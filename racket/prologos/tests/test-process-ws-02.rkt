@@ -28,7 +28,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string session-sexp)
     (define results (process-string-ws defproc-ws))
     (if (list? results) (last results) results)))
@@ -41,7 +41,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string-ws ws-string))
     (if (list? results) (last results) results)))
 

@@ -54,7 +54,6 @@
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
@@ -81,7 +80,6 @@
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-preparse-registry shared-preparse-reg]
                  [current-capability-registry shared-cap-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
                  ;; THE KEY: enable punify cell-tree path
                  [current-punify-enabled? #t])
@@ -102,7 +100,6 @@
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-preparse-registry shared-preparse-reg]
                  [current-capability-registry shared-cap-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-lib-paths (list prelude-lib-dir)]
                  [current-punify-enabled? #f])
     (install-module-loader!)

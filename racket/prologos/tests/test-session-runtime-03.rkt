@@ -32,7 +32,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (define results (process-string s))
     (last results)))
 
@@ -45,7 +45,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string s)))
 
 ;; ========================================
@@ -211,7 +211,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string
       (string-append
        "(session S (Send Nat End))\n"
@@ -231,7 +231,7 @@
                  [current-strategy-registry (hasheq)]
                  [current-process-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-string
       (string-append
        "(session R (Recv Nat End))\n"

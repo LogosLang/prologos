@@ -115,7 +115,8 @@
  all-postponed-constraints
  all-failed-constraints
  ;; Sprint 6: Universe level metavariables
- current-level-meta-store
+ ;; PPN 4C S2.e-iv-c (2026-04-25): current-level-meta-store provide RETIRED
+ ;; (parameter retired; was vestigial — only hash-clear! consumer in production).
  fresh-level-meta
  solve-level-meta!
  level-meta-solved?
@@ -123,7 +124,7 @@
  zonk-level
  zonk-level-default
  ;; Sprint 7: Multiplicity metavariables
- current-mult-meta-store
+ ;; PPN 4C S2.e-iv-c (2026-04-25): current-mult-meta-store provide RETIRED.
  fresh-mult-meta
  solve-mult-meta!
  mult-meta-solved?
@@ -131,7 +132,7 @@
  zonk-mult
  zonk-mult-default
  ;; Sprint 8: Session metavariables
- current-sess-meta-store
+ ;; PPN 4C S2.e-iv-c (2026-04-25): current-sess-meta-store provide RETIRED.
  fresh-sess-meta
  solve-sess-meta!
  sess-meta-solved?
@@ -170,9 +171,8 @@
  current-prop-meta-info-set
  prop-meta-id-hash
  ;; Phase B: Auxiliary meta CHAMP boxes
- current-level-meta-champ-box
- current-mult-meta-champ-box
- current-sess-meta-champ-box
+ ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box provides RETIRED. Parameters
+ ;; retired alongside (status migrated to universe cell in S2.e-iv-a).
  ;; Phase 8b: Network operation callbacks (set by driver at startup)
  current-prop-make-network
  current-prop-fresh-meta
@@ -1403,9 +1403,11 @@
 ;; Each stores id → 'unsolved | solution. Included in save/restore for
 ;; correct speculative rollback (fixes latent bug where level/mult/session
 ;; meta mutations leaked through with-speculative-rollback).
-(define current-level-meta-champ-box (make-parameter #f))
-(define current-mult-meta-champ-box (make-parameter #f))
-(define current-sess-meta-champ-box (make-parameter #f))
+;; PPN 4C S2.e-iv-c (2026-04-25): current-{level,mult,sess}-meta-champ-box
+;; parameter definitions RETIRED per D.3 §7.5.15.2 + §7.5.14.1. Status
+;; tracking migrated to universe cell in S2.e-iv-a; champ-fallback consumers
+;; retired in S2.e-iv-b. These parameters had no remaining production
+;; consumers (retraction loop entries also retired in S2.e-iv-a).
 
 ;; Symbol hash for gensym meta-ids.
 (define (prop-meta-id-hash id) (eq-hash-code id))
@@ -1715,9 +1717,6 @@
 ;;   (with-fresh-meta-env (parameterize ([current-retry-unify ...]) ...))
 (define-syntax-rule (with-fresh-meta-env body ...)
   (parameterize ([current-meta-store (make-hasheq)]
-                 [current-level-meta-store (make-hasheq)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-sess-meta-store (make-hasheq)]
                  [current-definition-cells-content (hasheq)]  ;; Phase 3a
                  [current-definition-dependencies (hasheq)]  ;; Phase 3b
                  ;; Cell IDs: #f — reset-meta-store! populates when callbacks available
@@ -1739,10 +1738,11 @@
                  ;; because process-command expects elab-network in the box.
                  [current-prop-net-box (box (make-elaboration-network))]
                  [current-prop-meta-info-box (box champ-empty)]
-                 [current-prop-id-map-box (box champ-empty)]
-                 [current-level-meta-champ-box (box champ-empty)]
-                 [current-mult-meta-champ-box (box champ-empty)]
-                 [current-sess-meta-champ-box (box champ-empty)])
+                 [current-prop-id-map-box (box champ-empty)])
+    ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box parameter bindings RETIRED
+    ;; per D.3 §7.5.15.2 + §7.5.14.1. Status migrated to universe cell in
+    ;; S2.e-iv-a; champ-fallback consumers retired in S2.e-iv-b; parameters
+    ;; themselves retired in this commit.
     (reset-meta-store!)
     body ...))
 
@@ -2385,7 +2385,10 @@
 ;; Simpler than expr-metas: no context, type, or constraints needed.
 ;; Store maps level-meta id → solution (a ground level) or 'unsolved.
 
-(define current-level-meta-store (make-parameter (make-hasheq)))
+;; PPN 4C S2.e-iv-c (2026-04-25): current-level-meta-store RETIRED per
+;; D.3 §7.5.15.2 + §7.5.14.1. Was Racket parameter holding (make-hasheq);
+;; only production consumer was hash-clear! in reset-meta-store!. Vestigial
+;; (no reads). Retired alongside test-fixture surgery (sed batch).
 
 ;; Create a fresh level metavariable, register in store, return level-meta.
 ;; Hash removal: Always writes to CHAMP.
@@ -2512,7 +2515,10 @@
 ;; Same pattern as level-metas: simple id → solution or 'unsolved store.
 ;; mult-meta solutions are concrete multiplicities ('m0, 'm1, 'mw).
 
-(define current-mult-meta-store (make-parameter (make-hasheq)))
+;; PPN 4C S2.e-iv-c (2026-04-25): current-mult-meta-store RETIRED. Same
+;; rationale as current-level-meta-store above — vestigial parameter, only
+;; consumer was hash-clear! in reset-meta-store!. Retired alongside
+;; test-fixture surgery (sed batch removed 347 references in 169 test files).
 
 ;; Create a fresh mult metavariable, register in store, return mult-meta.
 ;; Hash removal: Always writes to CHAMP.
@@ -2633,7 +2639,9 @@
 ;; Same pattern as level-metas/mult-metas: simple id → solution or 'unsolved store.
 ;; sess-meta solutions are session types (sess-send, sess-recv, sess-end, etc.).
 
-(define current-sess-meta-store (make-parameter (make-hasheq)))
+;; PPN 4C S2.e-iv-c (2026-04-25): current-sess-meta-store RETIRED. Same
+;; rationale as current-level-meta-store + current-mult-meta-store above —
+;; vestigial parameter, only consumer was hash-clear! in reset-meta-store!.
 
 ;; Create a fresh sess metavariable, register in store, return sess-meta.
 ;; Hash removal: Always writes to CHAMP.
@@ -2818,25 +2826,20 @@
 ;; Propagator network only reset when callbacks are available.
 (define (reset-meta-store!)
   (hash-clear! (current-meta-store))
-  (hash-clear! (current-level-meta-store))
-  (hash-clear! (current-mult-meta-store))
-  (hash-clear! (current-sess-meta-store))
+  ;; PPN 4C S2.e-iv-c (2026-04-25): hash-clear! calls for level/mult/sess
+  ;; meta-store parameters RETIRED. Parameters themselves retired (vestigial,
+  ;; no production reads). Per D.3 §7.5.15.2 + §7.5.14.1.
   ;; Phase 8 cleanup: vestigial hash-clear! calls removed — cells handle reset.
   (reset-constraint-store!)
-  ;; Always reset CHAMP meta-info + auxiliary boxes
+  ;; Always reset CHAMP meta-info box. PPN 4C S2.e-iv-c (2026-04-25): the
+  ;; auxiliary champ-box parameters (level/mult/sess) were retired alongside
+  ;; the status-tracking migration; only the type-meta CHAMP box remains
+  ;; (Phase 4 retires alongside meta-info CHAMP itself).
   (define mi-box (current-prop-meta-info-box))
   (if mi-box
-      (begin
-        (set-box! mi-box champ-empty)
-        (set-box! (current-level-meta-champ-box) champ-empty)
-        (set-box! (current-mult-meta-champ-box) champ-empty)
-        (set-box! (current-sess-meta-champ-box) champ-empty))
-      (begin
-        ;; First call — create CHAMP boxes
-        (current-prop-meta-info-box (box champ-empty))
-        (current-level-meta-champ-box (box champ-empty))
-        (current-mult-meta-champ-box (box champ-empty))
-        (current-sess-meta-champ-box (box champ-empty))))
+      (set-box! mi-box champ-empty)
+      ;; First call — create CHAMP box
+      (current-prop-meta-info-box (box champ-empty)))
   ;; Propagator network: Track 8 B2b — make-elaboration-network is direct.
   ;; Still gated on current-prop-new-infra-cell: infrastructure cells need the
   ;; callback from driver.rkt. Without it, the network exists but can't create

@@ -31,7 +31,7 @@
          "../../sre-core.rkt"
          "../../rrb.rkt"
          "../../driver.rkt"
-         "../../metavar-store.rkt"  ;; current-mult-meta-store
+         "../../metavar-store.rkt"  ;; with-fresh-meta-env, fresh-meta, etc.
          (except-in "../../macros.rkt" register-ctor!))
 
 ;; ============================================================
@@ -314,22 +314,18 @@
 
 (define e1 (bench-ms "E1 if/let rewrites" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e1-src))))))
 
 (define e2 (bench-ms "E2 dot-access + implicit-map" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e2-src))))))
 
 (define e3 (bench-ms "E3 pattern matching (full pipeline)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e3-src))))))
 
 (define e4 (bench-ms "E4 list literals (fold rewrite)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e4-src))))))
 
 

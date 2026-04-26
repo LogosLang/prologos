@@ -78,7 +78,6 @@
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (current-trait-registry)]
                  [current-impl-registry (current-impl-registry)]
@@ -105,7 +104,6 @@
                  [current-ns-context shared-ns-context]
                  [current-module-registry shared-module-reg]
                  [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]   ; Fresh per test
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
@@ -125,7 +123,6 @@
                    [current-ns-context shared-ns-context]
                    [current-module-registry shared-module-reg]
                    [current-lib-paths (list lib-dir)]
-                   [current-mult-meta-store (make-hasheq)]   ; Fresh per test
                    [current-preparse-registry (current-preparse-registry)]
                    [current-trait-registry shared-trait-reg]
                    [current-impl-registry shared-impl-reg]

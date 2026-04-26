@@ -241,7 +241,6 @@
          [current-source-str              ""]
          [current-raw-node                #f]
          ;; metavar-store.rkt — fresh mutable hash per file
-         [current-mult-meta-store         (make-hasheq)]
          ;; Track 4B: constraint cell-id isolation — reset exported cell-id
          ;; parameters per file. Each test creates fresh cells via
          ;; reset-meta-store!; stale cell-ids from a prior test cause

@@ -41,7 +41,6 @@
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
@@ -67,7 +66,6 @@
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-preparse-registry shared-preparse-reg]
                  [current-capability-registry shared-cap-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-lib-paths (list prelude-lib-dir)])
     (install-module-loader!)
     (process-string code)))
@@ -116,7 +114,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (unify* '() (expr-fvar 'Nat) (expr-fvar 'Nat))))
@@ -133,7 +130,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (unify* '() (expr-fvar 'Nat) (expr-fvar 'Bool))))
@@ -152,7 +148,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (unify* '() pi-a pi-b)))
@@ -171,7 +166,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (unify* '() pi-a pi-b)))
@@ -200,7 +194,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       ;; fresh-meta returns (expr-meta id) — use directly
@@ -219,7 +212,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (define me1 (fresh-meta '() #f "test-g3-m1"))
@@ -239,7 +231,6 @@
                    [current-param-impl-registry shared-param-impl-reg]
                    [current-preparse-registry shared-preparse-reg]
                    [current-capability-registry shared-cap-reg]
-                   [current-mult-meta-store (make-hasheq)]
                    [current-lib-paths (list prelude-lib-dir)])
       (install-module-loader!)
       (define me (fresh-meta '() #f "test-g3-dom"))

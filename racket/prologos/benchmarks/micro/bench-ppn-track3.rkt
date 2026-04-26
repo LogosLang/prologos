@@ -83,7 +83,6 @@
 
 (define (process-ws-silent src)
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws src)))))
 
 ;; ========================================
@@ -292,7 +291,6 @@
 
 (bench "full-pipeline sexp (simple)"
        (lambda () (silent (lambda ()
-         (parameterize ([current-mult-meta-store (make-hasheq)])
            (process-string sexp-simple)))))
        #:runs 10 #:warmup 3)
 
@@ -593,7 +591,6 @@
                                              (min 80 (string-length (exn-message e))))))])
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-        (parameterize ([current-mult-meta-store (make-hasheq)])
           (process-file f)))))
     (printf "  ~a: ~a ms\n" fname (~r total-ms #:precision '(= 1)))))
 
@@ -630,7 +627,6 @@
                                              (min 60 (string-length (exn-message e))))))])
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-        (parameterize ([current-mult-meta-store (make-hasheq)])
           (process-file f)))))
     (printf "  ~a (~a bytes): ~a ms\n" fname size (~r total-ms #:precision '(= 1)))))
 
@@ -666,7 +662,6 @@
                                   (substring (exn-message e) 0
                                              (min 80 (string-length (exn-message e)))))
                           (set! e3-fail (+ e3-fail 1)))])
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-file f))
     (set! e3-pass (+ e3-pass 1))))
 
@@ -687,7 +682,6 @@
 
 (bench "E4 sexp: simple"
        (lambda () (silent (lambda ()
-         (parameterize ([current-mult-meta-store (make-hasheq)])
            (process-string sexp-simple)))))
        #:runs 10 #:warmup 3)
 
@@ -697,7 +691,6 @@
 
 (bench "E4 sexp: medium (20 defs)"
        (lambda () (silent (lambda ()
-         (parameterize ([current-mult-meta-store (make-hasheq)])
            (process-string sexp-medium)))))
        #:runs 5 #:warmup 2)
 

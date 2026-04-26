@@ -46,7 +46,6 @@
                  [current-ns-context #f]
                  [current-module-registry (hasheq)]
                  [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry (current-trait-registry)]
                  [current-impl-registry (current-impl-registry)]
@@ -103,7 +102,6 @@
                  [current-impl-registry shared-impl-reg]
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-bundle-registry shared-bundle-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-cfa-result #f])
     ;; Define apply-op
     (process-string "
@@ -140,7 +138,6 @@
                  [current-impl-registry shared-impl-reg]
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-bundle-registry shared-bundle-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-cfa-result #f])
     ;; apply-op should already be defined from prior test, but re-define
     (process-string "
@@ -168,7 +165,6 @@
                  [current-impl-registry shared-impl-reg]
                  [current-param-impl-registry shared-param-impl-reg]
                  [current-bundle-registry shared-bundle-reg]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-cfa-result #f])
     (process-string "
       (spec apply-op (-> Nat (-> Nat Nat)) Nat Nat -> Nat)

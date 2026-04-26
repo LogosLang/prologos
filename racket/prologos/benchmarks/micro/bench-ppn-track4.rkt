@@ -318,32 +318,26 @@
 
 (define e1 (bench-ms "E1 simple (def+spec+eval, no metas)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e1-src))))))
 
 (define e2 (bench-ms "E2 pattern matching (data+defn arms)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e2-src))))))
 
 (define e3 (bench-ms "E3 mixed-type maps (union speculation)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e3-src))))))
 
 (define e4 (bench-ms "E4 list + map (polymorphic, prelude)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e4-src))))))
 
 (define e5 (bench-ms "E5 generic arithmetic (trait dispatch)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e5-src))))))
 
 (define e6 (bench-ms "E6 recursive function (fib)" 10
   (silent (lambda ()
-    (parameterize ([current-mult-meta-store (make-hasheq)])
       (process-string-ws e6-src))))))
 
 

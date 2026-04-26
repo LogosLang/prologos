@@ -1976,8 +1976,6 @@
                     [current-module-definitions-content (hasheq)]  ;; Track 6 Phase 7d
                     [current-ns-context #f]
                     [current-meta-store (make-hasheq)]
-                    [current-level-meta-store (make-hasheq)]
-                    [current-mult-meta-store (make-hasheq)]
                     [current-preparse-registry (current-preparse-registry)]
                     [current-ctor-registry (current-ctor-registry)]
                     [current-type-meta (current-type-meta)]
@@ -2024,10 +2022,9 @@
                     [current-cross-module-deps '()]  ;; Track 5 Phase 4
                     ;; Phase A: fresh meta-info CHAMP per module
                     [current-prop-meta-info-box #f]
-                    ;; Phase B: fresh auxiliary meta CHAMPs per module
-                    [current-level-meta-champ-box #f]
-                    [current-mult-meta-champ-box #f]
-                    [current-sess-meta-champ-box #f]
+                    ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box parameter
+                    ;; bindings RETIRED. Status migrated to universe cell;
+                    ;; parameters retired in metavar-store.rkt. See D.3 §7.5.15.2.
                     ;; Phase D: fresh ATMS per module
                     [current-command-atms #f]
 )

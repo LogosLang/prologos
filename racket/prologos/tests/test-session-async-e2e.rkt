@@ -30,7 +30,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file path)))
 
 ;; ========================================
@@ -70,7 +70,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file (build-path here "ws-session-e2e-03.prologos"))
     ;; AsyncPing session registered with async types
     (define entry (lookup-session 'AsyncPing))
@@ -88,7 +88,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file (build-path here "ws-session-e2e-03.prologos"))
     (define entry (lookup-session 'MixedProto))
     (check-true (session-entry? entry))
@@ -117,7 +117,7 @@
                  [current-session-registry (hasheq)]
                  [current-strategy-registry (hasheq)]
                  [current-module-registry (hasheq)]
-                 [current-mult-meta-store (make-hasheq)])
+                 )
     (process-file (build-path here "ws-session-e2e-03.prologos"))
     (define entry (lookup-strategy 'async-plan))
     (check-true (strategy-entry? entry))

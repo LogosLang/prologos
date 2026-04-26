@@ -39,7 +39,6 @@
                  [current-ns-context #f]
                  [current-module-registry prelude-module-registry]
                  [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
                  [current-preparse-registry prelude-preparse-registry]
                  [current-trait-registry prelude-trait-registry]
                  [current-impl-registry prelude-impl-registry]
@@ -109,7 +108,7 @@
   (check-true
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Int)))))
 
@@ -117,7 +116,7 @@
   (check-true
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-int 42) (expr-Rat)))))
 
@@ -125,7 +124,7 @@
   (check-true
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Rat)))))
 
@@ -133,7 +132,7 @@
   (check-true
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-posit8 64) (expr-Posit16)))))
 
@@ -141,7 +140,7 @@
   (check-true
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-posit8 64) (expr-Posit32)))))
 
@@ -149,7 +148,7 @@
   (check-false
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
-                  [current-mult-meta-store (make-hasheq)])
+                  )
      (reset-meta-store!)
      (tc:check '() (expr-suc (expr-zero)) (expr-Posit8)))))
 

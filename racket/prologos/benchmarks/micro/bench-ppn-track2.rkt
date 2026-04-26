@@ -84,7 +84,7 @@
   (with-output-to-string
     (lambda ()
       (parameterize ([current-error-port (current-output-port)]
-                     [current-mult-meta-store (make-hasheq)])
+                     )
         (process-string-ws src))))
   (define total-end (current-inexact-monotonic-milliseconds))
   (- total-end total-start))
@@ -95,7 +95,7 @@
     (with-output-to-string
       (lambda ()
         (parameterize ([current-error-port (current-output-port)]
-                       [current-mult-meta-store (make-hasheq)])
+                       )
           (process-string-ws src)))))))
 
 (define m1-programs
@@ -289,7 +289,7 @@
            (with-output-to-string
              (lambda ()
                (parameterize ([current-error-port (current-output-port)]
-                              [current-mult-meta-store (make-hasheq)])
+                              )
                  (process-string-ws a1-src)))))
          #:runs 5 #:warmup 2))
 
@@ -318,7 +318,7 @@
            (with-output-to-string
              (lambda ()
                (parameterize ([current-error-port (current-output-port)]
-                              [current-mult-meta-store (make-hasheq)])
+                              )
                  (process-string-ws a2-src)))))
          #:runs 5 #:warmup 2))
 
@@ -343,7 +343,7 @@
            (with-output-to-string
              (lambda ()
                (parameterize ([current-error-port (current-output-port)]
-                              [current-mult-meta-store (make-hasheq)])
+                              )
                  (process-string-ws a3-src)))))
          #:runs 5 #:warmup 2))
 
@@ -375,7 +375,7 @@
            (with-output-to-string
              (lambda ()
                (parameterize ([current-error-port (current-output-port)]
-                              [current-mult-meta-store (make-hasheq)])
+                              )
                  (process-string-ws a4-src)))))
          #:runs 5 #:warmup 2))
 
@@ -409,7 +409,6 @@
     ;; Time full process-file
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-        (parameterize ([current-mult-meta-store (make-hasheq)])
           (process-file f)))))
     (printf "  ~a: total=~a ms\n"
             fname
@@ -439,7 +438,6 @@
   (with-handlers ([exn? (lambda (e) (void))])
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-        (parameterize ([current-mult-meta-store (make-hasheq)])
           (process-file f)))))
     (set! lib-timings (cons (list fname total-ms) lib-timings))))
 
