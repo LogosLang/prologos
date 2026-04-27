@@ -1844,6 +1844,18 @@
      (make-stx (list (make-stx '$nat-literal source line col pos1 0)
                      (make-stx value source line col pos1 span))
                source line col pos1 span)]
+    ;; Slash-containing number lexeme (e.g. 0/1, 1/2, -3/7) → ($rat-literal n).
+    ;; A user-written `0/1` IS a Rat literal even when string->number simplifies
+    ;; the value to the integer 0; the `/` is a load-bearing source token. The
+    ;; sentinel preserves Rat-ness through the parse pipeline so downstream
+    ;; typing sees `0/1` as Rat, not as Int.
+    [(number)
+     (cond
+       [(string-contains? lexeme "/")
+        (make-stx (list (make-stx '$rat-literal source line col pos1 0)
+                        (make-stx value source line col pos1 span))
+                  source line col pos1 span)]
+       [else (make-stx value source line col pos1 span)])]
     [(rest-param)
      (if (string=? lexeme "...")
          ;; standalone ... → $rest symbol

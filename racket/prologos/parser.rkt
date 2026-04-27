@@ -623,6 +623,18 @@
                (parse-error loc (format "N suffix requires a non-negative integer, got: ~a" v) #f)))
          (parse-error loc "N suffix requires exactly one argument" #f))]
 
+    ;; $rat-literal sentinel: a number lexeme containing `/` (e.g. 0/1, 1/2,
+    ;; -3/7) is a Rat literal even when string->number simplifies it (e.g.
+    ;; `0/1` → 0). The WS reader emits this sentinel for any slash-containing
+    ;; number token to preserve Rat-ness through the parse pipeline.
+    [(and (symbol? head) (eq? head '$rat-literal))
+     (if (= (length args) 1)
+         (let ([v (stx->datum (car args))])
+           (if (and (number? v) (exact? v) (rational? v))
+               (surf-rat-lit v loc)
+               (parse-error loc (format "rat literal requires an exact rational, got: ~a" v) #f)))
+         (parse-error loc "rat literal requires exactly one argument" #f))]
+
     ;; $approx-literal sentinel: ~N → surf-approx-literal
     [(and (symbol? head) (eq? head '$approx-literal))
      (if (= (length args) 1)
