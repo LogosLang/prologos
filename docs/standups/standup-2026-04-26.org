@@ -1,0 +1,281 @@
+#+TITLE: Standup — 2026-04-26
+#+DATE: 2026-04-26
+
+* Yesterday (since 2026-04-23 standup)
+
+** PPN Track 4C Phase 9+10+11 Addendum — Step 2 SUBSTANTIVELY CLOSED + Tropical Quantale Addendum Stage 3 D.1 drafted
+
+A multi-day arc spanning 4 calendar days (2026-04-23 continuation
+through 2026-04-26): Step 2 (PU refactor) closed entirely across
+S2.a-S2.e-VAG (~929 net LoC deletion); methodology codifications
+graduated; Phase 1E audit done; tropical addendum scoping
+re-sequenced; Stage 3 design cycle opened with D.1 drafted today.
+~30+ commits across the interval.
+
+** 2026-04-23 (continuation) session — Path T arc + Step 2 S2.a/b/c-i/c-ii
+
+Closed Path T-3 (set-union merge + Role A/B decomplection) via 4
+staged commits; landed Path T-1 as documentation-only pass per
+charter alignment; landed Path T-2 ("Open by Design" Map ergonomics
+with =expr-Open= α-semantic universal type) via 3 staged commits;
+opened Step 2 with S2.a infrastructure + S2.a-followup; pivoted
+S2.b to Option B (no =elab-meta-*= API) per architectural dialogue
+adding Phase 1E for =that-*= storage unification; landed Step 2
+S2.b through S2.b-v measurement checkpoint with 119.5s suite within
+variance band.
+
+** 2026-04-24 session — S2.c arc + methodology codifications (commits =9f7c0b82=, =c86596e0=)
+
+Landed S2.precursor (universal cross-domain bridge component-paths
+fix); S2.precursor++ (CBC compound-cell access primitive); S2.c-i
+(3 audits/measurements: Section F microbench validating option 4
+wins by 302 ns/call; T-3 'equality audit confirming no gap; initial
+Pi elaboration audit confirming scenario B); S2.c-ii (parameter
+injection per option 3c); S2.c-iii (dispatch unification + 9
+shims); **first-pass S2.c-iii VAG drift caught by user external
+challenge** (catalogued instead of challenged; with-handlers
+wrapper preserved from PM 8F era prevented option 4's perf benefit
+from landing). Move B+ corrective (=c86596e0=) dropped with-handlers
++ ignored explicit-cid for universe-active path; re-microbench
+verified ~80% of predicted 302 ns benefit captured.
+
+**Methodology codifications** (=9f7c0b82=): adversarial VAG
+TWO-COLUMN catalogue vs challenge framing across DESIGN_METHODOLOGY,
+CRITIQUE_METHODOLOGY, workflow.md, MEMORY.md, STEP2_BASELINE.md.
+NEW Stage 4 step 6 — microbench claim verification per-sub-phase
+obligation when design references microbench finding.
+
+S2.c-iv landed mult universe migration atomically (fresh + solve +
+flag flip + bridge migration + γ retirement) per now-codified
+pipeline.md "Per-Domain Universe Migration" checklist (=d5aba2c6=).
+S2.c-v measurement confirmed 3/6 §5 micro criteria MET; solve-meta!
+regression UNWOUND past baseline (-10% from 8.53 μs).
+
+** 2026-04-25 session — S2.d arc + S2.e arc + Step 2 SUBSTANTIVELY CLOSED
+
+S2.d-level (=badf5fa9=) and S2.d-session (=440e6139=) landed via
+prophylactic application of pipeline.md per-domain universe
+migration checklist — clean ~20-min landings each (vs S2.c-iv's
+4-min hang prevention demonstrating 3 prophylactic data points).
+S2.d-followup correction (=34972bac=): cell-id field set to #f
+under universe-active per Path B reframe; honest scaffolding
+labeling.
+
+S2.e mini-design (=209d5721=): Option C-4 lazy universe init
+chosen; 7-sub-phase partition (i-v + vi + VAG); per-command
+transient cell consolidation captured as Track 4D scope per
+§7.5.14.4 + Track 4D research §5.4 + DEFERRED.md.
+
+S2.e arc DELIVERED across 13 commits (=0a38fab2= through =d039c036=):
+- S2.e-i: Option C-4 lazy init in 4 fresh-X-meta sites; ZERO test
+  fixture surgery
+- S2.e-ii: retire current-prop-mult-cell-write callback; restore
+  symmetry with level/sess
+- S2.e-iii: retire 3 fresh-X-cell factory callbacks + dead [else]
+  branches
+- S2.e-iv split into a/b/c per pre-implementation audit revealing
+  3-category divergence (Cat A meta-store mechanical surgery; Cat B
+  champ-box ARCHITECTURAL refactor; Cat C dead code cleanup):
+  - S2.e-iv-a (=85e9ad8b=): champ-box status migration to universe
+    cell — D1+D4 verified via test-speculation-bridge GREEN
+  - S2.e-iv-b (=6efb709e=): retire 6 dead fns + simplify
+    meta-domain-info dispatch (lean 4 keys/domain post-cleanup)
+  - S2.e-iv-c (=d7bd97a4=): retire 6 store/champ-box parameters +
+    180-file mechanical sed batch surgery — initial single-pass
+    sed broke 94 parameterize blocks (caught only by FULL SUITE);
+    recovered via revert + smart 2-pass sed pattern
+- S2.e-v (=118ab57a=): Wide retirement of 6 test-only/dead-code
+  mult-cell + bridge surfaces (audit revealed 6 vs design's 2 —
+  capture-gap pattern's 3rd data point this session)
+- S2.e-vi (=be398d8f=): final §5 measurement + honest hypothesis
+  reframing per §7.5.14.4 (per-command transients dominate, NOT
+  persistent metas) + 6 codifications graduated to
+  DEVELOPMENT_LESSONS.org
+- S2.e-VAG (=d039c036=): adversarial TWO-COLUMN VAG x 4 questions;
+  STEP 2 SUBSTANTIVELY CLOSED
+
+**6 codifications graduated this session arc** (DEVELOPMENT_LESSONS.org
+~+600 LoC):
+1. Pipeline.md "Per-Domain Universe Migration" checklist works
+   prophylactically (3 data points)
+2. Capture-gap pattern: "future phase X handles Y" requires
+   verification (3 data points)
+3. Partial-state regression unwinds when architecture completes
+   (3 data points)
+4. Audit-first methodology prevents under-scoped implementation
+   (4 data points)
+5. Audit-driven scope expansion: Wide vs Narrow decision point
+   (NEW; 2 data points)
+6. Sed-deletion of parameterize bindings is error-prone for
+   last-binding lines (1 high-confidence data point — operational
+   rule with 2-pass sed pattern)
+7. Microbench-claim verification pays off across sub-phase arcs
+   (3 data points extending workflow.md rule)
+
+Suite stable through arc: 118.4s → 124.7s → 124.2s → 125.0s →
+123.0s → 119.7s → 119.3s — within 118-127s variance band, on
+lower end consistent with cleanup deletion trend.
+
+** 2026-04-25 session (continuation) — Tropical addendum scoping + handoff prep + mempalace failure
+
+Post-S2.e-VAG close, opened Phase 1E audit (5 design questions
+Q1-Q5; 6 surfaces vs design's 2 — capture-gap pattern's 4th data
+point reinforcing the codification). Decision: Phase 1E gets
+conversational Stage 4 mini-design AFTER tropical addendum;
+tropical (Phase 1B + 1C + 1V bundled) is the architecturally
+novel piece deserving full Stage 3 dues per user direction.
+
+**Mempalace recurring failure** — 2nd incident in 3 days (2026-04-23 +
+2026-04-25-26 boundary): MCP unavailable; CLI segfaulted with 423
+stale lock files from Apr 24; recovery attempted per documented
+procedure but mine produced only 2409 drawers vs 26147 expected;
+search returned "Error finding id". Phase 2 success criteria
+evaluation question now real. Fallback to manual file reads for
+handoff prep.
+
+** 2026-04-26 session — handoff + mempalace upgrade + hot-load + Stage 3 D.1
+
+Tropical addendum handoff written (=e06797ce=, ~700 lines): 47-doc
+hot-load list, 8 meta-lessons at top, full session arc summary.
+Mempalace clean re-install + upgrade 3.3.2 → 3.3.3 (=7aa52afb=)
+with background mine PID 17968 set to survive Claude Code session
+restart.
+
+Post-compact + restart continuation: hot-load executed per
+HANDOFF_PROTOCOL.org (38 of 47 §2 docs in full; ~500K tokens
+consumed; full Stage 1 research foundation including
+TROPICAL_QUANTALE_RESEARCH ~1000 lines/12 sections + Module Theory
++ Algebraic Embeddings + SRE Research; D.3 parent + addendum
+across 5000+ lines; STEP2_BASELINE + DEFERRED + dailies + prior
+handoff + standup loaded).
+
+**Stage 3 design cycle opened per refined Stage 4 methodology
+applied at design-cycle scale**:
+- Mini-design dialogue + mini-audit (co-dependent, audit-first)
+  resolved 4 cross-cutting questions: Q-Open-1 (refine + verify
+  D.3 scaffolding); Q-Open-2 (A+B+cross-reference capture for
+  Phase 3C, stronger than original three-form proposal); Q-Open-3
+  ((β) multi-quantale composition NTT in scope); Q-Open-4 (γ
+  strict sequencing per pipeline.md template)
+- 3 audits in parallel: Q-Audit-1 (prop-network-fuel: 17 prod refs
+  + 13 test refs + 2 bench refs — well-bounded); Q-Audit-2 (ATMS
+  surfaces: 13 deprecated functions + 14 surface AST structs +
+  14-file pipeline impact); Q-Audit-3 (tropical-fuel.rkt clean
+  slate + 5 anticipated consumer scaffolding sites grounding
+  substrate-level placement)
+- User-directed γ-bundle-wide: 1A-iii-b + 1A-iii-c + 1B + 1C + 1V
+  all in addendum; 1V closes Phase 1 entirely
+
+**D.1 drafted** (=fc4b9d3e=) at
+=docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md=:
+- 1179 lines / 78KB / 18 sections + 50+ subsections
+- Scope: γ-bundle-wide Phase 1 closure
+- §4 multi-quantale composition NTT model (TypeFacetQ + TropicalFuelQ
+  co-existence; quantale-of-bridges; quantaloids out of scope)
+- §6.5 Phase 3C cross-reference capture (Form A unit tests + Form
+  B UC1/UC2/UC3 enumeration + Form C deferred to right phase per
+  capture-gap discipline)
+- §13 Pre-0 microbenchmark plan (M7-M9 + A5 + F-tropical extensions
+  to bench-ppn-track4c.rkt)
+- §14 P/R/M/S Self-Critique with S lens load-bearing for quantale
+  algebra
+- All 7 cross-cutting open questions RESOLVED at D.1 close
+- Phase-specific open questions placed at right phases per user's
+  workflow
+
+* Today
+
+** Priority 1: Pre-0 microbenchmark execution
+
+Per D.1 §13: extend =bench-ppn-track4c.rkt= with M7 (tropical-fuel-merge
+cost vs counter decrement) + M8 (threshold propagator firing cost vs
+=(<= fuel 0)= check) + M9 (per-consumer fuel cell allocation cost) +
+A5 (cost-bounded exploration vs flat fuel exhaustion semantic axis) +
+F-tropical (counter vs cell exhaustion equivalence parity).
+
+Estimated ~80-120 LoC additions + ~15-30 min benchmark execution.
+Pre-0 baselines establish predicted post-implementation deltas;
+data feeds D.2 revision.
+
+** Priority 2: D.2 revise with Pre-0 findings
+
+If Pre-0 surfaces design-affecting findings (per D.1 §13.5 — e.g., M7
+shows cell-write significantly slower than struct-copy, or M8 shows
+threshold propagator overhead too high), reconsider primitive design
+or canonical instance approach. If Pre-0 confirms expected patterns,
+D.2 captures the data + minor refinements.
+
+** Priority 3: D.3+ critique rounds
+
+P/R/M/S lenses; especially S (Structural — load-bearing for quantale
+algebra per CRITIQUE_METHODOLOGY). Possibly external critique. Each
+critique round → respond → refine cycle until clarity.
+
+** Stage 4 implementation plan (post-Stage-3-close)
+
+Per per-phase mini-design+audit before each phase implementation:
+- Phase 1B (substrate ships first; consumers depend on it)
+- Phase 1A-iii-b + 1A-iii-c can parallelize with Phase 1C
+- Phase 1C (canonical BSP fuel migration) consumes Phase 1B's
+  primitive
+- Phase 1V atomic close
+
+** Mempalace mine completion verification
+
+Mine was at 15014/26147 drawers (~57%) when last checked; PID
+17968 still active. Verify via =mempalace status= showing ~26K
+drawers + successful =mempalace search "tropical quantale" --wing
+prologos --results 5= query before next mempalace-dependent work.
+
+* Notes
+
+** Capture-gap pattern's correct application
+
+User's A+B+cross-reference capture direction at Q-Open-2 was
+STRONGER than my original three-form proposal. Form C in Phase 1B
+was scope creep; deferring to Phase 3C with cross-reference back
+is correctness-by-construction. The pattern's structural fingerprint:
+**capture lives at the right phase, not in current scope**.
+Codification refinement candidate to existing capture-gap entry
+post-validation in next 1-2 design cycles.
+
+** "Refine + verify, don't re-litigate" discipline
+
+When prior design exists with critique cycles already invested
+(D.3 §7.5.6/§7.5.7/§7.7-§7.11/§10/§13/§16.1), Stage 3 D.1 treats
+it as draft D.0 and refines + verifies + extends. Don't re-derive;
+don't accept uncritically. Each preexisting decision gets adversarial
+challenge + audit grounding. 1 data point this session — codification
+candidate after 1-2 more.
+
+** Multi-quantale composition NTT extension as Stage 3 NTT Model
+   Requirement extension
+
+For first-instantiation tracks (this addendum is THE first
+optimization-quantale instantiation in production code), the NTT
+model should extend beyond single-quantale to composition pattern
+with co-existing quantales. Without it, capture-gap risk (residuation
+declaration becomes structurally isolated). 1 data point — methodology
+candidate.
+
+** Tropical quantale work's architectural significance
+
+Per Stage 1 research §1.1: this IS the first practical instantiation
+of optimization as tropical quantales in our architecture. User
+direction repeated emphasis on "deserves the most careful considerations
+that we can pay it its dues" — full Stage 3 dues, depth-first formal
+grounding.
+
+The 5 anticipated consumer scaffolding sites discovered via Q-Audit-3
+(sre-rewrite.rkt:95 cost field, atms.rkt:856 TODO, parse-lattice.rkt
+×3 cost+priority fields) GROUND the substrate-level placement as
+architecturally meaningful — these are bookmarks for Phase 3C, OE
+Series Track 1 weighted parsing, future PReduce.
+
+** OE (Optimization Enrichment) Series first production landing
+
+Per MASTER_ROADMAP.org § OE: Tracks 0/1/2 sketched but no production
+landings. This addendum IS OE Track 0/1/2's first production landing.
+Decision deferred per handoff §5.4: do we formally update OE Series
+Master tracking after this addendum lands? Or wait until PReduce +
+cost-guided search are also tropically-instrumented?
