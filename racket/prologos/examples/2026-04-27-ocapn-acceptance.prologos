@@ -1,0 +1,126 @@
+;; ===========================================================
+;; OCapN-in-Prologos — Phase 0 Acceptance Demo
+;; ===========================================================
+;;
+;; This file exercises the complete public API of `prologos::ocapn`
+;; end-to-end. It is the Level-3 (file-mode) sanity check for the
+;; library: if any module here fails to elaborate, the implementation
+;; is broken at the integration boundary even when individual tests
+;; pass.
+;;
+;; The Goblins reference (https://codeberg.org/spritely/racket-goblins)
+;; and OCapN spec (https://github.com/ocapn/ocapn) shaped the model.
+;; Phase 0 covers:
+;;
+;;   - Capability typing (refr.prologos)
+;;   - Syrup abstract values (syrup.prologos)
+;;   - Promise algebra (promise.prologos)
+;;   - CapTP message values (message.prologos)
+;;   - Behaviour dispatch (behavior.prologos)
+;;   - Local vat with event loop (vat.prologos)
+;;   - Session-typed CapTP sub-protocols (captp-session.prologos)
+;;
+;; The bracketed `;; expected: ...` comments document what each form
+;; should evaluate to. They are not assertions; the test files are.
+;;
+;; Out of scope: real networking, byte-level Syrup encoding, sturdy
+;; refr serialisation, GC of refrs, user-defined actor behaviours
+;; (closed-enum limitation — see goblin-pitfalls #3).
+
+ns ocapn-acceptance
+
+require [prologos::ocapn::core :refer-all]
+        [prologos::data::list :refer [List nil cons]]
+        [prologos::data::option :refer [Option some none unwrap-or]]
+
+;; ===========================================================
+;; 1. Syrup values round-trip through predicates
+;; ===========================================================
+
+;; expected: true
+def s-null-isnull := [null? syrup-null]
+
+;; expected: false
+def s-refr-isnull := [null? [syrup-refr zero]]
+
+;; expected: true
+def s-tagged-istagged := [tagged? [syrup-tagged "op:deliver" syrup-null]]
+
+;; expected: some 0
+def s-refr-id := [get-refr [syrup-refr zero]]
+
+;; ===========================================================
+;; 2. Promise algebra: fulfill/break monotonicity
+;; ===========================================================
+
+;; expected: true
+def p-fresh-unresolved := [unresolved? fresh]
+
+;; expected: true — second fulfill must not overwrite the first.
+def p-double-fulfill-first-wins :=
+  [fulfilled? [fulfill [syrup-nat [suc zero]]
+                       [fulfill [syrup-nat zero] fresh]]]
+
+;; expected: true — break wins over a subsequent fulfill (monotone).
+def p-break-then-fulfill-broken :=
+  [broken? [fulfill [syrup-nat zero]
+                    [break [syrup-string "err"] fresh]]]
+
+;; ===========================================================
+;; 3. CapTP messages
+;; ===========================================================
+
+;; expected: true
+def m-deliver-only-isit :=
+  [deliver-only? [op-deliver-only zero syrup-null]]
+
+;; expected: true
+def m-mk-deliver-isdeliver :=
+  [deliver? [mk-deliver zero syrup-null [suc zero] [suc [suc zero]]]]
+
+;; expected: some 0
+def m-deliver-target := [deliver-target [op-deliver-only zero syrup-null]]
+
+;; ===========================================================
+;; 4. Vat scenarios
+;; ===========================================================
+
+;; --- echo round-trip ---
+;; spawn echo, send "ping", drain. Expected: a fulfilled promise.
+
+def echo-scenario : Vat :=
+  let v0 := [fst [spawn-actor beh-echo syrup-null empty-vat]]
+    let r := [send zero [syrup-string "ping"] v0]
+      [drain [suc [suc [suc [suc [suc zero]]]]] [fst r]]
+
+;; --- counter round-trip ---
+;; spawn counter at 0, send "inc", drain. State should be nat 1.
+
+def counter-scenario : Vat :=
+  let v0 := [fst [spawn-actor beh-counter [syrup-nat zero] empty-vat]]
+    let r := [send zero [syrup-tagged "inc" syrup-null] v0]
+      [drain [suc [suc [suc [suc [suc zero]]]]] [fst r]]
+
+;; --- forwarder routes message ---
+
+def forwarder-scenario : Vat :=
+  let s1 := [spawn-actor beh-echo syrup-null empty-vat]
+    let s2 := [spawn-actor beh-forwarder [syrup-refr [snd s1]] [fst s1]]
+      let v1 := [tell [snd s2] [syrup-string "hi"] [fst s2]]
+        [drain [suc [suc [suc [suc [suc zero]]]]] v1]
+
+;; --- fulfiller settles a freshly-allocated promise ---
+
+def fulfiller-scenario : Vat :=
+  let r0 := [fresh-promise empty-vat]
+    let pid := [snd r0]
+      let s := [spawn-actor beh-fulfiller [syrup-promise pid] [fst r0]]
+        let v1 := [tell [snd s] [syrup-string "go"] [fst s]]
+          [drain [suc [suc [suc [suc [suc zero]]]]] v1]
+
+;; ===========================================================
+;; 5. Quiescence: drain on empty vat is identity
+;; ===========================================================
+
+;; expected: 0
+def drained-empty := [queue-length [drain [suc zero] empty-vat]]

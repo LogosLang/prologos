@@ -1,0 +1,275 @@
+ns prologos::ocapn::behavior
+
+;; ========================================
+;; Built-in actor behaviours
+;; ========================================
+;;
+;; In Goblins, an actor's behaviour is an arbitrary Racket closure.
+;; In Prologos there is no straightforward way to store heterogeneous
+;; closures inside a single `data` constructor and dispatch them at
+;; runtime — so we model behaviours as a closed sum (BehaviorTag) and
+;; provide a fixed dispatcher (`step-behavior`) keyed by tag.
+;;
+;; Adding a new actor type means: (1) extending `BehaviorTag`,
+;; (2) writing the per-tag step function, (3) extending
+;; `step-behavior` to dispatch it. This is the load-bearing limitation
+;; documented in goblin-pitfalls #3.
+;;
+;; The built-in set is small but covers the patterns we test:
+;;
+;;   beh-cell      — settable storage cell. msg = tagged "set" v / "get"
+;;   beh-counter   — incrementable counter. msg = tagged "inc" / "get"
+;;   beh-greeter   — greeter that constructs greetings
+;;   beh-echo      — returns its argument unchanged
+;;   beh-adder     — running sum, message = arg, state = total
+;;   beh-forwarder — forwards everything to a fixed target refr id
+;;   beh-fulfiller — resolves a promise with a constant value (for tests)
+
+require [prologos::ocapn::syrup
+         :refer [SyrupValue
+                 syrup-null syrup-bool syrup-nat syrup-int syrup-string
+                 syrup-symbol syrup-list syrup-tagged
+                 syrup-refr syrup-promise]]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::nat    :refer [add]]
+        [prologos::data::string :as str :refer []]
+
+;; ========================================
+;; Behaviour tags
+;; ========================================
+
+data BehaviorTag
+  beh-cell
+  beh-counter
+  beh-greeter
+  beh-echo
+  beh-adder
+  beh-forwarder
+  beh-fulfiller
+
+;; ========================================
+;; Side-effects an actor can request
+;; ========================================
+;;
+;; The vat fully owns the world; behaviours don't mutate anything.
+;; They describe what they want done as a list of Effects, which the
+;; vat interprets atomically when the turn closes.
+
+data Effect
+  ;; Send to a refr (fire-and-forget).
+  eff-send-only : Nat -> SyrupValue
+  ;; Resolve a promise with a value (pst-fulfilled).
+  eff-resolve   : Nat -> SyrupValue
+  ;; Break a promise with a reason (pst-broken).
+  eff-break     : Nat -> SyrupValue
+
+;; ========================================
+;; ActStep — what one method invocation produces
+;; ========================================
+;;
+;; new-state, return-value, side-effects.
+
+data ActStep
+  act-step : SyrupValue -> SyrupValue -> [List Effect]
+
+;; Selectors.
+
+spec step-state ActStep -> SyrupValue
+defn step-state [s]
+  match s
+    | act-step st _ _ -> st
+
+spec step-return ActStep -> SyrupValue
+defn step-return [s]
+  match s
+    | act-step _ rv _ -> rv
+
+spec step-effects ActStep -> List Effect
+defn step-effects [s]
+  match s
+    | act-step _ _ es -> es
+
+;; ========================================
+;; A small helper: "no change" step
+;; ========================================
+
+spec no-op SyrupValue -> ActStep
+  :doc "Return state unchanged with no effects, return-value = state"
+defn no-op [state]
+  act-step state state nil
+
+;; ========================================
+;; Per-behavior step functions
+;; ========================================
+
+;; --- echo ---
+spec step-echo SyrupValue SyrupValue -> ActStep
+defn step-echo [state args]
+  act-step state args nil
+
+;; --- cell ---
+;; State: stored value. Args: tagged "set" v / "get" / anything.
+spec step-cell SyrupValue SyrupValue -> ActStep
+defn step-cell [state args]
+  match args
+    | syrup-null         -> no-op state
+    | syrup-bool _       -> no-op state
+    | syrup-nat _        -> no-op state
+    | syrup-int _        -> no-op state
+    | syrup-string _     -> no-op state
+    | syrup-symbol _     -> no-op state
+    | syrup-list _       -> no-op state
+    | syrup-refr _       -> no-op state
+    | syrup-promise _    -> no-op state
+    | syrup-tagged tag p ->
+        match [str::eq tag "set"]
+          | true  -> act-step p syrup-null nil
+          | false -> match [str::eq tag "get"]
+              | true  -> no-op state
+              | false -> no-op state
+
+;; --- counter ---
+;; State: syrup-nat n. Args: tagged "inc" _ | tagged "get" _.
+spec step-counter SyrupValue SyrupValue -> ActStep
+defn step-counter [state args]
+  match state
+    | syrup-nat n ->
+        match args
+          | syrup-tagged tag _ ->
+              match [str::eq tag "inc"]
+                | true  -> act-step [syrup-nat [add n [suc zero]]]
+                                    [syrup-nat [add n [suc zero]]]
+                                    nil
+                | false -> no-op state
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-nat _     -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-string _  -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list _    -> no-op state
+          | syrup-refr _    -> no-op state
+          | syrup-promise _ -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-string _  -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+
+;; --- greeter ---
+;; State: syrup-string greeting. Args: syrup-string name.
+;; Returns syrup-string "{greeting}, {name}!".
+spec step-greeter SyrupValue SyrupValue -> ActStep
+defn step-greeter [state args]
+  match state
+    | syrup-string g ->
+        match args
+          | syrup-string n ->
+              act-step state
+                [syrup-string [str::append [str::append g ", "] n]]
+                nil
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-nat _     -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list _    -> no-op state
+          | syrup-tagged _ _ -> no-op state
+          | syrup-refr _    -> no-op state
+          | syrup-promise _ -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-nat _     -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+
+;; --- adder ---
+;; State: syrup-nat running-total. Args: syrup-nat addend.
+;; new state := total + addend; return new total.
+spec step-adder SyrupValue SyrupValue -> ActStep
+defn step-adder [state args]
+  match state
+    | syrup-nat t ->
+        match args
+          | syrup-nat a ->
+              act-step [syrup-nat [add t a]] [syrup-nat [add t a]] nil
+          | syrup-null      -> no-op state
+          | syrup-bool _    -> no-op state
+          | syrup-int _     -> no-op state
+          | syrup-string _  -> no-op state
+          | syrup-symbol _  -> no-op state
+          | syrup-list _    -> no-op state
+          | syrup-tagged _ _ -> no-op state
+          | syrup-refr _    -> no-op state
+          | syrup-promise _ -> no-op state
+    | syrup-null      -> no-op state
+    | syrup-bool _    -> no-op state
+    | syrup-int _     -> no-op state
+    | syrup-string _  -> no-op state
+    | syrup-symbol _  -> no-op state
+    | syrup-list _    -> no-op state
+    | syrup-tagged _ _ -> no-op state
+    | syrup-refr _    -> no-op state
+    | syrup-promise _ -> no-op state
+
+;; --- forwarder ---
+;; State: syrup-refr target. Forwards args via a fire-and-forget send.
+;; Returns null.
+spec step-forwarder SyrupValue SyrupValue -> ActStep
+defn step-forwarder [state args]
+  match state
+    | syrup-refr t ->
+        act-step state syrup-null
+                 [cons [eff-send-only t args] nil]
+    | syrup-null       -> act-step state syrup-null nil
+    | syrup-bool _     -> act-step state syrup-null nil
+    | syrup-nat _      -> act-step state syrup-null nil
+    | syrup-int _      -> act-step state syrup-null nil
+    | syrup-string _   -> act-step state syrup-null nil
+    | syrup-symbol _   -> act-step state syrup-null nil
+    | syrup-list _     -> act-step state syrup-null nil
+    | syrup-tagged _ _ -> act-step state syrup-null nil
+    | syrup-promise _  -> act-step state syrup-null nil
+
+;; --- fulfiller ---
+;; State: syrup-promise pid (the promise to settle).
+;; Args: any value. Resolves the named promise to that value, returns null.
+spec step-fulfiller SyrupValue SyrupValue -> ActStep
+defn step-fulfiller [state args]
+  match state
+    | syrup-promise pid ->
+        act-step state syrup-null
+                 [cons [eff-resolve pid args] nil]
+    | syrup-null       -> act-step state syrup-null nil
+    | syrup-bool _     -> act-step state syrup-null nil
+    | syrup-nat _      -> act-step state syrup-null nil
+    | syrup-int _      -> act-step state syrup-null nil
+    | syrup-string _   -> act-step state syrup-null nil
+    | syrup-symbol _   -> act-step state syrup-null nil
+    | syrup-list _     -> act-step state syrup-null nil
+    | syrup-tagged _ _ -> act-step state syrup-null nil
+    | syrup-refr _     -> act-step state syrup-null nil
+
+;; ========================================
+;; Dispatcher — the "ABI" for actors
+;; ========================================
+
+spec step-behavior BehaviorTag SyrupValue SyrupValue -> ActStep
+defn step-behavior [tag state args]
+  match tag
+    | beh-cell      -> step-cell state args
+    | beh-counter   -> step-counter state args
+    | beh-greeter   -> step-greeter state args
+    | beh-echo      -> step-echo state args
+    | beh-adder     -> step-adder state args
+    | beh-forwarder -> step-forwarder state args
+    | beh-fulfiller -> step-fulfiller state args
