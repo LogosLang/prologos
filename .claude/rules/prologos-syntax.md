@@ -5,7 +5,7 @@
 - **`[]` for all functional contexts** -- application `[f x y]`, lambda `[fn [x : Int] body]`, partial application `[int* _ 2]`. Square brackets are the universal functional delimiter.
 - **`()` only for parser keywords** -- `(match ...)`, `(the ...)`, `(def ...)`, and relational goals inside `solve`/`defr`. These signal "special form, not application."
 - **`<>` for type-level grouping** -- Pi `<(x : A) -> B>`, Sigma `<(x : A) * B>`, union `<Int | String>`.
-- **`{}` for maps and implicit binders** -- map literals `{:name "alice"}`, implicit type binders `{A B : Type}` in specs.
+- **`{}` for maps and implicit binders** -- map literals `{:name "alice"}`, implicit type binders `{A B : Type}` in specs (but see "Implicit binder inference" below — most specs do not need them).
 
 ## Definitions
 
@@ -32,7 +32,37 @@
 
 - **Prefer type inference** where unambiguous -- `def x := 42` over `def x : Int := 42`. We work hard on inference; lean on it. Use explicit annotations when the type is genuinely ambiguous (union types, polymorphic contexts) or for documentation in specs.
 - **Angle brackets for complex types** -- `<Int | String>`, `<(x : A) -> B>`.
-- **`{A B : Type}` for implicit erased binders** in `spec`.
+- **`{A B : Type}` for implicit erased binders** in `spec` -- but **prefer the bare form** when D1/D2 covers the binders (see "Implicit binder inference" below).
+
+## Implicit binder inference (issue #20)
+
+`spec` auto-introduces implicit binders for capitalized identifiers that appear free in the signature. Two directions, additive:
+
+- **Direction 1**: a capitalized identifier `A`, `B`, ... that appears free in the spec body and is not a known type or constructor name is introduced as `{A : Type}`.
+
+  ```
+  spec length [List A] -> Nat        ;; equivalent to {A : Type} [List A] -> Nat
+  spec const A -> B -> A             ;; equivalent to {A : Type} {B : Type} A -> B -> A
+  ```
+
+- **Direction 2**: when a free variable appears in a `:where (TraitName Var)` clause (or as an inline trait constraint before the first `->`), the binder's kind is inferred from the trait declaration. If `Seqable` is declared over `{C : Type -> Type}`, then `C` in `[Seqable C]` is auto-introduced as `{C : Type -> Type}`.
+
+  ```
+  ;; Before (issue #20):
+  spec gmap {A B : Type} {C : Type -> Type}
+       [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+
+  ;; After:
+  spec gmap [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+  ```
+
+**Canonical form**: drop both kinds of explicit binders. Keep them only when:
+
+- The spec has no constraining position to anchor inference (e.g. `spec empty {A : Type} [List A]` — `A` has no usage that would pin it).
+- Disambiguating a genuinely ambiguous spec (rare).
+- Pedagogic clarity in book / tutorial code.
+
+**Trait declarations are NOT specs**: `trait Seqable {C : Type -> Type}` MUST keep its explicit binder — D1/D2 only run on `spec`, not on `trait` declarations.
 
 ## Lists and literals
 
@@ -81,4 +111,7 @@ def greeting := "hello"
 
 ;; Generic arithmetic
 [+ [* 3 4] [- 10 3]]
+
+;; Bare-binder spec (D1+D2): no explicit {A : Type} or {C : Type -> Type}
+spec gmap [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
 ```

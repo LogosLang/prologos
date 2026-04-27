@@ -262,10 +262,20 @@ defn-private    = 'defn-' , identifier , defn-sig , defn-clauses ;
 
 (* spec declares a type signature separately from the definition.
    Supports implicit binders via {}, constraints, varargs, and
-   an optional trailing metadata map (via implicit map syntax). *)
+   an optional trailing metadata map (via implicit map syntax).
+
+   Note (issue #20 — improved implicit inference): explicit
+   implicit-binders are OPTIONAL. The elaborator auto-introduces
+   {Var : Type} for any free capitalized identifier in the spec body
+   (Direction 1) and uses the kind declared by trait constraints in
+   :where (or inline) clauses to refine the inferred kind
+   (Direction 2). E.g. `spec gmap [Seqable C] -> [Buildable C] ->
+   [A -> B] -> [C A] -> [C B]` is equivalent to
+   `spec gmap {A B : Type} {C : Type -> Type}
+        [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]`. *)
 spec-form       = 'spec' , identifier , spec-body , [ spec-metadata ] ;
 spec-body       = { spec-element } ;
-spec-element    = implicit-binders                 (* {A B : Type} *)
+spec-element    = implicit-binders                 (* {A B : Type} — OPTIONAL post-#20 *)
                 | constraint                       (* (Eq A) or [Eq A] *)
                 | type-atom                        (* part of the type *)
                 | '...'                            (* vararg marker *)
