@@ -2,6 +2,10 @@
 
 Functional-logic language unifying dependent types, session types, linear types (QTT), logic programming, and propagators. Phase 0 implementation in Racket (`#lang racket/base`).
 
+## Racket version
+
+Requires **Racket v9.0 or newer**. The implementation depends on Racket 9 features — parallel threads (`thread #:pool 'own`) for the BSP scheduler's parallel-fire path, and `unsafe-fxpopcount` from `racket/unsafe/ops`. CI installs Racket 9.0 via `Bogdanp/setup-racket`. The minimum is declared in `racket/prologos/info.rkt` (`(define deps '(["base" #:version "9.0"]))`).
+
 ## Commands
 
 - **Run tests**: `racket tools/run-affected-tests.rkt` (targeted, with timing) or `--all`
