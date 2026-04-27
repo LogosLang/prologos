@@ -221,13 +221,13 @@
   "ns bench-4c-e4\neval [+ 1 2]\neval [+ 3N 4N]\n")
 
 (define e1 (bench-mem "E1 simple (no metas)" 10
-                  (process-string-ws e1-src))))))
+                  (silent (lambda () (process-string-ws e1-src)))))
 (define e2 (bench-mem "E2 parametric Seqable (Axis 1 bridge)" 10
-                  (process-string-ws e2-src))))))
+                  (silent (lambda () (process-string-ws e2-src)))))
 (define e3 (bench-mem "E3 polymorphic id (Axis 5 :type/:term)" 10
-                  (process-string-ws e3-src))))))
+                  (silent (lambda () (process-string-ws e3-src)))))
 (define e4 (bench-mem "E4 generic arithmetic (Axis 6)" 10
-                  (process-string-ws e4-src))))))
+                  (silent (lambda () (process-string-ws e4-src)))))
 
 ;; ============================================================
 ;; V: VALIDATION — Correctness reference for parity harness
