@@ -89,33 +89,33 @@ def m-deliver-target := [deliver-target [op-deliver-only zero syrup-null]]
 ;; spawn echo, send "ping", drain. Expected: a fulfilled promise.
 
 def echo-scenario : Vat :=
-  let v0 := [fst [spawn-actor beh-echo syrup-null empty-vat]]
+  let v0 := [alloc-vat [vat-spawn-actor beh-echo syrup-null empty-vat]]
     let r := [send zero [syrup-string "ping"] v0]
-      [drain [suc [suc [suc [suc [suc zero]]]]] [fst r]]
+      [drain [suc [suc [suc [suc [suc zero]]]]] [alloc-vat r]]
 
 ;; --- counter round-trip ---
 ;; spawn counter at 0, send "inc", drain. State should be nat 1.
 
 def counter-scenario : Vat :=
-  let v0 := [fst [spawn-actor beh-counter [syrup-nat zero] empty-vat]]
+  let v0 := [alloc-vat [vat-spawn-actor beh-counter [syrup-nat zero] empty-vat]]
     let r := [send zero [syrup-tagged "inc" syrup-null] v0]
-      [drain [suc [suc [suc [suc [suc zero]]]]] [fst r]]
+      [drain [suc [suc [suc [suc [suc zero]]]]] [alloc-vat r]]
 
 ;; --- forwarder routes message ---
 
 def forwarder-scenario : Vat :=
-  let s1 := [spawn-actor beh-echo syrup-null empty-vat]
-    let s2 := [spawn-actor beh-forwarder [syrup-refr [snd s1]] [fst s1]]
-      let v1 := [tell [snd s2] [syrup-string "hi"] [fst s2]]
+  let s1 := [vat-spawn-actor beh-echo syrup-null empty-vat]
+    let s2 := [vat-spawn-actor beh-forwarder [syrup-refr [alloc-id s1]] [alloc-vat s1]]
+      let v1 := [tell [alloc-id s2] [syrup-string "hi"] [alloc-vat s2]]
         [drain [suc [suc [suc [suc [suc zero]]]]] v1]
 
 ;; --- fulfiller settles a freshly-allocated promise ---
 
 def fulfiller-scenario : Vat :=
   let r0 := [fresh-promise empty-vat]
-    let pid := [snd r0]
-      let s := [spawn-actor beh-fulfiller [syrup-promise pid] [fst r0]]
-        let v1 := [tell [snd s] [syrup-string "go"] [fst s]]
+    let pid := [alloc-id r0]
+      let s := [vat-spawn-actor beh-fulfiller [syrup-promise pid] [alloc-vat r0]]
+        let v1 := [tell [alloc-id s] [syrup-string "go"] [alloc-vat s]]
           [drain [suc [suc [suc [suc [suc zero]]]]] v1]
 
 ;; ===========================================================

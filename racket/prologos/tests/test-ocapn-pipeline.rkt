@@ -24,6 +24,7 @@
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
+         "../source-location.rkt"
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
@@ -32,7 +33,8 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
 
 (define shared-preamble
   "(ns test-ocapn-pipeline)
@@ -50,7 +52,9 @@
                 shared-module-reg
                 shared-trait-reg
                 shared-impl-reg
-                shared-param-impl-reg)
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
@@ -71,7 +75,9 @@
             (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
-            (current-param-impl-registry))))
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
 
 (define (run s)
   (parameterize ([current-prelude-env shared-global-env]
@@ -81,7 +87,9 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg])
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
     (process-string s)))
 
 (define (run-last s) (last (run s)))
@@ -100,23 +108,23 @@
 (test-case "pipeline/two-step echo chain fulfills first promise"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-echo syrup-null empty-vat)
-                  r1 (send zero (syrup-string \"alpha\") (fst s))
-                  r2 (send zero (syrup-string \"beta\") (fst r1))
-                  v3 (drain (suc (suc (suc (suc (suc (suc zero)))))) (fst r2)))
+    "(eval (let (s  (vat-spawn beh-echo syrup-null empty-vat)
+                  r1 (send zero (syrup-string \"alpha\") (alloc-vat s))
+                  r2 (send zero (syrup-string \"beta\") (alloc-vat r1))
+                  v3 (run-vat (suc (suc (suc (suc (suc (suc zero)))))) (alloc-vat r2)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r1) v3)))))")
+                                      (lookup-promise (alloc-id r1) v3)))))")
    "true"))
 
 (test-case "pipeline/two-step echo chain fulfills second promise too"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-echo syrup-null empty-vat)
-                  r1 (send zero (syrup-string \"alpha\") (fst s))
-                  r2 (send zero (syrup-string \"beta\") (fst r1))
-                  v3 (drain (suc (suc (suc (suc (suc (suc zero)))))) (fst r2)))
+    "(eval (let (s  (vat-spawn beh-echo syrup-null empty-vat)
+                  r1 (send zero (syrup-string \"alpha\") (alloc-vat s))
+                  r2 (send zero (syrup-string \"beta\") (alloc-vat r1))
+                  v3 (run-vat (suc (suc (suc (suc (suc (suc zero)))))) (alloc-vat r2)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r2) v3)))))")
+                                      (lookup-promise (alloc-id r2) v3)))))")
    "true"))
 
 ;; ========================================
@@ -142,18 +150,18 @@
 ;; Vat-level: a fulfiller drives forward progress
 ;; ========================================
 ;;
-;; This is the integration test: spawn a fresh promise, wire up an
-;; actor whose behaviour is to settle it, and drain. The promise must
-;; transition to resolved and the queue must drain to zero.
+;; This is the integration test: vat-spawn a fresh promise, wire up an
+;; actor whose behaviour is to settle it, and run-vat. The promise must
+;; transition to resolved and the queue must run-vat to zero.
 
-(test-case "pipeline/fulfiller drives drain to quiescence"
+(test-case "pipeline/fulfiller drives run-vat to quiescence"
   (check-contains
    (run-last
     "(eval (let (r0  (fresh-promise empty-vat)
-                  pid (snd r0)
-                  s   (spawn beh-fulfiller (syrup-promise pid) (fst r0))
-                  v1  (send-only (snd s) syrup-null (fst s))
-                  v2  (drain (suc (suc (suc (suc (suc zero))))) v1))
+                  pid (alloc-id r0)
+                  s   (vat-spawn beh-fulfiller (syrup-promise pid) (alloc-vat r0))
+                  v1  (send-only (alloc-id s) syrup-null (alloc-vat s))
+                  v2  (run-vat (suc (suc (suc (suc (suc zero))))) v1))
               (and (fulfilled? (unwrap-or fresh
                                            (lookup-promise pid v2)))
                    (resolved? (unwrap-or fresh
@@ -173,11 +181,11 @@
   (check-contains
    (run-last
     "(eval (let (r0   (fresh-promise empty-vat)
-                  pid  (snd r0)
-                  s1   (spawn beh-fulfiller (syrup-promise pid) (fst r0))
-                  s2   (spawn beh-fulfiller (syrup-promise pid) (fst s1))
-                  v1   (send-only (snd s1) (syrup-string \"first\")  (fst s2))
-                  v2   (send-only (snd s2) (syrup-string \"second\") v1)
-                  v3   (drain (suc (suc (suc (suc (suc (suc zero)))))) v2))
+                  pid  (alloc-id r0)
+                  s1   (vat-spawn beh-fulfiller (syrup-promise pid) (alloc-vat r0))
+                  s2   (vat-spawn beh-fulfiller (syrup-promise pid) (alloc-vat s1))
+                  v1   (send-only (alloc-id s1) (syrup-string \"first\")  (alloc-vat s2))
+                  v2   (send-only (alloc-id s2) (syrup-string \"second\") v1)
+                  v3   (run-vat (suc (suc (suc (suc (suc (suc zero)))))) v2))
               (resolved? (unwrap-or fresh (lookup-promise pid v3)))))")
    "true"))

@@ -13,7 +13,7 @@
 ;;;   5. Resolver — fulfiller resolves a remote promise
 ;;;   6. Multiple sends in one drain — vat orders correctly
 ;;;
-;;; All scenarios use the public API: spawn-actor, ask, tell, drain.
+;;; All scenarios use the public API: vat-spawn-actor, ask, tell, drain.
 ;;;
 
 (require rackunit
@@ -23,6 +23,7 @@
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
+         "../source-location.rkt"
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
@@ -31,7 +32,8 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
 
 (define shared-preamble
   "(ns test-ocapn-e2e)
@@ -45,7 +47,9 @@
                 shared-module-reg
                 shared-trait-reg
                 shared-impl-reg
-                shared-param-impl-reg)
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
@@ -66,7 +70,9 @@
             (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
-            (current-param-impl-registry))))
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
 
 (define (run s)
   (parameterize ([current-prelude-env shared-global-env]
@@ -76,7 +82,9 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg])
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
     (process-string s)))
 
 (define (run-last s) (last (run s)))
@@ -93,11 +101,11 @@
   ;; Spawn a counter at 0. ask it to inc. drain. promise should be fulfilled.
   (check-contains
    (run-last
-    "(eval (let (sa  (spawn-actor beh-counter (syrup-nat zero) empty-vat)
-                  ar  (ask zero (syrup-tagged \"inc\" syrup-null) (fst sa))
-                  v2  (drain (suc (suc (suc (suc (suc zero))))) (fst ar)))
+    "(eval (let (sa  (vat-spawn-actor beh-counter (syrup-nat zero) empty-vat)
+                  ar  (ask zero (syrup-tagged \"inc\" syrup-null) (alloc-vat sa))
+                  v2  (drain (suc (suc (suc (suc (suc zero))))) (alloc-vat ar)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd ar) v2)))))")
+                                      (lookup-promise (alloc-id ar) v2)))))")
    "true"))
 
 ;; ========================================
@@ -107,11 +115,11 @@
 (test-case "e2e/greeter — ask resolves to greeting"
   (check-contains
    (run-last
-    "(eval (let (sa  (spawn-actor beh-greeter (syrup-string \"howdy\") empty-vat)
-                  ar  (ask zero (syrup-string \"world\") (fst sa))
-                  v2  (drain (suc (suc (suc (suc (suc zero))))) (fst ar)))
+    "(eval (let (sa  (vat-spawn-actor beh-greeter (syrup-string \"howdy\") empty-vat)
+                  ar  (ask zero (syrup-string \"world\") (alloc-vat sa))
+                  v2  (drain (suc (suc (suc (suc (suc zero))))) (alloc-vat ar)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd ar) v2)))))")
+                                      (lookup-promise (alloc-id ar) v2)))))")
    "true"))
 
 ;; ========================================
@@ -122,15 +130,15 @@
   ;; tell the cell to set; ask it to get; drain.
   (check-contains
    (run-last
-    "(eval (let (sa   (spawn-actor beh-cell syrup-null empty-vat)
+    "(eval (let (sa   (vat-spawn-actor beh-cell syrup-null empty-vat)
                   v1   (tell zero
                               (syrup-tagged \"set\" (syrup-string \"meow\"))
-                              (fst sa))
+                              (alloc-vat sa))
                   ar   (ask zero
                              (syrup-tagged \"get\" syrup-null) v1)
-                  v3   (drain (suc (suc (suc (suc (suc zero))))) (fst ar)))
+                  v3   (drain (suc (suc (suc (suc (suc zero))))) (alloc-vat ar)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd ar) v3)))))")
+                                      (lookup-promise (alloc-id ar) v3)))))")
    "true"))
 
 ;; ========================================
@@ -140,10 +148,10 @@
 (test-case "e2e/forwarder — full chain settles"
   (check-contains
    (run-last
-    "(eval (let (sa1  (spawn-actor beh-echo syrup-null empty-vat)
-                  sa2  (spawn-actor beh-forwarder
-                                     (syrup-refr (snd sa1)) (fst sa1))
-                  v1   (tell (snd sa2) (syrup-string \"hello\") (fst sa2))
+    "(eval (let (sa1  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  sa2  (vat-spawn-actor beh-forwarder
+                                     (syrup-refr (alloc-id sa1)) (alloc-vat sa1))
+                  v1   (tell (alloc-id sa2) (syrup-string \"hello\") (alloc-vat sa2))
                   v2   (drain (suc (suc (suc (suc (suc zero))))) v1))
               (queue-length v2)))")
    "0N"))
@@ -156,10 +164,10 @@
   (check-contains
    (run-last
     "(eval (let (rp   (fresh-promise empty-vat)
-                  pid  (snd rp)
-                  sa   (spawn-actor beh-fulfiller
-                                     (syrup-promise pid) (fst rp))
-                  v1   (tell (snd sa) (syrup-string \"go\") (fst sa))
+                  pid  (alloc-id rp)
+                  sa   (vat-spawn-actor beh-fulfiller
+                                     (syrup-promise pid) (alloc-vat rp))
+                  v1   (tell (alloc-id sa) (syrup-string \"go\") (alloc-vat sa))
                   v2   (drain (suc (suc (suc (suc (suc zero))))) v1))
               (fulfilled? (unwrap-or fresh (lookup-promise pid v2)))))")
    "true"))
@@ -171,8 +179,8 @@
 (test-case "e2e/three sends to adder: cumulative state"
   (check-contains
    (run-last
-    "(eval (let (sa   (spawn-actor beh-adder (syrup-nat zero) empty-vat)
-                  v1   (tell zero (syrup-nat (suc zero)) (fst sa))
+    "(eval (let (sa   (vat-spawn-actor beh-adder (syrup-nat zero) empty-vat)
+                  v1   (tell zero (syrup-nat (suc zero)) (alloc-vat sa))
                   v2   (tell zero (syrup-nat (suc (suc zero))) v1)
                   v3   (tell zero (syrup-nat (suc (suc (suc zero)))) v2)
                   v4   (drain (suc (suc (suc (suc (suc (suc zero)))))) v3))
@@ -198,5 +206,5 @@
   (check-contains
    (run-last
     "(eval (lookup-actor zero
-              (drain (suc zero) (fst (spawn-actor beh-echo syrup-null empty-vat)))))")
+              (drain (suc zero) (alloc-vat (vat-spawn-actor beh-echo syrup-null empty-vat)))))")
    "some"))

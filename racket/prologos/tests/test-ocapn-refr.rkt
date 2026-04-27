@@ -16,6 +16,7 @@
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
+         "../source-location.rkt"
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
@@ -24,7 +25,8 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
 
 (define shared-preamble
   "(ns test-ocapn-refr)
