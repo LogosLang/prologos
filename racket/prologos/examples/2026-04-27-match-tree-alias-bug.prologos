@@ -1,0 +1,75 @@
+ns examples.match-tree-alias-bug
+
+;; ========================================================================
+;;
+;;  Issue #18: compile-match-tree variable bindings in compound patterns
+;;             alias outer-param storage in recursive bodies.
+;;
+;;  Repro: a multi-clause defn whose pattern decomposes a compound
+;;  parameter (e.g. cons r rest) and whose body recurses on a sub-binding
+;;  with another clause that further dispatches the same constructor.
+;;
+;;  Field names in compile-match-tree are derived purely from the
+;;  constructor name + index ("__cons_0" / "__cons_1"). Nested dispatch
+;;  on the same constructor reuses the same Racket-level symbols and
+;;  shadows the outer scope, so let-bindings created BEFORE the inner
+;;  dispatch are silently re-aliased to the inner scrutinee's components.
+;;  The recursive call then operates on the wrong sub-list.
+;;
+;;  Pre-fix observable: sum-rows '[1N 2N 3N] returns 5N (wrong).
+;;  Post-fix expected:  sum-rows '[1N 2N 3N] returns 6N.
+;;
+;;  All examples use the bracketed pattern form ([[cons r rest]]). The
+;;  bare-token form (| nil, | cons r rest) is a separate parser concern
+;;  tracked in PR #16 / #17 and not in scope here.
+;;
+;; ========================================================================
+
+
+;; ----- Section A: The original reproducer (sum-rows, 3 clauses) -----
+;; Three clauses force the inner cons dispatch (column 1, ctor=cons)
+;; to reuse "__cons_0" / "__cons_1" — the alias trigger.
+spec sum-rows [List Nat] -> Nat
+defn sum-rows
+  | [nil]            -> 0N
+  | [[cons r nil]]   -> r
+  | [[cons r rest]]  -> [+ r [sum-rows rest]]
+
+[sum-rows '[1N 2N 3N]]
+
+
+;; ----- Section B: A length-style traversal in 3-clause form -----
+;; Forces the same alias mechanism with `_ rest` (wildcard head).
+spec my-length [List Nat] -> Nat
+defn my-length
+  | [nil]            -> 0N
+  | [[cons _ nil]]   -> 1N
+  | [[cons _ rest]]  -> [suc [my-length rest]]
+
+[my-length '[10N 20N 30N 40N]]
+
+
+;; ----- Section C: 2-clause form -----
+;; Without the [cons r nil] middle clause, there's no second dispatch on
+;; the SAME constructor, so the alias mechanism doesn't trigger; this is
+;; a regression-control case to confirm the fix doesn't break the
+;; common pattern.
+spec sum-list [List Nat] -> Nat
+defn sum-list
+  | [nil]            -> 0N
+  | [[cons r rest]]  -> [+ r [sum-list rest]]
+
+[sum-list '[1N 2N 3N 4N 5N]]
+
+
+;; ----- Section D: Single-element list edge case -----
+;; The 'cons r nil' clause must hit and return r (5N), not fall through.
+[sum-rows '[5N]]
+
+
+;; ----- Section E: Empty list edge case -----
+[sum-rows '[]]
+
+
+;; ----- Section F: A larger list to force several recursion steps -----
+[sum-rows '[1N 1N 1N 1N 1N 1N 1N]]
