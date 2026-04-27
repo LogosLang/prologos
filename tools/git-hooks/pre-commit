@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# pre-commit — paren balance check on staged .rkt files
+#
+# Runs tools/check-parens.sh on every .rkt file in the staged set.
+# Each check is ~100ms (read-syntax via Racket); fast enough for a
+# pre-commit gate. Blocks the commit if any file has unbalanced
+# delimiters, with the exact line:column from Racket's reader.
+#
+# Bypass: git commit --no-verify  (emergencies only).
+#
+# Per ~/.claude/rules/workflow.md, hooks should never be skipped
+# routinely — failures indicate real bugs that must be fixed.
+#
+# Origin: surfaced 2026-04-27 after commit d7bd97a4 (S2.e-iv-c
+# mechanical sed surgery) introduced unbalanced parens in 5
+# bench files outside the targeted-tests verification scope, breaking
+# `raco pkg install` and downstream CI on every open PR. PR #29
+# from kumavis fixed the immediate bug; this hook prevents recurrence.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+  echo "pre-commit: not inside a git repository" >&2
+  exit 1
+fi
+
+# Get staged .rkt files (added or modified, not deleted)
+files=$(git diff --cached --name-only --diff-filter=AM | grep '\.rkt$' || true)
+
+if [ -z "$files" ]; then
+  # No .rkt files staged — nothing to check
+  exit 0
+fi
+
+# Run check-parens.sh on the staged files. The script accepts a
+# space-separated file list as positional args.
+exec "$REPO_ROOT/tools/check-parens.sh" $files
