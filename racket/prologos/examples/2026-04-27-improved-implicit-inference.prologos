@@ -1,0 +1,82 @@
+ns test-improved-implicit-inference
+
+;; ========================================
+;; Acceptance: Improved Implicit Binder Inference
+;; ========================================
+;; Issue #20 — Direction 1 + Direction 2 (additive).
+;;
+;; Direction 1: bare `A` in a spec signature auto-introduces `{A : Type}`.
+;; Direction 2: bare `C` in `:where (Seqable C)` auto-introduces `{C : Type -> Type}`,
+;;              with the kind inferred from the trait declaration.
+;;
+;; This file exercises both directions in WS mode. It is run via
+;; `process-file` after each phase; the track is not done until 0 errors.
+
+require [prologos::data::list :refer [List nil cons]]
+require [prologos::data::lseq :refer [LSeq]]
+require [prologos::core::collection-traits :refer [Seqable Buildable Foldable
+                                                    Buildable-from-seq]]
+require [prologos::data::lseq-ops :refer [lseq-map lseq-length]]
+
+;; ----------------------------------------
+;; D1 alone: bare type variable in spec body
+;; ----------------------------------------
+;; `length` previously: spec length {A : Type} [List A] -> Nat
+;; Bare form should auto-introduce {A : Type}.
+
+spec my-length [List A] -> Nat
+defn my-length
+  | nil       -> zero
+  | cons _ xs -> suc [my-length xs]
+
+;; D1 with two free variables (A, B), nested function type
+spec my-pair-fst A -> B -> A
+defn my-pair-fst [a b] a
+
+spec my-pair-snd A -> B -> B
+defn my-pair-snd [a b] b
+
+;; D1 with nested type: bare A inside [List A]
+spec my-singleton A -> [List A]
+defn my-singleton [x]
+  cons A x [nil A]
+
+;; ----------------------------------------
+;; D2 alone: kind inferred from :where
+;; ----------------------------------------
+;; Previously: spec g-length {A : Type} {C : Type -> Type} [Seqable C] -> [C A] -> Nat
+;; Bare form should auto-introduce A : Type and C : Type -> Type.
+
+spec g-length [Seqable C] -> [C A] -> Nat
+defn g-length [$seq xs]
+  lseq-length [$seq A xs]
+
+;; ----------------------------------------
+;; D1 + D2 combined: gmap-like signature
+;; ----------------------------------------
+;; spec gmap {A B : Type} {C : Type -> Type} [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+;; becomes:
+spec my-gmap [Seqable C] -> [Buildable C] -> [A -> B] -> [C A] -> [C B]
+defn my-gmap [$seq $build f xs]
+  Buildable-from-seq $build B [lseq-map A B f [$seq A xs]]
+
+;; ----------------------------------------
+;; Sanity: explicit binders still work (regression check)
+;; ----------------------------------------
+
+spec my-id-a {A : Type} A -> A
+defn my-id-a [x] x
+
+spec my-id-b {A : Type} {B : Type} A -> B -> A
+defn my-id-b [a b] a
+
+;; ----------------------------------------
+;; Run the specs
+;; ----------------------------------------
+
+[my-length [cons Nat 1N [cons Nat 2N [cons Nat 3N [nil Nat]]]]]
+
+[my-pair-fst 1N 2N]
+[my-pair-snd 1N 2N]
+
+[my-id-a 7N]
