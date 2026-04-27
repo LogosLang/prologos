@@ -36,11 +36,12 @@
 
 ### §1.1 Addendum thesis
 
-PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 9+10+11 is the **substrate and orchestration unification chapter** of that charter. Three architectural moves, all instances of the same pattern ("unify the mechanisms"):
+PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 9+10+11 is the **substrate and orchestration unification chapter** of that charter. Four architectural moves, all instances of the same pattern ("unify the mechanisms"):
 
 1. **Substrate**: retire legacy speculation-stack + migrate fuel-counter to tropical-quantale primitive, leaving one substrate story (bitmask worldview cell + per-propagator override + tropical fuel primitive)
-2. **Orchestration**: retire the sequential `run-stratified-resolution-pure` in favor of BSP scheduler's uniform stratum iteration via `register-stratum-handler!`
+2. **Orchestration (in-form)**: retire the sequential `run-stratified-resolution-pure` in favor of BSP scheduler's uniform stratum iteration via `register-stratum-handler!`
 3. **Features**: ship union types via ATMS branching (D.3 §6.10) atop the unified substrate + orchestration, exploiting already-implemented hypercube primitives (Gray code, Hamming, subcube-member?, tree-reduce)
+4. **Orchestration (between-form)**: retire `process-command`'s sequential top-level form loop in favor of BSP-orchestrated form processing. Completes the "no sequential orchestrators" thesis at all layers. Designed at phase open ([#22](https://github.com/LogosLang/prologos/issues/22)).
 
 ### §1.2 Phase scope
 
@@ -63,7 +64,16 @@ PPN 4C's charter (D.3 §1) is to bring elaboration completely on-network. Phase 
 - Wire subcube pruning into contradiction propagation
 - Residuation-based error-explanation for all-branch-contradict
 
-**Total estimate**: 830-1450 LoC across 3 phases + their sub-phases (revised D.3 per Phase 1A mini-audit scope finding).
+**Phase 4 — Top-level orchestration unification** (LoC TBD; mini-design at phase open)
+- Retire `process-command`'s sequential top-level form loop in `driver.rkt`
+- Per-form-type processing as BSP stratum handlers (parallel to Phase 2's in-form retirement pattern)
+- Topology-phase semantics: top-level names register into cells before any body elaborates
+- Mutual recursion falls out of cell architecture (no order needed) — completes the thesis at all layers
+- Coordinate with PM Track 12 (parameter→cell migration for env) and PM Track 10 (module loading on network)
+- Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14), kumavis pitfall #4)
+- Tracking: [#22](https://github.com/LogosLang/prologos/issues/22)
+
+**Total estimate**: 830-1450 LoC across Phases 1-3 + their sub-phases (revised D.3 per Phase 1A mini-audit scope finding); Phase 4 estimated at phase-open mini-design.
 
 ### §1.3 Out of scope (explicit deferrals)
 
@@ -167,6 +177,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
+| **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
 
 ---
