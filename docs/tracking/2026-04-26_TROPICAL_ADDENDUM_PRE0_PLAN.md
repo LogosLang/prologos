@@ -1012,41 +1012,124 @@ Add `cost_accumulated` (or similar) to PERF-COUNTERS for tracking tropical fuel 
 1. Run V-series parity tests
 2. Verify ATMS retirement parity per V5/V6
 
-### §12.5 Pre-0 baseline data (populate post-execution)
+### §12.5 Pre-0 baseline data (populated incrementally per tier execution)
 
-| Test | Pre-impl wall | Pre-impl alloc | Pre-impl retention | GC count |
+#### M-tier baselines (executed 2026-04-26, commit `f6576479`)
+
+Source: `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
+
+| Test | Pre-impl wall | Pre-impl alloc | Pre-impl retention | Notes |
 |---|---|---|---|---|
-| M7 (n=1) | TBD ns/call | TBD bytes/call | TBD bytes | TBD |
-| M7 (n=100) | TBD | TBD | TBD | TBD |
-| M7 (n=10000) | TBD | TBD | TBD | TBD |
-| M8 (no-trigger) | TBD | TBD | TBD | TBD |
-| M8 (trigger) | TBD | TBD | TBD | TBD |
-| M9 (N=1) | TBD | TBD | TBD | TBD |
-| M9 (N=50) | TBD | TBD | TBD | TBD |
-| M9 (N=500) | TBD | TBD | TBD | TBD |
-| M11 | TBD | TBD | TBD | TBD |
-| M13 | TBD | TBD | TBD | TBD |
-| A5 | TBD | TBD | TBD | TBD |
-| A6 (N=10) | TBD | TBD | TBD | TBD |
-| A6 (N=200) | TBD | TBD | TBD | TBD |
-| A7 (1000 dec) | TBD | TBD | TBD | TBD |
-| A7 (100000 dec) | TBD | TBD | TBD | TBD |
-| A8 | TBD | TBD | TBD | TBD |
-| A9 (100 cycles) | TBD | TBD | TBD | TBD |
-| A10 (5 branches) | TBD | TBD | TBD | TBD |
-| A11.1-4 | TBD | TBD | TBD | TBD |
-| E7 | TBD | TBD | TBD | TBD |
-| E8 | TBD | TBD | TBD | TBD |
-| E9 | TBD | TBD | TBD | TBD |
-| R1 | TBD | TBD | TBD | TBD |
-| R2 | TBD | TBD | TBD | TBD |
-| R3 | TBD | TBD | TBD | TBD |
-| R4 | TBD | TBD | TBD | TBD |
-| R5 | TBD | TBD | TBD | TBD |
-| S1 (suite) | 119.3s baseline | TBD | TBD | TBD |
-| S4 (probe) | 28 commands; cell_allocs=1181 | per-command | TBD | TBD |
+| M1 that-read :type | 30 ns/call | n/a (read-only) | n/a | Existing baseline (matches PRE0) |
+| M1 that-read absent | 30 ns/call | n/a | n/a | Existing baseline |
+| M2 fresh-meta | 40 μs/call | n/a (M-bench wall-only) | n/a | Existing baseline (matches STEP2 §11) |
+| M2 solve-meta! | 44 μs/call | n/a | n/a | Existing baseline |
+| M2 meta-solution | 47 μs/call | n/a | n/a | Existing baseline (CHAMP path) |
+| M3 infer lam | 447 μs/call | n/a | n/a | Existing baseline |
+| M3 infer app | 545 μs/call | n/a | n/a | Existing baseline |
+| M3 infer Pi | 348 μs/call | n/a | n/a | Existing baseline |
+| **M7.1 struct-copy decrement n=1** | **24 ns/call** | (see M7.mem) | (see M7.mem) | NEW — n-independent |
+| **M7.2 n=100** | **25 ns/call** | (see M7.mem) | (see M7.mem) | n doesn't affect single-op cost |
+| **M7.3 n=10000** | **24 ns/call** | (see M7.mem) | (see M7.mem) | n doesn't affect single-op cost |
+| **M7.mem 10000 decrements** | **0.11 ms (11 ns/dec)** | **625 KB (62.5 bytes/dec)** | **-0.1 KB (no growth)** | **HYPOTHESIS CORRECTED**: actual is 62.5 bytes/dec (predicted 200-300 bytes); 4x more efficient |
+| **M8.1 inline (<= fuel 0) not-exh** | **6 ns/call** | n/a | n/a | NEW — TIGHT bar for threshold |
+| **M8.2 boundary** | 6 ns/call | n/a | n/a | NEW |
+| **M8.3 exhausted** | 6 ns/call | n/a | n/a | NEW |
+| **M9.1 net-new-cell N=1** | **16 μs/call** (incl make-prop-network) | **6.5 KB** | **0.3 KB** | NEW |
+| **M9.2 N=5 sequential** | 17 μs (3.4 μs/cell) | 9.2 KB (1.8 KB/cell incl base) | 0.2 KB | NEW |
+| **M9.3 N=50 sequential** | 61 μs (1.2 μs/cell) | 74.6 KB (1.5 KB/cell) | 0.2 KB | NEW |
+| **M9.4 N=500 sequential** | **264 μs (0.5 μs/cell)** | **625 KB (1.25 KB/cell at scale)** | 0.3 KB | NEW — per-cell amortization confirmed |
+| **M10 residuation operator** | N/A pre-impl | N/A | N/A | Deferred to post-Phase-1B (operator doesn't exist) |
+| **M11.1 fixnum +** | **1 ns/call** | 0 | 0 | NEW — tropical tensor essentially free |
+| **M11.2 large fixnum +** | 1 ns/call | 0 | 0 | NEW |
+| **M11.3 +inf.0 + finite** | 1 ns/call | 0 | 0 | NEW (+inf.0 propagation works at fixnum cost) |
+| **M12 SRE registration** | N/A pre-impl | N/A | N/A | Deferred to post-Phase-1B |
+| **M13 prop-network-fuel access** | **6 ns/call** | 0 | 0 | NEW (struct-field access; matches M8 inline) |
 
-(Table populated after Pre-0 execution.)
+#### A-tier baselines (existing A1/A2 + new A5-A12 PENDING)
+
+| Test | Pre-impl wall | Pre-impl alloc | Pre-impl retention | Notes |
+|---|---|---|---|---|
+| A1a 10 metas same | 3.36 ms | 13354 KB | -8.2 KB | Existing baseline |
+| A1b 20 metas different | 6.58 ms | 24513 KB | -18.6 KB | Existing baseline |
+| A2a 10 spec cycles no branch | 0.07 ms | 57.3 KB | 1.2 KB | Existing baseline |
+| A2b 10 spec cycles 3 metas | 0.09 ms | 102.0 KB | 1.4 KB | Existing baseline |
+| **A5 cost-bounded vs flat** | TBD | TBD | TBD | NEW — pending A-tier execution |
+| **A6 deep dep chain N=10/200** | TBD | TBD | TBD | NEW — Phase 3C UC1 forward-capture |
+| **A7 high-freq 1k/100k decrement** | TBD | TBD | TBD | NEW — memory pressure |
+| **A8 multi-consumer 10×1000** | TBD | TBD | TBD | NEW |
+| **A9 100 spec cycles rollback** | TBD | TBD | TBD | NEW |
+| **A10 5-branch fork** | TBD | TBD | TBD | NEW — Phase 3A forward-capture |
+| **A11.1-4 pathological costs** | TBD | TBD | TBD | NEW |
+| **A12 residuation boundaries** | N/A pre-impl | N/A | N/A | Post-Phase-1B (operator doesn't exist) |
+
+#### E-tier baselines (existing E1-E4 + new E7-E9 PENDING)
+
+| Test | Pre-impl wall | Pre-impl alloc | Pre-impl retention | Notes |
+|---|---|---|---|---|
+| E1 simple no metas | 55.23 ms | 17968 KB | -4.8 KB | Existing |
+| E2 parametric Seqable | 169.53 ms | 346445 KB | -11.0 KB | Existing (alloc outlier — Phase 7 target) |
+| E3 polymorphic id | 90.80 ms | 65419 KB | 9.5 KB | Existing |
+| E4 generic arithmetic | 93.48 ms | 54278 KB | 26.0 KB | Existing |
+| **E7 realistic + fuel** | TBD | TBD | TBD | NEW — pending E-tier extension |
+| **E8 deep type-inference** | TBD | TBD | TBD | NEW |
+| **E9 cost-bounded** | TBD | TBD | TBD | NEW — Phase 3C UC2 forward-capture |
+
+#### R-tier (memory as PRIMARY signal) — PENDING execution
+
+| Test | Pre-impl alloc rate | Pre-impl retention growth | GC count/dur | Notes |
+|---|---|---|---|---|
+| R1 per-decrement alloc rate | TBD | TBD | TBD | NEW |
+| R2 retention after quiescence | TBD | TBD | TBD | NEW |
+| R3 GC pressure under load | TBD | TBD | TBD | NEW |
+| R4 compound vs flat layout | TBD | TBD | TBD | NEW |
+| R5 long-running speculation | TBD | TBD | TBD | NEW |
+
+#### S-tier — captured at suite-level
+
+| Test | Pre-impl baseline | Notes |
+|---|---|---|
+| S1 full suite wall | 119.3s (S2.e-v close) | Existing |
+| S4 probe verbose | 28 commands; cell_allocs=1181 | Existing |
+| S2 per-file distribution | (use `tools/benchmark-tests.rkt --slowest 10`) | Existing tooling |
+| S3 heartbeat counter deltas | (compare timings.jsonl pre vs post) | Existing tooling |
+
+#### V-tier — N/A pre-impl (parity tests run post-impl)
+
+V4-V6 verify counter-vs-cell + ATMS retirement parity. Run post-Phase-1C and post-Phase-1A-iii-b/c.
+
+### §12.6 Key Pre-0 findings from M-tier execution (2026-04-26)
+
+Inform D.2 design revision + Phase 1B/1C execution discipline:
+
+**Finding 1 — Hypothesis correction on M7.mem allocation rate**:
+- Predicted: 200-300 bytes/decrement
+- **Actual baseline: 62.5 bytes/decrement** (4x more efficient than predicted)
+- Implication: cell-write needs to stay under ~125 bytes/dec to satisfy DR (1.25-2x baseline). TIGHTER than previously thought; tagged-cell-value entry layout under universe-active worldview needs careful design.
+
+**Finding 2 — M8 sets a TIGHT bar for threshold propagator**:
+- Inline `(<= fuel 0)` check: 6 ns/call
+- DR triggers if no-trigger threshold propagator overhead > 100% (12 ns total)
+- A propagator fire (worklist entry + dispatcher + fire-fn) is realistically ~100-600 ns
+- **Implication**: threshold propagator approach almost certainly FAILS the DR for the no-trigger case
+- **Design response**: consider HYBRID approach — inline `(<= fuel 0)` fast-path at decrement sites (preserve current cost) PLUS threshold propagator for contradiction-write side effect. Inline check stays cheap; threshold propagator only fires on actual exhaustion (rare event).
+- This reframes Phase 1C: the canonical fuel cell can have a threshold propagator, but the inline check at decrement sites should remain. The propagator's job is to write contradiction ON exhaustion, not to perform per-write check.
+
+**Finding 3 — M9 per-cell amortization works**:
+- N=1: 16 μs (incl make-prop-network setup) / 6.5 KB
+- N=500: 0.5 μs/cell / 1.25 KB/cell at scale
+- Implication: per-consumer fuel cell allocation is feasible at typical N (1-50 per net); marginal cost decreases at scale
+
+**Finding 4 — M11 tropical tensor essentially free**:
+- All variants: 1 ns/call; 0 allocation
+- `+inf.0` propagation works at fixnum cost
+- Implication: tropical tensor implementation has zero perf overhead concerns; representation choice (Q-1B-2: `+inf.0` vs sentinel) can be made on architectural grounds, not perf
+
+**Finding 5 — Counter substrate is REMARKABLY cheap**:
+- Combined: M7 (24 ns) + M8 (6 ns) + M13 (6 ns) = ~36 ns total per decrement+check+read cycle
+- Cell-based path will be slower in absolute terms (cell-write ~30-50 ns + cell-read ~30-50 ns = 60-100 ns + threshold propagator overhead)
+- The architectural-correctness trade-off (Q-A2 substrate-level + canonical instance) costs ~2-3x in absolute decrement+check cycle time
+- **Decision implication for D.2**: this is acceptable per "structurally correct over hot-path optimal" framing IF the inline-check hybrid (Finding 2) preserves the per-decrement cost. Without hybrid, full cell-based path is expensive enough that we should reconsider.
 
 ---
 
