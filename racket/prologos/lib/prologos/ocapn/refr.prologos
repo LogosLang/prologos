@@ -1,0 +1,70 @@
+ns prologos::ocapn::refr :no-prelude
+
+;; ========================================
+;; OCapN Reference Capability Hierarchy
+;; ========================================
+;; Each kind of OCapN reference is a capability type. The hierarchy
+;; below mirrors the OCapN model:
+;;
+;;                       OCapNRefr
+;;                      /    |    \
+;;                     /     |     \
+;;                NearRefr FarRefr  PromiseRefr
+;;                            |        /     \
+;;                       SturdyRefr   /       \
+;;                              UnresolvedRefr
+;;                                    \         \
+;;                                  ResolvedFar  ResolvedNear
+;;
+;; Authority semantics:
+;;   - OCapNRefr   — abstract authority to invoke ANY object
+;;   - NearRefr    — local-vat reference; allows synchronous `$` (call)
+;;   - FarRefr     — remote-vat reference; only `<-` (eventual send)
+;;   - SturdyRefr  — durable, can be serialised, restored across sessions
+;;   - PromiseRefr — pending result; resolves to Near/Far/Broken
+;;
+;; Subtype edges encode attenuation: a function requiring NearRefr is
+;; satisfied by anything that decays to a NearRefr (it is the most
+;; specific). Conversely a function asking for OCapNRefr accepts any
+;; reference.
+
+;; --- Roots ---
+capability OCapNRefr
+
+;; --- Locality ---
+capability NearRefr
+capability FarRefr
+
+;; --- Durability ---
+capability SturdyRefr
+
+;; --- Promise classes ---
+capability PromiseRefr
+capability UnresolvedPromise
+capability ResolvedNearPromise
+capability ResolvedFarPromise
+capability BrokenPromise
+
+;; --- Hierarchy ---
+;; locality
+subtype NearRefr OCapNRefr
+subtype FarRefr  OCapNRefr
+
+;; durability: a sturdy refr authorises a far refr's worth of access
+subtype SturdyRefr FarRefr
+
+;; promises: every promise is an OCapNRefr; resolved promises tighten
+;; the static guarantee.
+subtype PromiseRefr        OCapNRefr
+subtype UnresolvedPromise  PromiseRefr
+subtype ResolvedNearPromise PromiseRefr
+subtype ResolvedFarPromise  PromiseRefr
+subtype BrokenPromise       PromiseRefr
+
+;; A resolved-near promise IS the equivalent authority to a near refr
+;; once you have observed its resolution. We model this as attenuation
+;; via an explicit cap-to-cap subtype edge — callers requiring NearRefr
+;; can be supplied a ResolvedNearPromise. (See Pitfall #1: composing
+;; capability subtype with promise resolution.)
+subtype ResolvedNearPromise NearRefr
+subtype ResolvedFarPromise  FarRefr

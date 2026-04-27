@@ -1,0 +1,229 @@
+ns prologos::ocapn::syrup
+
+;; ========================================
+;; Syrup-style value model for OCapN
+;; ========================================
+;;
+;; Syrup is the OCapN serialisation format. We do NOT implement the
+;; bytewise wire format here (that would require byte-string IO with
+;; capability-restricted FFI). Instead we model Syrup's *abstract*
+;; value space — the set of things a CapTP message can carry.
+;;
+;; The mapping below mirrors the Model.md document:
+;;   atoms      : null | bool | int | symbol | string
+;;   containers : list | struct (record) | tagged
+;;   references : refr id | promise id
+;;
+;; Floats and byte-arrays are deliberately omitted from this Phase 0
+;; — they need primitive support that's outside scope.
+;;
+;; Identifiers are Nat (vat-local). A wire serialiser would translate
+;; these to the descriptor table positions (desc:export N etc.) at
+;; the CapTP boundary; that translation lives in captp-session.
+
+require [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; Syrup values
+;; ========================================
+;;
+;; Note on the `tagged` constructor: in Syrup-as-spec, tagged values
+;; carry a SYMBOL label and an arbitrary payload, e.g. <op:deliver ...>.
+;; We follow that convention for CapTP messages (see message.prologos).
+
+data SyrupValue
+  syrup-null
+  syrup-bool   : Bool
+  syrup-nat    : Nat
+  syrup-int    : Int
+  syrup-string : String
+  syrup-symbol : String                  ;; symbol name as a string
+  syrup-list   : List SyrupValue
+  ;; tagged label + payload (payload can itself be a syrup-list)
+  syrup-tagged : String -> SyrupValue
+  ;; An object reference, vat-local position. The peer's import/export
+  ;; tables map these to <desc:export N> on the wire.
+  syrup-refr     : Nat
+  syrup-promise  : Nat
+
+;; ========================================
+;; Predicates (one per constructor)
+;; ========================================
+;;
+;; We deliberately spell out every constructor in every predicate,
+;; because match-with-wildcard on user-defined data triggers a known
+;; type-inference limitation (see goblin-pitfalls #2 and the matching
+;; comment in prologos::data::datum).
+
+spec null? SyrupValue -> Bool
+defn null? [v]
+  match v
+    | syrup-null         -> true
+    | syrup-bool _       -> false
+    | syrup-nat _        -> false
+    | syrup-int _        -> false
+    | syrup-string _     -> false
+    | syrup-symbol _     -> false
+    | syrup-list _       -> false
+    | syrup-tagged _ _   -> false
+    | syrup-refr _       -> false
+    | syrup-promise _    -> false
+
+spec bool? SyrupValue -> Bool
+defn bool? [v]
+  match v
+    | syrup-null         -> false
+    | syrup-bool _       -> true
+    | syrup-nat _        -> false
+    | syrup-int _        -> false
+    | syrup-string _     -> false
+    | syrup-symbol _     -> false
+    | syrup-list _       -> false
+    | syrup-tagged _ _   -> false
+    | syrup-refr _       -> false
+    | syrup-promise _    -> false
+
+spec refr? SyrupValue -> Bool
+defn refr? [v]
+  match v
+    | syrup-null         -> false
+    | syrup-bool _       -> false
+    | syrup-nat _        -> false
+    | syrup-int _        -> false
+    | syrup-string _     -> false
+    | syrup-symbol _     -> false
+    | syrup-list _       -> false
+    | syrup-tagged _ _   -> false
+    | syrup-refr _       -> true
+    | syrup-promise _    -> false
+
+spec promise? SyrupValue -> Bool
+defn promise? [v]
+  match v
+    | syrup-null         -> false
+    | syrup-bool _       -> false
+    | syrup-nat _        -> false
+    | syrup-int _        -> false
+    | syrup-string _     -> false
+    | syrup-symbol _     -> false
+    | syrup-list _       -> false
+    | syrup-tagged _ _   -> false
+    | syrup-refr _       -> false
+    | syrup-promise _    -> true
+
+spec tagged? SyrupValue -> Bool
+defn tagged? [v]
+  match v
+    | syrup-null         -> false
+    | syrup-bool _       -> false
+    | syrup-nat _        -> false
+    | syrup-int _        -> false
+    | syrup-string _     -> false
+    | syrup-symbol _     -> false
+    | syrup-list _       -> false
+    | syrup-tagged _ _   -> true
+    | syrup-refr _       -> false
+    | syrup-promise _    -> false
+
+;; ========================================
+;; Selectors
+;; ========================================
+;; Total functions returning Option (no partial pattern matches).
+
+spec get-nat SyrupValue -> Option Nat
+defn get-nat [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat n        -> some n
+    | syrup-int _        -> none
+    | syrup-string _     -> none
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged _ _   -> none
+    | syrup-refr _       -> none
+    | syrup-promise _    -> none
+
+spec get-string SyrupValue -> Option String
+defn get-string [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat _        -> none
+    | syrup-int _        -> none
+    | syrup-string s     -> some s
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged _ _   -> none
+    | syrup-refr _       -> none
+    | syrup-promise _    -> none
+
+spec get-refr SyrupValue -> Option Nat
+defn get-refr [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat _        -> none
+    | syrup-int _        -> none
+    | syrup-string _     -> none
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged _ _   -> none
+    | syrup-refr id      -> some id
+    | syrup-promise _    -> none
+
+spec get-promise SyrupValue -> Option Nat
+defn get-promise [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat _        -> none
+    | syrup-int _        -> none
+    | syrup-string _     -> none
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged _ _   -> none
+    | syrup-refr _       -> none
+    | syrup-promise id   -> some id
+
+spec get-tag SyrupValue -> Option String
+defn get-tag [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat _        -> none
+    | syrup-int _        -> none
+    | syrup-string _     -> none
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged t _   -> some t
+    | syrup-refr _       -> none
+    | syrup-promise _    -> none
+
+spec get-payload SyrupValue -> Option SyrupValue
+defn get-payload [v]
+  match v
+    | syrup-null         -> none
+    | syrup-bool _       -> none
+    | syrup-nat _        -> none
+    | syrup-int _        -> none
+    | syrup-string _     -> none
+    | syrup-symbol _     -> none
+    | syrup-list _       -> none
+    | syrup-tagged _ p   -> some p
+    | syrup-refr _       -> none
+    | syrup-promise _    -> none
+
+;; ========================================
+;; Convenience constructors
+;; ========================================
+
+spec mk-tagged String SyrupValue -> SyrupValue
+defn mk-tagged [tag payload]
+  syrup-tagged tag payload
+
+spec mk-record String [List SyrupValue] -> SyrupValue
+  :doc "A record with a tag and a list of fields, encoded as tagged+list"
+defn mk-record [tag fields]
+  syrup-tagged tag [syrup-list fields]

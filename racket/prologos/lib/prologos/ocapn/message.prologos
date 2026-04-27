@@ -1,0 +1,171 @@
+ns prologos::ocapn::message
+
+;; ========================================
+;; CapTP messages (op:*)
+;; ========================================
+;;
+;; CapTP is the wire protocol between OCapN peers. Each peer maintains
+;; four tables (questions, answers, exports, imports) and exchanges the
+;; following operation messages. Refer to OCapN's CapTP Specification
+;; for the canonical bit-level encoding; here we model them as
+;; first-class values at the abstract-syntax level.
+;;
+;; The local vat (vat.prologos) uses a SUBSET of these for in-process
+;; message delivery; the over-network variants extend the core ops with
+;; descriptors. This module is shared between the two paths.
+
+require [prologos::ocapn::syrup :refer [SyrupValue syrup-list]]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; CapTP Operations
+;; ========================================
+;;
+;; Field naming follows the CapTP spec doc:
+;;   to-desc      — target descriptor (refr id, locally; export-table
+;;                  entry, on-wire)
+;;   args         — message arguments (a syrup-list)
+;;   answer-pos   — promise position to bind the result; if absent the
+;;                  send is fire-and-forget
+;;   resolve-me   — descriptor of a resolver to be notified
+
+data CapTPOp
+  ;; op:start-session — handshake. Carries protocol version and a
+  ;; locator for the peer's identity. We model the locator as a
+  ;; SyrupValue (Symbol or string) for now.
+  op-start-session : String -> SyrupValue
+  ;; op:abort — terminate session with a reason string.
+  op-abort : String
+  ;; op:deliver — deliver to target; binds answer-pos for pipelining,
+  ;; resolve-me names a resolver to be notified.
+  ;;   target args answer-pos resolve-me
+  op-deliver : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
+  ;; op:deliver-only — delivery without expecting a result. Equivalent
+  ;; to op:deliver with answer-pos = none and resolve-me = none, but
+  ;; modelled separately because the wire format distinguishes them.
+  op-deliver-only : Nat -> SyrupValue
+  ;; op:listen — register that we're interested in being notified when
+  ;; the target promise settles.
+  ;;   target resolver
+  op-listen : Nat -> Nat
+  ;; op:gc-export — peer no longer needs an exported object; decrement
+  ;; the local refcount.
+  op-gc-export : Nat -> Nat                ;; export-pos refcount-delta
+  ;; op:gc-answer — peer is done with an answer position.
+  op-gc-answer : Nat
+
+;; ========================================
+;; Constructors (smart wrappers)
+;; ========================================
+
+spec mk-deliver Nat SyrupValue Nat Nat -> CapTPOp
+  :doc "Build an op:deliver expecting a result on answer-pos with resolver"
+defn mk-deliver [target args answer-pos resolver]
+  op-deliver target args [some answer-pos] [some resolver]
+
+spec mk-deliver-only Nat SyrupValue -> CapTPOp
+  :doc "Build a fire-and-forget op:deliver-only"
+defn mk-deliver-only [target args]
+  op-deliver-only target args
+
+spec mk-deliver-no-resolver Nat SyrupValue Nat -> CapTPOp
+  :doc "Build an op:deliver expecting a result on answer-pos but no resolver"
+defn mk-deliver-no-resolver [target args answer-pos]
+  op-deliver target args [some answer-pos] none
+
+;; ========================================
+;; Predicates
+;; ========================================
+
+spec deliver? CapTPOp -> Bool
+defn deliver? [op]
+  match op
+    | op-start-session _ _   -> false
+    | op-abort _             -> false
+    | op-deliver _ _ _ _     -> true
+    | op-deliver-only _ _    -> false
+    | op-listen _ _          -> false
+    | op-gc-export _ _       -> false
+    | op-gc-answer _         -> false
+
+spec deliver-only? CapTPOp -> Bool
+defn deliver-only? [op]
+  match op
+    | op-start-session _ _   -> false
+    | op-abort _             -> false
+    | op-deliver _ _ _ _     -> false
+    | op-deliver-only _ _    -> true
+    | op-listen _ _          -> false
+    | op-gc-export _ _       -> false
+    | op-gc-answer _         -> false
+
+spec listen? CapTPOp -> Bool
+defn listen? [op]
+  match op
+    | op-start-session _ _   -> false
+    | op-abort _             -> false
+    | op-deliver _ _ _ _     -> false
+    | op-deliver-only _ _    -> false
+    | op-listen _ _          -> true
+    | op-gc-export _ _       -> false
+    | op-gc-answer _         -> false
+
+spec abort? CapTPOp -> Bool
+defn abort? [op]
+  match op
+    | op-start-session _ _   -> false
+    | op-abort _             -> true
+    | op-deliver _ _ _ _     -> false
+    | op-deliver-only _ _    -> false
+    | op-listen _ _          -> false
+    | op-gc-export _ _       -> false
+    | op-gc-answer _         -> false
+
+;; ========================================
+;; Selectors
+;; ========================================
+
+spec deliver-target CapTPOp -> Option Nat
+defn deliver-target [op]
+  match op
+    | op-start-session _ _   -> none
+    | op-abort _             -> none
+    | op-deliver t _ _ _     -> some t
+    | op-deliver-only t _    -> some t
+    | op-listen _ _          -> none
+    | op-gc-export _ _       -> none
+    | op-gc-answer _         -> none
+
+spec deliver-args CapTPOp -> Option SyrupValue
+defn deliver-args [op]
+  match op
+    | op-start-session _ _   -> none
+    | op-abort _             -> none
+    | op-deliver _ a _ _     -> some a
+    | op-deliver-only _ a    -> some a
+    | op-listen _ _          -> none
+    | op-gc-export _ _       -> none
+    | op-gc-answer _         -> none
+
+spec deliver-answer-pos CapTPOp -> Option Nat
+defn deliver-answer-pos [op]
+  match op
+    | op-start-session _ _   -> none
+    | op-abort _             -> none
+    | op-deliver _ _ ap _    -> ap
+    | op-deliver-only _ _    -> none
+    | op-listen _ _          -> none
+    | op-gc-export _ _       -> none
+    | op-gc-answer _         -> none
+
+spec deliver-resolver CapTPOp -> Option Nat
+defn deliver-resolver [op]
+  match op
+    | op-start-session _ _   -> none
+    | op-abort _             -> none
+    | op-deliver _ _ _ r     -> r
+    | op-deliver-only _ _    -> none
+    | op-listen _ _          -> none
+    | op-gc-export _ _       -> none
+    | op-gc-answer _         -> none
