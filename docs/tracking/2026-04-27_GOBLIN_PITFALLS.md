@@ -667,3 +667,99 @@ directly). True over-the-wire pipelining is deferred to Phase 1.
 
 **Verdict.** Honest scope cut. Documented in
 `vat.prologos:resolve-promise` and the `core.prologos` top docstring.
+
+---
+
+### #18 — Multi-arity `defn` with constructor patterns matches first arg only (2026-04-27)
+
+**Symptom.** Wrote a 2-arg structural-equality function as
+
+```
+spec transport-eq? Transport Transport -> Bool
+defn transport-eq?
+  | tr-loopback         tr-loopback         -> true
+  | tr-tcp-testing-only tr-tcp-testing-only -> true
+  | tr-loopback         tr-tcp-testing-only -> false
+  | tr-tcp-testing-only tr-loopback         -> false
+```
+
+`(transport-eq? tr-loopback tr-tcp-testing-only)` returned **true**.
+The dispatcher matched only the FIRST argument's pattern (`tr-loopback`)
+to the FIRST arm and then returned that arm's body, ignoring the
+second argument.
+
+**Cause.** Multi-arity `defn` (the `| pat -> body` shorthand without
+explicit args) seems to dispatch on a single argument only. Stdlib
+patterns reflect this — `is-zero` is the canonical 1-arg form;
+nothing in stdlib's bool/etc. uses multi-pattern multi-arg `defn`.
+Two-arg pattern functions are written as nested `match`:
+
+```
+defn transport-eq? [a b]
+  match a
+    | tr-loopback ->
+        match b
+          | tr-loopback         -> true
+          | tr-tcp-testing-only -> false
+    | tr-tcp-testing-only ->
+        match b
+          | tr-loopback         -> false
+          | tr-tcp-testing-only -> true
+```
+
+**Verdict.** Likely a documented-but-easy-to-miss restriction. The
+ergonomics of an Erlang-style multi-arg pattern dispatch would help
+when porting. Not a blocking bug; recorded so the next person
+doesn't step on it.
+
+---
+
+### #19 — TCP framing for testing-only is line-oriented (design pitfall)
+
+**Symptom.** Endo's `tcp-test-only.js` does NOT define wire framing
+itself — it streams raw bytes via `socket.write` and the higher
+CapTP layer is responsible for length prefixing.
+
+**Our choice.** For Phase 0 we use ONE-LINE-PER-MESSAGE framing in
+`tcp-ffi.rkt`: each Syrup-encoded value is followed by `\n`; on
+read, the receiver consumes one line via `read-line`. This keeps
+the FFI minimal (no length-prefix code, no buffering ring needed).
+
+**Limit.** Doesn't carry binary payloads — Syrup byte-strings could
+contain `\n`. Phase 1 should swap line framing for length-prefixed
+framing or for the canonical bytewise Syrup transport. Until then,
+"tcp-testing-only" only carries the textual subset.
+
+**Verdict.** Honest scope cut, named explicitly. Keeps the path to
+Phase 1 short — only `tcp-ffi.rkt`'s `tcp-send-line`/`tcp-recv-line-ret`
+need to change to length-prefixed primitives.
+
+---
+
+### #20 — `:requires (Cap)` annotation must be on same line as `foreign` (2026-04-27, ergonomics)
+
+**Symptom.** Multi-line foreign declaration:
+
+```
+foreign racket "tcp-ffi.rkt"
+  :requires (NetCap)
+  [tcp-listen :as tcp-listen-raw : Nat -> Nat]
+```
+
+errors with:
+```
+foreign: Expected: (name [:as alias] : type), got: (:requires (NetCap))
+```
+
+**Cause.** The `foreign` parser expects keyword-tag pairs and
+brackets on the *same line*. WS-mode line continuation isn't
+applied here.
+
+**Workaround.** Compress to one line per foreign:
+```
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-listen :as tcp-listen-raw : Nat -> Nat]
+```
+
+**Verdict.** Cosmetic but annoying for libraries with long
+type-signatures. Worth a parser fix to allow indented continuation
+of a `foreign` form.
