@@ -4105,13 +4105,36 @@
            (datum->syntax #f (map stx->datum body-parts) (car body-parts))))
      (define body (parse-datum body-stx))
      ;; Parse patterns: single bracket element → use parse-pattern-bracket
-     ;; Multiple bare elements → parse each as individual pattern
+     ;; Multiple bare elements → either ONE compound (if ctor) or N args.
+     ;;
+     ;; Disambiguation rule:
+     ;;   `cons r nil` written as bare tokens after `|` is ambiguous between
+     ;;     (a) one compound pattern: cons-of-(r,nil)
+     ;;     (b) three separate arg patterns
+     ;;   ML/Haskell convention reads (a). To match user intuition while
+     ;;   preserving (b) for genuinely multi-arg defns like `defn add | x y -> ...`,
+     ;;   detect: if the leading bare token names a known constructor whose
+     ;;   field-count equals the remaining token count, parse as ONE compound.
+     ;;   Otherwise, fall back to N separate arg patterns.
      (define patterns
        (cond
          [(and (= (length pattern-stxs) 1)
                (pair? (stx->datum (car pattern-stxs))))
           ;; Single bracket [patterns...] → existing parse-pattern-bracket
           (parse-pattern-bracket (car pattern-stxs) loc)]
+         [(and (> (length pattern-stxs) 1)
+               (let* ([head (stx->datum (car pattern-stxs))]
+                      [meta (and (symbol? head) (lookup-ctor head))])
+                 (and meta
+                      (= (length (ctor-meta-field-types meta))
+                         (- (length pattern-stxs) 1)))))
+          ;; Leading symbol is a known constructor with matching field count.
+          ;; Treat as one compound pattern: cons r nil → (cons r nil)
+          (list (parse-single-pattern
+                 (datum->syntax #f
+                                (map stx->datum pattern-stxs)
+                                (car pattern-stxs))
+                 loc))]
          [else
           ;; Bare patterns: each element is one argument pattern
           (for/list ([p (in-list pattern-stxs)])
