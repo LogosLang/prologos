@@ -9247,10 +9247,25 @@
             (define meta (lookup-ctor ctor))
             (define n-fields
               (if meta (length (ctor-meta-field-types meta)) 0))
-            ;; Generate fresh field binding names
+            ;; Generate fresh field binding names.
+            ;; Issue #18: must be globally unique per dispatch site, NOT just
+            ;; (ctor + index). When compile-match-tree recurses on a new
+            ;; dispatch column whose constructor matches the outer dispatch's
+            ;; constructor (e.g. nested `cons` decomposition in a recursive
+            ;; list traversal — `defn f | cons r nil -> ... | cons r rest -> ...`
+            ;; where the inner reduce-arm dispatches on `rest`), reusing
+            ;; "__ctor_i" names lexically shadows the outer dispatch's field
+            ;; bindings. `specialize-rows` emits `(let v := <param-at-col>)`
+            ;; for variable patterns; if `param-at-col` is the OUTER cons
+            ;; field name `__cons_1`, that reference resolves to the INNER
+            ;; cons binder (a sub-list) at runtime, not the intended outer
+            ;; tail. The bug is silent — `[sum-rows '[1N 2N 3N]]` returns 5N
+            ;; instead of 6N. gensym makes each dispatch site's binders
+            ;; globally distinct so lexical resolution always finds the
+            ;; intended scope.
             (define field-names
               (for/list ([i (in-range n-fields)])
-                (string->symbol (format "__~a_~a" ctor i))))
+                (gensym (string->symbol (format "__~a_~a_" ctor i)))))
             ;; Specialize rows for this constructor
             (define specialized
               (specialize-rows rows col ctor n-fields param-names loc))
