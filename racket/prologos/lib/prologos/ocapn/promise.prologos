@@ -87,9 +87,15 @@ defn break [reason s]
     | pst-fulfilled  x -> pst-fulfilled x
     | pst-broken     x -> pst-broken x
 
-;; Append a queued message to an unresolved promise. Once resolved
-;; the message has nowhere to queue and is dropped (the caller is
-;; expected to flush queued messages on resolution).
+;; Push a queued message onto an unresolved promise. The newest
+;; message ends up at the HEAD of the list (LIFO storage). Callers
+;; that want FIFO semantics can `reverse` the result of `take-queue`
+;; — Phase 0's only consumer of the queue is the test suite, which
+;; checks length and emptiness, not order. Goblins's wire-protocol
+;; layer would impose FIFO at the deliver site, not here.
+;; Once resolved the message has nowhere to queue and is dropped.
+;; (See Copilot review #28#discussion_r3150426657 for the LIFO-vs-
+;; "append" wording call-out that prompted this clarification.)
 spec enqueue SyrupValue PromiseState -> PromiseState
 defn enqueue [m s]
   match s
@@ -97,8 +103,12 @@ defn enqueue [m s]
     | pst-fulfilled  v    -> pst-fulfilled v
     | pst-broken     r    -> pst-broken r
 
-;; Drain the queue (returning the messages and a fresh empty
-;; unresolved state). For settled states the queue is empty.
+;; Inspect the queued messages on an unresolved promise (LIFO order
+;; — head is newest). Settled states return nil. The PromiseState
+;; itself is NOT updated; callers wanting "drain + clear" should
+;; pair this with the resolve/break transitions which discard the
+;; queue. (See Copilot review #28#discussion_r3150426758 for the
+;; doc-vs-impl note that prompted this clarification.)
 spec take-queue PromiseState -> List SyrupValue
 defn take-queue [s]
   match s

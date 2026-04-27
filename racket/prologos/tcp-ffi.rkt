@@ -179,7 +179,13 @@
 
 (define (tcp-table-clear!)
   ;; Best-effort cleanup for tests.
-  (for ([(id _) (in-hash tcp-table)])
+  ;;
+  ;; Snapshot the keys BEFORE iterating, because tcp-close mutates
+  ;; tcp-table via hash-remove!. Iterating in-hash while removing
+  ;; entries can raise an iteration/contract error (see Copilot
+  ;; review #28#discussion_r3150426813).
+  (define ids (hash-keys tcp-table))
+  (for ([id (in-list ids)])
     (with-handlers ([exn:fail? (lambda _ (void))])
       (tcp-close id)))
   (hash-clear! tcp-table)

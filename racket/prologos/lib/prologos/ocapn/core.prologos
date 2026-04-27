@@ -34,10 +34,25 @@ ns prologos::ocapn::core
 ;;
 ;; What works
 ;; - Full request/reply cycle through promises
-;; - Promise pipelining (send to a promise; flushes on resolution)
 ;; - Promise monotone resolution (fulfill / break)
+;; - In-actor pipelining via the FullFiller pattern: an actor can
+;;   emit an `eff-resolve` effect for a target promise as part of its
+;;   step output, and the vat applies it directly. This covers the
+;;   common case (an actor that receives a result and needs to settle
+;;   a promise in the same vat).
 ;; - The seven built-in actor behaviours (cell, counter, greeter,
 ;;   echo, adder, forwarder, fulfiller)
+;;
+;; What is NOT yet wired up
+;; - Full Goblins-style promise pipelining (send-to-an-unresolved-
+;;   promise that auto-flushes its queue on resolution) is deferred:
+;;   the PromiseState carries a queue (see `enqueue` / `take-queue`),
+;;   but `resolve-promise` / `break-promise` do NOT flush it back to
+;;   the vat queue, because the queue carries `SyrupValue` (wire
+;;   form) and the vat queue holds `VatMsg` (decoded form). Phase 1
+;;   should wire a re-encoder. See goblin-pitfalls #17 for the full
+;;   scope-cut rationale; updated per Copilot review
+;;   #28#discussion_r3150426694.
 
 ;; --- Refr capabilities (typing-side authority lattice) ---
 require [prologos::ocapn::refr :refer-all]

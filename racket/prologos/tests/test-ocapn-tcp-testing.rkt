@@ -91,14 +91,27 @@
 ;; FFI loopback round-trip
 ;; ========================================
 ;;
-;; Direct exercise of the FFI that the netlayer wraps. Use a fixed
-;; high port (18763) to avoid system port conflicts; rerun cleans up.
+;; Direct exercise of the FFI that the netlayer wraps. Bind a random
+;; high port and retry on collisions so the test is robust to
+;; conflicts with other processes / parallel test runs (Copilot
+;; review #28#discussion_r3150426716 — fixed port 18763 was flaky
+;; under CI parallelism).
 
-(define test-port 18763)
+;; Returns (values port server-id) by trying random ephemeral ports
+;; until one binds. Caller is responsible for `tcp-close`-ing the
+;; server.
+(define (listen-on-random-port [attempts 32])
+  (define candidate (+ 49152 (random 16384)))
+  (with-handlers ([exn:fail?
+                   (lambda (e)
+                     (if (zero? attempts)
+                         (raise e)
+                         (listen-on-random-port (sub1 attempts))))])
+    (values candidate (tcp-listen candidate))))
 
 (test-case "tcp-testing/loopback echo end-to-end"
   (tcp-table-clear!)
-  (define server-id (tcp-listen test-port))
+  (define-values (test-port server-id) (listen-on-random-port))
   (define server-thread
     (thread
       (lambda ()
@@ -120,7 +133,7 @@
   ;; The framing is line-oriented, so multiple sends/recvs should
   ;; all work.
   (tcp-table-clear!)
-  (define server-id (tcp-listen (+ test-port 1)))
+  (define-values (test-port server-id) (listen-on-random-port))
   (define server-thread
     (thread
       (lambda ()
@@ -130,7 +143,7 @@
           (define line (tcp-recv-cached conn))
           (tcp-send-line conn (string-append "ack:" line)))
         (tcp-close conn))))
-  (define client (tcp-connect "127.0.0.1" (+ test-port 1)))
+  (define client (tcp-connect "127.0.0.1" test-port))
   (define received '())
   (for ([msg '("one" "two" "three")])
     (tcp-send-line client msg)
@@ -144,7 +157,7 @@
 
 (test-case "tcp-testing/two clients can connect to one server"
   (tcp-table-clear!)
-  (define server-id (tcp-listen (+ test-port 2)))
+  (define-values (test-port server-id) (listen-on-random-port))
   (define server-thread
     (thread
       (lambda ()
@@ -153,12 +166,12 @@
           (tcp-recv-line-ret conn)
           (tcp-send-line conn (tcp-recv-cached conn))
           (tcp-close conn)))))
-  (define c1 (tcp-connect "127.0.0.1" (+ test-port 2)))
+  (define c1 (tcp-connect "127.0.0.1" test-port))
   (tcp-send-line c1 "alpha")
   (tcp-recv-line-ret c1)
   (define got1 (tcp-recv-cached c1))
   (tcp-close c1)
-  (define c2 (tcp-connect "127.0.0.1" (+ test-port 2)))
+  (define c2 (tcp-connect "127.0.0.1" test-port))
   (tcp-send-line c2 "beta")
   (tcp-recv-line-ret c2)
   (define got2 (tcp-recv-cached c2))
@@ -170,7 +183,7 @@
 
 (test-case "tcp-testing/handle table cleans up after close"
   (tcp-table-clear!)
-  (define server-id (tcp-listen (+ test-port 3)))
+  (define-values (_test-port server-id) (listen-on-random-port))
   (check-equal? (tcp-table-size) 1)
   (tcp-close server-id)
   (check-equal? (tcp-table-size) 0))
