@@ -9247,10 +9247,21 @@
             (define meta (lookup-ctor ctor))
             (define n-fields
               (if meta (length (ctor-meta-field-types meta)) 0))
-            ;; Generate fresh field binding names
+            ;; Generate fresh field binding names.
+            ;; gensym (not string->symbol) so each destructure level gets
+            ;; UNIQUE names. Without uniqueness, recursive structural
+            ;; patterns like
+            ;;   defn sum-rows
+            ;;     | nil           -> 0N
+            ;;     | cons r nil    -> r
+            ;;     | cons r rest   -> [add r [sum-rows rest]]
+            ;; produce wrong answers: nested cons destructures use the
+            ;; same `__cons_0` / `__cons_1` names, the inner shadows the
+            ;; outer, and the leaf body's `let r := __cons_0` reads the
+            ;; INNER cons's head instead of the OUTER's. See issue #18.
             (define field-names
               (for/list ([i (in-range n-fields)])
-                (string->symbol (format "__~a_~a" ctor i))))
+                (gensym (format "__~a_~a_" ctor i))))
             ;; Specialize rows for this constructor
             (define specialized
               (specialize-rows rows col ctor n-fields param-names loc))
