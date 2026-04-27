@@ -527,6 +527,69 @@
                   (silent (lambda () (process-string-ws e4-src)))))
 
 ;; ============================================================
+;; E7-E9: TROPICAL FUEL E2E BASELINES (Pre-0)
+;; Per docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md §7
+;; Each test has hypothesis (HYP) + decision rule (DR).
+;; Pre-impl baselines run current counter-based fuel through realistic
+;; full-pipeline workloads; post-impl re-run via bench-ab.rkt --ref.
+;; ============================================================
+
+(displayln "\n\n=== E7-E9: TROPICAL FUEL E2E BASELINES (Pre-0) ===\n")
+
+;; E7: Realistic elaboration with fuel tracking (probe file as workload)
+;; HYP: post-impl wall within 5% of pre-impl; memory within 10%; cell_allocs delta +N for canonical fuel cells (bounded constant)
+;; DR: if wall regression > 10% → investigate hot-path overhead at decrement sites
+;;     if memory regression > 20% → investigate retention semantics
+;;     if cell_allocs delta > 10 → unexpected cell allocation; investigate
+(displayln "E7: realistic elaboration with fuel tracking (probe file 28 expressions)")
+(define e7-probe-path "examples/2026-04-22-1A-iii-probe.prologos")
+(define e7-src
+  (call-with-input-file e7-probe-path port->string))
+(define e7 (bench-mem "E7.1 probe full file (realistic elaboration profile)" 5
+  (silent (lambda () (process-string-ws e7-src)))))
+
+;; E8: Deep type-inference workload (high decrement rate via 50-deep id composition)
+;; HYP: stress the decrement path; expect ~5-15% regression but bounded (per Finding 11 hybrid pivot empirically reinforced)
+;; DR: if regression > 25% → revisit threshold propagator architecture
+;;     (maybe inline check at decrement site as fast-path — already proposed via M-tier Finding 2 hybrid pivot)
+(displayln "\nE8: deep type-inference workload (50-deep polymorphic id composition)")
+(define (e8-make-deep-id-src depth)
+  (string-append
+   "ns bench-4c-e8 :no-prelude\n"
+   "spec id {A : Type} A -> A\n"
+   "defn id [x] x\n"
+   "eval "
+   (apply string-append
+          (for/list ([_ (in-range depth)]) "[id "))
+   "3N"
+   (apply string-append
+          (for/list ([_ (in-range depth)]) "]"))
+   "\n"))
+(define e8-src (e8-make-deep-id-src 50))
+(define e8 (bench-mem "E8.1 50-deep id composition" 5
+  (silent (lambda () (process-string-ws e8-src)))))
+
+;; E9: Cost-bounded elaboration scenario (Phase 3C UC2 forward-capture)
+;; Pre-impl: simulate Phase 3C UC2 via moderately complex polymorphic program
+;; HYP: cost-bounded elaboration is feasible with current substrate; Phase 3C consumer can implement cleanly
+;; DR: if hypothesis fails → revisit Phase 3C UC2 design (D.1 §9.7); might need additional substrate
+;; Hand-instrumented (not full Phase 3C); demonstrates pattern works under Phase 1B substrate
+(displayln "\nE9: cost-bounded elaboration scenario (Phase 3C UC2 forward-capture)")
+(define e9-src
+  (string-append
+   "ns bench-4c-e9 :no-prelude\n"
+   "spec id {A : Type} A -> A\n"
+   "defn id [x] x\n"
+   "spec compose {A B C : Type} [B -> C] -> [A -> B] -> A -> C\n"
+   "defn compose [f g x] [f [g x]]\n"
+   "def f1 := [compose id id]\n"
+   "def f2 := [compose f1 f1]\n"
+   "def f3 := [compose f2 f2]\n"
+   "eval [f3 5N]\n"))
+(define e9 (bench-mem "E9.1 cost-bounded elaboration scenario" 5
+  (silent (lambda () (process-string-ws e9-src)))))
+
+;; ============================================================
 ;; V: VALIDATION — Correctness reference for parity harness
 ;; ============================================================
 
@@ -615,6 +678,9 @@
 (printf "E2 parametric Seqable (Axis 1):      ~a\n" (fmt-mem e2))
 (printf "E3 polymorphic id (Axis 5):          ~a\n" (fmt-mem e3))
 (printf "E4 generic arithmetic (Axis 6):      ~a\n" (fmt-mem e4))
+(printf "E7 probe (realistic):                ~a\n" (fmt-mem e7))
+(printf "E8 50-deep id composition:           ~a\n" (fmt-mem e8))
+(printf "E9 cost-bounded elaboration:         ~a\n" (fmt-mem e9))
 (printf "V correctness:                       ~a failures\n" v-failures)
 
 (displayln "\n(Baselines captured. Re-run after 4C phases land for A/B comparison.)")

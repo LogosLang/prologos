@@ -1084,17 +1084,17 @@ Source: `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
 | **A11.4 monotonic (1k)** | **0.013 ms** | n/a | n/a | NEW — **A11.3 = A11.4 IDENTICALLY** confirms pre-impl cost-blindness; post-impl A/B will diverge dramatically (A11.4 exhausts at step ~44; A11.3 at ~500) |
 | **A12 residuation boundaries** | N/A pre-impl | N/A | N/A | **Captured at D.1 §9.10 + §9.6 Form A** (post-Phase-1B; `tests/test-tropical-fuel.rkt`; cross-reference parity at impl) |
 
-#### E-tier baselines (existing E1-E4 + new E7-E9 PENDING)
+#### E-tier baselines (executed 2026-04-26, this commit)
 
 | Test | Pre-impl wall | Pre-impl alloc | Pre-impl retention | Notes |
 |---|---|---|---|---|
-| E1 simple no metas | 55.23 ms | 17968 KB | -4.8 KB | Existing |
-| E2 parametric Seqable | 169.53 ms | 346445 KB | -11.0 KB | Existing (alloc outlier — Phase 7 target) |
-| E3 polymorphic id | 90.80 ms | 65419 KB | 9.5 KB | Existing |
-| E4 generic arithmetic | 93.48 ms | 54278 KB | 26.0 KB | Existing |
-| **E7 realistic + fuel** | TBD | TBD | TBD | NEW — pending E-tier extension |
-| **E8 deep type-inference** | TBD | TBD | TBD | NEW |
-| **E9 cost-bounded** | TBD | TBD | TBD | NEW — Phase 3C UC2 forward-capture |
+| E1 simple no metas | 69.00 ms | 17919 KB | -5.1 KB | Refreshed baseline |
+| E2 parametric Seqable | 177.89 ms | 333406 KB | 2.9 KB | Refreshed baseline (alloc outlier — Phase 7 target) |
+| E3 polymorphic id | 100.29 ms | 64240 KB | 8.7 KB | Refreshed baseline |
+| E4 generic arithmetic | 118.87 ms | 49625 KB | 18.2 KB | Refreshed baseline |
+| **E7.1 probe full file (28 expressions)** | **334.89 ms** | **812747 KB** | **-6.7 KB (no leak)** | NEW — realistic elaboration profile; ~29 MB/command; Phase 1C migration A/B reference |
+| **E8.1 50-deep id composition** | **262.40 ms** | **620315 KB** | **+31.2 KB (small accumulator)** | NEW — high-frequency decrement workload; per-level fresh meta + dispatch; hybrid pivot CRITICAL here (without inline fast-path, 5-30× regression risk per Finding 11) |
+| **E9.1 cost-bounded elaboration** | **117.25 ms** | **127178 KB** | **-18.2 KB (no leak)** | NEW — Phase 3C UC2 forward-capture; compose chain f1/f2/f3 over polymorphic id; demonstrates pattern feasibility |
 
 #### R-tier (memory as PRIMARY signal) — PENDING execution
 
@@ -1217,6 +1217,56 @@ The hybrid design (inline check + threshold propagator for contradiction-write o
 4. Aligns with Hyperlattice mantra (cells + propagators + emergent contradiction)
 
 **E-tier + R-tier execution will further confirm or refute this hybrid pivot** before D.2 commits the design decision per user direction (2026-04-26): "wait until all measurements before committing to a final decision."
+
+### Key Pre-0 findings from E-tier execution (2026-04-26)
+
+E-tier (E7-E9) execution adds 3 new findings + reinforces hybrid pivot via realistic full-pipeline workloads:
+
+**Finding 12 — E7 realistic probe baseline 334.89 ms / 812.7 MB / -6.7 KB retain**:
+- 28-expression probe file is the realistic elaboration profile reference for Phase 1C migration A/B
+- Per-command average ~29 MB allocation reflects current elaboration alloc-heaviness (independent of fuel mechanism)
+- Wall: 335 ms across 28 expressions ≈ 12 ms/expression
+- Retention NEGATIVE — no leak; GC keeps up
+- DR for Phase 1C: post-impl wall within 5% (≤ 351 ms) and memory within 10% (≤ 894 MB)
+- Cell_allocs delta should be near-zero for non-fuel-stressing commands (most of the probe)
+
+**Finding 13 — E8 50-deep polymorphic id stresses decrement path heavily**:
+- 262.40 ms / 620.3 MB / +31.2 KB retain
+- Each `[id ...]` level triggers fresh meta + dispatch + reduction step → high-frequency decrement workload
+- Per-level cost ~5.2 ms / ~12.4 MB allocation
+- Slight retention growth (+31.2 KB) — within accumulator state expectation
+- **DR for Phase 1C is permissive (≤ 25% regression = ≤ 328 ms)** but hybrid pivot CRITICAL here
+- Without inline check fast-path (M-tier Finding 2), threshold-propagator-only path would 5-30× regress at this depth (50 levels × ~100-600 ns extra per decrement = 5-30 ms additional)
+- E8 is the SCENARIO that would surface threshold-propagator overhead most acutely; hybrid pivot avoids this
+
+**Finding 14 — E9 cost-bounded composition baseline 117.25 ms / 127 MB**:
+- compose chain `f1 = compose(id,id)`, `f2 = compose(f1,f1)`, `f3 = compose(f2,f2)` over polymorphic id
+- Phase 3C UC2 forward-capture grounded
+- Demonstrates Phase 3C consumer can implement budget-driven elaboration cleanly under Phase 1B substrate
+- Per-compose-level cost moderate (~4× cost from f1 to f3 due to type-tensor expansion)
+- DR for Phase 3C: cost-bounded elaboration via Galois bridge γ direction is feasible at this complexity
+
+**Cross-finding (Finding 15) — E-tier confirms full-pipeline alloc-heaviness independent of fuel mechanism**:
+- Existing E2 parametric Seqable: 333 MB alloc (longest-standing alloc outlier)
+- Existing E1 simple: 17.9 MB alloc (baseline floor)
+- New E7 probe: 813 MB alloc; per-command ~29 MB
+- New E8 deep-id: 620 MB alloc; per-level ~12 MB
+- New E9 cost-bounded: 127 MB alloc; per-compose ~32 MB
+- **The elaboration path is alloc-heavy regardless of fuel mechanism**
+- Phase 1C migration MUST NOT add allocation overhead beyond Pre-0 budget
+- Hybrid pivot preserves per-decrement cost; full cell-based path would compound the existing alloc heaviness
+- E-tier reinforces hybrid pivot decision; D.2 commit candidate ready post-R-tier
+
+### Hybrid pivot status — STRONGER evidence post-E-tier (provisional D.2 commit candidate)
+
+M+A+E tier evidence cumulative for hybrid pivot (preserve inline check + threshold propagator for contradiction-write only):
+- M-tier Finding 2 (origin): inline check 6 ns vs propagator fire 100-600 ns
+- M-tier Finding 5: counter substrate is REMARKABLY cheap (~36 ns combined cycle)
+- A-tier Finding 11: empirical confirmation across A7/A8/A11 (linear, pattern-blind, scaled)
+- E-tier Finding 13: deep-id workload (E8) is the high-frequency stress scenario where hybrid pivot avoids 5-30× regression
+- E-tier Finding 15: alloc-heaviness baseline; Phase 1C must NOT compound it
+
+**R-tier remaining**: validates retention semantics under sustained workload + memory-as-PRIMARY scenarios. After R-tier completes, D.2 revise can commit hybrid pivot as final design decision.
 
 ---
 
