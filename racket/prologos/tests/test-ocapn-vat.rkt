@@ -3,7 +3,7 @@
 ;;;
 ;;; Tests for prologos::ocapn::vat — local vat (event-loop core).
 ;;;
-;;; Validates spawn, send/send-only, step-vat, run-vat, and the
+;;; Validates vat-spawn, send/send-only, step-vat, run-vat, and the
 ;;; per-actor behaviour dispatch via step-behavior. Each behaviour
 ;;; tag (cell, counter, greeter, echo, adder, forwarder, fulfiller)
 ;;; gets at least one round-trip test exercising its dispatch path.
@@ -21,6 +21,7 @@
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
+         "../source-location.rkt"
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
@@ -29,7 +30,8 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
 
 (define shared-preamble
   "(ns test-ocapn-vat)
@@ -47,7 +49,9 @@
                 shared-module-reg
                 shared-trait-reg
                 shared-impl-reg
-                shared-param-impl-reg)
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
@@ -68,7 +72,9 @@
             (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
-            (current-param-impl-registry))))
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
 
 (define (run s)
   (parameterize ([current-prelude-env shared-global-env]
@@ -78,7 +84,9 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg])
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
     (process-string s)))
 
 (define (run-last s) (last (run s)))
@@ -108,38 +116,38 @@
    (run-last "(eval (vat-next-id empty-vat))") "0N"))
 
 ;; ========================================
-;; spawn
+;; vat-spawn
 ;; ========================================
 
-(test-case "vat/spawn echo bumps next-id"
+(test-case "vat/vat-spawn echo bumps next-id"
   (check-contains
    (run-last
-    "(eval (vat-next-id (fst (spawn beh-echo syrup-null empty-vat))))")
+    "(eval (vat-next-id (alloc-vat (vat-spawn beh-echo syrup-null empty-vat))))")
    "1N"))
 
-(test-case "vat/spawn echo allocates id 0"
+(test-case "vat/vat-spawn echo allocates id 0"
   (check-contains
    (run-last
-    "(eval (snd (spawn beh-echo syrup-null empty-vat)))")
+    "(eval (alloc-id (vat-spawn beh-echo syrup-null empty-vat)))")
    "0N"))
 
-(test-case "vat/spawn twice yields ids 0 and 1"
+(test-case "vat/vat-spawn twice yields ids 0 and 1"
   (check-contains
    (run-last
-    "(eval (snd (spawn beh-echo syrup-null
-                       (fst (spawn beh-echo syrup-null empty-vat)))))")
+    "(eval (alloc-id (vat-spawn beh-echo syrup-null
+                       (alloc-vat (vat-spawn beh-echo syrup-null empty-vat)))))")
    "1N"))
 
 (test-case "vat/lookup-actor finds spawned actor"
   (check-contains
    (run-last
-    "(eval (lookup-actor zero (fst (spawn beh-echo syrup-null empty-vat))))")
+    "(eval (lookup-actor zero (alloc-vat (vat-spawn beh-echo syrup-null empty-vat))))")
    "some"))
 
 (test-case "vat/lookup-actor on missing id returns none"
   (check-contains
    (run-last
-    "(eval (lookup-actor (suc zero) (fst (spawn beh-echo syrup-null empty-vat))))")
+    "(eval (lookup-actor (suc zero) (alloc-vat (vat-spawn beh-echo syrup-null empty-vat))))")
    "none"))
 
 ;; ========================================
@@ -150,23 +158,23 @@
   (check-contains
    (run-last
     "(eval (queue-length (send-only zero syrup-null
-                                     (fst (spawn beh-echo syrup-null empty-vat)))))")
+                                     (alloc-vat (vat-spawn beh-echo syrup-null empty-vat)))))")
    "1N"))
 
 (test-case "vat/send allocates a fresh promise (id = 1 since 0 is the actor)"
   (check-contains
    (run-last
-    "(eval (snd (send zero syrup-null
-                       (fst (spawn beh-echo syrup-null empty-vat)))))")
+    "(eval (alloc-id (send zero syrup-null
+                       (alloc-vat (vat-spawn beh-echo syrup-null empty-vat)))))")
    "1N"))
 
 (test-case "vat/send creates an unresolved promise"
   (check-contains
    (run-last
-    "(eval (let (v0 (fst (spawn beh-echo syrup-null empty-vat))
+    "(eval (let (v0 (alloc-vat (vat-spawn beh-echo syrup-null empty-vat))
                   r  (send zero syrup-null v0))
               (unresolved? (unwrap-or fresh
-                                       (lookup-promise (snd r) (fst r))))))")
+                                       (lookup-promise (alloc-id r) (alloc-vat r))))))")
    "true"))
 
 ;; ========================================
@@ -184,11 +192,11 @@
 (test-case "vat/echo end-to-end fulfills answer-promise"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-echo syrup-null empty-vat)
-                  r  (send zero (syrup-string \"hi\") (fst s))
-                  v2 (drain (suc (suc (suc (suc (suc zero))))) (fst r)))
+    "(eval (let (s  (vat-spawn beh-echo syrup-null empty-vat)
+                  r  (send zero (syrup-string \"hi\") (alloc-vat s))
+                  v2 (run-vat (suc (suc (suc (suc (suc zero))))) (alloc-vat r)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r) v2)))))")
+                                      (lookup-promise (alloc-id r) v2)))))")
    "true"))
 
 ;; ========================================
@@ -198,20 +206,20 @@
 (test-case "vat/counter inc fulfills its result-promise"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-counter (syrup-nat zero) empty-vat)
-                  r  (send zero (syrup-tagged \"inc\" syrup-null) (fst s))
-                  v2 (drain (suc (suc (suc (suc (suc zero))))) (fst r)))
+    "(eval (let (s  (vat-spawn beh-counter (syrup-nat zero) empty-vat)
+                  r  (send zero (syrup-tagged \"inc\" syrup-null) (alloc-vat s))
+                  v2 (run-vat (suc (suc (suc (suc (suc zero))))) (alloc-vat r)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r) v2)))))")
+                                      (lookup-promise (alloc-id r) v2)))))")
    "true"))
 
 (test-case "vat/counter increment twice updates state"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-counter (syrup-nat zero) empty-vat)
-                  v1 (send-only zero (syrup-tagged \"inc\" syrup-null) (fst s))
+    "(eval (let (s  (vat-spawn beh-counter (syrup-nat zero) empty-vat)
+                  v1 (send-only zero (syrup-tagged \"inc\" syrup-null) (alloc-vat s))
                   v2 (send-only zero (syrup-tagged \"inc\" syrup-null) v1)
-                  v3 (drain (suc (suc (suc (suc (suc zero))))) v2))
+                  v3 (run-vat (suc (suc (suc (suc (suc zero))))) v2))
               (lookup-actor zero v3)))")
    "some"))
 
@@ -222,11 +230,11 @@
 (test-case "vat/greeter resolves greeting+name"
   (check-contains
    (run-last
-    "(eval (let (s  (spawn beh-greeter (syrup-string \"hello\") empty-vat)
-                  r  (send zero (syrup-string \"world\") (fst s))
-                  v2 (drain (suc (suc (suc (suc (suc zero))))) (fst r)))
+    "(eval (let (s  (vat-spawn beh-greeter (syrup-string \"hello\") empty-vat)
+                  r  (send zero (syrup-string \"world\") (alloc-vat s))
+                  v2 (run-vat (suc (suc (suc (suc (suc zero))))) (alloc-vat r)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r) v2)))))")
+                                      (lookup-promise (alloc-id r) v2)))))")
    "true"))
 
 ;; ========================================
@@ -236,14 +244,14 @@
 (test-case "vat/cell set then get fulfills get-promise"
   (check-contains
    (run-last
-    "(eval (let (s   (spawn beh-cell syrup-null empty-vat)
+    "(eval (let (s   (vat-spawn beh-cell syrup-null empty-vat)
                   v1  (send-only zero
                                   (syrup-tagged \"set\" (syrup-nat (suc (suc zero))))
-                                  (fst s))
+                                  (alloc-vat s))
                   r2  (send zero (syrup-tagged \"get\" syrup-null) v1)
-                  v3  (drain (suc (suc (suc (suc (suc zero))))) (fst r2)))
+                  v3  (run-vat (suc (suc (suc (suc (suc zero))))) (alloc-vat r2)))
               (fulfilled? (unwrap-or fresh
-                                      (lookup-promise (snd r2) v3)))))")
+                                      (lookup-promise (alloc-id r2) v3)))))")
    "true"))
 
 ;; ========================================
@@ -254,10 +262,10 @@
   (check-contains
    (run-last
     "(eval (let (r0  (fresh-promise empty-vat)
-                  pid (snd r0)
-                  s   (spawn beh-fulfiller (syrup-promise pid) (fst r0))
-                  v1  (send-only (snd s) (syrup-string \"hello\") (fst s))
-                  v2  (drain (suc (suc (suc (suc (suc zero))))) v1))
+                  pid (alloc-id r0)
+                  s   (vat-spawn beh-fulfiller (syrup-promise pid) (alloc-vat r0))
+                  v1  (send-only (alloc-id s) (syrup-string \"hello\") (alloc-vat s))
+                  v2  (run-vat (suc (suc (suc (suc (suc zero))))) v1))
               (fulfilled? (unwrap-or fresh
                                       (lookup-promise pid v2)))))")
    "true"))
@@ -269,10 +277,10 @@
 (test-case "vat/forwarder drains queue to zero"
   (check-contains
    (run-last
-    "(eval (let (s1  (spawn beh-echo syrup-null empty-vat)
-                  s2  (spawn beh-forwarder (syrup-refr (snd s1)) (fst s1))
-                  v1  (send-only (snd s2) (syrup-string \"hi\") (fst s2))
-                  v2  (drain (suc (suc (suc (suc (suc zero))))) v1))
+    "(eval (let (s1  (vat-spawn beh-echo syrup-null empty-vat)
+                  s2  (vat-spawn beh-forwarder (syrup-refr (alloc-id s1)) (alloc-vat s1))
+                  v1  (send-only (alloc-id s2) (syrup-string \"hi\") (alloc-vat s2))
+                  v2  (run-vat (suc (suc (suc (suc (suc zero))))) v1))
               (queue-length v2)))")
    "0N"))
 
@@ -283,9 +291,9 @@
 (test-case "vat/adder accumulates state across two sends"
   (check-contains
    (run-last
-    "(eval (let (s   (spawn beh-adder (syrup-nat zero) empty-vat)
-                  v1  (send-only zero (syrup-nat (suc (suc zero))) (fst s))
+    "(eval (let (s   (vat-spawn beh-adder (syrup-nat zero) empty-vat)
+                  v1  (send-only zero (syrup-nat (suc (suc zero))) (alloc-vat s))
                   v2  (send-only zero (syrup-nat (suc (suc (suc zero)))) v1)
-                  v3  (drain (suc (suc (suc (suc (suc zero))))) v2))
+                  v3  (run-vat (suc (suc (suc (suc (suc zero))))) v2))
               (lookup-actor zero v3)))")
    "some"))

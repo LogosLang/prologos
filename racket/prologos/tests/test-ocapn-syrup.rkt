@@ -13,6 +13,7 @@
          "../macros.rkt"
          "../prelude.rkt"
          "../syntax.rkt"
+         "../source-location.rkt"
          "../surface-syntax.rkt"
          "../errors.rkt"
          "../metavar-store.rkt"
@@ -21,7 +22,8 @@
          "../pretty-print.rkt"
          "../global-env.rkt"
          "../driver.rkt"
-         "../namespace.rkt")
+         "../namespace.rkt"
+         "../multi-dispatch.rkt")
 
 (define shared-preamble
   "(ns test-ocapn-syrup)
@@ -35,7 +37,9 @@
                 shared-module-reg
                 shared-trait-reg
                 shared-impl-reg
-                shared-param-impl-reg)
+                shared-param-impl-reg
+                shared-ctor-reg
+                shared-type-meta)
   (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)]
                  [current-ns-context #f]
@@ -56,7 +60,9 @@
             (current-module-registry)
             (current-trait-registry)
             (current-impl-registry)
-            (current-param-impl-registry))))
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
 
 (define (run s)
   (parameterize ([current-prelude-env shared-global-env]
@@ -66,7 +72,9 @@
                  [current-preparse-registry (current-preparse-registry)]
                  [current-trait-registry shared-trait-reg]
                  [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg])
+                 [current-param-impl-registry shared-param-impl-reg]
+                 [current-ctor-registry shared-ctor-reg]
+                 [current-type-meta shared-type-meta])
     (process-string s)))
 
 (define (run-last s) (last (run s)))

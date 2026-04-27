@@ -431,7 +431,15 @@
 ;; PAR Track 2 R2: Enable parallel thread executor globally.
 ;; The BSP scheduler uses parallel threads for worklists > 8 propagators.
 ;; Below threshold, falls back to sequential (no thread overhead).
-(current-parallel-executor (make-parallel-thread-fire-all))
+;;
+;; Compat fence (2026-04-27): `thread #:pool 'own` requires Racket 9+.
+;; If this Racket is older, fall back to sequential firing (the executor
+;; defaults to #f, which BSP treats as sequential-fire-all).
+(when (with-handlers ([exn:fail? (lambda _ #f)])
+        (define t (thread #:pool 'own (lambda () (void))))
+        (thread-wait t)
+        #t)
+  (current-parallel-executor (make-parallel-thread-fire-all)))
 
 ;; PTF Track 1 Phase 0: If set to a box, after each process-command the
 ;; elab-network is stored there for analysis. Default #f (no capture).

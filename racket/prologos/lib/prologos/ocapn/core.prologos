@@ -13,7 +13,7 @@ ns prologos::ocapn::core
 ;;
 ;;   Goblins             Prologos OCapN
 ;;   -----------------   ----------------------------------
-;;   spawn ^bcom args    spawn-actor : BehaviorTag → init → Vat
+;;   vat-spawn ^bcom args    vat-spawn-actor : BehaviorTag → init → Vat
 ;;   ($ refr msg)        — not modelled (Goblins-internal sync call)
 ;;   (<- refr msg)       send : Nat → SyrupValue → Vat → (Vat, Nat)
 ;;   (<-np refr msg)     send-only : Nat → SyrupValue → Vat → Vat
@@ -61,14 +61,14 @@ require [prologos::ocapn::vat :refer-all]
 ;; Convenience aliases that read like Goblins
 ;; ========================================
 
-spec spawn-actor BehaviorTag SyrupValue Vat -> [Sigma [_ <Vat>] Nat]
-  :doc "Goblins-flavoured alias for `spawn`. Returns (vat', refr-id)."
-defn spawn-actor [tag init v]
-  spawn tag init v
+spec vat-spawn-actor BehaviorTag SyrupValue Vat -> Allocated
+  :doc "Goblins-flavoured alias for `vat-spawn`. Returns Allocated(vat', refr-id)."
+defn vat-spawn-actor [tag init v]
+  vat-spawn tag init v
 
 ;; "send-and-get-promise": the pure-functional analogue of `(<- refr msg)`.
-spec ask Nat SyrupValue Vat -> [Sigma [_ <Vat>] Nat]
-  :doc "Send to refr, returning the answer-promise id. Goblins's `<-`."
+spec ask Nat SyrupValue Vat -> Allocated
+  :doc "Send to refr, returning Allocated(vat', promise-id). Goblins's `<-`."
 defn ask [target args v]
   send target args v
 
