@@ -2,13 +2,72 @@
 
 **Date**: 2026-04-26
 **Stage**: 3 — Design per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3
-**Version**: D.1 — first comprehensive draft
+**Version**: D.2 — Pre-0 findings incorporated; hybrid pivot committed
 **Scope**: PPN 4C Phase 1A-iii-b + 1A-iii-c + 1B + 1C + 1V (γ-bundle-wide; closes Phase 1 entirely)
-**Status**: Stage 3 design cycle opening; D.1 draft → Pre-0 microbenchmark → D.2+ critique rounds
+**Status**: Stage 3 design cycle — D.2 ready for D.3+ critique rounds (P/R/M/S; especially S for algebra)
 
 **Prior stages** (this track):
 - Stage 1 research: [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (commit `de357aa1`) — depth-first formal grounding; 12 sections, ~1000 lines
 - Stage 2 audit: this session 2026-04-26 (audit findings persist into this design at §6, §7, §8, §9, §10)
+- **Pre-0 phase**: [`docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md`](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) ✅ 100% COMPLETE (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f6576479`, `bef1f518`, `4be5e875`, `d270769b`, `d0934329`, `76129725`, `8a29f6af`)
+
+---
+
+## D.2 Revision Summary (2026-04-26)
+
+**Version bump**: D.1 → D.2 incorporates Pre-0 findings + commits hybrid pivot architecture for Phase 1C.
+
+**What changed from D.1 → D.2**:
+
+| Section | D.1 → D.2 |
+|---|---|
+| Front matter | Version D.2; Pre-0 phase 100% COMPLETE noted |
+| §3 Progress Tracker | Pre-0 ✅ COMPLETE (was ⬜) |
+| **§10 Phase 1C (REWRITTEN)** | **Hybrid pivot architecture** — preserve inline `(<= fuel 0)` fast-path at decrement sites; cell + threshold propagator are architectural substrate for Phase 3C consumers, NOT per-decrement live state |
+| §10.1 Scope | Reframed: substrate-introduction phase (NOT counter-replacement); existing struct field + macro + decrement/check sites preserved for fast-path |
+| §10.3 Per-site migration patterns | DRAMATICALLY reduced scope: hot-path preserved; only non-hot-path read sites + observability paths migrate to cell-mediated APIs |
+| §10.4 Sub-phase plan | Reduced from 9 to 5 sub-phases (decrement migration + check migration + macro retirement + field retirement REMOVED) |
+| §10.5 Drift risks | Updated to reflect hybrid scope |
+| §10.7 Open questions | Added Q-1C-3 (cell-update cadence: lazy vs eager vs semantic-transition-only) |
+| §16.5 | Hybrid pivot decision committed (was provisional pending Pre-0) |
+
+**Empirical rationale for hybrid pivot** (8 supporting findings + S-tier baseline):
+
+| Tier | Finding | Direction |
+|---|---|---|
+| M-2 (origin) | Inline check 6 ns vs propagator fire 100-600 ns | Hybrid pivot proposed |
+| M-5 | Counter substrate ~36 ns combined cycle | Tight cost budget |
+| A-11 | Linear 12 ns/dec scaling, pattern-blind | Empirical confirmation |
+| E-13 | E8 deep-id high-frequency stress (50 levels × 100-600 ns risk) | Hybrid pivot CRITICAL |
+| E-15 | Alloc-heaviness baseline regardless of fuel | Phase 1C must NOT compound |
+| **R-16** | **ZERO GC during 100k decrements** | **Hybrid pivot STRUCTURAL FIT** |
+| **R-17** | Bounded retention 15 bytes/cycle long-term | Phase 1C tagged-cell DR set |
+| **R-19** | **Without hybrid, full cell-based path triggers major GC at 100k rate** | **Hybrid is ONLY architecture preserving GC-friendly property** (strongest single piece of evidence) |
+| **S-20** | **`prop_firings` + `prop_allocs` ZERO suite-wide pre-impl** | **Architectural baseline: Phase 1C threshold propagator is FIRST production on-network propagator firing in elaboration; clean reference** |
+
+Full 22-finding detail: [Pre-0 plan §12.6](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md#126-key-pre-0-findings-from-m-tier-execution-2026-04-26).
+
+**Hybrid pivot architectural summary**:
+- **Decrement sites**: PRESERVE existing struct-copy + inline `(<= fuel 0)` check (zero migration on per-decrement hot path; ~30-40 ns total cycle preserved)
+- **Cell substrate**: canonical fuel-cost-cell + fuel-budget-cell allocated at well-known IDs (cell-id 11/12); SRE registered; threshold propagator installed
+- **Cell role**: ARCHITECTURAL substrate for Phase 3C consumers (UC1 fuel-exhaustion blame attribution; UC2 cost-bounded elaboration via Galois bridge; UC3 per-branch cost tracking under union-type ATMS); NOT per-decrement live state
+- **Cell-update cadence**: at SEMANTIC TRANSITIONS — start of phase, exhaustion-write, save/restore boundaries via existing snapshot mechanism (NOT per-decrement)
+- **On exhaustion**: decrement site's inline check trips → write final cost to fuel-cost-cell → threshold propagator fires (rare event) → writes contradiction → routes through propagator network for architectural correctness
+
+**Why hybrid IS principled (not belt-and-suspenders per workflow.md)**:
+- Inline check + cell-write are NOT redundant mechanisms handling the same code path
+- Inline check handles the per-decrement HOT PATH (common case; ~30-40 ns)
+- Cell + threshold propagator handle Phase 3C consumer paths (rare; semantic-phase-granularity)
+- The mechanisms address DIFFERENT code paths with DIFFERENT performance profiles
+- This is decomplection: fast-path optimization separated from architectural substrate
+
+**What this enables (Phase 3C consumer-readiness)**:
+- UC1 walk algorithm feasibility: 297 ns for N=200 (per A6.3) vs <100 μs DR target = 340× margin
+- UC2 cost-bounded elaboration: 117 ms baseline (per E9.1) — pattern feasible under Phase 1B substrate
+- UC3 per-branch fork: 11.9 KB/branch (per A10.1) — per-branch cell management empirically grounded
+- All three Phase 3C UCs operate on the cell at semantic-phase granularity, not per-decrement
+
+---
 
 **Parent addendum**: [`2026-04-21_PPN_4C_PHASE_9_DESIGN.md`](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) (D.3) — this addendum **refines and extends** D.3 §7.5.6 (Tier 2 ATMS internal retirement), §7.5.7 (Tier 3 surface ATMS AST retirement), §7.7 (Phase 1B deliverables), §7.8 (Phase 1C deliverables), §7.9 (Phase 1V), §7.10 (termination args), §7.11 (parity-test strategy), §10 (tropical quantale implementation skeleton), §13 (consolidated termination), §16.1 (Phase 1 mini-design items). Per Q-Open-1 (refine + verify, don't re-litigate), D.3 scaffolding is treated as **draft D.0**; D.1 incorporates with refinement, audit-grounding, multi-quantale composition NTT extension, and Phase 3C cross-reference capture.
 
@@ -162,12 +221,20 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 |---|---|---|---|
 | Stage 1 | Research doc (tropical quantale, ~1000 lines) | ✅ | commit `de357aa1` |
 | Stage 2 | Audits (Q-Audit-1/2/3) | ✅ | This session 2026-04-26 |
-| Stage 3 | Design doc (this) | 🔄 D.1 | Drafting |
-| Pre-0 | Microbenchmark plan execution (M7-M9 + A5 + F-tropical extensions to bench-ppn-track4c.rkt) | ⬜ | Per §13 |
+| Stage 3 D.1 | Design doc draft | ✅ | commit `fc4b9d3e` |
+| **Pre-0 plan** | Comprehensive 38-test plan across 8 tiers (M/A/C/X/E/R/S/V) | ✅ | commit `f79650fa` (1172 lines) |
+| **Pre-0 M-tier** | M7-M13 micro-benchmarks (5 findings) | ✅ | commit `f6576479` + `bef1f518` |
+| **Pre-0 A-tier** | A5-A12 adversarial (6 findings) | ✅ | commit `4be5e875` |
+| **Capture-gap closure** | M10/M12/A12/R4 captured at D.1 §9.10 (single source of truth) | ✅ | commit `d270769b` |
+| **Pre-0 E-tier** | E7-E9 end-to-end (4 findings) | ✅ | commit `d0934329` |
+| **Pre-0 R-tier** | R3+R5 memory-as-PRIMARY (4 findings + R4 capture) | ✅ | commit `76129725` |
+| **Pre-0 S-tier** | S1-S4 suite-level via existing tooling (3 findings) | ✅ | commit `8a29f6af` |
+| **Stage 3 D.2** | Pre-0 findings incorporated; hybrid pivot committed | ✅ | this commit |
+| Stage 3 D.3+ critique rounds | P/R/M/S lenses (especially S for algebra); possibly external critique | ⬜ | NEXT |
 | **1A-iii-b** | Tier 2 deprecated ATMS internal API retirement | ⬜ | Per §7 |
 | **1A-iii-c** | Tier 3 surface ATMS AST 14-file pipeline retirement | ⬜ | Per §8 |
 | **1B** | Tropical fuel primitive + SRE registration | ⬜ | Per §9 |
-| **1C** | Canonical BSP fuel migration | ⬜ | Per §10 |
+| **1C** | Canonical BSP fuel migration (HYBRID PIVOT — D.2) | ⬜ | Per §10 |
 | **1V** | Vision Alignment Gate Phase 1 (closes 1A + 1B + 1C) | ⬜ | Per §11 |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
@@ -813,145 +880,229 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 
 ---
 
-## §10 Phase 1C — Canonical BSP fuel migration
+## §10 Phase 1C — Canonical BSP fuel substrate (hybrid pivot architecture)
 
-### §10.1 Scope and rationale
+**REWRITTEN in D.2** per Pre-0 findings. The original D.1 §10 framing — "replace the imperative `(fuel 1000000)` decrementing counter with the on-network tropical fuel cell" — was reframed by Pre-0 measurement evidence (8 supporting findings + S-tier baseline finding 20). The hybrid pivot is empirically grounded across all 5 measurement tiers (M+A+E+R+S).
 
-Replace the imperative `(fuel 1000000)` decrementing counter with the on-network tropical fuel cell. Allocate canonical cells at well-known IDs (cell-id 11/12 per §4.3). Migrate 17 production refs + 13 test refs + 2 bench refs.
+### §10.1 Scope and rationale (HYBRID PIVOT — D.2)
 
-### §10.2 Audit-grounded migration plan (Q-Audit-1 findings)
+**Phase 1C INTRODUCES the canonical tropical fuel substrate as architectural foundation for Phase 3C consumers** (UC1 fuel-exhaustion blame attribution; UC2 cost-bounded elaboration via Galois bridge; UC3 per-branch cost tracking under union-type ATMS) **WITHOUT migrating the per-decrement hot path off the existing struct-copy + inline check fast-path.**
 
-**Allocation in `make-prop-network`** (refined from D.3 §10.3):
+**The hybrid architecture**:
+- Decrement sites (4) PRESERVE the existing `(struct-copy prop-net-cold ... [fuel (- ... n)])` pattern (no migration; ~24 ns)
+- Check sites (11) PRESERVE the existing `(<= (prop-network-fuel net) 0)` inline check (no migration; ~6 ns)
+- Per-decrement total cycle stays at ~30-40 ns (matches Pre-0 baseline; no regression)
+- The canonical fuel-cost-cell + fuel-budget-cell are allocated at well-known IDs (cell-id 11/12) and serve as the architectural substrate for Phase 3C consumers, NOT as per-decrement live state
+- The threshold propagator is installed as the structural guarantee that contradiction-on-exhaustion routes through the propagator network for any path that updates the cell
+- Cell value is updated at SEMANTIC TRANSITIONS (start of phase, exhaustion-write, save/restore boundaries via existing snapshot mechanism) — NOT per-decrement
+
+**Empirical rationale** (Pre-0 plan §12.6 Findings 2, 5, 11, 13, 15, 16, 17, 19, 20):
+- M-2: inline check 6 ns vs propagator fire 100-600 ns (10-100× regression risk if per-decrement)
+- R-16: ZERO GC during 100k decrements under struct-copy; per-decrement cell-write would generate tagged-cell-value entries → MAJOR GC pressure
+- R-19: hybrid pivot is the ONLY architecture preserving the GC-friendly property of the current substrate (strongest single piece of evidence)
+- S-20: pre-impl `prop_firings` + `prop_allocs` are ZERO suite-wide; Phase 1C threshold propagator becomes the FIRST production on-network propagator firing in elaboration; clean architectural baseline
+
+**Why hybrid IS principled (not belt-and-suspenders)**:
+- Decrement sites' inline check + cell substrate handle DIFFERENT code paths with DIFFERENT performance profiles
+- Inline check: per-decrement HOT PATH (common case; ~30-40 ns; 100k+ ops/sec in deep type inference)
+- Cell + threshold propagator: Phase 3C consumer paths (rare; semantic-phase granularity; few ops per file)
+- The mechanisms are NOT redundant; they decomplect fast-path optimization from architectural substrate
+
+### §10.2 Audit-grounded substrate plan (Q-Audit-1 findings — UNCHANGED)
+
+**Allocation in `make-prop-network`** (per D.3 §10.3 — substrate setup is the same):
 ```racket
 (define (make-prop-network [fuel 1000000])
   ;; ... existing allocations (cell-ids 0-10) ...
-  
-  ;; NEW: Phase 1C — canonical tropical fuel cells
+
+  ;; Phase 1C — canonical tropical fuel cells (architectural substrate)
   (define-values (net1 fuel-cid) (net-new-tropical-fuel-cell base-net))
   ;; (verify cell-id allocated as 11 — well-known position)
-  
+
   (define-values (net2 budget-cid) (net-new-tropical-budget-cell net1 fuel))
   ;; (verify cell-id allocated as 12)
-  
-  ;; Install threshold propagator
+
+  ;; Install threshold propagator (structural guarantee for cell-write paths)
   (define threshold-prop (make-tropical-fuel-threshold-propagator fuel-cid budget-cid))
   (net-add-propagator net2 (list fuel-cid budget-cid) '() threshold-prop)
   ;; ...
+
+  ;; PRESERVE: prop-net-cold struct still has 'fuel' field (per-decrement live state)
+  ;; PRESERVE: prop-network-fuel macro at line 399 (fast-path accessor)
 )
 ```
 
 **Export well-known cell-ids**: `fuel-cost-cell-id = 11`, `fuel-budget-cell-id = 12` per §4.3.
 
-### §10.3 Per-site migration patterns (refined from D.3 §10.4)
+**Production scope under hybrid** (vs original D.1 §10.2 audit findings):
+- **Decrement sites** (4): NO migration; preserve existing struct-copy pattern
+- **Check sites** (11): NO migration; preserve existing inline `(<= fuel 0)` check
+- **Read-as-value sites** (3): MIGRATE selectively (architecturally-consistent paths use cell-read; performance-sensitive paths use struct-field)
+- **Macro `prop-network-fuel`**: PRESERVED (still accesses struct field)
+- **Struct field `prop-net-cold-fuel`**: PRESERVED (live state for fast-path)
+- **typing-propagators saved-fuel** (1): MIGRATE to cell-mediated semantics (snapshot/restore boundary is a semantic transition)
+- **pretty-print** (1): UPDATE to display both struct-field cost and cell-budget for debugging
+- **Test sites** (13): MINIMAL migration — preserve existing struct-field assertions; ADD new tests for cell-mediated APIs where Phase 3C-relevant
+- **Bench sites** (2): NO migration (bench-alloc.rkt measures decrement cost, which stays struct-copy)
 
-**Decrement sites** (4 sites: propagator.rkt:2384, 3000, 3053; potentially 1 more in widening path):
+### §10.3 Per-site patterns under hybrid (REVISED)
+
+**Decrement sites** (4 sites — propagator.rkt:2384, 3000, 3053, +1 widening — UNCHANGED):
 
 ```racket
-;; BEFORE
+;; PRESERVED: struct-copy decrement (fast-path; 24 ns/call per Pre-0 M7.1)
 (struct-copy prop-net-cold ... [fuel (- (prop-network-fuel net) n)])
-
-;; AFTER
-(net-cell-write net fuel-cost-cell-id
-                (+ (net-cell-read net fuel-cost-cell-id) n))
-;; The min-merge ensures monotone accumulation; threshold prop watches for exhaustion
 ```
 
-**Check sites** (11 sites: `<= 0` patterns at 1817, 2366, 2373, 2992, 3045, 3132, 3135, 3142 + `> 0` at 2329):
+**Check sites** (11 sites — propagator.rkt:1817, 2366, 2373, 2329, 2992, 3045, 3132, 3135, 3142, 65, 399 — UNCHANGED):
 
 ```racket
-;; BEFORE
+;; PRESERVED: inline check (fast-path; 6 ns/call per Pre-0 M8)
 [(<= (prop-network-fuel net) 0) net]
-
-;; AFTER
-[(net-contradiction? net) net]
-;; The threshold propagator writes contradiction when cost >= budget
 ```
 
-**Read-as-value sites** (3 sites: 1824, 1872, 2875):
+**On exhaustion (decrement site detects cost >= budget)** — NEW pattern under hybrid:
+
 ```racket
-;; BEFORE
+;; When decrement would cause exhaustion, write the exhausted cost to the cell
+;; This triggers the threshold propagator (rare event), which routes contradiction
+;; through the propagator network for architectural correctness.
+(let* ([new-fuel (- (prop-network-fuel net) n)])
+  (cond
+    [(<= new-fuel 0)
+     ;; Exhausted — write to cell to trigger threshold propagator
+     (define cost-on-exhaustion (- (prop-network-fuel-budget net) new-fuel))
+     (net-cell-write net fuel-cost-cell-id cost-on-exhaustion)]
+     ;; threshold propagator fires; writes contradiction; net is now contradicted
+    [else
+     ;; Fast-path: struct-copy update; no cell-write; no propagator fire
+     (struct-copy prop-net-cold ... [fuel new-fuel])]))
+```
+
+The exhaustion path is RARE (per Pre-0 finding 5: a typical run completes within budget; exhaustion is the failure case). The cost of cell-write + propagator fire is amortized over the entire run.
+
+**Read-as-value sites** (3 sites — selective migration):
+
+```racket
+;; Site 1: propagator.rkt:1824 (general-purpose remaining-fuel boxing)
+;;   PRESERVE struct-field access (fast-path; not a semantic transition)
 (define remaining-fuel (box (prop-network-fuel net)))
 
-;; AFTER
-;; Reading the fuel-cost cell directly:
-(define current-cost (net-cell-read net fuel-cost-cell-id))
-(define current-budget (net-cell-read net fuel-cost-cell-id))
-(define remaining-fuel (box (- current-budget current-cost)))
-;; OR: use tropical-left-residual:
-(define remaining-fuel (box (tropical-left-residual current-cost current-budget)))
+;; Site 2: propagator.rkt:1872 (similar pattern)
+;;   PRESERVE struct-field access
+
+;; Site 3: propagator.rkt:2875 (potentially semantic-transition path)
+;;   AUDIT at 1C-iv mini-design: if path is reached at semantic-transition
+;;   (e.g., before save/restore, before phase boundary), MIGRATE to cell-read
+;;   to ensure cell value reflects current cost; otherwise PRESERVE struct-field
 ```
 
-**Macro definition retirement** (propagator.rkt:399):
-```racket
-;; RETIRE: (define-syntax-rule (prop-network-fuel net) ...)
-;; Replace with cell-read at all call sites
-```
+**typing-propagators.rkt:2269** (saved-fuel rollback — semantic transition):
 
-**Field retirement** (propagator.rkt:337 prop-net-cold struct):
-- Remove `fuel` field from prop-net-cold struct
-- All callers updated to use cell-read
-- Verify struct-copy callers don't reference fuel field
-
-**typing-propagators.rkt:2269** (saved-fuel restoration):
 ```racket
 ;; BEFORE
 (define saved-fuel (prop-network-fuel net2w))
-;; (later restore)
+;; ... later restore via snapshot mechanism
 
-;; AFTER
-(define saved-fuel-cost (net-cell-read net2w fuel-cost-cell-id))
-;; (later: net-cell-write to restore — but actually this is rollback territory;
-;;  may be handled by elab-net snapshot mechanism — verify at impl time)
+;; AFTER (under hybrid)
+;; Save/restore IS a semantic transition; sync cell at this boundary
+(define saved-fuel (prop-network-fuel net2w))  ; struct-field for fast-path
+;; Cell update at the snapshot boundary (semantic transition):
+(net-cell-write net2w fuel-cost-cell-id
+                (- (net-cell-read net2w fuel-budget-cell-id) saved-fuel))
+;; (later restore: existing snapshot mechanism handles BOTH struct-field AND cell)
 ```
 
-**pretty-print.rkt:463** (display):
+Per Q-1C-1 (deferred to 1C-iv mini-design): verify whether elab-net snapshot mechanism already captures cell state, OR whether explicit cell-write is needed at save/restore boundaries.
+
+**pretty-print.rkt:463** (display — update to show both):
+
 ```racket
 ;; BEFORE
 [(expr-prop-network v) (format "#<prop-network ~a>" (prop-network-fuel v))]
 
 ;; AFTER
-[(expr-prop-network v) (format "#<prop-network cost=~a budget=~a>"
-                                (net-cell-read v fuel-cost-cell-id)
-                                (net-cell-read v fuel-budget-cell-id))]
+[(expr-prop-network v)
+ (format "#<prop-network fuel=~a cost-cell=~a budget-cell=~a>"
+         (prop-network-fuel v)                   ; struct-field (live state)
+         (net-cell-read v fuel-cost-cell-id)     ; cell value (semantic-transition state)
+         (net-cell-read v fuel-budget-cell-id))]
+;; If struct-field and cell value differ, that's expected (cell is updated only at
+;; semantic transitions); display both for debugging/observability.
 ```
 
-**Test migrations** (13 sites, 7 files — mechanical):
-- `(prop-network-fuel net)` → `(net-cell-read net fuel-cost-cell-id)` for cost reads
-- `(- old-fuel new-fuel)` → cost difference reads
-- `(check-equal? (prop-network-fuel result) 0)` → `(check-equal? (net-cell-read result fuel-cost-cell-id) initial-budget)` (NB: semantics shift — measuring accumulated cost vs remaining fuel)
+**Macro `prop-network-fuel` (propagator.rkt:399)** — PRESERVED:
 
-**Bench migrations** (2 sites in bench-alloc.rkt):
-- Same mechanical pattern as test migrations
+```racket
+;; PRESERVED: still expands to struct-field access; serves fast-path callers
+(define-syntax-rule (prop-network-fuel net) (prop-net-cold-fuel (prop-net-cold-of net)))
+```
 
-### §10.4 Sub-phase plan
+**Struct field `prop-net-cold-fuel` (propagator.rkt:337)** — PRESERVED:
 
-- **1C-i** — Pre-implementation audit (mini-audit): confirm 17 production sites + 13 test sites + 2 bench sites; verify migration patterns hold; identify any test semantic shifts (cost-accumulation vs remaining-fuel)
-- **1C-ii** — Allocate canonical cells in `make-prop-network`; install threshold propagator; reserved cell-id 11/12 verified
-- **1C-iii** — Migrate decrement sites (4 sites); verify probe + targeted suite
-- **1C-iv** — Migrate check sites (11 sites); verify
-- **1C-v** — Migrate read-as-value sites (3 sites); migrate typing-propagators saved-fuel; migrate pretty-print
-- **1C-vi** — Retire `prop-network-fuel` macro + `prop-net-cold-fuel` field
-- **1C-vii** — Migrate test sites (13 sites, 7 files) — batch mechanical
-- **1C-viii** — Migrate bench sites (2 sites)
-- **1C-ix** — Verification + close: probe + targeted suite + full suite + parity test (tropical-fuel-parity axis: old counter vs new cell exhaustion equivalent for representative workloads)
+```racket
+;; PRESERVED: still in prop-net-cold struct; serves as per-decrement live state
+;; Cell substrate is COMPLEMENTARY (semantic-transition state for Phase 3C consumers)
+```
 
-### §10.5 Drift risks
+**Test migrations** (selective):
+- 13 test sites: most PRESERVE existing `(prop-network-fuel net)` assertions (testing struct-field/counter behavior)
+- ADD new tests for cell-mediated APIs:
+  - Cell allocation at make-prop-network: verify cell-id 11/12 + initial values
+  - Threshold propagator installation: verify cell-write triggers contradiction at boundary
+  - Semantic-transition sync: verify cell value reflects cost at save/restore boundaries
+  - Phase 3C UC1/UC2/UC3 cell-read patterns (forward-capture for Phase 3C tests)
 
-- **D-1C-1**: Cost-accumulation vs remaining-fuel semantic shift in tests — `(prop-network-fuel net) → 0` was "fuel exhausted"; under new semantics, `(net-cell-read net fuel-cost-cell-id)` IS the accumulated cost, not remaining. Tests need careful migration.
-- **D-1C-2**: typing-propagators saved-fuel rollback — verify whether elab-net snapshot handles this or if explicit restore needed
-- **D-1C-3**: Cell-id 11/12 conflicts — verify no other phase has reserved these IDs
-- **D-1C-4**: Threshold propagator firing semantics under speculation — verify with test-speculation-bridge
-- **D-1C-5**: `prop-network-fuel` macro retirement may surface stale usages not caught by grep
+**Bench migrations** (no migration):
+- bench-alloc.rkt 2 sites: PRESERVE struct-copy measurement (the per-decrement cost is the architecturally-significant metric)
+
+### §10.4 Sub-phase plan (REVISED — REDUCED scope)
+
+Under hybrid, Phase 1C is dominated by SUBSTRATE setup, not migration. Sub-phase plan compressed from 9 to 5 sub-phases:
+
+- **1C-i** — Pre-implementation audit (mini-audit): verify cell-id 11/12 unconflicted; identify which read-as-value sites (3) are semantic transitions vs fast-path; identify Phase 3C UC test scaffolding sites
+- **1C-ii** — Allocate canonical cells in `make-prop-network` (cell-id 11/12 + threshold propagator install); export `fuel-cost-cell-id` + `fuel-budget-cell-id` constants
+- **1C-iii** — Implement on-exhaustion cell-write at decrement sites (rare-event path; not per-decrement hot-path); implement typing-propagators saved-fuel cell sync at semantic-transition boundaries; update pretty-print display
+- **1C-iv** — Migrate selective read-as-value sites (per audit at 1C-i); add new tests for cell-mediated APIs (substrate validation + Phase 3C UC forward-capture)
+- **1C-v** — Verification + close: probe + targeted suite + full suite + parity test (tropical-fuel-parity axis: counter exhaustion AND cell-write-on-exhaustion equivalent for representative workloads); verify per-decrement performance preserved (M7+M8+M13 within Pre-0 variance)
+
+**Sub-phases REMOVED from D.1 §10.4** (no longer needed under hybrid):
+- ~~1C-iii Migrate decrement sites~~ — preserved
+- ~~1C-iv Migrate check sites~~ — preserved
+- ~~1C-vi Retire prop-network-fuel macro + prop-net-cold-fuel field~~ — preserved
+- ~~1C-vii Migrate test sites batch mechanical~~ — minimal migration
+- ~~1C-viii Migrate bench sites~~ — preserved
+
+### §10.5 Drift risks (REVISED for hybrid)
+
+- **D-1C-1**: Cell-update cadence ambiguity — when EXACTLY does the cell get synced from struct-field? Per Q-1C-3 (NEW): semantic-transition-only is the leaning answer, but explicit enumeration of transitions (start of phase / exhaustion / save-restore / phase-boundary) needs verification at 1C-iii mini-design
+- **D-1C-2**: typing-propagators saved-fuel rollback — verify whether elab-net snapshot mechanism captures cell state automatically OR explicit cell-write at boundaries needed (per Q-1C-1)
+- **D-1C-3**: Cell-id 11/12 conflicts — verify at 1C-i mini-audit no other phase has reserved these IDs
+- **D-1C-4**: Threshold propagator firing semantics under speculation — verify with test-speculation-bridge that cell-write under speculation worldview correctly tags the threshold-fire event
+- **D-1C-5**: Performance regression at decrement sites under hybrid — Pre-0 M7+M8+M13 baseline must be preserved (per microbench-claim verification rule). At 1C-v close: re-run M7+M8+M13 to verify ≤5% regression vs baseline.
+- **D-1C-6** (NEW): Cell value vs struct-field divergence — under hybrid, the cell can be stale relative to struct-field between semantic transitions. Phase 3C consumers reading the cell must understand this; either accept staleness OR trigger sync first. Document the cell-staleness contract at 1C-ii mini-design.
 
 ### §10.6 Termination + parity
 
-- Termination: Phase 1C migration is structural (cell-write replaces field-update); finite migration sites; trivially terminates
-- Parity: tropical-fuel-parity axis (per D.3 §7.11): for representative workloads, old counter and new cell exhaustion fire at equivalent points (allowing for the cost-vs-remaining semantic flip)
+- Termination: Phase 1C substrate setup is structural (cell allocation + propagator install); preserves existing decrement+check semantics; trivially terminates
+- Parity: tropical-fuel-parity axis (per D.3 §7.11) — UPDATED:
+  - For representative workloads, OLD counter and NEW substrate produce IDENTICAL exhaustion semantics (struct-field counter is the live state in both cases)
+  - The cell value at semantic-transition boundaries equals (budget - struct-field-fuel); this equivalence is the parity invariant
+  - On-exhaustion contradiction-write routes through propagator network in NEW; same semantic effect as OLD inline `(<= fuel 0)` short-circuit
+  - V-tier post-impl validates: existing tests' `(prop-network-fuel result)` assertions PASS unchanged
 
 ### §10.7 Open questions (deferred to per-phase mini-design+audit)
 
-- **Q-1C-1**: typing-propagators saved-fuel rollback semantics — verify at 1C-v mini-audit
-- **Q-1C-2**: Test cost-accumulation semantic shift — confirm how each test should migrate (D-1C-1)
+- **Q-1C-1** (CARRIED): typing-propagators saved-fuel rollback semantics — verify at 1C-iii mini-design
+- **Q-1C-2** (CARRIED, REFRAMED): Test cell-mediated API additions — which Phase 3C UC forward-capture tests belong in Phase 1C? (The cost-accumulation semantic shift in D.1 §10.7 is moot under hybrid since struct-field assertions are preserved.)
+- **Q-1C-3** (NEW under hybrid): Cell-update cadence — exhaustively enumerate semantic transitions where cell sync occurs:
+  - Start of phase (initial budget allocation)?
+  - End of phase (final cost capture)?
+  - Save/restore boundaries (snapshot-mediated)?
+  - Phase 3C UC1/UC2/UC3 explicit query sites (sync-on-read)?
+  - On-exhaustion path (decrement site detects exhaustion)?
+  
+  Lean: enumerate at 1C-iii mini-design with code in hand; the answer informs whether cell-staleness is bounded and predictable.
 
 ---
 
@@ -970,26 +1121,28 @@ Four questions × TWO-COLUMN catalogue vs challenge:
 - Challenge: are there any remaining off-network references to retired APIs? Defensive guards "for safety" preserved? Run pipeline.md "Two-Context Audit" to verify both elaboration + module-loading contexts.
 
 **Question (b) Complete?**
-- Catalogue: 1A-iii-b retirement complete (13 functions + struct + atms-believed); 1A-iii-c retirement complete (14-file pipeline); 1B primitive shipped + tested; 1C migration complete
-- Challenge: did Pre-0 microbenchmark perf claims land? Re-microbench at close per microbench-claim verification rule. Did any quantale property declarations remain speculative (capture-gap risk)?
+- Catalogue: 1A-iii-b retirement complete (13 functions + struct + atms-believed); 1A-iii-c retirement complete (14-file pipeline); 1B primitive shipped + tested; 1C substrate setup complete (cell-id 11/12 allocated; threshold propagator installed; struct-field + macro + decrement/check sites preserved per hybrid pivot)
+- Challenge: did Pre-0 microbenchmark perf claims land? Re-microbench M7+M8+M13 at close per microbench-claim verification rule (Pre-0 plan §12.6 cross-reference); per-decrement cycle should remain ~30-40 ns. Did any quantale property declarations remain speculative (capture-gap risk; M10/M12/R4/A12 captured at §9.10 Phase 1B implementation checklist)? Under hybrid: did the decomplection of fast-path + cell substrate genuinely deliver, or did edge cases force per-decrement cell writes (architectural failure)?
 
 **Question (c) Vision-advancing?**
-- Catalogue: first optimization-quantale instantiation in production; tropical fuel substrate; multi-quantale composition NTT; Phase 3C cross-reference capture
-- Challenge: is the residuation operator load-bearing (Form A test passes) or speculative? Does the multi-quantale NTT actually compose with TypeFacet quantale, or is it parallel co-existence only? Is OE Series Track 0/1/2 first landing recognized?
+- Catalogue: first optimization-quantale instantiation in production; tropical fuel substrate; multi-quantale composition NTT; Phase 3C cross-reference capture; hybrid pivot's empirically-grounded decomplection
+- Challenge: is the residuation operator load-bearing (Form A test passes) or speculative? Does the multi-quantale NTT actually compose with TypeFacet quantale, or is it parallel co-existence only? Is OE Series Track 0/1/2 first landing recognized? Under hybrid: is preserving the struct field + macro genuinely "fast-path needed for performance" or "scaffolding preserved for safety" (workflow.md belt-and-suspenders red flag — D.3 lens P scrutiny target)?
 
 **Question (d) Drift-risks-cleared?**
-- Catalogue: drift risks named per §7.4, §8.4, §9.8, §10.5 all addressed
-- Challenge: did the named risks cover both correctness AND perf-vs-design-target axes? Were any inherited patterns (deprecated APIs, surface AST scaffolding) preserved without challenge?
+- Catalogue: drift risks named per §7.4, §8.4, §9.8, §10.5 (D-1C-1 through D-1C-6 under hybrid) all addressed
+- Challenge: did the named risks cover both correctness AND perf-vs-design-target axes? Were any inherited patterns (deprecated APIs, surface AST scaffolding) preserved without challenge? Under hybrid specifically: D-1C-5 (per-decrement perf regression) is the load-bearing perf gate — verify M7+M8+M13 stay within Pre-0 variance at 1V close.
 
 ### §11.3 Phase 1V exit criteria
 
 - All 4 VAG questions pass under adversarial framing
-- Probe diff = 0 semantically vs pre-Phase-1 baseline
-- Full suite GREEN within 118-127s variance band
-- Pre-0 microbench claims verified (M7-M9 + A5 + F-tropical)
-- Parity tests GREEN (tropical-fuel-parity + 1A-iii-b parity + 1A-iii-c parity)
-- 1+ codifications graduated to DEVELOPMENT_LESSONS.org if patterns surfaced
+- Probe diff = 0 semantically vs pre-Phase-1 baseline (S4 reference: 28 commands; Pre-0 plan §12.5 + S-tier baseline file)
+- Full suite GREEN within 118-127s variance band (S1 reference: 119.288s)
+- Pre-0 microbench claims verified (re-microbench M7+M8+M13 to confirm per-decrement cycle preserved; M10+M11+M12+R4 from Phase 1B implementation checklist at §9.10)
+- Parity tests GREEN (tropical-fuel-counter-parity reframed for hybrid per §10.6 + 1A-iii-b parity + 1A-iii-c parity)
+- 1+ codifications graduated to DEVELOPMENT_LESSONS.org if patterns surfaced (capture-gap discipline at 5 data points already graduation-ready)
 - Cross-reference capture in D.3 Phase 3 design verified (Form C scheduled)
+- **Hybrid pivot performance gate** (NEW per D.2): per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns)
+- **Hybrid pivot architectural gate** (NEW per D.2): aggregate `prop_firings` post-impl ≤ 1× per file BSP-barrier-equivalent (S-20 baseline = 0; under hybrid, threshold propagator should fire only on rare exhaustion + semantic-transition-cell-writes, NOT per-decrement)
 
 ---
 
@@ -1013,6 +1166,8 @@ BSP scheduler outer loop: Phase 1C makes the loop's termination structurally bac
 ---
 
 ## §13 Pre-0 benchmark plan
+
+> **D.2 STATUS**: §13 is HISTORICAL — it sketched the Pre-0 plan at D.1 time. The comprehensive Pre-0 plan (38 tests across 8 tiers M/A/C/X/E/R/S/V; memory as first-class) lives in [`docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md`](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) and executed to completion (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f6576479` → `8a29f6af`). §13.5's predicted "If M8 shows threshold propagator overhead > 100% of inline check, reconsider threshold approach" came true at Pre-0 M-tier (Finding 2: inline 6 ns vs propagator 100-600 ns); D.2 §10 reframes Phase 1C with the hybrid pivot in response. The historical sketch below is preserved for traceability.
 
 Per DESIGN_METHODOLOGY Stage 3 Pre-0 Benchmarks Per Semantic Axis. Extends existing `benchmarks/micro/bench-ppn-track4c.rkt` (295 lines, M1-M6 + A1-A4 + E1-E6 + V1-V3 tiers per file inspection).
 
@@ -1156,32 +1311,46 @@ Per user's workflow direction (2026-04-26): "if there are any remaining open que
 - Q-1B-2: `+inf.0` Racket float-infinity vs sentinel `'tropical-top` (lean: `+inf.0`)
 - Q-1B-4: Residuation operator implementation — read-time helper vs propagator (lean: read-time helper)
 
-### §16.4 Phase 1C (canonical BSP fuel migration)
-- Q-1C-1: typing-propagators.rkt:2269 saved-fuel rollback semantics (D-1C-2)
-- Q-1C-2: Test cost-accumulation semantic shift handling (D-1C-1)
+### §16.4 Phase 1C (canonical BSP fuel substrate — hybrid pivot per D.2)
+- Q-1C-1 (CARRIED): typing-propagators.rkt:2269 saved-fuel rollback semantics (D-1C-2)
+- Q-1C-2 (CARRIED, REFRAMED): test cell-mediated API additions (Phase 3C UC forward-capture)
+- **Q-1C-3 (NEW per D.2)**: cell-update cadence — semantic-transition enumeration (start of phase / end of phase / save-restore / Phase 3C UC query sites / on-exhaustion); lean toward semantic-transition-only sync (cell stale between transitions; consumers must accept or trigger sync); resolve at 1C-iii mini-design with code in hand
 
-### §16.5 Cross-cutting (potentially affect overall addendum design — RESOLVE before D.1 closes)
-- Q-Open-2 ✅ RESOLVED: A+B+cross-reference capture per §6.5
-- Q-Open-3 ✅ RESOLVED: (β) multi-quantale composition NTT in this addendum per §4.2
-- Q-Open-4 ✅ RESOLVED: γ strict sequencing per pipeline.md template
-- Q-A3 ✅ RESOLVED: γ-bundle-wide per §6.3
-- Q-A5 ✅ RESOLVED: atms-believed retires with struct in 1A-iii-b per §6.4
-- Q-1B-3 (multi-quantale composition design — where do tropical fuel cells live alongside type universe cells): RESOLVED per §4.3 (cell-id 11/12; co-existence as independent Q-modules)
-- Q-1B-5 (NTT model completion for multi-quantale composition): RESOLVED per §4.2 (multi-quantale composition NTT model + quantale-of-bridges; quantaloids out of scope per §1.3)
+### §16.5 Cross-cutting (D.1 close + D.2 commits)
+- Q-Open-2 ✅ RESOLVED at D.1: A+B+cross-reference capture per §6.5
+- Q-Open-3 ✅ RESOLVED at D.1: (β) multi-quantale composition NTT in this addendum per §4.2
+- Q-Open-4 ✅ RESOLVED at D.1: γ strict sequencing per pipeline.md template
+- Q-A3 ✅ RESOLVED at D.1: γ-bundle-wide per §6.3
+- Q-A5 ✅ RESOLVED at D.1: atms-believed retires with struct in 1A-iii-b per §6.4
+- Q-1B-3 ✅ RESOLVED at D.1: cell-id 11/12 placement; co-existence as independent Q-modules per §4.3
+- Q-1B-5 ✅ RESOLVED at D.1: NTT model completion via quantale-of-bridges per §4.2
+- **Q-Hybrid-Pivot ✅ COMMITTED at D.2**: Phase 1C reframed to hybrid architecture per D.2 revision summary + §10 (rewritten); empirical rationale = 8 supporting findings (M-2, M-5, A-11, E-13, E-15, R-16, R-17, R-19) + S-tier baseline finding 20; per user direction "wait until all measurements before committing to a final decision" honored (Pre-0 100% complete; 22 cumulative findings; commit `8a29f6af`)
 
-**No remaining cross-cutting open questions blocking D.1 close.**
+**No remaining cross-cutting open questions blocking D.2 close.** D.3+ critique rounds (P/R/M/S; especially S for algebra) opens next.
 
 ---
 
 ## §17 What's next
 
 Per user's workflow:
-1. **D.1 draft complete** (this document)
-2. **Pre-0 microbenchmark plan** — extend bench-ppn-track4c.rkt with M7-M9 + A5 + F-tropical per §13; run pre-implementation baselines
-3. **D.2 revise** — incorporate Pre-0 findings
-4. **D.3+ critique rounds** — P/R/M/S lenses (especially S for algebra); possibly external critique
-5. **Stage 0 gates verified**: NTT Model Requirement (§4 ✓ multi-quantale completed); Design Mantra Audit (§5 ✓); Pre-0 Benchmarks Per Semantic Axis (§13 ✓ planned); Parity Test Skeleton (§15 ✓)
-6. **Stage 4 implementation** — per-phase mini-design+audit before each phase's implementation; phase-specific open questions (§16) resolved at phase mini-design
+1. ✅ **D.1 draft complete** (commit `fc4b9d3e`)
+2. ✅ **Pre-0 microbenchmark plan + execution** — comprehensive plan (`f79650fa`) + M-tier (`f6576479`/`bef1f518`) + A-tier (`4be5e875`) + capture-gap closure (`d270769b`) + E-tier (`d0934329`) + R-tier (`76129725`) + S-tier (`8a29f6af`); 22 cumulative design-affecting findings
+3. ✅ **D.2 revise** (THIS COMMIT) — Pre-0 findings incorporated; hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
+4. ⬜ **D.3+ critique rounds** (NEXT) — P/R/M/S lenses (especially S for algebra; SRE lattice lens load-bearing per CRITIQUE_METHODOLOGY); possibly external critique. Per CRITIQUE_METHODOLOGY § Cataloguing Instead of Challenging: TWO-COLUMN adversarial framing mandatory at every gate. The hybrid pivot decision itself is a candidate for adversarial scrutiny in D.3 (is "decomplection of fast-path optimization from architectural substrate" genuinely principled, or rationalization for incomplete migration?).
+5. ✅ **Stage 0 gates verified**: NTT Model Requirement (§4 ✓ multi-quantale completed); Design Mantra Audit (§5 ✓); Pre-0 Benchmarks Per Semantic Axis (§13 ✓ executed; 22 findings); Parity Test Skeleton (§15 ✓; tropical-fuel-counter-parity reframed for hybrid)
+6. ⬜ **Stage 4 implementation** — per-phase mini-design+audit before each phase's implementation; phase-specific open questions (§16) resolved at phase mini-design with code in hand
+   - Phase 1B substrate ships first (per Q-Open-4 strict sequencing)
+   - Phase 1A-iii-b + 1A-iii-c parallelize with 1C
+   - Phase 1C consumes 1B substrate (under hybrid: substrate setup + selective non-hot-path migration)
+   - Phase 1V atomic close
+7. **Phase 1B implementation checklist** captured at D.1 §9.10 (M10 + M12 + R4 + A12 verification)
+
+**D.3 critique opening adversarial questions** (forward-capture for the next session):
+- Is the hybrid pivot's decomplection between fast-path optimization and architectural substrate genuinely principled, or does it preserve scaffolding that should retire under the new architecture? (Lens P)
+- The struct field `prop-net-cold-fuel` and macro `prop-network-fuel` are PRESERVED under hybrid — is this honest "fast-path needed for performance" or "old mechanism preserved for safety" (workflow.md belt-and-suspenders red flag)? (Lens P)
+- Does the hybrid's cell-update-at-semantic-transitions cadence have well-defined, exhaustively-enumerated transitions, or is "semantic transition" ambiguous in practice? (Lens R + Q-1C-3)
+- Under hybrid, the cell value can be stale relative to struct-field — does this violate "cell as single source of truth" principle (DESIGN_PRINCIPLES.org § Propagator-First Infrastructure)? (Lens M + S)
+- Does the SRE lattice lens analysis (§14.4) hold under hybrid's reduced cell-write rate? (Lens S)
 
 ---
 
@@ -1224,13 +1393,15 @@ Per user's workflow:
 
 ## Document status
 
-**Stage 3 Design D.1** — comprehensive first draft. Per user's workflow direction:
-1. ✅ D.1 drafted (this document)
-2. ⬜ Pre-0 microbenchmark plan execution (§13)
-3. ⬜ D.2 revise with Pre-0 findings
-4. ⬜ D.3+ critique rounds (P/R/M/S; especially S for algebra)
-5. ⬜ Stage 4 implementation per per-phase mini-design+audit
+**Stage 3 Design D.2** — Pre-0 findings incorporated; hybrid pivot committed. Per user's workflow direction:
+1. ✅ D.1 drafted (commit `fc4b9d3e`)
+2. ✅ Pre-0 microbenchmark plan + execution (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f79650fa`, `f6576479`, `bef1f518`, `4be5e875`, `d270769b`, `d0934329`, `76129725`, `8a29f6af`)
+3. ✅ **D.2 revise** (this commit) — hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
+4. ⬜ D.3+ critique rounds (P/R/M/S; especially S for algebra; possibly external critique). §17 enumerates 5 forward-captured adversarial questions for D.3 opening.
+5. ⬜ Stage 4 implementation per per-phase mini-design+audit. Phase 1B implementation checklist captured at §9.10 (M10 + M12 + R4 + A12 verification).
 
 **Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.** Phase-specific open questions (§16) resolved at that time with code in hand.
 
 **The architectural foundation: tropical quantale as the substrate for OE Series Track 0/1/2 first production landing + future PReduce + future cost-guided search. Phase 3C residuation error explanation as the first downstream consumer (Form C cross-reference scheduled at right phase).**
+
+**The hybrid pivot (D.2 commit): Phase 1C reframes from "replace counter with cell" to "introduce cell substrate alongside preserved counter fast-path." The decomplection of fast-path optimization (struct-copy + inline check; ~30-40 ns) from architectural substrate (cell + threshold propagator; semantic-transition-granular) preserves R3's zero-major-GC property while routing contradiction-on-exhaustion through the propagator network. Empirically grounded across 5 measurement tiers (M+A+E+R+S; 8 supporting findings + S-tier baseline). Subject to D.3 adversarial scrutiny (is decomplection genuinely principled, or scaffolding preservation rationalized?).**
