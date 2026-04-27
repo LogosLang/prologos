@@ -38,9 +38,45 @@ command -v mempalace >/dev/null 2>&1 || exit 0
 # Skip silently if palace not initialized (init has not been run)
 [ -d "$HOME/.mempalace/palace" ] || exit 0
 
-# Background mine; disown so the commit completes immediately
 LOG="/var/tmp/mempalace-auto-mine.log"
-{
+LOCK_FILE="/var/tmp/mempalace-auto-mine.lock"
+
+# Concurrency guard — skip if another mine is already running.
+# Without this, rapid doc commits spawn overlapping mines that compete
+# for chroma.sqlite3 + leave stale lockfiles behind on crash.
+# Diagnosed 2026-04-26: 426 stale locks accumulated, palace state corrupted.
+if [ -f "$LOCK_FILE" ]; then
+  RUNNING_PID="$(cat "$LOCK_FILE" 2>/dev/null || true)"
+  if [ -n "$RUNNING_PID" ] && kill -0 "$RUNNING_PID" 2>/dev/null; then
+    {
+      printf '=== %s post-commit SKIP — mine already running (pid %s) ===\n\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "$RUNNING_PID"
+    } >>"$LOG" 2>&1
+    exit 0
+  fi
+  # Stale lockfile (owning process is dead) — clean up before proceeding.
+  rm -f "$LOCK_FILE"
+fi
+
+# Background mine; disown so the commit completes immediately.
+# The subshell:
+# - writes its own PID to the lockfile FIRST (close race window with
+#   any concurrent commit that fires before this point)
+# - removes the lockfile on EXIT/INT/TERM (releases lock cleanly even
+#   on signal)
+# - sets OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES to work around macOS
+#   fork()/CoreFoundation incompatibility with Python multiprocessing
+#   ("The process has forked and you cannot use this CoreFoundation
+#   functionality safely. You MUST exec()."). Without this, every mine
+#   crashes on Darwin, leaving stale locks. See
+#   https://bugs.python.org/issue33725
+(
+  echo "$BASHPID" > "$LOCK_FILE" 2>/dev/null || echo $$ > "$LOCK_FILE"
+  trap 'rm -f "$LOCK_FILE"' EXIT INT TERM
+
+  export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+
   printf '=== %s post-commit re-mine (HEAD=%s) ===\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$(git rev-parse HEAD)"
@@ -50,7 +86,7 @@ LOG="/var/tmp/mempalace-auto-mine.log"
   mempalace mine ./docs --wing prologos
   printf '=== done at %s ===\n\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-} >>"$LOG" 2>&1 &
+) >>"$LOG" 2>&1 &
 
 # disown may not exist in sh; guard silently
 disown 2>/dev/null || true
