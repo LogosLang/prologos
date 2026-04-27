@@ -241,7 +241,7 @@
 ;; ========================================
 
 (test-case "pretty-print: Set type"
-  (check-equal? (pp-expr (expr-Set (expr-Nat)) '()) "(Set Nat)"))
+  (check-equal? (pp-expr (expr-Set (expr-Nat)) '()) "[Set Nat]"))
 
 (test-case "pretty-print: hset value"
   (check-equal? (pp-expr (expr-hset champ-empty) '()) "#{}"))
@@ -332,7 +332,7 @@
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def s <(Set Nat)> (set-insert (set-empty Nat) (suc (suc zero))))\n(eval (set-member? s (suc (suc zero))))")])
       (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "s : (Set Nat) defined"))
+      (check-true (string-contains? (car result) "s : [Set Nat] defined"))
       (check-equal? (cadr result) "true : Bool"))))
 
 ;; ========================================
