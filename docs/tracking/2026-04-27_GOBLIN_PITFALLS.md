@@ -38,185 +38,156 @@ Prologos team to look at.
 
 ---
 
-### #0 — Sandbox without a Racket toolchain (2026-04-27, meta-pitfall)
+### #0 — [DELETED — out of scope]
 
-**Symptom.** The OCapN port was written in an environment without
-`racket`/`raco` on `PATH`, so the implementation could not be exercised
-with `racket tools/run-affected-tests.rkt` while writing it. Every test
-file and `.prologos` library module here is *static-syntax-clean by
-inspection only*.
-
-**Why this matters.** Our normal cadence (write, `raco make`, run targeted
-tests, iterate) is unavailable. Pitfalls #1–#N below were predicted from
-reading existing stdlib patterns rather than triggered by a failed run,
-so the catalogue is conservative — there are almost certainly bugs in the
-delivered code that only surface when a real Racket runs the suite.
-
-**RESOLVED 2026-04-27.** A Racket 8.10 was installed via the system
-package manager (Ubuntu universe), and the suite was exercised
-end-to-end. All 117 OCapN tests pass — see entries below for the
-non-trivial fixes triggered by the run, and pitfall #11 for the
-v8/v9 compat fence we had to drop into `driver.rkt`.
+Originally documented "no Racket toolchain in the sandbox." That's
+an environment limitation, not a Prologos issue. Number reserved.
 
 ---
 
-### #1 — Capability subtype + Promise resolution composition (2026-04-27)
+### #1 — Eventual-receive is a Phase 0 no-op (OCapN-side, NOT a Prologos bug) (2026-04-27)
 
-**What we tried.** In `lib/prologos/ocapn/refr.prologos` we model OCapN's
-attenuation lattice with `capability` declarations and `subtype` edges:
+**Status.** This is a deferred-implementation note, not a Prologos
+language bug. Number kept for catalogue continuity.
 
-```
-capability ResolvedNearPromise
-subtype    ResolvedNearPromise NearRefr   ;; a resolved near promise IS
-                                          ;; equivalent authority to a near refr
-```
+**Where this matters.** OCapN promises require a delivery semantics
+where `(<- refr msg)` enqueues a message and returns a promise that
+*eventually* settles to the actor's reply. In our Phase 0:
 
-The intent is so that a function with parameter type `NearRefr` accepts a
-`ResolvedNearPromise` once you have observed its resolution.
+- *Local* promise resolution works (the FullFiller pattern emits
+  `eff-resolve` and the vat applies it on the next turn).
+- *Cross-vat* eventual receive — i.e. the protocol-level "deliver
+  this message to a refr you got from a peer, and route the reply
+  back over CapTP" — is NOT implemented. Pipelined messages on a
+  promise are queued at the PromiseState level but the vat does
+  not flush them across resolution (see pitfall #17 for the
+  type-level reason: PromiseState's queue carries Syrup wire form,
+  vat queue carries decoded VatMsg).
 
-**Where this breaks down.** Capability types in Prologos are static —
-the subtype edge is a *type-level* fact, but resolution status is a
-*value-level* fact (a promise is a runtime cell). We cannot make the
-type-level edge conditional on resolution.
+**Implication.** The `core.prologos` `ask` function returns a
+promise id but the only way that promise gets settled is if some
+local actor explicitly emits `eff-resolve` for it. There's no
+remote-deliver path yet.
 
-In Goblins this composition is enforced dynamically: `($ refr msg)` on
-an unresolved promise refr just blocks (or errors) at the message
-delivery layer, regardless of what the type system thinks. We mirror
-that here — the type-edge is over-approximation; runtime promise
-state still gates real authority.
-
-**Implication for the type-driven contract.** A library author who
-relies on the static `NearRefr` constraint to mean "caller already
-resolved this" gets a weaker guarantee than the syntax suggests.
-Document the intended model in `core.prologos`'s docstrings explicitly.
-
-**Open question.** Whether session types could carry the resolution
-status as a protocol step (`?? PromiseRefr` until resolution then
-re-typed as `NearRefr`). This would require type-level state machines
-on capability subjects, which isn't currently available.
+**Open path to Phase 1.** Wire the netlayer ↔ vat bridge so that
+inbound CapTP `op:deliver` messages on a connection turn into
+`enqueue-msg` calls on the local vat, AND outbound `eff-resolve`
+on a promise that has a remote resolver triggers an outbound
+`op:listen`-reply on the originating connection.
 
 ---
 
-### #2 — Wildcard match on user data trips type inference (2026-04-27)
+### #2 — [DELETED — false claim, recanted] (2026-04-27)
 
-**Symptom.** Predicate functions written compactly with a wildcard
-fallthrough fail to type-check. Reproduces in
-`prologos::data::datum`, which already has a comment to this effect:
-
-> "Explicit exhaustive patterns used instead of wildcard `_` because
-> match with wildcard on user data types triggers a type-inference
-> limitation that causes module loading to fail."
-
-**Concrete example we hit.** Naive form:
+Originally claimed `match | _ -> body` on user data types fails
+type inference. **Tested 2026-04-27 with a real Racket and the
+claim is false.** With a proper `spec` and the WS-mode form:
 
 ```
-spec refr? SyrupValue -> Bool
-defn refr? [v]
-  match v
-    | syrup-refr _ -> true
-    | _            -> false   ;; wildcard fallthrough
+spec is-a-wild Foo -> Bool
+defn is-a-wild [x]
+  match x
+    | a-of _ -> true
+    | _      -> false
 ```
 
-We can't write this. We had to spell every constructor:
+elaborates and evaluates correctly (`is-a-wild (a-of zero) ⇒ true`,
+`is-a-wild (b-of zero) ⇒ false`). See
+`probe-p2-wildcard.prologos` in the test session.
 
-```
-defn refr? [v]
-  match v
-    | syrup-null         -> false
-    | syrup-bool _       -> false
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> false
-    | syrup-refr _       -> true
-    | syrup-promise _    -> false
-```
+**What the prologos::data::datum comment actually meant.** The
+in-source note about "explicit exhaustive patterns" is real for
+*type-inference inside a polymorphic context*, not a blanket
+wildcard ban. We over-generalised it into pitfall #2, then hit
+unrelated `match` issues that we mis-attributed to the wildcard.
+The behavior modules in `lib/prologos/ocapn/behavior.prologos`
+should be cleaned up (~250 LOC → ~70 LOC) by switching the
+constructor-by-constructor enumerations to `| _ -> no-op state`.
 
-**Multiplier.** OCapN models everything as a Syrup value (10
-constructors, plus 7 actor-behaviour tags, plus 7 CapTP ops). Every
-predicate / selector / step function pays this tax. The behavior
-dispatchers (`step-counter`, `step-greeter`, `step-adder`) pay it
-*twice* — once on state, once on args — so a 3-line function in
-Goblins becomes ~25 lines here.
-
-**Workaround in this port.** A small helper `no-op state` that returns
-the unchanged step, so the noisy fallthrough at least reads as "any
-ill-typed input is a no-op for this actor". Doesn't help compile time;
-helps the eye.
-
-**Filed as a candidate Prologos bug.** A pure FP language without
-working wildcard match on user-defined sums is a real ergonomics gap.
-Symptom looks shaped like a missing case in match-elaboration's
-exhaustiveness analysis when the scrutinee's constructor set isn't
-fully resolved before unification — but I couldn't reproduce in this
-sandbox to bisect.
+Number reserved. Cleanup tracked separately.
 
 ---
 
-### #3 — Closed-world actor behaviours (2026-04-27)
+### #3 — [DELETED — false claim, recanted] (2026-04-27)
 
-**Symptom.** Goblins's actor model is open: any closure
-`(args ... -> bcom)` is a valid behaviour. To put one in our vat we
-need the behaviour to be a value that can be stored in a `data`
-constructor and dispatched at runtime. Two options were tried:
+Originally claimed function-typed fields in `data` constructors
+were unverified, forcing the closed-`BehaviorTag` enum approach.
+**Tested 2026-04-27 with a real Racket and the claim is false.**
 
-1. **Function-typed field**: `data Actor actor : <Args -> ActStep>`.
-   In a dependently-typed positive-recursive setting this is OK in
-   theory (the function sits behind a constructor barrier so it's a
-   strictly positive occurrence) but we have no working examples in
-   the current stdlib of stored function values used as actor
-   behaviours, and the QTT `mw`/`m0` interaction with stored thunks
-   is unverified for our purposes.
+```
+data Step
+  step : [Nat -> Nat]    ;; bracketed function type — required so the
+                          ;; data-ctor parser doesn't read this as
+                          ;; "two Nat args returning Step"
+```
 
-2. **Closed enum + central dispatcher**: `BehaviorTag` is a closed
-   sum; `step-behavior` is a giant `match`. Adding a new behaviour
-   needs a library change.
+elaborates cleanly, accepts `[fn [n : Nat] n]` and closures with
+captured state, and the stored function applies correctly under
+`match | step f -> [f n]`. Evidence:
 
-We took option 2 and ship a built-in set (cell, counter, greeter,
-echo, adder, forwarder, fulfiller) that exercises the architecture.
-This is recorded as a real limitation, NOT a workaround — Phase 0 of
-this port doesn't unblock user-defined actor closures, and it would
-need a Prologos design step to do so cleanly.
+```
+def add3-step : Step := [make-add 3N]   ;; closure captures k=3
+[run-step add3-step 1N]   ⇒  4N
+[run-step add3-step 2N]   ⇒  5N
+```
 
-**Cost.** The library can demonstrate the actor model and OCapN wire
-shape (sends, promises, pipelining, forwarding) end-to-end, but it is
-not a usable framework for arbitrary applications until function-
-typed behaviour fields land. That's documented prominently in
-`core.prologos`'s top docstring.
+See `probe-p3-fnfield.prologos` in the test session.
+
+**Implication for the OCapN port.** `behavior.prologos` should be
+restructured: `data Behavior beh : [SyrupValue -> SyrupValue ->
+ActStep]` replaces `BehaviorTag` and `step-behavior`. Open-world
+user-defined actors become possible. Cleanup tracked separately;
+the architecture in this commit still uses the closed enum because
+that's what the original (incorrect) pitfall steered us into.
+
+Number reserved.
 
 ---
 
-### #4 — No recursive session types yet (2026-04-27)
+### #4 — `rec` session continuation is in the grammar but not in the elaborator (2026-04-27, real bug)
 
-**What we tried.** A real CapTP wire protocol is a multiplexed
-full-duplex stream of `op:*` messages — each peer can interleave
-`op:deliver`, `op:listen`, `op:gc-export`, etc. in any order until
-one side sends `op:abort`. This is a session that LOOPS over a
-non-deterministic choice, the canonical case for recursive session
-types (μX. ⊕{deliver:X, listen:X, abort:end}).
+**Symptom.** `grammar.ebnf` §6 lines 1153–1187 promise both `Mu`
+(the sexp form) and `rec [label]` (the WS form) for recursive
+session types. Try them:
 
-**What Prologos session types support.** The session-type DSL
-(`session NAME ! T ?? T end`) supports linear, finite sequences and
-the `&` external choice over finite alternatives. We didn't see a
-recursive `μX` form or a way to express a streaming protocol in a
-single session declaration. Closest existing example is
-`MixedProto` in `tests/ws-session-e2e-03.prologos`, which is a
-finite alternation `!! Nat ? String ! Nat ?? Nat end`.
+```
+session Loop
+  ! Nat
+  rec
+```
 
-**Workaround.** `captp-session.prologos` decomposes CapTP into FIVE
-finite sub-protocols (Handshake, Deliver, Listen, DeliverOnly, Gc),
-each modelled as its own `session` declaration. A real driver would
-re-instantiate the appropriate sub-protocol per outbound message and
-glue them together at the application layer. This is honest about
-what the type system can guarantee (per-exchange shape) versus what
-it cannot guarantee yet (long-running connection well-typedness).
+Elaboration fails with:
+```
+prologos-error "Unknown session type: rec"
+```
 
-**Filed as a Prologos design enhancement.** Recursive session types
-+ external choice over symbol-tagged branches would let a single
-`session CapTPConn` capture the stream-level invariant. Unblocked,
-this would make OCapN's wire protocol a single `defproc` declaration.
+The sexp form `(session Loop2 (Send Nat (Mu End)))` fails the same
+way:
+```
+prologos-error "Unknown session type: rec"
+```
+(grammar admits both `Mu` and `rec`; both unimplemented.)
+
+**Why this matters for OCapN.** The CapTP wire protocol is a
+multiplexed full-duplex stream of `op:*` messages — peers
+interleave `op:deliver`, `op:listen`, `op:gc-export`, etc. until
+one sends `op:abort`. The natural session is recursive:
+`μX. &> {deliver:X, listen:X, abort:end}`. Without `rec`, a
+single `session CapTPConn` can't capture stream-level
+well-typedness; we have to settle for per-exchange sub-protocols.
+
+**Workaround in this port.** `captp-session.prologos` decomposes
+CapTP into FIVE finite sub-protocols (Handshake, Deliver, Listen,
+DeliverOnly, Gc), each its own `session` declaration. A real
+driver re-instantiates the appropriate sub-protocol per
+exchange. Per-exchange typing remains, but stream-level
+well-typedness is unproven.
+
+**Filed as a Prologos bug.** The grammar documents `rec`/`Mu`;
+the elaborator should accept it. Pointing at `surface-syntax.rkt`
+or wherever the session-type elaborator lives would close the
+gap. Until then, `MixedProto` style finite alternations are the
+documented ceiling.
 
 ---
 
@@ -242,134 +213,73 @@ will hit it any time they write predicates returning `Option α`.
 
 ---
 
-### #6 — sexp-mode `let` vs WS-mode `let := body` (2026-04-27)
+### #6 — [DELETED — out of scope]
 
-**Symptom.** Test files use `process-string` which parses sexp mode.
-WS-mode let `let p := expr` is a different surface form from sexp
-let `(let (p expr) body)`. The first attempt at writing tests used
-the WS form inside the sexp string and produced cascading parse
-errors.
-
-**Workaround.** All test strings use the sexp `let` form. Support for
-sequential multi-binding lets `(let (a A b B c C) body)` is
-confirmed by inspection of `macros.rkt`'s `let-bindings->nested-fn`
-(uses `foldr` over bindings). We rely on this in `test-ocapn-vat.rkt`
-and `test-ocapn-e2e.rkt` so each test reads as a small program.
-
-**Lesson.** When the same construct has TWO surface forms across
-WS-mode and sexp-mode, tests need to agree with the parser the
-fixture is using (sexp mode in our case via `process-string`). A
-single example in CLAUDE.md showing both forms side-by-side would
-have saved an iteration here.
+WS-mode `let p := body` and sexp-mode `(let (p v) body)` are TWO
+SURFACE FORMS by design (grammar.ebnf §7 line 1236). Mixing them
+in a sexp test string is a user error, not a Prologos bug.
+Number reserved.
 
 ---
 
-### #7 — Closed-data `match` redundancy multiplies with constructor count (2026-04-27)
+### #7 — [DELETED — followed from #2 which was recanted] (2026-04-27)
 
-**Symptom.** This is a quantitative restatement of pitfall #2.
-`SyrupValue` has 10 constructors. `step-counter` matches twice (once
-on state, once on args), so the worst-case nested-match grid is
-10×10 = 100 arms. With four near-identical step functions
-(`step-counter`, `step-greeter`, `step-adder`, `step-cell`), this
-adds ~400 explicit fall-through arms across `behavior.prologos`.
+This was a quantitative restatement of #2 ("constructor-by-
+constructor enumerations are noisy"). With #2 recanted (wildcards
+work), #7 also evaporates: the OCapN behavior modules can be
+collapsed to wildcard-fallthrough form, dropping ~180 LOC.
 
-**Mitigation in this port.** Hoist the "anything ill-typed for me is
-a no-op" branch into a `no-op` helper. Each no-op-armed
-constructor reduces from 3 lines (`-> act-step state state nil`) to
-1 line (`-> no-op state`). Roughly 60% character reduction; doesn't
-fix the line count but reads better.
-
-**Filed as a follow-up.** A `match X exhaustively-otherwise BODY`
-form, or sound type-narrowing-with-wildcards, would let
-`behavior.prologos` shrink from ~250 lines to ~70.
+Number reserved. Cleanup tracked separately.
 
 ---
 
-### #8 — Sigma in `data` constructor signatures was avoided (2026-04-27)
+### #8 — [DELETED — false claim, recanted] (2026-04-27)
 
-**What we wanted.** A polymorphic assoc-list table:
-
-```
-data Vat
-  vat : Nat -> [List [Sigma [_ <Nat>] Actor]] -> ... -> Vat
-```
-
-**Why we didn't.** The `[Sigma [_ <T>] U]` syntax is well-attested in
-`spec` lines (`spec swap [Sigma [_ <A>] B] -> [Sigma [_ <B>] A]`) but
-we couldn't find an example of Sigma in a `data` constructor's
-parameter list. To stay safe we introduced concrete monomorphic
-entry types:
+Originally documented an avoidance: "we didn't put `Sigma` in
+`data` ctor fields because we couldn't find a stdlib example."
+**Tested 2026-04-27 with a real Racket and Sigma works fine in
+data ctors:**
 
 ```
-data ActorEntry
-  actor-entry : Nat -> Actor
+data Box1
+  box1 : [Sigma [_ <Nat>] Bool]
 
-data PromiseEntry
-  promise-entry : Nat -> PromiseState
-
-data Vat
-  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg]
+data Table
+  table : Nat -> [List [Sigma [_ <Nat>] Bool]]
 ```
 
-This is a bit more verbose (two extra struct-shaped sums) but reads
-clearly and avoids any ambiguity with how the parser treats Sigma in
-a positive position inside a constructor type.
+both elaborate cleanly:
+```
+box1  : [Sigma Nat Bool] -> Box1
+table : Nat [List [Sigma Nat Bool]] -> Table
+```
 
-**Open.** Was the avoidance necessary? On a real machine the original
-form might just work. Worth bisecting the next time someone writes a
-heterogeneous-table data type in this codebase.
+See `probe-p8-sigma.prologos` in the test session.
+
+**Implication for the port.** The named-struct `ActorEntry`/
+`PromiseEntry` workaround in `vat.prologos` was unnecessary. Could
+be simplified back to `[List [Sigma [_ <Nat>] Actor]]` and
+`[List [Sigma [_ <Nat>] PromiseState]]`. Cleanup tracked
+separately.
+
+Number reserved.
 
 ---
 
-### #9 — `def` with no args means "constant", needs `:=` (2026-04-27)
+### #9 — [DELETED — user error]
 
-**Symptom.** First attempt at `promise.prologos`'s constant
-`fresh : PromiseState` used `defn`:
-
-```
-spec fresh PromiseState           ;; arity-0 spec — odd
-defn fresh                         ;; no args
-  pst-unresolved nil
-```
-
-This shape isn't supported — `defn` declares a function, not a
-0-ary constant. The fix is to use `def`:
-
-```
-def fresh : PromiseState := [pst-unresolved nil]
-```
-
-**Lesson.** `def` and `defn` are NOT interchangeable. `defn` always
-takes args; `def` is for top-level value bindings. Stdlib examples
-mix the two in different files; CLAUDE.md or a syntax-rules doc could
-make the distinction explicit.
+`def` is for value bindings, `defn` is for functions. The
+distinction is documented (grammar.ebnf §3 lines 189–190 +
+prologos-syntax rules). Mis-using `defn` for a 0-ary constant is
+a usage error, not a Prologos bug. Number reserved.
 
 ---
 
-### #10 — Network sandbox blocks fetching the OCapN spec (2026-04-27)
+### #10 — [DELETED — out of scope]
 
-**Symptom.** The Goblins source repository
-(`https://codeberg.org/spritely/racket-goblins`) is unreachable from
-this sandbox — `403 Forbidden`. WebFetch on the OCapN GitHub repo
-worked for the README and `CapTP Specification.md`, but the Syrup
-serialization spec (`Syrup.md`) returned 404 — likely lives in a
-different file that the sandbox couldn't enumerate.
-
-**Workaround.** Implementation choices were grounded in:
-1. The OCapN README via WebFetch (high-level overview)
-2. The CapTP Specification draft via raw.githubusercontent (op:* and
-   four-table model)
-3. The Model.md draft via raw.githubusercontent (Syrup value space:
-   atoms, containers, references)
-4. Background knowledge of Goblins's API (spawn / `<-` / `<-np` /
-   `on` / `become`).
-
-**Coverage gap.** Syrup's wire-level encoding (canonical bytewise
-format with size-prefixed strings, varint integers, structured
-records) isn't implemented here — we only model the abstract value
-space. A future revision should follow up on `Syrup.md` if/when it's
-reachable, port the encoder/decoder, and connect it to the byte
-stream layer (which is also missing).
+Originally noted "the sandbox can't reach codeberg / Racket
+download mirrors." Network sandboxing is an environment
+limitation, not a Prologos issue. Number reserved.
 
 ---
 
