@@ -1361,6 +1361,7 @@ Per user's workflow:
 - This session 2026-04-26 audit findings (Q-Audit-1/2/3) at §2.2
 
 ### §18.2 Parent and adjacent design docs
+- **[`docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md`](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md) — D.2.SC (P/R/M/S self-critique; 18 findings; 3 BLOCKING + 10 REFINEMENTS + 5 ACKNOWLEDGEs)** — pending resolution review with user; D.3 incorporates accepted findings
 - [`docs/tracking/2026-04-21_PPN_4C_PHASE_9_DESIGN.md`](2026-04-21_PPN_4C_PHASE_9_DESIGN.md) — D.3 (parent addendum; refined by this doc per Q-Open-1)
 - [`docs/tracking/2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) — PPN 4C parent track
 - [`docs/tracking/2026-03-22_NTT_SYNTAX_DESIGN.md`](2026-03-22_NTT_SYNTAX_DESIGN.md) — NTT syntax reference for §4
