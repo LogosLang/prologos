@@ -8,7 +8,7 @@ require [prologos::core::collection-traits :refer [Seqable
                                                     Functor]]
 require [prologos::data::lseq          :refer [LSeq]]
 require [prologos::data::lseq-ops      :refer [list-to-lseq lseq-to-list]]
-require [prologos::data::list           :refer [List nil cons]]
+require [prologos::data::list           :refer [List nil cons zip-with]]
 require [prologos::data::option        :refer [Option some none]]
 require [prologos::data::nat            :refer [lt?]]
 
@@ -134,3 +134,15 @@ defn pvec-from-list-fn [xs]
 spec pvec-to-list-fn {A : Type} [PVec A] -> [List A]
 defn pvec-to-list-fn [v]
   pvec-to-list v
+
+;; ========================================
+;; pvec-zip-with : combine two PVecs element-wise
+;; ========================================
+;; Signature mirrors List zip-with; truncates to the shorter PVec's length.
+;; Implementation: convert both pvecs to lists, zip-with on lists, convert
+;; the result back to a PVec. The asymptotic cost is the same as a direct
+;; index walk: O(n) for the dominant length.
+spec pvec-zip-with {A B C : Type} [A -> B -> C] [PVec A] [PVec B] -> [PVec C]
+  :doc "Combine two PVecs element-wise with a function; truncates to shorter."
+defn pvec-zip-with [f xs ys]
+  pvec-from-list [zip-with f [pvec-to-list xs] [pvec-to-list ys]]
