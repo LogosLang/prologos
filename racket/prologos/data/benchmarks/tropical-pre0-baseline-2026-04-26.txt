@@ -1,33 +1,27 @@
-#t
-#t
-#t
-#t
-#t
-
 === M: MICRO-BENCHMARKS (per-operation baseline) ===
 
 M1: attribute-map facet access (4C hot path)
   M1a that-read :type: 0.027 μs/call (20000 calls)
-  M1b that-read absent facet: 0.027 μs/call (20000 calls)
+  M1b that-read absent facet: 0.026 μs/call (20000 calls)
 
 M2: meta-info CHAMP access (retirement target — Axis 2)
-  M2a fresh-meta (baseline): 40.332 μs/call (5000 calls)
-  M2b solve-meta! (writes CHAMP + cell): 44.133 μs/call (2000 calls)
-  M2c meta-solution read (CHAMP read): 46.507 μs/call (5000 calls)
+  M2a fresh-meta (baseline): 41.436 μs/call (5000 calls)
+  M2b solve-meta! (writes CHAMP + cell): 44.168 μs/call (2000 calls)
+  M2c meta-solution read (CHAMP read): 44.487 μs/call (5000 calls)
 
 M3: infer on core AST kinds (Axis 3 aspect-coverage baseline)
-  M3a infer lam: 447.174 μs/call (2000 calls)
-  M3b infer app: 545.125 μs/call (2000 calls)
-  M3c infer Pi: 347.491 μs/call (2000 calls)
+  M3a infer lam: 453.088 μs/call (2000 calls)
+  M3b infer app: 566.513 μs/call (2000 calls)
+  M3c infer Pi: 340.069 μs/call (2000 calls)
 
 
 === M7-M13: TROPICAL FUEL SUBSTRATE BASELINES (Pre-0) ===
 
 M7: counter decrement cost (baseline for post-impl tropical-fuel-merge)
-  M7.1 struct-copy decrement n=1: 0.026 μs/call (50000 calls)
-  M7.2 struct-copy decrement n=100: 0.025 μs/call (50000 calls)
-  M7.3 struct-copy decrement n=10000: 0.024 μs/call (50000 calls)
-  M7.mem 10000 decrements alloc+retain: wall=0.113 ms  alloc=625.2 KB  retain=-0.1 KB  (n=10)
+  M7.1 struct-copy decrement n=1: 0.024 μs/call (50000 calls)
+  M7.2 struct-copy decrement n=100: 0.024 μs/call (50000 calls)
+  M7.3 struct-copy decrement n=10000: 0.025 μs/call (50000 calls)
+  M7.mem 10000 decrements alloc+retain: wall=0.122 ms  alloc=625.2 KB  retain=-0.0 KB  (n=10)
 
 M8: inline fuel check cost (baseline for post-impl threshold propagator)
   M8.1 inline (<= fuel 0) not-exhausted: 0.006 μs/call (50000 calls)
@@ -35,10 +29,10 @@ M8: inline fuel check cost (baseline for post-impl threshold propagator)
   M8.3 inline (<= fuel 0) exhausted: 0.006 μs/call (50000 calls)
 
 M9: net-new-cell allocation cost (baseline for per-consumer fuel cell allocation)
-  M9.1 net-new-cell N=1: wall=0.015 ms  alloc=6.5 KB  retain=0.3 KB  (n=200)
-  M9.2 net-new-cell N=5 sequential: wall=0.017 ms  alloc=9.2 KB  retain=0.2 KB  (n=100)
-  M9.3 net-new-cell N=50 sequential: wall=0.057 ms  alloc=74.6 KB  retain=0.2 KB  (n=50)
-  M9.4 net-new-cell N=500 sequential: wall=0.247 ms  alloc=624.6 KB  retain=0.3 KB  (n=20)
+  M9.1 net-new-cell N=1: wall=0.018 ms  alloc=6.5 KB  retain=0.0 KB  (n=200)
+  M9.2 net-new-cell N=5 sequential: wall=0.020 ms  alloc=9.2 KB  retain=0.0 KB  (n=100)
+  M9.3 net-new-cell N=50 sequential: wall=0.060 ms  alloc=74.6 KB  retain=-0.1 KB  (n=50)
+  M9.4 net-new-cell N=500 sequential: wall=0.256 ms  alloc=624.6 KB  retain=-0.1 KB  (n=20)
 
 M10: residuation operator — N/A pre-impl (deferred to post-Phase-1B run)
 
@@ -56,50 +50,99 @@ M13: prop-network-fuel access (baseline for post-impl cell-read)
 === A: ADVERSARIAL TESTS (per-axis stress) ===
 
 A1: type-variable meta with concrete solution (Axis 5)
-  A1a 10 metas solve to same type: wall=3.364 ms  alloc=13353.8 KB  retain=-8.2 KB  (n=10)
-  A1b 20 metas solve to different types: wall=6.585 ms  alloc=24513.2 KB  retain=-18.6 KB  (n=10)
+  A1a 10 metas solve to same type: wall=3.711 ms  alloc=13353.8 KB  retain=-8.6 KB  (n=10)
+  A1b 20 metas solve to different types: wall=6.970 ms  alloc=24513.3 KB  retain=6.1 KB  (n=10)
 
 A2: speculation cycles (Phase 8 union-type ATMS baseline)
-  A2a 10 spec cycles, no branching: wall=0.069 ms  alloc=57.3 KB  retain=1.2 KB  (n=10)
-  A2b 10 spec cycles, 3 metas each (branching sim): wall=0.091 ms  alloc=102.0 KB  retain=1.4 KB  (n=10)
+  A2a 10 spec cycles, no branching: wall=0.071 ms  alloc=57.3 KB  retain=1.0 KB  (n=10)
+  A2b 10 spec cycles, 3 metas each (branching sim): wall=0.099 ms  alloc=102.0 KB  retain=0.9 KB  (n=10)
+
+
+=== A5-A12: TROPICAL FUEL ADVERSARIAL BASELINES (Pre-0) ===
+
+A5: cost-bounded vs flat fuel exhaustion (semantic axis)
+  A5.1 pre-impl counter loop 1000 mixed-cost steps: median=0.014 ms  min=0.013  max=0.014  (n=10)
+  A5.1.note: total cost over 1000 mixed-cost steps = 52300 (pre-impl exhausts at 1000 step-count regardless)
+
+A6: deep dependency chain (Phase 3C UC1 forward-capture)
+  A6.1 walk N=10 chain (sum costs): 0.024 μs/call (50000 calls)
+  A6.2 walk N=50 chain (sum costs): 0.075 μs/call (20000 calls)
+  A6.3 walk N=200 chain (sum costs): 0.297 μs/call (5000 calls)
+  A6.mem N=200 chain construction + walk: wall=0.005 ms  alloc=9.9 KB  retain=0.0 KB  (n=100)
+
+A7: high-frequency decrement (fuel exhaustion under load — memory PRIMARY)
+  A7.1 1000 decrements alloc+retain: wall=0.013 ms  alloc=62.7 KB  retain=0.1 KB  (n=50)
+  A7.2 10000 decrements alloc+retain: wall=0.117 ms  alloc=625.2 KB  retain=0.1 KB  (n=20)
+  A7.3 100000 decrements alloc+retain: wall=1.202 ms  alloc=6251.0 KB  retain=-0.2 KB  (n=5)
+
+A8: multi-consumer concurrent (10×1000 decrements — sequential composition)
+  A8.1 10 consumers × 1000 decrements each: wall=0.144 ms  alloc=682.6 KB  retain=-0.0 KB  (n=20)
+
+A9: speculation rollback cost (100 write-tagged-then-rollback cycles)
+  A9.1 100 spec cycles (save + write + restore): wall=0.448 ms  alloc=543.0 KB  retain=-16.3 KB  (n=20)
+
+A10: branch fork explosion (5-way × 100 decrements per branch)
+  A10.1 5-way fork × 100 decrements per branch: wall=0.027 ms  alloc=59.7 KB  retain=0.0 KB  (n=30)
+
+A11: pathological cost patterns
+  A11.1 single huge cost (pre-impl: 1 dec): 0.027 μs/call (50000 calls)
+  A11.2 many tiny costs 10000 steps × 1: median=0.116 ms  min=0.110  max=0.149  (n=20)
+  A11.3 alternating cost (1000 steps): median=0.013 ms  min=0.012  max=0.019  (n=50)
+  A11.4 monotonically increasing cost (1000 steps): median=0.013 ms  min=0.012  max=0.016  (n=50)
+
+A12: residuation boundary algebra — N/A pre-impl (deferred to post-Phase-1B run)
 
 
 === E: E2E BASELINES (full pipeline) ===
 
-  E1 simple (no metas): wall=55.230 ms  alloc=17968.2 KB  retain=-4.8 KB  (n=10)
-  E2 parametric Seqable (Axis 1 bridge): wall=169.526 ms  alloc=346444.7 KB  retain=-11.0 KB  (n=10)
-  E3 polymorphic id (Axis 5 :type/:term): wall=90.800 ms  alloc=65419.1 KB  retain=9.5 KB  (n=10)
-  E4 generic arithmetic (Axis 6): wall=93.481 ms  alloc=54278.2 KB  retain=26.0 KB  (n=10)
+  E1 simple (no metas): wall=55.426 ms  alloc=17972.3 KB  retain=-5.4 KB  (n=10)
+  E2 parametric Seqable (Axis 1 bridge): wall=163.908 ms  alloc=333509.2 KB  retain=2.8 KB  (n=10)
+  E3 polymorphic id (Axis 5 :type/:term): wall=85.458 ms  alloc=64302.6 KB  retain=8.9 KB  (n=10)
+  E4 generic arithmetic (Axis 6): wall=93.240 ms  alloc=49656.8 KB  retain=18.7 KB  (n=10)
 
 
 === V: VALIDATION (parity reference points) ===
 
   V1a FAIL: infer Nat = #(struct:expr-Type #(struct:lzero))
-  V-total: 1 failures
+  V-total: 1 failures (pre-existing harness mismatch since 2026-04-17 PRE0; not regression)
 
 
 === SUMMARY ===
 
 M1 attribute-map facet access:       0.03 / 0.03 μs  (that-read :type / :absent)
-M2 CHAMP meta-info access:           fresh=40.33  solve=44.13  read=46.51 μs
-M3 infer core forms:                 lam=447.17  app=545.12  Pi=347.49 μs
-M7 counter decrement (struct-copy):  n=1: 0.026  n=100: 0.025  n=10000: 0.024 μs
-M7.mem 10000 decrements:             0.11 ms / 625.2 KB alloc / -0.1 KB retain
+M2 CHAMP meta-info access:           fresh=41.44  solve=44.17  read=44.49 μs
+M3 infer core forms:                 lam=453.09  app=566.51  Pi=340.07 μs
+M7 counter decrement (struct-copy):  n=1: 0.024  n=100: 0.024  n=10000: 0.025 μs
+M7.mem 10000 decrements:             0.12 ms / 625.2 KB alloc / -0.0 KB retain
 M8 inline (<= fuel 0) check:         not-exh: 0.006  boundary: 0.006  exh: 0.006 μs
-M9 net-new-cell allocation:          N=1: 0.01 ms / 6.5 KB alloc / 0.3 KB retain
-M9 net-new-cell allocation:          N=5: 0.02 ms / 9.2 KB alloc / 0.2 KB retain
-M9 net-new-cell allocation:          N=50: 0.06 ms / 74.6 KB alloc / 0.2 KB retain
-M9 net-new-cell allocation:          N=500: 0.25 ms / 624.6 KB alloc / 0.3 KB retain
+M9 net-new-cell allocation:          N=1: 0.02 ms / 6.5 KB alloc / 0.0 KB retain
+M9 net-new-cell allocation:          N=5: 0.02 ms / 9.2 KB alloc / 0.0 KB retain
+M9 net-new-cell allocation:          N=50: 0.06 ms / 74.6 KB alloc / -0.1 KB retain
+M9 net-new-cell allocation:          N=500: 0.26 ms / 624.6 KB alloc / -0.1 KB retain
 M11 integer add cost:                fixnum: 0.001  large: 0.001  +inf.0: 0.001 μs
 M13 prop-network-fuel access:        0.006 μs
-A1a type-meta 10-same solve:         3.36 ms / 13353.8 KB alloc / -8.2 KB retain
-A1b type-meta 20-different solve:    6.58 ms / 24513.2 KB alloc / -18.6 KB retain
-A2a 10 spec cycles (no branching):   0.07 ms / 57.3 KB alloc / 1.2 KB retain
-A2b 10 spec cycles (3 metas each):   0.09 ms / 102.0 KB alloc / 1.4 KB retain
-E1 simple (no metas):                55.23 ms / 17968.2 KB alloc / -4.8 KB retain
-E2 parametric Seqable (Axis 1):      169.53 ms / 346444.7 KB alloc / -11.0 KB retain
-E3 polymorphic id (Axis 5):          90.80 ms / 65419.1 KB alloc / 9.5 KB retain
-E4 generic arithmetic (Axis 6):      93.48 ms / 54278.2 KB alloc / 26.0 KB retain
-V correctness:                       1 failures
+A1a type-meta 10-same solve:         3.71 ms / 13353.8 KB alloc / -8.6 KB retain
+A1b type-meta 20-different solve:    6.97 ms / 24513.3 KB alloc / 6.1 KB retain
+A2a 10 spec cycles (no branching):   0.07 ms / 57.3 KB alloc / 1.0 KB retain
+A2b 10 spec cycles (3 metas each):   0.10 ms / 102.0 KB alloc / 0.9 KB retain
+A5 cost-bounded loop (1000 steps):   0.014 ms (cost-blind pre-impl; total cost = 52300)
+A6 dep-chain walk:                   N=10: 0.024  N=50: 0.075  N=200: 0.297 μs
+A6.mem N=200 chain construction:     0.01 ms / 9.9 KB alloc / 0.0 KB retain
+A7 high-freq decrement N=1000:       0.01 ms / 62.7 KB alloc / 0.1 KB retain
+A7 high-freq decrement N=10000:      0.12 ms / 625.2 KB alloc / 0.1 KB retain
+A7 high-freq decrement N=100000:     1.20 ms / 6251.0 KB alloc / -0.2 KB retain
+A8 multi-consumer 10×1000:           0.14 ms / 682.6 KB alloc / -0.0 KB retain
+A9 100 spec cycles (save+write+restore): 0.45 ms / 543.0 KB alloc / -16.3 KB retain
+A10 5-way fork × 100/branch:         0.03 ms / 59.7 KB alloc / 0.0 KB retain
+A11.1 single huge cost (1 dec):      0.027 μs/call
+A11.2 many tiny costs (10k steps):   0.116 ms
+A11.3 alternating cost (1000 steps): 0.013 ms
+A11.4 monotonic cost (1000 steps):   0.013 ms
+E1 simple (no metas):                55.43 ms / 17972.3 KB alloc / -5.4 KB retain
+E2 parametric Seqable (Axis 1):      163.91 ms / 333509.2 KB alloc / 2.8 KB retain
+E3 polymorphic id (Axis 5):          85.46 ms / 64302.6 KB alloc / 8.9 KB retain
+E4 generic arithmetic (Axis 6):      93.24 ms / 49656.8 KB alloc / 18.7 KB retain
+V correctness:                       1 failures (pre-existing, see V-tier note)
 
-(Baselines captured. Re-run after 4C phases land for A/B comparison.)
+(Baselines captured 2026-04-26: M-tier (commit f6576479) + A-tier (this run).
+ Re-run after 4C phases land for A/B comparison via tools/bench-ab.rkt.)

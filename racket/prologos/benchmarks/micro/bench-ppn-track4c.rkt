@@ -309,6 +309,189 @@
       (restore-meta-state! s))))))
 
 ;; ============================================================
+;; A5-A12: TROPICAL FUEL ADVERSARIAL BASELINES (Pre-0)
+;; Per docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md §4
+;; Each test has hypothesis (HYP) + decision rule (DR).
+;; Pre-impl baselines stress current counter-based fuel + adjacent
+;; mechanisms (save/restore, sequential per-consumer counters);
+;; post-impl re-run via bench-ab.rkt --ref establishes A/B comparison.
+;; ============================================================
+
+(displayln "\n\n=== A5-A12: TROPICAL FUEL ADVERSARIAL BASELINES (Pre-0) ===\n")
+
+;; A5: Cost-bounded vs flat fuel exhaustion (semantic axis)
+;; Counter is cost-blind — exhausts at N steps regardless of per-step cost.
+;; Post-impl tropical fuel cell exhausts at accumulated cost == budget.
+;; Pre-impl: measure counter-decrement loop cost (cost distribution irrelevant).
+;; Workload: 80% cost 1, 15% cost 10, 5% cost 1000 (realistic non-uniform profile).
+;; HYP: pre-impl exhausts at exactly N=budget steps regardless of cost distribution.
+;; DR: post-impl must exhaust at correct cost-aware step count; bug if wrong.
+(displayln "A5: cost-bounded vs flat fuel exhaustion (semantic axis)")
+(define (a5-mixed-cost-step i)
+  ;; Cost at step i (post-impl will use; pre-impl ignores).
+  (cond
+    [(< (modulo i 20) 16) 1]      ;; 80% cheap
+    [(< (modulo i 20) 19) 10]     ;; 15% medium
+    [else 1000]))                  ;; 5% expensive
+(define a5-pre (bench-ms "A5.1 pre-impl counter loop 1000 mixed-cost steps" 10
+  (let loop ([net mfuel-net] [i 0])
+    (if (>= i 1000) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (add1 i))))))
+(define a5-total-cost-1000
+  (for/sum ([i (in-range 1000)]) (a5-mixed-cost-step i)))
+(printf "  A5.1.note: total cost over 1000 mixed-cost steps = ~a (pre-impl exhausts at 1000 step-count regardless)\n"
+        a5-total-cost-1000)
+
+;; A6: Deep dependency chain (Phase 3C UC1 forward-capture)
+;; Pre-impl: simulate dep-graph walk via list iteration; measure per-N.
+;; Post-impl: residuation walks the propagator dependency graph backward from
+;; contradicted fuel cell, summing per-step costs via `tropical-left-residual`.
+;; HYP: walk cost O(N) for chain depth N; for N=200, < 100 μs.
+;; DR: if walk > 1ms for N=200 → reconsider Phase 3C UC1 (lazy walk vs eager).
+(displayln "\nA6: deep dependency chain (Phase 3C UC1 forward-capture)")
+(define (a6-make-dep-chain N)
+  (for/list ([i (in-range N)]) (cons i (modulo i 10))))
+(define a6-chain-10 (a6-make-dep-chain 10))
+(define a6-chain-50 (a6-make-dep-chain 50))
+(define a6-chain-200 (a6-make-dep-chain 200))
+(define a6-walk-10 (bench "A6.1 walk N=10 chain (sum costs)" 50000
+  (for/sum ([entry (in-list a6-chain-10)]) (cdr entry))))
+(define a6-walk-50 (bench "A6.2 walk N=50 chain (sum costs)" 20000
+  (for/sum ([entry (in-list a6-chain-50)]) (cdr entry))))
+(define a6-walk-200 (bench "A6.3 walk N=200 chain (sum costs)" 5000
+  (for/sum ([entry (in-list a6-chain-200)]) (cdr entry))))
+(define a6-mem-200 (bench-mem "A6.mem N=200 chain construction + walk" 100
+  (let ([chain (a6-make-dep-chain 200)])
+    (for/sum ([entry (in-list chain)]) (cdr entry)))))
+
+;; A7: High-frequency decrement (memory pressure — primary signal)
+;; Pre-impl: bounded retention (struct-copy GC'd between iterations).
+;; Post-impl: tagged-cell-value entry per worldview accumulates;
+;; under no-speculation (canonical fuel cell), should be similar bounded retention.
+;; HYP: post-impl alloc within 1.25-2x pre-impl (per Finding 1: 62.5 bytes/dec baseline);
+;; comparable GC count under no-speculation.
+;; DR: if alloc > 5x → object pool; if GC > 3x → investigate retention pattern.
+(displayln "\nA7: high-frequency decrement (fuel exhaustion under load — memory PRIMARY)")
+(define a7-1k (bench-mem "A7.1 1000 decrements alloc+retain" 50
+  (let loop ([net mfuel-net] [n 1000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+(define a7-10k (bench-mem "A7.2 10000 decrements alloc+retain" 20
+  (let loop ([net mfuel-net] [n 10000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+(define a7-100k (bench-mem "A7.3 100000 decrements alloc+retain" 5
+  (let loop ([net mfuel-net] [n 100000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+
+;; A8: Multi-consumer concurrent (10 consumers × 1000 decrements each — sequential)
+;; Pre-impl: each "consumer" has its own prop-network with its own counter; sequential.
+;; Post-impl: each consumer allocates its own tropical fuel cell via the primitive.
+;; HYP: O(N × M) wall for N consumers × M decrements (linear);
+;; memory = O(N) cell allocation + O(N × M) cumulative decrements.
+;; DR: if non-linear scaling → investigate per-consumer pollution OR cross-consumer
+;; state interference; if memory > predicted → investigate per-consumer overhead (M9 baseline).
+(displayln "\nA8: multi-consumer concurrent (10×1000 decrements — sequential composition)")
+(define a8-mc (bench-mem "A8.1 10 consumers × 1000 decrements each" 20
+  (for/list ([_ (in-range 10)])
+    (let loop ([net (make-prop-network 10000)] [n 1000])
+      (if (zero? n) net
+        (loop (struct-copy prop-network net
+                [hot (struct-copy prop-net-hot (prop-network-hot net)
+                       [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+              (sub1 n)))))))
+
+;; A9: Speculation rollback cost (write-tagged-then-rollback — 100 cycles)
+;; Pre-impl: save-meta-state + meta-write + restore-meta-state! per cycle.
+;; This is the elab-net snapshot mechanism (off-network state for fuel; counter
+;; restored from snapshot). Phase 1C migration via tagged-cell-value worldview.
+;; HYP: post-impl significantly faster (worldview-narrow O(1) vs snapshot restore O(N) cells);
+;; less retention (per-worldview slice vs full snapshot).
+;; DR: if memory leaks under repeated rollback → S(-1) tagged-cell-value cleanup bug
+;; coordination needed between Phase 1B/1C + S(-1) stratum.
+(displayln "\nA9: speculation rollback cost (100 write-tagged-then-rollback cycles)")
+(define a9-100 (bench-mem "A9.1 100 spec cycles (save + write + restore)" 20
+  (with-fresh (λ ()
+    (for ([_ (in-range 100)])
+      (define s (save-meta-state))
+      (define m (fresh-meta '() (expr-Type 0) 'spec))
+      (solve-meta! (expr-meta-id m) (expr-Nat))
+      (restore-meta-state! s))))))
+
+;; A10: Branch fork explosion (5-way fork — Phase 3A per-branch fuel forward-capture)
+;; Pre-impl: simulate 5 branches via 5 sequential counters; measure cumulative.
+;; Post-impl: per-branch tropical fuel cell allocated per union component;
+;; threshold per branch; branch-local residuation walks per-branch dep chain on contradiction.
+;; HYP: O(B × M) wall for B branches × M decrements; memory O(B) cell + O(B × M) tagged
+;; entries during speculation; collapses to O(1) cell + O(M) entries after resolution.
+;; DR: if retention after resolution > O(M) → retracted branch state leaks
+;; (S(-1) stratum cleanup needs Phase 3A coordination).
+(displayln "\nA10: branch fork explosion (5-way × 100 decrements per branch)")
+(define a10-5-way (bench-mem "A10.1 5-way fork × 100 decrements per branch" 30
+  (for/list ([_ (in-range 5)])
+    (let loop ([net (make-prop-network 1000)] [n 100])
+      (if (zero? n) net
+        (loop (struct-copy prop-network net
+                [hot (struct-copy prop-net-hot (prop-network-hot net)
+                       [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+              (sub1 n)))))))
+
+;; A11: Pathological cost patterns
+;; HYP: pre-impl exhausts at exactly N=budget steps for ALL sub-tests (cost-blind);
+;; post-impl exhausts at correct cost-aware point per sub-test.
+;; DR: bug in cost accumulation if post-impl exhausts incorrectly;
+;; pathological alloc patterns indicate merge-fn bug.
+(displayln "\nA11: pathological cost patterns")
+;; A11.1: single huge cost (1 step × cost 1000000) — pre-impl: 1 decrement
+(define a11-huge (bench "A11.1 single huge cost (pre-impl: 1 dec)" 50000
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net)
+           [fuel (- (prop-net-hot-fuel (prop-network-hot mfuel-net)) 1)])])))
+;; A11.2: many tiny costs (10000 steps × cost 1) — pre-impl: 10000 decrements
+(define a11-tiny (bench-ms "A11.2 many tiny costs 10000 steps × 1" 20
+  (let loop ([net mfuel-net] [n 10000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+;; A11.3: alternating (1000 steps; 50% cost 0, 50% cost 2) — pre-impl: 1000 decrements
+(define a11-alt (bench-ms "A11.3 alternating cost (1000 steps)" 50
+  (let loop ([net mfuel-net] [i 0])
+    (if (>= i 1000) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (add1 i))))))
+;; A11.4: monotonically increasing (step i costs i; budget 1000) — pre-impl: 1000 decrements
+;; Post-impl: would exhaust at step ~44 (sum 1+2+...+44 ≈ 990).
+(define a11-mono (bench-ms "A11.4 monotonically increasing cost (1000 steps)" 50
+  (let loop ([net mfuel-net] [i 0])
+    (if (>= i 1000) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (add1 i))))))
+
+;; A12: residuation operator boundary algebra — N/A pre-impl
+;; (tropical-left-residual doesn't exist; will be measured post-Phase-1B
+;;  via bench-tropical-fuel.rkt + tests/test-tropical-fuel.rkt unit tests)
+(displayln "\nA12: residuation boundary algebra — N/A pre-impl (deferred to post-Phase-1B run)")
+
+;; ============================================================
 ;; E: E2E BASELINES — Realistic programs
 ;; ============================================================
 
@@ -413,6 +596,21 @@
 (printf "A1b type-meta 20-different solve:    ~a\n" (fmt-mem a1b))
 (printf "A2a 10 spec cycles (no branching):   ~a\n" (fmt-mem a2a))
 (printf "A2b 10 spec cycles (3 metas each):   ~a\n" (fmt-mem a2b))
+(printf "A5 cost-bounded loop (1000 steps):   ~a ms (cost-blind pre-impl; total cost = ~a)\n"
+        (~r a5-pre #:precision '(= 3)) a5-total-cost-1000)
+(printf "A6 dep-chain walk:                   N=10: ~a  N=50: ~a  N=200: ~a μs\n"
+        (~r a6-walk-10 #:precision '(= 3)) (~r a6-walk-50 #:precision '(= 3)) (~r a6-walk-200 #:precision '(= 3)))
+(printf "A6.mem N=200 chain construction:     ~a\n" (fmt-mem a6-mem-200))
+(printf "A7 high-freq decrement N=1000:       ~a\n" (fmt-mem a7-1k))
+(printf "A7 high-freq decrement N=10000:      ~a\n" (fmt-mem a7-10k))
+(printf "A7 high-freq decrement N=100000:     ~a\n" (fmt-mem a7-100k))
+(printf "A8 multi-consumer 10×1000:           ~a\n" (fmt-mem a8-mc))
+(printf "A9 100 spec cycles (save+write+restore): ~a\n" (fmt-mem a9-100))
+(printf "A10 5-way fork × 100/branch:         ~a\n" (fmt-mem a10-5-way))
+(printf "A11.1 single huge cost (1 dec):      ~a μs/call\n" (~r a11-huge #:precision '(= 3)))
+(printf "A11.2 many tiny costs (10k steps):   ~a ms\n" (~r a11-tiny #:precision '(= 3)))
+(printf "A11.3 alternating cost (1000 steps): ~a ms\n" (~r a11-alt #:precision '(= 3)))
+(printf "A11.4 monotonic cost (1000 steps):   ~a ms\n" (~r a11-mono #:precision '(= 3)))
 (printf "E1 simple (no metas):                ~a\n" (fmt-mem e1))
 (printf "E2 parametric Seqable (Axis 1):      ~a\n" (fmt-mem e2))
 (printf "E3 polymorphic id (Axis 5):          ~a\n" (fmt-mem e3))
