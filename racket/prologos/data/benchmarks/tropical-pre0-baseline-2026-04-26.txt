@@ -1,0 +1,105 @@
+#t
+#t
+#t
+#t
+#t
+
+=== M: MICRO-BENCHMARKS (per-operation baseline) ===
+
+M1: attribute-map facet access (4C hot path)
+  M1a that-read :type: 0.027 μs/call (20000 calls)
+  M1b that-read absent facet: 0.027 μs/call (20000 calls)
+
+M2: meta-info CHAMP access (retirement target — Axis 2)
+  M2a fresh-meta (baseline): 40.332 μs/call (5000 calls)
+  M2b solve-meta! (writes CHAMP + cell): 44.133 μs/call (2000 calls)
+  M2c meta-solution read (CHAMP read): 46.507 μs/call (5000 calls)
+
+M3: infer on core AST kinds (Axis 3 aspect-coverage baseline)
+  M3a infer lam: 447.174 μs/call (2000 calls)
+  M3b infer app: 545.125 μs/call (2000 calls)
+  M3c infer Pi: 347.491 μs/call (2000 calls)
+
+
+=== M7-M13: TROPICAL FUEL SUBSTRATE BASELINES (Pre-0) ===
+
+M7: counter decrement cost (baseline for post-impl tropical-fuel-merge)
+  M7.1 struct-copy decrement n=1: 0.026 μs/call (50000 calls)
+  M7.2 struct-copy decrement n=100: 0.025 μs/call (50000 calls)
+  M7.3 struct-copy decrement n=10000: 0.024 μs/call (50000 calls)
+  M7.mem 10000 decrements alloc+retain: wall=0.113 ms  alloc=625.2 KB  retain=-0.1 KB  (n=10)
+
+M8: inline fuel check cost (baseline for post-impl threshold propagator)
+  M8.1 inline (<= fuel 0) not-exhausted: 0.006 μs/call (50000 calls)
+  M8.2 inline (<= fuel 0) at-boundary: 0.006 μs/call (50000 calls)
+  M8.3 inline (<= fuel 0) exhausted: 0.006 μs/call (50000 calls)
+
+M9: net-new-cell allocation cost (baseline for per-consumer fuel cell allocation)
+  M9.1 net-new-cell N=1: wall=0.015 ms  alloc=6.5 KB  retain=0.3 KB  (n=200)
+  M9.2 net-new-cell N=5 sequential: wall=0.017 ms  alloc=9.2 KB  retain=0.2 KB  (n=100)
+  M9.3 net-new-cell N=50 sequential: wall=0.057 ms  alloc=74.6 KB  retain=0.2 KB  (n=50)
+  M9.4 net-new-cell N=500 sequential: wall=0.247 ms  alloc=624.6 KB  retain=0.3 KB  (n=20)
+
+M10: residuation operator — N/A pre-impl (deferred to post-Phase-1B run)
+
+M11: integer add cost (baseline for tropical tensor)
+  M11.1 small fixnum + small fixnum: 0.001 μs/call (50000 calls)
+  M11.2 large fixnum + small fixnum: 0.001 μs/call (50000 calls)
+  M11.3 +inf.0 + finite (overflow propagation): 0.001 μs/call (50000 calls)
+
+M12: SRE domain registration — N/A pre-impl (deferred to post-Phase-1B run)
+
+M13: prop-network-fuel access (baseline for post-impl cell-read)
+  M13.1 prop-network-fuel access (struct-field): 0.006 μs/call (50000 calls)
+
+
+=== A: ADVERSARIAL TESTS (per-axis stress) ===
+
+A1: type-variable meta with concrete solution (Axis 5)
+  A1a 10 metas solve to same type: wall=3.364 ms  alloc=13353.8 KB  retain=-8.2 KB  (n=10)
+  A1b 20 metas solve to different types: wall=6.585 ms  alloc=24513.2 KB  retain=-18.6 KB  (n=10)
+
+A2: speculation cycles (Phase 8 union-type ATMS baseline)
+  A2a 10 spec cycles, no branching: wall=0.069 ms  alloc=57.3 KB  retain=1.2 KB  (n=10)
+  A2b 10 spec cycles, 3 metas each (branching sim): wall=0.091 ms  alloc=102.0 KB  retain=1.4 KB  (n=10)
+
+
+=== E: E2E BASELINES (full pipeline) ===
+
+  E1 simple (no metas): wall=55.230 ms  alloc=17968.2 KB  retain=-4.8 KB  (n=10)
+  E2 parametric Seqable (Axis 1 bridge): wall=169.526 ms  alloc=346444.7 KB  retain=-11.0 KB  (n=10)
+  E3 polymorphic id (Axis 5 :type/:term): wall=90.800 ms  alloc=65419.1 KB  retain=9.5 KB  (n=10)
+  E4 generic arithmetic (Axis 6): wall=93.481 ms  alloc=54278.2 KB  retain=26.0 KB  (n=10)
+
+
+=== V: VALIDATION (parity reference points) ===
+
+  V1a FAIL: infer Nat = #(struct:expr-Type #(struct:lzero))
+  V-total: 1 failures
+
+
+=== SUMMARY ===
+
+M1 attribute-map facet access:       0.03 / 0.03 μs  (that-read :type / :absent)
+M2 CHAMP meta-info access:           fresh=40.33  solve=44.13  read=46.51 μs
+M3 infer core forms:                 lam=447.17  app=545.12  Pi=347.49 μs
+M7 counter decrement (struct-copy):  n=1: 0.026  n=100: 0.025  n=10000: 0.024 μs
+M7.mem 10000 decrements:             0.11 ms / 625.2 KB alloc / -0.1 KB retain
+M8 inline (<= fuel 0) check:         not-exh: 0.006  boundary: 0.006  exh: 0.006 μs
+M9 net-new-cell allocation:          N=1: 0.01 ms / 6.5 KB alloc / 0.3 KB retain
+M9 net-new-cell allocation:          N=5: 0.02 ms / 9.2 KB alloc / 0.2 KB retain
+M9 net-new-cell allocation:          N=50: 0.06 ms / 74.6 KB alloc / 0.2 KB retain
+M9 net-new-cell allocation:          N=500: 0.25 ms / 624.6 KB alloc / 0.3 KB retain
+M11 integer add cost:                fixnum: 0.001  large: 0.001  +inf.0: 0.001 μs
+M13 prop-network-fuel access:        0.006 μs
+A1a type-meta 10-same solve:         3.36 ms / 13353.8 KB alloc / -8.2 KB retain
+A1b type-meta 20-different solve:    6.58 ms / 24513.2 KB alloc / -18.6 KB retain
+A2a 10 spec cycles (no branching):   0.07 ms / 57.3 KB alloc / 1.2 KB retain
+A2b 10 spec cycles (3 metas each):   0.09 ms / 102.0 KB alloc / 1.4 KB retain
+E1 simple (no metas):                55.23 ms / 17968.2 KB alloc / -4.8 KB retain
+E2 parametric Seqable (Axis 1):      169.53 ms / 346444.7 KB alloc / -11.0 KB retain
+E3 polymorphic id (Axis 5):          90.80 ms / 65419.1 KB alloc / 9.5 KB retain
+E4 generic arithmetic (Axis 6):      93.48 ms / 54278.2 KB alloc / 26.0 KB retain
+V correctness:                       1 failures
+
+(Baselines captured. Re-run after 4C phases land for A/B comparison.)

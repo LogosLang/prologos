@@ -160,6 +160,120 @@
     (infer '() (expr-Pi 'mw (expr-Nat) (expr-Bool)))))))
 
 ;; ============================================================
+;; M7-M13: PRE-0 BASELINES FOR TROPICAL FUEL SUBSTRATE
+;; Per docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md §3
+;; Each test has hypothesis (HYP) + decision rule (DR).
+;; Pre-impl baselines measure CURRENT counter-based fuel; post-impl
+;; comparison runs after Phase 1B+1C land via bench-ab.rkt --ref.
+;; ============================================================
+
+(displayln "\n\n=== M7-M13: TROPICAL FUEL SUBSTRATE BASELINES (Pre-0) ===\n")
+
+;; Pre-allocate a network for fuel-related ops
+(define mfuel-net (make-prop-network 1000000))
+
+;; M7: Counter decrement cost (baseline for post-impl tropical-fuel-merge)
+;; Pattern: (struct-copy prop-network ... [hot (struct-copy prop-net-hot ... [fuel ...])])
+;; Per BSP-LE Track 0 hot/warm/cold split: fuel lives in prop-net-hot (frequently mutated)
+;; Mirrors the actual decrement at propagator.rkt:2382-2384 (BSP scheduler snapshot pattern)
+;; HYP: cell-write within 50% of struct-copy cost (~1.5x at worst); both O(1) per call
+;; DR: if cell-write > 2x struct-copy → reconsider canonical instance approach (revisit Q-A2)
+(displayln "M7: counter decrement cost (baseline for post-impl tropical-fuel-merge)")
+(define m7-1 (bench "M7.1 struct-copy decrement n=1" 50000
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net)
+           [fuel (sub1 (prop-net-hot-fuel (prop-network-hot mfuel-net)))])])))
+(define m7-100 (bench "M7.2 struct-copy decrement n=100" 50000
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net)
+           [fuel (- (prop-net-hot-fuel (prop-network-hot mfuel-net)) 100)])])))
+(define m7-10000 (bench "M7.3 struct-copy decrement n=10000" 50000
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net)
+           [fuel (- (prop-net-hot-fuel (prop-network-hot mfuel-net)) 10000)])])))
+
+;; M7-mem: Memory-axis measurement for decrement (ties into R1 per-decrement allocation rate)
+;; HYP: ~200-300 bytes/decrement (struct-copy of prop-net-hot + prop-network); cell-write 1.25-2x baseline
+;; DR: if post-impl > 5x → object pooling for tagged-cell-value entries
+(define m7-mem (bench-mem "M7.mem 10000 decrements alloc+retain" 10
+  (let loop ([net mfuel-net] [n 10000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+
+;; M8: Inline (<= fuel 0) check cost (baseline for post-impl threshold propagator)
+;; Mirrors actual check sites at propagator.rkt:1817, 2366, 2373, 2992, 3045, 3132, 3135, 3142
+;; HYP: post-impl threshold propagator within 30% of inline check at no-trigger case
+;; DR: if no-trigger wall > 100% of inline check → reconsider threshold approach (inline check fast-path)
+(displayln "\nM8: inline fuel check cost (baseline for post-impl threshold propagator)")
+(define m8-not-exhausted (bench "M8.1 inline (<= fuel 0) not-exhausted" 50000
+  (<= (prop-network-fuel mfuel-net) 0)))
+;; Boundary case via synthetic net with fuel=0
+(define m8-net-boundary
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net) [fuel 0])]))
+(define m8-at-boundary (bench "M8.2 inline (<= fuel 0) at-boundary" 50000
+  (<= (prop-network-fuel m8-net-boundary) 0)))
+(define m8-net-exhausted
+  (struct-copy prop-network mfuel-net
+    [hot (struct-copy prop-net-hot (prop-network-hot mfuel-net) [fuel -10])]))
+(define m8-exhausted (bench "M8.3 inline (<= fuel 0) exhausted" 50000
+  (<= (prop-network-fuel m8-net-exhausted) 0)))
+
+;; M9: net-new-cell baseline (per-consumer fuel cell allocation cost)
+;; HYP: O(1) per cell; ~200-500 bytes per cell allocation; linear with N
+;; DR: if non-O(1) → reconsider per-consumer feasibility; if mem > 1KB/cell → investigate layout
+(displayln "\nM9: net-new-cell allocation cost (baseline for per-consumer fuel cell allocation)")
+(define identity-merge (lambda (a b) a))
+(define m9-1 (bench-mem "M9.1 net-new-cell N=1" 200
+  (let-values ([(net cid) (net-new-cell (make-prop-network 1000000) 0 identity-merge)])
+    (void))))
+(define m9-5 (bench-mem "M9.2 net-new-cell N=5 sequential" 100
+  (let loop ([net (make-prop-network 1000000)] [n 5])
+    (if (zero? n) net
+      (let-values ([(net2 cid) (net-new-cell net 0 identity-merge)])
+        (loop net2 (sub1 n)))))))
+(define m9-50 (bench-mem "M9.3 net-new-cell N=50 sequential" 50
+  (let loop ([net (make-prop-network 1000000)] [n 50])
+    (if (zero? n) net
+      (let-values ([(net2 cid) (net-new-cell net 0 identity-merge)])
+        (loop net2 (sub1 n)))))))
+(define m9-500 (bench-mem "M9.4 net-new-cell N=500 sequential" 20
+  (let loop ([net (make-prop-network 1000000)] [n 500])
+    (if (zero? n) net
+      (let-values ([(net2 cid) (net-new-cell net 0 identity-merge)])
+        (loop net2 (sub1 n)))))))
+
+;; M10: residuation operator — N/A pre-impl (tropical-left-residual doesn't exist)
+;; Will be measured post-Phase-1B in bench-tropical-fuel.rkt
+(displayln "\nM10: residuation operator — N/A pre-impl (deferred to post-Phase-1B run)")
+
+;; M11: integer add cost (baseline for tropical tensor +)
+;; HYP: ~5-10 ns/call (single arithmetic op); 0 alloc for fixnum cases
+;; DR: if wall > 50 ns → investigate Racket + for relevant numeric domain
+;; If memory non-zero for fixnum case → choose representation more carefully (Q-1B-2)
+(displayln "\nM11: integer add cost (baseline for tropical tensor)")
+(define m11-fixnum (bench "M11.1 small fixnum + small fixnum" 50000
+  (+ 5 10)))
+(define m11-large (bench "M11.2 large fixnum + small fixnum" 50000
+  (+ 1000000 5)))
+(define m11-inf (bench "M11.3 +inf.0 + finite (overflow propagation)" 50000
+  (+ +inf.0 5)))
+
+;; M12: SRE domain registration overhead — N/A pre-impl (no new domain to register)
+;; Will be measured post-Phase-1B by timing tropical-fuel-sre-domain registration
+(displayln "\nM12: SRE domain registration — N/A pre-impl (deferred to post-Phase-1B run)")
+
+;; M13: prop-network-fuel access (baseline for post-impl net-cell-read of fuel cell)
+;; HYP: cell-read 6-10x slower than struct-field access (constant factor; per BSP-LE 0 ~30-50 ns)
+;; DR: if cell-read > 100 ns → pre-resolved cell-id cache
+(displayln "\nM13: prop-network-fuel access (baseline for post-impl cell-read)")
+(define m13-1 (bench "M13.1 prop-network-fuel access (struct-field)" 50000
+  (prop-network-fuel mfuel-net)))
+
+;; ============================================================
 ;; A: ADVERSARIAL TESTS — Stress the 9 axes
 ;; ============================================================
 
@@ -270,18 +384,31 @@
 
 (displayln "\n\n=== SUMMARY ===\n")
 
-(printf "M1 attribute-map facet access:       ~a / ~a μs  (that-read :type / :absent)\n"
-        (~r m1a #:precision '(= 2)) (~r m1b #:precision '(= 2)))
-(printf "M2 CHAMP meta-info access:           fresh=~a  solve=~a  read=~a μs\n"
-        (~r m2a #:precision '(= 2)) (~r m2b #:precision '(= 2)) (~r m2c #:precision '(= 2)))
-(printf "M3 infer core forms:                 lam=~a  app=~a  Pi=~a μs\n"
-        (~r m3a #:precision '(= 2)) (~r m3b #:precision '(= 2)) (~r m3c #:precision '(= 2)))
 (define (fmt-mem v)
   ;; v is (vector wall-ms alloc-bytes retain-bytes)
   (format "~a ms / ~a KB alloc / ~a KB retain"
           (~r (vector-ref v 0) #:precision '(= 2))
           (~r (/ (vector-ref v 1) 1024.0) #:precision '(= 1))
           (~r (/ (vector-ref v 2) 1024.0) #:precision '(= 1))))
+
+(printf "M1 attribute-map facet access:       ~a / ~a μs  (that-read :type / :absent)\n"
+        (~r m1a #:precision '(= 2)) (~r m1b #:precision '(= 2)))
+(printf "M2 CHAMP meta-info access:           fresh=~a  solve=~a  read=~a μs\n"
+        (~r m2a #:precision '(= 2)) (~r m2b #:precision '(= 2)) (~r m2c #:precision '(= 2)))
+(printf "M3 infer core forms:                 lam=~a  app=~a  Pi=~a μs\n"
+        (~r m3a #:precision '(= 2)) (~r m3b #:precision '(= 2)) (~r m3c #:precision '(= 2)))
+(printf "M7 counter decrement (struct-copy):  n=1: ~a  n=100: ~a  n=10000: ~a μs\n"
+        (~r m7-1 #:precision '(= 3)) (~r m7-100 #:precision '(= 3)) (~r m7-10000 #:precision '(= 3)))
+(printf "M7.mem 10000 decrements:             ~a\n" (fmt-mem m7-mem))
+(printf "M8 inline (<= fuel 0) check:         not-exh: ~a  boundary: ~a  exh: ~a μs\n"
+        (~r m8-not-exhausted #:precision '(= 3)) (~r m8-at-boundary #:precision '(= 3)) (~r m8-exhausted #:precision '(= 3)))
+(printf "M9 net-new-cell allocation:          N=1: ~a\n" (fmt-mem m9-1))
+(printf "M9 net-new-cell allocation:          N=5: ~a\n" (fmt-mem m9-5))
+(printf "M9 net-new-cell allocation:          N=50: ~a\n" (fmt-mem m9-50))
+(printf "M9 net-new-cell allocation:          N=500: ~a\n" (fmt-mem m9-500))
+(printf "M11 integer add cost:                fixnum: ~a  large: ~a  +inf.0: ~a μs\n"
+        (~r m11-fixnum #:precision '(= 3)) (~r m11-large #:precision '(= 3)) (~r m11-inf #:precision '(= 3)))
+(printf "M13 prop-network-fuel access:        ~a μs\n" (~r m13-1 #:precision '(= 3)))
 (printf "A1a type-meta 10-same solve:         ~a\n" (fmt-mem a1a))
 (printf "A1b type-meta 20-different solve:    ~a\n" (fmt-mem a1b))
 (printf "A2a 10 spec cycles (no branching):   ~a\n" (fmt-mem a2a))
