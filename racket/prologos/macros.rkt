@@ -9232,10 +9232,27 @@
             (define meta (lookup-ctor ctor))
             (define n-fields
               (if meta (length (ctor-meta-field-types meta)) 0))
-            ;; Generate fresh field binding names
+            ;; Generate fresh field binding names.
+            ;; Issue #18: must be globally unique per dispatch site, NOT just
+            ;; (ctor + index). When compile-match-tree recurses on a new
+            ;; column whose dispatch is the same constructor (e.g. nested
+            ;; `cons` decomposition in a recursive list traversal), reusing
+            ;; "__ctor_i" names lexically shadows the outer dispatch's
+            ;; field bindings. Any let-bindings emitted by `specialize-rows`
+            ;; on the OUTER scope reference the outer field symbols by
+            ;; name; a second dispatch on the same ctor wraps those
+            ;; references inside an inner `reduce-arm` whose `field-names`
+            ;; rebind the same symbols, silently re-aliasing the let-bound
+            ;; values to the inner scrutinee's components. The recursive
+            ;; call then operates on the wrong sub-list (e.g. the inner
+            ;; cons-tail rather than the outer cons-tail). The bug is
+            ;; silent — no error, only wrong results.
+            ;; gensym makes each dispatch site's binders globally distinct
+            ;; so the lexical resolution in `elaborate-reduce-arm` always
+            ;; finds the intended scope.
             (define field-names
               (for/list ([i (in-range n-fields)])
-                (string->symbol (format "__~a_~a" ctor i))))
+                (gensym (string->symbol (format "__~a_~a_" ctor i)))))
             ;; Specialize rows for this constructor
             (define specialized
               (specialize-rows rows col ctor n-fields param-names loc))
