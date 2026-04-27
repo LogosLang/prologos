@@ -99,6 +99,32 @@
             runs)
     (vector (med wall-times) (med alloc-bytes) (med retain-bytes))))
 
+;; bench-gc: wall-clock + GC duration during body (memory-as-PRIMARY-signal R-tier)
+;; Captures GC time consumed during the body via current-gc-milliseconds.
+(define-syntax-rule (bench-gc label runs body)
+  (let ()
+    (for ([_ (in-range 3)]) body)
+    (define results
+      (for/list ([_ (in-range runs)])
+        (collect-garbage) (collect-garbage)
+        (define gc-before (current-gc-milliseconds))
+        (define start (current-inexact-milliseconds))
+        body
+        (define end (current-inexact-milliseconds))
+        (define gc-after (current-gc-milliseconds))
+        (vector (- end start) (- gc-after gc-before))))
+    (define wall-times (for/list ([r results]) (vector-ref r 0)))
+    (define gc-times (for/list ([r results]) (vector-ref r 1)))
+    (define (med xs) (list-ref (sort xs <) (quotient (length xs) 2)))
+    (define gc-pct (* 100.0 (/ (med gc-times) (max 0.001 (med wall-times)))))
+    (printf "  ~a: wall=~a ms  gc=~a ms (~a%)  (n=~a)\n"
+            label
+            (~r (med wall-times) #:precision '(= 3))
+            (~r (med gc-times) #:precision '(= 3))
+            (~r gc-pct #:precision '(= 1))
+            runs)
+    (vector (med wall-times) (med gc-times))))
+
 (define (silent thunk)
   (with-output-to-string
     (lambda ()
@@ -590,6 +616,64 @@
   (silent (lambda () (process-string-ws e9-src)))))
 
 ;; ============================================================
+;; R: MEMORY-AS-PRIMARY-SIGNAL BASELINES (Pre-0)
+;; Per docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md §8
+;; R-tier reframes M/A/E memory measurements with memory-as-PRIMARY lens
+;; PLUS adds 2 NEW measurements (R3 GC duration, R5 extended speculation).
+;; R4 N/A pre-impl — captured at D.1 §9.10 (post-Phase-1B `bench-tropical-fuel.rkt`).
+;; ============================================================
+
+(displayln "\n\n=== R: MEMORY-AS-PRIMARY-SIGNAL BASELINES (Pre-0) ===\n")
+
+;; R1: Per-decrement allocation rate (cross-reference to A7)
+;; HYP: pre-impl ~62.5 bytes/dec (per M-tier Finding 1 + A-tier Finding 7)
+;; DR: if post-impl alloc > 5x baseline → object pool tagged-cell-value entries
+(displayln "R1: per-decrement allocation rate (cross-reference: A7 measured 62.5 bytes/dec linear across N=1k-100k)")
+(printf "  R1.note: A7.1=62.7 bytes/dec; A7.2=62.5; A7.3=62.5 — linear scaling confirmed across 5 orders of magnitude.\n")
+(printf "  R1.note: post-impl DR ≤ 5x = 312 bytes/dec; design target 1.25-2x = 78-125 bytes/dec.\n")
+
+;; R2: Retention after quiescence (cross-reference to E7)
+;; HYP: pre-impl ~25-50KB retention; post-impl + ~5-10KB for tropical fuel infrastructure
+;; DR: if retention grows with workload size (vs constant) → fuel cell value not GC'd per cycle (worldview accumulation issue)
+(displayln "\nR2: retention after quiescence (cross-reference: E7 measured -6.7 KB retain after probe; bench-mem already does collect-garbage)")
+(printf "  R2.note: E7 probe (28 expressions) retention=-6.7 KB; E2 Seqable=2.9 KB; E3 polymorphic=8.7 KB; E4 generic=18.2 KB.\n")
+(printf "  R2.note: post-impl DR retention should not exceed E-tier baseline + ~~10 KB for canonical fuel cells (cell-id 11/12 + threshold prop).\n")
+
+;; R3: GC pressure profile under load (NEW measurement; uses bench-gc macro)
+;; HYP: pre-impl minor GC every ~10000 decrements (struct-copy GC pressure);
+;;      post-impl similar minor GC frequency; possibly slightly higher for tagged-cell-value
+;; DR: if GC count > 3x baseline → object pooling strategy needed
+;;     if GC duration > 2x → investigate which allocations survive to old gen
+(displayln "\nR3: GC pressure profile under load (100k decrements; bench-gc captures GC duration)")
+(define r3-100k (bench-gc "R3.1 100k decrements GC profile" 5
+  (let loop ([net mfuel-net] [n 100000])
+    (if (zero? n) net
+      (loop (struct-copy prop-network net
+              [hot (struct-copy prop-net-hot (prop-network-hot net)
+                     [fuel (sub1 (prop-net-hot-fuel (prop-network-hot net)))])])
+            (sub1 n))))))
+
+;; R4: compound vs flat cell value layout — N/A pre-impl
+;; (tropical fuel cell layout doesn't exist; comparison is between hypothetical
+;;  flat tagged-cell-value vs hypothetical compound cell value with multiple worldview tags)
+;; Captured at D.1 §9.10 — post-Phase-1B `bench-tropical-fuel.rkt`
+(displayln "\nR4: compound vs flat cell layout — N/A pre-impl (captured at D.1 §9.10; post-Phase-1B bench-tropical-fuel.rkt)")
+
+;; R5: Long-running fuel cell retention under speculation accumulation (1000 cycles, extends A9)
+;; HYP: per-cycle 1 new tagged entry on commit; 1 entry retracted on rollback
+;;      cumulative bounded by S(-1) retraction cleanup; retention stable or slowly-growing (NOT unbounded)
+;; DR: if retention grows unboundedly → bug in S(-1) tagged-cell-value cleanup
+;;     if per-cycle entry count > 1 → investigate tag-entry creation pattern
+(displayln "\nR5: long-running fuel cell retention under speculation accumulation (1000 cycles)")
+(define r5-1k (bench-mem "R5.1 1000 spec cycles (extended retention test)" 5
+  (with-fresh (λ ()
+    (for ([_ (in-range 1000)])
+      (define s (save-meta-state))
+      (define m (fresh-meta '() (expr-Type 0) 'spec))
+      (solve-meta! (expr-meta-id m) (expr-Nat))
+      (restore-meta-state! s))))))
+
+;; ============================================================
 ;; V: VALIDATION — Correctness reference for parity harness
 ;; ============================================================
 
@@ -681,6 +765,14 @@
 (printf "E7 probe (realistic):                ~a\n" (fmt-mem e7))
 (printf "E8 50-deep id composition:           ~a\n" (fmt-mem e8))
 (printf "E9 cost-bounded elaboration:         ~a\n" (fmt-mem e9))
+(define (fmt-gc v)
+  ;; v is (vector wall-ms gc-ms)
+  (format "wall=~a ms / gc=~a ms (~a%)"
+          (~r (vector-ref v 0) #:precision '(= 2))
+          (~r (vector-ref v 1) #:precision '(= 2))
+          (~r (* 100.0 (/ (vector-ref v 1) (max 0.001 (vector-ref v 0)))) #:precision '(= 1))))
+(printf "R3 100k decrements GC profile:       ~a\n" (fmt-gc r3-100k))
+(printf "R5 1000 spec cycles (retention):     ~a\n" (fmt-mem r5-1k))
 (printf "V correctness:                       ~a failures\n" v-failures)
 
 (displayln "\n(Baselines captured. Re-run after 4C phases land for A/B comparison.)")

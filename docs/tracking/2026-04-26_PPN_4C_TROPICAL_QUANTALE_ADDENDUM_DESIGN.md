@@ -783,13 +783,26 @@ Phase 1B's deliverables include `bench-tropical-fuel.rkt` (NEW; per Pre-0 plan �
 - Methodology: assertion-based correctness (rackunit `check-equal?`); wall-clock secondary (timing covered by M10)
 - DR: if any boundary case produces wrong result → bug in `tropical-left-residual` implementation OR reconsider `+inf.0` representation choice (Q-1B-2)
 
+**R4 — Memory cost of compound cell value vs flat tagged-cell-value**:
+- Per Pre-0 plan §8 R4: cell value layout impact on memory
+- Implementation site: `bench-tropical-fuel.rkt` micro section (R-series companion to M9 cell allocation cost)
+- Tropical fuel cell IS atomic value (`'value` classification per D.1 §9.4 SRE registration); should NOT need compound layout
+- HYP: per-cell base ~150-300 bytes; per-additional-worldview-tag ~50-100 bytes
+- DR: if base > 1 KB → investigate cell layout; if per-worldview marginal > 200 bytes → investigate tag-entry overhead
+- Sub-tests:
+  - Atomic tropical fuel cell allocation (control)
+  - Compare to hypothetical flat tagged-cell-value with single worldview tag
+  - Compare to hypothetical compound cell with multiple worldview tags (when speculation creates branches)
+- Validates D.1 §9.4 `'value` classification choice — if compound layout has comparable cost to atomic, validates the architectural decision; if compound is significantly heavier, validates keeping atomic for tropical fuel
+
 **Phase 1B implementation checklist** (capture-gap closure):
-- [ ] M10 added to `bench-tropical-fuel.rkt` (timing measurement)
-- [ ] M12 added to `bench-tropical-fuel.rkt` (registration cost measurement)
+- [ ] M10 added to `bench-tropical-fuel.rkt` (residuation operator timing measurement)
+- [ ] M12 added to `bench-tropical-fuel.rkt` (SRE registration cost measurement)
+- [ ] R4 added to `bench-tropical-fuel.rkt` (compound vs flat cell value layout measurement)
 - [ ] A12 boundary cases verified in `tests/test-tropical-fuel.rkt` (per §9.6 Form A enumeration)
 - [ ] Cross-reference verification: §9.6 Form A test list matches Pre-0 plan §4 A12 boundary cases enumeration
-- [ ] Update Pre-0 plan §12.5 M10/M12/A12 rows with measured baseline data post-Phase-1B
-- [ ] Document any findings in Pre-0 plan §12.6 from M10/M12/A12 measurements
+- [ ] Update Pre-0 plan §12.5 M10/M12/R4/A12 rows with measured baseline data post-Phase-1B
+- [ ] Document any findings in Pre-0 plan §12.6 from M10/M12/R4/A12 measurements
 
 **Why this capture is critical**: without explicit cross-reference back to D.1 §9, the Phase 1B implementer might:
 - Look at D.1 §9.6 → see Form A unit tests → implement them in `test-tropical-fuel.rkt`
