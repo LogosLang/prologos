@@ -155,19 +155,20 @@ defn actor-table-get [k entries]
           | true  -> some [ae-actor e]
           | false -> actor-table-get k rest
 
-;; Replace-or-insert. Walks the list once, replacing the first
-;; matching entry; otherwise prepends. Earlier versions just consed
-;; unconditionally (Copilot review #28#discussion_r3150426596): with
-;; one delivery per turn the actor table grew without bound and
-;; lookups slowed linearly.
+;; cons-at-head, latest write wins on subsequent get. Earlier
+;; revisions used a recursive replace-in-place to avoid the
+;; unbounded-growth concern Copilot review #28#discussion_r3150426596
+;; raised — but that change made `run-vat` time-out on Racket 8.14
+;; under the run-affected-tests.rkt runner (3 OCapN test files,
+;; 120s per-file). The recursive form costs O(N) per delivery in
+;; the reducer's symbolic eval and dominated.
+;;
+;; Phase 1 will swap the assoc list for a hash/CHAMP map; the cons
+;; form is acceptable for Phase 0 because each test scenario uses
+;; fewer than ~5 actors. Tracked as a known follow-up.
 spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
 defn actor-table-set [k a entries]
-  match entries
-    | nil -> cons [actor-entry k a] nil
-    | cons e rest ->
-        match [nat-eq? k [ae-id e]]
-          | true  -> cons [actor-entry k a] rest
-          | false -> cons e [actor-table-set k a rest]
+  cons [actor-entry k a] entries
 
 spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
 defn promise-table-get [k entries]
@@ -178,17 +179,12 @@ defn promise-table-get [k entries]
           | true  -> some [pe-state e]
           | false -> promise-table-get k rest
 
-;; Same shape as actor-table-set: replace-or-insert in place. See
-;; Copilot review #28#discussion_r3150426729 for the same growth
-;; concern as actor-table-set above.
+;; Same trade-off as actor-table-set above (Copilot review
+;; #28#discussion_r3150426729). Cons-at-head; defer hash-backed
+;; storage to Phase 1.
 spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
 defn promise-table-set [k s entries]
-  match entries
-    | nil -> cons [promise-entry k s] nil
-    | cons e rest ->
-        match [nat-eq? k [pe-id e]]
-          | true  -> cons [promise-entry k s] rest
-          | false -> cons e [promise-table-set k s rest]
+  cons [promise-entry k s] entries
 
 ;; ========================================
 ;; Vat
