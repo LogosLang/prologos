@@ -1962,8 +1962,17 @@
 ;; Indent grouping is recovered by treating child-node boundaries as
 ;; implicit wrapping points when not inside an open bracket.
 (define (tree-node->stx-elements node source source-str)
-  ;; Collect tokens with indent-boundary markers
-  (define items (flatten-with-boundaries node))
+  ;; Collect tokens with indent-boundary markers. For a `spec` form, the
+  ;; type-signature continuation lines are inlined directly (rather than
+  ;; wrapped as sub-lists) so that arrows like `-> Result` placed on their
+  ;; own continuation line remain at the top level of the spec body — where
+  ;; `decompose-spec-type` looks for them. Metadata-style continuation lines
+  ;; (whose first token is a keyword-like symbol such as `:doc`) are still
+  ;; wrapped so the `process-spec` metadata loop recognizes them.
+  (define items
+    (if (spec-form-node? node)
+        (flatten-with-boundaries/spec node)
+        (flatten-with-boundaries node)))
   (define vec (list->vector items))
   (define-values (elems _end)
     (group-items vec 0 (vector-length vec) #f source source-str))
@@ -1985,6 +1994,63 @@
                  (flatten-with-boundaries child)
                  (list 'indent-close))]
         [else '()]))))
+
+;; Recognize a parse-tree-node whose first token is `spec` or `spec-`. The
+;; node's tag may not yet be refined to `'spec` (e.g., the private `spec-`
+;; variant is registered as a preparser keyword but has no tag rule), so we
+;; look at the first child token directly.
+(define (spec-form-node? node)
+  (and (parse-tree-node? node)
+       (let ([children (parse-tree-node-children node)])
+         (and (> (rrb-size children) 0)
+              (let ([first (rrb-get children 0)])
+                (and (token-entry? first)
+                     (let ([lex (token-entry-lexeme first)])
+                       (or (equal? lex "spec")
+                           (equal? lex "spec-")))))))))
+
+;; Flatten variant for `spec` forms: top-level child lines are SPLICED into
+;; the parent token stream (no `indent-open`/`indent-close` wrapping), so a
+;; multi-line type signature like
+;;     spec foo
+;;          [List Rat]
+;;          -> Result
+;; flattens to `spec foo [List Rat] -> Result` — keeping `->` at the top
+;; level where `split-on-arrow-datum` can find it. Continuation lines whose
+;; first token is a keyword-like symbol (e.g. `:doc`) are still wrapped so
+;; that the `process-spec` metadata loop, which expects `(:key val ...)`
+;; sub-lists, continues to recognize them.
+(define (flatten-with-boundaries/spec node)
+  (define children (parse-tree-node-children node))
+  (define n (rrb-size children))
+  (apply append
+    (for/list ([i (in-range n)])
+      (define child (rrb-get children i))
+      (cond
+        [(token-entry? child) (list child)]
+        [(parse-tree-node? child)
+         (define inner (flatten-with-boundaries child))
+         (if (continuation-starts-with-keyword? inner)
+             ;; Metadata-style continuation: keep wrapped as a sub-list
+             (append (list 'indent-open) inner (list 'indent-close))
+             ;; Type-signature continuation: splice tokens directly
+             inner)]
+        [else '()]))))
+
+;; Does this flattened token list start with a keyword-like token (lexeme
+;; beginning with `:`)? Used to distinguish metadata continuations from
+;; type-signature continuations in spec forms.
+(define (continuation-starts-with-keyword? items)
+  (let loop ([items items])
+    (cond
+      [(null? items) #f]
+      [(eq? (car items) 'indent-open) (loop (cdr items))]
+      [(token-entry? (car items))
+       (let ([lex (token-entry-lexeme (car items))])
+         (and (string? lex)
+              (positive? (string-length lex))
+              (char=? (string-ref lex 0) #\:)))]
+      [else #f])))
 
 ;; Lookahead: check if there's a matching rangle before the current scope closes.
 ;; Scans forward tracking nesting depth for <> pairs.
