@@ -187,19 +187,19 @@ require [prologos::data::lseq     :refer [LSeq lseq-nil lseq-cell lseq-head lseq
 ;; ── Transducer Constructors ────────────────────────
 
 ;; map-xf : transform each element through f before passing to reducer.
-spec map-xf {A B : Type} [A -> B] -> <(R :0 Type) -> [R -> B -> R] -> R -> A -> R>
+spec map-xf [A -> B] -> <(R :0 Type) -> [R -> B -> R] -> R -> A -> R>
 defn map-xf [f]
   fn [R :0 <Type>] [rf : <R -> B -> R>] [acc : <R>] [x : <A>]
     rf acc [f x]
 
 ;; filter-xf : only pass elements satisfying pred to the reducer.
-spec filter-xf {A : Type} [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
+spec filter-xf [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
 defn filter-xf [pred]
   fn [R :0 <Type>] [rf : <R -> A -> R>] [acc : <R>] [x : <A>]
     if [pred x] [rf acc x] acc
 
 ;; remove-xf : opposite of filter — remove elements satisfying pred.
-spec remove-xf {A : Type} [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
+spec remove-xf [A -> Bool] -> <(R :0 Type) -> [R -> A -> R] -> R -> A -> R>
 defn remove-xf [pred]
   fn [R :0 <Type>] [rf : <R -> A -> R>] [acc : <R>] [x : <A>]
     if [pred x] acc [rf acc x]
@@ -211,7 +211,7 @@ defn remove-xf [pred]
 ;;
 ;; In transducer algebra, composition is reversed from function composition:
 ;; xf1 transforms the input first, xf2 transforms the reducer wrapping.
-spec xf-compose {A B C : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S> -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
+spec xf-compose <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> <(S :0 Type) -> [S -> C -> S] -> S -> B -> S> -> <(S :0 Type) -> [S -> C -> S] -> S -> A -> S>
 defn xf-compose [xf1 xf2]
   fn [R :0 <Type>] [rf : <R -> C -> R>]
     xf1 R [xf2 R rf]
@@ -220,7 +220,7 @@ defn xf-compose [xf1 xf2]
 
 ;; list-conj : a cons-to-front reducer for building lists.
 ;; Result is reversed since we fold left.
-spec list-conj {A : Type} [List A] -> A -> [List A]
+spec list-conj [List A] -> A -> [List A]
 defn list-conj [acc x]
   cons A x acc
 
@@ -229,14 +229,14 @@ defn list-conj [acc x]
 ;; transduce : apply a polymorphic transducer xf to list xs,
 ;; using reducer rf and initial accumulator init.
 ;; The xf is polymorphic in R — transduce specializes it internally.
-spec transduce {A B R : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [R -> B -> R] R [List A] -> R
+spec transduce <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [R -> B -> R] R [List A] -> R
 defn transduce [xf rf init xs]
   lseq-fold R A [xf R rf] init [list-to-lseq A xs]
 
 ;; xf-into-list-rev : transduce into a reversed list (fold-left with cons).
 ;; The xf is polymorphic in R — xf-into-list-rev specializes it to (List B).
 ;; Renamed from into-list-rev to avoid collision with prologos::core::collections::into-list.
-spec xf-into-list-rev {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+spec xf-into-list-rev <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
 defn xf-into-list-rev [xf xs]
   lseq-fold [List B] A [xf [List B] [list-conj B]] [nil B] [list-to-lseq A xs]
 
@@ -244,6 +244,6 @@ defn xf-into-list-rev [xf xs]
 ;; Uses xf-into-list-rev then reverses for correct element order.
 ;; One extra O(n) reverse, but fusion saves N-1 intermediate list allocations.
 ;; Renamed from into-list to avoid collision with prologos::core::collections::into-list.
-spec xf-into-list {A B : Type} <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
+spec xf-into-list <(S :0 Type) -> [S -> B -> S] -> S -> A -> S> [List A] -> [List B]
 defn xf-into-list [xf xs]
   reverse B [xf-into-list-rev xf xs]

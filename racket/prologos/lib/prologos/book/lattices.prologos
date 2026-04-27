@@ -153,7 +153,7 @@ defn rat-min [a b]
 
 ;; --- Set helpers ---
 
-spec set-subset? {A : Type} [Set A] [Set A] -> Bool
+spec set-subset? [Set A] [Set A] -> Bool
 defn set-subset? [a b]
   set-fold [fn acc x [and acc [set-member? b x]]] true a
 
