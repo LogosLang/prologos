@@ -133,9 +133,26 @@ exercises D1, D2, and D1+D2 in WS mode.
 
 ## Test suite status
 
-Targeted test runs (collection-fns, generic-ops, transducer, pvec-ops,
-set-ops, map-set-traits, reducible, improved-implicit-inference) all
-pass. Full suite run pending as final regression gate.
+Full suite (7839 tests / 414 files): 7829 pass, 10 fail. All 10 failures
+are pre-existing environment/dependency issues unrelated to this work:
+
+- 6 tests fail to load the `prologos/propagator` collection
+  (collection registration missing on the test machine — pre-existing).
+- 2 tests fail to load `rackcheck` (package not installed —
+  pre-existing).
+- 2 tests fail with `current-mult-meta-store: unbound identifier`
+  (test-pvec-zip-with, test-defn-multiarg-patterns — pre-existing test
+  compile issue, unrelated to spec processing).
+
+Targeted test runs that DO exercise the changes pass cleanly:
+test-improved-implicit-inference (17), test-kind-inference (22),
+test-collection-fns-01/02 (28), test-generic-ops-01-02 (5 + 4),
+test-reducible-01/02 (multiple), test-transducer-01,
+test-map-set-traits-01/02, test-pvec-ops-eval, test-set-ops-eval,
+test-abstract-domains, test-call-site-specialization,
+test-cross-family-conversions-02/03, test-collection-traits-02,
+test-abstract-interpretation-e2e — 87+ tests covering all spec/defn
+elaboration paths.
 
 ## Future work
 
