@@ -1,0 +1,185 @@
+ns examples.eigentrust
+
+
+require [prologos::data::list :refer [List cons nil reduce]]
+
+
+;; ============================================================
+;; EigenTrust on Propagators (via Racket FFI)
+;; ============================================================
+;;
+;; EigenTrust [Kamvar/Schlosser/Garcia-Molina 2003] is the classic
+;; reputation algorithm for peer-to-peer networks. Each peer i has a
+;; trust score t[i] in [0, 1]. Local trust C[i][j] says how much peer i
+;; trusts peer j (rows of C are normalised to sum to 1). A pre-trust
+;; vector p — usually a small set of authority peers, normalised to
+;; sum to 1 — anchors the iteration against Sybil attacks.
+;;
+;; The power iteration:
+;;
+;;     t_{k+1} = α · p + (1 − α) · C^T · t_k
+;;
+;; converges to the eigenvector of (1−α)·C^T + α·p·1^T corresponding to
+;; eigenvalue 1 — the global trust ranking.
+;;
+;; ----- Implementing it via propagators -----
+;;
+;; Each peer's score at iteration k is one cell on the propagator
+;; network. For each (peer j, iteration k+1), one sum-propagator reads
+;; the previous iteration's cells {t_k[i] : i = 0..N-1} and writes
+;;
+;;     target := α · p[j]  +  (1 − α) · Σ_i C[i][j] · t_k[i]
+;;
+;; into the iter-(k+1) cell for j.  Cells use a generation-tagged
+;; merge so iter-(k+1) writes strictly dominate iter-k initial values
+;; — every cell is written exactly once per round, and the topological
+;; order of the cell-DAG drives the propagator firing schedule.
+;;
+;; Prologos's first-class propagator surface (`net-new`, `net-new-cell`,
+;; `net-add-prop`, …) is on the roadmap but not yet ready, so this file
+;; uses `foreign racket "..."` imports of the same primitives. The
+;; helper Racket module wraps the persistent prop-network in a small
+;; mutable handle so Prologos sees an imperative-feeling API while
+;; everything underneath is the standard CALM-monotone propagator
+;; network in `racket/prologos/propagator.rkt`.
+;;
+;; ============================================================
+
+
+;; ---------- FFI: low-level propagator primitives ----------
+;;
+;; Every "side-effecting" call returns a meaningful Nat (handle id or
+;; cell-id) instead of Unit. Prologos's reduction is call-by-name; an
+;; unused result expression would never be evaluated and the side
+;; effect would be silently dropped. Threading a Nat through every
+;; call forces strict evaluation order.
+
+foreign racket "lib/examples/eigentrust-prop.rkt" :as et
+  ;; Network construction
+  et-new       : Nat -> Nat                                          ; fuel -> handle id
+  ;; Cell allocation, read, write
+  et-cell      : Nat Posit32 -> Nat                                  ; handle, init -> cell-id
+  et-cell-get  : Nat Nat -> Posit32                                  ; handle, cell-id -> value
+  et-cell-set  : Nat Nat Posit32 -> Nat                              ; handle, cell-id, val -> cell-id
+  ;; Propagator install: target := bias + Σ weights[i] * srcs[i]
+  et-sum-prop  : Nat [List Nat] [List Posit32] Posit32 Nat -> Nat    ; -> handle (chains)
+  ;; Quiescence
+  et-run       : Nat -> Nat                                          ; -> handle (chains)
+  ;; Read a batch of cells as Posit32 values
+  et-snapshot  : Nat [List Nat] -> [List Posit32]
+  ;; Run-and-snapshot in one call (forces strict evaluation of installed
+  ;; propagators before the quiescence pass)
+  et-run-and-snapshot : Nat [List Nat] -> [List Posit32]
+  ;; Higher-level: build one EigenTrust round on the network
+  et-add-iter  : Nat [List Nat] [List [List Posit32]] [List Posit32] Posit32 -> [List Nat]
+
+
+;; ---------- One-shot demonstration of the low-level surface ----------
+;;
+;; Three cells, one sum-propagator: target := 0.1 + 0.5·s1 + 1.0·s2.
+;; With s1=0.5 and s2=0.25 the propagator should write 0.6 into target.
+;; The `let h-after-install := [et/et-sum-prop ...]` and `let h-after-run
+;; := [et/et-run ...]` chains are the strict-thread idiom in action: each
+;; result Nat is immediately consumed by the next call.
+
+spec demo-one-prop Nat -> Posit32
+defn demo-one-prop [fuel]
+  let h               := [et/et-new fuel]
+  let s1              := [et/et-cell h ~0.5]
+  let s2              := [et/et-cell h ~0.25]
+  let tg              := [et/et-cell h ~0.0]
+  let h-after-install := [et/et-sum-prop h
+                           [cons s1 [cons s2 nil]]
+                           [cons ~0.5 [cons ~1.0 nil]]
+                           ~0.1
+                           tg]
+  let h-after-run     := [et/et-run h-after-install]
+    [et/et-cell-get h-after-run tg]
+
+
+;; A demo: should print ≈ ~0.6 (modulo posit32 rounding).
+[demo-one-prop 100000N]
+
+
+;; ---------- The EigenTrust algorithm ----------
+;;
+;; `eigentrust` builds a fresh propagator network, allocates the
+;; pre-trust vector as iteration-0 cells, then drives `et-add-iter`
+;; recursively to build out K iteration layers. Each layer adds N
+;; sum-propagators to the network. After all rounds are scheduled,
+;; one `et-run` flushes the worklist and the final-layer cells hold
+;; the converged scores.
+;;
+;; The recursion is the only place where strict evaluation matters —
+;; we thread the layer's cell-list through the recursive call so the
+;; previous layer's `et-add-iter` is forced before the next one runs.
+
+;; Allocate one cell per pre-trust value, in order, returning the list
+;; of cell-ids. Recursion threads the partial result so each `et-cell`
+;; call is forced strictly even though the body otherwise discards the
+;; intermediate handle.
+spec pretrust-cells Nat [List Posit32] -> [List Nat]
+defn pretrust-cells
+  | h nil          -> nil
+  | h [cons p ps]  ->
+      let c    := [et/et-cell h p]
+      let rest := [pretrust-cells h ps]
+        [cons c rest]
+
+
+;; Recursive step: starting at layer k of K, return the cell-list for the
+;; final layer.
+spec et-iterate Nat [List Nat] [List [List Posit32]] [List Posit32] Posit32 Nat -> [List Nat]
+defn et-iterate
+  | h cells matrix pretrust decay 0N      -> cells
+  | h cells matrix pretrust decay [suc k] ->
+      let next-cells := [et/et-add-iter h cells matrix pretrust decay]
+        [et-iterate h next-cells matrix pretrust decay k]
+
+
+;; Top-level driver: takes the pre-trust vector, the trust matrix, the
+;; decay constant α, and the iteration count, and returns the final
+;; trust scores. Each layer's propagators are built into the same
+;; network; the closing `et-run` flushes them in dataflow order.
+spec eigentrust [List Posit32] [List [List Posit32]] Posit32 Nat -> [List Posit32]
+defn eigentrust [pretrust matrix decay iters]
+  let h           := [et/et-new 1000000N]
+  let init-cells  := [pretrust-cells h pretrust]
+  let final-cells := [et-iterate h init-cells matrix pretrust decay iters]
+    ;; et-run-and-snapshot's CBV-at-FFI evaluates final-cells first — that
+    ;; forces et-iterate to run, which forces every layer's et-add-iter to
+    ;; install its propagators — and only THEN does run-to-quiescence fire.
+    [et/et-run-and-snapshot h final-cells]
+
+
+;; ---------- A concrete EigenTrust run ----------
+;;
+;; Four peers in a small reputation graph:
+;;
+;;       0  1  2  3
+;;   0 [.0 .5 .5 .0]
+;;   1 [.0 .0 .0 1.]
+;;   2 [.5 .0 .0 .5]
+;;   3 [.0 1. .0 .0]
+;;
+;; Each row is normalised to sum to 1. Pre-trust is uniform across all
+;; four peers (0.25 each) — no prior authority. α = 0.15 is the
+;; standard PageRank-style decay (it's effectively "teleport to a
+;; pre-trusted peer with probability α each step").
+;;
+;; After 20 power iterations the scores converge to the dominant
+;; eigenvector of (1-α)·C^T + α·p·1^T.
+
+def trust-matrix : [List [List Posit32]] :=
+  [cons [cons ~0.0 [cons ~0.5 [cons ~0.5 [cons ~0.0 nil]]]]
+  [cons [cons ~0.0 [cons ~0.0 [cons ~0.0 [cons ~1.0 nil]]]]
+  [cons [cons ~0.5 [cons ~0.0 [cons ~0.0 [cons ~0.5 nil]]]]
+  [cons [cons ~0.0 [cons ~1.0 [cons ~0.0 [cons ~0.0 nil]]]]
+        nil]]]]
+
+def pretrust : [List Posit32] :=
+  [cons ~0.25 [cons ~0.25 [cons ~0.25 [cons ~0.25 nil]]]]
+
+
+;; Run EigenTrust for 20 iterations with α = 0.15.
+[eigentrust pretrust trust-matrix ~0.15 20N]
