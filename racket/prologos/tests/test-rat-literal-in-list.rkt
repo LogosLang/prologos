@@ -113,12 +113,12 @@
 (test-case "rat-literal-in-list/pvec-zero-and-half"
   (check-equal?
    (run-ns-ws-last "ns rp1\ninfer @[0/1 1/2]")
-   "(PVec Rat)"))
+   "[PVec Rat]"))
 
 (test-case "rat-literal-in-list/pvec-with-one-over-one"
   (check-equal?
    (run-ns-ws-last "ns rp2\ninfer @[1/1 1/2 0/1]")
-   "(PVec Rat)"))
+   "[PVec Rat]"))
 
 ;; ========================================
 ;; F. Annotated def with mixed simplifying / non-simplifying rationals

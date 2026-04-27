@@ -289,7 +289,7 @@
                  [current-module-definitions-content (hasheq)])
     (let ([result (process-string "(def v <(PVec Nat)> (pvec-push (pvec-empty Nat) (suc (suc zero))))\n(eval (pvec-nth v zero))")])
       (check-equal? (length result) 2)
-      (check-true (string-contains? (car result) "v : (PVec Nat) defined"))
+      (check-true (string-contains? (car result) "v : [PVec Nat] defined"))
       (check-equal? (cadr result) "2N : Nat"))))
 
 ;; ========================================

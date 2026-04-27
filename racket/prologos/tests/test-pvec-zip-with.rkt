@@ -11,42 +11,17 @@
 ;;;
 
 (require rackunit
-         racket/list
          racket/string
-         "test-support.rkt"
-         "../macros.rkt"
-         "../syntax.rkt"
-         "../errors.rkt"
-         "../metavar-store.rkt"
-         "../global-env.rkt"
-         "../driver.rkt"
-         "../namespace.rkt"
-         "../multi-dispatch.rkt")
+         "test-support.rkt")
 
 ;; ========================================
 ;; Helpers
 ;; ========================================
+;; Use test-support.rkt's run-ns-* helpers (canonical post-S2.e pattern;
+;; the manual parameterize block here referenced retired `current-mult-meta-store`
+;; and friends — fixed 2026-04-27).
 
-(define (run-ns s)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry prelude-module-registry]
-                 [current-lib-paths (list prelude-lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry prelude-preparse-registry]
-                 [current-ctor-registry (current-ctor-registry)]
-                 [current-type-meta (current-type-meta)]
-                 [current-trait-registry prelude-trait-registry]
-                 [current-impl-registry prelude-impl-registry]
-                 [current-param-impl-registry prelude-param-impl-registry]
-                 [current-multi-defn-registry (current-multi-defn-registry)]
-                 [current-spec-store (hasheq)])
-    (install-module-loader!)
-    (process-string s)))
-
-(define (run-last s)
-  (last (run-ns s)))
+(define (run-last s) (run-ns-last s))
 
 (define (check-contains actual substr [msg #f])
   (check-true (and (string? actual) (string-contains? actual substr))

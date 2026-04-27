@@ -22,102 +22,21 @@
 ;;;
 
 (require rackunit
-         racket/list
-         racket/path
          racket/string
-         racket/port
-         racket/file
-         "../macros.rkt"
-         "../prelude.rkt"
-         "../syntax.rkt"
-         "../source-location.rkt"
-         "../surface-syntax.rkt"
-         "../errors.rkt"
-         "../metavar-store.rkt"
-         "../parser.rkt"
-         "../elaborator.rkt"
-         "../pretty-print.rkt"
-         "../global-env.rkt"
-         "../driver.rkt"
-         "../reduction.rkt"
-         (prefix-in tc: "../typing-core.rkt")
-         "../namespace.rkt"
-         "../trait-resolution.rkt"
-         "../parse-reader.rkt"
-         "../multi-dispatch.rkt")
+         "test-support.rkt")
 
 ;; ========================================
-;; Shared Fixture (prelude loaded once)
+;; Helpers
 ;; ========================================
+;; Use test-support.rkt's run-ns-* helpers (canonical post-S2.e pattern;
+;; the manual parameterize block here referenced retired
+;; `current-mult-meta-store` and friends — fixed 2026-04-27).
 
-(define here (path->string (path-only (syntax-source #'here))))
-(define lib-dir (simplify-path (build-path here ".." "lib")))
-
-(define-values (shared-global-env
-                shared-ns-context
-                shared-module-reg
-                shared-trait-reg
-                shared-impl-reg
-                shared-param-impl-reg
-                shared-bundle-reg)
-  (parameterize ([current-prelude-env (hasheq)]
-                 [current-module-definitions-content (hasheq)]
-                 [current-ns-context #f]
-                 [current-module-registry (hasheq)]
-                 [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry (current-trait-registry)]
-                 [current-impl-registry (current-impl-registry)]
-                 [current-param-impl-registry (current-param-impl-registry)]
-                 [current-bundle-registry (current-bundle-registry)])
-    (install-module-loader!)
-    (process-string "(ns test-defn-multiarg)")
-    (values (current-prelude-env)
-            (current-ns-context)
-            (current-module-registry)
-            (current-trait-registry)
-            (current-impl-registry)
-            (current-param-impl-registry)
-            (current-bundle-registry))))
-
-;; Run sexp code using shared environment
-(define (run s)
-  (parameterize ([current-prelude-env shared-global-env]
-                 [current-ns-context shared-ns-context]
-                 [current-module-registry shared-module-reg]
-                 [current-lib-paths (list lib-dir)]
-                 [current-mult-meta-store (make-hasheq)]
-                 [current-preparse-registry (current-preparse-registry)]
-                 [current-trait-registry shared-trait-reg]
-                 [current-impl-registry shared-impl-reg]
-                 [current-param-impl-registry shared-param-impl-reg]
-                 [current-bundle-registry shared-bundle-reg])
-    (process-string s)))
-
-(define (run-last s) (last (run s)))
-
-;; Run WS code via temp file using shared environment
-(define (run-ws s)
-  (define tmp (make-temporary-file "prologos-test-~a.prologos"))
-  (call-with-output-file tmp #:exists 'replace
-    (lambda (out) (display s out)))
-  (define result
-    (parameterize ([current-prelude-env shared-global-env]
-                   [current-ns-context shared-ns-context]
-                   [current-module-registry shared-module-reg]
-                   [current-lib-paths (list lib-dir)]
-                   [current-mult-meta-store (make-hasheq)]
-                   [current-preparse-registry (current-preparse-registry)]
-                   [current-trait-registry shared-trait-reg]
-                   [current-impl-registry shared-impl-reg]
-                   [current-param-impl-registry shared-param-impl-reg]
-                   [current-bundle-registry shared-bundle-reg])
-      (process-file tmp)))
-  (delete-file tmp)
-  result)
-
-(define (run-ws-last s) (last (run-ws s)))
+;; Prepend namespace declarations so test strings (which lack their own
+;; ns headers) get a namespace context — needed for prelude refs.
+(define (run-last s) (run-ns-last (string-append "(ns test)\n" s)))
+(define (run-ws s) (run-ns-ws-all (string-append "ns test\n" s)))
+(define (run-ws-last s) (run-ns-ws-last (string-append "ns test\n" s)))
 
 ;; ========================================
 ;; A. Single-arg multi-clause regression
