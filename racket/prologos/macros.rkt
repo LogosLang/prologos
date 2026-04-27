@@ -8650,14 +8650,40 @@
       (hash-ref (read-preparse-registry) name #f)))   ;; deftype alias / macro (cell-primary)
 
 ;; Detect if a surf-defn already has explicit implicit params (from {A B} syntax).
-;; If the first Pi binder has mult='m0 and type=(surf-type ...) and its name
-;; matches the first param-name, then the parser already inserted implicits.
+;; If the first Pi binder has mult='m0 and its kind is a "type-level" kind
+;; (universe Type or higher-kind like Type -> Type) and its name matches the
+;; first param-name, then the parser already inserted implicits.
+;;
+;; The kind check accepts both:
+;;   * `surf-type _ _` — the universe Type, e.g. {A : Type} → A is kind Type.
+;;   * `surf-arrow _ dom cod` whose dom and cod are themselves type-level kinds —
+;;     e.g. {C : Type -> Type} → C is kind Type → Type.
+;; This is necessary so issue #20's Direction 2 works: bare `{C : Type -> Type}`
+;; is auto-introduced from a :where (Seqable C) clause and lands in the FIRST
+;; Pi binder position when the spec drops both `{A : Type}` and `{C : Type ->
+;; Type}` annotations. Without recognising the higher kind here,
+;; `infer-auto-implicits` would re-prepend the same names as fresh m0 binders,
+;; creating duplicate (and unrelated) implicit binders that break trait dict
+;; resolution at call sites.
 (define (has-leading-implicits? type-ast param-names)
   (and (not (null? param-names))
        (match type-ast
-         [(surf-pi (binder-info bname 'm0 (surf-type _ _)) _body _loc)
-          (eq? bname (car param-names))]
+         [(surf-pi (binder-info bname 'm0 ktype) _body _loc)
+          (and (kind-level-type? ktype)
+               (eq? bname (car param-names)))]
          [_ #f])))
+
+;; Recognise a kind-level type expression: the universe `Type` (any level), or
+;; an arrow whose endpoints are themselves kind-level types. Used by
+;; `has-leading-implicits?` to decide whether the first Pi binder is an
+;; implicit kind binder that the spec already supplied.
+(define (kind-level-type? ast)
+  (match ast
+    [(surf-type _ _) #t]
+    [(surf-arrow _ domain codomain _loc)
+     (and (kind-level-type? domain)
+          (kind-level-type? codomain))]
+    [_ #f]))
 
 ;; Infer auto-implicit type parameters for a surf-defn.
 ;; If the defn already has explicit implicits, returns unchanged.

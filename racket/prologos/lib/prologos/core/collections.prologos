@@ -30,17 +30,19 @@
 ;; ── Transforming ops (Seqable + Buildable) ──────────
 
 ;; map : (A -> B) -> C A -> C B
-(spec map {A B : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (-> A B) -> (C A) -> (C B))
+;; A, B (kind Type) and C (kind Type -> Type) are auto-introduced
+;; (Direction 1 + Direction 2 from issue #20).
+(spec map (Seqable C) -> (Buildable C) -> (-> A B) -> (C A) -> (C B))
 (defn map [$seq $build f xs]
   (Buildable-from-seq $build B (lseq-map A B f ($seq A xs))))
 
 ;; filter : (A -> Bool) -> C A -> C A
-(spec filter {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (-> A Bool) -> (C A) -> (C A))
+(spec filter (Seqable C) -> (Buildable C) -> (-> A Bool) -> (C A) -> (C A))
 (defn filter [$seq $build pred xs]
   (Buildable-from-seq $build A (lseq-filter A pred ($seq A xs))))
 
 ;; concat : C A -> C A -> C A
-(spec concat {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (C A) -> (C A) -> (C A))
+(spec concat (Seqable C) -> (Buildable C) -> (C A) -> (C A) -> (C A))
 (defn concat [$seq $build xs ys]
   (Buildable-from-seq $build A (lseq-append A ($seq A xs) ($seq A ys))))
 
@@ -48,31 +50,31 @@
 
 ;; reduce : (B -> A -> B) -> B -> C A -> B   [left fold, accumulator first]
 ;; Folds natively over the collection via Reducible — no LSeq intermediary.
-(spec reduce {A B : Type} {C : Type -> Type} (Reducible C) -> (-> B (-> A B)) -> B -> (C A) -> B)
+(spec reduce (Reducible C) -> (-> B (-> A B)) -> B -> (C A) -> B)
 (defn reduce [$red f z xs]
   ($red A B f z xs))
 
 ;; length : C A -> Nat
 ;; Counts elements via native left fold.
-(spec length {A : Type} {C : Type -> Type} (Reducible C) -> (C A) -> Nat)
+(spec length (Reducible C) -> (C A) -> Nat)
 (defn length [$red xs]
   ($red A Nat (fn (n : Nat) (fn (_ : A) (suc n))) zero xs))
 
 ;; any? : (A -> Bool) -> C A -> Bool
 ;; Note: does NOT short-circuit (processes all elements via fold).
-(spec any? {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
+(spec any? (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
 (defn any? [$red pred xs]
   ($red A Bool (fn (acc : Bool) (fn (a : A) (if (pred a) true acc))) false xs))
 
 ;; all? : (A -> Bool) -> C A -> Bool
 ;; Note: does NOT short-circuit (processes all elements via fold).
-(spec all? {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
+(spec all? (Reducible C) -> (-> A Bool) -> (C A) -> Bool)
 (defn all? [$red pred xs]
   ($red A Bool (fn (acc : Bool) (fn (a : A) (if (pred a) acc false))) true xs))
 
 ;; find : (A -> Bool) -> C A -> Option A
 ;; Note: does NOT short-circuit (processes all elements via fold).
-(spec find {A : Type} {C : Type -> Type} (Reducible C) -> (-> A Bool) -> (C A) -> (Option A))
+(spec find (Reducible C) -> (-> A Bool) -> (C A) -> (Option A))
 (defn find [$red pred xs]
   ($red A (Option A)
     (fn (acc : (Option A)) (fn (a : A)
@@ -83,7 +85,7 @@
 
 ;; to-list : C A -> List A
 ;; Materialize any Seqable collection into a List.
-(spec to-list {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (List A))
+(spec to-list (Seqable C) -> (C A) -> (List A))
 (defn to-list [$seq xs]
   (lseq-to-list ($seq A xs)))
 
@@ -93,19 +95,19 @@
 ;; Like Clojure's (reduce f coll): uses first element as accumulator.
 ;; Returns none for empty collections, some result for non-empty.
 ;; Stays on Seqable because it needs head access to extract the first element.
-(spec reduce1 {A : Type} {C : Type -> Type} (Seqable C) -> (-> A (-> A A)) -> (C A) -> (Option A))
+(spec reduce1 (Seqable C) -> (-> A (-> A A)) -> (C A) -> (Option A))
 (defn reduce1 [$seq f xs]
   (match ($seq A xs)
     (lseq-nil -> (none A))
     (lseq-cell a t -> (some A (lseq-fold A A f a (t unit))))))
 
 ;; take : Nat -> C A -> C A
-(spec take {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
+(spec take (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
 (defn take [$seq $build n xs]
   (Buildable-from-seq $build A (lseq-take A n ($seq A xs))))
 
 ;; drop : Nat -> C A -> C A
-(spec drop {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
+(spec drop (Seqable C) -> (Buildable C) -> Nat -> (C A) -> (C A))
 (defn drop [$seq $build n xs]
   (Buildable-from-seq $build A (lseq-drop A n ($seq A xs))))
 
@@ -115,7 +117,8 @@
 ;; Usage: (into @[] '[1 2 3]) → @[1 2 3]
 ;;        (into #{} @[1 2 3]) → #{1 2 3}
 ;;        |> '[1 2 3] (into @[])   ;; in pipe context
-(spec into {A : Type} {S : Type -> Type} {T : Type -> Type} (Seqable S) -> (Buildable T) -> (T A) -> (S A) -> (T A))
+;; Both S and T are auto-introduced as Type -> Type from Seqable / Buildable.
+(spec into (Seqable S) -> (Buildable T) -> (T A) -> (S A) -> (T A))
 (defn into [$seq $build _target source]
   (Buildable-from-seq $build A ($seq A source)))
 
@@ -123,13 +126,13 @@
 ;; Get the first element of any collection, or none if empty.
 ;; Converts to LSeq via Seqable, then extracts the head.
 ;; Alias: `first` (identical behavior).
-(spec head {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(spec head (Seqable C) -> (C A) -> (Option A))
 (defn head [$seq xs]
   (lseq-head A ($seq A xs)))
 
 ;; empty? : C A -> Bool
 ;; Check if a collection is empty.
-(spec empty? {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> Bool)
+(spec empty? (Seqable C) -> (C A) -> Bool)
 (defn empty? [$seq xs]
   (lseq-empty? A ($seq A xs)))
 
@@ -137,7 +140,7 @@
 ;; Get the remaining elements as a lazy sequence.
 ;; The return type is always LSeq (not the original collection type)
 ;; since this streams the tail without materializing a new collection.
-(spec rest-seq {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (LSeq A))
+(spec rest-seq (Seqable C) -> (C A) -> (LSeq A))
 (defn rest-seq [$seq xs]
   (lseq-rest A ($seq A xs)))
 
@@ -146,13 +149,13 @@
 ;; first : C A -> Option A
 ;; Get the first element of any Seqable collection, or none if empty.
 ;; Identical to `head` — exists for ergonomic naming alongside `second`/`rest`.
-(spec first {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(spec first (Seqable C) -> (C A) -> (Option A))
 (defn first [$seq xs]
   (lseq-head A ($seq A xs)))
 
 ;; second : C A -> Option A
 ;; Get the second element of any Seqable collection, or none if fewer than 2.
-(spec second {A : Type} {C : Type -> Type} (Seqable C) -> (C A) -> (Option A))
+(spec second (Seqable C) -> (C A) -> (Option A))
 (defn second [$seq xs]
   (match ($seq A xs)
     (lseq-nil -> (none A))
@@ -161,7 +164,7 @@
 ;; rest : C A -> C A
 ;; All elements after the first, preserving the collection type.
 ;; Returns empty for empty collections.
-(spec rest {A : Type} {C : Type -> Type} (Seqable C) -> (Buildable C) -> (C A) -> (C A))
+(spec rest (Seqable C) -> (Buildable C) -> (C A) -> (C A))
 (defn rest [$seq $build xs]
   (Buildable-from-seq $build A (lseq-rest A ($seq A xs))))
 
@@ -171,22 +174,22 @@
 ;; Demonstrates Seq-centric architecture with explicit List specialization.
 
 ;; coll-map : (A -> B) -> List A -> List B
-spec coll-map {A B : Type} [A -> B] -> [List A] -> [List B]
+spec coll-map [A -> B] -> [List A] -> [List B]
 defn coll-map [f xs]
   List--Buildable--from-seq B [lseq-map A B f [List--Seqable--dict A xs]]
 
 ;; coll-filter : (A -> Bool) -> List A -> List A
-spec coll-filter {A : Type} [A -> Bool] -> [List A] -> [List A]
+spec coll-filter [A -> Bool] -> [List A] -> [List A]
 defn coll-filter [pred xs]
   List--Buildable--from-seq A [lseq-filter A pred [List--Seqable--dict A xs]]
 
 ;; coll-length : List A -> Nat
-spec coll-length {A : Type} [List A] -> Nat
+spec coll-length [List A] -> Nat
 defn coll-length [xs]
   lseq-length A [List--Seqable--dict A xs]
 
 ;; coll-to-list : List A -> List A
-spec coll-to-list {A : Type} [List A] -> [List A]
+spec coll-to-list [List A] -> [List A]
 defn coll-to-list [xs]
   lseq-to-list A [List--Seqable--dict A xs]
 
@@ -199,42 +202,42 @@ defn coll-to-list [xs]
 ;; ── List → PVec ──────────
 
 ;; vec : List A -> PVec A
-spec vec {A : Type} [List A] -> [PVec A]
+spec vec [List A] -> [PVec A]
 defn vec [xs]
   pvec-from-list xs
 
 ;; ── Any → LSeq (lazy sequence) ──────────
 
 ;; list-to-seq : List A -> LSeq A
-spec list-to-seq {A : Type} [List A] -> [LSeq A]
+spec list-to-seq [List A] -> [LSeq A]
 defn list-to-seq [xs]
   list-to-lseq A xs
 
 ;; pvec-to-seq : PVec A -> LSeq A
-spec pvec-to-seq {A : Type} [PVec A] -> [LSeq A]
+spec pvec-to-seq [PVec A] -> [LSeq A]
 defn pvec-to-seq [v]
   list-to-lseq A [pvec-to-list v]
 
 ;; set-to-seq : Set A -> LSeq A
-spec set-to-seq {A : Type} [Set A] -> [LSeq A]
+spec set-to-seq [Set A] -> [LSeq A]
 defn set-to-seq [s]
   list-to-lseq A [set-to-list s]
 
 ;; ── LSeq → specific collections (into-*) ──────────
 
 ;; into-list : LSeq A -> List A
-spec into-list {A : Type} [LSeq A] -> [List A]
+spec into-list [LSeq A] -> [List A]
 defn into-list [xs]
   lseq-to-list A xs
 
 ;; into-vec : LSeq A -> PVec A
-spec into-vec {A : Type} [LSeq A] -> [PVec A]
+spec into-vec [LSeq A] -> [PVec A]
 defn into-vec [xs]
   pvec-from-list [lseq-to-list A xs]
 
 ;; into-set : LSeq A -> Set A
 ;; Folds the lazy sequence into a Set via set-insert.
 ;; (Can't call set-from-list due to :w/:0 multiplicity mismatch.)
-spec into-set {A : Type} [LSeq A] -> [Set A]
+spec into-set [LSeq A] -> [Set A]
 defn into-set [xs]
   foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] [lseq-to-list A xs]
