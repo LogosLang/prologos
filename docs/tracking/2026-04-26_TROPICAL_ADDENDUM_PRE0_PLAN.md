@@ -1111,14 +1111,85 @@ Source: `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
 | R4 compound vs flat layout | TBD | TBD | TBD | NEW |
 | R5 long-running speculation | TBD | TBD | TBD | NEW |
 
-#### S-tier — captured at suite-level
+#### S-tier — captured at suite-level (executed 2026-04-26, this commit)
 
-| Test | Pre-impl baseline | Notes |
-|---|---|---|
-| S1 full suite wall | 119.3s (S2.e-v close) | Existing |
-| S4 probe verbose | 28 commands; cell_allocs=1181 | Existing |
-| S2 per-file distribution | (use `tools/benchmark-tests.rkt --slowest 10`) | Existing tooling |
-| S3 heartbeat counter deltas | (compare timings.jsonl pre vs post) | Existing tooling |
+Source: `data/benchmarks/timings.jsonl` latest entry (commit `308e4d2d`, 2026-04-25T22:26:00Z, branch main, machine macosx-aarch64, jobs=10, file_count=410, total_tests=7914, source=affected, all_pass=true).
+
+**S1 — Full suite wall time**:
+
+| Metric | Pre-impl baseline |
+|---|---|
+| Total wall time | **119.288s** (119.3s rounded) |
+| File count | 410 |
+| Total tests | 7914 |
+| All pass | true |
+| Reference commit | `308e4d2d` (S2.e-v close) |
+| DR | wall > 130s = regression > 10% (investigate per S2); wall < 115s = improvement > 3% (capture as positive finding) |
+
+**S2 — Per-file timing distribution (slowest 10)** (`racket tools/benchmark-tests.rkt --slowest 10`):
+
+| Rank | File | Wall | Tests | Status |
+|---|---|---|---|---|
+| 1 | test-pipe-compose-e2e-02b.rkt | 17.1s | 8 | pass |
+| 2 | test-reducible-02.rkt | 17.0s | 14 | pass |
+| 3 | test-string-ops.rkt | 15.5s | 27 | pass |
+| 4 | test-surface-integration.rkt | 14.4s | 77 | pass |
+| 5 | test-transducer-01.rkt | 13.4s | 17 | pass |
+| 6 | test-io-csv-02.rkt | 13.3s | 8 | pass |
+| 7 | test-functor-ws-02.rkt | 13.2s | 5 | pass |
+| 8 | test-hashable-02.rkt | 12.7s | 7 | pass |
+| 9 | test-list-extended-01-02.rkt | 11.5s | 15 | pass |
+| 10 | test-transducer-02.rkt | 11.0s | 11 | pass |
+
+DR per Pre-0 plan §9 S2: file-level regression > 200% → investigate; new top-10 entrants → investigate.
+
+**S3 — Heartbeat counter aggregates (suite-level)**:
+
+Per-file `cell_metrics`/`heartbeats`/`memory`/`phases` schema present in every result entry. Suite-level aggregates extracted from latest run:
+
+| Counter | Pre-impl baseline |
+|---|---|
+| cell_allocs | **230,679** |
+| cell_metrics.cells (per file) | range varies (e.g. test-abstract-domains.rkt = 35) |
+| cell_metrics.propagators (per file) | range varies (e.g. 8) |
+| constraint_count | 1 |
+| constraint_retries | 0 |
+| elaborate_steps | 39,607 |
+| infer_steps | 22,052 |
+| meta_created | 2,045 |
+| meta_solved | 1,668 |
+| **prop_allocs** | **0** (no on-network propagator allocation in current state) |
+| **prop_firings** | **0** (no on-network propagator firing in current state) |
+| reduce_steps | 96,731 |
+| resolution_cycles | 1,621 |
+| solver_backtracks | 34 |
+| solver_unifies | 103 |
+| trait_resolve_steps | 34 |
+| unify_steps | 12,683 |
+| zonk_steps | 54,861 |
+
+DR per Pre-0 plan §9 S3:
+- Aggregate `cell_allocs` delta > +200 → investigate (bounded delta from canonical fuel infrastructure expected: ~+5-10 cells × ~410 files = ~+2050-4100 max, but the canonical fuel cell is per-network, not per-test-file, so the delta should be lower)
+- Aggregate `prop_firings` delta > +100 → investigate threshold propagator firing rate (current baseline is 0; any non-zero post-impl is the threshold propagator's contribution)
+
+**S4 — Probe verbose (per-command JSON)** (`process-file examples/2026-04-22-1A-iii-probe.prologos #:verbose #t`):
+
+| Metric | Pre-impl baseline |
+|---|---|
+| Total commands | 28 |
+| Total cell_allocs | ≈1181 (matches handoff §1 reference) |
+| prop_firings | 0 across all 28 commands |
+| prop_allocs | 0 across all 28 commands |
+| Highest reduce_steps | 51 (cmd 20 head op on List Int) |
+| Highest wall_ms | 516 (cmd 18 p5-list cons construction; 6 metas created+solved) |
+| Highest metas_created | 6 (cmd 18 p5-list cons) |
+| Highest unify_steps | 18 (cmd 18 p5-list cons) |
+| Output strings | 28 elaboration result strings (full equivalence reference for post-impl A/B) |
+
+DR per Pre-0 plan §9 S4:
+- Any output string mismatch post-Phase-1C: semantic regression — investigate
+- Cell_allocs per-command delta > 5: investigate per-command cell allocation
+- New counter values appearing (e.g., fuel-related counters): expected; capture as new baseline
 
 #### V-tier — N/A pre-impl (parity tests run post-impl)
 
@@ -1324,7 +1395,45 @@ M+A+E+R tier evidence cumulative for hybrid pivot (preserve inline check + thres
 - **Architecturally**: routes contradiction through propagator network (correctness) + preserves per-decrement cost (~30-40 ns) + preserves zero-major-GC property (R3) + bounded retention (R5)
 - **Rationale**: 19 findings across M/A/E/R tiers + 4 codifications candidate (capture-gap pattern's correct application reinforced 5x; "refine + verify, don't re-litigate" discipline; multi-quantale composition NTT extension as first-instantiation requirement; bench file integrity audit-first before Pre-0 execution)
 
-**S-tier remaining** (suite-level baselines using existing tooling) for full Pre-0 closure. Then D.2 revise commits the hybrid pivot decision per user direction (2026-04-26): "wait until all measurements before committing to a final decision."
+### Key Pre-0 findings from S-tier execution (2026-04-26)
+
+S-tier (S1-S4) execution adds 3 new findings via existing tooling. No new bench code; all data captured from `data/benchmarks/timings.jsonl` + `tools/benchmark-tests.rkt --slowest 10` + `process-file ... #:verbose #t`.
+
+**Finding 20 — S3 prop_firings + prop_allocs are ZERO suite-wide pre-impl**:
+- Aggregate `prop_firings` = 0 across 410 files / 7914 tests
+- Aggregate `prop_allocs` = 0 across 410 files / 7914 tests
+- Implication: Phase 1C's threshold propagator is the FIRST production on-network propagator firing in the elaboration path post-Step-2-close
+- Post-impl A/B reference: any non-zero post-impl `prop_firings` is the threshold propagator's contribution
+- DR refinement: post-impl `prop_firings` aggregate should be ≤ 410 (one fire per file's BSP barrier on average) under the hybrid pivot architecture; > 410 indicates per-decrement firing (architectural failure)
+
+**Finding 21 — S2 slowest 10 range 11.0-17.1s is the regression-investigation band**:
+- Slowest file: test-pipe-compose-e2e-02b.rkt at 17.1s
+- 10th slowest: test-transducer-02.rkt at 11.0s
+- All 10 passing
+- Implication: post-Phase-1C any file > 2× its current entry in the slowest-10 → investigate
+- DR sub-test: if Phase 1C migration introduces any NEW top-10 entrant (file not currently in slowest-10 but jumps in post-impl), investigate that file's specific Phase 1C interaction
+- Reference for sustained suite stability: 410 files, 7914 tests, 119.3s = ~290 ms/file average; slowest-10 are 38-59× the average
+
+**Finding 22 — S4 probe verbose 28 commands is the per-command behavioral fingerprint**:
+- 28 commands total; matches E7 baseline expression count
+- Total cell_allocs ≈ 1181 (matches handoff §1 reference)
+- prop_firings = 0 across all 28 commands (probe doesn't exercise propagator-heavy paths)
+- Highest wall_ms = 516 (cmd 18 p5-list cons; 6 metas created+solved + 18 unify steps)
+- Highest reduce_steps = 51 (cmd 20 head op on List Int)
+- Implication: per-command output strings (28 elaboration result strings) are the IDENTICAL post-impl A/B reference; any string mismatch is a semantic regression
+- DR: per-command cell_allocs delta > 5 → investigate per-command cell allocation; new fuel-related counters appearing → expected (capture as new baseline)
+
+### Pre-0 phase status — 100% COMPLETE post-S-tier
+
+M+A+E+R+S-tiers all executed; 22 cumulative design-affecting findings; hybrid pivot READY FOR D.2 COMMIT (8 findings supporting from M+A+E+R; S-tier provides regression-gate reference for post-impl A/B).
+
+**S-tier observations**:
+- S1 + S2 + S3 + S4 use ONLY existing tooling (no new bench code; methodology-completion step)
+- S3's `prop_firings = 0` baseline is the **strongest single S-tier finding** — Phase 1C's threshold propagator will be the first production on-network propagator firing in elaboration; the baseline establishes a clear "any non-zero post-impl is the threshold propagator's contribution" reference
+- S4's per-command JSON output gives the FULL behavioral fingerprint for V-tier post-Phase-1C parity validation (output strings + counters)
+- Hybrid pivot's STRUCTURAL FIT confirmed at suite-level: under the hybrid (inline check fast-path + threshold propagator only on exhaustion), aggregate `prop_firings` post-impl should be small and bounded (~per-file, not per-decrement)
+
+**D.2 revise opens next** per user direction (2026-04-26): "wait until all measurements before committing to a final decision." All measurements complete (M+A+E+R+S); hybrid pivot decision is empirically grounded; D.2 commits the architecture.
 
 ---
 

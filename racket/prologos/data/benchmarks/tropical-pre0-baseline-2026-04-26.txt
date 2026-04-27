@@ -187,3 +187,70 @@ R5 1000 spec cycles (retention):     3.68 ms / 5297.3 KB alloc / 14.9 KB retain
 V correctness:                       1 failures
 
 (Baselines captured. Re-run after 4C phases land for A/B comparison.)
+
+
+=== S: SUITE-LEVEL BASELINES (Pre-0; existing tooling, no new bench code) ===
+
+Source: data/benchmarks/timings.jsonl latest entry (commit 308e4d2d, 2026-04-25T22:26:00Z, branch main)
+
+S1: Full suite wall time
+  total_wall_ms: 119288 (119.3s)
+  file_count: 410
+  total_tests: 7914
+  all_pass: true
+  jobs: 10
+  machine: macosx-aarch64
+  source: affected
+  DR: > 130s investigate per S2; < 115s positive finding
+
+S2: Per-file timing distribution (slowest 10, all pass)
+   1. test-pipe-compose-e2e-02b.rkt   17.1s  (8 tests)
+   2. test-reducible-02.rkt           17.0s  (14 tests)
+   3. test-string-ops.rkt             15.5s  (27 tests)
+   4. test-surface-integration.rkt    14.4s  (77 tests)
+   5. test-transducer-01.rkt          13.4s  (17 tests)
+   6. test-io-csv-02.rkt              13.3s  (8 tests)
+   7. test-functor-ws-02.rkt          13.2s  (5 tests)
+   8. test-hashable-02.rkt            12.7s  (7 tests)
+   9. test-list-extended-01-02.rkt    11.5s  (15 tests)
+  10. test-transducer-02.rkt          11.0s  (11 tests)
+  DR: file regression > 200% investigate; new top-10 entrants investigate
+
+S3: Heartbeat counter aggregates (suite-level)
+  cell_allocs:           230,679
+  constraint_count:            1
+  constraint_retries:          0
+  elaborate_steps:        39,607
+  infer_steps:            22,052
+  meta_created:            2,045
+  meta_solved:             1,668
+  prop_allocs:                 0  *** BASELINE: 0 propagator allocations suite-wide ***
+  prop_firings:                0  *** BASELINE: 0 propagator firings suite-wide ***
+  reduce_steps:           96,731
+  resolution_cycles:       1,621
+  solver_backtracks:          34
+  solver_unifies:            103
+  trait_resolve_steps:        34
+  unify_steps:            12,683
+  zonk_steps:             54,861
+
+  DR: cell_allocs delta > +200 investigate; prop_firings delta > +100 investigate (any non-zero
+      post-impl is the threshold propagator's contribution; baseline 0 → architectural reference)
+
+  Per-file schema: cell_metrics (cells, propagators) + heartbeats (16 counters above) + memory
+  (gc_ms, mem_after_bytes, mem_before_bytes, mem_retained_bytes) + phases (elaborate_ms, parse_ms,
+  qtt_ms, reduce_ms, trait_resolve_ms, type_check_ms, zonk_ms)
+
+S4: Probe verbose (process-file examples/2026-04-22-1A-iii-probe.prologos #:verbose #t)
+  Total commands: 28
+  Total cell_allocs: ≈1181 (matches handoff §1 reference)
+  prop_firings: 0 across all 28 commands
+  prop_allocs: 0 across all 28 commands
+  Highest reduce_steps: 51 (cmd 20 head op on List Int)
+  Highest wall_ms: 516 (cmd 18 p5-list cons; 6 metas created+solved, 18 unify_steps)
+  Highest metas_created: 6 (cmd 18 p5-list cons)
+  Highest unify_steps: 18 (cmd 18 p5-list cons)
+  28 elaboration result strings: full equivalence reference for post-impl A/B (V-tier parity)
+  DR: any output mismatch = semantic regression; cell_allocs delta > 5/cmd = investigate
+
+=== Pre-0 phase 100% COMPLETE: M+A+E+R+S-tiers all executed; 22 design-affecting findings ===
