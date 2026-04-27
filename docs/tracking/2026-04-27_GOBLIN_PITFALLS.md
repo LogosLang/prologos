@@ -38,10 +38,7 @@ Prologos team to look at.
 
 ---
 
-### #0 — [DELETED — out of scope]
-
-Originally documented "no Racket toolchain in the sandbox." That's
-an environment limitation, not a Prologos issue. Number reserved.
+### #0 — [DELETED — out of scope: env limitation, not a Prologos issue]
 
 ---
 
@@ -77,70 +74,11 @@ on a promise that has a remote resolver triggers an outbound
 
 ---
 
-### #2 — [DELETED — false claim, recanted] (2026-04-27)
-
-Originally claimed `match | _ -> body` on user data types fails
-type inference. **Tested 2026-04-27 with a real Racket and the
-claim is false.** With a proper `spec` and the WS-mode form:
-
-```
-spec is-a-wild Foo -> Bool
-defn is-a-wild [x]
-  match x
-    | a-of _ -> true
-    | _      -> false
-```
-
-elaborates and evaluates correctly (`is-a-wild (a-of zero) ⇒ true`,
-`is-a-wild (b-of zero) ⇒ false`). See
-`probe-p2-wildcard.prologos` in the test session.
-
-**What the prologos::data::datum comment actually meant.** The
-in-source note about "explicit exhaustive patterns" is real for
-*type-inference inside a polymorphic context*, not a blanket
-wildcard ban. We over-generalised it into pitfall #2, then hit
-unrelated `match` issues that we mis-attributed to the wildcard.
-The behavior modules in `lib/prologos/ocapn/behavior.prologos`
-should be cleaned up (~250 LOC → ~70 LOC) by switching the
-constructor-by-constructor enumerations to `| _ -> no-op state`.
-
-Number reserved. Cleanup tracked separately.
+### #2 — [DELETED — false claim: WS-mode wildcard match works correctly with a proper spec]
 
 ---
 
-### #3 — [DELETED — false claim, recanted] (2026-04-27)
-
-Originally claimed function-typed fields in `data` constructors
-were unverified, forcing the closed-`BehaviorTag` enum approach.
-**Tested 2026-04-27 with a real Racket and the claim is false.**
-
-```
-data Step
-  step : [Nat -> Nat]    ;; bracketed function type — required so the
-                          ;; data-ctor parser doesn't read this as
-                          ;; "two Nat args returning Step"
-```
-
-elaborates cleanly, accepts `[fn [n : Nat] n]` and closures with
-captured state, and the stored function applies correctly under
-`match | step f -> [f n]`. Evidence:
-
-```
-def add3-step : Step := [make-add 3N]   ;; closure captures k=3
-[run-step add3-step 1N]   ⇒  4N
-[run-step add3-step 2N]   ⇒  5N
-```
-
-See `probe-p3-fnfield.prologos` in the test session.
-
-**Implication for the OCapN port.** `behavior.prologos` should be
-restructured: `data Behavior beh : [SyrupValue -> SyrupValue ->
-ActStep]` replaces `BehaviorTag` and `step-behavior`. Open-world
-user-defined actors become possible. Cleanup tracked separately;
-the architecture in this commit still uses the closed enum because
-that's what the original (incorrect) pitfall steered us into.
-
-Number reserved.
+### #3 — [DELETED — false claim: function-typed `data` fields work with bracketed fn-type, e.g. `step : [Nat -> Nat]`]
 
 ---
 
@@ -213,73 +151,23 @@ will hit it any time they write predicates returning `Option α`.
 
 ---
 
-### #6 — [DELETED — out of scope]
-
-WS-mode `let p := body` and sexp-mode `(let (p v) body)` are TWO
-SURFACE FORMS by design (grammar.ebnf §7 line 1236). Mixing them
-in a sexp test string is a user error, not a Prologos bug.
-Number reserved.
+### #6 — [DELETED — out of scope: WS-mode and sexp-mode `let` are two surface forms by design]
 
 ---
 
-### #7 — [DELETED — followed from #2 which was recanted] (2026-04-27)
-
-This was a quantitative restatement of #2 ("constructor-by-
-constructor enumerations are noisy"). With #2 recanted (wildcards
-work), #7 also evaporates: the OCapN behavior modules can be
-collapsed to wildcard-fallthrough form, dropping ~180 LOC.
-
-Number reserved. Cleanup tracked separately.
+### #7 — [DELETED — followed from #2 which was false; wildcard fall-through obviates the noise]
 
 ---
 
-### #8 — [DELETED — false claim, recanted] (2026-04-27)
-
-Originally documented an avoidance: "we didn't put `Sigma` in
-`data` ctor fields because we couldn't find a stdlib example."
-**Tested 2026-04-27 with a real Racket and Sigma works fine in
-data ctors:**
-
-```
-data Box1
-  box1 : [Sigma [_ <Nat>] Bool]
-
-data Table
-  table : Nat -> [List [Sigma [_ <Nat>] Bool]]
-```
-
-both elaborate cleanly:
-```
-box1  : [Sigma Nat Bool] -> Box1
-table : Nat [List [Sigma Nat Bool]] -> Table
-```
-
-See `probe-p8-sigma.prologos` in the test session.
-
-**Implication for the port.** The named-struct `ActorEntry`/
-`PromiseEntry` workaround in `vat.prologos` was unnecessary. Could
-be simplified back to `[List [Sigma [_ <Nat>] Actor]]` and
-`[List [Sigma [_ <Nat>] PromiseState]]`. Cleanup tracked
-separately.
-
-Number reserved.
+### #8 — [DELETED — false claim: `Sigma` works in `data` ctor fields, e.g. `box1 : [Sigma [_ <Nat>] Bool]`]
 
 ---
 
-### #9 — [DELETED — user error]
-
-`def` is for value bindings, `defn` is for functions. The
-distinction is documented (grammar.ebnf §3 lines 189–190 +
-prologos-syntax rules). Mis-using `defn` for a 0-ary constant is
-a usage error, not a Prologos bug. Number reserved.
+### #9 — [DELETED — user error: `def` for values vs `defn` for functions is documented]
 
 ---
 
-### #10 — [DELETED — out of scope]
-
-Originally noted "the sandbox can't reach codeberg / Racket
-download mirrors." Network sandboxing is an environment
-limitation, not a Prologos issue. Number reserved.
+### #10 — [DELETED — out of scope: sandbox network limitation, not a Prologos issue]
 
 ---
 
@@ -481,36 +369,7 @@ infer") doesn't point at the line.
 
 ---
 
-### #15 — QTT linearity on `[fst p]` / `[snd p]` repeated (2026-04-27)
-
-**Symptom.**
-
-```
-defn send [target args v]
-  let r := [fresh-promise v]
-    pair [enqueue-msg [vmsg-deliver target args [some Nat [snd r]]] [fst r]] [snd r]
-```
-
-raises a multiplicity-error: `r` is used three times (once each in
-`[snd r]`, `[fst r]`, `[snd r]`).
-
-**Why this is surprising.** Stdlib's `swap` does:
-```
-defn swap [p]
-  pair [snd p] [fst p]
-```
-which uses `p` twice. So projection-twice clearly works in stdlib.
-The third use is what breaks ours.
-
-**Workaround.** Same as pitfall #14 — switch to a named struct and
-use a `match | allocated x y -> ...` destructure that consumes once.
-
-**Verdict.** Probably correct QTT behaviour given how `let r := ...`
-binds at multiplicity 1, but composes badly with
-"return both halves of a Sigma plus a derived value". A documented
-multiplicity-aware `unpair p (fn v1 pid ...)` combinator in stdlib
-would soften this — we ended up writing an actor-allocation-shaped
-struct rather than fight inference.
+### #15 — [DELETED — false claim: tested with `[fst p]`/`[snd p]` 3× on the same Sigma, no multiplicity error; the original failure was conflated with #14's destructure issue]
 
 ---
 
