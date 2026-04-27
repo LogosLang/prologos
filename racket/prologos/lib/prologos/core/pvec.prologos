@@ -116,22 +116,23 @@ require [prologos::data::nat            :refer [lt?]]
 ;; pvec-any? and pvec-all? use native pvec-fold.
 
 ;; pvec-any? : (A -> Bool) -> PVec A -> Bool
-spec pvec-any? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+;; A is auto-introduced (D1, issue #20).
+spec pvec-any? [-> A Bool] -> [PVec A] -> Bool
 defn pvec-any? [pred v]
   pvec-fold [fn acc x [if [pred x] true acc]] false v
 
 ;; pvec-all? : (A -> Bool) -> PVec A -> Bool
-spec pvec-all? {A : Type} [-> A Bool] -> [PVec A] -> Bool
+spec pvec-all? [-> A Bool] -> [PVec A] -> Bool
 defn pvec-all? [pred v]
   pvec-fold [fn acc x [if [pred x] acc false]] true v
 
 ;; pvec-from-list-fn : List A -> PVec A  (wraps AST pvec-from-list as a function)
-spec pvec-from-list-fn {A : Type} [List A] -> [PVec A]
+spec pvec-from-list-fn [List A] -> [PVec A]
 defn pvec-from-list-fn [xs]
   pvec-from-list xs
 
 ;; pvec-to-list-fn : PVec A -> List A  (wraps AST pvec-to-list as a function)
-spec pvec-to-list-fn {A : Type} [PVec A] -> [List A]
+spec pvec-to-list-fn [PVec A] -> [List A]
 defn pvec-to-list-fn [v]
   pvec-to-list v
 
@@ -142,7 +143,7 @@ defn pvec-to-list-fn [v]
 ;; Implementation: convert both pvecs to lists, zip-with on lists, convert
 ;; the result back to a PVec. The asymptotic cost is the same as a direct
 ;; index walk: O(n) for the dominant length.
-spec pvec-zip-with {A B C : Type} [A -> B -> C] [PVec A] [PVec B] -> [PVec C]
+spec pvec-zip-with [A -> B -> C] [PVec A] [PVec B] -> [PVec C]
   :doc "Combine two PVecs element-wise with a function; truncates to shorter."
 defn pvec-zip-with [f xs ys]
   pvec-from-list [zip-with f [pvec-to-list xs] [pvec-to-list ys]]

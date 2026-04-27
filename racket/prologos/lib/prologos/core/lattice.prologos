@@ -119,13 +119,13 @@ defn rat-min [a b]
 
 ;; --- Set helpers ---
 
-spec set-subset? {A : Type} [Set A] [Set A] -> Bool
+spec set-subset? [Set A] [Set A] -> Bool
 defn set-subset? [a b]
   set-fold [fn acc x [and acc [set-member? b x]]] true a
 
 ;; --- Map helpers ---
 
-spec map-merge-with {K V : Type} [V V -> V] [Map K V] [Map K V] -> [Map K V]
+spec map-merge-with [V V -> V] [Map K V] [Map K V] -> [Map K V]
 defn map-merge-with [join-fn m1 m2]
   map-fold-entries
     fn [acc <Map K V>] [k <K>] [v <V>]

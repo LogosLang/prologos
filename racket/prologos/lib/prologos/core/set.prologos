@@ -102,28 +102,29 @@ require [prologos::data::list             :refer [List nil cons foldr]]
 ;; set-map : (A -> B) -> Set A -> Set B
 ;; Applies f to every element, collecting results into a new set.
 ;; Uses native set-fold to avoid List conversion.
-spec set-map {A B : Type} [-> A B] -> [Set A] -> [Set B]
+;; A and B are auto-introduced (D1, issue #20).
+spec set-map [-> A B] -> [Set A] -> [Set B]
 defn set-map [f s]
   set-fold [fn acc x [set-insert acc [f x]]] [set-empty B] s
 
 ;; set-any? : (A -> Bool) -> Set A -> Bool
-spec set-any? {A : Type} [-> A Bool] -> [Set A] -> Bool
+spec set-any? [-> A Bool] -> [Set A] -> Bool
 defn set-any? [pred s]
   set-fold [fn acc x [if [pred x] true acc]] false s
 
 ;; set-all? : (A -> Bool) -> Set A -> Bool
-spec set-all? {A : Type} [-> A Bool] -> [Set A] -> Bool
+spec set-all? [-> A Bool] -> [Set A] -> Bool
 defn set-all? [pred s]
   set-fold [fn acc x [if [pred x] acc false]] true s
 
 ;; set-to-list-fn : Set A -> List A  (wraps AST set-to-list as a function)
-spec set-to-list-fn {A : Type} [Set A] -> [List A]
+spec set-to-list-fn [Set A] -> [List A]
 defn set-to-list-fn [s]
   set-to-list s
 
 ;; set-from-list-fn : List A -> Set A  (wraps via fold, erased type arg)
 ;; Note: We avoid calling set-from-list directly because it declares A :w,
 ;; but spec/defn generates A :0 (erased). Instead we fold with set-insert.
-spec set-from-list-fn {A : Type} [List A] -> [Set A]
+spec set-from-list-fn [List A] -> [Set A]
 defn set-from-list-fn [xs]
   foldr A [Set A] [fn a acc [set-insert acc a]] [set-empty A] xs
