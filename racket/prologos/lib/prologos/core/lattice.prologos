@@ -125,7 +125,13 @@ defn set-subset? [a b]
 
 ;; --- Map helpers ---
 
-spec map-merge-with [V V -> V] [Map K V] [Map K V] -> [Map K V]
+;; Explicit binders kept here: the body's nested-fn type annotations
+;; <Map K V>, <K>, <V> create dependency on a specific binder ORDER that
+;; the auto-detect (V then K, by occurrence) does not match.
+;; (See issue #20 — D1+D2 work for most specs but defns whose body uses
+;;  inline type annotations in nested fn closures occasionally need the
+;;  explicit form.)
+spec map-merge-with {K V : Type} [V V -> V] [Map K V] [Map K V] -> [Map K V]
 defn map-merge-with [join-fn m1 m2]
   map-fold-entries
     fn [acc <Map K V>] [k <K>] [v <V>]
