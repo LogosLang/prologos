@@ -326,7 +326,7 @@
 
 (define e1 (bench-ms "E1 numeric subtyping (simple)" 10
   (silent (lambda ()
-      (process-string-ws e1-src))))))
+      (process-string-ws e1-src)))))
 
 ;; E2: Mixed-type map (existing union type consumer)
 (define e2-src
@@ -338,7 +338,7 @@
 
 (define e2 (bench-ms "E2 mixed-type map (union values)" 10
   (silent (lambda ()
-      (process-string-ws e2-src))))))
+      (process-string-ws e2-src)))))
 
 ;; E3: Pattern matching (exercises type checking with multiple branches)
 (define e3-src
@@ -354,7 +354,7 @@
 
 (define e3 (bench-ms "E3 pattern matching (multiple branches)" 10
   (silent (lambda ()
-      (process-string-ws e3-src))))))
+      (process-string-ws e3-src)))))
 
 ;; E4: Trait with subtype (exercises subtype? in resolution)
 (define e4-src
@@ -367,7 +367,7 @@
 
 (define e4 (bench-ms "E4 subtype in arithmetic context" 10
   (silent (lambda ()
-      (process-string-ws e4-src))))))
+      (process-string-ws e4-src)))))
 
 
 ;; ============================================================

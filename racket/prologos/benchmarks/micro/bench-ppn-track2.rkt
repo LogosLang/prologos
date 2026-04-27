@@ -409,7 +409,7 @@
     ;; Time full process-file
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-          (process-file f)))))
+          (process-file f))))
     (printf "  ~a: total=~a ms\n"
             fname
             (~r total-ms #:precision '(= 1)))))
@@ -438,7 +438,7 @@
   (with-handlers ([exn? (lambda (e) (void))])
     (define-values (_1 total-ms)
       (time-ms (lambda ()
-          (process-file f)))))
+          (process-file f))))
     (set! lib-timings (cons (list fname total-ms) lib-timings))))
 
 ;; Sort by time, show top 10
