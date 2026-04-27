@@ -1,0 +1,54 @@
+;; Issue #18 Phase 0 acceptance: compile-match-tree variable bindings in
+;; compound patterns aliasing outer-param storage in recursive bodies.
+;;
+;; Reproducer from the issue: sum-rows on a 3-element list should be 6N.
+;; On the buggy compile-match-tree, the `rest` binding in the third clause
+;; aliases an outer field-name slot already overwritten by a later dispatch
+;; column. The recursive call sees a corrupted list and quietly returns 5N.
+
+ns alias-bug-18
+
+spec sum-rows [List Nat] -> Nat
+defn sum-rows
+  | nil            -> 0N
+  | cons r nil     -> r
+  | cons r rest    -> [+ r [sum-rows rest]]
+
+;; Expected: 6N
+[sum-rows '[1N 2N 3N]]
+
+;; Expected: 15N (broader regression coverage)
+[sum-rows '[1N 2N 3N 4N 5N]]
+
+;; List length via the same alias pattern
+spec my-length [List Nat] -> Nat
+defn my-length
+  | nil           -> 0N
+  | cons _ nil    -> 1N
+  | cons _ rest   -> [+ 1N [my-length rest]]
+
+;; Expected: 3N
+[my-length '[1N 2N 3N]]
+
+;; Expected: 0N
+[my-length '[]]
+
+;; Recursive map over nats: doubles every element
+spec dbl-all [List Nat] -> [List Nat]
+defn dbl-all
+  | nil          -> '[]
+  | cons x rest  -> [cons [+ x x] [dbl-all rest]]
+
+;; Expected: '[2N 4N 6N]
+[dbl-all '[1N 2N 3N]]
+
+;; Edge case: shadowed name across clauses (rest is named the same in two
+;; clauses, but only the third one is the recursive arm).
+spec last-elem [List Nat] -> Nat
+defn last-elem
+  | nil          -> 0N
+  | cons r nil   -> r
+  | cons _ rest  -> [last-elem rest]
+
+;; Expected: 3N
+[last-elem '[1N 2N 3N]]
