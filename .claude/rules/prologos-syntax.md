@@ -19,6 +19,16 @@
 - **Multi-arity `defn` is the primary dispatch mechanism.** If a function dispatches on its argument's constructors, use `defn foo | pattern -> body`, NOT `defn foo [x] match x | ...`.
 - **`match` is for mid-expression dispatch** -- when matching inside a larger body, not at the top level of a definition.
 - **Avoid `if`** -- structural pattern matching via multi-arity `defn` is always preferred. `if` is essentially redundant in a language with pattern matching on Bool. Minimize its use; prefer `defn foo | true -> ... | false -> ...`.
+- **Multi-line clause body: continuation indented past the `|`.** When a clause body is more complex than a single inline expression (e.g., contains a nested `match`), put the body on the next line indented further than the `|` it belongs to. This is the canonical layout-based form, consistent with `defn` body, `def := body`, and `let` body indentation rules:
+  ```
+  defn nth [n xs]
+    | n nil -> none
+    | n [cons h t] ->
+      match [eq n 0]
+        | true  -> [some h]
+        | false -> [nth [- n 1] t]
+  ```
+  Body at the **same** indent as `|` is a layout violation (currently produces a hard parser error; tracked in issue #27 for diagnostic improvement). Body indent must be **strictly greater than** the `|` column.
 
 ## Application style
 
