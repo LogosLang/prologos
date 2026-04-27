@@ -754,6 +754,50 @@ These three use cases ground the Form B anticipated-use enumeration. Phase 3C's 
 - **Q-1B-2**: `+inf.0` (Racket float-infinity) vs sentinel `'tropical-top`. Lean: `+inf.0` — Racket-native; arithmetic well-defined (`+inf.0 + a = +inf.0`); easier interop. Alternative: sentinel for type clarity; might be more SRE-aligned. Decide at 1B mini-design.
 - **Q-1B-4**: Residuation operator as read-time helper vs propagator. Lean: read-time helper (per §9.5 + §6.5). Decide at 1B mini-design with Phase 3C UC1/UC2/UC3 anticipated use cases in hand.
 
+### §9.10 Post-Phase-1B benchmark capture — forward-pointer for Pre-0 deferred items (NEW 2026-04-26)
+
+Per **capture-gap discipline** (DEVELOPMENT_LESSONS.org, codified 2026-04-25; "every 'future phase X handles Y' claim requires capture verification or explicit capture creation at the time of the claim"). Pre-0 plan §3-§4 has 3 items labeled "N/A pre-impl, deferred to post-Phase-1B" — captured here at the right phase so the work isn't dropped when Phase 1B implementation opens.
+
+Phase 1B's deliverables include `bench-tropical-fuel.rkt` (NEW; per Pre-0 plan §11.1 file table) which is the home for these post-impl benchmarks. The Form A unit tests (§9.6) cover **correctness** of the residuation operator + tensor + boundary cases; the deferred Pre-0 micros below cover **performance characterization**.
+
+**M10 — Residuation operator (read-time pure function) cost**:
+- Per Pre-0 plan §3 M10: pure function call cost on `(tropical-left-residual a b)` for various (a, b) value combinations
+- Implementation site: `bench-tropical-fuel.rkt` micro section
+- HYP: ~10-30 ns/call for fixnum cases; ~50-100 ns/call for `+inf.0` cases (per Pre-0 plan §3 M10 hypothesis)
+- DR: if wall > 100 ns → optimize residuation operator (open-coded comparison)
+- Boundary cases (per Pre-0 plan §3 M10): simple `(tropical-left-residual 5 10)`, boundary `(tropical-left-residual 0 0)`, infinite cases, pathological extreme values
+- Decision input for Q-1B-4: read-time helper has near-zero overhead → consumers wrap in propagator only when needed
+
+**M12 — SRE domain registration overhead**:
+- Per Pre-0 plan §3 M12: one-time module-load cost for `register-domain! tropical-fuel-sre-domain`
+- Implementation site: `bench-tropical-fuel.rkt` micro section
+- HYP: < 1 ms (one-time at module load); < 10 KB per domain (struct + property declarations + merge-fn entries)
+- DR: if significantly higher → investigate property inference triggering at registration vs lazy
+- Sub-tests: one-time registration cost; idempotency check (repeat registration is no-op vs re-runs property inference)
+
+**A12 — Edge-case algebra (residuation at boundaries)**:
+- Per Pre-0 plan §4 A12: assertion-based correctness for 6 boundary cases + algebraic adjunction law
+- Implementation site: `tests/test-tropical-fuel.rkt` (covered by Form A unit tests per §9.6 above)
+- The 6 cases (a=b, a=0, b=+inf, a=+inf, a>b overspend, both 0 identity) are the boundary semantics for `(tropical-left-residual a b)`
+- Cross-reference: A12 boundary cases are **the same cases** as §9.6 Form A unit tests — A12 was named in Pre-0 plan as adversarial-tier coverage but is realized via Form A unit tests
+- Methodology: assertion-based correctness (rackunit `check-equal?`); wall-clock secondary (timing covered by M10)
+- DR: if any boundary case produces wrong result → bug in `tropical-left-residual` implementation OR reconsider `+inf.0` representation choice (Q-1B-2)
+
+**Phase 1B implementation checklist** (capture-gap closure):
+- [ ] M10 added to `bench-tropical-fuel.rkt` (timing measurement)
+- [ ] M12 added to `bench-tropical-fuel.rkt` (registration cost measurement)
+- [ ] A12 boundary cases verified in `tests/test-tropical-fuel.rkt` (per §9.6 Form A enumeration)
+- [ ] Cross-reference verification: §9.6 Form A test list matches Pre-0 plan §4 A12 boundary cases enumeration
+- [ ] Update Pre-0 plan §12.5 M10/M12/A12 rows with measured baseline data post-Phase-1B
+- [ ] Document any findings in Pre-0 plan §12.6 from M10/M12/A12 measurements
+
+**Why this capture is critical**: without explicit cross-reference back to D.1 §9, the Phase 1B implementer might:
+- Look at D.1 §9.6 → see Form A unit tests → implement them in `test-tropical-fuel.rkt`
+- Look at Pre-0 plan §4 A12 → see "deferred post-Phase-1B" → potentially DUPLICATE in `bench-tropical-fuel.rkt` thinking they're separate
+- OR miss M10 / M12 entirely (no Form A counterpart in §9.6)
+
+This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks are owed" — the implementer reads this checklist + §9.6 + Pre-0 plan §11.1 together. The capture lives at Phase 1B (the right phase per capture-gap discipline) with explicit cross-references back to Pre-0 plan items.
+
 ---
 
 ## §10 Phase 1C — Canonical BSP fuel migration

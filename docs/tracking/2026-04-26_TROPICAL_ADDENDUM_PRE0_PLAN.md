@@ -177,6 +177,8 @@ Each M-test follows the same structure: setup + wall-clock measurement + memory 
 
 **Semantic axis**: pure function call cost
 
+**📌 CAPTURE**: M10 is N/A pre-impl; **captured at Phase 1B per [D.1 §9.10](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md#910-post-phase-1b-benchmark-capture--forward-pointer-for-pre-0-deferred-items-new-2026-04-26)**. Implementation site: `bench-tropical-fuel.rkt` micro section. Phase 1B implementation checklist includes M10 — see D.1 §9.10.
+
 **Setup**:
 - Post-impl ONLY (no pre-impl baseline; operator doesn't exist)
 - `(tropical-left-residual a b)` for various (a, b) value combinations
@@ -227,6 +229,8 @@ Each M-test follows the same structure: setup + wall-clock measurement + memory 
 ### M12 — SRE domain registration overhead
 
 **Semantic axis**: one-time module-load cost
+
+**📌 CAPTURE**: M12 is N/A pre-impl (no new domain to register); **captured at Phase 1B per [D.1 §9.10](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md#910-post-phase-1b-benchmark-capture--forward-pointer-for-pre-0-deferred-items-new-2026-04-26)**. Implementation site: `bench-tropical-fuel.rkt` micro section. Phase 1B implementation checklist includes M12 — see D.1 §9.10.
 
 **Setup**:
 - Pre-impl: existing `register-domain!` cost for type-sre-domain (already registered; measure as proxy)
@@ -471,6 +475,8 @@ Each M-test follows the same structure: setup + wall-clock measurement + memory 
 ### A12 — Edge-case algebra (residuation at boundaries)
 
 **Semantic axis**: residuation operator boundary behavior
+
+**📌 CAPTURE**: A12 is N/A pre-impl (operator doesn't exist); **captured at Phase 1B per [D.1 §9.10](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md#910-post-phase-1b-benchmark-capture--forward-pointer-for-pre-0-deferred-items-new-2026-04-26)**. Implementation site: `tests/test-tropical-fuel.rkt` (Form A unit tests per [D.1 §9.6](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md#96-tests-refined-from-d3-77)). The 6 boundary cases below are **the same cases** as §9.6 Form A enumeration — A12 was named in adversarial-tier scope but is realized via Form A unit tests at Phase 1B. Phase 1B implementation checklist verifies cross-reference parity. See D.1 §9.10.
 
 **Setup**:
 - (a=b): `(tropical-left-residual 5 5) = 0`
@@ -920,9 +926,9 @@ V-series runs as regression tests in `tests/test-elaboration-parity.rkt`. Alread
 | File | Extensions | LoC estimate |
 |---|---|---|
 | `racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt` | M7-M13 (7 micros) + A5-A12 (8 adversarial) + E7-E9 (3 E2E) + R1-R5 (5 memory-specific) | ~250-400 LoC |
-| `racket/prologos/benchmarks/micro/bench-tropical-fuel.rkt` (NEW) | C1-C5 (algebraic correctness) + X1-X3 (multi-quantale composition) + dedicated tropical-fuel-specific micros | ~200-300 LoC |
+| `racket/prologos/benchmarks/micro/bench-tropical-fuel.rkt` (NEW) | C1-C5 (algebraic correctness) + X1-X3 (multi-quantale composition) + **M10 residuation operator timing** + **M11 tropical tensor timing (post-impl)** + **M12 SRE registration cost** (per D.1 §9.10) | ~200-300 LoC |
 | `racket/prologos/tests/test-elaboration-parity.rkt` | V4-V6 (parity validation) | ~80-150 LoC |
-| `racket/prologos/tests/test-tropical-fuel.rkt` (NEW) | Phase 1B unit tests (covered by C-series + dedicated micros) | ~100-200 LoC |
+| `racket/prologos/tests/test-tropical-fuel.rkt` (NEW) | Phase 1B unit tests covered by C-series + Form A residuation tests + **A12 boundary algebra** (per D.1 §9.6 + §9.10) | ~100-200 LoC |
 
 **Pre-0 phase (NOW)**:
 - Extend `bench-ppn-track4c.rkt` with Pre-impl baselines for M7-M13 + A5-A12 + E7-E9 + R1-R5 (counter-side)
@@ -989,10 +995,17 @@ Add `cost_accumulated` (or similar) to PERF-COUNTERS for tracking tropical fuel 
 
 ### §12.2 Post-Phase-1B phase
 
-1. Create `bench-tropical-fuel.rkt` with C1-C5 + X1-X3 + dedicated tropical-fuel micros (~200-300 LoC)
-2. Run C-series for algebraic correctness verification (assertion-based)
-3. Run X-series for multi-quantale composition verification
-4. Capture data; compare against hypotheses
+1. Create `bench-tropical-fuel.rkt` with C1-C5 + X1-X3 + **M10 residuation timing** + **M11 tropical tensor (post-impl)** + **M12 SRE registration cost** (~200-300 LoC; per [D.1 §9.10 capture](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md#910-post-phase-1b-benchmark-capture--forward-pointer-for-pre-0-deferred-items-new-2026-04-26))
+2. Create `tests/test-tropical-fuel.rkt` with merge-semantics + cell allocation + threshold propagator + Form A residuation operator tests (per D.1 §9.6) + **A12 boundary algebra** (per D.1 §9.10; the 6 boundary cases at Pre-0 plan §4 A12 are the same as §9.6 Form A enumeration)
+3. Run C-series for algebraic correctness verification (assertion-based)
+4. Run X-series for multi-quantale composition verification
+5. Run M10/M11/M12 micros; capture into Pre-0 plan §12.5 baseline table; document findings in §12.6 if design-affecting
+6. Capture data; compare against hypotheses
+
+**Capture-gap closure verification**:
+- [ ] D.1 §9.10 implementation checklist all items checked
+- [ ] §9.6 Form A test list and Pre-0 plan §4 A12 enumeration match (6 boundary cases identical)
+- [ ] Pre-0 plan §12.5 M10/M12/A12 rows updated with measured baseline data
 
 **If C-series fails**: critical bug; halt before Phase 1C migration.
 
@@ -1039,11 +1052,11 @@ Source: `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
 | **M9.2 N=5 sequential** | 17 μs (3.4 μs/cell) | 9.2 KB (1.8 KB/cell incl base) | 0.2 KB | NEW |
 | **M9.3 N=50 sequential** | 61 μs (1.2 μs/cell) | 74.6 KB (1.5 KB/cell) | 0.2 KB | NEW |
 | **M9.4 N=500 sequential** | **264 μs (0.5 μs/cell)** | **625 KB (1.25 KB/cell at scale)** | 0.3 KB | NEW — per-cell amortization confirmed |
-| **M10 residuation operator** | N/A pre-impl | N/A | N/A | Deferred to post-Phase-1B (operator doesn't exist) |
+| **M10 residuation operator** | N/A pre-impl | N/A | N/A | **Captured at D.1 §9.10** (post-Phase-1B; `bench-tropical-fuel.rkt` micro section) |
 | **M11.1 fixnum +** | **1 ns/call** | 0 | 0 | NEW — tropical tensor essentially free |
 | **M11.2 large fixnum +** | 1 ns/call | 0 | 0 | NEW |
 | **M11.3 +inf.0 + finite** | 1 ns/call | 0 | 0 | NEW (+inf.0 propagation works at fixnum cost) |
-| **M12 SRE registration** | N/A pre-impl | N/A | N/A | Deferred to post-Phase-1B |
+| **M12 SRE registration** | N/A pre-impl | N/A | N/A | **Captured at D.1 §9.10** (post-Phase-1B; `bench-tropical-fuel.rkt` micro section) |
 | **M13 prop-network-fuel access** | **6 ns/call** | 0 | 0 | NEW (struct-field access; matches M8 inline) |
 
 #### A-tier baselines (executed 2026-04-26, this commit)
@@ -1069,7 +1082,7 @@ Source: `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
 | **A11.2 many tiny (10k)** | **0.116 ms** | n/a | n/a | Matches A7.2 ratio (12 ns/dec) |
 | **A11.3 alternating (1k)** | **0.013 ms** | n/a | n/a | NEW — pattern-blind cost-blindness fingerprint |
 | **A11.4 monotonic (1k)** | **0.013 ms** | n/a | n/a | NEW — **A11.3 = A11.4 IDENTICALLY** confirms pre-impl cost-blindness; post-impl A/B will diverge dramatically (A11.4 exhausts at step ~44; A11.3 at ~500) |
-| **A12 residuation boundaries** | N/A pre-impl | N/A | N/A | Post-Phase-1B (operator doesn't exist) |
+| **A12 residuation boundaries** | N/A pre-impl | N/A | N/A | **Captured at D.1 §9.10 + §9.6 Form A** (post-Phase-1B; `tests/test-tropical-fuel.rkt`; cross-reference parity at impl) |
 
 #### E-tier baselines (existing E1-E4 + new E7-E9 PENDING)
 
