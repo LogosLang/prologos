@@ -155,9 +155,19 @@ defn actor-table-get [k entries]
           | true  -> some [ae-actor e]
           | false -> actor-table-get k rest
 
+;; Replace-or-insert. Walks the list once, replacing the first
+;; matching entry; otherwise prepends. Earlier versions just consed
+;; unconditionally (Copilot review #28#discussion_r3150426596): with
+;; one delivery per turn the actor table grew without bound and
+;; lookups slowed linearly.
 spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
 defn actor-table-set [k a entries]
-  cons [actor-entry k a] entries
+  match entries
+    | nil -> cons [actor-entry k a] nil
+    | cons e rest ->
+        match [nat-eq? k [ae-id e]]
+          | true  -> cons [actor-entry k a] rest
+          | false -> cons e [actor-table-set k a rest]
 
 spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
 defn promise-table-get [k entries]
@@ -168,9 +178,17 @@ defn promise-table-get [k entries]
           | true  -> some [pe-state e]
           | false -> promise-table-get k rest
 
+;; Same shape as actor-table-set: replace-or-insert in place. See
+;; Copilot review #28#discussion_r3150426729 for the same growth
+;; concern as actor-table-set above.
 spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
 defn promise-table-set [k s entries]
-  cons [promise-entry k s] entries
+  match entries
+    | nil -> cons [promise-entry k s] nil
+    | cons e rest ->
+        match [nat-eq? k [pe-id e]]
+          | true  -> cons [promise-entry k s] rest
+          | false -> cons e [promise-table-set k s rest]
 
 ;; ========================================
 ;; Vat
@@ -362,6 +380,13 @@ defn step-after-act [target old-act new-state rv effects ap v]
 
 ;; deliver: look up the target actor, run its behaviour, integrate
 ;; effects, settle the answer-promise (if any) with the return value.
+;;
+;; Missing-target handling (Copilot review #28#discussion_r3150426741):
+;; if the target id has no actor in the table, we BREAK any answer
+;; promise rather than dropping the message — otherwise an `ask`
+;; against a non-existent actor would hang on its result-promise
+;; forever. The break-reason carries the original args so callers
+;; can debug what couldn't be delivered.
 
 spec deliver-msg VatMsg Vat -> Vat
 defn deliver-msg [m v]
@@ -369,7 +394,10 @@ defn deliver-msg [m v]
     let args := [vmsg-args m]
       let ap := [vmsg-answer-pos m]
         match [actor-table-get target [vat-actors v]]
-          | none -> v
+          | none ->
+              match ap
+                | none     -> v
+                | some pid -> break-promise pid args v
           | some a ->
               let s := [step-behavior [actor-tag a] [actor-state a] args]
                 step-after-act target a [step-state s] [step-return s] [step-effects s] ap v
