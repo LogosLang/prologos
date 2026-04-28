@@ -76,19 +76,16 @@ data ActStep
 ;; Selectors.
 
 spec step-state ActStep -> SyrupValue
-defn step-state [s]
-  match s
-    | act-step st _ _ -> st
+defn step-state
+  | act-step st _ _ -> st
 
 spec step-return ActStep -> SyrupValue
-defn step-return [s]
-  match s
-    | act-step _ rv _ -> rv
+defn step-return
+  | act-step _ rv _ -> rv
 
 spec step-effects ActStep -> List Effect
-defn step-effects [s]
-  match s
-    | act-step _ _ es -> es
+defn step-effects
+  | act-step _ _ es -> es
 
 ;; ========================================
 ;; A small helper: "no change" step
@@ -111,23 +108,22 @@ defn step-echo [state args]
 ;; --- cell ---
 ;; State: stored value. Args: tagged "set" v / "get" / anything.
 spec step-cell SyrupValue SyrupValue -> ActStep
-defn step-cell [state args]
-  match args
-    | syrup-null         -> no-op state
-    | syrup-bool _       -> no-op state
-    | syrup-nat _        -> no-op state
-    | syrup-int _        -> no-op state
-    | syrup-string _     -> no-op state
-    | syrup-symbol _     -> no-op state
-    | syrup-list _       -> no-op state
-    | syrup-refr _       -> no-op state
-    | syrup-promise _    -> no-op state
-    | syrup-tagged tag p ->
-        match [str::eq tag "set"]
-          | true  -> act-step p syrup-null nil
-          | false -> match [str::eq tag "get"]
-              | true  -> no-op state
-              | false -> no-op state
+defn step-cell
+  | state [syrup-tagged tag p] ->
+      match [str::eq tag "set"]
+        | true  -> act-step p syrup-null nil
+        | false -> match [str::eq tag "get"]
+            | true  -> no-op state
+            | false -> no-op state
+  | state syrup-null        -> no-op state
+  | state [syrup-bool _]    -> no-op state
+  | state [syrup-nat _]     -> no-op state
+  | state [syrup-int _]     -> no-op state
+  | state [syrup-string _]  -> no-op state
+  | state [syrup-symbol _]  -> no-op state
+  | state [syrup-list _]    -> no-op state
+  | state [syrup-refr _]    -> no-op state
+  | state [syrup-promise _] -> no-op state
 
 ;; --- counter ---
 ;; State: syrup-nat n. Args: tagged "inc" _ | tagged "get" _.

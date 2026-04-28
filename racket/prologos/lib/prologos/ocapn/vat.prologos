@@ -61,14 +61,12 @@ data Actor
   actor : BehaviorTag -> SyrupValue
 
 spec actor-tag Actor -> BehaviorTag
-defn actor-tag [a]
-  match a
-    | actor t _ -> t
+defn actor-tag
+  | actor t _ -> t
 
 spec actor-state Actor -> SyrupValue
-defn actor-state [a]
-  match a
-    | actor _ s -> s
+defn actor-state
+  | actor _ s -> s
 
 ;; ========================================
 ;; Table entries (concrete, monomorphic)
@@ -82,27 +80,23 @@ data ActorEntry
   actor-entry : Nat -> Actor
 
 spec ae-id ActorEntry -> Nat
-defn ae-id [e]
-  match e
-    | actor-entry i _ -> i
+defn ae-id
+  | actor-entry i _ -> i
 
 spec ae-actor ActorEntry -> Actor
-defn ae-actor [e]
-  match e
-    | actor-entry _ a -> a
+defn ae-actor
+  | actor-entry _ a -> a
 
 data PromiseEntry
   promise-entry : Nat -> PromiseState
 
 spec pe-id PromiseEntry -> Nat
-defn pe-id [e]
-  match e
-    | promise-entry i _ -> i
+defn pe-id
+  | promise-entry i _ -> i
 
 spec pe-state PromiseEntry -> PromiseState
-defn pe-state [e]
-  match e
-    | promise-entry _ s -> s
+defn pe-state
+  | promise-entry _ s -> s
 
 ;; ========================================
 ;; Vat messages (in-memory; not on the wire)
@@ -118,19 +112,16 @@ data VatMsg
   vmsg-deliver : Nat -> SyrupValue -> [Option Nat]
 
 spec vmsg-target VatMsg -> Nat
-defn vmsg-target [m]
-  match m
-    | vmsg-deliver t _ _ -> t
+defn vmsg-target
+  | vmsg-deliver t _ _ -> t
 
 spec vmsg-args VatMsg -> SyrupValue
-defn vmsg-args [m]
-  match m
-    | vmsg-deliver _ a _ -> a
+defn vmsg-args
+  | vmsg-deliver _ a _ -> a
 
 spec vmsg-answer-pos VatMsg -> Option Nat
-defn vmsg-answer-pos [m]
-  match m
-    | vmsg-deliver _ _ ap -> ap
+defn vmsg-answer-pos
+  | vmsg-deliver _ _ ap -> ap
 
 ;; Convenience.
 
@@ -197,24 +188,20 @@ data Vat
 ;; Selectors.
 
 spec vat-next-id Vat -> Nat
-defn vat-next-id [v]
-  match v
-    | vat n _ _ _ -> n
+defn vat-next-id
+  | vat n _ _ _ -> n
 
 spec vat-actors Vat -> List ActorEntry
-defn vat-actors [v]
-  match v
-    | vat _ a _ _ -> a
+defn vat-actors
+  | vat _ a _ _ -> a
 
 spec vat-promises Vat -> List PromiseEntry
-defn vat-promises [v]
-  match v
-    | vat _ _ p _ -> p
+defn vat-promises
+  | vat _ _ p _ -> p
 
 spec vat-queue Vat -> List VatMsg
-defn vat-queue [v]
-  match v
-    | vat _ _ _ q -> q
+defn vat-queue
+  | vat _ _ _ q -> q
 
 ;; ========================================
 ;; Construction
@@ -240,38 +227,33 @@ data Allocated
   allocated : Vat -> Nat
 
 spec alloc-vat Allocated -> Vat
-defn alloc-vat [a]
-  match a
-    | allocated v _ -> v
+defn alloc-vat
+  | allocated v _ -> v
 
 spec alloc-id Allocated -> Nat
-defn alloc-id [a]
-  match a
-    | allocated _ n -> n
+defn alloc-id
+  | allocated _ n -> n
 
 ;; ========================================
 ;; Spawn / fresh-promise
 ;; ========================================
 
 spec vat-spawn BehaviorTag SyrupValue Vat -> Allocated
-defn vat-spawn [tag init-state v]
-  match v
-    | vat n acts proms q ->
-        allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q] n
+defn vat-spawn
+  | tag init-state [vat n acts proms q] ->
+      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q] n
 
 spec fresh-promise Vat -> Allocated
-defn fresh-promise [v]
-  match v
-    | vat n acts proms q ->
-        allocated [vat [suc n] acts [promise-table-set n fresh proms] q] n
+defn fresh-promise
+  | vat n acts proms q ->
+      allocated [vat [suc n] acts [promise-table-set n fresh proms] q] n
 
 ;; enqueue-msg: append a VatMsg at the END of the queue (FIFO).
 
 spec enqueue-msg VatMsg Vat -> Vat
-defn enqueue-msg [m v]
-  match v
-    | vat n acts proms q ->
-        vat n acts proms [append q [cons m nil]]
+defn enqueue-msg
+  | m [vat n acts proms q] ->
+      vat n acts proms [append q [cons m nil]]
 
 ;; ========================================
 ;; Sending
@@ -305,28 +287,26 @@ defn send-only [target args v]
 ;; See goblin-pitfalls #11.
 
 spec resolve-promise Nat SyrupValue Vat -> Vat
-defn resolve-promise [pid val v]
-  match v
-    | vat n acts proms q ->
-        match [promise-table-get pid proms]
-          | none -> v   ;; unknown promise, no-op
-          | some s ->
-              match [resolved? s]
-                | true  -> v   ;; already settled, monotone no-op
-                | false ->
-                    [vat n acts [promise-table-set pid [fulfill val s] proms] q]
+defn resolve-promise
+  | pid val [vat n acts proms q] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q]   ;; unknown promise, no-op
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q]   ;; already settled, monotone no-op
+              | false ->
+                  [vat n acts [promise-table-set pid [fulfill val s] proms] q]
 
 spec break-promise Nat SyrupValue Vat -> Vat
-defn break-promise [pid reason v]
-  match v
-    | vat n acts proms q ->
-        match [promise-table-get pid proms]
-          | none -> v
-          | some s ->
-              match [resolved? s]
-                | true  -> v
-                | false ->
-                    [vat n acts [promise-table-set pid [break reason s] proms] q]
+defn break-promise
+  | pid reason [vat n acts proms q] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q]
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q]
+              | false ->
+                  [vat n acts [promise-table-set pid [break reason s] proms] q]
 
 ;; ========================================
 ;; Effect interpretation
@@ -336,17 +316,15 @@ defn break-promise [pid reason v]
 ;; settle the corresponding promise.
 
 spec apply-effect Effect Vat -> Vat
-defn apply-effect [e v]
-  match e
-    | eff-send-only t a -> send-only t a v
-    | eff-resolve pid val -> resolve-promise pid val v
-    | eff-break   pid val -> break-promise   pid val v
+defn apply-effect
+  | [eff-send-only t a]    v -> send-only t a v
+  | [eff-resolve pid val]  v -> resolve-promise pid val v
+  | [eff-break   pid val]  v -> break-promise   pid val v
 
 spec apply-effects [List Effect] Vat -> Vat
-defn apply-effects [es v]
-  match es
-    | nil -> v
-    | cons e rest -> apply-effects rest [apply-effect e v]
+defn apply-effects
+  | nil           v -> v
+  | [cons e rest] v -> apply-effects rest [apply-effect e v]
 
 ;; ========================================
 ;; send (uses send-only via the vat queue)
