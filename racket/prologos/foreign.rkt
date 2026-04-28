@@ -29,6 +29,10 @@
          int->integer
          integer->int
          posit->rational
+         posit8->rational
+         posit16->rational
+         posit32->rational
+         posit64->rational
          rational->posit
          prologos-list->racket-list
          racket-list->prologos-list
@@ -81,25 +85,50 @@
     [(expr-string v) v]
     [_ (error 'foreign "Cannot marshal to string — not a String literal: ~a" e)]))
 
-;; Convert a Prologos Posit (any width) to a Racket exact rational.
-;; NaR contamination raises an error since rationals cannot represent NaR.
-(define (posit->rational e)
-  (define-values (width bits)
-    (match e
-      [(expr-posit8  v) (values 8  v)]
-      [(expr-posit16 v) (values 16 v)]
-      [(expr-posit32 v) (values 32 v)]
-      [(expr-posit64 v) (values 64 v)]
-      [_ (error 'foreign "Cannot marshal to rational — not a Posit literal: ~a" e)]))
-  (define r
-    (case width
-      [(8)  (posit8-to-rational  bits)]
-      [(16) (posit16-to-rational bits)]
-      [(32) (posit32-to-rational bits)]
-      [(64) (posit64-to-rational bits)]))
-  (when (eq? r 'nar)
-    (error 'foreign "Cannot marshal Posit~a NaR to rational" width))
-  r)
+;; Per-width Prologos Posit → Racket exact rational converters. Each rejects
+;; mismatched IR widths so a `Posit8`-typed slot won't silently accept an
+;; `expr-posit16` (and vice versa). NaR contamination raises an error since
+;; rationals cannot represent NaR.
+(define (posit8->rational e)
+  (match e
+    [(expr-posit8 v)
+     (let ([r (posit8-to-rational v)])
+       (when (eq? r 'nar) (error 'foreign "Cannot marshal Posit8 NaR to rational"))
+       r)]
+    [_ (error 'foreign "Cannot marshal to rational — not a Posit8 literal: ~a" e)]))
+
+(define (posit16->rational e)
+  (match e
+    [(expr-posit16 v)
+     (let ([r (posit16-to-rational v)])
+       (when (eq? r 'nar) (error 'foreign "Cannot marshal Posit16 NaR to rational"))
+       r)]
+    [_ (error 'foreign "Cannot marshal to rational — not a Posit16 literal: ~a" e)]))
+
+(define (posit32->rational e)
+  (match e
+    [(expr-posit32 v)
+     (let ([r (posit32-to-rational v)])
+       (when (eq? r 'nar) (error 'foreign "Cannot marshal Posit32 NaR to rational"))
+       r)]
+    [_ (error 'foreign "Cannot marshal to rational — not a Posit32 literal: ~a" e)]))
+
+(define (posit64->rational e)
+  (match e
+    [(expr-posit64 v)
+     (let ([r (posit64-to-rational v)])
+       (when (eq? r 'nar) (error 'foreign "Cannot marshal Posit64 NaR to rational"))
+       r)]
+    [_ (error 'foreign "Cannot marshal to rational — not a Posit64 literal: ~a" e)]))
+
+;; Width-dispatching wrapper: caller passes the declared Posit width.
+(define (posit->rational width e)
+  (case width
+    [(8)  (posit8->rational  e)]
+    [(16) (posit16->rational e)]
+    [(32) (posit32->rational e)]
+    [(64) (posit64->rational e)]
+    [else (error 'foreign "Unknown Posit width: ~a" width)]))
 
 ;; Helpers: recognize cons/nil names regardless of namespace qualification.
 (define (list-cons-name? name)
@@ -177,7 +206,10 @@
        [(Unit)    (void)]
        [(Char)    (char->rkt-char val)]
        [(String)  (string->rkt-string val)]
-       [(Posit8 Posit16 Posit32 Posit64) (posit->rational val)]
+       [(Posit8)  (posit8->rational  val)]
+       [(Posit16) (posit16->rational val)]
+       [(Posit32) (posit32->rational val)]
+       [(Posit64) (posit64->rational val)]
        ;; Passthrough types: the Prologos IR value IS the Racket value
        [(Path Keyword Passthrough) val]
        [else

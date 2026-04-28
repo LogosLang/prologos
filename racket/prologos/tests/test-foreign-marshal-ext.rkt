@@ -82,6 +82,38 @@
   (check-exn exn:fail?
              (lambda () (marshal-prologos->racket 'Posit8 (expr-int 1)))))
 
+(test-case "ffi-ext/Posit width mismatch is rejected per direction"
+  ;; Each declared Posit width must reject IR of any other width — otherwise
+  ;; a Posit8-typed slot would silently accept a Posit16 literal (and vice
+  ;; versa), defeating the width distinction.
+  (define p8  (marshal-racket->prologos 'Posit8  1))
+  (define p16 (marshal-racket->prologos 'Posit16 1))
+  (define p32 (marshal-racket->prologos 'Posit32 1))
+  (define p64 (marshal-racket->prologos 'Posit64 1))
+  ;; Posit8 declared, but Posit16/32/64 IR — must fail.
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit8 p16)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit8 p32)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit8 p64)))
+  ;; Posit16 declared, but Posit8/32/64 IR — must fail.
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit16 p8)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit16 p32)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit16 p64)))
+  ;; Posit32 declared, but Posit8/16/64 IR — must fail.
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit32 p8)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit32 p16)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit32 p64)))
+  ;; Posit64 declared, but Posit8/16/32 IR — must fail.
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit64 p8)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit64 p16)))
+  (check-exn exn:fail? (lambda () (marshal-prologos->racket 'Posit64 p32))))
+
+(test-case "ffi-ext/Posit per-width converters reject mismatched IR"
+  ;; The per-width API (posit8->rational etc.) is also strict.
+  (check-exn exn:fail? (lambda () (posit8->rational  (marshal-racket->prologos 'Posit16 1))))
+  (check-exn exn:fail? (lambda () (posit16->rational (marshal-racket->prologos 'Posit32 1))))
+  (check-exn exn:fail? (lambda () (posit32->rational (marshal-racket->prologos 'Posit64 1))))
+  (check-exn exn:fail? (lambda () (posit64->rational (marshal-racket->prologos 'Posit8  1)))))
+
 ;; ========================================
 ;; Posit16 / Posit32 / Posit64 marshalling
 ;; ========================================
@@ -129,11 +161,18 @@
 ;; posit->rational / rational->posit direct API
 ;; ========================================
 
-(test-case "ffi-ext/posit->rational: dispatches by width on the IR"
-  (check-equal? (posit->rational (marshal-racket->prologos 'Posit8  1)) 1)
-  (check-equal? (posit->rational (marshal-racket->prologos 'Posit16 1)) 1)
-  (check-equal? (posit->rational (marshal-racket->prologos 'Posit32 1)) 1)
-  (check-equal? (posit->rational (marshal-racket->prologos 'Posit64 1)) 1))
+(test-case "ffi-ext/posit->rational: dispatches by declared width"
+  ;; The width-dispatching wrapper takes the declared width explicitly.
+  (check-equal? (posit->rational 8  (marshal-racket->prologos 'Posit8  1)) 1)
+  (check-equal? (posit->rational 16 (marshal-racket->prologos 'Posit16 1)) 1)
+  (check-equal? (posit->rational 32 (marshal-racket->prologos 'Posit32 1)) 1)
+  (check-equal? (posit->rational 64 (marshal-racket->prologos 'Posit64 1)) 1))
+
+(test-case "ffi-ext/posit->rational: rejects mismatched declared/actual width"
+  (check-exn exn:fail?
+             (lambda () (posit->rational 8 (marshal-racket->prologos 'Posit16 1))))
+  (check-exn exn:fail?
+             (lambda () (posit->rational 32 (marshal-racket->prologos 'Posit8 1)))))
 
 (test-case "ffi-ext/rational->posit: builds the right IR width"
   (check-pred expr-posit8?  (rational->posit 8  1/2))
