@@ -2478,10 +2478,21 @@
 ;; Supports uncurried syntax: (Nat Nat -> Bool) → (-> Nat (-> Nat Bool))
 ;; where multiple tokens before the last -> are expanded into separate domains.
 ;; The last segment is never expanded (multi-token = type application, e.g. List Nat).
+;;
+;; Function-typed parameters (FFI lambda passing, 2026-04-28): a sub-bracket
+;; token like [Nat -> Nat] arrives as a sub-list containing '->. We recursively
+;; normalize each list-shaped token so that nested function types parse the
+;; same as the top level.
 (define (foreign-type-tokens->sexp tokens)
   (cond
-    ;; Single token: bare type like Nat, Bool, Unit
-    [(= (length tokens) 1) (car tokens)]
+    ;; Single token: bare type like Nat, Bool, Unit, OR a sub-bracket form.
+    [(= (length tokens) 1)
+     (define t (car tokens))
+     (if (and (pair? t) (memq '-> t))
+         ;; Sub-list with '-> inside (e.g. (Nat -> Nat)) — normalize recursively
+         ;; so the parser sees prefix form (-> Nat Nat).
+         (foreign-type-tokens->sexp t)
+         t)]
     ;; Multi-token with ->: split on arrows, expand uncurried segments
     [(memq '-> tokens)
      (define parts (split-on-arrow tokens))
@@ -2505,11 +2516,21 @@
                     final)))))
      (define (build parts)
        (cond
-         [(= (length parts) 1) (car parts)]
-         [else (list '-> (car parts) (build (cdr parts)))]))
+         [(= (length parts) 1) (normalize-sub-token (car parts))]
+         [else (list '-> (normalize-sub-token (car parts))
+                     (build (cdr parts)))]))
      (build expanded)]
     ;; No arrows: just a single type expression (shouldn't happen with well-formed input)
     [else (error 'foreign "Cannot parse foreign type tokens: ~a" tokens)]))
+
+;; Normalize a single argument-position token. If it's a sub-list containing
+;; '-> at top level (i.e. a bracketed function type like [Nat -> Nat]),
+;; recurse so it becomes prefix form. Otherwise pass through unchanged.
+(define (normalize-sub-token t)
+  (cond
+    [(and (pair? t) (list? t) (memq '-> t))
+     (foreign-type-tokens->sexp t)]
+    [else t]))
 
 ;; Split a flat list on '-> symbols.
 ;; (Nat -> Nat -> Bool) → (Nat Nat Bool)

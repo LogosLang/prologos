@@ -21,7 +21,12 @@
          "performance-counters.rkt"
          "macros.rkt"
          "metavar-store.rkt"
-         "foreign.rkt"
+         ;; foreign.rkt: no exports used here (struct expr-foreign-fn lives in
+         ;; syntax.rkt). Removed in 2026-04-28 FFI lambda passing track to
+         ;; permit the reverse dependency: foreign.rkt now requires reduction.rkt
+         ;; so its function-type marshaller can call `nf` to drive callbacks
+         ;; from Racket back into the Prologos reducer. See
+         ;; docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md § Module Topology.
          "champ.rkt"
          "rrb.rkt"
          "propagator.rkt"

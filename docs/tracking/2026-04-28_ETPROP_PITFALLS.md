@@ -13,27 +13,37 @@ here because tracking them in commit messages alone made them invisible.
 
 ## What MUST stay on the Racket side (the irreducible core)
 
-Across two passes of "minimise the Racket footprint", these four
-responsibilities resisted every attempt to push them out into Prologos:
+After three passes of "minimise the Racket footprint", what's left is
+the propagator-network plumbing itself:
 
-  1. **Propagator fire functions.** The fire-fn is a Racket closure invoked
-     by the Racket-side BSP scheduler with the network as its argument.
-     Prologos lambdas can't cross the FFI boundary as live closures (the
-     FFI marshaller validates a fixed type signature on each call; live
-     closures don't fit that protocol).
+  1. **Propagator fire functions.** [Preferentially Racket for
+     performance, no longer required.] Historically blocked because
+     Prologos lambdas couldn't cross the FFI boundary as live closures;
+     dissolved by the FFI lambda passing track (see
+     [2026-04-28_FFI_LAMBDA_PASSING.md](2026-04-28_FFI_LAMBDA_PASSING.md)).
+     The eigentrust shim's fire-fn is now pure plumbing — read input
+     cell, dispatch to broadcast item-fn, write output cell. The
+     per-row arithmetic (`affine-step`) lives in Prologos.
+     The reason to keep fire-fns in Racket is now performance (each
+     call drives a Prologos `nf` reduction), not capability.
 
-  2. **Cell merge functions.** Same constraint. The propagator network
-     calls merge-fn during cell writes (and during BSP fold-merges). It
-     has to be a Racket procedure.
+  2. **Cell merge functions.** [Preferentially Racket for performance,
+     no longer required.] Same situation as item 1.
 
-  3. **The cell-value carrier.** A gen-tagged immutable Racket vector. The
-     gen tag has to interoperate with Racket's `equal?` for the cell's
-     change detection, and the merge function has to be a Racket procedure
-     that operates on whatever Racket data structure the cell holds.
+  3. **The cell-value carrier.** A gen-tagged immutable Racket vector.
+     The gen tag has to interoperate with Racket's `equal?` for the
+     cell's change detection, and the merge function has to be a Racket
+     procedure that operates on whatever Racket data structure the cell
+     holds.
 
-  4. **FFI marshalling glue.** Walking Prologos cons/nil chains, extracting
-     posit32 bit-patterns out of `expr-posit32` IR nodes, encoding rationals
-     back into bit patterns. Pure Racket-side bookkeeping.
+  4. **FFI marshalling glue.** [Centralised — used to be per-shim
+     boilerplate, now in foreign.rkt.] A separate FFI extension landed
+     centralised marshalling for parameterised types: `[List T]`,
+     `Posit8/16/32/64`, and `Int` round-trip via foreign.rkt's recursive
+     marshaller. The eigentrust shim no longer hand-walks cons/nil
+     chains, no longer extracts Posit32 bit patterns, no longer
+     constructs IR list nodes. The FFI carries semantic values
+     (rationals, lists) directly across the boundary.
 
 Everything else — matrix transpose, decay scaling, bias computation,
 initial-zero-vector, the iteration driver, the entire EigenTrust update
@@ -49,6 +59,37 @@ The four FFI primitives (`net-new`, `net-new-cell`, `net-add-prop`,
 `net-run-read`) are the entire Racket-Prologos interface.
 
 ------------------------------------------------------------------
+
+## 0. FFI-call AST caching — distinct calls collapse onto one side effect
+
+The complement to pitfall #1: within a single `process-command`, the
+per-command `whnf-cache` memoises identical ASTs. For a side-effecting
+foreign function (e.g. `net-new-cell`), two calls with structurally equal
+arguments hit the cache on the second call and the side effect runs only
+once. The Prologos source *thinks* it allocated two cells; the Racket
+side allocated one and returned the same id twice.
+
+Repro shape:
+
+    let c1 := et/net-new-cell h zeros
+    let c2 := et/net-new-cell h zeros   ;; same AST → cache hit → c1 = c2
+
+Observed during the eigentrust lambda-FFI refactor: the recursive driver
+loop allocated K layer cells via `[et/net-new-cell h zeros]` each
+iteration; with identical args, all K reduced to the same physical cell.
+Layer 2's broadcast propagator's input *and* output both pointed to that
+shared cell — a self-loop that ran to fixpoint regardless of K.
+
+**Workaround**: take a "freshness tag" argument on the FFI side that's
+ignored functionally but disambiguates the call AST. The eigentrust shim
+does this for `net-new-cell : handle × tag × init-vec → cell-ref` — the
+Prologos driver passes the previous layer's cell-ref (varies per
+recursion) as the tag.
+
+**Underlying language design call**: same as pitfall #1 — referential
+transparency is the contract. There's no "force evaluation now" surface;
+the FFI argument boundary IS the only forcing point. Anything memoised by
+AST equality collides on identical input.
 
 ## 1. `def` is reference-transparent — side effects re-fire on every use
 
@@ -287,6 +328,34 @@ loop and the FFI marshalling, not the propagator firing itself. Future
 work: a `Posit32` instance of `Num` and operator desugaring would let the
 .prologos source operate on posits directly (without going through Rat),
 which would also let the FFI shim drop its rational pre-computation step.
+
+## 16. FFI-callback overhead per fire dominates scaling K
+
+Once the FFI lambda passing track landed (item-1/-2 of "what stays
+Racket" downgraded), the eigentrust shim moved its per-row affine
+combination out into a Prologos lambda. Each propagator fire now invokes
+the kernel via the marshaller's wrapper, which:
+
+  1. Marshals each Racket arg back to Prologos IR.
+  2. Builds an `expr-app` chain.
+  3. Runs `nf` on it (full normal form reduction).
+  4. Marshals the result back to Racket.
+
+For a 4-peer 4-element dot product, one fire ≈ 4 kernel calls × ~50
+reduction steps each ≈ 200 reductions per fire. At Racket-9.1 reduction
+speed that's a fraction of a second per fire — tolerable for small K but
+linear in K because each layer is a separate broadcast propagator.
+
+For the test we use K=4 power iterations, which lands within ~6e-3 of
+the steady-state eigenvector and finishes in ~16s wall — under the
+test runner's 30s "first result" guard. K=20 (full convergence) takes
+several minutes and exceeds the runner's death-detection threshold.
+
+This is **expected scaffolding cost** of the off-network FFI bridge —
+see `2026-04-28_FFI_LAMBDA_PASSING.md` § Mantra-alignment retirement
+plan. Future propagator-native callbacks (cell subscription instead of
+procedure-shaped foreign callbacks) would replace the per-fire `nf`
+reduction with a structurally-emergent activation.
 
 ------------------------------------------------------------------
 

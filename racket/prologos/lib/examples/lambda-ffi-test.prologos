@@ -1,0 +1,48 @@
+;; ============================================================
+;; FFI lambda passing — acceptance file
+;;
+;; Demonstrates that Prologos lambdas can be passed across the
+;; Racket FFI boundary as live closures. Each foreign call below
+;; passes a Prologos `fn` to a Racket procedure that invokes it
+;; from the Racket side; the marshaller bridges Racket-side
+;; arguments back into the Prologos reducer and marshals the
+;; result back out.
+;;
+;; See: docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md
+;; ============================================================
+
+ns lambda-ffi-test :no-prelude
+
+foreign racket "lib/examples/lambda-ffi-helper.rkt" :as helper
+  apply-twice     : [Nat -> Nat] Nat -> Nat
+  apply-twice-p32 : [Posit32 -> Posit32] Posit32 -> Posit32
+  compose-and-call : [Nat -> Nat] [Nat -> Nat] Nat -> Nat
+
+;; ------------------------------------------------------------
+;; Test 1 — Nat callback
+;;   apply-twice (suc) 3 = (suc (suc 3)) = 5
+;; ------------------------------------------------------------
+eval (helper/apply-twice (fn [x : Nat] (suc x))
+                         (suc (suc (suc zero))))   ;; expect 5N
+
+;; ------------------------------------------------------------
+;; Test 2 — Named Prologos lambda passed by reference
+;; ------------------------------------------------------------
+def my-inc : (-> Nat Nat) := (fn [x : Nat] (suc x))
+eval (helper/apply-twice my-inc (suc zero))         ;; expect 3N
+
+;; ------------------------------------------------------------
+;; Test 3 — Posit32 callback (non-Nat scalar marshalling)
+;;   apply-twice-p32 (p32* 2.0) 1.0 = (p32* 2.0 (p32* 2.0 1.0)) = 4.0
+;; ------------------------------------------------------------
+def double : (-> Posit32 Posit32) := (fn [x : Posit32] (p32* ~2.0 x))
+eval (helper/apply-twice-p32 double ~1.0)           ;; expect 4.0
+
+;; ------------------------------------------------------------
+;; Test 4 — Two function-typed parameters in one call
+;;   compose-and-call f g x = f (g x).
+;;   With f = suc, g = suc, x = 1: result = 3.
+;; ------------------------------------------------------------
+eval (helper/compose-and-call (fn [x : Nat] (suc x))
+                              (fn [x : Nat] (suc x))
+                              (suc zero))           ;; expect 3N
