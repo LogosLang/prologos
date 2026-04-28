@@ -17,12 +17,23 @@
 
 ## 0. TL;DR
 
-Prologos is, by its own self-characterization, a *module over the endomorphism ring of its
-lattice transformations* (`MODULE_THEORY_LATTICES.md` §2). Lattice-based zero-knowledge proof
-systems (LaBRADOR, Greyhound, LatticeFold/+, Lova, Hachi) prove statements about *modules over
-polynomial rings* under the Module-SIS hardness assumption. The structural identity is not
-nominal: in both worlds the load-bearing object is a module with a notion of "shorter / lower"
-elements and a monotonicity discipline.
+> **Revision note (post-review).** An earlier version of this section claimed a "structural
+> identity" between Prologos's order-theoretic lattices and the geometric/algebraic lattices
+> of Module-SIS-based ZK. That overclaim has been walked back. The two senses of "lattice" are
+> distinct algebraic objects (idempotent commutative semilattice vs. abelian-group module);
+> the bridge between them is an *encoding*, and the encoding is clean only for a subset of
+> Prologos cell domains. The architecture below still stands under the more modest framing.
+> See §2.5 and §6 for the honest accounting.
+
+Prologos's runtime is a propagator network: cells with monotone-merge values, propagators that
+fire under BSP scheduling, an execution trace that IS a sequence of cell-state snapshots.
+Lattice-based zero-knowledge proof systems (LaBRADOR, Greyhound, LatticeFold/+, Lova, Hachi)
+prove statements about modules over polynomial rings under Module-SIS. The two systems are not
+the same algebraic object, but the propagator-network execution trace turns out to be a *good
+witness shape* for lattice-friendly proofs — not because of a deep identity, but because of
+several concrete structural features (monotonic updates as additive openings, order-independent
+within-round writes, idempotent firings, hypercube-shaped worldview lattices, explicit
+dependency DAG, clean stratum boundaries). Section 6 enumerates ten such shortcuts.
 
 The standard recipe for verifiable computation — compile to a generic VM (RISC0, SP1, Jolt),
 arithmetize the trace, prove the arithmetization — pays a triple tax: (1) every layer of
@@ -30,21 +41,19 @@ compilation is information loss, (2) the VM trace is sequential where the source
 (3) the algebraic structure that makes the source meaningful (monotonicity, idempotence, lattice
 joins) is invisible to the prover and has to be reconstructed via brute-force constraints.
 
-This document plans an alternative: **encode each Prologos cell directly as an Ajtai/Module-SIS
-commitment to a vector in `R_q^k`, encode each propagator's fire function as a Module-SIS
-witness relation, prove BSP rounds with LaBRADOR or LatticeFold+, fold across rounds with Lova
-or LatticeFold+, and host the verifier itself as a stratum on the propagator network.** The
-witness for the lattice-based ZK proof IS the propagator network's natural execution trace; no
-separate arithmetization layer.
+This document plans an alternative: **encode each Prologos cell as an Ajtai/Module-SIS
+commitment to a vector in `R_q^k`, prove BSP rounds with LaBRADOR or LatticeFold+, fold across
+rounds with Lova or LatticeFold+, and host the verifier itself as a stratum on the propagator
+network.** For *Group A cells* (bit-vectors, char-vectors, finite-alphabet monotone-set, ATMS
+worldviews) the encoding is monotone-homomorphic and joins become native algebraic operations
+on the commitments — the witness IS the network's update trace, no extra arithmetization. For
+*Group B cells* (type/scope/AST cells) the encoding is opaque-Merkle and joins are
+arithmetized as R1CS — same costs as a generic prover would pay, but at least amortized at
+the BSP-round granularity rather than per ISA step.
 
-The ambitious claim — defended below but not proven — is that the cryptographic substrate
-(`R_q`-modules under Module-SIS) and the computational substrate (Prologos's lattice-ordered
-endomorphism module) admit a *Galois connection* in the SRE sense: a pair of monotone maps
-α, γ between them satisfying the standard adjunction laws. If that connection exists, ZK-
-Prologos doesn't compile to crypto — it commutes with crypto.
-
-This is grounded but speculative. The deliverable here is a research plan that walks the claim
-back to falsifiable phases.
+The deliverable here is a research plan that walks the claims back to falsifiable phases. The
+strong "structural identity" framing is dropped; the weak "lattice ZK is a good fit for
+Prologos's execution shape" framing is the operating thesis.
 
 ---
 
@@ -109,13 +118,18 @@ Two reasonable interpretations:
   This is achievable today using LaBRADOR + Greyhound + LatticeFold+. It buys post-quantum
   security and small recursion overhead.
 
-- **Strong**: claim a *structural identity* between the order-theoretic lattices Prologos uses
-  for cells and the geometric/algebraic lattices the cryptography uses, such that the two
-  share a substrate. This is the ambitious claim. It is what justifies "ZK-Prologos" as a
-  distinct project rather than "Prologos compiled to a lattice ZK-VM."
+- **Medium** (the operating thesis): exploit specific structural shortcuts that the
+  propagator-network execution shape exposes to a lattice-friendly prover, on top of the
+  weak baseline. These shortcuts are concrete and testable (catalogued in §6); they do not
+  require a deep algebraic identity between the two senses of "lattice."
 
-The plan below pursues the strong interpretation but is structured so that even if the strong
-identity fails to hold cleanly, the weak interpretation is delivered as a byproduct.
+- **Strong** (overclaimed in earlier drafts; walked back): a *structural identity* between
+  Prologos's order-theoretic lattices and the geometric/algebraic lattices of cryptography,
+  such that the two share a substrate. §2.3 documents why this claim does not hold
+  algebraically. The Galois-connection framing applies to Group A cells only.
+
+The plan below pursues the medium interpretation. The weak interpretation is delivered as a
+byproduct. The strong interpretation is *not* what the architecture rests on.
 
 ---
 
@@ -156,72 +170,97 @@ Z }` for some basis `b_1,…,b_n ∈ R^n`. The hard problems are about *short* v
 The cryptographic lattice is a *Z*-module (or *R_q*-module). Hardness comes from the
 combinatorial sparsity of "short" vectors and the geometry of bases.
 
-### 2.3 Both are modules — the bridge
+### 2.3 They are not the same algebraic object
 
-The two notions are not the same object. They are, however, both instances of a more general
-algebraic shape: a module with a compatible "size" (norm or order) function. This lets us
-bridge them not by identification but by *encoding*.
+**Earlier drafts of this section overclaimed.** The two senses of "lattice" are not instances
+of the same algebraic shape. Concretely:
 
-| Order-theoretic (Prologos) | Algebraic (Module-SIS world) |
-|----------------------------|------------------------------|
-| Cell `c` with value lattice `(L, ⊔, ⊥)` | Module `M = R_q^k` |
-| Element `v ∈ L` | Vector `enc(v) ∈ M` |
-| Join `v ⊔ w` | Algebraic operation on `enc(v), enc(w)` (depends on `L`) |
-| Monotonicity `v ≤ v ⊔ w` | Norm bound: `‖enc(v ⊔ w) − enc(v)‖ ≤ β` |
-| Idempotence `v ⊔ v = v` | `enc` is a function (well-definedness) |
-| Lattice element `⊥` | Zero vector `0 ∈ M` |
+| | Prologos's `(L, ⊔, ⊥)` | Module-SIS's `R_q^k` |
+|---|---|---|
+| Operation | join `⊔` | addition `+` mod `q` |
+| Idempotent? | yes (`v ⊔ v = v`) | no (`v + v = 2v`) |
+| Inverse? | no | yes |
+| Algebraic class | idempotent commutative monoid | abelian group |
+| Order from? | lattice order intrinsic | norm (extrinsic) |
 
-The encoding `enc : L → M` is the bridge. For different cell domains, `enc` looks different:
+An idempotent commutative monoid is *not* a Z-module. There is no canonical functor between
+these categories; the word "module" in `MODULE_THEORY_LATTICES.md` refers to the propagator
+network being a module over its endomorphism ring (where module addition is `⊔`), and that
+algebraic structure is fundamentally different from `R_q^k` (where module addition is `+`).
 
-- **Boolean / monotone-set lattices**: `enc(S) = (1[1∈S], 1[2∈S], …, 1[n∈S])` — the
-  characteristic vector. Join = coordinate-wise `max` = bit-OR. Monotonicity is automatic
-  (norms only grow).
+So the bridge is *not* an algebraic isomorphism. It is an *encoding* — a function `enc : L →
+R_q^k` that preserves enough structure to be useful, but that loses the idempotence on the
+target side. We compensate for the loss with a norm budget: encoded values live in a bounded
+region of `R_q^k`, and joins are realized by algebraic operations (coordinate-wise OR / max /
+addition + norm clip) chosen specifically to mimic the source-side idempotence within that
+region.
 
-- **Worldview bitmasks (already a bit-vector)**: `enc` is the identity. The Hypercube design
-  doc (§"Bitmask-tagged cell values") already commits to this representation; the
-  cryptographic side adds nothing — it just commits to the bitmask.
+This works cleanly for some cell domains and badly for others. The split is the load-bearing
+distinction in the rest of the document.
 
-- **Hash-union cells `(K → V)`**: vectorize to `R_q^{|K|·dim(V)}` and unite per-key. This is
-  the standard vector-commitment-of-vector-commitments pattern (see Catalano-Fiore, Wee's
-  functional commitments).
+### 2.4 Group A — cells with native algebraic encoding
 
-- **Term / type lattices**: depth-bounded. Encode via a fixed-arity tree-as-vector
-  representation. Join = SRE structural unification. Norm bound = depth. (This is the
-  hardest case; see §6 for the open question.)
+A cell domain is "Group A" if its lattice admits a monotone homomorphism `enc: L → R_q^k`
+where:
+- `enc(v ⊔ w)` equals an algebraic operation on `enc(v), enc(w)` in `R_q^k`
+- `‖enc(v)‖` is bounded by a quantity polynomial in `|L|` or in the cell's parameters
+- `enc` is injective (no two source values collide)
 
-- **Numeric interval lattices**: encode `(lo, hi)` as a pair; join = `(min, max)`. Native to
-  range proofs over `R_q`.
+The known Group A domains in Prologos:
 
-The key observation: **for most Prologos cell types, `enc` is a monotone homomorphism into a
-free `R_q`-module**, and the cell's join becomes an *algebraic* operation (coordinate-wise OR /
-max / addition with norm bound) on the module. The structural identity is not full equivalence
-between order-theoretic and geometric lattices; it is the existence of a *natural family of
-monotone module homomorphisms* `{enc_L}` indexed by the cell domains.
+| Domain | `enc` | Algebraic join | Norm bound |
+|---|---|---|---|
+| ATMS worldview bitmask (`HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`) | identity | bit-OR | `n` |
+| `monotone-set` over finite alphabet `Σ` | char vector ∈ `{0,1}^|Σ|` | coord-wise OR | `|Σ|` |
+| Multiplicity (m0/m1/mw) | 2-bit code | bit-OR | 2 |
+| Decision narrowing over fixed finite domain | char vector | coord-wise AND (narrowing) | `|D|` |
+| Numeric interval `[lo, hi]` | `(lo, hi) ∈ R_q^2` | `(min, max)` | depends on range |
 
-### 2.4 The Galois-connection claim
+For Group A cells the bridge is genuine: the SRE Galois-connection framing
+(`STRUCTURAL_REASONING_ENGINE.md` lines 183–194) applies, the encoding is a monotone
+homomorphism, and the cryptographic-side join IS an algebraic operation that mirrors the
+source-side join under `enc`. Concrete payoff: monotone updates become Module-SIS additive
+deltas (Shortcut 1 in §6), with no R1CS circuit for the merge itself.
 
-If we phrase this in SRE terms (`structural-thinking.md` §SRE Lattice Lens, Q3), the bridge is
-a *Galois connection* between Prologos's lattice-ordered module and the `R_q`-module:
+### 2.5 Group B — cells with opaque-commit encoding only
 
-- α : Prologos-cell-value → R_q-vector (encoding / commitment opening)
-- γ : R_q-vector → Prologos-cell-value (decoding / interpretation)
+A cell domain is "Group B" if no such `enc` exists with reasonable norm bound. The lattice
+join is a complex computation on structured values (typically AST), not an algebraic operation
+in `R_q^k`. The known Group B domains in Prologos:
 
-For a sound encoding we need:
-- α monotone (ascending in the source lattice ⇒ ascending in the algebraic norm or
-  coordinate-wise order)
-- γ monotone (algebraic ascent ⇒ source lattice ascent)
-- `v ≤_L γ(α(v))` (no information loss on round-trip into crypto)
-- `α(γ(x)) ≤_M x` (decoding is conservative)
+- **Type cells**: `expr-Pi`, `expr-Sigma`, `expr-Lam`, dependent type expressions of unbounded
+  recursive depth. Join = SRE structural unification — a non-trivial computation involving
+  constructor-head matching, recursion on sub-expressions, fresh-meta allocation.
+- **Scope cells / substitutions**: maps from meta-ids to AST values.
+- **Constraint cells**: pending obligations whose structure references AST.
+- **Trait dispatch tables**: keys to method-body ASTs.
 
-This is exactly the SRE bridge shape (`STRUCTURAL_REASONING_ENGINE.md` lines 183–194: "Both
-layers live on the same propagator network. SRE propagators and Galois bridge propagators
-compose automatically via shared cells."). The plan, then, is to *install the encryption
-bridge as just another Galois-bridge propagator on the same network*.
+For Group B, the bridge is "Merkle-commit the canonical-form serialization." The cell's
+commitment is a hash of its serialized AST. The "join" is not an algebraic operation; it is
+a computation that must be arithmetized as an R1CS instance, exactly as a generic VM would do.
+The Module-SIS commitment is used here only as a cryptographic primitive — there is no
+structural reuse of the lattice ordering on the prover side.
 
-That phrasing is not metaphorical. It is exactly how the architecture absorbs the
-cryptography: there is no "ZK layer" outside the propagator network. There is a family of
-α/γ propagators between cells holding source-lattice values and cells holding `R_q^k` Module-
-SIS commitments, and the proof obligations are constraints on the bridge propagators.
+**The Galois-connection framing does not apply to Group B.** The α/γ pair on Group B is
+"serialize / deserialize," which is bijective on individual values but not a lattice morphism
+in any nontrivial sense.
+
+### 2.6 The asymmetric architecture
+
+The split implies an asymmetric architecture. For each cell `c`:
+
+- If `c`'s domain is Group A: install bridge propagators α/γ as ordinary on-network
+  Galois-bridge propagators (`structural-thinking.md` §"Bridges to Other Lattices"). Updates
+  produce zero-cost (algebraic) proof obligations.
+
+- If `c`'s domain is Group B: commit via canonical-form Merkle hash. Updates produce R1CS
+  circuit obligations (size proportional to merge function complexity, bounded by cell-value
+  depth).
+
+A typical Prologos compilation involves *both* groups concurrently. Type-cell traffic
+(elaboration phase) is Group B-heavy; worldview / decision / fact-accumulation traffic
+(runtime phase) is Group A-heavy. The benefits of the lattice substrate are concentrated
+where Group A dominates; Group B pays roughly the same cost a generic VM would.
 
 ---
 
@@ -526,26 +565,249 @@ sub-network of the same network.
 
 The non-trivial alignment check: **does the proof structure naturally match the Hasse-diagram
 optimality claim of the Hyperlattice Conjecture** (`structural-thinking.md` §"The Hyperlattice
-Conjecture")? If the conjecture is right, then the optimal parallel decomposition of a
-Prologos computation is the Hasse diagram of its lattice state space. The proof structure
-above commits one R1CS/CCS instance per BSP round, where one BSP round corresponds to one
-*level* in the Hasse diagram (the simultaneous fixpoint advance). After folding, the proof
-size is `polylog(T)` where `T` is the diagram's depth (BSP-round count, equivalently lattice
-height). Proof size depending on lattice *height* rather than lattice *cardinality* is the
-quantitative form of the optimality claim. If the conjecture holds, we should observe `T` to
-be `O(log N)` for naturally-parallel programs, giving end-to-end proof sizes of `polylog(log
-N)` — empirically essentially constant.
+Conjecture")? Tentatively yes, with two caveats. If the conjecture is right, the optimal
+parallel decomposition of a Prologos computation is the Hasse diagram of its lattice state
+space. The proof structure above commits one R1CS/CCS instance per BSP round, where one BSP
+round corresponds to one *level* in the diagram. After folding, the proof size is `polylog(T)`
+where `T` is the diagram's depth (BSP-round count, equivalently lattice height). If the
+conjecture holds, we expect `T = O(log N)` for naturally-parallel programs, giving
+`polylog(log N)` proof sizes — empirically near-constant.
 
-That last claim is testable on the existing benchmark suite once L2 is implemented.
+Caveat one: the Hyperlattice Conjecture is a claim about *order-theoretic* lattices, not
+cryptographic ones. The bridge above (Group A native encoding, Group B opaque-Merkle) does
+not import the conjecture's optimality into the cryptographic side wholesale. The
+optimality applies to *which* propagators fire in what order; the proof system still pays
+its own cost per round.
+
+Caveat two: the `polylog(T)` claim depends on Lova/LatticeFold+ folding being shaped along
+the Hasse diagram (Shortcut 6.6). With sequential folding, the proof grows as `O(log T)` ×
+constant per fold, which is good but not Hasse-optimal. Hasse-shaped folding is itself a
+research item, not a direct deliverable from any current scheme.
+
+Both caveats are testable on the existing benchmark suite once L2 is implemented.
 
 ---
 
-## 6. Open questions and falsification paths
+## 6. Concrete shortcuts the lattice substrate enables
+
+The architecture's value proposition reduces to a list of *specific algorithmic shortcuts* the
+lattice ZK stack can apply when the witness comes from a propagator network rather than from
+an arbitrary VM trace. This section is the operative answer to "what does leveraging the
+lattice actually buy?"
+
+Shortcuts are listed in rough order of cumulative impact. Each names what is exploited, how
+it manifests in the proof, and the dependency (Group A vs. universal).
+
+### 6.1 Monotone update = native additive opening *(Group A)*
+
+Group A cells have `enc(v ⊔ δ) = enc(v) ⊕ enc(δ)` where `⊕` is coord-wise OR/max in `R_q^k`.
+Ajtai commitments are additively homomorphic. Therefore:
+
+> "Cell `c` was monotonically updated by `δ` in round `k`"
+> ≡ `C_{k+1}[c] − C_k[c] = A·enc(δ) + B·r_δ`, with `‖δ‖ + ‖r_δ‖ ≤ β`
+
+A single Module-SIS algebraic identity. **No R1CS circuit for the merge.** A generic VM
+proves "memory was monotonically updated" via integer-comparison circuits per word per step.
+Here it is the native statement type Module-SIS is built around.
+
+### 6.2 Within-round writes commute — witness is a *set*, not a *sequence* *(universal)*
+
+BSP fires all enabled propagators simultaneously. Joins are commutative + associative +
+idempotent. Witness for round `k` is the multiset of `(destination, delta)` pairs — no
+ordering bits.
+
+Quantitative: `M` writes per round in a generic VM commit `O(M log M)` ordering bits; here
+`0`. Over `T` rounds with average `M̄` writes, `T·M̄·log M̄` bits removed from the witness.
+
+### 6.3 Idempotence collapses repeated firings *(universal)*
+
+If propagator `p` fires `N` times during execution and writes the same value each time, the
+witness collapses to a single "p produced this value, ≥ once" entry. A trace-based proof
+would have `N` rows. The cell's *content* is the witness regardless of how many firings
+produced it — the structural reason fixpoint engines beat re-execution carries directly into
+the proof system.
+
+### 6.4 Quiescence as a single zero-opening *(universal, Group A optimal)*
+
+Proof of "the network reached fixpoint at round `T`":
+
+```
+prove: C_T - C_{T+1} = 0          -- single Ajtai zero-opening
+plus:  fired-set_T = enabled-set_T -- bitmask equality (Group A)
+```
+
+Both checks are `O(1)` in cell count. A generic VM proves quiescence by showing `R` more
+no-op rounds at `R · trace-width` constraints. Here it is a constant.
+
+This is the **single most important qualitative shortcut**: termination is detectable
+algebraically, not by exhaustion.
+
+### 6.5 Independent sub-networks fold in parallel *(universal)*
+
+Lova/LatticeFold+ fold sequentially by default. Connected components in the propagator DAG
+are *independent* (no cells crossing) — their proofs fold in any order, which means a round
+splitting into `K` independent sub-networks folds in `log K` parallel steps instead of `K`
+sequential ones.
+
+A generic VM trace cannot expose this — the topology was discarded by linearization. Prologos
+component structure is explicit and free.
+
+### 6.6 Hasse-diagram-shaped folding *(universal, theoretical)*
+
+The Hyperlattice Conjecture's optimality claim: the Hasse diagram IS the optimal parallel
+decomposition. Operationally, shape the folding tree along the diagram's adjacency (Gray-code
+traversal, hypercube all-reduce for worldviews). For Boolean lattices, this is `n` rounds of
+folding instead of `2^n` — exponential on worldview-heavy proofs.
+
+**Risk**: this is the strongest claim and the riskiest empirical one. It depends on whether a
+real program's BSP-round count `T` actually equals the Hasse height of its lattice state
+space. Phase 4 benchmarks would resolve it.
+
+### 6.7 Worldview / nogood checks are O(1) bitmask ops *(Group A)*
+
+ATMS worldviews are bit-vectors; nogoods are bit-vectors; subcube containment `(w AND ng) ==
+ng` is one AND + one EQ. Proof of "this propagator firing was viable under worldview `w`":
+vector equality check across committed nogoods, `O(log #nogoods)` via SIS vector commitments.
+
+Generic VM: hash-set membership query, Merkle-path proofs per check.
+
+### 6.8 Universe-cell compound commitments *(Group A + B, structural fit)*
+
+Prologos already aggregates per-meta values into universe cells indexed by meta-id (PPN 4C
+S2). This matches SIS-based vector commitments exactly: one commitment to the universe cell
+with `N` components, per-component opening in `O(log N)` via functional commitments (Wee,
+Peikert).
+
+A generic VM tracking `N` metas tracks `N` separate memory regions with `N` Merkle paths.
+The architectural alignment is striking — Prologos's universe-cell migration *predates* the
+cryptographic motivation, suggesting the underlying design pattern is the same in both
+worlds.
+
+### 6.9 Stratum boundaries as natural recursion checkpoints *(universal)*
+
+S0, S1 NAF, S(-1) retraction, topology — each stratum is its own BSP fixpoint with its own
+proof obligation. Compose with folding. The stratum graph IS the recursion structure.
+
+Saving: in a generic VM, stratum semantics are erased; the prover must rediscover natural
+chunk boundaries (or accept arbitrary ones). Here they are given by the language design.
+
+### 6.10 CALM ⇒ proof-time parallelism for free *(universal)*
+
+CALM theorem: monotone computations are coordination-free. Therefore: independent provers on
+different machines can each prove a sub-slice of the network and the slices fold consistently.
+Large compilations parallel-prove without coordinating on shared trace state.
+
+Generic-VM proofs can be split, but only along arbitrary trace chunks, requiring inter-prover
+handshakes for boundary state. CALM gives Prologos the strong guarantee: any monotone slicing
+produces consistent proofs.
+
+### 6.11 What is *not* a shortcut
+
+For honest accounting:
+
+- **Group B cells (type / scope / AST)**: no algebraic-correspondence saving. Joins are
+  R1CS circuits whose constraint count scales with cell-value depth. We pay roughly the same
+  per-fire-function cost a generic VM would pay per-instruction — except that we amortize at
+  BSP-round granularity rather than per-instruction.
+- **Non-monotone strata (S(-1), S1 NAF)**: no monotone-update shortcut. They use the standard
+  "open + recompute + recommit" or OR-proof patterns at full cost.
+- **Fire functions themselves**: arbitrary computations on cell values; have to be arithmetized
+  even for Group A cells. The shortcut is on the *merge* (free), not the *compute* (full cost).
+- **Final proof size**: the `R_q^k` substrate gives ~50-100 KB final proofs regardless of how
+  cleanly the witness was generated. No lattice shortcut beats that without a non-PQ wrap.
+
+### 6.12 Compounding cost picture
+
+Per round, the cost decomposition:
+
+```
+generic VM trace cost per round
+  ≈ (instructions × trace-width) + (memory-access × Merkle-depth) + ordering-bits
+
+Prologos lattice-friendly cost per round
+  ≈ Σ_p R1CS(f_p)              -- fire-function arithmetization (compute)
+  + Σ_c[Group A] O(1)          -- monotone-update zero-cost (Shortcut 6.1)
+  + Σ_c[Group B] R1CS(merge_c) -- per-circuit merge for Group B
+  + 0                          -- ordering bits (Shortcut 6.2)
+```
+
+The win is concentrated where Group A cells dominate. The more lattice-runtime-shaped the
+program (decision narrowing, fact accumulation, worldview reasoning), the larger the
+shortcut. Heavy-elaboration programs (lots of dependent-type unification) get less benefit.
+
+Quiescence (Shortcut 6.4) is the only `O(1)`-vs-`O(N)` *qualitative* shortcut. The rest are
+constant factors that compound over `T` rounds — meaningful but not asymptotic. Hasse-diagram
+folding (Shortcut 6.6) is asymptotic if the conjecture holds.
+
+---
+
+## 7. RISC0 feature-parity gap
+
+Treating RISC0 as a reference checklist, what would lattice-ZK schemes need to provide to
+substitute for it (independent of the Prologos-specific shortcuts above)?
+
+### 7.1 What RISC0 delivers
+
+1. Universal arithmetization (RISC-V trace → AIR, given for free)
+2. Sequential-trace soundness (PC, register file, memory transitions)
+3. Merkleized RAM with succinct read/write proofs
+4. Recursion (STARK-of-STARK, eventually Groth16-wrapped)
+5. Sub-KB final proofs after the EC wrap
+6. Production toolchain
+7. Public/private I/O segregation, deterministic execution
+
+### 7.2 Lattice-ZK's coverage
+
+| RISC0 deliverable | Lattice-ZK status |
+|---|---|
+| Arithmetization given (1) | **Missing.** No lattice-ZK-VM ships an ISA-trace → R1CS frontend. The constraint-system prover (LaBRADOR) exists; the VM frontend doesn't. |
+| Sequential-trace IOP (2) | **Building blocks present.** Hachi + ring-switching gives sumcheck-over-rings; Brakedown-over-Galois-rings gives AIR-style. Not yet packaged as a STARK-equivalent. |
+| Merkleized RAM (3) | **Substrate available.** SIS-based vector commitments (Wee, Peikert) provide succinct random-access opening natively — arguably better than Merkle. Not packaged into a memory model. |
+| Recursion (4) | **Solved.** LatticeFold+ and Lova give folding with constant per-fold overhead. |
+| Sub-KB proofs (5) | **Not achievable post-quantum.** Lattice-ZK proofs are 50-100 KB. RISC0's 200-byte size comes from a final Groth16 wrap (EC crypto). Wrapping a lattice proof in Groth16 kills PQ security at that hop. |
+| Toolchain (6) | **Research-grade.** Out of scope for this document. |
+| ZK + I/O segregation (7) | **Standard.** All listed schemes are NIZK in ROM via Fiat-Shamir. |
+
+### 7.3 Three engineering gaps and two research gaps
+
+**Engineering** (no theoretical obstacle):
+
+- **G1. Lattice ZK-VM frontend.** ISA trace → R1CS-over-`R_q`, fed to LaBRADOR/LatticeFold+.
+  Plausible direct port of Jolt's lookup-arg style.
+- **G2. AIR-over-rings backend.** Wrap Hachi + ring-switching as an AIR prover.
+- **G3. Memory-commitment standard.** Pick: Merkle-over-Poseidon vs. SIS vector commitments.
+
+**Research** (open):
+
+- **R1. Sub-KB post-quantum proofs.** Open problem. Either accept 50-100 KB or accept a
+  non-PQ final wrap. No middle ground today.
+- **R2. Lattice-friendly *small-state* recursive verifier.** LatticeFold+ improved this
+  materially; whether it is small enough for "verifier-as-a-propagator-on-the-network"
+  (ZK-Prologos's L4) is an empirical open question — no published benchmark fits this use
+  case yet.
+
+### 7.4 Implication for ZK-Prologos
+
+ZK-Prologos *does not need* G1-G3 closed, because it does not compile to a generic ZK-VM. It
+arithmetizes the propagator network's execution shape directly (L2 layer of the architecture).
+The shortcut catalogue (§6) lists what that direct-arithmetization saves over going through a
+generic VM.
+
+R1 affects ZK-Prologos like everyone else: ~50-100 KB final proofs. Acceptable for the
+application domain.
+
+R2 is the load-bearing open question for the L4 verifier-as-stratum vision. If the verifier
+circuit is too large to fit in a propagator, "verifier-as-stratum" downgrades to
+"verifier-as-FFI-call" — still on-network in spirit but losing the elegance.
+
+---
+
+## 8. Open questions and falsification paths
 
 This section enumerates what could break the design. Each item names the risk, the
 falsification test, and a fallback if it fails.
 
-### 6.1 The encoding for term / type lattices may not be norm-bounded
+### 8.1 The encoding for term / type lattices may not be norm-bounded
 
 **Risk**: Prologos type cells hold structural type expressions of unbounded depth (recursive
 types, dependent types). Encoding into `R_q^k` with `k` fixed forces a depth bound; encoding
@@ -562,7 +824,7 @@ its commitment from operands), but it scales to unbounded type expressions. The 
 becomes "I know AST `t_1`, AST `t_2`, and AST `t_3` such that `t_3 = unify(t_1, t_2)`" — still
 proven via LaBRADOR but with the unification logic explicit in the circuit.
 
-### 6.2 Non-monotone strata may not arithmetize cleanly
+### 8.2 Non-monotone strata may not arithmetize cleanly
 
 **Risk**: S(-1) retraction (`stratification.md` §"S(-1) retraction") and S1 NAF are non-
 monotone. Their natural statement is "the cell value *decreased* on the lattice" or "no
@@ -584,7 +846,7 @@ Prologos to S0-only (monotone) computations. This still covers a huge fraction o
 programs (anything that doesn't use NAF or assumption retraction), and lets the architecture
 ship while research continues on the non-monotone strata.
 
-### 6.3 The "joincheck" protocol may not exist
+### 8.3 The "joincheck" protocol may not exist
 
 **Speculation in §3.4**: a sumcheck-analog where the aggregate is `⊔` (idempotent) rather than
 `+`. The structural property that makes this potentially shorter than sumcheck is that
@@ -598,7 +860,7 @@ encoding and pay an `O(log |S|)` factor we hoped to avoid.
 **Fallback**: standard sumcheck on the bit-vector encoding works correctly even if joincheck
 fails. The cost is a constant factor on per-round prover time, not a fundamental obstacle.
 
-### 6.4 Quiescence as `O(1)` proof obligation
+### 8.4 Quiescence as `O(1)` proof obligation
 
 **Speculation in §3.4**: prove "the network reached fixpoint" by showing
 `commitment_{round k+1} − commitment_{round k} = 0` for the canonical aggregate cell. The
@@ -614,7 +876,7 @@ trivially available via the worklist). The quiescence proof becomes `commitment_
 AND fired-set = enabled-propagators-set`. The latter is a set-equality check — also `O(k)`
 where `k` is the number of propagators, fully arithmetizable.
 
-### 6.5 Concrete proof sizes may not be competitive
+### 8.5 Concrete proof sizes may not be competitive
 
 **Risk**: lattice-based proofs are ~50-100 KB. Groth16 is ~200 bytes. Many production ZK use
 cases want sub-1KB proofs. ZK-Prologos is post-quantum but loses on size.
@@ -628,7 +890,7 @@ size growth must be measured on real round counts (a typical Prologos elaboratio
 `O(100)`-`O(1000)` BSP rounds). LatticeFold+ benchmarks suggest we should land in the 50-200
 KB range for the final aggregate, which is acceptable for the application domain.
 
-### 6.6 Random-oracle / Fiat-Shamir model assumptions
+### 8.6 Random-oracle / Fiat-Shamir model assumptions
 
 **Risk**: most lattice-based SNARKs (LaBRADOR, LatticeFold+, Greyhound, Lova) are non-
 interactive in the random oracle model via Fiat-Shamir. Recent work (e.g., the "weak
@@ -639,14 +901,14 @@ boundary clearly.
 **Mitigation**: document the assumption explicitly. Allow the hash to be a swappable cell-
 indexed parameter so that future post-quantum hash standards can be plugged in.
 
-### 6.7 Implementation realism
+### 8.7 Implementation realism
 
 **Risk**: this is a research-grade undertaking. A naïve estimate of effort: 6-12 months for a
 research prototype, multi-year for a production-grade system. The Prologos team is small; a
 realistic plan must phase the work to deliver value at each step rather than gating on the
 full architecture.
 
-**Mitigation**: the phasing in §7 below ships incremental value:
+**Mitigation**: the phasing in §9 below ships incremental value:
 - Phase 1: any single cell domain encoded → proof of concept
 - Phase 2: per-fire arithmetization → already enables non-aggregated proofs
 - Phase 3: BSP-round prover → first useful artifact (a "verifiable Prologos run")
@@ -658,7 +920,7 @@ Each phase produces something demoable. We can stop at any point and have a work
 
 ---
 
-## 7. Phased plan
+## 9. Phased plan
 
 The plan is phased so each phase delivers a runnable artifact and a falsifiable claim. Phase
 ordering follows the architecture-layer ordering (L0 → L5).
@@ -691,7 +953,7 @@ ordering follows the architecture-layer ordering (L0 → L5).
 - Test: the existing test fixture pattern (`test-support.rkt`) plus a new
   `tests/test-zk-bool-bridge.rkt`.
 
-**Falsifies**: §6.1 for the simplest case (Boolean lattice). If even bitmasks don't fit, the
+**Falsifies**: §8.1 for the simplest case (Boolean lattice). If even bitmasks don't fit, the
 whole approach fails.
 
 ### Phase 2 — L2 per-fire arithmetization
@@ -741,7 +1003,7 @@ we're back to per-round proofs.
 - Implement OR-proofs (CDS-style) for NAF disjunctive cases.
 - Acceptance file: a `.prologos` program exercising NAF (e.g., `not p(X) :- ...`).
 
-**Falsifies**: §6.2's fallback path. If even open-recommit-recommit is infeasible for typical
+**Falsifies**: §8.2's fallback path. If even open-recommit-recommit is infeasible for typical
 retractions, we may need to restrict the verifiable subset.
 
 ### Phase 6 — L4 verifier stratum
@@ -783,12 +1045,12 @@ collapses (the architecture is still sound, but the deployment value drops).
 
 ---
 
-## 8. What this enables (vision)
+## 10. What this enables (vision)
 
 If even Phase 4 lands successfully, the language acquires capabilities that classical ZK
 pipelines cannot match:
 
-### 8.1 Verifiable elaboration
+### 10.1 Verifiable elaboration
 
 A Prologos type-check is a fixpoint computation on the propagator network. Today, the
 compiler produces a `.pnet` cache and a downstream consumer must trust that the cache was
@@ -802,7 +1064,7 @@ client verifies in `polylog(T)` time and trusts the result without re-running el
 This is novel — current dependent-type pipelines (Coq, Agda, Lean, Idris) require the
 verifier to re-run the type-checker.
 
-### 8.2 ZK applications with dependent types
+### 10.2 ZK applications with dependent types
 
 Classical ZK SNARK pipelines (Circom, Noir, Cairo) use weakly-typed circuit DSLs. Bugs
 are common; whole subfields exist to find them ([eprint 2025/916](https://eprint.iacr.org/2025/916)
@@ -812,28 +1074,31 @@ the proof backend, *the type system and the proof system are the same artifact*.
 type is its specification; the proof certifies that the program meets the specification *and*
 ran correctly. This collapses the "spec / impl / proof" three-step into one.
 
-### 8.3 Proof-carrying code, natively
+### 10.3 Proof-carrying code, natively
 
 The `.pnet` cache becomes proof-carrying code in the precise [Necula 1997] sense: a binary
 artifact paired with a proof of safety properties. Because the proof is succinct and the
 verifier is a propagator, *any Prologos installation can verify any other's outputs* with no
 additional infrastructure. Module distribution becomes trustless.
 
-### 8.4 Lattice-on-lattice
+### 10.4 Lattice-on-lattice (qualified)
 
 The Hyperlattice Conjecture (`structural-thinking.md`) claims lattices are the right
-substrate for *all* computation. If ZK-Prologos works, we have a system where:
+substrate for *all* computation. ZK-Prologos pairs:
 
-- The computational lattice (cells with `⊔`-merges) drives execution.
-- The cryptographic lattice (Module-SIS over `R_q`-modules) drives verification.
-- A Galois bridge connects them.
-- The proof topology mirrors the computation topology (Hasse diagram = proof DAG).
+- The computational lattice (cells with `⊔`-merges) driving execution.
+- The cryptographic lattice (Module-SIS over `R_q`-modules) driving verification.
+- For Group A cells, an honest Galois bridge connecting the two.
+- For Group B cells, an opaque-Merkle commitment with no algebraic correspondence.
 
-That's lattice-on-lattice through-and-through. It is the strongest concrete realization of
-the conjecture available — not because it proves the conjecture, but because it stakes a
-working computational system on the conjecture's optimality claim.
+This is a *partial* realization of "lattice-on-lattice." The structural overlap is real
+where it exists (Group A) and absent where it does not (Group B). The architecture stakes a
+working system on the conjecture's *operational* claim (BSP rounds = Hasse-diagram levels)
+without claiming to *prove* the conjecture or to algebraically unify the two senses of
+lattice. Earlier drafts of this document overstated this; the corrected framing is more
+modest but still substantial.
 
-### 8.5 Post-quantum from the ground up
+### 10.5 Post-quantum from the ground up
 
 Module-SIS is conjectured to be post-quantum hard (no known quantum algorithm beats classical
 for SIS). RISC0 and other elliptic-curve-based ZK systems are not. For long-horizon
@@ -843,7 +1108,7 @@ gap by inheriting Module-SIS's post-quantum security uniformly across the stack.
 
 ---
 
-## 9. References
+## 11. References
 
 ### Lattice-based ZK proof systems
 
@@ -902,7 +1167,7 @@ gap by inheriting Module-SIS's post-quantum security uniformly across the stack.
 
 ---
 
-## 10. Decision points needing user input
+## 12. Decision points needing user input
 
 Before Phase 0 begins, the following choices need to be made by the project lead:
 
