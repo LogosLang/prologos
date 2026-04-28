@@ -3,104 +3,117 @@
 ;;;
 ;;; PROPAGATOR-BASED EIGENTRUST — Racket FFI shim for Prologos.
 ;;;
-;;; The user-facing pitch: Prologos plans to make Propagators a first-class
-;;; language construct (not just compiler infrastructure). That work hasn't
-;;; landed yet, so this module exposes the underlying propagator network
-;;; primitives via Racket FFI so that algorithms like EigenTrust can be
-;;; written in `.prologos` files using `foreign racket "..."` imports.
+;;; The user-facing pitch: Prologos plans first-class propagator support,
+;;; but the type checker isn't yet wired through the surface forms in the
+;;; grammar. This shim exposes the underlying primitives (`net-new`,
+;;; `net-new-cell`, `net-add-prop`) directly via Racket FFI so a `.prologos`
+;;; file can build and run a propagator network today.
 ;;;
-;;; The functions exported here wrap the persistent (immutable) prop-network
-;;; in a small mutable handle (`et-net`) so Prologos sees a stateful API:
+;;; -----------------------------------------------------------------
+;;; Mantra alignment (per .claude/rules/on-network.md)
 ;;;
-;;;   et-new        : Nat -> Nat                                  ; returns a fresh handle id
-;;;   et-cell       : Nat -> Posit32 -> Nat                       ; allocates a cell, returns id
-;;;   et-cell-get   : Nat -> Nat -> Posit32                       ; read score
-;;;   et-cell-set   : Nat -> Nat -> Posit32 -> Nat                ; returns cell-id (chains)
-;;;   et-sum-prop   : Nat -> List Nat -> List Posit32 -> Posit32 -> Nat -> Nat
-;;;                   ; installs target := bias + Σ (weight_i * src_i); returns handle (chains)
-;;;   et-run        : Nat -> Nat                                  ; runs to quiescence; returns handle
-;;;   et-snapshot   : Nat -> List Nat -> List Posit32             ; read many cells
+;;;     "All-at-once, all in parallel, structurally emergent
+;;;      information flow ON-NETWORK."
 ;;;
-;;; Note that the "side-effecting" calls (cell-set, sum-prop, run) return a
-;;; meaningful Nat — typically the handle or a relevant cell-id — instead of
-;;; Unit. Prologos's reduction is call-by-name; an unused result expression
-;;; would never be evaluated and the side effect would be silently dropped.
-;;; Threading a Nat through every call forces strict evaluation order.
+;;; This shim takes the mantra at face value:
 ;;;
-;;; The first argument of every operation (other than et-new) is a handle id
-;;; — a non-negative integer returned by et-new. The Racket side keeps a
-;;; private registry of network boxes keyed by id, so Prologos sees normal
-;;; Nat values throughout and the propagator network mutates under the hood.
+;;;   * All-at-once   — each iteration is ONE compound cell holding the
+;;;                     full score vector for all peers, allocated atomically
+;;;                     (`net-new-cells-batch`, internally). The matrix /
+;;;                     pretrust / decay configuration arrives as a single
+;;;                     declarative payload.
+;;;   * All in parallel — `net-add-prop` installs ONE broadcast propagator
+;;;                     (per `.claude/rules/propagator-design.md` § Broadcast
+;;;                     Propagators) covering all N peer-update items. The
+;;;                     scheduler can decompose the broadcast across OS
+;;;                     threads at fire time. NO N-propagator step-think,
+;;;                     NO `for/fold` walking the peer list.
+;;;   * Structurally emergent — the cell DAG is iter-0 → iter-1 → ... →
+;;;                     iter-K. The BSP scheduler fires layers in
+;;;                     topological order; we never tell it what fires when.
+;;;   * ON-NETWORK    — every score lives in a cell. The compound carrier
+;;;                     holds the full peer vector; merge keeps the higher
+;;;                     generation so each layer's broadcast write strictly
+;;;                     dominates the previous initial value.
 ;;;
-;;; The cell merge function is monotone-by-generation: each cell holds a
-;;; (gen . posit-bits) pair and the merge keeps the entry with the higher
-;;; generation. Iteration k+1 cells are generation k+1; this lets EigenTrust's
-;;; non-monotone power iteration cooperate with the CALM-monotone propagator
-;;; network — every cell is written at most once per round, ordered by
-;;; data-dependency rather than imperative control flow.
+;;; -----------------------------------------------------------------
+;;; FFI surface (consumed from .prologos via `foreign racket "..."`):
 ;;;
-;;; For Prologos, all numeric scoring happens in Posit32 (32-bit posits, 2022
-;;; standard, es=2). The bit pattern is the FFI carrier; this module converts
-;;; to/from exact rationals internally for the dot-product math.
+;;;   net-new       : Posit32 -> Posit32
+;;;       Allocate a fresh propagator network with the given fuel budget;
+;;;       return a Posit32 handle id.
+;;;
+;;;   net-new-cell  : Posit32 -> List Posit32 -> Posit32
+;;;       Allocate one compound cell holding a vector of Posit32 scores.
+;;;       Return a Posit32 cell-ref.
+;;;
+;;;   net-add-prop  : Posit32 -> Posit32 -> Posit32
+;;;                 -> List (List Posit32) -> List Posit32 -> Posit32
+;;;                 -> Posit32
+;;;       Install ONE broadcast propagator on the network whose fire-fn
+;;;       implements one EigenTrust round:
+;;;
+;;;         t_{k+1}[j] = α · pretrust[j]
+;;;                    + (1 − α) · Σ_i  C[i][j] · t_k[i]
+;;;
+;;;       Args: handle, input-cell, output-cell, matrix-rows (C in
+;;;       row-major form), pretrust vector, decay α. Returns the
+;;;       output-cell so callers can chain layers.
+;;;
+;;;   net-run-read  : Posit32 -> Posit32 -> List Posit32
+;;;       Run the network to quiescence, then read the final layer's
+;;;       compound cell as a Posit32 list. Combined into one call so the
+;;;       Prologos call-by-name reduction has to evaluate the full layer
+;;;       chain (forces every net-add-prop side effect) before the
+;;;       quiescence pass starts.
+;;;
+;;; All "side-effecting" calls return a meaningful Posit32 (handle, cell
+;;; ref, or score list) instead of Unit. Prologos's reduction is
+;;; call-by-name — an unused result expression would never be evaluated and
+;;; the side effect would be silently dropped. Threading a Posit32 through
+;;; every call forces strict evaluation order.
 ;;;
 
 (require racket/match
-         "../../propagator.rkt"
+         racket/list
+         racket/vector
+         (rename-in "../../propagator.rkt"
+                    [net-new-cell      raw-net-new-cell]
+                    [net-add-broadcast-propagator raw-net-add-broadcast])
          "../../syntax.rkt"
          "../../posit-impl.rkt")
 
 (provide
- et-new
- et-cell
- et-cell-get
- et-cell-set
- et-sum-prop
- et-run
- et-snapshot
- et-run-and-snapshot
- ;; Higher-level operation that Prologos can compose recursively to drive
- ;; the EigenTrust power iteration: given the previous iteration's cells,
- ;; allocate a fresh layer of cells and install one sum-propagator per peer
- ;; that computes t_{k+1}[j] = α·p[j] + (1-α) · Σ_i C[i][j]·t_k[i].
- et-add-iter
- ;; Convenience for Prologos: encode/decode Posit32 ↔ Rat so that user code
- ;; can construct posit constants without going through literal sugar.
- et-rat->posit32
- et-posit32->rat)
+ net-new
+ net-new-cell
+ net-add-prop
+ net-run-read)
 
 ;; ========================================
-;; Handle: integer id into a Racket-side registry of mutable network boxes.
+;; Handle registry — Posit32 carrier.
 ;; ========================================
 ;;
-;; Prologos's foreign FFI marshals user-defined types as Passthrough — the IR
-;; value is the Racket value. That works for primitives but breaks reduction
-;; (whnf/nf) when a non-IR Racket struct flows through arbitrary Prologos
-;; expressions. Returning a `Nat` handle keeps every foreign value an honest
-;; IR Nat, and the registry side-table lookups happen entirely on the Racket
-;; side.
+;; Posit32 represents small integers exactly within its range, so we use
+;; the *bit pattern* of the encoded posit as the on-the-wire handle. The
+;; Prologos surface sees Posit32 values; the registry side-table on the
+;; Racket side maps decoded integer ids to mutable boxes holding the
+;; persistent prop-network.
 
 (struct et-net (box) #:transparent)
 
-(define handle-registry (make-hasheqv))     ;; integer -> et-net
-(define next-handle-id (box 0))
+(define handle-registry (make-hasheqv))   ;; integer -> et-net
+(define cell-registry   (make-hasheqv))   ;; integer -> cell-id (the prop-network's cell)
+(define next-handle-id  (box 1))           ;; reserve 0 in case
+(define next-cell-id    (box 1))
 
-(define (lookup-handle id)
-  (define h (hash-ref handle-registry id #f))
-  (unless h (error 'eigentrust-prop "no such EigenTrust handle: ~a" id))
-  h)
-
-(define (et-new fuel)
-  (define h (et-net (box (make-prop-network (max fuel 1)))))
-  (define id (unbox next-handle-id))
-  (set-box! next-handle-id (+ id 1))
-  (hash-set! handle-registry id h)
-  id)
+(define (id->posit32 i)         (posit32-encode i))
+(define (posit32->id bits)      (inexact->exact (posit32-to-rational bits)))
 
 ;; ========================================
-;; List helpers — walk the Prologos cons/nil chain in WHNF form.
+;; List helpers: walk WHNF cons/nil chains.
 ;; ========================================
 ;;
-;; Foreign args have been reduced before marshalling, so List values arrive
+;; Foreign args are reduced to nf before marshalling, so List values arrive
 ;; as nested expr-app of expr-fvar 'cons (or qualified ::cons) terminating
 ;; in expr-nil / expr-fvar 'nil.
 
@@ -116,14 +129,12 @@
         (let ([n (string-length s)])
           (and (>= n 5) (string=? (substring s (- n 5)) "::nil"))))))
 
-;; Drill through optional type-arg applications: `(cons A) head tail` and
-;; `((cons A) head) tail` both denote a cons cell with payload `head`.
 (define (try-cons-decomp e)
   (and (expr-app? e)
        (let ([func (expr-app-func e)]
              [tail (expr-app-arg e)])
          (and (expr-app? func)
-              (let ([head (expr-app-arg func)]
+              (let ([head  (expr-app-arg func)]
                     [inner (expr-app-func func)])
                 (cond
                   [(and (expr-fvar? inner) (cons-name? (expr-fvar-name inner)))
@@ -146,264 +157,199 @@
     (cond
       [(is-nil? cur) (reverse acc)]
       [(try-cons-decomp cur)
-       => (lambda (hd-tl)
-            (loop (cdr hd-tl) (cons (car hd-tl) acc)))]
+       => (lambda (hd-tl) (loop (cdr hd-tl) (cons (car hd-tl) acc)))]
       [else (error 'eigentrust-prop
-                   "list walk got a non-list / non-WHNF value: ~v" cur)])))
+                   "list walk: not a list / not in WHNF: ~v" cur)])))
 
-;; Walk a List Nat — extract Racket integers from expr-nat-val nodes.
-(define (list-of-nat->ints lst-expr)
-  (for/list ([e (in-list (prologos-list->list lst-expr))])
-    (match e
-      [(expr-nat-val n) n]
-      [(expr-zero) 0]
-      [(expr-suc _) (let walk ([x e] [k 0])
-                      (match x
-                        [(expr-zero) k]
-                        [(expr-nat-val m) (+ k m)]
-                        [(expr-suc inner) (walk inner (+ k 1))]
-                        [_ (error 'eigentrust-prop "expected Nat, got ~v" e)]))]
-      [_ (error 'eigentrust-prop "expected Nat in list, got ~v" e)])))
+(define (list-of-posit32->bits-vec e)
+  (define lst (prologos-list->list e))
+  (for/vector #:length (length lst)
+              ([x (in-list lst)])
+    (match x
+      [(expr-posit32 b) b]
+      [_ (error 'eigentrust-prop "expected Posit32 in list, got ~v" x)])))
 
-;; Walk a List Posit32 — extract bit-pattern integers from expr-posit32 nodes.
-(define (list-of-posit32->bits lst-expr)
-  (for/list ([e (in-list (prologos-list->list lst-expr))])
-    (match e
-      [(expr-posit32 bits) bits]
-      [_ (error 'eigentrust-prop "expected Posit32 in list, got ~v" e)])))
+(define (matrix->vec-of-vecs e)
+  (define rows (prologos-list->list e))
+  (for/vector #:length (length rows)
+              ([row (in-list rows)])
+    (list-of-posit32->bits-vec row)))
 
-;; Build a Prologos List Posit32 from a Racket list of bit-pattern integers.
-(define (bits->prologos-list-posit32 bits-list)
-  (foldr (lambda (bits acc)
-           (expr-app (expr-app (expr-fvar 'cons) (expr-posit32 bits)) acc))
+(define (bits-vec->prologos-list bits-vec)
+  (foldr (lambda (b acc)
+           (expr-app (expr-app (expr-fvar 'cons) (expr-posit32 b)) acc))
          (expr-nil)
-         bits-list))
+         (vector->list bits-vec)))
 
 ;; ========================================
-;; Cell merge: monotone "max-by-generation" lattice.
-;; ========================================
+;; Cell value: generation-tagged immutable vector of Posit32 bit patterns.
 ;;
-;; Cell value = (cons gen bits). Iteration k writes (k . new-bits); merge
-;; keeps the higher-gen entry. The first write per round is the only write
-;; (propagator fires once per round when its gen-(k-1) inputs are ready), so
-;; ties shouldn't arise in correct use; on a tie we keep the existing.
+;; The merge function keeps the entry with the higher generation. This is
+;; CALM-monotone (joins commute / are associative / are idempotent) under
+;; the usual correctness contract: each generation is written exactly
+;; once, by exactly one propagator, in topological order.
+;; ========================================
 
-(struct gen-val (gen bits) #:transparent)
+(struct gen-vec (gen vec) #:transparent)
 
 (define (gen-merge old new)
   (cond
-    [(not (gen-val? old)) new]
-    [(not (gen-val? new)) old]
-    [(> (gen-val-gen new) (gen-val-gen old)) new]
+    [(not (gen-vec? old)) new]
+    [(not (gen-vec? new)) old]
+    [(> (gen-vec-gen new) (gen-vec-gen old)) new]
     [else old]))
 
-;; Initial bot value for any cell.
-(define gen-bot (gen-val -1 0))  ;; gen=-1 => any real write strictly dominates
-
-;; Track the per-cell generation in a side table so we know which gen to
-;; assign on the next write. The simplest convention: a cell allocated by
-;; `et-cell` starts at gen 0 with the user-supplied initial bits.
-(define (current-gen cell-val)
-  (if (gen-val? cell-val) (gen-val-gen cell-val) -1))
-
-(define (current-bits cell-val)
-  (if (gen-val? cell-val) (gen-val-bits cell-val) 0))
+(define (current-gen v)  (if (gen-vec? v) (gen-vec-gen v) -1))
+(define (current-vec v)  (if (gen-vec? v) (gen-vec-vec v) #()))
 
 ;; ========================================
-;; Public FFI surface.
-;; ========================================
-
-;; Allocate a cell with the given Posit32 initial value (bit pattern).
-;; Returns the cell-id as a non-negative integer (Nat in Prologos).
-(define (et-cell hid init-bits)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define-values (net* cid) (net-new-cell net (gen-val 0 init-bits) gen-merge))
-  (set-box! (et-net-box handle) net*)
-  (cell-id-n cid))
-
-;; Read the current Posit32 bits stored in a cell.
-(define (et-cell-get hid cid-int)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define cid (cell-id cid-int))
-  (current-bits (net-cell-read net cid)))
-
-;; Imperatively overwrite a cell with a higher generation. Returns the cell-id
-;; so calls can be chained (Prologos uses CBN; an unused result wouldn't fire).
-(define (et-cell-set hid cid-int bits)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define cid (cell-id cid-int))
-  (define old (net-cell-read net cid))
-  (define next-gen (+ 1 (current-gen old)))
-  (define net* (net-cell-write net cid (gen-val next-gen bits)))
-  (set-box! (et-net-box handle) net*)
-  cid-int)
-
-;; Install a propagator: target_cell := bias + Σ_i weight_i * src_i.
-;;   srcs    : Prologos List Nat        — input cell-ids
-;;   weights : Prologos List Posit32    — same length as srcs
-;;   bias    : Posit32 bit-pattern      — additive constant
-;;   target  : Nat                      — output cell-id
-;; Returns the handle.
-;;
-;; The fire function reads sources, decodes to rationals, computes the
-;; weighted sum (in exact rational arithmetic, using a quire-style exact
-;; accumulator), encodes back to Posit32, and writes a generation
-;; max(gen(srcs)) + 1 entry into the target cell.
-(define (et-sum-prop hid srcs-list weights-list bias-bits target-int)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define src-ints (list-of-nat->ints srcs-list))
-  (define wt-bits (list-of-posit32->bits weights-list))
-  (unless (= (length src-ints) (length wt-bits))
-    (error 'et-sum-prop "srcs and weights must have equal length: ~a vs ~a"
-           (length src-ints) (length wt-bits)))
-  (define src-cids (map cell-id src-ints))
-  (define target-cid (cell-id target-int))
-  (define wt-rats (map posit32-to-rational wt-bits))
-  (define bias-rat (posit32-to-rational bias-bits))
-  (define fire-fn
-    (lambda (n)
-      ;; Read each source, decode to rational, multiply by weight, sum.
-      ;; Track the max generation among inputs so the output gets a strictly
-      ;; higher generation (gen-merge keeps higher gens).
-      (define max-gen
-        (for/fold ([g -1]) ([cid (in-list src-cids)])
-          (max g (current-gen (net-cell-read n cid)))))
-      (define sum
-        (for/fold ([acc bias-rat])
-                  ([cid (in-list src-cids)]
-                   [w   (in-list wt-rats)])
-          (define src-bits (current-bits (net-cell-read n cid)))
-          (define src-rat (posit32-to-rational src-bits))
-          (cond
-            [(or (eq? src-rat 'nar) (eq? acc 'nar)) 'nar]
-            [else (+ acc (* w src-rat))])))
-      (define out-bits (cond
-                         [(eq? sum 'nar) (posit32-encode 'nar)]
-                         [else (posit32-encode sum)]))
-      (net-cell-write n target-cid (gen-val (+ 1 max-gen) out-bits))))
-  (define-values (net* _pid)
-    (net-add-propagator net src-cids (list target-cid) fire-fn))
-  (set-box! (et-net-box handle) net*)
-  hid)
-
-;; Run the network to quiescence (fixpoint of all installed propagators).
-;; Returns the handle id so it can be chained (forces evaluation in CBN).
-(define (et-run hid)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define net* (run-to-quiescence net))
-  (set-box! (et-net-box handle) net*)
-  hid)
-
-;; ========================================
-;; et-add-iter: build one EigenTrust iteration on the propagator network.
+;; net-new — allocate a propagator network.
 ;; ========================================
 ;;
-;; prev-cells : Prologos List Nat       — cell-ids holding t_k (current scores)
-;; matrix     : Prologos List (List Posit32)
-;;              — row-major C, i.e., matrix[i][j] = how much peer i trusts peer j
-;; pretrust   : Prologos List Posit32   — p, the prior trust vector
-;; decay-bits : Posit32 bit pattern     — α (decay constant, typically 0.1–0.2)
+;; fuel-bits : Posit32 bit pattern for a small integer fuel budget.
+;; Returns:    Posit32 bit pattern for the handle id.
+
+(define (net-new fuel-bits)
+  (define fuel-int
+    (let ([r (posit32-to-rational fuel-bits)])
+      (cond
+        [(exact-integer? r) r]
+        [(rational? r)      (inexact->exact (round r))]
+        [else 1000000])))
+  (define h (et-net (box (make-prop-network (max 1 fuel-int)))))
+  (define id (unbox next-handle-id))
+  (set-box! next-handle-id (+ id 1))
+  (hash-set! handle-registry id h)
+  (id->posit32 id))
+
+(define (lookup-handle hbits)
+  (define id (posit32->id hbits))
+  (or (hash-ref handle-registry id #f)
+      (error 'eigentrust-prop "no such network handle: ~a" id)))
+
+;; ========================================
+;; net-new-cell — allocate a compound cell.
+;; ========================================
 ;;
-;; Allocates one fresh cell per peer (gen=k+1), installs a sum-propagator per
-;; peer reading prev-cells, writing the new cell. The propagator computes
+;; Each cell holds a vector of Posit32 bit-patterns — the score for every
+;; peer at one iteration, all bundled into one cell so the broadcast
+;; propagator writes them atomically (mantra: all-at-once, on-network).
 ;;
-;;   t_{k+1}[j] = α · p[j]  +  (1 − α) · Σ_i C[i][j] · t_k[i]
+;; init-bits-list : Prologos List Posit32 — initial score vector.
+;; Returns         : Posit32 bit pattern encoding the cell-ref id.
+
+(define (net-new-cell hbits init-bits-list)
+  (define handle (lookup-handle hbits))
+  (define init-vec (vector->immutable-vector (list-of-posit32->bits-vec init-bits-list)))
+  (define net (unbox (et-net-box handle)))
+  (define-values (net* cid)
+    (raw-net-new-cell net (gen-vec 0 init-vec) gen-merge))
+  (set-box! (et-net-box handle) net*)
+  (define cref (unbox next-cell-id))
+  (set-box! next-cell-id (+ cref 1))
+  (hash-set! cell-registry cref cid)
+  (id->posit32 cref))
+
+(define (lookup-cell crefbits)
+  (define cref (posit32->id crefbits))
+  (or (hash-ref cell-registry cref #f)
+      (error 'eigentrust-prop "no such cell-ref: ~a" cref)))
+
+;; ========================================
+;; net-add-prop — install ONE broadcast propagator for an EigenTrust round.
+;; ========================================
 ;;
-;; Returns the list of new cell-ids as a Prologos List Nat (so the recursive
-;; Prologos driver can pass them as the next iteration's `prev-cells`).
-(define (et-add-iter hid prev-cells-list matrix-list pretrust-list decay-bits)
-  (define handle (lookup-handle hid))
-  (define prev-ints (list-of-nat->ints prev-cells-list))
-  (define n (length prev-ints))
-  (define matrix-bits (for/list ([row (in-list (prologos-list->list matrix-list))])
-                        (list-of-posit32->bits row)))
-  (define pretrust-bits (list-of-posit32->bits pretrust-list))
-  (unless (= n (length matrix-bits))
-    (error 'et-add-iter "matrix outer length ~a != peer count ~a"
-           (length matrix-bits) n))
-  (unless (= n (length pretrust-bits))
-    (error 'et-add-iter "pretrust length ~a != peer count ~a"
-           (length pretrust-bits) n))
-  (define decay-rat (posit32-to-rational decay-bits))
-  (define one-minus-decay (- 1 decay-rat))
-  ;; Per-peer column j of C (transpose row), weighted by (1-α).
-  (define weights-by-target
-    (for/list ([j (in-range n)])
-      (for/list ([i (in-range n)])
-        (* one-minus-decay
-           (posit32-to-rational (list-ref (list-ref matrix-bits i) j))))))
-  ;; Per-peer bias = α * p[j].
+;; Per `.claude/rules/propagator-design.md` § Broadcast Propagators:
+;; "any for/fold or for/list that processes independent items is a
+;;  candidate for broadcast." This is exactly that — N peer updates that
+;;  read the same prev-iter cell. The broadcast-profile metadata makes
+;;  the propagator decomposable across OS threads (BSP-LE Track 2 Phase
+;;  1B) when the scheduler chooses.
+;;
+;; input-cref  : prev iteration cell (compound, gen-vec carrier)
+;; output-cref : next iteration cell (compound, gen-vec carrier)
+;; matrix      : Prologos List (List Posit32) — row-major C
+;; pretrust    : Prologos List Posit32        — p
+;; decay-bits  : Posit32 bit pattern          — α
+;; Returns     : output-cref (chains).
+
+(define (net-add-prop hbits input-cref output-cref matrix pretrust decay-bits)
+  (define handle    (lookup-handle hbits))
+  (define input-cid (lookup-cell input-cref))
+  (define out-cid   (lookup-cell output-cref))
+  (define C-rows    (matrix->vec-of-vecs matrix))
+  (define p-bits    (list-of-posit32->bits-vec pretrust))
+  (define n         (vector-length p-bits))
+  (unless (= n (vector-length C-rows))
+    (error 'net-add-prop "matrix outer length ~a != peer count ~a"
+           (vector-length C-rows) n))
+  (for ([row (in-vector C-rows)] [i (in-naturals)])
+    (unless (= n (vector-length row))
+      (error 'net-add-prop "matrix row ~a has ~a entries, expected ~a"
+             i (vector-length row) n)))
+  (define decay-rat   (posit32-to-rational decay-bits))
+  (define one-m-decay (- 1 decay-rat))
+  (define p-rats      (for/vector ([b (in-vector p-bits)]) (posit32-to-rational b)))
+  ;; Pre-compute, in exact rationals, the per-target weights and bias.
+  ;;   weights[j][i] = (1 - α) · C[i][j]
+  ;;   bias[j]       = α · p[j]
+  (define weights
+    (for/vector ([j (in-range n)])
+      (for/vector ([i (in-range n)])
+        (* one-m-decay
+           (posit32-to-rational (vector-ref (vector-ref C-rows i) j))))))
   (define biases
-    (for/list ([j (in-range n)])
-      (* decay-rat (posit32-to-rational (list-ref pretrust-bits j)))))
-  ;; Allocate the new layer first (so propagator installation can refer to it).
-  (define new-cells
-    (for/list ([_ (in-range n)])
-      (et-cell hid (posit32-encode 0))))
-  ;; Install one sum-propagator per peer.
-  (for ([j (in-range n)])
-    (define new-cid (list-ref new-cells j))
-    (define wts (list-ref weights-by-target j))
-    (define bias (list-ref biases j))
-    (et-sum-prop hid
-                 (foldr (lambda (cid acc)
-                          (expr-app (expr-app (expr-fvar 'cons) (expr-nat-val cid)) acc))
-                        (expr-nil)
-                        prev-ints)
-                 (foldr (lambda (w acc)
-                          (expr-app (expr-app (expr-fvar 'cons)
-                                              (expr-posit32 (posit32-encode w))) acc))
-                        (expr-nil)
-                        wts)
-                 (posit32-encode bias)
-                 new-cid))
-  ;; Return the new cell-ids as a Prologos List Nat.
-  (foldr (lambda (i acc)
-           (expr-app (expr-app (expr-fvar 'cons) (expr-nat-val i)) acc))
-         (expr-nil)
-         new-cells))
+    (for/vector ([j (in-range n)]) (* decay-rat (vector-ref p-rats j))))
+  ;; --- Broadcast propagator: ONE install, N items, parallel-decomposable.
+  ;; items: peer indices 0..N-1.
+  (define items (build-list n values))
+  ;; item-fn: per-peer update. Reads the (single) prev-iter compound cell,
+  ;; computes t_{k+1}[j], returns (input-gen, j, bits). The input-gen
+  ;; tag lets the next-layer's gen exceed it so re-fires (after the input
+  ;; cell evolves) strictly dominate stale fires.
+  (define (item-fn j input-vals)
+    (define prev-cell-val (car input-vals))
+    (define prev          (current-vec prev-cell-val))
+    (define input-gen     (current-gen prev-cell-val))
+    (define wts  (vector-ref weights j))
+    (define bias (vector-ref biases j))
+    (define sum
+      (for/fold ([acc bias]) ([w (in-vector wts)] [b (in-vector prev)])
+        (+ acc (* w (posit32-to-rational b)))))
+    (list input-gen j (posit32-encode sum)))
+  ;; result-merge: accumulate per-peer results into a gen-vec carrier
+  ;; whose gen is input-gen + 1. Gen-merge then keeps the latest fire when
+  ;; the input cell evolves across BSP rounds.
+  (define (final-merge acc r)
+    (define input-gen (car r))
+    (define j         (cadr r))
+    (define bits      (caddr r))
+    (define base
+      (cond
+        [(gen-vec? acc) (vector-copy (gen-vec-vec acc))]
+        [else           (make-vector n 0)]))
+    (vector-set! base j bits)
+    (gen-vec (+ 1 input-gen) (vector->immutable-vector base)))
+  (define net0 (unbox (et-net-box handle)))
+  (define-values (net* _pid)
+    (raw-net-add-broadcast net0 (list input-cid) out-cid
+                           items item-fn final-merge))
+  (set-box! (et-net-box handle) net*)
+  output-cref)
 
-;; Read a list of cells and return their current Posit32 bits as a Prologos List.
-(define (et-snapshot hid cids-list)
-  (define handle (lookup-handle hid))
-  (define net (unbox (et-net-box handle)))
-  (define ints (list-of-nat->ints cids-list))
-  (define bits-list
-    (for/list ([i (in-list ints)])
-      (current-bits (net-cell-read net (cell-id i)))))
-  (bits->prologos-list-posit32 bits-list))
+;; ========================================
+;; net-run-read — flush the network and snapshot a cell's vector.
+;; ========================================
+;;
+;; The single FFI call forces strict evaluation of `output-cref` before
+;; running, so the entire chain of net-add-prop side effects has fired
+;; by the time run-to-quiescence runs.
 
-;; Combined "run + snapshot" — flushes the propagator worklist and reads the
-;; given cells out as Posit32 values in one call. Useful as the final step
-;; of an algorithm so Prologos's call-by-name reduction strictly evaluates
-;; the cell list (and hence the propagator-install side effects) before the
-;; quiescence run happens.
-(define (et-run-and-snapshot hid cids-list)
-  (define handle (lookup-handle hid))
-  (define ints (list-of-nat->ints cids-list))     ;; forces cids-list's eval
+(define (net-run-read hbits cref)
+  (define handle (lookup-handle hbits))
+  (define cid    (lookup-cell cref))
   (define net0 (unbox (et-net-box handle)))
   (define net* (run-to-quiescence net0))
   (set-box! (et-net-box handle) net*)
-  (define bits-list
-    (for/list ([i (in-list ints)])
-      (current-bits (net-cell-read net* (cell-id i)))))
-  (bits->prologos-list-posit32 bits-list))
-
-;; ========================================
-;; Posit32 ↔ exact rational bridges (passthrough types).
-;; ========================================
-;;
-;; For Prologos, Posit32 marshals to its raw bit-pattern integer; calling
-;; `posit32-to-rational` directly via FFI works, but these wrappers give
-;; the user a clean idiom in the `.prologos` source.
-
-(define (et-rat->posit32 r)
-  (posit32-encode r))
-
-(define (et-posit32->rat bits)
-  (posit32-to-rational bits))
+  (define final-vec (current-vec (net-cell-read net* cid)))
+  (bits-vec->prologos-list final-vec))
