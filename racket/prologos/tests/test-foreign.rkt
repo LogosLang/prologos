@@ -376,3 +376,141 @@
    (lambda ()
      (run-ns
       "(foreign racket \"racket/base\" :as rkt)"))))
+
+;; ========================================
+;; Integration tests: Int, Posit, and List FFI types
+;; ========================================
+;; These exercise marshal-prologos->racket / marshal-racket->prologos through
+;; the full elaborator pipeline, complementing the pure unit tests in
+;; test-foreign-marshal-ext.rkt. Tests that need `List` in scope use a `ns`
+;; prefix to trigger prelude auto-import.
+
+(define list-prelude "(ns t-foreign-list)\n")
+
+(test-case "foreign/Int-add1-eval"
+  ;; add1 imported as Int -> Int (Racket's add1 works on any exact integer).
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (add1 : Int -> Int))
+     (eval (add1 (int 5)))")
+   "6 : Int"))
+
+(test-case "foreign/Int-plus-two-args"
+  ;; Two-arg Int -> Int -> Int aliased to int+ to avoid clashing with the
+  ;; macro-resolved `+` reduction rule on Int literals.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ :as int-plus : Int -> Int -> Int))
+     (eval (int-plus (int 3) (int 4)))")
+   "7 : Int"))
+
+(test-case "foreign/Int-negative"
+  ;; Negative Int input/output round-trip through marshalling.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (- :as int-sub : Int -> Int -> Int))
+     (eval (int-sub (int 3) (int 10)))")
+   "-7 : Int"))
+
+(test-case "foreign/Int-bignum-roundtrip"
+  ;; Racket bignum × bignum should preserve precision through marshalling.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (* :as int-mul : Int -> Int -> Int))
+     (eval (int-mul (int 1000000) (int 1000000)))")
+   "1000000000000 : Int"))
+
+(test-case "foreign/Posit8-add1"
+  ;; Racket's add1 works on rationals (1 + bits-decoded-as-rational).
+  ;; (posit8 64) is the value 1.0; add1 → 2.0; encoded back to bits.
+  (define result
+    (run-ns-last
+     "(foreign racket \"racket/base\" (add1 :as p8-rat-inc : Posit8 -> Posit8))
+      (check (p8-rat-inc (posit8 64)) <Posit8>)"))
+  (check-contains result "OK"))
+
+(test-case "foreign/Posit16-roundtrip-via-identity"
+  ;; values: (posit16 16384) = 1.0 exact in posit16.
+  ;; Use Racket's identity-style call: we go IR → rational → IR through marshal.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (add1 :as p16-rat-inc : Posit16 -> Posit16))
+     (check (p16-rat-inc (posit16 16384)) <Posit16>)")
+   "OK"))
+
+(test-case "foreign/Posit32-add"
+  ;; Two-arg Racket + on rationals through Posit32 marshalling.
+  ;; (posit32 1073741824) = 1.0 in posit32.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (+ :as p32-rat-add : Posit32 -> Posit32 -> Posit32))
+     (check (p32-rat-add (posit32 1073741824) (posit32 1073741824)) <Posit32>)")
+   "OK"))
+
+(test-case "foreign/Posit64-passes-through"
+  ;; Type-check only: ensures Posit64 is accepted in foreign type positions
+  ;; and the marshaller pair is built without error.
+  (check-contains
+   (run-ns-last
+    "(foreign racket \"racket/base\" (add1 :as p64-rat-inc : Posit64 -> Posit64))
+     (infer p64-rat-inc)")
+   "Posit64"))
+
+(test-case "foreign/List-Int-length"
+  ;; Pass a List of Ints to Racket's `length`, get back a Nat.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
+      (eval (rkt-length (cons Int (int 1) (cons Int (int 2) (cons Int (int 3) (nil Int))))))"))
+   "3N : Nat"))
+
+(test-case "foreign/List-Int-empty"
+  ;; Empty list of Ints should marshal as () and length should be 0.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
+      (eval (rkt-length (nil Int)))"))
+   "0N : Nat"))
+
+(test-case "foreign/List-Nat-length"
+  ;; Nat element marshalling inside a list.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (length :as rkt-length : (List Nat) -> Nat))
+      (eval (rkt-length (cons Nat zero (cons Nat (suc zero) (nil Nat)))))"))
+   "2N : Nat"))
+
+(test-case "foreign/List-Int-infer-type"
+  ;; Type checks: foreign declaration with (List Int) in arg position
+  ;; produces a function with that signature.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
+      (infer rkt-length)"))
+   "List"))
+
+(test-case "foreign/List-Int-return-from-racket"
+  ;; Racket's `list` returns a list — typed as (List Int).
+  ;; (list 10 20 30) on the Racket side returns a 3-element list, which the
+  ;; marshaller encodes back into a Prologos cons/nil chain.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (list :as rkt-list-of-3 : Int -> Int -> Int -> (List Int)))
+      (foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
+      (eval (rkt-length (rkt-list-of-3 (int 10) (int 20) (int 30))))"))
+   "3N : Nat"))
+
+(test-case "foreign/List-Int-roundtrip-via-reverse"
+  ;; Send a Prologos list to Racket's `reverse`, then count the result.
+  (check-contains
+   (run-ns-last
+    (string-append list-prelude
+     "(foreign racket \"racket/base\" (reverse :as rkt-reverse : (List Int) -> (List Int)))
+      (foreign racket \"racket/base\" (length :as rkt-length : (List Int) -> Nat))
+      (eval (rkt-length (rkt-reverse (cons Int (int 1) (cons Int (int 2) (cons Int (int 3) (nil Int)))))))"))
+   "3N : Nat"))
