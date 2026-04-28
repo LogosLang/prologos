@@ -15,9 +15,13 @@
 ;;; What MUST stay in Racket (the irreducible core):
 ;;;
 ;;;   1. Propagator fire functions are Racket closures invoked by the
-;;;      Racket-side scheduler; Prologos lambdas can't cross the FFI
-;;;      boundary as live closures.
-;;;   2. Cell merge functions, same reason.
+;;;      Racket-side scheduler.
+;;;      [2026-04-28] Downgraded — Prologos lambdas CAN now cross the FFI
+;;;      boundary as live closures (see
+;;;      docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md). A Racket harness
+;;;      propagator can adapt a Prologos lambda to the fire-fn protocol.
+;;;      Reason to keep in Racket is now performance, not capability.
+;;;   2. Cell merge functions. [2026-04-28] Downgraded — same as item 1.
 ;;;   3. The cell-value carrier (gen-tagged immutable Posit32 vector) and
 ;;;      its monotone merge — both Racket data structures.
 ;;;   4. The persistent prop-network struct, handle/cell registries.

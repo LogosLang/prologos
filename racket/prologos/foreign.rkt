@@ -11,10 +11,16 @@
 ;;;   Char   ↔ char
 ;;;   String ↔ string
 ;;;
+;;; Function-typed parameters: a parameter whose type is itself a Pi (arrow)
+;;; is marshalled by wrapping the incoming Prologos lambda as a Racket procedure
+;;; that bridges Racket-side calls back into the Prologos reducer.
+;;;   See: docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md
+;;;
 
 (require racket/match
          racket/string
-         "syntax.rkt")
+         "syntax.rkt"
+         "reduction.rkt")
 
 (provide marshal-prologos->racket
          marshal-racket->prologos
@@ -84,24 +90,68 @@
     [(expr-posit64 bits) bits]
     [_ (error 'foreign "Cannot marshal to Posit64 — not a Posit64 literal: ~a" e)]))
 
-(define (marshal-prologos->racket base-type val)
-  (case base-type
-    [(Nat)     (nat->integer val)]
-    [(Int)     (int->integer val)]
-    [(Rat)     (rat->rational val)]
-    [(Bool)    (bool->boolean val)]
-    [(Unit)    (void)]
-    [(Char)    (char->rkt-char val)]
-    [(String)  (string->rkt-string val)]
-    [(Posit32) (posit32->bits val)]
-    [(Posit64) (posit64->bits val)]
-    ;; Passthrough types: the Prologos IR value IS the Racket value
-    [(Path Keyword Passthrough) val]
+(define (marshal-prologos->racket spec val)
+  (cond
+    ;; Function-typed parameter: wrap the incoming Prologos value as a Racket
+    ;; procedure that, when called from Racket, marshals its args back into the
+    ;; IR, applies the Prologos value, normalises, and marshals the result out.
+    ;; spec is (cons 'fn (cons arg-specs ret-spec)).
+    [(and (pair? spec) (eq? (car spec) 'fn))
+     (define parsed (cdr spec))
+     (define arg-specs (car parsed))
+     (define ret-spec (cdr parsed))
+     (wrap-prologos-fn-as-racket val arg-specs ret-spec)]
+    ;; Base type symbol: existing fast path.
+    [(symbol? spec)
+     (case spec
+       [(Nat)     (nat->integer val)]
+       [(Int)     (int->integer val)]
+       [(Rat)     (rat->rational val)]
+       [(Bool)    (bool->boolean val)]
+       [(Unit)    (void)]
+       [(Char)    (char->rkt-char val)]
+       [(String)  (string->rkt-string val)]
+       [(Posit32) (posit32->bits val)]
+       [(Posit64) (posit64->bits val)]
+       ;; Passthrough types: the Prologos IR value IS the Racket value
+       [(Path Keyword Passthrough) val]
+       [else
+        (define type-str (symbol->string spec))
+        (if (string-prefix? type-str "Opaque:")
+            (if (expr-opaque? val) (expr-opaque-value val) val)
+            (error 'foreign "Unsupported marshal-in type: ~a" spec))])]
     [else
-     (define type-str (symbol->string base-type))
-     (if (string-prefix? type-str "Opaque:")
-         (if (expr-opaque? val) (expr-opaque-value val) val)
-         (error 'foreign "Unsupported marshal-in type: ~a" base-type))]))
+     (error 'foreign "Unsupported marshal-in spec: ~a" spec)]))
+
+;; Build a Racket procedure that wraps a Prologos value of function type.
+;; When the procedure is called with Racket-side argument values, each is
+;; marshalled into Prologos IR, the Prologos value is applied to them, the
+;; resulting expression is fully reduced via `nf`, and the result marshalled
+;; back to Racket via the return-type spec.
+;;
+;; This is the Racket→Prologos→Racket bridge used when a foreign function
+;; receives a Prologos lambda. Recursion through `marshal-{prologos->racket,
+;; racket->prologos}` handles nested function types: an arg spec that is
+;; itself ('fn ...) installs a deeper bridge.
+(define (wrap-prologos-fn-as-racket pf arg-specs ret-spec)
+  (define n (length arg-specs))
+  (define (call . racket-args)
+    (unless (= (length racket-args) n)
+      (error 'foreign "Prologos lambda passed to Racket called with ~a args, expected ~a"
+             (length racket-args) n))
+    ;; Marshal each Racket arg back to Prologos IR using its declared spec.
+    (define ir-args
+      (for/list ([a (in-list racket-args)]
+                 [s (in-list arg-specs)])
+        (marshal-racket->prologos s a)))
+    ;; Build (((pf arg1) arg2) ... argN)
+    (define applied
+      (for/fold ([acc pf]) ([a (in-list ir-args)])
+        (expr-app acc a)))
+    ;; Reduce to normal form and marshal the result back out.
+    (define result-ir (nf applied))
+    (marshal-prologos->racket ret-spec result-ir))
+  call)
 
 ;; ========================================
 ;; Racket → Prologos marshalling
@@ -136,31 +186,51 @@
     (error 'foreign "Cannot marshal Racket value to Posit~a (expected bit-pattern integer): ~a" width val))
   (ctor val))
 
-(define (marshal-racket->prologos base-type val)
-  (case base-type
-    [(Nat)     (integer->nat val)]
-    [(Int)     (integer->int val)]
-    [(Rat)     (rational->rat val)]
-    [(Bool)    (if val (expr-true) (expr-false))]
-    [(Unit)    (expr-unit)]
-    [(Char)    (expr-char val)]
-    [(String)  (expr-string val)]
-    [(Posit32) (bits->posit-expr 32 val expr-posit32)]
-    [(Posit64) (bits->posit-expr 64 val expr-posit64)]
-    ;; Passthrough types: result is already a Prologos IR value
-    [(Path Keyword Passthrough) val]
+(define (marshal-racket->prologos spec val)
+  (cond
+    ;; Function-typed result/parameter going Racket→Prologos. Returning a
+    ;; Racket procedure to a Prologos consumer as a callable lambda is not
+    ;; supported in this release — the inverse bridge requires fabricating an
+    ;; expr-foreign-fn at marshal time, which crosses the type-checked
+    ;; surface and is out of scope for the FFI lambda passing track. Error
+    ;; with a clear message so callers know the path is reserved.
+    [(and (pair? spec) (eq? (car spec) 'fn))
+     (error 'foreign
+            (string-append
+             "Marshalling a Racket procedure back to Prologos as a function "
+             "value is not supported. (Bridge in this direction is reserved "
+             "for a future track; see docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md.)"))]
+    [(symbol? spec)
+     (case spec
+       [(Nat)     (integer->nat val)]
+       [(Int)     (integer->int val)]
+       [(Rat)     (rational->rat val)]
+       [(Bool)    (if val (expr-true) (expr-false))]
+       [(Unit)    (expr-unit)]
+       [(Char)    (expr-char val)]
+       [(String)  (expr-string val)]
+       [(Posit32) (bits->posit-expr 32 val expr-posit32)]
+       [(Posit64) (bits->posit-expr 64 val expr-posit64)]
+       ;; Passthrough types: result is already a Prologos IR value
+       [(Path Keyword Passthrough) val]
+       [else
+        (define type-str (symbol->string spec))
+        (if (string-prefix? type-str "Opaque:")
+            (expr-opaque val (string->symbol (substring type-str 7)))
+            (error 'foreign "Unsupported marshal-out type: ~a" spec))])]
     [else
-     (define type-str (symbol->string base-type))
-     (if (string-prefix? type-str "Opaque:")
-         (expr-opaque val (string->symbol (substring type-str 7)))
-         (error 'foreign "Unsupported marshal-out type: ~a" base-type))]))
+     (error 'foreign "Unsupported marshal-out spec: ~a" spec)]))
 
 ;; ========================================
 ;; Type parsing for marshalling
 ;; ========================================
 
-;; Extract base type symbol from a core type expression.
-;; Returns one of: 'Nat, 'Bool, 'Unit, 'Posit8
+;; Extract a marshal-spec from a core type expression.
+;; Returns either:
+;;   - a base type symbol (e.g. 'Nat, 'Bool, 'Posit32, ...)
+;;   - (cons 'fn parsed-foreign-type) when the type is itself a Pi (function
+;;     type). The inner parsed type uses the same recursive shape, so nested
+;;     function types are handled.
 (define (base-type-name e)
   (match e
     [(expr-Nat)    'Nat]
@@ -177,23 +247,28 @@
     ;; Passthrough types: Path, Keyword — Racket functions operate on IR values directly
     [(expr-Path) 'Path]
     [(expr-Keyword) 'Keyword]
+    ;; Function-typed parameter: recurse and tag with 'fn so the marshaller
+    ;; installs a Racket→Prologos→Racket bridge at call time.
+    [(expr-Pi _ _ _) (cons 'fn (parse-foreign-type e))]
     ;; Any other type: passthrough (the Racket function handles IR values directly)
     [_ 'Passthrough]))
 
 ;; Parse a Prologos core type expression into a marshalling descriptor.
-;; Returns (cons arg-base-types return-base-type) where arg-base-types
-;; is a list of symbols and return-base-type is a symbol.
+;; Returns (cons arg-specs return-spec) where each spec is per `base-type-name`
+;; (a symbol for base types, or (cons 'fn parsed-type) for function types).
 ;;
 ;; Examples:
 ;;   (expr-Nat) → '(() . Nat)                        ;; constant, 0 args
 ;;   (expr-Pi _ (expr-Nat) (expr-Nat)) → '((Nat) . Nat)   ;; Nat -> Nat
 ;;   (expr-Pi _ (expr-Nat) (expr-Pi _ (expr-Nat) (expr-Bool)))
 ;;     → '((Nat Nat) . Bool)                         ;; Nat -> Nat -> Bool
+;;   (expr-Pi _ (expr-Pi _ (expr-Nat) (expr-Nat)) (expr-Pi _ (expr-Nat) (expr-Nat)))
+;;     → '(((fn (Nat) . Nat) Nat) . Nat)             ;; (Nat -> Nat) -> Nat -> Nat
 (define (parse-foreign-type type-expr)
   (let loop ([t type-expr] [args '()])
     (match t
       [(expr-Pi _ dom cod)
-       ;; Arrow type: extract domain's base type, recurse on codomain
+       ;; Arrow type: extract domain's spec, recurse on codomain.
        (loop cod (cons (base-type-name dom) args))]
       [_ (cons (reverse args) (base-type-name t))])))
 

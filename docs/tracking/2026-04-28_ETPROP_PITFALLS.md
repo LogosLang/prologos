@@ -14,17 +14,28 @@ here because tracking them in commit messages alone made them invisible.
 ## What MUST stay on the Racket side (the irreducible core)
 
 Across two passes of "minimise the Racket footprint", these four
-responsibilities resisted every attempt to push them out into Prologos:
+responsibilities resisted every attempt to push them out into Prologos.
+**Update 2026-04-28**: items 1 and 2 are no longer hard requirements —
+the FFI marshaller now passes Prologos lambdas across the boundary as
+live Racket procedures (see
+[2026-04-28_FFI_LAMBDA_PASSING.md](2026-04-28_FFI_LAMBDA_PASSING.md)).
+They are downgraded to "preferentially Racket for performance, but no
+longer required."
 
-  1. **Propagator fire functions.** The fire-fn is a Racket closure invoked
-     by the Racket-side BSP scheduler with the network as its argument.
-     Prologos lambdas can't cross the FFI boundary as live closures (the
-     FFI marshaller validates a fixed type signature on each call; live
-     closures don't fit that protocol).
+  1. **Propagator fire functions.** [Downgraded — preferentially Racket
+     for performance, no longer required.] Historically the fire-fn was a
+     Racket closure invoked by the Racket-side BSP scheduler with the
+     network as its argument, and Prologos lambdas could not cross the
+     FFI boundary as live closures. With the FFI lambda passing track
+     a Prologos lambda CAN now be passed across the FFI: a Racket harness
+     propagator can adapt the Prologos lambda to the network's fire-fn
+     protocol. The reason to keep fire-fns in Racket is now performance
+     (each call drives a Prologos `nf` reduction), not capability.
 
-  2. **Cell merge functions.** Same constraint. The propagator network
-     calls merge-fn during cell writes (and during BSP fold-merges). It
-     has to be a Racket procedure.
+  2. **Cell merge functions.** [Downgraded — preferentially Racket for
+     performance, no longer required.] Same situation as item 1 above.
+     The propagator network calls merge-fn during cell writes (and during
+     BSP fold-merges); a Prologos lambda can supply the merge via FFI.
 
   3. **The cell-value carrier.** A gen-tagged immutable Racket vector. The
      gen tag has to interoperate with Racket's `equal?` for the cell's
