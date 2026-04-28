@@ -57,74 +57,69 @@ data SyrupValue
 ;; comment in prologos::data::datum).
 
 spec null? SyrupValue -> Bool
-defn null? [v]
-  match v
-    | syrup-null         -> true
-    | syrup-bool _       -> false
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> false
-    | syrup-refr _       -> false
-    | syrup-promise _    -> false
+defn null?
+  | syrup-null         -> true
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
 
 spec bool? SyrupValue -> Bool
-defn bool? [v]
-  match v
-    | syrup-null         -> false
-    | syrup-bool _       -> true
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> false
-    | syrup-refr _       -> false
-    | syrup-promise _    -> false
+defn bool?
+  | syrup-null         -> false
+  | syrup-bool _       -> true
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
 
 spec refr? SyrupValue -> Bool
-defn refr? [v]
-  match v
-    | syrup-null         -> false
-    | syrup-bool _       -> false
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> false
-    | syrup-refr _       -> true
-    | syrup-promise _    -> false
+defn refr?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-refr _       -> true
+  | syrup-promise _    -> false
 
 spec promise? SyrupValue -> Bool
-defn promise? [v]
-  match v
-    | syrup-null         -> false
-    | syrup-bool _       -> false
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> false
-    | syrup-refr _       -> false
-    | syrup-promise _    -> true
+defn promise?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> false
+  | syrup-refr _       -> false
+  | syrup-promise _    -> true
 
 spec tagged? SyrupValue -> Bool
-defn tagged? [v]
-  match v
-    | syrup-null         -> false
-    | syrup-bool _       -> false
-    | syrup-nat _        -> false
-    | syrup-int _        -> false
-    | syrup-string _     -> false
-    | syrup-symbol _     -> false
-    | syrup-list _       -> false
-    | syrup-tagged _ _   -> true
-    | syrup-refr _       -> false
-    | syrup-promise _    -> false
+defn tagged?
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> true
+  | syrup-refr _       -> false
+  | syrup-promise _    -> false
 
 ;; ========================================
 ;; Selectors
@@ -132,88 +127,82 @@ defn tagged? [v]
 ;; Total functions returning Option (no partial pattern matches).
 
 spec get-nat SyrupValue -> Option Nat
-defn get-nat [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat n        -> some n
-    | syrup-int _        -> none
-    | syrup-string _     -> none
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged _ _   -> none
-    | syrup-refr _       -> none
-    | syrup-promise _    -> none
+defn get-nat
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat n        -> some n
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
 
 spec get-string SyrupValue -> Option String
-defn get-string [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat _        -> none
-    | syrup-int _        -> none
-    | syrup-string s     -> some s
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged _ _   -> none
-    | syrup-refr _       -> none
-    | syrup-promise _    -> none
+defn get-string
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string s     -> some s
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
 
 spec get-refr SyrupValue -> Option Nat
-defn get-refr [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat _        -> none
-    | syrup-int _        -> none
-    | syrup-string _     -> none
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged _ _   -> none
-    | syrup-refr id      -> some id
-    | syrup-promise _    -> none
+defn get-refr
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-refr id      -> some id
+  | syrup-promise _    -> none
 
 spec get-promise SyrupValue -> Option Nat
-defn get-promise [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat _        -> none
-    | syrup-int _        -> none
-    | syrup-string _     -> none
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged _ _   -> none
-    | syrup-refr _       -> none
-    | syrup-promise id   -> some id
+defn get-promise
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ _   -> none
+  | syrup-refr _       -> none
+  | syrup-promise id   -> some id
 
 spec get-tag SyrupValue -> Option String
-defn get-tag [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat _        -> none
-    | syrup-int _        -> none
-    | syrup-string _     -> none
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged t _   -> some t
-    | syrup-refr _       -> none
-    | syrup-promise _    -> none
+defn get-tag
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged t _   -> some t
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
 
 spec get-payload SyrupValue -> Option SyrupValue
-defn get-payload [v]
-  match v
-    | syrup-null         -> none
-    | syrup-bool _       -> none
-    | syrup-nat _        -> none
-    | syrup-int _        -> none
-    | syrup-string _     -> none
-    | syrup-symbol _     -> none
-    | syrup-list _       -> none
-    | syrup-tagged _ p   -> some p
-    | syrup-refr _       -> none
-    | syrup-promise _    -> none
+defn get-payload
+  | syrup-null         -> none
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-tagged _ p   -> some p
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
 
 ;; ========================================
 ;; Convenience constructors

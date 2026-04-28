@@ -42,10 +42,9 @@ data Transport
   tr-tcp-testing-only
 
 spec transport-name Transport -> String
-defn transport-name [t]
-  match t
-    | tr-loopback         -> "loopback"
-    | tr-tcp-testing-only -> "tcp-testing-only"
+defn transport-name
+  | tr-loopback         -> "loopback"
+  | tr-tcp-testing-only -> "tcp-testing-only"
 
 ;; ========================================
 ;; Locator
@@ -63,24 +62,20 @@ data Locator
 ;; Selectors
 
 spec loc-transport Locator -> Transport
-defn loc-transport [l]
-  match l
-    | locator t _ _ _ -> t
+defn loc-transport
+  | locator t _ _ _ -> t
 
 spec loc-designator Locator -> String
-defn loc-designator [l]
-  match l
-    | locator _ d _ _ -> d
+defn loc-designator
+  | locator _ d _ _ -> d
 
 spec loc-host Locator -> String
-defn loc-host [l]
-  match l
-    | locator _ _ h _ -> h
+defn loc-host
+  | locator _ _ h _ -> h
 
 spec loc-port Locator -> Nat
-defn loc-port [l]
-  match l
-    | locator _ _ _ p -> p
+defn loc-port
+  | locator _ _ _ p -> p
 
 ;; ========================================
 ;; Convenience constructors
@@ -108,29 +103,21 @@ require [prologos::data::string :as str :refer []]
         [prologos::data::nat :refer [nat-eq?]]
 
 spec transport-eq? Transport Transport -> Bool
-defn transport-eq? [a b]
-  match a
-    | tr-loopback ->
-        match b
-          | tr-loopback         -> true
-          | tr-tcp-testing-only -> false
-    | tr-tcp-testing-only ->
-        match b
-          | tr-loopback         -> false
-          | tr-tcp-testing-only -> true
+defn transport-eq?
+  | tr-loopback         tr-loopback         -> true
+  | tr-loopback         tr-tcp-testing-only -> false
+  | tr-tcp-testing-only tr-loopback         -> false
+  | tr-tcp-testing-only tr-tcp-testing-only -> true
 
 spec locator-eq? Locator Locator -> Bool
-defn locator-eq? [a b]
-  match a
-    | locator ta da ha pa ->
-        match b
-          | locator tb db hb pb ->
-              match [transport-eq? ta tb]
-                | false -> false
-                | true  ->
-                    match [str::eq da db]
-                      | false -> false
-                      | true  ->
-                          match [str::eq ha hb]
-                            | false -> false
-                            | true  -> nat-eq? pa pb
+defn locator-eq?
+  | [locator ta da ha pa] [locator tb db hb pb] ->
+      match [transport-eq? ta tb]
+        | false -> false
+        | true  ->
+            match [str::eq da db]
+              | false -> false
+              | true  ->
+                  match [str::eq ha hb]
+                    | false -> false
+                    | true  -> nat-eq? pa pb

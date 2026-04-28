@@ -35,33 +35,29 @@ data PromiseState
 ;; ========================================
 
 spec unresolved? PromiseState -> Bool
-defn unresolved? [s]
-  match s
-    | pst-unresolved _ -> true
-    | pst-fulfilled  _ -> false
-    | pst-broken     _ -> false
+defn unresolved?
+  | pst-unresolved _ -> true
+  | pst-fulfilled  _ -> false
+  | pst-broken     _ -> false
 
 spec fulfilled? PromiseState -> Bool
-defn fulfilled? [s]
-  match s
-    | pst-unresolved _ -> false
-    | pst-fulfilled  _ -> true
-    | pst-broken     _ -> false
+defn fulfilled?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> true
+  | pst-broken     _ -> false
 
 spec broken? PromiseState -> Bool
-defn broken? [s]
-  match s
-    | pst-unresolved _ -> false
-    | pst-fulfilled  _ -> false
-    | pst-broken     _ -> true
+defn broken?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> false
+  | pst-broken     _ -> true
 
 spec resolved? PromiseState -> Bool
   :doc "True iff the promise has been settled (fulfilled OR broken)"
-defn resolved? [s]
-  match s
-    | pst-unresolved _ -> false
-    | pst-fulfilled  _ -> true
-    | pst-broken     _ -> true
+defn resolved?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> true
+  | pst-broken     _ -> true
 
 ;; ========================================
 ;; State transitions
@@ -73,19 +69,17 @@ defn resolved? [s]
 
 spec fulfill SyrupValue PromiseState -> PromiseState
   :doc "Fulfill an unresolved promise. No-op if already settled."
-defn fulfill [v s]
-  match s
-    | pst-unresolved _ -> pst-fulfilled v
-    | pst-fulfilled  x -> pst-fulfilled x
-    | pst-broken     x -> pst-broken x
+defn fulfill
+  | v [pst-unresolved _] -> pst-fulfilled v
+  | _ [pst-fulfilled  x] -> pst-fulfilled x
+  | _ [pst-broken     x] -> pst-broken x
 
 spec break SyrupValue PromiseState -> PromiseState
   :doc "Break (reject) an unresolved promise. No-op if already settled."
-defn break [reason s]
-  match s
-    | pst-unresolved _ -> pst-broken reason
-    | pst-fulfilled  x -> pst-fulfilled x
-    | pst-broken     x -> pst-broken x
+defn break
+  | reason [pst-unresolved _] -> pst-broken reason
+  | _      [pst-fulfilled  x] -> pst-fulfilled x
+  | _      [pst-broken     x] -> pst-broken x
 
 ;; Push a queued message onto an unresolved promise. The newest
 ;; message ends up at the HEAD of the list (LIFO storage). Callers
@@ -97,11 +91,10 @@ defn break [reason s]
 ;; (See Copilot review #28#discussion_r3150426657 for the LIFO-vs-
 ;; "append" wording call-out that prompted this clarification.)
 spec enqueue SyrupValue PromiseState -> PromiseState
-defn enqueue [m s]
-  match s
-    | pst-unresolved msgs -> pst-unresolved [cons m msgs]
-    | pst-fulfilled  v    -> pst-fulfilled v
-    | pst-broken     r    -> pst-broken r
+defn enqueue
+  | m [pst-unresolved msgs] -> pst-unresolved [cons m msgs]
+  | _ [pst-fulfilled  v]    -> pst-fulfilled v
+  | _ [pst-broken     r]    -> pst-broken r
 
 ;; Inspect the queued messages on an unresolved promise (LIFO order
 ;; — head is newest). Settled states return nil. The PromiseState
@@ -110,19 +103,17 @@ defn enqueue [m s]
 ;; queue. (See Copilot review #28#discussion_r3150426758 for the
 ;; doc-vs-impl note that prompted this clarification.)
 spec take-queue PromiseState -> List SyrupValue
-defn take-queue [s]
-  match s
-    | pst-unresolved msgs -> msgs
-    | pst-fulfilled  _    -> nil
-    | pst-broken     _    -> nil
+defn take-queue
+  | pst-unresolved msgs -> msgs
+  | pst-fulfilled  _    -> nil
+  | pst-broken     _    -> nil
 
 ;; Inspect the resolution value (some on settled, none on unresolved).
 spec resolution-value PromiseState -> Option SyrupValue
-defn resolution-value [s]
-  match s
-    | pst-unresolved _ -> none
-    | pst-fulfilled  v -> some v
-    | pst-broken     r -> some r
+defn resolution-value
+  | pst-unresolved _ -> none
+  | pst-fulfilled  v -> some v
+  | pst-broken     r -> some r
 
 ;; ========================================
 ;; Constructors

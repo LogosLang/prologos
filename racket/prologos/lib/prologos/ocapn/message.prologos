@@ -79,93 +79,85 @@ defn mk-deliver-no-resolver [target args answer-pos]
 ;; ========================================
 
 spec deliver? CapTPOp -> Bool
-defn deliver? [op]
-  match op
-    | op-start-session _ _   -> false
-    | op-abort _             -> false
-    | op-deliver _ _ _ _     -> true
-    | op-deliver-only _ _    -> false
-    | op-listen _ _          -> false
-    | op-gc-export _ _       -> false
-    | op-gc-answer _         -> false
+defn deliver?
+  | op-start-session _ _   -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> true
+  | op-deliver-only _ _    -> false
+  | op-listen _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
 
 spec deliver-only? CapTPOp -> Bool
-defn deliver-only? [op]
-  match op
-    | op-start-session _ _   -> false
-    | op-abort _             -> false
-    | op-deliver _ _ _ _     -> false
-    | op-deliver-only _ _    -> true
-    | op-listen _ _          -> false
-    | op-gc-export _ _       -> false
-    | op-gc-answer _         -> false
+defn deliver-only?
+  | op-start-session _ _   -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> true
+  | op-listen _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
 
 spec listen? CapTPOp -> Bool
-defn listen? [op]
-  match op
-    | op-start-session _ _   -> false
-    | op-abort _             -> false
-    | op-deliver _ _ _ _     -> false
-    | op-deliver-only _ _    -> false
-    | op-listen _ _          -> true
-    | op-gc-export _ _       -> false
-    | op-gc-answer _         -> false
+defn listen?
+  | op-start-session _ _   -> false
+  | op-abort _             -> false
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> false
+  | op-listen _ _          -> true
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
 
 spec abort? CapTPOp -> Bool
-defn abort? [op]
-  match op
-    | op-start-session _ _   -> false
-    | op-abort _             -> true
-    | op-deliver _ _ _ _     -> false
-    | op-deliver-only _ _    -> false
-    | op-listen _ _          -> false
-    | op-gc-export _ _       -> false
-    | op-gc-answer _         -> false
+defn abort?
+  | op-start-session _ _   -> false
+  | op-abort _             -> true
+  | op-deliver _ _ _ _     -> false
+  | op-deliver-only _ _    -> false
+  | op-listen _ _          -> false
+  | op-gc-export _ _       -> false
+  | op-gc-answer _         -> false
 
 ;; ========================================
 ;; Selectors
 ;; ========================================
 
 spec deliver-target CapTPOp -> Option Nat
-defn deliver-target [op]
-  match op
-    | op-start-session _ _   -> none
-    | op-abort _             -> none
-    | op-deliver t _ _ _     -> some t
-    | op-deliver-only t _    -> some t
-    | op-listen _ _          -> none
-    | op-gc-export _ _       -> none
-    | op-gc-answer _         -> none
+defn deliver-target
+  | op-start-session _ _   -> none
+  | op-abort _             -> none
+  | op-deliver t _ _ _     -> some t
+  | op-deliver-only t _    -> some t
+  | op-listen _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
 
 spec deliver-args CapTPOp -> Option SyrupValue
-defn deliver-args [op]
-  match op
-    | op-start-session _ _   -> none
-    | op-abort _             -> none
-    | op-deliver _ a _ _     -> some a
-    | op-deliver-only _ a    -> some a
-    | op-listen _ _          -> none
-    | op-gc-export _ _       -> none
-    | op-gc-answer _         -> none
+defn deliver-args
+  | op-start-session _ _   -> none
+  | op-abort _             -> none
+  | op-deliver _ a _ _     -> some a
+  | op-deliver-only _ a    -> some a
+  | op-listen _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
 
 spec deliver-answer-pos CapTPOp -> Option Nat
-defn deliver-answer-pos [op]
-  match op
-    | op-start-session _ _   -> none
-    | op-abort _             -> none
-    | op-deliver _ _ ap _    -> ap
-    | op-deliver-only _ _    -> none
-    | op-listen _ _          -> none
-    | op-gc-export _ _       -> none
-    | op-gc-answer _         -> none
+defn deliver-answer-pos
+  | op-start-session _ _   -> none
+  | op-abort _             -> none
+  | op-deliver _ _ ap _    -> ap
+  | op-deliver-only _ _    -> none
+  | op-listen _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none
 
 spec deliver-resolver CapTPOp -> Option Nat
-defn deliver-resolver [op]
-  match op
-    | op-start-session _ _   -> none
-    | op-abort _             -> none
-    | op-deliver _ _ _ r     -> r
-    | op-deliver-only _ _    -> none
-    | op-listen _ _          -> none
-    | op-gc-export _ _       -> none
-    | op-gc-answer _         -> none
+defn deliver-resolver
+  | op-start-session _ _   -> none
+  | op-abort _             -> none
+  | op-deliver _ _ _ r     -> r
+  | op-deliver-only _ _    -> none
+  | op-listen _ _          -> none
+  | op-gc-export _ _       -> none
+  | op-gc-answer _         -> none

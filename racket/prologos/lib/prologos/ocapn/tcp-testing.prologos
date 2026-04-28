@@ -78,14 +78,12 @@ data ConnHandle
   conn-handle : Nat
 
 spec server-handle-id ServerHandle -> Nat
-defn server-handle-id [h]
-  match h
-    | server-handle n -> n
+defn server-handle-id
+  | server-handle n -> n
 
 spec conn-handle-id ConnHandle -> Nat
-defn conn-handle-id [h]
-  match h
-    | conn-handle n -> n
+defn conn-handle-id
+  | conn-handle n -> n
 
 ;; ========================================
 ;; Operations (typed wrappers around FFI)
@@ -101,15 +99,13 @@ defn listen [port]
 
 spec accept ServerHandle -> ConnHandle
   :doc "Block until an incoming connection arrives; return the conn handle."
-defn accept [s]
-  match s
-    | server-handle sid -> conn-handle [tcp-accept-raw sid]
+defn accept
+  | server-handle sid -> conn-handle [tcp-accept-raw sid]
 
 spec accept-ready? ServerHandle -> Bool
   :doc "True iff `accept` would not block."
-defn accept-ready? [s]
-  match s
-    | server-handle sid -> tcp-accept-ready-raw sid
+defn accept-ready?
+  | server-handle sid -> tcp-accept-ready-raw sid
 
 spec connect-tcp String Nat -> ConnHandle
   :doc "Dial host:port; return the conn handle. Blocks during connect."
@@ -118,33 +114,29 @@ defn connect-tcp [host port]
 
 spec send-line ConnHandle String -> ConnHandle
   :doc "Write line + LF on the connection. Returns the same handle (data-flow)."
-defn send-line [c line]
-  match c
-    | conn-handle cid ->
-        let _r : Nat := [tcp-send-line-raw cid line]
-          c
+defn send-line
+  | [conn-handle cid] line ->
+      let _r : Nat := [tcp-send-line-raw cid line]
+        conn-handle cid
 
 ;; recv-line: read ONE line, return the line as a String. Internally
 ;; uses the read-then-cache trick from io-ffi.
 spec recv-line ConnHandle -> String
   :doc "Read one line (no LF). Empty string on EOF. Blocks."
-defn recv-line [c]
-  match c
-    | conn-handle cid ->
-        let _r : Nat := [tcp-recv-line-ret-raw cid]
-          tcp-recv-cached-raw cid
+defn recv-line
+  | conn-handle cid ->
+      let _r : Nat := [tcp-recv-line-ret-raw cid]
+        tcp-recv-cached-raw cid
 
 spec close-conn ConnHandle -> Unit
   :doc "Close a connection. The handle becomes invalid."
-defn close-conn [c]
-  match c
-    | conn-handle cid -> tcp-close-raw cid
+defn close-conn
+  | conn-handle cid -> tcp-close-raw cid
 
 spec close-server ServerHandle -> Unit
   :doc "Close a server handle. Subsequent accepts are invalid."
-defn close-server [s]
-  match s
-    | server-handle sid -> tcp-close-raw sid
+defn close-server
+  | server-handle sid -> tcp-close-raw sid
 
 ;; ========================================
 ;; Locator-driven dial

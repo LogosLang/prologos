@@ -73,29 +73,26 @@ defn reverse-tail [xs]
 ;; Pop the OLDEST message. Returns (Option (rest-mailbox)).
 spec mb-pop Mailbox -> Option Mailbox
   :doc "Pop the oldest message; returns none if empty."
-defn mb-pop [mb]
-  match mb
-    | mailbox xs ->
-        match [reverse xs]
-          | nil -> none
-          | cons _ _rest -> some [mailbox [reverse-tail xs]]
+defn mb-pop
+  | mailbox xs ->
+      match [reverse xs]
+        | nil -> none
+        | cons _ _rest -> some [mailbox [reverse-tail xs]]
 
 ;; Get the OLDEST message without removing.
 spec mb-peek Mailbox -> Option SyrupValue
-defn mb-peek [mb]
-  match mb
-    | mailbox xs ->
-        match [reverse xs]
-          | nil -> none
-          | cons a _ -> some a
+defn mb-peek
+  | mailbox xs ->
+      match [reverse xs]
+        | nil -> none
+        | cons a _ -> some a
 
 spec mb-empty? Mailbox -> Bool
-defn mb-empty? [mb]
-  match mb
-    | mailbox xs ->
-        match xs
-          | nil -> true
-          | cons _ _ -> false
+defn mb-empty?
+  | mailbox xs ->
+      match xs
+        | nil -> true
+        | cons _ _ -> false
 
 ;; ========================================
 ;; Connection
@@ -116,41 +113,34 @@ data Connection
 ;; Selectors
 
 spec conn-id Connection -> Nat
-defn conn-id [c]
-  match c
-    | connection i _ _ _ _ -> i
+defn conn-id
+  | connection i _ _ _ _ -> i
 
 spec conn-peer Connection -> Locator
-defn conn-peer [c]
-  match c
-    | connection _ l _ _ _ -> l
+defn conn-peer
+  | connection _ l _ _ _ -> l
 
 spec conn-outbound Connection -> Mailbox
-defn conn-outbound [c]
-  match c
-    | connection _ _ o _ _ -> o
+defn conn-outbound
+  | connection _ _ o _ _ -> o
 
 spec conn-inbound Connection -> Mailbox
-defn conn-inbound [c]
-  match c
-    | connection _ _ _ i _ -> i
+defn conn-inbound
+  | connection _ _ _ i _ -> i
 
 spec conn-is-outgoing? Connection -> Bool
-defn conn-is-outgoing? [c]
-  match c
-    | connection _ _ _ _ b -> b
+defn conn-is-outgoing?
+  | connection _ _ _ _ b -> b
 
 ;; Functional updates
 
 spec conn-set-outbound Connection Mailbox -> Connection
-defn conn-set-outbound [c mb]
-  match c
-    | connection i l _ ib io -> connection i l mb ib io
+defn conn-set-outbound
+  | [connection i l _ ib io] mb -> connection i l mb ib io
 
 spec conn-set-inbound Connection Mailbox -> Connection
-defn conn-set-inbound [c mb]
-  match c
-    | connection i l ob _ io -> connection i l ob mb io
+defn conn-set-inbound
+  | [connection i l ob _ io] mb -> connection i l ob mb io
 
 ;; ========================================
 ;; Sim-NetLayer
@@ -181,27 +171,22 @@ def empty-sim-net : SimNet := [sim-net zero nil]
 ;; Selectors
 
 spec sim-next-id SimNet -> Nat
-defn sim-next-id [s]
-  match s
-    | sim-net n _ -> n
+defn sim-next-id
+  | sim-net n _ -> n
 
 spec sim-connections SimNet -> List ConnEntry
-defn sim-connections [s]
-  match s
-    | sim-net _ es -> es
+defn sim-connections
+  | sim-net _ es -> es
 
 ;; Lookup a connection by id.
 
 spec sim-find-conn Nat [List ConnEntry] -> Option Connection
-defn sim-find-conn [k entries]
-  match entries
-    | nil -> none
-    | cons e rest ->
-        match e
-          | conn-entry i c ->
-              match [nat-eq? k i]
-                | true  -> some c
-                | false -> sim-find-conn k rest
+defn sim-find-conn
+  | _ nil -> none
+  | k [cons [conn-entry i c] rest] ->
+      match [nat-eq? k i]
+        | true  -> some c
+        | false -> sim-find-conn k rest
 
 ;; Insert / replace a connection by id (cons-at-head; latest wins).
 
@@ -220,35 +205,31 @@ data SimAlloc
   sim-alloc : SimNet -> Nat
 
 spec sim-alloc-net SimAlloc -> SimNet
-defn sim-alloc-net [a]
-  match a
-    | sim-alloc s _ -> s
+defn sim-alloc-net
+  | sim-alloc s _ -> s
 
 spec sim-alloc-id SimAlloc -> Nat
-defn sim-alloc-id [a]
-  match a
-    | sim-alloc _ n -> n
+defn sim-alloc-id
+  | sim-alloc _ n -> n
 
 spec sim-open Locator Bool SimNet -> SimAlloc
   :doc "Open a fresh connection. Bool is is-outgoing? flag."
-defn sim-open [peer is-outgoing? s]
-  match s
-    | sim-net n entries ->
-        let c : Connection :=
-          [connection n peer empty-mailbox empty-mailbox is-outgoing?]
-          sim-alloc [sim-net [suc n] [sim-set-conn n c entries]] n
+defn sim-open
+  | peer is-outgoing? [sim-net n entries] ->
+      let c : Connection :=
+        [connection n peer empty-mailbox empty-mailbox is-outgoing?]
+        sim-alloc [sim-net [suc n] [sim-set-conn n c entries]] n
 
 ;; Write to a connection's outbound mailbox.
 
 spec sim-write Nat SyrupValue SimNet -> SimNet
-defn sim-write [cid v s]
-  match s
-    | sim-net n entries ->
-        match [sim-find-conn cid entries]
-          | none -> s
-          | some c ->
-              let c2 : Connection := [conn-set-outbound c [mb-push v [conn-outbound c]]]
-                sim-net n [sim-set-conn cid c2 entries]
+defn sim-write
+  | cid v [sim-net n entries] ->
+      match [sim-find-conn cid entries]
+        | none -> [sim-net n entries]
+        | some c ->
+            let c2 : Connection := [conn-set-outbound c [mb-push v [conn-outbound c]]]
+              sim-net n [sim-set-conn cid c2 entries]
 
 ;; Read a value from the inbound mailbox of a connection.
 ;; Returns the netlayer with the message popped (or unchanged if
@@ -258,30 +239,27 @@ data SimRead
   sim-read : SimNet -> [Option SyrupValue]
 
 spec sim-read-net SimRead -> SimNet
-defn sim-read-net [r]
-  match r
-    | sim-read s _ -> s
+defn sim-read-net
+  | sim-read s _ -> s
 
 spec sim-read-val SimRead -> Option SyrupValue
-defn sim-read-val [r]
-  match r
-    | sim-read _ v -> v
+defn sim-read-val
+  | sim-read _ v -> v
 
 spec sim-recv Nat SimNet -> SimRead
-defn sim-recv [cid s]
-  match s
-    | sim-net n entries ->
-        match [sim-find-conn cid entries]
-          | none -> sim-read s none
-          | some c ->
-              match [mb-peek [conn-inbound c]]
-                | none -> sim-read s none
-                | some v ->
-                    match [mb-pop [conn-inbound c]]
-                      | none -> sim-read s [some v]
-                      | some mb2 ->
-                          let c2 : Connection := [conn-set-inbound c mb2]
-                            sim-read [sim-net n [sim-set-conn cid c2 entries]] [some v]
+defn sim-recv
+  | cid [sim-net n entries] ->
+      match [sim-find-conn cid entries]
+        | none -> sim-read [sim-net n entries] none
+        | some c ->
+            match [mb-peek [conn-inbound c]]
+              | none -> sim-read [sim-net n entries] none
+              | some v ->
+                  match [mb-pop [conn-inbound c]]
+                    | none -> sim-read [sim-net n entries] [some v]
+                    | some mb2 ->
+                        let c2 : Connection := [conn-set-inbound c mb2]
+                          sim-read [sim-net n [sim-set-conn cid c2 entries]] [some v]
 
 ;; ========================================
 ;; Pairing two SimNets (testing-only — Endo does this in JS by
@@ -301,20 +279,17 @@ data SimPair
   sim-pair : SimNet -> SimNet
 
 spec sim-pair-a SimPair -> SimNet
-defn sim-pair-a [p]
-  match p
-    | sim-pair a _ -> a
+defn sim-pair-a
+  | sim-pair a _ -> a
 
 spec sim-pair-b SimPair -> SimNet
-defn sim-pair-b [p]
-  match p
-    | sim-pair _ b -> b
+defn sim-pair-b
+  | sim-pair _ b -> b
 
 ;; Helper: extract the underlying list from a Mailbox (head-of-newest).
 spec mailbox-list Mailbox -> List SyrupValue
-defn mailbox-list [mb]
-  match mb
-    | mailbox xs -> xs
+defn mailbox-list
+  | mailbox xs -> xs
 
 ;; Helper: push every element of `vs` (oldest-first) onto a Mailbox.
 spec push-all [List SyrupValue] Mailbox -> Mailbox
