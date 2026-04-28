@@ -1,13 +1,36 @@
 #lang racket/base
 
 ;;;
-;;; PROPAGATOR-BASED EIGENTRUST — Racket FFI shim for Prologos.
+;;; PROPAGATOR-BASED EIGENTRUST — minimal Racket FFI shim.
 ;;;
-;;; The user-facing pitch: Prologos plans first-class propagator support,
-;;; but the type checker isn't yet wired through the surface forms in the
-;;; grammar. This shim exposes the underlying primitives (`net-new`,
-;;; `net-new-cell`, `net-add-prop`) directly via Racket FFI so a `.prologos`
-;;; file can build and run a propagator network today.
+;;; This module is the irreducible Racket-side plumbing. Prologos plans
+;;; first-class propagator support, but the type checker isn't yet wired
+;;; through the surface forms in the grammar; until then, the four
+;;; propagator-network primitives below are exposed via `foreign racket
+;;; "..."`. Everything else — the EigenTrust-specific algorithm — lives in
+;;; the .prologos source (matrix transpose, decay weighting, pretrust
+;;; biasing, the iteration loop, etc.).
+;;;
+;;; -----------------------------------------------------------------
+;;; What MUST stay in Racket (the irreducible core):
+;;;
+;;;   1. Propagator fire functions are Racket closures invoked by the
+;;;      Racket-side scheduler; Prologos lambdas can't cross the FFI
+;;;      boundary as live closures.
+;;;   2. Cell merge functions, same reason.
+;;;   3. The cell-value carrier (gen-tagged immutable Posit32 vector) and
+;;;      its monotone merge — both Racket data structures.
+;;;   4. The persistent prop-network struct, handle/cell registries.
+;;;   5. FFI marshalling: list walking on cons/nil chains, posit
+;;;      bit-pattern extraction.
+;;;
+;;; What MOVED out, into the .prologos source:
+;;;
+;;;   1. Matrix transpose
+;;;   2. Decay scaling   (1 − α) · C
+;;;   3. Bias computation  α · pretrust
+;;;   4. Initial-zero vector for new-layer cells
+;;;   5. The iteration driver
 ;;;
 ;;; -----------------------------------------------------------------
 ;;; Mantra alignment (per .claude/rules/on-network.md)
@@ -15,63 +38,49 @@
 ;;;     "All-at-once, all in parallel, structurally emergent
 ;;;      information flow ON-NETWORK."
 ;;;
-;;; This shim takes the mantra at face value:
-;;;
 ;;;   * All-at-once   — each iteration is ONE compound cell holding the
-;;;                     full score vector for all peers, allocated atomically
-;;;                     (`net-new-cells-batch`, internally). The matrix /
-;;;                     pretrust / decay configuration arrives as a single
-;;;                     declarative payload.
+;;;                     full score vector for all peers, allocated atomically.
 ;;;   * All in parallel — `net-add-prop` installs ONE broadcast propagator
-;;;                     (per `.claude/rules/propagator-design.md` § Broadcast
-;;;                     Propagators) covering all N peer-update items. The
-;;;                     scheduler can decompose the broadcast across OS
-;;;                     threads at fire time. NO N-propagator step-think,
-;;;                     NO `for/fold` walking the peer list.
-;;;   * Structurally emergent — the cell DAG is iter-0 → iter-1 → ... →
-;;;                     iter-K. The BSP scheduler fires layers in
-;;;                     topological order; we never tell it what fires when.
-;;;   * ON-NETWORK    — every score lives in a cell. The compound carrier
-;;;                     holds the full peer vector; merge keeps the higher
-;;;                     generation so each layer's broadcast write strictly
-;;;                     dominates the previous initial value.
+;;;                     (per .claude/rules/propagator-design.md § Broadcast
+;;;                     Propagators) covering all N components as items.
+;;;                     The BSP scheduler decomposes across OS threads at
+;;;                     fire time.
+;;;   * Structurally emergent — the cell DAG iter-0 → iter-1 → ... → iter-K
+;;;                     drives firing order via dataflow.
+;;;   * ON-NETWORK    — every score lives in a cell.
 ;;;
 ;;; -----------------------------------------------------------------
 ;;; FFI surface (consumed from .prologos via `foreign racket "..."`):
 ;;;
 ;;;   net-new       : Posit32 -> Posit32
-;;;       Allocate a fresh propagator network with the given fuel budget;
-;;;       return a Posit32 handle id.
+;;;       Allocate a propagator network with the given fuel budget; return
+;;;       a Posit32 handle id.
 ;;;
 ;;;   net-new-cell  : Posit32 -> List Posit32 -> Posit32
-;;;       Allocate one compound cell holding a vector of Posit32 scores.
-;;;       Return a Posit32 cell-ref.
+;;;       Allocate ONE compound cell holding the given Posit32 vector.
+;;;       Returns a Posit32 cell-ref.
 ;;;
 ;;;   net-add-prop  : Posit32 -> Posit32 -> Posit32
 ;;;                 -> List (List Posit32) -> List Posit32 -> Posit32
-;;;                 -> Posit32
-;;;       Install ONE broadcast propagator on the network whose fire-fn
-;;;       implements one EigenTrust round:
+;;;       Install ONE broadcast propagator that computes the affine
+;;;       combination:
 ;;;
-;;;         t_{k+1}[j] = α · pretrust[j]
-;;;                    + (1 − α) · Σ_i  C[i][j] · t_k[i]
+;;;          out[j]  :=  biases[j]  +  Σ_i  weights[j][i]  ·  in[i]
 ;;;
-;;;       Args: handle, input-cell, output-cell, matrix-rows (C in
-;;;       row-major form), pretrust vector, decay α. Returns the
-;;;       output-cell so callers can chain layers.
+;;;       Domain-AGNOSTIC: the .prologos caller precomputes weights and
+;;;       biases from whatever raw inputs the algorithm has. Returns
+;;;       output-cref so layers can be chained.
 ;;;
 ;;;   net-run-read  : Posit32 -> Posit32 -> List Posit32
-;;;       Run the network to quiescence, then read the final layer's
-;;;       compound cell as a Posit32 list. Combined into one call so the
-;;;       Prologos call-by-name reduction has to evaluate the full layer
-;;;       chain (forces every net-add-prop side effect) before the
-;;;       quiescence pass starts.
+;;;       Run the network to quiescence, then read the cell as a Posit32
+;;;       list. Combined so call-by-name reduction is forced to evaluate
+;;;       the full layer chain before the quiescence pass.
 ;;;
 ;;; All "side-effecting" calls return a meaningful Posit32 (handle, cell
 ;;; ref, or score list) instead of Unit. Prologos's reduction is
-;;; call-by-name — an unused result expression would never be evaluated and
-;;; the side effect would be silently dropped. Threading a Posit32 through
-;;; every call forces strict evaluation order.
+;;; call-by-name — an unused result expression would never be evaluated
+;;; and the side effect would be silently dropped. Threading a Posit32
+;;; through every call forces strict evaluation order.
 ;;;
 
 (require racket/match
@@ -256,70 +265,72 @@
       (error 'eigentrust-prop "no such cell-ref: ~a" cref)))
 
 ;; ========================================
-;; net-add-prop — install ONE broadcast propagator for an EigenTrust round.
+;; net-add-prop — install ONE broadcast propagator implementing a
+;; domain-agnostic affine combination over a vector cell.
 ;; ========================================
 ;;
 ;; Per `.claude/rules/propagator-design.md` § Broadcast Propagators:
 ;; "any for/fold or for/list that processes independent items is a
-;;  candidate for broadcast." This is exactly that — N peer updates that
-;;  read the same prev-iter cell. The broadcast-profile metadata makes
-;;  the propagator decomposable across OS threads (BSP-LE Track 2 Phase
-;;  1B) when the scheduler chooses.
+;;  candidate for broadcast." This is exactly that — N output components
+;; share one input cell. The broadcast-profile metadata makes the
+;; propagator decomposable across OS threads (BSP-LE Track 2 Phase 1B)
+;; when the scheduler chooses.
 ;;
-;; input-cref  : prev iteration cell (compound, gen-vec carrier)
-;; output-cref : next iteration cell (compound, gen-vec carrier)
-;; matrix      : Prologos List (List Posit32) — row-major C
-;; pretrust    : Prologos List Posit32        — p
-;; decay-bits  : Posit32 bit pattern          — α
-;; Returns     : output-cref (chains).
+;;   for each item j  in 0..N-1:
+;;       out[j]  :=  bias[j]  +  Σ_i  weights[j][i]  ·  in[i]
+;;
+;; The propagator is purpose-AGNOSTIC. EigenTrust-specific math (matrix
+;; transpose, decay weighting, pretrust biasing) lives in the .prologos
+;; source — only the linear-combination and gen-tagging plumbing is here.
+;; This is the irreducible Racket-side core: cell merge functions and
+;; propagator fire functions cannot cross the FFI boundary as Prologos
+;; closures, so they MUST be implemented in Racket.
+;;
+;; weights : Prologos List (List Posit32)  — weights[j][i]
+;; biases  : Prologos List Posit32         — biases[j]
+;;
+;; Returns output-cref so the caller can chain net-add-prop calls.
 
-(define (net-add-prop hbits input-cref output-cref matrix pretrust decay-bits)
+(define (net-add-prop hbits input-cref output-cref weights-list biases-list)
   (define handle    (lookup-handle hbits))
   (define input-cid (lookup-cell input-cref))
   (define out-cid   (lookup-cell output-cref))
-  (define C-rows    (matrix->vec-of-vecs matrix))
-  (define p-bits    (list-of-posit32->bits-vec pretrust))
-  (define n         (vector-length p-bits))
-  (unless (= n (vector-length C-rows))
-    (error 'net-add-prop "matrix outer length ~a != peer count ~a"
-           (vector-length C-rows) n))
-  (for ([row (in-vector C-rows)] [i (in-naturals)])
+  (define W-rows    (matrix->vec-of-vecs weights-list))
+  (define b-bits    (list-of-posit32->bits-vec biases-list))
+  (define n         (vector-length b-bits))
+  (unless (= n (vector-length W-rows))
+    (error 'net-add-prop "weights outer length ~a != biases length ~a"
+           (vector-length W-rows) n))
+  (for ([row (in-vector W-rows)] [j (in-naturals)])
     (unless (= n (vector-length row))
-      (error 'net-add-prop "matrix row ~a has ~a entries, expected ~a"
-             i (vector-length row) n)))
-  (define decay-rat   (posit32-to-rational decay-bits))
-  (define one-m-decay (- 1 decay-rat))
-  (define p-rats      (for/vector ([b (in-vector p-bits)]) (posit32-to-rational b)))
-  ;; Pre-compute, in exact rationals, the per-target weights and bias.
-  ;;   weights[j][i] = (1 - α) · C[i][j]
-  ;;   bias[j]       = α · p[j]
-  (define weights
-    (for/vector ([j (in-range n)])
-      (for/vector ([i (in-range n)])
-        (* one-m-decay
-           (posit32-to-rational (vector-ref (vector-ref C-rows i) j))))))
+      (error 'net-add-prop "weights row ~a has ~a entries, expected ~a"
+             j (vector-length row) n)))
+  ;; Convert weights and biases to exact rationals once, up front.
+  (define W
+    (for/vector ([row (in-vector W-rows)])
+      (for/vector ([b (in-vector row)]) (posit32-to-rational b))))
   (define biases
-    (for/vector ([j (in-range n)]) (* decay-rat (vector-ref p-rats j))))
+    (for/vector ([b (in-vector b-bits)]) (posit32-to-rational b)))
   ;; --- Broadcast propagator: ONE install, N items, parallel-decomposable.
-  ;; items: peer indices 0..N-1.
   (define items (build-list n values))
-  ;; item-fn: per-peer update. Reads the (single) prev-iter compound cell,
-  ;; computes t_{k+1}[j], returns (input-gen, j, bits). The input-gen
-  ;; tag lets the next-layer's gen exceed it so re-fires (after the input
-  ;; cell evolves) strictly dominate stale fires.
+  ;; item-fn: per-component update. Reads the prev-iter compound cell,
+  ;; computes the affine combination for component j, returns
+  ;;   (input-gen, j, bits)
+  ;; The input-gen tag lets the next layer's gen strictly exceed it so
+  ;; re-fires (after the input cell evolves) dominate stale fires.
   (define (item-fn j input-vals)
     (define prev-cell-val (car input-vals))
     (define prev          (current-vec prev-cell-val))
     (define input-gen     (current-gen prev-cell-val))
-    (define wts  (vector-ref weights j))
+    (define wts  (vector-ref W j))
     (define bias (vector-ref biases j))
     (define sum
       (for/fold ([acc bias]) ([w (in-vector wts)] [b (in-vector prev)])
         (+ acc (* w (posit32-to-rational b)))))
     (list input-gen j (posit32-encode sum)))
-  ;; result-merge: accumulate per-peer results into a gen-vec carrier
-  ;; whose gen is input-gen + 1. Gen-merge then keeps the latest fire when
-  ;; the input cell evolves across BSP rounds.
+  ;; result-merge: accumulate per-component results into a gen-vec
+  ;; carrier whose gen is input-gen + 1. Gen-merge then keeps the latest
+  ;; fire when the input cell evolves across BSP rounds.
   (define (final-merge acc r)
     (define input-gen (car r))
     (define j         (cadr r))

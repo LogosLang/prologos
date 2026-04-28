@@ -11,6 +11,43 @@ The list is **observation only** — these are bugs / friction in language
 features and tooling, not in the EigenTrust example itself. They're filed
 here because tracking them in commit messages alone made them invisible.
 
+## What MUST stay on the Racket side (the irreducible core)
+
+Across two passes of "minimise the Racket footprint", these four
+responsibilities resisted every attempt to push them out into Prologos:
+
+  1. **Propagator fire functions.** The fire-fn is a Racket closure invoked
+     by the Racket-side BSP scheduler with the network as its argument.
+     Prologos lambdas can't cross the FFI boundary as live closures (the
+     FFI marshaller validates a fixed type signature on each call; live
+     closures don't fit that protocol).
+
+  2. **Cell merge functions.** Same constraint. The propagator network
+     calls merge-fn during cell writes (and during BSP fold-merges). It
+     has to be a Racket procedure.
+
+  3. **The cell-value carrier.** A gen-tagged immutable Racket vector. The
+     gen tag has to interoperate with Racket's `equal?` for the cell's
+     change detection, and the merge function has to be a Racket procedure
+     that operates on whatever Racket data structure the cell holds.
+
+  4. **FFI marshalling glue.** Walking Prologos cons/nil chains, extracting
+     posit32 bit-patterns out of `expr-posit32` IR nodes, encoding rationals
+     back into bit patterns. Pure Racket-side bookkeeping.
+
+Everything else — matrix transpose, decay scaling, bias computation,
+initial-zero-vector, the iteration driver, the entire EigenTrust update
+rule's arithmetic decomposition — is in the .prologos source. The
+Racket-side `net-add-prop` is purpose-AGNOSTIC: it implements the
+generic affine combination
+
+  out[j]  :=  bias[j]  +  Σ_i  weight[j][i] · in[i]
+
+with no knowledge of EigenTrust, decay, transposition, or pretrust.
+
+The four FFI primitives (`net-new`, `net-new-cell`, `net-add-prop`,
+`net-run-read`) are the entire Racket-Prologos interface.
+
 ------------------------------------------------------------------
 
 ## 1. `def` is reference-transparent — side effects re-fire on every use

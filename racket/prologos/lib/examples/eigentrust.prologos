@@ -10,10 +10,10 @@ require [prologos::data::list :refer [List]]
 ;;
 ;; EigenTrust [Kamvar/Schlosser/Garcia-Molina 2003] is the classic
 ;; reputation algorithm for peer-to-peer networks. Each peer i has a
-;; trust score t[i] in [0, 1]. The local trust matrix C[i][j] says how
-;; much peer i trusts peer j (rows of C are normalised to sum to 1). A
-;; pre-trust vector p anchors the iteration against Sybil attacks. The
-;; power iteration
+;; trust score t[i] in [0, 1]. Local trust C[i][j] says how much peer i
+;; trusts peer j (rows of C are normalised to sum to 1). A pre-trust
+;; vector p anchors the iteration against Sybil attacks. The power
+;; iteration
 ;;
 ;;     t_{k+1} = α · p + (1 − α) · C^T · t_k
 ;;
@@ -35,33 +35,53 @@ require [prologos::data::list :refer [List]]
 ;;                       drives firing order; we never tell the scheduler
 ;;                       what fires when.
 ;;   * ON-NETWORK      — every score lives in a cell; the gen-tagged
-;;                       compound merge is CALM-monotone (the propagator
-;;                       network's standard contract).
+;;                       compound merge is CALM-monotone.
 ;;
-;; First-class propagator surface (`net-new`, `net-new-cell`, `net-add-prop`)
-;; is on the Prologos roadmap but not yet wired through the type checker;
-;; this file imports the same primitives via `foreign racket "..."` until
-;; that work lands.
+;; ----- Where each piece of the algorithm lives -----
+;;
+;; Racket  (eigentrust-prop.rkt — irreducible plumbing):
+;;   * The four propagator-network primitives (net-new, net-new-cell,
+;;     net-add-prop, net-run-read).
+;;   * The compound-cell carrier and its gen-tagged merge.
+;;   * The fire function — a Racket closure that evaluates a
+;;     domain-AGNOSTIC affine combination
+;;          out[j] := bias[j] + Σ_i  W[j][i] · in[i]
+;;     on the propagator's items. (Closures can't cross the FFI
+;;     boundary, so the fire-fn must stay Racket; we keep it generic so
+;;     EigenTrust-specific math doesn't leak into it.)
+;;   * Posit32 ↔ rational marshalling.
+;;
+;; Prologos  (this file — the algorithm):
+;;   * Matrix transpose
+;;   * Decay scaling   (1 − α) · Cᵀ
+;;   * Bias computation  α · pretrust
+;;   * Building zero-vectors for fresh-layer cell initialisation
+;;   * The K-iteration driver loop
+;;
+;; First-class propagator surface (`net-new`, `net-new-cell`,
+;; `net-add-prop`) is on the Prologos roadmap but not yet wired through
+;; the type checker; this file imports the same primitives via
+;; `foreign racket "..."` until that work lands.
 ;;
 ;; ============================================================
 
 
-;; -- FFI: the four propagator primitives we need --
+;; -- FFI: the irreducible four propagator primitives --
 ;;
 ;; All carriers are Posit32 — handles, cell-refs, fuel, scores, weights.
-;; "Side-effecting" calls return a meaningful Posit32 (the cell-ref or the
-;; handle itself) so call-by-name reduction is forced to evaluate them.
+;; "Side-effecting" calls return a meaningful Posit32 so call-by-name
+;; reduction is forced to evaluate them.
 
 foreign racket "lib/examples/eigentrust-prop.rkt" :as et
   net-new      : Posit32 -> Posit32
   net-new-cell : Posit32 [List Posit32] -> Posit32
-  net-add-prop : Posit32 Posit32 Posit32 [List [List Posit32]] [List Posit32] Posit32 -> Posit32
+  net-add-prop : Posit32 Posit32 Posit32 [List [List Posit32]] [List Posit32] -> Posit32
   net-run-read : Posit32 Posit32 -> [List Posit32]
 
 
-;; A list of zeros with the same shape as the reference vector — used as
-;; the initial value of every iter-(k+1) cell before its broadcast
-;; propagator fires.
+;; ---------- Vector / matrix helpers (pure Prologos) ----------
+
+;; Constant-zero vector with the same length as the reference.
 spec zeros-of [List Posit32] -> [List Posit32]
 defn zeros-of [xs]
   match xs
@@ -69,45 +89,110 @@ defn zeros-of [xs]
     | [cons _ rs]  -> [cons 0.0 [zeros-of rs]]
 
 
-;; Chain K iteration layers of broadcast propagators on the network.
-;; Each `net-add-prop` install IS structurally one round: ONE broadcast
-;; propagator covering all N peers, reading the previous compound cell
-;; and writing the next compound cell. After all K layers are installed,
-;; `net-run-read` runs the BSP scheduler to quiescence and reads the
-;; final layer's score vector.
+;; scale-vec α v   ↦  [α · v[0], α · v[1], …]
+spec scale-vec Posit32 [List Posit32] -> [List Posit32]
+defn scale-vec [s xs]
+  match xs
+    | nil         -> nil
+    | [cons x rs] -> [cons [p32* s x] [scale-vec s rs]]
+
+
+;; scale-mat α M   ↦   M with every entry scaled by α
+spec scale-mat Posit32 [List [List Posit32]] -> [List [List Posit32]]
+defn scale-mat [s xss]
+  match xss
+    | nil          -> nil
+    | [cons xs rs] -> [cons [scale-vec s xs] [scale-mat s rs]]
+
+
+;; First column of a matrix; truncates if any row is shorter than the
+;; rest. (Used by `transpose`.)
+spec map-head [List [List Posit32]] -> [List Posit32]
+defn map-head [xss]
+  match xss
+    | nil           -> nil
+    | [cons xs rest] ->
+        match xs
+          | nil          -> nil
+          | [cons x _]   -> [cons x [map-head rest]]
+
+
+;; Drop the first column of a matrix.
+spec map-tail [List [List Posit32]] -> [List [List Posit32]]
+defn map-tail [xss]
+  match xss
+    | nil            -> nil
+    | [cons xs rest] ->
+        match xs
+          | nil           -> [map-tail rest]
+          | [cons _ xs']  -> [cons xs' [map-tail rest]]
+
+
+;; Predicate: every row of the matrix is nil.
+spec all-empty? [List [List Posit32]] -> Bool
+defn all-empty? [xss]
+  match xss
+    | nil          -> true
+    | [cons xs rs] ->
+        match xs
+          | nil -> [all-empty? rs]
+          | _   -> false
+
+
+;; transpose  M    ↦   Mᵀ  for a (rectangular) matrix.
+spec transpose [List [List Posit32]] -> [List [List Posit32]]
+defn transpose [xss]
+  match [all-empty? xss]
+    | true  -> nil
+    | false -> [cons [map-head xss] [transpose [map-tail xss]]]
+
+
+;; ---------- The EigenTrust algorithm ----------
 ;;
-;; The construction-time recursion is just for traversing K. At RUN
-;; time, every layer's propagator fires in dataflow order — the
-;; iter-0 → iter-K DAG IS the parallel decomposition.
-spec drive Posit32 Posit32 [List [List Posit32]] [List Posit32] Posit32 Nat -> Posit32
+;; Each `net-add-prop` install is ONE broadcast propagator covering all N
+;; peers in parallel. Layer cells form a DAG iter-0 → iter-1 → … → iter-K
+;; that the BSP scheduler fires in topological order.
+;;
+;; Construction-time recursion in `drive` is just for traversing K. At
+;; RUN time, the cell-DAG IS the parallel decomposition.
+spec drive Posit32 Posit32 [List [List Posit32]] [List Posit32] [List Posit32] Nat -> Posit32
 defn drive
-  | h cell matrix pretrust decay 0N      -> cell
-  | h cell matrix pretrust decay [suc k] ->
-      let next-cell  := et/net-new-cell h (zeros-of pretrust)
-      let chained    := et/net-add-prop h cell next-cell matrix pretrust decay
-        drive h chained matrix pretrust decay k
+  | h cell weights biases _zeros 0N      -> cell
+  | h cell weights biases  zeros [suc k] ->
+      let next-cell := et/net-new-cell h zeros
+      let chained   := et/net-add-prop h cell next-cell weights biases
+        drive h chained weights biases zeros k
 
 
+;; t_{k+1} = α · p + (1 − α) · Cᵀ · t_k
+;;
+;; The propagator's affine kernel is  out[j] := bias[j] + Σ W[j][i] · in[i],
+;; so we precompute, in pure Prologos:
+;;
+;;   weights = (1 − α) · Cᵀ
+;;   biases  = α · pretrust
+;;
+;; …and hand both to net-add-prop. The Racket side never sees the matrix
+;; or the decay constant.
 spec eigentrust [List Posit32] [List [List Posit32]] Posit32 Nat -> [List Posit32]
 defn eigentrust [pretrust matrix decay iters]
-  let h          := et/net-new 1000000.0
-  let init-cell  := et/net-new-cell h pretrust
-  let final-cell := drive h init-cell matrix pretrust decay iters
+  let one-minus-decay := [p32- 1.0 decay]
+  let weights         := [scale-mat one-minus-decay [transpose matrix]]
+  let biases          := [scale-vec decay pretrust]
+  let zeros           := [zeros-of pretrust]
+  let h               := [et/net-new 1000000.0]
+  let init-cell       := [et/net-new-cell h pretrust]
+  let final-cell      := [drive h init-cell weights biases zeros iters]
     et/net-run-read h final-cell
 
 
 ;; ---------- Concrete reputation graph ----------
-;;
-;; Four peers; each row of C sums to 1.
 ;;
 ;;        0    1    2    3
 ;;   0 [ 0.0  0.5  0.5  0.0 ]
 ;;   1 [ 0.0  0.0  0.0  1.0 ]
 ;;   2 [ 0.5  0.0  0.0  0.5 ]
 ;;   3 [ 0.0  1.0  0.0  0.0 ]
-;;
-;; Pre-trust is uniform (no prior authority). α = 0.15 is the standard
-;; PageRank-style decay.
 
 def trust-matrix : [List [List Posit32]] :=
   '['[0.0 0.5 0.5 0.0]
@@ -118,5 +203,6 @@ def trust-matrix : [List [List Posit32]] :=
 def pretrust : [List Posit32] := '[0.25 0.25 0.25 0.25]
 
 
-;; Run 20 power iterations. Converges to ≈ [0.0652 0.4348 0.0652 0.4348].
+;; Run 20 power iterations with α = 0.15. Converges to
+;;   ≈ [0.0652  0.4348  0.0652  0.4348].
 eigentrust pretrust trust-matrix 0.15 20N
