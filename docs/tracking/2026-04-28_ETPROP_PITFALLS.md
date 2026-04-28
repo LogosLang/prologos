@@ -61,6 +61,37 @@ The four FFI primitives (`net-new`, `net-new-cell`, `net-add-prop`,
 
 ------------------------------------------------------------------
 
+## 0. FFI-call AST caching — distinct calls collapse onto one side effect
+
+The complement to pitfall #1: within a single `process-command`, the
+per-command `whnf-cache` memoises identical ASTs. For a side-effecting
+foreign function (e.g. `net-new-cell`), two calls with structurally equal
+arguments hit the cache on the second call and the side effect runs only
+once. The Prologos source *thinks* it allocated two cells; the Racket
+side allocated one and returned the same id twice.
+
+Repro shape:
+
+    let c1 := et/net-new-cell h zeros
+    let c2 := et/net-new-cell h zeros   ;; same AST → cache hit → c1 = c2
+
+Observed during the eigentrust lambda-FFI refactor: the recursive driver
+loop allocated K layer cells via `[et/net-new-cell h zeros]` each
+iteration; with identical args, all K reduced to the same physical cell.
+Layer 2's broadcast propagator's input *and* output both pointed to that
+shared cell — a self-loop that ran to fixpoint regardless of K.
+
+**Workaround**: take a "freshness tag" argument on the FFI side that's
+ignored functionally but disambiguates the call AST. The eigentrust shim
+does this for `net-new-cell : handle × tag × init-vec → cell-ref` — the
+Prologos driver passes the previous layer's cell-ref (varies per
+recursion) as the tag.
+
+**Underlying language design call**: same as pitfall #1 — referential
+transparency is the contract. There's no "force evaluation now" surface;
+the FFI argument boundary IS the only forcing point. Anything memoised by
+AST equality collides on identical input.
+
 ## 1. `def` is reference-transparent — side effects re-fire on every use
 
 In Prologos a `def name := body` stores `body`'s **AST**, not its evaluated
@@ -298,6 +329,34 @@ loop and the FFI marshalling, not the propagator firing itself. Future
 work: a `Posit32` instance of `Num` and operator desugaring would let the
 .prologos source operate on posits directly (without going through Rat),
 which would also let the FFI shim drop its rational pre-computation step.
+
+## 16. FFI-callback overhead per fire dominates scaling K
+
+Once the FFI lambda passing track landed (item-1/-2 of "what stays
+Racket" downgraded), the eigentrust shim moved its per-row affine
+combination out into a Prologos lambda. Each propagator fire now invokes
+the kernel via the marshaller's wrapper, which:
+
+  1. Marshals each Racket arg back to Prologos IR.
+  2. Builds an `expr-app` chain.
+  3. Runs `nf` on it (full normal form reduction).
+  4. Marshals the result back to Racket.
+
+For a 4-peer 4-element dot product, one fire ≈ 4 kernel calls × ~50
+reduction steps each ≈ 200 reductions per fire. At Racket-9.1 reduction
+speed that's a fraction of a second per fire — tolerable for small K but
+linear in K because each layer is a separate broadcast propagator.
+
+For the test we use K=4 power iterations, which lands within ~6e-3 of
+the steady-state eigenvector and finishes in ~16s wall — under the
+test runner's 30s "first result" guard. K=20 (full convergence) takes
+several minutes and exceeds the runner's death-detection threshold.
+
+This is **expected scaffolding cost** of the off-network FFI bridge —
+see `2026-04-28_FFI_LAMBDA_PASSING.md` § Mantra-alignment retirement
+plan. Future propagator-native callbacks (cell subscription instead of
+procedure-shaped foreign callbacks) would replace the per-fire `nf`
+reduction with a structurally-emergent activation.
 
 ------------------------------------------------------------------
 

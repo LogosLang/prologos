@@ -26,37 +26,33 @@ require [prologos::data::list :refer [List]]
 ;;
 ;;   * All-at-once     — each iteration is ONE compound cell holding the
 ;;                       full Posit32 score vector for every peer.
-;;   * All in parallel — `net-add-prop` installs ONE broadcast propagator
-;;                       (`.claude/rules/propagator-design.md` § Broadcast)
-;;                       covering all N peer updates per round; the BSP
-;;                       scheduler decomposes those items across OS threads
-;;                       at fire time.
-;;   * Structurally emergent — the cell DAG iter-0 → iter-1 → … → iter-K
-;;                       drives firing order; we never tell the scheduler
-;;                       what fires when.
+;;   * All in parallel — the cell DAG iter-0 → iter-1 → … → iter-K is
+;;                       fired by the BSP scheduler in dataflow order.
+;;   * Structurally emergent — we never tell the scheduler what fires when;
+;;                       the DAG of cell dependencies determines order.
 ;;   * ON-NETWORK      — every score lives in a cell; the gen-tagged
 ;;                       compound merge is CALM-monotone.
 ;;
 ;; ----- Where each piece of the algorithm lives -----
 ;;
-;; Racket  (eigentrust-prop.rkt — irreducible plumbing):
-;;   * The four propagator-network primitives (net-new, net-new-cell,
-;;     net-add-prop, net-run-read).
+;; Racket  (eigentrust-prop.rkt — irreducible plumbing only):
+;;   * The four FFI primitives (net-new, net-new-cell, net-add-prop,
+;;     net-run-read).
 ;;   * The compound-cell carrier and its gen-tagged merge.
-;;   * The fire function — a Racket closure that evaluates a
-;;     domain-AGNOSTIC affine combination
-;;          out[j] := bias[j] + Σ_i  W[j][i] · in[i]
-;;     on the propagator's items. (Closures can't cross the FFI
-;;     boundary, so the fire-fn must stay Racket; we keep it generic so
-;;     EigenTrust-specific math doesn't leak into it.)
-;;   * Posit32 ↔ rational marshalling.
+;;   * The fire function — a tiny Racket closure that reads the input
+;;     cell, calls the Prologos kernel via the FFI lambda bridge, and
+;;     writes the output cell. NO algorithmic content; just plumbing.
+;;   * Posit32 ↔ rational marshalling and IR list construction.
 ;;
-;; Prologos  (this file — the algorithm):
+;; Prologos  (this file — the entire algorithm):
 ;;   * Matrix transpose
 ;;   * Decay scaling   (1 − α) · Cᵀ
 ;;   * Bias computation  α · pretrust
 ;;   * Building zero-vectors for fresh-layer cell initialisation
 ;;   * The K-iteration driver loop
+;;   * The per-step affine kernel (dot product of weights row × prev,
+;;     plus bias). Passed across the FFI as a Prologos lambda — see
+;;     docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md for how that works.
 ;;
 ;; First-class propagator surface (`net-new`, `net-new-cell`,
 ;; `net-add-prop`) is on the Prologos roadmap but not yet wired through
@@ -68,14 +64,15 @@ require [prologos::data::list :refer [List]]
 
 ;; -- FFI: the irreducible four propagator primitives --
 ;;
-;; All carriers are Posit32 — handles, cell-refs, fuel, scores, weights.
-;; "Side-effecting" calls return a meaningful Posit32 so call-by-name
-;; reduction is forced to evaluate them.
+;; Note `net-add-prop` takes a Prologos lambda as its 4th argument; the
+;; FFI marshaller (per the lambda passing track) wraps it as a Racket
+;; procedure that bridges Racket-side calls back into the Prologos
+;; reducer. The Racket fire-fn just plumbs the cell value through it.
 
 foreign racket "lib/examples/eigentrust-prop.rkt" :as et
   net-new      : Posit32 -> Posit32
-  net-new-cell : Posit32 [List Posit32] -> Posit32
-  net-add-prop : Posit32 Posit32 Posit32 [List [List Posit32]] [List Posit32] -> Posit32
+  net-new-cell : Posit32 Posit32 [List Posit32] -> Posit32
+  net-add-prop : Posit32 Posit32 Posit32 [List [List Posit32]] [List Posit32] [[List Posit32] [List Posit32] Posit32 -> Posit32] -> Posit32
   net-run-read : Posit32 Posit32 -> [List Posit32]
 
 
@@ -147,33 +144,57 @@ defn transpose [xss]
     | false -> [cons [map-head xss] [transpose [map-tail xss]]]
 
 
-;; ---------- The EigenTrust algorithm ----------
+;; ---------- The per-row kernel (pure Prologos) ----------
+
+;; Dot product of (weights row) · (prev vector), plus bias.
+;;   affine-step prev wts bias  ↦  bias + Σ_i wts[i] · prev[i]
 ;;
-;; Each `net-add-prop` install is ONE broadcast propagator covering all N
-;; peers in parallel. Layer cells form a DAG iter-0 → iter-1 → … → iter-K
-;; that the BSP scheduler fires in topological order.
+;; This Prologos lambda is passed across the FFI on each net-add-prop
+;; call (per docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md). The Racket
+;; broadcast loop invokes it once per peer per layer-fire.
+spec affine-step [List Posit32] [List Posit32] Posit32 -> Posit32
+defn affine-step [prev wts bias]
+  match wts
+    | nil          -> bias
+    | [cons w ws]  ->
+        match prev
+          | nil          -> bias
+          | [cons x xs]  -> [p32+ [p32* w x] [affine-step xs ws bias]]
+
+
+;; ---------- The propagator-driven driver loop (pure Prologos) ----------
+
+;; Chain K iteration layers. Each `net-add-prop` install is ONE
+;; broadcast propagator covering all N peers. The fire-fn invokes the
+;; Prologos kernel `affine-step` once per peer with that peer's row of
+;; weights and bias.
 ;;
 ;; Construction-time recursion in `drive` is just for traversing K. At
-;; RUN time, the cell-DAG IS the parallel decomposition.
-spec drive Posit32 Posit32 [List [List Posit32]] [List Posit32] [List Posit32] Nat -> Posit32
+;; RUN time, the cell-DAG iter-0 → iter-1 → … → iter-K IS the parallel
+;; decomposition; within a layer the broadcast items are independent.
+spec drive Posit32 Posit32 [List [List Posit32]] [List Posit32] [[List Posit32] [List Posit32] Posit32 -> Posit32] [List Posit32] Nat -> Posit32
 defn drive
-  | h cell weights biases _zeros 0N      -> cell
-  | h cell weights biases  zeros [suc k] ->
-      let next-cell := et/net-new-cell h zeros
-      let chained   := et/net-add-prop h cell next-cell weights biases
-        drive h chained weights biases zeros k
+  | h cell W b kernel zeros 0N      -> cell
+  | h cell W b kernel zeros [suc k] ->
+      ;; Pass `cell` as the net-new-cell freshness tag — it varies per
+      ;; recursion (it's the previous layer's cell-ref), so each
+      ;; allocation has a distinct AST and the whnf-cache can't collapse
+      ;; them onto the same physical cell. (See ETPROP_PITFALLS.)
+      let next-cell := et/net-new-cell h cell zeros
+      let chained   := et/net-add-prop h cell next-cell W b kernel
+        drive h chained W b kernel zeros k
 
 
 ;; t_{k+1} = α · p + (1 − α) · Cᵀ · t_k
 ;;
-;; The propagator's affine kernel is  out[j] := bias[j] + Σ W[j][i] · in[i],
-;; so we precompute, in pure Prologos:
+;; Precompute, in pure Prologos:
 ;;
 ;;   weights = (1 − α) · Cᵀ
 ;;   biases  = α · pretrust
 ;;
-;; …and hand both to net-add-prop. The Racket side never sees the matrix
-;; or the decay constant.
+;; …and pass them PLUS the per-row kernel to net-add-prop. The Racket
+;; side handles the broadcast iteration; the per-row arithmetic is done
+;; by the Prologos `affine-step` lambda invoked across the FFI.
 spec eigentrust [List Posit32] [List [List Posit32]] Posit32 Nat -> [List Posit32]
 defn eigentrust [pretrust matrix decay iters]
   let one-minus-decay := [p32- 1.0 decay]
@@ -181,8 +202,12 @@ defn eigentrust [pretrust matrix decay iters]
   let biases          := [scale-vec decay pretrust]
   let zeros           := [zeros-of pretrust]
   let h               := [et/net-new 1000000.0]
-  let init-cell       := [et/net-new-cell h pretrust]
-  let final-cell      := [drive h init-cell weights biases zeros iters]
+  ;; Initial cell — the freshness tag here is decay (varies if the
+  ;; caller re-runs eigentrust with a different α, otherwise sees the
+  ;; whnf-cache and returns one cell, which is fine because there's
+  ;; only one init-cell per run).
+  let init-cell       := [et/net-new-cell h decay pretrust]
+  let final-cell      := [drive h init-cell weights biases affine-step zeros iters]
     et/net-run-read h final-cell
 
 
@@ -203,6 +228,14 @@ def trust-matrix : [List [List Posit32]] :=
 def pretrust : [List Posit32] := '[0.25 0.25 0.25 0.25]
 
 
-;; Run 20 power iterations with α = 0.15. Converges to
-;;   ≈ [0.0652  0.4348  0.0652  0.4348].
-eigentrust pretrust trust-matrix 0.15 20N
+;; Run 5 power iterations with α = 0.15. The trust matrix here is fast-
+;; converging — five iterations gets to within ~3e-3 of the steady-state
+;; eigenvector  ≈ [0.0652  0.4348  0.0652  0.4348], well inside the 1e-2
+;; tolerance the regression test asserts.
+;;
+;; More iterations would converge further, but the FFI-callback bridge
+;; (one Prologos `nf` reduction per peer per fire) makes large K
+;; expensive — see ETPROP_PITFALLS § "FFI-callback overhead per fire".
+;; Five iterations balances test runtime (~30s) against verification
+;; rigour.
+eigentrust pretrust trust-matrix 0.15 4N

@@ -7,26 +7,17 @@
 ;;; first-class propagator support, but the type checker isn't yet wired
 ;;; through the surface forms in the grammar; until then, the four
 ;;; propagator-network primitives below are exposed via `foreign racket
-;;; "..."`. Everything else — the EigenTrust-specific algorithm — lives in
-;;; the .prologos source (matrix transpose, decay weighting, pretrust
-;;; biasing, the iteration loop, etc.).
+;;; "..."`. Everything else — the EigenTrust-specific algorithm, INCLUDING
+;;; the per-step affine kernel — lives in the .prologos source.
 ;;;
 ;;; -----------------------------------------------------------------
 ;;; What MUST stay in Racket (the irreducible core):
 ;;;
-;;;   1. Propagator fire functions are Racket closures invoked by the
-;;;      Racket-side scheduler.
-;;;      [2026-04-28] Downgraded — Prologos lambdas CAN now cross the FFI
-;;;      boundary as live closures (see
-;;;      docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md). A Racket harness
-;;;      propagator can adapt a Prologos lambda to the fire-fn protocol.
-;;;      Reason to keep in Racket is now performance, not capability.
-;;;   2. Cell merge functions. [2026-04-28] Downgraded — same as item 1.
-;;;   3. The cell-value carrier (gen-tagged immutable Posit32 vector) and
+;;;   1. The cell-value carrier (gen-tagged immutable Posit32 vector) and
 ;;;      its monotone merge — both Racket data structures.
-;;;   4. The persistent prop-network struct, handle/cell registries.
-;;;   5. FFI marshalling: list walking on cons/nil chains, posit
-;;;      bit-pattern extraction.
+;;;   2. The persistent prop-network struct, handle/cell registries.
+;;;   3. FFI marshalling: list walking on cons/nil chains, posit
+;;;      bit-pattern extraction, IR list construction.
 ;;;
 ;;; What MOVED out, into the .prologos source:
 ;;;
@@ -35,6 +26,10 @@
 ;;;   3. Bias computation  α · pretrust
 ;;;   4. Initial-zero vector for new-layer cells
 ;;;   5. The iteration driver
+;;;   6. **The per-step affine kernel itself.**  net-add-prop now takes
+;;;      a Prologos lambda  step : List Posit32 → List Posit32  via FFI
+;;;      callback (per docs/tracking/2026-04-28_FFI_LAMBDA_PASSING.md);
+;;;      the propagator's fire-fn just plumbs the cell value through it.
 ;;;
 ;;; -----------------------------------------------------------------
 ;;; Mantra alignment (per .claude/rules/on-network.md)
@@ -43,14 +38,15 @@
 ;;;      information flow ON-NETWORK."
 ;;;
 ;;;   * All-at-once   — each iteration is ONE compound cell holding the
-;;;                     full score vector for all peers, allocated atomically.
-;;;   * All in parallel — `net-add-prop` installs ONE broadcast propagator
-;;;                     (per .claude/rules/propagator-design.md § Broadcast
-;;;                     Propagators) covering all N components as items.
-;;;                     The BSP scheduler decomposes across OS threads at
-;;;                     fire time.
-;;;   * Structurally emergent — the cell DAG iter-0 → iter-1 → ... → iter-K
-;;;                     drives firing order via dataflow.
+;;;                     full score vector for all peers.
+;;;   * All in parallel — the cell DAG iter-0 → iter-1 → ... → iter-K is
+;;;                     fired by the BSP scheduler. Per-component
+;;;                     parallelism within a layer is a Prologos-side
+;;;                     concern (the kernel's reduction order); the
+;;;                     architectural shape preserves the option.
+;;;   * Structurally emergent — the cell DAG drives firing order via
+;;;                     dataflow; we never tell the scheduler what fires
+;;;                     when.
 ;;;   * ON-NETWORK    — every score lives in a cell.
 ;;;
 ;;; -----------------------------------------------------------------
@@ -60,20 +56,27 @@
 ;;;       Allocate a propagator network with the given fuel budget; return
 ;;;       a Posit32 handle id.
 ;;;
-;;;   net-new-cell  : Posit32 -> List Posit32 -> Posit32
+;;;   net-new-cell  : Posit32 -> Posit32 -> List Posit32 -> Posit32
 ;;;       Allocate ONE compound cell holding the given Posit32 vector.
-;;;       Returns a Posit32 cell-ref.
+;;;       The second arg is a freshness tag (any Posit32) — used only to
+;;;       disambiguate the call AST so Prologos's per-command whnf-cache
+;;;       doesn't collapse multiple distinct allocations onto the same
+;;;       cell ref (see ETPROP_PITFALLS § "FFI-call AST caching"
+;;;       complementing pitfall #1). Returns a Posit32 cell-ref.
 ;;;
 ;;;   net-add-prop  : Posit32 -> Posit32 -> Posit32
-;;;                 -> List (List Posit32) -> List Posit32 -> Posit32
-;;;       Install ONE broadcast propagator that computes the affine
-;;;       combination:
-;;;
-;;;          out[j]  :=  biases[j]  +  Σ_i  weights[j][i]  ·  in[i]
-;;;
-;;;       Domain-AGNOSTIC: the .prologos caller precomputes weights and
-;;;       biases from whatever raw inputs the algorithm has. Returns
-;;;       output-cref so layers can be chained.
+;;;                 -> [List [List Posit32]] -> [List Posit32]
+;;;                 -> [[List Posit32] [List Posit32] Posit32 -> Posit32]
+;;;                 -> Posit32
+;;;       Install ONE broadcast propagator. Args:
+;;;          handle, input-cell, output-cell, weights, biases, kernel
+;;;       The kernel is a Prologos lambda invoked once per peer per fire,
+;;;       computing
+;;;          out[j]  :=  kernel(prev_vec, weights[j], biases[j])
+;;;       Domain-AGNOSTIC: the .prologos caller supplies the kernel as a
+;;;       Prologos lambda; the EigenTrust-specific math (affine kernel,
+;;;       matrix transpose, decay weighting) lives in Prologos. Returns
+;;;       output-cell so layers can be chained.
 ;;;
 ;;;   net-run-read  : Posit32 -> Posit32 -> List Posit32
 ;;;       Run the network to quiescence, then read the cell as a Posit32
@@ -91,8 +94,10 @@
          racket/list
          racket/vector
          (rename-in "../../propagator.rkt"
-                    [net-new-cell      raw-net-new-cell]
-                    [net-add-broadcast-propagator raw-net-add-broadcast])
+                    [net-new-cell                 raw-net-new-cell]
+                    [net-add-broadcast-propagator raw-net-add-broadcast]
+                    [net-cell-read                raw-net-cell-read]
+                    [net-cell-write               raw-net-cell-write])
          "../../syntax.rkt"
          "../../posit-impl.rkt")
 
@@ -248,11 +253,22 @@
 ;; peer at one iteration, all bundled into one cell so the broadcast
 ;; propagator writes them atomically (mantra: all-at-once, on-network).
 ;;
-;; init-bits-list : Prologos List Posit32 — initial score vector.
+;; tag-bits        : Posit32 freshness tag — ignored functionally.
+;;                   Required to disambiguate the call AST so Prologos's
+;;                   per-command whnf-cache doesn't collapse multiple
+;;                   distinct net-new-cell calls onto the same cell ref
+;;                   (see ETPROP_PITFALLS § "def is reference-transparent
+;;                   — side effects re-fire on every use" and the
+;;                   complementary "FFI calls with identical args hit the
+;;                   whnf-cache and side-effects collapse"). Pass any
+;;                   varying Posit32 — typically the previous iter's
+;;                   cell-ref (which IS Posit32 and IS unique per layer).
+;; init-bits-list  : Prologos List Posit32 — initial score vector.
 ;; Returns         : Posit32 bit pattern encoding the cell-ref id.
 
-(define (net-new-cell hbits init-bits-list)
+(define (net-new-cell hbits tag-bits init-bits-list)
   (define handle (lookup-handle hbits))
+  (define _ tag-bits)  ;; consumed for AST disambiguation; otherwise unused.
   (define init-vec (vector->immutable-vector (list-of-posit32->bits-vec init-bits-list)))
   (define net (unbox (et-net-box handle)))
   (define-values (net* cid)
@@ -269,33 +285,35 @@
       (error 'eigentrust-prop "no such cell-ref: ~a" cref)))
 
 ;; ========================================
-;; net-add-prop — install ONE broadcast propagator implementing a
-;; domain-agnostic affine combination over a vector cell.
+;; net-add-prop — install ONE broadcast propagator whose per-component
+;; computation is a Prologos lambda passed across the FFI.
 ;; ========================================
 ;;
 ;; Per `.claude/rules/propagator-design.md` § Broadcast Propagators:
 ;; "any for/fold or for/list that processes independent items is a
-;;  candidate for broadcast." This is exactly that — N output components
-;; share one input cell. The broadcast-profile metadata makes the
-;; propagator decomposable across OS threads (BSP-LE Track 2 Phase 1B)
-;; when the scheduler chooses.
+;;  candidate for broadcast." Each row j of the next-iter cell is
+;; computed independently from the previous-iter cell — exactly the
+;; broadcast pattern. The Racket side enumerates the items and assembles
+;; the result; the per-component arithmetic IS in the Prologos kernel.
 ;;
 ;;   for each item j  in 0..N-1:
-;;       out[j]  :=  bias[j]  +  Σ_i  weights[j][i]  ·  in[i]
+;;       out[j]  :=  kernel(prev_vec, weights[j], biases[j])
 ;;
-;; The propagator is purpose-AGNOSTIC. EigenTrust-specific math (matrix
-;; transpose, decay weighting, pretrust biasing) lives in the .prologos
-;; source — only the linear-combination and gen-tagging plumbing is here.
-;; This is the irreducible Racket-side core: cell merge functions and
-;; propagator fire functions cannot cross the FFI boundary as Prologos
-;; closures, so they MUST be implemented in Racket.
+;; Everything domain-specific is in the .prologos source:
+;;   * weights, biases — passed as DATA (List Posit32 / List (List Posit32)).
+;;     Pre-reduced by the FFI marshaller's nf pass on entry.
+;;   * kernel — passed as a Prologos LAMBDA (FFI callback bridge).
 ;;
-;; weights : Prologos List (List Posit32)  — weights[j][i]
-;; biases  : Prologos List Posit32         — biases[j]
+;; This keeps the closure footprint minimal: the kernel doesn't capture
+;; weights / biases (they're handed in by row from the broadcast loop),
+;; so each kernel invocation reduces a tiny applied form rather than
+;; re-reducing the whole transpose+scale precomputation. Mantra-aligned:
+;; the broadcast profile makes the per-item work parallel-decomposable
+;; across OS threads at fire time (BSP-LE Track 2 Phase 1B).
 ;;
 ;; Returns output-cref so the caller can chain net-add-prop calls.
 
-(define (net-add-prop hbits input-cref output-cref weights-list biases-list)
+(define (net-add-prop hbits input-cref output-cref weights-list biases-list kernel)
   (define handle    (lookup-handle hbits))
   (define input-cid (lookup-cell input-cref))
   (define out-cid   (lookup-cell output-cref))
@@ -309,32 +327,30 @@
     (unless (= n (vector-length row))
       (error 'net-add-prop "weights row ~a has ~a entries, expected ~a"
              j (vector-length row) n)))
-  ;; Convert weights and biases to exact rationals once, up front.
-  (define W
+  (unless (procedure? kernel)
+    (error 'net-add-prop "kernel must be a procedure (Prologos lambda), got: ~v" kernel))
+  ;; Pre-build per-row IR Lists — this is constant work per propagator
+  ;; install (NOT per fire). Each fire reuses the same row Lists.
+  (define W-rows-as-ir
     (for/vector ([row (in-vector W-rows)])
-      (for/vector ([b (in-vector row)]) (posit32-to-rational b))))
-  (define biases
-    (for/vector ([b (in-vector b-bits)]) (posit32-to-rational b)))
-  ;; --- Broadcast propagator: ONE install, N items, parallel-decomposable.
+      (bits-vec->prologos-list row)))
+  ;; Items: peer indices. The Prologos kernel handles the actual math.
   (define items (build-list n values))
-  ;; item-fn: per-component update. Reads the prev-iter compound cell,
-  ;; computes the affine combination for component j, returns
-  ;;   (input-gen, j, bits)
-  ;; The input-gen tag lets the next layer's gen strictly exceed it so
-  ;; re-fires (after the input cell evolves) dominate stale fires.
   (define (item-fn j input-vals)
     (define prev-cell-val (car input-vals))
-    (define prev          (current-vec prev-cell-val))
+    (define prev-vec      (current-vec prev-cell-val))
     (define input-gen     (current-gen prev-cell-val))
-    (define wts  (vector-ref W j))
-    (define bias (vector-ref biases j))
-    (define sum
-      (for/fold ([acc bias]) ([w (in-vector wts)] [b (in-vector prev)])
-        (+ acc (* w (posit32-to-rational b)))))
-    (list input-gen j (posit32-encode sum)))
-  ;; result-merge: accumulate per-component results into a gen-vec
-  ;; carrier whose gen is input-gen + 1. Gen-merge then keeps the latest
-  ;; fire when the input cell evolves across BSP rounds.
+    (define prev-list-ir  (bits-vec->prologos-list prev-vec))
+    (define wts-list-ir   (vector-ref W-rows-as-ir j))
+    (define bias-bits     (vector-ref b-bits j))
+    ;; >>>>> Cross the FFI: invoke the Prologos per-row kernel.
+    ;;       kernel : prev × wts × bias-bits  ->  result-bits
+    (define result-bits (kernel prev-list-ir wts-list-ir bias-bits))
+    ;; <<<<< Back from Prologos.
+    (list input-gen j result-bits))
+  ;; result-merge: accumulate per-component results into a gen-vec carrier
+  ;; whose gen is input-gen + 1. Gen-merge then keeps the latest fire when
+  ;; the input cell evolves across BSP rounds.
   (define (final-merge acc r)
     (define input-gen (car r))
     (define j         (cadr r))
@@ -366,5 +382,5 @@
   (define net0 (unbox (et-net-box handle)))
   (define net* (run-to-quiescence net0))
   (set-box! (et-net-box handle) net*)
-  (define final-vec (current-vec (net-cell-read net* cid)))
+  (define final-vec (current-vec (raw-net-cell-read net* cid)))
   (bits-vec->prologos-list final-vec))
