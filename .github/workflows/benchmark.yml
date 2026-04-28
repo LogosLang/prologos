@@ -15,7 +15,7 @@ jobs:
       - name: Install Racket
         uses: Bogdanp/setup-racket@v1.11
         with:
-          version: '8.14'
+          version: '9.0'
 
       - name: Install dependencies
         run: cd racket/prologos && raco pkg install --auto --skip-installed
