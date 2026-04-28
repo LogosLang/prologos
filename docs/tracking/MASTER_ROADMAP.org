@@ -534,6 +534,25 @@ is a rewrite rule) and PPN (grammar productions are rewrite rules).
     CIU (collections) ←──── blocked on SRE Track 2C (trait dispatch)
 #+END_SRC
 
+** FFI (Foreign Function Interface)  — /Polyglot hub: where languages meet on the propagator network/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-04-28_FFI_MASTER.md][2026-04-28_FFI_MASTER.md]] |
+| *Thesis*         | Prologos as polyglot hub. The FFI surface is where languages, runtimes, and substrates meet — Racket today, more languages over time. Each addition integrates with the propagator network's information-flow discipline rather than bolting on parallel off-network bridges. Pragmatic scaffolding (e.g., procedure-shaped foreign callbacks while the on-network alternative matures) is named as scaffolding with explicit retirement direction. |
+| *Status*         | Track 0 (foundation marshaling) ✅ pre-existing. Track 1 (Posit + List marshaling) ✅ landed 2026-04-28 ([[https://github.com/LogosLang/prologos/pull/33][PR #33]]). Track 2 (FFI lambda passing — off-network scaffolding) 🔄 pending merge ([[https://github.com/LogosLang/prologos/pull/35][PR #35]]). Track 3 (retire Track 2 scaffolding via propagator-native callbacks) ⬜ tracked as [[https://github.com/LogosLang/prologos/issues/37][#37]]. |
+
+*** Tracks
+
+| Track | Description | Status | Design / PR | Notes |
+|-------+-------------+--------+-------------+-------|
+| 0 | Foundation marshaling (atomic types) | ✅ | — | Nat / Int / Bool / Unit / Char / String / Rat / Path / Keyword / Passthrough / Opaque |
+| 1 | Extended marshaling: Posit8/16/32/64 + List | ✅ | [[https://github.com/LogosLang/prologos/pull/33][PR #33]] (~9ef34206~) | NaR rejection; per-width dispatch; recursive List with namespace-qualified cons/nil |
+| 2 | FFI lambda passing (Prologos → Racket procedure) | 🔄 | [[https://github.com/LogosLang/prologos/pull/35][PR #35]] + [[file:2026-04-28_FFI_LAMBDA_PASSING.md][Design doc]] | *Off-network scaffolding by design* — labeled with explicit retirement direction. One-way only; reverse direction explicitly errors. Awaiting kumavis lift-from-draft. |
+| 3 | Retire Track 2 scaffolding via propagator-native callbacks | ⬜ | — | Tracked as [[https://github.com/LogosLang/prologos/issues/37][#37]]. Cell-subscription replaces procedure-shape boundary. Open design questions (cell identity, multi-arg dispatch, synchronization, worldview, retraction). |
+
+Future tracks (not yet scheduled): reverse-direction lambda passing, compound type marshaling (PVec/Map/Set/Sigma/custom data), effect-typed FFI (capabilities), additional language backends (JS/Python/Wasm/C ABI), module system polyglot, cost-aware FFI (tropical-quantale fuel for foreign call cost). See [[file:2026-04-28_FFI_MASTER.md][FFI Master]] for full vision and discipline.
+
 * Completed Standalone Tracks (not part of a Series)
 
 These are Tracks that were independently scoped and completed outside of
