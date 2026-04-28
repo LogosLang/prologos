@@ -70,15 +70,31 @@
     [(expr-string v) v]
     [_ (error 'foreign "Cannot marshal to string — not a String literal: ~a" e)]))
 
+;; Convert a Prologos Posit{32,64} to its raw bit-pattern integer.
+;; This is a passthrough at the Racket level — posit-impl.rkt operates on the
+;; same bit-pattern representation, so foreign-imported posit ops work directly.
+;; FFI consumers that want rationals call posit{32,64}-to-rational themselves.
+(define (posit32->bits e)
+  (match e
+    [(expr-posit32 bits) bits]
+    [_ (error 'foreign "Cannot marshal to Posit32 — not a Posit32 literal: ~a" e)]))
+
+(define (posit64->bits e)
+  (match e
+    [(expr-posit64 bits) bits]
+    [_ (error 'foreign "Cannot marshal to Posit64 — not a Posit64 literal: ~a" e)]))
+
 (define (marshal-prologos->racket base-type val)
   (case base-type
-    [(Nat)    (nat->integer val)]
-    [(Int)    (int->integer val)]
-    [(Rat)    (rat->rational val)]
-    [(Bool)   (bool->boolean val)]
-    [(Unit)   (void)]
-    [(Char)   (char->rkt-char val)]
-    [(String) (string->rkt-string val)]
+    [(Nat)     (nat->integer val)]
+    [(Int)     (int->integer val)]
+    [(Rat)     (rat->rational val)]
+    [(Bool)    (bool->boolean val)]
+    [(Unit)    (void)]
+    [(Char)    (char->rkt-char val)]
+    [(String)  (string->rkt-string val)]
+    [(Posit32) (posit32->bits val)]
+    [(Posit64) (posit64->bits val)]
     ;; Passthrough types: the Prologos IR value IS the Racket value
     [(Path Keyword Passthrough) val]
     [else
@@ -110,15 +126,27 @@
     (error 'foreign "Cannot marshal from Racket: expected exact rational, got ~a" n))
   (expr-rat n))
 
+;; Convert a Racket value to a Prologos Posit{32,64} expression.
+;; The carrier representation is the raw bit-pattern integer — same as
+;; posit-impl.rkt. So the input is expected to be an exact integer (the bit
+;; pattern). FFI consumers wanting to return a rational can compose with
+;; posit{32,64}-encode themselves.
+(define (bits->posit-expr width val ctor)
+  (unless (exact-integer? val)
+    (error 'foreign "Cannot marshal Racket value to Posit~a (expected bit-pattern integer): ~a" width val))
+  (ctor val))
+
 (define (marshal-racket->prologos base-type val)
   (case base-type
-    [(Nat)    (integer->nat val)]
-    [(Int)    (integer->int val)]
-    [(Rat)    (rational->rat val)]
-    [(Bool)   (if val (expr-true) (expr-false))]
-    [(Unit)   (expr-unit)]
-    [(Char)   (expr-char val)]
-    [(String) (expr-string val)]
+    [(Nat)     (integer->nat val)]
+    [(Int)     (integer->int val)]
+    [(Rat)     (rational->rat val)]
+    [(Bool)    (if val (expr-true) (expr-false))]
+    [(Unit)    (expr-unit)]
+    [(Char)    (expr-char val)]
+    [(String)  (expr-string val)]
+    [(Posit32) (bits->posit-expr 32 val expr-posit32)]
+    [(Posit64) (bits->posit-expr 64 val expr-posit64)]
     ;; Passthrough types: result is already a Prologos IR value
     [(Path Keyword Passthrough) val]
     [else
