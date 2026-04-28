@@ -1973,18 +1973,22 @@
 ;; to correctly handle both indent grouping and cross-line brackets.
 ;; Indent grouping is recovered by treating child-node boundaries as
 ;; implicit wrapping points when not inside an open bracket.
+;;
+;; Some forms need their indent-grouped continuation lines to be SPLICED
+;; into the parent token stream rather than wrapped as sub-lists, so that
+;; binding/arrow markers placed on continuation lines remain at the top
+;; level where the elaborator and preparser can find them. See:
+;;   - `flatten-with-boundaries/spec`: splices type-signature continuations
+;;     so `->` on its own line is visible to `decompose-spec-type`.
+;;   - `flatten-with-boundaries/def`: splices ONLY continuations whose first
+;;     token is `:=`, so `def name : T\n  := body` is read identically to
+;;     `def name : T := body`.
 (define (tree-node->stx-elements node source source-str)
-  ;; Collect tokens with indent-boundary markers. For a `spec` form, the
-  ;; type-signature continuation lines are inlined directly (rather than
-  ;; wrapped as sub-lists) so that arrows like `-> Result` placed on their
-  ;; own continuation line remain at the top level of the spec body — where
-  ;; `decompose-spec-type` looks for them. Metadata-style continuation lines
-  ;; (whose first token is a keyword-like symbol such as `:doc`) are still
-  ;; wrapped so the `process-spec` metadata loop recognizes them.
   (define items
-    (if (spec-form-node? node)
-        (flatten-with-boundaries/spec node)
-        (flatten-with-boundaries node)))
+    (cond
+      [(spec-form-node? node) (flatten-with-boundaries/spec node)]
+      [(def-form-node? node)  (flatten-with-boundaries/def  node)]
+      [else (flatten-with-boundaries node)]))
   (define vec (list->vector items))
   (define-values (elems _end)
     (group-items vec 0 (vector-length vec) #f source source-str))
@@ -2021,6 +2025,22 @@
                        (or (equal? lex "spec")
                            (equal? lex "spec-")))))))))
 
+;; Recognize a parse-tree-node whose first token is `def` or `def-`.
+;; Used by `tree-node->stx-elements` to apply the def-specific splice
+;; rule. Mirrors `spec-form-node?`: the node's tag may not yet be
+;; refined to `'def` (the private `def-` variant is registered as a
+;; preparser keyword but has no tag rule), so we look at the first
+;; child token directly.
+(define (def-form-node? node)
+  (and (parse-tree-node? node)
+       (let ([children (parse-tree-node-children node)])
+         (and (> (rrb-size children) 0)
+              (let ([first (rrb-get children 0)])
+                (and (token-entry? first)
+                     (let ([lex (token-entry-lexeme first)])
+                       (or (equal? lex "def")
+                           (equal? lex "def-")))))))))
+
 ;; Flatten variant for `spec` forms: top-level child lines are SPLICED into
 ;; the parent token stream (no `indent-open`/`indent-close` wrapping), so a
 ;; multi-line type signature like
@@ -2049,6 +2069,45 @@
              inner)]
         [else '()]))))
 
+;; Flatten variant for `def`/`def-` forms: top-level child lines are
+;; SPLICED into the parent token stream ONLY when the line begins with
+;; the binding marker `:=`. This makes
+;;     def name : T
+;;       := body
+;; read identically to
+;;     def name : T := body
+;; so `expand-def-assign` (which only scans the top level for `:=`)
+;; picks up the assignment.
+;;
+;; All other continuation lines (a bare body expression, a continued
+;; bracketed application, etc.) remain wrapped as sub-lists, preserving
+;; the existing semantics where
+;;     def name
+;;       + 1 2
+;; reads as `(def name (+ 1 2))` with the body grouped as one
+;; application. This is intentionally narrower than the spec splice
+;; rule: spec needs to expose `->` from anywhere in a multi-line type
+;; signature, while def only needs to expose `:=` (which is always the
+;; head of its continuation when line-broken in the natural way).
+(define (flatten-with-boundaries/def node)
+  (define children (parse-tree-node-children node))
+  (define n (rrb-size children))
+  (apply append
+    (for/list ([i (in-range n)])
+      (define child (rrb-get children i))
+      (cond
+        [(token-entry? child) (list child)]
+        [(parse-tree-node? child)
+         (define inner (flatten-with-boundaries child))
+         (if (continuation-starts-with-assign? inner)
+             ;; `:= body` continuation — splice tokens directly so `:=`
+             ;; appears at the top level of the def form.
+             inner
+             ;; Other continuation (bare body, application chain,
+             ;; etc.): keep wrapped as a sub-list.
+             (append (list 'indent-open) inner (list 'indent-close)))]
+        [else '()]))))
+
 ;; Does this flattened token list start with a keyword-like token (lexeme
 ;; beginning with `:`)? Used to distinguish metadata continuations from
 ;; type-signature continuations in spec forms.
@@ -2062,6 +2121,18 @@
          (and (string? lex)
               (positive? (string-length lex))
               (char=? (string-ref lex 0) #\:)))]
+      [else #f])))
+
+;; Does this flattened token list start with the assignment token `:=`?
+;; Used by `flatten-with-boundaries/def` to identify continuations that
+;; should be spliced into the def's top-level token stream.
+(define (continuation-starts-with-assign? items)
+  (let loop ([items items])
+    (cond
+      [(null? items) #f]
+      [(eq? (car items) 'indent-open) (loop (cdr items))]
+      [(token-entry? (car items))
+       (equal? (token-entry-lexeme (car items)) ":=")]
       [else #f])))
 
 ;; Lookahead: check if there's a matching rangle before the current scope closes.
