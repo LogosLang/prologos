@@ -13,38 +13,37 @@ here because tracking them in commit messages alone made them invisible.
 
 ## What MUST stay on the Racket side (the irreducible core)
 
-Across two passes of "minimise the Racket footprint", these four
-responsibilities resisted every attempt to push them out into Prologos.
-**Update 2026-04-28**: items 1 and 2 are no longer hard requirements —
-the FFI marshaller now passes Prologos lambdas across the boundary as
-live Racket procedures (see
-[2026-04-28_FFI_LAMBDA_PASSING.md](2026-04-28_FFI_LAMBDA_PASSING.md)).
-They are downgraded to "preferentially Racket for performance, but no
-longer required."
+After three passes of "minimise the Racket footprint", what's left is
+the propagator-network plumbing itself:
 
-  1. **Propagator fire functions.** [Downgraded — preferentially Racket
-     for performance, no longer required.] Historically the fire-fn was a
-     Racket closure invoked by the Racket-side BSP scheduler with the
-     network as its argument, and Prologos lambdas could not cross the
-     FFI boundary as live closures. With the FFI lambda passing track
-     a Prologos lambda CAN now be passed across the FFI: a Racket harness
-     propagator can adapt the Prologos lambda to the network's fire-fn
-     protocol. The reason to keep fire-fns in Racket is now performance
-     (each call drives a Prologos `nf` reduction), not capability.
+  1. **Propagator fire functions.** [Preferentially Racket for
+     performance, no longer required.] Historically blocked because
+     Prologos lambdas couldn't cross the FFI boundary as live closures;
+     dissolved by the FFI lambda passing track (see
+     [2026-04-28_FFI_LAMBDA_PASSING.md](2026-04-28_FFI_LAMBDA_PASSING.md)).
+     The eigentrust shim's fire-fn is now pure plumbing — read input
+     cell, dispatch to broadcast item-fn, write output cell. The
+     per-row arithmetic (`affine-step`) lives in Prologos.
+     The reason to keep fire-fns in Racket is now performance (each
+     call drives a Prologos `nf` reduction), not capability.
 
-  2. **Cell merge functions.** [Downgraded — preferentially Racket for
-     performance, no longer required.] Same situation as item 1 above.
-     The propagator network calls merge-fn during cell writes (and during
-     BSP fold-merges); a Prologos lambda can supply the merge via FFI.
+  2. **Cell merge functions.** [Preferentially Racket for performance,
+     no longer required.] Same situation as item 1.
 
-  3. **The cell-value carrier.** A gen-tagged immutable Racket vector. The
-     gen tag has to interoperate with Racket's `equal?` for the cell's
-     change detection, and the merge function has to be a Racket procedure
-     that operates on whatever Racket data structure the cell holds.
+  3. **The cell-value carrier.** A gen-tagged immutable Racket vector.
+     The gen tag has to interoperate with Racket's `equal?` for the
+     cell's change detection, and the merge function has to be a Racket
+     procedure that operates on whatever Racket data structure the cell
+     holds.
 
-  4. **FFI marshalling glue.** Walking Prologos cons/nil chains, extracting
-     posit32 bit-patterns out of `expr-posit32` IR nodes, encoding rationals
-     back into bit patterns. Pure Racket-side bookkeeping.
+  4. **FFI marshalling glue.** [Centralised — used to be per-shim
+     boilerplate, now in foreign.rkt.] A separate FFI extension landed
+     centralised marshalling for parameterised types: `[List T]`,
+     `Posit8/16/32/64`, and `Int` round-trip via foreign.rkt's recursive
+     marshaller. The eigentrust shim no longer hand-walks cons/nil
+     chains, no longer extracts Posit32 bit patterns, no longer
+     constructs IR list nodes. The FFI carries semantic values
+     (rationals, lists) directly across the boundary.
 
 Everything else — matrix transpose, decay scaling, bias computation,
 initial-zero-vector, the iteration driver, the entire EigenTrust update
