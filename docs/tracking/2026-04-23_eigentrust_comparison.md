@@ -1,10 +1,15 @@
-# EigenTrust in Prologos — 5-way Implementation Comparison
+# EigenTrust in Prologos — 7-way Implementation Comparison
 
-_Session 2026-04-23 + 2026-04-29. Compares **five** variants:
+_Session 2026-04-23 + 2026-04-29. Compares **seven** variants:
 four Prologos surface implementations across the
-`{List, PVec} × {Rat, Posit32}` grid, plus a fifth Racket-direct
-implementation that uses Prologos's underlying propagator network
-infrastructure but bypasses the surface language entirely.
+`{List, PVec} × {Rat, Posit32}` grid, plus three Racket-direct
+implementations that use Prologos's underlying propagator network
+infrastructure but bypass the surface language. The propagator
+variants split into:_
+
+- _**rat-coarse**: chain-of-cells, exact rationals, one cell per iteration._
+- _**rat-fine**: per-peer cells, exact rationals — K·n cells, K·n propagators._
+- _**float**: chain-of-cells, hardware flonums (`flvector`)._
 The algorithm uses the **column-stochastic** convention: the matrix
 `M` is the operational "trust-flow" matrix where `M[i][j]` is the
 fraction of peer j's outgoing trust that flows to peer i. Each
@@ -17,20 +22,32 @@ t_{k+1} = (1 - alpha) * M * t_k + alpha * p
 _`eigentrust` enforces the column-stochastic invariant; violating
 it panics (Prologos surface) or raises an error (Racket-direct)._
 
-## The five variants
+## The seven variants
 
-| Container / Scalar | Example / source                          | Test file                              | Benchmark                               |
-| ------------------ | ----------------------------------------- | -------------------------------------- | --------------------------------------- |
-| List + Rat (P)     | `examples/eigentrust.prologos`            | `tests/test-eigentrust.rkt`            | `benchmarks/.../eigentrust-list-rat`    |
-| List + Posit32 (P) | `examples/eigentrust-posit.prologos`      | `tests/test-eigentrust-posit.rkt`      | `benchmarks/.../eigentrust-list-posit`  |
-| PVec + Rat (P)     | `examples/eigentrust-pvec.prologos`       | `tests/test-eigentrust-pvec.rkt`       | `benchmarks/.../eigentrust-pvec-rat`    |
-| PVec + Posit32 (P) | `examples/eigentrust-pvec-posit.prologos` | `tests/test-eigentrust-pvec-posit.rkt` | `benchmarks/.../eigentrust-pvec-posit`  |
-| **Racket on Propagators** | `benchmarks/.../eigentrust-propagators.rkt` | `tests/test-eigentrust-propagators.rkt` | `benchmarks/.../eigentrust-propagators-bench.rkt` |
+| # | Variant | Source | Test |
+|---|---|---|---|
+| 1 | List + Rat (P) | `examples/eigentrust.prologos` | `tests/test-eigentrust.rkt` |
+| 2 | List + Posit32 (P) | `examples/eigentrust-posit.prologos` | `tests/test-eigentrust-posit.rkt` |
+| 3 | PVec + Rat (P) | `examples/eigentrust-pvec.prologos` | `tests/test-eigentrust-pvec.rkt` |
+| 4 | PVec + Posit32 (P) | `examples/eigentrust-pvec-posit.prologos` | `tests/test-eigentrust-pvec-posit.rkt` |
+| 5 | **rat-coarse** (propagator) | `benchmarks/.../eigentrust-propagators.rkt` | `tests/test-eigentrust-propagators.rkt` |
+| 6 | **rat-fine** (propagator) | `benchmarks/.../eigentrust-propagators-fine.rkt` | `tests/test-eigentrust-propagators-fine.rkt` |
+| 7 | **float** (propagator) | `benchmarks/.../eigentrust-propagators-float.rkt` | `tests/test-eigentrust-propagators-float.rkt` |
 
-(P) = Prologos surface language. The four (P) variants enforce
-`col-stochastic?` at the entry of `eigentrust`; the Racket-direct
-version raises an error in `build-eigentrust-network` if M isn't
-column-stochastic.
+Shared benchmark runner for variants 5–7:
+`benchmarks/comparative/eigentrust-propagators-bench.rkt`.
+
+(P) = Prologos surface language. All variants enforce
+`col-stochastic?` at the algorithm entry; the surface variants
+panic, the Racket-direct ones `error`.
+
+**Architectural breakdown** (5-7):
+- _coarse_ (5, 7): one cell per iteration, holding the entire
+  trust vector. K plain propagators (one per step).
+- _fine_ (6): one cell per peer per iteration. K·n cells,
+  K·n propagators. Each peer-step propagator reads all n cells
+  of the previous iteration row + the 3 constants, writes one
+  scalar.
 
 ## Shared benchmark workload
 
@@ -74,37 +91,74 @@ Prologos's reducer (pitfall #11), so k=3 is the sweet spot.
 Measured 2026-04-23 via `tools/bench-phases.rkt --runs 2`. Medians
 across 2 measured runs (plus one warmup).
 
-| Variant            | wall   | elaborate | type_check | qtt | reduce       | user sum | outside |
-| ------------------ | -----: | --------: | ---------: | --: | -----------: | -------: | ------: |
-| list + rat (P)     | 62 475 |      212  |       716  | 400 | **18 372**   |  19 702  |  42 772 |
-| list + posit32 (P) | 61 683 |      210  |       678  | 372 | **17 990**   |  19 252  |  42 431 |
-| pvec + rat (P)     | 76 884 |      144  |       370  | 112 | **33 006**   |  33 634  |  43 250 |
-| pvec + posit32 (P) | 77 039 |      146  |       344  | 108 | **33 198**   |  33 798  |  43 241 |
-| **propagators**    |    ~600 |       —   |         —  |  —  |  **0.16**    |    0.16  |    ~600 |
+### W3 (ring-4 / k=4 / α=3/10) — the reference workload
 
-The first four are Prologos surface (P). The fifth is the
-Racket-direct propagator-network implementation: 5-run median
-on `racket benchmarks/comparative/eigentrust-propagators-bench.rkt`,
-with `build_ms` (network construction) + `bsp_ms` (run to
-quiescence) + `read_ms` (final cell read) summing into `reduce_ms`.
-There is no Prologos elaboration / type-check / qtt phase — those
-columns don't apply. `outside` is dominated by Racket runtime
-startup (no Prologos prelude to load).
+| Variant             | wall   | elaborate | type_check | qtt | reduce       | user sum | outside |
+| ------------------- | -----: | --------: | ---------: | --: | -----------: | -------: | ------: |
+| list + rat (P)      | 62 475 |      212  |       716  | 400 | **18 372**   |  19 702  |  42 772 |
+| list + posit32 (P)  | 61 683 |      210  |       678  | 372 | **17 990**   |  19 252  |  42 431 |
+| pvec + rat (P)      | 76 884 |      144  |       370  | 112 | **33 006**   |  33 634  |  43 250 |
+| pvec + posit32 (P)  | 77 039 |      146  |       344  | 108 | **33 198**   |  33 798  |  43 241 |
+| **rat-coarse** (5)  |   ~850 |       —   |         —  |  —  |  **0.12**    |   0.12   |    ~850 |
+| **rat-fine** (6)    |   ~850 |       —   |         —  |  —  |  **0.23**    |   0.23   |    ~850 |
+| **float** (7)       |   ~850 |       —   |         —  |  —  |  **0.10**    |   0.10   |    ~850 |
 
-All values are median ms of measured runs. `reduce_ms` is the
-actual algorithm runtime.
+5-run median for variants 5–7 (single-process Racket; the wall ~850 ms
+is shared across 9 runs of the bench harness, dominated by Racket
+runtime startup). The four surface variants are 2-run median from
+`tools/bench-phases.rkt`. `reduce_ms` is the actual algorithm time;
+`outside` is everything else (prelude load + Racket startup + I/O).
+
+For propagator variants, `reduce_ms = build_ms + bsp_ms + read_ms`:
+```
+              build_ms   bsp_ms    reduce_ms
+rat-coarse    0.03       0.08      0.12
+rat-fine      0.07       0.16      0.23
+float         0.03       0.07      0.10
+```
+
+### W3-deep (ring-4 / k=10 / α=3/10) — chain depth scaling
+
+| Variant       | reduce_ms | Notes |
+| ------------- | --------: | ----- |
+| rat-coarse    |     0.42  | linear in K (3.5× from k=4) |
+| rat-fine      |     1.38  | linear in K·n (5.75× from k=4 — `n=4` per-step factor compounds) |
+| float         |     0.37  | linear in K (3.7× from k=4) |
+| (P) variants  | did not finish | O(k²) reducer blowup beyond k≈3 |
+
+The propagator variants stay linear in K because each fire
+function eagerly reduces to a normalised vector value; the
+Prologos surface variants keep an unreduced
+`tnew = [eigentrust-step c p α tnew]` term tree that grows
+quadratically across budget rounds.
 
 ### Observations
 
-* **The Racket-direct propagator implementation is ~115 000× faster
-  on `reduce_ms`** than List+Rat for the W3 ring workload (0.16 ms
-  vs 18 372 ms). The Prologos reducer's overhead (term-tree walk,
-  pattern-match dispatch, exact-Rat normalisation) dwarfs the
-  actual arithmetic. The Racket version has the same arithmetic
-  cost (Racket's exact rationals are byte-identical to Prologos's
-  Rat, since Prologos uses Racket's underlying rational ops) but no
-  reducer ceremony — direct vector arithmetic and a 4-propagator
-  chain.
+* **All three propagator variants are 5+ orders of magnitude faster
+  than the surface variants on W3 reduce_ms.** rat-coarse: 0.12 ms
+  vs List+Rat 18 372 ms (~150 000×). The Prologos reducer's overhead
+  (term-tree walk, pattern-match dispatch, exact-Rat normalisation)
+  dwarfs the arithmetic. Both versions perform identical
+  Racket-level arithmetic on identical exact-rational values; the
+  gap measures Prologos elaboration + reduction overhead.
+* **Float beats rat-coarse by ~17%** at W3 (0.10 vs 0.12 ms), in
+  line with hardware double-precision being faster than exact
+  rational arithmetic for n=4. At larger n the gap widens.
+* **Fine-grained loses to coarse by ~2× at n=4**: 0.23 vs 0.12 ms
+  for W3, 1.38 vs 0.42 ms for W3-deep. Per-cell overhead (CHAMP
+  insert, dependent registration, scheduler bookkeeping) for K·n
+  cells exceeds the benefit of finer-grained per-fire work at this
+  matrix size. The fine variant might cross over for larger n
+  (or under parallel BSP execution where the per-iteration peers
+  fire concurrently), but for n=4 the constants dominate.
+* **Iteration depth scales linearly for all 3 propagator variants**:
+  rat-coarse k=2→0.08, k=4→0.12, k=10→0.42 ms. The Prologos surface
+  variants exhibit O(k²) reduce blowup beyond k≈3 (an unreduced
+  `tnew = [eigentrust-step c p α tnew]` term tree grows
+  quadratically across forced iterations). The propagator variants
+  eagerly reduce in each fire function, so the term tree stays
+  flat — k=10 is fast where the surface versions don't terminate
+  within minutes.
 * **Among the four Prologos surface variants, on the ring workload
   List beats PVec by ~80%** on `reduce_ms` (18 s vs 33 s). The ring
   matrix is very sparse — each column has a single non-zero — so
@@ -215,13 +269,20 @@ racket tools/bench-phases.rkt --runs 2 \
   benchmarks/comparative/eigentrust-pvec-rat.prologos \
   benchmarks/comparative/eigentrust-pvec-posit.prologos
 
-# Fifth: Racket-direct on propagators
+# Three Racket-direct propagator variants (rat-coarse, rat-fine, float)
 racket benchmarks/comparative/eigentrust-propagators-bench.rkt
 
-# Tests
-raco test tests/test-eigentrust.rkt              # 13 tests (List+Rat)
-raco test tests/test-eigentrust-posit.rkt        #  6 tests (List+Posit32)
-raco test tests/test-eigentrust-pvec.rkt         #  6 tests (PVec+Rat)
-raco test tests/test-eigentrust-pvec-posit.rkt   #  6 tests (PVec+Posit32)
-raco test tests/test-eigentrust-propagators.rkt  # 13 tests (propagator)
+# Tests (4 surface + 3 propagator)
+raco test tests/test-eigentrust.rkt                       # 13 tests
+raco test tests/test-eigentrust-posit.rkt                 #  6 tests
+raco test tests/test-eigentrust-pvec.rkt                  #  6 tests
+raco test tests/test-eigentrust-pvec-posit.rkt            #  6 tests
+raco test tests/test-eigentrust-propagators.rkt           # 13 tests (rat-coarse)
+raco test tests/test-eigentrust-propagators-fine.rkt      #  6 tests (rat-fine)
+raco test tests/test-eigentrust-propagators-float.rkt     #  9 tests (float)
 ```
+
+## Pitfalls surfaced
+
+- Surface-language pitfalls: `2026-04-23_eigentrust_pitfalls.md` (16 entries).
+- Propagator-track pitfalls: `2026-04-29_eigentrust_propagators_pitfalls.md` (5 entries — fire-once vs chain, cell-merge during initial reads, float `equal?`, `for/sum` exact 0 vs 0.0, fine-grained cell-id lookup overhead).

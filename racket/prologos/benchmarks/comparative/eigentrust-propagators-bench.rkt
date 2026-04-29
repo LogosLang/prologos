@@ -1,45 +1,60 @@
 #lang racket/base
 
-;;; eigentrust-propagators-bench.rkt — timing harness for the 5th
-;;; comparison variant.
+;;; eigentrust-propagators-bench.rkt — timing harness for the
+;;; Racket-direct propagator EigenTrust variants.
 ;;;
-;;; Reports wall_ms, reduce_ms (algorithm time only, comparable to
-;;; the Prologos benchmarks' PHASE-TIMINGS reduce_ms), and the
+;;; Three propagator variants compared head-to-head, plus their
+;;; relationship to the Prologos surface benchmarks:
+;;;   - rat (coarse) : one cell per iteration, exact rationals
+;;;   - rat (fine)   : one cell per (iteration, peer) — K·n cells
+;;;   - float        : one cell per iteration, hardware flonum
+;;;
+;;; Reports wall_ms, reduce_ms (algorithm time, comparable to
+;;; PHASE-TIMINGS reduce_ms in the Prologos benchmarks), and the
 ;;; sub-breakdowns build_ms (network construction) and bsp_ms (run
 ;;; to quiescence).
 ;;;
 ;;; Run via:
 ;;;   racket benchmarks/comparative/eigentrust-propagators-bench.rkt
-;;;
-;;; Output format mirrors `tools/bench-phases.rkt`'s per-variant
-;;; section so the numbers can be eyeballed against the four
-;;; Prologos surface variants directly.
 
 (require "../../propagator.rkt"
          "eigentrust-propagators.rkt"
-         racket/list)
+         "eigentrust-propagators-fine.rkt"
+         "eigentrust-propagators-float.rkt"
+         racket/list
+         racket/flonum)
 
 (define NUM-RUNS 5)
 (define WARMUP-RUNS 1)
 
 ;; ============================================================
-;; Per-run timing
+;; Per-run timing — variant-agnostic.
+;;
+;; `build-fn` is a thunk-like procedure: (build-fn m p alpha k) →
+;; (values net result-cid-or-vector). For coarse/float variants,
+;; result-cid is a single cell-id; for fine, it's a vector of
+;; cell-ids.
+;; `read-fn` is (read-fn net result-cid-or-vector) → result.
 ;; ============================================================
 
-;; Returns (values build-ms bsp-ms read-ms total-reduce-ms result).
-;; build-ms: time to construct the network with K propagators.
-;; bsp-ms: time to run BSP to quiescence.
-;; read-ms: time to read the final cell.
-;; total-reduce-ms: build + bsp + read (comparable to Prologos reduce_ms).
-(define (time-one-run m p alpha k)
+(define (time-one-run build-fn read-fn m p alpha k)
   (define t0 (current-inexact-monotonic-milliseconds))
-  (define-values (net t-final-cid) (build-eigentrust-network m p alpha k))
+  (define-values (net result-handle) (build-fn m p alpha k))
   (define t1 (current-inexact-monotonic-milliseconds))
   (define net* (run-to-quiescence-bsp net))
   (define t2 (current-inexact-monotonic-milliseconds))
-  (define result (net-cell-read net* t-final-cid))
+  (define result (read-fn net* result-handle))
   (define t3 (current-inexact-monotonic-milliseconds))
   (values (- t1 t0) (- t2 t1) (- t3 t2) (- t3 t0) result))
+
+;; Coarse variants: result-handle is a single cell-id, read once.
+(define (read-single net cid) (net-cell-read net cid))
+
+;; Fine variant: result-handle is a vector of cell-ids; read each.
+(define (read-many net cids)
+  (define n (vector-length cids))
+  (for/vector #:length n ([j (in-range n)])
+    (net-cell-read net (vector-ref cids j))))
 
 
 ;; ============================================================
@@ -55,19 +70,21 @@
                          (list-ref sorted (quotient n 2)))
                       2)]))
 
-(define (run-bench label m p alpha k)
+(define (round-2 x)
+  (/ (round (* 100 x)) 100))
+
+(define (run-bench label build-fn read-fn m p alpha k)
   ;; Warmup
   (for ([_ (in-range WARMUP-RUNS)])
-    (time-one-run m p alpha k))
+    (time-one-run build-fn read-fn m p alpha k))
   ;; Measured runs
   (define samples
     (for/list ([_ (in-range NUM-RUNS)])
       (collect-garbage 'major)
-      (define-values (b r d t result) (time-one-run m p alpha k))
+      (define-values (b r d t result) (time-one-run build-fn read-fn m p alpha k))
       (list b r d t result)))
   (define builds (map car samples))
   (define bsps   (map cadr samples))
-  (define reads  (map caddr samples))
   (define totals (map cadddr samples))
   (define result (last (last samples)))
   (printf "── ~a ──~n" label)
@@ -80,7 +97,6 @@
           (round-2 (median bsps))
           (round-2 (apply min bsps))
           (round-2 (apply max bsps)))
-  (printf "  read_ms       : median ~a~n" (round-2 (median reads)))
   (printf "  reduce_ms     : median ~a (min ~a, max ~a, n=~a)~n"
           (round-2 (median totals))
           (round-2 (apply min totals))
@@ -88,42 +104,59 @@
           NUM-RUNS)
   (newline))
 
-(define (round-2 x)
-  (/ (round (* 100 x)) 100))
-
 
 ;; ============================================================
-;; Workloads — match the Prologos benchmarks where possible.
-;; The dominant workload is W3: ring-4, k=4, α=3/10. Others are
-;; smaller checks.
+;; Workloads
 ;; ============================================================
 
 (module+ main
   (define wall-t0 (current-inexact-monotonic-milliseconds))
 
-  (printf "═══ EigenTrust on Propagators (Racket-direct) ═══~n")
+  (printf "═══ EigenTrust on Propagators — 3 variants × workloads ═══~n")
   (printf "Runs per workload: ~a (+ ~a warmup)~n~n" NUM-RUNS WARMUP-RUNS)
 
-  ;; W3 — the dominant workload that drives the Prologos reduce_ms.
-  ;; Ring 4-peer, concentrated pre-trust, α=3/10, 4 step calls (matches
-  ;; Prologos `eigentrust ... 3/10 0/1 3` which does max-iter + 1 = 4).
-  (run-bench "W3 ring-4 / α=3/10 / k=4"
+  ;; ============================================================
+  ;; W3 — the canonical workload: ring-4, α=3/10, k=4.
+  ;; All three variants must produce the same answer (within tol
+  ;; for float).
+  ;; ============================================================
+  (run-bench "rat-coarse  W3 ring-4 / α=3/10 / k=4"
+             build-eigentrust-network read-single
              m-ring-4 p-seed-0 3/10 4)
+  (run-bench "rat-fine    W3 ring-4 / α=3/10 / k=4"
+             build-eigentrust-network-fine read-many
+             m-ring-4 p-seed-0 3/10 4)
+  (run-bench "float       W3 ring-4 / α=0.3 / k=4"
+             build-eigentrust-network-fl read-single
+             m-ring-4-fl p-seed-0-fl 0.3 4)
 
-  ;; W1 — uniform fixed-point. Converges in 1 step in the Prologos
-  ;; version (eps triggers exit); here we run k=2 to match the structure
-  ;; (1 actual computation step + 1 budget tail).
-  (run-bench "W1 uniform-4 / α=1/10 / k=2"
-             m-uniform-4 p-uniform-4 1/10 2)
-
-  ;; W2 — symmetric 3x3 fixed point.
-  (run-bench "W2 others-3 / α=1/10 / k=2"
-             m-others-3 p-uniform-3 1/10 2)
-
-  ;; W3-deep — same ring fixture but 10 steps to show how the propagator
-  ;; chain scales with iteration depth.
-  (run-bench "W3-deep ring-4 / α=3/10 / k=10"
+  ;; ============================================================
+  ;; W3-deep — ring with k=10, exercises chain depth.
+  ;; The Prologos surface variants O(k²) blow up here; propagator
+  ;; variants stay linear in K.
+  ;; ============================================================
+  (run-bench "rat-coarse  W3-deep ring-4 / α=3/10 / k=10"
+             build-eigentrust-network read-single
              m-ring-4 p-seed-0 3/10 10)
+  (run-bench "rat-fine    W3-deep ring-4 / α=3/10 / k=10"
+             build-eigentrust-network-fine read-many
+             m-ring-4 p-seed-0 3/10 10)
+  (run-bench "float       W3-deep ring-4 / α=0.3 / k=10"
+             build-eigentrust-network-fl read-single
+             m-ring-4-fl p-seed-0-fl 0.3 10)
+
+  ;; ============================================================
+  ;; W1 — uniform fixed point.
+  ;; ============================================================
+  (run-bench "rat-coarse  W1 uniform-4 / α=1/10 / k=2"
+             build-eigentrust-network read-single
+             m-uniform-4 p-uniform-4 1/10 2)
+  (run-bench "rat-fine    W1 uniform-4 / α=1/10 / k=2"
+             build-eigentrust-network-fine read-many
+             m-uniform-4 p-uniform-4 1/10 2)
+  (run-bench "float       W1 uniform-4 / α=0.1 / k=2"
+             build-eigentrust-network-fl read-single
+             m-uniform-4-fl p-uniform-4-fl 0.1 2)
 
   (define wall-t1 (current-inexact-monotonic-milliseconds))
   (printf "Total benchmark wall: ~a ms~n" (round-2 (- wall-t1 wall-t0))))
