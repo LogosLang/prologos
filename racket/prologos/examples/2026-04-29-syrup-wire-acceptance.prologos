@@ -1,0 +1,103 @@
+;; ===========================================================
+;; OCapN Syrup-Wire — Phase 1 Acceptance Demo
+;; ===========================================================
+;;
+;; This file exercises the byte-level Syrup encoder / decoder
+;; (`prologos::ocapn::syrup-wire`) end-to-end via WS-mode
+;; `process-file`. If any form here fails to elaborate or
+;; reduce, the implementation is broken at the integration
+;; boundary even when sexp-level tests pass.
+;;
+;; Wire format reference: OCapN `Syrup.md` + Endo `@endo/syrup`.
+;;
+;;   syrup-value ::= "n"                                       (null)
+;;                 | "t" | "f"                                  (bool)
+;;                 | digits "+" | digits "-"                    (int / nat)
+;;                 | digits "\"" utf8                           (string)
+;;                 | digits "'" utf8                            (symbol)
+;;                 | "[" syrup-value* "]"                       (list)
+;;                 | "<" syrup-value+ ">"                       (record/tagged)
+;;
+;; This Phase 1 codec covers atoms, lists, and 2-elem tagged
+;; records. Floats / dicts / sets / bytes are out of scope.
+
+ns syrup-wire-acceptance
+
+require [prologos::ocapn::syrup      :refer-all]
+        [prologos::ocapn::syrup-wire :refer-all]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option some none unwrap-or]]
+
+;; ===========================================================
+;; 1. Atoms encode to the documented bytes
+;; ===========================================================
+
+;; expected: "n"
+encode syrup-null
+
+;; expected: "t"
+encode [syrup-bool true]
+
+;; expected: "f"
+encode [syrup-bool false]
+
+;; expected: "0+"
+encode [syrup-nat zero]
+
+;; expected: "1+"
+encode [syrup-nat [suc zero]]
+
+;; expected: "5+"
+encode [syrup-int 5]
+
+;; expected: "7-"
+encode [syrup-int -7]
+
+;; expected: 5"hello
+encode [syrup-string "hello"]
+
+;; expected: 3'foo
+encode [syrup-symbol "foo"]
+
+;; ===========================================================
+;; 2. Lists nest correctly, records use angle brackets
+;; ===========================================================
+
+;; expected: [1+2+3+]
+encode [syrup-list [cons [syrup-nat [suc zero]]
+                          [cons [syrup-nat [suc [suc zero]]]
+                                [cons [syrup-nat [suc [suc [suc zero]]]]
+                                      nil]]]]
+
+;; expected: <3'tagn>           — tagged "tag" with null payload
+encode [syrup-tagged "tag" syrup-null]
+
+;; expected: <2'op2"hi>         — record "op" with string payload "hi"
+encode [syrup-tagged "op" [syrup-string "hi"]]
+
+;; ===========================================================
+;; 3. Round-trip: decode (encode v) returns v
+;; ===========================================================
+
+;; expected: some [syrup-bool true]
+decode-value [encode [syrup-bool true]]
+
+;; expected: some [syrup-string "hello"]
+decode-value [encode [syrup-string "hello"]]
+
+;; expected: some [syrup-tagged "tag" syrup-null]
+decode-value [encode [syrup-tagged "tag" syrup-null]]
+
+;; ===========================================================
+;; 4. Refr / promise are NOT wire-encodable in pure Syrup
+;; ===========================================================
+;;
+;; The CapTP layer translates refrs into descriptors before
+;; encoding. The pure Syrup encoder must reject them so a caller
+;; can't accidentally emit a wire-incompatible message.
+;;
+;; expected: none
+encode-safe [syrup-refr zero]
+
+;; expected: none
+encode-safe [syrup-promise [suc zero]]
