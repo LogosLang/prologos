@@ -1,0 +1,407 @@
+ns prologos::ocapn::captp-wire
+
+;; ===========================================================
+;; CapTP wire codec — Phase 2 of OCapN interop
+;; ===========================================================
+;;
+;; Builds on Phase-1's pure Syrup codec to encode/decode CapTP
+;; operation messages (op:start-session, op:abort, op:deliver,
+;; op:deliver-only, op:listen, op:gc-export, op:gc-answer).
+;;
+;; Each CapTPOp serialises as a Syrup record with the op-name
+;; symbol as label and a positional payload. Per the OCapN spec:
+;;
+;;   op:start-session   <op:start-session ver-string locator>
+;;   op:abort           <op:abort reason-string>
+;;   op:deliver         <op:deliver to-desc args answer-pos resolve-me>
+;;   op:deliver-only    <op:deliver-only to-desc args>
+;;   op:listen          <op:listen to-desc resolver-desc>
+;;   op:gc-export       <op:gc-export export-pos count>
+;;   op:gc-answer       <op:gc-answer answer-pos>
+;;
+;; In our Phase-0 model target / answer-pos / resolver are Nat
+;; positions. On the wire those positions are wrapped in
+;; descriptor records:
+;;
+;;   <desc:export N>          ;; refr exported by us
+;;   <desc:import-promise N>  ;; promise imported by us
+;;   <desc:answer N>          ;; answer-table position
+;;
+;; We encode targets as desc:export and answer-pos / resolver as
+;; desc:answer. (A full implementation consults the
+;; question/answer/export/import tables to choose the right
+;; descriptor; that bookkeeping is Phase 3+.)
+;;
+;; Layout / parsing notes (see goblin-pitfalls follow-up):
+;;   - `[Option Nat]` brackets in spec — bare `Option Nat` parses
+;;     as a multi-arg Pi.
+;;   - Multi-token application bodies on a single `defn` line need
+;;     `[...]` outer brackets, OR put the body on its own line.
+
+require [prologos::ocapn::syrup        :refer-all]
+        [prologos::ocapn::message      :refer-all]
+        [prologos::ocapn::syrup-wire   :as wire :refer []]
+        [prologos::data::string        :as str :refer []]
+        [prologos::data::list          :refer [List nil cons]]
+        [prologos::data::option        :refer [Option some none]]
+
+;; ===========================================================
+;; Descriptors as SyrupValue records
+;; ===========================================================
+
+spec desc-export Nat -> SyrupValue
+defn desc-export [n]
+  syrup-tagged "desc:export" [syrup-nat n]
+
+spec desc-answer Nat -> SyrupValue
+defn desc-answer [n]
+  syrup-tagged "desc:answer" [syrup-nat n]
+
+spec desc-import-promise Nat -> SyrupValue
+defn desc-import-promise [n]
+  syrup-tagged "desc:import-promise" [syrup-nat n]
+
+;; option-of-Nat -> SyrupValue: `none` becomes a syrup-null,
+;; `some n` becomes desc:answer N.
+
+spec opt-pos [Option Nat] -> SyrupValue
+defn opt-pos [o]
+  match o
+    | none   -> syrup-null
+    | some n -> desc-answer n
+
+;; ===========================================================
+;; Encode a CapTPOp to a Syrup record
+;; ===========================================================
+
+spec op-to-syrup CapTPOp -> SyrupValue
+defn op-to-syrup [op]
+  match op
+    | op-start-session ver loc  -> [syrup-tagged "op:start-session" [syrup-list [cons [syrup-string ver] [cons loc nil]]]]
+    | op-abort reason           -> [syrup-tagged "op:abort" [syrup-string reason]]
+    | op-deliver tgt args ap rm -> [syrup-tagged "op:deliver" [syrup-list [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]]]
+    | op-deliver-only tgt args  -> [syrup-tagged "op:deliver-only" [syrup-list [cons [desc-export tgt] [cons args nil]]]]
+    | op-listen tgt resolver    -> [syrup-tagged "op:listen" [syrup-list [cons [desc-export tgt] [cons [desc-export resolver] nil]]]]
+    | op-gc-export pos cnt      -> [syrup-tagged "op:gc-export" [syrup-list [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]]]
+    | op-gc-answer pos          -> [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+
+;; ===========================================================
+;; Encode a CapTPOp to wire bytes
+;; ===========================================================
+
+spec encode-op CapTPOp -> String
+defn encode-op [op]
+  wire::encode [op-to-syrup op]
+
+;; ===========================================================
+;; Decoder
+;; ===========================================================
+
+;; The wire format for a positive integer is `digits "+"`; the
+;; Phase-1 decoder always returns a syrup-int (sign already
+;; stripped). For our purposes (refr ids, answer positions,
+;; counts) the value is always a non-negative INT, but we keep
+;; it as Int internally rather than converting to Nat — Nat
+;; conversions are O(n) structural recursion and unnecessary
+;; for table-position arithmetic.
+;;
+;; To keep our types stable across the boundary, the dispatcher
+;; helpers use Int positions (after re-encoding through the
+;; existing message.prologos which carries Nat targets, decoders
+;; convert via syrup-nat → Nat directly).
+;;
+;; For Phase-2 simplicity we accept both syrup-int and
+;; syrup-nat in `wire-positive` and return as syrup-nat-equivalent
+;; via the (lossy on negatives) fallback `none`. Internal storage
+;; remains as Nat in the CapTPOp so downstream code is unchanged.
+
+;; Int -> Nat (clamped at 0). Structural recursion → O(n) cost.
+;; Only used for table-position decoding (small Nats) so the cost
+;; is acceptable.
+
+spec int-to-nat-loop Int Nat -> Nat
+defn int-to-nat-loop [i acc]
+  match [int-lt 0 i]
+    | false -> acc
+    | true  -> int-to-nat-loop [int- i 1] [suc acc]
+
+spec int-to-nat Int -> Nat
+defn int-to-nat [i]
+  int-to-nat-loop i zero
+
+spec wire-nat SyrupValue -> [Option Nat]
+defn wire-nat
+  | syrup-int i ->
+      match [int-lt i 0]
+        | true  -> none
+        | false -> some [int-to-nat i]
+  | syrup-nat n      -> some n
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _     -> none
+  | syrup-promise _  -> none
+
+spec list-fst [List SyrupValue] -> Option SyrupValue
+defn list-fst [xs]
+  match xs
+    | nil      -> none
+    | cons h _ -> some h
+
+spec list-2nd [List SyrupValue] -> Option SyrupValue
+defn list-2nd [xs]
+  match xs
+    | nil      -> none
+    | cons _ t -> list-fst t
+
+spec list-3rd [List SyrupValue] -> Option SyrupValue
+defn list-3rd [xs]
+  match xs
+    | nil      -> none
+    | cons _ t -> list-2nd t
+
+spec list-4th [List SyrupValue] -> Option SyrupValue
+defn list-4th [xs]
+  match xs
+    | nil      -> none
+    | cons _ t -> list-3rd t
+
+;; A `desc:export N` / `desc:answer N` / etc. wrapper becomes
+;; `syrup-tagged "desc:..." (syrup-nat N)`. Unwrap it.
+
+spec unwrap-desc SyrupValue -> [Option Nat]
+defn unwrap-desc
+  | syrup-tagged _ p -> wire-nat p
+  | syrup-null       -> none
+  | syrup-bool _     -> none
+  | syrup-nat _      -> none
+  | syrup-int _      -> none
+  | syrup-string _   -> none
+  | syrup-symbol _   -> none
+  | syrup-list _     -> none
+  | syrup-refr _     -> none
+  | syrup-promise _  -> none
+
+;; Same shape but for an Option-wrapped descriptor: `syrup-null`
+;; -> `none`, `desc:answer N` -> `some N`, anything else -> none.
+
+spec unwrap-opt-desc SyrupValue -> [Option Nat]
+defn unwrap-opt-desc
+  | syrup-null         -> none
+  | syrup-tagged _ p   -> wire-nat p
+  | syrup-bool _       -> none
+  | syrup-nat _        -> none
+  | syrup-int _        -> none
+  | syrup-string _     -> none
+  | syrup-symbol _     -> none
+  | syrup-list _       -> none
+  | syrup-refr _       -> none
+  | syrup-promise _    -> none
+
+;; ===========================================================
+;; Per-op dispatchers
+;; ===========================================================
+
+spec dispatch-abort SyrupValue -> [Option CapTPOp]
+defn dispatch-abort [p]
+  match [get-string p]
+    | none     -> none
+    | some msg -> some [op-abort msg]
+
+spec dispatch-gc-answer SyrupValue -> [Option CapTPOp]
+defn dispatch-gc-answer [p]
+  match [wire-nat p]
+    | none   -> none
+    | some n -> some [op-gc-answer n]
+
+spec dispatch-gc-export-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-gc-export-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some pos ->
+        match [wire-nat pos]
+          | none -> none
+          | some pos-n ->
+              match [list-2nd xs]
+                | none -> none
+                | some cnt ->
+                    match [wire-nat cnt]
+                      | none -> none
+                      | some cnt-n -> some [op-gc-export pos-n cnt-n]
+
+spec dispatch-gc-export SyrupValue -> [Option CapTPOp]
+defn dispatch-gc-export
+  | syrup-list xs -> dispatch-gc-export-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-promise _ -> none
+
+spec dispatch-deliver-only-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-only-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some tgt ->
+        match [unwrap-desc tgt]
+          | none -> none
+          | some t ->
+              match [list-2nd xs]
+                | none -> none
+                | some args -> some [op-deliver-only t args]
+
+spec dispatch-deliver-only SyrupValue -> [Option CapTPOp]
+defn dispatch-deliver-only
+  | syrup-list xs -> dispatch-deliver-only-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-promise _ -> none
+
+spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-listen-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some tgt ->
+        match [unwrap-desc tgt]
+          | none -> none
+          | some t ->
+              match [list-2nd xs]
+                | none -> none
+                | some r ->
+                    match [unwrap-desc r]
+                      | none -> none
+                      | some r-n -> some [op-listen t r-n]
+
+spec dispatch-listen SyrupValue -> [Option CapTPOp]
+defn dispatch-listen
+  | syrup-list xs -> dispatch-listen-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-promise _ -> none
+
+spec dispatch-deliver-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deliver-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some tgt ->
+        match [unwrap-desc tgt]
+          | none -> none
+          | some t ->
+              match [list-2nd xs]
+                | none -> none
+                | some args ->
+                    match [list-3rd xs]
+                      | none -> none
+                      | some ap ->
+                          match [list-4th xs]
+                            | none -> none
+                            | some rm -> some [op-deliver t args [unwrap-opt-desc ap] [unwrap-opt-desc rm]]
+
+spec dispatch-deliver SyrupValue -> [Option CapTPOp]
+defn dispatch-deliver
+  | syrup-list xs -> dispatch-deliver-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-promise _ -> none
+
+spec dispatch-start-session-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-start-session-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some ver ->
+        match [get-string ver]
+          | none -> none
+          | some ver-s ->
+              match [list-2nd xs]
+                | none -> none
+                | some loc -> some [op-start-session ver-s loc]
+
+spec dispatch-start-session SyrupValue -> [Option CapTPOp]
+defn dispatch-start-session
+  | syrup-list xs -> dispatch-start-session-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-promise _ -> none
+
+;; ===========================================================
+;; Tag dispatcher
+;; ===========================================================
+
+spec dispatch-op String SyrupValue -> [Option CapTPOp]
+defn dispatch-op [tag payload]
+  match [str::eq tag "op:abort"]
+    | true  -> dispatch-abort payload
+    | false ->
+        match [str::eq tag "op:gc-answer"]
+          | true  -> dispatch-gc-answer payload
+          | false ->
+              match [str::eq tag "op:gc-export"]
+                | true  -> dispatch-gc-export payload
+                | false ->
+                    match [str::eq tag "op:deliver-only"]
+                      | true  -> dispatch-deliver-only payload
+                      | false ->
+                          match [str::eq tag "op:listen"]
+                            | true  -> dispatch-listen payload
+                            | false ->
+                                match [str::eq tag "op:deliver"]
+                                  | true  -> dispatch-deliver payload
+                                  | false ->
+                                      match [str::eq tag "op:start-session"]
+                                        | true  -> dispatch-start-session payload
+                                        | false -> none
+
+spec syrup-to-op SyrupValue -> [Option CapTPOp]
+defn syrup-to-op
+  | syrup-tagged tag payload -> dispatch-op tag payload
+  | syrup-null               -> none
+  | syrup-bool _             -> none
+  | syrup-nat _              -> none
+  | syrup-int _              -> none
+  | syrup-string _           -> none
+  | syrup-symbol _           -> none
+  | syrup-list _             -> none
+  | syrup-refr _             -> none
+  | syrup-promise _          -> none
+
+;; ===========================================================
+;; Public top-level decode
+;; ===========================================================
+
+spec decode-op String -> [Option CapTPOp]
+  :doc "Parse one CapTP message from the start of `s`."
+defn decode-op [s]
+  match [wire::decode-value s]
+    | none -> none
+    | some v -> syrup-to-op v
