@@ -481,6 +481,27 @@ ergonomics of an Erlang-style multi-arg pattern dispatch would help
 when porting. Not a blocking bug; recorded so the next person
 doesn't step on it.
 
+**Confirmed 2026-04-29.** During the syntax-idiom sweep
+(commit `d65c6ac`) I converted `transport-eq?` to the multi-arity
+form again (forgetting #18) and the full OCapN suite on Racket 9.1
+caught it: 158/159, with the failure exactly at
+`tests/test-ocapn-locator.rkt:80` — same call site
+(`transport-eq? tr-loopback tr-tcp-testing-only` returns true).
+Reverting the one function to the nested-match shape restored
+159/159. The hazard is specific to clauses where BOTH positional
+patterns are 0-arity constructors (e.g. `tr-loopback tr-loopback`)
+across multiple alternatives — patterns where the second arg has
+a constructor-with-fields (`| v [pst-unresolved _]`, `| state
+[syrup-tagged tag p]`, `| [vat n acts proms q] m`) work correctly
+in multi-arity form. The narrowing failure appears to be about
+the pattern compiler treating leading bare 0-arity constructors as
+variable bindings when they shadow nothing.
+
+**Workaround crystallized.** Multi-arg cross-product over two
+0-arity-ctor enums → write as nested `match`. Multi-arg with at
+least one constructor-with-args pattern → multi-arity `defn` is
+fine.
+
 ---
 
 ### #19 — TCP framing for testing-only is line-oriented (design pitfall)

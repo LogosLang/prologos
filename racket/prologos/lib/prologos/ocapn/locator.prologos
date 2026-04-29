@@ -103,11 +103,16 @@ require [prologos::data::string :as str :refer []]
         [prologos::data::nat :refer [nat-eq?]]
 
 spec transport-eq? Transport Transport -> Bool
-defn transport-eq?
-  | tr-loopback         tr-loopback         -> true
-  | tr-loopback         tr-tcp-testing-only -> false
-  | tr-tcp-testing-only tr-loopback         -> false
-  | tr-tcp-testing-only tr-tcp-testing-only -> true
+defn transport-eq? [a b]
+  match a
+    | tr-loopback ->
+        match b
+          | tr-loopback         -> true
+          | tr-tcp-testing-only -> false
+    | tr-tcp-testing-only ->
+        match b
+          | tr-loopback         -> false
+          | tr-tcp-testing-only -> true
 
 spec locator-eq? Locator Locator -> Bool
 defn locator-eq?
