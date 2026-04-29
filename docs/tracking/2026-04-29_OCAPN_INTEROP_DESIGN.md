@@ -26,11 +26,11 @@ fidelity.
 | 1B | Syrup encoder | ✅ | lib/prologos/ocapn/syrup-wire.prologos |
 | 1C | Syrup decoder | ✅ | same module |
 | 1D | Round-trip + golden tests | ✅ | tests/test-ocapn-syrup-wire.rkt — 13/13 green on Racket 9.1 |
-| 1E | Phase-1 commit + green suite (Racket 9.1) | 🔄 | |
-| 2A | CapTP frame encoder (op:* → bytes) | ⬜ | lib/prologos/ocapn/captp-wire.prologos |
-| 2B | CapTP frame decoder | ⬜ | same module |
-| 2C | CapTP frame tests + fixtures | ⬜ | tests/test-ocapn-captp-wire.rkt + fixtures/captp-vectors.txt |
-| 2D | Phase-2 commit + green suite | ⬜ | |
+| 1E | Phase-1 commit + green suite (Racket 9.1) | ✅ | commit 1ad3e60 |
+| 2A | CapTP frame encoder (op:* → bytes) | ✅ | lib/prologos/ocapn/captp-wire.prologos |
+| 2B | CapTP frame decoder | ✅ | same module |
+| 2C | CapTP frame tests | ✅ | tests/test-ocapn-captp-wire.rkt — 6/6 green on Racket 9.1 |
+| 2D | Phase-2 commit + green suite | 🔄 | |
 | 3A | Real netlayer (TCP + Syrup framing) | ⬜ | lib/prologos/ocapn/netlayer-tcp.prologos |
 | 3B | In-process Racket↔Racket handshake | ⬜ | tests/test-ocapn-netlayer-tcp.rkt |
 | 3C | Phase-3 commit + green suite | ⬜ | |
