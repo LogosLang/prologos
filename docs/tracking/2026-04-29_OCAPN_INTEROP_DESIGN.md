@@ -33,7 +33,12 @@ fidelity.
 | 2D | Phase-2 commit + green suite | ✅ | commit 50fc0c1 |
 | 3A | Real netlayer (TCP + Syrup framing) | ✅ | tests/test-ocapn-netlayer-tcp.rkt — Racket-side, leverages existing tcp-ffi.rkt + Phase-2 codec |
 | 3B | In-process Racket↔Racket handshake | ✅ | tests/test-ocapn-netlayer-tcp.rkt — 2/2 green on Racket 9.1 |
-| 3C | Phase-3 commit + green suite | 🔄 | |
+| 3C | Phase-3 commit + green suite | ✅ | commit b4493a1 |
+| 4A | Probe @endo/ocapn API | ✅ | encodeSyrup + record representation discovered |
+| 4B | JS vector generator + committed fixture | ✅ | tools/interop/gen-syrup-vectors.mjs + tests/fixtures/syrup-cross-impl.txt (22 vectors) |
+| 4C | Racket cross-impl test | ✅ | tests/test-ocapn-syrup-cross-impl.rkt — 44/44 green on Racket 9.1 |
+| 4D | Interop CI workflow | ✅ | .github/workflows/interop.yml — runs gen-then-diff drift gate + Racket cross-impl test |
+| 4E | Phase-4 commit + green suite | 🔄 | |
 
 ## Design Mantra Audit
 

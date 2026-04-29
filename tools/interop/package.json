@@ -1,0 +1,14 @@
+{
+  "name": "prologos-ocapn-interop-tools",
+  "version": "1.0.0",
+  "description": "Cross-runtime interop helpers — generates Syrup wire-byte fixtures from @endo/ocapn (the JS reference) so the Prologos OCapN port can verify byte-equality.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node gen-syrup-vectors.mjs"
+  },
+  "dependencies": {
+    "@endo/init": "^1.1.0",
+    "@endo/ocapn": "^1.0.0"
+  }
+}

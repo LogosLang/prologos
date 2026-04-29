@@ -553,3 +553,230 @@ foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-listen :as tcp-listen-raw :
 **Verdict.** Cosmetic but annoying for libraries with long
 type-signatures. Worth a parser fix to allow indented continuation
 of a `foreign` form.
+
+---
+
+### #21 — Multi-line clause body silently produces `??__match-fail` holes (2026-04-29, real bug)
+
+**Symptom.** A `defn` whose `match` clause body spans multiple
+indented lines compiles without error but evaluates to
+`??__match-fail : <return-type>`:
+
+```prologos
+defn encode [v]
+  match v
+    | syrup-null         -> "n"
+    | syrup-bool b       ->
+        match b
+          | true  -> "t"
+          | false -> "f"
+    | syrup-string s     ->
+        str::append [str::from-int [str::length s]]
+                    [str::append "\"" s]    ;; 2-line body — BROKEN
+    ...
+```
+
+`(eval (encode (syrup-string "hi")))` returns
+`"??__match-fail : String"` even though the pattern clearly
+matched.
+
+**Cause.** Layout-rule interpretation of clause continuation. A
+body that has its function head on one line and its argument
+list on another is parsed as TWO separate forms, not one
+application. The first becomes the body of the clause; the
+second becomes some sort of layout-detached fragment that
+elaborates to a hole.
+
+**Workaround.** Either (a) collapse the body to a single line, or
+(b) put the entire body on the line BELOW the `->`, indented
+strictly past the `->`:
+
+```prologos
+;; (a) single line:
+| syrup-string s -> str::append [str::from-int [str::length s]] [str::append "\"" s]
+
+;; (b) body on its own line:
+| syrup-string s ->
+    str::append [str::from-int [str::length s]] [str::append "\"" s]
+```
+
+What does NOT work: head on `->` line, args on subsequent lines
+at lesser indentation.
+
+**Verdict.** Silent failure mode — no compile error, just a hole
+masquerading as a value. The same hazard appears in the
+clause-continuation example in `prologos-syntax.md` § "Multi-line
+clause body" (which says the body must be indented past the `|`,
+but that's necessary, not sufficient — multi-line continuation
+of a multi-token application is the breaking case).
+
+**Discovered.** Phase 1 of OCapN interop (commit `1ad3e60`) —
+all encoder branches with multi-line bodies returned match-fail
+sentinels. Took ~1 hour to diagnose because the symptom
+(every branch falls through) hid the cause (layout
+mis-parse of one specific body shape).
+
+**Codify-it ask.** A diagnostic that flags "this clause body
+elaborated to a hole" with a layout hint would close this gap.
+The hole has the right type, so type-checking passes — only the
+runtime sentinel reveals the bug.
+
+---
+
+### #22 — `Option Nat -> SyrupValue` parses as multi-arg Pi, not `(Option Nat) -> SyrupValue` (2026-04-29, real bug)
+
+**Symptom.** A spec like
+
+```prologos
+spec opt-pos Option Nat -> SyrupValue
+```
+
+triggers `Type mismatch` at IMPORT time (not at elaboration of
+the defining module), with no usable error context:
+
+```
+imports: Error loading module prologos::ocapn::captp-wire: Type mismatch
+```
+
+**Cause.** Without explicit brackets, `Option Nat -> SyrupValue`
+is parsed as a 3-argument Pi `Option -> Nat -> SyrupValue`, not
+as `[Option Nat] -> SyrupValue`. The mismatch surfaces only when
+another module imports the function and tries to instantiate the
+spec.
+
+**Workaround.** Bracket the parametric type in the spec:
+
+```prologos
+spec opt-pos [Option Nat] -> SyrupValue
+spec encode-safe SyrupValue -> [Option String]
+spec decode-op String -> [Option CapTPOp]
+```
+
+This applies to ALL return / parameter positions where a type
+constructor takes its own argument. `Option`, `List`, `Result`
+etc. all need the brackets.
+
+**Verdict.** Easy to miss because (a) the function elaborates
+fine in its own module, (b) the import error message gives no
+location or hint about which spec is wrong. Once you know the
+fix it's mechanical, but the discovery cost is high.
+
+**Discovered.** Phase 2 of OCapN interop (commit `50fc0c1`) —
+six functions in `captp-wire.prologos` had unbracketed
+`Option X` return types. The first failure narrowed the scope;
+fixing them in one pass took 30 seconds.
+
+**Codify-it ask.** A spec-level lint or just a less generic error
+message ("Type mismatch in spec for `opt-pos`: parametric type
+`Option` expected an argument; did you mean `[Option Nat]`?")
+would eliminate this.
+
+---
+
+### #23 — Multi-token `defn` body on a single line needs outer `[…]` brackets (2026-04-29, real bug)
+
+**Symptom.**
+
+```prologos
+defn desc-export [n] syrup-tagged "desc:export" [syrup-nat n]
+```
+
+triggers `Type mismatch` at import. The body `syrup-tagged "..." [syrup-nat n]`
+is being parsed as something other than a 3-element application.
+
+**Workaround.** Either (a) wrap the body in `[…]`:
+
+```prologos
+defn desc-export [n] [syrup-tagged "desc:export" [syrup-nat n]]
+```
+
+or (b) put the body on its own line, indented past the `[args]`
+header:
+
+```prologos
+defn desc-export [n]
+  syrup-tagged "desc:export" [syrup-nat n]
+```
+
+Both work. The single-line bare-juxtaposition form
+`defn f [args] head a b c` does not.
+
+**Cause.** Same family as #21 — WS-mode application is bracket-
+delimited; bare juxtaposition needs an enclosing form to anchor
+the parse.
+
+**Verdict.** Silent error class — like #21 the failure is at
+import (or evaluation), not at the `defn` itself.
+
+**Discovered.** Phase 2 of OCapN interop (commit `50fc0c1`) —
+multiple `desc-*` helpers in captp-wire.prologos had this shape.
+Fixed by moving bodies to their own line.
+
+---
+
+### #24 — Phase-1 wire decoder asymmetry: `+` suffix produces `syrup-int`, never `syrup-nat` (2026-04-29, design choice)
+
+**Context.** OCapN's Syrup wire format uses `<digits>"+"` for
+non-negative integers and `<digits>"-"` for negatives. There is
+no separate Nat wire form — Naturals are just non-negative
+integers. So `(syrup-nat 5)` and `(syrup-int 5)` BOTH serialise
+to `5+`.
+
+**Symptom.** A round-trip `(decode (encode (syrup-nat 5)))`
+returns `(syrup-int 5)`, not `(syrup-nat 5)`. Functions that
+match on `syrup-nat` (via `get-nat`) fail to extract the value
+from a decoded Nat-on-the-wire because the decoder always emits
+`syrup-int`.
+
+**Workaround.** Phase 2's `wire-nat` helper (in
+`captp-wire.prologos`) accepts both `syrup-nat` and `syrup-int`
+(when the int is ≥ 0) and bridges back to the model's Nat type
+via a structural-recursion `int-to-nat` helper.
+
+**Verdict.** Not a bug, but a subtle modelling tradeoff:
+- pro: the wire is one-to-one with the byte sequence; encode is
+  total over both Int and Nat
+- con: round-tripping a `syrup-nat` doesn't preserve identity
+- con: any decoder that wants Nat positions has to bridge
+
+**Codify-it ask.** Either (a) drop `syrup-nat` from the value
+type entirely (subsume into Int), or (b) make the decoder pick
+syrup-nat for `+` suffix and syrup-int only for `-`. Either is
+fine; the current asymmetry is just a minor wart.
+
+**Discovered.** Phase 2 of OCapN interop (commit `50fc0c1`).
+
+---
+
+### #25 — Prologos `String` return values come back through the test fixture with print-escapes that need `read`-back (2026-04-29, ergonomics)
+
+**Symptom.** A Phase 3 test that pulls the bytes of a Prologos
+`encode-op` call into Racket-side TCP code got wire bytes with
+literal `\"` instead of `"`:
+
+```racket
+(define wire-bytes (extract-value-bytes (run-last "(eval ...)")))
+;; got: "<8'op:abort13\"phase-3-works>"   ;; 1 backslash + 1 quote
+;; expected: "<8'op:abort13\"phase-3-works>"   ;; raw quote
+```
+
+**Cause.** The fixture's `run-last` returns the Prologos pretty-
+printer output, which uses C-style escapes (`\"`, `\\`) for
+String values. Naively stripping the `"..."` wrapper preserves
+those escapes in the Racket string, so subsequent uses see
+phantom backslashes.
+
+**Workaround.** `read` the quoted form back as a Racket string
+literal:
+
+```racket
+(define m (regexp-match #px"^(\".*\") : String$" s))
+(read (open-input-string (cadr m)))   ;; round-trips the escapes
+```
+
+**Verdict.** Test-helper-level pitfall, not a Prologos bug —
+the printer is doing the right thing (round-trippable output).
+Worth codifying as a reusable helper in `test-support.rkt` if
+more interop tests appear.
+
+**Discovered.** Phase 3 of OCapN interop (commit `b4493a1`).
