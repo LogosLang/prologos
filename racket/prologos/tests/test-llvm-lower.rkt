@@ -160,3 +160,117 @@
         (lower-program
          (list (list 'def 'main (expr-Bool) (expr-true)))))))
 )
+
+;; ============================================================
+;; Tier 2 — top-level functions, calls, m0 erasure
+;; ============================================================
+
+(parameterize ([current-llvm-tier 2])
+
+  ;; ---- Helpers to build canonical Tier 2 fixtures ----
+
+  ;; add(x : Int, y : Int) : Int
+  (define add-type
+    (expr-Pi 'mw (expr-Int) (expr-Pi 'mw (expr-Int) (expr-Int))))
+  (define add-body
+    (expr-lam 'mw (expr-Int)
+      (expr-lam 'mw (expr-Int)
+        (expr-int-add (expr-bvar 1) (expr-bvar 0)))))
+
+  ;; id : {A : Type} A -> A   (m0 type binder + mw value binder)
+  (define id-type
+    (expr-Pi 'm0 (expr-Type 0)
+      (expr-Pi 'mw (expr-bvar 0) (expr-bvar 1))))
+  (define id-body
+    (expr-lam 'm0 (expr-Type 0)
+      (expr-lam 'mw (expr-bvar 0) (expr-bvar 0))))
+
+  (test-case "tier 2: simple call to add"
+    (define main-body
+      (expr-app (expr-app (expr-fvar 'add) (expr-int 5)) (expr-int 7)))
+    (define ir
+      (lower-program
+       (list (list 'def 'add add-type add-body)
+             (list 'def 'main (expr-Int) main-body))))
+    (check-true (string-contains? ir "define i64 @p_add(i64 %p0, i64 %p1)")
+                "function definition with two i64 params")
+    (check-true (string-contains? ir "%t1 = add i64 %p0, %p1")
+                "body uses param SSA names in correct de Bruijn order")
+    (check-true (regexp-match? #rx"= call i64 @p_add\\(i64 5, i64 7\\)" ir)
+                "main calls add with literals"))
+
+  (test-case "tier 2: m0 binder dropped from signature"
+    ;; main calls id with implicit Type arg + Int value
+    (define main-body
+      (expr-app (expr-app (expr-fvar 'id) (expr-Int)) (expr-int 99)))
+    (define ir
+      (lower-program
+       (list (list 'def 'id id-type id-body)
+             (list 'def 'main (expr-Int) main-body))))
+    (check-true (string-contains? ir "define i64 @p_id(i64 %p1)")
+                "id has only the value param, m0 type binder is erased")
+    (check-true (string-contains? ir "ret i64 %p1")
+                "id returns its value param")
+    (check-true (regexp-match? #rx"= call i64 @p_id\\(i64 99\\)" ir)
+                "call site passes only the value arg"))
+
+  (test-case "tier 2: closure capture rejected"
+    ;; A body that reaches into a non-existent outer scope.
+    ;; bvar 5 in a nullary main body has no enclosing binder.
+    (define bad-main
+      (list 'def 'main (expr-Int) (expr-bvar 5)))
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program (list bad-main)))))
+
+  (test-case "tier 2: erased binder used at runtime is rejected"
+    ;; A function whose body uses bvar pointing at the m0 type binder.
+    (define bad-id-type
+      (expr-Pi 'm0 (expr-Type 0) (expr-Int)))
+    (define bad-id-body
+      (expr-lam 'm0 (expr-Type 0) (expr-bvar 0)))  ; body references the m0 binder
+    (define main-body
+      (expr-app (expr-fvar 'bad-id) (expr-Int)))
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'bad-id bad-id-type bad-id-body)
+               (list 'def 'main (expr-Int) main-body))))))
+
+  (test-case "tier 2: arity mismatch in call rejected"
+    (define main-body
+      (expr-app (expr-fvar 'add) (expr-int 5))) ; only 1 arg, add wants 2
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'add add-type add-body)
+               (list 'def 'main (expr-Int) main-body))))))
+
+  (test-case "tier 2: unknown function rejected"
+    (define main-body
+      (expr-app (expr-fvar 'no-such-fn) (expr-int 5)))
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'main (expr-Int) main-body))))))
+
+  (test-case "tier 2: bare expr-fvar (function-as-value) rejected"
+    ;; main := add  (would need closure conversion)
+    (define main-body (expr-fvar 'add))
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'add add-type add-body)
+               (list 'def 'main (expr-Int) main-body))))))
+
+  (test-case "tier 2: nested call inside arithmetic"
+    (define main-body
+      (expr-int-add (expr-app (expr-app (expr-fvar 'add) (expr-int 1)) (expr-int 2))
+                    (expr-int 100)))
+    (define ir
+      (lower-program
+       (list (list 'def 'add add-type add-body)
+             (list 'def 'main (expr-Int) main-body))))
+    (check-true (string-contains? ir "= call i64 @p_add(i64 1, i64 2)"))
+    (check-true (regexp-match? #rx"add i64 %t[0-9]+, 100" ir)))
+)

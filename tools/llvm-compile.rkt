@@ -53,7 +53,11 @@
   (displayln result))
 
 ;; 2. Lower main from the global env.
-(define ir (lower-program/from-global-env))
+;; Tier 0–1 use the main-only entry; Tier 2 walks dependencies.
+(define ir
+  (case tier
+    [(0 1) (lower-program/from-global-env)]
+    [else  (lower-program/from-global-env-multi)]))
 
 (cond
   [(emit-only?)
