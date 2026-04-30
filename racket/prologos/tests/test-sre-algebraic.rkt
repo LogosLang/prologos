@@ -309,3 +309,116 @@
                                          #:relation 'equality))
   (check-false (hash-has-key? props 'sd-vee))
   (check-false (hash-has-key? props 'sd-wedge)))
+
+;; ========================================
+;; 12. SRE Track 2I Phase 2: Detailed SD Evidence + Sample Generator
+;; ========================================
+
+(require "../sre-sample-generator.rkt")
+
+(test-case "sd-evidence: untested when no meet-fn"
+  (define td (lookup-domain 'type))
+  (define ev (test-sd-vee/detailed td type-samples #f))
+  (check-eq? (sd-evidence-status ev) 'untested)
+  (check-eq? (sd-evidence-total-checked ev) 0)
+  (check-eq? (sd-evidence-hypothesis-fired ev) 0)
+  (check-eq? (sd-evidence-conclusion-held ev) 0)
+  (check-eq? (sd-evidence-witness ev) #f))
+
+(test-case "sd-evidence: confirmed populates counts"
+  (define td (lookup-domain 'type))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  ;; Status either 'confirmed or 'refuted (not 'untested) since meet-fn provided.
+  (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
+                  (eq? (sd-evidence-status ev) 'refuted)))
+  ;; total-checked must equal |samples|³ for confirmed, ≤ that for refuted.
+  (check-true (> (sd-evidence-total-checked ev) 0))
+  ;; hypothesis-fired ≤ total-checked
+  (check-true (<= (sd-evidence-hypothesis-fired ev)
+                  (sd-evidence-total-checked ev)))
+  ;; conclusion-held ≤ hypothesis-fired
+  (check-true (<= (sd-evidence-conclusion-held ev)
+                  (sd-evidence-hypothesis-fired ev))))
+
+(test-case "sd-evidence: backward-compat wrappers translate correctly"
+  (define td (lookup-domain 'type))
+  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet))
+  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet))
+  ;; If detailed = confirmed, wrapper = axiom-confirmed
+  (case (sd-evidence-status ev-vee)
+    [(confirmed) (check-true (axiom-confirmed? wrap-vee))]
+    [(refuted)   (check-true (axiom-refuted? wrap-vee))]
+    [(untested)  (check-eq? wrap-vee axiom-untested)]))
+
+(test-case "sd-evidence: total-checked = |samples|³ on confirmed (full sweep)"
+  (define td (lookup-domain 'type))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  ;; Either confirmed (full sweep, total = n³) or refuted (short-circuit, total < n³)
+  (define n (length type-samples))
+  (case (sd-evidence-status ev)
+    [(confirmed) (check-eq? (sd-evidence-total-checked ev) (* n n n))]
+    [(refuted)   (check-true (<= (sd-evidence-total-checked ev) (* n n n)))]))
+
+(test-case "generate-domain-samples: returns non-empty for type domain"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td #:max-depth 1 #:per-ctor-count 2))
+  (check-true (> (length samples) 0)))
+
+(test-case "generate-domain-samples: includes bot/top by default"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td #:max-depth 0 #:per-ctor-count 1))
+  ;; type-bot and type-top must appear in depth-0 samples
+  (define bot-val (sre-domain-bot-value td))
+  (define top-val (sre-domain-top-value td))
+  (check-not-false (member bot-val samples))
+  (check-not-false (member top-val samples)))
+
+(test-case "generate-domain-samples: omits bot/top when #:include-bot-top #f"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 0
+                                           #:per-ctor-count 1
+                                           #:include-bot-top #f))
+  (define bot-val (sre-domain-bot-value td))
+  (define top-val (sre-domain-top-value td))
+  (check-false (member bot-val samples))
+  (check-false (member top-val samples)))
+
+(test-case "generate-domain-samples: respects base-values"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 0
+                                           #:per-ctor-count 1
+                                           #:include-bot-top #f
+                                           #:base-values (list (expr-Int) (expr-Bool))))
+  (check-not-false (member (expr-Int) samples))
+  (check-not-false (member (expr-Bool) samples)))
+
+(test-case "generate-domain-samples: increasing max-depth produces ≥ samples"
+  (define td (lookup-domain 'type))
+  (define samples-d0 (generate-domain-samples td #:max-depth 0 #:per-ctor-count 2))
+  (define samples-d1 (generate-domain-samples td #:max-depth 1 #:per-ctor-count 2))
+  (define samples-d2 (generate-domain-samples td #:max-depth 2 #:per-ctor-count 2))
+  ;; Each depth level only adds samples (monotone over depth via dedup)
+  (check-true (<= (length samples-d0) (length samples-d1)))
+  (check-true (<= (length samples-d1) (length samples-d2))))
+
+(test-case "generate-domain-samples: deduplicates"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 1
+                                           #:per-ctor-count 2
+                                           #:base-values (list (expr-Int) (expr-Int) (expr-Int))))
+  ;; Three duplicate base values should collapse to one
+  (define int-count (length (filter (lambda (s) (equal? s (expr-Int))) samples)))
+  (check-eq? int-count 1))
+
+(test-case "sd-evidence with generated samples: produces structured outcome"
+  (define td (lookup-domain 'type))
+  (define gen-samples (generate-domain-samples td #:max-depth 1 #:per-ctor-count 2))
+  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet))
+  (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
+                  (eq? (sd-evidence-status ev) 'refuted)))
+  ;; Total checked equals |samples|³ on confirmed; less or equal on refuted
+  (define n (length gen-samples))
+  (check-true (<= (sd-evidence-total-checked ev) (* n n n))))

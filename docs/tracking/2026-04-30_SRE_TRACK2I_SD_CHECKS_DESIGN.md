@@ -25,7 +25,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | 1 | `test-sd-vee` + `test-sd-wedge` in sre-core.rkt; wire into inference + reporting; implication rules for distributive⇒SD | ✅ | `a35d5f65`. 99 LoC sre-core.rkt + 71 LoC test-sre-algebraic.rkt. 42 tests pass via targeted runner. VAG passed adversarially. |
-| 2 | Programmatic sample generator from ctor-desc registry | ⬜ | "Lean more thorough" per user 2026-04-30. |
+| 2 | Programmatic sample generator from ctor-desc registry + sd-evidence struct + `/detailed` variants | ✅ | (commit-hash-pending). New file `sre-sample-generator.rkt` (~120 LoC) + sre-core.rkt enrichment (~80 LoC, sd-evidence struct + /detailed variants + backward-compat wrappers) + 11 new tests. 53 tests pass via targeted runner. VAG passed adversarially with two acknowledged Phase-3 gaps (sample-size verification, binder-ctor coverage). API note: `all-ctor-descs` takes `#:domain` keyword (not positional) — caught at compile time. |
 | 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ⬜ | Per workflow.md MANDATORY dedicated test phase. |
 | Discussion | Review Phase 3 findings with user; decide on Phase 4 (declaration updates) | ⬜ | Out-of-band of the implementation phases per user direction. |
@@ -124,18 +124,47 @@ Estimated scope: ~80-100 LoC across `sre-core.rkt` + ~30 LoC of unit tests in `t
 
 ### Phase 2: Programmatic sample generator from ctor-desc registry
 
-**Goal**: `generate-domain-samples : sre-domain × Nat → (listof value)` walks the domain's ctor-desc registry to synthesize representative inhabitants. Per user direction "lean more thorough" — generated samples cover the full constructor space, not hand-picked Track 2H fixtures.
+**Goal**: `generate-domain-samples : sre-domain × ... → (listof value)` walks the domain's ctor-desc registry to synthesize representative inhabitants. Plus enrich SD test return value to track vacuous-vs-non-vacuous triple counts for honest Phase 3 reporting.
 
-**Mini-design + audit**: deferred to phase open. Will require reading `sre-core.rkt`'s ctor-desc structure and per-domain ctor-desc tables (e.g., `type-sre-domain` registers 23 ctor-descs per Track 0).
+**Mini-design + audit (locked 2026-04-30)**:
 
-**Test coverage**: confirm generator returns non-empty sample sets for all registered domains; confirm samples are well-formed (each sample passes `(sre-domain-classify domain x)` non-trivially).
+*Audit findings persisted from code-reading*:
+- `ctor-desc` structure (`ctor-registry.rkt:85-96`): `tag`, `arity`, `recognizer-fn`, `extract-fn`, `reconstruct-fn`, `component-lattices`, `binder-depth`, `domain`, `component-variances`, `binder-open-fn`.
+- Per-domain storage: `type-ctor-table`, `data-ctor-table`, `extra-domain-tables` (`ctor-registry.rkt:141-157`). Access via `(domain-table 'type)` / similar.
+- Existing `type-samples` (test fixture, line 111): `(list type-bot type-top (expr-Int) (expr-Nat) (expr-String) (expr-Bool))` — 6 flat atoms only; no compound types.
 
-**Drift risks**:
-- Generator complexity creep (recursive generation could explode the sample space; need depth-bound).
-- Generated samples may not include realistic compound types — hand-augment if necessary.
-- Performance: SD checks are O(|samples|³); for |samples| = 30, that's 27,000 iterations per check, per domain. Bound the sample size or introduce sub-sampling.
+*Decisions (per user direction, 2026-04-30 dialogue)*:
 
-Estimated scope: ~100-150 LoC. ~45-60 min.
+1. **Generator placement**: SEPARATE FILE `racket/prologos/sre-sample-generator.rkt`. Decomplection — sample generation is orthogonal to property checking; reusable for any future algebraic-property check.
+
+2. **Vacuous-triple counting**: ENRICH SD test return value via parallel `/detailed` variants. Introduce `sd-evidence` struct (status, total-checked, hypothesis-fired, conclusion-held, witness). `test-sd-vee/detailed` and `test-sd-wedge/detailed` return `sd-evidence`; existing `test-sd-vee` and `test-sd-wedge` become thin wrappers preserving `axiom-confirmed | axiom-refuted | axiom-untested` shape (no breaking change to Phase 1 wiring or tests).
+
+3. **Binder ctors** (`binder-depth > 0`): SKIP IN PHASE 2 with explicit comment in code. Limitation documented; if Phase 3 reveals gaps from missing function-type SD coverage, revisit. Per user direction.
+
+*Honest implication of audit (flagged before implementation)*: `type × equality` uses agree-or-top merge; `a ⊔_eq b = a ⊔_eq c` rarely fires non-trivially regardless of sample diversity. SD on equality merge will likely report "confirmed mostly vacuously." This is real lattice structure, not a generator weakness — the vacuous-triple counter is what makes Phase 3's findings table informationally honest. The empirically interesting SD question is on `type × subtype` (where `Nat ⊔_sub Int = Int` is a non-trivial join), but that domain is already declared distributive (Heyting) — SD inherited via implication, not empirical sweep. Phase 3 reporting will need to mark the distinction.
+
+*Generator algorithm*:
+- Depth 0: bot, top (if `#:include-bot-top`), optional `#:base-values`, plus nullary ctor inhabitants reconstructed from `(ctor-desc-reconstruct-fn desc) '()`.
+- Depth d > 0: for each non-binder ctor with arity > 0, take Cartesian product of `per-ctor-count` components from depth (d-1), reconstruct, validate via `lookup-domain-classification` (skip 'unclassified).
+- Reconstruction failures caught via `with-handlers` + silent skip (defensive guard for naive component combinations; labeled scaffolding in code).
+- Deduplication via `equal?` at each depth + final pass.
+
+*Generator parameters*:
+- `#:max-depth` (default 2)
+- `#:per-ctor-count` (default 2 — Cartesian = 2^arity per ctor per depth)
+- `#:include-bot-top` (default #t)
+- `#:base-values` (optional pre-built atomic samples)
+
+*Estimated sample-set size at defaults*: depth 0 ~6-10, depth 1 ~20, depth 2 ~30; total ~50 deduped. SD-check cost: O(50³) = 125k iterations per check per domain × ~1μs/iter = 125ms. Within budget for the diagnostic invocation pattern.
+
+**Drift-risk mitigations (carried from §Drift risks)**:
+- R2 (sample size): generator's parameter caps + Cartesian explicit; not auto-recursive.
+- R4 (perf): O(|samples|³) bound visible from generator parameters; gated behind explicit `infer-domain-properties` call (no auto-runs).
+- New for Phase 2: reconstruction failure tolerance — `with-handlers` defensive scaffolding labeled in code.
+
+**Test coverage**: tests in `test-sre-algebraic.rkt` covering: generator returns non-empty for type domain; depth-0 includes bot/top + base atoms; depth > 0 produces compound values; all generated values pass classify; deduplication works. Plus tests for `sd-evidence` struct construction and `/detailed` variant return shape.
+
+**Estimated scope**: generator ~100-150 LoC; sd-evidence + /detailed variants ~70-90 LoC; tests ~80-100 LoC. ~45-60 min.
 
 ### Phase 3: Empirical sweep + findings recording
 

@@ -54,6 +54,9 @@
  axiom-untested
  test-commutative-join test-associative-join test-idempotent-join test-distributive
  test-sd-vee test-sd-wedge  ;; Track 2I: semidistributivity (Jónsson-Kiefer 1962)
+ ;; Track 2I Phase 2: detailed SD evidence for vacuous-vs-non-vacuous reporting
+ (struct-out sd-evidence)
+ test-sd-vee/detailed test-sd-wedge/detailed
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -337,59 +340,113 @@
 ;;
 ;; Both checks require meet-fn. Return axiom-untested if no meet available.
 
+;; ------------------------------------------------------------------------
+;; Phase 2: detailed SD evidence (vacuous-triple counting)
+;; ------------------------------------------------------------------------
+;;
+;; sd-evidence reports four counts plus optional witness:
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total triples (a,b,c) iterated over
+;;   hypothesis-fired  — triples where the SD hypothesis non-trivially held
+;;                       (SD∨: a ⊔ b = a ⊔ c; SD∧: a ⊓ b = a ⊓ c)
+;;   conclusion-held   — triples where hypothesis fired AND conclusion also held
+;;                       (this is the genuinely-informative count)
+;;   witness           — (list a b c) on refute; #f on confirmed/untested
+;;
+;; The vacuous count is (total-checked - hypothesis-fired). Phase 3 reports
+;; (hypothesis-fired / total-checked) as the "non-vacuity ratio" so SD-confirmed
+;; results are interpretable: SD-confirmed with 0 hypothesis-fired means
+;; "vacuously true on this sample set" — informationally weak. SD-confirmed
+;; with hypothesis-fired = total-checked is the strongest evidence shape.
+;;
+;; Status and witness semantics match axiom-confirmed/refuted/untested for
+;; backward compat: existing test-sd-vee and test-sd-wedge wrappers translate.
+(struct sd-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+;; Detailed SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
+(define (test-sd-vee/detailed domain samples meet-fn)
+  (cond
+    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [else
+     (define join ((sre-domain-merge-registry domain) 'equality))
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)])
+           (define t* (+ t 1))
+           (define ab (join a b))
+           (define ac (join a c))
+           (cond
+             [(not (equal? ab ac))
+              ;; Hypothesis fails — vacuously satisfied
+              (values t* f h)]
+             [else
+              ;; Hypothesis holds — check conclusion
+              (define conclusion (join a (meet-fn b c)))
+              (cond
+                [(equal? ab conclusion)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 ;; Refute and short-circuit
+                 (return (sd-evidence 'refuted t* (+ f 1) h (list a b c)))])])))
+       (sd-evidence 'confirmed total fired held #f))]))
+
+;; Detailed SD∧ (dual): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
+(define (test-sd-wedge/detailed domain samples meet-fn)
+  (cond
+    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [else
+     (define join ((sre-domain-merge-registry domain) 'equality))
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)])
+           (define t* (+ t 1))
+           (define ab (meet-fn a b))
+           (define ac (meet-fn a c))
+           (cond
+             [(not (equal? ab ac))
+              (values t* f h)]
+             [else
+              (define conclusion (meet-fn a (join b c)))
+              (cond
+                [(equal? ab conclusion)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (sd-evidence 'refuted t* (+ f 1) h (list a b c)))])])))
+       (sd-evidence 'confirmed total fired held #f))]))
+
+;; ------------------------------------------------------------------------
+;; Backward-compat wrappers — preserve axiom-confirmed | axiom-refuted | axiom-untested
+;; shape consumed by infer-domain-properties + resolve-and-report-properties.
+;; Phase 3 reporting uses /detailed variants directly for vacuous-counting.
+;; ------------------------------------------------------------------------
+
 ;; Test SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
 (define (test-sd-vee domain samples meet-fn)
-  (if (not meet-fn)
-      axiom-untested
-      (let ([join ((sre-domain-merge-registry domain) 'equality)])
-        (for/fold ([status (axiom-confirmed 0)])
-                  ([a (in-list samples)]
-                   #:break (axiom-refuted? status))
-          (for/fold ([st status])
-                    ([b (in-list samples)]
-                     #:break (axiom-refuted? st))
-            (for/fold ([st2 st])
-                      ([c (in-list samples)]
-                       #:break (axiom-refuted? st2))
-              (define ab (join a b))
-              (define ac (join a c))
-              (cond
-                ;; Hypothesis fails — implication is vacuously satisfied
-                [(not (equal? ab ac))
-                 (axiom-confirmed (+ (axiom-confirmed-count st2) 1))]
-                ;; Hypothesis holds — check conclusion
-                [else
-                 (define conclusion (join a (meet-fn b c)))
-                 (if (equal? ab conclusion)
-                     (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
-                     (axiom-refuted (list a b c)))])))))))
+  (define ev (test-sd-vee/detailed domain samples meet-fn))
+  (case (sd-evidence-status ev)
+    [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
+    [(untested)  axiom-untested]))
 
 ;; Test SD∧ (dual of SD∨): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
 (define (test-sd-wedge domain samples meet-fn)
-  (if (not meet-fn)
-      axiom-untested
-      (let ([join ((sre-domain-merge-registry domain) 'equality)])
-        (for/fold ([status (axiom-confirmed 0)])
-                  ([a (in-list samples)]
-                   #:break (axiom-refuted? status))
-          (for/fold ([st status])
-                    ([b (in-list samples)]
-                     #:break (axiom-refuted? st))
-            (for/fold ([st2 st])
-                      ([c (in-list samples)]
-                       #:break (axiom-refuted? st2))
-              (define ab (meet-fn a b))
-              (define ac (meet-fn a c))
-              (cond
-                ;; Hypothesis fails — implication is vacuously satisfied
-                [(not (equal? ab ac))
-                 (axiom-confirmed (+ (axiom-confirmed-count st2) 1))]
-                ;; Hypothesis holds — check conclusion
-                [else
-                 (define conclusion (meet-fn a (join b c)))
-                 (if (equal? ab conclusion)
-                     (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
-                     (axiom-refuted (list a b c)))])))))))
+  (define ev (test-sd-wedge/detailed domain samples meet-fn))
+  (case (sd-evidence-status ev)
+    [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
+    [(untested)  axiom-untested]))
 
 ;; Infer properties for a domain from sample values.
 ;; SRE Track 2H: #:relation selects which sub-hash to work with.
