@@ -136,47 +136,61 @@ quadratically across budget rounds.
 
 `benchmarks/comparative/eigentrust-propagators-scaling.rkt` runs
 the three propagator variants on random column-stochastic matrices
-at sizes n = 8..128 (all three variants), then float-only at
-n = 256..4096 (rat is intractable beyond 128). K=4, 3 measured runs
-per (variant, n), median.
+at n = 8 .. 4096. K=4, 3 measured runs per (variant, n), median.
+**Per-sample timeout: 30 s** — anything slower is `TIMEOUT`. Once
+a variant times out at some n, larger n are `(skip)`'d (rat-cost
+is monotone in n).
 
-**All three variants, n = 8..128:**
-
-| n   | rat-coarse | rat-fine    | float    | fine/coarse | rat/float |
-| --: | ---------: | ----------: | -------: | ----------: | --------: |
-|   8 |     5.3 ms |       6.9 ms |  0.14 ms |        1.3× |       38× |
-|  16 |    56.7 ms |      75.8 ms |  0.14 ms |        1.3× |      392× |
-|  32 |   669.5 ms |     687.8 ms |  0.19 ms |        1.0× |    3 496× |
-|  64 |    10.0 s  |      10.2 s  |  0.42 ms |        1.0× |   23 647× |
-| 128 |   138.2 s  |     138.7 s  |  1.11 ms |        1.0× |  124 088× |
-
-**Float only, n = 256..4096:** _to be filled in_
+| n    | rat-coarse  | rat-fine    | float       |
+| ---: | ----------: | ----------: | ----------: |
+|    8 |     5.72 ms |     7.01 ms |     0.20 ms |
+|   16 |    59.80 ms |    69.05 ms |     0.20 ms |
+|   32 |   704.99 ms |   736.14 ms |     0.27 ms |
+|   64 |     9.37 s  |     9.60 s  |     0.43 ms |
+|  128 |   **TIMEOUT** | **TIMEOUT** |     1.19 ms |
+|  256 |    (skip)   |    (skip)   |     4.25 ms |
+|  512 |    (skip)   |    (skip)   |    18.79 ms |
+| 1024 |    (skip)   |    (skip)   |    66.61 ms |
+| 2048 |    (skip)   |    (skip)   |   301.24 ms |
+| 4096 |    (skip)   |    (skip)   |  1 455.50 ms |
 
 ### Observations on scaling
 
-* **Exact-rat is exponential in n.** Each doubling of n is roughly
-  10-15× slower for both rat variants. The cause: at iteration k,
-  every entry of `M·t_k` is a sum of n products of rationals. With
-  random-rational inputs, the numerator/denominator both grow as
-  `O(n^k)` worst case; arithmetic on bigints is O(d log d) in the
-  digit count d. The compound effect (n^4 = 268M at n=128) makes
-  arithmetic itself dominant. **Exact-rat is not viable beyond
-  n ≈ 64 in this implementation.**
-* **Float scales sub-quadratically** from n=8 to n=128: 16× dimension
-  growth, only ~8× time growth. Pure mat-vec-mul is O(n²); the
-  observed sub-n² growth suggests memory bandwidth dominates over
-  flop count at these sizes (the n=8 row fits in L1 cache; larger
-  rows stream from L2/L3 but still well within bandwidth).
-* **rat-fine/rat-coarse converges to 1.0× as n grows.** At n=8
-  per-cell overhead makes fine 30% slower than coarse; by n=32
-  they're statistically tied. The fine variant's K·n cells amortize
-  better as the per-fire work (a single dot product) grows. At n=128
-  there's no measurable difference — both are bottlenecked on
-  rational arithmetic, not on cell-handling overhead.
-* **rat/float ratio explodes from 38× to 124 088×** between n=8 and
-  n=128. For any "real" trust graph (hundreds of peers and up),
-  float is the only viable option; the rat variants are useful for
-  correctness verification at small n only.
+* **Float computes a 4 096-peer EigenTrust step (K=4) in 1.46 s** —
+  viable for real-world trust graphs of thousands of peers. The
+  scaling is sub-cubic (well below O(n³)) and roughly tracks
+  O(K·n²) plus a constant-factor cache-hierarchy effect:
+  * n = 8 .. 64: time barely moves (~0.2 ms ↔ ~0.4 ms) — entire
+    matrix fits in L1; arithmetic-bound but tiny.
+  * n = 128 .. 4096: each doubling of n multiplies time by ~3.5–5×
+    (theoretical O(n²) is 4×). The slight overhead is memory
+    bandwidth as rows stream from L2/L3, plus the per-iteration cell
+    allocation + propagator construction (4 cells, 4 propagators
+    per iteration regardless of n — but the *fire-fn closures* read
+    larger vectors).
+* **Exact-rat is exponential in n and times out by n=128.**
+  At iteration k, entries of `M·t_k` are sums of n products of
+  rationals; numerators/denominators grow roughly as `O(n^k)` in
+  the worst case, and bigint arithmetic is O(d log d) in digit
+  count. By n=64 each step takes ~2 s; by n=128 it exceeds the 30 s
+  per-sample budget. **Exact-rat is for correctness verification
+  at small n only.**
+* **rat-fine / rat-coarse stays ≈ 1.0× across all measured sizes.**
+  At n=8 fine is 22% slower (per-cell construction overhead on
+  K·n = 32 cells); by n=32 they're within 5%; by n=64 within 3%.
+  Per-cell overhead amortizes as per-fire work grows. The fine
+  variant's potential parallel-BSP advantage isn't visible here
+  (single-threaded executor).
+* **The rat/float gap is exponential in n:**
+  * n=8: 28×
+  * n=16: 300×
+  * n=32: 2 600×
+  * n=64: 21 700×
+  * n=128: at-least-25 000× (rat timed out at the 30 s budget;
+    extrapolating the 10× per-doubling trend: ~125 000× — same as
+    the earlier n=128 measurement that finished in ~140 s).
+  For any graph with n > ~50, the choice between exact-rat and
+  hardware float is "exact-rat is intractable; use float."
 
 ### Observations
 
