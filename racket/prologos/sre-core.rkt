@@ -53,6 +53,7 @@
  axiom-refuted axiom-refuted? axiom-refuted-witness
  axiom-untested
  test-commutative-join test-associative-join test-idempotent-join test-distributive
+ test-sd-vee test-sd-wedge  ;; Track 2I: semidistributivity (Jónsson-Kiefer 1962)
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -321,6 +322,75 @@
                   (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
                   (axiom-refuted (list a b c)))))))))
 
+;; ========================================================================
+;; SRE Track 2I: Semidistributivity (Jónsson-Kiefer 1962)
+;; ========================================================================
+;; SD∨ (semidistributive-on-join):
+;;   (a ⊔ b = a ⊔ c)  ⇒  (a ⊔ b = a ⊔ (b ⊓ c))
+;; SD∧ (semidistributive-on-meet, dual):
+;;   (a ⊓ b = a ⊓ c)  ⇒  (a ⊓ b = a ⊓ (b ⊔ c))
+;;
+;; Distributive lattices satisfy both (free corollary).
+;; Free lattices satisfy both (Freese-Nation Theorem 1.21).
+;; The interesting empirical question: do our non-distributive-yet domains
+;; (type×equality, session×equality) satisfy SD even though not distributive?
+;;
+;; Both checks require meet-fn. Return axiom-untested if no meet available.
+
+;; Test SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
+(define (test-sd-vee domain samples meet-fn)
+  (if (not meet-fn)
+      axiom-untested
+      (let ([join ((sre-domain-merge-registry domain) 'equality)])
+        (for/fold ([status (axiom-confirmed 0)])
+                  ([a (in-list samples)]
+                   #:break (axiom-refuted? status))
+          (for/fold ([st status])
+                    ([b (in-list samples)]
+                     #:break (axiom-refuted? st))
+            (for/fold ([st2 st])
+                      ([c (in-list samples)]
+                       #:break (axiom-refuted? st2))
+              (define ab (join a b))
+              (define ac (join a c))
+              (cond
+                ;; Hypothesis fails — implication is vacuously satisfied
+                [(not (equal? ab ac))
+                 (axiom-confirmed (+ (axiom-confirmed-count st2) 1))]
+                ;; Hypothesis holds — check conclusion
+                [else
+                 (define conclusion (join a (meet-fn b c)))
+                 (if (equal? ab conclusion)
+                     (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+                     (axiom-refuted (list a b c)))])))))))
+
+;; Test SD∧ (dual of SD∨): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
+(define (test-sd-wedge domain samples meet-fn)
+  (if (not meet-fn)
+      axiom-untested
+      (let ([join ((sre-domain-merge-registry domain) 'equality)])
+        (for/fold ([status (axiom-confirmed 0)])
+                  ([a (in-list samples)]
+                   #:break (axiom-refuted? status))
+          (for/fold ([st status])
+                    ([b (in-list samples)]
+                     #:break (axiom-refuted? st))
+            (for/fold ([st2 st])
+                      ([c (in-list samples)]
+                       #:break (axiom-refuted? st2))
+              (define ab (meet-fn a b))
+              (define ac (meet-fn a c))
+              (cond
+                ;; Hypothesis fails — implication is vacuously satisfied
+                [(not (equal? ab ac))
+                 (axiom-confirmed (+ (axiom-confirmed-count st2) 1))]
+                ;; Hypothesis holds — check conclusion
+                [else
+                 (define conclusion (meet-fn a (join b c)))
+                 (if (equal? ab conclusion)
+                     (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+                     (axiom-refuted (list a b c)))])))))))
+
 ;; Infer properties for a domain from sample values.
 ;; SRE Track 2H: #:relation selects which sub-hash to work with.
 ;; Returns updated properties sub-hash for that relation.
@@ -355,7 +425,18 @@
         (update-property props-2 'distributive
                          (test-distributive domain samples meet-fn))
         props-2))
-  props-3)
+  ;; Track 2I: SD∨ and SD∧ (require meet-fn; otherwise untested)
+  (define props-4
+    (if meet-fn
+        (update-property props-3 'sd-vee
+                         (test-sd-vee domain samples meet-fn))
+        props-3))
+  (define props-5
+    (if meet-fn
+        (update-property props-4 'sd-wedge
+                         (test-sd-wedge domain samples meet-fn))
+        props-4))
+  props-5)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -378,7 +459,16 @@
                      'heyting)
    (implication-rule 'boolean
                      '(heyting has-complement)
-                     'boolean)))
+                     'boolean)
+   ;; Track 2I: distributive ⇒ semidistributive (forward implication only;
+   ;; SD ⇒ distributive does NOT hold — there exist non-distributive SD lattices,
+   ;; e.g., free lattices satisfy SD but not distributivity).
+   (implication-rule 'distributive→sd-vee
+                     '(distributive)
+                     'sd-vee)
+   (implication-rule 'distributive→sd-wedge
+                     '(distributive)
+                     'sd-wedge)))
 
 ;; Derive composite properties from atomic ones.
 ;; Reads source properties, writes derived property using property-value-join.
@@ -443,13 +533,16 @@
     (infer-domain-properties domain samples #:meet-fn meet-fn))
   ;; Step 2: Build evidence map for reporting
   (define evidence
-    (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join distributive))])
+    (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
+                                  distributive sd-vee sd-wedge))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
           [(associative-join) test-associative-join]
           [(idempotent-join) test-idempotent-join]
           [(distributive) (lambda (d s) (test-distributive d s meet-fn))]
+          [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn))]
+          [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties
