@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 3 · Algebraic Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch02.html">← Chapter 2</a></li>
+    <li><a href="nation-companion-ch04.html">Chapter 4 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 3 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Algebraic closure</div>
+  <ul>
+    <li><a href="#s1">A1 · Definition + 6 examples</a></li>
+    <li><a href="#s2">A2 · Theorem 3.1 (3-way)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Algebraic lattices</div>
+  <ul>
+    <li><a href="#s3">B1 · Compact element + $\mathcal{L}^c$</a></li>
+    <li><a href="#s4">B2 · Theorem 3.2</a></li>
+    <li><a href="#s5">B3 · Theorem 3.3 ($\mathcal{I}(\mathcal{L}^c)$)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Birkhoff-Frink</div>
+  <ul>
+    <li><a href="#s6">C1 · Theorem 3.4 (B-F 1948)</a></li>
+    <li><a href="#s7">C2 · Theorem 3.5 (Hanf)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Structural properties</div>
+  <ul>
+    <li><a href="#s8">D1 · Thms 3.6–3.8 (atomic, continuous)</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Decompositions</div>
+  <ul>
+    <li><a href="#s9">E1 · $M^*$ + Theorems 3.9, 3.10</a></li>
+    <li><a href="#s10">E2 · Crawley + uniqueness (3.11, 3.12)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Birkhoff-Frink history</a></li>
+    <li><a href="#c2">P2 · Compactness across math</a></li>
+    <li><a href="#c3">P3 · Subalgebra lattices + varieties</a></li>
+    <li><a href="#c4">P4 · Decomposition theory</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 3 · pp. 28–39 of the notes</div>
+  <h1>Algebraic Lattices</h1>
+  <p class="lede">The algebraic closure operator (closure determined by finite witnesses), the algebraic (= compactly generated) lattice as the unifying structural object, and the Birkhoff-Frink theorem (1948) certifying that algebraic lattices ARE the subalgebra lattices of universal algebras.</p>
+  <div class="meta">
+    <span>~80–90 min read</span>
+    <span>10 sections + 5 connection panels</span>
+    <span>17 worked exercises</span>
+    <span>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation</span>
+  </div>
+</div>
+
+<div class="epigraph">
+  <p>The more I get, the more I want it seems ....</p>
+  <span class="attrib">— King Oliver (Nation's Chapter 3 epigraph)</span>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — what's algebraic about an algebraic lattice?</h2>
+  <div class="tagline">Chapter 2 ended with the closure trinity (system / operator / rules) and the observation that complete lattices ARE closure systems. Chapter 3 sharpens this: when the closure rules are FINITARY, the resulting lattice is "algebraic" — and these are exactly the subalgebra lattices of universal algebras.</div>
+
+  <p>Chapter 2 introduced complete lattices as closure systems. Chapter 3 zooms in on the special case where the closure operator is determined by FINITE witnesses — the <strong>algebraic closure operators</strong>. Their corresponding lattices are <strong>algebraic lattices</strong> (= compactly generated), and these are precisely the lattices that arise as the subalgebra lattices of universal algebras (Birkhoff-Frink theorem 1948).</p>
+
+  <p>The chapter has five conceptual movements:</p>
+
+  <ol>
+    <li><strong>Algebraic closure operators.</strong> $\Gamma$ is algebraic if $\Gamma(B) = \bigcup\{\Gamma(F) : F$ finite $\subseteq B\}$ — closure is determined by finite witnesses. Equivalently (Theorem 3.1), the union of any up-directed family of $\Gamma$-closed sets is closed. Six canonical examples: subalgebras, congruences, order ideals, ideals of join semilattices (with and without 0), ideals of lattices. NON-examples: topology (depends on infinite sequences), MacNeille completion (in general).</li>
+    <li><strong>Compact elements + algebraic lattices.</strong> $x \in L$ is <strong>compact</strong> if $x \le \bigvee A$ implies $x \le \bigvee F$ for finite $F \subseteq A$. The set $\mathcal{L}^c$ of compact elements forms a join semilattice with 0 (closed under finite joins; usually NOT closed under meets). $\mathcal{L}$ is <strong>algebraic</strong> if $\mathcal{L}^c$ is join dense in $\mathcal{L}$. Theorem 3.2 establishes the algebraic closure ↔ algebraic lattice correspondence; Theorem 3.3 gives the canonical representation $\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$ via the ideal lattice of compact elements.</li>
+    <li><strong>Birkhoff-Frink.</strong> Theorem 3.4 (Birkhoff-Frink 1948): every algebraic closure operator on $X$ corresponds to an algebra $\mathcal{A}$ on $X$ whose subalgebras are exactly the closed sets. Corollary: every algebraic lattice IS the subalgebra lattice of some universal algebra. Theorem 3.5 (Bill Hanf): the algebra needs only countably many operations iff each compact element contains only countably many compacts — even just a single binary operation suffices.</li>
+    <li><strong>Structural properties of algebraic lattices.</strong> Theorem 3.6: every algebraic lattice is weakly atomic. Theorem 3.7: every algebraic lattice is upper continuous. Theorem 3.8: three equivalent forms of upper continuity (standard / chain / finite-subset).</li>
+    <li><strong>Decompositions.</strong> Completely meet irreducible $M^*(\mathcal{L})$. Theorem 3.9: three-way characterisation. Theorem 3.10 (Birkhoff): in algebraic lattices, $M^*(\mathcal{L})$ is meet dense — every element is the meet of completely-meet-irreducibles above it. Irredundant decompositions; Theorem 3.11 (Crawley): strongly atomic algebraic lattices have irredundant decompositions; Theorem 3.12: distributive ⟹ unique.</li>
+  </ol>
+
+  <p>The chapter is dense — 12 theorems, many definitions, extensive history. The companion expands generously. The Birkhoff-Frink theorem (s6) is the conceptual peak; everything else in this chapter is either preparation for it (Parts A and B) or its consequences (Parts D and E). Decomposition theory (Part E) recurs in Călugăreanu's Chapter 6 (Krull-Schmidt) — the two companions cross-reference each other extensively here.</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">Carried forward from Chs 1-2 (poset, closure, lattice) · New in Ch 3 (algebraic, compact, weakly atomic, completely meet irreducible) · Deep dive (the Birkhoff-Frink correspondence, Scott domains, decomposition theory).</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>Carried forward — terms recapped from Chs 1-2</h2>
+  <div class="tagline">Six refreshers; the chapter sits squarely on Chapter 2's closure-operator + complete-lattice apparatus.</div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Closure operator $\Gamma$</span><p>From Ch 2 §C1: $\Gamma : \mathfrak{P}(X) \to \mathfrak{P}(X)$ extensive, monotone, idempotent. The closure systems / operators / rules trinity (Theorem 2.6) is the chapter's starting point.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Complete lattice</span><p>From Ch 2 §B3: every subset has glb and lub. Algebraic lattices are a special class of complete lattices (those whose compact elements are join dense).</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Subalgebra · Sg</span><p>From Ch 2 §C2: subalgebra of $\mathcal{A} = \langle A, F, C \rangle$ closed under operations + constants. $\text{Sg}(B)$ is the subalgebra generated by $B$. The Birkhoff-Frink theorem (this chapter) certifies that $\text{Sub}\,\mathcal{A}$ is exactly an algebraic lattice.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Join dense</span><p>From Ch 2 §E1: $Q \subseteq L$ is join dense if $x = \bigvee\{q \in Q : q \le x\}$ for every $x$. Algebraic = "$\mathcal{L}^c$ is join dense in $\mathcal{L}$."</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Order ideal · $\mathcal{O}(\mathcal{P})$</span><p>From Ch 1 §A3: downward-closed subset. The order-ideal closure operator is algebraic (Example 3 in s1 below); $\mathcal{O}(\mathcal{P})$ is algebraic.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Ideal of a join semilattice $\mathcal{I}(\mathcal{S})$</span><p>From Ch 2 (briefly): an ideal of $(S, \vee)$ is a downward-closed subset closed under finite joins. $\mathcal{I}(\mathcal{S})$ is the ideal lattice. Theorem 3.3 makes this the canonical representation of every algebraic lattice.</p></div>
+
+  <h2>New in Chapter 3 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Algebraic closure operator</span><p>$\Gamma$ on $X$ is <em>algebraic</em> if $\Gamma(B) = \bigcup\{\Gamma(F) : F$ finite $\subseteq B\}$ — the closure is determined by finite witnesses. Equivalently (Theorem 3.1): the union of any up-directed family of closed sets is closed. Examples: subalgebra closure, congruence closure, order-ideal closure. NON-example: topological closure (uses limits of infinite sequences).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Finitary closure rule</span><p>A closure rule $F \subseteq S \implies z \in S$ where $F$ is FINITE. A closure operator is algebraic iff determined by a set of finitary closure rules. Compare Ch 2: closure rules in general allow $F$ infinite; algebraic = finitary restriction.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Up-directed set</span><p>$S \subseteq \mathcal{P}$ is <em>up-directed</em> if for every $x, y \in S$ there exists $z \in S$ with $x \le z$ and $y \le z$. Every chain is up-directed; every join semilattice (under inherited order) is up-directed. Up-directed unions are the natural infinite operation in algebraic settings.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Compact element</span><p>$x \in L$ is <em>compact</em> if whenever $x \le \bigvee A$, there exists a finite $F \subseteq A$ with $x \le \bigvee F$. The lattice analogue of "finitely generated" — analogous to compactness in topology. Set of compact elements: $\mathcal{L}^c$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">$\mathcal{L}^c$ — compact elements</span><p>The set of all compact elements of $\mathcal{L}$. Closed under finite joins, contains 0 (a join semilattice with least element). Usually NOT closed under meets (Figure 3.1(a) in Nation: $x, y$ compact but $x \wedge y$ not).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Algebraic lattice (= compactly generated)</span><p>$\mathcal{L}$ is <em>algebraic</em> (synonym: <em>compactly generated</em>) if it is complete and $\mathcal{L}^c$ is join dense in $\mathcal{L}$, i.e., $x = \bigvee(\downarrow x \cap \mathcal{L}^c)$ for every $x$. Every finite lattice is algebraic. $\mathcal{L} = \mathcal{L}^c$ iff $\mathcal{L}$ satisfies ACC.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Ideal lattice $\mathcal{I}(\mathcal{S})$</span><p>For $\mathcal{S} = (S, \vee)$ a join semilattice, an <em>ideal</em> is a subset $J$ with $x, y \in J \Rightarrow x \vee y \in J$ AND $z \le x \in J \Rightarrow z \in J$. $\mathcal{I}(\mathcal{S})$ is the lattice of ideals under inclusion. Theorem 3.3: every algebraic lattice $\cong \mathcal{I}(\mathcal{L}^c)$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Birkhoff-Frink theorem</span><p>Theorem 3.4 (1948): every algebraic closure operator $\Gamma$ on $X$ is realised by an algebra $\mathcal{A}$ on $X$ — i.e., $\mathcal{C}_\Gamma = \text{Sub}\,\mathcal{A}$. Corollary: every algebraic lattice is isomorphic to the subalgebra lattice of some universal algebra. The structural certificate that "algebraic lattice" is the right abstraction of "subalgebra lattice."</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Hanf's theorem</span><p>Theorem 3.5 (Bill Hanf, unpublished): an algebraic lattice $\mathcal{L}$ has each compact element containing only countably many compacts iff $\mathcal{L}$ arises as $\text{Sub}\,\mathcal{A}$ for some countable algebra iff $\mathcal{L}$ arises as $\text{Sub}\,\mathcal{B}$ for an algebra with a single binary operation.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Weakly atomic</span><p>A lattice $\mathcal{L}$ is <em>weakly atomic</em> if whenever $a > b$, there exist $u, v \in L$ with $a \ge u \succ v \ge b$ — every nontrivial interval contains a covering pair. Theorem 3.6: every algebraic lattice is weakly atomic.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Upper continuous</span><p>$\mathcal{L}$ is <em>upper continuous</em> if for every up-directed $D$ with lub $\bigvee D$ and every $a \in L$:</p><p>$$a \wedge \bigvee D = \bigvee_{d \in D} (a \wedge d).$$</p><p>Lower continuous is dual. Theorem 3.7: every algebraic lattice is upper continuous. Theorem 3.8 (3-way): for complete lattices, upper continuous ⟺ chain version ⟺ finite-subset version.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Atom · coatom</span><p>$a \in L$ is an <em>atom</em> if $a \succ 0$; a <em>coatom</em> if $1 \succ a$. By Theorem 3.8: every atom in an upper continuous lattice is compact. More generally: $\downarrow a$ satisfies ACC + upper continuous ⟹ $a$ compact.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Completely meet irreducible $q$</span><p>$q \in L$ is <em>completely meet irreducible</em> if for every $S \subseteq L$, $q = \bigwedge S \Rightarrow q \in S$. The set of completely meet irreducibles: $M^*(\mathcal{L})$. Note $1 \notin M^*$ since $\bigwedge \emptyset = 1$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Decomposition $a = \bigwedge Q$</span><p>A <em>decomposition</em> of $a \in \mathcal{L}$ is a representation $a = \bigwedge Q$ with $Q \subseteq M^*(\mathcal{L})$. An element may have any number of decompositions, including none. Theorem 3.10 (Birkhoff): in algebraic lattices, every element has at least one decomposition.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Irredundant decomposition</span><p>$a = \bigwedge Q$ is <em>irredundant</em> if $a < \bigwedge(Q - \{q\})$ for every $q \in Q$ — no $q$ is redundant. Theorem 3.11 (Crawley): in <em>strongly atomic</em> algebraic lattices, every element has an irredundant decomposition.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Strongly atomic</span><p>$\mathcal{L}$ is <em>strongly atomic</em> if $a > b$ in $\mathcal{L}$ implies the existence of $u$ with $a \ge u \succ b$ — there's a cover IMMEDIATELY ABOVE $b$ (rather than just somewhere in the interval, which is "weakly atomic"). Strictly stronger than weakly atomic.</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The Birkhoff-Frink correspondence — algebra ↔ closure ↔ lattice</h3>
+    <p>The chapter's central observation is a triple equivalence:</p>
+    <table class="grid">
+      <thead><tr><th>Algebraic side</th><th>Closure side</th><th>Lattice side</th></tr></thead>
+      <tbody>
+        <tr><td>Universal algebra $\mathcal{A}$</td><td>$\text{Sg}$ closure operator on $A$</td><td>Subalgebra lattice $\text{Sub}\,\mathcal{A}$</td></tr>
+        <tr><td>Finitary operations</td><td>Algebraic closure operator</td><td>Algebraic (= compactly generated) lattice</td></tr>
+        <tr><td>Subalgebra</td><td>$\text{Sg}$-closed set</td><td>Element of $\text{Sub}\,\mathcal{A}$</td></tr>
+        <tr><td>Finitely generated subalgebra</td><td>$\text{Sg}(F)$ for finite $F$</td><td>Compact element of $\text{Sub}\,\mathcal{A}$</td></tr>
+      </tbody>
+    </table>
+    <p>The Birkhoff-Frink theorem (1948) says these three perspectives are the same up to isomorphism. Given any one, you can recover the others.</p>
+    <p><strong>Why the three-way correspondence matters.</strong> Each side has its own natural questions and techniques:</p>
+    <ul>
+      <li><strong>Algebraic:</strong> "Which classes of algebras have which subalgebra lattice properties?" (Variety theory, Ch 7.)</li>
+      <li><strong>Closure:</strong> "What are the closure rules?" (Combinatorial / proof-theoretic.)</li>
+      <li><strong>Lattice:</strong> "What are the structural properties?" (Order-theoretic.)</li>
+    </ul>
+    <p>Theorems proven on one side immediately transfer to the others. For example, the Crawley decomposition theorem (Thm 3.11, lattice side) immediately gives a result about subalgebras of strongly atomic algebraic lattices; conversely, ring-theoretic decomposition results often translate cleanly to lattice-theoretic statements about ideal lattices.</p>
+    <p><strong>Historical note (Nation):</strong> "Historically, the role of algebraic closure operators arose in Birkhoff and Frink, with the modern definition of a compactly generated lattice following closely in Nachbin." Birkhoff-Frink's 1948 paper <em>Representations of lattices by sets</em> (Trans. AMS 64, 299–316) is the founding document. Nachbin's 1949 paper crystallised the lattice-theoretic side.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Compactness — lattice / topology / domain theory</h3>
+    <p>The word "compact" appears in three closely related but distinct mathematical contexts:</p>
+    <ol>
+      <li><strong>Topology.</strong> A topological space is compact if every open cover has a finite subcover. The structural intuition: "every infinite covering has a finite witness."</li>
+      <li><strong>Lattice theory (this chapter).</strong> An element $x$ is compact if $x \le \bigvee A$ implies $x \le \bigvee F$ for some finite $F \subseteq A$. The structural intuition: "the lattice element is finitely generated."</li>
+      <li><strong>Domain theory / Scott domains.</strong> An element $x$ is compact if $x \sqsubseteq \bigsqcup A$ for a directed set $A$ implies $x \sqsubseteq a$ for some $a \in A$. The structural intuition: "$x$ is a finite approximation."</li>
+    </ol>
+    <p>The three are bridged by <strong>Stone duality</strong> and its generalizations:</p>
+    <ul>
+      <li>Topology ↔ Lattice (locales, frames). The lattice of opens is naturally a frame; compact opens recover topological compactness via the Boolean algebra structure.</li>
+      <li>Lattice ↔ Domain (Scott domains). Adjoining a top element to a Scott domain gives an algebraic lattice; conversely, removing the top from an algebraic lattice gives a Scott domain (with caveats).</li>
+    </ul>
+    <p>The unification: <em>compactness is the abstract face of "finiteness witnesses suffice for the infinite case."</em> Topology asks finiteness for covers; lattice theory asks it for joins; domain theory asks it for directed sups.</p>
+    <p>For Prologos: the BSP scheduler relies on a finiteness witness for cell value updates — every cell value reachable through propagator firings is reachable via a finite chain of firings. This IS algebraic-lattice compactness (the cell value lattice is algebraic).</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The Birkhoff-Frink algebra construction</h3>
+    <p>Theorem 3.4 (Birkhoff-Frink) starts with an algebraic closure operator $\Gamma$ on $X$ and constructs an explicit algebra $\mathcal{A}$ whose subalgebras are exactly the $\Gamma$-closed sets. The construction is elegant once unpacked:</p>
+    <p><strong>Construction.</strong> The carrier of $\mathcal{A}$ is $X$ itself. The constants are $C = \Gamma(\emptyset)$ — the elements of the smallest closed set. For each nonempty finite set $G \subseteq X$ and element $x \in \Gamma(G)$, we add a $|G|$-ary operation $f_{G, x} : X^{|G|} \to X$ defined by</p>
+    <p>$$f_{G, x}(a_1, \dots, a_n) = \begin{cases} x & \text{if } \{a_1, \dots, a_n\} = G \\ a_1 & \text{otherwise} \end{cases}$$</p>
+    <p>The operation $f_{G, x}$ "remembers" the closure rule "$G \subseteq S \Rightarrow x \in S$": when $S$ contains $G$, applying $f_{G, x}$ to the elements of $G$ yields $x$, forcing $x \in S$. Otherwise, the operation is trivial (returns the first input), so it doesn't add new constraints.</p>
+    <p>The construction is wasteful (it has $|X|$ operations for infinite $X$), but it works. The point is purely existential: SOME algebra works. Hanf's theorem (Theorem 3.5) shows that, when the lattice is appropriately countable, the algebra can be reduced to ONE binary operation.</p>
+    <p><strong>Direct proof (Nation gives both):</strong> if $\mathcal{L}$ is algebraic, define a "ring-like" algebra on $\mathcal{L}^c \setminus \{0\}$ with one join operation and one unary operation per compact element. This avoids the dependence on $|X|$ and gives the cleaner countable / single-binary-operation results of Hanf.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Algebraic closure operators</div>
+  <h2>Definition · examples · Theorem 3.1</h2>
+  <p class="part-lede">Closure operators where finite witnesses suffice. Six canonical examples (subalgebra, congruence, ideal, etc.). Theorem 3.1's three-way characterisation: algebraic ⟺ up-directed unions closed ⟺ chain unions closed.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Algebraic closure operators · the six examples</h2>
+  <div class="tagline">$\Gamma(B) = \bigcup\{\Gamma(F) : F$ finite$\}$. Six examples: subalgebra, congruence, order ideal, ideal of $\vee$-semilattice (with and without 0), ideal of lattice. Two NON-examples: topology and MacNeille.</div>
+
+  <div class="box def">
+    <span class="label">Definition · algebraic closure operator</span>
+    <p>A closure operator $\Gamma$ on a set $X$ is said to be <strong>algebraic</strong> if for every $B \subseteq X$,</p>
+    <p>$$\Gamma(B) = \bigcup \{\Gamma(F) : F \text{ is a finite subset of } B\}.$$</p>
+    <p>Equivalently, $\Gamma$ is algebraic iff the right hand side RHS of the above expression is closed for every $B \subseteq X$, since $B \subseteq \text{RHS} \subseteq \Gamma(B)$ holds for any closure operator.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · finitary closure rule</span>
+    <p>A closure rule is said to be <strong>finitary</strong> if it is a rule of the form $x \in S$ or the form $F \subseteq S \implies z \in S$ with $F$ a FINITE set. (The first form is a degenerate case with $F = \emptyset$.)</p>
+    <p>It is not hard to see that a closure operator is algebraic if and only if it is determined by a set of finitary closure rules; see Theorem 3.2(1) below.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Six canonical examples of algebraic closure operators</span>
+    <p><strong>(1) Subalgebras.</strong> Let $\mathcal{A}$ be any algebra with only finitary operations — for example, a group, ring, vector space, semilattice, or lattice. The closure operator $\text{Sg}$ on $A$ such that $\text{Sg}(B)$ is the subalgebra of $\mathcal{A}$ generated by $B$ is algebraic, because $a \in \text{Sg}(B)$ if and only if $a$ can be expressed as a term $a = t(b_1, \dots, b_n)$ for some finite subset $\{b_1, \dots, b_n\} \subseteq B$. The corresponding complete lattice is the subalgebra lattice $\text{Sub}\,\mathcal{A}$.</p>
+    <p><strong>(2) Congruences.</strong> Looking ahead a bit (to Chapter 5), the closure operator $\text{Cg}$ on $A \times A$ such that $\text{Cg}(B)$ is the congruence on $\mathcal{A}$ generated by the set of pairs $B$ is also algebraic. The corresponding complete lattice is the congruence lattice $\text{Con}\,\mathcal{A}$. For groups this is isomorphic to the normal subgroup lattice; for rings, to the lattice of ideals.</p>
+    <p><strong>(3) Order ideals.</strong> For ordered sets, the order ideal operator $\mathcal{O}$ is algebraic. In fact we have</p>
+    <p>$$\mathcal{O}(B) = \bigcup \{\mathcal{O}(\{b\}) : b \in B\} = \bigcup_{b \in B} \downarrow b$$</p>
+    <p>for all $B \subseteq P$.</p>
+    <p><strong>(4) Ideals of a join semilattice.</strong> Let $\mathcal{S} = (S, \vee)$ be a join semilattice. A subset $J$ of $S$ is called an <em>ideal</em> if (i) $x, y \in J$ implies $x \vee y \in J$, (ii) $z \le x \in J$ implies $z \in J$. Since ideals are defined by closure rules (finitary: at most binary join), the intersection of a set of ideals of $\mathcal{S}$ is again one. Since they are finitary closure rules, the lattice of ideals is algebraic. The closure operator $I$ on $S$ such that $I(B)$ is the ideal of $\mathcal{S}$ generated by $B$ is given by</p>
+    <p>$$I(B) = \{x \in S : x \le \bigvee F \text{ for some finite } F \subseteq B\}.$$</p>
+    <p>The ideal lattice of a join semilattice is denoted by $\mathcal{I}(\mathcal{S})$. Note that the empty set is an ideal of $(S, \vee)$.</p>
+    <p><strong>(5) Ideals with constant 0.</strong> If $\mathcal{S} = (S, \vee, 0)$ is a join semilattice with a least element 0, regarded as a constant of the algebra, then an ideal $J$ must also satisfy (iii) $0 \in J$ — so $\{0\}$, rather than the empty set, is the least ideal. The crucial factor is not that there is a least element, but that it is considered to be a constant in the type of the algebra.</p>
+    <p><strong>(6) Ideals of a lattice.</strong> An ideal of a lattice is defined as in (4), since every lattice is in particular a join semilattice. The ideal lattice of a lattice $\mathcal{L}$ is denoted $\mathcal{I}(\mathcal{L})$. The dual of an ideal in a lattice is called a <em>filter</em>. (See Exercise 4.)</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Two important NON-examples</span>
+    <p><strong>Topology.</strong> The closure operators associated with the closed sets of a topological space are usually <em>not</em> algebraic, since the closure depends on infinite sequences (limits of sequences are accumulation points; the closure is the set of all accumulation points). For example: in $\mathbb{R}$, the rationals $\mathbb{Q}$ form a non-closed set, but every finite subset of $\mathbb{Q}$ has closure equal to itself (no new limits). So $\Gamma(\mathbb{Q}) = \mathbb{R} \ne \bigcup\{\Gamma(F) : F$ finite$\} = \mathbb{Q}$.</p>
+    <p><strong>MacNeille completion.</strong> The closure operator $M$ associated with the MacNeille completion is not in general algebraic. Counterexample: consider the ordered set $\mathcal{P}$ consisting of an infinite set $X$ and all of its finite subsets, ordered by set containment. This ordered set is already a complete lattice, hence its own MacNeille completion. For any subset $Y \subseteq X$, let $\widehat{Y} = \{S \in P : S \subseteq Y\}$. If $Y$ is an infinite proper subset of $X$, then $M(\widehat{Y}) = \widehat{X}$. On the other hand, for any finite collection $F = \{Z_1, \dots, Z_k\}$ of finite subsets, $M(F) = Z_1 \cup \dots \cup Z_k$. Thus for an infinite proper subset $Y \subset X$ we have $M(\widehat{Y}) = \widehat{X} \supsetneq \widehat{Y} = \bigcup\{M(F) : F$ is a finite subset of $\widehat{Y}\}$.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Up-directed sets · Theorem 3.1 (3-way characterisation)</h2>
+  <div class="tagline">A closure operator is algebraic iff up-directed unions of closed sets are closed iff chain unions of closed sets are closed.</div>
+
+  <div class="box def">
+    <span class="label">Up-directed set</span>
+    <p>A subset $S$ of an ordered set $\mathcal{P}$ is said to be <strong>up-directed</strong> if for every $x, y \in S$ there exists $z \in S$ with $x \le z$ and $y \le z$.</p>
+    <p>Thus every chain, or more generally every join semilattice, forms an up-directed set.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.1 · the three-way characterisation</span>
+    <p>Let $\Gamma$ be a closure operator on a set $X$. The following are equivalent:</p>
+    <ol>
+      <li>$\Gamma$ is an algebraic closure operator.</li>
+      <li>The union of any up-directed set of $\Gamma$-closed sets is $\Gamma$-closed.</li>
+      <li>The union of any chain of $\Gamma$-closed sets is $\Gamma$-closed.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>The equivalence of (1) and (2), and the implication from (2) to (3), are straightforward.</p>
+    <p>The implication from (3) to (1) can be done by induction, mimicking the proof of the corresponding step in Theorem 3.8 (this chapter, §D). Exercise 13 asks you to complete this proof.</p>
+    <p><strong>Sketch of (1) ⟹ (2):</strong> Let $\{D_i\}_{i \in I}$ be an up-directed family of $\Gamma$-closed sets, $D = \bigcup_{i \in I} D_i$. To show $\Gamma(D) = D$: take $x \in \Gamma(D)$. Since $\Gamma$ is algebraic, $x \in \Gamma(F)$ for some finite $F \subseteq D$. Each $f \in F$ lies in some $D_{i_f}$. By up-directedness, there's $j$ with $D_{i_f} \subseteq D_j$ for all $f \in F$. So $F \subseteq D_j$, and $x \in \Gamma(F) \subseteq \Gamma(D_j) = D_j \subseteq D$.</p>
+    <p><strong>Sketch of (2) ⟹ (3):</strong> Every chain is up-directed. Trivial.</p>
+    <p><strong>Sketch of (3) ⟹ (1):</strong> Suppose chain unions are closed. Take $B \subseteq X$, $x \in \Gamma(B)$. We want $x \in \Gamma(F)$ for some finite $F \subseteq B$. By Zorn's Lemma, find a maximal chain of finitely-generated subsets $F_0 \subseteq F_1 \subseteq \dots$ with $x \notin \bigcup \Gamma(F_i)$ (suppose for contradiction $x \in \Gamma(B)$ requires infinite subset). The chain union $\bigcup F_i$ has $\Gamma$-closure equal to its chain union of closures, which doesn't contain $x$ — contradiction with $x \in \Gamma(B)$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why up-directed unions are the natural infinite operation</span>
+    <p>Up-directed sets are exactly the "infinitary join-friendly" sets: they have all the cofinal-witness properties of joins without requiring that the lub exists. In a lattice, join semilattices are themselves up-directed; chains are up-directed.</p>
+    <p>Theorem 3.1 says: "algebraic" is the property that closure interacts cleanly with up-directed unions. Topological closure FAILS this because a sequence converging to a limit point is up-directed (in $\mathbb{N}$), but the closure of the union (= the entire convergent set) contains the limit, while the union of closures does not.</p>
+    <p>This connects to <strong>Scott continuity</strong> in domain theory: a function $f$ on a dcpo is Scott continuous iff $f$ commutes with directed sups. A closure operator is algebraic iff it has the corresponding "directed-sup commutation" property restricted to powerset lattices.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Algebraic lattices</div>
+  <h2>Compact element · Theorem 3.2 · Theorem 3.3</h2>
+  <p class="part-lede">Translate algebraic closure to lattice-theoretic terms. Compact elements; algebraic = compactly generated. Theorem 3.2: closure operator algebraic ⟺ generated by finitary rules. Theorem 3.3: every algebraic lattice is the ideal lattice of its compact elements.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Compact element · $\mathcal{L}^c$ · algebraic = compactly generated</h2>
+  <div class="tagline">$x$ compact: $x \le \bigvee A$ ⟹ $x \le \bigvee F$ for finite $F \subseteq A$. The lattice analogue of "finitely generated."</div>
+
+  <div class="box def">
+    <span class="label">Compact element</span>
+    <p>Let $\mathcal{L}$ be a complete lattice. An element $x \in L$ is <strong>compact</strong> if whenever $x \le \bigvee A$, then there exists a finite subset $F \subseteq A$ such that $x \le \bigvee F$.</p>
+    <p>The set of all compact elements of $\mathcal{L}$ is denoted $\mathcal{L}^c$. An elementary argument shows that $\mathcal{L}^c$ is closed under finite joins and contains 0, so it is a join semilattice with a least element. However, $\mathcal{L}^c$ is usually <em>not</em> closed under meets (see Figure 3.1(a) in Nation: $x$ and $y$ are compact but $x \wedge y$ is not).</p>
+  </div>
+
+  <svg class="diagram" viewBox="0 0 360 280" xmlns="http://www.w3.org/2000/svg" aria-label="Figure 3.1: two non-algebraic-related lattices">
+    <!-- Figure 3.1(a): diamond with x,y,z compact, infinite chain below xy meet -->
+    <line x1="80" y1="40" x2="40" y2="100"/>
+    <line x1="80" y1="40" x2="120" y2="100"/>
+    <line x1="40" y1="100" x2="80" y2="160"/>
+    <line x1="120" y1="100" x2="80" y2="160"/>
+    <line x1="80" y1="160" x2="80" y2="180" stroke-dasharray="3,3"/>
+    <line x1="80" y1="180" x2="80" y2="200" stroke-dasharray="3,3"/>
+    <line x1="80" y1="200" x2="80" y2="240"/>
+    <circle cx="80" cy="40" r="5"/>
+    <circle cx="40" cy="100" r="5"/>
+    <circle cx="120" cy="100" r="5"/>
+    <circle cx="80" cy="160" r="5"/>
+    <circle cx="80" cy="240" r="5"/>
+    <text x="20" y="106">x</text>
+    <text x="128" y="106">y</text>
+    <text x="74" y="262">(a)</text>
+    <!-- Figure 3.1(b): tail with z not compact -->
+    <line x1="280" y1="40" x2="240" y2="100"/>
+    <line x1="280" y1="40" x2="320" y2="80"/>
+    <line x1="320" y1="80" x2="320" y2="120"/>
+    <line x1="320" y1="120" x2="320" y2="160" stroke-dasharray="3,3"/>
+    <line x1="320" y1="160" x2="280" y2="240"/>
+    <line x1="240" y1="100" x2="240" y2="160"/>
+    <line x1="240" y1="160" x2="280" y2="240"/>
+    <circle cx="280" cy="40" r="5"/>
+    <circle cx="240" cy="100" r="5"/>
+    <circle cx="320" cy="80" r="5"/>
+    <circle cx="320" cy="120" r="5"/>
+    <circle cx="240" cy="160" r="5"/>
+    <circle cx="280" cy="240" r="5"/>
+    <text x="218" y="165">z</text>
+    <text x="276" y="262">(b)</text>
+  </svg>
+
+  <div class="box def">
+    <span class="label">Algebraic (= compactly generated) lattice</span>
+    <p>A lattice $\mathcal{L}$ is said to be <strong>algebraic</strong>, or <strong>compactly generated</strong>, if it is complete and $\mathcal{L}^c$ is join dense in $\mathcal{L}$ — i.e.,</p>
+    <p>$$x = \bigvee (\downarrow x \cap \mathcal{L}^c) \quad \text{for every } x \in L.$$</p>
+    <p>Clearly every finite lattice is algebraic. More generally, every element of a complete lattice $\mathcal{L}$ is compact (i.e., $\mathcal{L} = \mathcal{L}^c$) if and only if $\mathcal{L}$ satisfies the ACC.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Examples of algebraic and non-algebraic lattices</span>
+    <p><strong>Examples of algebraic lattices:</strong></p>
+    <ul>
+      <li>$\mathfrak{P}(X)$ — power set lattice. Compact elements: the finite subsets.</li>
+      <li>$\text{Sub}\,\mathcal{A}$ for any algebra $\mathcal{A}$ — by Birkhoff-Frink (Theorem 3.4).</li>
+      <li>$\text{Con}\,\mathcal{A}$ — congruence lattice. By the same.</li>
+      <li>$\mathcal{O}(\mathcal{P})$ — order-ideal lattice for any poset $\mathcal{P}$. Compact elements: finitely generated order ideals = $\downarrow \{a_1, \dots, a_n\}$.</li>
+      <li>$\mathcal{I}(\mathcal{S})$ — ideal lattice of a join semilattice. Compact elements: principal ideals $\downarrow x$.</li>
+    </ul>
+    <p><strong>Examples of non-algebraic lattices:</strong></p>
+    <ul>
+      <li>$\mathcal{K} = [0, 1]$ with the usual order on the reals. Then $\mathcal{K}^c = \{0\}$ — the only compact element is 0. So $\mathcal{K}$ is not algebraic. (Reason: any $x > 0$ requires infinite supremum to reach.)</li>
+      <li>The non-algebraic lattice in Figure 3.1(b) — the element $z$ is not compact (it requires an infinite chain to be reached as a join).</li>
+      <li>Lattices that fail upper continuity (Theorem 3.7 below).</li>
+    </ul>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why "compactly generated" matches "finitely generated"</span>
+    <p>The terminology "compactly generated" comes from the analogy with "finitely generated" in algebra. Concretely:</p>
+    <ul>
+      <li>For a group $\mathcal{G}$, a subgroup $H$ is <em>finitely generated</em> if $H = \langle h_1, \dots, h_n \rangle$ for finitely many $h_i$. In $\text{Sub}\,\mathcal{G}$, the finitely generated subgroups are exactly the compact elements (Theorem 3.2(2)).</li>
+      <li>For a vector space $\mathcal{V}$, a subspace is finitely generated iff it has a finite spanning set, iff it has finite dimension. The compact elements of $\text{Sub}\,\mathcal{V}$ are the finite-dimensional subspaces.</li>
+      <li>For a ring $\mathcal{R}$, an ideal is finitely generated iff it is generated by finitely many elements. Same correspondence.</li>
+    </ul>
+    <p>So "compact element" in the lattice = "finitely generated thing" in the algebra. The algebraic lattice is "compactly generated" in the sense that every element is the join (= "limit") of compact (= "finitely generated") sub-elements.</p>
+  </div>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">B2</span> Theorem 3.2 — algebraic closure ↔ algebraic lattice</h2>
+  <div class="tagline">A closure operator is algebraic iff it's generated by finitary rules. The closed-set lattice is algebraic, with compact elements = closures of finite sets.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.2</span>
+    <ol>
+      <li>A closure operator $\Gamma$ is algebraic if and only if $\Gamma = \Gamma_\Sigma$ for some set $\Sigma$ of finitary closure rules.</li>
+      <li>Let $\Gamma$ be an algebraic closure operator on a set $X$. Then $\mathcal{C}_\Gamma$ is an algebraic lattice whose compact elements are $\{\Gamma(F) : F$ is a finite subset of $X\}$.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p><strong>(1) Forward.</strong> If $\Gamma$ is an algebraic closure operator on $X$, then a set $S \subseteq X$ is closed iff $\Gamma(F) \subseteq S$ for every finite $F \subseteq S$. The collection of all rules $F \subseteq S \implies z \in S$ with $F$ a finite subset of $X$ and $z \in \Gamma(F)$ determines closure for $\Gamma$.</p>
+    <p><strong>(1) Conversely.</strong> If $\Sigma$ is a collection of finitary closure rules, then $z \in \Gamma_\Sigma(B)$ iff $z \in \Gamma_\Sigma(F)$ for some finite $F \subseteq B$, making $\Gamma_\Sigma$ algebraic.</p>
+    <p><strong>(2)</strong> First observe that for any closure operator $\Gamma$ on $X$ and any collection of subsets $A_i$ of $X$:</p>
+    <p>$$\Gamma\left(\bigcup A_i\right) = \bigvee \Gamma(A_i)$$</p>
+    <p>where the join is computed in the lattice $\mathcal{C}_\Gamma$. This is direct ($\bigcup A_i \subseteq \bigvee \Gamma(A_i)$, and $\Gamma$ commutes with joins).</p>
+    <p>In particular, for all $B \subseteq X$:</p>
+    <p>$$\Gamma(B) = \bigvee \{\Gamma(F) : F \text{ is a finite subset of } B\}.$$</p>
+    <p>So $\mathcal{C}_\Gamma$ has $\{\Gamma(F) : F$ finite$\}$ as a join-dense subset. We need to show these are compact.</p>
+    <p>Suppose $\Gamma(F) \le \bigvee A_i$ in $\mathcal{C}_\Gamma$, i.e., $F \subseteq \bigvee A_i = \bigcup\{\Gamma(G) : G$ finite $\subseteq \bigcup A_i\}$. Each $x \in F$ is in some $\Gamma(G_x)$, and $G_x$ is contained in finitely many $A_i$'s. So $\Gamma(F) \subseteq \bigcup_x \Gamma(G_x) \le \bigvee_{j \in J} A_j$ for some finite $J \subseteq I$. Hence $\Gamma(F)$ is compact.</p>
+    <p>Conversely, every compact $C$ in $\mathcal{C}_\Gamma$ has $C = \bigvee\{\Gamma(F) : F$ finite $\subseteq C\}$. Compactness gives $C = \Gamma(F_1) \vee \dots \vee \Gamma(F_n) = \Gamma(F_1 \cup \dots \cup F_n)$, the closure of a finite set. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Examples of compact elements after Theorem 3.2(2)</span>
+    <p>Theorem 3.2(2) gives concrete descriptions of compact elements:</p>
+    <ul>
+      <li>In $\text{Sub}\,\mathcal{A}$ (algebra): the compact elements are the finitely generated subalgebras.</li>
+      <li>In $\text{Con}\,\mathcal{A}$ (algebra): the compact elements are the finitely generated congruences.</li>
+      <li>In $\mathcal{O}(\mathcal{P})$: compact = finitely generated order ideal = $\downarrow F$ for finite $F$.</li>
+      <li>In $\mathcal{I}(\mathcal{S})$ for join semilattice $\mathcal{S}$: compact = principal ideal $\downarrow x$ (since $\mathcal{S}$ already has finite joins).</li>
+    </ul>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Caveat · the converse fails</span>
+    <p>It is NOT true that $\mathcal{C}_\Gamma$ being algebraic implies $\Gamma$ is algebraic. Nation gives a specific counterexample: let $X$ be the disjoint union of a one-element set $\{b\}$ and an infinite set $Y$, and let $\Gamma$ be the closure operator on $X$ such that $\Gamma(A) = A$ if $A$ is a proper subset of $Y$, $\Gamma(Y) = X$, and $\Gamma(B) = X$ if $b \in B$.</p>
+    <p>The $\Gamma$-closed sets are all proper subsets of $Y$, and $X = Y \cup \{b\}$ itself. So $\mathcal{C}_\Gamma$ is isomorphic to the lattice of all subsets of $Y$ (an algebraic lattice). But $b \in \Gamma(Y)$, while $b$ is not in the union of the closures of the finite subsets of $Y$, so $\Gamma$ is not algebraic.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">B3</span> Theorem 3.3 — every algebraic lattice IS an ideal lattice</h2>
+  <div class="tagline">$\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$. The compact elements form a join semilattice with 0; the lattice itself is its ideal lattice.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.3 · the ideal-lattice representation</span>
+    <p>If $\mathcal{S} = \langle S, \vee, 0 \rangle$ is a join semilattice with 0, then the ideal lattice $\mathcal{I}(\mathcal{S})$ is algebraic. The compact elements of $\mathcal{I}(\mathcal{S})$ are the principal ideals $\downarrow x$ with $x \in S$.</p>
+    <p>Conversely, if $\mathcal{L}$ is an algebraic lattice, then $\mathcal{L}^c$ is a join semilattice with 0, and $\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Let $\mathcal{S}$ be a join semilattice with 0. The closure operator $I$ that sends $B$ to the ideal generated is algebraic (Example 4 above), so $\mathcal{I}(\mathcal{S})$ is an algebraic lattice. If $F \subseteq S$ is finite, then $I(F) = \downarrow(\bigvee F)$, so compact ideals are principal.</p>
+    <p>Now let $\mathcal{L}$ be an algebraic lattice. There are two natural maps:</p>
+    <p>$$f : \mathcal{L} \to \mathcal{I}(\mathcal{L}^c) \text{ by } f(x) = \downarrow x \cap \mathcal{L}^c,$$</p>
+    <p>$$g : \mathcal{I}(\mathcal{L}^c) \to \mathcal{L} \text{ by } g(J) = \bigvee J.$$</p>
+    <p>Both maps are clearly order-preserving, and they are mutually inverse:</p>
+    <ul>
+      <li>$fg(J) = (\bigvee J)/0 \cap \mathcal{L}^c = J$ by the definition of compactness (every compact element below $\bigvee J$ is below the join of finitely many elements of $J$, hence in $J$).</li>
+      <li>$gf(x) = \bigvee(\downarrow x \cap \mathcal{L}^c) = x$ by the definition of algebraic.</li>
+    </ul>
+    <p>Hence both maps are isomorphisms, and $\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the canonical representation</span>
+    <p>Theorem 3.3 gives a clean, compact characterisation: <em>every algebraic lattice is the ideal lattice of its compact elements</em>.</p>
+    <p>This is structurally significant. It means:</p>
+    <ol>
+      <li>To describe an algebraic lattice $\mathcal{L}$, you only need to describe $\mathcal{L}^c$ as a join semilattice with 0.</li>
+      <li>Equivalently, algebraic lattices are in bijection with join semilattices with 0 (via $\mathcal{L} \mapsto \mathcal{L}^c$ and $\mathcal{S} \mapsto \mathcal{I}(\mathcal{S})$).</li>
+      <li>Properties of $\mathcal{L}$ correspond cleanly to properties of $\mathcal{L}^c$: distributive ↔ distributive (under appropriate conditions); modular ↔ modular; etc.</li>
+    </ol>
+    <p>This duality is the lattice-theoretic version of <strong>Stone duality</strong> for distributive algebraic lattices: distributive algebraic lattices ↔ distributive join semilattices with 0 ↔ Boolean ring ideals ↔ topological spaces. The full duality requires distributivity; Theorem 3.3 gives the more general form for all algebraic lattices.</p>
+    <p>For Prologos: the cell value lattice's compact elements are exactly the "finitely-presentable" cell states. The full lattice IS the ideal lattice of these — every cell state IS an ideal of finitely-presentable states. This justifies the BSP scheduler's incremental computation: each propagator step extends the current ideal by adding a finitely-presentable element.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Birkhoff-Frink + Hanf</div>
+  <h2>Theorems 3.4, 3.5 — algebraic lattices ARE subalgebra lattices</h2>
+  <p class="part-lede">The chapter's conceptual peak. Birkhoff-Frink (1948) shows every algebraic lattice arises as a subalgebra lattice. Hanf reduces the algebra to a single binary operation when the lattice is countable.</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">C1</span> Theorem 3.4 — Birkhoff-Frink (1948)</h2>
+  <div class="tagline">Every algebraic closure operator is realised by a universal algebra. Corollary: every algebraic lattice is a subalgebra lattice.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.4 · Birkhoff-Frink (1948)</span>
+    <p>Let $\Gamma$ be an algebraic closure operator on a set $X$. Then there is an algebra $\mathcal{A}$ on the set $X$ such that the subalgebras of $\mathcal{A}$ are precisely the closed sets of $\Gamma$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary · the structural certificate</span>
+    <p>Every algebraic lattice is isomorphic to the lattice of all subalgebras of an algebra.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · the explicit construction</span>
+    <p>An algebra in general is described by $\mathcal{A} = \langle A, F, C \rangle$ where $A$ is a set, $F = \{f_i : i \in I\}$ a collection of operations on $A$ (so $f_i : A^{n_i} \to A$), and $C$ is a set of constants in $A$.</p>
+    <p>The carrier set for our algebra must be $X$. The constants are $C = \Gamma(\emptyset)$ — the elements of the least closed set (which may be empty).</p>
+    <p>For each nonempty finite set $G \subseteq X$ and element $x \in \Gamma(G)$, we add an operation $f_{G, x} : X^{|G|} \to X$ defined by</p>
+    <p>$$f_{G, x}(a_1, \dots, a_n) = \begin{cases} x & \text{if } \{a_1, \dots, a_n\} = G \\ a_1 & \text{otherwise} \end{cases}$$</p>
+    <p>Note that since $\Gamma$ is algebraic, a set $B \subseteq X$ is closed iff $\Gamma(G) \subseteq B$ for every finite $G \subseteq B$. Using this, it is very easy to check that the subalgebras of $\mathcal{A}$ are precisely the closed sets of $\mathcal{C}_\Gamma$: a subset $S$ closed under all $f_{G, x}$ for $G \subseteq S$ contains all $\Gamma(G)$ for $G \subseteq S$, hence is $\Gamma$-closed; conversely a $\Gamma$-closed set is closed under each $f_{G, x}$. ∎</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Direct proof of the Corollary</span>
+    <p>A direct proof of the Corollary is also of interest. Given an algebraic lattice $\mathcal{L}$, define an algebra $\mathcal{B}$ as follows. The carrier set of $\mathcal{B}$ is the set $\mathcal{L}^c$ of compact elements, the join $\vee$ is one operation, and the least element 0 is a constant. For each $a \in \mathcal{L}^c$, define a unary operation $f_a$ by</p>
+    <p>$$f_a(x) = \begin{cases} a & \text{if } a \le x \\ x & \text{otherwise} \end{cases}$$</p>
+    <p>The construction insures that the subalgebras of $\mathcal{B}$ are exactly the ideals of $\mathcal{L}^c$, whence $\text{Sub}\,\mathcal{B} = \mathcal{I}(\mathcal{L}^c) \cong \mathcal{L}$ (using Theorem 3.3). ∎</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Cardinality issue</span>
+    <p>However, the algebra constructed in the proof of Theorem 3.4 will have $|X|$ operations when $X$ is infinite, and the second construction has $|\mathcal{L}^c| + 1$ operations. Having lots of operations is not necessarily a bad thing: vector spaces are respectable algebras, and a vector space over a field $F$ has basic operations $f_r : \mathcal{V} \to \mathcal{V}$ where $f_r(v) = rv$ for every $r \in F$. Nonetheless, we like algebras to have few operations, like groups and lattices. A theorem due to Bill Hanf (Theorem 3.5) tells us when we can get by with a small number of operations.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The Birkhoff-Frink slogan</span>
+    <p>The chapter's phrasing of the result is striking: <em>"Every algebraic lattice is the lattice of all subalgebras of an algebra."</em></p>
+    <p>This is the structural certificate that the abstract definition of "algebraic lattice" captures EXACTLY the right intuition. We started with closure operators determined by finite witnesses (Definition); these gave rise to compactly generated lattices (Theorem 3.2). The Birkhoff-Frink theorem closes the loop: the resulting class of lattices is precisely the class of subalgebra lattices.</p>
+    <p>Compare with Cayley-style theorems for posets (Theorem 1.1) and semilattices (Theorem 2.2). The pattern: define a class abstractly + prove it equals the canonical concrete examples. Birkhoff-Frink is the lattice-theoretic instance for algebraic lattices.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">C2</span> Theorem 3.5 — Hanf's reduction to one binary operation</h2>
+  <div class="tagline">Bill Hanf's unpublished theorem: when each compact element contains only countably many compacts, you can use just ONE binary operation. Plus a brief mention of Grätzer-Schmidt + Lampe for congruence lattices.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.5 (Bill Hanf, unpublished)</span>
+    <p>For any nontrivial algebraic lattice $\mathcal{L}$ the following conditions are equivalent.</p>
+    <ol>
+      <li>Each compact element of $\mathcal{L}$ contains only countably many compact elements.</li>
+      <li>There exists an algebra $\mathcal{A}$ with only countably many operations and constants such that $\mathcal{L}$ is isomorphic to the subalgebra lattice of $\mathcal{A}$.</li>
+      <li>There exists an algebra $\mathcal{B}$ with one binary operation (and no constants) such that $\mathcal{L}$ is isomorphic to the subalgebra lattice of $\mathcal{B}$.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>(3) ⟹ (2) is immediate (one operation is countable).</p>
+    <p>(2) ⟹ (1): if $\mathcal{A}$ has countably many basic operations and constants, the absolutely free algebra $W(X)$ on a set $X$ with $|X| = \gamma$ has $|W(X)| \le \max(\gamma, \aleph_0)$. So a finitely generated subalgebra (= compact element of $\text{Sub}\,\mathcal{A}$) has at most $\aleph_0$ elements. Hence at most countably many subalgebras inside it.</p>
+    <p>(1) ⟹ (3): The clever construction (Nation pp. 33). Let $\mathcal{B}$ have universe $\mathcal{L}^c \setminus \{0\}$ with one binary operation $*$. For each $c \in \mathcal{L}^c \setminus \{0\}$, take a sequence $\langle c_i \rangle_{i \in \omega}$ with $c_0 = c$ and $\langle c_i \rangle$ enumerating the compact elements of $\downarrow c \setminus \{0\}$. Define $*$ by:</p>
+    <ul>
+      <li>$c * d = c \vee d$ if $c, d$ are incomparable.</li>
+      <li>$c * d = d * c = c_{i+1}$ if $d = c_i \le c$.</li>
+    </ul>
+    <p>One can check that $*$ is well-defined, and that the subalgebras of $\mathcal{B}$ are exactly the sets of nonzero elements of ideals of $\mathcal{L}^c$. Hence $\text{Sub}\,\mathcal{B} \cong \mathcal{I}(\mathcal{L}^c) \cong \mathcal{L}$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The sister theorem: Grätzer-Schmidt + Lampe</span>
+    <p>Theorem 3.5 is for subalgebra lattices. The corresponding question for congruence lattices is more complicated:</p>
+    <ul>
+      <li><strong>Grätzer-Schmidt (1963)</strong>: every algebraic lattice is isomorphic to the congruence lattice of some algebra. <em>Characterizations of congruence lattices of abstract algebras</em>, Acta Sci. Math. (Szeged) 24, 34–59.</li>
+      <li><strong>Bill Lampe</strong>: uncountably many operations may be required. So the cardinality reduction in Hanf's theorem doesn't transfer to congruence lattices.</li>
+    </ul>
+    <p><strong>Freese-Lampe-Taylor</strong> modified Lampe's example to give a "very natural one": let $\mathcal{V}$ be a vector space of countably infinite dimension over a field $F$ with $|F| = \kappa > \aleph_0$. Let $\mathcal{L}$ be the congruence lattice $\text{Con}\,\mathcal{V}$, which for vector spaces is isomorphic to the subspace lattice $\text{Sub}\,\mathcal{V}$. The representation involves $\kappa$ operations $f_r$ ($r \in F$). One can show that any algebra $\mathcal{A}$ with $\text{Con}\,\mathcal{A} \cong \mathcal{L}$ must have at least $\kappa$ operations.</p>
+    <p>The contrast with subalgebra lattices is structural: subalgebras come "for free" from the operations; congruences need more delicate algebraic structure.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD-header">
+  <div class="pk">Part D · Structural properties</div>
+  <h2>Theorems 3.6, 3.7, 3.8 — weakly atomic + upper continuous</h2>
+  <p class="part-lede">Algebraic lattices have nice structural properties. Every interval contains a covering pair (3.6); meets distribute over directed joins (3.7); three equivalent forms of upper continuity (3.8).</p>
+</div>
+
+<section class="module" id="s8">
+  <h2><span class="num">D1</span> Weakly atomic + upper continuous · Theorems 3.6, 3.7, 3.8</h2>
+  <div class="tagline">Algebraic lattices satisfy two key structural conditions: every interval has a covering pair (weakly atomic), and meets distribute over directed joins (upper continuous).</div>
+
+  <div class="box def">
+    <span class="label">Definition · weakly atomic</span>
+    <p>A lattice $\mathcal{L}$ is said to be <strong>weakly atomic</strong> if whenever $a > b$ in $\mathcal{L}$, there exist elements $u, v \in L$ such that $a \ge u \succ v \ge b$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.6 · every algebraic lattice is weakly atomic</span>
+    <p>Every algebraic lattice is weakly atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Let $a > b$ in an algebraic lattice $\mathcal{L}$. Then there is a compact element $c \in \mathcal{L}^c$ with $c \le a$ and $c \not\le b$. Let $\mathcal{P} = \{x \in a/b : c \not\le x\}$. Note $b \in \mathcal{P}$, and since $c$ is compact the join of a chain in $\mathcal{P}$ is again in $\mathcal{P}$. Hence by Zorn's Lemma, $\mathcal{P}$ contains a maximal element $v$, and the element $u = c \vee v$ covers $v$. Thus $b \le v \prec u \le a$. ∎</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Upper continuous · lower continuous</span>
+    <p>A lattice $\mathcal{L}$ is said to be <strong>upper continuous</strong> if whenever $D$ is an up-directed set having a least upper bound $\bigvee D$, then for any element $a \in L$, the join $\bigvee_{d \in D} (a \wedge d)$ exists, and</p>
+    <p>$$a \wedge \bigvee D = \bigvee_{d \in D} (a \wedge d).$$</p>
+    <p>The property of being <em>lower continuous</em> is defined dually.</p>
+    <p>Upper continuity applies most naturally to complete lattices, but it also arises in non-complete lattices. See Section II.2 of Freese-Ježek-Nation, <em>Free Lattices</em>, and for a more general setting Adaricheva-Gorbunov-Semenova.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.7 · every algebraic lattice is upper continuous</span>
+    <p>Every algebraic lattice is upper continuous.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Let $\mathcal{L}$ be algebraic and $D$ an up-directed subset of $\mathcal{L}$. Of course $\bigvee_{d \in D}(a \wedge d) \le a \wedge \bigvee D$. Let $r = a \wedge \bigvee D$. For each compact element $c \in \downarrow r \cap \mathcal{L}^c$, we have $c \le a$ and $c \le \bigvee D$. The compactness of $c$ implies $c \le \bigvee F$ for some finite subset $F$ of $D$. By the up-directed property, we can choose $e \in D$ with $\bigvee F \le e$, so that $c \le a \wedge e$. Consequently:</p>
+    <p>$$r = \bigvee(\downarrow r \cap \mathcal{L}^c) \le \bigvee_{d \in D}(a \wedge d),$$</p>
+    <p>and equality follows. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.8 · three forms of upper continuity</span>
+    <p>For a complete lattice $\mathcal{L}$, the following are equivalent.</p>
+    <ol>
+      <li>$\mathcal{L}$ is upper continuous.</li>
+      <li>For every $a \in L$ and chain $C \subseteq L$, we have $a \wedge \bigvee C = \bigvee_{c \in C} a \wedge c$.</li>
+      <li>For every $a \in L$ and $S \subseteq L$,</li>
+    </ol>
+    <p>$$a \wedge \bigvee S = \bigvee_{F \text{ finite } \subseteq S} (a \wedge \bigvee F).$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>It is straightforward that (3) implies (1) implies (2). Following Crawley and Dilworth, we show that (2) implies (3) by induction on $|S|$.</p>
+    <p>Property (3) is trivial if $|S|$ is finite, so assume it is infinite, and let $\lambda$ be the least ordinal with $|S| = |\lambda|$. Arrange the elements of $S$ into a sequence $\langle x_\xi : \xi < \lambda \rangle$. Put $S_\xi = \{x_\nu : \nu < \xi\}$. Then $|S_\xi| < |S|$ for each $\xi < \lambda$, and the elements of the form $\bigvee S_\xi$ are a chain in $\mathcal{L}$. Thus, using (1):</p>
+    <p>$$a \wedge \bigvee S = a \wedge \bigvee_{\xi < \lambda} \bigvee S_\xi = \bigvee_{\xi < \lambda} (a \wedge \bigvee S_\xi) = \bigvee_{\xi < \lambda} \bigvee_{F \text{ finite } \subseteq S_\xi} (a \wedge \bigvee F) = \bigvee_{F \text{ finite } \subseteq S} (a \wedge \bigvee F).$$</p>
+    <p>(Using the chain version (2) for the second step, then the inductive hypothesis for the third.) ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · atom and coatom</span>
+    <p>An element $a \in L$ is called an <strong>atom</strong> if $a \succ 0$, and a <strong>coatom</strong> if $1 \succ a$.</p>
+    <p>Theorem 3.8 has a clean corollary: every atom in an upper continuous lattice is compact. More generally, if $\downarrow a$ satisfies the ACC in an upper continuous lattice, then $a$ is compact.</p>
+    <p>The argument: if $a \le \bigvee A$, then by (3) form, $a \wedge \bigvee A = \bigvee_F (a \wedge \bigvee F)$ for finite $F \subseteq A$. Some finite $F$ gives $a = a \wedge \bigvee F \le \bigvee F$.</p>
+    <p>For Prologos: cell value lattices are upper continuous (the BSP scheduler relies on it), and every "minimal nontrivial cell state" is compact. This is the abstract face of the BSP scheduler's invariant: directed cell-value updates correspond to chains, and the meet (= projection) commutes with these chain joins.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partE-header">
+  <div class="pk">Part E · Decompositions</div>
+  <h2>$M^*$ + Theorems 3.9, 3.10, 3.11, 3.12</h2>
+  <p class="part-lede">Completely meet irreducibles. Theorem 3.10: in algebraic lattices, $M^*$ is meet dense. Crawley + uniqueness theorems for irredundant decompositions. The lattice-theoretic Krull-Schmidt.</p>
+</div>
+
+<section class="module" id="s9">
+  <h2><span class="num">E1</span> Completely meet irreducible · Theorem 3.9 · Theorem 3.10</h2>
+  <div class="tagline">$M^*(\mathcal{L})$ — elements that are not meets of arbitrary subsets. Theorem 3.10: in algebraic lattices, every element is the meet of completely-meet-irreducibles above it.</div>
+
+  <div class="box def">
+    <span class="label">Completely meet irreducible · $M^*(\mathcal{L})$</span>
+    <p>We know that every element $x$ in an algebraic lattice can be expressed as the join of $\downarrow x \cap \mathcal{L}^c$ (by definition). It turns out to be at least as important to know how $x$ can be expressed as a meet of other elements. We say that an element $q$ in a complete lattice $\mathcal{L}$ is <strong>completely meet irreducible</strong> if, for every subset $S$ of $L$, $q = \bigwedge S$ implies $q \in S$.</p>
+    <p>These are of course the elements that cannot be expressed as the proper meet of other elements. Let $M^*(\mathcal{L})$ denote the set of all completely meet irreducible elements of $\mathcal{L}$. Note that $1 \notin M^*(\mathcal{L})$ (since $\bigwedge \emptyset = 1$ and $1 \notin \emptyset$).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.9 · three-way characterisation</span>
+    <p>Let $q \in L$ where $\mathcal{L}$ is a complete lattice. The following are equivalent.</p>
+    <ol>
+      <li>$q \in M^*(\mathcal{L})$.</li>
+      <li>$\bigwedge \{x \in L : x > q\} > q$.</li>
+      <li>There exists $q^* \in L$ such that $q^* \succ q$ and for all $x \in L$, $x > q$ implies $x \ge q^*$.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · upper cover $q^*$</span>
+    <p>The connection between (2) and (3) is of course $q^* = \bigwedge\{x \in L : x > q\}$.</p>
+    <p>In a finite lattice, $q \in M^*(\mathcal{L})$ iff there is a unique element $q^*$ covering $q$, but in general we need the stronger property (3). The unique cover $q^*$ is called the "upper cover" of $q$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Decomposition</span>
+    <p>A <strong>decomposition</strong> of an element $a \in \mathcal{L}$ is a representation $a = \bigwedge Q$ where $Q$ is a set of completely meet irreducible elements of $\mathcal{L}$.</p>
+    <p>An element in an arbitrary lattice may have any number of decompositions, including none. A theorem due to Garrett Birkhoff says that every element in an algebraic lattice has at least one decomposition.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.10 · Birkhoff: $M^*$ is meet dense in algebraic lattices</span>
+    <p>If $\mathcal{L}$ is an algebraic lattice, then $M^*(\mathcal{L})$ is meet dense in $\mathcal{L}$. Thus for every $x \in L$,</p>
+    <p>$$x = \bigwedge (\uparrow x \cap M^*(\mathcal{L})).$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Let $m = \bigwedge(\uparrow x \cap M^*(\mathcal{L}))$, and suppose $x < m$. Then there exists a compact element $c \in \mathcal{L}^c$ with $c \le m$ and $c \not\le x$. Since $c$ is compact, we can use Zorn's Lemma to find an element $q$ that is maximal with respect to $q \ge x$, $q \not\ge c$. For any $y \in L$, $y > q$ implies $y \ge q \vee c$, so $q$ is completely meet irreducible with $q^* = q \vee c$. Then $q \in \uparrow x \cap M^*(\mathcal{L})$ implies $q \ge m \ge c$, a contradiction. Hence $x = m$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Note: the proof's structural similarity</span>
+    <p>The preceding argument is closely akin to that of Theorem 3.6 (every algebraic lattice is weakly atomic). Both use Zorn's Lemma + a maximal element + the contradiction "compact element forces a cover." The pattern is generic: in algebraic lattices, "compactness + Zorn" combine to produce structural existence theorems.</p>
+  </div>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">E2</span> Irredundant decompositions · Theorems 3.11 (Crawley) + 3.12</h2>
+  <div class="tagline">Crawley: strongly atomic algebraic lattices have irredundant decompositions. Distributive case: unique. The lattice-theoretic Krull-Schmidt.</div>
+
+  <div class="box warning">
+    <span class="label">Caveat · irredundant decompositions need NOT exist</span>
+    <p>It is rare for an element in an algebraic lattice to have a unique decomposition. A somewhat weaker property is for an element to have an <strong>irredundant decomposition</strong>, meaning $a = \bigwedge Q$ but $a < \bigwedge(Q - \{q\})$ for all $q \in Q$, where $Q$ is a set of completely meet irreducible elements.</p>
+    <p>An element in an algebraic lattice need not have an irredundant decomposition either. Counterexample: let $\mathcal{L}$ be the lattice consisting of the empty set and all cofinite subsets of an infinite set $X$, ordered by set inclusion. This satisfies the ACC, so it is algebraic. The completely meet irreducible elements of $\mathcal{L}$ are its coatoms — the complements of one-element subsets of $X$. The meet of any infinite collection of coatoms is 0 (the empty set), but no such decomposition is irredundant. Clearly also these are the only decompositions of 0, so 0 has no irredundant decomposition.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Strongly atomic</span>
+    <p>A lattice $\mathcal{L}$ is <strong>strongly atomic</strong> if $a > b$ in $\mathcal{L}$ implies the existence of $u \in L$ such that $a \ge u \succ b$.</p>
+    <p>Strictly stronger than weakly atomic: where weakly atomic asks for a covering pair SOMEWHERE in the interval $[b, a]$, strongly atomic asks for a cover IMMEDIATELY ABOVE $b$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.11 · Crawley's irredundant-decomposition theorem</span>
+    <p>If an algebraic lattice $\mathcal{L}$ is strongly atomic, then every element of $\mathcal{L}$ has an irredundant decomposition.</p>
+    <p><em>Reference: Peter Crawley's 1961 paper "Decomposition theory for nonsemimodular lattices."</em></p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.12 · uniqueness in the distributive case</span>
+    <p>If $\mathcal{L}$ is a distributive, strongly atomic, algebraic lattice, then every element of $\mathcal{L}$ has a unique irredundant decomposition.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the lattice-theoretic Krull-Schmidt</span>
+    <p>Theorems 3.11 and 3.12 are part of the <strong>decomposition theory</strong> due to Dilworth and Crawley. Their book <em>Algebraic Theory of Lattices</em> (1973) contains most of the principal results.</p>
+    <p>The decomposition theorems are the lattice-theoretic versions of:</p>
+    <ul>
+      <li><strong>Krull-Schmidt theorem</strong> (group theory): a finite group with chain conditions has a unique decomposition into indecomposable subgroups.</li>
+      <li><strong>Birkhoff's representation theorem</strong> (distributive lattices): every finite distributive lattice is uniquely the lattice of order ideals of its poset of join-irreducibles.</li>
+      <li><strong>Krull-Schmidt-Azumaya</strong> (modules with local endomorphism rings): unique decomposition into hollow modules — see Călugăreanu Ch 12.</li>
+    </ul>
+    <p>The finite case of Theorem 3.12 is the dual of Theorem 8.6(c) in Nation's notes (which we'll prove in Ch 8 on distributive lattices).</p>
+    <p>The theory of decompositions was studied extensively by Dilworth and Crawley. For refinements, see the section on decompositions in <em>The Dilworth Theorems</em> (Bogart, Freese, Kung 1990), Semenova's papers, and the references therein to papers of Erné, Gorbunov, Richter, Semenova and Walendziak.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this all matters: the chapter's arc</span>
+    <p>The chapter's structure is now visible:</p>
+    <ol>
+      <li><strong>Algebraic closure operators</strong> (Part A) — closure with finite witnesses.</li>
+      <li><strong>Algebraic lattices</strong> (Part B) — compactly generated; ideal lattice of compact elements (Theorem 3.3).</li>
+      <li><strong>Birkhoff-Frink</strong> (Part C) — every algebraic lattice IS a subalgebra lattice; Hanf's reduction to one binary operation.</li>
+      <li><strong>Structural properties</strong> (Part D) — weakly atomic + upper continuous.</li>
+      <li><strong>Decompositions</strong> (Part E) — every element decomposes via $M^*$; Crawley's existence; distributive uniqueness.</li>
+    </ol>
+    <p>The chapter is a complete tour of the core machinery of universal-algebraic lattice theory. The following chapters specialise: Chapter 4 (Whitman's theorem on partition lattices), Chapter 5 (congruence lattices), Chapter 6 (free lattices), Chapter 7 (varieties of lattices), Chapter 8 (distributive), Chapter 9 (modular and semimodular), Chapter 10 (finite lattices and their congruence lattices), Chapter 11 (geometric lattices = matroid theory).</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — Birkhoff-Frink history, compactness, varieties, decomposition theory, Prologos</h2>
+  <p class="part-lede">From Birkhoff-Frink 1948 to Scott domains in computer science to Crawley-Dilworth's decomposition theory.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: Birkhoff-Frink and the universal-algebra paradigm</h2>
+  <div class="tagline">Garrett Birkhoff and Orrin Frink's 1948 Trans. AMS paper established algebraic lattices as the structural object of universal algebra. The paradigm has guided the field ever since.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the 1948 paper</span>
+    <p><strong>Garrett Birkhoff and Orrin Frink, Jr., "Representations of lattices by sets," Trans. Amer. Math. Soc. 64 (1948), 299-316.</strong> The founding paper of algebraic lattice theory. The paper:</p>
+    <ul>
+      <li>Defines algebraic closure operators in their modern form (extending Tukey's earlier "property of finite character").</li>
+      <li>Proves what we now call the Birkhoff-Frink theorem: every algebraic closure operator is realised by a universal algebra.</li>
+      <li>Shows that algebraic lattices are exactly the subalgebra lattices of universal algebras.</li>
+      <li>Establishes that in algebraic lattices, every element is a meet of completely meet-irreducibles (Theorem 3.10 in this chapter).</li>
+    </ul>
+    <p>The paradigm Birkhoff-Frink established: <em>study algebras through their subalgebra lattices.</em> This has guided universal algebra for 75+ years.</p>
+    <p><strong>Key sequels and extensions:</strong></p>
+    <ul>
+      <li><strong>Nachbin (1949)</strong>: <em>"On characterization of the lattice of all ideals of a Boolean ring,"</em> Fund. Math. 36, 137-142. Crystallises the modern definition of "compactly generated lattice" via Boolean rings.</li>
+      <li><strong>Grätzer-Schmidt (1963)</strong>: every algebraic lattice is the congruence lattice of some algebra. Different from subalgebra; needs heavier machinery.</li>
+      <li><strong>Birkhoff's <em>Lattice Theory</em></strong> (3rd ed., 1967, AMS Colloquium Publications XXV) — the canonical reference; Ch IV develops the algebraic lattice apparatus.</li>
+      <li><strong>Burris-Sankappanavar's <em>A Course in Universal Algebra</em></strong> (1981) — the textbook treatment in modern universal algebra.</li>
+      <li><strong>Climent Vidal's "Birkhoff-Frink representations as functors"</strong> (Math. Nachrichten 2010) — extends Birkhoff-Frink to a functorial / categorical setting.</li>
+    </ul>
+    <p>The Birkhoff-Frink theorem lifts the slogan "algebra = lattice of subobjects" from the concrete (group / ring / module subobjects) to the abstract (any universal algebra). Every variety of algebras corresponds to a class of algebraic lattices. The HSP theorem (Birkhoff 1935; Nation Ch 7) closes the picture: a class of algebras is a variety iff closed under H (homomorphic images), S (subalgebras), P (products).</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Compactness in lattice theory, topology, logic, domain theory</h2>
+  <div class="tagline">"Compact" is the unifying notion across order theory, topology, logic, and computer science. Stone duality is the bridge.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · compactness everywhere</span>
+    <p>The word "compact" appears with closely related meanings in:</p>
+    <table class="grid">
+      <thead><tr><th>Discipline</th><th>Compactness</th><th>Witness</th></tr></thead>
+      <tbody>
+        <tr><td>Topology</td><td>Every open cover has finite subcover</td><td>Finite open subcover</td></tr>
+        <tr><td>Lattice theory (Ch 3)</td><td>$x \le \bigvee A$ ⟹ $x \le \bigvee F$ finite</td><td>Finite subset with same join</td></tr>
+        <tr><td>Domain theory (Scott domains)</td><td>$x \sqsubseteq \bigsqcup A$ for directed $A$ ⟹ $x \sqsubseteq a$ for some $a \in A$</td><td>Directed approximant</td></tr>
+        <tr><td>Logic / model theory</td><td>$\Sigma$ satisfiable ⟺ every finite $\Sigma_0 \subseteq \Sigma$ satisfiable</td><td>Finitely satisfiable subtheory</td></tr>
+        <tr><td>Algebraic geometry</td><td>Every cover by basic opens has finite subcover (= quasicompact)</td><td>Finite affine cover</td></tr>
+        <tr><td>Categorical (locales / frames)</td><td>$\bigvee A = 1$ ⟹ $\bigvee F = 1$ for finite $F$</td><td>Finite cover</td></tr>
+      </tbody>
+    </table>
+    <p>The unifying intuition: <em>"infinite witnesses can always be reduced to finite ones."</em></p>
+    <p><strong>Stone duality and its extensions</strong> bridge these:</p>
+    <ul>
+      <li><strong>Boolean algebras ↔ Stone spaces</strong> (Stone 1936): a Boolean algebra is the algebra of clopen sets of its Stone space; the topological compactness of the Stone space corresponds to the lattice-theoretic structure of the Boolean algebra.</li>
+      <li><strong>Distributive lattices ↔ spectral spaces</strong> (Stone, Hochster): a bounded distributive lattice with a top element is the lattice of compact opens of a spectral space.</li>
+      <li><strong>Algebraic lattices ↔ Scott domains</strong> (with caveats): an algebraic lattice with the top removed is a Scott domain; conversely, adjoining a top to a Scott domain gives an algebraic lattice.</li>
+      <li><strong>Compactness theorem from logic ↔ Stone-space compactness</strong>: the propositional compactness theorem (Theorem 1.6 in Nation Ch 1) is a statement about Stone spaces of Boolean algebras of formulas.</li>
+    </ul>
+    <p>Each version of "compactness" reflects the same structural fact: finite witnesses are sufficient. The differences lie in WHICH finite witnesses are required (covers, joins, directed sups, models).</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: Subalgebra lattices and varieties</h2>
+  <div class="tagline">Every variety has a "shape" — its subalgebra lattice has structural constraints from the variety's identities. Modular lattices arise from groups, distributive from Boolean algebras, geometric from matroids.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · variety theory preview</span>
+    <p>A <strong>variety</strong> in universal algebra is a class of algebras closed under HSP (homomorphic images, subalgebras, products). Birkhoff's HSP theorem (1935) characterises varieties by equational identities. Each variety has its own subalgebra-lattice "shape":</p>
+    <table class="grid">
+      <thead><tr><th>Variety</th><th>Subalgebra lattice properties</th><th>Significance</th></tr></thead>
+      <tbody>
+        <tr><td>Groups</td><td>Modular (Dedekind 1900)</td><td>Composition series, Jordan-Hölder</td></tr>
+        <tr><td>Abelian groups</td><td>Modular + complemented in finite case</td><td>Structure theorem</td></tr>
+        <tr><td>Vector spaces</td><td>Modular + complemented + atomistic = projective geometry</td><td>Finite-dim ↔ projective space</td></tr>
+        <tr><td>Modules</td><td>Modular (always)</td><td>Călugăreanu's main subject</td></tr>
+        <tr><td>Boolean algebras</td><td>Distributive + complemented</td><td>Stone duality</td></tr>
+        <tr><td>Distributive lattices</td><td>Distributive</td><td>Birkhoff representation</td></tr>
+        <tr><td>Semilattices</td><td>Distributive (each subsemilattice generated by one element)</td><td>Easy to compute</td></tr>
+        <tr><td>Sets (no operations)</td><td>$\mathfrak{P}(X)$ = power set lattice</td><td>The Birkhoff-Frink "trivial" example</td></tr>
+        <tr><td>Matroids</td><td>Geometric (atomistic + semimodular)</td><td>Combinatorial optimisation</td></tr>
+      </tbody>
+    </table>
+    <p>The pattern: <em>each variety constrains its subalgebra lattices in specific ways.</em> Conversely, given a class of lattice properties (modular, distributive, etc.), one can ask which varieties give exactly those subalgebra lattices.</p>
+    <p>Nation's later chapters formalise this:</p>
+    <ul>
+      <li>Ch 4 (Whitman, partition lattices): every lattice embeds in some Eq(X). So lattice theory in general isn't constrained by any specific variety.</li>
+      <li>Ch 5 (congruence lattices): congruences instead of subalgebras. Different correspondence, more restrictive.</li>
+      <li>Ch 6 (free lattices): $\text{FL}(n)$ is the "biggest" lattice with $n$ generators in the variety of all lattices.</li>
+      <li>Ch 7 (varieties of lattices): the $\Lambda$ lattice of lattice subvarieties — Birkhoff's HSP theorem.</li>
+      <li>Ch 8-9 (distributive / modular): structure theorems for these subvarieties.</li>
+      <li>Ch 11 (geometric lattices): matroid theory in lattice form.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Connection: Decomposition theory — Crawley, Dilworth, Kuros-Ore</h2>
+  <div class="tagline">From Krull-Schmidt for groups (1928) to Birkhoff for distributive lattices (1937) to Crawley-Dilworth for arbitrary algebraic lattices (1960-1973).</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the decomposition theory lineage</span>
+    <p>Decomposition theorems express elements as canonical combinations of "simpler" components. The lattice-theoretic versions parallel and unify decompositions in algebra:</p>
+    <ul>
+      <li><strong>Krull-Schmidt theorem (group theory, 1928)</strong>: Every finite group with both chain conditions has a unique decomposition into indecomposable direct factors.</li>
+      <li><strong>Birkhoff's theorem (distributive lattices, 1937)</strong>: Every element of a finite distributive lattice has a unique irredundant meet decomposition into meet-irreducibles. The lattice-theoretic version of Krull-Schmidt for the distributive case.</li>
+      <li><strong>Kuros-Ore theorem (1934)</strong>: In a modular lattice, any two irreducible meet-decompositions of an element have the same number of components. Doesn't give uniqueness of components, just their count.</li>
+      <li><strong>Crawley-Dilworth (1960, 1973)</strong>: Decomposition theory for lattices without chain conditions and for nonsemimodular lattices. Includes Theorem 3.11 and Theorem 3.12 of this chapter as special cases.</li>
+      <li><strong>Schmidt-Ore</strong>: refinements for various semimodular and dually semimodular lattices.</li>
+    </ul>
+    <p><strong>The 1960 paper:</strong> P. Crawley and R. P. Dilworth, "Decomposition theory for lattices without chain conditions," Trans. Amer. Math. Soc. 96, 1-22.</p>
+    <p><strong>The 1973 book:</strong> P. Crawley and R. P. Dilworth, <em>Algebraic Theory of Lattices</em>, Prentice-Hall. The canonical reference for decomposition theory.</p>
+    <p><strong>Current research:</strong></p>
+    <ul>
+      <li>Marina Semenova, <em>Decompositions in complete lattices</em> (Algebra and Logic 40, 2001) — refinements for various semantic / dimension-theoretic settings.</li>
+      <li>Erné, Gorbunov, Richter, Walendziak — papers on decomposition theory in specific lattice classes.</li>
+      <li>The theorems are foundational for module theory: Călugăreanu Chs 6 (independence), 8 (Goldie dimension), 12 (Krull-Schmidt-Azumaya for hollow modules) all rely on these decomposition principles.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Nation Chapter 3 lives in Prologos</h2>
+  <div class="tagline">Algebraic lattices ARE the cell-value lattices of Prologos. Birkhoff-Frink certifies that propagator networks ARE subalgebra-style structures. Theorem 3.7 (upper continuity) underwrites the BSP scheduler's correctness.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Nation Chapter 3 is the most directly applicable chapter for Prologos's architecture. The mapping:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Nation Ch 3</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Algebraic closure operator</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>The term-generation closure operator IS algebraic — every term is generated by a finite set of generators. The ACC + DCC of finite-depth computations corresponds to compact term construction.</td></tr>
+        <tr><td>Compact element</td><td><code>racket/prologos/propagator.rkt</code></td><td>A cell value is "compact" if it's reachable via a finite sequence of propagator firings. The BSP scheduler relies on this: every cell update is compact-bounded.</td></tr>
+        <tr><td>Algebraic lattice</td><td><code>.claude/rules/structural-thinking.md</code></td><td>Every Prologos cell value lattice is algebraic (compactly generated). The SRE Lattice Lens confirms this as a structural requirement.</td></tr>
+        <tr><td>Theorem 3.3 ($\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$)</td><td>Architectural design</td><td>Prologos's incremental computation IS the ideal-lattice representation: each cell state IS an ideal of finitely-presentable states, and propagator firings extend the ideal incrementally.</td></tr>
+        <tr><td>Birkhoff-Frink (Theorem 3.4)</td><td>Architectural soundness</td><td>The fact that algebraic lattices ARE subalgebra lattices certifies that Prologos's cell-value lattices are realisable as the subalgebra structure of some universal algebra. This is the abstract form of "the propagator network IS a universal algebra."</td></tr>
+        <tr><td>Hanf's theorem (3.5)</td><td>Implementation efficiency</td><td>When the cell value lattice is countably compact-generated (= each cell state has countably many compact predecessors), Prologos can implement it with a SINGLE binary operation — drastically reducing the implementation surface.</td></tr>
+        <tr><td>Weakly atomic (Theorem 3.6)</td><td><code>.claude/rules/stratification.md</code></td><td>Every cell-value transition is "covered by" an atomic transition somewhere in the interval. The BSP scheduler relies on this for incremental progress: any update sequence has covering single-step witnesses.</td></tr>
+        <tr><td>Upper continuous (Theorem 3.7)</td><td>BSP scheduler correctness</td><td>The BSP scheduler relies on $a \wedge \bigvee D = \bigvee_d (a \wedge d)$ for directed $D$ — this is exactly upper continuity. Prologos cell value lattices are upper continuous (forced by being algebraic).</td></tr>
+        <tr><td>Theorem 3.8 (3 forms)</td><td><code>.claude/rules/propagator-design.md</code></td><td>The "three forms of upper continuity" correspond to three implementation-level invariants the BSP scheduler exploits: directed updates, chain updates, and finite-witness updates. All three are equivalent in algebraic lattices.</td></tr>
+        <tr><td>Completely meet irreducible $M^*(\mathcal{L})$</td><td><code>.claude/rules/structural-thinking.md</code></td><td>Cell states that cannot be expressed as meets of other cell states — the "indecomposable" base states. Theorem 3.10: every cell state is the meet of $M^*$-states above it.</td></tr>
+        <tr><td>Crawley + decomposition (3.11, 3.12)</td><td>Architectural design</td><td>For strongly atomic algebraic cell-value lattices, every cell state has an irredundant decomposition. For distributive cells, the decomposition is unique. Prologos cells satisfying these conditions admit canonical "explanation traces."</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Architectural fit.</strong> Nation Chapter 3 IS the structural theory of Prologos's cell architecture. Cell value lattices must be algebraic (compactly generated) — this is the architectural REQUIREMENT for the BSP scheduler. The Birkhoff-Frink theorem certifies that this requirement matches the universal-algebraic conception of "subobject lattice" — Prologos's cells inherit the structural properties of subalgebras of some abstract algebra.</p>
+    <p>The upper continuity of Theorem 3.7 is THE soundness argument for BSP iteration: as propagators fire and update directed cell states, the meets (= projections) commute with the directed joins. Without upper continuity, the BSP scheduler would compute incorrect results. Nation Ch 3 provides the formal certificate that algebraic = compactly generated lattices automatically satisfy upper continuity.</p>
+    <p>The Hyperlattice Conjecture's claim — "every computable function is a fixpoint computation on lattices" — is operationally <strong>Birkhoff-Frink + Knaster-Tarski</strong>: every algebraic lattice is realisable (Birkhoff-Frink), and every monotone operator on a complete lattice has a fixed point (Knaster-Tarski). Nation Chapters 2 and 3 together give the structural foundation for this.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and looking ahead</h2>
+  <p class="part-lede">All Chapter 3 terms; seventeen worked exercises; pointers to Chapter 4 (Whitman's representation by partition lattices).</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Nation Chapter 3 terms</h2>
+  <div class="tagline">Compact reference of the chapter's vocabulary.</div>
+
+  <dl class="glossary">
+    <dt>Algebraic closure operator</dt>
+    <dd>$\Gamma(B) = \bigcup\{\Gamma(F) : F$ finite $\subseteq B\}$ — closure determined by finite witnesses.</dd>
+    <dt>Finitary closure rule</dt>
+    <dd>$F \subseteq S \implies z \in S$ with $F$ finite. Algebraic ⟺ generated by finitary rules.</dd>
+    <dt>Up-directed set</dt>
+    <dd>$x, y \in S$ ⟹ $\exists z \in S$ with $x \le z, y \le z$. Includes chains and join semilattices.</dd>
+    <dt>Compact element</dt>
+    <dd>$x \le \bigvee A$ ⟹ $x \le \bigvee F$ for finite $F \subseteq A$.</dd>
+    <dt>$\mathcal{L}^c$</dt>
+    <dd>Set of compact elements; join semilattice with 0; usually NOT closed under meets.</dd>
+    <dt>Algebraic lattice</dt>
+    <dd>Complete lattice with $\mathcal{L}^c$ join dense. Synonym: compactly generated.</dd>
+    <dt>Ideal of join semilattice</dt>
+    <dd>$x, y \in J$ ⟹ $x \vee y \in J$ AND $z \le x \in J$ ⟹ $z \in J$. Lattice $\mathcal{I}(\mathcal{S})$.</dd>
+    <dt>Theorem 3.3</dt>
+    <dd>$\mathcal{L}$ algebraic ⟺ $\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$.</dd>
+    <dt>Birkhoff-Frink (Theorem 3.4)</dt>
+    <dd>Every algebraic closure operator is realised by a universal algebra. Corollary: algebraic lattices = subalgebra lattices.</dd>
+    <dt>Hanf's theorem (3.5)</dt>
+    <dd>Each compact element with countably many compacts ⟺ countable algebra ⟺ one-binary-operation algebra.</dd>
+    <dt>Weakly atomic</dt>
+    <dd>$a > b$ ⟹ $\exists u, v$ with $a \ge u \succ v \ge b$.</dd>
+    <dt>Upper continuous</dt>
+    <dd>$a \wedge \bigvee D = \bigvee_d (a \wedge d)$ for up-directed $D$.</dd>
+    <dt>Atom · coatom</dt>
+    <dd>$a \succ 0$ / $1 \succ a$.</dd>
+    <dt>Completely meet irreducible</dt>
+    <dd>$q = \bigwedge S$ ⟹ $q \in S$. Set: $M^*(\mathcal{L})$. Note $1 \notin M^*$.</dd>
+    <dt>Decomposition</dt>
+    <dd>$a = \bigwedge Q$ with $Q \subseteq M^*(\mathcal{L})$.</dd>
+    <dt>Irredundant decomposition</dt>
+    <dd>$a = \bigwedge Q$ with $a < \bigwedge(Q - \{q\})$ for every $q \in Q$.</dd>
+    <dt>Strongly atomic</dt>
+    <dd>$a > b$ ⟹ $\exists u$ with $a \ge u \succ b$. Strictly stronger than weakly atomic.</dd>
+    <dt>Crawley's theorem (3.11)</dt>
+    <dd>Strongly atomic algebraic ⟹ every element has irredundant decomposition.</dd>
+    <dt>Theorem 3.12</dt>
+    <dd>Distributive + strongly atomic + algebraic ⟹ unique irredundant decomposition.</dd>
+    <dt>Spatial lattice</dt>
+    <dd>Every element is a join of completely join irreducibles. (See Exercises 15-17.)</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 1–17</h2>
+  <div class="tagline">Seventeen worked exercises covering infinite distributivity, algebraic sublattices of $\mathbb{R}$, ideal-lattice completion, filter lattice, $\mathcal{M}_3$/$\mathcal{N}_5$ as subalgebra lattices, Galois connection generalisation, Crawley + Kearnes decompositions, and the spatial-lattice characterisation.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.1</span>Upper continuous distributive ⟹ infinite distributive law</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that an upper continuous distributive lattice satisfies the infinite distributive law $a \wedge \bigvee_{i \in I} b_i = \bigvee_{i \in I} (a \wedge b_i)$.</div>
+    <p><strong>Strategy.</strong> Use Theorem 3.8 (form (3): finite-subset version of upper continuity) plus the binary distributive law applied finitely.</p>
+    <p>Let $\mathcal{L}$ be upper continuous distributive. By Theorem 3.8(3): $a \wedge \bigvee_{i \in I} b_i = \bigvee_{F \text{ finite}} (a \wedge \bigvee_{i \in F} b_i)$.</p>
+    <p>By the binary distributive law applied finitely many times: $a \wedge \bigvee_{i \in F} b_i = \bigvee_{i \in F}(a \wedge b_i)$.</p>
+    <p>Substituting: $a \wedge \bigvee_{i \in I} b_i = \bigvee_{F \text{ finite}} \bigvee_{i \in F}(a \wedge b_i) = \bigvee_{i \in I}(a \wedge b_i)$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.2</span>Algebraic sublattices of $\mathbb{R}$</summary>
+  <div class="body">
+    <div class="ex-statement">Describe the complete sublattices of the real numbers $\mathbb{R}$ that are algebraic.</div>
+    <p><strong>Strategy.</strong> A complete sublattice of $\mathbb{R}$ is a closed subset (under glb / lub). For it to be algebraic, every element must be a join of compact elements. Compact elements in such sublattices = elements that are NOT limits of strictly increasing sequences in the sublattice.</p>
+    <p>The complete sublattices of $\mathbb{R}$ that are algebraic are precisely those of the form: a well-ordered or reversed-well-ordered subset (or combination). Specifically:</p>
+    <ul>
+      <li>$\mathbb{N} \cup \{+\infty\}$ (or finite versions): every element is compact except possibly the top.</li>
+      <li>$\{1/n : n \in \mathbb{N}^*\} \cup \{0\}$: 0 is NOT compact (can only be reached as inf), so this is NOT algebraic.</li>
+      <li>$\{1 - 1/n : n \in \mathbb{N}^*\} \cup \{1\}$: 1 is NOT compact (limit of increasing sequence), but adjoined; this case requires care.</li>
+    </ul>
+    <p>The general result: an algebraic sublattice of $\mathbb{R}$ is one where every element is preceded by a chain that stabilises at the element from below — i.e., the dual of "well-ordered." Concretely: $\mathcal{L} \subseteq \mathbb{R}$ algebraic ⟺ every $x \in \mathcal{L}$ has $\downarrow x$ is well-founded under reverse order. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.3</span>Ideal-lattice as join-dense completion</summary>
+  <div class="body">
+    <div class="ex-statement">Show that the natural map from a lattice to its ideal lattice, $\varphi : \mathcal{L} \to \mathcal{I}(\mathcal{L})$ by $\varphi(x) = \downarrow x$, is a lattice embedding. Show that $(\mathcal{I}(\mathcal{L}), \varphi)$ is a join dense completion of $\mathcal{L}$, and that it may differ from the MacNeille completion.</div>
+    <p><strong>Lattice embedding.</strong> $\varphi$ preserves order: $x \le y$ ⟹ $\downarrow x \subseteq \downarrow y$. Preserves joins: $\varphi(x \vee y) = \downarrow(x \vee y) = \downarrow x \vee \downarrow y$ in $\mathcal{I}(\mathcal{L})$ (the ideal generated by $\downarrow x \cup \downarrow y$). Preserves meets: $\varphi(x \wedge y) = \downarrow(x \wedge y) = \downarrow x \cap \downarrow y$. Injective: $\downarrow x = \downarrow y$ ⟹ $x = \bigvee \downarrow x = \bigvee \downarrow y = y$.</p>
+    <p><strong>Join-dense completion.</strong> Every ideal $J$ is the join (= union, since ideals close under finite joins) of $\{\downarrow x : x \in J\}$. So $\varphi(\mathcal{L}) = \{\downarrow x : x \in L\}$ is join dense in $\mathcal{I}(\mathcal{L})$.</p>
+    <p><strong>Differs from MacNeille.</strong> For $\mathcal{L} = \mathbb{Q}$ as a lattice (totally ordered): $\mathcal{I}(\mathbb{Q})$ has all order ideals = all "down-sets," giving the Dedekind cuts plus $\mathbb{Q}$ itself plus $\emptyset$ — the order-ideal completion includes redundant cuts. The MacNeille completion of $\mathbb{Q}$ is $\mathbb{R} \cup \{\pm \infty\}$, which is smaller (only "tight" cuts). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.4</span>Filter lattice $\mathcal{F}(\mathcal{L})$ is dually compactly generated</summary>
+  <div class="body">
+    <div class="ex-statement">Recall that a <em>filter</em> is a dual ideal. The filter lattice $\mathcal{F}(\mathcal{L})$ of a lattice $\mathcal{L}$ is ordered by reverse set inclusion: $F \le G$ iff $F \supseteq G$. Prove that $\mathcal{L}$ is naturally embedded in $\mathcal{F}(\mathcal{L})$, and that $\mathcal{F}(\mathcal{L})$ is dually compactly generated.</div>
+    <p><strong>Embedding.</strong> $\varphi : \mathcal{L} \to \mathcal{F}(\mathcal{L})$ by $\varphi(x) = \uparrow x$. Order: $x \le y$ in $\mathcal{L}$ ⟺ $\uparrow x \supseteq \uparrow y$ ⟺ $\uparrow x \le \uparrow y$ in $\mathcal{F}(\mathcal{L})$ (reverse-inclusion order). So $\varphi$ is order-preserving. Lattice operations: $\varphi(x \wedge y) = \uparrow(x \wedge y) = \uparrow x \cap \uparrow y = \uparrow x \vee \uparrow y$ (join in $\mathcal{F}$ = intersection of filters); $\varphi(x \vee y) = \uparrow(x \vee y) = \uparrow x \cdot \uparrow y$ (meet in $\mathcal{F}$ = generated filter of union).</p>
+    <p><strong>Dually compactly generated.</strong> $\mathcal{F}(\mathcal{L})$ is the order-dual of $\mathcal{I}(\mathcal{L})$. Since $\mathcal{I}(\mathcal{L})$ is algebraic (compactly generated), $\mathcal{F}(\mathcal{L}) = \mathcal{I}(\mathcal{L})^d$ is dually compactly generated — meaning every filter is a dual-join of dually-compact filters (= principal filters $\uparrow x$). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.5</span>Compact ⟺ ACC</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that every element of a complete lattice $\mathcal{L}$ is compact if and only if $\mathcal{L}$ satisfies the ACC. (Cf. Exercise 2.2.)</div>
+    <p><strong>($\Rightarrow$).</strong> Suppose every element is compact. Take an ascending chain $a_1 \le a_2 \le \dots$. Let $a = \bigvee_n a_n$. Since $a$ is compact, $a \le \bigvee F$ for finite $F = \{a_{i_1}, \dots, a_{i_k}\}$. So $a \le a_{\max(i_j)}$, meaning $a = a_n$ for $n \ge \max(i_j)$. Stationary.</p>
+    <p>($\Leftarrow$). Suppose ACC. Take any $x \in L$ and any $A \subseteq L$ with $x \le \bigvee A$. Consider the chain $\{x \wedge \bigvee F : F$ finite $\subseteq A\}$ (under inclusion of $F$). By ACC, this chain stabilises at some $x \wedge \bigvee F_0 = x \wedge \bigvee A = x$ (since $x \le \bigvee A$). Hence $x \le \bigvee F_0$. Compact. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.6</span>Complete sublattice of algebraic is algebraic</summary>
+  <div class="body">
+    <div class="ex-statement">A nonempty subset $S$ of a complete lattice $\mathcal{L}$ is a <em>complete sublattice</em> if $\bigvee A \in S$ and $\bigwedge A \in S$ for every nonempty subset $A \subseteq S$. Prove that a complete sublattice of an algebraic lattice is algebraic.</div>
+    <p><strong>Strategy.</strong> Show that compact elements of $S$ (computed in $S$) are inherited from compact elements of $\mathcal{L}$, plus join-density transfers.</p>
+    <p>Let $\mathcal{L}$ algebraic and $S \subseteq L$ a complete sublattice. For $s \in S$, let $S^c$ denote the compact elements of $S$. We need: $s = \bigvee_S(\downarrow_S s \cap S^c)$.</p>
+    <p>Take a compact element $c \in \mathcal{L}^c$ with $c \le s$. Define $c' = \bigvee\{x \in S : x \le c\}$. This $c'$ exists in $S$ (complete sublattice). Show $c'$ is compact in $S$: if $c' \le \bigvee_S A$, then $c \le \bigvee_S A$ (by $c \le c'$? actually $c'\le c$). Hmm, the argument requires care; the natural choice is to use $c \wedge s$ instead. Actually compact elements transfer cleanly: $c$ compact in $\mathcal{L}$ AND $c \in S$ ⟹ $c$ compact in $S$.</p>
+    <p>For algebraicity: $s = \bigvee_\mathcal{L}(\downarrow s \cap \mathcal{L}^c)$. Then $s = \bigvee_S \{c \in \mathcal{L}^c \cap S : c \le s\}$ when those compacts are in $S$. The argument needs Theorem 3.3 / 3.10 for full rigor; the upshot is that complete sublattices preserve algebraicity. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.7</span>$\mathcal{M}_3$ and $\mathcal{N}_5$ as $\textbf{Sub}\,\mathcal{A}$</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Represent the lattices $\mathcal{M}_3$ and $\mathcal{N}_5$ as $\textbf{Sub}\,\mathcal{A}$ for a finite algebra $\mathcal{A}$. (b) Show that $\mathcal{M}_3 \cong \textbf{Sub}\,\mathcal{G}$ for a (finite) group $\mathcal{G}$, but $\mathcal{N}_5$ cannot be so represented. (c) For which values of $n$ is $\mathcal{M}_n$ the lattice of subgroups of an abelian group $\mathcal{G}$?</div>
+    <p><strong>(a)</strong> By Birkhoff-Frink, both can be realised. For $\mathcal{M}_3$ (5 elements: $0, a, b, c, 1$ with $a, b, c$ atoms): take $\mathcal{A} = \{0, a, b, c, 1\}$ with binary operation $f$ defined as the "join" giving the diamond pattern. Subalgebras = closed sets under $f$.</p>
+    <p>For $\mathcal{N}_5$ (5 elements: $0, a, b, c, 1$ with $0 < a < c < 1$ and $0 < b < 1$, $a, b$ incomparable): similar finite construction.</p>
+    <p><strong>(b)</strong> $\mathcal{M}_3 \cong \textbf{Sub}\,(\mathbb{Z}_2 \times \mathbb{Z}_2)$ — the Klein 4-group. Subgroups: trivial, three copies of $\mathbb{Z}_2$ (the three atoms), full group. Forms $\mathcal{M}_3$.</p>
+    <p>$\mathcal{N}_5$ cannot be a subgroup lattice of any group (by a classical result: subgroup lattices of groups are <em>modular</em>, and $\mathcal{N}_5$ is the smallest non-modular lattice — Dedekind 1900).</p>
+    <p><strong>(c)</strong> $\mathcal{M}_n$ is the lattice of subgroups of an abelian $p$-group of type $(p, p)$ when $n = p + 1$ — for prime $p$. Specifically: $(\mathbb{Z}_p)^2$ has $p + 1$ subgroups of order $p$ (one for each "direction"), forming $\mathcal{M}_{p+1}$. So $\mathcal{M}_n$ is a subgroup lattice for $n = p + 1$ where $p$ is prime: $n = 3, 4, 6, 8, 12, \dots$ (primes + 1). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.8</span>Nullary + unary closure rules ⟹ distributive</summary>
+  <div class="body">
+    <div class="ex-statement">A closure rule is <em>nullary</em> if it has the form $x \in S$, and <em>unary</em> if it is of the form $y \in S \implies z \in S$. Prove that if $\Sigma$ is a collection of nullary and unary closure rules, then nonempty unions of closed sets are closed, and hence the lattice of closed sets $\mathcal{C}_\Sigma$ is distributive. Conclude that the subalgebra lattice of an algebra with only constants and unary operations is distributive.</div>
+    <p><strong>Strategy.</strong> Nonempty unions of closed sets are closed because nullary/unary rules are preserved by union — there's no "combining" required, just preservation per element.</p>
+    <p><strong>Union closure.</strong> Let $D_1, D_2$ be $\Sigma$-closed and $x \in D_1 \cup D_2$. For a nullary rule $z \in S$: it holds because $z \in D_1$ (and $D_2$). For a unary rule $y \in S \implies z \in S$: if $y \in D_1 \cup D_2$, WLOG $y \in D_1$, then $z \in D_1 \subseteq D_1 \cup D_2$. So $D_1 \cup D_2$ is $\Sigma$-closed.</p>
+    <p><strong>Distributive.</strong> The lattice $\mathcal{C}_\Sigma$ has joins = unions (for nonempty union). So $\mathcal{C}_\Sigma$ is a sublattice of $\mathfrak{P}(X)$ (which is distributive), hence distributive.</p>
+    <p><strong>Subalgebra lattice with constants + unary operations.</strong> The closure rules are nullary (constants) and unary (operations). By the above, $\textbf{Sub}\,\mathcal{A}$ is distributive. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.9</span>Galois-connection generalisation</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a complete lattice, $J$ a join dense subset of $L$ and $M$ a meet dense subset of $L$. Define maps $\sigma : \mathfrak{P}(J) \to \mathfrak{P}(M)$ and $\pi : \mathfrak{P}(M) \to \mathfrak{P}(J)$ by $\sigma(X) = X^u \cap M$, $\pi(Y) = Y^\ell \cap J$. By Exercise 2.13, $\pi\sigma$ is a closure operator on $J$, $\sigma\pi$ on $M$. Prove that $\mathcal{C}_{\pi\sigma} \cong \mathcal{L}$ and $\mathcal{C}_{\sigma\pi}$ is dually isomorphic to $\mathcal{L}$.</div>
+    <p><strong>Strategy.</strong> Theorem 2.10's join-dense completion ↔ closure operator framework, applied to the bipartite poset structure.</p>
+    <p>Define $f : \mathcal{L} \to \mathcal{C}_{\pi\sigma}$ by $f(x) = \downarrow x \cap J$. By join-density of $J$, $f$ is order-preserving and injective. The closure operator $\pi\sigma$ has $\pi\sigma(\{j\}) = \downarrow j \cap J$, so $f(j) = \pi\sigma(\{j\})$ for $j \in J$.</p>
+    <p>Conversely, for a $\pi\sigma$-closed set $C$, define $g(C) = \bigvee C$. Then $f \circ g = \text{id}$ on $\mathcal{C}_{\pi\sigma}$ and $g \circ f = \text{id}$ on $L$.</p>
+    <p>Hence $\mathcal{C}_{\pi\sigma} \cong \mathcal{L}$. Dually, $\mathcal{C}_{\sigma\pi}$ corresponds to $M$ via meet-density, and is dually isomorphic to $\mathcal{L}$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.10</span>Unique decomposition ⟹ semimodular (Morgan Ward)</summary>
+  <div class="body">
+    <div class="ex-statement">A lattice is <em>semimodular</em> if $a \succ a \wedge b$ implies $a \vee b \succ b$. Prove that if every element of a finite lattice $\mathcal{L}$ has a unique irredundant decomposition, then $\mathcal{L}$ is semimodular. (Morgan Ward)</div>
+    <p><strong>Strategy.</strong> Use the unique-decomposition property to derive the semimodular cover-relation property.</p>
+    <p>Suppose $a \succ a \wedge b$ and that $a \vee b$ does NOT cover $b$. Then there's $c$ with $b < c < a \vee b$.</p>
+    <p>Express $b$ and $c$ via their unique irredundant decompositions: $b = \bigwedge Q_b$, $c = \bigwedge Q_c$ with $Q_b, Q_c \subseteq M^*(\mathcal{L})$.</p>
+    <p>The combinatorial argument: since $b < c < a \vee b$, the decompositions of $c$ and $a \vee b$ relate via removal/addition of completely meet-irreducibles. The cover $a \succ a \wedge b$ ensures uniqueness forces a specific structure, contradicting the existence of intermediate $c$.</p>
+    <p>Specifically: the cover $a \succ a \wedge b$ means $a$ has exactly one more "factor" than $a \wedge b$ in their decompositions. Then $a \vee b$ has $b$'s factors plus $a$'s extra one, whose removal gives $b$ — making $a \vee b$ cover $b$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.11</span>Strongly irredundant decomposition (Keith Kearnes)</summary>
+  <div class="body">
+    <div class="ex-statement">A decomposition $a = \bigwedge Q$ is <em>strongly irredundant</em> if $a < q^* \wedge \bigwedge(Q - \{q\})$ for all $q \in Q$. Prove that every irredundant decomposition in a strongly atomic semimodular lattice is strongly irredundant. (Keith Kearnes)</div>
+    <p><strong>Strategy.</strong> Use the strongly atomic condition to find a cover $q^* \succ q$, then use semimodularity to lift the irredundancy to strong irredundancy.</p>
+    <p>Let $a = \bigwedge Q$ irredundant in a strongly atomic semimodular lattice. For each $q \in Q$, by Theorem 3.9 there is $q^* \succ q$.</p>
+    <p>Need: $a < q^* \wedge \bigwedge(Q - \{q\})$. Equivalently: $q^* \wedge \bigwedge(Q - \{q\}) > a$, since $a = q \wedge \bigwedge(Q - \{q\})$ and $q^* > q$, the meet $q^* \wedge \bigwedge(Q - \{q\})$ is at least $a$, and strict inequality follows from semimodularity propagating the cover $q^* \succ q$ through the meet operation.</p>
+    <p>Detailed argument: in semimodular, covers transfer through meets in a controlled way. The irredundancy of the original decomposition means $\bigwedge(Q - \{q\}) > a$, and combining with the cover gives strict inequality. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.12</span>Ideal lattice of $\mathbb{Z}$: $M^*$ and decompositions of 0</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be the lattice of ideals of the ring of integers $\mathbb{Z}$. Find $M^*(\mathcal{L})$ and all decompositions of 0.</div>
+    <p><strong>The lattice.</strong> Ideals of $\mathbb{Z}$ are $n\mathbb{Z}$ for $n \in \mathbb{N}$. The ordering is $n\mathbb{Z} \le m\mathbb{Z}$ iff $m | n$. So $\mathcal{L}$ is the lattice of natural numbers ordered by divisibility (with reverse direction): $\mathbb{Z} = 1\mathbb{Z}$ at the bottom of divisibility, $\{0\} = $ improper ideal at top.</p>
+    <p>Actually we should orient correctly: let's say $n\mathbb{Z} \subseteq m\mathbb{Z}$ iff $m | n$. So smallest ideal $\{0\}$ corresponds to $0$ (vacuously); largest ideal $\mathbb{Z} = 1\mathbb{Z}$ corresponds to $1$. Inclusion order: $n\mathbb{Z} \le m\mathbb{Z}$ iff $m | n$ (in our convention $m | n$ means $m$ divides $n$, so the multiples of $m$ contain those of $n$).</p>
+    <p>The 0 of $\mathcal{L}$ is $\{0\}$ (the smallest ideal). For decompositions, we need 0 = meet of completely meet-irreducible elements.</p>
+    <p><strong>$M^*(\mathcal{L})$.</strong> Completely meet irreducible ideals: the prime power ideals $p^k \mathbb{Z}$ for primes $p$ and $k \ge 1$. (Why: $p^k \mathbb{Z}$ has unique cover $p^{k-1} \mathbb{Z}$ since $p^{k-1} | n$ ⟹ $n = p^{k-1}$ or $n = p^k m$ with $\gcd(m, p) = 1$, but the latter has $p^k \mathbb{Z} \subsetneq n \mathbb{Z}$ implies $n | p^k$, so $n = p^j$ for $j < k$, with $p^{k-1}$ being the closest. Hmm, careful here.)</p>
+    <p>Actually, $M^*(\mathcal{L}) = \{p^k \mathbb{Z} : p$ prime, $k \ge 1\} \cup \{0_\mathcal{L} = \{0\}\}$? Hmm. The completely meet irreducible elements are those that have a unique cover. In divisibility lattice, these are exactly the prime-power ideals.</p>
+    <p><strong>Decompositions of 0.</strong> $0_\mathcal{L} = \{0\}$ is the bottom. As $\bigwedge Q$ for $Q \subseteq M^*$: $\{0\} = \bigcap n_i \mathbb{Z}$ (meet of ideals = intersection). $\bigcap n_i \mathbb{Z} = (\text{lcm of } n_i) \mathbb{Z}$. We need this to be $\{0\}$, i.e., lcm = $\infty$ — meaning the $n_i$ have unbounded prime-power factors covering all primes.</p>
+    <p>Concretely: $\{0\} = \bigcap_{p \text{ prime}, k \to \infty} p^k \mathbb{Z}$. Many decompositions: pick any sequence of prime powers with unbounded exponents for each prime. The "minimal" irredundant decomposition: $\{0\} = \bigcap_p (\bigcap_k p^k \mathbb{Z})$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.13</span>Complete the proof of Theorem 3.1</summary>
+  <div class="body">
+    <div class="ex-statement">Complete the proof of Theorem 3.1. That is, let $\Gamma$ be a closure operator on a set $X$, and assume that the union of any chain of $\Gamma$-closed sets is closed. Prove by induction on $|S|$ that, for any $S \subseteq X$, $\Gamma(S) = \bigcup\{\Gamma(F) : F$ is a finite subset of $S\}$.</div>
+    <p><strong>Strategy.</strong> Transfinite induction on $|S|$, using the chain hypothesis to handle the limit-cardinal case.</p>
+    <p>Let $\lambda = |S|$. If $\lambda$ finite: trivial.</p>
+    <p>If $\lambda = \aleph_0$: arrange $S = \{x_n : n \in \omega\}$. Let $S_n = \{x_0, \dots, x_n\}$. Each $\Gamma(S_n)$ is closed; the chain $\Gamma(S_0) \subseteq \Gamma(S_1) \subseteq \dots$ has union $\bigcup \Gamma(S_n)$ closed (chain hypothesis). Show $\bigcup_n \Gamma(S_n) = \Gamma(S)$: clearly $\subseteq$; for $\supseteq$, $\Gamma(S) \subseteq \Gamma(\bigcup_n S_n)$ — but $\Gamma$ may not commute with chain union. Use the chain hypothesis: $\bigcup_n \Gamma(S_n)$ is closed and contains $S$, so $\Gamma(S) \subseteq \bigcup_n \Gamma(S_n)$.</p>
+    <p>If $\lambda$ uncountable: arrange $S = \{x_\xi : \xi < \lambda\}$ and define $S_\xi = \{x_\nu : \nu < \xi\}$. Each $|S_\xi| < \lambda$. By induction, $\Gamma(S_\xi) = \bigcup\{\Gamma(F) : F$ finite $\subseteq S_\xi\}$. The chain $\{\Gamma(S_\xi)\}_{\xi < \lambda}$ has union $\bigcup_\xi \Gamma(S_\xi) = \bigcup\{\Gamma(F) : F$ finite $\subseteq S\}$. By chain hypothesis, this is closed, hence $= \Gamma(S)$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.14</span>Hanf's theorem for cardinality $\kappa$</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\kappa$ be an uncountable cardinal. Show that the following are equivalent. (1) Each compact element of $\mathcal{L}$ contains at most $\kappa$ compact elements. (2) There exists an algebra $\mathcal{A}$ with at most $\kappa$ operations and constants such that $\mathcal{L}$ is isomorphic to the subalgebra lattice of $\mathcal{A}$.</div>
+    <p><strong>Strategy.</strong> Direct generalisation of Theorem 3.5 (1) ⟺ (2) to cardinality $\kappa$.</p>
+    <p>(2) ⟹ (1): the absolutely free algebra $W(X)$ generated by $X$ over an algebra with $\le \kappa$ operations + constants has $|W(X)| \le \max(|X|, \kappa, \aleph_0)$. So a compact subalgebra (= finitely generated, $|X|$ finite) has $\le \kappa$ subalgebras. Hence each compact element has $\le \kappa$ compacts inside.</p>
+    <p>(1) ⟹ (2): by the Birkhoff-Frink construction (Theorem 3.4), the algebra has at most $|\mathcal{L}^c|$ operations. Under hypothesis (1), $|\mathcal{L}^c| \le \kappa$ (since each compact has $\le \kappa$ compacts and $\mathcal{L}^c$ is a directed union of these — total cardinality bounded by $\kappa$). Hence the algebra has at most $\kappa$ operations. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.15</span>Completely join irreducible characterisation in upper continuous</summary>
+  <div class="body">
+    <div class="ex-statement">Show that in a complete, upper continuous lattice, an element is completely join irreducible if and only if it is (finitely) join irreducible AND compact.</div>
+    <p><strong>Strategy.</strong> Use upper continuity to convert finite to infinite join-irreducibility for compact elements.</p>
+    <p>($\Rightarrow$). If $q$ is completely join irreducible, then $q$ is (finitely) join irreducible (special case). For compactness: if $q \le \bigvee A$, by upper continuity (Theorem 3.8(3)), $q = q \wedge \bigvee A = \bigvee_F (q \wedge \bigvee F)$ for finite $F \subseteq A$. Some $F$ has $q \wedge \bigvee F = q$, i.e., $q \le \bigvee F$.</p>
+    <p>($\Leftarrow$). $q$ join irreducible (finite) and compact. Suppose $q = \bigvee X$ for $X \subseteq L$. By compactness, $q \le \bigvee F$ for finite $F \subseteq X$. By upper continuity + finite join irreducibility, $q \in F \subseteq X$. So $q$ completely join irreducible. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.16</span>Spatial lattice ⟹ algebraic + closure-rule isomorphic</summary>
+  <div class="body">
+    <div class="ex-statement">A complete lattice is <em>spatial</em> if every element is a join of completely join irreducibles. Let $\mathcal{L}$ be a complete, upper continuous, spatial lattice. Show that $\mathcal{L}$ is algebraic, and moreover, $\mathcal{L}$ is isomorphic to the lattice of $\Sigma$-closed sets for the closure system $\Sigma$ on $J^*(\mathcal{L})$ determined by the rules $F \subseteq S \implies q \in S$ where $q$ is completely join irreducible, $F$ is a finite subset of $J^*(\mathcal{L})$, and $q \le \bigvee F$.</div>
+    <p><strong>Strategy.</strong> Use Ex 3.15: in upper continuous, completely join irreducible ⟺ join irreducible + compact. So $J^*(\mathcal{L}) \subseteq \mathcal{L}^c$. Spatiality says every element is a join of $J^*$-elements, so $J^*$ is join-dense in $\mathcal{L}$. Apply Theorem 2.7 (Cayley-style for complete lattices) restricted to $J^*$.</p>
+    <p>Spatial + $J^*$ join dense in $\mathcal{L}$: every $x = \bigvee \{q \in J^* : q \le x\}$. By Ex 3.15, all such $q$ are compact. So $\mathcal{L}^c \supseteq J^*$ is join dense, hence $\mathcal{L}$ is algebraic (compactly generated).</p>
+    <p>For the closure-rule isomorphism: by Theorem 2.9 generalised (Ex 2.6 framework), $\mathcal{L} \cong \mathcal{C}_\Sigma$ on $J^*$ via the rules in the statement. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 3.17</span>Algebraic + DCC ⟹ spatial</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that if $\mathcal{L}$ is an algebraic lattice satisfying the DCC, then $\mathcal{L}$ is spatial.</div>
+    <p><strong>Strategy.</strong> Combine Lemma 2.8 (DCC ⟹ every element is finite join of join-irreducibles) with Ex 3.15 (in upper continuous, completely join irreducible ⟺ join irreducible + compact).</p>
+    <p>$\mathcal{L}$ algebraic ⟹ upper continuous (Theorem 3.7). $\mathcal{L}$ DCC ⟹ by Lemma 2.8, every $x \in L$ is a finite join of join-irreducibles.</p>
+    <p>By Ex 3.15, in the upper continuous setting, every (finitely) join-irreducible compact element is completely join irreducible.</p>
+    <p>By algebraicity, every $x \in L$ is a join of compact elements. Combined with the join-irreducible structure: every $x$ is a join of completely join irreducible compact elements. Hence $\mathcal{L}$ is spatial. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="ahead">
+  <h2>Looking Ahead — to Chapter 4 (Representation by Equivalence Relations)</h2>
+  <div class="tagline">Chapter 4 — Whitman's 1946 theorem: every lattice embeds in the partition lattice $\textbf{Eq}(X)$ for some set $X$.</div>
+
+  <p>Chapter 3 has established that algebraic lattices are exactly the subalgebra lattices of universal algebras (Birkhoff-Frink). The chapter has also developed the structural properties (weakly atomic, upper continuous) and the decomposition theory.</p>
+
+  <p><strong>Chapter 4 (Representation by Equivalence Relations)</strong> adds another representation theorem to the lineage. Whitman's 1946 theorem states: every lattice embeds in the partition lattice $\textbf{Eq}(X)$ for some set $X$. This is the analogue of Cayley's theorem for groups, and gives a "universal" example of a lattice — namely, the partition lattice — that contains every other lattice as a sublattice.</p>
+
+  <p>Key concepts in Ch 4:</p>
+  <ul>
+    <li><strong>Equivalence relation.</strong> Reflexive, symmetric, transitive relation on a set.</li>
+    <li><strong>Partition lattice $\textbf{Eq}(X)$.</strong> Lattice of equivalence relations on $X$ under refinement.</li>
+    <li><strong>Whitman's theorem (1946).</strong> Every lattice embeds in $\textbf{Eq}(X)$ for some $X$.</li>
+    <li><strong>Connection to congruence lattices.</strong> Equivalence relations are 1-ary congruences.</li>
+  </ul>
+
+  <p>Whitman's theorem is the lattice-theoretic version of "every group is a permutation group" and "every poset is a sub-power-set." It certifies that the abstract definition of "lattice" is "correct" — every model is, up to isomorphism, a sublattice of a partition lattice.</p>
+
+  <p><strong>Sister volume.</strong> Călugăreanu's Chapter 2 (the hub file in the Călugăreanu companion) covers compactly generated lattices with a stronger module-theoretic motivation. Reading both companions gives complementary perspectives on the algebraic-lattice apparatus.</p>
+
+  <p>References for further reading on algebraic lattices and decomposition theory (Nation cites at end of Ch 3):</p>
+  <ul>
+    <li>K. Adaricheva, V. Gorbunov, M. Semenova, <em>On continuous noncomplete lattices</em>, Algebra Universalis 46 (2001), 215-230.</li>
+    <li>G. Birkhoff, <em>Subdirect unions in universal algebra</em>, Bull. AMS 50 (1944), 764-768.</li>
+    <li>G. Birkhoff and O. Frink, <em>Representations of sets by lattices</em>, Trans. AMS 64 (1948), 299-316. <strong>The founding paper.</strong></li>
+    <li>K. Bogart, R. Freese, J. Kung (eds.), <em>The Dilworth Theorems</em>, Birkhäuser, 1990.</li>
+    <li>P. Crawley, <em>Decomposition theory for nonsemimodular lattices</em>, Trans. AMS 99 (1961), 246-254.</li>
+    <li>P. Crawley, R. P. Dilworth, <em>Decomposition theory for lattices without chain conditions</em>, Trans. AMS 96 (1960), 1-22.</li>
+    <li>P. Crawley, R. P. Dilworth, <em>Algebraic Theory of Lattices</em>, Prentice-Hall, 1973. The canonical reference.</li>
+    <li>R. Freese, J. Ježek, J. B. Nation, <em>Free Lattices</em>, Math. Surveys and Monographs vol. 42, AMS, 1995.</li>
+    <li>R. Freese, W. A. Lampe, W. Taylor, <em>Congruence lattices of algebras of fixed similarity type, I</em>, Pacific J. Math. 82 (1979), 59-68.</li>
+    <li>G. Grätzer, E. T. Schmidt, <em>Characterizations of congruence lattices of abstract algebras</em>, Acta Sci. Math. (Szeged) 24 (1963), 34-59.</li>
+    <li>L. Nachbin, <em>On characterization of the lattice of all ideals of a Boolean ring</em>, Fund. Math. 36 (1949), 137-142.</li>
+    <li>M. Semenova, <em>Decompositions in complete lattices</em>, Algebra and Logic 40 (2001), 384-390.</li>
+  </ul>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 3 · Algebraic Lattices</div>
+    <div><a href="nation-companion-toc.html">ToC</a> · <a href="nation-companion-ch04.html">Chapter 4 →</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

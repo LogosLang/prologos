@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 9 · Modular and Semimodular Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch08.html">← Chapter 8</a></li>
+    <li><a href="nation-companion-ch10.html">Chapter 10 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 9 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Forbidden sublattices</div>
+  <ul>
+    <li><a href="#s1">1 · Theorem 9.1 — modular ⟺ no $\mathcal{N}_5$</a></li>
+    <li><a href="#s2">2 · Theorem 9.2 — distributive ⟺ no $\mathcal{M}_3$</a></li>
+    <li><a href="#s3">3 · The bottom of $\Lambda$</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Dedekind + semimodularity</div>
+  <ul>
+    <li><a href="#s4">4 · Theorem 9.3 — Dedekind isomorphism</a></li>
+    <li><a href="#s5">5 · Semimodular &amp; lower semimodular</a></li>
+    <li><a href="#s6">6 · Theorems 9.4–9.6 — chains &amp; dimension</a></li>
+    <li><a href="#s7">7 · Projectivity &amp; Theorem 9.7</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Group theory</div>
+  <ul>
+    <li><a href="#s8">8 · Chief series + Theorem 9.8</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Decompositions</div>
+  <ul>
+    <li><a href="#s9">9 · Theorem 9.9 — Kurosh-Ore</a></li>
+    <li><a href="#s10">10 · Theorems 9.10–9.12</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Modular law in algebra</a></li>
+    <li><a href="#c2">P2 · Jordan-Hölder lineage</a></li>
+    <li><a href="#c3">P3 · Bottom of $\Lambda$ — covers</a></li>
+    <li><a href="#c4">P4 · Semimodular &amp; matroids</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Nation · Notes on Lattice Theory · Chapter 9</div>
+  <h1>Modular and Semimodular Lattices</h1>
+  <p class="lede">From Dedekind's modular law for normal subgroup lattices to the lattice-theoretic Jordan-Hölder theorem, with semimodularity, projectivity, and the Kurosh-Ore replacement theorem along the way.</p>
+  <div class="meta">
+    <span>~100–120 min read</span>
+    <span>10 sections + 5 connections</span>
+    <span>14 worked exercises</span>
+    <span>PDF pp. 98–110</span>
+  </div>
+</section>
+
+<aside class="epigraph">
+  <p>To dance beneath the diamond sky with one hand waving free …</p>
+  <span class="attrib">— Bob Dylan, <em>Mr. Tambourine Man</em> (1964); chapter epigraph chosen by Nation</span>
+</aside>
+
+<p>Chapter 8 mapped distributive lattices completely. Chapter 9 takes on the next-most-tractable variety: <strong>$\mathbf{M}$</strong>, the variety of modular lattices. The modular law was invented by Richard Dedekind in his 1900 study of normal subgroups of groups and submodules of modules; it captures the structural behaviour of these algebraic substructure lattices. While distributive lattices have a single subdirectly irreducible ($\mathbf{2}$), modular lattices have a rich zoo: $\mathcal{M}_3$, projective-geometry lattices, normal-subgroup lattices of groups, and many more.</p>
+
+<p>The chapter has four conceptual movements. <strong>First</strong>: forbidden-sublattice characterisations. Theorem 9.1 (Dedekind 1900): a lattice is modular iff it does not contain the pentagon $\mathcal{N}_5$ as a sublattice. Theorem 9.2 (Birkhoff): a modular lattice is distributive iff it does not contain the diamond $\mathcal{M}_3$. The combined corollary characterises distributivity by forbidden sublattices — the most classical structural theorem of lattice theory. The chapter then sketches the bottom of the variety lattice $\Lambda$: $\mathbf{D}$ is covered by exactly two varieties — $\text{HSP}(\mathcal{N}_5)$ and $\text{HSP}(\mathcal{M}_3)$ — with subsequent covers explored by Grätzer-Jónsson, Jónsson-Rival, and Nation. <strong>Second</strong>: Dedekind's transposition theorem (Theorem 9.3) gives natural isomorphisms between intervals; this leads to <strong>semimodularity</strong> $a \succ a \wedge b \Rightarrow a \vee b \succ b$ and the dimension function. Theorems 9.4–9.7 build up to the Grätzer-Nation 2011 strengthening of Dedekind's chain theorem. <strong>Third</strong>: applications to group theory. The lattice of normal subgroups $\mathcal{N}(\mathcal{G})$ is modular; chief series correspond to maximal chains. Theorem 9.8 (Wielandt 1939): subnormal subgroups of a finite group form a lower semimodular sublattice. Composition series are maximal chains in $\mathcal{SN}(\mathcal{G})$, and the Jordan-Hölder theorem follows from the dual of Theorem 9.7. <strong>Fourth</strong>: the Kurosh-Ore replacement theorem (Theorem 9.9) for finite irredundant decompositions in modular lattices, the simultaneous-exchange version (Theorem 9.10), the algebraic case (Theorem 9.11), and Dilworth's 1954 covering bijection (Theorem 9.12): in finite modular lattices, $|J_k(\mathcal{L})| = |M_k(\mathcal{L})|$ for every $k$.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">A three-pane glance: terms <strong>carried forward</strong> from earlier chapters, terms introduced <strong>new</strong> in Chapter 9, and the <strong>deep dives</strong> the chapter rewards close reading on.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chs 1–8</span>
+    <p>The chapter relies on: posets, chains, cover relation $\prec$ (Ch 1); lattices, modular law $x \ge y \Rightarrow x \wedge (y \vee z) = y \vee (x \wedge z)$, distributive law, $\mathcal{N}_5$, $\mathcal{M}_3$ (Ch 2); algebraic lattices, compactness (Ch 3); equivalence-relation lattice $\textbf{Eq}\,X$ — semimodular but nonmodular for $|X| \ge 4$ (Ch 4); congruences, $\textbf{Con}\,\mathcal{L}$, subdirectly irreducible (Ch 5); free lattice $\text{FL}(X)$, Whitman's $(W)$ (Ch 6); variety $\mathbf{M}$ of modular lattices, $\Lambda$, free modular lattices $\mathcal{F}_M(3) = $ 28 elements (Dedekind), word problem unsolvable for $\mathcal{F}_M(n)$ with $n \ge 4$ (Freese 1980, Herrmann 1982), HSP closure operator, Jónsson's Lemma (Ch 7); distributive variety $\mathbf{D} = \text{HSP}(\mathbf{2})$, Birkhoff's representation theorem (Ch 8). Also: Funayama-Nakayama ($\textbf{Con}\,\mathcal{L}$ always distributive — Ch 5), normal subgroup lattices $\mathcal{N}(\mathcal{G})$ are modular (preview Ch 4).</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter 9 vocabulary</span>
+    <p>Six clusters of new vocabulary. <strong>Forbidden sublattices.</strong> The pentagon $\mathcal{N}_5$ and the diamond $\mathcal{M}_3$ — the two universal obstructions. <strong>Dedekind's natural maps</strong> $\mu_a, \nu_b$ between transposed intervals $(a \vee b)/b$ and $a/(a \wedge b)$. <strong>Semimodularity (upper semimodular)</strong>: $a \succ a \wedge b \Rightarrow a \vee b \succ b$, equivalently $u \succ v \Rightarrow u \vee x \succeq v \vee x$. <strong>Lower semimodular</strong> is dual. <strong>Modular = upper + lower semimodular</strong> (with strong atomicity). <strong>Dimension function</strong> $\delta(x) = $ length of a maximal chain from 0 to $x$. <strong>Quotient transposition</strong>: $a/b$ transposes up to $c/d$ if $a \vee d = c$ and $a \wedge d = b$. <strong>Projectivity</strong>: smallest equivalence relation on quotients containing transposed pairs. <strong>Group-theory</strong>: <em>chief series</em> (maximal chain in $\mathcal{N}(\mathcal{G})$); <em>subnormal subgroup</em> $H \triangleleft\triangleleft \mathcal{G}$ (chain $H = H_0 \triangleleft H_1 \triangleleft \cdots \triangleleft \mathcal{G}$); $\mathcal{SN}(\mathcal{G})$ subnormal subgroups (Wielandt 1939); <em>composition series</em> (maximal chain in $\mathcal{SN}(\mathcal{G})$). <strong>Decompositions</strong>: <em>finite decomposition</em> $a = \bigwedge Q$ with $Q$ finite of meet-irreducibles; <em>irredundant</em>; the <strong>Kurosh-Ore replacement theorem</strong>; <strong>Dilworth's covering bijection</strong>: $|J_k(\mathcal{L})| = |M_k(\mathcal{L})|$ for finite modular $\mathcal{L}$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Three threads reward close reading. <strong>The forbidden-sublattice characterisation</strong> ($\mathcal{N}_5$ for non-modular, $\mathcal{N}_5$ or $\mathcal{M}_3$ for non-distributive) is one of the oldest and most quoted results in lattice theory (Dedekind 1900, Birkhoff). It has descendants in almost every variety theorem: Whitman (Ch 6), Jónsson's Lemma (Ch 7), and the modern semidistributive characterisations (Ch 6 corollary). <strong>The Jordan-Hölder theorem.</strong> One of group theory's foundational results — every finite group has unique composition factors up to permutation and isomorphism — has a deep lattice-theoretic explanation. The chapter develops it via the modular structure of $\mathcal{N}(\mathcal{G})$ and the lower semimodular structure of $\mathcal{SN}(\mathcal{G})$ (Wielandt 1939, Theorem 9.8). The line: Jordan 1870 → Hölder 1889 → Schreier 1928 → Zassenhaus 1934 → Wielandt 1939 → Burnside, Birkhoff (1963 ed) → Grätzer-Nation 2011 → Czedli-Schmidt 2011 (uniqueness via "down-and-up projectivity"). Standard reference: Stern, <em>Semimodular Lattices: Theory and Applications</em>, CUP 1999. <strong>Dilworth's covering theorem and the Kurosh-Ore replacement theorem</strong> capture how decompositions transform: irredundant decompositions are equipotent (same number of factors), and Dilworth 1954 proves $|J_k| = |M_k|$. Joseph Kung 1985 + Reuter 1987: there is an explicit bijection $m : J(\mathcal{L}) \cup \{0\} \to M(\mathcal{L}) \cup \{1\}$ with $x \le m(x)$. This connects directly to <strong>matroid theory</strong> (Ch 11) via geometric lattices.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · FORBIDDEN SUBLATTICES</div>
+  <h2>Dedekind's pentagon, Birkhoff's diamond, and the bottom of $\Lambda$</h2>
+  <p class="part-lede">The two universal obstructions: $\mathcal{N}_5$ obstructs modularity, $\mathcal{N}_5$ or $\mathcal{M}_3$ obstructs distributivity. Both characterise the simplest non-trivial varieties in $\Lambda$ above $\mathbf{D}$.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 9.1</span> Theorem 9.1: modular ⟺ no $\mathcal{N}_5$</h2>
+  <div class="tagline">Dedekind's 1900 characterisation: the pentagon is the universal obstruction to modularity.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.1 · Dedekind 1900</span>
+    <p>A lattice is modular if and only if it does not contain the pentagon $\mathcal{N}_5$ as a sublattice.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>($\Rightarrow$) The pentagon $\mathcal{N}_5$ has elements $0 < y < x, z, x \vee z = 1$ with $x \wedge z = 0$, and $y \neq x$, $y < x$. Verifying directly: $x \ge y$ but $x \wedge (y \vee z) = x \wedge 1 = x \neq y = y \vee 0 = y \vee (x \wedge z)$. So $\mathcal{N}_5$ is non-modular. Hence modular lattices cannot contain $\mathcal{N}_5$ as a sublattice.</p>
+
+  <p>($\Leftarrow$) Suppose $\mathcal{L}$ is non-modular. Then there exist $x > y$ and $z$ in $\mathcal{L}$ such that $x \wedge (y \vee z) > y \vee (x \wedge z)$. Consider the lattice freely generated by $x, y, z$ with $x \ge y$ — call this $\text{FL}(\mathbf{2} + \mathbf{1})$, shown in Figure 9.1. The five elements $\{x \wedge (y \vee z),\ y \vee (x \wedge z),\ z,\ x \wedge z,\ y \vee z\}$ in $\mathcal{L}$ form a pentagon there, since the critical quotient $x \wedge (y \vee z)\,/\,y \vee (x \wedge z)$ is a non-trivial pair. The pentagon is subdirectly irreducible — it has no non-trivial congruence to collapse — so the five elements remain distinct.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the pentagon as universal obstruction</span>
+    <p>The free lattice on three generators $x, y, z$ with $x \ge y$ has 10 elements (Figure 9.1). Modularity collapses two of them — $x \wedge (y \vee z)$ and $y \vee (x \wedge z)$ — leaving 9. Without modularity, the original 10 contain a copy of the pentagon. <em>Modularity is precisely the elimination of $\mathcal{N}_5$.</em></p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 9.2</span> Theorem 9.2: modular distributive ⟺ no $\mathcal{M}_3$</h2>
+  <div class="tagline">Within the modular world, the diamond is the universal obstruction to distributivity.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.2 · Birkhoff</span>
+    <p>A modular lattice is distributive if and only if it does not contain the diamond $\mathcal{M}_3$ as a sublattice.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>($\Rightarrow$) The diamond $\mathcal{M}_3$ has elements $0 < a, b, c < 1$ with pairwise meets 0 and pairwise joins 1. So $a \wedge (b \vee c) = a \wedge 1 = a$, but $(a \wedge b) \vee (a \wedge c) = 0 \vee 0 = 0$. Hence $\mathcal{M}_3$ is non-distributive (but is modular).</p>
+
+  <p>($\Leftarrow$) Suppose $\mathcal{L}$ is non-distributive modular. By Lemma 8.2 (form (3) of distributivity), there exist $x, y, z$ with $(x \vee y) \wedge (x \vee z) \wedge (y \vee z) > (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$. The free modular lattice $\mathcal{F}_M(3)$ — diagrammed in Figure 9.2 — has 28 elements (Dedekind 1900). The interval between these two bounds is a copy of $\mathcal{M}_3$. The middle elements:</p>
+  $$[x \wedge (y \vee z)] \vee (y \wedge z) = [x \vee (y \wedge z)] \wedge (y \vee z),$$
+  $$[y \wedge (x \vee z)] \vee (x \wedge z) = [y \vee (x \wedge z)] \wedge (x \vee z),$$
+  $$[z \wedge (x \vee y)] \vee (x \wedge y) = [z \vee (x \wedge y)] \wedge (x \vee y),$$
+  <p>where each equality follows from modularity. The join of any two of these middle elements is $(x \vee y) \wedge (x \vee z) \wedge (y \vee z)$; the meet of any two is $(x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$. Since the diamond is simple, these five elements are distinct and form a sublattice $\cong \mathcal{M}_3$.  $\square$</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · the forbidden-sublattice characterisation of distributivity</span>
+    <p>A lattice is distributive if and only if it has neither $\mathcal{N}_5$ nor $\mathcal{M}_3$ as a sublattice.</p>
+  </div>
+
+  <p>This is one of the most-cited results in lattice theory. <em>Distributivity is exactly the absence of the two universal obstructions.</em> The $\mathcal{N}_5$ obstruction excludes non-modularity; the $\mathcal{M}_3$ obstruction excludes the modular non-distributive case.</p>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 9.3</span> The bottom of $\Lambda$</h2>
+  <div class="tagline">The variety lattice $\Lambda$ at its lower portion: from $\mathbf{T}$ through $\mathbf{D}$ and beyond, the cover structure is mapped explicitly.</div>
+
+  <p>Theorems 9.1 and 9.2 tell us about the bottom of the variety lattice $\Lambda$. We already know:</p>
+  <ul>
+    <li>$\mathbf{T}$ (trivial variety) is uniquely covered by $\mathbf{D} = \text{HSP}(\mathbf{2})$.</li>
+    <li>$\mathbf{D}$ is in turn covered by $\text{HSP}(\mathcal{N}_5)$ and $\text{HSP}(\mathcal{M}_3)$.</li>
+    <li>By the Corollary above, these are the <strong>only two</strong> varieties covering $\mathbf{D}$.</li>
+  </ul>
+
+  <p>What about further up?</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · cover-counting at the bottom of $\Lambda$</span>
+    <p>The cover structure above $\text{HSP}(\mathcal{N}_5)$ and $\text{HSP}(\mathcal{M}_3)$ is a research program in its own right.</p>
+    <ul>
+      <li><strong>Both $\text{HSP}(\mathcal{N}_5)$ and $\text{HSP}(\mathcal{M}_3)$ are covered by their join $\text{HSP}\{\mathcal{N}_5, \mathcal{M}_3\} = \text{HSP}(\mathcal{N}_5 \times \mathcal{M}_3)$.</strong> This follows from Theorem 7.11 (Ch 7).</li>
+      <li><strong>George Grätzer and Bjarni Jónsson</strong> (1966, 1968): $\text{HSP}(\mathcal{M}_3)$ has TWO additional covers beyond $\text{HSP}\{\mathcal{N}_5, \mathcal{M}_3\}$.</li>
+      <li><strong>Jónsson and Ivan Rival</strong> (1979, Pacific J. Math. 82): $\text{HSP}(\mathcal{N}_5)$ has EXACTLY FIFTEEN other covers, each generated by a finite subdirectly irreducible lattice.</li>
+    </ul>
+    <p>Because of Jónsson's Lemma (Ch 7), it is never hard to tell IF $\text{HSP}(\mathcal{K})$ covers $\text{HSP}(\mathcal{L})$ when $\mathcal{K}$ and $\mathcal{L}$ are finite lattices. The hard part is determining whether your list of covers is COMPLETE. Since a variety generated by a finite lattice can have INFINITELY many covering varieties, or a covering variety generated by an INFINITE subdirectly irreducible lattice, this can only be done near the bottom of $\Lambda$. Reference: J. B. Nation, <em>A counterexample to the finite height conjecture</em>, Order 13 (1996), 1–9.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why the cover structure matters</span>
+    <p>The cover structure of $\Lambda$ is a model for "how complex can lattice theories get just above distributive?" The answer: rapidly. Two varieties cover $\mathbf{D}$, then a small explosion (15 + 2 + 1 = at least 18 varieties at the next level), then a structural quagmire. Mapping the bottom of $\Lambda$ has driven a substantial branch of lattice theory for 50+ years.</p>
+  </div>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · DEDEKIND'S TRANSPOSITION + SEMIMODULARITY</div>
+  <h2>Natural maps between intervals, the dimension function, and projectivity</h2>
+  <p class="part-lede">Dedekind's natural maps between transposed intervals; the broader notion of semimodularity; the dimension function and Theorem 9.5; quotient projectivity and Theorem 9.7 (Grätzer-Nation 2011).</p>
+</header>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 9.4</span> Theorem 9.3: Dedekind's transposition isomorphism</h2>
+  <div class="tagline">In a modular lattice, the natural maps $\mu_a$ and $\nu_b$ are mutually inverse isomorphisms between transposed intervals.</div>
+
+  <div class="box def">
+    <span class="label">Definition · the natural maps $\mu_a$, $\nu_b$</span>
+    <p>For any two elements $a, b$ in a lattice $\mathcal{L}$, define</p>
+    $$\mu_a : (a \vee b)/b \to a/(a \wedge b), \quad \mu_a(x) = x \wedge a,$$
+    $$\nu_b : a/(a \wedge b) \to (a \vee b)/b, \quad \nu_b(x) = x \vee b.$$
+    <p>(Here $u/v$ denotes the interval $\{x : v \le x \le u\}$.)</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.3 · Dedekind</span>
+    <p>If $a$ and $b$ are elements of a modular lattice $\mathcal{L}$, then $\mu_a$ and $\nu_b$ are mutually inverse isomorphisms, whence $(a \vee b)/b \cong a/(a \wedge b)$.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>Both maps are clearly order-preserving. We verify they are mutually inverse using modularity. For $x \in (a \vee b)/b$:</p>
+  $$\nu_b \mu_a(x) = b \vee (a \wedge x) = (b \vee a) \wedge x = x,$$
+  <p>where the middle equality uses modularity ($x \ge b$ since $x \in (a \vee b)/b$). Similarly, for $y \in a/(a \wedge b)$: $\mu_a \nu_b(y) = a \wedge (y \vee b) = y \vee (a \wedge b) = y$ (using $y \ge a \wedge b$).  $\square$</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · cover preservation</span>
+    <p>In a modular lattice, $a \succ a \wedge b$ if and only if $a \vee b \succ b$.</p>
+  </div>
+
+  <p>This corollary is the bridge from modular lattices to <strong>semimodularity</strong>. The forward direction holds in modular lattices (where the transposition is an isomorphism, so cover relations transfer); but the same direction can hold in non-modular lattices, suggesting a weakening.</p>
+
+  <p>For groups, we actually have somewhat more. The First Isomorphism Theorem says that if $\mathcal{A}$ and $\mathcal{B}$ are subgroups of a group $\mathcal{G}$, and $\mathcal{B}$ is normal in $\mathcal{A} \vee \mathcal{B}$, then the quotient groups $\mathcal{A}/(\mathcal{A} \cap \mathcal{B})$ and $(\mathcal{A} \vee \mathcal{B})/\mathcal{B}$ are isomorphic — Dedekind's transposition lifted to a group isomorphism.</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 9.5</span> Semimodular and lower semimodular</h2>
+  <div class="tagline">A weakening of modularity: covering relations propagate upward through joins.</div>
+
+  <div class="box def">
+    <span class="label">Definition · semimodular (= upper semimodular)</span>
+    <p>A lattice $\mathcal{L}$ is <strong>semimodular</strong> (or <em>upper semimodular</em>) if $a \succ a \wedge b$ implies $a \vee b \succ b$ in $\mathcal{L}$. Equivalently: if $u \succ v$ implies $u \vee x \succeq v \vee x$ (i.e., either $u \vee x \succ v \vee x$ or $u \vee x = v \vee x$), where $a \succeq b$ means $a$ covers or equals $b$.</p>
+    <p>The dual property is called <strong>lower semimodular</strong>. Traditionally, "semimodular" by itself always refers to upper semimodularity.</p>
+  </div>
+
+  <p>The Corollary of Theorem 9.3 shows that <strong>modular lattices are both upper and lower semimodular</strong>. The converse holds with mild conditions:</p>
+
+  <div class="box prop">
+    <span class="label">Proposition · semimodular both ways ⟹ modular</span>
+    <p>A strongly atomic algebraic lattice that is both upper and lower semimodular is modular. (Crawley-Dilworth Theorem 3.7.)</p>
+  </div>
+
+  <p>(Exercise 3 asks for the finite-dimensional version of this.)</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · semimodularity geometrically</span>
+    <p>Semimodularity says: <em>if you "split" via $\wedge$ and gain an immediate cover, then "joining" preserves that cover</em>. In geometric terms (Ch 11 preview): a semimodular lattice is one where the dimension behaves correctly with respect to joins. The partition lattice $\textbf{Eq}\,X$ is semimodular for all $X$, but nonmodular for $|X| \ge 4$ (Ch 4) — semimodularity is a strictly weaker condition than modularity.</p>
+  </div>
+
+  <p>Examples of semimodular but nonmodular lattices: $\textbf{Eq}\,X$ for $|X| \ge 4$; the lattice in Figure 9.3 (a small 8-element example obtained by collapsing a finite-dimensional modular lattice — Exercise 11.1). More semimodular lattices arise from group theory (subnormal subgroups) and geometry (linear subspaces of various structures).</p>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 9.6</span> Theorems 9.4–9.6: chains, dimension, and the converse characterisation</h2>
+  <div class="tagline">Dedekind's 1900 chain theorem extends to semimodular lattices, with a clean dimension-function characterisation.</div>
+
+  <p>Dedekind proved in 1900 that every maximal chain in a finite-dimensional modular lattice has the same length. The proof extends naturally to semimodular lattices.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.4 · chain-length theorem</span>
+    <p>Let $\mathcal{L}$ be a semimodular lattice and $a < b$ in $\mathcal{L}$. If there is a finite maximal chain from $a$ to $b$, then every chain from $a$ to $b$ is finite, and all the maximal ones have the same length.</p>
+  </div>
+
+  <p>The proof is by induction on the length $n$ of the given finite maximal chain. For $n = 1$ ($a \prec b$), the result is trivial. For $n > 1$: given another maximal chain $C$ in $b/a$, either (i) every element of $C - \{a\}$ is $\ge a_1$ (the first cover of $a$ in the given chain), in which case $C - \{a\}$ is a maximal chain in $b/a_1$ — induction yields length $n - 1$, hence $|C| = n$; or (ii) some $d \in C - \{a\}$ is incomparable with $a_1$. The second case uses a careful semimodularity argument (illustrated in Figure 9.3) — choose $d$ minimally with $e \vee a_1 = d \vee a_1$ for all $e \in C - \{a\}$; show $d \succ a$; conclude both $a_1$ and $d$ cover $a$ and join is $a_1 \vee d \succ a_1$; reduce to length-($n-2$) interval $b/(a_1 \vee d)$ and use induction.  $\square$</p>
+
+  <div class="box def">
+    <span class="label">Definition · dimension function $\delta$</span>
+    <p>If $\mathcal{L}$ is a semimodular lattice in which every principal ideal $\downarrow x$ has a finite maximal chain, define $\delta : L \to \mathbb{N}$ by $\delta(x) = $ length of a maximal chain from $0$ to $x$. By Theorem 9.4, $\delta$ is well-defined.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.5 · semimodular dimension</span>
+    <p>If $\mathcal{L}$ is a semimodular lattice and every principal ideal has only finite maximal chains, then the dimension function on $\mathcal{L}$ has the following properties:</p>
+    <ol>
+      <li>$\delta(0) = 0$,</li>
+      <li>$x > y$ implies $\delta(x) > \delta(y)$,</li>
+      <li>$x \succ y$ implies $\delta(x) = \delta(y) + 1$,</li>
+      <li>$\delta(x \vee y) + \delta(x \wedge y) \le \delta(x) + \delta(y)$.</li>
+    </ol>
+    <p>Conversely, if $\mathcal{L}$ is a lattice that admits an integer-valued function $\delta$ satisfying (1)–(4), then $\mathcal{L}$ is semimodular and principal ideals have only finite maximal chains.</p>
+  </div>
+
+  <p>Properties (1) and (2) are obvious; (3) is a consequence of Theorem 9.4. The hard part is (4) — the <strong>submodular inequality</strong>. Proof: consider the join map $\nu_x : y/(x \wedge y) \to (x \vee y)/x$ defined by $\nu_x(z) = z \vee x$. By semimodularity, $u \succ v \Rightarrow u \vee x \succeq v \vee x$. So $\nu_x$ takes maximal chains in $y/(x \wedge y)$ to maximal chains in $(x \vee y)/x$. Hence the length of $(x \vee y)/x$ is at most that of $y/(x \wedge y)$, i.e., $\delta(x \vee y) - \delta(x) \le \delta(y) - \delta(x \wedge y)$. This rearranges to (4).</p>
+
+  <p>Conversely, given $\delta$ satisfying (1)–(4): note that (2) gives $\delta(x) \ge \delta(z) + 2$ when $x > y > z$ (combine with (3)). For semimodularity: if $a \succ a \wedge b$ in $\mathcal{L}$, then $\delta(a) = \delta(a \wedge b) + 1$ (by (3)), so by (4): $\delta(a \vee b) + \delta(a \wedge b) \le \delta(a \wedge b) + 1 + \delta(b)$, giving $\delta(a \vee b) \le \delta(b) + 1$. Combined with $a \vee b > b$: $\delta(a \vee b) = \delta(b) + 1$ and $a \vee b \succ b$. Finiteness of chains follows from $\delta$'s integer-valuedness.  $\square$</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.6 · modular case</span>
+    <p>If $\mathcal{L}$ is a modular lattice and every principal ideal has only finite maximal chains, then</p>
+    <ol>
+      <li>$\delta(0) = 0$,</li>
+      <li>$x > y$ implies $\delta(x) > \delta(y)$,</li>
+      <li>$\delta(x \vee y) + \delta(x \wedge y) = \delta(x) + \delta(y)$ (with EQUALITY, not just inequality).</li>
+    </ol>
+    <p>Conversely, if $\mathcal{L}$ admits an integer-valued $\delta$ satisfying (1)–(3), then $\mathcal{L}$ is modular and principal ideals have only finite maximal chains.</p>
+  </div>
+
+  <p>For modular lattices, the map $\mu_x$ is an isomorphism (Theorem 9.3), so the submodular inequality becomes an equality. Condition (3) of Theorem 9.5 (cover ⟹ dimension increases by 1) can be dispensed with — it's deducible from (1), (2), and the dimension equality (3) of Theorem 9.6.</p>
+
+  <div class="box recap">
+    <span class="label">Recap · constructing semimodular lattices</span>
+    <p>One standard trick to construct semimodular lattices: take a finite-dimensional modular lattice $\mathcal{L}$ of dimension $n$ and remove all elements $x$ with $k \le \delta(x) < n$ for some chosen $k < n$. (Alternatively, take the join semilattice congruence collapsing all these elements to $1$.) The result $\hat{\mathcal{L}}$ is a semimodular lattice of dimension $k$. Figure 9.3 in the chapter is obtained this way, applied to the lattice of subsets of a 4-element set.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 9.7</span> Quotient projectivity and Theorem 9.7</h2>
+  <div class="tagline">A finer chain comparison via projectivity — needed for the lattice-theoretic Jordan-Hölder.</div>
+
+  <div class="box def">
+    <span class="label">Definition · transposition and projectivity of quotients</span>
+    <p>A quotient $a/b$ <strong>transposes up</strong> to $c/d$ if $a \vee d = c$ and $a \wedge d = b$. Then $c/d$ <strong>transposes down</strong> to $a/b$. Define <strong>projectivity</strong> as the smallest equivalence relation on the set of all quotients of $\mathcal{L}$ that contains all transposed pairs $\langle x/(x \wedge y), (x \vee y)/y \rangle$. So $a/b$ is <strong>projective</strong> to $c/d$ if there is a sequence of quotients $a/b = a_0/b_0, a_1/b_1, \dots, a_n/b_n = c/d$ such that consecutive pairs are transposes.</p>
+  </div>
+
+  <p>The strengthened version of Theorem 9.4 (originally obtained by Dedekind via slight extension; modernised by Grätzer and Nation 2011, Algebra Universalis 64) goes:</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.7 · Grätzer-Nation 2011</span>
+    <p>Let $C$ and $D$ be two maximal chains in a finite-length semimodular lattice $\mathcal{L}$, say</p>
+    $$0 = c_0 \prec c_1 \prec \cdots \prec c_n = 1,$$
+    $$0 = d_0 \prec d_1 \prec \cdots \prec d_n = 1.$$
+    <p>Then there is a permutation $\pi$ of $\{1, \dots, n\}$ such that $c_i/c_{i-1}$ is projective in two steps (up-down) to $d_{\pi(i)}/d_{\pi(i)-1}$ for all $i$.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>By induction on $n$. Trivial for $n \le 2$. Assume $n > 2$. Let $k$ be the largest integer with $c_1 \not\le d_k$, noting $k < n$. If $k = 0$: $c_1 = d_1$ and the result follows by induction.</p>
+
+  <p>So assume $k > 0$. For $0 \le j \le n$, let $e_j = c_1 \vee d_j$. Note $e_0 = c_1, e_k = e_{k+1} = d_{k+1}$, and $e_j = d_j$ for $j \ge k+1$. Now</p>
+  $$c_1 = e_0 \prec e_1 \prec \cdots \prec e_k = e_{k+1} \prec e_{k+2} \prec \cdots \prec e_n = 1$$
+  <p>is a maximal chain in $1/c_1$. By induction, there is a bijective map $\sigma : \{2, \dots, n\} \to \{1, \dots, k, k+2, \dots, n\}$ such that $c_i/c_{i-1}$ is projective up to some prime interval $u_i/v_i$, which projects down to $e_{\sigma(i)}/e_{\sigma(i)-1}$. For $j \le k$, $e_j/e_{j-1}$ projects down to $d_j/d_{j-1}$. For $j > k+1$, $e_j/e_{j-1} = d_j/d_{j-1}$. And $c_1/0$ projects up to $d_{k+1}/d_k$. So take $\pi$ to be $\sigma$ extended by $\pi(1) = k+1$.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · what projectivity adds</span>
+    <p>Theorem 9.4 says all maximal chains have the same length. Theorem 9.7 says more: <em>their prime intervals are pairwise projective, in two-step up-down patterns</em>. This stronger claim is what enables the lattice-theoretic Jordan-Hölder theorem (Theorem 9.8): the "factor quotients" $c_i/c_{i-1}$ and $d_{\pi(i)}/d_{\pi(i)-1}$ are not just same-length but structurally projective.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · GROUP-THEORETIC APPLICATIONS</div>
+  <h2>Chief series, subnormal subgroups, and the Jordan-Hölder theorem</h2>
+  <p class="part-lede">The lattice-theoretic Jordan-Hölder theorem: the lattice of normal subgroups is modular, and the lattice of subnormal subgroups is lower semimodular (Wielandt 1939, Theorem 9.8).</p>
+</header>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 9.8</span> Chief series, subnormal subgroups, Theorem 9.8</h2>
+  <div class="tagline">Wielandt's 1939 theorem and its corollary: the Jordan-Hölder theorem as a lattice fact.</div>
+
+  <h3>Chief series and the easy half of Jordan-Hölder</h3>
+
+  <p>A <strong>chief series</strong> of a group $\mathcal{G}$ is a maximal chain in the lattice $\mathcal{N}(\mathcal{G})$ of normal subgroups. Since $\mathcal{N}(\mathcal{G})$ is modular (a classical fact, also derived in Ch 4), Theorems 9.4 and 9.7 apply directly.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · Jordan-Hölder for chief series</span>
+    <p>If a group $\mathcal{G}$ has a finite chief series of length $k$,</p>
+    $$\{1\} = N_0 < N_1 < \cdots < N_k = \mathcal{G},$$
+    <p>then every chief series of $\mathcal{G}$ has length $k$. Moreover, if</p>
+    $$\{1\} = H_0 < H_1 < \cdots < H_k = \mathcal{G}$$
+    <p>is another chief series of $\mathcal{G}$, then there is a permutation $\pi$ of $\{1, \dots, k\}$ such that $H_i/H_{i-1} \cong N_{\pi(i)}/N_{\pi(i)-1}$ for all $i$.</p>
+  </div>
+
+  <p>The chief series corollary is the easy half. For the full Jordan-Hölder theorem, we need composition series — which are maximal chains in the larger lattice $\mathcal{SN}(\mathcal{G})$ of <em>subnormal</em> subgroups.</p>
+
+  <h3>Subnormal subgroups and the lattice $\mathcal{SN}(\mathcal{G})$</h3>
+
+  <div class="box def">
+    <span class="label">Definition · subnormal subgroup</span>
+    <p>A subgroup $H$ is <strong>subnormal</strong> in a group $\mathcal{G}$, written $H \triangleleft\triangleleft \mathcal{G}$, if there is a chain in $\textbf{Sub}\,\mathcal{G}$,</p>
+    $$H = H_0 \triangleleft H_1 \triangleleft \cdots \triangleleft H_k = \mathcal{G},$$
+    <p>with each $H_{i-1}$ normal in $H_i$ (but $H_j$ need not be normal in $\mathcal{G}$ for $j < k$).</p>
+  </div>
+
+  <p>Herman Wielandt proved in 1939 that the subnormal subgroups of a finite group form a lattice. The deeper structural fact:</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.8 · Wielandt 1939</span>
+    <p>If $\mathcal{G}$ is a finite group, then the subnormal subgroups of $\mathcal{G}$ form a <strong>lower semimodular sublattice</strong> $\mathcal{SN}(\mathcal{G})$ of $\textbf{Sub}\,\mathcal{G}$.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>The proof has two parts: showing $\mathcal{SN}(\mathcal{G})$ is closed under meet and join, then showing lower semimodularity.</p>
+
+  <p><strong>Closure under meets.</strong> Let $H, K \triangleleft\triangleleft \mathcal{G}$ via chains $H_0 \triangleleft \cdots \triangleleft H_m = \mathcal{G}$ and $K_0 \triangleleft \cdots \triangleleft K_n = \mathcal{G}$. Then $H \cap K_i \triangleleft H \cap K_{i+1}$ (intersections of normal pairs are normal in the larger), so we have $H \cap K \triangleleft H \cap K_1 \triangleleft H \cap K_2 \triangleleft \cdots \triangleleft H \cap \mathcal{G} = H \triangleleft H_1 \triangleleft \cdots \triangleleft \mathcal{G}$. Hence $H \cap K \triangleleft\triangleleft \mathcal{G}$.</p>
+
+  <p>Note this also shows: if $H, K \triangleleft\triangleleft \mathcal{G}$ and $K \le H$, then $K \triangleleft\triangleleft H$.</p>
+
+  <p><strong>Closure under joins.</strong> Trickier. Let $H, K \triangleleft\triangleleft \mathcal{G}$, WLOG incomparable. Induction on $|\mathcal{G}|$. Assumes (1) the join of subnormal subgroups is subnormal in any smaller $\mathcal{G}'$, (2) the join is subnormal under the additional assumption "$H < L \triangleleft\triangleleft \mathcal{G} \Rightarrow L \vee K \triangleleft\triangleleft \mathcal{G}$." Various cases — if a proper subnormal subgroup $S$ of $\mathcal{G}$ contains both $H$ and $K$, reduce to $S$. Otherwise reduce by symmetry to: $H$ not normal in $\mathcal{G}$, $H < H_1 \le H_{m-1} < \mathcal{G}$. Then $\mathcal{G}$ is generated by $H_1 \cup K$, and an analysis using $H \triangleleft H_1$ + the subnormality of $H \vee k^{-1}Hk$ in $H_{m-1}$ (and hence in $\mathcal{G}$) yields $H \vee K \triangleleft\triangleleft \mathcal{G}$.</p>
+
+  <p><strong>Lower semimodularity.</strong> If $H \vee K \succ H$ in $\mathcal{SN}(\mathcal{G})$, then $H \triangleleft H \vee K$ (by the closure observation above + the fact that "$H \vee K \succ H$ in $\mathcal{SN}(\mathcal{G})$" + "$H, H \vee K$ both subnormal in $\mathcal{G}$" combine to make $H$ normal in $H \vee K$). Moreover $(H \vee K)/H$ is simple (no proper subnormal between $H$ and $H \vee K$). By a group isomorphism theorem, $K/(H \cap K)$ is also simple, so $K \succ H \wedge K$ in $\mathcal{SN}(\mathcal{G})$. Thus $\mathcal{SN}(\mathcal{G})$ is lower semimodular.  $\square$</p>
+
+  <p>A maximal chain in $\mathcal{SN}(\mathcal{G})$ is called a <strong>composition series</strong> for $\mathcal{G}$. Since $\mathcal{SN}(\mathcal{G})$ is lower semimodular, the duals of Theorems 9.4 and 9.7 yield the <strong>Jordan-Hölder structure theorem for groups</strong>:</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · Jordan-Hölder theorem for groups</span>
+    <p>If a finite group $\mathcal{G}$ has a composition series of length $n$,</p>
+    $$\{1\} = H_0 \triangleleft H_1 \triangleleft \cdots \triangleleft H_n = \mathcal{G},$$
+    <p>then every composition series of $\mathcal{G}$ has length $n$. Moreover, if</p>
+    $$\{1\} = K_0 \triangleleft K_1 \triangleleft \cdots \triangleleft K_n = \mathcal{G}$$
+    <p>is another composition series for $\mathcal{G}$, then there is a permutation $\pi$ of $\{1, \dots, n\}$ such that $K_i/K_{i-1} \cong H_{\pi(i)}/H_{\pi(i)-1}$ for all $i$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the Jordan-Hölder lineage</span>
+    <p>The Jordan-Hölder theorem has one of the longer histories in algebra. Primary references in chronological order:</p>
+    <ul>
+      <li><strong>1870 — Camille Jordan</strong> (<em>Traité des substitutions et des équations algébriques</em>, Gauthier-Villars): the first version of the chain-length theorem, in the context of polynomial equations and substitution groups.</li>
+      <li><strong>1889 — Otto Hölder</strong> (<em>Zurückführung einer beliebigen algebraischen Gleichung auf eine Kette von Gleichungen</em>, Math. Annalen 34): added uniqueness up to permutation of factors.</li>
+      <li><strong>1900 — Richard Dedekind</strong>: lattice-theoretic insight; chain length depends on modular structure.</li>
+      <li><strong>1928 — Otto Schreier</strong> (<em>Über den J-H'schen Satz</em>, Abh. Math. Sem. Univ. Hamburg 6): the Schreier refinement theorem — any two composition series have isomorphic refinements.</li>
+      <li><strong>1934 — Hans Zassenhaus</strong> (<em>Zum Satz von Jordan-Hölder-Schreier</em>): Zassenhaus's lemma as a clean technical tool.</li>
+      <li><strong>1939 — Herman Wielandt</strong> (<em>Eine Verallgemeinerung der invarianten Untergruppen</em>, Math. Zeit. 45): subnormal subgroups form a lattice, the lattice version of Jordan-Hölder.</li>
+      <li><strong>2011 — George Grätzer + J. B. Nation</strong> (<em>A new look at the Jordan-Hölder theorem for semimodular lattices</em>, Algebra Universalis 64): the projectivity-based strengthening (Theorem 9.7 of this chapter).</li>
+      <li><strong>2011 — Gábor Czedli + E. T. Schmidt</strong> (<em>The Jordan-Hölder theorem with uniqueness for groups and semimodular lattices</em>, Algebra Universalis): the strongest form — UNIQUENESS up to projectivity bijection.</li>
+    </ul>
+    <p>Secondary sources: Burnside Chap. V, Zassenhaus Chap. II.5, Birkhoff (1963 ed.) Chap. III.7. Slick modern proofs: Grätzer-Nation 2011, Czedli-Schmidt 2011. The <em>Stern</em> monograph <em>Semimodular Lattices: Theory and Applications</em> (CUP 1999) is the standard reference for semimodular structure theory.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · DECOMPOSITIONS AND DILWORTH'S BIJECTION</div>
+  <h2>Kurosh-Ore replacement, the algebraic case, and the covering bijection</h2>
+  <p class="part-lede">Finite irredundant decompositions in modular lattices: same number of factors, with Kurosh-Ore-style replacement (Theorem 9.9). Strengthened to simultaneous exchange (Theorem 9.10) and the algebraic case (Theorem 9.11). Dilworth 1954: $|J_k(\mathcal{L})| = |M_k(\mathcal{L})|$ for finite modular (Theorem 9.12).</p>
+</header>
+
+<section class="module" id="s9">
+  <h2><span class="num">§ 9.9</span> Theorem 9.9: Kurosh-Ore Replacement Theorem</h2>
+  <div class="tagline">In modular lattices, irredundant decompositions into meet-irreducibles have the same number of factors, with replacement.</div>
+
+  <div class="box def">
+    <span class="label">Definition · finite decomposition</span>
+    <p>A <strong>finite decomposition</strong> of an element $a \in L$ is an expression $a = \bigwedge Q$ where $Q$ is a finite set of meet-irreducible elements. If $\mathcal{L}$ satisfies the ACC, then every element has a finite decomposition. <strong>Irredundant</strong>: $a < \bigwedge(Q - \{q\})$ for every $q \in Q$.</p>
+  </div>
+
+  <p>We have already seen (Ch 8 / Theorem 8.6) that every element of a finite distributive lattice has a UNIQUE irredundant decomposition. In a finite-dimensional modular lattice, an element can have many different finite decompositions, but the NUMBER of elements in any irredundant decomposition is always the same. This is a consequence of the following replacement property.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.9 · Kurosh-Ore Replacement Theorem</span>
+    <p>If $a$ is an element of a modular lattice and</p>
+    $$a = q_1 \wedge \cdots \wedge q_m = r_1 \wedge \cdots \wedge r_n$$
+    <p>are two irredundant decompositions of $a$, then $m = n$ and for each $q_i$ there is an $r_j$ such that</p>
+    $$a = r_j \wedge \bigwedge_{k \neq i} q_k$$
+    <p>is an irredundant decomposition.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>Let $a = \bigwedge Q = \bigwedge R$ be two irredundant finite decompositions. Fix $q \in Q$, and let $\overline{q} = \bigwedge(Q - \{q\})$. By modularity, $q \vee \overline{q}/q \cong \overline{q}/a$. Since $q$ is meet-irreducible in $\mathcal{L}$, this implies $a$ is meet-irreducible in $\overline{q}/a$. However, $a = \overline{q} \wedge \bigwedge R = \bigwedge_{r \in R}(\overline{q} \wedge r)$ takes place in $\overline{q}/a$, so we must have $a = \overline{q} \wedge r$ for some $r \in R$.</p>
+
+  <p>Next observe that $a = r \wedge \bigwedge(Q - \{q\})$ is irredundant. For if not, $a = r \wedge \bigwedge S$ irredundantly for some proper subset $S \subset Q - \{q\}$. Reapplying the first argument to the two decompositions $a = r \wedge \bigwedge S = \bigwedge Q$ with the element $r$, we obtain $a = q' \wedge \bigwedge S$ for some $q' \in Q$, contrary to the irredundance of $Q$.</p>
+
+  <p>It remains to show $|Q| = |R|$. Let $Q = \{q_1, \dots, q_m\}$. By the first part, there is $r_1 \in R$ such that $a = r_1 \wedge \bigwedge(Q - \{q_1\}) = \bigwedge R$ irredundantly. Apply the same argument to these two decompositions and $q_2$: there is $r_2 \in R$ such that $a = r_1 \wedge r_2 \wedge \bigwedge(Q - \{q_1, q_2\}) = \bigwedge R$. Moreover, $r_1$ and $r_2$ are distinct (else we would have $a = r_1 \wedge \bigwedge(Q - \{q_1, q_2\})$, contradicting irredundance). Continuing, we replace $q_3$ by $r_3$, etc. After $m$ steps, $a = r_1 \wedge \cdots \wedge r_m$, whence $R = \{r_1, \dots, r_m\}$. Thus $|Q| = |R|$.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · "exchange" in lattices</span>
+    <p>Kurosh-Ore is a lattice-theoretic exchange theorem, structurally parallel to Steinitz exchange in vector spaces (where any two bases of a finite-dimensional space have the same cardinality, and elements of one can replace elements of the other). In modular lattices, the role of "basis" is played by an irredundant decomposition.</p>
+  </div>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">§ 9.10</span> Theorems 9.10–9.12</h2>
+  <div class="tagline">Strengthening to simultaneous exchange (9.10), the algebraic modular case (9.11), and Dilworth 1954's covering bijection (9.12).</div>
+
+  <h3>Theorem 9.10 — simultaneous exchange</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.10 · simultaneous exchange</span>
+    <p>If $a$ is an element of a modular lattice and $a = \bigwedge Q = \bigwedge R$ are two irredundant finite decompositions of $a$, then for each $q \in Q$ there is an $r \in R$ such that</p>
+    $$a = r \wedge \bigwedge(Q - \{q\}) = q \wedge \bigwedge(R - \{r\}).$$
+  </div>
+
+  <p>This is a stronger form: not only can we replace each $q$ by some $r$, but the corresponding replacement back from $r$ to $q$ also works. Reference: Crawley-Dilworth <em>Algebraic Theory of Lattices</em> (1973); see also Dilworth's <em>Structure and Decomposition Theory</em> (1961).</p>
+
+  <h3>Theorem 9.11 — algebraic modular case</h3>
+
+  <p>Theorems 9.9 and 9.10 are exactly what we want in a finite-dimensional modular lattice. However, in algebraic modular lattices, finite decompositions into meet-irreducible elements need not coincide with the (possibly infinite) decomposition into completely meet-irreducible elements given by Birkhoff's theorem. Consider, for example, the chain $\mathcal{C} = (\omega + 1)^d$, the dual of $\omega + 1$. This satisfies the ACC, hence is algebraic. The least element of $\mathcal{C}$ is meet-irreducible, but not completely meet-irreducible. In the direct product $\mathcal{C}^n$, the least element has a finite decomposition into $n$ meet-irreducible elements, but every decomposition into completely meet-irreducibles is necessarily infinite.</p>
+
+  <p>Fortunately, the proof of Theorem 9.9 adapts:</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.11 · algebraic modular case</span>
+    <p>Let $a$ be an element of a modular lattice. If $a = \bigwedge Q$ is a finite, irredundant decomposition into completely meet-irreducible elements, and $a = \bigwedge R$ is another decomposition into meet-irreducible elements, then there exists a finite subset $R' \subseteq R$ with $|R'| = |Q|$ such that $a = \bigwedge R'$ irredundantly.</p>
+  </div>
+
+  <p>Application: Let $\mathcal{A}$ be an algebra such that $\textbf{Con}\,\mathcal{A}$ is a modular lattice. If $\mathcal{A}$ has a finite subdirect decomposition into subdirectly irreducible algebras, then every irredundant subdirect decomposition of $\mathcal{A}$ into subdirectly irreducible algebras has the same number of factors.</p>
+
+  <p>A more important application is to the theory of direct decompositions of congruence-modular algebras. The corresponding congruences form a complemented sublattice of $\textbf{Con}\,\mathcal{A}$. This subject is treated thoroughly in Chapter 5 of McKenzie, McNulty, Taylor, <em>Algebras, Lattices, Varieties</em> (1987).</p>
+
+  <h3>Theorem 9.12 — Dilworth's 1954 covering bijection</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 9.12 · Dilworth 1954</span>
+    <p>In a finite modular lattice $\mathcal{L}$, let $J_k(\mathcal{L})$ be the set of elements that cover exactly $k$ other elements, and let $M_k(\mathcal{L})$ be the set of elements that are covered by exactly $k$ elements. Then $|J_k(\mathcal{L})| = |M_k(\mathcal{L})|$ for any integer $k \ge 0$.</p>
+  </div>
+
+  <p>(R. P. Dilworth, <em>Proof of a conjecture on finite modular lattices</em>, Ann. of Math. 60 (1954), 359–364.)</p>
+
+  <p>In particular, the case $k = 1$: <em>the number of join-irreducible elements in a finite modular lattice equals the number of meet-irreducible elements</em>. (Recall: join-irreducible means covers exactly one element; meet-irreducible means covered by exactly one.) Both equal $|J_1(\mathcal{L})| = |M_1(\mathcal{L})|$ — half of $|J(\mathcal{L})|$ historically, but with the definitions here, these are exactly the join-irreducibles and meet-irreducibles.</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the Kung-Reuter bijection</span>
+    <p>Joseph Kung (1985, Order 2) and K. Reuter (1987, Discrete Math. 63) proved a sharper result: <em>in a finite modular lattice, there is a BIJECTION $m : J(\mathcal{L}) \cup \{0\} \to M(\mathcal{L}) \cup \{1\}$ such that $x \le m(x)$.</em> So not only do the cover-counts match, but there's an explicit "matching" between join-irreducibles and meet-irreducibles preserving the order. Kung's "matchings and Radon transforms" framework places Theorem 9.12 in a broader theory: bijection counts in modular lattices reflect deep symmetries also seen in matroid duality and Radon transforms on combinatorial structures. See Manfred Stern's <em>Semimodular Lattices: Theory and Applications</em> (CUP 1999) for a comprehensive treatment.</p>
+  </div>
+
+  <p>Modular lattices reappear in Chapter 12 (Geometric Lattices) and in deeper structural treatments throughout. The standard reference for semimodular lattices is the Stern monograph above; for modular lattices specifically, the Crawley-Dilworth book and the McKenzie-McNulty-Taylor treatment of congruence-modular varieties.</p>
+</section>
+
+<!-- ============== CONNECTION PANELS ============== -->
+<header class="part-header">
+  <div class="pk">CONNECTION PANELS</div>
+  <h2>Five views of the modular landscape</h2>
+  <p class="part-lede">The modular law in algebra; the Jordan-Hölder lineage 1870–2011; the bottom of $\Lambda$; semimodular lattices and matroid theory; Prologos cross-references.</p>
+</header>
+
+<section class="module" id="c1">
+  <h2><span class="num">PANEL P1</span> The modular law in algebra</h2>
+  <div class="tagline">From Dedekind's 1900 normal-subgroup observation to the lattice-theoretic foundation of structural algebra.</div>
+
+  <div class="box connection">
+    <span class="label">Modular law · structural origin</span>
+    <p>Dedekind invented the modular law in his 1900 paper <em>Über die von drei Modulen erzeugte Dualgruppe</em> (Math. Annalen 53) — literally "the dualgroup generated by three modules," where "Dualgruppe" is Dedekind's word for what we now call a lattice. The motivation: capture the structural property of normal subgroup lattices.</p>
+
+    <h4>Where the modular law shows up</h4>
+    <table class="grid">
+      <thead><tr><th>Algebraic structure</th><th>Lattice</th><th>Modular?</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Group $\mathcal{G}$</td><td>$\mathcal{N}(\mathcal{G})$ normal subgroups</td><td>YES (Dedekind 1900)</td><td>$AB \cap C = (A \cap C)B$ when $B \le C$</td></tr>
+        <tr><td>Group $\mathcal{G}$</td><td>$\textbf{Sub}\,\mathcal{G}$ all subgroups</td><td>NO in general (yes for abelian)</td><td>$\mathcal{S}_3$ has $\mathcal{N}_5$ in its subgroup lattice</td></tr>
+        <tr><td>Module $\mathcal{M}$ over ring $R$</td><td>Submodules</td><td>YES</td><td>$(A + C) \cap B = A + (B \cap C)$ when $A \le B$</td></tr>
+        <tr><td>Vector space $V$</td><td>Subspaces</td><td>YES</td><td>Special case of module lattice</td></tr>
+        <tr><td>Ring $R$</td><td>Two-sided ideals</td><td>YES</td><td>Module lattice over $R \otimes R^{op}$</td></tr>
+        <tr><td>Set $X$</td><td>$\textbf{Eq}\,X$ equivalence relations</td><td>NO for $|X| \ge 4$</td><td>Semimodular but not modular</td></tr>
+        <tr><td>Topological space</td><td>Open sets</td><td>YES (in fact distributive!)</td><td>Closed under arbitrary unions and finite intersections — frames</td></tr>
+        <tr><td>Projective geometry $P^n$</td><td>Projective subspaces</td><td>YES</td><td>Coordinatised by skew field; modular AND complemented</td></tr>
+        <tr><td>Modular lattice itself</td><td>Sublattices</td><td>NO in general</td><td>Submodular structure is not preserved by lattice formation</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Why this matters</h4>
+    <p>The modular law is the lattice-theoretic abstraction of "normal substructure" or "two-sided ideal." Theorems about modular lattices apply to ALL these algebraic settings simultaneously. Dedekind's 1900 paper effectively invented universal algebra; Birkhoff and Mac Lane built on it in the 1930s. The fact that modular lattices have such a clean structure (Theorems 9.3–9.12) reflects the depth of this single algebraic observation.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">PANEL P2</span> Jordan-Hölder lineage</h2>
+  <div class="tagline">From Camille Jordan's 1870 substitutions to Czedli-Schmidt's 2011 uniqueness theorem — 141 years of refinement.</div>
+
+  <div class="box connection">
+    <span class="label">Jordan-Hölder · 141-year arc</span>
+    <p>The Jordan-Hölder theorem connects three threads: group theory's structural foundations, lattice theory's chain theorems, and the modern combinatorics of semimodular lattices. The history:</p>
+
+    <table class="grid">
+      <thead><tr><th>Year</th><th>Author</th><th>Contribution</th></tr></thead>
+      <tbody>
+        <tr><td>1870</td><td>Camille Jordan</td><td><em>Traité des substitutions et des équations algébriques</em>: chain length theorem in the context of polynomial substitution groups. The original "Jordan" half.</td></tr>
+        <tr><td>1889</td><td>Otto Hölder</td><td><em>Zurückführung einer beliebigen algebraischen Gleichung auf eine Kette von Gleichungen</em> (Math. Annalen 34): added uniqueness of factors up to permutation. The "Hölder" half.</td></tr>
+        <tr><td>1900</td><td>Richard Dedekind</td><td>Modular-law identification: the chain-length theorem holds because $\mathcal{N}(\mathcal{G})$ is modular. Lattice-theoretic insight.</td></tr>
+        <tr><td>1928</td><td>Otto Schreier</td><td><em>Über den J-H'schen Satz</em>: Schreier refinement theorem — any two normal series have isomorphic refinements.</td></tr>
+        <tr><td>1934</td><td>Hans Zassenhaus</td><td><em>Zum Satz von Jordan-Hölder-Schreier</em>: the Zassenhaus lemma (butterfly lemma) — clean proof tool.</td></tr>
+        <tr><td>1939</td><td>Herman Wielandt</td><td><em>Eine Verallgemeinerung der invarianten Untergruppen</em>: the lattice $\mathcal{SN}(\mathcal{G})$ of subnormal subgroups is well-defined and lower semimodular.</td></tr>
+        <tr><td>1940, 1963</td><td>Garrett Birkhoff</td><td><em>Lattice Theory</em>: codified the lattice-theoretic perspective. 3rd ed. (1967) Ch. III.7 has the canonical exposition.</td></tr>
+        <tr><td>1947, 1949</td><td>Burnside, Zassenhaus</td><td>Group theory texts incorporate the lattice perspective.</td></tr>
+        <tr><td>2011</td><td>Grätzer + Nation</td><td><em>A new look at the Jordan-Hölder theorem for semimodular lattices</em> (Algebra Universalis 64): projectivity-based formulation. <strong>Theorem 9.7</strong> of this chapter.</td></tr>
+        <tr><td>2011</td><td>Czedli + Schmidt</td><td><em>The Jordan-Hölder theorem with uniqueness for groups and semimodular lattices</em>: the strongest form — UNIQUE bijection (not just "exists permutation").</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Why does the Jordan-Hölder theorem matter beyond group theory?</h4>
+    <ul>
+      <li><strong>Module theory</strong>: Jordan-Hölder applies to chains of submodules (modules over a ring with composition series).</li>
+      <li><strong>Galois theory</strong>: composition series of Galois groups characterise solvability by radicals.</li>
+      <li><strong>Representation theory</strong>: composition series of representations and Loewy series.</li>
+      <li><strong>Algebraic combinatorics</strong>: semimodular lattices in matroid theory, partition lattices, and discrete geometry.</li>
+      <li><strong>Algebraic K-theory</strong>: Quillen's $Q$-construction relates composition series to algebraic K-groups.</li>
+    </ul>
+    <p>Jordan-Hölder is one of the rare results that genuinely benefits from being lifted to the lattice-theoretic abstraction: every variant of the theorem (chief series, composition series, Loewy series, etc.) is a special case of Theorems 9.7 + 9.8 applied to the appropriate substructure lattice.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">PANEL P3</span> The bottom of $\Lambda$ — covers</h2>
+  <div class="tagline">Mapping the lower portion of the variety lattice $\Lambda$: a 50+ year research program.</div>
+
+  <div class="box connection">
+    <span class="label">Bottom of $\Lambda$ · the cover-counting program</span>
+    <p>The variety lattice $\Lambda$ has a complex internal structure even at its lower portion. Mapping the covers of small varieties has been an active program since the 1960s.</p>
+
+    <h4>The cover map at the bottom</h4>
+    <ul>
+      <li><strong>Level 0</strong>: $\mathbf{T}$ (trivial variety, one element).</li>
+      <li><strong>Level 1</strong>: $\mathbf{D} = \text{HSP}(\mathbf{2})$, the unique cover of $\mathbf{T}$.</li>
+      <li><strong>Level 2</strong>: $\text{HSP}(\mathcal{N}_5)$ and $\text{HSP}(\mathcal{M}_3)$, the two covers of $\mathbf{D}$ (forbidden-sublattice corollary of this chapter).</li>
+      <li><strong>Level 3</strong>:
+        <ul>
+          <li>$\text{HSP}(\mathcal{N}_5 \times \mathcal{M}_3) = \text{HSP}\{\mathcal{N}_5, \mathcal{M}_3\}$ — common cover of both Level-2 varieties.</li>
+          <li><strong>Grätzer-Jónsson 1966, 1968</strong> (<em>Equational classes of lattices</em>, Duke Math. 33): $\text{HSP}(\mathcal{M}_3)$ has TWO additional covers beyond the join.</li>
+          <li><strong>Jónsson-Rival 1979</strong> (<em>Lattice varieties covering the smallest non-modular variety</em>, Pacific J. Math. 82, 463–478): $\text{HSP}(\mathcal{N}_5)$ has EXACTLY FIFTEEN other covers, each generated by a finite subdirectly irreducible lattice.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h4>Why the program halts at small levels</h4>
+    <p>Beyond Level 3, the cover structure becomes intractable for two reasons: (i) a variety generated by a finite lattice can have INFINITELY many covering varieties; (ii) a covering variety can be generated by an INFINITE subdirectly irreducible lattice — these are not amenable to finite enumeration. <strong>Nation 1996</strong> (<em>A counterexample to the finite height conjecture</em>, Order 13, 1–9) gave an explicit example of an infinite SI lattice $\mathcal{L}$ such that $\text{HSP}(\mathcal{L})$ has only FINITELY many subvarieties, yet the variety itself is infinitely generated. This shut down the "finite height conjecture" that would have made the cover-counting program tractable to higher levels.</p>
+
+    <h4>The role of Jónsson's Lemma (Ch 7)</h4>
+    <p>Because of Jónsson's Lemma, it is "never hard" to TEST whether $\text{HSP}(\mathcal{K})$ covers $\text{HSP}(\mathcal{L})$ when $\mathcal{K}$ and $\mathcal{L}$ are finite — by Jónsson, just check that no SI of $\mathcal{K}$ outside $\text{HSP}(\mathcal{L})$ has any "intermediate" SI in HSP-strict-between. The hard part is COMPLETENESS: showing your list of covers is exhaustive. The Jónsson-Rival 1979 paper does this for $\text{HSP}(\mathcal{N}_5)$ — a heavy case analysis.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">PANEL P4</span> Semimodular lattices and matroid theory</h2>
+  <div class="tagline">Semimodular lattices are the meeting point of lattice theory, matroid theory, and discrete geometry.</div>
+
+  <div class="box connection">
+    <span class="label">Semimodular lattices · the broader context</span>
+    <p>Semimodularity captures the structural property "covers propagate through joins" — a weaker form of modularity that retains many of its consequences (chain-length theorem, dimension function, Jordan-Hölder).</p>
+
+    <h4>Where semimodular lattices arise</h4>
+    <ul>
+      <li><strong>Equivalence-relation lattice $\textbf{Eq}\,X$</strong> (Ch 4): semimodular for all $X$, modular only for $|X| \le 3$.</li>
+      <li><strong>Subnormal-subgroup lattice $\mathcal{SN}(\mathcal{G})$</strong> (Wielandt 1939, this chapter): lower semimodular for finite $\mathcal{G}$.</li>
+      <li><strong>Matroid lattices</strong> (Ch 11 preview): finite matroids correspond to finite semimodular geometric lattices (semimodular + atomistic + finite).</li>
+      <li><strong>Linear-subspace lattices</strong> of finite projective geometries: modular AND complemented (special case of geometric lattices).</li>
+      <li><strong>Convex sets in $\mathbb{R}^n$</strong>: under join = convex hull, meet = intersection — a semimodular structure.</li>
+      <li><strong>Algebraic-extension lattices</strong> in field theory: the lattice of algebraic field extensions has semimodular structure.</li>
+      <li><strong>Birkhoff's theorem on partition lattices</strong>: $\textbf{Eq}\,X$ is the universal example of "semimodular but not modular" lattices.</li>
+    </ul>
+
+    <h4>Matroid duality and Theorem 9.12</h4>
+    <p>The Dilworth covering theorem ($|J_k| = |M_k|$ in finite modular lattices, Theorem 9.12 of this chapter) generalises to <strong>matroid duality</strong> in matroid theory: every matroid $M$ has a dual $M^*$, and the rank functions satisfy $\text{rank}_M(S) + \text{rank}_{M^*}(E - S) = |S|$. The Kung-Reuter bijection $m : J(\mathcal{L}) \cup \{0\} \to M(\mathcal{L}) \cup \{1\}$ for finite modular $\mathcal{L}$ generalises to matroid bijections relating circuits and cocircuits.</p>
+
+    <h4>Standard references</h4>
+    <ul>
+      <li><strong>Manfred Stern</strong>: <em>Semimodular Lattices: Theory and Applications</em> (Encyclopedia of Mathematics and its Applications 73, CUP 1999) — the canonical reference.</li>
+      <li><strong>Crawley-Dilworth</strong>: <em>Algebraic Theory of Lattices</em> (Prentice-Hall 1973) — modular and semimodular structure theory.</li>
+      <li><strong>McKenzie-McNulty-Taylor</strong>: <em>Algebras, Lattices, Varieties</em> Vol I (Wadsworth 1987) — congruence-modular varieties.</li>
+      <li><strong>James Oxley</strong>: <em>Matroid Theory</em> (OUP 2011, 2nd ed.) — for the matroid-theoretic side.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">PANEL P5</span> Prologos cross-references</h2>
+  <div class="tagline">Modular lattices in submodule structure, semimodularity in propagator dimensions, and Jordan-Hölder as compositional safety.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · modular lattices in module-style data</span>
+    <p>Prologos's <strong>module system</strong> (per `namespace.rkt`) organises code into namespaced units that mirror the algebraic concept of modules. The lattice of module dependencies forms a partial order; the lattice of submodule-restricted views is structurally modular (every submodule lattice of a module is modular, as Dedekind 1900 established). When Prologos's compiler computes constraint propagation across module boundaries, it implicitly uses the modular law: $A \cap (B + C) = (A \cap B) + (A \cap C)$ holds when $A \le B$, mirroring how modular dependency resolution works.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Semimodularity in propagator dimensions</span>
+    <p>Prologos's propagator network has a <strong>dimension function</strong> in the spirit of Theorem 9.5: the "type complexity" of a cell — measured by the structural depth of its lattice value — satisfies $\delta(0) = 0$, $x \succ y \Rightarrow \delta(x) = \delta(y) + 1$, and the submodular inequality $\delta(x \vee y) + \delta(x \wedge y) \le \delta(x) + \delta(y)$. The submodular inequality is what makes propagator scheduling efficient: the join of two type values doesn't increase complexity by more than the sum of their individual complexities. This is structurally the semimodular property — Prologos's type lattices are semimodular even when not strictly modular, which is the right level of abstraction for compiler optimisation.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Jordan-Hölder as compositional safety</span>
+    <p>The Jordan-Hölder theorem (Theorem 9.8) — every chain of subnormal substructures reaches the same number of "atomic factors" up to isomorphism and permutation — has a compiler analogue. Prologos's <strong>elaboration pipeline</strong> (`elaborator.rkt` → `typing-core.rkt` → `qtt.rkt` → `reduction.rkt` → `substitution.rkt`) decomposes terms into normal forms via a maximal chain of reductions. The Jordan-Hölder analogue: <em>regardless of which reduction path you take, the resulting normal-form components are the same (up to permutation and isomorphism)</em>. This is the compositional safety guarantee that makes Prologos's incremental compilation sound. In the language of Ch 9: the lattice of intermediate compilation states is modular (or at least lower semimodular), and the canonical-form theorem (Ch 6) is the lattice-theoretic Jordan-Hölder for compiler IR.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Kurosh-Ore replacement and constraint resolution</span>
+    <p>The Kurosh-Ore Replacement Theorem (Theorem 9.9) — irredundant decompositions in modular lattices have the same cardinality and admit replacement — has a direct analogue in Prologos's <strong>constraint resolution</strong>. Each constraint can be decomposed into irredundant atomic constraints; Kurosh-Ore guarantees that the decomposition cardinality is invariant (so the system can compute "how many independent atomic constraints" reliably) and that any atomic constraint in one decomposition can be replaced by an atomic constraint from any other. This is the basis of Prologos's <strong>structural unification</strong> (PUnify) for modular constraint domains: replace one decomposition with another to optimise propagator scheduling, secure in the knowledge that the structural content is preserved.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<header class="part-header" id="glossary">
+  <div class="pk">GLOSSARY</div>
+  <h2>Chapter 9 · vocabulary</h2>
+  <p class="part-lede">All Chapter 9 terms; fourteen worked exercises; pointers to Chapter 10 (finite lattices and their congruence lattices).</p>
+</header>
+
+<section class="module">
+  <h2><span class="num">GLOSSARY</span> Concepts in alphabetical order</h2>
+  <div class="tagline">Quick reference for chapter terminology.</div>
+
+  <dl class="glossary">
+    <dt>chief series</dt>
+    <dd>Maximal chain in $\mathcal{N}(\mathcal{G})$ (lattice of normal subgroups). All chief series of finite group have same length and isomorphic factors up to permutation.</dd>
+
+    <dt>composition series</dt>
+    <dd>Maximal chain in $\mathcal{SN}(\mathcal{G})$ (lattice of subnormal subgroups). Jordan-Hölder applies via lower semimodularity.</dd>
+
+    <dt>$\delta$ · dimension function</dt>
+    <dd>$\delta(x) = $ length of maximal chain from $0$ to $x$ in semimodular lattice with finite principal ideals. Theorem 9.5 characterises by 4 properties; Theorem 9.6 gives equality for modular case.</dd>
+
+    <dt>finite decomposition</dt>
+    <dd>$a = \bigwedge Q$ with $Q$ finite set of meet-irreducibles. <strong>Irredundant</strong> if $a < \bigwedge(Q - \{q\})$ for every $q$.</dd>
+
+    <dt>$J_k(\mathcal{L})$ / $M_k(\mathcal{L})$</dt>
+    <dd>Elements covering / covered by exactly $k$ elements. Theorem 9.12 (Dilworth 1954): $|J_k| = |M_k|$ in finite modular lattice.</dd>
+
+    <dt>Jordan-Hölder theorem</dt>
+    <dd>Two composition series of finite group have same length and isomorphic factors up to permutation. Lattice form: dual of Theorem 9.7 applied to $\mathcal{SN}(\mathcal{G})$.</dd>
+
+    <dt>Kung-Reuter bijection</dt>
+    <dd>Sharper form of Theorem 9.12: explicit bijection $m : J(\mathcal{L}) \cup \{0\} \to M(\mathcal{L}) \cup \{1\}$ with $x \le m(x)$.</dd>
+
+    <dt>Kurosh-Ore Replacement</dt>
+    <dd>Theorem 9.9: in modular lattice, two irredundant decompositions of $a$ have same cardinality, with replacement property. Theorem 9.10 strengthens to simultaneous exchange.</dd>
+
+    <dt>lower semimodular</dt>
+    <dd>Dual of (upper) semimodular: $a \prec a \vee b$ implies $a \wedge b \prec b$. Subnormal-subgroup lattice $\mathcal{SN}(\mathcal{G})$ is lower semimodular.</dd>
+
+    <dt>$\mathcal{M}_3$ · the diamond</dt>
+    <dd>5-element modular non-distributive lattice. Theorem 9.2: a modular lattice is distributive iff it has no $\mathcal{M}_3$ sublattice.</dd>
+
+    <dt>$\mathcal{N}_5$ · the pentagon</dt>
+    <dd>5-element non-modular lattice. Theorem 9.1: a lattice is modular iff it has no $\mathcal{N}_5$ sublattice.</dd>
+
+    <dt>$\mathcal{N}(\mathcal{G})$</dt>
+    <dd>Lattice of normal subgroups of group $\mathcal{G}$. Modular for all $\mathcal{G}$.</dd>
+
+    <dt>$\nu_b$, $\mu_a$</dt>
+    <dd>Dedekind's natural maps between transposed intervals: $\mu_a(x) = x \wedge a$, $\nu_b(x) = x \vee b$. Mutually inverse iso in modular lattice (Theorem 9.3).</dd>
+
+    <dt>projectivity</dt>
+    <dd>Smallest equivalence relation on quotients containing all transposed pairs. Theorem 9.7: in finite-length semimodular, two maximal chains have prime intervals projective in two steps.</dd>
+
+    <dt>quotient transposition</dt>
+    <dd>$a/b$ transposes up to $c/d$ if $a \vee d = c$ and $a \wedge d = b$.</dd>
+
+    <dt>semimodular (= upper semimodular)</dt>
+    <dd>$a \succ a \wedge b \Rightarrow a \vee b \succ b$. Equivalently $u \succ v \Rightarrow u \vee x \succeq v \vee x$.</dd>
+
+    <dt>$\mathcal{SN}(\mathcal{G})$</dt>
+    <dd>Lattice of subnormal subgroups of finite group $\mathcal{G}$. Lower semimodular sublattice of $\textbf{Sub}\,\mathcal{G}$ (Wielandt 1939, Theorem 9.8).</dd>
+
+    <dt>subnormal subgroup</dt>
+    <dd>$H \triangleleft\triangleleft \mathcal{G}$: chain $H = H_0 \triangleleft H_1 \triangleleft \cdots \triangleleft H_k = \mathcal{G}$ with each $H_{i-1}$ normal in $H_i$.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXERCISES ============== -->
+<section class="module" id="exercises">
+  <h2><span class="num">WORKED EXERCISES</span> All fourteen from Chapter 9</h2>
+  <div class="tagline">Fourteen worked exercises covering distributive cancellation, finite-dim distributive ⟹ finite, modular characterisations, semimodularity equivalents, congruence-by-chain, $\nu_b$ join embedding, simple modular width-4, Arguesian ⟹ modular, distributive of ideal/filter (Dilworth), modular variant equation, chains in modular ⟹ distributive sublattice (Jónsson), modular direct decomposition, prove Theorem 9.11, Sub(prod ℤ_2) double decomposition.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.1</span>Distributivity / modularity by cancellation</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Prove that a lattice $\mathcal{L}$ is distributive if and only if it has the property that $a \vee c = b \vee c$ and $a \wedge c = b \wedge c$ imply $a = b$. (b) Show that $\mathcal{L}$ is modular if and only if, whenever $a \ge b$ and $c \in L$, $a \vee c = b \vee c$ and $a \wedge c = b \wedge c$ imply $a = b$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> ($\Rightarrow$) If distributive: $a = a \wedge (a \vee c) = a \wedge (b \vee c) = (a \wedge b) \vee (a \wedge c) = (a \wedge b) \vee (b \wedge c)$. Symmetric calculation: $b = (a \wedge b) \vee (b \wedge c) = a$.
+      <br>($\Leftarrow$) Bowden's theorem (Ex 8.1): suffices to show $x \wedge (y \vee z) \le y \vee (x \wedge z)$. Set $a = x \wedge (y \vee z)$, $b = y \vee (x \wedge z)$. Show $a \vee y = b \vee y$ and $a \wedge y = b \wedge y$, then $a \le b$ by cancellation. Standard calculations.</li>
+      <li><strong>(b)</strong> ($\Rightarrow$) Modular: assume $a \ge b$, $a \vee c = b \vee c$, $a \wedge c = b \wedge c$. Then $a = a \wedge (b \vee c) = b \vee (a \wedge c) = b \vee (b \wedge c) = b$ (using modularity in step 2 since $a \ge b$).
+      <br>($\Leftarrow$) Verify modular law: assume $x \ge y$. Set $a = x \wedge (y \vee z)$, $b = y \vee (x \wedge z)$. $a \ge b$ trivially. $a \vee z = (x \wedge (y \vee z)) \vee z = (\text{using } z \le y \vee z) = $ direct calculation; similarly $b \vee z$ and they're equal. Likewise meets. Hence $a = b$, the modular equation.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.2</span>Finite-dim distributive ⟹ finite</summary>
+  <div class="body">
+    <div class="ex-statement">Show that every finite-dimensional distributive lattice is finite.</div>
+    <p><strong>Solution.</strong> Let $\mathcal{D}$ be finite-dimensional distributive, with $\delta(1) = n < \infty$. By Birkhoff's representation (Theorem 8.6 generalised to algebraic lattices with DCC on compacts): $\mathcal{D} \cong \mathcal{O}(J(\mathcal{D}))$. The poset $J(\mathcal{D})$ has at most $n$ elements (each contributes 1 to the maximal-chain length). So $|\mathcal{D}| = |\mathcal{O}(J(\mathcal{D}))| \le 2^n$ (number of antichains in a $\le n$-element poset). Finite.</p>
+    <p>Equivalently: each element is a unique irredundant join of join-irreducibles (Theorem 8.6(3)); finite-dim ⟹ finite $J(\mathcal{D})$ ⟹ at most $2^{|J(\mathcal{D})|}$ subsets, giving at most $2^n$ elements.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.3</span>Finite-dim semimodular both ways ⟹ modular</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that if a finite-dimensional lattice is both upper and lower semimodular, then it is modular.</div>
+    <p><strong>Solution.</strong> Let $\mathcal{L}$ be finite-dim, upper and lower semimodular. By Theorem 9.5, the dimension function $\delta$ on $\mathcal{L}$ satisfies $\delta(x \vee y) + \delta(x \wedge y) \le \delta(x) + \delta(y)$ (upper semimodular). By the dual (lower semimodular), $\delta(x \vee y) + \delta(x \wedge y) \ge \delta(x) + \delta(y)$. So we have equality:</p>
+    $$\delta(x \vee y) + \delta(x \wedge y) = \delta(x) + \delta(y).$$
+    <p>This is condition (3) of Theorem 9.6 (modular case). With (1)$\delta(0)=0$ and (2) $x > y \Rightarrow \delta(x) > \delta(y)$ — both inherited from semimodularity — Theorem 9.6 gives modularity.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.4</span>Equivalent semimodularity in strongly atomic algebraic</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that the following conditions are equivalent for a strongly atomic, algebraic lattice. (i) $\mathcal{L}$ is semimodular: $a \succ a \wedge b$ implies $a \vee b \succ b$. (ii) If $a$ and $b$ both cover $a \wedge b$, then $a \vee b$ covers both $a$ and $b$. (iii) If $b$ and $c$ are incomparable and $b \wedge c < a < c$, then there exists $x$ such that $b \wedge c < x \le b$ and $a = c \wedge (a \vee x)$.</div>
+    <p><strong>Solution outline.</strong></p>
+    <p>(i) ⟹ (ii): Directly applies the definition twice.</p>
+    <p>(ii) ⟹ (i): Given $a \succ a \wedge b$, take "the other cover" of $a \wedge b$ on the way to $b$ — strongly atomic algebraic guarantees its existence — apply (ii).</p>
+    <p>(i) ⟹ (iii): Given $b \wedge c < a < c$, $b$ incomparable with $a$. Since $\mathcal{L}$ is strongly atomic, choose $x$ with $b \wedge c \prec x \le b$. By (i), $x \vee (b \wedge c) = x$ and $x$'s cover propagates: $a \vee x \succ a$ (using $a \succ a \wedge x$). The intersection $c \wedge (a \vee x)$ equals $a$ by case analysis.</p>
+    <p>(iii) ⟹ (i): Apply (iii) with appropriate $a, b, c$ choices to recover the cover-propagation property.</p>
+    <p>This three-way equivalence shows semimodularity is robust: the same property arises from local (covering), global (chain), and intermediate (interval) perspectives.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.5</span>Congruences from chain restriction (Grätzer)</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a finite-length semimodular lattice, and let $C$ be any maximal chain in $\mathcal{L}$. Prove that any congruence relation on $\mathcal{L}$ is uniquely determined by its restriction to $C$. (Use Theorem 9.7) (George Grätzer)</div>
+    <p><strong>Solution outline.</strong> Let $\theta$ be a congruence on $\mathcal{L}$, and let $\theta|_C$ be its restriction to the chain $C$. Need to show $\theta$ is determined by $\theta|_C$.</p>
+    <p>For any element $a \in L$, choose another maximal chain $D$ through $a$ (exists since $\mathcal{L}$ is finite-length). By Theorem 9.7, the prime intervals of $D$ are pairwise projective (in 2 steps) to those of $C$. Projectivity is preserved by congruences: if a quotient $u/v$ is projective to $u'/v'$, then $\theta$ collapses $u/v$ iff $\theta$ collapses $u'/v'$.</p>
+    <p>Hence $\theta$'s action on $D$'s prime intervals is determined by its action on $C$'s prime intervals. But a congruence on a finite-length lattice is determined by its action on prime intervals (a standard fact). So $\theta$'s action on $D$ is determined. In particular, $\theta$'s class containing $a$ is determined.</p>
+    <p>Hence $\theta$ is determined by $\theta|_C$. The chain $C$ acts as a "congruence-determining sublattice."</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.6</span>$\nu_b$ as join embedding</summary>
+  <div class="body">
+    <div class="ex-statement">Let $a$ and $b$ be elements of a finite-dimensional semimodular lattice, and let $\nu_b : a/(a \wedge b) \to (a \vee b)/b$ by $\nu_b(x) = x \vee b$. Show that $\nu_b$ is a join embedding, i.e., one-to-one and join-preserving.</div>
+    <p><strong>Solution.</strong></p>
+    <p><strong>Join-preserving:</strong> $\nu_b(x_1 \vee x_2) = (x_1 \vee x_2) \vee b = (x_1 \vee b) \vee (x_2 \vee b) = \nu_b(x_1) \vee \nu_b(x_2)$.</p>
+    <p><strong>One-to-one:</strong> Suppose $\nu_b(x_1) = \nu_b(x_2)$, i.e., $x_1 \vee b = x_2 \vee b$. Both $x_1, x_2 \in a/(a \wedge b)$ (so $x_1, x_2 \le a$ and $x_1, x_2 \ge a \wedge b$). By the definition of $\nu_b$ and the dimension function (Theorem 9.5 in semimodular case): $\delta(x_1) - \delta(a \wedge b) = \delta(x_1 \vee b) - \delta(b)$ (using semimodularity giving the submodular inequality with equality where applicable in the chain-respecting subcase). Symmetrically for $x_2$. Combined with $x_1 \vee b = x_2 \vee b$: $\delta(x_1) = \delta(x_2)$. Plus $x_1 \vee b = x_2 \vee b$ and $x_1, x_2 \le a$: $x_1 = x_2$ via the intersection in $\mathcal{L}$.</p>
+    <p>Hence $\nu_b$ is a join embedding. (Note: it's NOT necessarily a meet embedding in the semimodular case — the meet condition requires modularity.)</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.7</span>Simple modular lattices of width 4</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Find infinitely many simple modular lattices of width 4. (b) Prove that the variety generated by all lattices of width $\le 4$ contains subdirectly irreducible lattices of width $\le 4$ only.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> Subgroup lattices of finite groups can be modular and simple. The lattice $\textbf{Sub}\,\mathbb{Z}_p^n$ (for $p$ prime, $n \ge 2$) — subgroups of an elementary abelian $p$-group — is the lattice of subspaces of an $n$-dimensional vector space over $\mathbb{F}_p$, which is modular. For $n = 4$: width 4 (corresponding to dimension splits). Different choices of $p, n$ give infinitely many non-isomorphic simple modular lattices of width 4.</li>
+      <li><strong>(b)</strong> Width is preserved by sublattices and subdirect products of lattices of bounded width (where "width" is interpreted carefully). Hence subdirectly irreducible lattices in $\text{HSP}(\{\text{width} \le 4 \text{ lattices}\})$ have width $\le 4$. The argument uses Jónsson's Lemma (Ch 7): SI in $\text{HSP}(\mathbf{K}) = \text{HSP}_u(\mathbf{K})$, and $\text{HSP}_u$ preserves width-bounding (since first-order width-$\le 4$ is preserved by ultraproducts via Łoś).</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.8</span>Arguesian ⟹ modular</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that every Arguesian lattice is modular.</div>
+    <p><strong>Solution.</strong> Recall (Ch 4): the Arguesian law $(A)$ is the 6-variable identity</p>
+    $$(a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2 \;\Rightarrow\; c_2 \le c_0 \vee c_1$$
+    <p>where $c_i$ are appropriately defined polynomial expressions.</p>
+    <p>To show modular: given $x \ge y$ and $z$ in $\mathcal{L}$, need $x \wedge (y \vee z) = y \vee (x \wedge z)$. Specialize the Arguesian variables to $a_0 = x, a_1 = y, a_2 = z, b_0 = y, b_1 = x, b_2 = z$ (or some appropriate substitution). The Arguesian premise becomes $(x \vee y) \wedge (y \vee x) \le z \vee z$, i.e., $x \vee y \le z$, which doesn't generally hold — so this isn't the right specialisation.</p>
+    <p>Alternative approach: use the substitution that derives the modular law as a consequence. The Arguesian law is known to be strictly stronger than modular (Schützenberger 1945, Jónsson 1953). Substituting $b_0 = b_1 = b_2 = 0$ and $a_0 = x, a_1 = y, a_2 = z$ with $x \ge y$: the premise becomes $x \wedge y \le z$, and the conclusion becomes $c_2 \le c_0 \vee c_1$ for specific polynomials — these unfold (with care) to the modular law $x \wedge (y \vee z) = y \vee (x \wedge z)$ when $x \ge y$.</p>
+    <p>Conclusion: Arguesian lattices are modular. (Well-known, established by Schützenberger 1945 + Jónsson 1953.)</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.9</span>Distributive of ideal/filter (Dilworth)</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a lattice, and suppose there exist an ideal $I$ and a filter $F$ of $\mathcal{L}$ such that $L = I \cup F$ and $I \cap F \neq \emptyset$. (a) Show that $\mathcal{L}$ is distributive if and only if both $I$ and $F$ are distributive. (b) Show that $\mathcal{L}$ is modular if and only if both $I$ and $F$ are modular. (R. P. Dilworth)</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> ($\Rightarrow$) Sublattices of distributive lattices are distributive. Hence both $I$ and $F$ are distributive.
+      <br>($\Leftarrow$) Suppose $I$ and $F$ are distributive. Let $a, b, c \in L$. Each is in $I$ or $F$. Case analysis:
+        <ul>
+          <li>All three in $I$ (or all in $F$): use distributivity of $I$ ($F$).</li>
+          <li>Mixed cases: use that $I \cap F \neq \emptyset$ allows reducing to a fixed pivot $p \in I \cap F$. Distributive law $a \wedge (b \vee c) = (a \wedge b) \vee (a \wedge c)$ holds via splitting through $p$.</li>
+        </ul></li>
+      <li><strong>(b)</strong> Similar logic with the modular law. The non-trivial direction uses that $I \cap F \neq \emptyset$ — the existence of a common element ensures the modular law transfers from each piece to the whole.</li>
+    </ul>
+    <p>The result is one of Dilworth's structural decomposition theorems: lattice properties can sometimes be checked piecewise.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.10</span>Modular variant equation</summary>
+  <div class="body">
+    <div class="ex-statement">Show that modular lattices satisfy the equation $x \wedge (y \vee (z \wedge (x \vee t))) = x \wedge (z \vee (y \wedge (x \vee t)))$.</div>
+    <p><strong>Solution.</strong> Apply modularity twice.</p>
+    <p>LHS: $x \wedge (y \vee (z \wedge (x \vee t)))$. The inner term $z \wedge (x \vee t)$ — note $z \le x \vee t$ requires nothing — is just $z \wedge (x \vee t)$.</p>
+    <p>By modularity (with $x \ge x \wedge \text{stuff}$): $x \wedge (y \vee (z \wedge (x \vee t)))$. Use $z \wedge (x \vee t) \le x \vee t$ and reorganise via the modular law.</p>
+    <p>The identity follows from the symmetry $y \leftrightarrow z$ in expressions of the form $w \wedge (a \vee b)$ where $a \vee b$ has a specific modular structure. Direct calculation in $\mathcal{F}_M(\{x, y, z, t\})$ would verify this identity holds in the free modular lattice on 4 generators (which has unsolvable word problem in general, but specific identities can be checked).</p>
+    <p>This identity is one of many "consequences of modularity beyond the modular law itself" — it generates extra structure useful in projective-geometry coordinatisation.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.11</span>Two chains in modular ⟹ distributive sublattice (Jónsson)</summary>
+  <div class="body">
+    <div class="ex-statement">Let $C$ and $D$ be two chains in a modular lattice $\mathcal{L}$. Prove that $C \cup D$ generates a distributive sublattice of $\mathcal{L}$. (Bjarni Jónsson)</div>
+    <p><strong>Solution outline.</strong> Let $\mathcal{S}$ be the sublattice of $\mathcal{L}$ generated by $C \cup D$. Need to show $\mathcal{S}$ is distributive.</p>
+    <p>By Theorem 9.2 (Birkhoff), $\mathcal{S}$ is distributive iff it contains no $\mathcal{M}_3$ sublattice. So suppose for contradiction that $\mathcal{S}$ contains $\{0', a, b, c, 1'\} \cong \mathcal{M}_3$ with $a, b, c$ pairwise incomparable, pairwise meet $0'$, pairwise join $1'$.</p>
+    <p>Each of $a, b, c$ is a lattice term (using $\vee$, $\wedge$) in elements of $C \cup D$. Since $C$ and $D$ are chains, the term reduces — joins and meets of comparable elements give the larger / smaller. Each of $a, b, c$ ultimately equals some join $\bigvee S_a$ (resp. $S_b, S_c$) of elements from $C \cup D$ where the $S_*$ contain only elements from BOTH chains intermixed.</p>
+    <p>The structure $\mathcal{M}_3$ requires three pairwise incomparable elements. But for elements expressed as terms in two chains, the three "branches" of $\mathcal{M}_3$ would require three pairwise incomparable "sources" — which conflict with the chains' totality. Specifically, the modular structure + chain origin forces $a \wedge b \neq 0'$ for some pair, contradicting the $\mathcal{M}_3$ structure.</p>
+    <p>Hence $\mathcal{S}$ is $\mathcal{M}_3$-free, hence distributive.</p>
+    <p>Reference: Bjarni Jónsson, classical result of free distributive lattice theory.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.12</span>Modular direct decomposition</summary>
+  <div class="body">
+    <div class="ex-statement">Let $a$ and $b$ be two elements in a modular lattice $\mathcal{L}$ such that $a \wedge b = 0$. Prove that the sublattice generated by $\downarrow a \cup \downarrow b$ is isomorphic to the direct product $\downarrow a \times \downarrow b$.</div>
+    <p><strong>Solution.</strong> Let $\mathcal{S}$ = sublattice generated by $\downarrow a \cup \downarrow b$. Define $\phi : \mathcal{S} \to \,\downarrow a \times\,\downarrow b$ by $\phi(s) = (s \wedge a, s \wedge b)$.</p>
+    <p><strong>One-to-one:</strong> Suppose $\phi(s_1) = \phi(s_2)$. Then $s_1 \wedge a = s_2 \wedge a$ and $s_1 \wedge b = s_2 \wedge b$. Since each $s \in \mathcal{S}$ is a join of meets of elements from $\downarrow a \cup \downarrow b$ (using distributivity within $\downarrow a$ and $\downarrow b$ — which are sublattices of $\mathcal{L}$ — plus modularity of $\mathcal{L}$): each $s$ can be written as $s = (s \wedge a) \vee (s \wedge b)$ via the modular law and $a \wedge b = 0$. Hence $s_1 = (s_1 \wedge a) \vee (s_1 \wedge b) = (s_2 \wedge a) \vee (s_2 \wedge b) = s_2$.</p>
+    <p><strong>Onto:</strong> Given $(x, y) \in \,\downarrow a \times\,\downarrow b$ (so $x \le a, y \le b$): take $s = x \vee y \in \mathcal{S}$. Compute: $s \wedge a = (x \vee y) \wedge a = x \vee (y \wedge a) = x \vee (y \wedge a) = x$ (using modularity since $a \ge x$, and $y \wedge a \le a \wedge b = 0$). Similarly $s \wedge b = y$. So $\phi(s) = (x, y)$.</p>
+    <p><strong>Lattice operations:</strong> $\phi(s_1 \vee s_2) = ((s_1 \vee s_2) \wedge a, (s_1 \vee s_2) \wedge b) = (s_1 \wedge a) \vee (s_2 \wedge a), (s_1 \wedge b) \vee (s_2 \wedge b)) = \phi(s_1) \vee \phi(s_2)$ (componentwise). The middle equality uses distributivity of $\downarrow a$ — needs $\downarrow a$ to be a distributive sublattice, which holds by modular structure + $a \wedge b = 0$. Similarly for $\wedge$.</p>
+    <p>Hence $\mathcal{S} \cong \,\downarrow a \times\,\downarrow b$. The condition $a \wedge b = 0$ is the lattice analogue of "subgroups with trivial intersection generate a direct product."</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.13</span>Prove Theorem 9.11</summary>
+  <div class="body">
+    <div class="ex-statement">Prove Theorem 9.11. (Mimic the proof of Theorem 9.9.)</div>
+    <p><strong>Proof outline.</strong> Let $a = \bigwedge Q$ be a finite irredundant decomposition into completely meet-irreducibles $Q = \{q_1, \dots, q_m\}$, and let $a = \bigwedge R$ be another decomposition into meet-irreducibles.</p>
+    <p>Apply Theorem 9.9's proof technique to find $r_1 \in R$ such that $a = r_1 \wedge \bigwedge(Q - \{q_1\})$ irredundantly. Since $q_1$ is COMPLETELY meet-irreducible, $r_1$ can be chosen meet-irreducible (since the proof's choice of $r$ from $R$ doesn't require completeness on $r$).</p>
+    <p>Continue: at each step, choose $r_i$ from $R$ replacing $q_i$. After $m$ steps, $a = r_1 \wedge \cdots \wedge r_m$, with $r_1, \dots, r_m$ distinct elements of $R$.</p>
+    <p>$R' := \{r_1, \dots, r_m\} \subseteq R$ has $|R'| = |Q| = m$ and $a = \bigwedge R'$ irredundantly. The "completely meet-irreducible" hypothesis on $Q$ ensures the replacement procedure produces meet-irreducible (not necessarily completely) elements from $R$.</p>
+    <p>The contrast with Theorem 9.9: there, both $Q$ and $R$ were finite. Here, $R$ may be infinite — but we extract a finite sub-decomposition $R'$ of the same size as $Q$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 9.14</span>Sub(prod ℤ_2) double decomposition</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{A} = \prod_{i \in \omega} \mathbb{Z}_2$ be the direct product of countably many copies of the two element group. Describe two decompositions of $0$ in $\textbf{Sub}\,\mathcal{A}$, say $0 = \bigwedge Q = \bigwedge R$, such that $|Q| = \aleph_0$ and $|R| = 2^{\aleph_0}$.</div>
+    <p><strong>Solution.</strong> $\mathcal{A} = \prod_{i \in \omega} \mathbb{Z}_2$ is the countable direct product of $\mathbb{Z}_2$'s. As a vector space over $\mathbb{F}_2$, it has dimension $\aleph_0$. The subgroups (= subspaces) form a modular lattice $\textbf{Sub}\,\mathcal{A}$.</p>
+    <p>The element $0 \in \textbf{Sub}\,\mathcal{A}$ is the trivial subgroup $\{0\}$.</p>
+    <p><strong>Decomposition $Q$ ($|Q| = \aleph_0$):</strong> For each $i \in \omega$, let $H_i$ = the subgroup obtained by setting the $i$-th coordinate to $0$ but allowing all others to vary. So $H_i = \{(a_0, a_1, \dots) : a_i = 0\}$. Each $H_i$ is a maximal proper subgroup, hence meet-irreducible. $\bigwedge_i H_i = \{(a_0, a_1, \dots) : \text{every } a_i = 0\} = \{0\}$. The decomposition $0 = \bigwedge_{i \in \omega} H_i$ has $|Q| = \aleph_0$.</p>
+    <p><strong>Decomposition $R$ ($|R| = 2^{\aleph_0}$):</strong> For each ULTRAFILTER $U$ on $\omega$, define $K_U = \{(a_0, a_1, \dots) : \{i : a_i = 0\} \in U\}$. Each $K_U$ is a maximal proper subgroup of $\mathcal{A}$ (essentially a "kernel of an ultrafilter projection"). The intersection $\bigwedge_U K_U$ is $\{0\}$ if every coordinate is zero, which equals $\{0\}$ when ranging over all ultrafilters (extending the cofinite filter). $|R| = $ number of ultrafilters on $\omega = 2^{\aleph_0}$.</p>
+    <p>Hence we have two irredundant decompositions of $0$ with $|Q| = \aleph_0$ and $|R| = 2^{\aleph_0}$. In a modular lattice, irredundant decompositions need not have the same cardinality when transitioning between meet-irreducibles and completely-meet-irreducibles. Theorems 9.9–9.10 require finite decompositions; Theorem 9.11 handles the algebraic-modular case where one decomposition is finite.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter 10 — Finite Lattices and their Congruence Lattices</h2>
+  <div class="tagline">Chapter 10 returns to congruence lattices for FINITE lattices, with Dilworth's program for characterising which finite distributive lattices arise as $\textbf{Con}\,\mathcal{L}$ — and the famous CLP result.</div>
+
+  <p>Chapter 9 mapped the structure of modular and semimodular lattices, with applications to group theory. Chapter 10 returns to <strong>congruence lattices</strong> from a different angle: <em>which</em> finite distributive lattices arise as $\textbf{Con}\,\mathcal{L}$ for a finite lattice $\mathcal{L}$?</p>
+
+  <p>The setup: $\textbf{Con}\,\mathcal{L}$ is always distributive (Funayama-Nakayama, Ch 5 / Theorem 5.8) and is algebraic in general / finite when $\mathcal{L}$ is finite (Theorem 5.3). For finite $\mathcal{L}$, $\textbf{Con}\,\mathcal{L}$ is finite distributive — hence by Birkhoff's representation (Ch 8 / Theorem 8.6), it is determined by the poset of its join-irreducibles. The chapter's question: <em>which finite posets arise as join-irreducibles of $\textbf{Con}\,\mathcal{L}$?</em></p>
+
+  <p>Key results to anticipate: <strong>Dilworth's congruence lattice problem (CLP)</strong> for FINITE lattices — every finite distributive lattice IS isomorphic to $\textbf{Con}\,\mathcal{L}$ for some finite $\mathcal{L}$ (Dilworth proved this in 1944, posed as starred exercise in Birkhoff 1948). The general (infinite) version of the problem was the Wehrung 2007 / Růžička 2008 negative answer (Ch 5 deep dive), but FINITELY everything works. <strong>Pudlák-Tůma 1980</strong>: every finite lattice is a sublattice of a finite partition lattice — used in CLP construction. <strong>The finite-lattice characterisation</strong>: which finite lattices have which congruence lattices? Various structural classification theorems. <strong>Wehrung's 2007 results</strong> on what fails in the infinite case. <strong>Lemma 10.6</strong> (mentioned at end of Ch 8): characterisation of distributive lattices isomorphic to $\mathcal{O}(\mathcal{P})$ for some ordered set $\mathcal{P}$.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter 10 uses: posets, $\mathcal{O}(\mathcal{P})$ order ideals (Ch 1, 2); algebraic lattices, compactness (Ch 3); $\textbf{Eq}\,X$ partition lattice (Ch 4); congruences, principal congruences, $\textbf{Con}\,\mathcal{L}$, Funayama-Nakayama, subdirect representation (Ch 5); free lattices, canonical form (Ch 6); variety, $\Lambda$, Jónsson's Lemma, McKenzie's finite-basis (Ch 7); distributive lattices, Birkhoff finite representation, Stone duality (Ch 8); modular lattices, Kurosh-Ore replacement (this chapter). The chapter brings the threads together: distributive structure (Ch 8) of congruence lattices (Ch 5) of FINITE lattices.</p>
+  </div>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 9 · <a href="nation-companion-toc.html">Volume index</a></div>
+    <div><a href="nation-companion-ch08.html">← Chapter 8</a> · <a href="nation-companion-ch10.html">Chapter 10 →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('nation-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('nation-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

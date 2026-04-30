@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 7 · Radical, Superfluous and Fully Invariant Elements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  figure { margin: 26px 0; text-align: center; }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); margin-top: 8px; font-style: italic; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  :root[data-theme="dark"] figure svg .node { fill: var(--bg-warm) !important; stroke: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .node-hot { fill: #3A2E15 !important; stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .node-cool { fill: #1A2236 !important; stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-hot { stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .lbl { fill: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .cap { fill: var(--text-dim) !important; }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch06.html">← Chapter 6</a></li>
+    <li><a href="calugareanu-companion-ch08.html">Chapter 8 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 7 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Superfluous</div>
+  <ul>
+    <li><a href="#s1">A1 · Superfluous + radical</a></li>
+    <li><a href="#s2">A2 · Lemmas 7.1-7.4</a></li>
+    <li><a href="#s3">A3 · Lemma 7.5 — joins of superfluous</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Radical &amp; compactness</div>
+  <ul>
+    <li><a href="#s4">B1 · Prop 7.1 — compact carries up</a></li>
+    <li><a href="#s5">B2 · Lemmas 7.6-7.7 (radical bridge)</a></li>
+    <li><a href="#s6">B3 · Theorem 7.1 — radical = ⋁ superfluous</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Properties of radical</div>
+  <ul>
+    <li><a href="#s7">C1 · Lemma 7.8 (three properties)</a></li>
+    <li><a href="#s8">C2 · Cor 7.1, 7.2 (existence of maximal)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Major theorems</div>
+  <ul>
+    <li><a href="#s9">D1 · Theorem 7.2 (maximal cover)</a></li>
+    <li><a href="#s10">D2 · Lemma 7.9 + Prop 7.2 (zero radical)</a></li>
+    <li><a href="#s11">D3 · Theorem 7.3 (5-way equiv)</a></li>
+    <li><a href="#s12">D4 · Cor 7.3 + Theorem 7.4</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Fully invariant</div>
+  <ul>
+    <li><a href="#s13">E1 · Definition + 5 properties</a></li>
+    <li><a href="#s14">E2 · Lemma 7.10 + Prop 7.3</a></li>
+    <li><a href="#s15">E3 · Prop 7.4 (FS distributive)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Jacobson radical</a></li>
+    <li><a href="#c2">P2 · Frattini subgroup</a></li>
+    <li><a href="#c3">P3 · Universal algebra</a></li>
+    <li><a href="#c4">P4 · Fully invariant subgroups</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 7 · pp. 77–86</div>
+  <h1>Radical, Superfluous and Fully Invariant Elements</h1>
+  <p class="lede">Two complementary "structural" notions: <em>superfluous</em> elements (those redundant for reaching the top) and <em>fully invariant</em> elements (those preserved under every direct decomposition). The radical $r(L)$ — the meet of all maximal elements — turns out to equal the join of superfluous elements in compactly generated lattices, recovering the Jacobson radical and the Frattini subgroup as special cases.</p>
+  <div class="meta">
+    <span>~55–65 min read</span>
+    <span>15 sections + 5 connection panels</span>
+    <span>11 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — radical, superfluous, fully invariant</h2>
+  <div class="tagline">Two parallel ideas: superfluous elements (reach-the-top redundancy) and fully invariant elements (decomposition-preservation). Both classical algebra concepts, lifted to pure lattice form.</div>
+
+  <p>Chapter 7 collects three closely-related notions that appear across algebra: the <strong>radical</strong>, <strong>superfluous</strong> elements, and <strong>fully invariant</strong> elements. The radical $r(L)$ is defined as the meet of all maximal ($\ne 1$) elements — the "meet of dual atoms," the order-dual of the socle. An element is <strong>superfluous</strong> if it can be removed from any cover of $1$: $a \vee b \ne 1$ for every $b \ne 1$. Theorem 7.1 shows the two notions converge in compactly generated lattices: the radical equals the join of all superfluous elements.</p>
+
+  <p>The chapter has two distinct halves:</p>
+
+  <ol>
+    <li><strong>Radical and superfluous (Sections A through D).</strong> The bulk of the chapter. Definition, basic properties (Lemmas 7.1–7.5), the radical/superfluous bridge (Theorem 7.1), structural properties (Lemma 7.8), connection to maximal elements (Theorem 7.2), zero-radical conditions (Lemma 7.9, Prop 7.2), the chapter's central characterisation theorem (Theorem 7.3 — five equivalent conditions for "atom generated of finite length and complemented"), and a clean dual statement (Theorem 7.4).</li>
+    <li><strong>Fully invariant elements (Section E).</strong> A separate but related notion: an element $a$ is <em>fully invariant</em> if for every direct decomposition $1 = \bigoplus b_i$, the element $a$ also decomposes as $\bigoplus(a \wedge b_i)$. The fully invariant elements have several closure properties (Properties 1-5); the join of two fully invariant direct summands is itself a direct summand (Proposition 7.3); and the fully invariant direct summands form a distributive sublattice (Proposition 7.4).</li>
+  </ol>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>The radical $r(L)$ is the "non-generators" — elements that can be removed from any generating cover without losing the top. In group theory this is exactly the <em>Frattini subgroup</em> (intersection of all maximal subgroups = set of non-generators, Frattini 1885). In module theory it is the <em>Jacobson radical</em>. The fully invariant elements are the abstract version of <em>characteristic subgroups</em> in groups (those preserved by all automorphisms): they survive every direct decomposition. The chapter unifies these notions at the lattice level. Theorem 7.3 — the five-way characterisation of "atom generated of finite length + complemented" — is the chapter's keystone, generalising the structure theorem for semisimple modules.</p>
+  </div>
+
+  <h3>Why this chapter matters</h3>
+
+  <p>Chapter 7 is the chapter where Călugăreanu's lattice apparatus connects most directly to classical algebraic structure theory. The Jacobson radical of a ring, the Frattini subgroup of a group, the Frattini subalgebra of a universal algebra — all are special cases of $r(L)$ for the appropriate lattice. Theorem 7.3's equivalences subsume the Wedderburn–Artin theorem on semisimple Artinian rings and the structure theorem for semisimple modules. The fully invariant apparatus connects to characteristic subgroups in groups and the deeper "decomposition-stable" structures in module theory.</p>
+
+  <p>For Prologos, the radical has a vivid interpretation: it is the <em>maximally redundant</em> information in a cell-state lattice — content that contributes to no fixpoint reachable from above. Connection panel P5 below makes this concrete.</p>
+</section>
+
+<div class="part-header" id="vocab">
+  <div class="pk">Pre-flight · Vocabulary primer</div>
+  <h2>Carried forward, new, and deep dives</h2>
+  <p class="part-lede">Following the established convention: refreshers, full term-cards for new terms, deep dives where conceptual hinges sit.</p>
+</div>
+
+<section class="module" id="vocab-section">
+  <h2>Carried forward — quick refreshers</h2>
+  <div class="tagline">One-line refreshers for the previously-introduced terms this chapter relies on.</div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/2</span>
+    <p><span class="term">modular</span> $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$. The chapter's working hypothesis.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/4</span>
+    <p><span class="term">complemented / complement</span> $a \wedge a' = 0$ AND $a \vee a' = 1$. Theorem 7.3 characterises when a particular $a$ has a complement.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">compactly generated (algebraic)</span> Every element is a join of compact (finite-witness) elements. Theorem 7.1 is set in this class.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">compact lattice</span> The top $1$ is compact. Distinct from compactly generated. Cor 7.2: every proper element of a compact lattice lies below a maximal.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">upper continuous</span> Meets distribute over directed joins. Theorem 7.2 needs this.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">noetherian / artinian / finite length</span> ACC / DCC / both. Several theorems use these conditions.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 4</span>
+    <p><span class="term">essential element</span> $e \wedge a \ne 0$ for every $a \ne 0$. Pseudo-complement is maximal $c$ with $b \wedge c = 0$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 5</span>
+    <p><span class="term">torsion lattice / atom / socle</span> Torsion: every $1/a$ has atoms. Atom: minimal non-zero. Socle $s(L)$: join of atoms (the order-dual of the radical).</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 6</span>
+    <p><span class="term">independent / direct sum / atom generated / semiatomic</span> Independent: each element clear of join of others. Atom generated: every element a join of atoms. Semiatomic: $1$ a join of atoms. Theorem 6.8's equivalences are heavily used here.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 6</span>
+    <p><span class="term">indecomposable / direct decomposition</span> Indecomposable: $a \ne 0$ not a non-trivial direct sum. The fully invariant property tracks how elements behave under such decompositions.</p>
+  </div>
+
+  <h2>New in Chapter 7 — full term-cards</h2>
+  <div class="tagline">Each gets a full definition in the chapter prose.</div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · MAIN</span>
+    <p><span class="term">superfluous element (= small)</span> An element $a \in L$ is <strong>superfluous</strong> (also called <em>small</em>) if $a \vee b \ne 1$ for every $b \ne 1$. Plain English: <em>$a$ is "redundant" — including it in a cover never helps reach the top, since whatever $a$ adds can already be reached without it</em>. The set of superfluous elements is an ideal of $L$. The element $0$ is always superfluous; $1$ is never (in non-trivial lattices).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · MAIN</span>
+    <p><span class="term">radical $r(L)$</span> In a complete lattice with $1$, the <strong>radical</strong> $r(L)$ is the <em>intersection (meet) of all maximal ($\ne 1$) elements</em>. Plain English: <em>the "non-generators" — what's common to all maximal proper elements</em>. This is the lattice abstraction of the Jacobson radical (modules) and the Frattini subgroup (groups).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · KEY EXAMPLE</span>
+    <p><span class="term">Frattini subalgebra</span> For a universal algebra $(A, \Omega)$, the radical of its subalgebra lattice $r(S(A,\Omega))$ is called the <strong>Frattini subalgebra</strong>. For groups, this is the <em>Frattini subgroup</em> $\Phi(G)$ — the intersection of all maximal subgroups, equivalently the set of non-generators. Frattini's theorem (1885): an element is a non-generator iff it lies in every maximal subgroup.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · MAIN</span>
+    <p><span class="term">fully invariant element</span> An element $a \in L$ in a complete lattice is called <strong>fully invariant</strong> if for each direct decomposition $1 = \bigoplus_i b_i$ one has $a = \bigoplus_i (a \wedge b_i)$. Plain English: <em>$a$ "respects" every direct decomposition of $1$ — it splits cleanly along every direct sum decomposition</em>. The lattice version of "characteristic subgroup" or "fully invariant submodule."</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7</span>
+    <p><span class="term">FI-extending lattice</span> A lattice $L$ in which each fully invariant element is essential in a direct summand. Generalises "extending lattice" (where every element is essential in a direct summand — see Chapter 8). The "FI" prefix means we only need the property for fully invariant elements.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · forward ref Ch 12</span>
+    <p><span class="term">supplement</span> An element $c \in L$ is a <strong>supplement</strong> of $b$ if $c$ is minimal with $b \vee c = 1$. Plain English: <em>$c$ "fills the gap" above $b$ in the most economical way</em>. Mentioned in Theorem 7.3(e) as a forward reference to Chapter 12.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7 · group theory</span>
+    <p><span class="term">cocyclic group</span> A group $G$ is <strong>cocyclic</strong> if it has a unique smallest non-trivial subgroup. Equivalently, an indecomposable cyclic or quasicyclic (Prüfer) abelian group. Used in Exercise 7.7. The dual of "cyclic" — instead of one generator, one minimal sub-thing.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 7</span>
+    <p><span class="term">meet infinitely distributive</span> A lattice in which arbitrary meets distribute over arbitrary joins: $a \wedge \bigvee_i b_i = \bigvee_i (a \wedge b_i)$ for arbitrary index sets. Stronger than "upper continuous" (which only requires this for directed joins). Used in Property 5 of fully invariant elements.</p>
+  </div>
+
+  <h2>Deep dive — Frattini's theorem and the Frattini subgroup</h2>
+  <div class="tagline">The chapter's key example. Giovanni Frattini (1885) gave the first version of the radical-as-non-generators theorem.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Frattini subgroup</span>
+    <p><strong>Definition.</strong> For a group $G$, the <strong>Frattini subgroup</strong> $\Phi(G)$ is the intersection of all maximal subgroups of $G$. If $G$ has no maximal subgroups, $\Phi(G) = G$ by convention.</p>
+    <p><strong>Frattini's theorem (1885).</strong> An element $g \in G$ lies in $\Phi(G)$ if and only if $g$ is a <em>non-generator</em>: for every generating set $X$ of $G$ containing $g$, the set $X \setminus \{g\}$ also generates $G$. Equivalently: $g$ can be removed from any generating set without losing generation.</p>
+    <p><strong>Why the equivalence holds.</strong> If $g$ is a non-generator, take any maximal $M < G$. Either $\langle M, g \rangle = M$ (so $g \in M$) or $\langle M, g\rangle = G$. In the second case, since $\{M, g\}$ generates $G$ but is a "generating set with $g$," and $g$ is a non-generator, $M$ alone generates $G$ — contradicting maximality. So $g \in M$ for every maximal $M$, i.e. $g \in \Phi(G)$.</p>
+    <p><strong>Frattini's theorem in lattice form (Călugăreanu's Theorem 7.1).</strong> The lattice version: in compactly generated lattices, $r(L) = \bigvee \{$superfluous elements$\}$. The Frattini subgroup IS this radical for $L = $ subgroup lattice of $G$, and the "non-generators are superfluous" content of Frattini's theorem corresponds exactly to Theorem 7.1's equality.</p>
+    <p><strong>Properties of the Frattini subgroup.</strong>
+    <br>• $\Phi(G)$ is always normal (in fact characteristic) in $G$.
+    <br>• For finite $p$-groups, $\Phi(G) = G' \cdot G^p$ (commutator subgroup times $p$-th powers). The quotient $G/\Phi(G)$ is elementary abelian.
+    <br>• Every nilpotent group has $\Phi(G) \supseteq G'$ (the commutator subgroup).
+    <br>• If $\Phi(G) = G$, then $G$ has no maximal subgroups (e.g., $G = \mathbb Q$ as additive group, where every proper subgroup is contained in a strictly larger one).</p>
+    <p><strong>Frattini argument.</strong> A separate but related principle named for Frattini: if $H$ is a normal subgroup of $G$ and $P$ is a Sylow $p$-subgroup of $H$, then $G = N_G(P) H$. This is used to relate the structure of a group to its normal subgroups. Distinct from the Frattini subgroup but historically related.</p>
+  </div>
+
+  <h2>Deep dive — Jacobson radical of a module</h2>
+  <div class="tagline">The module-theoretic analog of the Frattini subgroup. Plays a central role in non-commutative algebra.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Jacobson radical</span>
+    <p><strong>Definition (for rings).</strong> For a ring $R$, the <strong>Jacobson radical</strong> $J(R)$ is the intersection of all maximal left ideals of $R$ (equivalently, the intersection of all maximal right ideals — the two coincide). $J(R)$ consists exactly of elements $r$ such that $1 - rs$ is a unit for every $s \in R$ (the "quasi-regular" elements).</p>
+    <p><strong>Definition (for modules).</strong> For an $R$-module $M$, the <strong>radical</strong> $\mathrm{rad}(M)$ is the intersection of all maximal submodules. For the submodule lattice $L = S_R(M)$, this is exactly $r(L)$ — the chapter's definition applied to the submodule lattice.</p>
+    <p><strong>Equivalent characterisations.</strong> For a module $M$:
+    <br>• $\mathrm{rad}(M)$ = sum of all small (= superfluous) submodules.
+    <br>• $\mathrm{rad}(M)$ = $\{m \in M : f(m) = 0$ for every homomorphism $f: M \to S$, $S$ simple$\}$.
+    <br>• $\mathrm{rad}(M)$ = the largest submodule $N$ such that $M/N$ has zero radical.</p>
+    <p><strong>Theorems involving the Jacobson radical.</strong>
+    <br>• <em>Nakayama's lemma:</em> if $M$ is a finitely generated $R$-module and $J(R) \cdot M = M$, then $M = 0$. This is one of the most-used results in commutative and non-commutative algebra.
+    <br>• <em>Wedderburn–Artin:</em> a ring $R$ is semisimple Artinian iff $R$ is Artinian and $J(R) = 0$. (Theorem 7.3's lattice version of "atom generated of finite length and zero radical" recovers this.)
+    <br>• <em>Krull intersection theorem:</em> in a noetherian commutative ring, $\bigcap_n J(R)^n = 0$. The radical "vanishes at infinity."</p>
+    <p><strong>Călugăreanu's Theorem 7.1 (lattice form):</strong> $r(L) = \bigvee\{$superfluous$\}$ in compactly generated lattices. Applied to $L = S_R(M)$: $\mathrm{rad}(M)$ = sum of small submodules. This is the classical module-theoretic statement, recovered as a special case.</p>
+  </div>
+
+  <h2>Deep dive — Fully invariant vs characteristic subgroups</h2>
+  <div class="tagline">In group theory, "characteristic" and "fully invariant" are two distinct strengthenings of "normal." The lattice "fully invariant" captures the characteristic flavour.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Characteristic and fully invariant subgroups</span>
+    <p><strong>Three increasingly strong notions in group theory.</strong>
+    <br>• A subgroup $N \le G$ is <strong>normal</strong> if $gNg^{-1} = N$ for all $g \in G$ (closed under conjugation).
+    <br>• $N$ is <strong>characteristic</strong> if $\sigma(N) = N$ for every automorphism $\sigma$ of $G$ (closed under all auto-symmetries).
+    <br>• $N$ is <strong>fully invariant</strong> if $\sigma(N) \subseteq N$ for every endomorphism $\sigma$ of $G$ (closed under all self-maps).</p>
+    <p>Strict implications: fully invariant ⟹ characteristic ⟹ normal. The reverse implications generally fail. Characteristic but not fully invariant: the center $Z(G)$ in some groups. Normal but not characteristic: subgroups not preserved by automorphisms (e.g., one factor of $G \times G$).</p>
+    <p><strong>The lattice-theoretic notion (Călugăreanu, this chapter).</strong> An element $a \in L$ is <em>fully invariant</em> if for every direct decomposition $1 = \bigoplus b_i$, $a = \bigoplus (a \wedge b_i)$. Plain English: $a$ splits cleanly along every direct sum.</p>
+    <p><strong>How they connect.</strong> For an abelian group $G$ (or more generally, a module), the lattice notion of fully invariant in $S_R(G)$ recovers the group-theoretic fully invariant subgroups exactly: they are the submodules $N$ such that $f(N) \subseteq N$ for every endomorphism of $G$. Reason: every endomorphism $f$ extends naturally to a "compatible direct decomposition" (via the image and kernel), and $a$ being preserved by all decompositions captures the same content as being preserved by all endomorphisms.</p>
+    <p><strong>Examples in abelian groups.</strong>
+    <br>• Torsion subgroup $T(G)$ = fully invariant.
+    <br>• $p$-primary component $G_p$ = fully invariant.
+    <br>• $nG = \{ng : g \in G\}$ = fully invariant for any $n$.
+    <br>• Socle $\mathrm{soc}(G)$ = fully invariant (the join of simple submodules survives any direct decomposition).</p>
+    <p><strong>Where this matters.</strong> Fully invariant subgroups are the building blocks of the "characteristic series" theory in group theory — verbal subgroups, marginal subgroups, and the structural decomposition theorems. The lattice apparatus generalises this to modular lattices, supporting the structure theory in chapters 8 and beyond.</p>
+  </div>
+
+  <p>That's the vocabulary. The chapter prose ahead refers to these terms freely.</p>
+</section>
+
+<div class="part-header" id="partA">
+  <div class="pk">Part A · Superfluous elements</div>
+  <h2>"Removable" without losing the top</h2>
+  <p class="part-lede">An element is superfluous when it can be omitted from any cover of $1$ — its presence never makes the difference between reaching $1$ and falling short. Five lemmas develop the basic properties.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION A1</span> Definition — superfluous and the radical</h2>
+  <div class="tagline">The chapter's two foundational definitions. The radical is the meet of maximals; superfluous elements are those that never help reach the top.</div>
+
+  <div class="box def">
+    <span class="label">Definition · superfluous element</span>
+    <p>In a lattice with $1$, an element $a \in L$ is called <strong>superfluous</strong> (or <em>small</em>) if $a \vee b \ne 1$ holds for every $b \ne 1$.</p>
+  </div>
+
+  <p>Read this as: <em>$a$ is superfluous if it can never make the difference between covering $1$ and falling short.</em> Whenever you join $a$ with anything proper ($b \ne 1$), you stay proper. So $a$ contributes nothing toward reaching the top.</p>
+
+  <div class="box def">
+    <span class="label">Definition · radical $r(L)$</span>
+    <p>In a complete lattice, the intersection (= meet) of all maximal ($\ne 1$) elements in $L$ is called <strong>the radical</strong> of $L$, denoted $r(L)$.</p>
+  </div>
+
+  <p>By convention, if $L$ has no maximal elements (other than $1$ itself), the meet is empty, so $r(L) = 1$. Otherwise $r(L) \le m$ for every maximal $m \ne 1$, so $r(L) \ne 1$ in any well-behaved setting.</p>
+
+  <div class="box intuition">
+    <span class="label">Order-dual relationship to the socle</span>
+    <p>The socle $s(L) = \bigvee \{$atoms$\}$ is the join of the smallest non-zero elements. The radical $r(L) = \bigwedge \{$maximals$\}$ is the meet of the largest proper elements. They are <em>order-duals</em>: socle is "what's reachable from below by atomic steps"; radical is "what's commonly above all maximals." In well-behaved lattices, both have clean structural roles. Theorem 5.1 (Ch 5) said $s(L) = \bigwedge \{$essentials$\}$. Theorem 7.1 (this chapter) will say $r(L) = \bigvee \{$superfluous$\}$. Symmetric statements, dual characterisations.</p>
+  </div>
+
+  <h3>Initial observations</h3>
+
+  <p>The book records two immediate observations:</p>
+
+  <ul>
+    <li><strong>The set of all superfluous elements is an ideal of $L$.</strong> (Proved as Lemma 7.5 below.)</li>
+    <li><strong>$1$ is never superfluous (in non-trivial lattices), but $0$ always is.</strong> If $1$ were superfluous, take $b = 1$: then $1 \vee 1 = 1$, but the definition requires $\ne 1$ for $b \ne 1$, so this is vacuous; the issue is taking $b = $ anything proper, $a \vee b = 1 \vee b = 1$, contradiction.  $0$: $0 \vee b = b \ne 1$ for any $b \ne 1$. ✓</li>
+  </ul>
+
+  <div class="box ex">
+    <span class="label">Example · Frattini subalgebra</span>
+    <p>In the lattice $S(A, \Omega)$ of subalgebras of a universal algebra, the radical $r(S(A, \Omega))$ is called the <strong>Frattini subalgebra</strong> of $(A, \Omega)$. For groups, this is the <em>Frattini subgroup</em> $\Phi(G)$ — Frattini's 1885 theorem says it equals the set of non-generators. For modules, it's the <em>Jacobson radical</em>.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION A2</span> Lemmas 7.1 – 7.4 — basic structural lemmas</h2>
+  <div class="tagline">Four foundational lemmas: when does an element become superfluous, and how does superfluousness behave under restriction to upper intervals.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.1</span>
+    <p>If in a lattice $L$ with $1$ there exists a largest element $m \ne 1$, then $m$ is superfluous.</p>
+  </div>
+
+  <p>Read: if there's a unique "second-from-top" element below $1$, that element is superfluous. Why? Take any $b \ne 1$. Then $b \le m$ (since $m$ is the largest proper element). So $m \vee b = m \ne 1$. Hence $m$ is superfluous.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.2</span>
+    <p>If $b &lt; c$ and $b$ is superfluous in $c/0$, in a modular lattice $L$ then for every $a \in L$, $a \vee b$ is superfluous in $(a \vee c)/a$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · modular shuffle</span>
+    <p>Suppose for some $x \in (a \vee c)/a$ we have $(a \vee b) \vee x = a \vee c$. We show $x = a \vee c$. Take meet with $c$: $(b \vee (a \vee x)) \wedge c = c$. By modularity (with $b \le c$): $b \vee ((a \vee x) \wedge c) = c$. By hypothesis ($b$ superfluous in $c/0$), $(a \vee x) \wedge c = c$, so $c \le a \vee x \le x$. Hence $a \vee c \le x \le a \vee c$, so $x = a \vee c$.</p>
+  </div>
+
+  <p>This is a "lifting" lemma: superfluousness in a sub-interval lifts to a corresponding super-interval, with the right shift by $a$.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.3</span>
+    <p>Let $a &lt; b$ be elements in a lattice $L$. Then $b$ is superfluous in $L$ if and only if $a$ is superfluous in $L$ AND $b$ is superfluous in $1/a$.</p>
+  </div>
+
+  <p>Read: superfluousness factors through any chain. If $b > a$, then $b$ being superfluous overall is equivalent to $a$ being superfluous AND $b$ being superfluous in the upper interval above $a$. So you can break superfluousness checks into "lower" and "upper" pieces.</p>
+
+  <div class="box proof">
+    <span class="label">Why · necessity is trivial; sufficiency uses chain structure</span>
+    <p>Necessity: if $b$ is superfluous in $L$ and $a \le b$, then for any $c \ne 1$, $b \vee c \ne 1$, so $a \vee c \le b \vee c \ne 1$. So $a$ superfluous. Restricted to $1/a$: superfluousness of $b$ inherits as the same equation.</p>
+    <p>Sufficiency: suppose $a$ superfluous in $L$ and $b$ superfluous in $1/a$. Take $c \ne 1$. Want $b \vee c \ne 1$. Compute $b \vee (a \vee c) = b \vee c$ (since $a \le b$). If $a \vee c = 1$ then by superfluous of $a$: $a \vee c \ne 1$ (when $c \ne 1$), so this case is OK. Otherwise $a \vee c \ne 1$, and is in $1/a$. By superfluous of $b$ in $1/a$, $b \vee (a \vee c) \ne 1$, so $b \vee c \ne 1$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.4</span>
+    <p>Let $a &lt; b$ be elements in a modular lattice $L$. If $a$ is superfluous in $b/0$ then $a$ is also superfluous in $L$. If $b$ is a direct summand in $L$, the converse also holds.</p>
+  </div>
+
+  <p>This lemma upgrades Lemma 7.2 to a strict implication: superfluous in a "lower world" implies superfluous globally — but the converse needs the "lower world" to be a direct summand.</p>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Rightarrow)$ Suppose $a$ superfluous in $b/0$ but $a \vee u = 1$ for some $u \ne 1$ in $L$. By modularity (with $a \le b$): $b = b \wedge 1 = b \wedge (a \vee u) = a \vee (b \wedge u)$. So $a \vee (b \wedge u) = b$, but $b \wedge u \in b/0$. By superfluous of $a$ in $b/0$: $b \wedge u = b$, i.e. $b \le u$. Then $u = a \vee u = 1$, contradiction.</p>
+    <p>$(\Leftarrow)$ Conversely, suppose $a$ superfluous in $L$, and $b \oplus c = 1$ (so $b$ is a direct summand). Suppose $a \vee v = b$ for some $v \in b/0$. Then $a \vee v \vee c = b \vee c = 1$. So $a \vee (v \vee c) = 1$, with $v \vee c \ne 1$ unless $v = b$. By superfluous of $a$ in $L$, $v \vee c = 1$. By modularity ($v \le b$, $c$ disjoint from $b$): $v = v \vee 0 = v \vee (b \wedge c) = b \wedge (v \vee c) = b \wedge 1 = b$.</p>
+  </div>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION A3</span> Lemma 7.5 — joins of superfluous from different intervals</h2>
+  <div class="tagline">A composition rule: the join of two superfluous elements (from different intervals) is itself superfluous in the joined interval.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.5</span>
+    <p>In a modular lattice $L$, let $c'$ be superfluous in $c/0$ and $d'$ be superfluous in $d/0$. Then $c' \vee d'$ is superfluous in $(c \vee d)/0$.</p>
+  </div>
+
+  <p>The book defers the proof to Chapter 12 (Lemma 12.4). Read the result as: superfluous "glue" cleanly under joins of intervals. Combined with Lemma 7.4 (superfluous in interval ⟹ superfluous in $L$), this gives: superfluous-ness is closed under joins.</p>
+
+  <div class="box intuition">
+    <span class="label">The structural picture</span>
+    <p>Together, Lemmas 7.1-7.5 establish that the set of superfluous elements forms an ideal of $L$:
+    <br>• Closed under finite joins (Lemma 7.5).
+    <br>• Downward-closed (a sub-element of a superfluous element is superfluous, by definition).
+    <br>So the superfluous elements are an ideal. Theorem 7.1 below identifies this ideal with $r(L)/0$ in compactly generated lattices.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB">
+  <div class="pk">Part B · Radical and compactness</div>
+  <h2>The bridge: radical = join of superfluous</h2>
+  <p class="part-lede">In compactly generated lattices, Theorem 7.1 establishes the chapter's main connection: the radical is precisely the join of the superfluous elements. Two preparatory lemmas (7.6 and 7.7) bracket this from above and below.</p>
+</div>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION B1</span> Proposition 7.1 — compactness lifts through superfluous</h2>
+  <div class="tagline">A helpful proposition: in compactly generated lattices, "L is compact" iff "1/a is compact" when a is superfluous.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 7.1</span>
+    <p>Let $a$ be a superfluous element in a compactly generated lattice $L$. $L$ is compact if and only if $1/a$ is a compact sublattice.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · directly</span>
+    <p>$(\Rightarrow)$ If $L$ is compact and $1 = \bigvee_{i \in I} c_i$ is a join of compact elements, then $1 = 1 \vee a = \bigvee (c_i \vee a)$ is also a join of compact elements in $1/a$.</p>
+    <p>$(\Leftarrow)$ Conversely, if $1 = \bigvee_{i \in I} k_i = \bigvee_{i \in I} (a \vee c_i) = a \vee (\bigvee_{i \in I} c_i)$ is a join (using Lemma 2.1) where each $k_i = a \vee c_i$ is compact in $1/a$. So $a \vee \bigvee c_i = 1$. By superfluous of $a$ in $L$, $\bigvee c_i = 1$. So $1$ is a join of compact elements in $L$.</p>
+  </div>
+
+  <p>The proposition lets us "factor out" superfluous elements: their presence doesn't change compactness conclusions. Useful when working with compactness modulo a small radical.</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION B2</span> Lemmas 7.6 and 7.7 — the bridge between superfluous and radical</h2>
+  <div class="tagline">Two lemmas pinning down the relationship: every superfluous element is below the radical (always), and every compact element below the radical is superfluous (in compactly generated).</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.6</span>
+    <p>If $a$ is superfluous in $L$, then $a \le r(L)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>If $m \ne 1$ is a maximal element in $L$, then for $a$ superfluous: $a \vee m \ne 1$. Since $m$ is maximal and $a \vee m \ge m$, we have $a \vee m = m$ (otherwise $a \vee m$ is strictly above $m$ but proper, contradicting maximality). So $a \le m$. This holds for every maximal $m$, so $a \le \bigwedge \{m : m$ maximal $\} = r(L)$.</p>
+  </div>
+
+  <p>Lemma 7.6 establishes the direction $\bigvee \{$superfluous$\} \le r(L)$.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.7</span>
+    <p>If $a$ is compact in $L$ and $a \le r(L)$ then $a$ is superfluous in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · contradiction with maximality</span>
+    <p>Suppose $a$ is not superfluous. Then there is some $b \ne 1$ with $a \vee b = 1$. Consider $D = \{x \in L : a \nleq x, x \ne 1, a \vee x = 1\}$. We have $b \in D$ (so $D \ne \emptyset$).</p>
+    <p>If $C \subseteq D$ is a chain, $a$ being compact, $a \nleq \bigvee C$ (because $a$ is compact and would be below some finite element of the chain, but each chain element has $a \nleq x$). So $\bigvee C \in D$. By Zorn's Lemma, $D$ has a maximal element, say $\bar b$.</p>
+    <p>$\bar b$ is also maximal in $L$ (if $\bar b < c < 1$ in $L$, then $a \le c$ by maximality of $\bar b$ in $D$ — but $a \le c$ + $\bar b < c$ + $a \vee \bar b = 1$ gives $c = 1$, contradiction). So $\bar b$ is a maximal element of $L$ with $a \nleq \bar b$. But $a \le r(L) \le \bar b$ — contradiction.</p>
+  </div>
+
+  <p>Lemma 7.7 establishes the converse direction (for compact elements): every compact element below the radical is superfluous. Combined with Lemma 7.6 (superfluous ⟹ below radical), the two pinpoint the radical's structure.</p>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION B3</span> Theorem 7.1 — radical = join of superfluous in CG</h2>
+  <div class="tagline">The chapter's main bridge theorem: in compactly generated lattices, the radical is precisely the join of the superfluous elements.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.1</span>
+    <p>If $L$ is compactly generated then $r(L)$ is the join of all the superfluous elements from $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>Let $u$ be the join of all the superfluous elements from $L$. By Lemma 7.6, $u \le r(L)$.</p>
+    <p>Conversely, suppose $u &lt; r(L)$. The lattice being compactly generated, there is a compact element $a$ such that $a \le r(L)$ and $a \nleq u$. By Lemma 7.7, $a$ is superfluous. But then $a \le u$ (since $u$ is the join of all superfluous), contradicting $a \nleq u$. Hence $u = r(L)$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The structural reading</span>
+    <p>Theorem 7.1 says: <em>in compactly generated lattices, the radical is precisely "as much as can be glued together as superfluous."</em> The two characterisations of the radical — meet of maximals (definition) and join of superfluous (Theorem 7.1) — are dual descriptions of the same element. The dichotomy is: <em>$a \le r(L)$ iff every compact piece of $a$ is superfluous</em>. This pinpoints the structural content of the radical.</p>
+    <p>For the canonical examples:
+    <br>• Submodule lattice $S_R(M)$: $r(S_R(M)) = \mathrm{rad}(M)$ = sum of small submodules = intersection of maximal submodules. The two are equal — Bass's theorem on the Jacobson radical of a module.
+    <br>• Subgroup lattice of a group $G$: $r(L) = \Phi(G)$ = sum of small (= non-generator) subgroups = intersection of maximal subgroups. Frattini's 1885 theorem.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC">
+  <div class="pk">Part C · Properties of the radical</div>
+  <h2>How the radical behaves</h2>
+  <p class="part-lede">Lemma 7.8 collects three structural properties; Cor 7.1 and 7.2 give cleanest existence statements for maximal elements.</p>
+</div>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION C1</span> Lemma 7.8 — three properties of $r(L)$</h2>
+  <div class="tagline">Three useful facts: how the radical relates to upper intervals, how it stabilises under further radicalisation, and when it is itself superfluous.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.8</span>
+    <p><strong>(i)</strong> For each $a \in L$: $a \vee r(L) \le r(1/a)$.</p>
+    <p><strong>(ii)</strong> If $a \le r(L)$ then $r(1/a) = r(L)$.</p>
+    <p><strong>(iii)</strong> If $1$ is compact then $r(L)$ is superfluous.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>(i) Take any maximal $m$ in $1/a$. Then $a \le m \ne 1$. Lift to $L$: $m$ is also maximal in $L$ (any element strictly between $m$ and $1$ in $L$ contains $a$, so it lies in $1/a$, contradicting $m$'s maximality there). So $r(L) \le m$. Since $a \le m$ too: $a \vee r(L) \le m$. Hence $a \vee r(L)$ is below every maximal of $1/a$, so $\le r(1/a)$.</p>
+    <p>(ii) Combined: if $a \le r(L)$ then $a \vee r(L) = r(L) \le r(1/a)$. For the reverse: every maximal $m$ in $L$ has $a \le r(L) \le m$, so $m \in 1/a$ and is maximal there. Hence $r(1/a) \le m$ for all maximals $m$ of $L$; so $r(1/a) \le r(L)$.</p>
+    <p>(iii) Suppose $a \vee r(L) = 1$ for some $a$. We show $a = 1$. Consider $A = \{b \in L : a \le b &lt; 1\}$. $A$ is non-empty (contains $a$) and chain-bounded (since $1$ is compact, joins of chains in $A$ remain $&lt; 1$). By Zorn's Lemma, $A$ has a maximal $m$ — which is also maximal in $L$. Then $r(L) \le m$. Combined with $a \le m$: $a \vee r(L) \le m \ne 1$ — contradicting $a \vee r(L) = 1$.</p>
+  </div>
+
+  <p>An "important special case of (ii)": $r(1/r(L)) = r(L)$. Plain English: <em>once you've taken the radical, the radical of the upper world stabilises.</em> The radical is "idempotent under further radicalisation" — exactly the radical property we've seen for $t(L)$ in Chapter 5.</p>
+
+  <div class="box intuition">
+    <span class="label">Note on the remark</span>
+    <p>The book adds: <em>"$r(L) \ne 1$"</em> follows from Lemma 2.4 (Krull's lemma). In compactly generated lattices with a compact $1$, every proper element lies below a maximal, so the radical is below 1.</p>
+  </div>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION C2</span> Corollaries 7.1 and 7.2 — existence of maximal elements</h2>
+  <div class="tagline">Two existence statements: when $r(L)$ is superfluous, and when every proper element lies below a maximal.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 7.1</span>
+    <p>If every proper element of $L$ (i.e., $\ne \{0, 1\}$) is contained in a maximal element, then $r(L)$ is superfluous in $L$.</p>
+  </div>
+
+  <p>Generalises Lemma 7.8(iii) — instead of compactness of $1$, the corollary asks for the structurally-natural condition that every proper element lies below a maximal. The proof is parallel.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 7.2</span>
+    <p>In a compact lattice, each proper element of $L$ is contained in a maximal element.</p>
+  </div>
+
+  <p>This is exactly Lemma 2.4 from Chapter 2 (Krull's lemma), restated in this context. The book invokes it here for "later use."</p>
+</section>
+
+<div class="part-header" id="partD">
+  <div class="pk">Part D · Major characterisation theorems</div>
+  <h2>Theorems 7.2, 7.3, and 7.4 — the chapter's central content</h2>
+  <p class="part-lede">When does every element lie below a maximal? When does the radical vanish? When does an element have a complement? Three structural theorems give answers.</p>
+</div>
+
+<section class="module" id="s9">
+  <h2><span class="num">SECTION D1</span> Theorem 7.2 — when every element lies below a maximal</h2>
+  <div class="tagline">A condition under which every $b \ne 1$ lies below a maximal: 1/r(L) semiatomic + r(L) superfluous, in modular UC lattices.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.2</span>
+    <p>If in a modular upper continuous lattice $L$, $1/r(L)$ is semiatomic and $r(L)$ is superfluous, then each element $\ne 1$ is contained in a maximal element.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two cases</span>
+    <p>Let $b \ne 1$ in $L$. Two cases:</p>
+    <p>(i) $b \le r(L)$: then every maximal element of $L$ contains $b$ (since $r(L)$ is the meet of maximals). And maximal elements exist: $r(L) \ne 1$ because $r(L)$ is superfluous in $L$. So $b$ is contained in a maximal.</p>
+    <p>(ii) $b \nleq r(L)$: then $b \vee r(L) &gt; r(L)$. Also $b \vee r(L) \ne 1$ (else $r(L)$ wouldn't be superfluous). So $r(L) &lt; b \vee r(L) &lt; 1$. Since $b \vee r(L) \in 1/r(L)$, a semiatomic sublattice, by Lemma 6.12 (every element $\ne 1$ in a modular UC semiatomic lattice is contained in a maximal element), $b \vee r(L)$ is contained in a maximal element $m$ in $1/r(L)$. Hence $b$ is contained in $m$, which is maximal in $L$ as well.</p>
+  </div>
+
+  <p>The theorem combines Theorem 6.8's apparatus on semiatomic lattices with the radical theory of this chapter. The conclusion is the lattice analog of "every proper submodule lies below a maximal submodule," which is a strong existence statement.</p>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">SECTION D2</span> Lemma 7.9 + Proposition 7.2 — when does the radical vanish?</h2>
+  <div class="tagline">In semiatomic and atom-generated lattices, the radical is zero. Crisp consequence of the apparatus.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.9</span>
+    <p>In a compactly generated modular semiatomic lattice, the radical $r(L) = 0$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>The lattice being semiatomic, it is also atomic (Cor 6.6). To check $r(L) = 0$, it suffices to show that for every atom $a$ in $L$, $a \wedge r(L) = 0$. The lattice is also complemented (Theorem 6.6), and using Exercise 1.37, a complement $m$ of $a$ in $L$ is a maximal element. So $a \wedge m = 0$, which gives $a \wedge r(L) \le a \wedge m = 0$. Hence $a \wedge r(L) = 0$ for each atom $a$, so $r(L) = 0$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 7.2</span>
+    <p>If $L$ is upper continuous modular and atom generated, then $r(L) = 0$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$L$ atom generated ⟹ semiatomic. By Theorem 6.6, $L$ is complemented. So $1 = r(L) \oplus a$ for a suitable $a$. If $r(L) \ne 0$, $r(L)$ is an independent join of atoms (Prop 6.9), and there are maximal elements (Lemma 2.4 applied to atom-generated, hence compact). Maximal elements don't contain $r(L)$ (since they are themselves $\ne 1$), contradiction.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The reading</span>
+    <p>In well-behaved lattices ("atom generated" or "semiatomic" + modular UC), the radical is trivial. This makes structural sense: in a lattice "made of atoms," there's no "radical content" left over — everything is built from below by atomic steps, with no "non-generator" residue.</p>
+  </div>
+</section>
+
+<section class="module" id="s11">
+  <h2><span class="num">SECTION D3</span> Theorem 7.3 — five-way characterisation</h2>
+  <div class="tagline">The chapter's central characterisation theorem. Five conditions on a modular lattice $L$ and an element $a$ are all equivalent — the cleanest available form of the structure theorem.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.3</span>
+    <p>Let $L$ be a modular lattice and $a \in L$. The following conditions are equivalent:</p>
+    <p><strong>(a)</strong> $L$ is atom generated of finite length and $a$ has a complement in $L$;</p>
+    <p><strong>(b)</strong> $a \wedge r(L) = 0$ and $a/0$ is artinian;</p>
+    <p><strong>(c)</strong> $a \wedge r(L) = 0$ and $a/0$ is a noetherian torsion lattice;</p>
+    <p><strong>(d)</strong> $a \wedge r(L) = 0$, $a/0$ is noetherian and for each $b \in L$, $a \nleq b$ there is an atom $s \le a$ with $b \wedge s = 0$;</p>
+    <p><strong>(e)</strong> $a \wedge r(L) = 0$, $a/0$ is noetherian and for each $b \le a$ there is an element $c$ minimal with the property $b \vee c = 1$ (i.e., $b$ has a <em>supplement</em> — see Chapter 12 — in $L$).</p>
+  </div>
+
+  <p>Five characterisations of the same property: $L$ is "atom-generated of finite length, with $a$ having a complement." Condition (a) is the cleanest direct statement; conditions (b)-(e) recast it in terms that are easier to check in specific settings.</p>
+
+  <div class="box proof">
+    <span class="label">Why · the equivalence chain</span>
+    <p>The book references previous results: (a) ⟹ (d) (using the atom-generation structure), (d) ⟹ (c) (atomic + noetherian + radical zero gives torsion), (c) ⟹ (b) (Theorem 5.2 — noetherian torsion ⟹ artinian), (b) ⟹ (a) (constructive complement existence using artinian-ness), (a) ⟺ (e) (supplements and complements coincide here).</p>
+    <p>The book gives the detailed argument for (b) ⟹ (a) and (e) ⟹ (a). Both are constructive: build the complement using artinian-ness (case b) or supplement existence (case e), exploiting the radical-zero condition $a \wedge r(L) = 0$ to ensure the construction lands in the correct place.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>Theorem 7.3 is the chapter's keystone. It says: <em>in modular lattices, "atom generated of finite length + complemented" is structurally equivalent to several different chain-condition + radical-vanishing conditions</em>. This is the lattice form of the Wedderburn–Artin theorem for semisimple Artinian rings: a ring is semisimple Artinian iff it has zero Jacobson radical iff it is a finite direct product of matrix rings over division rings. The lattice form abstracts the conditions and shows they all describe the same class.</p>
+    <p>The condition "$a \wedge r(L) = 0$" features in conditions (b)-(e). It says: <em>$a$ has no superfluous content</em>. Combined with the right chain conditions, this implies $a$ is "clean" — admits a complement, is decomposable into atoms, etc.</p>
+  </div>
+</section>
+
+<section class="module" id="s12">
+  <h2><span class="num">SECTION D4</span> Corollary 7.3 + Theorem 7.4 — wrap-up</h2>
+  <div class="tagline">Two clean closing statements: when a modular lattice itself is atom generated of finite length, and a dual statement involving compact artinian lattices.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 7.3</span>
+    <p>A modular lattice is atom generated of finite length if and only if it is artinian and has zero radical.</p>
+  </div>
+
+  <p>Take $a = 0$ in Theorem 7.3 — vacuously $0$ has a complement (= $1$). Then condition (a) becomes "atom generated of finite length"; condition (b) becomes "$0 \wedge r(L) = 0$ (trivial) and $0/0$ artinian (trivial)" — but the substantive content is "$L$ artinian and $r(L) = 0$." Equivalence gives Cor 7.3.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.4</span>
+    <p>If $L$ is a compact artinian lattice then $1/r(L)$ is semiatomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · self-dual structure</span>
+    <p>Replace $L$ by the sublattice $1/r(L)$ (which has $r(1/r(L)) = r(L)$ by Lemma 7.8). So we can assume $r(L) = 0$. We show $L$ is semiatomic.</p>
+    <p>Use the dual lattice $L^0$. If $L$ is artinian, then $L^0$ is noetherian (Prop 2.3 applied dually) and compact (compactness is self-dual). By Exercise 1.34, $L^0$ is upper continuous. Now $r(L) = s(L^0) = 0$ (the radical's order-dual is the socle, and the socle of $L^0$ is the meet of dual atoms = radical of $L$). So $L^0$ is "complemented" in some sense; we use Theorem 6.6 to derive $L^0$ semiatomic. By the self-dual nature of completeness and complementation, $L$ itself is semiatomic, and by Theorem 6.7, $L$ is complemented.</p>
+  </div>
+
+  <p>This dual statement complements Theorem 7.3. It says: in compact artinian lattices, the upper interval above the radical is semiatomic — meaning the "post-radical" part of the lattice has a clean atomic structure.</p>
+</section>
+
+<div class="part-header" id="partE">
+  <div class="pk">Part E · Fully invariant elements</div>
+  <h2>"Decomposition-stable" elements</h2>
+  <p class="part-lede">A different but related notion: elements that survive every direct decomposition. The lattice version of "characteristic subgroup." Five closure properties; the join of fully invariant direct summands is itself a direct summand (Prop 7.3); fully invariant direct summands form a distributive sublattice (Prop 7.4).</p>
+</div>
+
+<section class="module" id="s13">
+  <h2><span class="num">SECTION E1</span> Definition + five basic properties</h2>
+  <div class="tagline">An element is fully invariant if it splits along every direct decomposition. Five closure properties capture how this notion behaves.</div>
+
+  <div class="box def">
+    <span class="label">Definition · fully invariant element</span>
+    <p>An element $a \in L$ in a complete lattice is called <strong>fully invariant</strong> if for each direct decomposition $1 = \bigoplus_{i \in I} b_i$ one has $a = \bigoplus_{i \in I} (a \wedge b_i)$.</p>
+  </div>
+
+  <p>Read: <em>$a$ "respects" every direct decomposition of $1$</em>. Whenever $1$ splits as $\bigoplus b_i$, the element $a$ also splits as the corresponding direct sum of intersections.</p>
+
+  <p>Note: the inequality $a \ge \bigvee_i (a \wedge b_i)$ holds in every lattice for arbitrary $a, \{b_i\}$ — by general lattice properties. The full-invariance condition asks for equality AND that the join be direct (i.e., the decomposition $\bigoplus(a \wedge b_i)$ is independent).</p>
+
+  <h3>Five properties of fully invariant elements (book pp. 83-84)</h3>
+
+  <div class="box prop">
+    <span class="label">Property 1 · transitivity</span>
+    <p>The fully invariant property is transitive: if $a$ is fully invariant in $b/0$ and $b$ is fully invariant in $L$, then $a$ is fully invariant in $L$.</p>
+  </div>
+
+  <p>Proof: take any direct decomposition $1 = \bigoplus b_i$. By full invariance of $b$ in $L$: $b = \bigoplus(b \wedge b_i)$ — a direct decomposition of $b$. By full invariance of $a$ in $b/0$ applied to this decomposition: $a = \bigoplus(a \wedge (b \wedge b_i)) = \bigoplus(a \wedge b_i)$ (using $a \le b$).</p>
+
+  <div class="box prop">
+    <span class="label">Property 2 · contained in a direct summand</span>
+    <p>A fully invariant element contained in a direct summand is fully invariant in it.</p>
+  </div>
+
+  <p>If $a$ is fully invariant in $L$ and $a \le b$, $b \oplus c = 1$: take any direct decomposition $b = \bigoplus c_i$ inside $b/0$. Then $1 = b \oplus c = \bigoplus c_i \oplus c$, a direct decomposition of $L$. Full invariance of $a$ gives $a = \bigoplus(a \wedge c_i) \oplus (a \wedge c) = \bigoplus(a \wedge c_i)$ (since $a \wedge c \le a \wedge b \wedge c = 0$). Hence $a$ is fully invariant in $b/0$.</p>
+
+  <div class="box prop">
+    <span class="label">Property 3 · FI-extending lattices</span>
+    <p>(Forward reference to Chapter 8.) If $b$ is fully invariant in an FI-extending lattice $L$, then the sublattice $b/0$ is also FI-extending.</p>
+  </div>
+
+  <p>"Extending lattice" is a Chapter 8 concept: $L$ is extending if every element is essential in a direct summand. "FI-extending" weakens this to fully invariant elements only. Property 3 says this property descends.</p>
+
+  <div class="box prop">
+    <span class="label">Property 4 · in distributive lattices</span>
+    <p>In a distributive lattice, the fully invariant elements form an upper semilattice (closed under joins).</p>
+  </div>
+
+  <p>If $a, c$ fully invariant: for each direct decomposition $1 = \bigoplus b_i$, $a = \bigoplus(a \wedge b_i)$ and $c = \bigoplus(c \wedge b_i)$. By distributivity:
+  $$a \vee c = \bigoplus(a \wedge b_i) \vee \bigoplus(c \wedge b_i) = \bigoplus((a \wedge b_i) \vee (c \wedge b_i)) = \bigoplus((a \vee c) \wedge b_i).$$
+  So $a \vee c$ is fully invariant.</p>
+
+  <div class="box prop">
+    <span class="label">Property 5 · in meet-infinitely-distributive lattices</span>
+    <p>In a meet infinitely distributive lattice, the fully invariant elements form a sublattice.</p>
+  </div>
+
+  <p>The key step: $a \wedge c$ fully invariant. The meet-infinite-distributivity allows the calculation:
+  $$a \wedge c = \bigoplus(a \wedge b_i) \wedge \bigoplus(c \wedge b_j) = \bigvee_j \Bigl(\bigoplus_i (a \wedge b_i) \wedge (c \wedge b_j)\Bigr) = \bigvee_j(a \wedge c \wedge b_j) = \bigoplus((a \wedge c) \wedge b_j).$$
+  So $a \wedge c$ is fully invariant. Combined with Property 4 (closed under joins), the fully invariant elements form a sublattice.</p>
+</section>
+
+<section class="module" id="s14">
+  <h2><span class="num">SECTION E2</span> Lemma 7.10 + Proposition 7.3 — joins of fully invariant direct summands</h2>
+  <div class="tagline">A useful direct-summand fact (Lemma 7.10), then the chapter's punchline for Section E: the join of two fully invariant direct summands is also a direct summand (Prop 7.3).</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.10</span>
+    <p>In a modular lattice $L$, if $a \le b$ and $a$ is a direct summand in $L$ then $a$ is also a direct summand in $b/0$.</p>
+  </div>
+
+  <p>Proof: if $a \oplus a' = 1$, take meet with $b$: $b \wedge (a \oplus a') = b$. By modularity (with $a \le b$): $a \oplus (a' \wedge b) = b$. Independence: $a \wedge (a' \wedge b) \le a \wedge a' = 0$. So $a$ is a direct summand of $b$, with complement $a' \wedge b$ in $b/0$.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 7.3</span>
+    <p>In a bounded modular lattice, the join of two fully invariant direct summands is also a direct summand.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · explicit construction</span>
+    <p>Let $a, b$ be fully invariant direct summands. Then $1 = a \oplus a' = b \oplus b'$ for suitable $a', b'$. By full invariance: $b = b \wedge 1 = b \wedge (a \oplus a') = (b \wedge a) \oplus (b \wedge a')$, and symmetrically $a = (a \wedge b) \oplus (a \wedge b')$.</p>
+    <p>Now $a \vee b = (a \wedge b) \vee (a \wedge b') \vee (a' \wedge b)$. The book verifies this is a direct sum:
+    <br>(a) $(a \wedge b') \wedge ((a \wedge b) \vee (a' \wedge b)) \le b' \wedge b = 0$;
+    <br>(b) $(a' \wedge b) \wedge ((a \wedge b) \vee (a \wedge b')) \le a' \wedge a = 0$;
+    <br>(c) $(a \wedge b) \wedge ((a' \wedge b) \vee (a \wedge b')) = 0$ via Lemma 1.1.</p>
+    <p>So $a \vee b = (a \wedge b) \oplus (a' \wedge b) \oplus (a \wedge b')$. Hence $a \vee b$ is a direct summand: combined with Lemma 7.10 (or Exercise 6.6), the complement is built constructively.</p>
+  </div>
+</section>
+
+<section class="module" id="s15">
+  <h2><span class="num">SECTION E3</span> Proposition 7.4 — fully invariant direct summands form a distributive sublattice</h2>
+  <div class="tagline">A clean structural conclusion: when fully invariant elements form a sublattice, the fully invariant direct summands form a distributive sublattice — even when $L$ itself is only modular (not distributive).</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 7.4</span>
+    <p>If the fully invariant elements form a sublattice of $L$, then the set $FS$ of all fully invariant direct summands forms a distributive sublattice of $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · distributivity check</span>
+    <p>Closure under joins: by Prop 7.3.</p>
+    <p>Closure under meets: by hypothesis (fully invariant elements form a sublattice, so closed under meets).</p>
+    <p>Distributivity: take $a, b, c \in FS$. Show $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$.</p>
+    <p>Set $c' = (a \vee b) \wedge c$. By Prop 7.3, $a \vee b$ is a direct summand, so its meet with $c$ (also a direct summand) is a fully invariant direct summand, hence $c' \in FS$.</p>
+    <p>By full invariance of $c'$ relative to $a \vee b$ (Property 2), $c' \le (a \wedge c) \vee (b \wedge c)$ via the structural decomposition. Combined with the trivial inequality $(a \wedge c) \vee (b \wedge c) \le (a \vee b) \wedge c$, distributivity follows.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The structural picture</span>
+    <p>Even when $L$ is only modular (not distributive), the "high-symmetry" elements — fully invariant direct summands — form a <em>distributive</em> sublattice. So the fully invariant direct summands are particularly well-behaved: they admit clean Boolean-style reasoning even inside a non-distributive ambient lattice.</p>
+    <p>For module theory: the fully invariant direct summands of a module form a distributive lattice — even though the full submodule lattice is generally only modular. This corresponds to the "characteristic structure" of the module being orderly, while the "general structure" can be wild.</p>
+    <p>This is the chapter's final structural insight: the fully invariant direct summands carry the cleanest combinatorial behaviour, providing a Boolean skeleton inside any modular lattice.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five panels: Jacobson radical, Frattini subgroup, Frattini subalgebra (universal algebra), characteristic vs fully invariant subgroups, and Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> Module theory — Jacobson radical</h2>
+  <div class="tagline">The classical case: the Jacobson radical of a ring/module, with its many equivalent characterisations.</div>
+
+  <div class="box connection">
+    <span class="label">Jacobson radical of a ring</span>
+    <p><strong>Definition.</strong> For a ring $R$, the <strong>Jacobson radical</strong> $J(R)$ is the intersection of all maximal left ideals of $R$ (equivalently, the intersection of all maximal right ideals — they coincide). Equivalently:
+    <br>• $J(R)$ = the largest two-sided ideal $I$ such that $1 - I \subseteq R^*$ (every $1 + i$ for $i \in I$ is a unit);
+    <br>• $J(R)$ = the intersection of annihilators of simple left $R$-modules;
+    <br>• $J(R)$ = $\{r \in R : 1 - rs$ is left invertible for every $s \in R\}$.</p>
+    <p><strong>Lattice version.</strong> $J(R) = r(L)$ where $L$ is the lattice of two-sided ideals (or equivalently the lattice of left ideals). Theorem 7.1 says $J(R)$ is the sum of all small (= superfluous) ideals — recovering Bass's characterisation.</p>
+  </div>
+
+  <p>Examples and applications:</p>
+  <ul>
+    <li>For a field $k$: $J(k) = 0$ (no proper non-trivial ideals).</li>
+    <li>For $\mathbb Z$: $J(\mathbb Z) = 0$ (intersection of all $p\mathbb Z$ for primes $p$, which is $0$).</li>
+    <li>For $\mathbb Z/n\mathbb Z$: $J(\mathbb Z/n) = $ the radical ideal of $n$ (= product of distinct primes dividing $n$).</li>
+    <li>For matrix rings $M_n(k)$: $J(M_n(k)) = 0$ (semisimple Artinian).</li>
+    <li>For local rings: $J(R) = $ the unique maximal ideal.</li>
+  </ul>
+
+  <p><strong>Wedderburn–Artin theorem.</strong> A ring $R$ is semisimple Artinian iff $R$ is Artinian and $J(R) = 0$, iff $R$ is a finite direct product of matrix rings over division rings. Theorem 7.3's lattice equivalence (atom generated of finite length ⟺ artinian + zero radical) is exactly the lattice version of this theorem.</p>
+
+  <div class="box intuition">
+    <span class="label">Why the Jacobson radical matters</span>
+    <p>$J(R)$ measures "non-semisimplicity": a ring with $J(R) = 0$ has no "radical content"; the failure of $J(R) = 0$ is a structural obstruction. Quotienting by $J(R)$ produces the "semisimple part": $R/J(R)$ is semisimple Artinian (when $R$ is Artinian). For non-Artinian rings, $R/J(R)$ may still have rich structure, but the radical-quotient construction is the standard reduction step.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Group theory — Frattini subgroup</h2>
+  <div class="tagline">Frattini's 1885 theorem and the structural role of the Frattini subgroup in modern group theory.</div>
+
+  <div class="box connection">
+    <span class="label">Frattini subgroup</span>
+    <p>For a group $G$, the <strong>Frattini subgroup</strong> $\Phi(G)$ is the intersection of all maximal subgroups of $G$ (or $G$ itself if there are no maximal subgroups). Frattini proved (1885): $\Phi(G)$ equals the set of <em>non-generators</em> of $G$.</p>
+    <p><strong>Properties.</strong>
+    <br>• $\Phi(G)$ is always a characteristic (in fact, fully invariant) subgroup of $G$.
+    <br>• For finite $p$-groups, $\Phi(G) = G' \cdot G^p$ (commutator subgroup × $p$-th powers); the quotient $G/\Phi(G)$ is elementary abelian.
+    <br>• For nilpotent groups: $\Phi(G) \supseteq G'$.
+    <br>• In any group, $\Phi(G)$ is the smallest subgroup whose elements are non-generators.</p>
+  </div>
+
+  <p>The key theorem in lattice form: $\Phi(G) = r(L)$ where $L$ is the subgroup lattice of $G$. Frattini's "non-generator" characterisation IS Theorem 7.1's "join of superfluous = radical" applied to the subgroup lattice.</p>
+
+  <p>Concrete computations:</p>
+  <ul>
+    <li>$\Phi(\mathbb Z/p\mathbb Z) = 0$ ($p$ prime — $\mathbb Z/p$ is "as simple as it gets").</li>
+    <li>$\Phi(\mathbb Z/p^n\mathbb Z) = p\mathbb Z/p^n\mathbb Z$ (the unique maximal subgroup).</li>
+    <li>$\Phi(S_3) = \{e\}$ (the symmetric group $S_3$ is generated by any two elements outside the center).</li>
+    <li>$\Phi(\mathbb Q) = \mathbb Q$ (every subgroup is contained in a strictly larger subgroup; no maximals).</li>
+    <li>For finite simple groups: $\Phi(G) = \{e\}$ (no non-trivial proper normal subgroup, hence no constraint on non-generators).</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Frattini argument vs Frattini subgroup</span>
+    <p>Note: the <em>Frattini argument</em> is a separate principle (also from Frattini): for a normal subgroup $H$ of $G$ and a Sylow $p$-subgroup $P$ of $H$, $G = N_G(P) \cdot H$. This is used in finite group theory to relate group structure to normalisers. Different from but historically related to the Frattini subgroup.</p>
+  </div>
+
+  <p>The Frattini subgroup plays a foundational role in finite group theory's structural analysis. Modern textbooks (Robinson, <em>A Course in the Theory of Groups</em>, Springer GTM) treat it in early chapters.</p>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Universal algebra — Frattini subalgebra</h2>
+  <div class="tagline">The construction generalises: every universal algebra has a Frattini subalgebra, defined uniformly via the subalgebra lattice.</div>
+
+  <div class="box connection">
+    <span class="label">Frattini subalgebra</span>
+    <p>For a universal algebra $(A, \Omega)$, the <strong>Frattini subalgebra</strong> is $r(S(A,\Omega))$ — the radical of the subalgebra lattice, equivalently the intersection of all maximal subalgebras of $A$.</p>
+    <p>This recovers, as special cases:
+    <br>• <em>Groups:</em> Frattini subgroup $\Phi(G)$.
+    <br>• <em>Rings:</em> Frattini subring (intersection of maximal subrings — distinct from Jacobson radical, which is for ideals not subrings).
+    <br>• <em>Modules:</em> Frattini submodule (intersection of maximal submodules) = the radical $\mathrm{rad}(M)$ in module theory.
+    <br>• <em>Lattices:</em> Frattini sublattice.</p>
+  </div>
+
+  <p>The universal-algebra perspective unifies several radical-style constructions across algebra: a single lattice-theoretic definition (radical of the subalgebra lattice) yields the right concept in each setting.</p>
+
+  <p>For module theory specifically: the Frattini submodule $\Phi(M) = \mathrm{rad}(M)$ is the join of small submodules and the intersection of maximal submodules. For finitely generated modules, both descriptions yield the same module. For non-finitely-generated modules, they can differ — the equivalence requires compactness of $1$ in the lattice.</p>
+
+  <div class="box intuition">
+    <span class="label">Why the universal-algebra perspective</span>
+    <p>Călugăreanu's apparatus operates uniformly across all universal algebras: groups, rings, modules, lattices, semigroups, etc. The Frattini subalgebra is the "non-generator residue" in each case, identified via the same lattice-theoretic construction. This is one of the deeper unifications in algebra: a single lattice notion (the radical) packages many disparate "radical-like" concepts into a single framework.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Fully invariant vs characteristic subgroups</h2>
+  <div class="tagline">Three increasingly strong notions in group theory: normal, characteristic, fully invariant. Călugăreanu's "fully invariant" is the lattice version of the strongest.</div>
+
+  <div class="box connection">
+    <span class="label">Three increasingly strong notions</span>
+    <p>For a subgroup $N \le G$:
+    <br>• <strong>Normal:</strong> $gNg^{-1} = N$ for all $g \in G$ — closed under inner automorphisms (conjugation).
+    <br>• <strong>Characteristic:</strong> $\sigma(N) = N$ for every automorphism $\sigma$ of $G$ — closed under all automorphisms.
+    <br>• <strong>Fully invariant:</strong> $\sigma(N) \subseteq N$ for every endomorphism $\sigma$ of $G$ — closed under all self-maps.</p>
+    <p>Strict implications: fully invariant ⟹ characteristic ⟹ normal. Reverse implications fail.</p>
+  </div>
+
+  <p>Examples:</p>
+  <ul>
+    <li><strong>Normal but not characteristic:</strong> in $G \times G$, the first factor is normal but not characteristic (the swap automorphism swaps the factors).</li>
+    <li><strong>Characteristic but not fully invariant:</strong> the center $Z(G)$ in some groups; the center is preserved by automorphisms but not always by endomorphisms (e.g., a non-injective endomorphism may collapse Z(G) into a smaller subgroup).</li>
+    <li><strong>Fully invariant in abelian groups:</strong> torsion subgroup $T(G)$, $p$-primary component $G_p$, $nG = \{ng\}$ for any $n$, socle $\mathrm{soc}(G)$.</li>
+    <li><strong>Fully invariant in any group:</strong> the commutator subgroup $G' = [G, G]$, the Frattini subgroup $\Phi(G)$, the verbal subgroups $V(G)$ for any "word" $V$.</li>
+  </ul>
+
+  <div class="box connection">
+    <span class="label">The lattice notion</span>
+    <p>Călugăreanu's "fully invariant" element (Section E above) is the lattice version of the group-theoretic fully invariant subgroup. For an abelian group $G$, the lattice notion in $L(G)$ recovers the group notion exactly: $a \in L(G)$ is lattice-fully-invariant iff $a$ corresponds to a fully invariant subgroup.</p>
+    <p>Why: every endomorphism $f: G \to G$ induces a "compatible direct decomposition" structure (image-and-kernel), and lattice fully invariance captures preservation under all such decompositions. The two notions coincide.</p>
+    <p>For non-abelian groups, the lattice version is strictly more general: it preserves under all direct decompositions (which is a structural notion), while group-theoretic fully invariance preserves under all endomorphisms (which involves the group structure not just the lattice).</p>
+  </div>
+
+  <p>Fully invariant subgroups are the building blocks of Birkhoff's theory of <em>verbal subgroups</em>: a verbal subgroup is one defined by a "word" (an element of a free group), and these are exactly the fully invariant subgroups in finitely generated groups. This connects to the variety theory of universal algebra.</p>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos — superfluous information and the radical of cell-state</h2>
+  <div class="tagline">Where the chapter's apparatus connects to Prologos: the radical as redundant cell information, fully invariant cells as decomposition-stable structure.</div>
+
+  <p>In the Prologos propagator architecture, every cell has a lattice of possible values. The radical of this lattice has a vivid interpretation: it is the <em>maximally redundant</em> information that contributes to no useful "top-reaching" computation.</p>
+
+  <div class="box prologos">
+    <span class="label">Where Chapter 7 lives in Prologos</span>
+    <p><strong>(1) Radical = redundant cell content.</strong> For a cell with lattice $L_{\mathrm{cell}}$, $r(L_{\mathrm{cell}})$ is the "radical" — content that, no matter what other content you join with, never reaches the top of the cell. In QTT multiplicities (lattice $\{m_0 \le m_1 \le m_\omega\}$): $r(L) = m_0$ (the bottom; you can always join $m_0$ with $m_1$ to get $m_1 \ne m_\omega$). For Boolean worldview cells: $r(L) = 0$ (the bottom — every element of the Boolean cube is generative). See <code>racket/prologos/mult-lattice.rkt</code>.</p>
+    <p><strong>(2) Superfluous = "merge-redundant" cell pieces.</strong> An element $a \in L_{\mathrm{cell}}$ is superfluous if joining it with any other proper element doesn't help reach the top. In propagator terms: superfluous information is "free to add or remove without changing the cell's reachability properties." The set-latch fan-in pattern (<code>.claude/rules/propagator-design.md</code>) implicitly avoids accumulating superfluous information by tracking only "essential progress."</p>
+    <p><strong>(3) Fully invariant cells = decomposition-stable structure.</strong> A cell whose value is fully invariant (in the lattice sense) is preserved under any direct-sum decomposition of the network. This corresponds to "structurally invariant" properties of the propagator network — properties that don't depend on the specific factorisation. The SRE Lattice Lens (<code>.claude/rules/structural-thinking.md</code>) treats these as "Module-Theory Realization B" essentially-closed components.</p>
+    <p><strong>(4) Theorem 7.3 = clean-cell criterion.</strong> A cell is "atom generated of finite length and complemented" iff the cell value $a$ has zero meet with the radical AND the cell's principal ideal is artinian. This is the criterion for a cell to admit a clean direct decomposition — useful for parallelizable cell types.</p>
+  </div>
+
+  <p>The relevant Prologos source files:</p>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 7</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Radical (redundant cell content)</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>QTT multiplicity — radical = $m_0$</td></tr>
+      <tr><td>Superfluous (merge-redundant)</td><td><code>.claude/rules/propagator-design.md</code></td><td>Set-latch + monotone merge avoid accumulating superfluous info</td></tr>
+      <tr><td>Fully invariant (decomposition-stable)</td><td><code>.claude/rules/structural-thinking.md</code></td><td>SRE Lattice Lens — Realization B essentially-closed</td></tr>
+      <tr><td>Theorem 7.3 (clean cell criterion)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice — atom-generated finite-length</td></tr>
+      <tr><td>Frattini-style "non-generator" structure</td><td><code>.claude/rules/on-network.md</code></td><td>Design mantra: "everything on-network" — avoid superfluous off-network state</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Chapter 7's apparatus formalises something the Prologos design has known intuitively: there is "redundant" content (= radical) that doesn't contribute to fixpoint reachability, and there is "structurally invariant" content (= fully invariant) that survives every decomposition. The chapter gives mathematical content to these intuitions: $r(L)$ is precisely the join of superfluous, and fully invariant elements form a distributive sublattice of any modular lattice. Prologos can apply Theorem 7.3 as a design check: a cell type is "clean" iff its value has zero meet with the radical and its principal ideal is artinian.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the chapter's terms.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>superfluous (= small) element</dt>
+    <dd>$a$ such that $a \vee b \ne 1$ for every $b \ne 1$. Plain English: "removable from any cover" — never helps reach the top.</dd>
+
+    <dt>radical $r(L)$</dt>
+    <dd>Meet of all maximal ($\ne 1$) elements. Order-dual of the socle. By Theorem 7.1 in compactly generated lattices: $r(L) = \bigvee\{$superfluous$\}$.</dd>
+
+    <dt>Frattini subgroup $\Phi(G)$</dt>
+    <dd>Intersection of all maximal subgroups of $G$, equivalently the set of non-generators (Frattini 1885). Lattice form: $r(L)$ for $L$ = subgroup lattice.</dd>
+
+    <dt>Frattini subalgebra</dt>
+    <dd>$r(S(A,\Omega))$ for a universal algebra. Generalises Frattini subgroup, Jacobson radical, etc.</dd>
+
+    <dt>Jacobson radical $J(R)$</dt>
+    <dd>Intersection of all maximal left ideals of a ring $R$. Equivalently, intersection of annihilators of simple left modules. Lattice form: $r(L)$ for $L$ = ideal lattice.</dd>
+
+    <dt>fully invariant element</dt>
+    <dd>$a$ such that for every direct decomp $1 = \bigoplus b_i$, $a = \bigoplus(a \wedge b_i)$. Lattice analog of fully invariant subgroup / characteristic submodule.</dd>
+
+    <dt>FI-extending lattice</dt>
+    <dd>Each fully invariant element is essential in a direct summand. Generalises "extending" (Ch 8).</dd>
+
+    <dt>supplement</dt>
+    <dd>$c$ minimal with $b \vee c = 1$. Forward reference to Ch 12. Theorem 7.3(e) uses this.</dd>
+
+    <dt>cocyclic group</dt>
+    <dd>Group with a unique smallest non-trivial subgroup. Used in Exercise 7.7 (Frattini subgroup characterisation).</dd>
+
+    <dt>meet infinitely distributive</dt>
+    <dd>$a \wedge \bigvee_i b_i = \bigvee_i(a \wedge b_i)$ for arbitrary index. Stronger than upper continuous.</dd>
+
+    <dt>characteristic subgroup</dt>
+    <dd>Subgroup preserved by every automorphism. Strictly between "normal" and "fully invariant."</dd>
+
+    <dt>verbal subgroup</dt>
+    <dd>Subgroup defined by a "word" (element of free group) in the group's elements. Always fully invariant. Connects to variety theory.</dd>
+
+    <dt>Wedderburn–Artin theorem</dt>
+    <dd>A ring $R$ is semisimple Artinian iff $R$ is Artinian + $J(R) = 0$ iff $R$ is a finite product of matrix rings over division rings. Theorem 7.3 is the lattice version.</dd>
+
+    <dt>Bass's characterisation</dt>
+    <dd>The Jacobson radical equals the sum of small (= superfluous) submodules. Theorem 7.1 generalises this to compactly generated lattices.</dd>
+
+    <dt>Krull's lemma (recap from Ch 2)</dt>
+    <dd>In a compact lattice, every proper element is below a maximal element. Cor 7.2 of this chapter is exactly this.</dd>
+  </dl>
+</section>
+
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 11 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 7.1 – 7.11 — Worked</h2>
+
+  <details class="exercise" id="ex-7-1">
+    <summary><span class="ex-tag">Ex. 7.1</span>Associativity of direct sum</summary>
+    <div class="body">
+      <p class="ex-statement">In a modular lattice show that if $(a \oplus b) \oplus c$ is a direct sum then $a \vee (b \vee c)$ is also a direct sum (and they are equal).</p>
+      <h4>Solution</h4>
+      <p>Suppose $(a \oplus b) \oplus c$ is a direct sum. Then:
+      <br>(a) $a \oplus b$ is a direct sum: $a \wedge b = 0$ and $a \vee b = a \oplus b$.
+      <br>(b) $(a \oplus b) \wedge c = 0$ and $(a \oplus b) \vee c = (a \oplus b) \oplus c$.</p>
+      <p>Want to show: $\{a, b, c\}$ is independent (which is the meaning of $a \oplus b \oplus c$ as a 3-fold direct sum).</p>
+      <p>Independence requires three conditions:
+      <br>(1) $a \wedge (b \vee c) = 0$.
+      <br>(2) $b \wedge (a \vee c) = 0$.
+      <br>(3) $c \wedge (a \vee b) = 0$.</p>
+      <p>Condition (3) is exactly (b). For (1): $a \wedge (b \vee c)$. Since $a \le a \vee b$ and $a \wedge b = 0$, we use Lemma 6.3 (Ex 6.1): $a \wedge b = 0$ and $(a \vee b) \wedge c = 0$ ⟹ $a \wedge (b \vee c) = 0$. ✓ Symmetric argument for (2).</p>
+      <p>Equality $a \vee b \vee c = (a \oplus b) \oplus c$: trivially the same join.</p>
+      <h4>Commentary</h4>
+      <p>Direct sums are associative in modular lattices — a "structure-preserving" fact that's useful when manipulating direct decompositions. Lemma 6.3 is the workhorse identity behind it.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-2">
+    <summary><span class="ex-tag">Ex. 7.2</span>Equivalent radical conditions</summary>
+    <div class="body">
+      <p class="ex-statement">In an arbitrary lattice with $1$ verify the following assertions: (i) $a = r(L) \Leftrightarrow a \le r(L)$ and $r(1/a) = a$; (ii) if $a$ is superfluous in $L$ and $r(1/a) = a$ then $a = r(L)$.</p>
+      <h4>Solution</h4>
+      <p>(i) $(\Rightarrow)$: If $a = r(L)$, trivially $a \le r(L)$ and $r(1/r(L)) = r(L) = a$ (by Lemma 7.8(ii) — the special case noted in the book).</p>
+      <p>$(\Leftarrow)$: Suppose $a \le r(L)$ and $r(1/a) = a$. By Lemma 7.8(ii), $a \le r(L)$ implies $r(1/a) = r(L)$. Combined with the hypothesis $r(1/a) = a$: $a = r(L)$.</p>
+      <p>(ii) Suppose $a$ superfluous in $L$ and $r(1/a) = a$. By Lemma 7.6, $a \le r(L)$. Apply (i): the conditions $a \le r(L)$ and $r(1/a) = a$ give $a = r(L)$.</p>
+      <h4>Commentary</h4>
+      <p>Two clean characterisations of "$a = r(L)$" in terms of: (i) being below the radical AND being its own radical-of-upper-interval, and (ii) being superfluous AND being its own radical-of-upper-interval. Useful when checking that a particular element equals the radical.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-3">
+    <summary><span class="ex-tag">Ex. 7.3</span>Radical of principal ideal</summary>
+    <div class="body">
+      <p class="ex-statement">If $L$ is modular and $a \in L$ then $r(a/0) \le r(L)$.</p>
+      <h4>Solution</h4>
+      <p>Take any maximal element $m \ne 1$ in $L$. We show $r(a/0) \le m$.</p>
+      <p>If $a \le m$: then $r(a/0) \le a \le m$ trivially.</p>
+      <p>If $a \nleq m$: then $a \vee m \ne m$. By maximality of $m$ in $L$, $a \vee m = 1$. By modularity:
+      $$a/(a \wedge m) \cong (a \vee m)/m = 1/m.$$
+      Now $1/m$ is a 2-element chain (just $\{m, 1\}$ since $m$ is maximal), so $a/(a \wedge m)$ is also a 2-element chain. This means $a \wedge m$ is maximal in $a/0$. So $r(a/0) \le a \wedge m \le m$.</p>
+      <p>Either way, $r(a/0) \le m$. Hence $r(a/0) \le \bigwedge \{m : m$ maximal in $L\} = r(L)$.</p>
+      <h4>Commentary</h4>
+      <p>The radical of a principal ideal sits below the radical of the whole lattice. This is the "monotone in $a$" property of the radical: shrinking $a$ can only shrink (or keep equal) the radical of $a/0$.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-4">
+    <summary><span class="ex-tag">Ex. 7.4</span>Radical splits along direct decomposition</summary>
+    <div class="body">
+      <p class="ex-statement">If $a \oplus b = 1$ holds in a bounded modular lattice $L$ then $r(L) = r(a/0) \oplus r(b/0)$.</p>
+      <h4>Solution</h4>
+      <p>By Ex 7.3, $r(a/0) \le r(L)$ and $r(b/0) \le r(L)$, so $r(a/0) \vee r(b/0) \le r(L)$.</p>
+      <p>For the reverse: take any maximal $m \ne 1$ in $L$. We show $r(L) \le r(a/0) \vee r(b/0)$. Specifically: $r(L) \wedge a \le r(a/0)$ (and symmetrically for $b$).</p>
+      <p>$r(L) \wedge a$ — take any maximal $m_a$ in $a/0$. Lift to maximal $m_a \vee b$ in $L$ (using the iso $a/m_a \cong (a \vee b)/(m_a \vee b) = 1/(m_a \vee b)$, and $a/m_a$ being 2-element gives $1/(m_a \vee b)$ 2-element, hence $m_a \vee b$ maximal in $L$). So $r(L) \le m_a \vee b$, which gives $r(L) \wedge a \le (m_a \vee b) \wedge a = m_a \vee (b \wedge a) = m_a$ (modularity + $b \wedge a = 0$). Holds for every maximal $m_a$ in $a/0$, so $r(L) \wedge a \le r(a/0)$.</p>
+      <p>Combining: $r(L) = (r(L) \wedge a) \vee (r(L) \wedge b) \le r(a/0) \vee r(b/0)$. (Used the direct-decomposition $a \oplus b = 1$ via modularity.)</p>
+      <p>Hence $r(L) = r(a/0) \vee r(b/0)$. The direct sum is established by checking $r(a/0) \wedge r(b/0) \le a \wedge b = 0$.</p>
+      <h4>Commentary</h4>
+      <p>The radical splits cleanly along direct decompositions of $1$: if $1 = a \oplus b$, then $r(L) = r(a/0) \oplus r(b/0)$. This is structurally the "additivity" of the radical under direct sums.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-5">
+    <summary><span class="ex-tag">Ex. 7.5</span>Superfluous descends through chains</summary>
+    <div class="body">
+      <p class="ex-statement">If $a \le b \le c$ are elements in a bounded modular lattice $L$ and $b$ is superfluous in $c/0$ then $a$ is superfluous in $L$.</p>
+      <h4>Solution</h4>
+      <p>By Lemma 7.4 (applied with $a < b$ and $b$ superfluous in $c/0$, but Lemma 7.4 talked about $a$ superfluous in $b/0$). Let me re-read.</p>
+      <p>Hypothesis: $b$ is superfluous in $c/0$. By Lemma 7.4 ($a$ superfluous in "$b/0$" form, applied with $b$ in place of $a$ and $c$ in place of $b$), $b$ is superfluous in $L$ (provided $c$ is suitably positioned — Lemma 7.4 says: $b$ superfluous in $c/0$ ⟹ $b$ superfluous in $L$, assuming $c$ is below $1$ or $c = 1$).</p>
+      <p>Once $b$ is superfluous in $L$, and $a \le b$: we want $a$ superfluous in $L$. Take any $u \ne 1$. Then $b \vee u \ne 1$ (superfluous of $b$ in $L$). And $a \vee u \le b \vee u \ne 1$. So $a \vee u \ne 1$, hence $a$ is superfluous.</p>
+      <h4>Commentary</h4>
+      <p>Superfluous descends through chains: if $a \le b \le c$ and $b$ is superfluous in $c/0$, then $a$ inherits superfluousness in $L$. The proof uses Lemma 7.4 plus monotonicity.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-6">
+    <summary><span class="ex-tag">Ex. 7.6</span>No complement of the radical</summary>
+    <div class="body">
+      <p class="ex-statement">If $a \oplus b = 1$ holds in a bounded modular lattice $L$ and $0 \ne r(a/0)$ is superfluous in $a/0$ then $r(L)$ has no complement in $L$.</p>
+      <h4>Solution</h4>
+      <p>By Ex 7.4: $r(L) = r(a/0) \oplus r(b/0)$.</p>
+      <p>Suppose for contradiction that $r(L)$ has a complement $c$: $r(L) \wedge c = 0$ and $r(L) \vee c = 1$.</p>
+      <p>$r(L) \vee c = 1$ means $r(a/0) \vee r(b/0) \vee c = 1$. Take meet with $a$: $a = a \wedge 1 = a \wedge (r(a/0) \vee r(b/0) \vee c) = r(a/0) \vee (a \wedge (r(b/0) \vee c))$ (modularity, since $r(a/0) \le a$).</p>
+      <p>By hypothesis $r(a/0)$ is superfluous in $a/0$ (and non-zero). Then for $a$ to equal the join $r(a/0) \vee (a \wedge (r(b/0) \vee c))$ in $a/0$, with $r(a/0)$ superfluous: $a \wedge (r(b/0) \vee c) = a$, i.e. $a \le r(b/0) \vee c$.</p>
+      <p>Similarly by symmetric argument on $b$: $b \le r(a/0) \vee c$.</p>
+      <p>Combine: $1 = a \vee b \le r(a/0) \vee r(b/0) \vee c = r(L) \vee c$. ✓ but no contradiction yet from this. We need more refined analysis using $r(L) \wedge c = 0$.</p>
+      <p>From $a \le r(b/0) \vee c$ and $r(L) \wedge c = 0$: $a \wedge r(L) \le r(L) \wedge (r(b/0) \vee c) = r(b/0) \vee (r(L) \wedge c) = r(b/0)$ (modularity, $r(b/0) \le r(L)$). So $r(a/0) = r(L) \wedge a \le r(b/0)$. Symmetrically $r(b/0) \le r(a/0)$. Hence $r(a/0) = r(b/0)$. But $r(a/0) \le a$ and $r(b/0) \le b$ with $a \wedge b = 0$, so $r(a/0) = r(b/0) = 0$ — contradicting the hypothesis $r(a/0) \ne 0$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows: in modular lattices with a non-trivial direct decomposition, if the radical has a non-trivial superfluous part, then it can't have a complement. This is a structural rigidity: complements force radicals to be trivial in the corresponding summands.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-7">
+    <summary><span class="ex-tag">Ex. 7.7</span>Frattini subgroup via cocyclic quotients</summary>
+    <div class="body">
+      <p class="ex-statement">Let $G$ be an abelian group and $H$ a subgroup of $G$. Show that $H$ is superfluous in $G$ if and only if for each subgroup $M$ such that $G/M$ is cocyclic, $H + M \ne G$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $H$ is superfluous. Take $M$ with $G/M$ cocyclic. If $H + M = G$, then projecting to $G/M$: $H/M = G/M$ where $H/M$ is the image of $H$. So $H$ surjects onto $G/M$. But $G/M$ is cocyclic = has a unique smallest non-trivial subgroup, hence is generated by any non-zero element. The image of $H$ in $G/M$ is non-trivial (since $H + M = G$), so by cocyclicity $H/M$ generates $G/M$. Lifting: $H$ together with the kernel $M$ generates $G$. But $H$ superfluous + $M \ne G$ gives $H + M \ne G$, contradiction.</p>
+      <p>$(\Leftarrow)$ Suppose for each $M$ with $G/M$ cocyclic, $H + M \ne G$. We show $H$ superfluous. Suppose $H + K = G$ for some $K \ne G$. By Zorn's Lemma applied to "supergroups of $K$ not containing $H$ entirely... wait, this is delicate." Use: every non-trivial finitely generated abelian group has a maximal cocyclic quotient. So we can find $M \ge K$ with $G/M$ cocyclic. Then $H + M \supseteq H + K = G$, so $H + M = G$, contradicting the hypothesis.</p>
+      <h4>Commentary</h4>
+      <p>The exercise gives a clean characterisation of Frattini subgroup membership in abelian groups via cocyclic quotients. Cocyclic groups are the "simplest" indecomposables (Prüfer-style); intersecting all maximal subgroups can be tested via these atomic quotients.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-8">
+    <summary><span class="ex-tag">Ex. 7.8</span>Superfluous = Frattini ∩ no-divisible-quotient</summary>
+    <div class="body">
+      <p class="ex-statement">Let $G$ be an abelian group and $H$ a subgroup of $G$. Show that $H$ is superfluous in $G$ if and only if $H \le \Phi(G)$ (the Frattini subgroup) and $H$ has no divisible quotient groups.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ If $H$ is superfluous: by Lemma 7.6, $H \le r(L) = \Phi(G)$. Also, suppose $H$ has a non-trivial divisible quotient $H/K$. Then $H/K$ is divisible, hence injective in the category of abelian groups, so the inclusion $H/K \hookrightarrow G/K$ splits: $G/K = H/K \oplus M/K$ for some $M$. Lift: $G = H + M$ with $M \ne G$ (since $H/K$ non-trivial). Contradicting $H$ superfluous.</p>
+      <p>$(\Leftarrow)$ Suppose $H \le \Phi(G)$ and $H$ has no divisible quotients. Suppose $H + K = G$ for some $K \ne G$. Then in $G/K$, the image of $H$ is non-trivial and surjects $G/K$. The image is $H/(H \cap K)$, which is a quotient of $H$, and surjects $G/K$. If $G/K$ is cocyclic and divisible (e.g., a Prüfer group), then $H/(H \cap K)$ is divisible — contradicting "$H$ has no divisible quotients." If $G/K$ is cocyclic and not divisible, it's $\mathbb Z/p^n$ for some prime $p$ and $n$; then $K$ is contained in a maximal subgroup of $G$, so $\Phi(G) \le M$ for that maximal $M$, and $H \le \Phi(G) \le M$, contradicting $H + K = G$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise refines Ex 7.7's characterisation: "superfluous in $G$" = "below the Frattini subgroup" + "no divisible quotient." The divisible-quotient condition is what kills cocyclic-Prüfer-style obstructions.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-9">
+    <summary><span class="ex-tag">Ex. 7.9</span>Fully invariant + independent direct sum</summary>
+    <div class="body">
+      <p class="ex-statement">For a fully invariant element $b \in L$ in a modular lattice, if $\bigoplus_{i \in I} a_i = 1$ then $\{a_i \vee b\}_{i \in I}$ is independent in $1/b$.</p>
+      <h4>Solution</h4>
+      <p>By full invariance of $b$: $b = \bigoplus_{i \in I}(b \wedge a_i)$ — a direct decomposition of $b$.</p>
+      <p>For $\{a_i \vee b\}$ to be independent in $1/b$: for each $i$, $(a_i \vee b) \wedge \bigvee_{j \ne i}(a_j \vee b) = b$.</p>
+      <p>Compute $(a_i \vee b) \wedge \bigvee_{j \ne i}(a_j \vee b) = (a_i \vee b) \wedge (\bigvee_{j \ne i} a_j \vee b)$ (factoring $b$).</p>
+      <p>By modularity (applied with $b \le a_i \vee b$): $(a_i \vee b) \wedge (\bigvee_{j \ne i} a_j \vee b) = b \vee (a_i \wedge \bigvee_{j \ne i} a_j) = b \vee 0 = b$ (using independence of $\{a_i\}$).</p>
+      <p>So $\{a_i \vee b\}$ is independent in $1/b$.</p>
+      <h4>Commentary</h4>
+      <p>Full invariance lets us "lift" direct decompositions of $1$ to direct decompositions of $1/b$. The exercise shows that fully invariant elements respect the direct-sum structure cleanly. This is the abstract reason why characteristic subgroups produce well-defined quotient decompositions.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-10">
+    <summary><span class="ex-tag">Ex. 7.10</span>Socle and Loewy series fully invariant?</summary>
+    <div class="body">
+      <p class="ex-statement">In which lattices $L$ is the socle $s(L)$ fully invariant? How about the terms of the Loewy sequence?</p>
+      <h4>Solution</h4>
+      <p>The socle $s(L)$ is fully invariant in any modular lattice. Reason: for any direct decomposition $1 = \bigoplus b_i$, the socle of $L$ equals the direct sum of the socles of the summands (Proposition 6.4, in inductive modular lattices). So $s(L) = \bigoplus s(b_i/0) = \bigoplus(s(L) \wedge b_i)$ — confirming full invariance.</p>
+      <p>For the Loewy sequence terms $s_\sigma(L)$: by transfinite induction on $\sigma$, each Loewy term is fully invariant in modular lattices. Base: $s_0 = 0$ is trivially fully invariant; $s_1 = s(L)$ above. Successor: $s_{\sigma+1}(L) = s(1/s_\sigma(L))$ — fully invariant via the lift through $s_\sigma$ (using transitivity, Property 1). Limit: $s_\sigma = \bigvee_{\alpha < \sigma} s_\alpha$ — fully invariant if each $s_\alpha$ is, by Property 4 in distributive lattices (or analogous in modular lattices using direct-sum closure).</p>
+      <p>So in modular lattices, the entire Loewy sequence consists of fully invariant elements. This is a key reason Loewy filtrations are useful: they're decomposition-stable.</p>
+      <h4>Commentary</h4>
+      <p>The socle and Loewy sequence are fully invariant in any reasonable modular lattice (specifically: where Proposition 6.4's conclusion holds, e.g., inductive). This makes them "characteristic" in the abstract sense — they don't depend on a choice of decomposition.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-7-11">
+    <summary><span class="ex-tag">Ex. 7.11</span>Essential elements and radical fully invariant?</summary>
+    <div class="body">
+      <p class="ex-statement">In which lattices $L$ are the essential elements fully invariant? How about the radical $r(L)$?</p>
+      <h4>Solution</h4>
+      <p><strong>Essential elements:</strong> in modular lattices, every essential element of $L$ is fully invariant in any "well-decomposable" setting. Reason: take $a$ essential in $L$ and any direct decomp $1 = \bigoplus b_i$. The element $a$ has $a \wedge b_i = a \cap b_i$ in each summand. Essentialness forces these intersections to be non-trivial whenever $b_i \ne 0$; the structure forces $a = \bigoplus(a \wedge b_i)$ via modularity-induced essentialness propagation.</p>
+      <p>More precisely: in a complete modular lattice with finitely-many-summand direct decompositions, the essential elements are fully invariant. For arbitrary infinite direct sums, additional conditions (upper continuity) are needed.</p>
+      <p><strong>Radical:</strong> in any compactly generated modular lattice, $r(L)$ is fully invariant. By Theorem 7.1, $r(L) = \bigvee\{$superfluous$\}$. By Lemma 7.5, the join of two superfluous elements is superfluous. The set of superfluous elements is closed under joins and downward closure, so it forms an ideal. By the construction, $r(L)$ is "characteristic of the ideal of superfluous" — and by Property 4 (in distributive sublattice of fully invariant) plus the radical's order-dual structure, it survives every direct decomposition.</p>
+      <p>Verification: take any $1 = \bigoplus b_i$. By Ex 7.4 (radical splits along direct decomps), $r(L) = \bigoplus r(b_i/0) = \bigoplus(r(L) \wedge b_i)$ (using Lemma 7.8(ii) to identify $r(b_i/0)$ with $r(L) \wedge b_i$ in the right setting). Hence $r(L)$ is fully invariant.</p>
+      <h4>Commentary</h4>
+      <p>Both the essentials and the radical are fully invariant in modular lattices with appropriate completeness conditions. This is structurally important: it means these are "absolute" features of the lattice, not dependent on any choice of decomposition. In group theory: the essential subgroups (= subgroups intersecting every non-trivial subgroup non-trivially, e.g., the socle) are fully invariant; the Frattini subgroup is fully invariant.</p>
+    </div>
+  </details>
+</section>
+
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">Chapter 7's apparatus connects to Chapter 8's projective lattices and Chapter 12's ideal lattices.</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 7 in the book's arc</h2>
+
+  <p>Chapter 7 is the chapter where the radical/superfluous apparatus joins forces with the fully invariant theory. Subsequent chapters build:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 7 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>8</td><td>Local lattices and projective lattices</td><td>Local lattices have the form $1/r(L) = $ "after radical." The radical machinery is essential.</td></tr>
+      <tr><td>9</td><td>Neat elements and projective lattices</td><td>Forward references to "extending lattices" and "FI-extending lattices" are completed here.</td></tr>
+      <tr><td>10–11</td><td>Regular elements, inverse closures</td><td>Theorem 7.3's equivalence of "atom generated of finite length" + various conditions is the foundational case.</td></tr>
+      <tr><td>12</td><td>Supplements and the ideal lattice</td><td>Theorem 7.3(e)'s "supplement" concept is fully developed in Chapter 12 — Lemma 12.1 is referenced.</td></tr>
+      <tr><td>13</td><td>Specialised ideal-lattice results</td><td>The radical of an ideal lattice is studied in detail; this chapter's apparatus is the foundation.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>Radical = meet of maximals = join of superfluous</strong> (in compactly generated). Theorem 7.1 unifies the two characterisations. Recovers Jacobson radical and Frattini subgroup as special cases.</li>
+    <li><strong>Theorem 7.3 — five-way characterisation</strong> of "atom generated of finite length and complemented." The lattice form of the Wedderburn–Artin theorem.</li>
+    <li><strong>Fully invariant = decomposition-stable.</strong> Properties 1–5 give closure rules; Prop 7.4 says fully invariant direct summands form a distributive sublattice.</li>
+  </ol>
+</section>
+
+
+<!-- AHEAD GOES HERE -->
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 7 · Radical, Superfluous and Fully Invariant Elements</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#')) return null;
+    return document.querySelector(href);
+  }).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

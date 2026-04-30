@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Notes on Lattice Theory · Table of Contents</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .theme-toggle {
+    position: fixed; top: 18px; right: 20px; z-index: 100;
+    background: var(--bg-warm); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  .page { max-width: 980px; margin: 0 auto; padding: 56px 36px 120px; }
+  .hero {
+    padding: 0 0 38px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 40px;
+  }
+  .hero .kicker {
+    color: var(--gold);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.08;
+    margin: 0 0 18px;
+  }
+  .hero .lede {
+    font-size: 19px;
+    color: var(--teal);
+    font-style: italic;
+    max-width: 680px;
+    line-height: 1.5;
+  }
+  .hero .meta {
+    display: flex;
+    gap: 22px;
+    margin-top: 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .nav-strip {
+    margin-top: 22px;
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .nav-strip a {
+    color: var(--ink);
+    text-decoration: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    background: var(--bg-warm);
+    padding: 7px 13px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    transition: all 0.15s ease;
+  }
+  .nav-strip a:hover { border-color: var(--gold); color: var(--gold); }
+  .nav-strip a .arrow { color: var(--gold); margin-right: 4px; }
+  .companion-purpose {
+    background: var(--bg-warm);
+    border-left: 3px solid var(--gold);
+    padding: 18px 22px;
+    margin: 0 0 32px;
+    border-radius: 0 4px 4px 0;
+  }
+  .companion-purpose p { margin: 0 0 10px; }
+  .companion-purpose p:last-child { margin-bottom: 0; }
+  h2.section-h {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 36px 0 18px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--line);
+  }
+  /* Compact ToC */
+  nav.compact-toc {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 8px 14px;
+    margin: 0 0 36px;
+  }
+  nav.compact-toc a {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 9px 14px;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg-warm);
+    color: var(--ink);
+    transition: all 0.15s ease;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+  }
+  nav.compact-toc a:hover {
+    border-color: var(--gold);
+    background: var(--bg-muted);
+    color: var(--gold);
+  }
+  nav.compact-toc .num {
+    font-weight: 700;
+    color: var(--gold);
+    min-width: 26px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  nav.compact-toc .num.app {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  nav.compact-toc .title {
+    flex: 1;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  nav.compact-toc em {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-left: 4px;
+  }
+  /* Chapter cards */
+  .chapter-card {
+    border: 1px solid var(--line);
+    background: var(--bg-warm);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin: 0 0 22px;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.18s ease;
+  }
+  .chapter-card.available {
+    border-color: var(--gold-soft);
+  }
+  .chapter-card.available:hover {
+    border-color: var(--gold);
+    box-shadow: 0 4px 12px rgba(30,39,73,0.08);
+    transform: translateY(-1px);
+  }
+  .chapter-card .row1 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .chapter-card .ch-num {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .chapter-card .ch-meta {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .chapter-card .ch-meta .status {
+    margin-left: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+  }
+  .chapter-card.available .status {
+    background: var(--gold);
+    color: #1E2749;
+  }
+  .chapter-card.pending .status {
+    background: var(--bg-muted);
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+  }
+  .chapter-card h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+  .chapter-card .tag {
+    font-style: italic;
+    color: var(--teal);
+    margin: 0 0 14px;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+  .chapter-card .desc { margin: 0 0 16px; font-size: 15px; }
+  .chapter-card .topics {
+    display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px;
+  }
+  .chapter-card .topic {
+    background: var(--bg-muted);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+  }
+  .chapter-card .ch-link {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: var(--gold);
+    font-size: 14px;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+  .chapter-card.available:hover .ch-link {
+    border-bottom-color: var(--gold);
+  }
+  .chapter-card.pending .ch-link { color: var(--text-dim); pointer-events: none; }
+
+  /* Topic-chip hover tooltip */
+  .chapter-card .topic[data-tooltip] {
+    position: relative;
+    cursor: help;
+  }
+  .chapter-card .topic[data-tooltip]:hover::after,
+  .chapter-card .topic[data-tooltip]:focus::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 9px 13px;
+    border-radius: 6px;
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: normal;
+    width: max-content;
+    max-width: 320px;
+    line-height: 1.45;
+    z-index: 100;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    pointer-events: none;
+  }
+  .chapter-card .topic[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--ink);
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  strong { color: var(--ink); font-weight: 600; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  footer { margin-top: 60px; padding-top: 22px; border-top: 1px solid var(--line); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  @media (max-width: 720px) {
+    .page { padding: 32px 18px 80px; }
+    .hero h1 { font-size: 32px; }
+    .chapter-card { padding: 20px 22px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+
+<div class="page">
+
+<div class="hero">
+  <div class="kicker">Nation Companion · Notes on Lattice Theory · Front Door</div>
+  <h1>Nation's <em>Notes on Lattice Theory</em></h1>
+  <p class="lede">A chapter-by-chapter prose, diagrammed, and connected reading of J. B. Nation's <em>Notes on Lattice Theory</em> (University of Hawaii) — designed to be read side-by-side with the notes.</p>
+  <div class="meta">
+    <span>11 chapters + 3 appendices</span>
+    <span>Faithful expansion of book content</span>
+    <span>Cross-domain connections</span>
+    <span>Worked solutions to exercises</span>
+  </div>
+  <div class="nav-strip">
+    <a href="calugareanu-companion-toc.html"><span class="arrow">↗</span> Călugăreanu Companion (sister volume)</a>
+    <a href="lattice-module-hub.html"><span class="arrow">↗</span> Lattice Atlas (structured curriculum)</a>
+    <a href="nation-companion-process.md"><span class="arrow">↗</span> Process notes</a>
+  </div>
+</div>
+
+<div class="companion-purpose">
+  <p><strong>What this is.</strong> A pedagogical companion to J. B. Nation's <em>Notes on Lattice Theory</em>, published as free PDF lecture notes by the University of Hawaii. Each chapter of Nation's notes gets a companion HTML file that preserves the book's numbering (Theorem 1.1, Lemma 1.2, Theorem 1.4, etc.) so you can hold the notes open beside it and cross-reference. Where Nation is terse, the companion expands with intuition, diagrams, and worked-out reasoning. Where Nation is concrete, the companion connects outward — to combinatorics (Dilworth's theorem), logic (compactness theorem), order theory at large, and the Prologos propagator network.</p>
+  <p><strong>How to use it.</strong> Read Nation's notes first. When stuck on a definition or proof, switch to the companion's matching section for prose, intuition, and a fuller reading. End-of-chapter exercises are worked in collapsible blocks — open them after attempting the exercise yourself.</p>
+  <p><strong>Sister companion.</strong> The <a href="calugareanu-companion-toc.html">Călugăreanu Companion</a> covers Călugăreanu's <em>Lattice Concepts of Module Theory</em> (Springer 2000) — a parallel volume going deeper into the module-theoretic side of lattice theory (radicals, supplemented, Goldie / Krull / Gabriel dimensions). The two books cover overlapping foundational vocabulary but diverge sharply in scope: Nation goes broader (free lattices, varieties, geometric lattices); Călugăreanu goes deeper into modules. Reading both companions gives the full landscape.</p>
+</div>
+
+<h2 class="section-h">Compact ToC</h2>
+<p style="margin: 0 0 18px; color: var(--text-dim); font-size: 14.5px;">A condensed overview to locate any chapter quickly. Click any entry to jump to its chapter card below.</p>
+<nav class="compact-toc" aria-label="Compact table of contents">
+  <a href="#card-ch1"><span class="num">1</span><span class="title">Ordered Sets</span></a>
+  <a href="#card-ch2"><span class="num">2</span><span class="title">Semilattices, Lattices, Complete Lattices</span></a>
+  <a href="#card-ch3"><span class="num">3</span><span class="title">Algebraic Lattices</span></a>
+  <a href="#card-ch4"><span class="num">4</span><span class="title">Representation by Equivalence Relations</span></a>
+  <a href="#card-ch5"><span class="num">5</span><span class="title">Congruence Relations</span></a>
+  <a href="#card-ch6"><span class="num">6</span><span class="title">Free Lattices</span></a>
+  <a href="#card-ch7"><span class="num">7</span><span class="title">Varieties of Lattices</span></a>
+  <a href="#card-ch8"><span class="num">8</span><span class="title">Distributive Lattices</span></a>
+  <a href="#card-ch9"><span class="num">9</span><span class="title">Modular and Semimodular Lattices</span></a>
+  <a href="#card-ch10"><span class="num">10</span><span class="title">Finite Lattices and their Congruence Lattices</span></a>
+  <a href="#card-ch11"><span class="num">11</span><span class="title">Geometric Lattices</span></a>
+  <a href="#card-app1"><span class="num app">A1</span><span class="title">Cardinals, Ordinals and Universal Algebra</span></a>
+  <a href="#card-app2"><span class="num app">A2</span><span class="title">The Axiom of Choice</span></a>
+  <a href="#card-app3"><span class="num app">A3</span><span class="title">Formal Concept Analysis</span></a>
+</nav>
+
+<h2 class="section-h">Chapter cards</h2>
+<p style="margin: 0 0 22px; color: var(--text-dim); font-size: 14.5px;">Detailed overview of each chapter. Click the card to open the full reading. Hover over any topic chip to see a brief description.</p>
+
+<a href="nation-companion-ch01.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch1">
+    <div class="row1">
+      <span class="ch-num">Chapter 1</span>
+      <span class="ch-meta">~70–80 min · pp. 1–12 · 5 sections + 5 connections · 13 worked exercises (from 15) <span class="status">Available</span></span>
+    </div>
+    <h3>Ordered Sets</h3>
+    <p class="tag">Posets, Hasse diagrams, the Cayley-style representation theorem, Dilworth's theorem, Axiom of Choice equivalents, the compactness theorem, and the three invariants $w, c, d$ on ordered sets.</p>
+    <p class="desc">Nation's foundational chapter. Posets defined via reflexivity, antisymmetry, transitivity. Examples: power set $\mathfrak{P}(X)$, subgroup lattice $\mathbf{Sub}\,\mathcal{G}$, the reals, chains, antichains. Cover relation $\prec$, Hasse diagrams, order-preserving maps, isomorphism. <strong>Theorem 1.1</strong> — every ordered set $\mathcal{Q}$ embeds in $\mathfrak{P}(\mathcal{Q})$ via $\phi(x) = \{y : y \le x\}$ (the Cayley analogue for orders). Order ideals $\mathcal{O}(\mathcal{P})$, dual $\mathcal{P}^d$, principal $\downarrow x$, $\uparrow x$. Maximum vs maximal. <strong>Lemma 1.2</strong> (3-way DCC). <strong>Lemma 1.3</strong> (induction principle for DCC). Three invariants: width $w(\mathcal{P})$, chain covering $c(\mathcal{P})$, dimension $d(\mathcal{P})$. <strong>Theorem 1.4 (Dilworth, 1950)</strong>: $w(\mathcal{P}) = c(\mathcal{P})$ in finite case. Proof in finite case (Tverberg-Freese); infinite case via compactness. <strong>Theorem 1.5</strong>: AoC ⟺ Zermelo well-ordering ⟺ Hausdorff maximality ⟺ Zorn's Lemma ⟺ LUB-chain → maximal. <strong>Theorem 1.6 (Gödel compactness theorem)</strong>: a set of WFFs is satisfiable iff every finite subset is. <strong>Theorem 1.7 (Szpilrajn, 1930)</strong>: every partial order is the intersection of total orders. <strong>Theorem 1.9</strong>: $d(\mathcal{P}) \le c(\mathcal{P})$, with $d(\mathcal{P}) = $ smallest $\kappa$ such that $\mathcal{P}$ embeds in product of $\kappa$ chains. Connection panels: Dilworth in combinatorics · Cayley-style representation theorems · the compactness theorem from logic + Jónsson's method · order dimension in scheduling · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Set with reflexive, antisymmetric, transitive ≤ — the starting object of order theory.">poset</span>
+      <span class="topic" data-tooltip="Visual representation of a finite poset: vertices = elements, edges = covers, vertical = order.">Hasse diagram</span>
+      <span class="topic" data-tooltip="Theorem 1.1: every ordered set 𝒬 embeds in 𝔓(𝒬) via x ↦ {y : y ≤ x}. The order-theoretic analogue of Cayley's group representation.">Theorem 1.1</span>
+      <span class="topic" data-tooltip="Largest antichain size in 𝒫. Maximum number of pairwise incomparable elements.">width $w(\mathcal{P})$</span>
+      <span class="topic" data-tooltip="Smallest number of chains needed to cover 𝒫. Equals width when 𝒫 is finite (Theorem 1.4).">chain cover $c(\mathcal{P})$</span>
+      <span class="topic" data-tooltip="Dushnik-Miller dimension: smallest cardinality of a realizer (set of total orders whose intersection is ≤).">dimension $d(\mathcal{P})$</span>
+      <span class="topic" data-tooltip="Theorem 1.4 (R.P. Dilworth, Annals of Math 1950): in any finite poset, max antichain = min chain cover.">Dilworth's theorem</span>
+      <span class="topic" data-tooltip="Theorem 1.5: AoC ⟺ well-ordering ⟺ Hausdorff maximality ⟺ Zorn ⟺ LUB-chain → maximal.">Axiom of Choice</span>
+      <span class="topic" data-tooltip="Theorem 1.6 (Gödel 1930): a set of WFFs is satisfiable iff every finite subset is. Used by Jónsson to prove infinite Dilworth.">compactness theorem</span>
+      <span class="topic" data-tooltip="Theorem 1.7 (Szpilrajn-Marczewski, 1930): every partial order is the intersection of all total orders containing it.">Szpilrajn extension</span>
+      <span class="topic" data-tooltip="Descending Chain Condition: every nonempty subset has a minimal element; equivalently, no infinite descending chain.">DCC</span>
+      <span class="topic" data-tooltip="Order ideal generated by x: ↓x = {y : y ≤ x}. Order filter: ↑x = {y : y ≥ x}.">↓x, ↑x</span>
+    </div>
+    <span class="ch-link">Read Chapter 1 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch02.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch2">
+    <div class="row1">
+      <span class="ch-num">Chapter 2</span>
+      <span class="ch-meta">~80–90 min · pp. 13–27 · 11 sections + 5 connections · 14 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Semilattices, Lattices and Complete Lattices</h3>
+    <p class="tag">Where the lattice operations enter. Semilattices as idempotent commutative semigroups; lattices via algebra ↔ order; the trinity of closure systems / operators / rules; the order-ideal and MacNeille completions; the Knaster-Tarski-Davis fixed-point theorem.</p>
+    <p class="desc">Five movements through Nation's foundational chapter on the algebraic side of order theory. <strong>(A) Semilattices.</strong> Theorem 2.1 (algebra ↔ poset with all glbs); Theorem 2.2 (Cayley-style: every meet semilattice embeds in $\mathcal{O}(\mathcal{S})$). <strong>(B) Lattices.</strong> Theorem 2.3 (algebra ↔ poset with both glbs and lubs); $\mathcal{M}_3$ and $\mathcal{N}_5$ as obstructions to power-set embedding; Theorem 2.4 (finite test: top + all meets ⟹ lattice); Theorem 2.5 (complete meet semilattices are complete lattices). <strong>(C) The closure trinity.</strong> Theorem 2.6 (three-way correspondence: closure systems = closure operators = closure rules); Theorem 2.7 (every complete lattice IS a closure system on itself). <strong>(D) Join irreducibles.</strong> Lemma 2.8 (DCC ⟹ each element is a finite join of join irreducibles); Theorem 2.9 (ACC + DCC lattices ≅ closure-rule lattice on $J(\mathcal{L})$). <strong>(E) Completions.</strong> Order-ideal completion $\mathcal{O}(\mathcal{P})$, MacNeille completion $\mathcal{M}(\mathcal{P}) = (A^u)^\ell$ (the Dedekind-cut generalisation, MacNeille 1937); Theorem 2.10 (join-dense completions ↔ closure operators on $P$); Theorem 2.12 ($\mathcal{K}(\mathcal{P})$ has $\mathcal{O}$ at bottom, $\mathcal{M}$ at top); <strong>Theorem 2.13 (Knaster-Tarski-Davis)</strong>: a lattice is complete ⟺ every order-preserving self-map has a fixed point. Connection panels: universal-algebra view · closure operators across mathematics · MacNeille + Dedekind cuts · Knaster-Tarski + denotational semantics · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Idempotent commutative associative semigroup. Theorem 2.1: equivalent to poset with all binary glbs.">semilattice</span>
+      <span class="topic" data-tooltip="Algebra (L, ∧, ∨) with both semilattices linked by absorption. Theorem 2.3: equivalent to poset with all binary glbs and lubs.">lattice</span>
+      <span class="topic" data-tooltip="Every subset has glb and lub. Theorem 2.5: complete meet semilattice ⟹ complete lattice.">complete lattice</span>
+      <span class="topic" data-tooltip="Subsets of X closed under arbitrary intersection. By Theorem 2.5, the closed sets form a complete lattice.">closure system</span>
+      <span class="topic" data-tooltip="Γ : 𝔓(X) → 𝔓(X) extensive, monotone, idempotent. Examples: topological closure, span, subgroup generation, convex hull.">closure operator</span>
+      <span class="topic" data-tooltip="Properties of form 'Y ⊆ S ⟹ z ∈ S'. Theorem 2.6: closure systems = closure operators = closure rules — three faces of the same idea.">closure rules</span>
+      <span class="topic" data-tooltip="Theorem 2.7: every complete lattice IS a closure system on itself, via Δ(A) = {x : x ≤ ⋁A}.">Theorem 2.7</span>
+      <span class="topic" data-tooltip="q = ⋁F for finite F ⟹ q ∈ F. Lemma 2.8: under DCC, every element is a finite join of join irreducibles.">join irreducible</span>
+      <span class="topic" data-tooltip="Theorem 2.9: every lattice with ACC + DCC is the closure-rule lattice on its join-irreducibles.">Theorem 2.9</span>
+      <span class="topic" data-tooltip="Smallest complete lattice extending a poset. Order-ideal completion 𝓞(𝓟) and MacNeille completion 𝓜(𝓟).">completion</span>
+      <span class="topic" data-tooltip="MacNeille 1937: 𝓜(𝓟) = lattice of cuts (A^u)^ℓ. Generalises Dedekind cuts (1872). Top of 𝓚(𝓟); preserves all existing meets and joins.">MacNeille</span>
+      <span class="topic" data-tooltip="Theorem 2.13 (Tarski 1955 + Davis 1955): a lattice is complete ⟺ every order-preserving self-map has a fixed point. Foundation of denotational semantics.">Knaster-Tarski-Davis</span>
+    </div>
+    <span class="ch-link">Read Chapter 2 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch03.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch3">
+    <div class="row1">
+      <span class="ch-num">Chapter 3</span>
+      <span class="ch-meta">~80–90 min · pp. 28–39 · 10 sections + 5 connections · 17 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Algebraic Lattices</h3>
+    <p class="tag">The algebraic closure operator (closure determined by finite witnesses), the algebraic (= compactly generated) lattice as the unifying structural object, and the Birkhoff-Frink theorem (1948) certifying that algebraic lattices ARE the subalgebra lattices of universal algebras.</p>
+    <p class="desc">Five conceptual movements. <strong>(A) Algebraic closure operators.</strong> $\Gamma$ is algebraic if $\Gamma(B) = \bigcup\{\Gamma(F) : F$ finite$\}$. Six examples (subalgebras, congruences, order ideals, ideals of $\vee$-semilattices with/without 0, ideals of lattices); two NON-examples (topology and MacNeille). Theorem 3.1 (3-way: algebraic ⟺ up-directed unions closed ⟺ chain unions closed). <strong>(B) Algebraic lattices.</strong> Compact element $x$ ($x \le \bigvee A$ ⟹ $x \le \bigvee F$ finite); $\mathcal{L}^c$ as join semilattice with 0; algebraic = compactly generated. Theorem 3.2 (closure operator algebraic ⟺ generated by finitary rules). Theorem 3.3 ($\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$ — the canonical ideal-lattice representation). <strong>(C) Birkhoff-Frink.</strong> Theorem 3.4 (1948): every algebraic closure operator $\Gamma$ on $X$ is realised by a universal algebra $\mathcal{A}$ on $X$. Corollary: every algebraic lattice IS a subalgebra lattice. Theorem 3.5 (Bill Hanf): countable compact-counts ⟺ countable algebra ⟺ algebra with one binary operation. Plus Grätzer-Schmidt + Lampe sister theorems for congruence lattices. <strong>(D) Structural properties.</strong> Theorem 3.6 (algebraic ⟹ weakly atomic). Theorem 3.7 (algebraic ⟹ upper continuous). Theorem 3.8 (3 forms of upper continuity). <strong>(E) Decompositions.</strong> $M^*(\mathcal{L})$ — completely meet irreducibles. Theorem 3.9 (3-way characterisation). Theorem 3.10 (Birkhoff: $M^*$ meet dense in algebraic). Theorem 3.11 (Crawley: strongly atomic algebraic ⟹ irredundant decompositions exist). Theorem 3.12 (distributive ⟹ unique). Connection panels: Birkhoff-Frink history · compactness in lattice/topology/logic/domain theory · subalgebra lattices and varieties · Crawley-Dilworth decomposition theory · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Closure operator Γ on X with Γ(B) = ∪{Γ(F) : F finite ⊆ B} — closure determined by finite witnesses.">algebraic closure</span>
+      <span class="topic" data-tooltip="Element x with: x ≤ ⋁A implies x ≤ ⋁F for some finite F ⊆ A. The lattice analogue of 'finitely generated.'">compact element</span>
+      <span class="topic" data-tooltip="Complete lattice with 𝓛^c (compact elements) join dense in 𝓛. Synonym: compactly generated. Every finite lattice is algebraic.">algebraic lattice</span>
+      <span class="topic" data-tooltip="Theorem 3.3: every algebraic lattice 𝓛 ≅ 𝓘(𝓛^c) — the ideal lattice of its compact elements.">Theorem 3.3</span>
+      <span class="topic" data-tooltip="Theorem 3.4 (Birkhoff-Frink 1948): every algebraic closure operator is realised by a universal algebra. Corollary: every algebraic lattice IS a subalgebra lattice.">Birkhoff-Frink</span>
+      <span class="topic" data-tooltip="Theorem 3.5 (Bill Hanf): each compact element with countably many compacts ⟺ countable algebra ⟺ algebra with one binary operation.">Hanf's theorem</span>
+      <span class="topic" data-tooltip="Theorem 3.6: every algebraic lattice satisfies a > b ⟹ ∃ u, v with a ≥ u ≻ v ≥ b — every interval has a covering pair.">weakly atomic</span>
+      <span class="topic" data-tooltip="Theorem 3.7: every algebraic lattice satisfies a ∧ ⋁D = ⋁(a ∧ d) for up-directed D. Meets distribute over directed joins.">upper continuous</span>
+      <span class="topic" data-tooltip="q ∈ 𝓛 such that q = ⋀S implies q ∈ S — element not expressible as proper meet of others. Set: M*(𝓛).">M*(𝓛)</span>
+      <span class="topic" data-tooltip="Theorem 3.10 (Birkhoff): in algebraic lattices, every x = ⋀(↑x ∩ M*(𝓛)) — meet of completely meet irreducibles above it.">meet dense</span>
+      <span class="topic" data-tooltip="Theorem 3.11 (Crawley): in strongly atomic algebraic lattices, every element has an irredundant decomposition into completely meet irreducibles.">Crawley</span>
+      <span class="topic" data-tooltip="Theorem 3.12: in distributive strongly atomic algebraic lattices, irredundant decompositions are UNIQUE — the lattice-theoretic Krull-Schmidt for distributive case.">distributive uniqueness</span>
+    </div>
+    <span class="ch-link">Read Chapter 3 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch04.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch4">
+    <div class="row1">
+      <span class="ch-num">Chapter 4</span>
+      <span class="ch-meta">~70–80 min · pp. 40–49 · 7 sections + 5 connections · 8 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Representation by Equivalence Relations</h3>
+    <p class="tag">The Cayley analogue for lattices: every lattice embeds in the partition lattice $\textbf{Eq}\,X$ for some set $X$ (Whitman 1946; simplified by Jónsson 1953). The proof is a transfinite recursion. Then climbs to modular ⟺ type 2 representation, Arguesian ← type 1.</p>
+    <p class="desc">Three conceptual movements. <strong>(A) Equivalence relations + Eq X.</strong> Equivalence relations as binary relations satisfying R, S, T. Kernel of a function $f$. Congruence relation. $\textbf{Eq}\,X$ as algebraic, strongly atomic, semimodular, relatively complemented, simple lattice. Relative product $R \circ S$. Three types of representations: <em>type 1</em> ($F(x) \vee F(y) = F(x) \circ F(y)$), <em>type 2</em> ($F(x) \circ F(y) \circ F(x)$), <em>type 3</em> ($F(x) \circ F(y) \circ F(x) \circ F(y)$). <strong>(B) Whitman's theorem.</strong> Theorem 4.1 (Whitman 1946 / Jónsson 1953): every lattice has a type 3 representation. Proof via weak representation + Sublemma 1 (extension by 3 new points) + Sublemma 2 (limit-ordinal continuity) + $\omega$-iterated fix-up. <strong>Theorem 4.2 (Pudlák-Tůma 1980)</strong>: every finite lattice has a finite representation — a celebrated 20th-century result. Theorem 4.3: every lattice embeds in $\textbf{Sub}\,\mathcal{G}$ for some group. <strong>(C) Modular and Arguesian.</strong> Lemma 4.4: type 2 ⟹ modular law (Dedekind 1890s). <strong>Theorem 4.5 (Jónsson)</strong>: lattice has type 2 representation ⟺ modular. Arguesian law $(A)$: $(a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2 \Rightarrow c_2 \le c_0 \vee c_1$ — modeled after Desargues' Law (Schützenberger 1945). <strong>Theorem 4.6</strong>: type 1 ⟹ Arguesian. Examples (subgroups, abelian, ideals, vector spaces, modules). Haiman 1987/1991: Arguesian ⟹ type 1 FAILS. Pálfy-Szabó 1995: subgroup lattices of abelian groups satisfy a STRICTLY STRONGER identity. Connection panels: Cayley-style theorem lineage · Dedekind's modular law + module theory · Arguesian / Desargues / projective geometry · Pálfy-Szabó + variety theory · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Reflexive, symmetric, transitive binary relation on X. Equivalent to a partition of X into blocks.">equivalence relation</span>
+      <span class="topic" data-tooltip="Eq X = lattice of all equivalence relations on X under set containment. Algebraic, strongly atomic, semimodular, relatively complemented, simple. Top = X² (universal); bottom = equality.">Eq X</span>
+      <span class="topic" data-tooltip="ker f = {(x, y) : f(x) = f(y)}. For homomorphisms, this is a CONGRUENCE relation — preserved by all operations.">kernel</span>
+      <span class="topic" data-tooltip="R ∘ S = {(x, y) : ∃ z with x R z S y}. For equivalence relations, R ∨ S is the union of the chain R∘S ⊆ R∘S∘R ⊆ ⋯">relative product R∘S</span>
+      <span class="topic" data-tooltip="Pair (X, F) where F : 𝓛 → Eq X is a lattice embedding. Type 1, 2, 3 differ in how joins F(x) ∨ F(y) are computed (depth of relative-product chain).">representation</span>
+      <span class="topic" data-tooltip="Theorem 4.1 (Whitman 1946 / Jónsson 1953): every lattice has a type 3 representation. The Cayley analogue for lattices. Proof uses transfinite recursion.">Whitman 1946</span>
+      <span class="topic" data-tooltip="Theorem 4.2 (Pudlák-Tůma 1980, Algebra Universalis 10): every FINITE lattice has a FINITE partition representation. Famous and difficult result.">Pudlák-Tůma 1980</span>
+      <span class="topic" data-tooltip="Modular law (M): x ≥ y ⟹ x ∧ (y ∨ z) = y ∨ (x ∧ z). Invented by Dedekind in the 1890s. The lattice abstraction of submodule behavior.">modular law</span>
+      <span class="topic" data-tooltip="Theorem 4.5 (Jónsson): a lattice has a type 2 representation ⟺ it is modular. Joins via R∘S∘R correspond to the modular structure.">Theorem 4.5 (Jónsson)</span>
+      <span class="topic" data-tooltip="Arguesian law (A): stronger than modular, weaker than distributive. Modeled after Desargues' theorem (1648). Schützenberger 1945, Jónsson 1953.">Arguesian</span>
+      <span class="topic" data-tooltip="Theorem 4.6: lattice with type 1 representation ⟹ Arguesian. Haiman 1987/1991: converse FAILS — type 1 representable is strictly stronger than Arguesian.">Theorem 4.6</span>
+      <span class="topic" data-tooltip="Lattice of normal subgroups of any group is Arguesian (cosets permute → type 1). Subgroups of abelian groups, ideals of rings, subspaces of vector spaces, submodules — all Arguesian.">subgroup ⟹ Arguesian</span>
+    </div>
+    <span class="ch-link">Read Chapter 4 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch05.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch5">
+    <div class="row1">
+      <span class="ch-num">Chapter 5</span>
+      <span class="ch-meta">~80–90 min · pp. 50–61 · 9 sections + 5 connections · 12 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Congruence Relations</h3>
+    <p class="tag">From arbitrary equivalence relations to <strong>congruences</strong>: equivalence relations preserved by ALL algebra operations. The quotient $\mathcal{L}/\theta$ inherits the algebraic structure. The lattice $\textbf{Con}\,\mathcal{L}$ is always algebraic AND distributive (Funayama–Nakayama 1942).</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Quotients + congruences.</strong> Theorem 5.1 (First Iso): $\mathcal{L}/\ker f \cong f(\mathcal{L})$. Theorem 5.2: the quotient $\mathcal{L}/\theta$ is a lattice and the natural map is a homomorphism. <strong>(B) Con L + subdirect representation.</strong> $\textbf{Con}\,\mathcal{L} \subseteq \textbf{Eq}\,L$ is a complete sublattice. Theorem 5.3: $\textbf{Con}\,\mathcal{L}$ is algebraic — finitely generated congruences are compact. Principal congruence $\text{con}(a,b)$. Theorem 5.4 (Second Iso): correspondence between congruences on $\mathcal{L}/\theta$ and congruences on $\mathcal{L}$ above $\theta$. Subdirect product, subdirectly irreducible (SI), monolith $\mu$ as smallest non-zero congruence. <strong>Theorem 5.5–5.7 (Birkhoff 1944)</strong>: every algebra is a subdirect product of subdirectly irreducible quotients. <strong>(C) Distributivity.</strong> <strong>Theorem 5.8 (Funayama–Nakayama 1942)</strong>: $\textbf{Con}\,\mathcal{L}$ is DISTRIBUTIVE for every lattice $\mathcal{L}$. Proof via Pixley's majority polynomial $m(x,y,z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$ and the Mal'cev-style 3-permutability. The congruence lattice problem (Dilworth: which distributive algebraic lattices arise as $\textbf{Con}\,\mathcal{L}$?). Wehrung 2007 + Růžička 2008: counterexample of cardinality $\aleph_2$. <strong>(D) Weaving polynomials + completely join prime.</strong> Theorem 5.9: characterisation of $\text{con}(a,b)$ via weaving polynomials (alternating $\vee$ and $\wedge$ chains). Theorems 5.10–5.12: in finite distributive lattices, completely join prime = join prime = join irreducible.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Equivalence relation θ ⊆ L × L preserved by ALL operations: x θ y, u θ v ⟹ (x ∨ u) θ (y ∨ v) and (x ∧ u) θ (y ∧ v). The kernel of any lattice homomorphism is a congruence; conversely, every congruence is a kernel.">congruence relation θ</span>
+      <span class="topic" data-tooltip="Theorem 5.1 (First Isomorphism Theorem): for any lattice homomorphism f : L → M, the quotient L/ker f is isomorphic to f(L). The kernel completely determines the homomorphic image up to iso.">First Iso Theorem 5.1</span>
+      <span class="topic" data-tooltip="Theorem 5.2: the quotient L/θ is a lattice with [a]_θ ∨ [b]_θ = [a ∨ b]_θ. The natural projection π : L → L/θ is a surjective lattice homomorphism with kernel θ. Quotient is well-defined precisely BECAUSE θ is a congruence.">quotient L/θ</span>
+      <span class="topic" data-tooltip="Con L = lattice of all congruences on L, ordered by inclusion. A complete sublattice of Eq L. Top = L² (universal congruence, identifies everything); bottom = equality (identity congruence). Theorem 5.3: Con L is ALGEBRAIC — finitely generated congruences are compact.">Con L</span>
+      <span class="topic" data-tooltip="con(a, b) = smallest congruence with a θ b. Equivalently, the principal congruence GENERATED by collapsing the pair (a, b). Compact in Con L. Every finitely generated congruence is a finite join of principal congruences.">principal congruence con(a,b)</span>
+      <span class="topic" data-tooltip="Theorem 5.4 (Second Isomorphism Theorem / Correspondence Theorem): for θ ∈ Con L, there is an order isomorphism between congruences ψ ∈ Con(L/θ) and congruences φ ∈ Con L with φ ⊇ θ. The interval [θ, 1] in Con L is isomorphic to Con(L/θ).">Second Iso Theorem 5.4</span>
+      <span class="topic" data-tooltip="Algebra A is a subdirect product of {A_i} if A embeds into ∏ A_i with each projection π_i : A → A_i surjective. Equivalently, A has congruences {θ_i} with ⋂ θ_i = 0_A and each A/θ_i = A_i.">subdirect product</span>
+      <span class="topic" data-tooltip="A subdirectly irreducible (SI). The intersection of all non-zero congruences μ is itself non-zero. μ is called the MONOLITH. SIs are the building blocks via Birkhoff's subdirect representation theorem.">subdirectly irreducible (SI) + monolith</span>
+      <span class="topic" data-tooltip="Theorem 5.5–5.7 (Birkhoff 1944, Bull. AMS 50): every algebra is isomorphic to a subdirect product of subdirectly irreducible algebras (its SI quotients). Foundational structure theorem of universal algebra.">Birkhoff subdirect 1944</span>
+      <span class="topic" data-tooltip="Theorem 5.8 (Funayama–Nakayama 1942, Proc. Imp. Acad. Tokyo 18, 553–554): for EVERY lattice L, Con L is a DISTRIBUTIVE algebraic lattice. Surprising: the meta-lattice of congruences is far better-behaved than L itself can be. Proof uses Pixley's majority polynomial m(x,y,z) = (x ∧ y) ∨ (x ∧ z) ∨ (y ∧ z).">Funayama-Nakayama 1942</span>
+      <span class="topic" data-tooltip="Pixley's majority polynomial m(x,y,z) = (x ∧ y) ∨ (x ∧ z) ∨ (y ∧ z). Satisfies m(x,x,y) = m(x,y,x) = m(y,x,x) = x. Existence of a majority term in any variety implies congruence distributivity (a special case of Jónsson's lemma 1967).">majority polynomial</span>
+      <span class="topic" data-tooltip="Dilworth's congruence lattice problem (1940s): which distributive algebraic lattices arise as Con L for some lattice L? Wehrung 2007 (Adv. Math.): counterexample exists. Růžička 2008: optimal counterexample of cardinality ℵ₂. The countable case (Pudlák 1985) and ℵ₁ case (Wehrung) had been resolved positively earlier.">CLP / Wehrung 2007</span>
+    </div>
+    <span class="ch-link">Read Chapter 5 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch06.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch6">
+    <div class="row1">
+      <span class="ch-num">Chapter 6</span>
+      <span class="ch-meta">~85–95 min · pp. 62–74 · 10 sections + 5 connections · 11 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Free Lattices</h3>
+    <p class="tag">From abstract universal-algebra construction to concrete combinatorial structure: the free lattice $\text{FL}(X)$, Whitman's algorithm for the word problem, and the surprising appearance of the semidistributive laws — all coordinated by Day's 1970 doubling construction.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Generators, free generation, existence.</strong> Definition of free generation by $X$ (conditions I/II/III). Theorem 6.1: existence of $\text{FL}(X)$ via three "Basic Principles" (universal-algebra forms of Theorems 5.1, 5.4, 5.5). Word algebra $W(X)$, $\Lambda$, $\lambda$. Proof works for any nontrivial variety (Birkhoff 1935 HSP). <strong>(B) Whitman's solution.</strong> Theorem 6.2 (Whitman 1941): six conditions for $\text{FL}(X)$, including $(W) : p_1 \wedge p_2 \le q_1 \vee q_2 \iff$ four trivial reasons. Skolem 1920 priority (rediscovered by Cosmadakis-Freese late 1980s, Burris 1995). Alan Day's 1970 doubling construction $\mathcal{L}[I]$: slick proof of $(W)$. Word-problem algorithm (polynomial-time per Skolem; exponential per Whitman). <strong>(C) Canonical form.</strong> Theorem 6.3: characterisation of free generation. Lemmas 6.4–6.6: minimal-length terms + refinement quasiorder $\ll$. Theorem 6.7: canonical form unique up to AC. Canonical joinands / meetands. <strong>(D) Structural consequences.</strong> Theorem 6.8 (Jónsson 1961): $\text{FL}(X)$ satisfies $\text{SD}_\vee$ and $\text{SD}_\wedge$. <strong>Theorem 6.9 (Nation 1982)</strong>: a finite lattice embeds in a free lattice $\iff$ it satisfies $(W) + \text{SD}_\vee + \text{SD}_\wedge$ — confirming Jónsson's conjecture. Theorem 6.10: every countable poset embeds in $\text{FL}(3)$, but no uncountable chain embeds in any free lattice. Theorem 6.11: $\text{FL}(X)$ weakly atomic for finite $X$. Reference: Freese-Ježek-Nation, <em>Free Lattices</em>, AMS Surveys & Monographs 42 (1995).</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Lattice F is freely generated by X if (I) F is a lattice, (II) X generates F, (III) every map h₀ : X → L extends to a homomorphism h : F → L. Equivalently: no accidental equations beyond lattice axioms.">freely generated</span>
+      <span class="topic" data-tooltip="FL(X) = the free lattice on X. FL(2) has 4 elements (the 'diamond minus center'). FL(n) is INFINITE for n ≥ 3. Unique up to isomorphism.">FL(X)</span>
+      <span class="topic" data-tooltip="W(X) = absolutely free algebra of formal lattice expressions on X. No equations imposed beyond the formal closure rules. Two terms equal iff they are identical strings.">word algebra W(X)</span>
+      <span class="topic" data-tooltip="Theorem 6.1 (existence): for any nonempty X, FL(X) exists. Construction: W(X) / λ where λ = ⋂ {θ ∈ Con W(X) : W(X)/θ is a lattice}. Proof works for any nontrivial variety (Birkhoff HSP, 1935).">Theorem 6.1 · existence</span>
+      <span class="topic" data-tooltip="Three universal-algebra principles used in Theorem 6.1's proof: (1) First Iso Theorem; (2) lifting lemma when one kernel refines another; (3) Birkhoff subdirect-product representation. Lattice-specific forms are Theorems 5.1, 5.4, 5.5.">Basic Principles 1, 2, 3</span>
+      <span class="topic" data-tooltip="Whitman's condition (W): p₁ ∧ p₂ ≤ q₁ ∨ q₂ iff p₁ ≤ q₁ ∨ q₂ or p₂ ≤ q₁ ∨ q₂ or p ≤ q₁ or p ≤ q₂. THE defining property of FL(X) — no 'miracle' inequality between meet and join.">Whitman's condition (W)</span>
+      <span class="topic" data-tooltip="Theorem 6.2 (Whitman 1941, Annals of Math 42): FL(X) is characterised by six conditions including (W). Skolem 1920 had solved this earlier but his work was forgotten until Cosmadakis-Freese rediscovered it in the late 1980s.">Theorem 6.2 (Whitman 1941)</span>
+      <span class="topic" data-tooltip="Alan Day's 1970 construction (Canad. Math. Bull. 13). For interval I = u/v in L: L[I] = (L − I) ∪ (I × 2) — two parallel copies of I. Used to prove (W) slickly. Foundation of splitting lattices, bounded images, congruence normality.">Day's doubling L[I]</span>
+      <span class="topic" data-tooltip="Theorem 6.7: each w ∈ FL(X) has a unique minimal-length term up to associativity and commutativity — its canonical form. The components are canonical joinands / meetands. Foundation for the Whitman word-problem algorithm.">canonical form</span>
+      <span class="topic" data-tooltip="A ≪ B if every a ∈ A has b ∈ B with a ≤ b. Quasiorder on finite subsets, antisymmetric on antichains. Lemmas 6.5, 6.6 connect refinement to canonical-form analysis.">refinement A ≪ B</span>
+      <span class="topic" data-tooltip="Theorem 6.8 (Jónsson 1961): FL(X) satisfies SD∨: u = a ∨ b = a ∨ c ⟹ u = a ∨ (b ∧ c). Strictly weaker than distributive. Now central in modern lattice theory (convex geometries, Cambrian lattices, fundamental theorem of finite SD lattices Reading-Speyer-Thomas 2019).">SD∨ semidistributive</span>
+      <span class="topic" data-tooltip="Theorem 6.9 (Nation 1982): a FINITE lattice embeds in a free lattice IFF it satisfies (W), SD∨, and SD∧. Confirmed Jónsson's 1961 conjecture. Trans. AMS 269.">Theorem 6.9 (Nation 1982)</span>
+    </div>
+    <span class="ch-link">Read Chapter 6 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch07.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch7">
+    <div class="row1">
+      <span class="ch-num">Chapter 7</span>
+      <span class="ch-meta">~95–110 min · pp. 75–88 · 10 sections + 5 connections · 11 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Varieties of Lattices</h3>
+    <p class="tag">From a single free lattice to the lattice $\Lambda$ of <em>all</em> lattice varieties — and the model-theoretic apparatus (filters, ultrafilters, ultraproducts, Łoś's theorem 1955, Jónsson's lemma 1967) that makes its structure theory tractable.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Equations + varieties.</strong> Lattice equation $p \approx q$, variety / equational class, the standard sub-varieties $\mathbf{L}, \mathbf{M}, \mathbf{D}, \mathbf{T}$. $\mathbf{K}$-free generation generalising Ch 6. <strong>Theorem 7.1 (Birkhoff HSP, 1935):</strong> variety $\iff$ closed under H, S, P $\iff$ admits relatively-free objects + closed under H. The disappointing footnote: word problem for $\mathcal{F}_M(5)$ unsolvable (Freese 1980), $\mathcal{F}_M(4)$ also (Herrmann 1982) — $\mathbf{M}$ is not generated by its finite members. <strong>(B) Fully invariant congruences + $\Lambda$.</strong> Endomorphism semigroup $\textbf{End}\,\mathcal{L}$, fully invariant congruence. <strong>Theorem 7.2:</strong> $\text{FL}(X)/\theta$ relatively free $\iff$ $\theta$ fully invariant. <strong>Theorem 7.3:</strong> $\Lambda$ dually isomorphic to fully invariant congruences on $\text{FL}(\omega)$; dually algebraic; finitely-based varieties = dually compact. HSP closure operator. <strong>Lemma 7.4:</strong> varieties determined by their SIs. <strong>(C) Filters, ultrafilters, ultraproducts.</strong> Filter, principal/nonprincipal, ultrafilter. Lemma 7.5 (5 properties: Zorn extension, ultrafilter characterisation, complement is maximal ideal, finite-cover principle, nonprincipal ⟺ contains cofinite). Reduced product, ultraproduct $\prod \mathcal{L}_i / \equiv_U$. First-order language for lattices: alphabet, equations, AND/OR/NOT, $\forall \exists$, wffs, $(\mathcal{L}, h) \models \varphi$. <strong>First-order:</strong> SD, $(W)$, width 7, $\le 7$ elements, $\cong \mathcal{M}_5$. <strong>Not first-order:</strong> finite, ACC, finite width, subdirectly irreducible. <strong>Theorem 7.6 (Łoś 1955):</strong> $\prod \mathcal{L}_i / \equiv_U \models \varphi$ $\iff$ $\{i : \mathcal{L}_i \models \varphi\} \in U$. <strong>(D) Jónsson + finite basis.</strong> <strong>Theorem 7.7 (Jónsson's Lemma 1967, Math. Scand. 21):</strong> SI in $\text{HSP}(\mathbf{K})$ $\Rightarrow$ SI in $\text{HSP}_u(\mathbf{K})$. Crucial use of Funayama-Nakayama (Ch 5). Lemma 7.8 (filter restriction). <strong>Theorem 7.9:</strong> SI in HSP of finite collection of finite lattices is in HS of one of them. <strong>Theorem 7.10 (McKenzie 1970):</strong> variety generated by a finite lattice is finitely based. Generalisation lineage: Oates-Powell 1964 (groups), Kruse 1973 (rings), Baker 1977 (any congruence-distributive variety). <strong>Theorem 7.11:</strong> $(\mathbf{V} \vee \mathbf{W})_{si} = \mathbf{V}_{si} \cup \mathbf{W}_{si}$. Corollary: $\Lambda$ distributive. <strong>Theorem 7.12 (Baker-Hales 1974):</strong> $\mathcal{I}(\mathcal{L}) \in \text{HSP}_u(\mathcal{L})$.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Lattice equation p ≈ q: p, q ∈ W(X) (lattice terms). L satisfies p ≈ q if h(p) = h(q) for every homomorphism h : W(X) → L. Equivalently: equality in FL(X).">lattice equation p ≈ q</span>
+      <span class="topic" data-tooltip="Variety / equational class: class of all lattices satisfying a fixed set Σ of equations. Standard examples: L (all lattices), M (modular), D (distributive), T (one-element). Closed under H, S, P (Birkhoff HSP).">variety</span>
+      <span class="topic" data-tooltip="Theorem 7.1 (Birkhoff 1935, Proc. Cambridge Phil. Soc. 31, 433-454): a class is a variety ⟺ closed under homomorphic images, sublattices, products ⟺ admits relatively-free objects + closed under H. Foundational HSP theorem of universal algebra.">Birkhoff HSP (Theorem 7.1)</span>
+      <span class="topic" data-tooltip="K-freely generated: F ∈ K, X generates F, every map X → L (L ∈ K) extends to homomorphism F → L. Generalises Ch 6's free generation. F_K(X) is the relatively-free lattice in K on X.">K-free generation</span>
+      <span class="topic" data-tooltip="Endomorphism: lattice homomorphism f : L → L. Form a semigroup End L under composition. Fully invariant congruence: θ such that (x, y) ∈ θ ⟹ (f(x), f(y)) ∈ θ for all endomorphisms f.">fully invariant congruence</span>
+      <span class="topic" data-tooltip="Λ = lattice of all lattice varieties ordered by containment. |Λ| = 2^ℵ₀. Dually algebraic (Theorem 7.3); distributive (Theorem 7.11 corollary). T at bottom, L at top.">Λ · variety lattice</span>
+      <span class="topic" data-tooltip="Theorem 7.2: FL(X)/θ is relatively-freely generated by {xθ : x ∈ X} ⟺ θ is fully invariant. The bijection between varieties and fully invariant congruences on FL(ω).">Theorem 7.2 · invariant correspondence</span>
+      <span class="topic" data-tooltip="Filter F on lattice: 1 ∈ F, closed under finite meets, upward-closed. Principal: ↑x. Nonprincipal: e.g., the cofinite filter on infinite I. Ultrafilter: maximal proper filter; for every A ⊆ I, exactly one of A, I−A is in U.">filter / ultrafilter</span>
+      <span class="topic" data-tooltip="Reduced product ∏ L_i / ≡_F where ≡_F identifies tuples agreeing on a set in F. Ultraproduct: F = U is ultrafilter. Interesting case: U nonprincipal — ultraproduct is genuinely new.">ultraproduct</span>
+      <span class="topic" data-tooltip="Łoś's theorem (Jerzy Łoś, 1955, Mathematical interpretations of formal systems): ultraproduct ∏ L_i / ≡_U satisfies first-order φ ⟺ {i : L_i ⊨ φ} ∈ U. Fundamental theorem of model theory; gateway to compactness, nonstandard analysis, Keisler-Shelah.">Łoś's theorem (Theorem 7.6)</span>
+      <span class="topic" data-tooltip="Jónsson's Lemma (Bjarni Jónsson, 1967, Math. Scand. 21, 110-121): in any congruence-distributive variety, SI in HSP(K) ⟹ SI in HSP_u(K). Crucially uses Funayama-Nakayama (Ch 5). Foundation for finite-basis theorems.">Jónsson's Lemma (Theorem 7.7)</span>
+      <span class="topic" data-tooltip="Theorem 7.10 (Ralph McKenzie, 1970, Math. Scand. 27, 24-38): variety generated by a finite lattice is finitely based — admits a finite equational presentation. Lineage: Oates-Powell 1964 (groups), Kruse 1973 (rings), Baker 1977 (any congruence-distributive variety with finitely many operations).">McKenzie 1970 (Theorem 7.10)</span>
+    </div>
+    <span class="ch-link">Read Chapter 7 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch08.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch8">
+    <div class="row1">
+      <span class="ch-num">Chapter 8</span>
+      <span class="ch-meta">~85–95 min · pp. 89–98 · 11 sections + 5 connections · 12 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Distributive Lattices</h3>
+    <p class="tag">The most tractable lattice variety: a single subdirectly irreducible $\mathbf{2}$, the unique-up-to-isomorphism set-representation, finite Birkhoff duality with posets, free distributive lattices and Dedekind's problem (9th value computed in April 2023!), Stone's representation of Boolean algebras (1936), and Dilworth's stunning 1945 disproof of Huntington's 65-year conjecture on uniquely complemented lattices.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Local finiteness + forms of distributivity.</strong> Theorem 8.1 (HSP of finite is locally finite, with cardinality bound $|\mathcal{F}_\mathbf{V}(n)| \le |L|^{|L|^n}$). Lemma 8.2: three equivalent forms of distributivity, including the self-dual median identity $(x \vee y) \wedge (x \vee z) \wedge (y \vee z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$. Lemma 8.3: surjective $h : \mathcal{L} \twoheadrightarrow \mathbf{2}$ ↔ ideal/filter partition. <strong>(B) Birkhoff Prime Ideal Theorem.</strong> Prime ideal/filter; complement of prime ideal = prime filter. <strong>Theorem 8.4 (Birkhoff Prime Ideal Theorem):</strong> in distributive D, $a \not\le b$ ⟹ exists prime filter separating them. Cascade of corollaries: $\mathbf{2}$ is the only SI distributive lattice; $\mathbf{D} = \text{HSP}(\mathbf{2})$; $\mathbf{D}$ is locally finite. <strong>(C) Set representation + finite Birkhoff.</strong> Theorem 8.5 (every distributive lattice embeds in $\mathfrak{P}(S)$). Join prime element. <strong>Theorem 8.6 (Birkhoff 1933 finite representation):</strong> finite $\mathcal{D} \cong \mathcal{O}(J(\mathcal{D}))$ — finite distributive lattices ⟺ finite posets. Free distributive lattice $\mathcal{F}_\mathbf{D}(n)$ as the order ideals of antichain-poset on subsets. <strong>Dedekind's problem</strong>: counting $|\mathcal{F}_\mathbf{D}(n)|$. Sequence: 2, 3, 6, 20, 168, 7581, 7M, 2.4T, 56 sextillion, ... $M(9)$ computed in April 2023 by Christian Jäkel (TU Dresden, 5311 GPU-hours) AND independently by Van Hirtum, De Causmaecker et al. (KU Leuven/Paderborn, FPGAs). $M(10)$ remains computationally infeasible. Kleitman's asymptotic: $\log_2 M(n) \sim \binom{n}{\lfloor n/2 \rfloor}$. <strong>(D) Boolean + Stone + uniquely complemented.</strong> Theorem 8.7 (Tarski-Papert, 1959): complete embedding into $\mathcal{P}(X)$ ⟺ completely-join-prime elements separate. Boolean algebra = complemented distributive. Free Boolean $\text{FBA}(X) = \mathfrak{P}(\mathfrak{P}(X))$ for finite $X$; $\text{FBA}(\aleph_0)$ is the unique countable atomless Boolean algebra. <strong>Theorem 8.8 (Stone Representation, 1936):</strong> every Boolean algebra $\cong$ clopen subsets of compact totally disconnected Hausdorff space. Sublemmas A and B. Priestley duality (1970) generalises to all distributive lattices via ordered Stone spaces; Esakia duality (1974) for Heyting. Peirce 1880 + Huntington 1904 conjecture. <strong>Theorem 8.9 (Birkhoff-Ward 1939):</strong> complete + atomic + uniquely complemented ⟹ Boolean. <strong>Dilworth 1945 disproof:</strong> every lattice embeds in a uniquely complemented one — Huntington's conjecture is dramatically false.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Locally finite variety V: every finitely-generated lattice in V is finite. Equivalently F_V(n) finite for every n. Theorem 8.1: HSP of finite lattice is locally finite, |F_V(n)| ≤ |L|^|L|^n.">locally finite</span>
+      <span class="topic" data-tooltip="Lemma 8.2: three equivalent forms of distributivity. (1) x ∧ (y ∨ z) ≈ (x ∧ y) ∨ (x ∧ z); (2) x ∨ (y ∧ z) ≈ (x ∨ y) ∧ (x ∨ z); (3) self-dual median identity (x ∨ y) ∧ (x ∨ z) ∧ (y ∨ z) ≈ (x ∧ y) ∨ (x ∧ z) ∨ (y ∧ z).">three forms of distributivity</span>
+      <span class="topic" data-tooltip="Prime ideal: proper ideal I with x ∧ y ∈ I ⟹ x ∈ I or y ∈ I. Prime filter: dual. Complement L − I is a filter ⟺ I is prime ⟺ L − I is prime.">prime ideal / filter</span>
+      <span class="topic" data-tooltip="Theorem 8.4 (Birkhoff Prime Ideal Theorem): in distributive D, a ≰ b ⟹ exists prime filter F with a ∈ F, b ∉ F. The foundational separation theorem; uses Zorn's Lemma + four-way distributive expansion.">Theorem 8.4 · separation</span>
+      <span class="topic" data-tooltip="Corollary of Theorem 8.4: 2 is the ONLY subdirectly irreducible distributive lattice. Hence D = HSP(2). The variety D has just one SI — much simpler than M (modular) or L (all lattices).">D = HSP(2)</span>
+      <span class="topic" data-tooltip="Theorem 8.5: every distributive lattice D embeds into P(S) where S = prime filters of D, via φ(x) = {F : x ∈ F}. Stone-style precursor: 'points' are prime filters.">Theorem 8.5 · set rep</span>
+      <span class="topic" data-tooltip="Theorem 8.6 (Birkhoff 1933): finite distributive D ≅ O(J(D)) — D equals the order ideals of its poset of join-irreducibles. Equivalence: finite distributive lattices ⟺ finite posets. The cleanest duality in elementary lattice theory.">Birkhoff Theorem 8.6</span>
+      <span class="topic" data-tooltip="Dedekind's problem: count |F_D(n)| = number of antichains in {0,1}^n = number of monotone Boolean functions on n vars. Sequence M(n): 2, 3, 6, 20, 168, 7581, 7M, 2.4T, 56 sextillion, M(9) = 286,386,577,668,298,411,128,469,151,667,598,498,812,366. Computed independently by Jäkel (TU Dresden, GPUs) and Van Hirtum et al. (KU Leuven/Paderborn, FPGAs) in April 2023.">Dedekind's problem</span>
+      <span class="topic" data-tooltip="Theorem 8.7 (Tarski-Papert, 1959): complete lattice D admits complete embedding into P(X) ⟺ completely-join-prime elements separate any incomparable pair. Counter-example: [0,1] ⊆ ℝ has no completely-join-prime elements, hence no complete set representation.">Tarski-Papert (Theorem 8.7)</span>
+      <span class="topic" data-tooltip="Boolean algebra: complemented distributive lattice. As variety with signature ⟨∧, ∨, 0, 1, ^c⟩. Free FBA(X) for finite X has 2^|X| atoms (the minterms), so |FBA(X)| = 2^(2^|X|). FBA(ℵ₀) is the unique countable atomless Boolean algebra.">Boolean algebra</span>
+      <span class="topic" data-tooltip="Theorem 8.8 (M. H. Stone, 1936, Trans. AMS 40, 37-111): every Boolean algebra B is isomorphic to the Boolean algebra of clopen subsets of S(B), a compact totally disconnected Hausdorff space (Stone space). Stone space points = ultrafilters of B. Categorical duality: BoolAlg^op ≃ Stone.">Stone duality (Theorem 8.8)</span>
+      <span class="topic" data-tooltip="Huntington's conjecture (1904): every uniquely complemented lattice is distributive. Theorem 8.9 (Birkhoff-Ward 1939): true under complete + atomic. DRAMATIC DISPROOF: Dilworth 1945 (Trans. AMS 57): every lattice embeds in a uniquely complemented one. Conjecture false.">Huntington / Dilworth 1945</span>
+    </div>
+    <span class="ch-link">Read Chapter 8 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch09.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch9">
+    <div class="row1">
+      <span class="ch-num">Chapter 9</span>
+      <span class="ch-meta">~100–120 min · pp. 99–112 · 10 sections + 5 connections · 14 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Modular and Semimodular Lattices</h3>
+    <p class="tag">From Dedekind's 1900 modular law for normal subgroup lattices to the lattice-theoretic Jordan-Hölder theorem (Wielandt 1939, Grätzer-Nation 2011, Czedli-Schmidt 2011), with semimodularity, projectivity, the Kurosh-Ore replacement theorem, and Dilworth's 1954 covering bijection along the way.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Forbidden sublattices.</strong> Theorem 9.1 (Dedekind 1900): a lattice is modular iff it does not contain $\mathcal{N}_5$ (the pentagon) as a sublattice. Theorem 9.2 (Birkhoff): a modular lattice is distributive iff it does not contain $\mathcal{M}_3$ (the diamond). <strong>Corollary:</strong> distributive iff neither $\mathcal{N}_5$ nor $\mathcal{M}_3$ — the most-cited structural theorem of lattice theory. Bottom of variety lattice $\Lambda$: $\mathbf{T} \prec \mathbf{D} \prec \{\text{HSP}(\mathcal{N}_5), \text{HSP}(\mathcal{M}_3)\}$. Grätzer-Jónsson 1966-68: $\text{HSP}(\mathcal{M}_3)$ has 2 additional covers. Jónsson-Rival 1979 (Pacific J. Math. 82): $\text{HSP}(\mathcal{N}_5)$ has EXACTLY 15 other covers. Nation 1996: counter-example to the finite height conjecture beyond. <strong>(B) Dedekind's transposition + semimodularity.</strong> Natural maps $\mu_a, \nu_b$ between transposed intervals. Theorem 9.3 (Dedekind): in modular lattice, mutually inverse isomorphisms; $(a \vee b)/b \cong a/(a \wedge b)$. Corollary: $a \succ a \wedge b$ iff $a \vee b \succ b$. Definition of (upper) semimodular and lower semimodular. Modular = both (with strong atomicity, Crawley-Dilworth). Theorem 9.4 (Dedekind 1900 generalisation): finite maximal chain ⟹ all chains finite, all maximal chains same length. Dimension function $\delta$. Theorem 9.5 (semimodular: 4 properties); Theorem 9.6 (modular case: equality $\delta(x \vee y) + \delta(x \wedge y) = \delta(x) + \delta(y)$). Quotient transposition + projectivity. Theorem 9.7 (Grätzer-Nation 2011, Algebra Universalis 64): two maximal chains have prime intervals projective in two steps with permutation. <strong>(C) Group-theoretic applications.</strong> Chief series in $\mathcal{N}(\mathcal{G})$. Subnormal subgroups $H \triangleleft\triangleleft \mathcal{G}$. Theorem 9.8 (Wielandt 1939, Math. Zeit. 45): $\mathcal{SN}(\mathcal{G})$ is a lower semimodular sublattice of $\textbf{Sub}\,\mathcal{G}$. Composition series. Corollary: <strong>Jordan-Hölder theorem</strong> via duality of Theorem 9.7. Historical lineage: Jordan 1870 → Hölder 1889 → Dedekind 1900 → Schreier 1928 → Zassenhaus 1934 → Wielandt 1939 → Grätzer-Nation 2011 → Czedli-Schmidt 2011 (uniqueness via projectivity bijection). Stern 1999 monograph. <strong>(D) Decompositions + Dilworth's bijection.</strong> Theorem 9.9 (Kurosh-Ore Replacement Theorem): in modular lattices, two finite irredundant decompositions of $a$ have the same cardinality with replacement. Theorem 9.10 (simultaneous exchange — Crawley-Dilworth). Theorem 9.11 (algebraic modular case). Application to congruence-modular algebras. <strong>Theorem 9.12 (Dilworth 1954, Ann. of Math. 60):</strong> in finite modular lattice, $|J_k(\mathcal{L})| = |M_k(\mathcal{L})|$ for every $k$. Kung-Reuter bijection: explicit $m : J(\mathcal{L}) \cup \{0\} \to M(\mathcal{L}) \cup \{1\}$ with $x \le m(x)$.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 9.1 (Dedekind 1900): a lattice is modular iff it does not contain N₅ (the pentagon) as a sublattice. The pentagon is the universal obstruction to modularity. Proof uses FL(2+1) — the free lattice on x, y, z with x ≥ y, which has 10 elements; modularity collapses two.">Theorem 9.1 · N₅ obstruction</span>
+      <span class="topic" data-tooltip="Theorem 9.2 (Birkhoff): a MODULAR lattice is distributive iff it does not contain M₃ (the diamond) as a sublattice. The diamond is the universal obstruction within the modular world. Combined with Theorem 9.1: distributive iff has neither N₅ nor M₃.">Theorem 9.2 · M₃ obstruction</span>
+      <span class="topic" data-tooltip="Bottom of Λ: T ⊂ D = HSP(2) ⊂ {HSP(N₅), HSP(M₃)}. Grätzer-Jónsson 1966-68: HSP(M₃) has 2 additional covers. Jónsson-Rival 1979 (Pacific J. Math. 82): HSP(N₅) has EXACTLY 15 other covers. Nation 1996: counterexample to finite height conjecture.">bottom of Λ · cover counts</span>
+      <span class="topic" data-tooltip="Theorem 9.3 (Dedekind): in modular lattice, μ_a(x) = x ∧ a and ν_b(x) = x ∨ b are mutually inverse isomorphisms (a∨b)/b ≅ a/(a∧b). The transposition isomorphism — backbone of modular structure theory.">Dedekind transposition (Theorem 9.3)</span>
+      <span class="topic" data-tooltip="Semimodular (= upper semimodular): a ≻ a∧b ⟹ a∨b ≻ b. Equivalently u ≻ v ⟹ u∨x ⪰ v∨x. Lower semimodular is dual. Modular = both (with strong atomicity). Eq X partition lattice is semimodular but nonmodular for |X| ≥ 4.">semimodular</span>
+      <span class="topic" data-tooltip="Theorem 9.4 (Dedekind 1900 generalised to semimodular): if there is a finite maximal chain from a to b, then all chains from a to b are finite and all maximal ones have the same length. Foundation for the dimension function.">chain-length theorem (Theorem 9.4)</span>
+      <span class="topic" data-tooltip="δ(x) = length of maximal chain from 0 to x in semimodular lattice with finite principal ideals. Theorem 9.5: 4 properties characterise semimodular; Theorem 9.6: modular case has equality δ(x∨y) + δ(x∧y) = δ(x) + δ(y) (drops cover-condition (3)).">dimension function δ</span>
+      <span class="topic" data-tooltip="Quotient a/b transposes up to c/d if a∨d = c and a∧d = b. Projectivity: smallest equivalence on quotients containing transposed pairs. Theorem 9.7 (Grätzer-Nation 2011, Algebra Universalis 64): two maximal chains in finite-length semimodular lattice have prime intervals projective in 2 steps (up-down) with permutation.">projectivity (Theorem 9.7)</span>
+      <span class="topic" data-tooltip="Subnormal subgroup H ⊲⊲ G: chain H = H₀ ⊲ H₁ ⊲ ... ⊲ G with each H_{i-1} normal in H_i. Theorem 9.8 (Wielandt 1939, Math. Zeit. 45): SN(G) for finite G is a lower semimodular sublattice of Sub G. Composition series = maximal chain in SN(G).">SN(G) · subnormal</span>
+      <span class="topic" data-tooltip="Jordan-Hölder theorem: every two composition series of a finite group have same length and isomorphic factors up to permutation. Lattice-theoretic form: dual of Theorem 9.7 applied to lower semimodular SN(G). Lineage: Jordan 1870 → Hölder 1889 → Dedekind 1900 → Schreier 1928 → Zassenhaus 1934 → Wielandt 1939 → Grätzer-Nation 2011 → Czedli-Schmidt 2011 (uniqueness).">Jordan-Hölder theorem</span>
+      <span class="topic" data-tooltip="Theorem 9.9 (Kurosh-Ore Replacement Theorem): in modular lattice, two finite irredundant decompositions of a into meet-irreducibles have the same cardinality, with replacement property. Lattice-theoretic exchange theorem; Steinitz exchange for vector spaces is the special case.">Kurosh-Ore (Theorem 9.9)</span>
+      <span class="topic" data-tooltip="Theorem 9.12 (Dilworth 1954, Ann. of Math. 60, 359-364): in finite modular lattice, |J_k(L)| = |M_k(L)| for every k ≥ 0 — number of elements covering exactly k = number covered by exactly k. Kung 1985 + Reuter 1987: explicit bijection m : J(L) ∪ {0} → M(L) ∪ {1} with x ≤ m(x).">Dilworth 1954 (Theorem 9.12)</span>
+    </div>
+    <span class="ch-link">Read Chapter 9 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch10.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch10">
+    <div class="row1">
+      <span class="ch-num">Chapter 10</span>
+      <span class="ch-meta">~95–110 min · pp. 113–123 · 10 sections + 5 connections · 15 worked exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Finite Lattices and their Congruence Lattices</h3>
+    <p class="tag">A closure-operator representation theory for finite (and "principally chain finite") lattices, recovering $\textbf{Con}\,\mathcal{L}$ from the join-irreducibles modulo the $\underline{D}$ relation, and answering Dilworth's congruence lattice problem in the finite case (Grätzer-Schmidt 1962) — recapping Wehrung 2007's negative answer for $\aleph_2$ and beyond.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) PCF + closure operator $\Gamma$.</strong> Principally chain finite (PCF) lattices: every $\downarrow x$ satisfies ACC + DCC. The $\underline{D}$ relation on $J(\mathcal{L})$: $p \,\underline{D}\, q$ iff $\exists x$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. Lemma 10.1 (3 properties: separation by join-irreducibles, refinement to minimal join expressions/covers, $\underline{D}$ via minimal join covers). Algebraic closure operator $\Gamma(S) = \{p : p \le \bigvee F$ for finite $F \subseteq S\}$. <strong>(B) Representation Theorems 10.2-10.5.</strong> Theorem 10.2: $\mathcal{L}$ ≅ compact $\Gamma$-closed subsets of $J(\mathcal{L})$. Theorem 10.3: $\Gamma$-closed iff order ideal + closed under minimal join covers. The $\sigma$ map: $\sigma(\theta) = \{p \in J : p \,\theta\, p_*\}$. Theorem 10.4: $\sigma$ is a one-to-one complete lattice homomorphism. Theorem 10.5: range characterised by closure under reverse $\underline{D}$. The $\trianglelefteq$ quasiorder + $Q_\mathcal{L} = J(\mathcal{L})/\equiv$. <strong>Corollary: $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$</strong> — polynomial-time congruence-lattice algorithm. Corollary: SI iff $Q_\mathcal{L}$ has least element. <strong>(C) Dilworth's CLP.</strong> Recap: Wehrung 2007 negative for $\aleph_2$+. Lemma 10.6: distributive algebraic $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ iff every element is join of completely-join-primes iff every compact element is join of join-irreducible compacts. Theorem 10.7: principal congruences $\text{con}(p, p_*)$ are the join-irreducible compacts of $\textbf{Con}\,\mathcal{L}$. <strong>Theorem 10.8 (Dilworth 1940s, Grätzer-Schmidt 1962, Acta Math. Acad. Sci. Hungar. 13):</strong> every distributive algebraic $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ is $\textbf{Con}\,\mathcal{L}$ for some PCF lattice $\mathcal{L}$. Construction with $J = P^0 \cup P^1$ (maximal elements identified). <strong>(D) Modular/relatively complemented + direct sum.</strong> Theorem 10.9: PCF + (modular OR relatively complemented) ⟹ $\underline{D}$ symmetric, $\textbf{Con}\,\mathcal{L}$ Boolean. Theorem 10.10 (Dilworth 1950, Ann. of Math. 51): a relatively complemented PCF lattice is a direct sum of simple ones.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Principally chain finite (PCF) lattice: every principal ideal ↓x satisfies both ACC and DCC. Equivalently: ↓x contains no infinite chain. Includes all finite lattices and arises naturally in finite-height lattice variety analysis (Theorem 11.1 preview).">PCF · principally chain finite</span>
+      <span class="topic" data-tooltip="The D̲ relation on J(L): p D̲ q iff ∃ x ∈ L with p ≤ q ∨ x but p ≰ q_* ∨ x. Reflexive. Lemma 10.1(3): equivalent to 'q ∈ A for some minimal join cover A of p'. Foundation for the chapter's congruence-representation theory.">D̲ relation</span>
+      <span class="topic" data-tooltip="Lemma 10.1: in PCF lattice — (1) b ≰ a ⟹ exists p ∈ J(L) with p ≤ b, p ≰ a; (2) every join expression refines to minimal, every join cover refines to minimal; (3) p D̲ q iff q ∈ A for some minimal join cover A of p.">Lemma 10.1</span>
+      <span class="topic" data-tooltip="Closure operator Γ(S) = {p ∈ J(L) : p ≤ ⋁F for some finite F ⊆ S}. Algebraic closure operator on J(L). Compact closed sets correspond to elements of L via Theorem 10.2.">Γ closure operator</span>
+      <span class="topic" data-tooltip="Theorem 10.2: PCF lattice L ≅ lattice of compact Γ-closed subsets of J(L), via φ(x) = {p ∈ J(L) : p ≤ x}. Generalises Birkhoff's finite distributive representation (Ch 8) to PCF.">Theorem 10.2 · representation</span>
+      <span class="topic" data-tooltip="The σ map: σ : Con L → P(J(L)), σ(θ) = {p ∈ J(L) : p θ p_*}. Theorem 10.4: one-to-one complete lattice homomorphism. Theorem 10.5: range characterised by closure under reverse D̲ — S = σ(θ) iff p D̲ q ∈ S implies p ∈ S.">σ embedding</span>
+      <span class="topic" data-tooltip="Q_L = (J(L)/≡, ⊴), where ⊴ is transitive closure of D̲ and ≡ is 'p ⊴ q AND q ⊴ p.' Corollary of Theorem 10.5: Con L ≅ O(Q_L). Polynomial-time algorithm for finite-lattice congruence computation. SI iff Q_L has least element.">Q_L · Con L ≅ O(Q_L)</span>
+      <span class="topic" data-tooltip="Lemma 10.6: distributive algebraic D ≅ O(P) for some ordered P iff every element of D is a join of completely-join-prime elements iff every compact element of D is a join of (finitely many) join-irreducible compacts. Characterises which D arise as Con L for PCF L.">Lemma 10.6 · O(P) characterisation</span>
+      <span class="topic" data-tooltip="Theorem 10.7: in PCF L, the join-irreducible compact congruences are exactly con(p, p_*) for p ∈ J(L). Moreover, con(q, q_*) ≤ con(p, p_*) iff q ⊴ p in Q_L. Foundation for finite-CLP construction (Theorem 10.8).">Theorem 10.7</span>
+      <span class="topic" data-tooltip="Theorem 10.8 (Dilworth 1940s, proof Grätzer-Schmidt 1962, Acta Math. Acad. Sci. Hungar. 13, 179-185): every distributive algebraic D ≅ O(P) for some ordered P is Con L for some PCF lattice L. Positive answer to Dilworth's CLP for finite case. Construction: J = P^0 ∪ P^1 (maximal elements identified) with closure conditions encoding the order on P.">Dilworth-Grätzer-Schmidt CLP</span>
+      <span class="topic" data-tooltip="Theorem 10.9: PCF + (modular OR relatively complemented) ⟹ D̲ symmetric on J(L), hence Q_L is an antichain, hence Con L ≅ P(Q_L) is a Boolean algebra. Implies SI modular or relatively complemented PCF lattice is simple.">Theorem 10.9 · Boolean Con</span>
+      <span class="topic" data-tooltip="Theorem 10.10 (R. P. Dilworth 1950, Ann. of Math. 51, 348-359, 'The structure of relatively complemented lattices'): a relatively complemented PCF lattice is a direct sum of simple (relatively complemented PCF) lattices. Combines Theorems 10.2 + 10.9 with the structural fact that join-irreducibles in relatively complemented lattices are atoms.">Dilworth 1950 (Theorem 10.10)</span>
+    </div>
+    <span class="ch-link">Read Chapter 10 →</span>
+  </article>
+</a>
+
+<a href="nation-companion-ch11.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch11">
+    <div class="row1">
+      <span class="ch-num">Chapter 11</span>
+      <span class="ch-meta">~70–80 min · pp. 124–130 · 9 sections + 5 connections · 12 worked exercises <span class="status">Available · final main chapter</span></span>
+    </div>
+    <h3>Geometric Lattices</h3>
+    <p class="tag">Lattice-theoretic foundations of incidence geometry: algebraic semimodular lattices in which every element is a join of atoms. The meeting point of lattice theory, matroid theory (Whitney 1935 + Birkhoff 1935 + Mac Lane 1938), projective geometry, and modern combinatorics — including the spectacular Adiprasito-Huh-Katz 2018 Hodge-theoretic resolution of the unimodal conjecture.</p>
+    <p class="desc">Four conceptual movements. <strong>(A) Geometric lattices.</strong> Geometry's incidence axioms (1)-(4) yield: a lattice in which atoms = points, every element is join of atoms, semimodular dimension. Definition: geometric lattice = algebraic semimodular atomistic. Examples: $\mathbb{R}^n$, vector subspaces, $\textbf{Eq}\,X$. Geometric vs lattice dimension. Birkhoff 1930s + Menger-Alt-Schreiber 1936 history. <strong>Theorem 11.1:</strong> three equivalent characterisations (geometric ⟺ upper-continuous atomistic semimodular ⟺ ideal lattice of atomistic semimodular PCF). <strong>(B) Mac Lane's representation + relative complementation.</strong> Exchange property of closure operator. Examples: linear span, geometric closure, transcendence-degree closure (Mac Lane 1938 motivation). <strong>Theorem 11.2 (Mac Lane 1938, Duke Math. J. 4):</strong> geometric ⟺ closed sets of algebraic closure operator with exchange property. <strong>Theorem 11.3:</strong> every geometric lattice is relatively complemented (uses Zorn + atom-finding). <strong>(C) Direct product decomposition.</strong> Lemma 11.4: $\mathcal{I}(\sum \mathbf{K}_i) \cong \prod \mathcal{I}(\mathbf{K}_i)$. <strong>Theorem 11.5 (Dilworth 1950 finite-dim, Hashimoto 1957 extension):</strong> every geometric lattice is direct product of SI geometric lattices; finite-dim case = direct product of simple. Libkin 1995: every atomistic algebraic = direct product of directly indecomposable. <strong>(D) Whitney numbers + unimodal + convex.</strong> Whitney numbers $w_k = |\{x : \delta(x) = k\}|$. <strong>Unimodal conjecture</strong>: $w_0 \le \cdots \le w_m \ge \cdots \ge w_n$. Open until 2018 — partial cases by Basterfield-Kelly 1968, Greene 1970, Hsieh-Kleitman 1973, Harper 1974, Dowling-Wilson 1975. <strong>RESOLVED in stronger LOG-CONCAVITY form by Adiprasito, Huh &amp; Katz 2018 (Annals of Math 188)</strong> via Hodge theory for matroids — June Huh received 2022 Fields Medal partially for this work. Anti-exchange property → convex geometries (Adaricheva-Gorbunov-Tumanov 2003 Adv. Math. 173). The matroid / convex-geometry dichotomy.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Geometric lattice = algebraic semimodular lattice in which every element is a join of atoms. Atoms correspond to points; join = span; meet = intersection. Examples: subspaces of R^n, subspaces of vector spaces, equivalence-relation lattice Eq X.">geometric lattice</span>
+      <span class="topic" data-tooltip="Atomistic = every element is a join of atoms. Geometric lattices are necessarily atomistic. Atoms correspond to 'points' of the geometry; geometric dimension is one less than lattice dimension δ.">atomistic</span>
+      <span class="topic" data-tooltip="Theorem 11.1: 3 equivalent characterisations of geometric lattice — (1) geometric (algebraic semimodular atomistic); (2) upper continuous atomistic semimodular; (3) ideal lattice of atomistic semimodular PCF. Plus: K = compact elements of L = finite-dim elements of L.">Theorem 11.1</span>
+      <span class="topic" data-tooltip="Exchange property of closure operator Γ: y ∈ Γ(B ∪ {x}) and y ∉ Γ(B) implies x ∈ Γ(B ∪ {y}). Generalises Steinitz exchange for vector spaces. Examples: linear span, geometric closure, transcendence-degree closure.">exchange property</span>
+      <span class="topic" data-tooltip="Theorem 11.2 (Saunders Mac Lane 1938, 'A lattice formulation for transcendence degrees and p-bases', Duke Math. J. 4, 455-468): a lattice L is geometric iff isomorphic to lattice of closed sets of an algebraic closure operator with exchange property. Foundational result of matroid theory.">Mac Lane (Theorem 11.2)</span>
+      <span class="topic" data-tooltip="Matroid (Whitney 1935, 'On the abstract properties of linear dependence', Amer. J. Math. 57): combinatorial structure abstracting linear independence. Equivalent to finite atomistic semimodular lattice (Birkhoff 1935) = closure operator with exchange (Mac Lane 1938). Three perspectives, one structure.">matroid</span>
+      <span class="topic" data-tooltip="Theorem 11.3: every geometric lattice is relatively complemented. Proof via Zorn + atom-finding. Combined with Theorem 10.10 (Dilworth 1950), enables the direct product decomposition Theorem 11.5.">Theorem 11.3</span>
+      <span class="topic" data-tooltip="Theorem 11.5 (Dilworth 1950 finite-dim, Hashimoto 1957 extension): every geometric lattice is a direct product of subdirectly irreducible geometric lattices. Finite-dim case = direct product of simple geometric lattices. Libkin 1995: atomistic algebraic = direct product of directly indecomposable.">Theorem 11.5 · structure</span>
+      <span class="topic" data-tooltip="Whitney numbers w_k = |{x ∈ L : δ(x) = k}| for finite geometric lattice. Examples: Stirling numbers (for Eq n), Gaussian binomials (for Sub(F_q^n)). The dimension-by-dimension census of the lattice.">Whitney numbers</span>
+      <span class="topic" data-tooltip="Unimodal conjecture (Rota ~1971): for finite geometric lattice of dim n, ∃ m with w_0 ≤ ... ≤ w_m ≥ ... ≥ w_n. Partial cases by Basterfield-Kelly 1968, Greene 1970, Harper 1974, Hsieh-Kleitman 1973, Dowling-Wilson 1975. RESOLVED 2018 by Adiprasito-Huh-Katz in stronger log-concavity form via Hodge theory for matroids.">unimodal conjecture</span>
+      <span class="topic" data-tooltip="Adiprasito-Huh-Katz 2018 (Annals of Math 188, 381-452, 'Hodge theory for combinatorial geometries'): proved log-concavity (hence unimodality) for ALL matroids via Chow ring of matroid + Bergman fan + Kähler package. June Huh received 2022 Fields Medal partially for this work. Combinatorial breakthrough using algebraic-geometric tools.">Adiprasito-Huh-Katz 2018</span>
+      <span class="topic" data-tooltip="Anti-exchange property: y ∈ Γ(B ∪ {x}) and y ∉ Γ(B) implies x ∉ Γ(B ∪ {y}). Convex hull is the prototype. Closure operators with anti-exchange give CONVEX GEOMETRIES (Edelman-Jamison 1985), dual of finite join-semidistributive lattices (Adaricheva-Gorbunov-Tumanov 2003 Adv. Math. 173, 1-49). The dual world to matroid theory.">anti-exchange · convex geometries</span>
+    </div>
+    <span class="ch-link">Read Chapter 11 →</span>
+  </article>
+</a>
+
+<h2 class="section-h">Appendices</h2>
+
+<article class="chapter-card pending" id="card-app1">
+  <div class="row1">
+    <span class="ch-num">Appendix 1</span>
+    <span class="ch-meta">pp. 131–134 <span class="status">Pending</span></span>
+  </div>
+  <h3>Cardinals, Ordinals and Universal Algebra</h3>
+  <p class="tag">Set-theoretic preliminaries assumed throughout the book.</p>
+  <p class="desc">Cardinals and ordinals, transfinite induction. Universal algebra basics: signatures, terms, equational theories.</p>
+  <span class="ch-link">Coming soon</span>
+</article>
+
+<article class="chapter-card pending" id="card-app2">
+  <div class="row1">
+    <span class="ch-num">Appendix 2</span>
+    <span class="ch-meta">pp. 135–137 <span class="status">Pending</span></span>
+  </div>
+  <h3>The Axiom of Choice</h3>
+  <p class="tag">Proof of Theorem 1.5 — the equivalence of AoC, Zermelo, Hausdorff, Zorn, and LUB-chain → maximal.</p>
+  <p class="desc">Detailed proof that the five set-theoretic axioms in Theorem 1.5 are pairwise equivalent.</p>
+  <span class="ch-link">Coming soon</span>
+</article>
+
+<article class="chapter-card pending" id="card-app3">
+  <div class="row1">
+    <span class="ch-num">Appendix 3</span>
+    <span class="ch-meta">pp. 138–141 <span class="status">Pending</span></span>
+  </div>
+  <h3>Formal Concept Analysis</h3>
+  <p class="tag">Ganter–Wille's formal concept analysis: the lattice of concepts of a binary relation.</p>
+  <p class="desc">A binary relation $R \subseteq A \times B$ induces a Galois connection between $\mathfrak{P}(A)$ and $\mathfrak{P}(B)$ whose fixed points form the <em>concept lattice</em>. Ganter–Wille's formal concept analysis (FCA) is the systematic study.</p>
+  <span class="ch-link">Coming soon</span>
+</article>
+
+<h2 class="section-h">Reference</h2>
+
+<div class="companion-purpose">
+  <p><strong>How chapters are organised.</strong> Each chapter file has a sidebar with sections grouped into thematic parts, followed by five outward connection panels, a glossary, and worked exercises. Theme toggle (dark/light) preserves your choice via <code>localStorage</code>. The brand block in each chapter's sidebar links back here.</p>
+  <p><strong>Math rendering.</strong> All chapters use MathJax 3.2 (loaded from cdnjs). Tooltip math has been pre-rendered to Unicode for in-attribute display. Allow a few seconds for initial typeset on first load.</p>
+  <p><strong>Source.</strong> Companion to <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii (free PDF lecture notes). All theorem numberings, definitions, and exercise statements are from those notes.</p>
+  <p><strong>Companion progress.</strong> Phase 1: Chapter 1 only. Subsequent chapters will be added incrementally.</p>
+</div>
+
+<footer>
+  <div class="row">
+    <div>Nation Companion · Front Door</div>
+    <div>Built to be read alongside Nation's notes.</div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Theme toggle persists across chapters via localStorage.</div>
+    <div>Last updated: April 2026.</div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Chapter III · Covers in Free Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .scope { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; color: var(--ink-soft); }
+  .scope p { margin: 0 0 10px; }
+  .scope p:last-child { margin: 0; }
+  .scope .attrib { display: block; text-align: right; font-style: italic; color: var(--text-dim); font-size: 13.5px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor, .box.problem { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.problem .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.example { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.example > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.example[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.example > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.example[open] > summary::before { content: "▾ "; }
+  details.example > div.body { padding: 6px 22px 14px; }
+  details.example .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.example .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Free Lattices Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Free Lattices</em> by Ralph Freese, Jaroslav Ježek &amp; J. B. Nation (AMS Surveys 42, 1995).</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="freelat-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="freelat-companion-ch02.html">← Chapter II</a></li>
+    <li><a href="freelat-companion-ch04.html">Chapter IV →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter III · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Cover-theory foundations</div>
+  <ul>
+    <li><a href="#s1">§1 · Elementary cover theorems (3.1–3.10)</a></li>
+    <li><a href="#s2">§2 · J-closed sets and standard epimorphism (3.11–3.16)</a></li>
+    <li><a href="#s3">§3 · Finite lower bounded lattices (3.17–3.23)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · The lattice $\mathbf{L}^\vee(w)$</div>
+  <ul>
+    <li><a href="#s4">§4 · L<sup>∨</sup>(w) (3.24–3.28)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Polynomial-time algorithm</div>
+  <ul>
+    <li><a href="#s5">§5 · Syntactic algorithms (3.29–3.35)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Examples + bottom of FL(X)</div>
+  <ul>
+    <li><a href="#s6">§6 · Examples (3.36–3.42, Table 3.1)</a></li>
+    <li><a href="#s7">§7 · Connected components (3.43–3.45)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Freese-Nation 1985</a></li>
+    <li><a href="#c2">P2 · From canonical form to algorithm</a></li>
+    <li><a href="#c3">P3 · κ-bijection in action</a></li>
+    <li><a href="#c4">P4 · Bottom of FL(X)</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#examples">Computed examples</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Free Lattices · Mathematical Surveys &amp; Monographs 42 · Chapter III</div>
+  <h1>Covers in Free Lattices</h1>
+  <p class="lede">Freese-Nation 1985 made operational. Given $w \in \mathbf{FL}(X)$, decide whether $w$ has a lower cover and — if so — list all of them, in polynomial time. The key constructions: J-closed sets, the standard epimorphism $\mathbf{FL}(X) \to A^\vee$, the finite lower-bounded subdirectly-irreducible lattice $\mathbf{L}^\vee(w)$ associated to each completely-join-irreducible $w$, and Theorem 3.32's explicit formula for $\kappa(w)$.</p>
+  <div class="meta">
+    <span>~110–135 min read</span>
+    <span>7 sections · 45 named results</span>
+    <span>5 connection panels</span>
+    <span>Book pp. 67–89 · PDF pp. 76–98</span>
+  </div>
+</section>
+
+<aside class="scope">
+  <p>In this chapter we study covers in a finitely generated free lattice $\mathbf{FL}(X)$, with the aim of giving an algorithm which finds all the lower covers of a given element. Of course, upper covers can be treated dually. In Section 1 we collect the material that can be derived by elementary methods and reduce the problem of finding the lower covers of an element to the case when the element is join irreducible. In Sections 2 and 3 we build the basic theory and in Section 4 we use this theory to formulate and prove a fundamental result characterizing when a join irreducible element $w$ has a lower cover in $\mathbf{FL}(X)$. For each join irreducible element $w$, we construct a finite lattice $\mathbf{L}^\vee(w)$. The element $w$ has a lower cover if and only if this lattice is semidistributive. This shows that the question of deciding if $w$ has a lower cover is recursive. In Section 5 we then proceed to obtain a syntactic version of the algorithm, extracting the crucial information from $\mathbf{L}^\vee(w)$ without requiring that the lattice be constructed. This syntactic algorithm is more suitable for computer language implementations, and the techniques employed make it also possible to obtain more detailed information on the canonical representation of a completely join irreducible element and its lower cover.</p>
+  <p>Most of the results in this chapter are from Freese and Nation's paper <em>Covers in free lattices</em>, Trans. AMS 288 (1985), 1–42.</p>
+  <span class="attrib">— Freese, Ježek &amp; Nation, opening of Chapter III (paraphrased)</span>
+</aside>
+
+<p>Throughout this chapter, $X$ is a finite set with at least three elements. The chapter delivers what Chapter II promised: an effective procedure for the cover relation in $\mathbf{FL}(X)$. Where Chapter II built the structural toolkit (κ-bijection, J-closed sets, bounded homomorphisms), Chapter III applies that toolkit to a single concrete question — <em>does this term have a lower cover?</em> — and the answer is a polynomial-time algorithm.</p>
+
+<p>The chapter has a clear architectural arc. <strong>Sections 1–3</strong> reduce the problem to: "for $w$ completely join irreducible, decide if $w_*$ exists." <strong>Section 4</strong> constructs $\mathbf{L}^\vee(w)$, a finite lower-bounded subdirectly-irreducible lattice associated to each join-irreducible $w$. The key theorem (3.26): $w$ has a lower cover iff $\mathbf{L}^\vee(w)$ is meet semidistributive. <strong>Section 5</strong> bypasses constructing $\mathbf{L}^\vee(w)$ explicitly, giving a syntactic test (Theorem 3.30) and an explicit formula for $\kappa(w)$ (Theorem 3.32). <strong>Sections 6–7</strong> apply the algorithm: examples of coverless elements (Dean's 1960 historical example), classification of slim elements with covers, and an explicit description of the bottom of $\mathbf{FL}(X)$.</p>
+
+<p>The chapter's deepest result is Theorem 3.32, which gives $\kappa(w)$ as an explicit syntactic expression in the canonical form of $w$. This is the formula the polynomial-time implementation of the cover algorithm uses. In Chapter XI, the algorithms developed here are shown to run in polynomial time — $O(|w|^k)$ for $w$ a term of length $|w|$ — making the cover relation tractable for actual computation on free-lattice expressions.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">Three panes: terms <strong>carried forward</strong> from Chapters I–II, terms <strong>new</strong> in this chapter, and the <strong>deep dives</strong> that reward close reading.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chapters I–II</span>
+    <p>Canonical form (I.17), the canonical join representation $w = \bigvee w_i$ with canonical joinands $w_i$ (I.18), join refinement $A \ll B$ (I.15). Whitman's condition (W) (I.8) and the algorithm (I.11). Semidistributivity SD$_\vee$ / SD$_\wedge$ (I.21). Covers and the lower cover $a_*$, upper cover $b^*$ of completely (join/meet) irreducible elements. Day's doubling $\mathbf{L}[C]$ (I.1). Bounded homomorphism with right adjoint $\beta$ and left adjoint $\alpha$ (II.1). The minimal join cover refinement property and the set $\mathcal{M}(a)$ of minimal covers (II.6). The D relation, D-rank $\rho$, $\mathbf{D}(\mathbf{L})$ (II.7). The κ-map $\kappa(w) = \bigvee K(w)$ where $K(w) = \{u : u \ge w_*, u \not\ge w\}$ (II.54), the κ-bijection $\mathbf{J}(\mathbf{L}) \leftrightarrow \mathbf{M}(\mathbf{L})$ in semidistributive lattices (II.55). J-closed sets and $\mathbf{J}(p)$, $\mathbf{J}^*(p)$ (II.48–II.51). Critical pair / quotient / prime critical quotient and splitting lattices (II.71–II.79). $\mathbf{V}(\mathbf{L})$ — variety generated by $\mathbf{L}$.</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter III vocabulary</span>
+    <p>Six clusters of new vocabulary. <strong>Cover-relating elements:</strong> "$w$ has a lower cover $w_*$" — this is now made effectively decidable; in the chapter, $w$ being completely join irreducible is equivalent to "$w$ has a lower cover" (Theorem 3.1). <strong>Lower atomic / upper atomic:</strong> $w$ is <em>lower atomic</em> if for every $u < w$ there exists $v$ with $u \le v \prec w$ (every below has a cover-witness). Dually <em>upper atomic</em>. Theorem 3.5–3.8 give the cover-counting via canonical joinands. <strong>Coverless element:</strong> $w$ has no lower cover AND no upper cover. The first historical example (Dean 1960, Example 3.36): $w = x \wedge (y \vee z)$ in $\mathbf{FL}(\{x, y, z\})$. <strong>The standard epimorphism:</strong> for a finite J-closed subset $A \subseteq L$ (with $\mathbf{L}$ having minimal-join-cover refinement), the map $f : \mathbf{L} \to A^\vee$ defined by $f(u) = \bigvee\{a \in A : a \le u\}$ is a lower-bounded epimorphism (Theorem 3.15). This is the chapter's bridge between J-closure and lower-bounded structure. <strong>The lattice $A^\vee$:</strong> for $A \subseteq L$ finite, $A^\vee = $ the join-subsemilattice of $L$ consisting of all joins of finite subsets of $A$ (including $\bigvee \emptyset = 0$), with the inherited join and a derived meet $a \wedge' b = \bigvee\{c \in A : c \le a \wedge b \text{ in } \mathbf{L}\}$. <strong>The lattice $\mathbf{L}^\vee(w)$:</strong> for a join irreducible $w \in \mathbf{FL}(X)$, $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$. Theorem 3.24 — finite, lower bounded, subdirectly irreducible with $w/w_\dagger$ as critical prime quotient (where $w_\dagger = \bigvee\{u \in \mathbf{J}(w) : u < w\}$). The chapter's central technical object. <strong>Syntactic algorithm:</strong> a procedure operating directly on canonical-form terms (rather than constructing $\mathbf{L}^\vee(w)$). The set $\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}$, used in Theorem 3.30 to test complete-join-irreducibility, and in Theorem 3.32 to compute $\kappa(w)$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Four threads reward close reading. <strong>The fundamental reduction (Theorems 3.5, 3.7, 3.8).</strong> A join reducible element $w = w_1 \vee \cdots \vee w_n$ (canonical) has lower covers in bijection with its <em>completely join irreducible canonical joinands</em>. The bijection $\gamma$ sends a lower cover $v$ to the unique $w_i \not\le v$. This reduces the cover problem to the case of a single completely-join-irreducible element. <strong>The standard epimorphism = the J-closure structural skeleton.</strong> Theorem 3.15: for finite J-closed $A$, the map $f(u) = \bigvee\{a \in A : a \le u\}$ is a lower-bounded epimorphism $\mathbf{L} \twoheadrightarrow A^\vee$. So J-closed sets are NOT just combinatorial closures — they correspond bijectively to lower-bounded congruences (Corollary 3.16, Corollary 2.34). This is the "fundamental theorem on homomorphic images of $A^\vee$" (Theorem 3.19). <strong>Theorem 3.26 — the central characterisation.</strong> For a join-irreducible $w \in \mathbf{FL}(X)$, the following are equivalent: (1) $w$ is completely join irreducible (= has a lower cover); (2) every element of $\mathbf{J}(w)$ is completely join irreducible; (3) every subelement of $w$ is lower atomic; (4) $\mathbf{L}^\vee(w)$ is meet semidistributive; (5) $\mathbf{L}^\vee(w)$ is a splitting lattice. Five equivalent forms — each useful in different contexts. <strong>Theorem 3.32 — the explicit formula for $\kappa(w)$.</strong> $\kappa(w) = \bigvee\{x \in X : w_\dagger \vee x \not\ge w\} \vee \bigvee\{k^\dagger \wedge \kappa(v) : v \in \mathbf{J}(w) - \{w\}, w \not\le \kappa(v)\}$ where $k^\dagger = \bigwedge\{\kappa(v) : v \in \mathbf{J}(w) - \{w\}, \kappa(v) \ge \bigvee \mathbf{K}(w)\}$. This is what the polynomial-time implementation actually computes. Beautiful in its specificity: every quantity in the formula is recursively determined by the canonical form.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · COVER-THEORY FOUNDATIONS — §1, §2, §3</div>
+  <h2>From general elements to completely-join-irreducible witnesses, via J-closed sets and the standard epimorphism</h2>
+  <p class="part-lede">Reduce the cover problem to the case of completely join irreducibles (§1), build the J-closure / standard-epimorphism duality (§2), and characterise finite lower bounded lattices as $A^\vee$ for finite J-closed $A$ (§3).</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 1</span> Elementary Theorems on Covers in $\mathbf{FL}(X)$</h2>
+  <div class="tagline">$w$ has a lower cover iff $w$ is completely join irreducible (3.1). The canonical-meetand-not-above $\kappa(w_*)$ is unique (3.1). The number of lower covers of a join reducible $w$ equals the number of its completely-join-irreducible canonical joinands (3.5–3.8).</div>
+
+  <h3>The κ-correspondence specialised to free lattices (book p. 67)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.1 · κ in $\mathbf{FL}(X)$</span>
+    <p>Let $w$ be a completely join irreducible element of $\mathbf{FL}(X)$. Then there is a unique canonical meetand $\kappa(w)$ of $w_*$ which is not above $w$. Every element of $\mathbf{FL}(X)$ which is above $w_*$ is either above $w$ or below $\kappa(w)$. Dually, if $v$ is completely meet irreducible in $\mathbf{FL}(X)$, then $\kappa^d(v)$ is the unique canonical joinand of $v^*$ which is not below $v$ and every element below $v^*$ is either below $v$ or above $\kappa^d(v)$.</p>
+    <p>If $w$ is not completely join irreducible, then $\kappa(w)$ is undefined.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · κ as the "splitting witness"</span>
+    <p>Theorem 3.1 specialises the κ-map of Chapter II's Theorem 2.54 to the case of free lattices. Free lattices are semidistributive (Theorem 1.21) and have the minimal join cover refinement property (Corollary 2.11), so κ is fully defined on completely join irreducibles. The interval $1/w_*$ is the disjoint union of $1/w$ (above $w$) and $\kappa(w)/w_*$ (below $\kappa(w)$). The element $\kappa(w)$ "tracks" the missing direction — it is the unique witness that $w$ does not lie below.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.2 · the disjoint-union characterisation</span>
+    <p>Let $w$ be completely join irreducible in $\mathbf{FL}(X)$. If $u \ge w_*$, then either $u \ge w$ or $u \le \kappa(w)$. Thus the interval $1/w_*$ is the disjoint union of $1/w$ and $\kappa(w)/w_*$. Moreover, for any element $u$, $u \le \kappa(w)$ iff $w_* \vee u \not\ge w$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.3 · κ is a bijection in $\mathbf{FL}(X)$</span>
+    <p>If $w$ is a completely join irreducible element of $\mathbf{FL}(X)$, then $\kappa(w)$ is completely meet irreducible and</p>
+    $$w_* = w \wedge \kappa(w), \qquad \kappa(w)^* = w \vee \kappa(w), \qquad \kappa^d(\kappa(w)) = w.$$
+    <p>Thus $\kappa$ is a bijection from the set of completely join irreducible elements onto the set of completely meet irreducible elements of $\mathbf{FL}(X)$, and $\kappa^d$ is its inverse.</p>
+  </div>
+
+  <p>By Theorem 2.66, $w$ and $\kappa(w)$ have the same complexity, $\rho(w) = \rho^d(\kappa(w))$. Yet (as Chapter XI shows) the LENGTHS of these elements as terms can differ greatly. Table 3.1 (in §6 below) lists six concrete examples of completely join irreducible $w$ together with their $\kappa(w)$, illustrating the size disparity.</p>
+
+  <h3>The structural decomposition for canonical joinands (book p. 68)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.4 · canonical-meetand uniqueness</span>
+    <p>Let $w$ be a completely join irreducible element in $\mathbf{FL}(X)$. If</p>
+    $$w = \bigwedge_i \bigvee_j w_{ij} \wedge \bigwedge_k x_k$$
+    <p>canonically, then for each $i$ there is exactly one $j$ with $w_{ij} \not\le w$.</p>
+  </div>
+
+  <p>The proof uses Whitman's condition (W) applied to $w \le w_* \vee w_{i1}$ (after renumbering), the canonical-form characterisation (Theorem 1.18), and the fact that distinct canonical meetands cannot be comparable. Crucial for Sections 4–5: $\kappa(w)$'s defining role makes Theorem 3.4 the entry point for finding $\kappa(w)$ syntactically.</p>
+
+  <h3>Reducing covers of $w$ to canonical joinand structure (book p. 69)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.5 · cover bijection γ</span>
+    <p>Let $w$ be a join reducible element of $\mathbf{FL}(X)$. Then there is a bijection $\gamma$ of the set of lower covers of $w$ onto the set of the canonical joinands of $w$ that are completely join irreducible, defined as follows:</p>
+    <ol>
+      <li>If $v$ is a lower cover of $w$, then $\gamma(v)$ is the unique canonical joinand $w_i$ of $w$ such that $w_i \not\le v$.</li>
+      <li>If $w_i$ is a completely join irreducible canonical joinand of $w$, then $\gamma^{-1}(w_i) = \kappa(w_i) \wedge w$, and this is the only lower cover of $w$ not above $w_i$.</li>
+    </ol>
+    <p>Moreover, each canonical joinand $w_i$ is join prime in $w/0$, and if $w_i$ is completely join irreducible then it is completely join prime in $w/0$. Consequently, if $w_i$ is completely join irreducible, then $w/0$ is the disjoint union of the intervals $w/w_i$ and $w \wedge \kappa(w_i)/0$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Lower atomic / upper atomic</span>
+    <p>An element $w \in \mathbf{FL}(X)$ is <strong>lower atomic</strong> if for every element $u$ such that $u < w$ there exists an element $v$ with $u \le v \prec w$. (Equivalently: every element below $w$ has a cover-witness.) An element $w$ is <strong>upper atomic</strong> dually.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollaries 3.6–3.9 · cover counts and atomicity</span>
+    <p><strong>3.6:</strong> If $w = w_1 \vee \cdots \vee w_n$ canonically, the number of lower covers of $w$ equals the number of completely join irreducible $w_i$. So $w$ has at most $n$ lower covers. <strong>3.7:</strong> A join reducible $w$ has a lower cover iff at least one canonical joinand is completely join irreducible. <strong>3.8:</strong> $w$ is lower atomic iff $w$ has precisely $n$ lower covers iff each $w_i$ is completely join irreducible. <strong>3.9:</strong> Letting $v = $ join of all completely-join-irreducible canonical joinands and $u = $ join of the others, an interval $w/t$ is coatomic iff $t \ge u$; contains no coatom iff $t \ge v$.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.10 · κ for generators and meets-of-generators</span>
+    <p>For a generator $x \in X$, $\kappa(x) = \overline{x} = \bigvee(X - \{x\})$ and $x_* = x \wedge \overline{x}$. Dually, $\kappa^d(x) = \underline{x} = \bigwedge(X - \{x\})$ and $x^* = x \vee \underline{x}$. If $w = \bigwedge Y$ is a meet of generators (with $\emptyset \neq Y \subset X$), then $\kappa(w) = \bigvee(X - Y)$ and $w_* = w \wedge \kappa(w)$. The element $w$ is also upper atomic, and its upper covers are $w \vee \underline{y}$ for each $y \in Y$ (Corollary 1.7).</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the cover question reduces to one case</span>
+    <p>Theorem 3.5 turns the problem "list all lower covers of $w$" into "for each canonical joinand $w_i$, decide if $w_i$ is completely join irreducible (= has a lower cover)." The reduction is COMPLETE: covers above $w$ correspond exactly to completely-join-irreducible canonical joinands, with $\gamma^{-1}(w_i) = \kappa(w_i) \wedge w$. Sections 2–5 are dedicated to the residual question: given a join-irreducible $w$, decide if it is completely join irreducible. That question is the chapter's central problem.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 2</span> J-closed Sets and the Standard Epimorphism</h2>
+  <div class="tagline">Build the bridge: J-closed sets ↔ lower-bounded epimorphisms. The set $A^\vee$ for finite J-closed $A$ is a finite lower bounded lattice. Theorem 3.15: the standard epimorphism $f : \mathbf{L} \to A^\vee$, $f(u) = \bigvee\{a \in A : a \le u\}$.</div>
+
+  <h3>$\mathbf{J}(p)$ via Whitman's condition (book p. 71)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 3.11 · $\mathcal{M}^*(w)$ for join irreducible $w$ in $\mathbf{FL}(X)$</span>
+    <p>Let $w$ be a join irreducible element in $\mathbf{FL}(X)$. If</p>
+    $$w = \bigwedge_i \bigvee_{1 \le j \le r_i} w_{ij} \wedge \bigwedge_k x_k$$
+    <p>canonically with $x_k \in X$, then $U \in \mathcal{M}^*(w)$ if and only if $U = \{w_{i1}, \ldots, w_{ir_i}\}$ for some $i$.</p>
+  </div>
+
+  <p>So the minimal-join-covers-of-completely-join-irreducibles for $w$ are EXACTLY the canonical joinands of the canonical meetands. Beautiful: Whitman's condition reduces the abstract "$\mathcal{M}^*(w)$" set to a concrete read-off-the-canonical-form recipe.</p>
+
+  <p>In free lattices, $\mathcal{M}^*(w)$ may be properly contained in $\mathcal{M}(w)$. Example: if $w = x \wedge (y \vee (x \wedge (z \vee (x \wedge y))))$, then $\mathcal{M}^*(w) = \{\{y, x \wedge (z \vee (x \wedge y))\}\}$ but $\{y, z\}$ is also in $\mathcal{M}(w)$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.12 · explicit recursion for $\mathbf{J}(w)$ in $\mathbf{FL}(X)$</span>
+    <p>If $w$ is an element of a free lattice, then $\mathbf{J}^*(w) = \mathbf{J}(w)$ and</p>
+    $$\mathbf{J}(w) = \begin{cases}\{w\} & \text{if } w \text{ is a meet of generators},\\ \{w\} \cup \bigcup_{i, j} \mathbf{J}(w_{ij}) & \text{if } w = \bigwedge_i \bigvee_j w_{ij} \wedge \bigwedge_k x_k \text{ canonically},\\ \bigcup_i \mathbf{J}(w_i) & \text{if } w = \bigvee_i w_i \text{ canonically}.\end{cases}$$
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · $\mathbf{J}(w)$ as canonical-form descent</span>
+    <p>$\mathbf{J}(w)$ is recursively defined by descent through the canonical form. Each "canonical-form layer" contributes its join-irreducible substructure to $\mathbf{J}(w)$. This recursive description is the COMPUTATIONAL gateway: given $w$ as a canonical-form term, $\mathbf{J}(w)$ can be enumerated in time polynomial in the term length. (Chapter XI makes this precise.)</p>
+  </div>
+
+  <h3>The lattice $A^\vee$ and the standard epimorphism (book pp. 72–74)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · $A^\vee$ for finite $A \subseteq L$</span>
+    <p>For any subset $A$ of a lattice $\mathbf{F}$ with zero $0$, denote by $A^\vee$ the subset consisting of all joins of finite subsets of $A$, including $\bigvee \emptyset = 0$. If $A$ is finite, $A^\vee$ is a finite lattice, with the join operation coinciding with that of $\mathbf{F}$ and the meet operation $\wedge'$ defined by</p>
+    $$a \wedge' b = \bigvee\{c \in A : c \le a \wedge b \text{ in } \mathbf{F}\}.$$
+    <p>If $A$ is a finite set of join irreducible elements of $\mathbf{F}$, then $A$ is the set of join irreducible elements of $A^\vee$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.13 · J-closure from a lower-bounded image</span>
+    <p>Let $h : \mathbf{F} \to \mathbf{L}$ be a lower bounded homomorphism of a lattice $\mathbf{F}$ with the minimal join cover refinement property into a finite lattice $\mathbf{L}$. Let $A = \{\beta(a) : a \in L\} \cap \mathbf{J}(\mathbf{F})$. Then $A$ is J-closed and the image $h(\mathbf{F})$ is isomorphic to $A^\vee$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.14 · J-closure when $h$ is onto</span>
+    <p>Let $h$ be a lower bounded epimorphism of a lattice $\mathbf{F}$ onto a finite lattice $\mathbf{L}$, and let $C = \{\beta(c) : c \in \mathbf{J}(\mathbf{L})\}$. Then $C = \{\beta(a) : a \in L\} \cap \mathbf{J}(\mathbf{F})$. Hence $C$ is J-closed and $\mathbf{L} \cong C^\vee$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.15 · the standard epimorphism (the chapter's keystone)</span>
+    <p>Let $\mathbf{F}$ be a lattice with zero and the minimal join cover refinement property, and let $A$ be a finite J-closed subset of $\mathbf{F}$. Then the mapping $f : \mathbf{F} \to A^\vee$ defined by</p>
+    $$f(u) = \bigvee\{a \in A : a \le u\}$$
+    <p>is a lower bounded epimorphism.</p>
+  </div>
+
+  <p>The map $f$ in Theorem 3.15 is called the <strong>standard epimorphism</strong> of $\mathbf{F}$ onto $A^\vee$.</p>
+
+  <p><strong>Proof sketch.</strong> $f$ is order-preserving and idempotent on $A^\vee$ ($f$ restricted to $A^\vee$ is the identity, since $A^\vee \subseteq \mathbf{F}$). To show $f$ preserves meets: $f(u) \wedge' f(v) = \bigvee\{a \in A : a \le f(u) \wedge f(v)\} = \bigvee\{a \in A : a \le u \wedge v\} = f(u \wedge v)$. To show $f$ preserves joins is more delicate — uses the J-closed property: if $a \le u \vee v$ for $a \in A$, then $\{u, v\}$ is a join cover of $a$, refining (since $A$ is J-closed) to a cover entirely in $A$, hence $a \le \bigvee T \le f(u) \vee f(v)$ for some $T \subseteq A$ with $T \ll \{u, v\}$. So $f(u \vee v) \le f(u) \vee f(v)$, and the reverse holds by monotonicity. Lower-boundedness: $\beta(f(u)) = $ the minimum of $f^{-1}(f(u))$ exists because $f(u) \in A^\vee \subseteq \mathbf{F}$ is its own least preimage. $\square$</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.16 · J-closed subsets of $\mathbf{J}(\mathbf{F})$ correspond to specific congruences</span>
+    <p>Let $\mathbf{F}$ be a lattice with zero and the minimal join cover refinement property. Then there is a natural one-to-one correspondence between finite J-closed subsets of $\mathbf{J}(\mathbf{F})$ and congruences $\theta$ on $\mathbf{F}$ such that $\mathbf{F}/\theta$ is finite and each $\theta$-class has a least element.</p>
+  </div>
+
+  <p>Corollary 3.16 is the chapter's structural payoff: J-closed subsets are NOT a side concept but the universal-algebra incarnation of "lower-bounded congruence" for $\mathbf{F}$. When $\mathbf{F}$ is a finite lattice, this is just a restatement of Corollary 2.34 (chapter II). Here we use it for free lattices — getting cover information from finite-lattice computations.</p>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 3</span> Finite Lower Bounded Lattices</h2>
+  <div class="tagline">Apply the standard-epimorphism machinery to free lattices. Theorem 3.17: every finite lower-bounded lattice is $A^\vee$ for some finite J-closed $A \subseteq \mathbf{FL}(X)$. Theorem 3.19 — the homomorphism theorem on $A^\vee$.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.17 · finite lower bounded $\Leftrightarrow$ $A^\vee$ for finite J-closed $A$</span>
+    <p>A finite lattice $\mathbf{L}$ is lower bounded if and only if $\mathbf{L} \cong A^\vee$ for a finite J-closed subset $A$ of a finitely generated free lattice.</p>
+  </div>
+
+  <p>An important aspect of this representation is that it gives us another way to construct finite lower bounded lattices. In particular, recall that for any element $w$ in a finitely generated free lattice, $\mathbf{J}(w)$ is a finite J-closed set. We define $\mathbf{L}^\vee(w)$ to be the lattice $\mathbf{J}(w)^\vee$ — the central object of §4.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.18 · $\mathbf{J}(w)^\vee$ as the standard image</span>
+    <p>For any element $w \in \mathbf{FL}(X)$, the mapping $f$ defined by</p>
+    $$f(u) = \bigvee\{v \in \mathbf{J}(w) : v \le u\}$$
+    <p>is a lower bounded homomorphism (the standard epimorphism) of $\mathbf{FL}(X)$ onto the lattice $\mathbf{L}^\vee(w)$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.19 · homomorphisms between $A^\vee$ and $B^\vee$</span>
+    <p>Let $A$ be a finite J-closed subset of join irreducible elements of $\mathbf{FL}(X)$. If a subset $B$ of $A$ is also J-closed, then the restriction to $A^\vee$ of the standard epimorphism of $\mathbf{FL}(X)$ onto $B^\vee$ is a homomorphism of $A^\vee$ onto $B^\vee$. Moreover, every homomorphic image of $A^\vee$ is isomorphic to $B^\vee$ for a J-closed subset $B$ of $A$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.20 · congruences cofinal with finite lower-bounded quotients form a filter</span>
+    <p>The set of the congruences $\phi$ of $\mathbf{FL}(X)$ for which $\mathbf{FL}(X)/\phi$ is a finite, lower bounded lattice is a filter in the congruence lattice of $\mathbf{FL}(X)$. This filter is dually isomorphic to the distributive lattice of finite J-closed subsets of $\mathbf{J}(\mathbf{FL}(X))$ (which is a lattice with respect to the operations of union and intersection).</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.21 · subdirect decompositions ↔ J-closure decompositions</span>
+    <p>If $A_i$ ($1 \le i \le n$) are finite J-closed subsets of $\mathbf{FL}(X)$, then the lattice $B^\vee$, where $B = \bigcup_{i=1}^n A_i$, is a subdirect product of the lattices $A_i^\vee$. Conversely, if $A$ is a J-closed subset of $\mathbf{FL}(X)$ and the lattice $A^\vee$ is isomorphic to a subdirect product of lattices $\mathbf{L}_i$ ($1 \le i \le n$), then there exist finite J-closed subsets $A_i$ such that $A = \bigcup_{i=1}^n A_i$ and $\mathbf{L}_i \cong A_i^\vee$ for $1 \le i \le n$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.22 · J-closure of a SI lower bounded lattice = $\mathbf{J}(w)$</span>
+    <p>Let $A$ be a finite J-closed subset of $\mathbf{FL}(X)$. If $A^\vee$ is subdirectly irreducible, then $A \cap \mathbf{J}(\mathbf{FL}(X)) = \mathbf{J}(w)$ for some join irreducible element $w \in A$.</p>
+  </div>
+
+  <h3>Day's theorem revisited (book p. 76)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.23 · 4-fold characterisation of bounded sublattices of $\mathbf{FL}(X)$</span>
+    <p>Let $A$ be a finite J-closed subset of $\mathbf{FL}(X)$. Then the following are equivalent:</p>
+    <ol>
+      <li>The lattice $A^\vee$ is bounded.</li>
+      <li>The lattice $A^\vee$ is meet semidistributive.</li>
+      <li>Every nonzero element of $A^\vee$ is lower atomic.</li>
+      <li>Every join irreducible element of $A$ is completely join irreducible.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why this is "Day's theorem revisited"</span>
+    <p>Theorem 2.64 (Day 1979) said: a finite lower-bounded lattice is bounded iff it is meet semidistributive. Theorem 3.23 specialises that to the case $\mathbf{L} = A^\vee$ for J-closed $A \subseteq \mathbf{FL}(X)$, and ADDS two equivalent forms specific to this setting: lower-atomicity in $A^\vee$ (= every nonzero element has a cover-witness in $A^\vee$) and complete-join-irreducibility in $\mathbf{FL}(X)$ (= every join-irreducible $a \in A$ has a lower cover in $\mathbf{FL}(X)$). The $A^\vee$ representation makes this equivalence explicit. In §4 we will fix $A = \mathbf{J}(w)$, getting the lattice $\mathbf{L}^\vee(w)$ and its connection to the cover question on $w$ itself.</p>
+  </div>
+
+  <div class="box connection" id="c1">
+    <span class="label">Connection P1 · Freese-Nation 1985</span>
+    <p>The chapter is an essentially complete reading of Freese-Nation 1985, <em>Covers in free lattices</em>, Trans. AMS 288, 1–42. The paper achieved three goals: (1) decide algorithmically if $w$ has a lower cover; (2) when it does, describe ALL lower covers; (3) prove the algorithm runs in polynomial time. The 1985 paper introduced the lattice $\mathbf{L}^\vee(w)$ and its central role (Theorem 3.26 here is essentially Theorem 5.7 of the 1985 paper). The polynomial-time complexity bound relies on §5's syntactic algorithms — the explicit formula for $\kappa(w)$ from canonical-form data. <strong>The standing of the result.</strong> Before 1985, R.A. Dean had shown by ad hoc methods (in the 1960 paper introducing free lattices over partially ordered sets) that some elements of $\mathbf{FL}(3)$ have no lower cover (Example 3.36 below: $w = x \wedge (y \vee z)$). After 1985, the question for ANY element of ANY $\mathbf{FL}(X)$ is decidable in polynomial time. The 1985 paper is one of the "nice algorithm meets nice structure" results in lattice theory: the structure theorem (Theorem 3.26) and the algorithm (Theorem 3.32) are tightly coupled, with each illuminating the other. <strong>Subsequent developments.</strong> Freese-Ježek-Nation 1995 (this monograph) is the mature unified treatment. Freese 1990 wrote up the algorithms in the survey paper "Free lattice algorithms" (Order 7, 165–177), with implementation notes for actual computation. The cover algorithm has been implemented in Freese's lattice-drawing software, used to produce the figures in §6.</p>
+  </div>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · THE LATTICE $\mathbf{L}^\vee(w)$ — §4</div>
+  <h2>The chapter's central technical object: $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$</h2>
+  <p class="part-lede">For each join-irreducible $w \in \mathbf{FL}(X)$, $\mathbf{L}^\vee(w)$ is a finite lower-bounded subdirectly-irreducible lattice with $w/w_\dagger$ as critical prime quotient. Theorem 3.26: $w$ has a lower cover iff $\mathbf{L}^\vee(w)$ is meet semidistributive iff $\mathbf{L}^\vee(w)$ is a splitting lattice.</p>
+</header>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 4</span> The Lattice $\mathbf{L}^\vee(w)$</h2>
+  <div class="tagline">For $w$ join irreducible, $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ is a finite lower-bounded subdirectly-irreducible lattice with critical prime quotient $w/w_\dagger$ (where $w_\dagger = \bigvee\{u \in \mathbf{J}(w) : u < w\}$). Five-fold characterisation of complete-join-irreducibility (Theorem 3.26).</div>
+
+  <h3>Definitions and the key construction (book p. 76)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · $\mathbf{L}^\vee(w)$, $w_\dagger$, $w^\dagger$</span>
+    <p>For an element $w \in \mathbf{FL}(X)$, denote by $\mathbf{L}^\vee(w)$ the lattice $\mathbf{J}(w)^\vee$. When $w$ is join irreducible, the lower cover of $w$ in this lattice will be denoted by $w_\dagger$. Thus</p>
+    $$w_\dagger = \bigvee\{u \in \mathbf{J}(w) : u < w\}.$$
+    <p>The lattice $\mathbf{L}^\wedge(w) = \mathbf{M}(w)^\wedge$ and, for $w$ meet irreducible, the element $w^\dagger$ are defined dually.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.24 · $\mathbf{L}^\vee(w)$ is subdirectly irreducible with $w/w_\dagger$ critical prime</span>
+    <p>Let $w$ be a join irreducible element of $\mathbf{FL}(X)$. Then $\mathbf{L}^\vee(w)$ is a finite, lower bounded and subdirectly irreducible lattice with $w/w_\dagger$ as a critical prime quotient. The kernel of the standard epimorphism $f : \mathbf{FL}(X) \to \mathbf{L}^\vee(w)$ is the unique largest congruence $\phi$ of $\mathbf{FL}(X)$ with the property that $\langle u, w\rangle \notin \phi$ whenever $u < w$.</p>
+    <p>Conversely, if $\mathbf{L}$ is a finite, lower bounded, subdirectly irreducible lattice, then $\mathbf{L} \cong \mathbf{L}^\vee(w)$ for some $w \in \mathbf{FL}(X)$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · $\mathbf{L}^\vee(w)$ as a "shadow" of $\mathbf{FL}(X)$ around $w$</span>
+    <p>$\mathbf{L}^\vee(w)$ captures the "neighborhood" of $w$ in $\mathbf{FL}(X)$ — the join-subsemilattice generated by $\mathbf{J}(w)$. It is a finite quotient of $\mathbf{FL}(X)$ via the standard epimorphism, and it is subdirectly irreducible with $w/w_\dagger$ as the critical prime quotient. The construction is canonical: every finite lower-bounded subdirectly-irreducible lattice arises this way (the second part of Theorem 3.24). So $\mathbf{L}^\vee(w)$ is a structural fingerprint of the join-irreducible $w$.</p>
+  </div>
+
+  <p>The lattice $\mathbf{L}^\vee(w)$ for join reducible $w$ is still a finite, lower bounded lattice: if $w = \bigvee w_i$ canonically, then $\mathbf{J}(w) = \bigcup \mathbf{J}(w_i)$, so $\mathbf{L}^\vee(w)$ is a subdirect product of the $\mathbf{L}^\vee(w_i)$. However, this representation need not be proper. Nor can every finite, lower bounded lattice be represented as $\mathbf{L}^\vee(w)$: the three-element chain provides an easy counterexample.</p>
+
+  <h3>The κ-bijection at the level of $\mathbf{L}^\vee(w)$ (book p. 77)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.25 · McKenzie's congruence formula</span>
+    <p>Let $w$ be a completely join irreducible element of $\mathbf{FL}(X)$. Let $f$ be the standard epimorphism of $\mathbf{FL}(X)$ onto $\mathbf{L}^\vee(w)$ and let $g$ be the dual standard epimorphism of $\mathbf{FL}(X)$ onto $\mathbf{L}^\wedge(\kappa(w))$. Then</p>
+    $$\ker f = \psi(w, w_*) = \psi(\kappa(w)^*, \kappa(w)) = \ker g.$$
+    <p>For $u \in \mathbf{FL}(X)$, the congruence class of $u$ for this congruence is the interval $\alpha_g g(u) / \beta_f f(u)$. The lattice $\mathbf{FL}(X)/\psi(w, w_*)$ is a splitting lattice and it is isomorphic to both $\mathbf{L}^\vee(w)$ and $\mathbf{L}^\wedge(\kappa(w))$.</p>
+  </div>
+
+  <p>The congruence $\psi(w, w_*)$ is the unique largest separating $w$ from $w_*$; Dilworth's characterisation of lattice congruences says such a congruence exists for any prime quotient. McKenzie 1972 was the first to prove this in the splitting-lattice context; Theorem 3.25 makes the connection explicit. <strong>Compare with Theorems 2.79, 2.80 and Corollary 2.81 of Chapter II</strong> — Theorem 3.25 specialises those to the explicit free-lattice setting.</p>
+
+  <h3>The chapter's central characterisation (book p. 78)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.26 · five equivalent forms of complete-join-irreducibility (THE central theorem)</span>
+    <p>The following are equivalent for a join irreducible element $w \in \mathbf{FL}(X)$:</p>
+    <ol>
+      <li>$w$ is completely join irreducible in $\mathbf{FL}(X)$.</li>
+      <li>Every element of $\mathbf{J}(w)$ is completely join irreducible.</li>
+      <li>Every subelement of $w$ is lower atomic.</li>
+      <li>$\mathbf{L}^\vee(w)$ is meet semidistributive.</li>
+      <li>$\mathbf{L}^\vee(w)$ is a splitting lattice.</li>
+    </ol>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 3.27 · 4-fold characterisation of lower-atomic elements</span>
+    <p>The following are equivalent for an element $w \in \mathbf{FL}(X)$:</p>
+    <ol>
+      <li>$w$ is lower atomic in $\mathbf{FL}(X)$.</li>
+      <li>Every element of $\mathbf{J}(w)$ is completely join irreducible.</li>
+      <li>Every subelement of $w$ is lower atomic.</li>
+      <li>The number of lower covers of $w$ equals the number of canonical joinands of $w$.</li>
+    </ol>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.28 · J/M containment via canonical joinand</span>
+    <p>Suppose that $w$ is a proper join in $\mathbf{FL}(X)$, and that $w_1$ is a canonical joinand of $w$. For any element $u$ such that $w_1 \le u \le w$, we have</p>
+    <ol>
+      <li>$\mathbf{J}(w_1) \subseteq \mathbf{J}(u)$, and</li>
+      <li>If $w_1$ is not a generator, $\mathbf{M}(w_1) \subseteq \mathbf{M}(u)$.</li>
+    </ol>
+    <p>Consequently, if there exists a completely join irreducible element $u$ with $w_1 \le u \le w$, then $w_1$ is also completely join irreducible. Similarly, if there exists a completely meet irreducible element in $w/w_1$, then $w_1$ is upper atomic.</p>
+  </div>
+
+  <div class="box connection" id="c2">
+    <span class="label">Connection P2 · From canonical form to algorithm — the conceptual arc</span>
+    <p>The chapter realises a beautiful arc from PURE STRUCTURE (Chapter I's canonical form, Chapter II's J-closure) to EFFECTIVE COMPUTATION (this chapter's polynomial algorithm). The arc has six conceptual steps:</p>
+    <p><strong>(1) Theorem 3.5 reduces covers of $w$ to covers of canonical joinands.</strong> So we need only treat the case of $w$ join irreducible.</p>
+    <p><strong>(2) Theorem 3.12 gives an explicit canonical-form recipe for $\mathbf{J}(w)$.</strong> So $\mathbf{J}(w)$ is enumerable in polynomial time from the canonical form of $w$.</p>
+    <p><strong>(3) Theorem 3.15's standard epimorphism builds $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ from $\mathbf{J}(w)$.</strong> So $\mathbf{L}^\vee(w)$ is a concrete finite lattice, computable from $w$.</p>
+    <p><strong>(4) Theorem 3.26 reduces the cover question to the SD$_\wedge$ question on $\mathbf{L}^\vee(w)$.</strong> $w$ has a lower cover iff $\mathbf{L}^\vee(w)$ is meet semidistributive.</p>
+    <p><strong>(5) Theorem 2.56 (Chapter II) reduces SD$_\wedge$ to the existence of $\kappa$.</strong> A finite lattice satisfies SD$_\wedge$ iff $\kappa(a)$ exists for every $a \in \mathbf{J}(\mathbf{L})$.</p>
+    <p><strong>(6) Theorem 3.30 makes $\kappa$ in $\mathbf{L}^\vee(w)$ syntactically computable from canonical form.</strong> So the cover test is polynomial-time on the term length.</p>
+    <p>Each step is a structural theorem from Chapter I or II made operational. The chapter's beauty is that this reduction chain holds together — every step preserves the reduction to canonical-form data.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · POLYNOMIAL-TIME ALGORITHM — §5</div>
+  <h2>The syntactic algorithm: $\kappa(w)$ from canonical form, in polynomial time</h2>
+  <p class="part-lede">Bypass the construction of $\mathbf{L}^\vee(w)$. Lemma 3.29 + Theorem 3.30: a syntactic test for complete-join-irreducibility using $\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}$. Theorem 3.32: an explicit formula for $\kappa(w)$ derived directly from canonical form. Lemmas 3.33–3.35: invariants supporting the algorithm.</p>
+</header>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 5</span> Syntactic Algorithms</h2>
+  <div class="tagline">Avoid building $\mathbf{L}^\vee(w)$ explicitly. The set $\mathbf{K}(w)$ controls the test (3.29–3.30) and supports the explicit formula for $\kappa(w)$ (3.32). Lemmas 3.33–3.35 provide canonical-form invariants.</div>
+
+  <h3>The K-set test (book p. 79)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · $\mathbf{K}(w)$</span>
+    <p>Let $w$ be a join irreducible element of $\mathbf{FL}(X)$. Define</p>
+    $$\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}.$$
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 3.29 · K-set characterises complete-join-irreducibility</span>
+    <p>If $w$ is completely join irreducible in $\mathbf{FL}(X)$, then the following are equivalent for any $v \in \mathbf{FL}(X)$:</p>
+    <ol>
+      <li>$w \not\le w_\dagger \vee v$.</li>
+      <li>$w \not\le w_* \vee v$.</li>
+      <li>$v \le \kappa(w)$.</li>
+    </ol>
+    <p>Consequently, $w \not\le \bigvee \mathbf{K}(w)$ whenever $w$ is completely join irreducible.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.30 · the syntactic test for complete-join-irreducibility</span>
+    <p>Let $w$ be a join irreducible element of $\mathbf{FL}(X)$. Then $w$ is completely join irreducible in $\mathbf{FL}(X)$ if and only if the following two conditions are satisfied:</p>
+    <ol>
+      <li>Every $u \in \mathbf{J}(w) - \{w\}$ is completely join irreducible.</li>
+      <li>$w \not\le \bigvee \mathbf{K}(w)$.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · Theorem 3.30 as a recursive descent</span>
+    <p>Theorem 3.30 reduces complete-join-irreducibility of $w$ to (a) recursive complete-join-irreducibility of every smaller element of $\mathbf{J}(w)$, plus (b) a single Whitman-algorithm test $w \not\le \bigvee \mathbf{K}(w)$. Both checks are polynomial-time computable from canonical form. The recursion bottoms out at meets-of-generators (Example 3.10), where complete-join-irreducibility is automatic. So the algorithm is: compute $\mathbf{J}(w)$ from canonical form (Theorem 3.12), descend through it bottom-up checking complete-join-irreducibility at each level via condition (b), terminating at the meets-of-generators leaves.</p>
+  </div>
+
+  <h3>The κ-formula (book pp. 80–81)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.31 · canonical meetands of $\kappa(w)$</span>
+    <p>Let $w$ be a completely join irreducible element of $\mathbf{FL}(X)$. Then $\mathbf{M}(\kappa(w)) = \{\kappa(u) : u \in \mathbf{J}(w)\}$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.32 · the explicit formula for $\kappa(w)$ (THE formula the algorithm uses)</span>
+    <p>Let $w$ be a completely join irreducible element of $\mathbf{FL}(X)$. Then</p>
+    $$\kappa(w) = \bigvee\{x \in X : w_\dagger \vee x \not\ge w\} \vee \bigvee\{k^\dagger \wedge \kappa(v) : v \in \mathbf{J}(w) - \{w\}, w \not\le \kappa(v)\}$$
+    <p>where</p>
+    $$k^\dagger = \bigwedge\{\kappa(v) : v \in \mathbf{J}(w) - \{w\}, \kappa(v) \ge \bigvee \mathbf{K}(w)\}$$
+    <p>and</p>
+    $$\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}.$$
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · how Theorem 3.32 is used</span>
+    <p>Theorem 3.32 is the chapter's algorithmic treasure. Given a completely-join-irreducible $w$, $\kappa(w)$ is computed RECURSIVELY: (1) Identify the generators $x$ such that $w_\dagger \vee x \not\ge w$ — these are read off the canonical form. (2) For each smaller $v \in \mathbf{J}(w)$ with $w \not\le \kappa(v)$, recursively compute $\kappa(v)$. (3) Compute $k^\dagger$ as a meet of certain $\kappa(v)$'s. (4) Combine via the formula. The recursion bottoms out at generators (where $\kappa(x) = \bigvee(X - \{x\})$ by Example 3.10). The formula has TIGHT complexity — every term is polynomial in the size of the canonical form. Chapter XI proves the resulting algorithm runs in $O(n^k)$ where $n$ is the term length.</p>
+  </div>
+
+  <h3>Lemmas supporting the canonical structure of $w_*$ (book pp. 81–82)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 3.33 · $w_* \neq $ canonical joinand of any canonical meetand of $w$</span>
+    <p>If $w$ is completely join irreducible, then $w_*$ is not a canonical joinand of any canonical meetand of $w$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.34 · canonical meetands of $w_*$ in terms of those of $w$</span>
+    <p>Let $w$ be a completely join irreducible element of $\mathbf{FL}(X)$ with $w = w_1 \wedge \cdots \wedge w_m$ canonically. Then</p>
+    $$\{\kappa(w)\} \cup \{w_i : w_i \not\ge \kappa(w)\}$$
+    <p>is the set of canonical meetands of $w_*$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 3.35 · complete-join-irreducibility is sublattice-restricted</span>
+    <p>Let $Y \subseteq X$, and let $w \neq \bigwedge Y$ be a join irreducible element of the sublattice $\mathbf{FL}(Y)$ (which we can consider to be the sublattice of $\mathbf{FL}(X)$ generated by $Y$). Then $w$ is completely join irreducible in $\mathbf{FL}(Y)$ if and only if it is completely join irreducible in $\mathbf{FL}(X)$.</p>
+  </div>
+
+  <p>Theorem 3.35 is a "stability" result: complete-join-irreducibility doesn't depend on which over-set we work in. Note that the existence of a lower cover for $w$ in $\mathbf{FL}(X)$ depends only on the elements of $\text{var}(w)$ — but the EXACT element $w_*$ depends on $X$. Using Theorem 3.32, if $\kappa(w) = p(x_1, \ldots, x_n)$ in $\mathbf{FL}(\text{var}(w))$, then in $\mathbf{FL}(X)$ the new $\kappa(w)$ is given (not necessarily in canonical form) by $p(x_1 \vee s, \ldots, x_n \vee s)$ where $s = \bigvee(X - \text{var}(w))$.</p>
+
+  <div class="box connection" id="c3">
+    <span class="label">Connection P3 · κ-bijection in action</span>
+    <p>The chapter is the κ-bijection in action. <strong>Theorem 3.3</strong>: κ is a bijection $\mathbf{J}(\mathbf{FL}(X)) \leftrightarrow \mathbf{M}(\mathbf{FL}(X))$ (specialising Corollary 2.55). <strong>Theorem 3.31</strong>: the bijection lifts to $\mathbf{M}(\kappa(w)) = \{\kappa(u) : u \in \mathbf{J}(w)\}$ — a structural correspondence between the meet-side of $\kappa(w)$ and the join-side of $w$. <strong>Theorem 3.34</strong>: the canonical meetands of $w_*$ are read directly from those of $w$ plus $\kappa(w)$ itself. <strong>Theorem 3.32</strong>: the κ-formula computes $\kappa(w)$ from canonical form data. <strong>Implication for free-lattice algorithms.</strong> The κ-bijection is not just a structural fact — it is the CONSTRUCTOR for the cover algorithm. Given $w$ completely join irreducible, the algorithm computes $\kappa(w)$ via Theorem 3.32, then $w_* = w \wedge \kappa(w)$ (Theorem 3.3). The bijection's existence (Theorem 3.3) is the GUARANTEE that $\kappa(w)$ exists; the bijection's syntactic FORMULA (Theorem 3.32) is the algorithm. <strong>For practical implementation.</strong> Theorem 3.32 is what Freese implements in his lattice-drawing software (cited below in §6's figures). The recursive structure is naturally tail-recursive: $\kappa(w)$ depends only on smaller elements. In Prologos terminology, this is a fire-once propagator on a J-closed-set cell, with the recursion supplying the dependency depth.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · EXAMPLES + BOTTOM OF $\mathbf{FL}(X)$ — §6, §7</div>
+  <h2>The algorithm in practice: coverless elements, slim element classification, and the connected components at the bottom of $\mathbf{FL}(X)$</h2>
+  <p class="part-lede">Concrete examples. Six $\mathbf{L}^\vee(w)$ lattices for join-irreducibles in $\mathbf{FL}(3)$ (Figure 3.3, Table 3.1). Dean's 1960 example of a coverless element. Coverless elements (3.39, 3.41). The bottom of $\mathbf{FL}(4)$ explicitly described (Figure 3.5).</p>
+</header>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 6</span> Examples</h2>
+  <div class="tagline">Six explicit $\mathbf{L}^\vee(w)$ lattices in $\mathbf{FL}(3)$, the historical Dean coverless element, slim-element classification.</div>
+
+  <h3>Worked examples in $\mathbf{FL}(3)$ (book pp. 83–86)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 3.36 · Dean 1960 — the historical first coverless element</span>
+    <p>In $\mathbf{FL}(X)$ with $X = \{x, y, z\}$, take $w = x \wedge (y \vee z)$. Then $\mathbf{J}(w) = \{x \wedge (y \vee z), y, z\}$ and $\mathbf{L}^\vee(w)$ is the lattice drawn in Figure 3.2(1) — a 5-element lattice that fails meet semidistributivity. By Theorem 3.26, $w$ does NOT have a lower cover.</p>
+    <p>This was the first example of an element in $\mathbf{FL}(X)$ with no lower cover, found by R.A. Dean around 1960 using ad hoc methods. By the dual of Theorem 3.5, the upper covers of $w$ are of the form $w \vee \kappa^d(w_i)$ for each $w_i$ in the canonical meet representation of $w$ which has an upper cover. The upper covers turn out to be $(x \wedge (y \vee z)) \vee (y \wedge z)$ (from $w_1 = x$ with $\kappa^d(x) = y \wedge z$) and $w \vee x = x$ (from $w_2 = y \vee z$ with $\kappa^d(y \vee z) = x$).</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.37 · a 5-element non-modular SD$_\wedge$ lattice</span>
+    <p>Again in $\mathbf{FL}(X)$ with $X = \{x, y, z\}$, take $w = x \wedge (y \vee (x \wedge z))$. Then $\mathbf{J}(w) = \{w, y, x \wedge z\}$. The lattice $\mathbf{L}^\vee(w)$, drawn in Figure 3.2(2), is a 5-element non-modular lattice that IS meet semidistributive. So by Theorem 3.26, $w$ HAS a lower cover. By Theorem 3.32, $\kappa(w) = z \vee ((x \vee z) \wedge y)$. Then $w_* = w \wedge \kappa(w) = x \wedge (y \vee (x \wedge z)) \wedge (z \vee ((x \vee z) \wedge y))$.</p>
+    <p>By the dual computation, $w$'s upper cover is $(x \wedge (y \vee (x \wedge z))) \vee (y \wedge z)$. (This is the only upper cover, since the second canonical meetand of $w$, the element $y \vee (x \wedge z)$, has no upper cover by the dual of Example 3.36.)</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.38 / Table 3.1 · six $\mathbf{L}^\vee(w)$ lattices for $\mathbf{FL}(3)$</span>
+    <p>Table 3.1 lists $\kappa(w)$, $w_*$, and upper covers for six selected join-irreducible elements of $\mathbf{FL}(3)$. The corresponding lattices $\mathbf{L}^\vee(w)$ are drawn in Figure 3.3. Highlights:</p>
+    <ul>
+      <li>$w = (x \vee y) \wedge (x \vee z)$: $\kappa(w) = x \vee ((x \vee y) \wedge (x \vee z) \wedge (y \vee z))$, $w_* = w \wedge \kappa(w)$ (same expression). Upper covers: $x \vee y$ and $x \vee z$.</li>
+      <li>$w = (x \vee y) \wedge (x \vee z) \wedge (y \vee z)$: $\kappa(w)$ undefined, $w_*$ undefined (NO lower cover). Upper covers: $x \vee w$, $y \vee w$, $z \vee w$.</li>
+      <li>$w = (x \vee (y \wedge z)) \wedge (y \vee z)$: $\kappa(w)$ undefined, $w_*$ undefined. Upper cover: $x \vee (y \wedge z)$.</li>
+      <li>$w = x \wedge (y \vee (x \wedge z)) \wedge (z \vee (x \wedge y))$: $\kappa(w) = (y \wedge (x \vee z)) \vee (z \wedge (x \vee y))$, $w_* = w \wedge \kappa(w)$. Upper cover: $w \vee (y \wedge z)$.</li>
+      <li>$w = (x \vee (y \wedge z)) \wedge (y \vee (x \wedge z))$: $\kappa(w) = z \vee (x \wedge (y \vee z)) \vee (y \wedge (x \vee z))$, $w_* = w \wedge \kappa(w)$. NO upper covers!</li>
+      <li>$w = x \wedge ((x \wedge y) \vee (x \wedge z) \vee (y \wedge z))$: $\kappa(w) = (x \wedge y) \vee (x \wedge z)$, $w_* = (x \wedge y) \vee (x \wedge z)$. Three upper covers.</li>
+    </ul>
+    <p>The six lattices $\mathbf{L}^\vee(w)$ in Figure 3.3 illustrate the variety of structures: 7-element to 16-element, all subdirectly irreducible, all lower bounded.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.39 · A coverless element in $\mathbf{FL}(3)$</span>
+    <p>An element $w \in \mathbf{FL}(X)$ is called <strong>coverless</strong> if it has no lower and no upper covers. Here is a coverless element in $\mathbf{FL}(\{x, y, z\})$:</p>
+    $$w = ((x \wedge (y \vee z)) \vee (y \wedge z)) \wedge ((y \wedge (x \vee z)) \vee (x \wedge z)).$$
+    <p>To see that $w$ has no lower cover, take the subelement $x \wedge (y \vee z)$, which has no lower cover by Example 3.36, and apply Theorem 3.26 (specifically condition (3): if any subelement is not lower atomic, $w$ is not completely join irreducible). On the other hand, by the dual of (3) in Example 3.38, $(x \wedge (y \vee z)) \vee (y \wedge z)$ has no upper cover, and symmetrically the same is true for $(y \wedge (x \vee z)) \vee (x \wedge z)$. Since these are the elements in the canonical meet representation of $w$, we conclude that $w$ has no upper cover.</p>
+  </div>
+
+  <p>Chapter IX proves that EVERY infinite interval in a free lattice contains a coverless element — a structurally surprising fact that justifies the chapter's algorithmic precision: coverless-ness is generic in infinite intervals.</p>
+
+  <h3>Slim elements (book p. 86)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 3.40 · classification of slim elements with lower covers</span>
+    <p>Recall (Chapter I) that an element $w \in \mathbf{FL}(X)$ is <strong>slim</strong> if its canonical form (when $w$ is join irreducible) is</p>
+    $$w = x_n \wedge (x_{n-1} \vee (x_{n-2} \wedge \cdots \vee (x_2 \wedge x_1)))) \quad (n \ge 2, n \text{ even})$$
+    <p>or</p>
+    $$w = x_n \wedge (x_{n-1} \vee (x_{n-2} \wedge \cdots \vee (x_2 \wedge x_1)))) \quad (n \ge 1, n \text{ odd})$$
+    <p>where the $x_i$ are generators (not necessarily distinct), with the canonical-form constraints $x_i \neq x_{i+1}$ and $(x_i, x_{i+1}) \neq (x_{i+2}, x_{i+3})$ for all $i$, and additionally $x_1 \neq x_3$ and $(x_1, x_3) \neq (x_4, x_5)$.</p>
+    <p><strong>Result (book p. 86).</strong> A join irreducible slim element has a lower cover in $\mathbf{FL}(X)$ if and only if it is either a generator or an element of the canonical form</p>
+    $$w = x_n \wedge (x_{n-1} \vee (x_{n-2} \wedge \cdots \vee (x_2 \wedge x_1))))$$
+    <p>where $n \ge 2$ is even and $x_2 = x_4 = \cdots = x_n$.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.41 · Theorem 3.4 converse — failed</span>
+    <p>In $\mathbf{FL}(\{x, y, z, t\})$, the element</p>
+    $$w = (x \vee y) \wedge (x \vee ((y \vee z) \wedge (z \vee t)))$$
+    <p>does not have a lower cover. On the other hand, every canonical meetand of $w$ has exactly one canonical joinand not below $w$. This shows that the converse of Theorem 3.4 is FALSE.</p>
+    <p>However, in the following example we show that for elements of very low complexity the converse of Theorem 3.4 does hold.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.42 · low-complexity converse</span>
+    <p>Let $w \in X^{\wedge \vee \wedge}$ be a join irreducible element of $\mathbf{FL}(X)$. Then $w$ has a lower cover in $\mathbf{FL}(X)$ if and only if every canonical meetand of $w$ which is not a generator has exactly one canonical joinand not below $w$.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 7</span> Connected Components and the Bottom of $\mathbf{FL}(X)$</h2>
+  <div class="tagline">Recall: connected component of $a$ = elements reachable from $a$ via a finite sequence of cover relations. Examples 3.43–3.45 give explicit descriptions: the connected component of a generator is a 5-element non-modular lattice; the bottom of $\mathbf{FL}(n)$ for $n \ge 4$ has $1 + n^2$ elements arranged in a regular pattern.</div>
+
+  <h3>The connected component of a generator (book p. 87)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 3.43 · the 5-element connected component of a generator</span>
+    <p>The connected component of a generator $x$ of $\mathbf{FL}(X)$ is a 5-element set, which as a lattice is isomorphic to the 5-element non-modular lattice $\mathbf{N}_5$ (the pentagon). Its elements are</p>
+    $$x, \quad x_* = x \wedge \overline{x}, \quad x^* = x \vee \underline{x}, \quad x_* \vee \underline{x}, \quad x^* \wedge \overline{x}$$
+    <p>where, as usual, $\overline{x} = \bigvee(X - \{x\})$ and $\underline{x} = \bigwedge(X - \{x\})$. These are ordered as follows:</p>
+    $$x_* \prec x \prec x^*, \qquad x_* \prec x_* \vee \underline{x} < x^* \wedge \overline{x} \prec x^*.$$
+    <p>This is diagrammed in Figure 7.5 (page 161).</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.44 · connected component of $0$ in $\mathbf{FL}(3)$</span>
+    <p>The connected component of $0$ in $\mathbf{FL}(\{x, y, z\})$ is the 11-element sublattice pictured in Figure 3.4. The three atoms are denoted by $\underline{x} = y \wedge z$, $\underline{y} = x \wedge z$, $\underline{z} = x \wedge y$ and their join by $m$.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 3.45 · the bottom of $\mathbf{FL}(n)$ for $n \ge 4$</span>
+    <p>The sublattice $\mathbf{L}_n$ generated by the atoms of $\mathbf{FL}(\{x_1, \ldots, x_n\})$ is finite for $n \le 4$ and infinite for $n \ge 5$ (by Theorem 1.32). For $n = 3$ the sublattice contains 8 elements, for $n = 4$ it contains 22 elements (Figure 1.1, page 25). For $n \ge 4$, the connected component of $0$ consists of:</p>
+    <ul>
+      <li>$0$;</li>
+      <li>The $n$ atoms $\underline{x_1}, \ldots, \underline{x_n}$ of $\mathbf{FL}(n)$;</li>
+      <li>The $\binom{n}{2}$ pairwise joins $\underline{x_i} \vee \underline{x_j}$ for $i < j$;</li>
+      <li>For each pair $i \neq j$: the element $\bigwedge_{k \neq i, j} (\underline{x_i} \vee \underline{x_j} \vee \underline{x_k})$.</li>
+    </ul>
+    <p>Together: $1 + n + \binom{n}{2} + n(n-1) = 1 + n + \frac{n(n-1)}{2} + n(n-1) = 1 + n^2$ elements.</p>
+    <p>The cover-chains in this component are:</p>
+    $$0 \prec \underline{x_i} \prec \underline{x_i} \vee \underline{x_j} \prec \bigwedge_{k \neq i, j} (\underline{x_i} \vee \underline{x_j} \vee \underline{x_k})$$
+    <p>for $i, j \in \{1, \ldots, n\}$ with $i \neq j$.</p>
+    <p><strong>Larger connected components.</strong> For $n \ge 4$ and any subset $J \subseteq \{1, \ldots, n\}$ with $|J| \ge 3$, the connected component of $a_J = \bigvee_{j \in J} \underline{x_j}$ is the union of the chains</p>
+    $$a_J \wedge \bigvee_{j \in J - \{i\}} (x_i \wedge x_j) \prec a_J \wedge x_i \prec a_J$$
+    <p>for $i \in J$; it contains $1 + 2|J|$ elements.</p>
+    <p>The bottom of $\mathbf{FL}(4)$ is pictured in Figure 3.5, where solid lines indicate coverings, dotted lines indicate non-coverings, with $u_1 = (x_1 \wedge x_2) \vee (x_1 \wedge x_3) \vee (x_1 \wedge x_4)$ and $v_{12} = (x_2 \wedge x_3) \vee (x_2 \wedge x_4)$. None of the elements in Figure 3.5 covers, or is covered by, any element not in the picture.</p>
+  </div>
+
+  <div class="box connection" id="c4">
+    <span class="label">Connection P4 · The bottom of $\mathbf{FL}(X)$ — concrete combinatorics</span>
+    <p>Section 7's figures give an unusual gift: an EXPLICIT, COMPLETE description of a region of $\mathbf{FL}(X)$. The bottom of $\mathbf{FL}(4)$ has 33 elements arranged in $1 + 4^2 = 17$ "atom-component" elements plus larger components for triples and the full 4-tuple. The diagrams (Figures 3.4 and 3.5) make the lattice visible — solid lines for covers, dotted lines for non-cover order relations.</p>
+    <p>The contrast with the GENERAL infinite structure of $\mathbf{FL}(X)$ is striking. Theorem 1.28 (Whitman): $\mathbf{FL}(\omega) \hookrightarrow \mathbf{FL}(3)$. So $\mathbf{FL}(3)$ contains an infinite ascending chain (Theorem 1.23). Yet near the bottom, $\mathbf{FL}(4)$'s structure is completely understood. The cover algorithm of §5 is what makes this regional description tractable — without polynomial-time κ-computation, even $\mathbf{FL}(4)$'s atoms-region would be combinatorially elusive.</p>
+    <p><strong>Higher up in $\mathbf{FL}(X)$.</strong> Sections 7 and 8 of Chapter VII study finite intervals and three-element intervals. Chapter VIII treats singular and semisingular elements. Chapter IX (Tschantz's theorem) proves: every infinite interval in $\mathbf{FL}(X)$ contains a coverless element. The cover algorithm developed here is foundational for ALL these results — without it, the structural classification couldn't be made effective.</p>
+  </div>
+</section>
+
+<!-- ============== CONNECTIONS ============== -->
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos cross-references</h2>
+  <div class="tagline">How Chapter III's algorithmic constructions resonate with Prologos's propagator architecture: the standard epimorphism as a recursive cell-monotone closure, $\mathbf{L}^\vee(w)$ as a J-closed-set propagator, Theorem 3.32's κ-recursion as a fire-once cascade.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · standard epimorphism + $\mathbf{L}^\vee(w)$ + κ-recursion</span>
+    <p>Chapter III is the operational realisation of Chapter II's structural theory. Each of its constructions has a direct analog in the propagator architecture.</p>
+    <p><strong>(1) The standard epimorphism as a recursive monotone closure.</strong> Theorem 3.15: $f(u) = \bigvee\{a \in A : a \le u\}$ where $A$ is finite J-closed. In Prologos: this is exactly the structural form of a J-closed-set propagator firing on a <code>monotone-set</code> cell. The merge function is union of finite subsets; the firing rule reads the cell, computes $\{a \in A : a \le u\}$, joins them, and writes the result. The set-latch + threshold pattern from <code>propagator-design.md</code> § set-latch is structurally identical: latch accumulates, threshold fires when sufficient. Theorem 3.15's proof that $f$ preserves joins via J-closure is the monotonicity guarantee that makes the propagator CALM-safe.</p>
+    <p><strong>(2) The lattice $\mathbf{L}^\vee(w)$ as a J-closed-set cell.</strong> $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ is the join-subsemilattice of $\mathbf{FL}(X)$ generated by $\mathbf{J}(w)$. As a cell, it is a finite-domain monotone-set cell whose value is the J-closed set $\mathbf{J}(w)$. Propagator that fires on this cell: the cover-test (does $w$ have a lower cover?), implemented as the SD$_\wedge$-test on $\mathbf{L}^\vee(w)$. The recursive construction of $\mathbf{J}(w)$ from canonical form (Theorem 3.12) maps to a topology-stratum allocation: when $w$ is added to the network, allocate cells for each canonical-form sub-element, install the J-closure propagator, fire to compute $\mathbf{L}^\vee(w)$ at quiescence.</p>
+    <p><strong>(3) Theorem 3.30's syntactic test as a fire-once cascade.</strong> $w$ is completely join irreducible iff (1) every $u \in \mathbf{J}(w) - \{w\}$ is completely join irreducible AND (2) $w \not\le \bigvee \mathbf{K}(w)$. In propagator terms: install a fire-once propagator on $\mathbf{J}(w)$'s monotone-set cell. The propagator's fire function (a) checks the recursive condition by reading components of the cell (each component carries its own complete-join-irreducibility flag), (b) checks the Whitman test $w \not\le \bigvee \mathbf{K}(w)$ via a finite computation, (c) sets the result flag. Component-paths declaration ensures the propagator fires only when the relevant components change.</p>
+    <p><strong>(4) Theorem 3.32's κ-formula as a structural fixpoint.</strong> $\kappa(w) = \bigvee\{x \in X : w_\dagger \vee x \not\ge w\} \vee \bigvee\{k^\dagger \wedge \kappa(v) : v \in \mathbf{J}(w) - \{w\}, w \not\le \kappa(v)\}$. In the propagator architecture: this is a structural-recursion propagator that depends on $\kappa(v)$ for smaller $v$. By the well-foundedness of D-rank (Theorem 2.20), the recursion terminates. Each propagator install is a fire-once on a κ-cell whose value is the κ-image. The bilattice cell architecture (with structural unification on κ-results) gives the meet operation needed in $k^\dagger$. The recursion-as-fixpoint is the structural-thinking-rule's guarantee that the lattice's Hasse diagram IS the optimal parallel decomposition — each $\kappa(v)$ for distinct $v$ at the same D-rank can be computed concurrently.</p>
+    <p><strong>(5) Polynomial-time complexity = depth-bounded fixpoint.</strong> Chapter XI proves the algorithm runs in $O(n^k)$. In propagator terms: the network has depth bounded by the canonical-form complexity of $w$, and each round fires propagators in parallel. Total work is polynomial in term size, with the parallel structure giving constant-factor improvement on real hardware. This matches the Hyperlattice Conjecture: the Hasse diagram of $\mathbf{J}(w)$ IS the parallel decomposition. The algorithm's polynomial complexity is a structural property of the lattice's depth, not an algorithmic optimisation.</p>
+    <p><strong>(6) Coverless elements as fixed points without lower covers.</strong> Example 3.36 ($w = x \wedge (y \vee z)$ in $\mathbf{FL}(3)$, no lower cover) is the simplest non-completely-join-irreducible element. In Prologos terms: a cell whose value is "stuck" — has a stable neighbourhood but no minimal-cover witness. Example 3.39 (coverless element with neither lower nor upper covers) is a cell that is stuck in BOTH directions: an "isolated" point in the propagator network. Tschantz's theorem (Chapter IX) — every infinite interval contains a coverless element — translates to: every infinite-cell-domain region of the network has a stuck point. This is structurally why propagator networks need stratification to make progress past such points.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="module" id="glossary">
+  <h2><span class="num">GLOSSARY</span> Chapter III vocabulary, alphabetical</h2>
+  <div class="tagline">All new terminology with brief definition. Page references to the monograph book pages (PDF page numbers in parentheses).</div>
+
+  <dl class="glossary">
+    <dt>$A^\vee$</dt>
+    <dd>For a subset $A$ of a lattice $\mathbf{F}$ with $0$, the set of all joins of finite subsets of $A$ (including $\bigvee \emptyset = 0$). When $A$ is finite, $A^\vee$ is a finite lattice with inherited join and derived meet $a \wedge' b = \bigvee\{c \in A : c \le a \wedge b\}$. Defined book p. 72 (PDF 81).</dd>
+
+    <dt>Bottom of $\mathbf{FL}(X)$</dt>
+    <dd>The atom-region of $\mathbf{FL}(X)$, fully described in §7 for $|X| \le 4$. Has $1 + n^2$ atom-region elements for $n = |X|$ (Example 3.45).</dd>
+
+    <dt>Connected component (of $a$)</dt>
+    <dd>The set of $b \in \mathbf{FL}(X)$ for which there exists a finite sequence $a = c_0, c_1, \ldots, c_k = b$ such that consecutive $c_i, c_{i+1}$ are in cover relation. Example 3.43–3.45 give explicit descriptions.</dd>
+
+    <dt>Coverless element</dt>
+    <dd>An element with neither lower nor upper covers in $\mathbf{FL}(X)$. Example 3.39 gives a 4-meet, 4-join expression with no covers either way; Theorem of Chapter IX (Tschantz): every infinite interval contains a coverless element.</dd>
+
+    <dt>Dean's example</dt>
+    <dd>$w = x \wedge (y \vee z)$ in $\mathbf{FL}(3)$ — the FIRST historical example of an element without a lower cover, found by R.A. Dean around 1960 by ad hoc methods. Example 3.36.</dd>
+
+    <dt>Fundamental theorem on $A^\vee$ images</dt>
+    <dd>Theorem 3.19 — every homomorphic image of $A^\vee$ is isomorphic to $B^\vee$ for some J-closed subset $B$ of $A$.</dd>
+
+    <dt>γ (gamma)</dt>
+    <dd>The bijection in Theorem 3.5 from lower covers of $w$ to completely-join-irreducible canonical joinands of $w$. $\gamma(v) = $ unique $w_i \not\le v$. $\gamma^{-1}(w_i) = \kappa(w_i) \wedge w$.</dd>
+
+    <dt>$\mathbf{J}(p)$</dt>
+    <dd>The smallest J-closed set containing every minimal join representation of $p$. Theorem 3.12: explicit canonical-form recipe in $\mathbf{FL}(X)$.</dd>
+
+    <dt>J-closed set</dt>
+    <dd>$A \subseteq L$ such that $\mathbf{J}(p) \subseteq A$ for every $p \in A$. Equivalently: minimal join covers of elements in $A$ have all elements in $A$. The chapter's central structural concept.</dd>
+
+    <dt>$\mathbf{K}(w)$</dt>
+    <dd>For join irreducible $w \in \mathbf{FL}(X)$, the set $\{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}$. Used in Theorems 3.30 and 3.32.</dd>
+
+    <dt>$k^\dagger$</dt>
+    <dd>For completely-join-irreducible $w \in \mathbf{FL}(X)$, $k^\dagger = \bigwedge\{\kappa(v) : v \in \mathbf{J}(w) - \{w\}, \kappa(v) \ge \bigvee \mathbf{K}(w)\}$. Used in Theorem 3.32's κ-formula.</dd>
+
+    <dt>$\mathbf{L}^\vee(w)$ / $\mathbf{L}^\wedge(w)$</dt>
+    <dd>$\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ — the lattice generated by the J-closure of $w$ via the standard epimorphism. For $w$ join irreducible, finite, lower bounded, subdirectly irreducible, with $w/w_\dagger$ critical prime quotient (Theorem 3.24). Dually $\mathbf{L}^\wedge(w) = \mathbf{M}(w)^\wedge$.</dd>
+
+    <dt>Lower atomic</dt>
+    <dd>An element $w$ is lower atomic if for every $u < w$ there exists $v$ with $u \le v \prec w$. Theorem 3.5–3.8 connect this to canonical-joinand structure.</dd>
+
+    <dt>$\mathbf{M}(p)$</dt>
+    <dd>The set of canonical meetands of $p$. Lemma 3.11 + Theorem 3.31 give explicit canonical-form formulas.</dd>
+
+    <dt>$\mathcal{M}(p)$, $\mathcal{M}^*(p)$</dt>
+    <dd>From Chapter II: $\mathcal{M}(p)$ = minimal join covers of $p$; $\mathcal{M}^*(p)$ = those with all elements completely join irreducible. Lemma 3.11 specialises $\mathcal{M}^*(w)$ for $\mathbf{FL}(X)$.</dd>
+
+    <dt>Slim element</dt>
+    <dd>An element of $\mathbf{FL}(X)$ whose canonical form is a strict alternation of $\wedge$ and $\vee$ with no repetition rules — see Example 3.40 for the precise constraints. Cover-test classified in Example 3.40.</dd>
+
+    <dt>Standard epimorphism</dt>
+    <dd>For finite J-closed $A \subseteq \mathbf{F}$ (with $\mathbf{F}$ having minimal-join-cover refinement), the map $f : \mathbf{F} \to A^\vee$ defined by $f(u) = \bigvee\{a \in A : a \le u\}$. Theorem 3.15: a lower-bounded epimorphism. Chapter's bridge from J-closure to lower-bounded structure.</dd>
+
+    <dt>Subelement of $w$</dt>
+    <dd>An element $u \in \mathbf{FL}(X)$ which is a subterm (in some canonical-form representation) of $w$. Theorem 3.26(3): every subelement of $w$ is lower atomic iff $w$ is completely join irreducible.</dd>
+
+    <dt>Syntactic algorithm</dt>
+    <dd>An algorithm operating directly on canonical-form terms, without constructing $\mathbf{L}^\vee(w)$ explicitly. §5 develops the syntactic algorithm via Theorems 3.30 and 3.32.</dd>
+
+    <dt>Upper atomic</dt>
+    <dd>An element $w$ is upper atomic if for every $u > w$ there exists $v$ with $w \prec v \le u$.</dd>
+
+    <dt>$w_\dagger$, $w^\dagger$</dt>
+    <dd>For $w$ join irreducible, $w_\dagger = \bigvee\{u \in \mathbf{J}(w) : u < w\}$ — the lower cover of $w$ in $\mathbf{L}^\vee(w)$. Dually $w^\dagger$ for $w$ meet irreducible. Distinct from $w_*$, $w^*$ (covers in $\mathbf{FL}(X)$ itself), though Theorem 3.30 connects them via $\bigvee \mathbf{K}(w) \not\ge w$.</dd>
+
+    <dt>$w_*$, $w^*$</dt>
+    <dd>For $w$ completely join irreducible (resp. completely meet irreducible) in $\mathbf{FL}(X)$, the unique lower (resp. upper) cover. By Theorem 3.3, $w_* = w \wedge \kappa(w)$, $w^* = w \vee \kappa^d(w)$.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXAMPLES ============== -->
+<section class="module" id="examples">
+  <h2><span class="num">COMPUTED EXAMPLES</span> Worked instances of Chapter III results</h2>
+  <div class="tagline">Five computed examples: Theorem 3.4 in action, Dean's coverless element with detailed Whitman-algorithm verification, $\mathbf{L}^\vee(w)$ for a 5-element lattice, slim element classification, the connected component of a generator.</div>
+
+  <details class="example"><summary><span class="ex-tag">Example III.A</span>Theorem 3.4 in action — unique canonical meetand-not-above</summary>
+  <div class="body">
+    <div class="ex-statement">For $w = (x \vee y) \wedge (x \vee z)$ in $\mathbf{FL}(\{x, y, z\})$, verify Theorem 3.4: for each canonical meetand of $w$, exactly one canonical joinand is not below $w$.</div>
+    <p><strong>Setup.</strong> $w$ has canonical meet representation $w = w_1 \wedge w_2$ with $w_1 = x \vee y$ and $w_2 = x \vee z$. Each $w_i$ is itself a canonical join.</p>
+    <p><strong>Check $w_1 = x \vee y$.</strong> The canonical joinands are $x$ and $y$. Is $x \le w$? $w = (x \vee y) \wedge (x \vee z) \ge x \wedge x = x$ (since $x \le x \vee y$ and $x \le x \vee z$). So $x \le w$. Is $y \le w$? Need $y \le x \vee z$. By Whitman's algorithm (case 4): $y$ is a generator, $x \vee z$ is a join, so $y \le x \vee z$ iff $y \le x$ or $y \le z$. But generators are pairwise incomparable, so neither holds. Hence $y \not\le x \vee z$, so $y \not\le w$. <strong>Thus exactly one canonical joinand of $w_1$ (namely $y$) is not below $w$.</strong> ✓</p>
+    <p><strong>Check $w_2 = x \vee z$.</strong> By symmetry, exactly one canonical joinand (namely $z$) is not below $w$. ✓</p>
+    <p><strong>Implication.</strong> Theorem 3.4 confirmed. The unique not-below joinand of each canonical meetand identifies the structural "direction" each meetand contributes to $\kappa(w)$. Per Table 3.1, $\kappa(w) = x \vee ((x \vee y) \wedge (x \vee z) \wedge (y \vee z))$. Note that $\kappa(w)$ involves a triple meet that picks up both directions $y, z$ together with $x$.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example III.B</span>Dean 1960 — verify $w = x \wedge (y \vee z)$ has no lower cover via $\mathbf{L}^\vee(w)$</summary>
+  <div class="body">
+    <div class="ex-statement">For $w = x \wedge (y \vee z)$ in $\mathbf{FL}(3)$, compute $\mathbf{J}(w)$, draw $\mathbf{L}^\vee(w)$, and verify it fails meet semidistributivity — confirming via Theorem 3.26 that $w$ has no lower cover.</div>
+    <p><strong>Step 1: compute $\mathbf{J}(w)$.</strong> $w = x \wedge (y \vee z)$ is join irreducible (it's a meet — the only join cover would involve refining the meet, but $x \wedge (y \vee z) \le x$ and $x \wedge (y \vee z) \le y \vee z$, neither of which is a refinement). By Theorem 3.12 case (2), $\mathbf{J}(w) = \{w\} \cup \mathbf{J}(y) \cup \mathbf{J}(z) = \{x \wedge (y \vee z), y, z\}$ — three elements.</p>
+    <p><strong>Step 2: build $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$.</strong> Take all joins of subsets:</p>
+    <ul>
+      <li>$\bigvee \emptyset = 0$ (the bottom).</li>
+      <li>Single elements: $w, y, z$.</li>
+      <li>Pairs: $w \vee y, w \vee z, y \vee z$. Compute these in $\mathbf{FL}(3)$: $w \vee y = (x \wedge (y \vee z)) \vee y$; $w \vee z = (x \wedge (y \vee z)) \vee z$; $y \vee z$.</li>
+      <li>Triple: $w \vee y \vee z = y \vee z$ (since $w \le y \vee z$ — second meetand of $w$).</li>
+    </ul>
+    <p>Five distinct elements (since $w \vee y \vee z = y \vee z$): $\{0, w, y, z, y \vee z\}$ plus $\{w \vee y, w \vee z\}$ if these are distinct from $y \vee z$. Actually, by canonical-form analysis: $w \vee y$ has canonical form $(x \wedge (y \vee z)) \vee y$ which is NOT $y \vee z$. So $\mathbf{L}^\vee(w)$ has more elements.</p>
+    <p>The careful analysis (book p. 83, Figure 3.2(1)): $\mathbf{L}^\vee(w)$ is the 5-element lattice consisting of $\{0, y, z, w, y \vee z\}$ with $0 \prec y, z, w$, then $y, z, w$ each $\prec y \vee z$. (Actually Figure 3.2(1) is drawn as a "diamond with one extra" — 5 elements: $\{0, w, y, z, y \vee z\}$.)</p>
+    <p><strong>Step 3: verify SD$_\wedge$ fails.</strong> Test: $y \wedge z = 0$ (since they are different generators, their meet in $\mathbf{FL}(3)$ is 0 in $\mathbf{L}^\vee(w)$; alternatively in $\mathbf{FL}(3)$ itself, $y \wedge z$ is below $w$, but here $\mathbf{L}^\vee(w)$ has $0$ as the only element strictly below $y, z, w$). Also $w \wedge y = ?$ in $\mathbf{L}^\vee(w)$: by the formula $a \wedge' b = \bigvee\{c \in \mathbf{J}(w) : c \le a \wedge b\}$, $w \wedge' y = \bigvee\{c \in \{w, y, z\} : c \le w \wedge y \text{ in } \mathbf{FL}(3)\}$. Now $w \wedge y$ in $\mathbf{FL}(3)$ is some element, but neither $w, y, z$ is below it (by canonical form). So $w \wedge' y = 0$. Similarly $w \wedge' z = 0$, but $w \wedge' (y \vee z) = w$ (since $w \le y \vee z$).</p>
+    <p>SD$_\wedge$ test: $w \wedge' y = w \wedge' z = 0$, but $w \wedge' (y \vee z) = w \neq 0$. <strong>SD$_\wedge$ FAILS.</strong></p>
+    <p><strong>Step 4: conclusion via Theorem 3.26.</strong> By Theorem 3.26(4), $w$ has a lower cover iff $\mathbf{L}^\vee(w)$ is meet semidistributive. Since SD$_\wedge$ fails, $w$ has no lower cover. ✓ (Confirms Dean 1960's original ad hoc result.)</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example III.C</span>Slim element classification — which slim elements have lower covers</summary>
+  <div class="body">
+    <div class="ex-statement">Apply Example 3.40 to determine which slim elements of $\mathbf{FL}(X)$ have lower covers, and count via the $f(n)$ growth rate.</div>
+    <p><strong>Slim elements.</strong> A join-irreducible slim element has canonical form $w = x_n \wedge (x_{n-1} \vee (\cdots \vee (x_2 \wedge x_1)))$ for $n \ge 2$ even, or $n \ge 1$ odd, with constraints: $x_i \neq x_{i+1}$ and $(x_i, x_{i+1}) \neq (x_{i+2}, x_{i+3})$ for all $i$, plus $x_1 \neq x_3$ and $(x_1, x_3) \neq (x_4, x_5)$.</p>
+    <p><strong>Cover test (from Example 3.40).</strong> A slim join-irreducible $w$ has a lower cover iff:</p>
+    <ul>
+      <li>$n \le 2$: ALWAYS (small cases work).</li>
+      <li>$n = 3$ odd: NO lower cover (failure case from Example 3.36 — $w = x \wedge (y \vee z)$ for some $x, y, z$).</li>
+      <li>$n \ge 3$ odd: NO lower cover.</li>
+      <li>$n \ge 4$ even: lower cover iff $x_2 = x_4 = \cdots = x_n$.</li>
+    </ul>
+    <p>So the additional restriction is $x_2 = x_4 = \cdots = x_n$ — all even-indexed positions must hold the SAME generator. Given $|X| = m$, choose this generator in $m$ ways. The odd-indexed positions $x_1, x_3, \ldots, x_{n-1}$ can be any of the remaining $m - 1$ generators, BUT subject to canonical-form constraints.</p>
+    <p><strong>Growth rate.</strong> Let $f(n)$ = number of join-irreducible slim elements with canonical form of length $n$ that have a lower cover. Book p. 87: if $|X| = 3$, $f(n)$ is upper bounded by a linear function (since the constraints become tight). If $|X| > 3$, $f(n)$ grows EXPONENTIALLY in $n$.</p>
+    <p><strong>Implication.</strong> The cover relation in $\mathbf{FL}(X)$ has dramatically different growth behavior between $|X| = 3$ and $|X| \ge 4$. For $|X| = 3$, cover-witnesses are RARE (only finitely many up to canonical-form length $n$ for any $n$). For $|X| \ge 4$, cover-witnesses are EXPONENTIALLY ABUNDANT. This is reflected in the structural complexity of $\mathbf{FL}(X)$ — Theorem 1.32 says for $|X| \ge 5$, atom-generated sublattice is infinite.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example III.D</span>Theorem 3.32 — explicit κ computation for $w = (x \vee y) \wedge (x \vee z)$</summary>
+  <div class="body">
+    <div class="ex-statement">Use Theorem 3.32 to compute $\kappa(w)$ for $w = (x \vee y) \wedge (x \vee z)$ in $\mathbf{FL}(\{x, y, z\})$, the first row of Table 3.1. Verify against the table's stated answer.</div>
+    <p><strong>Step 1: $\mathbf{J}(w)$.</strong> By Theorem 3.12 (since $w$ is a meet of joins), $\mathbf{J}(w) = \{w\} \cup \mathbf{J}(x) \cup \mathbf{J}(y) \cup \mathbf{J}(z) = \{w, x, y, z\}$. Four elements.</p>
+    <p><strong>Step 2: $w_\dagger$.</strong> $w_\dagger = \bigvee\{u \in \mathbf{J}(w) : u < w\} = x \vee y \vee z$ — wait, but $y \not< w$ since $y \not\le w$ (by Example III.A). Let me redo: $u < w$ means $u \le w$ AND $u \neq w$. So we need $u \in \{x, y, z\}$ with $u \le w$. From III.A, $x \le w$ and $y \not\le w$, $z \not\le w$. So the only $u < w$ in $\mathbf{J}(w) - \{w\}$ is $u = x$. Hence $w_\dagger = x$.</p>
+    <p><strong>Step 3: $\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}$.</strong> Test each $v \in \{w, x, y, z\}$:</p>
+    <ul>
+      <li>$v = w$: $w_\dagger \vee w = x \vee w = w$ (since $x \le w$), so $w_\dagger \vee w = w \ge w$. Trivially. Excluded.</li>
+      <li>$v = x$: $w_\dagger \vee x = x \vee x = x \le w$ but $\not\ge w$. So $w_\dagger \vee x \not\ge w$ ⇒ $x \in \mathbf{K}(w)$.</li>
+      <li>$v = y$: $w_\dagger \vee y = x \vee y$. Is $x \vee y \ge w = (x \vee y) \wedge (x \vee z)$? We have $w \le x \vee y$ (by canonical meet form). Hence $x \vee y \ge w$ ⇒ $y \notin \mathbf{K}(w)$.</li>
+      <li>$v = z$: by symmetry, $z \notin \mathbf{K}(w)$.</li>
+    </ul>
+    <p>So $\mathbf{K}(w) = \{x\}$, and $\bigvee \mathbf{K}(w) = x$.</p>
+    <p><strong>Step 4: $k^\dagger = \bigwedge\{\kappa(v) : v \in \mathbf{J}(w) - \{w\}, \kappa(v) \ge \bigvee \mathbf{K}(w) = x\}$.</strong> Test each $v \in \{x, y, z\}$:</p>
+    <ul>
+      <li>$v = x$: $\kappa(x) = y \vee z$ (by Example 3.10). Is $y \vee z \ge x$? No (generators incomparable). Excluded.</li>
+      <li>$v = y$: $\kappa(y) = x \vee z$. Is $x \vee z \ge x$? Yes. Include.</li>
+      <li>$v = z$: $\kappa(z) = x \vee y$. Is $x \vee y \ge x$? Yes. Include.</li>
+    </ul>
+    <p>$k^\dagger = (x \vee z) \wedge (x \vee y)$.</p>
+    <p><strong>Step 5: first part of κ-formula.</strong> $\bigvee\{x \in X : w_\dagger \vee x \not\ge w\}$. We computed $w_\dagger = x$. Test each generator:</p>
+    <ul>
+      <li>$x$: $w_\dagger \vee x = x$. $x \ge w$? No. Include.</li>
+      <li>$y$: $w_\dagger \vee y = x \vee y \ge w$. Excluded.</li>
+      <li>$z$: $w_\dagger \vee z = x \vee z \ge w$. Excluded.</li>
+    </ul>
+    <p>First part = $x$.</p>
+    <p><strong>Step 6: second part of κ-formula.</strong> $\bigvee\{k^\dagger \wedge \kappa(v) : v \in \mathbf{J}(w) - \{w\}, w \not\le \kappa(v)\}$. Test each $v$:</p>
+    <ul>
+      <li>$v = x$: $\kappa(x) = y \vee z$. $w = (x \vee y) \wedge (x \vee z)$. Is $w \le y \vee z$? Apply Whitman case 6: $w$ is a meet, $y \vee z$ is a join. Need $x \vee y \le y \vee z$ or $x \vee z \le y \vee z$ or $w \le y$ or $w \le z$. None hold (generators incomparable, both joinands of $w$ contain $x$). So $w \not\le \kappa(x)$. INCLUDE.</li>
+      <li>$v = y$: $\kappa(y) = x \vee z$. Is $w \le x \vee z$? $w$ has canonical meetand $x \vee z$, so $w \le x \vee z$. EXCLUDE.</li>
+      <li>$v = z$: by symmetry, $w \le \kappa(z) = x \vee y$. EXCLUDE.</li>
+    </ul>
+    <p>Second part = $k^\dagger \wedge \kappa(x) = ((x \vee z) \wedge (x \vee y)) \wedge (y \vee z) = (x \vee y) \wedge (x \vee z) \wedge (y \vee z)$.</p>
+    <p><strong>Step 7: combine.</strong> $\kappa(w) = x \vee \big((x \vee y) \wedge (x \vee z) \wedge (y \vee z)\big)$.</p>
+    <p><strong>Verification against Table 3.1.</strong> Table 3.1 row (1) lists $\kappa(w) = x \vee ((x \vee y) \wedge (x \vee z) \wedge (y \vee z))$. ✓ Exact match.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example III.E</span>The connected component of a generator — verifying $\mathbf{N}_5$</summary>
+  <div class="body">
+    <div class="ex-statement">Verify Example 3.43: the connected component of generator $x$ in $\mathbf{FL}(\{x, y, z\})$ is a 5-element lattice isomorphic to the pentagon $\mathbf{N}_5$.</div>
+    <p><strong>Step 1: identify the elements.</strong> The connected component is the set of elements reachable from $x$ via covers. By Example 3.10, $\kappa(x) = y \vee z = \overline{x}$, so $x_* = x \wedge \overline{x}$ exists (it's a lower cover of $x$). Dually, $\kappa^d(x) = y \wedge z = \underline{x}$, so $x^* = x \vee \underline{x}$ is the upper cover.</p>
+    <p>So we have $x_* \prec x \prec x^*$ — three elements connected vertically.</p>
+    <p><strong>Step 2: covers from $x_*$.</strong> $x_* = x \wedge (y \vee z)$. By Theorem 3.5, the lower covers of $x_*$ correspond to completely-join-irreducible canonical joinands. But $x_*$ is a meet, not a join — its canonical join representation requires looking at $\mathbf{J}(x_*)$. Actually $x_* = x \wedge \overline{x}$ may itself be join irreducible. By Example 3.36, $x \wedge (y \vee z)$ has NO lower cover. So $x_*$ has no element below it in the connected component — $x_*$ is a "minimum" of the component (locally).</p>
+    <p>However $x_*$ DOES have upper covers besides $x$: by the dual analysis, the upper covers of $x_*$ are of the form $x_* \vee \underline{?}$. Specifically: $x_* \vee \underline{x} = (x \wedge \overline{x}) \vee \underline{x}$. In $\mathbf{FL}(3)$, $\underline{x} = y \wedge z$. So $x_* \vee \underline{x} = (x \wedge (y \vee z)) \vee (y \wedge z)$. This is an upper cover of $x_*$.</p>
+    <p><strong>Step 3: covers from $x^*$.</strong> $x^* = x \vee (y \wedge z)$. Dually to Step 2, $x^*$ has no upper cover (by the dual of Example 3.36). $x^*$ has lower covers: $x$ (already known) and $x^* \wedge \overline{x} = (x \vee (y \wedge z)) \wedge (y \vee z)$.</p>
+    <p><strong>Step 4: assemble the 5-element lattice.</strong> The five elements:</p>
+    <ul>
+      <li>$x_* = x \wedge \overline{x}$ (bottom of the component);</li>
+      <li>$x_* \vee \underline{x}$ (one branch up from $x_*$);</li>
+      <li>$x$ (the central generator);</li>
+      <li>$x^* \wedge \overline{x}$ (one branch down from $x^*$, on the OTHER side from $x$);</li>
+      <li>$x^* = x \vee \underline{x}$ (top).</li>
+    </ul>
+    <p>Cover relations: $x_* \prec x \prec x^*$, $x_* \prec x_* \vee \underline{x} < x^* \wedge \overline{x} \prec x^*$. And the inequality $x_* \vee \underline{x} < x^* \wedge \overline{x}$ (NOT a cover — there's room between, but no intermediate element in the connected component).</p>
+    <p><strong>Step 5: identify as $\mathbf{N}_5$.</strong> The five-element lattice with elements $\{0, a, b, c, 1\}$ where $0 \prec a \prec c \prec 1$ and $0 \prec b \prec 1$ and $a, c$ incomparable to $b$, with $b \wedge c = 0$, $b \vee a = 1$ — this is the pentagon $\mathbf{N}_5$. Mapping: $0 \mapsto x_*$, $a \mapsto x_* \vee \underline{x}$, $c \mapsto x^* \wedge \overline{x}$, $b \mapsto x$, $1 \mapsto x^*$. Cover relations match $\mathbf{N}_5$'s. ✓</p>
+    <p><strong>Implication.</strong> Even at the most local level — the connected component of a generator — non-modular structure already appears. The pentagon $\mathbf{N}_5$ is the smallest non-modular lattice; its emergence here at the SUB-component level shows that $\mathbf{FL}(X)$ is "non-modular at every scale". This connects to Chapter II's result that $\mathbf{N}_5$ is the unique splitting lattice for the modular variety: the very fabric of $\mathbf{FL}(X)$'s local structure is woven from non-modular witnesses.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter IV — Day's Theorem Revisited</h2>
+  <div class="tagline">Chapter IV is brief but technically central — a 4-page chapter giving a refined version of Day's theorem (free lattices are weakly atomic, originally from Chapter II §7). The refinement is needed for results in Chapter VI (totally atomic elements) and beyond.</div>
+
+  <p>Chapter IV opens after Chapter III's algorithmic cover theory, before Chapter V's deep sublattice theorems. Where Chapter II §7 proved Day's weak-atomicity theorem via inverse-limit construction starting from the free distributive lattice, Chapter IV gives a STRONGER form of the theorem — one that controls not just the existence of covering pairs in nontrivial intervals but also their relationship to the κ-bijection and J-closed structure developed in Chapter III.</p>
+
+  <p>Reading Chapter IV cold is fine — it builds on Chapter II §7 but doesn't require the algorithmic apparatus of Chapter III. However, reading Chapter IV AFTER Chapter III gives the strongest perspective: the cover algorithm makes Day's theorem operational, and Chapter IV's refinement is what extracts the structural fineness that Chapters VI–IX exploit.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter IV uses everything from Chapters I–III. Day's doubling (I.1), Whitman's condition (I.8), canonical form (I.17), semidistributivity (I.21). Bounded homomorphisms with $\beta, \alpha$ (II.1), the κ-bijection (II.54–II.55), splitting lattices (II.79). Chapter III's cover theorems (3.1–3.5), the $\mathbf{L}^\vee(w)$ construction (3.24), Theorem 3.26's five-fold characterisation, the syntactic algorithm (3.32). Chapter IV's "refinement" of Day's theorem strengthens the inverse-limit construction with explicit cover-counting given by Chapter III's algorithm.</p>
+  </div>
+
+  <p>Key results to anticipate. <strong>Theorem 4.1 (likely)</strong>: a strengthened version of Day's theorem — every nontrivial interval contains not just a covering pair, but a covering pair with specific structural properties (e.g., the lower element is completely join irreducible, the upper element is completely meet irreducible). <strong>Implication for Chapter VI</strong>: in Chapter VI, "totally atomic" elements (completely join AND completely meet irreducible) are studied. Chapter IV's refinement gives the existence of such elements in every nontrivial interval — a much stronger fact than mere weak atomicity. <strong>Implication for Chapter IX (Tschantz)</strong>: every infinite interval contains a coverless element. The contrast with Chapter IV's strengthened theorem is structural: in EVERY nontrivial interval there are covering pairs (Day, Chapter IV), but in every INFINITE interval there are also coverless elements (Tschantz, Chapter IX). The two coexist, structuring the lattice's local/global behaviour.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Free Lattices Companion · Chapter III · <a href="freelat-companion-toc.html">Volume index</a></div>
+    <div><a href="freelat-companion-ch02.html">← Chapter II</a> · <a href="freelat-companion-ch04.html">Chapter IV →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

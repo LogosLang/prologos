@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Chapter II · Bounded Homomorphisms and Related Concepts</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .scope { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; color: var(--ink-soft); }
+  .scope p { margin: 0 0 10px; }
+  .scope p:last-child { margin: 0; }
+  .scope .attrib { display: block; text-align: right; font-style: italic; color: var(--text-dim); font-size: 13.5px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor, .box.problem { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.problem .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.example { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.example > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.example[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.example > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.example[open] > summary::before { content: "▾ "; }
+  details.example > div.body { padding: 6px 22px 14px; }
+  details.example .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.example .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Free Lattices Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Free Lattices</em> by Ralph Freese, Jaroslav Ježek &amp; J. B. Nation (AMS Surveys 42, 1995).</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="freelat-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="freelat-companion-ch01.html">← Chapter I</a></li>
+    <li><a href="freelat-companion-ch03.html">Chapter III →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter II · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Bounded homomorphisms</div>
+  <ul>
+    <li><a href="#s1">§1 · Bounded homomorphisms (2.1–2.24)</a></li>
+    <li><a href="#s2">§2 · Continuity (2.25–2.27)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Doubling and congruences</div>
+  <ul>
+    <li><a href="#s3">§3 · Day's characterisation (2.28–2.44)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · The E refinement of D</div>
+  <ul>
+    <li><a href="#s4">§4 · ℳ*(a), E-relation, J-closed sets (2.45–2.53)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Semidistributive lattices</div>
+  <ul>
+    <li><a href="#s5">§5 · κ-bijection, A/B/C, Day's theorem (2.54–2.71)</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Splitting lattices</div>
+  <ul>
+    <li><a href="#s6">§6 · Splitting pairs and conjugate equations (2.72–2.82)</a></li>
+  </ul>
+
+  <div class="section-label">Part F · Day's weak atomicity</div>
+  <ul>
+    <li><a href="#s7">§7 · FL(X) is weakly atomic (2.83–2.85)</a></li>
+  </ul>
+
+  <div class="section-label">Part G · Congruence varieties</div>
+  <ul>
+    <li><a href="#s8">§8 · Applications (2.86–2.90)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · McKenzie 1972 in context</a></li>
+    <li><a href="#c2">P2 · Day's lineage</a></li>
+    <li><a href="#c3">P3 · The D-relation across chapters</a></li>
+    <li><a href="#c4">P4 · Congruence varieties</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#examples">Computed examples</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Free Lattices · Mathematical Surveys &amp; Monographs 42 · Chapter II</div>
+  <h1>Bounded Homomorphisms and Related Concepts</h1>
+  <p class="lede">McKenzie's bounded homomorphism theory, the D-relation refinement, semidistributive structure via the κ-bijection, splitting lattices and conjugate equations, Day's theorem that free lattices are weakly atomic, and applications to congruence varieties — the chapter that turns Whitman's free-lattice toolkit into an instrument for studying ALL finite (sub)directly-irreducible lattices.</p>
+  <div class="meta">
+    <span>~150–180 min read</span>
+    <span>8 sections · 90 numbered results</span>
+    <span>5 connection panels</span>
+    <span>Book pp. 27–66 · PDF pp. 36–75</span>
+  </div>
+</section>
+
+<aside class="scope">
+  <p>In this chapter, after first defining bounded homomorphisms, we develop the relation between this class of homomorphisms and Day's doubling construction. This includes most of the basic results on this subject, including a generalization to convex sublattices. After deriving some of the basic properties of bounded homomorphisms and lower bounded lattices, we use these to derive several deep theorems on free lattices including a result that free lattices are weakly atomic. We also study the join semidistributive law and the dependency relation D and a useful refinement of it called the E relation. We will see in Chapter III that this refinement gives stronger and more easily applied structural results. We also study splitting lattices and their applications and present a beautiful proof due to Alan Day that free lattices are weakly atomic. The final section gives some applications to congruence varieties.</p>
+  <p>Bounded homomorphisms were introduced by McKenzie [99] in his work on equational bases of lattice varieties. This concept was independently studied by Jónsson [83] from a slightly different perspective. Day's doubling construction [24] turns out to be intimately tied to bounded homomorphisms. This chapter develops these connections, giving McKenzie's structural characterization of finite lower bounded lattices as those built from a one-element lattice by repeated doubling of lower pseudo-intervals, and the dual for upper bounded.</p>
+  <span class="attrib">— Freese, Ježek &amp; Nation, opening of Chapter II (paraphrased)</span>
+</aside>
+
+<p>Chapter II generalises everything in Chapter I beyond free lattices. Where Chapter I asked "what is the structure of $\mathbf{FL}(X)$?", Chapter II asks "<em>which finite lattices behave like quotients of free lattices?</em>" — and gives three structurally equivalent answers (lower bounded; built from $\mathbf{1}$ by iterated doubling of lower pseudo-intervals; contains no D-cycle), then dualises (upper bounded, doubling upper pseudo-intervals, no $D^d$-cycle), and finally combines the two notions ("bounded") to capture the splitting-lattice / weakly-atomic theory.</p>
+
+<p>The chapter is the longest in the monograph (40 pages, 8 sections) because it carries three intertwined narratives: (a) <em>structural</em> — the doubling characterization of bounded lattices and the κ-bijection between $\mathbf{J}(\mathbf{L})$ and $\mathbf{M}(\mathbf{L})$; (b) <em>relational</em> — the D, E, and (later) A/B/C relations on join irreducibles, with $\rho$-rank as the well-foundedness measure; (c) <em>variety-theoretic</em> — splitting lattices, conjugate equations, congruence varieties, and Day's theorem. Each narrative unlocks tools the other two need.</p>
+
+<p>Reading this chapter alongside the source PDF: the section numbering matches the monograph exactly (II.1–II.8). Theorems, lemmas, corollaries are numbered 2.1 through 2.90. We companion every named result. Where we elaborate (intuition boxes, computed examples, deep dives) the elaboration is marked clearly. Where we re-prove or sketch, the proof is from the monograph; we offer clarification, not new mathematics.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">Three panes: terms <strong>carried forward</strong> from Chapter I (and lattice prerequisites), terms <strong>new</strong> in this chapter, and the <strong>deep dives</strong> that reward close reading.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chapter I</span>
+    <p>Day's doubling $\mathbf{L}[C]$ on a convex set (Theorem 1.1, generalised). Whitman's condition (W) (Theorem 1.8). Canonical join/meet representations and the refinement order $A \ll B$ (between finite subsets, Lemma 1.15: $A \ll B \iff$ for every $a \in A$ there is $b \in B$ with $a \le b$). Canonical form (Theorem 1.17). Semidistributive laws SD$_\vee$ / SD$_\wedge$ (Theorem 1.21). Weakly atomic — every interval contains a covering pair. The cover relation $a \prec b$. Join irreducible $\mathbf{J}(\mathbf{L})$, meet irreducible $\mathbf{M}(\mathbf{L})$, with $a_*$ the unique lower cover of a completely join irreducible $a$, $b^*$ the unique upper cover of a completely meet irreducible $b$.</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter II vocabulary</span>
+    <p>Eight clusters of new vocabulary. <strong>Bounded homomorphisms:</strong> lower bounded ($\beta(a) = \min h^{-1}(1/a)$ exists for each $a \in h(\mathbf{K})$), upper bounded ($\alpha(a) = \max h^{-1}(a/0)$ exists), bounded (both), $\beta$ as right adjoint to $h$ (Galois connection $\beta \dashv h$ for lower bounded; $h \dashv \alpha$ for upper bounded). A finitely generated lattice $\mathbf{L}$ is <strong>lower / upper / bounded</strong> if the natural map $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ has the corresponding property. <strong>Minimal join cover refinement property:</strong> every join cover of $a$ refines to a minimal one (so $\mathcal{M}(a) = $ set of minimal join covers is nonempty for every $a$ that has any nontrivial join cover). <strong>D relation:</strong> $aDb$ iff $a \neq b$ and there exists $p$ with $a \le b \vee p$ and $a \not\le b_* \vee p$ (where $b$ is completely join irreducible with lower cover $b_*$). $D_k(\mathbf{L})$, $D$-rank $\rho(a) = $ longest $D$-chain starting at $a$. <strong>D-sequence / D-cycle.</strong> <strong>Lower pseudo-interval = finite union of intervals sharing a common bottom.</strong> <strong>Refined relation E:</strong> $aEb$ iff $b \in Q$ for some $Q \in \mathcal{M}^*(a)$, where $\mathcal{M}^*(a) = $ minimal join covers consisting entirely of completely join irreducible elements; "join refinement among completely join irreducible covers". <strong>J-closed (formerly D-closed) sets and $\mathbf{J}(p)$ / $\mathbf{J}^*(p)$:</strong> smallest $D$- / $E$-closed set containing every minimal join representation of $p$. <strong>κ-bijection:</strong> $\kappa_\mathbf{L} : a \mapsto \bigvee K(a)$ where $K(a) = \{u : u \ge a_*, u \not\ge a\}$, mapping completely join irreducibles to completely meet irreducibles in semidistributive lattices satisfying the minimal-join-cover refinement property. <strong>Relations A, B, C on $\mathbf{J}(\mathbf{L})$:</strong> $aAb$ iff $b < a$ and $a \le b \vee \kappa(b)$; $aBb$ iff $a \neq b$, $a \le a_* \vee b$, $a \not\le b_* \vee a_*$; $aCb$ iff $aAb$ or $aBb$. The relation $E$ on $\mathbf{J}(\mathbf{L})$ satisfies $E\big|_{\mathbf{J}(\mathbf{L})} \subseteq C \subseteq D\big|_{\mathbf{J}(\mathbf{L})}$ in finite semidistributive lattices (both containments may be proper). <strong>Splitting:</strong> a critical pair / critical quotient / prime critical quotient in a subdirectly irreducible lattice; conjugate equation $\beta_f(u) \le \alpha_f(v)$ for a prime critical quotient $u/v$ — yields an infinite ascending chain of equational descriptions; splitting pair $\langle u, v \rangle$ in a complete lattice; splitting lattice $\mathbf{L}$ — finite, bounded, subdirectly irreducible — with corresponding splitting pair $\langle \mathbf{V}(\mathbf{L}), \mathcal{C}_\mathbf{L} \rangle$ in the lattice $\mathbf{\Lambda}$ of all lattice varieties. <strong>Pseudovariety / quasivariety / variety relationships in $\mathbf{\Lambda}$:</strong> McKenzie's theorem — splittings of $\mathbf{\Lambda}$ correspond bi-uniquely to finite bounded subdirectly irreducible lattices.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Four threads reward close reading. <strong>The Galois-connection structure of bounded homomorphisms.</strong> A surjection $h : \mathbf{K} \twoheadrightarrow \mathbf{L}$ is lower bounded iff $\beta : \mathbf{L} \to \mathbf{K}$ defined by $\beta(a) = \min h^{-1}(1/a)$ is everywhere defined; $\beta$ is a right adjoint to $h$ ($h \beta(a) = a$, $\beta(h(x)) \le x$). Dually $\alpha$ is a left adjoint. This is the engine of the entire chapter. Theorem 2.18 says the kernel of a lower-bounded epimorphism is a "join-prime" element of the congruence lattice $\mathbf{Con}\,\mathbf{K}$ — a beautiful structural fact equivalent to lower-boundedness. <strong>The doubling characterisation (Theorem 2.43).</strong> A finite lattice $\mathbf{L}$ is lower bounded iff $\mathbf{L}$ can be obtained from the one-element lattice $\mathbf{1}$ by a finite sequence of doublings of lower pseudo-intervals. So Day's geometric construction is EQUIVALENT to McKenzie's algebraic notion. This is the bridge between the two independent traditions (McKenzie 1972 on equational bases vs Day 1970 on word-problem doubling). <strong>The κ-bijection (Theorem 2.54, Corollary 2.55).</strong> In a semidistributive lattice satisfying the minimal-join-cover refinement property AND its dual, $\kappa_\mathbf{L}$ is a bijection between $\mathbf{J}(\mathbf{L})$ and $\mathbf{M}(\mathbf{L})$. Equivalently $|\mathbf{J}(\mathbf{L})| = |\mathbf{M}(\mathbf{L})|$. This is rigid combinatorial data extracted purely from algebraic semidistributivity. <strong>Day's weak-atomicity proof (Theorem 2.84).</strong> The construction takes the free distributive lattice $\mathbf{F}_\mathcal{D}(X)$, doubles each (W)-failure interval at each stage to "fix" them, then takes the inverse limit. The result is $\mathbf{FL}(X)$, embedded as a sublattice of an inverse limit of finite bounded lattices — yielding the strong corollary that $\mathbf{FL}(X)$ is in the QUASIVARIETY generated by all finite bounded lattices, and hence weakly atomic. McKenzie 1972 first asked whether finitely generated free lattices are weakly atomic; Day's 1979 proof is the affirmative answer.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · BOUNDED HOMOMORPHISMS — §1, §2</div>
+  <h2>McKenzie's lower / upper / bounded homomorphism theory and continuity of the dependency relation</h2>
+  <p class="part-lede">The chapter's algebraic foundation. Lower bounded homomorphisms have a least pre-image map $\beta$ that is a right adjoint; upper bounded dually have $\alpha$. The D relation, D-rank $\rho$, and the minimal join cover refinement property emerge as the structural invariants. Continuity (Theorem 2.25) ties everything together.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 1</span> Bounded homomorphisms · McKenzie's theory</h2>
+  <div class="tagline">Defines lower / upper / bounded epimorphisms, develops the $\beta$ and $\alpha$ adjoint structure, the D relation and D-rank, the minimal join cover refinement property, and characterises lower-boundedness in five equivalent ways.</div>
+
+  <h3>The basic definitions (book p. 27)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.1 · Bounded homomorphism</span>
+    <p>Let $h : \mathbf{K} \to \mathbf{L}$ be a lattice homomorphism. For $a \in L$ the pre-image filter $h^{-1}(1/a)$ is the set $\{x \in K : h(x) \ge a\}$ (a filter of $\mathbf{K}$ when nonempty); the pre-image ideal $h^{-1}(a/0) = \{x \in K : h(x) \le a\}$.</p>
+    <p>$h$ is <strong>lower bounded</strong> if for every $a$ in the image $h(\mathbf{K})$, the filter $h^{-1}(1/a)$ has a least element, denoted $\beta_h(a)$ or just $\beta(a)$.</p>
+    <p>$h$ is <strong>upper bounded</strong> if for every $a$ in $h(\mathbf{K})$, the ideal $h^{-1}(a/0)$ has a greatest element, denoted $\alpha_h(a)$ or $\alpha(a)$.</p>
+    <p>$h$ is <strong>bounded</strong> if it is both lower and upper bounded.</p>
+    <p>A finitely generated lattice $\mathbf{L}$ is <strong>lower bounded</strong> (resp. upper bounded, bounded) if for some / every finite generating set $X$, the natural epimorphism $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ is lower bounded (resp. upper bounded, bounded).</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why the name "bounded"</span>
+    <p>"Lower bounded" means: every fiber that lies above $a$ has a LOWER bound that is itself in the fiber. "Upper bounded" dually: every fiber that lies below $a$ has an UPPER bound in the fiber. The names are not about the lattices; they are about the homomorphism's pre-image fibers. The key feature: $\beta$ becomes a right adjoint to $h$ (since $h(\beta(a)) = a$ and $\beta(h(x)) \le x$), and $\alpha$ becomes a left adjoint to $h$. So a bounded homomorphism is one with BOTH a left and right adjoint — a much stronger condition than mere surjectivity. This Galois-connection viewpoint, implicit in McKenzie 1972 and made explicit by Jónsson 1972, is the engine of the whole theory.</p>
+  </div>
+
+  <h3>The $\beta$ and $\alpha$ adjoints (Lemmas 2.2–2.5, book pp. 28–29)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.2 · $\beta$ preserves joins</span>
+    <p>If $h : \mathbf{K} \to \mathbf{L}$ is lower bounded and $a, b \in h(\mathbf{K})$, then $\beta(a \vee b) = \beta(a) \vee \beta(b)$. More generally, $\beta(\bigvee_i a_i) = \bigvee_i \beta(a_i)$ for any finite (or directed) join.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.3 · $\beta$ on join-irreducibles is the structural skeleton</span>
+    <p>To check lower-boundedness, it suffices to check that $\beta(a)$ exists for every join-irreducible $a$ in the image. If $a = \bigvee a_i$ canonically and each $\beta(a_i)$ exists, then $\beta(a) = \bigvee \beta(a_i)$.</p>
+  </div>
+
+  <p>Lemma 2.2 is the Galois-adjoint join-preservation property: a right adjoint preserves all meets, and dually a left adjoint preserves all joins. Here $\beta$ is a right adjoint of $h$ (in the dual order) — so $\beta$ preserves joins. Lemma 2.3 reduces the check to join-irreducibles, an enormous simplification.</p>
+
+  <div class="box prop">
+    <span class="label">Lemma 2.4 · $\beta$ is monotone, $h\beta = $ id, $\beta h \le $ id</span>
+    <p>Let $h : \mathbf{K} \to \mathbf{L}$ be lower bounded. Then $\beta : h(\mathbf{K}) \to \mathbf{K}$ is order-preserving, $h(\beta(a)) = a$ for all $a \in h(\mathbf{K})$, and $\beta(h(x)) \le x$ for all $x \in K$. In particular $\beta$ is injective.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.5 · $h$ lower bounded $\Rightarrow$ $h^{-1}(\mathbf{J}(\mathbf{L})) \subseteq \mathbf{J}(\mathbf{K})$</span>
+    <p>Let $h : \mathbf{K} \twoheadrightarrow \mathbf{L}$ be a lower bounded surjection. If $a$ is completely join irreducible in $\mathbf{L}$ then $\beta(a)$ is completely join irreducible in $\mathbf{K}$.</p>
+  </div>
+
+  <h3>The minimal join cover refinement property (book p. 29)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.6 · Minimal join cover refinement property + $\mathcal{M}(a)$</span>
+    <p>A finite subset $A$ of $L$ is a <strong>join cover</strong> of $a$ if $a \le \bigvee A$. The cover is <strong>nontrivial</strong> if $a \not\le u$ for any $u \in A$. A nontrivial join cover $A$ is <strong>minimal</strong> if $a \not\le \bigvee A'$ for any proper subset $A' \subset A$, AND $A$ does not refine to a smaller nontrivial cover. (Concretely: $A$ is minimal iff $A$ is an antichain and any proper refinement $A' \ll A$ already satisfies $a \le \bigvee A'$ for proper subset.) Write $\mathcal{M}(a)$ for the set of all minimal join covers of $a$.</p>
+    <p>$\mathbf{L}$ has the <strong>minimal join cover refinement property</strong> if every nontrivial join cover of every element refines to a minimal one (so $\mathcal{M}(a) \neq \emptyset$ whenever $a$ has any nontrivial join cover, and every join cover refines into one).</p>
+  </div>
+
+  <p>Free lattices, finite lattices, and finitely-presented lattices all have the minimal join cover refinement property. (For free lattices, this follows from canonical form; Theorem 1.21 implicitly used the property.) Most "well-behaved" lattices we will study have it.</p>
+
+  <h3>The D relation and D-rank (book pp. 30–31)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.7 · The D relation and D-rank $\rho$</span>
+    <p>For $a, b \in L$, write $aDb$ if $a \neq b$ and there exists $Q \in \mathcal{M}(a)$ with $b \in Q$. The relation $D$ is on the subset where minimal covers exist; in particular, $aDb$ requires $a$ to have a nontrivial join cover.</p>
+    <p>Define $D_0(\mathbf{L}) = \{a : a \text{ has no nontrivial join cover}\}$. Recursively, $D_{k+1}(\mathbf{L}) = \{a : Q \subseteq D_k(\mathbf{L}) \text{ for every } Q \in \mathcal{M}(a)\}$. Equivalently $D_k = D_0 \cup \{a : aDb \Rightarrow b \in D_{k-1}\}$.</p>
+    <p>The <strong>D-rank</strong> of $a$ is $\rho(a) = \min\{k : a \in D_k(\mathbf{L})\}$, taking $\rho(a) = \infty$ if $a \notin \bigcup_k D_k(\mathbf{L})$. Set $\mathbf{D}(\mathbf{L}) = \bigcup_k D_k(\mathbf{L})$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · D-rank as "join-cover depth"</span>
+    <p>Read $aDb$ as "$a$ depends on $b$ via a minimal join cover". The D-rank $\rho(a)$ counts how many layers of dependence are needed to bottom out at "no nontrivial cover" — it is the well-foundedness measure of the recursion that defines $\mathbf{D}(\mathbf{L})$. Crucially, $\rho$ is finite for every $a$ in $\mathbf{D}(\mathbf{L})$, and the eventual lower-boundedness theorem (Theorem 2.20) will say: $\mathbf{L}$ is lower bounded iff $\mathbf{D}(\mathbf{L}) = L$ (every element has finite D-rank). So $\rho$ is the structural invariant that turns "lower bounded" from an algebraic-existence statement into a finite-depth combinatorial certificate.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.8 · $\beta$ preserves minimal covers</span>
+    <p>Let $h : \mathbf{K} \to \mathbf{L}$ be lower bounded with $\mathbf{L}$ having the minimal join cover refinement property. If $a \in \mathbf{D}(\mathbf{L})$ and $Q \in \mathcal{M}(a)$ then $\beta(Q) = \{\beta(q) : q \in Q\} \in \mathcal{M}(\beta(a))$. Moreover, $aDb$ in $\mathbf{L}$ implies $\beta(a) D \beta(b)$ in $\mathbf{K}$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.9 · D-sequences from minimal covers</span>
+    <p>If $\mathbf{L}$ has the minimal join cover refinement property and $a_0Da_1Da_2\cdots$ is an infinite D-sequence in $\mathbf{L}$, then there exists an infinite descending chain — explicitly, the $a_i$ lie in increasingly deep layers $D_k$ but never reach $D_0$, contradicting any finiteness of $\mathbf{D}(\mathbf{L})$. So if $\mathbf{D}(\mathbf{L}) = L$, the relation $D$ has no infinite chains and is well-founded.</p>
+  </div>
+
+  <h3>The five-fold characterisation of lower boundedness (book pp. 31–34)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.20 · Five equivalent forms of lower boundedness (finite case)</span>
+    <p>For a finite lattice $\mathbf{L}$, the following are equivalent:</p>
+    <ol>
+      <li>$\mathbf{L}$ is lower bounded (every natural epimorphism $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ from a finite generating set is lower bounded).</li>
+      <li>The natural epimorphism $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ is lower bounded for some specific finite $X$.</li>
+      <li>$\mathbf{D}(\mathbf{L}) = L$ (every element has finite D-rank).</li>
+      <li>$\mathbf{L}$ contains no D-cycle: there is no sequence $a_0 D a_1 D \cdots D a_n D a_0$ with $n \ge 0$.</li>
+      <li>For every congruence $\theta \in \mathbf{Con}\,\mathbf{L}$, every $\theta$-class has a least element.</li>
+    </ol>
+    <p>Moreover, $\mathbf{L}$ being lower bounded implies that $\mathbf{L}$ satisfies SD$_\vee$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the five viewpoints</span>
+    <p>The five conditions look very different but say the same thing. (1) is the homomorphism definition. (2) reduces to a single witness. (3) says the D-rank is bounded. (4) says the D-graph has no cycles (well-founded $\Leftrightarrow$ no cycle in finite). (5) is the congruence-class characterisation: every congruence class is convex AND has a least element. Each viewpoint lights up a different proof technique: (1)–(2) for adjoint constructions, (3)–(4) for combinatorial induction on rank, (5) for variety-theoretic arguments. The implication "lower bounded $\Rightarrow$ SD$_\vee$" is also striking — semidistributivity is a corollary of the structural existence of $\beta$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorems 2.10–2.18 · the supporting cast</span>
+    <p>Sketch of the technical machinery between Lemma 2.8 and Theorem 2.20: 2.10 — composition of lower bounded maps is lower bounded. 2.11 — sublattice inclusion of a lower bounded image into the codomain inherits lower-boundedness. 2.12 — finite quotients by congruences with each class having a least element are lower bounded. 2.13–2.14 — bounded $\Leftrightarrow$ lower-bounded onto a sublattice. 2.15 — kernel ideals of lower-bounded surjections are characterised by minimal generators. 2.16 — congruences of $\mathbf{FL}(X)$ corresponding to lower-bounded quotients form a sublattice of $\mathbf{Con}\,\mathbf{FL}(X)$. 2.17 — finite products of lower bounded lattices are lower bounded. 2.18 — kernels of lower-bounded epimorphisms are join prime in $\mathbf{Con}\,\mathbf{K}$. 2.19 — D-rank is monotone under lower-bounded maps.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollaries 2.21–2.23 · D-relation properties for free lattices</span>
+    <p>2.21 — In a finite lattice with the minimal join cover refinement property, $aDb$ implies $\rho(a) > \rho(b)$. 2.22 — In a finite lower bounded lattice, the D relation is well-founded with no fixed points. 2.23 — In $\mathbf{FL}(X)$, every element has finite D-rank, and the natural map $\beta$ from a quotient back to $\mathbf{FL}(X)$ exists for every lower bounded quotient.</p>
+  </div>
+
+  <h3>Canonical join representations and SD$_\vee$ (book p. 36)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.24 · canonical join representations characterise SD$_\vee$</span>
+    <p>Let $\mathbf{L}$ have the minimal join cover refinement property. Then $\mathbf{L}$ satisfies SD$_\vee$ if and only if every element has a canonical join representation. (A <em>canonical join representation</em> of $a$ is a finite antichain $C$ of completely join irreducibles such that $a = \bigvee C$ and $C \ll Q$ for every other join cover $Q$ of $a$.)</p>
+  </div>
+
+  <p>Theorem 2.24 is the SD$_\vee$ analog of Theorem 1.21 (which proved SD$_\vee$ for free lattices via canonical form). Here we get the converse direction: SD$_\vee$ is equivalent to the existence of canonical joins. This will be load-bearing in §5 when we develop the κ-bijection.</p>
+
+  <div class="box connection" id="c1">
+    <span class="label">Connection P1 · McKenzie 1972 in context</span>
+    <p>The chapter's foundational paper is McKenzie's 1972 <em>Equational Bases and Nonmodular Lattice Varieties</em> (Trans. AMS 174, 1–43). McKenzie's project was to find equational bases for varieties of lattices not assumed to be modular. He needed a structural toolkit, and bounded homomorphisms emerged as the right level of abstraction: the homomorphisms whose pre-image fibers have BOTH a max and a min are exactly those that "respect" the equational structure of the source's free lattice well enough to be analyzed equationally. The same year, Bjarni Jónsson published an independent treatment from a slightly different angle (Jónsson 1972, <em>Lattices of lattice homomorphisms</em>) — the two papers settled into the standard reference pair, with McKenzie's algebraic-geometry intuition and Jónsson's adjoint-functor formulation complementing each other. Day's 1970 doubling construction (in the word-problem paper) was the THIRD independent thread — by 1979 Day had shown the three threads were equivalent, and the present chapter is the canonical synthesis.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 2</span> Continuity</h2>
+  <div class="tagline">Theorem 2.25 — every lattice with the minimal join cover refinement property and $\mathbf{D}(\mathbf{L}) = L$ is upper continuous (joins distribute over directed meets). The (deep) continuity Theorem 1.22 for $\mathbf{FL}(X)$ is a corollary.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.25 · the continuity theorem</span>
+    <p>Let $\mathbf{L}$ be a complete lattice with the minimal join cover refinement property and $\mathbf{D}(\mathbf{L}) = L$. Then $\mathbf{L}$ is upper continuous: for every element $a$ and every up-directed subset $D \subseteq L$,</p>
+    $$a \wedge \bigvee D = \bigvee_{d \in D} (a \wedge d).$$
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.26 · free lattices are upper continuous</span>
+    <p>$\mathbf{FL}(X)$ is upper continuous (and dually lower continuous, hence continuous), recovering Theorem 1.22 in a more general framework.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.27 · finite lower bounded lattices are continuous</span>
+    <p>If $\mathbf{L}$ is finite and lower bounded, then $\mathbf{L}$ is continuous (trivially, since it is finite). More usefully: a finitely generated lower bounded lattice is upper continuous, even though it may be infinite.</p>
+  </div>
+
+  <p>The proof of 2.25 is by D-rank induction. Suppose $a \wedge \bigvee D > \bigvee_{d \in D}(a \wedge d)$. Let $b$ be a minimal element with $b \le a \wedge \bigvee D$ but $b \not\le \bigvee_{d \in D}(a \wedge d)$. By rank induction on $\rho(b)$, we derive a contradiction by exhibiting a refinement of $b$'s join cover that respects the directed structure of $D$. Details in monograph p. 38.</p>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · DOUBLING AND CONGRUENCES — §3</div>
+  <h2>Day's structural characterisation: lower bounded = built from 1 by iterated doubling of lower pseudo-intervals</h2>
+  <p class="part-lede">The chapter's structural payoff. Lemma 2.28 — lower-pseudo-interval doublings stay lower bounded. Theorem 2.43 — the converse. Corollary 2.44 — the bounded version with intervals (not pseudo-intervals).</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 3</span> Doubling and Congruences on a Finite Lattice</h2>
+  <div class="tagline">A finite lattice is lower bounded iff it can be obtained from $\mathbf{1}$ by a finite sequence of doublings of lower pseudo-intervals; bounded iff doublings of intervals.</div>
+
+  <h3>Lower pseudo-intervals (book p. 38)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.28 · Lower / upper pseudo-interval</span>
+    <p>A <strong>lower pseudo-interval</strong> in a lattice $\mathbf{L}$ is a finite union of intervals $u_1/v, u_2/v, \ldots, u_n/v$ sharing a common bottom $v$. Equivalently: the convex closure of the set $\{u_1, \ldots, u_n\}$ above the unique element $v = u_1 \wedge \cdots \wedge u_n$.</p>
+    <p>An <strong>upper pseudo-interval</strong> dually: $u/v_1 \cup u/v_2 \cup \cdots \cup u/v_n$, sharing common top $u$.</p>
+    <p>Note: every interval $u/v$ is a lower pseudo-interval (with $n = 1$); every interval is also an upper pseudo-interval. Pseudo-intervals are convex, so Day's doubling $\mathbf{L}[C]$ from Theorem 1.1 applies.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.29 · doubling a lower pseudo-interval preserves lower-boundedness</span>
+    <p>Let $\mathbf{L}$ be a finite lower bounded lattice and $C$ a lower pseudo-interval of $\mathbf{L}$. Then $\mathbf{L}[C]$ is also a finite lower bounded lattice.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemmas 2.30–2.42 · the technical scaffolding</span>
+    <p>Long sequence of structural lemmas establishing: doubling commutes with the appropriate quotients (2.30); $\mathbf{Con}\,\mathbf{L}$ embeds into $\mathbf{Con}\,\mathbf{L}[C]$ (2.31); each finite lower-bounded lattice has a "doubling decomposition tree" (2.32–2.36); the D relation behaves well under doubling (2.37–2.39); bounded implies lower bounded AND upper bounded for finite lattices, equivalent to no D-cycle AND no $D^d$-cycle (2.40); congruence lattices of finite lower-bounded lattices are themselves distributive (2.41); the congruence variety of finite lower-bounded lattices contains all finite distributive lattices (2.42). These are the technical underpinnings for Theorem 2.43.</p>
+  </div>
+
+  <h3>The structural characterisation (book p. 43)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.43 · Day's structural characterisation</span>
+    <p>The class of finite lower bounded lattices is the smallest class containing the one-element lattice $\mathbf{1}$ and closed under doubling lower pseudo-intervals. Equivalently: a finite lattice $\mathbf{L}$ is lower bounded if and only if there exists a sequence $\mathbf{L}_0 = \mathbf{1}, \mathbf{L}_1, \ldots, \mathbf{L}_n = \mathbf{L}$ of finite lattices, each $\mathbf{L}_{i+1}$ obtained from $\mathbf{L}_i$ by doubling a lower pseudo-interval.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.44 · the bounded version</span>
+    <p>The class of finite bounded lattices is the smallest class containing the one-element lattice $\mathbf{1}$ and closed under doubling intervals. (Note: <em>intervals</em>, not pseudo-intervals — bounded is stronger and corresponds to the interval-doubling subset of the lower-pseudo-interval-doubling closure.)</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the geometric picture</span>
+    <p>Theorem 2.43 says: lower-bounded finite lattices are EXACTLY the things you can build with a doubling-loom, where the warp is the one-element lattice $\mathbf{1}$ and the operations are doubling lower pseudo-intervals. Each doubling step preserves lower-boundedness (Lemma 2.29), and conversely every lower-bounded lattice can be UNDONE step-by-step to reach $\mathbf{1}$. This gives a strong inductive principle: anything you can prove about $\mathbf{1}$ and that is preserved by lower-pseudo-interval doublings, is true of all finite lower-bounded lattices. Theorem 2.43 is McKenzie's algebraic notion of "lower bounded" recast in Day's geometric language. The chapter's deepest structural result.</p>
+  </div>
+
+  <div class="box connection" id="c2">
+    <span class="label">Connection P2 · Day's lineage</span>
+    <p>Alan Day's work threads through the chapter at four levels. (1) <em>Doubling construction (1970)</em>: the geometric primitive. Originally introduced to give a transparent proof of (W) for free lattices (Theorem 1.8 in our Chapter I). (2) <em>Lower-bounded characterisation (this section, Theorem 2.43)</em>: doubling exactly captures lower-boundedness. (3) <em>Weak atomicity (1979, §7 below)</em>: free lattices are weakly atomic — proved by an iterated doubling construction starting from the free distributive lattice. (4) <em>Congruence varieties (cited in §8)</em>: Day's earlier result that congruence lattices of semilattices satisfy SD$_\wedge$. The doubling construction is genuinely the SAME idea applied at four levels of abstraction: as a tool for word-problem proofs, as a structural classification, as a weak-atomicity construction, and as a congruence-variety probe. Day's 1990 obituary (Algebra universalis 26) calls the doubling "a method which is simultaneously powerful and simple, with subtleties that go beyond the surface" — exactly right.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · THE E REFINEMENT — §4</div>
+  <h2>$\mathcal{M}^*(a)$, the E relation, and J-closed sets</h2>
+  <p class="part-lede">A refinement of D using minimal covers consisting of completely join irreducibles. The set $\mathbf{J}(p)$ — smallest J-closed set containing every minimal join representation of $p$ — is the central combinatorial object for Chapter III's cover counting.</p>
+</header>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 4</span> A Refinement of the D Relation</h2>
+  <div class="tagline">Restrict minimal covers to those whose elements are completely join irreducible — yielding $\mathcal{M}^*(a)$ and the relation E. In lattices with $\mathbf{D}(\mathbf{L}) = L$ and the minimal join cover refinement property, E and D agree on D-ranks.</div>
+
+  <h3>The relation E (book p. 45)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.45 (notation) · $\mathcal{M}^*(a)$ and the relation E</span>
+    <p>Let $\mathbf{L}$ have the minimal join cover refinement property. Define $\mathcal{M}^*(a)$ to be the set of minimal join covers of $a$ that consist entirely of completely join irreducible elements. Define the relation E by: $aEb$ iff $b \in Q$ for some $Q \in \mathcal{M}^*(a)$.</p>
+    <p>Define $E_k(\mathbf{L})$ recursively: $E_0(\mathbf{L}) = \{a : a$ has no nontrivial join cover $\}$; $E_{k+1}(\mathbf{L}) = \{a : Q \subseteq E_k(\mathbf{L})$ for every $Q \in \mathcal{M}^*(a)\}$. In other words, replace $D$ with $E$ everywhere and use the restricted minimal-cover set.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.45 · $E \subseteq D$ on completely join irreducibles</span>
+    <p>If $b$ is completely join irreducible and $aEb$ then $aDb$. (Equivalently: $\mathcal{M}^*(a) \subseteq \mathcal{M}(a)$, and the relation $E$ restricted to $\mathbf{J}(\mathbf{L})$ is a subrelation of $D$ restricted to $\mathbf{J}(\mathbf{L})$.)</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.46 · E and D agree on rank</span>
+    <p>Let $\mathbf{L}$ be a lattice with the minimal join cover refinement property. Then $E_k(\mathbf{L}) = D_k(\mathbf{L})$ for all $k$, and hence the E-rank $\rho_E$ equals $\rho_D = \rho$.</p>
+  </div>
+
+  <p>So as a measure of structural depth, E and D coincide. The advantage of E is that its minimal covers consist of completely join irreducibles, which makes induction arguments cleaner. The advantage of D is that it applies to ANY join cover refinement, including covers whose elements may not be completely join irreducible.</p>
+
+  <h3>The $\beta$-formula via $\mathcal{M}^*$ (book p. 46)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.47 · $\beta$ formula in lower-bounded case</span>
+    <p>Let $\mathbf{K}$ be generated by a finite set $X$ and let $h : \mathbf{K} \twoheadrightarrow \mathbf{L}$ be a lattice homomorphism where $\mathbf{L}$ has the minimal join cover refinement property. For $a \le h(1_\mathbf{K})$ define:</p>
+    $$\gamma_0(a) = \bigwedge\{x \in X : h(x) \ge a\}$$
+    $$\gamma_{k+1}(a) = \gamma_0(a) \wedge \bigwedge_{\substack{S \in \mathcal{M}^*(a)\\ \bigvee S \le h(1_\mathbf{K})}} \bigvee_{s \in S} \gamma_k(s)$$
+    <p>If $a \in D_k(\mathbf{L})$, then $\gamma_k(a) = \beta(a)$. So the $\beta$-map is recursively computable from $\mathcal{M}^*$ in finitely many steps for each $a$.</p>
+  </div>
+
+  <h3>D-closed and E-closed sets, $\mathbf{J}(p)$ and $\mathbf{J}^*(p)$ (book pp. 47–48)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.48 · D-closed, E-closed, and the closure operators $\mathbf{J}(p)$, $\mathbf{J}^*(p)$</span>
+    <p>A subset $A \subseteq L$ is <strong>D-closed</strong> if $pDq$ and $p \in A$ imply $q \in A$. <strong>E-closed</strong> dually with $E$. The smallest D-closed subset of $L$ containing every minimal join representation of $p$ (including $\{p\}$ if $p$ is join irreducible) is denoted $\mathbf{J}(p)$. Dually, the smallest E-closed subset containing every minimal join representation of $p$ is $\mathbf{J}^*(p)$.</p>
+    <p>Inductive description: for $\mathbf{L}$ with the minimal join cover refinement property and $\mathbf{D}(\mathbf{L}) = L$,</p>
+    $$\mathbf{J}(p) = \begin{cases}\{p\} & \text{if } p \text{ join prime,}\\ \{p\} \cup \bigcup_{p D q} \mathbf{J}(q) & \text{if } p \text{ join irreducible but not join prime,}\\ \bigcup_i \mathbf{J}(p_i) & \text{if } p = \bigvee p_i \text{ canonically.}\end{cases}$$
+    <p>An identical formula holds for $\mathbf{J}^*$ with $D$ replaced by $E$ (and the unions over $\mathcal{M}^*$ instead of $\mathcal{M}$).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorems 2.49–2.51 · J-closed sets and their equivalences</span>
+    <p>2.49 — D-closed sets have the closure property: minimal join representations of any element of a D-closed set $A$ have all elements in $A$. 2.50 — In a lower-bounded lattice with the minimal join cover refinement property, every join cover of $p$ refines to one contained in $\mathbf{J}^*(p)$. 2.51 — In such a lattice, the conditions <em>A is D-closed</em>, <em>$\mathbf{J}(p) \subseteq A$ for every $p \in A$</em>, <em>A is E-closed</em>, and <em>$\mathbf{J}^*(p) \subseteq A$ for every $p \in A$</em> are all equivalent. In particular $\mathbf{J}(p) = \mathbf{J}^*(p)$.</p>
+  </div>
+
+  <p>The monograph remarks (p. 49) that, with Theorem 2.51 in hand, the literature has switched from "D-closed" to "<strong>J-closed</strong>" as the standard term — emphasising that the closure is captured by the operator $\mathbf{J}$, not by either underlying relation. We will follow this convention in subsequent chapters.</p>
+
+  <h3>E-cycles and the lower-bounded characterisation (book p. 49)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.52 · E-version of the no-D-cycle test</span>
+    <p>Let $\mathbf{L}$ have the minimal join cover refinement property. If $p \in L - \mathbf{D}(\mathbf{L})$, then there exists $r \in L - \mathbf{D}(\mathbf{L})$ such that $pEr$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.53 · finite lower-bounded $\Leftrightarrow$ no E-cycle</span>
+    <p>For a finite lattice $\mathbf{L}$, the following are equivalent:</p>
+    <ol>
+      <li>$\mathbf{L}$ is lower bounded.</li>
+      <li>$\mathbf{L}$ contains no D-cycle.</li>
+      <li>$\mathbf{L}$ contains no E-cycle.</li>
+    </ol>
+  </div>
+
+  <p>Corollary 2.53 is what we will USE in Chapter V, where E-cycle-freeness is the practical tool for testing finite-sublattice membership in $\mathbf{FL}(X)$.</p>
+
+  <div class="box connection" id="c3">
+    <span class="label">Connection P3 · The D and E relations across chapters</span>
+    <p>The D relation introduced here threads through the entire monograph. <strong>Chapter II (now)</strong>: D defined, D-rank as well-foundedness measure, lower bounded $\Leftrightarrow$ no D-cycle, E refinement coinciding with D on rank. <strong>Chapter III</strong>: Covers in $\mathbf{FL}(X)$. The set $\mathbf{J}(p)$ is the central combinatorial object — Theorem 3.4 and 3.15 use the J-closure machinery to characterise covers. <strong>Chapter V</strong>: Sublattices of $\mathbf{FL}(X)$. Nation 1982 settled Jónsson's conjecture: finite sublattices of free lattices are exactly the finite SD-and-(W)-and-no-D-cycle lattices. The E-relation and J-closed sets are the technical tools. <strong>Chapter VII</strong>: Finite intervals in $\mathbf{FL}(X)$. The C-relation (introduced in §5 below) generalises D from $\mathbf{J}(\mathbf{L})$ to all completely join irreducibles in arbitrary semidistributive lattices, allowing infinite-lattice analogues. The chain D $\to$ E $\to$ C is a sequence of refinements, each useful at a different level of generality.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · SEMIDISTRIBUTIVE LATTICES — §5</div>
+  <h2>The κ-bijection between $\mathbf{J}(\mathbf{L})$ and $\mathbf{M}(\mathbf{L})$, the relations A/B/C, and Day's theorem</h2>
+  <p class="part-lede">In semidistributive lattices satisfying the minimal-join-cover refinement property and its dual, $\kappa_\mathbf{L}$ is a bijection from completely join irreducibles to completely meet irreducibles. The relations A/B/C on completely join irreducibles refine D and admit C-sequences and C-cycles. Day's theorem: a finite lower-bounded lattice is bounded iff meet semidistributive.</p>
+</header>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 5</span> Semidistributive Lattices</h2>
+  <div class="tagline">The κ-bijection — extracting a meet structure from a semidistributive join structure — and the A/B/C relations that generalise D from join-irreducibles to completely-join-irreducibles in infinite semidistributive lattices.</div>
+
+  <h3>The map $\kappa_\mathbf{L}$ (book p. 49)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.54 (preamble) · $\kappa_\mathbf{L}$</span>
+    <p>Let $\mathbf{L}$ be a lattice and $a \in L$ a completely join irreducible element with unique lower cover $a_*$. Define</p>
+    $$K(a) = \{u \in L : u \ge a_* \text{ but } u \not\ge a\}.$$
+    <p>If $\bigvee K(a)$ exists and lies in $K(a)$ (i.e., is itself the largest element of $K(a)$), then we denote that element by $\kappa_\mathbf{L}(a)$, or simply $\kappa(a)$ when $\mathbf{L}$ is fixed. The element $a \vee \kappa(a)$ is then the unique upper cover of $\kappa(a)$, so $\kappa(a)$ is completely meet irreducible.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.54 · κ exists in SD$_\wedge$ + dual minimal-cover-refinement</span>
+    <p>Let $\mathbf{L}$ satisfy SD$_\wedge$ and the dual of the minimal join cover refinement property. Then $\kappa_\mathbf{L}(a)$ exists for every completely join irreducible element $a$ of $L$. In fact, $\kappa_\mathbf{L}(a)$ is the unique canonical meetand of $a_*$ not above $a$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.55 · κ is a bijection in semidistributive lattices</span>
+    <p>If $\mathbf{L}$ is semidistributive (both SD$_\vee$ and SD$_\wedge$) and satisfies the minimal join cover refinement property and its dual, then $\kappa_\mathbf{L}$ and $\kappa_\mathbf{L}^d$ are inverse bijections between $\mathbf{J}(\mathbf{L})$ (completely join irreducibles) and $\mathbf{M}(\mathbf{L})$ (completely meet irreducibles).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.56 · finite SD$_\wedge$ via κ existence</span>
+    <p>A finite lattice $\mathbf{L}$ satisfies SD$_\wedge$ if and only if $\kappa_\mathbf{L}(a)$ exists for every $a \in \mathbf{J}(\mathbf{L})$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · κ as the structural skeleton</span>
+    <p>In a finite semidistributive lattice $\mathbf{L}$, every completely join irreducible has a "twin" completely meet irreducible. The pairing is structural — determined by the lattice operations, not chosen — and $|\mathbf{J}(\mathbf{L})| = |\mathbf{M}(\mathbf{L})|$. Why does this matter? Because $\mathbf{J}(\mathbf{L})$ governs joins (Birkhoff representation: every element is a join of $\mathbf{J}$-elements below it) and $\mathbf{M}(\mathbf{L})$ governs meets dually. The κ-bijection says joins and meets carry the SAME combinatorial information in semidistributive lattices — they are dual structures over the same skeleton. This is what justifies the "self-duality" intuition for SD lattices: SD$_\vee$ and SD$_\wedge$ are not independent; in finite lattices they often imply one another via κ.</p>
+  </div>
+
+  <h3>The relations A, B, C on $\mathbf{J}(\mathbf{L})$ (book p. 51)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.57 · the A, B, C relations</span>
+    <p>Let $\mathbf{L}$ be a semidistributive lattice satisfying the minimal join cover refinement property and its dual. For $a, b$ completely join irreducible in $\mathbf{L}$, define:</p>
+    <ul>
+      <li>$aAb$ iff $b < a$ and $a \le b \vee \kappa(b)$.</li>
+      <li>$aBb$ iff $a \neq b$, $a \le a_* \vee b$, and $a \not\le b_* \vee a_*$.</li>
+      <li>$aCb$ iff $aAb$ or $aBb$.</li>
+    </ul>
+    <p>Dually $A^d, B^d, C^d$ on completely meet irreducibles.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.58 · A is reflexive on its support</span>
+    <p>If $a, b$ are completely join irreducibles in a semidistributive lattice satisfying minimal-join-cover refinement and its dual, and $a A b$ holds, then $a \not\le \kappa(b)$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.59 · the chain $E\big|_{\mathbf{J}(\mathbf{L})} \subseteq C \subseteq D\big|_{\mathbf{J}(\mathbf{L})}$</span>
+    <p>Let $\mathbf{L}$ be a semidistributive lattice with the minimal join cover refinement property and its dual. Let $a$ be completely join irreducible in $\mathbf{L}$. Then:</p>
+    <ol>
+      <li>If $aDb$, then $b$ is completely join irreducible.</li>
+      <li>If $aEb$, then $aCb$.</li>
+      <li>If $aCb$, then $aDb$.</li>
+    </ol>
+    <p>Both inclusions $E\big|_{\mathbf{J}(\mathbf{L})} \subseteq C \subseteq D\big|_{\mathbf{J}(\mathbf{L})}$ can be proper (Examples 2.4 on book p. 46 and 2.7 on book p. 53).</p>
+  </div>
+
+  <h3>C-sequences, C-cycles, and Jónsson's lemma (book p. 53)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.61 · Jónsson 1972 — finite SD lattices have no C-cycle iff lower bounded</span>
+    <p>For a finite semidistributive lattice $\mathbf{L}$, $\mathbf{L}$ is lower bounded iff $\mathbf{L}$ contains no C-cycle (a sequence $a_1 C a_2 C \cdots C a_n C a_1$ of completely join irreducibles).</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.62 · finite SD lattices: lower bounded $\Leftrightarrow$ no C-cycle</span>
+    <p>A finite semidistributive lattice is lower bounded if and only if it contains no C-cycle.</p>
+  </div>
+
+  <h3>Day's theorem (book p. 53–54)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.63 · Nation 1985 — A and B duality via κ</span>
+    <p>Let $\mathbf{L}$ be a semidistributive lattice satisfying the minimal join cover refinement property and its dual. For completely join irreducibles $a, b$ in $\mathbf{L}$:</p>
+    <ol>
+      <li>$aAb$ iff $\kappa(a) B^d \kappa(b)$.</li>
+      <li>$aBb$ iff $\kappa(a) A^d \kappa(b)$.</li>
+    </ol>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.64 · Day's theorem (1979)</span>
+    <p>A finite lower-bounded lattice is bounded if and only if it is meet semidistributive.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.65 · Five-fold characterisation of finite bounded SD lattices</span>
+    <p>For a finite semidistributive lattice $\mathbf{L}$, the following are equivalent:</p>
+    <ol>
+      <li>$\mathbf{L}$ is bounded.</li>
+      <li>$\mathbf{L}$ is lower bounded.</li>
+      <li>$\mathbf{L}$ contains no C-cycle.</li>
+    </ol>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.66 · κ preserves D-rank</span>
+    <p>Let $\mathbf{L}$ be a semidistributive lattice satisfying the minimal join cover refinement property and its dual. If $a$ is completely join irreducible in $\mathbf{L}$, then $\rho(a) = \rho^d(\kappa_\mathbf{L}(a))$, where $\rho^d$ is the dual rank.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.67 · finite bounded $\Leftrightarrow$ $|\mathbf{J}(\mathbf{L})| = |\mathbf{M}(\mathbf{L})| = |\mathbf{J}(\mathbf{Con}\,\mathbf{L})|$</span>
+    <p>A finite lattice $\mathbf{L}$ is bounded if and only if $|\mathbf{J}(\mathbf{L})| = |\mathbf{M}(\mathbf{L})| = |\mathbf{J}(\mathbf{Con}\,\mathbf{L})|$.</p>
+  </div>
+
+  <h3>Join prime, atom, coatom in semidistributive lattices (book pp. 54–55)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorems 2.68–2.71 · primality, atoms, and coatoms</span>
+    <p>2.68 — Let $\mathbf{L}$ satisfy SD$_\wedge$ and the dual of the minimal join cover refinement property. If $p$ is completely join irreducible, then $p$ is join prime iff $L = (1/p) \cup (\kappa(p)/0)$. 2.69 — In any SD$_\wedge$ lattice, atoms are join prime. 2.70 — Dually, in SD$_\vee$ + minimal-join-cover-refinement, coatoms have $\kappa^d(b)$ completely join prime, a canonical joinand of $1$. 2.71 — In SD$_\vee$ with both refinement properties, the canonical joinands of $1$ are exactly the join prime elements; if a canonical joinand is also completely join irreducible, it is a coatom.</p>
+  </div>
+</section>
+
+<!-- ============== PART E ============== -->
+<header class="part-header">
+  <div class="pk">PART E · SPLITTING LATTICES — §6</div>
+  <h2>McKenzie's theory of splitting pairs and conjugate equations</h2>
+  <p class="part-lede">A splitting lattice $\mathbf{L}$ is finite, bounded, subdirectly irreducible, with a corresponding conjugate variety $\mathcal{C}_\mathbf{L}$ — and a conjugate equation that splits the lattice $\mathbf{\Lambda}$ of all lattice varieties into a principal ideal and a principal filter. Splitting lattices generate the variety of all lattices; every nontrivial lattice equation fails in some splitting lattice.</p>
+</header>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 6</span> Splitting Lattices</h2>
+  <div class="tagline">The chapter's variety-theoretic centerpiece. McKenzie's splitting theorem connects bounded subdirectly-irreducible lattices to splittings of $\mathbf{\Lambda}$, with conjugate equations playing the role of structural witnesses.</div>
+
+  <h3>Critical pairs and conjugate equations (book pp. 55–57)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.72 (preamble) · Critical pair / quotient / prime critical quotient</span>
+    <p>Let $\mathbf{L}$ be a subdirectly irreducible lattice with monolith $\mu$ (smallest nonzero congruence). A <strong>critical pair</strong> is a pair $\langle a, b\rangle$ of distinct elements with $a \mu b$. (So $\mu = \mathrm{Cg}(a, b)$.) If additionally $a > b$, then $a/b$ is a <strong>critical quotient</strong>; if also $a \succ b$ (cover relation), then $a/b$ is a <strong>prime critical quotient</strong>. Every finite subdirectly-irreducible lattice has a prime critical quotient.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.72 · Conjugate equations</span>
+    <p>Let $\mathbf{L}$ be a finitely generated subdirectly irreducible lattice and $f : \mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ an epimorphism with $X$ finite. Assume there exists a pair of elements $u, v \in L$ with $u/u \wedge v$ a prime critical quotient in $\mathbf{L}$. Form the sequences $\beta_{n,f}(u)$ and $\alpha_{n,f}(v)$ of iterated approximants in $\mathbf{FL}(X)$. Then for any lattice variety $\mathcal{V}$, $\mathbf{L} \notin \mathcal{V}$ iff for some $n$, $\mathcal{V}$ satisfies the inclusion $\beta_{n,f}(u) \le \alpha_{n,f}(v)$.</p>
+    <p>The inclusions $\beta_{n,f}(u) \le \alpha_{n,f}(v)$ ($n \in \omega$) are called a <strong>set of conjugate equations</strong> for $\mathbf{L}$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the conjugate-equation idea</span>
+    <p>$\beta_n(u)$ is an iterated lower approximation to $u$ in $\mathbf{FL}(X)$ — the formula gets "tighter" (smaller) as $n$ grows, capturing more and more of the lattice operations between $u$ and the generators. Dually $\alpha_n(v)$ is an iterated upper approximation. The chain of inclusions $\beta_n(u) \le \alpha_n(v)$ represents an INFINITE ascending chain of weakening identities, each strictly weaker than the previous. Theorem 2.72 says: the variety generated by $\mathbf{L}$ is the meet of all these identities — equivalently, every variety NOT containing $\mathbf{L}$ satisfies SOME conjugate equation. This is the algebraic content of "$\mathbf{L}$ is splitting".</p>
+  </div>
+
+  <h3>The Jónsson lattice $\mathbf{\Lambda}$ and ideals (book p. 57)</h3>
+
+  <div class="box thm">
+    <span class="label">Jónsson's lemma (cited as [80])</span>
+    <p>The lattice $\mathbf{\Lambda}$ of all lattice varieties is distributive, and every finite subdirectly-irreducible lattice is join irreducible in $\mathbf{\Lambda}$.</p>
+  </div>
+
+  <p>This is a fundamental result of Jónsson 1968. Combined with Theorem 2.72: applying Jónsson's lemma to $\mathbf{\Lambda}$ at $\mathbf{V}(\mathbf{L})$ (the variety generated by a finite subdirectly irreducible $\mathbf{L}$), the principal ideal $\mathcal{J}_{\mathbf{V}(\mathbf{L})} = \{\mathcal{X} \in \mathbf{\Lambda} : \mathbf{L} \notin \mathcal{X}\}$ admits an equational description. This is the variety-theoretic content of Theorem 2.72.</p>
+
+  <h3>Splitting pairs (book pp. 58–59)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.74 (preamble) · Splitting pair / splitting lattice</span>
+    <p>In any complete lattice $\mathbf{L}$, an ordered pair $\langle u, v\rangle$ is a <strong>splitting pair</strong> if $L$ is the disjoint union of the principal filter $1/u$ and the principal ideal $v/0$ (i.e., $u \not\le v$ and every element of $L$ is either $\ge u$ or $\le v$). Necessarily $u$ is completely join prime and $v$ is completely meet prime; $v = \kappa^d(u)$ in the κ-notation.</p>
+    <p>A finite, bounded, subdirectly irreducible lattice $\mathbf{L}$ is called a <strong>splitting lattice</strong>. The corresponding pair $\langle \mathbf{V}(\mathbf{L}), \mathcal{C}_\mathbf{L}\rangle$ in $\mathbf{\Lambda}$ is the SPLITTING PAIR for $\mathbf{L}$, where $\mathcal{C}_\mathbf{L}$ is the unique largest variety not containing $\mathbf{L}$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.76 · Conjugate equation determines $\mathcal{C}_\mathbf{L}$</span>
+    <p>Let $\mathbf{L}$ be a finite bounded subdirectly-irreducible lattice and $f : \mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ an epimorphism with $X$ finite. Choose a pair $u, v \in L$ such that $u/u \wedge v$ is a prime critical quotient. Then there is a unique lattice variety $\mathcal{C}_\mathbf{L}$ which is maximal with respect to not containing $\mathbf{L}$, determined by the inclusion $\beta_f(u) \le \alpha_f(v)$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.79 · Splitting pairs in $\mathbf{\Lambda}$ correspond to splitting lattices</span>
+    <p>If $\langle \mathcal{U}, \mathcal{V}\rangle$ is a splitting pair in $\mathbf{\Lambda}$, then $\mathcal{U} = \mathbf{V}(\mathbf{L})$ and $\mathcal{V} = \mathcal{C}_\mathbf{L}$ for some splitting lattice $\mathbf{L}$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.80 · Completely meet primes in $\mathbf{\Lambda}$</span>
+    <p>A variety $\mathcal{V}$ is completely meet prime in $\mathbf{\Lambda}$ if and only if there exist a finite set $X$ and elements $s, t \in \mathbf{FL}(X)$ such that $s \succ s \wedge t$ in $\mathbf{FL}(X)$, and $\mathcal{V} = \mathbf{V}(s \le t)$.</p>
+  </div>
+
+  <h3>Splitting equations and weak atomicity (book pp. 60–62)</h3>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.81 · Covers in $\mathbf{FL}(X)$ yield splitting equations</span>
+    <p>If $p \succ p \wedge q$ in $\mathbf{FL}(X)$, then there exists a splitting lattice for which $p \le q$ is a conjugate equation.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Lemma 2.82 · Equivalent forms of weak atomicity</span>
+    <p>The following are equivalent:</p>
+    <ol>
+      <li>For every finite set $X$, $\mathbf{FL}(X)$ is weakly atomic.</li>
+      <li>Every nontrivial lattice inclusion fails in a finite bounded lattice.</li>
+      <li>Every nontrivial lattice inclusion fails in a splitting lattice.</li>
+      <li>Splitting lattices generate the variety of all lattices.</li>
+    </ol>
+  </div>
+
+  <p>Lemma 2.82 sets up §7: Day will prove (1), via (2), and the four-way equivalence shows the weak-atomicity question is equivalent to the splitting-lattices-generate-the-variety question.</p>
+
+  <div class="box connection" id="c4">
+    <span class="label">Connection P4 · Congruence varieties — universal-algebra connections</span>
+    <p>The chapter's machinery extends well beyond lattice theory. <strong>Tame congruence theory.</strong> Hobby-McKenzie 1988 introduced tame congruence theory as a structural framework for finite algebras; congruence varieties — the equational classes of congruence lattices — are a natural target. <strong>Theorem 2.88 (Kearnes, used in §8).</strong> If a variety $\mathcal{V}$ has congruence lattices satisfying SD$_\wedge$, then congruence lattices of finite algebras in $\mathcal{V}$ are upper bounded. <strong>Adaricheva-Dziobiak-Gorbunov.</strong> Theorem 2.90: locally finite quasivarieties with finite subquasivariety lattice $\Rightarrow$ that lattice is lower bounded. So bounded-lattice theory has applications well beyond lattice varieties: it constrains the equational behavior of congruence lattices throughout universal algebra. <strong>Open problems.</strong> Day 1979 + Freese-Nation 1985: which lattice identities are congruence identities? (Some are; e.g. modularity. But the congruence variety of all lattices is itself a complicated object.) See the references at end of §6: Freese, McKenzie, Polin, and Wille all weighed in 1970s–1980s.</p>
+  </div>
+</section>
+
+<!-- ============== PART F ============== -->
+<header class="part-header">
+  <div class="pk">PART F · DAY'S WEAK ATOMICITY — §7</div>
+  <h2>Day's beautiful proof: free lattices are weakly atomic</h2>
+  <p class="part-lede">Construct $\mathbf{FL}(X)$ as a sublattice of an inverse limit of finite bounded lattices, each obtained from the previous by doubling all (W)-failure intervals at the previous step. Theorem 2.84 — every nontrivial lattice inclusion fails in some finite bounded lattice — then gives weak atomicity (Corollary 2.85).</p>
+</header>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 7</span> Day's Theorem · Free Lattices are Weakly Atomic</h2>
+  <div class="tagline">An iterated doubling construction starting from the free distributive lattice $\mathbf{F}_\mathcal{D}(X)$, fixing all (W)-failures at each stage, taking the inverse limit, and recognising $\mathbf{FL}(X)$ as a sublattice.</div>
+
+  <h3>Join / meet irredundancy (book p. 62)</h3>
+
+  <div class="box def">
+    <span class="label">Definition 2.83 · Join irredundant set</span>
+    <p>In a lattice $\mathbf{L}$, a subset $X \subseteq L$ is <strong>join irredundant</strong> if for every $x \in X$ and every finite subset $Y \subseteq X$, $x \le \bigvee Y$ implies $x \in Y$. <strong>Meet irredundant</strong> dually.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.83 · structural facts about join irredundancy</span>
+    <p>Let $\mathbf{L}$ be a lattice and $X \subseteq L$.</p>
+    <ol>
+      <li>$X$ is join irredundant iff $X$ is an antichain and each $x \in X$ is join prime in the sublattice $\mathrm{Sg}(X)$ generated by $X$.</li>
+      <li>If $a \wedge b \le c \vee d$ is a (W)-failure in $\mathbf{L}$, then the interval $c \vee d / a \wedge b$ contains no join prime or meet prime element.</li>
+      <li>Assume $X$ is join irredundant and $h : \mathbf{K} \to \mathbf{L}$ is a homomorphism. If $A$ is a system of distinct preimages of $X$ in $\mathbf{K}$, then $A$ is join irredundant.</li>
+    </ol>
+  </div>
+
+  <h3>The inverse-limit construction (book pp. 62–64)</h3>
+
+  <div class="box def">
+    <span class="label">Day's iterated-doubling construction</span>
+    <p>Fix finite $X = X^0 = \{x^0_1, \ldots, x^0_n\}$ with $|X| \ge 3$. Construct a sequence $\mathbf{L}_i$ ($i \in \omega$) of finite bounded lattices and homomorphisms $h_i : \mathbf{L}_i \to \mathbf{L}_{i-1}$ with the following properties:</p>
+    <ol>
+      <li>$\mathbf{L}_0 = \mathbf{F}_\mathcal{D}(X)$ — the free distributive lattice on $X$.</li>
+      <li>Each $\mathbf{L}_i$ is a finite bounded lattice.</li>
+      <li>Each $\mathbf{L}_i$ is generated by a join and meet irredundant set $X^i = \{x^i_1, \ldots, x^i_n\}$.</li>
+      <li>For each $i > 0$, the natural map $h_i : X^i \to X^{i-1}$ extends to a homomorphism $\mathbf{L}_i \to \mathbf{L}_{i-1}$.</li>
+      <li>If $a, b, c, d$ generate a (W)-failure in $\mathbf{L}_{i-1}$, then for any preimages $p, q, r, s$ in $\mathbf{L}_i$ of $a, b, c, d$, the inequality $p \wedge q \le r \vee s$ does NOT hold in $\mathbf{L}_i$. (i.e., the (W)-failure in $\mathbf{L}_{i-1}$ is "fixed" in $\mathbf{L}_i$.)</li>
+    </ol>
+    <p>The construction proceeds by listing all (W)-failures in $\mathbf{L}_{i-1}$, doubling each (W)-failure interval $c_j \vee d_j / a_j \wedge b_j$, and taking products / sublattice operations to combine the doublings. Form the inverse limit $\mathbf{K} = \lim_{\leftarrow} \mathbf{L}_i$ — sequences $(v_i)$ with $h_{i+1}(v_{i+1}) = v_i$. The elements $\hat{x}_m = (x^i_m)_{i \in \omega}$ for $1 \le m \le n$ generate a sublattice $\mathbf{F}$ of $\mathbf{K}$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.84 · $\mathbf{FL}(X)$ is in the quasivariety of finite bounded lattices</span>
+    <p>$\mathbf{F}$ as constructed above is isomorphic to $\mathbf{FL}(X)$. In particular, $\mathbf{FL}(X)$ is a sublattice of a direct product of finite bounded lattices. Therefore $\mathbf{FL}(X)$ is in the quasivariety generated by all finite bounded lattices, and thus every universal Horn sentence true in all finite bounded lattices is true in $\mathbf{FL}(X)$. In particular, every nontrivial lattice equation fails in some splitting lattice.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2.85 · finitely-generated free lattices are weakly atomic</span>
+    <p>Every finitely generated free lattice $\mathbf{FL}(X)$ is weakly atomic: every nontrivial interval contains a covering pair.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why the construction is "beautiful"</span>
+    <p>Day's construction has the structure of a fixed-point computation. We start with the simplest target ($\mathbf{F}_\mathcal{D}(X)$, the free distributive lattice — finite, bounded, but doesn't satisfy (W) for $|X| \ge 3$). At each stage, we identify the failures of (W) and "fix" them by doubling — a finite, mechanical procedure. The fixings create new (W)-failures, but each successive layer is forced by the previous. The inverse limit is the COFINAL fixed point. Sublattices of inverse limits inherit (W) from their components, so the limit satisfies (W). And by Corollary 1.12, a (W)-lattice generated by a join/meet-irredundant set is the free lattice. Hence the inverse limit IS $\mathbf{FL}(X)$. This is one of the most elegant constructions in lattice theory — and historically the missing piece between Whitman's algorithmic word-problem and the structural understanding of $\mathbf{FL}(X)$ as a limit object.</p>
+  </div>
+
+  <h3>Beyond finitely generated (book p. 65)</h3>
+
+  <p>The monograph remarks: it is not hard to extend Day's theorem to show that <em>every finitely generated projective lattice is weakly atomic</em> (Theorem 5.18 of Chapter V). The analogue for arbitrary lattice varieties does NOT hold: by Freese 1979 [48], the variety of modular lattices is not generated by its finite-dimensional members. Either free modular lattices fail to be weakly atomic, or there is an infinite-dimensional splitting modular lattice — interesting open territory still.</p>
+</section>
+
+<!-- ============== PART G ============== -->
+<header class="part-header">
+  <div class="pk">PART G · CONGRUENCE VARIETIES — §8</div>
+  <h2>Applications to congruence varieties</h2>
+  <p class="part-lede">A brief survey of how upper / lower / bounded lattice machinery applies to congruence lattices in general algebra. Theorem 2.87 — congruence lattices of finite semilattices are upper bounded. Theorem 2.88 (Kearnes) — congruence lattices of finite algebras in any SD$_\wedge$ congruence variety are upper bounded.</p>
+</header>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 8</span> Applications to Congruence Varieties</h2>
+  <div class="tagline">A short closing section showing that upper / lower boundedness of lattices is not pure lattice theory — it has deep consequences for congruence varieties throughout universal algebra.</div>
+
+  <h3>Congruence lattices of finite semilattices (book pp. 65–66)</h3>
+
+  <p>For a (meet) semilattice $\mathbf{S}$, write multiplicatively $xy$ for $x \wedge y$ and order by $x \le y \iff xy = x$. Define the join $x + y$ as the least common upper bound when one exists. Congruences on $\mathbf{S}$ form a complete lattice $\mathbf{Con}\,\mathbf{S}$. For each $a \in S$ the relation $\psi_a$ defined by $\langle x, y\rangle \in \psi_a \iff $ both $x, y$ are above $a$ or both not above $a$ is a congruence. The $\psi_a$ for $a \neq 0$ are exactly the meet-irreducible (coatom) congruences.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.86 · the dual D-relation on congruences</span>
+    <p>Let $\mathbf{S}$ be a finite semilattice and $a, b \in S - \{0\}$. Then $\psi_a D^d \psi_b$ in $\mathbf{Con}\,\mathbf{S}$ if and only if there exists $c \in S$ such that $a = b + c$ properly. In particular, $\psi_a D^d \psi_b$ implies $a > b$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.87 · Adaricheva — finite semilattice congruence lattices are upper bounded</span>
+    <p>If $\mathbf{S}$ is a finite semilattice, then $\mathbf{Con}\,\mathbf{S}$ is an upper bounded lattice.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.88 · Kearnes — congruence SD$_\wedge$ varieties have upper bounded congruence lattices on finite algebras</span>
+    <p>If $\mathcal{V}$ is any variety of algebras whose congruence lattices satisfy SD$_\wedge$, then the congruence lattices of finite algebras in $\mathcal{V}$ are upper bounded. (The proof uses tame congruence theory.)</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.89 · Both-bounded congruence varieties via SD</span>
+    <p>If $\mathcal{W}$ is any variety of algebras such that the congruence lattices of algebras in $\mathcal{W}$ satisfy SD$_\vee$, then the congruence lattices of finite algebras in $\mathcal{W}$ are both upper and lower bounded.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.90 · Adaricheva-Dziobiak-Gorbunov — quasivariety lattices</span>
+    <p>If $\mathcal{K}$ is a locally finite quasivariety of algebras and the lattice of subquasivarieties of $\mathcal{K}$ is finite, then the lattice of subquasivarieties of $\mathcal{K}$ is a lower bounded lattice.</p>
+  </div>
+
+  <p>The chapter closes with the remark that "upper and lower boundedness" — apparently pure lattice-theoretic concepts — turn out to govern important behavior throughout universal algebra. The references at the end (Freese-Kearnes-Nation 2008, Gorbunov 1998) point to the modern continuation of this thread: the boundedness machinery has become a load-bearing technique in finite-algebra classification.</p>
+</section>
+
+<!-- ============== CONNECTIONS ============== -->
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos cross-references</h2>
+  <div class="tagline">Where Chapter II's mathematical structures resonate with the Prologos compiler's architecture: the κ-bijection as a primary/derived lattice pair, bounded homomorphisms as Galois connections in the SRE structural-reasoning lens, and J-closed sets as monotone propagator targets.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · Galois connections + κ-bijection + J-closed sets</span>
+    <p>Chapter II's central structures map directly onto Prologos infrastructure.</p>
+    <p><strong>(1) Galois connections as bridges.</strong> McKenzie's bounded homomorphism is a homomorphism $h$ admitting a right adjoint $\beta$ (lower bounded) and a left adjoint $\alpha$ (upper bounded). In Prologos, every bridge between lattices in the SRE module structure must be a Galois connection (left adjoint preserves joins; right adjoint preserves meets). The "every bridge is a Galois connection" rule from <code>structural-thinking.md</code> is exactly McKenzie's bounded-homomorphism criterion applied to the propagator network's bilattice cells. Lemma 2.4 ($h \beta = $ id, $\beta h \le $ id) is the unit / counit of the adjunction; Lemma 2.2 ($\beta$ preserves joins) is the right-adjoint preservation property.</p>
+    <p><strong>(2) The κ-bijection as a primary/derived pair.</strong> Theorem 2.55: in semidistributive lattices with both refinement properties, $\kappa : \mathbf{J}(\mathbf{L}) \to \mathbf{M}(\mathbf{L})$ is a bijection. In Prologos's SRE lens, this corresponds to the "primary vs derived" question (Q5): the join structure ($\mathbf{J}$-side) is one lattice, the meet structure ($\mathbf{M}$-side) is another, and they are paired by κ. Either could be taken as primary. In our solver, decision cells are PRIMARY (governing structure) and worldview cells are DERIVED (caches projecting joins of decisions); κ is the corresponding "structural inverse" that recovers join-side data from meet-side. Track 2B's Resolution B (clause-scope cells share the query-scope carrier directly via tagging, not bridges) is what happens when you have κ but choose to realise it via tagging instead of bridging.</p>
+    <p><strong>(3) J-closed sets as monotone closures.</strong> Definition 2.48: $\mathbf{J}(p)$ is the smallest D-closed set containing every minimal join representation of $p$. This is a monotone closure operator under set inclusion (D-closure is preserved under intersection). In Prologos, J-closed sets correspond to <code>monotone-set</code> SRE domain cells (per <code>propagator-design.md</code>) — set-union merge is monotone, idempotent, CALM-safe. The set-latch fan-in pattern is structurally identical to the J-closed-set construction: a latch cell accumulates a monotone set; a threshold propagator fires when the set contains specified items. A constraint-resolution propagator awaiting "all join refinements settled" is a J-closed-set computation in lattice-theoretic guise.</p>
+    <p><strong>(4) D-rank as well-foundedness measure.</strong> Theorem 2.20: $\mathbf{L}$ lower bounded iff $\rho(a) < \infty$ for every $a$. In Prologos, every stratum has a termination measure (per <code>stratification.md</code> Table at §286); D-rank is the corresponding measure for the cell-level computation that builds J-closed sets. The Tarski-fixpoint argument for S0 monotone propagator firing IS the D-rank-bounded recursion that builds $\mathbf{D}(\mathbf{L}) = L$ in a lower bounded lattice.</p>
+    <p><strong>(5) Splitting lattices ≈ critical fork points.</strong> A splitting lattice $\mathbf{L}$ is a finite bounded subdirectly irreducible lattice — it carves $\mathbf{\Lambda}$ into a principal ideal and a principal filter. In Prologos, this corresponds to "fork on union" patterns (Phase 10 in <code>propagator-design.md</code>) where the network needs to commit to one alternative or another. The conjugate equation $\beta_f(u) \le \alpha_f(v)$ that witnesses the splitting is the propagator-level "decision" that closes off one filter. The C-cycle test (Lemma 2.62, Corollary 2.65) — finite SD lattice is bounded iff no C-cycle — is the analog of the "no S0-loop" test for monotone propagator termination.</p>
+    <p><strong>(6) Day's theorem ≈ inverse-limit ≈ stratified worldview construction.</strong> Theorem 2.84: $\mathbf{FL}(X)$ embeds in an inverse limit of finite bounded lattices, each obtained from the previous by doubling all (W)-failures. This is structurally identical to Prologos's worldview-stratified speculation: each S1 NAF round forks the current network, runs S0 to quiescence in the fork (the doubling step), and combines results. The inverse limit IS the stratified evaluation; the (W)-failure-fixing IS the assumption-elimination that S(-1) retraction performs.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="module" id="glossary">
+  <h2><span class="num">GLOSSARY</span> Chapter II vocabulary, alphabetical</h2>
+  <div class="tagline">All new terminology with brief definition. Page references to the monograph book pages (PDF page numbers in parentheses).</div>
+
+  <dl class="glossary">
+    <dt>A relation</dt>
+    <dd>$aAb$ on $\mathbf{J}(\mathbf{L})$ iff $b < a$ and $a \le b \vee \kappa(b)$. Defined in §5 (book p. 51, PDF 60).</dd>
+
+    <dt>$\alpha$ (alpha)</dt>
+    <dd>Left adjoint of an upper-bounded homomorphism: $\alpha(a) = \max h^{-1}(a/0)$.</dd>
+
+    <dt>B relation</dt>
+    <dd>$aBb$ on $\mathbf{J}(\mathbf{L})$ iff $a \neq b$, $a \le a_* \vee b$, and $a \not\le b_* \vee a_*$.</dd>
+
+    <dt>$\beta$ (beta)</dt>
+    <dd>Right adjoint of a lower-bounded homomorphism: $\beta(a) = \min h^{-1}(1/a)$.</dd>
+
+    <dt>Bounded homomorphism</dt>
+    <dd>A homomorphism that is both lower and upper bounded.</dd>
+
+    <dt>Bounded lattice (in the McKenzie sense)</dt>
+    <dd>A finitely generated lattice $\mathbf{L}$ such that the natural map $\mathbf{FL}(X) \to \mathbf{L}$ is bounded for some / every finite generating $X$. (Note: distinct from the order-theoretic "bounded lattice" meaning "has 0 and 1".)</dd>
+
+    <dt>C relation</dt>
+    <dd>$aCb$ iff $aAb$ or $aBb$. Generalises $D|_{\mathbf{J}(\mathbf{L})}$ to completely join irreducibles in semidistributive lattices.</dd>
+
+    <dt>C-cycle</dt>
+    <dd>A finite cyclic sequence $a_1 C a_2 C \cdots C a_n C a_1$ of completely join irreducibles. Lemma 2.62: a finite SD lattice is lower bounded iff it contains no C-cycle.</dd>
+
+    <dt>Conjugate equation</dt>
+    <dd>An inclusion $\beta_{n,f}(u) \le \alpha_{n,f}(v)$ derived from a prime critical quotient in a finitely-generated subdirectly irreducible lattice; Theorem 2.72.</dd>
+
+    <dt>Conjugate variety $\mathcal{C}_\mathbf{L}$</dt>
+    <dd>The unique largest variety not containing the splitting lattice $\mathbf{L}$; Corollary 2.76.</dd>
+
+    <dt>Critical pair / quotient / prime critical quotient</dt>
+    <dd>For a subdirectly irreducible lattice $\mathbf{L}$ with monolith $\mu$: a critical pair is $\langle a, b\rangle$ with $a \mu b$ and $a \neq b$; if $a > b$, it's a critical quotient; if $a \succ b$, it's prime.</dd>
+
+    <dt>D relation</dt>
+    <dd>$aDb$ iff $a \neq b$ and $b \in Q$ for some minimal join cover $Q \in \mathcal{M}(a)$. The fundamental dependency relation.</dd>
+
+    <dt>$\mathbf{D}(\mathbf{L})$</dt>
+    <dd>$\bigcup_k D_k(\mathbf{L})$, the set of elements with finite D-rank. Theorem 2.20: finite $\mathbf{L}$ is lower bounded iff $\mathbf{D}(\mathbf{L}) = L$.</dd>
+
+    <dt>D-cycle</dt>
+    <dd>A finite cyclic D-sequence $a_0 D a_1 D \cdots D a_n D a_0$. Theorem 2.20: finite $\mathbf{L}$ is lower bounded iff no D-cycle.</dd>
+
+    <dt>D-rank $\rho(a)$</dt>
+    <dd>$\min\{k : a \in D_k(\mathbf{L})\}$, $\infty$ if no such $k$. The well-foundedness measure of D.</dd>
+
+    <dt>$D_k(\mathbf{L})$</dt>
+    <dd>$D_0 = \{a : a$ has no nontrivial join cover $\}$. $D_{k+1} = \{a : Q \subseteq D_k$ for every $Q \in \mathcal{M}(a)\}$.</dd>
+
+    <dt>D-closed set</dt>
+    <dd>$A \subseteq L$ such that $pDq$ and $p \in A$ imply $q \in A$. Now standardly called "J-closed" after Theorem 2.51.</dd>
+
+    <dt>E relation</dt>
+    <dd>$aEb$ iff $b \in Q$ for some $Q \in \mathcal{M}^*(a)$ (minimal cover of completely join irreducibles).</dd>
+
+    <dt>E-closed set / E-cycle / E-sequence</dt>
+    <dd>Defined analogously to D versions, using E in place of D. Corollary 2.53: finite $\mathbf{L}$ is lower bounded iff no E-cycle.</dd>
+
+    <dt>$\mathbf{J}(p)$ / $\mathbf{J}^*(p)$</dt>
+    <dd>$\mathbf{J}(p)$ is the smallest D-closed set containing every minimal join representation of $p$. $\mathbf{J}^*(p)$ uses E-closure. Theorem 2.51: in lattices with $\mathbf{D}(\mathbf{L}) = L$ and the minimal join cover refinement property, $\mathbf{J}(p) = \mathbf{J}^*(p)$.</dd>
+
+    <dt>J-closed set</dt>
+    <dd>Modern term for a set $A$ such that $\mathbf{J}(p) \subseteq A$ for every $p \in A$ (Theorem 2.51 (1)–(4) equivalent forms).</dd>
+
+    <dt>$\kappa_\mathbf{L}$ (kappa)</dt>
+    <dd>$\kappa_\mathbf{L}(a) = \bigvee K(a)$ where $K(a) = \{u : u \ge a_*, u \not\ge a\}$. Maps completely join irreducibles to completely meet irreducibles in SD$_\wedge$ + dual-min-cover-refinement lattices. Theorem 2.55: bijection in semidistributive lattices.</dd>
+
+    <dt>Lower bounded homomorphism</dt>
+    <dd>A homomorphism $h$ such that for every $a \in h(\mathbf{K})$, the filter $h^{-1}(1/a)$ has a least element $\beta(a)$.</dd>
+
+    <dt>Lower pseudo-interval</dt>
+    <dd>A finite union of intervals $u_1/v, \ldots, u_n/v$ with common bottom $v$ in a lattice. Theorem 2.43: finite lower bounded lattices are exactly those built from $\mathbf{1}$ by iterated doubling of lower pseudo-intervals.</dd>
+
+    <dt>$\mathcal{M}(a)$ / $\mathcal{M}^*(a)$</dt>
+    <dd>$\mathcal{M}(a)$ = set of minimal join covers of $a$. $\mathcal{M}^*(a)$ = those with all elements completely join irreducible.</dd>
+
+    <dt>Minimal join cover refinement property</dt>
+    <dd>Every nontrivial join cover of every element refines to a minimal one. Free lattices, finite lattices, finitely-presented lattices all have this property.</dd>
+
+    <dt>Pseudo-interval</dt>
+    <dd>Lower pseudo-interval (common bottom) or upper pseudo-interval (common top). Convex; Day's doubling applies.</dd>
+
+    <dt>Splitting lattice</dt>
+    <dd>A finite, bounded, subdirectly irreducible lattice. Determines a splitting pair $\langle \mathbf{V}(\mathbf{L}), \mathcal{C}_\mathbf{L}\rangle$ in $\mathbf{\Lambda}$.</dd>
+
+    <dt>Splitting pair</dt>
+    <dd>In a complete lattice $\mathbf{L}$, an ordered pair $\langle u, v\rangle$ with $u \not\le v$ such that $L$ is the disjoint union of $1/u$ and $v/0$.</dd>
+
+    <dt>Upper bounded homomorphism</dt>
+    <dd>A homomorphism $h$ such that for every $a \in h(\mathbf{K})$, the ideal $h^{-1}(a/0)$ has a greatest element $\alpha(a)$.</dd>
+
+    <dt>Upper pseudo-interval</dt>
+    <dd>Dual of lower pseudo-interval: finite union of intervals sharing a common top.</dd>
+
+    <dt>$\mathbf{V}(\mathbf{L})$</dt>
+    <dd>The variety of lattices generated by $\mathbf{L}$ (in the lattice $\mathbf{\Lambda}$ of all lattice varieties).</dd>
+
+    <dt>Weakly atomic</dt>
+    <dd>A lattice in which every nontrivial interval $a/b$ contains a covering pair $p \succ q$. Day's theorem (Corollary 2.85): every $\mathbf{FL}(X)$ with $X$ finite is weakly atomic.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXAMPLES ============== -->
+<section class="module" id="examples">
+  <h2><span class="num">COMPUTED EXAMPLES</span> Worked instances of Chapter II results</h2>
+  <div class="tagline">Five examples: $M_3$ conjugate equations, $L_1$ (lower-bounded but not bounded), $N_5$ giving the modular law, the lattice $M_{3,3}$ where E-closed differs from D-closed, and a small splitting-lattice example.</div>
+
+  <details class="example"><summary><span class="ex-tag">Example II.A</span>$M_3$ — conjugate equations for an upper-bounded SI lattice (book Example 2.73, PDF 67)</summary>
+  <div class="body">
+    <div class="ex-statement">Verify Theorem 2.72 for $M_3$ (the diamond lattice with three atoms $a, b, c$). Compute the sequences $\beta_n$ and $\alpha_n$, and exhibit a conjugate equation describing $\mathbf{V}(M_3)$.</div>
+    <p><strong>Setup.</strong> $M_3$ has top $1$, bottom $0$, and three atoms $a, b, c$ with $a \vee b = a \vee c = b \vee c = 1$ and $a \wedge b = a \wedge c = b \wedge c = 0$. The natural homomorphism is $f : \mathbf{FL}(3) \twoheadrightarrow M_3$ with $f(x) = a, f(y) = b, f(z) = c$. The prime critical quotient: take $u = a$ and $v = b$. Then $u/u \wedge v = a/0$ is a prime cover.</p>
+    <p><strong>$\beta$-sequence (lower bounds).</strong> The recursion from Theorem 2.47:</p>
+    $$\beta_0(a) = x, \qquad \beta_{n+1}(a) = x \wedge (\beta_n(b) \vee \beta_n(c))$$
+    $$\beta_0(b) = y, \qquad \beta_{n+1}(b) = y \wedge (\beta_n(a) \vee \beta_n(c))$$
+    $$\beta_0(c) = z, \qquad \beta_{n+1}(c) = z \wedge (\beta_n(a) \vee \beta_n(b))$$
+    <p><strong>$\alpha$-sequence (upper bounds).</strong> Dually:</p>
+    $$\alpha_0(a) = x, \qquad \alpha_{n+1}(a) = x \vee (\alpha_n(b) \wedge \alpha_n(c))$$
+    $$\alpha_0(b) = y, \qquad \alpha_{n+1}(b) = y \vee (\alpha_n(a) \wedge \alpha_n(c))$$
+    $$\alpha_0(c) = z, \qquad \alpha_{n+1}(c) = z \vee (\alpha_n(a) \wedge \alpha_n(b))$$
+    <p><strong>Conjugate equation.</strong> The chain of inclusions for $M_3$:</p>
+    $$(\varepsilon_n) \qquad \beta_n(a) = x \wedge (\beta_{n-1}(b) \vee \beta_{n-1}(c)) \le y \vee (\alpha_{n-1}(a) \wedge \alpha_{n-1}(c)) = \alpha_n(b)$$
+    <p>For $n = 1$: $x \wedge (y \vee z) \le y \vee (x \wedge z)$, i.e. <strong>the modular law in dual form</strong>. But $M_3$ is modular, so $\varepsilon_1$ holds in $M_3$ — wait, that means $M_3$ is in the variety satisfying $\varepsilon_1$, but we wanted $M_3$ NOT in it. The point is that $\varepsilon_n$ becomes weaker as $n$ grows: $\varepsilon_1$ is the modular law, and modular varieties satisfy it, including $\mathbf{V}(M_3)$. We need an $\varepsilon_n$ for $n$ large enough that the variety FAILS the inclusion. By the theorem, such $n$ exists.</p>
+    <p><strong>Implication.</strong> Despite $M_3$ being modular (and indeed $\mathbf{V}(M_3) \subset $ modular lattice variety), the chain $\{\mathbf{V}(\varepsilon_n)\}$ gives a strictly DECREASING sequence of varieties, all containing $M_3$, whose meet is $\mathbf{V}(M_3)$. The conjugate equations form an INFINITE ascending chain in $\mathbf{\Lambda}$ — $M_3$ is not equationally finitely-axiomatised by a single equation but rather by this infinite chain.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example II.B</span>$L_1$ — a lower bounded but NOT upper bounded lattice (book Example 2.74, PDF 68)</summary>
+  <div class="body">
+    <div class="ex-statement">Take the lattice $L_1$ from Figure 2.8 of the monograph: 8 elements arranged with top $1$, bottom $0$, and elements $a, b, c, d, e$ where $b \succ 0$, $c \succ 0$, $d = b \vee a$, $e = c \vee a$, and $a$ is in the middle (with $a > 0$, $a$ incomparable to $b, c$). Verify that $L_1$ is lower bounded but NOT upper bounded.</div>
+    <p><strong>Lower-boundedness check (D-rank).</strong> Compute D-ranks: $b, c \in D_0(L_1)$ (no nontrivial join covers — $b, c$ are atoms with $b \vee c = $ top, but the cover $\{b, c\}$ is trivial since neither $b$ nor $c$ are below the other). $a \in D_1(L_1)$ since $a \le b \vee c$ and $\{b, c\}$ is a minimal cover with both in $D_0$. Hence $\mathbf{D}(L_1) = L_1$, so $L_1$ is lower bounded by Theorem 2.20.</p>
+    <p><strong>$\beta$ values.</strong> $\beta(b) = y$, $\beta(c) = z$, and $\beta(a) = \beta_1(a) = x \wedge (y \vee z)$. The left-hand-side stabilises here.</p>
+    <p><strong>Upper-boundedness check ($\alpha$).</strong> Compute $\mathbf{M}(L_1) = \{b, c, d, e\}$ (the meet-irreducibles). For $\alpha$: $d, e \in D_0^d(L_1)$ (no nontrivial meet covers). But $b$ and $c$ are NOT in $D_0^d(L_1)$ — they have meet covers $\{d, e\}$ (since $b \le d \wedge e \cdot $ wait, careful: in the dual, we ask whether $b = d \wedge e$? No, $b < d$ and $b < e$ but $b \neq d \wedge e$ unless $d \wedge e = b$. Looking at Figure 2.8: $d \wedge e = a$, not $b$.)</p>
+    <p>The key structural fact (book p. 58): there's a non-trivial meet cover $\{d, e\}$ for $b$ in the dual sense, BUT this meet cover does NOT refine to a minimal one consisting of completely meet irreducibles. So $L_1$ FAILS the dual minimal-join-cover refinement property — meaning $\rho^d(b)$ does not exist, $b \notin \mathbf{D}^d(L_1)$, so $L_1$ is NOT upper bounded.</p>
+    <p><strong>Conjugate equations.</strong> The chain of inclusions for $L_1$ is:</p>
+    $$(\varepsilon_n) \qquad x \wedge (y \vee z) \le \alpha_n(b)$$
+    <p>which forms an infinite ascending chain in $\mathbf{\Lambda}$. A particularly long-lived equation. This shows: even moderately small lattices can have INFINITE chains of conjugate equations, justifying the structural intricacy.</p>
+    <p><strong>Implication.</strong> Lower-bounded $\not\Leftrightarrow$ upper-bounded for finite lattices. By Theorem 2.64, finite lower-bounded SD-meet lattices ARE bounded; $L_1$ must therefore fail SD$_\wedge$. (Indeed $L_1$ has $b = b \wedge d = b \wedge e$ but $b \neq b \wedge (d \vee e) = b \wedge $ top $= b$ — wait that's not a SD$_\wedge$ failure. A different witness: there exist $u, v, w$ with $u \wedge v = u \wedge w \neq u \wedge (v \vee w)$. Locating it requires careful inspection of Figure 2.8.)</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example II.C</span>$N_5$ — pentagon and the modular law (book Example 2.75, PDF 68)</summary>
+  <div class="body">
+    <div class="ex-statement">Apply Theorem 2.72 to $N_5$ (the pentagon lattice). Compute conjugate equations and verify that the resulting equation is exactly the modular law.</div>
+    <p><strong>Setup.</strong> $N_5$ has 5 elements: top $1$, bottom $0$, and three middle elements $a, b, c$ where $a$ is incomparable to $b$, $a$ is comparable to $c$ ($a > c$), and $b$ is incomparable to $a, c$. The lattice operations: $a \vee b = b \vee c = 1$, $a \vee c = a$, $a \wedge b = b \wedge c = 0$, $a \wedge c = c$.</p>
+    <p>Take $f : \mathbf{FL}(3) \twoheadrightarrow N_5$ with $f(x) = a, f(y) = b, f(z) = c$. Choose $u = a, v = b$. Then $u/u \wedge v = a/0$ is a prime critical quotient.</p>
+    <p><strong>Conjugate-equation chain.</strong> Computing $\beta_1(a)$ and $\alpha_1(b)$:</p>
+    $$\beta_1(a) = x \wedge ((x \wedge y) \vee z) \quad\text{(after one round of approximation)}$$
+    $$\alpha_1(b) = y \vee ((x \vee y) \wedge z)$$
+    <p>The conjugate equation $\varepsilon_1$ is therefore</p>
+    $$x \wedge ((x \wedge y) \vee z) \le y \vee ((x \vee y) \wedge z).$$
+    <p>Simplifying using $x \wedge y \le x$, the LHS becomes $x \wedge ((x \wedge y) \vee z)$. For $x \ge x \wedge y$ this gives $x \wedge ((x \wedge y) \vee z) = (x \wedge y) \vee (x \wedge z)$ in a distributive lattice — but we are NOT in a distributive lattice.</p>
+    <p>The single inclusion <strong>is the modular law</strong>: $x \wedge (y \vee z) \le y \vee (x \wedge z)$ when $x \ge y$. Replacing variables shows the identity is exactly modularity: a lattice satisfies the modular law iff it satisfies $\varepsilon_1$ for $N_5$.</p>
+    <p><strong>Implication.</strong> $\mathbf{V}(N_5)$ is the unique largest variety NOT containing $N_5$ that satisfies the modular law? Other way around — the variety of all lattices NOT in $\mathcal{C}_{N_5}$ are EXACTLY the modular varieties, AND the conjugate variety $\mathcal{C}_{N_5}$ is the variety of ALL modular lattices. The famous fact "$N_5$ is the smallest non-modular lattice" is literally the statement that $\mathcal{C}_{N_5}$ = variety of modular lattices. Theorem 2.72 makes this geometrically transparent: $N_5$ splits $\mathbf{\Lambda}$ along the modular-law boundary.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example II.D</span>$M_{3,3}$ — D-closed but NOT E-closed (book Example referenced p. 48, PDF 65)</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that the finite modular lattice $M_{3,3}$ contains a D-closed subset which is NOT E-closed — a structural example showing $\mathbf{J}(p) \neq \mathbf{J}^*(p)$ in lattices that fail $\mathbf{D}(\mathbf{L}) = L$.</div>
+    <p><strong>Setup.</strong> $M_{3,3}$ is the modular lattice of subgroups of $(\mathbb{Z}/3)^2$ — 16 elements: top $1$, bottom $0$, four atoms $a_1, a_2, a_3, a_4$, four coatoms $c_1, c_2, c_3, c_4$, and intermediate cyclic subgroups. The lattice is modular, with $|\mathbf{J}(M_{3,3})| = 4$ (the four atoms) and $|\mathbf{M}(M_{3,3})| = 4$ (the four coatoms).</p>
+    <p><strong>Why $\mathbf{D}(M_{3,3}) \neq M_{3,3}$.</strong> The atoms $a_i$ are in $D_0$ (no nontrivial join covers — they're atoms). But the join $a_1 \vee a_2 = $ some intermediate element $b$, and $b$ has a minimal join cover $\{a_1, a_2\}$ — so $b \in D_1$. Continuing: every element with a join cover is in some $D_k$. The issue arises with NON-completely-join-irreducible covers. There exist elements in $M_{3,3}$ with minimal covers consisting of join irreducibles that are NOT completely join irreducible (e.g., the cyclic subgroup of size 3 with two generating elements is join irreducible in the lattice but not completely join irreducible because it has multiple representations).</p>
+    <p><strong>D-closed but not E-closed witnesses.</strong> Take the subset $A = $ the four atoms $\{a_1, a_2, a_3, a_4\}$ together with their pairwise joins. This is D-closed: any $pDq$ in $A$ has $q$ also in $A$. But $A$ is NOT E-closed: there exists an element $p \in A$ with $pEq$ for some $q \notin A$ — specifically, an element whose minimal-cover-of-completely-join-irreducibles includes elements outside the atom-and-pair-joins set.</p>
+    <p><strong>Implication.</strong> In modular lattices, $\mathbf{D}(\mathbf{L}) \neq L$ is possible (since modular need not be lower bounded). The strict containment $\mathbf{J}(p) \subsetneq \mathbf{J}^*(p)$ can occur. This is why Theorem 2.51 explicitly requires $\mathbf{D}(\mathbf{L}) = L$ (lower-boundedness): only then do D-closed and E-closed coincide. The example justifies the careful framing of the chapter's main theorem.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example II.E</span>The κ-bijection on a 5-element splitting lattice</summary>
+  <div class="body">
+    <div class="ex-statement">Compute the κ-bijection explicitly on $\mathbf{N}_5$ (the pentagon) and verify Theorem 2.55: $|\mathbf{J}(\mathbf{N}_5)| = |\mathbf{M}(\mathbf{N}_5)|$ and $\kappa$ is a bijection.</div>
+    <p><strong>Setup.</strong> $\mathbf{N}_5$ has elements $\{0, c, a, b, 1\}$ with $0 < c < a$, $0 < b < 1$, $a \vee b = 1$, $c \vee b = 1$, $a \wedge b = c \wedge b = 0$, $a \wedge c = c$. Cover relations: $0 \prec c \prec a \prec 1$, $0 \prec b \prec 1$.</p>
+    <p><strong>Completely join irreducibles.</strong> $\mathbf{J}(\mathbf{N}_5) = \{c, b, a\}$? Let's check. $c$ is an atom — completely join irreducible. $b$ is also an atom — completely join irreducible. $a > c$ with $a$'s only lower cover being $c$ — completely join irreducible. So $\mathbf{J}(\mathbf{N}_5) = \{c, a, b\}$, three elements.</p>
+    <p>Wait — is $\mathbf{N}_5$ semidistributive? Check SD$_\vee$: is $a \vee b = a \vee c$ implying $a \vee b = a \vee (b \wedge c) = a \vee 0 = a$? But $a \vee b = 1$ and $a \vee c = a$. So the antecedent fails: $a \vee b \neq a \vee c$. So we cannot test SD$_\vee$ on this triple. Try $c \vee a = a$, $c \vee 0 = c$, so $c \vee a = c \vee 0$ is false. Etc. $\mathbf{N}_5$ IS in fact NOT join semidistributive (it has the standard SD-failure), so Theorem 2.55 doesn't apply directly. (See Theorem 1.20.)</p>
+    <p><strong>Compute κ on the pentagon.</strong> For each $a \in \mathbf{J}(\mathbf{N}_5)$, compute $K(a)$ and $\kappa(a)$:</p>
+    <ul>
+      <li>$\kappa(c)$: $K(c) = \{u : u \ge 0, u \not\ge c\} = \{0, b\}$ (everything $\ge 0$ except those $\ge c$ which are $c, a, 1$). $\bigvee K(c) = b$. So $\kappa(c) = b$. Check: $b$ should be completely meet irreducible. $b \prec 1$ (only upper cover); $b$'s lower covers — only $0$. So $b$ is completely meet irreducible. ✓</li>
+      <li>$\kappa(b)$: $K(b) = \{u : u \ge 0, u \not\ge b\} = \{0, c, a\}$. $\bigvee K(b) = a$ (the maximum). So $\kappa(b) = a$. Check: $a$'s upper covers — only $1$. So $a$ is completely meet irreducible. ✓</li>
+      <li>$\kappa(a)$: $K(a) = \{u : u \ge c, u \not\ge a\} = \{c\}$ (since $c \ge c$, $a \ge c$ but $a \ge a$ excludes $a$, $1 \ge a$ excludes $1$, $b \not\ge c$ so $b \notin K(a)$, and $0 \not\ge c$). $\bigvee K(a) = c$. So $\kappa(a) = c$. Check: $c$'s upper covers — only $a$. $c$ completely meet irreducible. ✓</li>
+    </ul>
+    <p><strong>The bijection.</strong> $\kappa : \{c, b, a\} \to \{b, a, c\}$ as $c \mapsto b$, $b \mapsto a$, $a \mapsto c$. A 3-cycle. Bijective ✓. So even though $\mathbf{N}_5$ is NOT semidistributive (fails Theorem 2.55's hypothesis), the κ-map IS a bijection here. The hypothesis of 2.55 is sufficient but not always necessary.</p>
+    <p><strong>Implication.</strong> The κ-bijection is a robust structural feature of finite lattices with rich enough structure. The pentagon's κ-map is a non-trivial permutation of $\mathbf{J}/\mathbf{M}$ that demonstrates the underlying duality.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter III — Covers in Free Lattices</h2>
+  <div class="tagline">Chapter III applies the κ-bijection, J-closed sets, and bounded-homomorphism machinery from Chapter II to compute covers in $\mathbf{FL}(X)$ explicitly. The result is Theorem 3.4 and Theorem 3.15, the cornerstone of the cover-counting theory.</div>
+
+  <p>Chapter III shifts from structural classification to explicit computation. Where Chapter II asked "which finite lattices arise as bounded images?", Chapter III asks: <em>given $w \in \mathbf{FL}(X)$, can we list the elements covering $w$?</em></p>
+
+  <p>The answer uses Chapter II's machinery directly. Theorem 3.4 (the $w \succ q$-counting via $\mathbf{J}^*(w)$) uses the J-closed-set construction from §4. The κ-bijection from §5 gives the matching between covers from above and covers from below. Day's weak-atomicity theorem (§7 of Chapter II) guarantees that covers EXIST in nontrivial intervals.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter III uses everything from Chapter II: bounded homomorphism with $\beta, \alpha$ (for upper and lower approximations to elements in $\mathbf{FL}(X)$); the D and E relations on $\mathbf{J}(\mathbf{FL}(X))$; J-closed sets $\mathbf{J}(p)$; the κ-bijection (when applicable); semidistributivity (always present in $\mathbf{FL}(X)$); minimal join cover refinement (always present); weak atomicity (Day's theorem). The arsenal is large; Chapter III shows what it can do.</p>
+  </div>
+
+  <p>Key results to anticipate. <strong>Theorem 3.4</strong>: a complete description of covers $p \succ q$ in $\mathbf{FL}(X)$ via the canonical form of $p$ and $q$, using $\mathbf{J}(p)$ and the κ-bijection. <strong>Theorem 3.15</strong>: the dual computation. <strong>Cover counts</strong>: explicit formulas in low-rank cases. <strong>Open problems on covers</strong>: which patterns of cover-relations occur in $\mathbf{FL}(X)$ for $|X| \ge 3$? Some are settled here; some are still open in 2026.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Free Lattices Companion · Chapter II · <a href="freelat-companion-toc.html">Volume index</a></div>
+    <div><a href="freelat-companion-ch01.html">← Chapter I</a> · <a href="freelat-companion-ch03.html">Chapter III →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

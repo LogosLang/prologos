@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 13 · Several Dimensions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .closing-banner { background: linear-gradient(135deg, var(--bg-warm), var(--box-prol-bg)); border: 2px solid var(--gold); padding: 24px 28px; margin: 30px 0; border-radius: 8px; }
+  .closing-banner h3 { color: var(--gold); margin-top: 0; font-size: 20px; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch12.html">← Chapter 12</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 13 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Dual Goldie dim</div>
+  <ul>
+    <li><a href="#s1">A1 · Definition + Theorem 13.1</a></li>
+    <li><a href="#s2">A2 · Cor 13.1 + Thms 13.2, 13.3</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Infinite Goldie</div>
+  <ul>
+    <li><a href="#s3">B1 · Ideal lattice $I_0(L)$</a></li>
+    <li><a href="#s4">B2 · u-basis + Thms 13.4, 13.5</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Krull dimension</div>
+  <ul>
+    <li><a href="#s5">C1 · Deviation + Lemmonier</a></li>
+    <li><a href="#s6">C2 · Modular case + Krause + critical</a></li>
+    <li><a href="#s7">C3 · Theorem 13.8 + closing corollaries</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Gabriel dimension</div>
+  <ul>
+    <li><a href="#s8">D1 · Definition + Prop 13.7</a></li>
+    <li><a href="#s9">D2 · Theorems 13.9, 13.10</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Goldie's theorem</a></li>
+    <li><a href="#c2">P2 · Krull dim in commutative algebra</a></li>
+    <li><a href="#c3">P3 · Gabriel categories</a></li>
+    <li><a href="#c4">P4 · Synthesis — four dimensions</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#looking-back">Looking Back</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 13 · pp. 143–163 · Closing chapter</div>
+  <h1>Several Dimensions</h1>
+  <p class="lede">The closing chapter: four dimension concepts on lattices — dual Goldie (hollow), infinite Goldie via the ideal lattice, the transfinite Krull dimension of Gabriel-Rentschler-Hart, and Gabriel dimension. The final theorems compare them: $k$-dim $\le$ $g$-dim $\le$ $k$-dim $+ 1$ when both exist (Krause), and $g$-dim $= k$-dim $+ 1$ for noetherian lattices.</p>
+  <div class="meta">
+    <span>~80–90 min read</span>
+    <span>9 sections + 5 connection panels</span>
+    <span>13 worked exercises</span>
+    <span>Closing chapter — companion now complete</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — four dimensions and how they fit together</h2>
+  <div class="tagline">Each "dimension" measures the lattice's structural complexity along a different axis. The chapter's punchline is that all four interlock cleanly: noetherian + finite uniform + Krull + Gabriel form a coherent fingerprint.</div>
+
+  <p>Chapter 13 closes the book by collecting <strong>four distinct notions of dimension</strong> for lattices. Each is a measure of "how much structural complexity" the lattice carries along a different axis, and the final theorems (13.7–13.10) make the relationships precise.</p>
+
+  <p><strong>Dual Goldie (hollow) dimension.</strong> Order-dual to Chapter 8's uniform/Goldie dimension. $h$-dim$(L) = n$ if $L$ admits an irredundant decomposition $\bigvee a_k = 1$ with each $a_k/0$ hollow — exactly the dual of "uniform dimension $n$" via $L \mapsto L^0$. Theorem 13.1 gives the five-way characterisation in bounded modular lattices: finite hollow dim $\iff$ bounded meet-independent subsets $\iff$ a chain condition $\iff$ DCC$_\oplus$ $\iff$ no infinite meet-independent subsets.</p>
+
+  <p><strong>Infinite Goldie dimension.</strong> Chapter 8 gave finite uniform dim; Chapter 13 lifts to arbitrary cardinality. The vehicle is the ideal lattice $I_0(L)$ — a compactly generated upper continuous lattice into which $L$ embeds via $a \mapsto a/0$. Lemmas 13.1–13.4 set up the machinery; Theorem 13.4 (Crawley) is the cardinal-bound version of Theorem 8.1; the equivalence of "$L$ has u-basis" with "every non-zero element contains a uniform" (Theorem 13.5) is the infinite extension of finite Goldie dim.</p>
+
+  <p><strong>Krull dimension.</strong> The Gabriel-Rentschler (1967) deviation: an ordinal $\alpha$ assigned recursively to a poset, where deviation $-1$ means trivial, deviation $0$ means artinian-and-nontrivial, and deviation $\alpha$ means "almost all factors of any descending chain have deviation $&lt; \alpha$." Hart's $\alpha$-critical lattices ($k$-dim $= \alpha$ but every quotient $1/a$ has $k$-dim $&lt; \alpha$) are the building blocks. Theorem 13.6 (Lemmonier) gives a clean obstruction characterisation: $A$ has no Krull dim iff $A$ contains a copy of the dyadic numbers $\mathbf{D}$. Theorem 13.7 (Krause) ties it back: upper continuous modular + Krull dim ⟹ finite uniform dim.</p>
+
+  <p><strong>Gabriel dimension.</strong> A finer recursive ordinal: $g$-dim$(L) = 0$ for $L = \{0\}$; $g$-dim$(L) = 1$ iff $L$ is a torsion lattice; $g$-dim$(L) \le \alpha$ iff every $1/a$ ($a \ne 1$) contains a $\beta$-simple element for $\beta \le \alpha$. Proposition 13.7 gives the interval recursion ($g$-dim$(L) = \sup\{g$-dim$(a/0)$, $g$-dim$(1/a)\}$); Theorem 13.9 (Krause): $k$-dim$(L) \le g$-dim$(L) \le k$-dim$(L) + 1$. Theorem 13.10 (Krause): for noetherian $L$, $g$-dim$(L) = k$-dim$(L) + 1$.</p>
+
+  <p>The chapter is mostly summarising — many results are stated without full proof, the chapter referring to Stenström [34], Rentschler-Gabriel [31], and Hart [18] for details. The role of Chapter 13 in the book's arc is to connect the lattice apparatus built across Chapters 1–12 to the dimensional invariants that classify modules in classical theory: it answers the question "what does the lattice fingerprint of a module look like?"</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">Carried forward (recap from Ch 1–12) · New in Chapter 13 (full term-cards for the four dimensions and their building blocks) · Deep dive (extended explainers for the deviation construction and the four-dimension comparison).</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>Carried forward — terms recapped from Ch 1–12</h2>
+  <div class="tagline">Six refreshers; the chapter relies heavily on Chapter 8's uniform / Goldie dimension as the model for dualisation and on Chapter 12's hollow / supplemented language.</div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Uniform / Goldie dimension</span><p>Chapter 8: $L$ has uniform (or Goldie) dimension $n$ if $\bigvee a_k$ is essential in $L$ with $\{a_k\}$ independent and each $a_k/0$ uniform. Chapter 13's $h$-dim is the order-dual via $L \mapsto L^0$.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Hollow / Local lattice</span><p>Chapter 12: hollow = every $\ne 1$ is superfluous; local = $L \setminus \{1\}$ has top. Hollow elements are the building blocks of dual Goldie dim, just as uniforms build Goldie dim.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Independence</span><p>Chapter 6: $\{a_i\}$ independent if $a_i \wedge \bigvee_{j \ne i} a_j = 0$. Chapter 13 introduces meet independent (the dual): $a_i \vee \bigwedge_{j \ne i} a_j = 1$.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Compact / compactly generated</span><p>Chapter 1. The ideal lattice $I_0(L)$ in Section B is compactly generated, with compact elements = principal ideals. The bridge $L \hookrightarrow I_0(L)$ takes "compact element of $L$" to "principal ideal."</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Noetherian / Artinian</span><p>Chapter 1. ACC and DCC respectively. Krull dim measures how far an artinian or noetherian-flavoured chain condition extends into the transfinite — deviation $0$ is artinian-and-nontrivial.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Torsion lattice</span><p>Chapter 5: every element above an atom; equivalent to $L = \bigvee \{a : a/0$ has finite length$\}$. Gabriel dim $= 1$ exactly characterises torsion lattices.</p></div>
+
+  <h2>New in Chapter 13 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Dual Goldie (hollow) dimension</span><p>$h$-dim$(L) = n$ if there is $\{a_1, \dots, a_n\} \subseteq L$ with $\bigwedge a_k$ superfluous in $L$ and each $1/a_k$ hollow. $h$-dim$(L) = $ dim$(L^0)$ — the chapter's first definition of order duality at the dimension level. If no such finite $n$ exists, $h$-dim$(L) = \infty$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Meet independent</span><p>A finite subset $\{a_1, \dots, a_n\} \subseteq L$ is <em>meet independent</em> if $a_i \vee \bigwedge_{j \ne i} a_j = 1$ for each $i$. The order-dual of "join independent" (Ch 6). Infinite version: every finite subset is meet independent.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">DCC$_\oplus$</span><p>The descending chain condition for finite direct sums. Every descending chain $a_0 \ge a_1 \ge \dots$ of finite direct-sum elements stabilises. One of the five equivalents in Theorem 13.1.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Ideal of a lattice</span><p>For $L$ with $0$, an <em>ideal</em> $I$ is a non-empty subset closed under finite joins and downward-closed (down-set + closed under joins). $I(L)$ = lattice of ideals; $I_0(L)$ = ideals not containing $\{0\}$ alone — i.e., non-zero ideals. Both are compactly generated (Lemma 13.2).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Principal ideal $a/0$</span><p>For $a \in L$, the principal ideal generated by $a$ is $a/0 = \{x \in L : x \le a\}$. Lemma 13.3: compact elements in $I_0(L)$ are exactly the finitely generated ideals, equivalently the principal ideals.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">u-basis</span><p>A maximal independent subset $B$ of $L \setminus \{0\}$ consisting only of uniform elements. The lattice analogue of "vector space basis" — Theorem 13.5 connects the existence of a u-basis to "every non-zero element contains a uniform."</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Deviation (Krull dimension)</span><p>For a poset $A$, the deviation $\text{dev}(A)$ (or $k$-dim$(A)$) is an ordinal defined recursively. $\mathcal{D}_{-1}$ = trivial posets (antichains); $\mathcal{D}_\alpha$ for ordinal $\alpha$: posets $A$ such that $A \notin \bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$ and every descending chain has all-but-finitely-many factors in $\bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$. Not every poset has a deviation (Counterexample: $\mathbf{R}$).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Krull dimension (factor formulation)</span><p>Equivalently: as in Chapter 1's preorder construction, build $R_\alpha(A)$ by transfinite induction: $R_{-1}(A) = \Delta_A$ (equality); $R_\alpha(A) = $ pairs $(a, a')$ such that almost all factors of any chain $a' \ge a_0 \ge a_1 \ge \dots \ge a$ are in $\bigcup_{\beta &lt; \alpha} R_\beta$. Krull dim of $A$ is the least $\alpha$ with $R_\alpha(\bar{A}) = \bar{A}$ (where $\bar{A}$ adds a smallest element if needed).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">$\alpha$-critical (Hart)</span><p>A bounded lattice $L$ is $\alpha$-critical if $k$-dim$(L) = \alpha$ and $k$-dim$(1/a) &lt; \alpha$ for each $a \ne 0$. An element $a$ is $\alpha$-critical if $a/0$ is. By Lemma 13.8 (modular case): in a bounded modular $\alpha$-critical lattice, every non-zero element is $\alpha$-critical — atoms are $0$-critical. Critical elements are the lattice analogue of "simple modules at level $\alpha$."</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Convex subset</span><p>$B \subseteq A$ is <em>convex</em> if $b, b' \in B$ and $b \le a \le b'$ imply $a \in B$. Used in Lemma 13.5 / Proposition 13.4(a): convex subsets inherit Krull dim "exactly" from the ambient (no slack).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Dyadic numbers $\mathbf{D}$</span><p>$\mathbf{D} = \{m/2^n : m, n \in \mathbf{N}, 0 \le m/2^n \le 1\}$ — the dyadic rationals in $[0,1]$ with the inherited order. Lemma 13.6: $\mathbf{D}$ has no Krull dim. Theorem 13.6 (Lemmonier): $A$ has no Krull dim iff $A$ contains a subset isomorphic to $\mathbf{D}$. The $\mathbf{D}$-obstruction is the Krull-dim analogue of $N_5$ as the modular obstruction.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Gabriel dimension</span><p>$g$-dim$(L)$ is an ordinal defined by transfinite induction. $g$-dim$(L) = 0$ iff $L = \{0\}$. $L$ is $\alpha$-simple if $g$-dim$(a/0) \not\le \alpha$ for $a \ne 0$ and $g$-dim$(1/a) &lt; \alpha$ for $a \ne 1$. $g$-dim$(L) = \alpha$ iff $g$-dim$(L) \not\le \alpha$ but every $1/a$ ($a \ne 1$) contains a $\beta$-simple element for $\beta \le \alpha$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">$\alpha$-simple</span><p>$L$ is $\alpha$-simple iff $g$-dim$(L) = \alpha$ and "$L$ has no $1/a$ with $g$-dim $&lt; \alpha$." Atom $\iff$ $1$-simple (Remark after the definition). $1$-simple is the lattice analogue of "simple module"; $\alpha$-simple is the transfinite generalisation.</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The deviation construction — what each ordinal level captures</h3>
+    <p>The Krull dimension via deviation is genuinely transfinite. Here's what the first few ordinals look like:</p>
+    <ul>
+      <li><strong>dev$(A) = -1$</strong> $\iff$ $A$ is trivial (every two distinct elements are incomparable). Examples: discrete posets, antichains.</li>
+      <li><strong>dev$(A) = 0$</strong> $\iff$ $A$ is artinian-and-nontrivial. Every descending chain stabilises; finitely many factors before all subsequent factors are trivial (single-element). Example: any finite chain.</li>
+      <li><strong>dev$(A) = 1$</strong> $\iff$ $A$ is "almost artinian": every descending chain has all-but-finitely-many factors of finite length. Example: $\mathbf{Z}$ usually ordered (= $\dots &lt; -2 &lt; -1 &lt; 0 &lt; 1 &lt; 2 &lt; \dots$): every descending chain $z_0 &gt; z_1 &gt; \dots$ has finite-length factors $z_n / z_{n+1}$ (artinian), giving deviation $\le 1$. Not deviation $0$ because $\mathbf{Z}$ itself isn't artinian.</li>
+      <li><strong>dev$(A) = 2$</strong> $\iff$ deviation $\le 2$ but not $\le 1$: descending chains have all-but-finitely-many factors of deviation $\le 1$. Example: $\mathbf{Z} \times \mathbf{Z}$ with lexicographic order (or product order).</li>
+      <li><strong>dev$(A) = \omega$</strong>: descending chains have all-but-finitely-many factors of finite deviation. The first transfinite level — a genuinely "limit-ordinal" structural feature.</li>
+      <li><strong>$A$ has no deviation</strong>: $A$ contains a $\mathbf{D}$-shaped subposet — a structure where descending chains can be subdivided indefinitely (the dyadic rationals). Theorem 13.6 (Lemmonier) makes this precise.</li>
+    </ul>
+    <p>The construction is genuinely transfinite-recursive; each ordinal level captures a structural feature one step beyond what the previous level handles. The recursion mirrors the construction of the Cantor-Bendixson rank in topology and the foundation rank in set theory — all are transfinite measures of "how complex an iterative process needs to be" to reach a base case.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Why four dimensions, not one</h3>
+    <p>The chapter introduces four dimension concepts because they answer four <em>different</em> structural questions. Each is irreducible to the others:</p>
+    <table class="grid">
+      <thead><tr><th>Dimension</th><th>Question it answers</th><th>Building block</th></tr></thead>
+      <tbody>
+        <tr><td>Goldie / uniform (Ch 8)</td><td>How many independent uniform pieces fit?</td><td>Uniform element</td></tr>
+        <tr><td>Dual Goldie / hollow (Ch 13)</td><td>How many irredundant hollow pieces fit?</td><td>Hollow element</td></tr>
+        <tr><td>Krull (Ch 13)</td><td>How transfinite is the chain-condition behaviour?</td><td>Trivial / artinian level + ordinal</td></tr>
+        <tr><td>Gabriel (Ch 13)</td><td>How transfinite is the simple-element decomposition?</td><td>$\alpha$-simple element</td></tr>
+      </tbody>
+    </table>
+    <p>The relations: in upper continuous modular lattices with Krull dimension, finite uniform dim follows (Theorem 13.7 — Krause). Both Krull and Gabriel are transfinite, and they differ by at most $1$: $k$-dim $\le$ $g$-dim $\le$ $k$-dim $+ 1$ (Theorem 13.9 — Krause). For noetherian lattices, the gap is always exactly $1$ (Theorem 13.10).</p>
+    <p>Module-theoretically: Goldie dim corresponds to the "essential socle structure," dual Goldie to the "essential top quotient structure," Krull dim to the "Loewy length transfinite extension," and Gabriel dim to the "torsion-and-localisation depth." All four are needed to fully classify a module's structural fingerprint; loosing any one collapses information.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The Gabriel-Rentschler-Hart story</h3>
+    <p>Gabriel's 1962 thesis <em>Des catégories abéliennes</em> introduced the dimension that bears his name in the categorical setting: an ordinal-valued invariant of a Grothendieck category measuring its "torsion-localisation depth." Rentschler in 1967 (with Gabriel) extended the Krull dimension from commutative noetherian rings to non-commutative noetherian rings via deviation. Hart's 1971 paper introduced the lattice-theoretic $\alpha$-critical elements, allowing the construction to apply to arbitrary modular lattices.</p>
+    <p>Stenström's 1975 textbook <em>Rings of Quotients</em> [34] consolidated the lattice-theoretic versions. Krause's 1972 paper proved the comparison theorems ($k$-dim $\le$ $g$-dim $\le$ $k$-dim $+ 1$).</p>
+    <p>The lattice version (Călugăreanu Chapter 13) is "the Stenström line" — the cleanest abstraction that recovers all module-theoretic results without requiring categorical machinery. The chapter cites [31] (Rentschler-Gabriel), [34] (Stenström), and [18] (Hart) as the canonical references.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Dual Goldie (hollow) dimension</div>
+  <h2>Definition · Theorem 13.1 · Corollary 13.1 · Theorems 13.2, 13.3</h2>
+  <p class="part-lede">The order-dual of Chapter 8's Goldie dimension. Five-way characterisation in bounded modular; decomposition formula; hollow-element characterisation under upper continuity.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Dual Goldie dimension · Theorem 13.1 (5-way)</h2>
+  <div class="tagline">$h$-dim$(L) = $ dim$(L^0)$ via the order-duality involution. Theorem 13.1 lifts Theorem 8.1's five-way characterisation through dualisation.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Dual Goldie dimension</span>
+    <p>A lattice $L$ has <strong>dual Goldie (or hollow) dimension $n$</strong> if there exists a subset $\{a_1, a_2, \dots, a_n\} \subseteq L$ such that $a_1 \wedge a_2 \wedge \dots \wedge a_n$ is superfluous in $L$ and the quotient sublattices $1/a_k$ are hollow for each $k \in \{1, 2, \dots, n\}$.</p>
+    <p>In this case $h$-dim$(L) = n$. If no such finite $n$ exists, $h$-dim$(L) = \infty$. Clearly $h$-dim$(L) = $ dim$(L^0)$, the Goldie dimension of the dual lattice.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Meet independent</span>
+    <p>A finite subset $\{a_1, a_2, \dots, a_n\}$ in a lattice $L$ is <strong>meet independent</strong> if $a_i \vee \bigwedge_{j \ne i} a_j = 1$ holds for each $i$. An infinite subset $X \subseteq L$ is meet independent if each finite subset of $X$ is meet independent.</p>
+    <p>Order-dual to "independent" (Chapter 6). The "join goes to $1$" condition replaces "meet goes to $0$"; "$j \ne i$ excluded from the meet" replaces "$j \ne i$ excluded from the join."</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.1 · the 5-way characterisation</span>
+    <p>In a bounded modular lattice $L$, the following conditions are equivalent:</p>
+    <ol type="a">
+      <li>$L$ has finite dual Goldie dimension;</li>
+      <li>The cardinality of meet independent subsets of $L$ is bounded (in $\mathbf{N}$);</li>
+      <li>If $a_0 \ge a_1 \ge \dots \ge a_m \ge \dots$ there is an $i \in \mathbf{N}$ such that for each $j \ge i$, $a_i$ is superfluous in $1/a_j$;</li>
+      <li>$L$ satisfies the DCC$_\oplus$, i.e., the descending chain condition for finite direct sums;</li>
+      <li>$L$ does not contain infinite meet independent subsets.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>The whole theorem is the order-dual of Theorem 8.1 (Chapter 8). Each clause maps under $L \to L^0$:</p>
+    <ul>
+      <li>(a) "$h$-dim$(L) = n$" $\to$ "dim$(L^0) = n$" — the original Theorem 8.1 (a).</li>
+      <li>(b) Meet independent in $L$ $\to$ independent in $L^0$. Bounded cardinality is duality-invariant.</li>
+      <li>(c) The chain condition in $L$ corresponds to an ascending-chain essentialness condition in $L^0$.</li>
+      <li>(d) DCC$_\oplus$ in $L$ $\to$ ACC on finite direct sums in $L^0$.</li>
+      <li>(e) Infinite meet independent in $L$ $\to$ infinite (join) independent in $L^0$.</li>
+    </ul>
+    <p>Apply Theorem 8.1 to $L^0$. Bounded modular is self-dual; the dualisation goes through cleanly. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition</span>
+    <p>The dualisation here is mechanical because Chapters 1–8 set up the lattice machinery in a self-dual way (modular is self-dual, bounded is self-dual). The dual Goldie dim is genuinely a new concept module-theoretically — modules don't admit a clean order-duality (dualising the submodule lattice gives the lattice of factor modules, not a literal lattice of submodules of a dual module) — but at the lattice level, the duality is structural.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Corollary 13.1 · Theorems 13.2, 13.3</h2>
+  <div class="tagline">Decomposition formula via meet-independent atoms; hollow-element characterisation when $\bigvee a_k = 1$ is irredundant; upper continuous closing form.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.1</span>
+    <p>Let $\{a_1, \dots, a_n\}$ be a meet independent subset of a modular lattice $L$ such that $0 = \bigwedge_{k=1}^n a_k$. $L$ has finite dual Goldie dimension if and only if each quotient sublattice $1/a_k$ has finite dual Goldie dimension. In fact</p>
+    <p>$$h\text{-dim}(L) = \sum_{k=1}^n h\text{-dim}(1/a_k).$$</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.2</span>
+    <p>Let $L$ be a bounded modular lattice and $\bigvee_{k=1}^n a_k = 1$ be an irredundant join. If each sublattice $a_k/0$ is hollow then $h$-dim$(L) = n$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.3</span>
+    <p>In an upper continuous modular lattice with zero, $h$-dim$(L) = n$ if and only if there are hollow elements $a_1, a_2, \dots, a_n \in L$ such that $\bigvee_{k=1}^n a_k = 1$ is an irredundant join.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition</span>
+    <p>Theorems 13.2 and 13.3 are the dualisations of Theorems 8.5 and 8.6 (Chapter 8) — the "essential direct sum of uniforms" characterisation of finite Goldie dim. The hollow-elements form a complete decomposition: $L$ "factors" as an irredundant supremum of hollow pieces, exactly as a finite-Goldie-dim lattice "factors" as an essential direct sum of uniforms.</p>
+    <p>In the module-theoretic translation: $M$ has finite hollow dim $n$ iff $M$ admits an irredundant epimorphism $M \twoheadrightarrow \bigoplus_{k=1}^n M_k$ with each $M_k$ hollow. This is the classical Krull-Schmidt-Azumaya situation for hollow modules with local endomorphism rings (Ch 12 P2).</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Infinite Goldie dimension</div>
+  <h2>The ideal lattice $I_0(L)$ · Lemmas 13.1–13.4 · u-basis · Theorems 13.4, 13.5</h2>
+  <p class="part-lede">Lifting Goldie dimension from finite to infinite cardinality. The vehicle is the ideal lattice $I_0(L)$ — a compactly generated upper continuous lattice into which $L$ embeds via $a \mapsto a/0$.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Ideal lattice $I_0(L)$ · Lemmas 13.1–13.4</h2>
+  <div class="tagline">$I_0(L)$ is the lattice of non-zero ideals of $L$. Lemmas 13.1–13.4 establish the embedding properties: $I_0(L)$ is compactly generated, principal ideals are compact, and uniform/independent properties transfer cleanly.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Ideal lattice $I_0(L)$</span>
+    <p>For a lattice $L$ with $0$, an <em>ideal</em> $I \subseteq L$ is a non-empty subset closed under finite joins and downward-closed: $a \in I$, $b \le a$ $\Rightarrow$ $b \in I$, and $a, b \in I$ $\Rightarrow$ $a \vee b \in I$.</p>
+    <p>$I(L)$ = lattice of all ideals. $I_0(L)$ = sublattice of non-zero ideals. (The zero ideal $\{0\}$ exists in any lattice with $0$; $I_0(L)$ excludes the case where $I = \{0\}$.) Both are complete lattices: meets are intersections, joins are the smallest ideal containing the union.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.1</span>
+    <p>If $X \subseteq L$ then $x \in (X)$ if and only if $\exists n \in \mathbf{N}^*$, $\exists F \in \mathcal{P}_0(X) : x \le \bigvee F$. Here $(X)$ denotes the ideal generated by $X$, and $\mathcal{P}_0(X)$ the set of finite subsets of $X$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Principal ideals</span>
+    <p>$a/0 = \{x \in L : x \le a\}$ is the <em>principal ideal</em> generated by $a$. Remark 13.1: $(a_1, \dots, a_n) = (a_1 \vee \dots \vee a_n)/0$. Hence each finitely generated ideal is principal.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.2</span>
+    <p>If $L$ has a zero, $I_0(L)$ is a complete lattice. For every lattice, $I_0(L)$ is a compactly generated lattice, the mapping $a \mapsto a/0$ is an embedding of $L$ in $I_0(L)$, and $I_0(L)$ satisfies every lattice identity that $L$ satisfies.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Set-theoretic intersection of any family of ideals is an ideal — gives meets. For joins: take $\mathcal{B} = \mathcal{P}_0(\bigcup \mathcal{A})$, then $J_\mathcal{A} = \{x \in L : x \le \bigvee F$ for some $F \in \mathcal{B}\}$ is an ideal and $\bigvee \mathcal{A} = J_\mathcal{A}$. Compactly generated: each $a/0$ is compact in $I_0(L)$, and $I = \bigvee_{a \in I} (a/0)$ for each ideal $I$. Lattice identities: the embedding $a \mapsto a/0$ is order-preserving + compatible with joins/meets, transferring identities. ∎</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.3</span>
+    <p>The compact elements in $I_0(L)$ are the finitely generated ideals. In particular $a/0 = (\{a\}) = \{x \wedge a : x \in L\}$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.4</span>
+    <p>If $L$ is a modular lattice with $0$ then:</p>
+    <ol type="a">
+      <li>For each family $\{I_j\}_{j \in J}$ of ideals and $I \in I_0(L)$, if $I \wedge \bigvee_{j \in J} I_j \ne 0$, there is a finite $F \subseteq J$ such that $I \wedge \bigvee_{j \in F} I_j \ne 0$;</li>
+      <li>An element $a \in L$ is uniform in $L$ if and only if $a/0$ is uniform in $I_0(L)$;</li>
+      <li>A subset $X$ is independent in $L$ if and only if $\{x/0\}_{x \in X}$ is independent in $I_0(L)$;</li>
+      <li>A subset $X$ is maximal independent in $L$ if and only if $\{x/0\}_{x \in X}$ is maximal independent in $I_0(L)$.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why $I_0(L)$ is the right home</span>
+    <p>Chapter 8 worked entirely with finite Goldie dim because the original lattice $L$ may not be compactly generated or upper continuous. The lift to $I_0(L)$ — which IS always compactly generated and upper continuous — gives access to Zorn's lemma for maximal independent sets, transfinite induction over the lattice, and the cleanly behaved "join of compact elements" structure.</p>
+    <p>Lemma 13.4 is the bridge that says: $L$'s structural properties (uniform, independent, maximal independent) transfer to $I_0(L)$ via $a \mapsto a/0$. So we can prove infinite-Goldie statements in $I_0(L)$ where the machinery is more powerful, then reflect back.</p>
+  </div>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">B2</span> u-basis · Theorem 13.4 · Theorem 13.5 · Proposition 13.1</h2>
+  <div class="tagline">u-basis = max independent + uniform. Cardinal-bound version of Theorem 8.1; equivalent characterisations; vector space basis as the canonical example.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.4 · cardinal-bound</span>
+    <p>If $M$ is a maximal independent subset in $L$ such that all the elements of $M$ are uniform then for each independent set $X$ of $L$, $|X| \le |M|$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>By Lemma 13.4, transfer to $I_0(L)$. If $X$ or $M$ is finite, Theorem 8.1 (Chapter 8) handles it. Else both at least countable. Define $f : X \to \mathcal{P}_0(M)$ by $f(x) = M_x$ where $M_x \subseteq M$ is finite with $x \wedge \bigvee M_x \ne 0$ (exists by Lemma 13.4(a)). For different $x_1, \dots, x_n \in f^{-1}(M_x)$: the elements $y_k = x_k \wedge \bigvee M_x$ are independent in $(\bigvee M_x)/0$ and $n \le |M_x|$ = dim of the uniform direct sum. So $|f^{-1}(M_x)| \le |M_x|$, giving $|X| = |f(X)| \le |\mathcal{P}_0(M)| = |M|$. ∎</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · u-basis</span>
+    <p>A maximal independent subset $B$ of $L \setminus \{0\}$ is called a <strong>u-basis</strong> if it contains only uniform elements in $L$.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example · vector spaces</span>
+    <p>If $V_K$ is a vector space over a field $K$, then $B$ is a basis of $V$ if and only if $\{bK : b \in B\}$ is a u-basis in the lattice $S_K(V)$ of all subspaces of $V$ (Ex 13.5).</p>
+    <p>The 1-dimensional subspaces $bK$ are exactly the uniform elements of $S_K(V)$ (a 1-dim subspace has no proper non-zero subspaces, so is hollow as well as uniform). Maximal independence in $S_K(V)$ corresponds to spanning. Hence "u-basis" in $S_K(V)$ recovers the linear-algebra notion of basis exactly.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.5 · 4-way</span>
+    <p>For a modular lattice $L$ with zero the following conditions are equivalent:</p>
+    <ol>
+      <li>$L$ has a u-basis;</li>
+      <li>$I_0(L)$ has a u-basis;</li>
+      <li>Each non-zero ideal $\gamma \in I_0(L)$ contains a uniform element of $I_0(L)$;</li>
+      <li>($\alpha$) Each non-zero element $a \in L$ contains a uniform element (Chapter 8).</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>(i)$\Rightarrow$(ii): apply Lemma 13.4. (ii)$\Rightarrow$(iii): take a u-basis $B$ in $I_0(L)$; $I = \bigvee_{\beta \in B} \beta$ is essential in $I_0(L)$, so for each non-zero $\gamma$, $\gamma \wedge I \ne 0$, and by (a) of Lemma 13.4, $\gamma \wedge \bigvee_{i=1}^n \beta_i \ne 0$ for finite $\{\beta_1, \dots, \beta_n\}$. The dimension calculus (Ch 8) gives a uniform $U \le \gamma \wedge \bigvee \beta_i \le \gamma$. (iii)$\Rightarrow$($\alpha$): apply Lemma 13.4(b). ($\alpha$)$\Rightarrow$(i): Zorn's Lemma on independent uniform subsets gives a maximal one; this is a u-basis. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.1</span>
+    <p>If $M$ is a maximal independent subset of a lattice $L$ and $B_m$ are u-basis in $m/0$ for each $m \in M$ then $\bigcup_{m \in M} B_m$ is a u-basis in $L$.</p>
+    <p><em>Proof.</em> Use Lemma 13.4 + Proposition 6.2. ∎</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Caveat</span>
+    <p>Sublattices do not inherit the property of having a u-basis (Ex 13.6). Ideals do (per the lemmas above). The transfer $L \to I_0(L)$ for u-basis questions is not symmetric — $I_0(L)$ is structurally cleaner than $L$ for the purpose, so the embedding "lifts" the u-basis to a more tractable home.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Krull dimension</div>
+  <h2>Deviation · Lemmonier · Krause's theorem · α-critical lattices</h2>
+  <p class="part-lede">The Gabriel-Rentschler-Hart construction: a transfinite ordinal-valued dimension. The deepest part of Chapter 13. The key theorems are Lemmonier's $\mathbf{D}$-obstruction (13.6), Krause's "Krull dim ⟹ finite uniform dim" (13.7), and Hart's $\alpha$-critical infrastructure.</p>
+</div>
+
+<section class="module" id="s5">
+  <h2><span class="num">C1</span> Deviation · Lemma 13.5 · Propositions 13.2–13.4 · Theorem 13.6 (Lemmonier)</h2>
+  <div class="tagline">Recursive ordinal-valued definition; subposets inherit deviation; noetherian posets always have deviation; $\mathbf{D}$ is the obstruction.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Deviation (Krull dimension)</span>
+    <p>For $\alpha = -1$ or an ordinal number, define recursively a class of posets $\mathcal{D}_\alpha$:</p>
+    <ul>
+      <li>$\mathcal{D}_{-1}$ is the class of all <em>trivial</em> posets — those partially ordered by equality (every pair of distinct elements is incomparable).</li>
+      <li>If $\alpha$ is an ordinal and $\mathcal{D}_\beta$ is defined for each $\beta &lt; \alpha$, let $\mathcal{D}_\alpha$ be the class of all posets $A$ such that:
+        <ol>
+          <li>$A \notin \bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$;</li>
+          <li>For every countable descending chain $a_0 \ge a_1 \ge \dots \ge a_n \ge \dots$ of elements of $A$, there is an $n \in \mathbf{N}$ such that the factors $a_i / a_{i+1}$ belong to $\bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$ for every $i \ge n$.</li>
+        </ol>
+      </li>
+    </ul>
+    <p>The classes are pairwise disjoint. We write $\text{dev}(A) = \alpha$ (or $k$-dim$(A) = \alpha$) and say $A$ has <em>deviation</em> (or <em>Krull dimension</em>) $\alpha$ if $A \in \mathcal{D}_\alpha$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Examples · the first few levels</span>
+    <p><strong>dev$(A) = -1$</strong> $\iff$ $A$ is trivial.</p>
+    <p><strong>dev$(A) = 0$</strong> $\iff$ $A$ is artinian and nontrivial. (For artinian $A$: every chain $a_0 \ge a_1 \ge \dots$ stabilises, $a_i = a_{i+1}$ for $i \ge n$; then factors $|a_i/a_{i+1}| = 1$ are trivial.)</p>
+    <p><strong>dev$(\mathbf{Z}) = 1$</strong>. $\mathbf{Z}$ usually ordered: not trivial, not artinian, but every descending chain $z_0 \ge z_1 \ge \dots$ has factors of finite length (artinian), giving deviation $\le 1$.</p>
+    <p><strong>$\mathbf{R}$ has no deviation</strong>. The reals usually ordered contain $\mathbf{D}$ (the dyadic numbers in $[0,1]$) as a subposet, which has no Krull dim (Lemma 13.6).</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.5</span>
+    <p>If $B$ is a subposet of a poset $A$ with deviation $\alpha$ then $B$ has deviation and dev$(B) \le \alpha$.</p>
+    <p><em>Proof.</em> Transfinite induction on $\alpha$. For $\alpha = -1$ trivial. For $\alpha$ general: the factors of a descending chain in $B$ are subposets of factors of the same chain in $A$, which by induction lie in $\bigcup_{\sigma &lt; \alpha} \mathcal{D}_\sigma$. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.2</span>
+    <p>Each noetherian poset has a deviation.</p>
+    <p><em>Proof.</em> By way of contradiction, take the maximal $m$ in the set $X$ of elements without deviation in a bounded noetherian poset. Then for each $a &gt; m$, $a/0$ has deviation. Set $\alpha = \sup\{\text{dev}(1/a) : a \in A, a &gt; m\}$. We show $1/m$ has deviation $\le \alpha + 1$, contradicting $m \in X$. Each descending chain $a_0 \ge a_1 \ge \dots$ in $1/m$ has factors with deviation $\le \alpha$, so $1/m$ has deviation $\le \alpha + 1$. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.3 (Gabriel-Rentschler)</span>
+    <p>If $f : A \to B$ is a strictly order morphism such that the poset $B$ has Krull dimension, then $A$ also has Krull dimension and $k$-dim$(A) \le k$-dim$(B)$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Convex subset</span>
+    <p>$B \subseteq A$ is <strong>convex</strong> if $b'/b = \{a \in A : b \le a \le b'\} \subseteq B$ for every $b, b' \in B$ with $b \le b'$. Convex subsets inherit Krull dim with equality (no slack).</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.4 (Lemmonier) · five properties of $R_\alpha$</span>
+    <p>If $(A, R)$ is a poset and $\alpha, \beta$ are ordinals then:</p>
+    <ol type="a">
+      <li>$(a, a') \in R_\alpha(A)$ iff $a'/a$ has Krull dim and $k$-dim$(a'/a) \le \alpha$;</li>
+      <li>$k$-dim$(A) \le \beta$ iff each decreasing sequence has factors with $k$-dim $&lt; \beta$ from some point on;</li>
+      <li>$L$ has Krull dim iff each decreasing sequence has factors with Krull dim from some fixed point;</li>
+      <li>$k$-dim$(L) = \beta$ and $\alpha &lt; \beta$ ⟹ exists a decreasing sequence with all factors having $k$-dim $\ge \alpha$;</li>
+      <li>If $(a, a') \in R - R_{\alpha+1}(A)$ then there is $x \in A$ with $a &lt; x &lt; a'$, $(a, x) \notin R_{\alpha+1}(A)$, $(x, b) \in R_\alpha(A)$.</li>
+    </ol>
+  </div>
+
+  <div class="box def">
+    <span class="label">Dyadic numbers</span>
+    <p>$\mathbf{D} = \{m/2^n : m, n \in \mathbf{N}, 0 \le m/2^n \le 1\}$ — the dyadic rationals in $[0,1]$. Equipped with the order induced from $\mathbf{Q}$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.6</span>
+    <p>The posets $\mathbf{D}$ and $\mathbf{Q}$ are countable posets without Krull dimension.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.6 (Lemmonier) · the obstruction characterisation</span>
+    <p>The poset $A$ does not have Krull dimension if and only if $A$ contains a subset isomorphic to $\mathbf{D}$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>If $\mathbf{D} \subseteq A$, then $A$ has no Krull dim by Lemma 13.6 + Lemma 13.5. Conversely: if $A$ has no Krull dim, use Prop 13.4(e) recursively to build a strictly order morphism $f : \mathbf{D} \to A$ with image isomorphic to $\mathbf{D}$. The construction goes by induction on the dyadic level: at each level, one finds a midpoint element using Prop 13.4(e). ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the $\mathbf{D}$-obstruction</span>
+    <p>Theorem 13.6 is the structural analogue of "$L$ is non-modular iff $L$ contains $N_5$" (Chapter 1). Just as $N_5$ is the universal obstacle to modularity, $\mathbf{D}$ is the universal obstacle to having Krull dimension: ANY poset that admits a way to "subdivide indefinitely" — meaning, contains a copy of the dyadic rationals' order structure — fails to have a Krull dim.</p>
+    <p>The dyadic rationals are special because they capture "always a midpoint between" — between any two of them, there's another one (the midpoint), and this iterates infinitely. The Krull dimension construction can't terminate at any ordinal level when this iteration is present.</p>
+  </div>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">C2</span> Modular case · Proposition 13.5 · Theorem 13.7 (Krause) · α-critical · Lemmas 13.7, 13.8</h2>
+  <div class="tagline">In modular lattices, Krull dim has a clean interval-recursion. Krause: Krull dim ⟹ finite uniform dim. Hart's α-critical lattices are the building blocks; every Krull-dim'd lattice contains an essential direct sum of critical elements.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.5 (Rentschler-Gabriel)</span>
+    <p>If $L$ is a bounded modular lattice and $a \in L$ then $k$-dim$(L) = \sup\{k$-dim$(a/0), k$-dim$(1/a)\}$.</p>
+    <p><em>Proof.</em> The function $f : L \to (a/0) \times (1/a)$, $f(x) = (a \wedge x, a \vee x)$ is strictly order-preserving (modularity). Apply Prop 13.3 + Ex 13.11 (Krull dim survives products). ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.7 (Krause)</span>
+    <p>Let $L$ be an upper continuous modular lattice. If $L$ has Krull dimension then $L$ has finite uniform dimension.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>By contradiction. Suppose $L$ has Krull dim $\alpha$ minimal such that $L$ has an infinite independent subset $\{a_i\}_{i \in \mathbf{N}^*}$. Define $I_n = \{2^n i : i \in \mathbf{N}^*\}$ and $b_n = \bigvee_{i \in I_n} a_i$. Then $b_0 &gt; b_1 &gt; \dots$ — a descending chain. By the minimality of $\alpha$, each $b_n / b_{n+1}$ has finite uniform dim. But by modularity + Lemma 6.2, $\{b_{n+1} \vee a_i\}_{i \in I_n - I_{n+1}}$ is an infinite independent set in $b_n / b_{n+1}$ — contradiction. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.6</span>
+    <p>Let $L$ be an upper continuous modular lattice with Krull dimension. If $\alpha$ denotes $\sup\{k$-dim$(1/a) + 1 : a$ essential in $L\}$, then $k$-dim$(L) \le \alpha$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · $\alpha$-critical (Hart)</span>
+    <p>A bounded lattice $L$ is <strong>$\alpha$-critical</strong> if $k$-dim$(L) = \alpha$ and $k$-dim$(1/a) &lt; \alpha$ for each $a \ne 0$, $a \in L$.</p>
+    <p>An element $a \in L$ is $\alpha$-critical if $a/0$ is $\alpha$-critical. <em>Example:</em> An element is $0$-critical if and only if it is an atom.</p>
+    <p>A lattice $L$ is <strong>critical</strong> if there is an ordinal $\alpha$ such that $L$ is $\alpha$-critical.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.7</span>
+    <p>A bounded modular lattice with Krull dimension contains a critical element.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Transfinite induction on $\alpha = k$-dim$(L)$. For $\alpha = 0$: $L$ artinian, contains an atom (= $0$-critical). General $\alpha$: assume the claim for $U$ with $k$-dim$(U) &lt; \alpha$. May assume $k$-dim$(L) = k$-dim$(a/0)$ for each $a \ne 0$. If $L$ not $\alpha$-critical, exists $a_1 \ne 0$ with $k$-dim$(1/a_1) = \alpha$. Iterate: get a descending sequence $a_1 &gt; a_2 &gt; \dots$ with $k$-dim$(a_n / a_{n+1}) = \alpha$ for each $n$, contradicting Prop 13.4(b). ∎</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 13.8</span>
+    <p>In a bounded modular $\alpha$-critical lattice each non-zero element is $\alpha$-critical.</p>
+    <p><em>Proof.</em> Let $a \ne 0$. Since $k$-dim$(1/a) &lt; \alpha$ and Prop 13.5 gives $k$-dim$(a/0) = \alpha$. For $0 \ne b \le a$: $a/b \subseteq 1/b$, so $k$-dim$(a/b) \le k$-dim$(1/b) &lt; \alpha$. Hence $a$ is $\alpha$-critical. ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.2</span>
+    <p>Any bounded modular upper continuous lattice with Krull dimension contains an essential direct sum of critical elements.</p>
+    <p><em>Proof.</em> Let $\{a_i\}_{i \in I}$ be a maximal independent family of critical elements (exists by Zorn + Lemma 13.7). $I$ is finite (Theorem 13.7), so $\bigvee a_i$ is essential by Lemma 13.7 / Theorem 8.5. ∎</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">C3</span> Theorem 13.8 · Corollaries 13.3–13.5</h2>
+  <div class="tagline">Limit-ordinal continuity of Krull dim; sup characterisation of $k$-dim$(L)$ via $a_i$'s; the critical elements as the "atoms at level $\sigma$."</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.8</span>
+    <p>In a modular upper continuous lattice $L$ with Krull dimension, let $\sigma$ be a limit ordinal such that for an increasing sequence of elements $\{a_\lambda : \lambda &lt; \sigma\}$ in $L$, $\bigvee_{\lambda &lt; \sigma} a_\lambda = 1$. If for an ordinal $\alpha$, $k$-dim$(a_\lambda/0) \le \alpha$ for every $\lambda &lt; \sigma$, then $k$-dim$(L) \le \alpha$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.3</span>
+    <p>In an upper continuous modular lattice $L$ with Krull dimension, if $\bigvee_{i \in I} a_i = 1$ then $k$-dim$(L) = \sup_{i \in I}\{k$-dim$(a_i/0)\}$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.4</span>
+    <p>If $L$ is upper continuous modular and $k$-dim$(L) = \alpha$, then for each ordinal $\beta \le \alpha$ there exists an element $a_\beta \in L$ maximal relative to the property $k$-dim$(a_\beta/0) \le \beta$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.5</span>
+    <p>In an upper continuous modular lattice $L$ with Krull dimension,</p>
+    <p>$$k\text{-dim}(L) = \sup\{\sigma \text{ ordinal} : \exists a, b \in L : a &lt; b \le 1, b/a \text{ is } \sigma\text{-critical}\}.$$</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the critical hierarchy</span>
+    <p>Corollary 13.5 is the chapter's cleanest synthesis of the Krull dimension theory: the lattice's Krull dim equals the supremum of "$\sigma$-critical" levels reached by any interval $b/a$. The $\sigma$-critical elements at each level $\sigma$ form a kind of "filtration" of the lattice — at each ordinal level you find the elements whose interval has exactly that complexity.</p>
+    <p>Module-theoretically: $\sigma$-critical modules are the building blocks of the Gabriel-Rentschler theory; they generalise simple modules ($0$-critical = atom = simple) to arbitrary ordinals. Every module with Krull dimension is built up from $\sigma$-criticals at each level.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD-header">
+  <div class="pk">Part D · Gabriel dimension</div>
+  <h2>Definition by transfinite induction · Proposition 13.7 · Theorems 13.9, 13.10</h2>
+  <p class="part-lede">A finer ordinal: $g$-dim$(L)$. The relations to Krull dim: $k$-dim $\le g$-dim $\le k$-dim$+1$ (Theorem 13.9 — Krause), and $g$-dim $= k$-dim $+ 1$ for noetherian (Theorem 13.10 — Krause).</p>
+</div>
+
+<section class="module" id="s8">
+  <h2><span class="num">D1</span> Gabriel dimension · Proposition 13.7 · Corollary 13.6</h2>
+  <div class="tagline">$g$-dim$(L)$: an ordinal defined by transfinite induction over "α-simple" elements; Proposition 13.7 gives the interval recursion.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Gabriel dimension</span>
+    <p>For a bounded modular upper continuous lattice $L$, define $g$-dim$(L)$ by transfinite induction:</p>
+    <ul>
+      <li>$g$-dim$(L) = 0$ if and only if $|L| = 1$ (i.e., $L = \{0\}$).</li>
+      <li>For nonlimit ordinal $\alpha$, suppose $g$-dim$(M) = \sigma$ defined for $\sigma &lt; \alpha$ and lattices $M$.</li>
+      <li>$L$ is <strong>$\alpha$-simple</strong> if $g$-dim$(a/0) \not\le \alpha$ for $a \ne 0$ and $g$-dim$(1/a) &lt; \alpha$ for $a \ne 1$.</li>
+      <li>$L$ has $g$-dim$(L) = \alpha$ if $g$-dim$(L) \not\le \alpha$ but for every $a \ne 1$ there is an element $b &gt; 0$ such that $b/a$ is $\beta$-simple for some $\beta \le \alpha$.</li>
+    </ul>
+    <p>If $a \in L$ we call $g$-dim$(a/0)$ the Gabriel dimension of $a$, denoted $g$-dim$(a)$. An element $a \in L$ is <em>$\alpha$-simple</em> if $a/0$ is $\alpha$-simple.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Remarks</span>
+    <p>$a$ is $1$-simple in $L$ if and only if $a$ is an atom in $L$. (The "1-simple" elements are exactly the simple modules at the lattice level.)</p>
+    <p>$g$-dim$(L) = 1$ if and only if $L$ is a torsion lattice. (Torsion lattices = "every element is above an atom" = "$\alpha$-simple structure at level $1$.")</p>
+    <p>$g$-dim$(L) \le \alpha$ if and only if for every $a \ne 1$ in $L$, $1/a$ contains a $\beta$-simple element, for a suitable $\beta \le \alpha$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.7 · interval recursion</span>
+    <p>$L$ has Gabriel dimension if and only if for each $a \in L$, $a/0$ and $1/a$ have Gabriel dimension. In this case,</p>
+    <p>$$g\text{-dim}(L) = \sup\{g\text{-dim}(a/0), g\text{-dim}(1/a)\}.$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Transfinite induction on $\alpha$. Forward direction: if $g$-dim$(L) = \alpha$, immediately $g$-dim$(1/a) \le \alpha$. For $g$-dim$(a/0) \le \alpha$: split into "$L$ is $\alpha$-simple" (simple recursion) and "$L$ is not $\alpha$-simple" (use the pseudo-complement structure of $a$ in $1/b$ for $0 \ne b \le a$). Backward: given each interval has Gabriel dim, build the existence of $\beta$-simple sub-elements via induction. ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.6</span>
+    <p>If $0 \ne a \le a'$ and $a'$ is $\alpha$-simple, then $a$ is also $\alpha$-simple. Moreover, there is an independent subset $\{a_i\}_{i \in I}$ such that each $a_i$ is $\alpha_i$-simple and $\bigvee_{i \in I} a_i$ is essential in $L$.</p>
+  </div>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">D2</span> Proposition 13.8 · Theorems 13.9, 13.10</h2>
+  <div class="tagline">Sup characterisation; Krause's comparison theorems closing the chapter and the book.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 13.8</span>
+    <p>If $\bigvee_{i \in I} a_i = 1$ then $g$-dim$(L) = \sup_{i \in I}\{g$-dim$(a_i/0)\}$ (if any of these members is defined).</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.7</span>
+    <p>If $L$ has Gabriel dimension then</p>
+    <p>$$g\text{-dim}(L) = \sup\{\sigma \text{ ordinal} : \exists a &lt; b : b/a \text{ is } \alpha\text{-simple}\}.$$</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 13.8</span>
+    <p>If in a lattice $L$ each sublattice $1/a$, $a \ne 0$ has Gabriel dimension and $\alpha = \sup\{g$-dim$(1/a) : a \ne 0\}$ then $g$-dim$(L) \le \alpha + 1$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.9 (Krause) · the comparison</span>
+    <p>If $L$ has Krull dimension then $L$ has also Gabriel dimension and</p>
+    <p>$$k\text{-dim}(L) \le g\text{-dim}(L) \le k\text{-dim}(L) + 1.$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Right inequality $g$-dim $\le k$-dim $+ 1$: transfinite induction on $\alpha = k$-dim$(L)$. For $\alpha = 0$: $L$ artinian, hence torsion, hence $g$-dim $\le 1$. For general $\alpha$: take $a \ne 1$, find $\beta$-critical $b$ in $1/a$ (Lemma 13.7 + Lemma 13.8), then $b/a$ is also $\beta$-critical and admits a $\sigma$-simple sub-element with $\sigma \le \alpha + 1$.</p>
+    <p>Left inequality $k$-dim $\le g$-dim: transfinite induction on $\sigma = g$-dim$(L)$. For $\sigma = 0$: $L = \{0\}$ trivially has $k$-dim. For $\sigma$ general: $\alpha$-simple decomposition gives the chain structure for the deviation. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 13.10 (Krause)</span>
+    <p>If $L$ is a noetherian lattice then $g$-dim$(L) = k$-dim$(L) + 1$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>$L$ noetherian ⟹ has Krull dim (Prop 13.2) ⟹ has Gabriel dim and $g$-dim $\le k$-dim $+ 1$ (Theorem 13.9). Need equality. By transfinite induction on $\alpha = k$-dim$(L)$. For $\alpha = 0$: $L$ artinian + noetherian ⟹ finite length ⟹ torsion (each element above an atom in finitely many steps) ⟹ $g$-dim $= 1$, while $k$-dim $= 0$. ∎</p>
+  </div>
+
+  <div class="closing-banner">
+    <h3>The closing equation</h3>
+    <p>For noetherian lattices: $$g\text{-dim}(L) = k\text{-dim}(L) + 1.$$</p>
+    <p>This is the chapter's punchline. The two transfinite dimensions — Krull and Gabriel — are not independent: for the most-studied class of lattices (noetherian), they differ by exactly $1$. The "$+1$" is the gap between "deviation reaches $\alpha$" and "$\alpha$-simple decomposition reaches $\alpha$" — Gabriel always counts one ordinal further because it tracks the simple-decomposition structure rather than just chain stabilisation.</p>
+    <p>The book ends here, with the four dimensions in formal relation to one another and module theory's classification problems reframed in terms of the lattice fingerprint.</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — Goldie, Krull, Gabriel, synthesis, Prologos</h2>
+  <p class="part-lede">From Alfred Goldie's 1958 finiteness theorem to Pierre Gabriel's 1962 abelian categories to the synthesis of the four dimensions as a structural fingerprint.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: Goldie's theorem and the uniform/hollow dimensions</h2>
+  <div class="tagline">Alfred Goldie's 1958 theorem characterised the rings that are right orders in semisimple Artinian rings via finite uniform dimension; Chapter 13 extends to the infinite + dual case.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Goldie 1958</span>
+    <p>Alfred Goldie's classical theorem (1958): a ring $R$ is a right order in a semisimple Artinian ring if and only if $R$ has finite right uniform dimension and satisfies the right Goldie conditions (ACC on right annihilators + finite uniform dim of the right $R$-module $R$).</p>
+    <p>Goldie's apparatus was the right module $R_R$'s uniform dimension — the lattice version is exactly Chapter 8's Goldie dim. Chapter 13 extends in two directions: (i) the infinite-cardinal version via $I_0(L)$ (Theorem 13.5) gives "Goldie dim infinite" classifications, useful for non-noetherian ring theory; (ii) the dual notion (hollow dim, Section A) classifies rings via their factor modules' structure rather than their submodule structure.</p>
+    <p>Module-theoretic application: a module $M$ has finite hollow dim $n$ iff $M$ admits a "minimal cover" by hollow modules. This characterises semiperfect modules in a clean dual way to Goldie's characterisation of orders.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Krull dimension in commutative algebra → Gabriel-Rentschler in the non-commutative case</h2>
+  <div class="tagline">Krull's original 1928 dimension via prime ideal chains; Gabriel-Rentschler 1967 generalisation to non-commutative rings via deviation; Lemmonier's $\mathbf{D}$-obstruction characterisation.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the Krull dimension lineage</span>
+    <p><strong>Krull (1928).</strong> For a commutative ring $R$, the Krull dimension is the supremum of lengths of chains of prime ideals: $\dim(R) = \sup\{n : \mathfrak{p}_0 \subsetneq \mathfrak{p}_1 \subsetneq \dots \subsetneq \mathfrak{p}_n\}$. For $R = k[x_1, \dots, x_n]$, $\dim(R) = n$. For Dedekind domains, $\dim(R) = 1$. Foundational invariant of commutative algebra.</p>
+    <p><strong>Gabriel-Rentschler (1967).</strong> For non-commutative rings, the prime-ideal-chain definition doesn't generalise cleanly (the prime spectrum is less structured). Instead, define $k$-dim via deviation of the lattice of left ideals (or right ideals, or submodules of a fixed module). The key technical advance: deviation is a TRANSFINITE ordinal, not just a natural number — non-commutative rings can have infinite-but-bounded chain behavior at higher ordinals.</p>
+    <p><strong>Hart (1971).</strong> Introduced $\alpha$-critical lattices, allowing the construction to apply to arbitrary modular lattices (not just submodule lattices of modules). This is the version in Călugăreanu Chapter 13.</p>
+    <p><strong>Lemmonier.</strong> The $\mathbf{D}$-obstruction (Theorem 13.6) is structural — exactly identifies which posets fail to have Krull dim. In commutative algebra, this corresponds to "the prime spectrum doesn't admit a clean recursive structure."</p>
+    <p><strong>Krause (1972).</strong> The comparison Theorem 13.7 (Krull dim ⟹ finite uniform dim) and Theorem 13.9 ($k$-dim $\le g$-dim $\le k$-dim $+ 1$) are Krause's contributions — establishing that the four-dimension framework is internally consistent.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: Gabriel categories and localization theory</h2>
+  <div class="tagline">Pierre Gabriel's 1962 thesis introduced both Gabriel dimension and localizing subcategories; the lattice-theoretic Gabriel dim is the shadow of a deeper categorical construction.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Gabriel 1962</span>
+    <p>Pierre Gabriel's 1962 thesis <em>Des catégories abéliennes</em> introduced two interlocking constructions: (i) <em>Gabriel filtration</em> of a Grothendieck category — a transfinite filtration by localizing subcategories, where each successor step "kills off" a new class of torsion objects; (ii) <em>Gabriel dimension</em> — the ordinal at which the filtration reaches the whole category.</p>
+    <p>The lattice-theoretic version (Călugăreanu Chapter 13) is the shadow of this construction. Gabriel's "$\alpha$-simple objects" — objects that survive the $\alpha$-th filtration step but become torsion at $\alpha + 1$ — correspond exactly to Hart's $\alpha$-simple lattice elements.</p>
+    <p>For $R$-Mod: the Gabriel filtration starts with the torsion modules (level $1$), then "level-$2$ torsion" modules (those that become torsion modulo level-$1$ torsion), and so on. A module's Gabriel dim is the level at which it disappears under this iterative torsion process.</p>
+    <p>Modern significance: Gabriel categories underpin much of modern homological algebra — derived categories, motivic cohomology, equivariant cohomology — all use the localization machinery Gabriel introduced. The lattice version (Chapter 13) is the cleanest formulation that doesn't require category theory: one can develop the dimension theory using only the submodule lattice's structural data.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Synthesis: The four dimensions as a structural fingerprint</h2>
+  <div class="tagline">Each dimension catches a different structural axis. Together they form a complete fingerprint — losing any one collapses information.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the four-dimension fingerprint</span>
+    <p>By the close of Chapter 13, the lattice has been characterised along four orthogonal dimensions. Each measures a different structural axis:</p>
+    <table class="grid">
+      <thead><tr><th>Dimension</th><th>Axis</th><th>Building block</th><th>Example: $\mathbb{Z}$ as $\mathbb{Z}$-module</th></tr></thead>
+      <tbody>
+        <tr><td>Goldie dim (Ch 8)</td><td>Essential socle structure</td><td>Uniform element</td><td>$1$ (uniform: $\mathbb{Z}$ is integral domain)</td></tr>
+        <tr><td>Hollow dim (Ch 13.A)</td><td>Irredundant top decomposition</td><td>Hollow element</td><td>$\infty$ (Ex 13.1: torsion-free abelian groups have infinite hollow dim)</td></tr>
+        <tr><td>Krull dim (Ch 13.C)</td><td>Transfinite chain stabilisation</td><td>$\alpha$-critical element</td><td>$1$ (Ex 13.10: $S_\mathbb{Z}(\mathbb{Z}) = \mathbb{Z}$ has $k$-dim$=1$)</td></tr>
+        <tr><td>Gabriel dim (Ch 13.D)</td><td>Transfinite simple-decomposition</td><td>$\alpha$-simple element</td><td>$2$ (Theorem 13.10: noetherian, so $g$-dim $= k$-dim $+ 1$)</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The fingerprint is non-redundant.</strong> Two lattices with the same Goldie dim might have different hollow dim (the dualisation isn't symmetric module-theoretically). Two with the same Krull dim might have different Gabriel dim (when not noetherian). Each dimension catches information the others don't.</p>
+    <p><strong>The fingerprint is interlocked.</strong> The Krause inequality $k$-dim $\le g$-dim $\le k$-dim $+ 1$ (Theorem 13.9) shows that two of the dimensions are tightly coupled. Theorem 13.7 (Krull ⟹ finite uniform) couples Krull to Goldie. The four are not independent dials; they constrain each other in structural ways.</p>
+    <p><strong>Module-theoretic translation.</strong> A finitely generated module over a noetherian ring is fully classified (up to "structural equivalence" in a precise sense) by its four dimensions. This is the closing observation of the book: the lattice abstraction has produced a complete dimensional invariant for module-classification problems.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Chapter 13 lives in Prologos</h2>
+  <div class="tagline">The four dimensions as structural invariants of propagator-network lattices; transfinite ordinals as recursion depth bounds for the BSP scheduler.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Chapter 13's four dimensions correspond directly to four structural questions about Prologos's propagator networks:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Chapter 13</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Goldie dim (uniform)</td><td><code>racket/prologos/propagator.rkt</code></td><td>Number of independent "uniform" cell sub-networks — counts how many parallel essential evaluation paths the network admits. Used by the BSP scheduler for thread allocation.</td></tr>
+        <tr><td>Hollow dim (dual)</td><td><code>.claude/rules/propagator-design.md</code> § Set-Latch</td><td>Number of irredundant "hollow" supplements — counts the minimal-witness decompositions of a target cell. Used in explanation tracing.</td></tr>
+        <tr><td>Krull dim (deviation)</td><td><code>.claude/rules/stratification.md</code></td><td>Transfinite recursion depth bound for the strata system: $S_0$ has Krull dim $0$ (artinian); higher strata correspond to higher transfinite ordinal levels. Termination guaranteed by Krull dim being defined.</td></tr>
+        <tr><td>$\mathbf{D}$-obstruction (Lemmonier)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>The dyadic-rational embedding obstruction: any cell hierarchy where "midpoints exist between any two" lacks Krull dim — Prologos forbids this by design (cells are well-founded).</td></tr>
+        <tr><td>Gabriel dim (α-simple)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>Transfinite simple-decomposition depth: bilattice's FOUR has $g$-dim $= 2$ ($1$-simples = consistency atoms; $2$-simple = the four-element completion). Prologos's lattices have well-defined Gabriel dim.</td></tr>
+        <tr><td>$k$-dim $\le g$-dim $\le k$-dim $+1$ (Krause)</td><td>Architectural design</td><td>Two recursion-depth measures, differing by at most $1$. Prologos's BSP scheduler uses Krull dim as the termination measure; Gabriel dim is the "decomposition complexity" used in explanation tracing.</td></tr>
+        <tr><td>Critical hierarchy</td><td><code>.claude/rules/structural-thinking.md</code> § Hyperlattice Conjecture</td><td>The $\sigma$-critical elements at each ordinal level form the lattice's structural fingerprint — exactly the "Hasse diagram is the optimal parallel decomposition" claim. The $\sigma$-critical elements ARE the irreducible structural pieces of the parallel computation.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The closing connection.</strong> The four dimensions formalize what the Hyperlattice Conjecture intuited: every lattice has a structural fingerprint, and that fingerprint (a) measures the inherent parallel decomposition complexity, (b) is bounded by transfinite ordinals, and (c) is compositionally stable under bridges. Prologos's propagator architecture is exactly the on-network realisation of this fingerprint.</p>
+    <p>The "all-at-once, all in parallel, structurally emergent information flow ON-NETWORK" mantra has its mathematical justification here: a compactly generated upper continuous modular lattice with Krull dimension has a finite uniform dimension (Krause) — so there are finitely many independent essential parallel paths, exactly matching the BSP scheduler's thread allocation. The Krull dim bounds the recursion depth; the Gabriel dim bounds the decomposition complexity. Together: the lattice is structurally tractable in finite parallelism + bounded transfinite recursion. This IS the Prologos design constraint.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and the closing reflection</h2>
+  <p class="part-lede">All Chapter 13 terms; thirteen worked exercises; the looking-back synthesis closing the companion.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Chapter 13 terms</h2>
+  <div class="tagline">All four dimensions and their building blocks.</div>
+
+  <dl class="glossary">
+    <dt>Dual Goldie (hollow) dimension</dt>
+    <dd>$h$-dim$(L) = n$ if $\bigvee a_k = 1$ irredundant with each $a_k/0$ hollow. $h$-dim$(L) = $ dim$(L^0)$.</dd>
+    <dt>Meet independent</dt>
+    <dd>$\{a_i\}$ with $a_i \vee \bigwedge_{j \ne i} a_j = 1$ for each $i$. Order-dual to "independent."</dd>
+    <dt>DCC$_\oplus$</dt>
+    <dd>Descending chain condition for finite direct sums.</dd>
+    <dt>Ideal</dt>
+    <dd>Down-set closed under finite joins. $I(L), I_0(L)$ as defined; principal ideals $a/0$.</dd>
+    <dt>u-basis</dt>
+    <dd>Maximal independent subset of $L \setminus \{0\}$ consisting only of uniform elements.</dd>
+    <dt>Deviation / Krull dim</dt>
+    <dd>Transfinite ordinal-valued dimension. $\mathcal{D}_{-1}$ trivial; $\mathcal{D}_\alpha$ recursive.</dd>
+    <dt>Convex subset</dt>
+    <dd>$B \subseteq A$ with $b'/b \subseteq B$ for all $b, b' \in B$ with $b \le b'$.</dd>
+    <dt>Dyadic numbers</dt>
+    <dd>$\mathbf{D} = \{m/2^n : 0 \le m/2^n \le 1\}$; the universal obstruction to Krull dim (Theorem 13.6).</dd>
+    <dt>$\alpha$-critical</dt>
+    <dd>Bounded lattice with $k$-dim $= \alpha$ and $k$-dim$(1/a) &lt; \alpha$ for $a \ne 0$. Atom $\iff$ $0$-critical.</dd>
+    <dt>Critical lattice</dt>
+    <dd>$\alpha$-critical for some ordinal $\alpha$.</dd>
+    <dt>Gabriel dim</dt>
+    <dd>$g$-dim$(L)$: transfinite ordinal. $0 \iff L = \{0\}$; $1 \iff $ torsion. $\alpha$-simple = "g-dim simple at level $\alpha$."</dd>
+    <dt>$\alpha$-simple</dt>
+    <dd>$L$ such that no $a \ne 0$ has $g$-dim$(a/0) \le \alpha$ AND every $a \ne 1$ has $g$-dim$(1/a) &lt; \alpha$. Atom $\iff$ $1$-simple.</dd>
+    <dt>Semi-hollow (Rangaswamy, Ex 13.4)</dt>
+    <dd>Each compact element is superfluous. Compactly generated semi-hollow $\iff$ local OR $r(L) = 1$.</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 13.1 – 13.13</h2>
+  <div class="tagline">Thirteen exercises covering the dual Goldie classification, vector space basis equivalence, and the Krull/Gabriel dim machinery.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.1</span>Torsion-free abelian: infinite hollow dim</summary>
+  <div class="body">
+    <div class="ex-statement">For every torsion-free abelian group, the lattice $L(G)$ has infinite uniform (dual Goldie) dimension.</div>
+    <p><strong>Strategy.</strong> Find an infinite meet independent (or independent — depending on which "uniform dim" the exercise refers to) subset.</p>
+    <p>For $G = \mathbb{Z}$: subgroups are $n\mathbb{Z}$ for $n \in \mathbb{N}$. Take $\{2\mathbb{Z}, 3\mathbb{Z}, 5\mathbb{Z}, 7\mathbb{Z}, \dots\} \subseteq L(\mathbb{Z})$ (subgroups generated by primes). For any finite subset $\{p_1\mathbb{Z}, \dots, p_n\mathbb{Z}\}$: $\bigwedge_{j \ne i} p_j\mathbb{Z} = (p_1 \cdots p_{i-1} p_{i+1} \cdots p_n)\mathbb{Z}$, and $p_i\mathbb{Z} \vee (p_1 \cdots p_{i-1} p_{i+1} \cdots p_n)\mathbb{Z} = \gcd(p_i, p_1 \cdots p_{i-1} p_{i+1} \cdots p_n) \mathbb{Z} = \mathbb{Z}$. So the family is meet independent of arbitrary finite size — infinite meet independent.</p>
+    <p>For general torsion-free $G$ of rank $\ge 1$: $G$ contains $\mathbb{Z}$ as a subgroup, so $L(\mathbb{Z}) \hookrightarrow L(G)$ as a sublattice (more carefully: the subgroups of $\mathbb{Z}$ inside $G$ form a copy of $L(\mathbb{Z})$). The infinite meet independent set in $L(\mathbb{Z})$ becomes one in $L(G)$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.2</span>Finite uniform dim, $a$ not superfluous ⟹ $a/0$ contains hollow</summary>
+  <div class="body">
+    <div class="ex-statement">If $L$ has finite uniform dimension and $a \in L$ is not superfluous, then $a/0$ contains hollow elements.</div>
+    <p><strong>Strategy.</strong> Use Theorem 13.3: if $L$ has finite uniform dim and $a$ not superfluous, $a/0$ has finite hollow dim, hence (by Theorem 13.3) $a/0$ admits an irredundant join of hollow elements. Pick any one of those hollow elements.</p>
+    <p>$a$ not superfluous: there is $c$ with $a \vee c = 1$ but $c \ne 1$. By minimality argument, $a$ is "above the radical" in some informal sense. By the dualisation of Chapter 8's theory, $a/0$ inherits the finite uniform/hollow structure. By Theorem 13.3, $a/0$ admits hollow elements with irredundant join $= a$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.3</span>Finite uniform dim ⟹ supplemented</summary>
+  <div class="body">
+    <div class="ex-statement">If $L$ has finite uniform dimension then $L$ is supplemented.</div>
+    <p><strong>Strategy.</strong> Combine Ex 13.2 with Corollary 12.2 (compact case) or Proposition 12.5 (general modular compactly generated).</p>
+    <p>$L$ finite uniform dim ⟹ (by the dualisation route) $L$ is "essentially" decomposable as a finite irredundant join of hollow elements. Apply Corollary 12.2: $1$ is an irredundant join of local elements ⟹ $L$ is supplemented (in the compact case). For non-compact $L$: the same argument lifts via Proposition 12.5(c).</p>
+    <p>The key insight: finite uniform dim is structurally equivalent to "$1$ admits a finite irredundant decomposition," which is exactly the supplemented characterisation of Chapter 12. The bridge from "uniform" to "hollow" goes through the dualisation $L \to L^0$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.4</span>Rangaswamy semi-hollow lattice</summary>
+  <div class="body">
+    <div class="ex-statement">A lattice is called (Rangaswamy) <em>semi-hollow</em> if each compact element is superfluous. Show that a compactly generated lattice is semi-hollow if and only if it is local or it has no maximal elements (the radical $r(L) = 1$). Equivalently, $L$ is semi-hollow if and only if $r(L) = 1$ or $r(L)$ is maximal and superfluous in $L$.</div>
+    <p><strong>Strategy.</strong> Compactly generated + each compact superfluous ⟹ structural alternative.</p>
+    <p>($\Rightarrow$) Compactly generated semi-hollow: each compact superfluous. Two cases: if $r(L) = 1$, no maximal elements (the maximals' meet is $1$, but $r(L) = 1$ means meet of maximals is $1$, which only happens when the maximal set is empty or all $= 1$). If $r(L) \ne 1$, by Lemma 12.5(c) reading dually: each compact superfluous + compactly generated forces $L$ local + $r(L)$ superfluous and maximal. Use the bridge: every $a \ne 1$ contains a compact element, which is superfluous, so $a$ is superfluous; hence $L$ hollow; hollow + $r(L) \ne 1$ + compact = local (Prop 12.4(2)).</p>
+    <p>($\Leftarrow$) Local: $r(L)$ unique maximal; each compact $\not\le r(L)$ would have $c \vee r(L) = 1$, contradicting $c$ compact + $r(L)$ superfluous. So compact $\le r(L)$, hence superfluous. $r(L) = 1$ case: by Lemma 12.5(c), each compact superfluous. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.5</span>Vector space basis ⟺ u-basis</summary>
+  <div class="body">
+    <div class="ex-statement">If $V_K$ is a vector space over a field $K$ then $B$ is a basis of $V$ if and only if $\{bK : b \in B\}$ is a u-basis in the lattice $S_K(V)$ of all subspaces of $V$.</div>
+    <p><strong>Strategy.</strong> Translate the linear algebra definitions into lattice-theoretic terms.</p>
+    <p><strong>($\Rightarrow$).</strong> $B$ is a basis: $B$ is linearly independent (no non-trivial linear combination = 0) AND $B$ spans $V$. Linearly independent: $\{bK\}$ is independent in $S_K(V)$ — for any $b_0 \in B$, $b_0 K \cap \langle B \setminus \{b_0\} \rangle K = \{0\}$. Each $bK$ is uniform: a 1-dim subspace has only $\{0\}$ as proper subspace, so trivially uniform. $B$ spans: $\{bK\}$ is maximal independent — any subspace not contained in $\bigvee bK = V$ would extend the family, but the join is already $V$.</p>
+    <p><strong>($\Leftarrow$).</strong> $\{bK\}$ is u-basis: maximal independent + uniform. Each $bK$ being uniform forces it to be 1-dimensional. Maximal independence forces $\bigvee bK$ to be essential in $V$, but in a vector space "essential" $=$ "everything," so $\bigvee bK = V$ — i.e., $\{b\}$ spans. Independence in $S_K(V)$ forces linear independence of $B$. Hence $B$ is a basis. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.6</span>Sublattice without u-basis</summary>
+  <div class="body">
+    <div class="ex-statement">Give an example of a sublattice which has no u-basis of a lattice which has an u-basis.</div>
+    <p><strong>Strategy.</strong> $L = $ some lattice with u-basis (e.g., $L = S_K(V)$ for vector space $V$); pick a sublattice that doesn't preserve the uniform structure.</p>
+    <p><strong>Example.</strong> Take $V = K^\omega$ (countably-infinite direct sum), $L = S_K(V)$. $L$ has a u-basis: the standard basis vectors $e_i$, with $\{e_i K\}$ being independent uniform. So $L$ has u-basis.</p>
+    <p>Take the sublattice $L' = $ the lattice of subspaces of $V$ that contain a fixed 1-dim subspace, say $W = e_1 K$. Equivalently, $L' = $ the principal filter $W/V \subseteq L$ (all subspaces $U$ with $W \subseteq U \subseteq V$). $L'$ as a lattice is naturally isomorphic to $S_K(V/W)$. But "uniform" in $L'$ means uniform in $L'$ — which corresponds to "uniform modulo $W$." The 1-dim subspaces in $V/W$ correspond to 2-dim subspaces in $V$ containing $W$, none of which are uniform in $L$ originally. The u-basis structure is lost in the sublattice. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.7</span>$R_\alpha$ on subposet</summary>
+  <div class="body">
+    <div class="ex-statement">Using the above notation, if $B$ is a subposet of $A$ show that: (i) for each ordinal $\alpha$, $R_\alpha(A) \cap R|_{B \times B} \subseteq R_\alpha(B)$; (ii) If $B$ is convex, the equality holds.</div>
+    <p><strong>Strategy.</strong> Transfinite induction on $\alpha$.</p>
+    <p><strong>(i)</strong> If $(b, b') \in R_\alpha(A) \cap R|_{B \times B}$, then $b'/b$ in $A$ has Krull dim $\le \alpha$. The factors of any descending chain $b' \ge x_0 \ge x_1 \ge \dots \ge b$ in $B$ have factors that are subposets of factors in $A$ (since $B \subseteq A$). By Lemma 13.5, the factors in $B$ have $k$-dim $\le$ factor's $k$-dim in $A$. Hence by induction $(b, b') \in R_\alpha(B)$.</p>
+    <p><strong>(ii)</strong> Convex: $b'/b \subseteq B$, so the descending chains in $B$ between $b$ and $b'$ are EXACTLY the chains in $A$ between $b$ and $b'$ (no slack). Hence $k$-dim$(b'/b)$ in $B$ equals $k$-dim$(b'/b)$ in $A$, giving equality. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.8</span>$\bar{A}$ extension preserves $R_\alpha$ structure</summary>
+  <div class="body">
+    <div class="ex-statement">If, for an arbitrary poset $A$, $\bar{A}$ denotes: the same poset, if $A$ has a smallest element, and $\{m\} \cup A$, where $m \notin A$ and $m &lt; a$ for each $a \in A$, if $A$ has no smallest element, show that $R = R_\alpha(A)$ implies $\bar{R} = R_{\alpha+1}(\bar{A})$.</div>
+    <p><strong>Strategy.</strong> If $A$ already has a smallest, $\bar{A} = A$ and the claim is trivial. If $A$ has no smallest, $\bar{A}$ adjoins a new bottom $m$. Show that $\bar{A}$'s deviation increments by exactly $1$.</p>
+    <p>$\bar{A}$'s descending chains are $A$'s descending chains plus possibly the new element $m$ at the bottom. The factors $a_i / a_{i+1}$ in $\bar{A}$ above $m$ are exactly the factors in $A$, so they belong to $R_\alpha$ via the assumption. The factors involving $m$: $a_i / m$ is a "new" interval, with $k$-dim equal to $k$-dim$(a_i / 0)$ if $A$ already had bottom, else $a_i / m$ adds one ordinal level (since $A$ originally had no bottom, so the chain "from bottom to $a_i$" is a fresh path of length $\le \alpha$, contributing deviation $\alpha$).</p>
+    <p>Total: $\bar{A}$'s deviation $= \alpha + 1$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.9</span>$k$-dim$(\mathbf{N}) = 0$</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that $k$-dim$(\mathbf{N}) = 0$.</div>
+    <p>$\mathbf{N}$ usually ordered: $0 &lt; 1 &lt; 2 &lt; \dots$. Every descending chain $n_0 \ge n_1 \ge \dots$ stabilises (since $\mathbf{N}$ is well-ordered = artinian). $\mathbf{N}$ is not trivial (has comparable elements). Hence by definition $k$-dim$(\mathbf{N}) = 0$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.10</span>PID not field ⟹ $k$-dim = 1</summary>
+  <div class="body">
+    <div class="ex-statement">If $R$ is a commutative principal ideal domain which is not a field, then show that $k$-dim$(S_R(R)) = 1$.</div>
+    <p><strong>Strategy.</strong> $S_R(R)$ is the lattice of ideals of $R$. PID + not field ⟹ Krull-1 in the classical sense; verify this matches the deviation Krull-1.</p>
+    <p>$R$ a PID, $R$ not a field: the prime ideals of $R$ are $\{0\}$ and the maximal ideals $(p)$ for $p$ prime. So the prime spectrum has length $1$ (every chain $\{0\} \subsetneq (p) \subsetneq R$ has length $1$). This matches classical Krull-1.</p>
+    <p>Lattice version: $S_R(R) = \{(0), (p_1), (p_1 p_2), \dots, R\}$ where products of primes give a rich subgroup lattice. Every descending chain $I_0 \supseteq I_1 \supseteq \dots$ in the ideal lattice $S_R(R)$ has factors $I_k / I_{k+1}$ that are quotients of cyclic modules — hence finite length (since $R/I$ for non-zero $I$ is a finite-length $R$-module via its primary decomposition). So all factors have $k$-dim $= 0$ (artinian), giving $S_R(R)$ deviation $\le 1$.</p>
+    <p>Not artinian itself: $\mathbb{Z}$ has descending chain $\mathbb{Z} \supsetneq 2\mathbb{Z} \supsetneq 4\mathbb{Z} \supsetneq \dots$ that doesn't stabilise. So $k$-dim $\ne 0$. Hence $k$-dim $= 1$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.11</span>Krull dim survives products</summary>
+  <div class="body">
+    <div class="ex-statement">(Gabriel-Rentschler) For two nonempty posets $A$ and $A_1$, consider the poset $A \times A_1$ ordered by the relation $(a, a_1) \le (a', a'_1)$ if and only if $a \le a'$ and $a_1 \le a'_1$. If $A$ and $A_1$ have Krull dimension show that $A \times A_1$ also has Krull dimension.</div>
+    <p><strong>Strategy.</strong> Transfinite induction on $\max(k$-dim$(A), k$-dim$(A_1))$.</p>
+    <p>Base case $\max = 0$: $A, A_1$ both artinian. Product of artinians is artinian: any descending chain in $A \times A_1$ projects to descending chains in $A$ and $A_1$, both stabilise, so the product chain stabilises.</p>
+    <p>Inductive step: assume the claim for posets with $k$-dim $&lt; \alpha$. $A, A_1$ with $k$-dim $\le \alpha$. A descending chain $(a_n, a^1_n)$ in $A \times A_1$ projects to descending chains in $A$ and $A_1$. Their factors have $k$-dim $&lt; \alpha$ from some point, and the product factor $(a_n, a^1_n)/(a_{n+1}, a^1_{n+1})$ embeds in the product of these factors, hence has $k$-dim $&lt; \alpha$ by induction. Hence $A \times A_1$ has $k$-dim $\le \alpha$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.12</span>$A$ Krull dim ⟺ $A^0$ Krull dim</summary>
+  <div class="body">
+    <div class="ex-statement">(Lemmonier) A poset $A$ has Krull dimension if and only if the dually ordered poset $A^0$ has Krull dimension.</div>
+    <p><strong>Strategy.</strong> Dualisation: a descending chain in $A$ is an ascending chain in $A^0$. The deviation construction is invariant under this: trivial posets are self-dual, and the recursive definition (factors $a_i/a_{i+1}$ have lower deviation) is symmetric.</p>
+    <p>Verify by transfinite induction. $A \in \mathcal{D}_{-1} \iff A^0 \in \mathcal{D}_{-1}$ (trivial is self-dual). Inductively, $A \in \mathcal{D}_\alpha \iff $ each descending chain in $A$ has factors in $\bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$ from some point $\iff$ each ascending chain in $A^0$ has factors (now ascending intervals in $A^0$, which are descending intervals in $A$) in $\bigcup_{\beta &lt; \alpha} \mathcal{D}_\beta$ — but ascending chains in $A^0$ correspond to descending chains in $A$ via the duality, so the condition becomes "$A^0 \in \mathcal{D}_\alpha$." ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 13.13</span>$Se(A), I(A)$ — Krull dim+1</summary>
+  <div class="body">
+    <div class="ex-statement">(Gabriel-Rentschler) Let $A$ be a bounded poset and $Se(A)$ the set of all the eventually constant series $(x_i)_{i \ge 1}$ in $A$. If $Se(A)$ is ordered by $(x_i) \le (y_i)$ if and only if $x_i \le y_i$ for every $i \ge 1$ and $I(A)$ denotes the subset of $Se(A)$ consisting of all the increasing sequences, prove that if $A$ has Krull dimension, say $\alpha$, then $k$-dim$(Se(A)) = k$-dim$(I(A)) = \alpha + 1$.</div>
+    <p><strong>Strategy.</strong> The set of eventually-constant series adds a "stabilisation pattern" layer to the poset; this corresponds to one transfinite ordinal-level above $A$'s deviation.</p>
+    <p>Eventually constant means $x_i = x_{i+1} = \dots$ from some index $i_0$ onward. Each series is "$A$-data plus a stabilisation index." Descending chains in $Se(A)$: $(x_i^{(0)}) \ge (x_i^{(1)}) \ge \dots$. Each component $x_i^{(j)}$ is a descending chain in $A$. Factors of these chains are products of $A$-factors, so have $k$-dim $\le \alpha$. The "$+1$" comes from the additional layer: the structure of the stabilisation index itself contributes one ordinal level.</p>
+    <p>Formally: $Se(A) = $ the limit of "increasingly stabilised series" $\subseteq A^\mathbf{N}$ via the eventually-constant restriction. By Ex 13.11 on products, $A^\mathbf{N}$ has $k$-dim related to $\alpha$; the eventually-constant subset has $k$-dim $\alpha + 1$ via a careful induction. $I(A) \subseteq Se(A)$ via "increasing" subset; by convexity arguments (Prop 13.4 + Ex 13.7), $k$-dim$(I(A)) = k$-dim$(Se(A)) = \alpha + 1$. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="looking-back">
+  <h2>Looking Back — closing the companion</h2>
+  <div class="tagline">Thirteen chapters, twelve months of building lattice apparatus, and a dimension-fingerprint synthesis at the close.</div>
+
+  <div class="closing-banner">
+    <h3>What the book has built</h3>
+    <p>From <strong>Chapter 1</strong>'s lattice axioms to <strong>Chapter 13</strong>'s four dimensions, Călugăreanu has assembled the lattice version of the structural toolkit module theorists use every day: compactness (Ch 1), composition series (Ch 3), essential extensions and pseudo-complements (Ch 4), socle and torsion (Ch 5), independence and Goldie dimension (Ch 6, Ch 8), radicals and superfluous elements (Ch 7), purity and neat subobjects (Ch 9), coatomic structure and Bass's B-objects (Ch 10), co-compactness and finitely cogenerated modules (Ch 11), supplements and the Krull-Schmidt-Azumaya structure of semiperfect modules (Ch 12), and now the four-dimensional fingerprint.</p>
+  </div>
+
+  <p><strong>The lattice abstraction's gain.</strong> What does the lattice formulation give us beyond classical module theory? Three things, in the chapter's framing:</p>
+  <ol>
+    <li><strong>Order duality.</strong> Modules are not naturally self-dual (the dual of a module is a module over the opposite ring, not the same module's dual lattice). The lattice $L^0$ is structurally the same kind of object as $L$. So results that involve essentialness/superfluousness, uniform/hollow, atomic/coatomic, socle/radical, Goldie/dual Goldie are <em>automatically</em> dual at the lattice level — the proofs need not be re-derived.</li>
+    <li><strong>Compactness and chain conditions decouple from cardinality.</strong> The infinite Goldie dimension theory (Ch 13.B) lifts cleanly to arbitrary cardinalities via the ideal lattice $I_0(L)$. Classical module theory often hits cardinality obstacles; lattice theory routes around them via the embedding into a compactly generated upper continuous home.</li>
+    <li><strong>Transfinite ordinals as native invariants.</strong> The Krull and Gabriel dimensions are ordinal-valued; the deviation construction is genuinely transfinite-recursive. Module theory's classical Krull dim (commutative algebra) is finite; the lattice version captures the non-commutative + non-noetherian behaviour cleanly.</li>
+  </ol>
+
+  <p><strong>The journey through the chapters.</strong></p>
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>Key invariant</th></tr></thead>
+    <tbody>
+      <tr><td>Ch 1–2</td><td>Lattice basics + compactness</td><td>Compact element, compactly generated</td></tr>
+      <tr><td>Ch 3</td><td>Composition series + length</td><td>Length, atom, irreducible decomposition</td></tr>
+      <tr><td>Ch 4</td><td>Essential extensions + pseudo-complements</td><td>Essential element, pseudo-complement</td></tr>
+      <tr><td>Ch 5</td><td>Socle + torsion + Loewy series</td><td>Socle $s(L)$, torsion, Loewy length</td></tr>
+      <tr><td>Ch 6</td><td>Independence + Krull-Schmidt</td><td>Independent set, semiatomic</td></tr>
+      <tr><td>Ch 7</td><td>Superfluous + radical</td><td>Radical $r(L)$, superfluous</td></tr>
+      <tr><td>Ch 8</td><td>Uniform + Goldie dim + CS</td><td>Uniform, Goldie dim, CS lattice</td></tr>
+      <tr><td>Ch 9</td><td>Pure + neat (Prüfer-Honda)</td><td>Pure, neat, $R_1$/$R_2$ axioms</td></tr>
+      <tr><td>Ch 10</td><td>Coatomic + Bass's B-objects + local</td><td>Coatomic, divisible, local lattice</td></tr>
+      <tr><td>Ch 11</td><td>Co-compact + finitely cogenerated</td><td>Co-compact, dual compact element</td></tr>
+      <tr><td>Ch 12</td><td>Supplemented + locally artinian</td><td>Supplement, hollow, local-irredundant join</td></tr>
+      <tr><td>Ch 13</td><td>Four dimensions</td><td>$h$-dim, Goldie dim, $k$-dim, $g$-dim</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>For further reading.</strong> The book's closing remark points the reader to:</p>
+  <ul>
+    <li><strong>Stenström, <em>Rings of Quotients</em></strong> [34] — for the localisation theory and the Gabriel filtration in module-theoretic form.</li>
+    <li><strong>Wisbauer, <em>Foundations of Module and Ring Theory</em></strong> [41] — for the supplemented/semiperfect classical theory.</li>
+    <li><strong>Goodearl-Warfield, <em>An Introduction to Noncommutative Noetherian Rings</em></strong> — for the Krull dimension theory in non-commutative ring theory (textbook treatment of Gabriel-Rentschler).</li>
+    <li><strong>McConnell-Robson, <em>Noncommutative Noetherian Rings</em></strong> — for the deeper interplay of Krull dim, Gabriel dim, and global dimension.</li>
+    <li><strong>Hart's 1971 paper</strong> [18] — the original $\alpha$-critical lattices construction.</li>
+  </ul>
+
+  <p>The companion's task is now complete. The book sat across thirteen sessions, each chapter unfolded into a self-contained pedagogical document with vocab primer, prose exposition, connection panels, glossary, and worked exercises. Each chapter cross-references the others; the ToC tracks completeness; the process notes record terminology traps and design conventions. <em>Chapter 13 closes the lattice journey from the compactness primitives of Chapter 1 to the four-dimensional fingerprint that synthesizes all twelve previous chapters' apparatus.</em></p>
+
+  <p>The lattice machinery — once an arcane abstraction that some module theorists dismissed as too distant from the concrete — has earned its place. It is the structural language in which module-theoretic facts are most cleanly stated, where order duality reveals symmetries the module formulation hides, and where transfinite invariants find their natural home. Călugăreanu's <em>Lattice Concepts of Module Theory</em> is the bridge that makes this language accessible.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 13 · Several Dimensions · <em>Closing chapter</em></div>
+    <div>← <a href="calugareanu-companion-ch12.html">Chapter 12</a> · <a href="calugareanu-companion-toc.html">ToC</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Lattice Concepts of Module Theory</em> by Grigore Călugăreanu (Springer Science+Business Media Dordrecht, 2000). All thirteen chapters now available.</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

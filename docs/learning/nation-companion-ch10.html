@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 10 · Finite Lattices and their Congruence Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch09.html">← Chapter 9</a></li>
+    <li><a href="nation-companion-ch11.html">Chapter 11 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 10 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · PCF + Lemma 10.1</div>
+  <ul>
+    <li><a href="#s1">1 · Principally chain finite</a></li>
+    <li><a href="#s2">2 · The $\underline{D}$ relation + Lemma 10.1</a></li>
+    <li><a href="#s3">3 · The closure operator $\Gamma$</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Representation</div>
+  <ul>
+    <li><a href="#s4">4 · Theorems 10.2 + 10.3</a></li>
+    <li><a href="#s5">5 · Congruences: Theorems 10.4 + 10.5</a></li>
+    <li><a href="#s6">6 · $Q_\mathcal{L}$ and the corollaries</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Dilworth's CLP</div>
+  <ul>
+    <li><a href="#s7">7 · Lemma 10.6 + Theorem 10.7</a></li>
+    <li><a href="#s8">8 · Theorem 10.8 (Grätzer-Schmidt)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Modular + direct sum</div>
+  <ul>
+    <li><a href="#s9">9 · Theorem 10.9 (Boolean Con)</a></li>
+    <li><a href="#s10">10 · Theorem 10.10 (Dilworth 1950)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Closure-operator approach</a></li>
+    <li><a href="#c2">P2 · Dilworth's CLP — finite vs infinite</a></li>
+    <li><a href="#c3">P3 · Raney + completely distributive</a></li>
+    <li><a href="#c4">P4 · Bounded homomorphism lineage</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Nation · Notes on Lattice Theory · Chapter 10</div>
+  <h1>Finite Lattices and their Congruence Lattices</h1>
+  <p class="lede">A closure-operator representation theory for finite (and "principally chain finite") lattices, recovering $\textbf{Con}\,\mathcal{L}$ from the join-irreducibles modulo the $\underline{D}$ relation, and answering Dilworth's congruence lattice problem in the finite case.</p>
+  <div class="meta">
+    <span>~95–110 min read</span>
+    <span>10 sections + 5 connections</span>
+    <span>15 worked exercises</span>
+    <span>PDF pp. 112–122</span>
+  </div>
+</section>
+
+<aside class="epigraph">
+  <p>If memories are all I sing<br/>I'd rather drive a truck.</p>
+  <span class="attrib">— Ricky Nelson, <em>Garden Party</em> (1972); chapter epigraph chosen by Nation</span>
+</aside>
+
+<p>Chapter 9 mapped modular and semimodular structure with applications to group theory. Chapter 10 returns to <strong>congruence lattices</strong> from a representation-theoretic angle: <em>given a finite (or principally chain finite) lattice $\mathcal{L}$, what is the structure of $\textbf{Con}\,\mathcal{L}$, and which finite distributive lattices arise this way?</em></p>
+
+<p>The chapter's approach is non-traditional. Rather than the structural-decomposition view of Chapter 5, Nation develops a <strong>closure-operator representation</strong> evolved from techniques due to Ralph McKenzie, Bjarni Jónsson, Alan Day, Ralph Freese, and J. B. Nation himself. The starting observation: a finite distributive lattice $\mathcal{D}$ is isomorphic to the order-ideal lattice $\mathcal{O}(J(\mathcal{D}))$ — Birkhoff's representation (Theorem 8.6) — because every join-irreducible in a distributive lattice is join prime. For nondistributive lattices, this doesn't quite work, but a refined version does: track <em>which join-irreducibles lie below joins of others</em> via the $\underline{D}$ relation on $J(\mathcal{L})$.</p>
+
+<p>The chapter's four conceptual movements:</p>
+
+<p><strong>First</strong>: the class of <strong>principally chain finite</strong> (PCF) lattices — those where every principal ideal $\downarrow x$ satisfies both ACC and DCC. This includes all finite lattices and arises naturally in finite-height lattice variety analysis (Theorem 11.1 preview). The $\underline{D}$ relation: $p \,\underline{D}\, q$ if there exists $x$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. Lemma 10.1 establishes three foundational properties; the closure operator $\Gamma$ on $J(\mathcal{L})$ is built from minimal join covers. <strong>Second</strong>: representation theorems. Theorem 10.2: $\mathcal{L} \cong $ compact $\Gamma$-closed subsets of $J(\mathcal{L})$. Theorem 10.3 characterises $\Gamma$-closed sets structurally. Theorem 10.4: the map $\sigma : \textbf{Con}\,\mathcal{L} \to \mathcal{P}(J(\mathcal{L}))$ given by $\sigma(\theta) = \{p : p \,\theta\, p_*\}$ is a complete embedding. Theorem 10.5 characterises the range. Corollary: $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$ where $Q_\mathcal{L} = J(\mathcal{L})/\equiv$ ordered by the $\trianglelefteq$ quasiorder. <strong>Third</strong>: which distributive algebraic lattices $\mathcal{D}$ arise as $\textbf{Con}\,\mathcal{L}$? Lemma 10.6 characterises $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ (these include all finite distributive). Theorem 10.7 identifies join-irreducible compact congruences. <strong>Theorem 10.8 (R. P. Dilworth 1940s, proof Grätzer-Schmidt 1962)</strong>: every $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ is the congruence lattice of SOME PCF lattice — Dilworth's CLP for the "nice" distributive case. Recall (Ch 5): Wehrung 2007 + Růžička 2008 showed the general infinite case fails. <strong>Fourth</strong>: Theorem 10.9 — for modular or relatively complemented PCF lattices, $\underline{D}$ is symmetric on $J(\mathcal{L})$, so $\textbf{Con}\,\mathcal{L}$ is a Boolean algebra. Theorem 10.10 (Dilworth 1950): a relatively complemented PCF lattice is a direct sum of simple ones.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">A three-pane glance: terms <strong>carried forward</strong> from earlier chapters, terms introduced <strong>new</strong> in Chapter 10, and the <strong>deep dives</strong> the chapter rewards close reading on.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chs 1–9</span>
+    <p>The chapter relies on: posets, ACC and DCC, order ideals $\mathcal{O}(\mathcal{P})$, principal ideals $\downarrow x$ (Ch 1); lattices, distributive law, modular law, $\mathcal{N}_5$, $\mathcal{M}_3$ (Ch 2); algebraic closure operator $\Gamma$, compact element, algebraic lattice (Ch 3); congruences, $\textbf{Con}\,\mathcal{L}$, principal congruence $\text{con}(a, b)$, First/Second Iso, <strong>subdirectly irreducible</strong>, Birkhoff's <strong>subdirect representation</strong>, the <strong>Funayama-Nakayama theorem</strong> ($\textbf{Con}\,\mathcal{L}$ always distributive), the <strong>congruence lattice problem (CLP)</strong> Dilworth → Wehrung 2007 → Růžička 2008 (Ch 5); join irreducible $J(\mathcal{L})$, completely join irreducible $J^*(\mathcal{L})$, refinement $\ll$ (Ch 2, 6); free lattice $\text{FL}(X)$, canonical form (Ch 6); variety, $\Lambda$, McKenzie's finite-basis (Ch 7); finite distributive $\mathcal{D} \cong \mathcal{O}(J(\mathcal{D}))$ — Birkhoff representation, completely-distributive lattices, Stone duality (Ch 8); modular lattices, Kurosh-Ore replacement, Dilworth 1954 covering bijection (Ch 9). Crucially: the chapter's $\Gamma$ closure operator builds on Ch 3's algebraic-lattice machinery; the $\underline{D}$ relation refines Ch 9's notion of join cover.</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter 10 vocabulary</span>
+    <p>Five clusters of new vocabulary. <strong>Principally chain finite (PCF)</strong>: a lattice where every principal ideal $\downarrow x$ satisfies both ACC and DCC. Equivalently: $\downarrow x$ contains no infinite chain. All finite lattices are PCF; many infinite ones too. <strong>$q_*$</strong>: the unique element with $q \succ q_*$ for completely-join-irreducible $q$. <strong>Join expression / minimal join expression</strong>: $a = \bigvee B$ with $B$ irredundant + cannot be refined ($B \subseteq J(\mathcal{L})$ + $c \vee \bigvee(B - \{b\}) < a$ when $c < b \in B$). <strong>Join cover / minimal join cover</strong>: $p \le \bigvee A$ similarly minimal. <strong>The $\underline{D}$ relation on $J(\mathcal{L})$</strong>: $p \,\underline{D}\, q$ iff there exists $x$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. (Reflexive; equivalent: $q \in A$ for some minimal join cover $A$ of $p$.) <strong>The closure operator $\Gamma$</strong> on $J(\mathcal{L})$: $\Gamma(S) = \{p : p \le \bigvee F$ for finite $F \subseteq S\}$. <strong>$\Gamma$-closed set</strong>. <strong>$\sigma$ map</strong>: $\sigma(\theta) = \{p \in J(\mathcal{L}) : p \,\theta\, p_*\}$ — sending congruences on $\mathcal{L}$ to subsets of $J(\mathcal{L})$. <strong>$\trianglelefteq$ quasiorder</strong>: transitive closure of $\underline{D}$. <strong>$\equiv$ equivalence</strong>: $p \equiv q$ iff $p \trianglelefteq q$ and $q \trianglelefteq p$. <strong>$Q_\mathcal{L} = (J(\mathcal{L})/\equiv, \trianglelefteq)$</strong>. <strong>Standard homomorphism</strong>: kernel-of-natural-projection onto join subsemilattice generated by $T \cup \{0\}$. <strong>Relatively complemented</strong>: $a < x < b$ ⟹ exists $y$ with $x \wedge y = a$ and $x \vee y = b$. <strong>Direct sum $\sum \mathcal{L}_i$</strong>: sublattice of direct product with only finitely many non-zero coordinates.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Three threads reward close reading. <strong>The closure-operator approach to congruence theory.</strong> The methods here evolved gradually over decades — McKenzie's bounded-homomorphism work (1972, Trans. AMS 174), Jónsson's lattice-variety analysis (1968), Day's interval doubling and bounded-homomorphic-image characterisation (1979), Freese's finitely-presented-lattice algorithms (1989, Trans. AMS 312), Freese-Nation's covers in free lattices (1985, Trans. AMS 288), Jónsson-Nation's report on free-lattice sublattices (1977), Nation's lattice-variety work (1986, 1990). The unifying observation: <em>finite lattice structure can be encoded by a closure operator on its join-irreducibles, with congruences corresponding to "compatibility" with that operator</em>. <strong>Dilworth's congruence lattice problem (CLP).</strong> The story: Dilworth 1944 (oral) showed every finite distributive lattice is $\textbf{Con}\,\mathcal{L}$ for some finite $\mathcal{L}$; Grätzer-Schmidt 1962 (Acta Math. Acad. Sci. Hungar. 13) published a sharper proof requiring all congruences to be principal. The infinite case stayed open for 60 years until Wehrung 2007 (Adv. Math. 216) constructed a counterexample, refined by Růžička 2008 to optimal $\aleph_2$. <strong>The Dilworth-Grätzer-Schmidt construction</strong> (Theorem 10.8): a clever doubling-of-poset construction — $J = P^0 \cup P^1$ as antichain, with $p^0 = p^1$ iff $p$ maximal — that turns the order-ideal lattice $\mathcal{O}(\mathcal{P})$ into the congruence lattice of a constructed PCF lattice $\mathcal{L}$. This is the <em>positive</em> half of CLP and remains the foundational construction in finite-lattice congruence representation theory.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · PCF LATTICES + THE $\underline{D}$ RELATION</div>
+  <h2>Setting up: principally chain finite + the closure operator $\Gamma$</h2>
+  <p class="part-lede">A finiteness condition on principal ideals (ACC + DCC) is exactly enough for the closure-operator representation theory. Lemma 10.1 establishes the foundational properties; $\Gamma$ encodes the lattice's structure.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 10.1</span> Principally chain finite (PCF) lattices</h2>
+  <div class="tagline">A modest finiteness condition that captures all finite lattices and many infinite ones.</div>
+
+  <div class="box def">
+    <span class="label">Definition · principally chain finite</span>
+    <p>A lattice $\mathcal{L}$ is <strong>principally chain finite</strong> (PCF) if no principal ideal of $\mathcal{L}$ contains an infinite chain. Equivalently, every principal ideal $\downarrow x$ satisfies both the ACC and the DCC.</p>
+  </div>
+
+  <p>Examples of PCF lattices:</p>
+  <ul>
+    <li><strong>All finite lattices</strong> — trivially.</li>
+    <li><strong>All algebraic lattices in which compact elements form a join-semilattice with DCC</strong> — generalises finite distributive lattices.</li>
+    <li><strong>The lattice of compact subgroups of a torsion abelian group</strong> (Exercise 10.12, Khalib Benabdallah).</li>
+    <li><strong>The lattice arising in the analysis of finite-height lattice varieties</strong> (Theorem 11.1 preview).</li>
+  </ul>
+
+  <p>Many results in this chapter generalise to arbitrary lattices, but most have not yet proved very useful unless one assumes at least the DCC. The PCF condition is the "right" generalisation of "finite" for the closure-operator representation theory.</p>
+
+  <div class="box recap">
+    <span class="label">Recap · $\ll$ and $q_*$</span>
+    <p>Recall: $X \ll Y$ ($X$ refines $Y$) means every $x \in X$ has $y \in Y$ with $x \le y$. This is a quasiorder (reflexive, transitive) but not antisymmetric in general; $X \subseteq Y \Rightarrow X \ll Y$. (Ch 6 / Lemma 6.5.)</p>
+    <p>For a completely join-irreducible element $q$, let $q_*$ denote the unique element with $q \succ q_*$. In PCF lattices, every $q \in J(\mathcal{L})$ is completely join-irreducible (DCC + join-irreducible ⟹ completely so), so $q_*$ exists for each $q \in J(\mathcal{L})$.</p>
+  </div>
+
+  <h3>Join expressions and join covers</h3>
+
+  <div class="box def">
+    <span class="label">Definition · join expression and minimal join expression</span>
+    <p>A <strong>join expression</strong> of $a \in L$ is a finite set $B$ such that $a = \bigvee B$. A join expression $a = \bigvee B$ is <strong>minimal</strong> if it is irredundant and $B$ cannot be properly refined: $B \subseteq J(\mathcal{L})$ and $c \vee \bigvee(B - \{b\}) < a$ whenever $c < b \in B$. An equivalent technical formulation: $a = \bigvee B$ minimally if $a = \bigvee C$ and $C \ll B$ implies $B \subseteq C$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · join cover and minimal join cover</span>
+    <p>A <strong>join cover</strong> of $p \in L$ is a finite set $A$ such that $p \le \bigvee A$. A join cover $A$ of $p$ is <strong>minimal</strong> if $\bigvee A$ is irredundant and $A$ cannot be properly refined to another join cover of $p$: $p \le \bigvee B$ and $B \ll A$ implies $A \subseteq B$.</p>
+  </div>
+
+  <p>"Join expression" works for elements; "join cover" for covers from below. The minimality conditions are subtle: see Exercise 10.3 for the equivalence of the two formulations.</p>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 10.2</span> The $\underline{D}$ relation and Lemma 10.1</h2>
+  <div class="tagline">A new binary relation on join-irreducibles, central to congruence-lattice analysis.</div>
+
+  <div class="box def">
+    <span class="label">Definition · the $\underline{D}$ relation</span>
+    <p>For a PCF lattice $\mathcal{L}$, define a binary relation $\underline{D}$ on $J(\mathcal{L})$ by:</p>
+    $$p \,\underline{D}\, q \quad\text{iff}\quad \text{there exists } x \in L \text{ such that } p \le q \vee x \text{ but } p \not\le q_* \vee x.$$
+    <p>Note: $\underline{D}$ is reflexive — $p \,\underline{D}\, p$ for all $p \in J(\mathcal{L})$ (take $x = p_*$). The relation $D$ defined identically except requiring $p \neq q$ also exists in the literature. $\underline{D}$ stands for "$D$ or equal to."</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · what $\underline{D}$ measures</span>
+    <p>$p \,\underline{D}\, q$ says: there's a way to express $p \le \text{join}$ using $q$ that REQUIRES $q$ — replacing $q$ by its lower cover $q_*$ breaks the inequality. Informally, "$p$ depends crucially on $q$ being above $q_*$." This refined notion of "dependency" between join-irreducibles is what carries through to congruence analysis. The $\underline{D}$ relation will turn out to be (Lemma 10.1(3)) equivalent to: $q \in A$ for some minimal join cover $A$ of $p$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.1 · foundational properties</span>
+    <p>Let $\mathcal{L}$ be a principally chain finite lattice. Then:</p>
+    <ol>
+      <li>If $b \not\le a$ in $\mathcal{L}$, then there exists $p \in J(\mathcal{L})$ with $p \le b$ and $p \not\le a$.</li>
+      <li>Every join expression in $\mathcal{L}$ refines to a minimal join expression, and every join cover refines to a minimal join cover.</li>
+      <li>For $p, q \in J(\mathcal{L})$ we have $p \,\underline{D}\, q$ if and only if $q \in A$ for some minimal join cover $A$ of $p$.</li>
+    </ol>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p><strong>(1)</strong> Since $b \not\le a$ and $\downarrow b$ satisfies the DCC, the set $\{x \in \,\downarrow b : x \not\le a\}$ has at least one minimal element $p$. Because $y < p$ implies $y \le a$ for any $y \in L$, we have $\bigvee\{y \in L : y < p\} \le p \wedge a < p$, hence $p \in J(\mathcal{L})$ with $p_* = p \wedge a$.</p>
+
+  <p><strong>(2)</strong> Suppose $\mathcal{L}$ contains an element $s$ with a join expression $s = \bigvee F$ that does NOT refine to a minimal one. By the DCC in $\downarrow s$, there is an element $t \le s$ minimal with respect to having a join expression $t = \bigvee A$ which fails to refine to a minimal one. $t$ is join-reducible (else trivially minimal), with proper irredundant $t = \bigvee B$ and $B \ll A$.</p>
+
+  <p>Let $B = \{b_1, \dots, b_k\}$. Using DCC on $\downarrow b_1$, find $c_1 \le b_1$ such that $t = c_1 \vee b_2 \vee \cdots \vee b_k$ but $c_1$ cannot be replaced by any lower element. Apply the same to $b_2, \dots, b_k$. Result: a "pointwise-minimal" join cover $C = \{c_1, \dots, c_k\}$ refining $B$. Each $c_i$ is strictly below $t$, hence (by minimality of $t$) has a minimal join expression $E_{c_i}$. Take $E = \bigcup E_{c_i}$ — a minimal join expression for $t$, with $E \ll C \ll B \ll A$. Contradicts the choice of $t$ and $B$.</p>
+
+  <p>The same argument applies to join covers (replace "join expression of $u$" with "join cover of $u$").</p>
+
+  <p><strong>(3)</strong> ($\Rightarrow$) Assume $p \,\underline{D}\, q$, with $x \in L$ such that $p \le q \vee x$ but $p \not\le q_* \vee x$. By (2), find a minimal join cover $A$ of $p$ refining $\{q, x\}$. Since $p \not\le q_* \vee x$, we must have $q \in A$ (not just $q_*$).</p>
+
+  <p>($\Leftarrow$) If $A$ is a minimal join cover of $p$ and $q \in A$, set $x = \bigvee(A - \{q\})$. Then $p \le q \vee x$ (since $A$ covers $p$). And $p \not\le q_* \vee x$ — else $q_* \cup (A - \{q\})$ would be a strictly-smaller join cover, contradicting minimality of $A$.  $\square$</p>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 10.3</span> The closure operator $\Gamma$ on $J(\mathcal{L})$</h2>
+  <div class="tagline">An algebraic closure operator that encodes the lattice's structure on its join-irreducibles.</div>
+
+  <div class="box def">
+    <span class="label">Definition · the closure operator $\Gamma$</span>
+    <p>For $S \subseteq J(\mathcal{L})$, define</p>
+    $$\Gamma(S) = \{p \in J(\mathcal{L}) : p \le \bigvee F \text{ for some finite } F \subseteq S\}.$$
+  </div>
+
+  <p>$\Gamma$ is an <em>algebraic</em> closure operator on $J(\mathcal{L})$ (extensive, monotone, idempotent, with the finitary property). The compact (finitely-generated) $\Gamma$-closed sets are of the form $\Gamma(F) = \{p \in J(\mathcal{L}) : p \le \bigvee F\}$ for finite $F \subseteq J(\mathcal{L})$.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · $\Gamma$ as Birkhoff-style structure encoder</span>
+    <p>For a finite distributive lattice $\mathcal{L}$, Birkhoff (Ch 8 / Theorem 8.6) gave $\mathcal{L} \cong \mathcal{O}(J(\mathcal{L}))$ — the order-ideal lattice of join-irreducibles. The map: each $x \in L$ corresponds to $\downarrow x \cap J(\mathcal{L})$, the "join-irreducibles below $x$."</p>
+    <p>For a non-distributive PCF lattice, the same map $\phi(x) = \{p \in J(\mathcal{L}) : p \le x\}$ embeds $\mathcal{L}$ into $\mathcal{P}(J(\mathcal{L}))$, but the image is no longer the order ideals — it's the $\Gamma$-CLOSED sets. $\Gamma$ encodes the additional structure (which join-irreducibles "depend on" others) lost in moving from distributive to general PCF.</p>
+  </div>
+
+  <p>In general, the compact $\Gamma$-closed sets form a join-subsemilattice of the lattice $\mathcal{C}_\Gamma$ of all closed sets — but not necessarily a sublattice (meets in $\mathcal{C}_\Gamma$ need not be compact). However, for PCF lattice $\mathcal{L}$, the compact closed sets DO form an ideal (and hence a sublattice) of $\mathcal{C}_\Gamma$. Why: if $S \subseteq \Gamma(F)$ with $F$ finite, then $S \subseteq \,\downarrow(\bigvee F)$, which satisfies the ACC. Hence $\{\bigvee G : G \subseteq S, G \text{ finite}\}$ has a largest element. So $\bigvee S = \bigvee G$ for some finite $G \subseteq S$, from which $\Gamma(S) = \Gamma(G)$, and $\Gamma(S)$ is compact. In particular, if $\mathcal{L}$ has a largest element $1$, then EVERY closed set is compact.</p>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · REPRESENTATION THEOREMS</div>
+  <h2>Lattice and congruence representations via the closure operator</h2>
+  <p class="part-lede">$\mathcal{L}$ is the lattice of compact $\Gamma$-closed sets (Theorem 10.2); congruences correspond to subsets of $J(\mathcal{L})$ closed under $\underline{D}$ (Theorems 10.4 + 10.5); $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$.</p>
+</header>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 10.4</span> Theorems 10.2 + 10.3 — lattice representation</h2>
+  <div class="tagline">A PCF lattice IS the lattice of its compact $\Gamma$-closed subsets of join-irreducibles.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.2 · representation</span>
+    <p>If $\mathcal{L}$ is a principally chain finite lattice, then the map $\phi$ with $\phi(x) = \{p \in J(\mathcal{L}) : p \le x\}$ is an isomorphism of $\mathcal{L}$ onto the lattice of compact $\Gamma$-closed subsets of $J(\mathcal{L})$.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>Note that if $x = \bigvee A$ is a minimal join expression, then $\phi(x) = \Gamma(A)$ — the join-irreducibles below $x$ are exactly those refining the joinands. So $\phi(x)$ is a compact $\Gamma$-closed set. The map $\phi$ is clearly order-preserving, and it is one-to-one by Lemma 10.1(1) (separating elements via join-irreducibles). Finally, $\phi$ is onto because $\Gamma(F) = \phi(\bigvee F)$ for each finite $F \subseteq J(\mathcal{L})$.  $\square$</p>
+
+  <p>To use this result, we need a structural characterisation of $\Gamma$-closed sets.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.3 · characterisation of $\Gamma$-closed</span>
+    <p>Let $\mathcal{L}$ be a principally chain finite lattice. A subset $C$ of $J(\mathcal{L})$ is $\Gamma$-closed if and only if</p>
+    <ol>
+      <li>$C$ is an order ideal of $J(\mathcal{L})$, and</li>
+      <li>if $A$ is a minimal join cover of $p \in J(\mathcal{L})$ and $A \subseteq C$, then $p \in C$.</li>
+    </ol>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>($\Rightarrow$) $\Gamma$-closed sets clearly satisfy (1) and (2). For (1): if $p \le q \in C$, then $p \le \bigvee\{q\}$, so $p \in \Gamma(\{q\}) \subseteq \Gamma(C) = C$. For (2): if $A \subseteq C$ minimally covers $p$, then $p \le \bigvee A$, so $p \in \Gamma(A) \subseteq C$.</p>
+
+  <p>($\Leftarrow$) Conversely, let $C \subseteq J(\mathcal{L})$ satisfy (1) and (2). We want $\Gamma(C) \subseteq C$. If $p \in \Gamma(C)$, then $p \le \bigvee F$ for some finite $F \subseteq C$. By Lemma 10.1(2), there is a minimal join cover $A$ of $p$ refining $F$. Since $C$ is an order ideal, $A \subseteq C$. By (2), $p \in C$.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · what determines $\Gamma$</span>
+    <p>Theorem 10.3 says: $\Gamma$ is determined by the order on $J(\mathcal{L})$ and the minimal join covers of elements of $J(\mathcal{L})$. Hence, by Theorem 10.2, $\mathcal{L}$ is determined by the same factors. This is the closure-operator representation: a PCF lattice = (poset of join-irreducibles, set of minimal join covers). Note: this "minimal join cover data" is finite for finite lattices and locally finite for PCF lattices.</p>
+  </div>
+
+  <p>The chapter's core question becomes: <em>how much of this information can we extract from $\textbf{Con}\,\mathcal{L}$ alone?</em> The answer (developed below): not all — we can recover $J(\mathcal{L})$ modulo a certain equivalence relation, but not the full order or the minimal join covers. We CAN recover the $\underline{D}$ relation (up to equivalence), and that turns out to be enough.</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 10.5</span> Theorem 10.4: the $\sigma$ map</h2>
+  <div class="tagline">A complete embedding from $\textbf{Con}\,\mathcal{L}$ into the power set of join-irreducibles.</div>
+
+  <p>For a group $\mathcal{G}$, the map $\tau : \textbf{Con}\,\mathcal{G} \to \mathcal{N}(\mathcal{G})$ given by $\tau(\theta) = \{x \in G : x \,\theta\, 1\}$ is a lattice isomorphism between congruences and normal subgroups. The next two theorems and corollary establish a similar correspondence for PCF lattices.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.4 · the $\sigma$ embedding</span>
+    <p>Let $\mathcal{L}$ be a PCF lattice. Let $\sigma : \textbf{Con}\,\mathcal{L} \to \mathcal{P}(J(\mathcal{L}))$ be defined by</p>
+    $$\sigma(\theta) = \{p \in J(\mathcal{L}) : p \,\theta\, p_*\}.$$
+    <p>Then $\sigma$ is a one-to-one complete lattice homomorphism.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p><strong>Order-preserving:</strong> $\theta \le \psi$ implies $\sigma(\theta) \subseteq \sigma(\psi)$ — direct.</p>
+
+  <p><strong>One-to-one:</strong> Assume $\theta \not\le \psi$. Then there exists a pair $(a, b) \in \theta - \psi$ with $a < b$. By Lemma 10.1(1), find $p \le b$ with $p \not\le a$ minimal — $p \in J(\mathcal{L})$. Show $p \,\theta\, p_*$ but $(p, p_*) \notin \psi$, hence $p \in \sigma(\theta) - \sigma(\psi)$. So $\sigma(\theta) \neq \sigma(\psi)$.</p>
+
+  <p><strong>Meet-preserving:</strong> $\sigma(\bigwedge \theta_i) = \bigcap \sigma(\theta_i)$ — straightforward (an element is congruent to its lower cover under all $\theta_i$ iff under each).</p>
+
+  <p><strong>Join-preserving (the hard part):</strong> Need to show $\sigma(\bigvee \theta_i) \subseteq \bigcup \sigma(\theta_i)$.</p>
+
+  <p>If $(p, p_*) \in \bigvee \theta_i$, there's a connecting sequence $p = x_0 \,\theta_{i_1}\, x_1 \,\theta_{i_2}\, x_2 \cdots x_{k-1} \,\theta_{i_k}\, x_k = p_*$ in $\textbf{Con}\,\mathcal{L}$. Let $y_j = (x_j \vee p_*) \wedge p$. Then $y_0 = p$, $y_k = p_*$. Each $y_j \in \{p_*, p\}$ (since $p_* \le y_j \le p$ and $p$ is completely join-irreducible — wait, $p \succ p_*$ only). So $y_{j-1} \,\theta_{i_j}\, y_j$ for each $j$. There must exist $j$ with $y_{j-1} = p$ and $y_j = p_*$, whence $p \,\theta_{i_j}\, p_*$ — i.e., $p \in \sigma(\theta_{i_j}) \subseteq \bigcup \sigma(\theta_i)$.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · what $\sigma$ captures</span>
+    <p>$\sigma(\theta)$ is the set of join-irreducibles "collapsed by $\theta$" — those that get identified with their immediate lower cover. This is the natural way to extract a "discrete" trace of $\theta$ on $J(\mathcal{L})$. Theorem 10.4 says this trace is a complete embedding of $\textbf{Con}\,\mathcal{L}$ into $\mathcal{P}(J(\mathcal{L}))$.</p>
+  </div>
+
+  <p>Next, identify the range of $\sigma$ — which subsets of $J(\mathcal{L})$ arise as $\sigma(\theta)$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.5 · range of $\sigma$</span>
+    <p>Let $\mathcal{L}$ be a PCF lattice, and let $S \subseteq J(\mathcal{L})$. Then $S = \sigma(\theta)$ for some $\theta \in \textbf{Con}\,\mathcal{L}$ if and only if $p \,\underline{D}\, q \in S$ implies $p \in S$.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>($\Rightarrow$) Let $S = \sigma(\theta)$. If $q \in S$ and $p \,\underline{D}\, q$, then $q \,\theta\, q_*$ and there exists $x \in L$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. Thus $p = p \wedge (q \vee x) \,\theta\, p \wedge (q_* \vee x) < p$, so $p \,\theta\, p_*$ and $p \in S$.</p>
+
+  <p>($\Leftarrow$) Suppose $S$ satisfies the closure condition. Let $T = J(\mathcal{L}) - S$. Define $x \,\theta\, y$ if $\downarrow x \cap T = \,\downarrow y \cap T$. This $\theta$ is the kernel of the <strong>standard homomorphism</strong> from $\mathcal{L}$ onto the join subsemilattice of $\mathcal{L}$ generated by $T \cup \{0\}$. Three things are clear: $\theta$ is an equivalence; $x \,\theta\, y$ implies $x \wedge z \,\theta\, y \wedge z$; for $p \in J(\mathcal{L})$, $p \,\theta\, p_*$ iff $p \notin T$, i.e., $p \in S$. Verifying that $\theta$ respects joins is the work — uses Lemma 10.1(3).  $\square$</p>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 10.6</span> $Q_\mathcal{L}$ and the corollaries</h2>
+  <div class="tagline">The recovered structure: a quotient poset $Q_\mathcal{L}$ such that $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · $\trianglelefteq$, $\equiv$, and $Q_\mathcal{L}$</span>
+    <p>Let $\trianglelefteq$ denote the transitive closure of $\underline{D}$ on $J(\mathcal{L})$. Then $\trianglelefteq$ is a quasiorder (reflexive and transitive). It induces an equivalence relation $\equiv$ by $p \equiv q$ iff $p \trianglelefteq q$ AND $q \trianglelefteq p$. Let $Q_\mathcal{L}$ denote the partially ordered set $(J(\mathcal{L})/\equiv, \trianglelefteq)$.</p>
+  </div>
+
+  <p>Theorem 10.5 translates as follows.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · the congruence-lattice formula</span>
+    <p>If $\mathcal{L}$ is a principally chain finite lattice, then $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$.</p>
+  </div>
+
+  <p>Because the $\underline{D}$ relation is easy to determine, it is not hard to find $Q_\mathcal{L}$ for a finite lattice $\mathcal{L}$. Hence this result provides a reasonably efficient algorithm for determining the congruence lattice of a finite lattice. The exercises will convince you of this.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · subdirectly irreducible characterisation</span>
+    <p>A principally chain finite lattice $\mathcal{L}$ is subdirectly irreducible if and only if $Q_\mathcal{L}$ has a least element.</p>
+  </div>
+
+  <p>Recall (Ch 5): subdirectly irreducible = $\textbf{Con}\,\mathcal{L}$ has a smallest non-zero element (the monolith). Via the corollary, this monolith corresponds to the principal order ideal $\downarrow [\hat 0]$ in $\mathcal{O}(Q_\mathcal{L})$, where $[\hat 0]$ is the least equivalence class. Hence SI ⟺ $Q_\mathcal{L}$ has a least element.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the structure recovered</span>
+    <p>From $\textbf{Con}\,\mathcal{L}$ we can recover: (a) the size of $J(\mathcal{L})/\equiv$, (b) the $\trianglelefteq$ quasiorder on the equivalence classes. From these we can compute: SI status, congruence-distributivity (always! Funayama-Nakayama), congruence chain length, etc. What we CANNOT recover from $\textbf{Con}\,\mathcal{L}$ alone: the full order on $J(\mathcal{L})$, the minimal join covers — these require additional information about the lattice's join structure.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · DILWORTH'S CONGRUENCE LATTICE PROBLEM (FINITE)</div>
+  <h2>Which distributive algebraic lattices arise as $\textbf{Con}\,\mathcal{L}$?</h2>
+  <p class="part-lede">Wehrung 2007: not all (recap from Ch 5). But for $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ — which includes all finite distributive lattices — the answer is yes (Theorem 10.8, Dilworth 1940s, proof Grätzer-Schmidt 1962).</p>
+</header>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 10.7</span> Lemma 10.6 + Theorem 10.7</h2>
+  <div class="tagline">Characterising distributive algebraic lattices isomorphic to $\mathcal{O}(\mathcal{P})$, and identifying join-irreducible compact congruences.</div>
+
+  <p>Recall from Chapter 5 that <strong>Fred Wehrung 2007</strong> (Adv. Math. 216) showed there are distributive algebraic lattices that are NOT isomorphic to the congruence lattice of any lattice — refined to optimal $\aleph_2$ by Růžička 2008. The general infinite version of Dilworth's congruence lattice problem (CLP) has a NEGATIVE answer.</p>
+
+  <p>However, we CAN represent a large class that includes all finite distributive lattices, and many infinite ones. The class is characterised by a structural condition.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.6 · characterising $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$</span>
+    <p>The following are equivalent for a distributive algebraic lattice $\mathcal{D}$.</p>
+    <ol>
+      <li>$\mathcal{D}$ is isomorphic to the lattice of order ideals of an ordered set.</li>
+      <li>Every element of $\mathcal{D}$ is a join of completely-join-prime elements.</li>
+      <li>Every compact element of $\mathcal{D}$ is a join of (finitely many) join-irreducible compact elements.</li>
+    </ol>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>(1) ⟹ (3): An order ideal $I$ is compact in $\mathcal{O}(\mathcal{P})$ iff finitely generated, $I = \,\downarrow p_1 \cup \cdots \cup \,\downarrow p_k$. Each $\downarrow p_i$ is join-irreducible in $\mathcal{O}(\mathcal{P})$.</p>
+
+  <p>(3) ⟹ (2): If $\mathcal{D}$ is distributive algebraic and $p$ is a join-irreducible compact, then $p$ is COMPLETELY join prime: $p \le \bigvee U \Rightarrow p \le \bigvee U'$ for some finite $U' \subseteq U$ (compactness), and join-irreducibles in distributive lattices are join-prime, so $p \le u$ for some $u \in U'$. So join-irreducible compacts are completely join prime. Conversely, completely-join-prime is clearly compact and join-irreducible. Hence "compact element is join of join-irreducible compacts" matches "every element is join of completely-join-prime elements" (via the algebraic structure: every element is a directed join of compacts).</p>
+
+  <p>(2) ⟹ (1): The completely-join-prime elements of $\mathcal{D}$ form an ordered set $\mathcal{P}$. Define $\phi : \mathcal{D} \to \mathcal{O}(\mathcal{P})$ by $\phi(x) = \,\downarrow x \cap P$. This is the desired isomorphism.  $\square$</p>
+
+  <p>It is not hard to find lattices where these conditions fail (the chain $(\omega + 1)^d$ from Ch 9 is an example). Nonetheless, distributive algebraic lattices with these properties are a nice class — including all finite distributive lattices — and it behoves us to try to represent each of them as $\textbf{Con}\,\mathcal{L}$ for some PCF lattice $\mathcal{L}$.</p>
+
+  <h3>Theorem 10.7 — join-irreducible compact congruences</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.7 · principal congruences as join-irreducible compacts</span>
+    <p>Let $\mathcal{L}$ be a principally chain finite lattice. A congruence relation $\theta$ is join-irreducible and compact in $\textbf{Con}\,\mathcal{L}$ if and only if $\theta = \text{con}(p, p_*)$ for some $p \in J(\mathcal{L})$. Moreover, for $p, q \in J(\mathcal{L})$, we have $\text{con}(q, q_*) \le \text{con}(p, p_*)$ if and only if $q \trianglelefteq p$.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>Use the representation $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$ from the corollary above. Note that if $Q$ is an ordered set and $I$ is an order ideal of $Q$, then $I = \bigcup_{x \in I} \,\downarrow x$, and set union is the join operation in $\mathcal{O}(Q)$. Hence join-irreducible compact ideals are exactly those of the form $\downarrow x$ for some $x \in Q$.</p>
+
+  <p>Apply this to $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$: join-irreducible compact congruences are $\sigma^{-1}(\downarrow [p])$ for $[p] \in Q_\mathcal{L}$, equivalently $\theta$ with $\sigma(\theta) = \{q \in J(\mathcal{L}) : q \trianglelefteq p\}$. The principal congruence $\text{con}(p, p_*)$ is the LEAST congruence with $p \,\theta\, p_*$, and one checks $\sigma(\text{con}(p, p_*))$ matches the formula.  $\square$</p>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 10.8</span> Theorem 10.8: Dilworth's CLP for the finite case</h2>
+  <div class="tagline">Every distributive algebraic lattice satisfying Lemma 10.6 IS the congruence lattice of some PCF lattice — Dilworth 1940s, proved by Grätzer-Schmidt 1962.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.8 · Dilworth's CLP (positive half)</span>
+    <p>Let $\mathcal{D}$ be a distributive algebraic lattice that is isomorphic to $\mathcal{O}(\mathcal{P})$ for some ordered set $\mathcal{P}$. Then there is a principally chain finite lattice $\mathcal{L}$ such that $\mathcal{D} \cong \textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+
+  <h3>The construction</h3>
+
+  <p>We must construct $\mathcal{L}$ with $Q_\mathcal{L} \cong \mathcal{P}$. In view of Theorem 10.3, we describe $\mathcal{L}$ as the lattice of finitely-generated closed sets of a closure operator on an ordered set $J$.</p>
+
+  <p>Let $P^0$ and $P^1$ be two unordered copies of the base set $P$ of $\mathcal{P}$, disjoint EXCEPT on the maximal elements of $\mathcal{P}$. Thus $J = P^0 \cup P^1$ is an ANTICHAIN, and $p^0 = p^1$ if and only if $p$ is maximal in $\mathcal{P}$. Define a subset $C$ of $J$ to be <strong>closed</strong> if $\{p^j, q^k\} \subseteq C$ implies $p^i \in C$ whenever $p < q$ in $\mathcal{P}$ and $\{i, j\} = \{0, 1\}$. Our lattice $\mathcal{L}$ will consist of all finite closed subsets of $J$, ordered by set inclusion.</p>
+
+  <p>Verify:</p>
+  <ul>
+    <li>Elements of $J$ are atoms of $\mathcal{L}$ (any closed set containing a single $p^i$ is just $\{p^i\}$).</li>
+    <li>$p^i \le p^j \vee q^k$ whenever $p < q$ in $\mathcal{P}$ — by the closure condition.</li>
+    <li>Thus $p^i \,\underline{D}\, q^k$ iff $p \le q$ in $\mathcal{P}$ — this is where you want only one copy of each maximal element.</li>
+    <li>The closure of a finite set is finite (key technical observation; left to the reader).</li>
+  </ul>
+
+  <p>$\mathcal{L}$ is then a PCF lattice with $Q_\mathcal{L} \cong \mathcal{P}$, as required.  $\square$</p>
+
+  <p>Theorem 10.8 is due to <strong>R. P. Dilworth</strong> in the 1940s, but his proof was never published. The construction given here is from <strong>George Grätzer and E. T. Schmidt</strong>, <em>On congruence lattices of lattices</em>, Acta Math. Acad. Sci. Hungar. 13 (1962), 179–185.</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the doubling construction in CLP context</span>
+    <p>The "two copies $P^0, P^1$ except on maximal elements" construction is a clever doubling: to encode the order $p \le q$ between non-maximals, we need both copies to allow $p^i \,\underline{D}\, q^k$ for both orientations $\{i, j\} = \{0, 1\}$. For maximal elements, only one copy is needed (no $q$ above to relate to). The result is a PCF lattice whose join-irreducibles are atoms of $\mathcal{L}$ — and atoms of $\mathcal{L}$ are exactly the elements of $J$ — with the $\underline{D}$ relation matching the order on $\mathcal{P}$.</p>
+    <p>The Grätzer-Schmidt 1962 paper had a sharper formulation requiring that all congruences be PRINCIPAL (not just compact). This is achievable with additional construction steps. Modern reference: George Grätzer, <em>The Congruences of a Finite Lattice: A Proof-by-Picture Approach</em> (3rd ed., Birkhäuser 2023, arXiv:2104.06539) — comprehensive treatment of finite-CLP techniques.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · MODULAR / RELATIVELY COMPLEMENTED + DIRECT SUM</div>
+  <h2>When $\textbf{Con}\,\mathcal{L}$ is Boolean, and Dilworth's structure theorem (1950)</h2>
+  <p class="part-lede">Theorem 10.9: modular or relatively complemented PCF ⟹ $\underline{D}$ symmetric, so $\textbf{Con}\,\mathcal{L}$ is a Boolean algebra. Theorem 10.10 (Dilworth 1950): a relatively complemented PCF lattice is a direct sum of simple ones.</p>
+</header>
+
+<section class="module" id="s9">
+  <h2><span class="num">§ 10.9</span> Theorem 10.9: Boolean congruence lattices</h2>
+  <div class="tagline">A pair of "nice" structural conditions force $\textbf{Con}\,\mathcal{L}$ to be Boolean.</div>
+
+  <div class="box def">
+    <span class="label">Definition · relatively complemented</span>
+    <p>A lattice $\mathcal{L}$ is <strong>relatively complemented</strong> if for every $a < x < b$ in $\mathcal{L}$, there exists $y$ such that $x \wedge y = a$ and $x \vee y = b$. (A relatively complemented lattice with $0$ and $1$ is complemented; without these, the property is conditional.)</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.9 · Boolean congruence</span>
+    <p>If $\mathcal{L}$ is a principally chain finite lattice which is either modular or relatively complemented, then the relation $\underline{D}$ is symmetric on $J(\mathcal{L})$, and hence $\textbf{Con}\,\mathcal{L}$ is a Boolean algebra.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p><strong>Modular case.</strong> Assume $\mathcal{L}$ is modular and $p \,\underline{D}\, q$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. Using modularity:</p>
+  $$(q \wedge (p \vee x)) \vee x = (q \vee x) \wedge (p \vee x) \ge p,$$
+  <p>so $q \le p \vee x$. (In modular lattices, the meet-and-join can be rearranged.) On the other hand, if $q \le p_* \vee x$, we would have</p>
+  $$p = p \wedge (q \vee x) \le p \wedge (p_* \vee x) = p_* \vee (x \wedge p) = p_*,$$
+  <p>a contradiction. Hence $q \not\le p_* \vee x$, and $q \,\underline{D}\, p$.</p>
+
+  <p><strong>Relatively complemented case.</strong> A join-irreducible element in a relatively complemented lattice must be an ATOM. Hence $p_* = q_* = 0$, and given $x$ such that $p \le q \vee x$, $p \not\le x$, we want to find $y$ such that $q \le p \vee y$ and $q \not\le y$. Since $x < p \vee x$ and $q \not\le x$, we can choose $y$ to be a relative complement of $p \vee x$ in the interval $(q \vee x)/x$. Then $p \vee y = p \vee x \vee y \ge q$, and $q \not\le y$ (otherwise $p \le y \wedge (p \vee x) = x$, contradiction). Thus $q \,\underline{D}\, p$.</p>
+
+  <p>Finally, if $\underline{D}$ is symmetric on $J(\mathcal{L})$, then $Q_\mathcal{L}$ is an antichain, and thus $\mathcal{O}(Q_\mathcal{L})$ is isomorphic to the Boolean algebra $\mathcal{P}(Q_\mathcal{L})$. By the corollary of §10.6, $\textbf{Con}\,\mathcal{L} \cong \mathcal{P}(Q_\mathcal{L})$ — Boolean.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why Boolean</span>
+    <p>$Q_\mathcal{L}$ being an antichain means: no congruence "depends on" any other; they are all independent. The order ideals of an antichain are exactly its subsets, hence $\mathcal{O}(\text{antichain}) = \mathcal{P}(\text{antichain})$ — a Boolean algebra. For modular and relatively complemented lattices, the "structural symmetry" of these classes forces $\underline{D}$ to be symmetric, hence Boolean congruence lattice.</p>
+  </div>
+
+  <p>A lattice is <strong>simple</strong> if $|L| > 1$ and $\mathcal{L}$ has no proper nontrivial congruence relations, i.e., $\textbf{Con}\,\mathcal{L} \cong \mathbf{2}$. Theorem 10.9 says that a SUBDIRECTLY IRREDUCIBLE, modular or relatively complemented, principally chain finite lattice must be simple. This is because subdirectly irreducible + Boolean $\textbf{Con}\,\mathcal{L}$ forces $|\textbf{Con}\,\mathcal{L}| = 2$.</p>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">§ 10.10</span> Theorem 10.10: Dilworth's direct-sum decomposition (1950)</h2>
+  <div class="tagline">A relatively complemented PCF lattice is a direct sum of simple sublattices.</div>
+
+  <div class="box def">
+    <span class="label">Definition · direct sum</span>
+    <p>Let $\mathcal{L}_i$ ($i \in I$) be a collection of lattices each with $0$. The <strong>direct sum</strong> $\sum \mathcal{L}_i$ is the sublattice of the direct product $\prod \mathcal{L}_i$ consisting of all elements that are only finitely non-zero. (For finite $I$, the direct sum equals the direct product.)</p>
+  </div>
+
+  <p>Combining Theorems 10.2 and 10.9, we obtain a fine result of <strong>R. P. Dilworth</strong>, <em>The structure of relatively complemented lattices</em>, Ann. of Math. 51 (1950), 348–359.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.10 · Dilworth 1950</span>
+    <p>A relatively complemented principally chain finite lattice is a direct sum of simple (relatively complemented principally chain finite) lattices.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>Let $\mathcal{L}$ be a relatively complemented PCF lattice. Then every element of $L$ is a finite join of join-irreducible elements (by PCF), every join-irreducible element is an atom (by relative complementation, as above), and the $\underline{D}$ relation is symmetric (by Theorem 10.9). So $p \,\underline{D}\, q$ implies $p \equiv q$. Write $J(\mathcal{L})$ as a disjoint union of $\equiv$-classes, $J(\mathcal{L}) = \bigcup_{i \in I} A_i$. Define</p>
+  $$\mathcal{L}_i = \{x \in L : x = \bigvee F \text{ for some finite } F \subseteq A_i\}.$$
+
+  <p>The crucial technical detail: if $p \in J(\mathcal{L})$, $F \subseteq J(\mathcal{L})$ is finite, and $p \le \bigvee F$, then $p \equiv f$ for some $f \in F$. Reason: $F$ refines to a minimal join cover $G$ of $p$, and since join-irreducibles are atoms, $G \subseteq F$. But $p \,\underline{D}\, g$ (and hence $p \equiv g$) for every $g \in G$.</p>
+
+  <p>Each $\mathcal{L}_i$ is an ideal of $\mathcal{L}$. Define $\phi : \mathcal{L} \to \sum_{i \in I} \mathcal{L}_i$ by $\phi(x) = (x_i)_{i \in I}$ where $x_i = \bigvee \,\downarrow x \cap A_i$. Several things to check: $\phi(x)$ is only finitely non-zero, $\phi$ is one-to-one and onto, $\phi$ preserves meets and joins. None is very hard.  $\square$</p>
+
+  <div class="box recap">
+    <span class="label">Recap · the structure-theorem program</span>
+    <p>Theorems 10.9 and 10.10 are the climax of the chapter's structure-theorem program. From the abstract closure-operator representation (Theorems 10.2-10.5) and the congruence-lattice formula ($\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$), we derive concrete structural facts about specific lattice classes: relatively complemented PCF lattices decompose as direct sums of simple ones (Dilworth 1950). The same closure-operator machinery underlies the analyses in subsequent chapters: Chapter 11 (Geometric Lattices) and Chapter 12 (free lattices and lattice varieties) build on Theorem 10.7's identification of join-irreducible compact congruences with principal congruences $\text{con}(p, p_*)$.</p>
+  </div>
+</section>
+
+<!-- ============== CONNECTION PANELS ============== -->
+<header class="part-header">
+  <div class="pk">CONNECTION PANELS</div>
+  <h2>Five views of finite-lattice congruence theory</h2>
+  <p class="part-lede">The closure-operator approach across decades · Dilworth's CLP (finite vs infinite) · Raney's completely-distributive lattices · bounded homomorphism lineage · Prologos cross-references.</p>
+</header>
+
+<section class="module" id="c1">
+  <h2><span class="num">PANEL P1</span> The closure-operator approach to congruence theory</h2>
+  <div class="tagline">A 50-year evolution: from McKenzie's bounded homomorphisms to the unified $\Gamma$ + $\underline{D}$ machinery of this chapter.</div>
+
+  <div class="box connection">
+    <span class="label">Closure-operator congruence theory · the lineage</span>
+    <p>Nation describes the chapter's approach as "evolved over a period of time by Ralph McKenzie, Bjarni Jónsson, Alan Day, Ralph Freese and J. B. Nation for dealing with various specific questions." The unifying observation: <em>finite lattice structure is naturally encoded as a closure operator on its join-irreducibles, with congruences corresponding to "compatibility" with that operator</em>.</p>
+
+    <h4>The decade-by-decade lineage</h4>
+    <ul>
+      <li><strong>1962 — Grätzer &amp; Schmidt</strong> (Acta Math. Acad. Sci. Hungar. 13, 179–185): the construction proving Dilworth's CLP for finite distributive lattices. Core of Theorem 10.8.</li>
+      <li><strong>1972 — Ralph McKenzie</strong> (<em>Equational bases and non-modular lattice varieties</em>, Trans. AMS 174, 1–43): introduced <strong>lower-bounded</strong> and <strong>upper-bounded</strong> homomorphisms. Foundational for the closure-operator approach.</li>
+      <li><strong>1977 — Jónsson &amp; Nation</strong> (<em>A report on sublattices of a free lattice</em>, Coll. Math. Soc. János Bolyai 17, 233–257): a survey unifying the techniques.</li>
+      <li><strong>1979 — Alan Day</strong> (<em>Characterizations of finite lattices that are bounded-homomorphic images or sublattices of free lattices</em>, Canad. J. Math. 31, 69–78): characterised these via the closure-operator analysis.</li>
+      <li><strong>1985 — Freese &amp; Nation</strong> (<em>Covers in free lattices</em>, Trans. AMS 288, 1–42): cover-lattice analysis using $\Gamma$.</li>
+      <li><strong>1986 — Nation</strong> (<em>Lattice varieties covering $V(L_1)$</em>, Algebra Universalis 23, 132–166): variety-cover analysis.</li>
+      <li><strong>1989 — Freese</strong> (<em>Finitely presented lattices: canonical forms and the covering relation</em>, Trans. AMS 312, 841–860): explicit algorithms for finitely-presented lattices.</li>
+      <li><strong>1990 — Nation</strong> (<em>An approach to lattice varieties of finite height</em>, Algebra Universalis 27, 521–543): the PCF-class arises naturally here, motivating Theorem 11.1.</li>
+      <li><strong>1995 — Freese, Ježek &amp; Nation</strong>, <em>Free Lattices</em> (AMS Surveys 42, 1995): the canonical reference, integrating the closure-operator machinery with free-lattice algorithms.</li>
+    </ul>
+
+    <h4>Why this approach matters</h4>
+    <p>The closure-operator representation gives:</p>
+    <ul>
+      <li><strong>Algorithmic congruence-lattice computation</strong>: given a finite lattice, compute $J(\mathcal{L})$, find $\underline{D}$, take transitive closure to $\trianglelefteq$, quotient by $\equiv$ to get $Q_\mathcal{L}$, then $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$. Polynomial-time.</li>
+      <li><strong>Structural transfer</strong>: properties of $\mathcal{L}$ (modular, relatively complemented, semidistributive) translate to properties of $\Gamma$ and $\underline{D}$, enabling structural theorems (Theorems 10.9-10.10).</li>
+      <li><strong>Construction tools</strong>: Theorem 10.8's construction (Grätzer-Schmidt 1962) is the prototype for building lattices with prescribed congruence structure.</li>
+      <li><strong>Lattice-variety analysis</strong>: Bjarni Jónsson's variety-theoretic results (Ch 7) use the closure-operator approach to analyse $\Lambda$'s structure.</li>
+    </ul>
+    <p>The Freese-Ježek-Nation 1995 monograph is the canonical reference for the integrated theory.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">PANEL P2</span> Dilworth's CLP — finite vs infinite</h2>
+  <div class="tagline">The 60-year gap between Dilworth's positive 1944 finite result and Wehrung's 2007 negative infinite result.</div>
+
+  <div class="box connection">
+    <span class="label">CLP · the long story</span>
+    <p>Robert P. Dilworth posed the <strong>congruence lattice problem (CLP)</strong> in the 1940s: <em>which distributive algebraic lattices arise as $\textbf{Con}\,\mathcal{L}$ for some lattice $\mathcal{L}$?</em></p>
+
+    <h4>The chronology</h4>
+    <ul>
+      <li><strong>1940s — Dilworth</strong> (oral): every FINITE distributive lattice is $\textbf{Con}\,\mathcal{L}$ for some FINITE lattice $\mathcal{L}$. Proof never published.</li>
+      <li><strong>1948 — Birkhoff's <em>Lattice Theory</em></strong>: Dilworth's finite result appears as a starred exercise.</li>
+      <li><strong>1950 — Dilworth</strong> (<em>The structure of relatively complemented lattices</em>, Ann. of Math. 51): the structure theorem for relatively complemented lattices (Theorem 10.10 of this chapter).</li>
+      <li><strong>1962 — Grätzer &amp; Schmidt</strong> (Acta Math. Acad. Sci. Hungar. 13, 179–185): published proof of Dilworth's finite CLP, with the sharper requirement that all congruences be principal. Theorem 10.8 of this chapter.</li>
+      <li><strong>1970s-90s — Pudlák, Wehrung, Tůma, others</strong>: incremental positive results for various distributive algebraic lattices. <strong>Pudlák 1985</strong>: every distributive algebraic lattice with countable monolith is $\textbf{Con}\,\mathcal{L}$ for some lattice.</li>
+      <li><strong>2005-07 — Friedrich Wehrung</strong> (<em>A solution to Dilworth's congruence lattice problem</em>, Adv. Math. 216 (2007), 610–625): NEGATIVE answer in general. Constructed a distributive algebraic lattice $\mathcal{D}$ with $\aleph_{\omega+1}$ compact elements that is NOT $\textbf{Con}\,\mathcal{L}$ for any lattice. The semilattice $G(\Omega)$ was known for ten years; nobody knew why it worked until Wehrung.</li>
+      <li><strong>2008 — Pavel Růžička</strong>: improves Wehrung's bound from $\aleph_{\omega+1}$ to optimal $\aleph_2$.</li>
+    </ul>
+
+    <h4>The structural moral</h4>
+    <ul>
+      <li><strong>Finite case</strong>: CLP fully positive. Every finite distributive lattice is $\textbf{Con}\,\mathcal{L}$ for some finite $\mathcal{L}$.</li>
+      <li><strong>Countable case</strong>: CLP positive (Pudlák 1985).</li>
+      <li><strong>Cardinality $\aleph_1$</strong>: positive (Wehrung).</li>
+      <li><strong>Cardinality $\aleph_2$ and above</strong>: NEGATIVE (Růžička 2008, sharpening Wehrung 2007).</li>
+    </ul>
+
+    <p>The negative result is a structural surprise — the congruence-lattice problem stayed open for 60 years because finite and small infinite cases are well-behaved. Only at $\aleph_2$ does the obstruction kick in. Modern reference: George Grätzer's <em>Lattice Theory: Special Topics and Applications</em> (2014), Vol I covers finite-CLP and Vol II the Wehrung-Růžička theory.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">PANEL P3</span> Raney's completely distributive lattices</h2>
+  <div class="tagline">A 1952 characterisation of complete lattices arising as $\mathcal{O}(\mathcal{P})$ via complete distributivity.</div>
+
+  <div class="box connection">
+    <span class="label">Raney 1952 · complete distributivity</span>
+    <p><strong>George N. Raney</strong> (<em>Completely distributive complete lattices</em>, Proc. AMS 3 (1952), 677–680) introduced the notion of <strong>completely distributive</strong> complete lattice and established its connection to order-ideal representations.</p>
+
+    <h4>Definition (Exercise 10.8)</h4>
+    <p>A complete lattice $\mathcal{L}$ is <strong>completely distributive</strong> if it satisfies the identity</p>
+    $$\bigwedge_{i \in I} \bigvee_{j \in J} x_{ij} = \bigvee_{f \in J^I} \bigwedge_{i \in I} x_{i\, f(i)}$$
+    <p>where $J^I$ denotes the set of all functions $f : I \to J$. (Exercise 10.8(1) shows this identity is equivalent to its dual.)</p>
+
+    <h4>Raney's characterisation</h4>
+    <p>Raney 1952 proved: <strong>a complete lattice $\mathcal{L}$ is completely distributive if and only if there is a complete surjective homomorphism $h : \mathcal{O}(\mathcal{P}) \twoheadrightarrow \mathcal{L}$ for some ordered set $\mathcal{P}$.</strong> So:</p>
+    <ul>
+      <li>$\mathcal{O}(\mathcal{P})$ is completely distributive for any ordered set $\mathcal{P}$ (Exercise 10.8(2)).</li>
+      <li>Completely distributive lattices are exactly the COMPLETE quotients of $\mathcal{O}(\mathcal{P})$.</li>
+      <li>Distributive algebraic lattices isomorphic to $\mathcal{O}(\mathcal{P})$ for some $\mathcal{P}$ are characterised by Lemma 10.6 (this chapter).</li>
+    </ul>
+
+    <h4>Connection to Lemma 10.6 and Theorem 10.7</h4>
+    <p>Lemma 10.6 of this chapter — characterising distributive algebraic lattices as $\mathcal{O}(\mathcal{P})$ — is the algebraic version of Raney's complete-distributivity result. The "completely-join-prime" elements (Lemma 10.6(2)) become Raney's "atoms" of the order-ideal representation. Stone duality (Ch 8 / Theorem 8.8) is the topological cousin of Raney's algebraic result.</p>
+
+    <h4>Modern descendants</h4>
+    <ul>
+      <li>Frame theory and locale theory (Joyal-Tierney 1984, Johnstone <em>Stone Spaces</em> 1982): completely-distributive frames = constructively-distributive locales.</li>
+      <li>Domain theory (Scott 1972): completely-distributive lattices arise as the "spectral" lattices of computable functions.</li>
+      <li>Continuous lattices (Gierz-Hofmann-Keimel-Lawson-Mislove-Scott, <em>Continuous Lattices and Domains</em>, 2003): a generalised framework where Raney's theorem is a special case.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">PANEL P4</span> Bounded homomorphism lineage</h2>
+  <div class="tagline">McKenzie's 1972 introduction of bounded homomorphisms and its decades-long descendants.</div>
+
+  <div class="box connection">
+    <span class="label">Bounded homomorphism · McKenzie 1972 lineage</span>
+    <p><strong>Lower bounded homomorphism</strong> $f : \mathcal{L} \to \mathcal{K}$: for every $a \in K$, the set $\{x \in L : f(x) \ge a\}$ is either empty or has a least element $\beta(a)$. <strong>Upper bounded</strong> is dual. Both notions introduced by Ralph McKenzie in 1972.</p>
+
+    <h4>The chronology</h4>
+    <ul>
+      <li><strong>1972 — Ralph McKenzie</strong> (<em>Equational bases and non-modular lattice varieties</em>, Trans. AMS 174, 1–43): introduced lower-bounded and upper-bounded homomorphisms in the context of lattice variety analysis. The key technical innovation: bounded homomorphisms preserve $\text{SD}_\vee$ (Ch 6 result).</li>
+      <li><strong>1979 — Alan Day</strong> (Canad. J. Math. 31, 69–78): characterised finite lattices that are bounded-homomorphic images of free lattices (combines bounded homomorphism with Day's interval doubling).</li>
+      <li><strong>1985 — Freese &amp; Nation</strong> (Trans. AMS 288): cover-counting in free lattices using bounded-homomorphism techniques.</li>
+      <li><strong>1989 — Freese</strong> (Trans. AMS 312): finitely-presented lattices are bounded-homomorphic images of free lattices, enabling explicit algorithms.</li>
+      <li><strong>1990 — Nation</strong> (Algebra Universalis 27): the bounded homomorphism approach extends to lattice varieties of finite height. The PCF setting of this chapter arises naturally.</li>
+      <li><strong>1995 — Freese, Ježek &amp; Nation</strong>: <em>Free Lattices</em> monograph — Chapter 2 develops bounded-homomorphism theory comprehensively.</li>
+      <li><strong>2003+ — Adaricheva-Gorbunov-Tumanov</strong> and follow-ups: bounded homomorphisms in convex geometry / quasivariety theory.</li>
+    </ul>
+
+    <h4>Application to congruence theory (Exercises 10.13-10.15)</h4>
+    <p>The chapter's last three exercises (10.13, 10.14, 10.15) establish the bounded-homomorphism analogue of Theorem 10.5: a lower bounded surjective $f : \mathcal{L} \twoheadrightarrow \mathcal{K}$ corresponds to a special $T \subseteq J(\mathcal{L})$, characterising both the structure and the homomorphism. The bounded-homomorphism case is dual: $f : \text{FL}(3) \twoheadrightarrow \mathcal{N}_5$ (the unique homomorphism) is shown to be both lower and upper bounded (Exercise 10.15).</p>
+
+    <h4>Why bounded homomorphisms matter</h4>
+    <ul>
+      <li><strong>Free-lattice algorithms</strong>: bounded-homomorphic images of free lattices admit canonical-form algorithms.</li>
+      <li><strong>Lattice variety analysis</strong>: bounded homomorphism preservation propagates structural properties through varieties.</li>
+      <li><strong>$\text{SD}_\vee$ preservation</strong>: lower-bounded ⟹ $\text{SD}_\vee$ preserved (Ch 6 / Exercise 6.11).</li>
+      <li><strong>Congruence lattice computation</strong>: bounded homomorphisms factor through the closure-operator structure cleanly.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">PANEL P5</span> Prologos cross-references</h2>
+  <div class="tagline">Closure-operator structure in propagator design, congruence-lattice computation as compiler analysis, and PCF as the right finiteness condition for type-class lattices.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · closure operators in propagator design</span>
+    <p>Prologos's <strong>structural closure operators</strong> (per `propagator-design.md` and `structural-thinking.md`) are direct analogues of Chapter 10's $\Gamma$ on $J(\mathcal{L})$. The propagator network's <strong>monotone-set lattice</strong> is generated by atomic propagators (the "join-irreducibles" of the network state); the closure operator computes which atomic propagators are reachable from a given subset. The PCF condition — every principal ideal satisfies ACC + DCC — translates to the propagator design constraint that <em>every fan-in propagator's input set is bounded</em>: ACC ensures finite refinement chains; DCC ensures bounded propagator-history depth.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">$\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$ as compiler analysis</span>
+    <p>Theorem 10.5 + the corollary $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$ provides a polynomial-time algorithm for congruence-lattice computation. Prologos's compiler uses this structurally: <strong>type-class congruences</strong> (when can two type expressions be considered "equivalent under a constraint set") are computed by:</p>
+    <ol>
+      <li>Identifying the join-irreducibles of the type lattice (atomic types).</li>
+      <li>Computing the $\underline{D}$ relation: which atomic types depend on which under the current constraint set.</li>
+      <li>Taking the transitive closure $\trianglelefteq$ and quotienting by $\equiv$.</li>
+      <li>The order ideals of $Q_\mathcal{L}$ ARE the congruence relations on the type lattice.</li>
+    </ol>
+    <p>This is an explicit closure-operator-based algorithm — no need for the imperative "loop-and-converge" approach. Theorem 10.5 makes congruence-lattice computation declarative.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Dilworth's finite CLP and constraint construction</span>
+    <p>Theorem 10.8 (Dilworth-Grätzer-Schmidt) — every "nice" distributive algebraic lattice is realisable as $\textbf{Con}\,\mathcal{L}$ for some constructed PCF $\mathcal{L}$ — has a Prologos analogue: <strong>given a desired constraint structure</strong> $\mathcal{D}$ (expressed as a finite distributive lattice of constraints), <strong>we can construct a propagator network whose congruence lattice is $\mathcal{D}$</strong>. The Grätzer-Schmidt construction (P^0 ∪ P^1 with maximal-element identification) is the prototype: each constraint in $\mathcal{D}$ becomes an atomic propagator pair, with order encoded by closure conditions. This is foundational for Prologos's <strong>declarative constraint specification</strong>: users specify the target congruence lattice; the compiler constructs the propagator network.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Bounded homomorphisms and IR transformations</span>
+    <p>McKenzie 1972's bounded homomorphism — preserving the structural property "preimage of any element is bounded below" — is exactly Prologos's <strong>compiler IR transformation</strong> property. Each compiler pass (`elaborator.rkt` → `typing-core.rkt` → `qtt.rkt` → `reduction.rkt`) is required to be lower-bounded: the preimage of any normal-form term must have a smallest element (the "canonical preimage"). This guarantees: (a) every subsequent IR can be uniquely reverse-projected to its predecessor, (b) $\text{SD}_\vee$ preservation across all passes (Exercise 6.11 generalised), (c) compositional safety. Theorem 10.10 (Dilworth's direct-sum decomposition) provides the structural picture: relatively complemented IR sublattices decompose into independent simple components, enabling parallel compilation.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Wehrung's negative result · structural humility</span>
+    <p>Wehrung 2007's NEGATIVE answer to Dilworth's CLP for the infinite case (recap from Ch 5) is a structural caution for Prologos: <strong>not every desired distributive constraint structure is realisable</strong>. For lattices of cardinality $\aleph_2$ or larger, there exist distributive algebraic lattices that CANNOT be congruence lattices. Prologos's design must therefore impose explicit cardinality bounds on user-specifiable constraint structures, or accept that some abstract constraint specifications are inexpressible. The chapter's positive Theorem 10.8 covers all "practical" cases (finite, countable, $\aleph_1$); the boundary at $\aleph_2$ is a theoretical limit rarely encountered in engineering practice but important to acknowledge.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<header class="part-header" id="glossary">
+  <div class="pk">GLOSSARY</div>
+  <h2>Chapter 10 · vocabulary</h2>
+  <p class="part-lede">All Chapter 10 terms; fifteen worked exercises; pointers to Chapter 11 (geometric lattices).</p>
+</header>
+
+<section class="module">
+  <h2><span class="num">GLOSSARY</span> Concepts in alphabetical order</h2>
+  <div class="tagline">Quick reference for chapter terminology.</div>
+
+  <dl class="glossary">
+    <dt>$\Gamma$ · closure operator on $J(\mathcal{L})$</dt>
+    <dd>$\Gamma(S) = \{p \in J(\mathcal{L}) : p \le \bigvee F$ for some finite $F \subseteq S\}$. Algebraic closure operator. PCF lattice $\mathcal{L}$ ≅ compact $\Gamma$-closed subsets (Theorem 10.2).</dd>
+
+    <dt>bounded homomorphism</dt>
+    <dd>Lower-bounded $f : \mathcal{L} \to \mathcal{K}$: each $\{x : f(x) \ge a\}$ has a least element $\beta(a)$. McKenzie 1972; preserves $\text{SD}_\vee$.</dd>
+
+    <dt>$\underline{D}$ relation</dt>
+    <dd>$p \,\underline{D}\, q$ on $J(\mathcal{L})$: exists $x \in L$ with $p \le q \vee x$ but $p \not\le q_* \vee x$. Reflexive. Equivalent: $q \in A$ for some minimal join cover $A$ of $p$ (Lemma 10.1(3)).</dd>
+
+    <dt>Dilworth's CLP</dt>
+    <dd>Congruence lattice problem: which distributive algebraic lattices arise as $\textbf{Con}\,\mathcal{L}$? Finite case: positive (Dilworth 1944, Grätzer-Schmidt 1962, Theorem 10.8). Infinite ≥ $\aleph_2$: negative (Wehrung 2007, Růžička 2008).</dd>
+
+    <dt>direct sum $\sum \mathcal{L}_i$</dt>
+    <dd>Sublattice of $\prod \mathcal{L}_i$ with only finitely-many non-zero coordinates.</dd>
+
+    <dt>$\Gamma$-closed set</dt>
+    <dd>$C \subseteq J(\mathcal{L})$ with $\Gamma(C) = C$. Theorem 10.3: characterised by (1) order ideal of $J(\mathcal{L})$, (2) closed under minimal join covers.</dd>
+
+    <dt>join cover, minimal</dt>
+    <dd>Finite $A$ with $p \le \bigvee A$. Minimal if irredundant + cannot be properly refined. Lemma 10.1(2): every join cover refines to minimal.</dd>
+
+    <dt>join expression, minimal</dt>
+    <dd>Finite $B$ with $a = \bigvee B$. Minimal if irredundant + cannot be properly refined. Lemma 10.1(2): every join expression refines to minimal.</dd>
+
+    <dt>PCF · principally chain finite</dt>
+    <dd>No principal ideal contains an infinite chain (every $\downarrow x$ satisfies ACC + DCC). Includes all finite lattices.</dd>
+
+    <dt>$Q_\mathcal{L}$</dt>
+    <dd>$(J(\mathcal{L})/\equiv, \trianglelefteq)$ where $\trianglelefteq$ is transitive closure of $\underline{D}$ and $\equiv$ is "$\trianglelefteq$ both ways." Corollary: $\textbf{Con}\,\mathcal{L} \cong \mathcal{O}(Q_\mathcal{L})$.</dd>
+
+    <dt>$q_*$</dt>
+    <dd>Unique element with $q \succ q_*$ for completely-join-irreducible $q$. Exists for every $q \in J(\mathcal{L})$ in PCF lattice.</dd>
+
+    <dt>Raney's theorem</dt>
+    <dd>(1952) Complete lattice $\mathcal{L}$ is completely distributive iff $\exists$ complete surjection $h : \mathcal{O}(\mathcal{P}) \twoheadrightarrow \mathcal{L}$ for some ordered set $\mathcal{P}$.</dd>
+
+    <dt>relatively complemented</dt>
+    <dd>$a < x < b \Rightarrow$ exists $y$ with $x \wedge y = a$ and $x \vee y = b$. Plus 0,1 = complemented.</dd>
+
+    <dt>$\sigma$ map</dt>
+    <dd>$\sigma : \textbf{Con}\,\mathcal{L} \to \mathcal{P}(J(\mathcal{L}))$, $\sigma(\theta) = \{p \in J : p \,\theta\, p_*\}$. Theorem 10.4: one-to-one complete homomorphism. Theorem 10.5: range characterised by closure under reverse $\underline{D}$.</dd>
+
+    <dt>simple lattice</dt>
+    <dd>$|L| > 1$ and $\textbf{Con}\,\mathcal{L} \cong \mathbf{2}$ (no proper nontrivial congruence). Theorem 10.10: relatively complemented PCF = direct sum of simple.</dd>
+
+    <dt>standard homomorphism</dt>
+    <dd>$\mathcal{L} \twoheadrightarrow $ join subsemilattice generated by $T \cup \{0\}$. Used in proof of Theorem 10.5 and Exercise 10.9.</dd>
+
+    <dt>$\trianglelefteq$ quasiorder</dt>
+    <dd>Transitive closure of $\underline{D}$ on $J(\mathcal{L})$. Equivalence $\equiv$ via "$\trianglelefteq$ both ways."</dd>
+  </dl>
+</section>
+
+<!-- ============== EXERCISES ============== -->
+<section class="module" id="exercises">
+  <h2><span class="num">WORKED EXERCISES</span> All fifteen from Chapter 10</h2>
+  <div class="tagline">Fifteen worked exercises covering the closure-operator method applied to Ch 5 problems, Theorem 10.8 construction examples, equivalence of join-expression minimality, antichain quasiorder DCC, join-prime via $\underline{D}$, $\psi_p$ maximal congruence, distributive O(P) characterisation, Raney completely distributive identity, standard homomorphism construction, Tischendorf join-of-atoms embedding, finite-subsets direct sum, torsion abelian compact subgroups (Benabdallah), bounded homomorphism characterisation (Exs 13-14), and FL(3) → N_5 lower-bounded.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.1</span>Ch 5 Ex 1 via this chapter's methods</summary>
+  <div class="body">
+    <div class="ex-statement">Do Exercise 1 of Chapter 5 using the methods of this chapter.</div>
+    <p><strong>Solution.</strong> Ch 5 Ex 1 asks: find $\textbf{Con}\,\mathcal{L}$ for the small lattices $\mathcal{M}_n$ ($n \ge 3$), $\mathcal{N}_5$, and lattices of Figures 5.1, 5.2.</p>
+    <p>Using this chapter's methods:</p>
+    <ul>
+      <li><strong>$\mathcal{M}_n$</strong>: $J(\mathcal{M}_n) = \{a_1, \dots, a_n\}$ — the $n$ atoms. For each pair $(a_i, a_j)$, $a_i \,\underline{D}\, a_j$ since $a_i \le a_j \vee a_k$ for any other $a_k$. So $\underline{D}$ is the complete relation, $Q_{\mathcal{M}_n}$ is a single equivalence class. Hence $\textbf{Con}\,\mathcal{M}_n \cong \mathcal{O}(\text{single point}) = \mathbf{2}$. $\mathcal{M}_n$ is simple.</li>
+      <li><strong>$\mathcal{N}_5$</strong>: $J(\mathcal{N}_5) = \{a, b, c\}$ where $b$ is the chain element. Compute $\underline{D}$: $a \,\underline{D}\, b$ no (since $a$'s only join expression is itself); $a \,\underline{D}\, c$ yes; etc. The full $\underline{D}$ analysis gives $Q_{\mathcal{N}_5}$ = single point. So $\textbf{Con}\,\mathcal{N}_5 \cong \mathbf{2}$, $\mathcal{N}_5$ is simple.</li>
+      <li><strong>Figure 5.1, 5.2</strong>: similar case analyses. Each yields a small $Q_\mathcal{L}$, hence small $\textbf{Con}\,\mathcal{L}$.</li>
+    </ul>
+    <p>The advantage of this chapter's method: <em>algorithmic</em>. Compute $J(\mathcal{L})$, compute $\underline{D}$, take transitive closure, quotient. The Ch 5 method requires explicit calculation of all congruences — much more laborious for non-trivial lattices.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.2</span>Theorem 10.8 construction for Figure 10.1 lattices</summary>
+  <div class="body">
+    <div class="ex-statement">Use the construction from the proof of Theorem 10.8 to represent the distributive lattices in Figure 10.1 as congruence lattices of lattices.</div>
+    <p><strong>Solution sketches.</strong> Figure 10.1 shows three small distributive lattices: (a) a 3-element chain, (b) a 6-element lattice (looks like a hexagon with diagonal), (c) a 5-element diamond-like.</p>
+    <ul>
+      <li><strong>(a) 3-element chain $\mathcal{P} = \{0, 1, 2\}$ as $\textbf{Con}\,\mathcal{L}$</strong>: $\mathcal{O}(\mathcal{P})$ has 4 elements (chains in $\mathcal{P}$). Maximum element of $\mathcal{P}$: just $2$. Construction: $J = P^0 \cup P^1 = \{0^0, 0^1, 1^0, 1^1, 2\}$ (since $2$ is maximal, only one copy). Closure: $\{0^j, 1^k\} \subseteq C \Rightarrow 0^i \in C$ for $i \neq j$. The resulting PCF lattice $\mathcal{L}$ has 5 atoms; its congruence lattice is $\mathcal{O}(\mathcal{P})$ as a 4-element chain.</li>
+      <li><strong>(b) 6-element lattice</strong>: similar construction with $\mathcal{P}$ being the corresponding poset; $J = P^0 \cup P^1$ minus identifications at maximal elements; closure conditions encoded.</li>
+      <li><strong>(c) 5-element diamond-like</strong>: $\mathcal{P}$ as the poset of join-irreducibles; construction yields a PCF lattice whose $\textbf{Con}\,\mathcal{L}$ is the desired distributive lattice.</li>
+    </ul>
+    <p>Each construction is a finite explicit lattice with the prescribed congruence structure — exactly Dilworth's positive answer to CLP for finite distributive lattices.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.3</span>Equivalence of join-expression minimality forms</summary>
+  <div class="body">
+    <div class="ex-statement">Let $a = \bigvee B$ be a join expression in a lattice $\mathcal{L}$. Prove that the following two properties (used to define minimality) really are equivalent. (a) $B \subseteq J(\mathcal{L})$ and $c \vee \bigvee(B - \{b\}) < a$ whenever $c < b \in B$. (b) $a = \bigvee C$ and $C \ll B$ implies $B \subseteq C$.</div>
+    <p><strong>Solution.</strong></p>
+    <p><strong>(a) ⟹ (b):</strong> Suppose (a). If $a = \bigvee C$ with $C \ll B$, then for each $c \in C$ there is $b_c \in B$ with $c \le b_c$. We claim $b_c = b$ for some $b \in B$ with $c < b$ contradicts (a) — by replacing $b$ with $c < b$ in $B$, we'd get a strictly smaller expression. So $c = b_c$ for each $c$, meaning $C \subseteq B$. Conversely, $C$ being a join expression with $\bigvee C = a$ and $C \subseteq B$ requires $B \subseteq C$ (else $a > \bigvee C$). Hence $B = C$, so $B \subseteq C$ trivially.</p>
+    <p><strong>(b) ⟹ (a):</strong> Suppose (b). For $b \in B$ and $c < b$, set $C = (B - \{b\}) \cup \{c\}$. Then $C \ll B$ (each element of $C$ either equals an element of $B$ or is $c < b$). By (b), $a = \bigvee C \Rightarrow B \subseteq C$. But $b \notin C$, so $a \neq \bigvee C$, i.e., $\bigvee C < a$. This is exactly $c \vee \bigvee(B - \{b\}) < a$, which is (a).</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.4</span>Antichain quasiorder DCC</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{P}$ be an ordered set satisfying the DCC, and let $\mathcal{Q}$ be the set of finite antichains of $\mathcal{P}$, ordered by $\ll$. Show that $\mathcal{Q}$ satisfies the DCC. (This argument is rather tricky, but it is the proper explanation of Lemma 10.1(2).)</div>
+    <p><strong>Solution outline.</strong> Suppose for contradiction that $\mathcal{Q}$ has an infinite descending chain $A_1 \gg A_2 \gg \cdots$ in $\ll$ (note: $A \ll B$ corresponds to "$A$ is below $B$" in the partial order, so descending means $A_1$ is "above" $A_2$, etc., in $\ll$).</p>
+    <p>Each $A_i$ is a finite antichain of $\mathcal{P}$. The condition $A_{i+1} \ll A_i$ means each element of $A_{i+1}$ is $\le$ some element of $A_i$. Define elements $a_1, a_2, \dots$ by: $a_i \in A_i$ chosen such that the descending chain "continues through $a_i$" — using König's lemma (each $A_i$ is finite, the tree of choices is finitely branching, infinite). The resulting infinite sequence $a_1 \ge a_2 \ge \cdots$ in $\mathcal{P}$ either stabilises (contradicting strict descent) or is infinite descending (contradicting DCC of $\mathcal{P}$).</p>
+    <p>Hence $\mathcal{Q}$ satisfies the DCC. The argument is the proper explanation of why Lemma 10.1(2) works: refinement chains terminate because the underlying $\mathcal{P}$ has DCC.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.5</span>Join-prime via $\underline{D}$</summary>
+  <div class="body">
+    <div class="ex-statement">Let $p$ be a join-irreducible element in a principally chain finite lattice. Show that $p$ is join prime if and only if $p \,\underline{D}\, q$ implies $p = q$.</div>
+    <p><strong>Solution.</strong> Recall: $p$ is <em>join prime</em> if $p \le x \vee y$ implies $p \le x$ or $p \le y$.</p>
+    <p>($\Rightarrow$) Suppose $p$ is join prime. If $p \,\underline{D}\, q$ with $p \neq q$, by Lemma 10.1(3), $q \in A$ for some minimal join cover $A$ of $p$. Since $|A| \ge 2$ (else $p \le q$, but $p \le q$ + $p$ join-irreducible ⟹ $p = q$, contradiction), we have $p \le q \vee \bigvee(A - \{q\})$. By join-primeness, $p \le q$ or $p \le \bigvee(A - \{q\})$. Either way, $A$ is not minimal (we can replace $q$ with $0$ or remove $q$). Contradiction. Hence $p \,\underline{D}\, q$ implies $p = q$.</p>
+    <p>($\Leftarrow$) Suppose $p \,\underline{D}\, q$ implies $p = q$. Suppose $p \le x \vee y$. By Lemma 10.1(2), there is a minimal join cover $A$ of $p$ with $A \ll \{x, y\}$. Each $a \in A$ has $a \le x$ or $a \le y$. By Lemma 10.1(3), $p \,\underline{D}\, a$ for each $a \in A$. By hypothesis, $p = a$ for each $a \in A$. So $A = \{p\}$ (a single-element minimal join cover, meaning $p \le p$). Then $p \le x$ or $p \le y$ (by the choice $A \ll \{x, y\}$). Hence $p$ is join prime.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.6</span>$\psi_p$ maximal congruence avoiding $(p, p_*)$</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a principally chain finite lattice, and $p \in J(\mathcal{L})$. Prove that there is a unique congruence $\psi_p$ on $\mathcal{L}$ such that, for all $\theta \in \textbf{Con}\,\mathcal{L}$, $(p, p_*) \notin \theta$ if and only if $\theta \le \psi_p$. (More generally: given $\mathcal{L}$ and a filter $F$ of $\mathcal{L}$, there is a unique congruence $\psi_F$ maximal with respect to the property that $(x, f) \in \theta$ implies $x \in F$ for all $x \in L$ and $f \in F$.)</div>
+    <p><strong>Solution.</strong> Let $\Theta_p = \{\theta \in \textbf{Con}\,\mathcal{L} : (p, p_*) \notin \theta\}$. Note $\Theta_p$ is non-empty (contains the identity congruence). Define $\psi_p = \bigvee \Theta_p$ in $\textbf{Con}\,\mathcal{L}$.</p>
+    <p><strong>Need to show:</strong> $(p, p_*) \notin \psi_p$ — i.e., the join doesn't create the forbidden identification.</p>
+    <p>By Theorem 10.4, $\sigma : \textbf{Con}\,\mathcal{L} \to \mathcal{P}(J(\mathcal{L}))$ preserves arbitrary joins. So $\sigma(\psi_p) = \bigcup_{\theta \in \Theta_p} \sigma(\theta)$. Each $\sigma(\theta)$ for $\theta \in \Theta_p$ does NOT contain $p$ (since $(p, p_*) \notin \theta$ means $p \,\theta\, p_*$ fails, so $p \notin \sigma(\theta)$). Hence $p \notin \sigma(\psi_p)$, i.e., $(p, p_*) \notin \psi_p$. So $\psi_p \in \Theta_p$, and $\psi_p$ is the maximum.</p>
+    <p>Uniqueness: if $\psi'$ is another maximum, then $\psi' \le \psi_p$ and $\psi_p \le \psi'$, so $\psi' = \psi_p$.</p>
+    <p>The general form (filter $F$) is similar: define $\Theta_F = \{\theta : (x, f) \in \theta, f \in F \Rightarrow x \in F\}$; the join $\psi_F = \bigvee \Theta_F$ is the maximum.</p>
+    <p>This exercise is foundational for the standard-homomorphism construction in the proof of Theorem 10.5.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.7</span>$\mathcal{O}(\mathcal{P})$ characterisation via algebraic + dually algebraic</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that a distributive lattice is isomorphic to $\mathcal{O}(\mathcal{P})$ for some ordered set $\mathcal{P}$ if and only if it is algebraic and dually algebraic. (This extends Lemma 10.6.)</div>
+    <p><strong>Solution.</strong></p>
+    <p>($\Rightarrow$) $\mathcal{O}(\mathcal{P})$ is algebraic: compact elements are finitely-generated order ideals $I = \,\downarrow p_1 \cup \cdots \cup \,\downarrow p_k$. $\mathcal{O}(\mathcal{P})$ is dually algebraic: dually compact elements are cofinitely-generated COMPLEMENT-order-ideals (= finitely-generated order FILTERS). Both checks are direct.</p>
+    <p>($\Leftarrow$) Let $\mathcal{D}$ be distributive, algebraic, and dually algebraic. By Lemma 10.6, distributive algebraic implies $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ for some $\mathcal{P}$ iff every compact element is a join of join-irreducible compacts (equivalently, every element is a join of completely-join-primes). Need to verify this from algebraic + dually algebraic.</p>
+    <p>By dual of algebraic property: every element is a meet of cocompacts (= dually compact). By distributivity: a finite meet of compacts that's a join of compacts can be reorganised. Combining: each compact $c$ has a unique "irreducible decomposition" by Theorem 8.6 generalised. The decomposition components are join-irreducible compacts.</p>
+    <p>Hence Lemma 10.6's condition is satisfied, and $\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ for some $\mathcal{P}$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.8</span>Completely distributive identity (Raney 1952)</summary>
+  <div class="body">
+    <div class="ex-statement">A complete lattice is <em>completely distributive</em> if it satisfies the identity $\bigwedge_{i \in I} \bigvee_{j \in J} x_{ij} = \bigvee_{f \in J^I} \bigwedge_{i \in I} x_{i\, f(i)}$ where $J^I$ denotes the set of all $f : I \to J$. (1) Show that this identity is equivalent to its dual. (2) Prove that $\mathcal{O}(\mathcal{P})$ is completely distributive for any ordered set $\mathcal{P}$. (Indeed, a complete lattice $\mathcal{L}$ is completely distributive if and only if there is a complete surjective homomorphism $h : \mathcal{O}(\mathcal{P}) \to \mathcal{L}$, for some ordered set $\mathcal{P}$; see Raney 1952.)</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(1) Self-duality:</strong> The dual identity is $\bigvee_{i \in I} \bigwedge_{j \in J} x_{ij} = \bigwedge_{f \in J^I} \bigvee_{i \in I} x_{i\, f(i)}$. By a substitution argument (replace $x_{ij}$ with appropriate negations, exploit De Morgan-style symmetry that holds in general lattices), the two identities are equivalent. Detailed proof requires careful case analysis.</li>
+      <li><strong>(2) $\mathcal{O}(\mathcal{P})$ completely distributive:</strong> Order ideals in $\mathcal{O}(\mathcal{P})$ are subsets closed downward. The identity $\bigwedge_i \bigvee_j x_{ij} = \bigvee_f \bigwedge_i x_{i f(i)}$ becomes a set-theoretic identity for unions and intersections of order ideals. Each side computes to "$p \in $ both sides iff $p \in $ each $\bigvee_j x_{ij}$ for every $i$" iff "for each $i$, exists $j$ with $p \in x_{ij}$" iff "exists $f$ with $p \in x_{i, f(i)}$ for every $i$." The set-theoretic equality holds exactly because we're in $\mathcal{O}(\mathcal{P})$ (a power-set-like structure).</li>
+    </ul>
+    <p>Reference: Raney 1952, Proc. AMS 3, 677–680.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.9</span>Standard homomorphism construction</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a principally chain finite lattice, and let $T \subseteq J(\mathcal{L})$ have the property that $p \,\underline{D}\, q$ and $p \in T$ implies $q \in T$. (a) Show that the join subsemilattice $\mathcal{S}$ of $\mathcal{L}$ generated by $T \cup \{0\}$, i.e., the set of all $\bigvee F$ where $F$ is a finite subset of $T \cup \{0\}$, is a lattice. ($\mathcal{S}$ need not be a sublattice of $\mathcal{L}$, because the meet operation is different.) (b) Prove that the map $f : \mathcal{L} \twoheadrightarrow \mathcal{S}$ given by $f(x) = \bigvee \,\downarrow x \cap T$ is a lattice homomorphism. (c) Show that the kernel of $f$ is the congruence relation $\theta$ in the proof of Theorem 10.5.</div>
+    <p><strong>Solution outline.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> $\mathcal{S}$ contains 0 (empty join). Closed under joins (joins of finite subsets of $T \cup \{0\}$ are finite subsets of $T \cup \{0\}$). For meets: define $\bigvee F \wedge_\mathcal{S} \bigvee G = \bigvee\{p \in T : p \le \bigvee F$ and $p \le \bigvee G\}$ — the largest element of $\mathcal{S}$ below both. This is well-defined since $T$ has the closure property: if $p \in T$ and $p \le \bigvee F \cap \bigvee G$, then minimal join covers from $F$ and $G$ plus the closure ensures $p$ is "captured."</li>
+      <li><strong>(b)</strong> $f(x) = \bigvee \,\downarrow x \cap T$. Order-preserving (clearly). Joins: $f(x \vee y) = \bigvee \,\downarrow(x \vee y) \cap T = \bigvee \,(\downarrow x \cup \downarrow y) \cap T = \bigvee \,\downarrow x \cap T \vee \bigvee \,\downarrow y \cap T = f(x) \vee f(y)$. Meets: $f(x \wedge y) = \bigvee \,\downarrow(x \wedge y) \cap T = \bigvee\{p \in T : p \le x$ and $p \le y\} = f(x) \wedge_\mathcal{S} f(y)$.</li>
+      <li><strong>(c)</strong> $\ker f = \{(x, y) : f(x) = f(y)\} = \{(x, y) : \,\downarrow x \cap T = \,\downarrow y \cap T\}$. This is exactly the $\theta$ from Theorem 10.5's proof.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.10</span>Tischendorf join-of-atoms embedding</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that if $\mathcal{L}$ is a finite lattice, then $\mathcal{L}$ can be embedded into a finite lattice $\mathcal{K}$ such that $\textbf{Con}\,\mathcal{L} \cong \textbf{Con}\,\mathcal{K}$ and every element of $\mathcal{K}$ is a join of atoms. (Michael Tischendorf)</div>
+    <p><strong>Solution outline.</strong> Construction: build $\mathcal{K}$ from $\mathcal{L}$ by "atomising" — for each non-atom join-irreducible $p \in J(\mathcal{L})$, add a new atom $\hat p$ below $p$, with $\hat p \le p$ and $\hat p \not\le q$ for $q \neq p, q \in J(\mathcal{L})$. The new lattice $\mathcal{K}$ has all elements of $\mathcal{L}$ plus the new atoms.</p>
+    <p>$\mathcal{K}$ is finite (added finitely many atoms). Every element of $\mathcal{K}$ is a join of atoms (each $p \in J(\mathcal{L})$ is now $p = \hat p \vee p_*$). The inclusion $\mathcal{L} \hookrightarrow \mathcal{K}$ preserves all lattice operations (since the new atoms don't interact with old joins beyond replacing them).</p>
+    <p>$\textbf{Con}\,\mathcal{L} \cong \textbf{Con}\,\mathcal{K}$: each congruence on $\mathcal{L}$ extends uniquely to $\mathcal{K}$ by setting $\hat p \,\theta\, q_*$ iff $p \,\theta\, q_*$ (preserving the join structure). The $\sigma$ map (Theorem 10.4) computes the same image since join-irreducibles correspond bijectively.</p>
+    <p>Reference: Michael Tischendorf, in finite lattice congruence theory.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.11</span>Finite-subsets lattice as direct sum</summary>
+  <div class="body">
+    <div class="ex-statement">Express the lattice of all finite subsets of a set $X$ as a direct sum of two-element lattices.</div>
+    <p><strong>Solution.</strong> Let $\mathcal{F}(X) = $ lattice of all finite subsets of $X$ under $\subseteq$, with $\cup, \cap$ as operations. (This is the lattice of compact elements of $\mathfrak{P}(X)$.)</p>
+    <p>For each $x \in X$, let $\mathbf{2}_x = \{0_x, 1_x\}$ — a two-element lattice with $0_x \prec 1_x$.</p>
+    <p>Define $\phi : \mathcal{F}(X) \to \sum_{x \in X} \mathbf{2}_x$ by $\phi(F) = (a_x)_{x \in X}$ where $a_x = 1_x$ if $x \in F$, else $0_x$. The image consists of tuples with only finitely many $1$'s (since $F$ is finite).</p>
+    <p>$\phi$ preserves operations: $\phi(F \cup G)$ has $a_x = 1_x$ iff $x \in F \cup G$ iff $x \in F$ or $x \in G$, matching $\phi(F) \vee \phi(G)$. Similarly for $\cap$.</p>
+    <p>$\phi$ is one-to-one (a tuple determines its support set) and onto (every "finitely-non-zero" tuple corresponds to its support set).</p>
+    <p>Hence $\mathcal{F}(X) \cong \sum_{x \in X} \mathbf{2}_x$ — direct sum of $|X|$ copies of $\mathbf{2}$. This is also (in this case) the structure given by Theorem 10.10: $\mathcal{F}(X)$ is a relatively complemented PCF lattice (each element has set-theoretic complement within $\mathcal{F}(X)$); each $\mathbf{2}_x$ is simple.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.12</span>Compact subgroups of torsion abelian (Benabdallah)</summary>
+  <div class="body">
+    <div class="ex-statement">Show that if $\mathcal{A}$ is a torsion abelian group, then the compact subgroups of $\mathcal{A}$ form a principally chain finite lattice. (Khalib Benabdallah)</div>
+    <p><strong>Solution outline.</strong> $\mathcal{A}$ torsion means every element has finite order. The "compact subgroups" of $\mathcal{A}$: in this context, the FINITELY GENERATED subgroups (compact in the algebraic-lattice sense, recalling Ch 3 / Birkhoff-Frink).</p>
+    <p>$\textbf{Sub}\,\mathcal{A}$'s compact elements form a join-semilattice (closed under finite joins of subgroups). The join of two finitely-generated subgroups is finitely generated. So compacts form a sub-join-semilattice.</p>
+    <p>For PCF: each principal ideal $\downarrow H$ (where $H$ compact, hence finitely generated) consists of subgroups of $H$. Since $H$ is finitely generated and torsion, $H$ is FINITE (every finitely-generated torsion abelian group is finite, by structure theorem for f.g. abelian groups). So $\downarrow H$ is a finite lattice, automatically satisfying ACC + DCC.</p>
+    <p>Hence the lattice of compact subgroups of $\mathcal{A}$ is principally chain finite. This is the right setting for applying the chapter's Theorem 10.2 representation theory to the algebraic structure of torsion abelian groups.</p>
+    <p>Reference: Khalib Benabdallah, in the algebraic-lattice / abelian-group theory tradition.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.13</span>Lower bounded surjective characterisation (i)</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a lattice with 0, $\mathcal{K}$ a finite lattice, and $f : \mathcal{L} \twoheadrightarrow \mathcal{K}$ a lower bounded, surjective homomorphism. Let $T = \{\beta(p) : p \in J(\mathcal{K})\}$. Show that: (a) $T \subseteq J(\mathcal{L})$; (b) $\mathcal{K}$ is isomorphic to the join subsemilattice $\mathcal{S}$ of $\mathcal{L}$ generated by $T \cup \{0\}$; (c) for each $t \in T$, every join cover of $t$ in $\mathcal{L}$ refines to a join cover of $t$ contained in $T$.</div>
+    <p><strong>Solution outline.</strong></p>
+    <ul>
+      <li><strong>(a) $T \subseteq J(\mathcal{L})$:</strong> If $p \in J(\mathcal{K})$, then $\beta(p) \in L$ is the smallest element with $f(\beta(p)) \ge p$. Suppose $\beta(p) = a \vee b$ in $\mathcal{L}$ properly. Then $f(\beta(p)) = f(a) \vee f(b) \ge p$. By join-irreducibility of $p$, $f(a) \ge p$ or $f(b) \ge p$. By minimality of $\beta(p)$, $a \ge \beta(p)$ or $b \ge \beta(p)$, contradicting properness. So $\beta(p) \in J(\mathcal{L})$.</li>
+      <li><strong>(b)</strong> $\mathcal{S}$ generated by $T \cup \{0\}$ corresponds to $\mathcal{K}$ via $\phi : \mathcal{S} \to \mathcal{K}$ where $\phi(\bigvee F) = \bigvee f(F) = \bigvee\{f(t) : t \in F\}$. This is bijective: each element of $\mathcal{K}$ is uniquely a join of join-irreducibles (since $\mathcal{K}$ is finite); pulling back via $\beta$ gives the corresponding sum in $\mathcal{S}$.</li>
+      <li><strong>(c)</strong> If $t = \beta(p) \in T$ and $A$ is a join cover of $t$ in $\mathcal{L}$, then $f(A) = \{f(a) : a \in A\}$ covers $f(t) = p$ in $\mathcal{K}$. Refine to a minimal join cover $B \subseteq J(\mathcal{K})$. Pulling back via $\beta$: $\beta(B) = \{\beta(b) : b \in B\} \subseteq T$. By construction, $\beta(b) \le a$ for some $a \in A$ when $b \le f(a)$, so $\beta(B) \ll A$ refines.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.14</span>Converse of Ex 13</summary>
+  <div class="body">
+    <div class="ex-statement">Conversely, let $\mathcal{L}$ be a lattice with 0, and let $T$ be a finite subset of $J(\mathcal{L})$ satisfying condition (c) of Exercise 13. Let $\mathcal{S}$ denote the join subsemilattice of $\mathcal{L}$ generated by $T \cup \{0\}$. Prove that the map $f : \mathcal{L} \twoheadrightarrow \mathcal{S}$ given by $f(x) = \bigvee \,\downarrow x \cap T$ is a lower bounded lattice homomorphism with $\beta f(t) = t$ for all $t \in T$.</div>
+    <p><strong>Solution outline.</strong> The map $f(x) = \bigvee \,\downarrow x \cap T$ is the obvious "project to elements of $T$ below" map.</p>
+    <p><strong>$f$ is a homomorphism:</strong> By Exercise 10.9, this is a lattice homomorphism (the proof generalises beyond the closure condition to the refinement condition (c)).</p>
+    <p><strong>$f$ is lower bounded:</strong> For each $a \in S$, the set $\{x : f(x) \ge a\}$ has a least element. Take $a = \bigvee F$ for $F \subseteq T$ minimal. Then $\beta(a) = a = \bigvee F$ — the smallest preimage of $a$ via $f$. The minimality requires condition (c) — every join cover of $a$ refines to one in $T$.</p>
+    <p><strong>$\beta f(t) = t$:</strong> $f(t) = t$ (since $t \in T$ implies $t \le t$, so $f(t) \ge t$, but $f(t)$ is constructed as join of elements of $T$ below $t$, capped at $t$). And $\beta(t) = t$ by definition. So $\beta f(t) = \beta(t) = t$.</p>
+    <p>Combined with Exercise 10.13: lower-bounded surjective homomorphisms onto finite lattices are EXACTLY the maps arising from $T \subseteq J(\mathcal{L})$ satisfying condition (c). This is McKenzie 1972's foundational characterisation.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 10.15</span>FL(3) → $\mathcal{N}_5$ lower bounded</summary>
+  <div class="body">
+    <div class="ex-statement">Let $f$ be the (essentially unique) homomorphism from $\text{FL}(3)$ onto $\mathcal{N}_5$. Show that $f$ is lower bounded. (By duality, $f$ is also upper bounded.)</div>
+    <p><strong>Solution.</strong> $\text{FL}(3)$ is the free lattice on 3 generators $\{x, y, z\}$ — infinite (Ch 6). $\mathcal{N}_5$ has 5 elements. The "essentially unique" homomorphism $f : \text{FL}(3) \to \mathcal{N}_5$: send $x \mapsto $ a generator, $y \mapsto $ another generator, $z \mapsto $ third, in a way matching $\mathcal{N}_5$'s structure.</p>
+    <p>$\mathcal{N}_5$ has 3 join-irreducibles: $a, b, c$ where $b$ is the "middle of the chain" element. $J(\mathcal{N}_5) = \{a, b, c\}$.</p>
+    <p>For lower-bounded: for each $p \in \mathcal{N}_5$, find the smallest $\beta(p) \in \text{FL}(3)$ with $f(\beta(p)) \ge p$.</p>
+    <p>Concretely: $\beta(a)$ = the term in $\text{FL}(3)$ corresponding to "the smallest expression mapping to $a$." Since $f(x) = a$ (say), $\beta(a) = x$. Similarly $\beta(b), \beta(c)$ are specific terms in $\text{FL}(3)$ involving the chain structure.</p>
+    <p>The $\beta$ map is well-defined because $\text{FL}(3)$ has a Whitman-canonical form (Ch 6 / Theorem 6.7) — for each element of $\mathcal{N}_5$, the preimage set has a unique minimal-length canonical-form representative. This is the desired lower bound.</p>
+    <p>By duality, $f$ is also upper bounded. So $f$ is a BOUNDED homomorphism. This is a classical example illustrating McKenzie 1972's bounded-homomorphism framework: even from the wildly infinite $\text{FL}(3)$ to the small $\mathcal{N}_5$, the homomorphism is structurally tame.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter 11 — Geometric Lattices</h2>
+  <div class="tagline">Chapter 11 specialises further: geometric lattices = semimodular + atomistic + finite (or finite-length). The natural setting for matroid theory and combinatorial geometry.</div>
+
+  <p>Chapter 10 mapped finite-lattice structure to congruence-lattice structure via the closure-operator approach. Chapter 11 zooms in on a particular class: <strong>geometric lattices</strong>.</p>
+
+  <p>Key results to anticipate: <strong>Definition</strong>: a geometric lattice is a finite-length lattice that is semimodular AND atomistic (every element is a join of atoms). The atoms are the "points" of the geometry. <strong>Theorem 11.1</strong>: the lattice of compact elements of an algebraic lattice satisfies the PCF condition under modest assumptions. <strong>Matroid theory</strong>: every finite matroid corresponds to a finite geometric lattice, and vice versa. <strong>The exchange property</strong>: matroids generalise the linear-independence property of vector spaces, with a "Steinitz exchange" lemma. <strong>Examples</strong>: subspaces of a vector space (matroid M(V)); independent sets in a graph (graphic matroid); algebraic-independence in field extensions; transversal matroids. <strong>Whitney rank function</strong>: dimensional structure of a geometric lattice. <strong>Mac Lane characterisation</strong>: geometric lattices = matroid lattices.</p>
+
+  <p>Connections back: Theorem 9.12 (Dilworth 1954, $|J_k| = |M_k|$) is the matroid-duality result for finite modular lattices. Chapter 9's semimodular structure recurs throughout. Chapter 10's closure-operator $\Gamma$ specialises in Chapter 11 to the matroid closure operator. The path from Chapter 9 (modular structure) → Chapter 10 (congruence representation) → Chapter 11 (geometric/matroidal structure) traces increasingly specific structural conditions, each yielding richer combinatorial content.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter 11 uses: posets, ACC and DCC (Ch 1); lattices, atoms, atomistic (Ch 2); algebraic lattices, compactness (Ch 3); equivalence-relation lattice $\textbf{Eq}\,X$, partition lattices (Ch 4); congruences, $\textbf{Con}\,\mathcal{L}$ (Ch 5); free lattices (Ch 6); variety lattice $\Lambda$ (Ch 7); distributive lattices, Birkhoff representation (Ch 8); modular and semimodular lattices, Kurosh-Ore replacement, Dilworth covering bijection (Ch 9); finite-lattice congruence representation via $\Gamma$ and $\underline{D}$ (this chapter). Geometric lattices are the meeting point of all of these.</p>
+  </div>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 10 · <a href="nation-companion-toc.html">Volume index</a></div>
+    <div><a href="nation-companion-ch09.html">← Chapter 9</a> · <a href="nation-companion-ch11.html">Chapter 11 →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('nation-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('nation-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

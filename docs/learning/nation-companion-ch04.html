@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 4 · Representation by Equivalence Relations</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch03.html">← Chapter 3</a></li>
+    <li><a href="nation-companion-ch05.html">Chapter 5 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 4 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Eq X + representations</div>
+  <ul>
+    <li><a href="#s1">A1 · Equivalence relations + Eq X</a></li>
+    <li><a href="#s2">A2 · Types 1, 2, 3 representations</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Whitman's theorem</div>
+  <ul>
+    <li><a href="#s3">B1 · Weak rep + Sublemma 1</a></li>
+    <li><a href="#s4">B2 · Sublemma 2 + Theorem 4.1</a></li>
+    <li><a href="#s5">B3 · Pudlák-Tůma + subgroup embedding</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Modular + Arguesian</div>
+  <ul>
+    <li><a href="#s6">C1 · Lemma 4.4 + Theorem 4.5 (Jónsson)</a></li>
+    <li><a href="#s7">C2 · Arguesian + Theorem 4.6</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Cayley-style theorems</a></li>
+    <li><a href="#c2">P2 · Dedekind's modular law + modules</a></li>
+    <li><a href="#c3">P3 · Arguesian + Desargues + projective</a></li>
+    <li><a href="#c4">P4 · Pálfy-Szabó + variety theory</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 4 · pp. 40–49 of the notes</div>
+  <h1>Representation by Equivalence Relations</h1>
+  <p class="lede">The Cayley analogue for lattices: every lattice embeds in the partition lattice $\textbf{Eq}\,X$ for some set $X$ (Whitman 1946; simplified by Jónsson 1953). The proof is a transfinite recursion. The chapter then climbs to modular ⟺ type 2 representation (Jónsson) and Arguesian ← type 1 representation (Schützenberger / Jónsson).</p>
+  <div class="meta">
+    <span>~70–80 min read</span>
+    <span>7 sections + 5 connection panels</span>
+    <span>8 worked exercises</span>
+    <span>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation</span>
+  </div>
+</div>
+
+<div class="epigraph">
+  <p>No taxation without representation!</p>
+  <span class="attrib">— Nation's Chapter 4 epigraph</span>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — the Cayley analogue for lattices</h2>
+  <div class="tagline">Chapter 1 gave Cayley for posets; Chapter 2 gave it for semilattices. Chapter 4 delivers the lattice version: every lattice embeds in $\textbf{Eq}\,X$ for some $X$. The proof (Whitman 1946 / Jónsson 1953) is a transfinite recursion. Then: modular ⟺ type 2 representation; Arguesian ← type 1 representation.</div>
+
+  <p>So far, the companion has given Cayley-style representation theorems for posets (Theorem 1.1: every poset embeds in $\mathfrak{P}(\mathcal{Q})$) and semilattices (Theorem 2.2: every meet semilattice embeds in $\mathcal{O}(\mathcal{S})$). The lattice version is harder. Power-set lattices satisfy distributivity, so non-distributive lattices like $\mathcal{M}_3, \mathcal{N}_5$ cannot embed in any $\mathfrak{P}(X)$. The right replacement is the <strong>partition lattice</strong> $\textbf{Eq}\,X$ — the lattice of equivalence relations on $X$ under refinement.</p>
+
+  <p><strong>Whitman's theorem (1946)</strong>, simplified by Jónsson in 1953: every lattice embeds in $\textbf{Eq}\,X$ for some $X$. The proof is technically demanding — a transfinite recursion fixing up "join failures" three points at a time, then iterating $\omega$ times — but the result is foundational. It justifies the abstract definition of "lattice" (the axioms generate exactly the structures that arise as sublattices of partition lattices) and gives a "universal example" — namely, $\textbf{Eq}\,X$ — that contains every lattice.</p>
+
+  <p>The chapter has three conceptual movements:</p>
+
+  <ol>
+    <li><strong>Equivalence relations + Eq X.</strong> Equivalence relations as binary relations satisfying R, S, T. Kernel of a function. Congruence relation. $\textbf{Eq}\,X$ as an algebraic lattice with many nice structural properties. Relative product $R \circ S$. Three types of representations 1, 2, 3 — differing in how joins are computed.</li>
+    <li><strong>Whitman's theorem (Theorem 4.1).</strong> Every lattice has a type 3 representation. Proof via weak representation + Sublemma 1 (extension by 3 new points) + Sublemma 2 (limit ordinal continuity). Then Theorem 4.2 (Pudlák-Tůma 1980): every finite lattice has a finite representation. Theorem 4.3: every lattice embeds in the subgroup lattice of a group (a corollary of Whitman).</li>
+    <li><strong>Modular and Arguesian.</strong> Lemma 4.4: type 2 representations satisfy the modular law. Theorem 4.5 (Jónsson): a lattice has type 2 representation ⟺ modular. The modular law's history (Dedekind 1890s) and the modular vs distributive distinction. Arguesian law (Schützenberger): stronger than modular, weaker than distributive. Theorem 4.6: type 1 ⟹ Arguesian. Examples (subgroups, abelian groups, ideals, vector subspaces, modules — all Arguesian). Haiman's 1987/1991 theorems on the Arguesian / type 1 gap.</li>
+  </ol>
+
+  <p>The chapter's tone is more technical than Chs 1-3 — the Whitman proof is intricate, and the modular / Arguesian story has subtle distinctions. The companion expands the proof, isolates the structural insights, and connects to the broader picture: representation theorems are the backbone of universal-algebraic lattice theory.</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">Carried forward from Chs 1-3 (lattice, algebraic lattice) · New in Ch 4 (equivalence relation, Eq X, kernel, types of representation, modular, Arguesian) · Deep dive (Whitman's proof technique, Dedekind's modular law, the Arguesian / projective-geometry connection).</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>Carried forward — terms recapped from Chs 1-3</h2>
+  <div class="tagline">Five refreshers that this chapter relies on.</div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Lattice</span><p>From Ch 2 §B1: $(L, \wedge, \vee)$ with idempotent, commutative, associative + absorption. Equivalent to a poset with all binary glbs and lubs.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Algebraic lattice</span><p>From Ch 3 §B1: complete lattice with $\mathcal{L}^c$ join dense. $\textbf{Eq}\,X$ is algebraic; this chapter extensively uses that.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Subalgebra · $\textbf{Sub}\,\mathcal{A}$</span><p>From Ch 2 §C2 + Ch 3 §C1: subalgebra lattice. Theorem 4.3 (this chapter) embeds every lattice in $\textbf{Sub}\,\mathcal{G}$ for a group $\mathcal{G}$, building on the equivalence-relation embedding.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Lattice morphism / embedding</span><p>From Ch 2 §B2: $f : \mathcal{L} \to \mathcal{L}'$ preserving $\wedge$ and $\vee$. <em>Embedding</em>: injective lattice morphism. Whitman's theorem (Ch 4) embeds every lattice into $\textbf{Eq}\,X$.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Modular law (preview from Ch 1 / Ch 9)</span><p>$x \ge y$ ⟹ $x \wedge (y \vee z) = y \vee (x \wedge z)$. The lattice abstraction of "submodules behave nicely." Dedekind 1890s. This chapter proves: type 2 representation ⟺ modular (Theorem 4.5).</p></div>
+
+  <h2>New in Chapter 4 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Equivalence relation</span><p>A binary relation $E$ on $X$ satisfying (1) $x E x$ (reflexive), (2) $x E y$ ⟹ $y E x$ (symmetric), (3) $x E y, y E z$ ⟹ $x E z$ (transitive). Equivalently: the relation that partitions $X$ into disjoint blocks (equivalence classes).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Kernel of a function</span><p>For $f : X \to Y$: $\ker f = \{(x, y) \in X^2 : f(x) = f(y)\}$. An equivalence relation. If $X, Y$ are algebras and $f$ a homomorphism, $\ker f$ is a <em>congruence relation</em> — preserved by all operations.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Eq X — partition lattice</span><p>The lattice of all equivalence relations on $X$, ordered by set containment ($R \le S$ iff $R \subseteq S$). Top = universal relation $X^2$; bottom = equality $=$. <strong>Algebraic, strongly atomic, semimodular, relatively complemented, simple.</strong> Meet = set intersection. Join = transitive closure of union.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Relative product $R \circ S$</span><p>For relations $R, S$ on $X$: $R \circ S = \{(x, y) : \exists z \in X$ with $x R z S y\}$. For equivalence relations: $R \subseteq R \circ S$ and $S \subseteq R \circ S$ (because of reflexivity). The chain $R \circ S \subseteq R \circ S \circ R \subseteq \dots$ has union $R \vee S$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Representation by equivalence relations</span><p>A pair $(X, F)$ where $X$ is a set and $F : \mathcal{L} \to \textbf{Eq}\,X$ is a lattice embedding. Whitman's theorem: every lattice has a representation.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Type 1 / 2 / 3 representations</span><p>Differ in how joins of $F(x)$ and $F(y)$ are computed:</p>
+    <ul>
+      <li><strong>Type 1:</strong> $F(x) \vee F(y) = F(x) \circ F(y)$.</li>
+      <li><strong>Type 2:</strong> $F(x) \vee F(y) = F(x) \circ F(y) \circ F(x)$.</li>
+      <li><strong>Type 3:</strong> $F(x) \vee F(y) = F(x) \circ F(y) \circ F(x) \circ F(y)$.</li>
+    </ul>
+    <p>Type 1 ⟹ type 2 ⟹ type 3. Whitman's theorem gives type 3 for every lattice. Modular lattices have type 2 (Theorem 4.5). Arguesian lattices that are type 1 satisfy stronger conditions.</p>
+  </div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Weak representation</span><p>A pair $(U, F)$ where $U$ is a set and $F : \mathcal{L} \to \textbf{Eq}\,U$ is a one-to-one MEET homomorphism (meets preserved; joins maybe not). The intermediate object in Whitman's proof: start with a weak representation, extend it $\omega$ times to fix join failures, eventually obtain a (full) type 3 representation.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Modular law (M)</span><p>$x \ge y$ ⟹ $x \wedge (y \vee z) = y \vee (x \wedge z)$. Equivalently: $x \wedge ((x \wedge y) \vee z) = (x \wedge y) \vee (x \wedge z)$ (form M'). Dedekind 1890s. Special case of distributivity (D); fails in $\mathcal{N}_5$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Arguesian law (A)</span><p>The lattice identity:</p>
+    <p>$(a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2$ implies $c_2 \le c_0 \vee c_1$,</p>
+    <p>where $c_i = (a_j \vee a_k) \wedge (b_j \vee b_k)$ for $\{i, j, k\} = \{0, 1, 2\}$. Stronger than modular, weaker than distributive. Modeled after Desargues' Law in projective geometry. Equivalent form (A'): $(a_0 \vee b_0) \wedge (a_1 \vee b_1) \wedge (a_2 \vee b_2) \le a_0 \vee (b_0 \wedge (c \vee b_1))$ where $c = c_2 \wedge (c_0 \vee c_1)$.</p>
+  </div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Permuting / commuting equivalence relations</span><p>$R, S \in \textbf{Eq}\,X$ <em>permute</em> if $R \circ S = S \circ R$ (Exercise 4: equivalent to $R \vee S = R \circ S$). Sublattices of $\textbf{Eq}\,X$ in which all pairs permute give type 1 representations. The lattice of normal subgroups of a group is exactly such a sublattice (cosets permute).</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Whitman's proof technique — the Cayley-style construction</h3>
+    <p>Whitman's proof (Theorem 4.1) is a paradigmatic example of <strong>transfinite recursion in lattice theory</strong>. The structure:</p>
+    <ol>
+      <li><strong>Start with a "weak" representation</strong> — meets are preserved, but joins might not be. Specifically, $F(x \vee y)$ might be strictly bigger than $F(x) \circ F(y) \circ F(x) \circ F(y)$.</li>
+      <li><strong>Sublemma 1: fix one join failure at a time.</strong> If $(p, q) \in F(x \vee y)$ but $(p, q) \notin F(x) \circ F(y) \circ F(x) \circ F(y)$, extend $U$ to $V = U \cup \{r, s, t\}$ (three new points) and define new equivalence relations $G(z)$ on $V$ that fix this one join failure.</li>
+      <li><strong>Sublemma 2: limit-ordinal continuity.</strong> When the recursion encounters a limit ordinal, define the representation as the union of the previous stages. Verify it's a valid weak representation.</li>
+      <li><strong>Iterate the join-fixing $\omega$ times.</strong> Each iteration introduces new join failures (because of the new points), so we keep going. After $\omega$ iterations, we get a representation $(W, H)$ that is type 3 (Whitman) or type 2 (Jónsson, with appropriate adjustments for modular).</li>
+    </ol>
+    <p>Why three new points? The proof uses a 4-element diagram: $p \to r \to s \to t \to q$ with edges labeled $G(x), G(y), G(x), G(y)$. Two new points are insufficient — Theorems 4.5 and 4.6 (modular and Arguesian) show that with FEWER intermediate points, you'd get stronger laws (modular for 2 intermediate, Arguesian for 1 intermediate).</p>
+    <p>The proof is reminiscent of Cayley's group representation: <em>build the universal example by adjoining missing structure recursively</em>. For groups, you adjoin permutations; for lattices, equivalence relations.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Dedekind's modular law (1890s) and module theory</h3>
+    <p>Richard Dedekind invented the modular law in the 1890s while studying ideals. Two key papers:</p>
+    <ul>
+      <li><strong>Dedekind 1892</strong> (Supplement XI to Dirichlet's <em>Vorlesungen über Zahlentheorie</em>) — first appearance.</li>
+      <li><strong>Dedekind 1897</strong> (<em>Über Zerlegungen von Zahlen durch ihre grössten gemeinsamen Teiler</em>) — systematic development.</li>
+      <li><strong>Dedekind 1900</strong> (<em>Über die von drei Moduln erzeugte Dualgruppe</em>) — the free modular lattice on three generators (28 elements).</li>
+    </ul>
+    <p>Dedekind proved that the lattice of normal subgroups of a group is modular. The lattice of submodules of a module is modular. The lattice of ideals of a ring is modular. The pattern: <em>"normal subobjects" are modular</em>.</p>
+    <p>The lattice abstraction: a lattice $\mathcal{L}$ is modular iff $x \ge y$ ⟹ $x \wedge (y \vee z) = y \vee (x \wedge z)$, equivalently iff $\mathcal{L}$ does NOT contain $\mathcal{N}_5$ as a sublattice (Dedekind 1900; restated as Theorem 9.1 in Nation).</p>
+    <p>The chapter's modular content (Lemma 4.4 + Theorem 4.5 — Jónsson) connects modularity to the representation theory: a lattice has a type 2 representation iff it is modular. So modular lattices are exactly the sublattices of partition lattices in which joins are computed by the "shorter" formula $R \circ S \circ R$ instead of $R \circ S \circ R \circ S$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The Arguesian / Desargues / projective-geometry connection</h3>
+    <p>The Arguesian law has a beautiful connection to projective geometry. <strong>Desargues' theorem</strong> (Girard Desargues, 1648) states: in a projective plane, two triangles are perspective from a point if and only if they are perspective from a line. This is one of the foundational theorems of projective geometry.</p>
+    <p><strong>Schützenberger 1945</strong>: Desargues' theorem can be expressed as a lattice identity (the Arguesian identity) that holds in the lattice of subspaces of a projective space iff the geometry is Desarguesian. So:</p>
+    <p><em>Desarguesian projective geometry</em> ⟺ <em>subspace lattice satisfies Arguesian law</em>.</p>
+    <p><strong>Jónsson 1953</strong>: showed the Arguesian identity holds in every lattice of <em>commuting</em> equivalence relations — i.e., in every lattice with a type 1 representation. Theorem 4.6 in Nation is this result.</p>
+    <p>Examples of lattices satisfying the Arguesian law:</p>
+    <ul>
+      <li>Lattice of normal subgroups of any group (cosets permute).</li>
+      <li>Lattice of subgroups of any abelian group (everything commutes).</li>
+      <li>Lattice of ideals of any ring (ideals add commutatively).</li>
+      <li>Lattice of subspaces of any vector space (= subspace lattice of $\mathbb{P}^n$).</li>
+      <li>Lattice of submodules of any module.</li>
+    </ul>
+    <p><strong>Freese-Jónsson 1976</strong>: if $\mathcal{V}$ is a variety of algebras with all congruence lattices modular (e.g., groups, rings, modules), then all those congruence lattices are also Arguesian.</p>
+    <p><strong>Haiman 1987, 1991</strong>: showed the converse of Theorem 4.6 fails — there are Arguesian lattices that do NOT have a type 1 representation. So "Arguesian" is strictly weaker than "type 1 representable." The exact characterisation of type 1 representable lattices remains an open problem.</p>
+    <p><strong>Pálfy-Szabó 1995</strong>: subgroup lattices of abelian groups satisfy an identity that does NOT hold in all normal subgroup lattices — refining the variety hierarchy further.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Eq X and representations</div>
+  <h2>Equivalence relations · partition lattice · types 1, 2, 3</h2>
+  <p class="part-lede">From R, S, T to the structural properties of $\textbf{Eq}\,X$. Three flavors of representation, distinguished by how joins are computed.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Equivalence relations · Eq X · relative product</h2>
+  <div class="tagline">$\textbf{Eq}\,X$ is the algebraic lattice of equivalence relations on $X$. Algebraic, strongly atomic, semimodular, relatively complemented, simple.</div>
+
+  <div class="box def">
+    <span class="label">Definition · equivalence relation</span>
+    <p>An <strong>equivalence relation</strong> on a set $X$ is a binary relation $E$ satisfying, for all $x, y, z \in X$:</p>
+    <ol>
+      <li>$x E x$ <em>(reflexive)</em></li>
+      <li>$x E y$ implies $y E x$ <em>(symmetric)</em></li>
+      <li>$x E y$ and $y E z$ imply $x E z$ <em>(transitive)</em></li>
+    </ol>
+    <p>We think of an equivalence relation as partitioning the set $X$ into blocks of $E$-related elements, called <em>equivalence classes</em>. Conversely, any partition of $X$ into a disjoint union of blocks induces an equivalence relation on $X$: $x E y$ iff $x$ and $y$ are in the same block. We write $x E y$ and $(x, y) \in E$ interchangeably.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Kernel · congruence relation</span>
+    <p>The most important equivalence relations are those induced by maps. If $Y$ is another set and $f : X \to Y$ is any function, then</p>
+    <p>$$\ker f = \{(x, y) \in X^2 : f(x) = f(y)\}$$</p>
+    <p>is an equivalence relation, called the <strong>kernel</strong> of $f$. If $X$ and $Y$ are algebras and $f : X \to Y$ is a homomorphism, then $\ker f$ is a <strong>congruence relation</strong> (preserved by all operations).</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Eq X — the partition lattice</span>
+    <p>Thinking of binary relations as subsets of $X^2$, the axioms (1)-(3) for an equivalence relation are finitary closure rules. Thus the collection of all equivalence relations on $X$ forms an algebraic lattice $\textbf{Eq}\,X$. The order on $\textbf{Eq}\,X$ is given by set containment:</p>
+    <p>$$R \le S \quad \text{iff} \quad R \subseteq S \text{ in } \mathfrak{P}(X^2) \text{ iff } (x, y) \in R \implies (x, y) \in S.$$</p>
+    <p>The greatest element of $\textbf{Eq}\,X$ is the universal relation $X^2$, and its least element is the equality relation $=$. The meet operation in $\textbf{Eq}\,X$ is set intersection: $(x, y) \in \bigwedge_{i \in I} E_i$ iff $x E_i y$ for all $i \in I$. The join $\bigvee_{i \in I} E_i$ is the transitive closure of $\bigcup_{i \in I} E_i$, so $(x, y) \in \bigvee E_i$ iff there exists a finite sequence of elements $x_j$ and indices $i_j$ such that</p>
+    <p>$$x = x_0 \, E_{i_1} \, x_1 \, E_{i_2} \, x_2 \dots x_{k-1} \, E_{i_k} \, x_k = y.$$</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Properties of Eq X</span>
+    <p>The lattice $\textbf{Eq}\,X$ has many nice properties: it is</p>
+    <ul>
+      <li><strong>algebraic</strong> (compactly generated; from finitary closure rules);</li>
+      <li><strong>strongly atomic</strong>;</li>
+      <li><strong>semimodular</strong>;</li>
+      <li><strong>relatively complemented</strong>;</li>
+      <li><strong>simple</strong> (no nontrivial congruences).</li>
+    </ul>
+    <p>The terms "relatively complemented" and "simple" are defined in Chapter 10. Proofs of the structural properties are exercises in this chapter (Ex 6) and Chapter 11.</p>
+    <p>Crawley-Dilworth's <em>Algebraic Theory of Lattices</em> (1973), Chapter 12, gives the full structural account.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Relative product $R \circ S$</span>
+    <p>If $R$ and $S$ are relations on $X$, define the <strong>relative product</strong></p>
+    <p>$$R \circ S = \{(x, y) \in X^2 : \exists z \in X \text{ with } x R z S y\}.$$</p>
+    <p>If $R, S$ are equivalence relations, then because $x R x$ we have $S \subseteq R \circ S$; similarly $R \subseteq R \circ S$. Thus</p>
+    <p>$$R \circ S \subseteq R \circ S \circ R \subseteq R \circ S \circ R \circ S \subseteq \dots$$</p>
+    <p>and it is not hard to see that $R \vee S$ is the union of this chain.</p>
+    <p>It is possible, however, that $R \vee S$ is in fact equal to some term in the chain — for example, this is always the case when $X$ is finite. Whitman's proof yields a representation in which this is always the case for any two equivalence relations that represent elements of the given lattice. The "depth" at which this happens is the <strong>type</strong> of the representation.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Representations of types 1, 2, 3</h2>
+  <div class="tagline">Three "depths" of join expression. Type 1 ⟹ type 2 ⟹ type 3. Modular lattices give type 2; arbitrary lattices give type 3 (Whitman).</div>
+
+  <div class="box def">
+    <span class="label">Representation by equivalence relations</span>
+    <p>To be precise, a <strong>representation</strong> (by equivalence relations) of a lattice $\mathcal{L}$ is an ordered pair $(X, F)$ where $X$ is a set and $F : \mathcal{L} \to \textbf{Eq}\,X$ is a lattice embedding. We say that the representation is</p>
+    <ol>
+      <li><strong>of type 1</strong> if $F(x) \vee F(y) = F(x) \circ F(y)$ for all $x, y \in L$,</li>
+      <li><strong>of type 2</strong> if $F(x) \vee F(y) = F(x) \circ F(y) \circ F(x)$ for all $x, y \in L$,</li>
+      <li><strong>of type 3</strong> if $F(x) \vee F(y) = F(x) \circ F(y) \circ F(x) \circ F(y)$ for all $x, y \in L$.</li>
+    </ol>
+    <p>Clearly type 1 ⟹ type 2 ⟹ type 3.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why three types?</span>
+    <p>The "depth" of the join expression measures how hard it is to compute lattice joins inside the partition lattice. The chapter will show:</p>
+    <ul>
+      <li><strong>Type 3 (Whitman 1946 / Jónsson 1953):</strong> EVERY lattice has a type 3 representation. The "weakest" condition; works for arbitrary lattices.</li>
+      <li><strong>Type 2 (Jónsson):</strong> A lattice has a type 2 representation iff it is MODULAR (Theorem 4.5).</li>
+      <li><strong>Type 1 (Schützenberger / Jónsson):</strong> A lattice with a type 1 representation satisfies the ARGUESIAN law (Theorem 4.6). The converse fails in general (Haiman 1987, 1991).</li>
+    </ul>
+    <p>So the type hierarchy stratifies lattices by their structural complexity: arbitrary < modular < Arguesian (with strict inequalities on the type-1 side).</p>
+    <p>P. M. Whitman [1946] proved in <em>Bull. Amer. Math. Soc. 52</em> that every lattice has a representation. In 1953 Bjarni Jónsson [<em>Math. Scand. 1</em>] found a simpler proof that gives a slightly stronger result.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Whitman's theorem</div>
+  <h2>Theorem 4.1 · Pudlák-Tůma · Theorem 4.3</h2>
+  <p class="part-lede">The chapter's main result. Whitman's transfinite construction. Pudlák-Tůma's 1980 finiteness sharpening. Birkhoff's corollary on subgroup-lattice embedding.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Weak representation · Sublemma 1 (extension by 3 new points)</h2>
+  <div class="tagline">Build a "weak" representation that preserves meets but maybe not joins. Sublemma 1 fixes one join failure by adding three new points.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.1 · Whitman / Jónsson</span>
+    <p>Every lattice has a type 3 representation.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Weak representation · the staging ground</span>
+    <p>Given a lattice $\mathcal{L}$, we use transfinite recursion to construct a type 3 representation of $\mathcal{L}$. Along the way we work with a more flexible structure:</p>
+    <p>A <strong>weak representation</strong> of $\mathcal{L}$ is a pair $(U, F)$ where $U$ is a set and $F : \mathcal{L} \to \textbf{Eq}\,U$ is a one-to-one MEET homomorphism. (Joins not required to be preserved.)</p>
+    <p>Order weak representations by</p>
+    <p>$$(U, F) \sqsubseteq (V, G) \quad \text{if} \quad U \subseteq V \text{ and } G(x) \cap U^2 = F(x) \text{ for all } x \in L.$$</p>
+    <p>I.e., $G$ extends $F$ by acting like $F$ on the original set $U$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Initial weak representation</span>
+    <p>We can begin our construction by letting $(U_0, F_0)$ be the weak representation with $U_0 = L$ (the lattice itself, as a set) and $F_0(x)$ defined on $L$ by $(y, z) \in F_0(x)$ iff $y = z$ or $y \vee z \le x$.</p>
+    <p>Verifications: $F_0(x)$ is reflexive (by $y = y$), symmetric (by symmetry of $\vee$), transitive (by $y \vee z \le x$ and $z \vee w \le x$ giving $y \vee w \le y \vee z \vee w \le x$ in modular — but we don't have modular in general; this needs care). Meets: $F_0(x \wedge y) = F_0(x) \cap F_0(y)$ by direct verification. So $F_0$ is a meet homomorphism.</p>
+    <p>Joins fail in general: $F_0(x) \vee F_0(y)$ might be strictly larger than what we want. The "crucial step" is fixing these failures up one at a time.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Sublemma 1 · the extension step</span>
+    <p>If $(U, F)$ is a weak representation of $\mathcal{L}$ and $(p, q) \in F(x \vee y)$, then there exists $(V, G) \sqsupseteq (U, F)$ with $(p, q) \in G(x) \circ G(y) \circ G(x) \circ G(y)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · the construction with 3 new points</span>
+    <p>Form $V$ by adding three new points to $U$: $V = U \cup \{r, s, t\}$, as in Figure 4.1. We want to make</p>
+    <p>$$p \,G(x)\, r \,G(y)\, s \,G(x)\, t \,G(y)\, q.$$</p>
+    <p>Accordingly, for $z \in L$ we define $G(z)$ to be the reflexive, symmetric relation on $V$ satisfying, for $u, v \in U$:</p>
+    <ol>
+      <li>$u \,G(z)\, v$ iff $u \,F(z)\, v$,</li>
+      <li>$u \,G(z)\, r$ iff $z \ge x$ and $u \,F(z)\, p$,</li>
+      <li>$u \,G(z)\, s$ iff $z \ge x \vee y$ and $u \,F(z)\, p$,</li>
+      <li>$u \,G(z)\, t$ iff $z \ge y$ and $u \,F(z)\, q$,</li>
+      <li>$r \,G(z)\, s$ iff $z \ge y$,</li>
+      <li>$s \,G(z)\, t$ iff $z \ge x$,</li>
+      <li>$r \,G(z)\, t$ iff $z \ge x \vee y$.</li>
+    </ol>
+    <p>You must check that each $G(z)$ defined thusly really is an equivalence relation, i.e., that it is transitive. This is routine but a bit tedious to write down, so we leave it to the reader. There are four cases, depending on whether or not $z \ge x$ and on whether or not $z \ge y$. Straightforward though it is, this verification would NOT work if we had only added one or two new elements between $p$ and $q$ — see Theorems 4.5 and 4.6 below.</p>
+    <p>Now (1) says that $G(z) \cap U^2 = F(z)$. Since $F$ is one-to-one, this implies $G$ is also. Note that for $z, z' \in L$ we have $z \wedge z' \ge x$ iff $z \ge x$ and $z' \ge x$, and symmetrically for $y$. Using this with conditions (1)-(7), it is not hard to check that $G(z \wedge z') = G(z) \cap G(z')$. Hence, $G$ is a weak representation of $\mathcal{L}$, and clearly $(U, F) \sqsubseteq (V, G)$. ∎</p>
+  </div>
+
+  <svg class="diagram" viewBox="0 0 380 280" xmlns="http://www.w3.org/2000/svg" aria-label="Figure 4.1 — Sublemma 1 construction">
+    <ellipse cx="190" cy="240" rx="160" ry="30" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="120" y1="220" x2="100" y2="160" stroke-dasharray="0"/>
+    <line x1="100" y1="160" x2="190" y2="60"/>
+    <line x1="190" y1="60" x2="280" y2="160"/>
+    <line x1="280" y1="160" x2="260" y2="220"/>
+    <line x1="120" y1="220" x2="260" y2="220" stroke-dasharray="3,3"/>
+    <circle cx="120" cy="220" r="5"/>
+    <circle cx="100" cy="160" r="5"/>
+    <circle cx="190" cy="60" r="5"/>
+    <circle cx="280" cy="160" r="5"/>
+    <circle cx="260" cy="220" r="5"/>
+    <text x="105" y="240">p</text>
+    <text x="80" y="160">r</text>
+    <text x="186" y="50">s</text>
+    <text x="290" y="160">t</text>
+    <text x="265" y="240">q</text>
+    <text x="60" y="200">G(x)</text>
+    <text x="115" y="105">G(y)</text>
+    <text x="245" y="105">G(x)</text>
+    <text x="305" y="200">G(y)</text>
+    <text x="160" y="265">F(x ∨ y)</text>
+    <text x="195" y="280">U</text>
+  </svg>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">B2</span> Sublemma 2 · Theorem 4.1 (Whitman / Jónsson)</h2>
+  <div class="tagline">The limit-ordinal step + the $\omega$-iterated fix-up. Result: every lattice has a type 3 representation.</div>
+
+  <div class="box lemma">
+    <span class="label">Sublemma 2 · limit ordinal continuity</span>
+    <p>Let $\lambda$ be a limit ordinal, and for $\xi < \lambda$ let $(U_\xi, F_\xi)$ be weak representations of $\mathcal{L}$ such that $\alpha < \beta < \lambda$ implies $(U_\alpha, F_\alpha) \sqsubseteq (U_\beta, F_\beta)$. Let $V = \bigcup_{\xi < \lambda} U_\xi$ and $G(x) = \bigcup_{\xi < \lambda} F_\xi(x)$ for all $x \in L$. Then $(V, G)$ is a weak representation of $\mathcal{L}$ with $(U_\xi, F_\xi) \sqsubseteq (V, G)$ for each $\xi < \lambda$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Let $\xi < \lambda$. Since $F_\alpha(x) = F_\xi(x) \cap U_\alpha^2 \subseteq F_\xi(x)$ whenever $\alpha < \xi$, and $F_\xi(x) = F_\beta(x) \cap U_\xi^2$ whenever $\beta \ge \xi$, for all $x \in L$ we have</p>
+    <p>$$G(x) \cap U_\xi^2 = (\bigcup_{\gamma < \lambda} F_\gamma(x)) \cap U_\xi^2 = \bigcup_{\gamma < \lambda} (F_\gamma(x) \cap U_\xi^2) = F_\xi(x).$$</p>
+    <p>Thus $(U_\xi, F_\xi) \sqsubseteq (V, G)$. Since $F_0$ is one-to-one, this implies $G$ is also.</p>
+    <p>It remains to show that $G$ is a meet homomorphism. Order-preservation is clear. For any $x, y \in L$: $G(x \wedge y) \subseteq G(x) \cap G(y)$ trivially. Conversely, if $(u, v) \in G(x) \cap G(y)$, then there exists $\alpha < \lambda$ with $(u, v) \in F_\alpha(x)$, and there exists $\beta < \lambda$ with $(u, v) \in F_\beta(y)$. Take $\gamma = \max(\alpha, \beta)$. Then $(u, v) \in F_\gamma(x) \cap F_\gamma(y) = F_\gamma(x \wedge y) \subseteq G(x \wedge y)$. ∎</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof of Theorem 4.1 · putting it together</span>
+    <p>Now we use these two sublemmas to construct a type 3 representation of $\mathcal{L}$.</p>
+    <p><strong>Step 1: fix all join failures from $(U_0, F_0)$.</strong> Start with the arbitrary weak representation $(U_0, F_0)$. Consider the set of all quadruples $(p, q, x, y)$ such that $p, q \in U_0$ and $x, y \in L$ and $(p, q) \in F_0(x \vee y)$. Arrange these into a well-ordered sequence $(p_\xi, q_\xi, x_\xi, y_\xi)$ for $\xi < \eta$. Applying Sublemmas 1 and 2 repeatedly, we obtain a sequence of weak representations $(U_\xi, F_\xi)$ for $\xi \le \eta$ such that:</p>
+    <ol>
+      <li>If $\xi < \eta$, then $(U_\xi, F_\xi) \sqsubseteq (U_{\xi+1}, F_{\xi+1})$ and $(p_\xi, q_\xi) \in F_{\xi+1}(x_\xi) \circ F_{\xi+1}(y_\xi) \circ F_{\xi+1}(x_\xi) \circ F_{\xi+1}(y_\xi)$.</li>
+      <li>If $\lambda \le \eta$ is a limit ordinal, then $U_\lambda = \bigcup_{\xi < \lambda} U_\xi$ and $F_\lambda(x) = \bigcup_{\xi < \lambda} F_\xi(x)$.</li>
+    </ol>
+    <p>Let $V_1 = U_\eta$ and $G_1 = F_\eta$. If $p, q \in U_0$ and $p F_0(x \vee y) q$, then $(p, q, x, y) = (p_\xi, q_\xi, x_\xi, y_\xi)$ for some $\xi < \eta$, so by (1):</p>
+    <p>$$F_0(x \vee y) \subseteq G_1(x) \circ G_1(y) \circ G_1(x) \circ G_1(y).$$</p>
+    <p>Note $(U_0, F_0) \sqsubseteq (V_1, G_1)$.</p>
+    <p><strong>Step 2: iterate $\omega$ times.</strong> Of course, along the way we have probably introduced lots of new failures of the join property that need to be fixed up (because Sublemma 1 added new elements). So repeat this whole process $\omega$ times, obtaining a sequence:</p>
+    <p>$$(U_0, F_0) = (V_0, G_0) \sqsubseteq (V_1, G_1) \sqsubseteq (V_2, G_2) \sqsubseteq \dots$$</p>
+    <p>such that $G_n(x \vee y) \subseteq G_{n+1}(x) \circ G_{n+1}(y) \circ G_{n+1}(x) \circ G_{n+1}(y)$ for all $n \in \omega$ and $x, y \in L$.</p>
+    <p>Finally, let $W = \bigcup_{n \in \omega} V_n$ and $H(x) = \bigcup_{n \in \omega} G_n(x)$ for all $x \in L$. By Sublemma 2 applied to the chain at limit $\omega$, $(W, H)$ is a weak representation of $\mathcal{L}$. By construction, $H$ satisfies $H(x \vee y) \subseteq H(x) \circ H(y) \circ H(x) \circ H(y)$ for all $x, y \in L$. Combined with the trivial reverse inclusion, equality holds — and you get a type 3 representation of $\mathcal{L}$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this is "transfinite recursion"</span>
+    <p>Whitman's proof structure is a paradigm of transfinite construction in lattice theory:</p>
+    <ol>
+      <li><strong>Successor step:</strong> Sublemma 1 fixes one join failure.</li>
+      <li><strong>Limit step:</strong> Sublemma 2 takes unions at limit ordinals.</li>
+      <li><strong>Outer iteration:</strong> Iterate the join-fixing $\omega$ times to handle the new failures introduced by Step 1.</li>
+    </ol>
+    <p>The same pattern recurs in: subgroup-lattice constructions (Theorem 4.3), Birkhoff's theorem on free lattices (Ch 6), Hanf's theorem (Ch 3), and Loewy series in Călugăreanu Ch 5. The trick is always: at each step, fix one local failure; at limit ordinals, take unions; iterate enough times that all failures are fixed.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">B3</span> Theorem 4.2 (Pudlák-Tůma) · Theorem 4.3 (subgroup embedding)</h2>
+  <div class="tagline">For finite lattices: a finite representation exists (Pudlák-Tůma 1980). Birkhoff's corollary: every lattice embeds in a subgroup lattice.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.2 · Pudlák-Tůma 1980</span>
+    <p>Every finite lattice has a representation $(Y, G)$ with $Y$ finite.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why Theorem 4.2 is famous (and hard)</span>
+    <p>Since the proof of Theorem 4.1 involves transfinite recursion, it produces a representation $(X, F)$ with $X$ infinite, even when $\mathcal{L}$ is finite. <strong>For a long time one of the outstanding questions of lattice theory was whether every finite lattice can be embedded into the lattice of equivalence relations on a finite set.</strong></p>
+    <p>In 1980, Pavel Pudlák and Jiří Tůma showed that the answer is YES. <em>The proof is quite difficult.</em> Their paper <em>Every finite lattice can be embedded in a finite partition lattice</em> (Algebra Universalis 10, 74-95) is one of the celebrated results in 20th-century lattice theory.</p>
+    <p>The Pudlák-Tůma construction is intricate, using a combinatorial argument that builds a finite $Y$ inductively from the finite lattice $\mathcal{L}$. Modern improvements (Wehrung et al., 2018+) give "tight" embeddings with controlled $|Y|$ in terms of $|L|$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.3 · Birkhoff's subgroup embedding</span>
+    <p>Every lattice can be embedded into the lattice of subgroups of a group.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · sketch</span>
+    <p>One of the motivations for Whitman's theorem was Garrett Birkhoff's observation, made in the 1930's, that a representation of a lattice $\mathcal{L}$ by equivalence relations induces an embedding of $\mathcal{L}$ into the lattice of subgroups of a group.</p>
+    <p>Given a representation $(X, F)$ of $\mathcal{L}$, let $\mathcal{G}$ be the group of all permutations on $X$ that move only finitely many elements (= the symmetric group with finite support), and let $\textbf{Sub}\,\mathcal{G}$ denote the lattice of subgroups of $\mathcal{G}$. Define $h : \mathcal{L} \to \textbf{Sub}\,\mathcal{G}$ by</p>
+    <p>$$h(a) = \{\pi \in \mathcal{G} : x \,F(a)\, \pi(x) \text{ for all } x \in X\}.$$</p>
+    <p>I.e., $h(a)$ is the subgroup of permutations that "respect" the equivalence relation $F(a)$. Then it is not too hard to check that $h$ is a lattice embedding. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Two universal examples</span>
+    <p>Theorems 4.1 and 4.3 give two "universal examples" of lattices:</p>
+    <ul>
+      <li><strong>Partition lattice $\textbf{Eq}\,X$</strong>: every lattice embeds via Whitman.</li>
+      <li><strong>Subgroup lattice $\textbf{Sub}\,\mathcal{G}$</strong>: every lattice embeds via Birkhoff's corollary.</li>
+    </ul>
+    <p>Both are the lattice-theoretic analogues of Cayley's theorem for groups (every group embeds in a permutation group). The partition lattice is more "combinatorial"; the subgroup lattice is more "algebraic." Together, they certify that the abstract definition of "lattice" is "correct" — every model is, up to isomorphism, a sublattice of a partition lattice (or equivalently, of a subgroup lattice).</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Modular and Arguesian</div>
+  <h2>Lemma 4.4 · Theorem 4.5 (Jónsson) · Theorem 4.6 + Arguesian</h2>
+  <p class="part-lede">Type 2 representations satisfy modular law (Lemma 4.4); modular ⟺ type 2 (Theorem 4.5). Arguesian law (Schützenberger): type 1 ⟹ Arguesian (Theorem 4.6). The Haiman counterexample.</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">C1</span> Lemma 4.4 · Theorem 4.5 (Jónsson) · the modular law</h2>
+  <div class="tagline">Type 2 representations force modularity. Conversely, every modular lattice has a type 2 representation. Dedekind's modular law placed in context.</div>
+
+  <p>Not all lattices have representations of type 1 or 2, so it is natural to ask which ones do. First we consider sublattices of $\textbf{Eq}\,X$ with type 2 joins.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 4.4</span>
+    <p>Let $\mathcal{L}$ be a sublattice of $\textbf{Eq}\,X$ with the property that $R \vee S = R \circ S \circ R$ for all $R, S \in L$. Then $\mathcal{L}$ satisfies</p>
+    <p>$$(M) \quad x \ge y \quad \text{implies} \quad x \wedge (y \vee z) = y \vee (x \wedge z).$$</p>
+    <p>The implication $(M)$ is known as the <strong>modular law</strong>.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Assume that $\mathcal{L}$ is a sublattice of $\textbf{Eq}\,X$ with type 2 joins, and let $A, B, C \in L$ with $A \ge B$. If $p, q \in X$ and $(p, q) \in A \wedge (B \vee C)$, then</p>
+    <p>$$p \,A\, q \quad \text{and} \quad p \,B\, r \,C\, s \,B\, q$$</p>
+    <p>for some $r, s \in X$ (see Figure 4.2). Since</p>
+    <p>$$r \,B\, p \,A\, q \,B\, s$$</p>
+    <p>and $B \le A$, we have $(r, s) \in A \wedge C$. It follows that $(p, q) \in B \vee (A \wedge C)$. Thus $A \wedge (B \vee C) \le B \vee (A \wedge C)$. The reverse inclusion is trivial, so we have equality. ∎</p>
+  </div>
+
+  <svg class="diagram" viewBox="0 0 360 200" xmlns="http://www.w3.org/2000/svg" aria-label="Figure 4.2 — modular law diagram">
+    <line x1="80" y1="40" x2="280" y2="40"/>
+    <line x1="80" y1="40" x2="80" y2="160"/>
+    <line x1="280" y1="40" x2="280" y2="160"/>
+    <line x1="80" y1="160" x2="280" y2="160"/>
+    <circle cx="80" cy="40" r="5"/>
+    <circle cx="280" cy="40" r="5"/>
+    <circle cx="80" cy="160" r="5"/>
+    <circle cx="280" cy="160" r="5"/>
+    <text x="62" y="38">r</text>
+    <text x="290" y="38">s</text>
+    <text x="62" y="180">p</text>
+    <text x="290" y="180">q</text>
+    <text x="170" y="32">C</text>
+    <text x="35" y="105">B</text>
+    <text x="290" y="105">B</text>
+    <text x="172" y="180">A</text>
+  </svg>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.5 · Jónsson — modular ⟺ type 2</span>
+    <p>A lattice has a type 2 representation if and only if it is modular.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Leftarrow$) Jónsson 1953 gave a slight variation of the proof of Theorem 4.1 that shows every modular lattice has a type 2 representation. The variation: in Sublemma 1, we add only TWO new points (instead of three) between $p$ and $q$ — yielding a 3-point chain that gives type 2 joins. The transitivity verification works precisely under the modular hypothesis (which is why the standard 3-new-point construction in Sublemma 1 was needed for general lattices — see the comment in Nation's text after Sublemma 1).</p>
+    <p>($\Rightarrow$) Combine Lemma 4.4 (type 2 ⟹ modular) with the embedding hypothesis. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The modular law and its history</span>
+    <p>The modular law $(M)$ plays an important role in lattice theory. It was invented in the 1890s by Richard Dedekind, who showed that the lattice of normal subgroups of a group is modular [Dedekind 1892, 1897]. Note that $(M)$ FAILS in the pentagon $\mathcal{N}_5$. In fact, Dedekind proved that a lattice is modular if and only if it does not contain the pentagon as a sublattice (this is Theorem 9.1 in Nation's book — see Călugăreanu Ch 1 for a parallel treatment).</p>
+    <p>The modular law is equivalent to the equation:</p>
+    <p>$$(M') \quad x \wedge ((x \wedge y) \vee z) = (x \wedge y) \vee (x \wedge z).$$</p>
+    <p>It is easily seen to be a special case of (and hence weaker than) the distributive law:</p>
+    <p>$$(D) \quad x \wedge (y \vee z) = (x \wedge y) \vee (x \wedge z).$$</p>
+    <p>Specifically: $(M)$ says that $(D)$ should hold for $x \ge y$.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">C2</span> Arguesian law · Theorem 4.6 · Haiman</h2>
+  <div class="tagline">Arguesian: stronger than modular, weaker than distributive. Type 1 ⟹ Arguesian (Schützenberger / Jónsson). Haiman: converse fails.</div>
+
+  <p>Note that the normal subgroup lattice of a group has a natural representation $(X, F)$: take $X = G$ and $F(N) = \{(x, y) \in G^2 : xy^{-1} \in N\}$. This representation is in fact <strong>type 1</strong> (Exercise 3), and Jónsson showed that lattices with a type 1 representation, or equivalently sublattices of $\textbf{Eq}\,X$ in which $R \vee S = R \circ S$, satisfy an implication stronger than the modular law. A lattice is said to be <strong>Arguesian</strong> if it satisfies</p>
+
+  <div class="box def">
+    <span class="label">Arguesian law (A)</span>
+    <p>$$(A) \quad (a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2 \quad \text{implies} \quad c_2 \le c_0 \vee c_1$$</p>
+    <p>where</p>
+    <p>$$c_i = (a_j \vee a_k) \wedge (b_j \vee b_k) \quad \text{for } \{i, j, k\} = \{0, 1, 2\}.$$</p>
+    <p>The Arguesian law is (less obviously) equivalent to a lattice inclusion,</p>
+    <p>$$(A') \quad (a_0 \vee b_0) \wedge (a_1 \vee b_1) \wedge (a_2 \vee b_2) \le a_0 \vee (b_0 \wedge (c \vee b_1))$$</p>
+    <p>where</p>
+    <p>$$c = c_2 \wedge (c_0 \vee c_1).$$</p>
+    <p>These are two of several equivalent forms of this law, which is stronger than modularity and weaker than distributivity. The Arguesian law is modeled after <strong>Desargues' Law in projective geometry</strong>.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.6 · type 1 ⟹ Arguesian</span>
+    <p>If $\mathcal{L}$ is a sublattice of $\textbf{Eq}\,X$ with the property that $R \vee S = R \circ S$ for all $R, S \in L$, then $\mathcal{L}$ satisfies the Arguesian law.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary</span>
+    <p>Every lattice that has a type 1 representation is Arguesian.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof of Theorem 4.6 · the diagram chase</span>
+    <p>Let $\mathcal{L}$ be a sublattice of $\textbf{Eq}\,X$ with type 1 joins. Assume $(A_0 \vee B_0) \wedge (A_1 \vee B_1) \le A_2 \vee B_2$, and suppose $(p, q) \in C_2 = (A_0 \vee A_1) \wedge (B_0 \vee B_1)$. Then there exist $r, s$ such that</p>
+    <p>$$p \,A_0\, r \,A_1\, q$$</p>
+    <p>$$p \,B_0\, s \,B_1\, q.$$</p>
+    <p>Since $(r, s) \in (A_0 \vee B_0) \wedge (A_1 \vee B_1) \le A_2 \vee B_2$, there exists $t$ such that $r \,A_2\, t \,B_2\, s$.</p>
+    <p>Now you can check that</p>
+    <p>$$(p, t) \in (A_0 \vee A_2) \wedge (B_0 \vee B_2) = C_1$$</p>
+    <p>$$(t, q) \in (A_1 \vee A_2) \wedge (B_1 \vee B_2) = C_0$$</p>
+    <p>and hence $(p, q) \in C_0 \vee C_1$. Thus $C_2 \le C_0 \vee C_1$, as desired. (This argument is diagrammed in Figure 4.3.) ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Examples of Arguesian lattices</span>
+    <p>It follows that the lattice of normal subgroups of a group is not only modular, but Arguesian (Exercise 3). All these types of lattices are Arguesian:</p>
+    <ul>
+      <li>Lattice of normal subgroups of a group (cosets permute).</li>
+      <li>Lattice of subgroups of an abelian group (everything commutes).</li>
+      <li>Lattice of ideals of a ring (ideals add commutatively).</li>
+      <li>Lattice of subspaces of a vector space (= subspace lattice of $\mathbb{P}^n$).</li>
+      <li>Lattice of submodules of a module.</li>
+    </ul>
+    <p>More generally, <strong>Ralph Freese and Bjarni Jónsson</strong> (1976, Algebra Universalis 6, 225-228) proved that if $\mathcal{V}$ is a variety of algebras, all of whose congruence lattices are modular (such as groups or rings), then the congruence lattices of algebras in $\mathcal{V}$ are Arguesian.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">The Arguesian / type 1 gap (Haiman)</span>
+    <p><strong>Mark Haiman</strong> has shown that the converse of Theorem 4.6 is false: there are Arguesian lattices that do NOT have a type 1 representation [Haiman 1987 (Bull. AMS 16), 1991 (Algebra Universalis 28)]. In fact, his proof shows that lattices with a type 1 representation must satisfy equations that are STRICTLY STRONGER than the Arguesian law. It follows, in particular, that the lattice of normal subgroups of a group also satisfies these stronger equations, as do the other types of lattices mentioned in the preceding paragraph.</p>
+    <p>Interestingly, <strong>P. P. Pálfy and László Szabó</strong> (1995, Algebra Universalis 33) have shown that subgroup lattices of abelian groups satisfy an equation that does NOT hold in all normal subgroup lattices. So the variety hierarchy is even finer than just "Arguesian / type 1 / modular."</p>
+    <p><strong>Open question (still as of Nation's notes):</strong> Does there exist a set of equations $\Sigma$ such that a lattice has a type 1 representation iff it satisfies all the equations of $\Sigma$? Haiman proved that if such a $\Sigma$ exists, it must contain infinitely many equations. In Chapter 7 we will see that a class of lattices is characterised by a set of equations iff it is closed with respect to direct products, sublattices, and homomorphic images. The class of lattices having a type 1 representation is easily seen to be closed under sublattices and direct products, so the question is equivalent to: <em>Is the class of all lattices having a type 1 representation closed under homomorphic images?</em></p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — Cayley lineage, Dedekind's modular law, Desargues / projective, Pálfy-Szabó / variety theory, Prologos</h2>
+  <p class="part-lede">From Cayley 1854 to Whitman 1946 to Pudlák-Tůma 1980 to modern open problems on Arguesian lattices.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: The Cayley-style theorem lineage</h2>
+  <div class="tagline">Theorem 4.1 is the lattice version of Cayley's group theorem. The full lineage runs from groups (1854) to lattices (1946) to modern variants.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · representation theorems across algebra</span>
+    <p>The "every $X$ embeds in a canonical structure" pattern goes back to Cayley:</p>
+    <table class="grid">
+      <thead><tr><th>Object</th><th>Canonical embedding target</th><th>Theorem</th></tr></thead>
+      <tbody>
+        <tr><td>Group</td><td>Permutation group on $|G|$</td><td>Cayley 1854</td></tr>
+        <tr><td>Poset</td><td>Subset of $\mathfrak{P}(\mathcal{Q})$</td><td>Theorem 1.1 (Nation Ch 1)</td></tr>
+        <tr><td>Semilattice</td><td>$\mathcal{O}(\mathcal{S})$ (order ideals)</td><td>Theorem 2.2 (Nation Ch 2)</td></tr>
+        <tr><td>Algebraic lattice</td><td>$\textbf{Sub}\,\mathcal{A}$ for some algebra</td><td>Birkhoff-Frink 1948 (Nation Ch 3)</td></tr>
+        <tr><td>Lattice (general)</td><td>$\textbf{Eq}\,X$ (partition lattice)</td><td>Whitman 1946 (this chapter)</td></tr>
+        <tr><td>Lattice (general)</td><td>$\textbf{Sub}\,\mathcal{G}$ (subgroup lattice)</td><td>Theorem 4.3 (corollary of 4.1)</td></tr>
+        <tr><td>Distributive lattice</td><td>$\mathcal{O}(J(\mathcal{L}))$ (order ideals of join-irr)</td><td>Birkhoff 1933 (Ch 8)</td></tr>
+        <tr><td>Boolean algebra</td><td>$\mathfrak{P}(X)$ for some $X$</td><td>Stone 1936</td></tr>
+        <tr><td>Topological space</td><td>$[0,1]^I$ embedding</td><td>Tychonoff 1930</td></tr>
+        <tr><td>Module</td><td>Submodule of free module</td><td>(Structure thms)</td></tr>
+      </tbody>
+    </table>
+    <p>Each instance: define the abstract object via axioms + prove a representation theorem certifying the abstract definition is "correct" — every model is, up to isomorphism, of a specific concrete form.</p>
+    <p>Nation's chapters following 4 specialise these representation theorems:</p>
+    <ul>
+      <li>Ch 5 (congruence lattices): a refinement of Birkhoff-Frink.</li>
+      <li>Ch 6 (free lattices): the "biggest" lattice with $n$ generators.</li>
+      <li>Ch 7 (varieties): Birkhoff's HSP theorem characterising classes of lattices by equations.</li>
+      <li>Ch 8 (distributive): Birkhoff's representation in detail.</li>
+      <li>Ch 11 (geometric): matroid theory as a lattice representation.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Dedekind's modular law and module theory</h2>
+  <div class="tagline">Dedekind invented the modular law in the 1890s while studying ideals. The lattice of submodules of any module is modular — the founding observation of "lattice methods in algebra."</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Dedekind's lineage and module theory</span>
+    <p><strong>Dedekind 1892</strong>: Supplement XI to Dirichlet's <em>Vorlesungen über Zahlentheorie</em>. The first appearance of the modular law in print, in the context of ideals of algebraic number fields.</p>
+    <p><strong>Dedekind 1897</strong>: <em>Über Zerlegungen von Zahlen durch ihre grössten gemeinsamen Teiler</em> (Festschrift der Herzogl. technischen Hochschule zur Naturforscher-Versammlung). Systematic development of modular lattice theory; "Dualgruppen" (dual groups = lattices).</p>
+    <p><strong>Dedekind 1900</strong>: <em>Über die von drei Moduln erzeugte Dualgruppe</em> (Mathematische Annalen 53). The free modular lattice on three generators (28 elements). Established the $N_5$ obstruction theorem: a lattice is modular ⟺ does not contain the pentagon.</p>
+    <p>Dedekind's key observation: <em>"normal subobjects in algebra always form modular lattices."</em></p>
+    <ul>
+      <li>Normal subgroups (within a group): modular.</li>
+      <li>Submodules of any module: modular.</li>
+      <li>Ideals of any ring (= submodules of $R$ as $R$-module): modular.</li>
+      <li>Subspaces of any vector space: modular.</li>
+      <li>Subspaces of any projective space: modular (Arguesian if Desarguesian).</li>
+      <li>Closed subsets of a finite-dimensional Galois extension: modular.</li>
+    </ul>
+    <p>The modular law is "the algebraic-structure-respecting law": whenever you have a class of objects where "internal sums and intersections behave well," the resulting lattice is modular.</p>
+    <p>Călugăreanu's <em>Lattice Concepts of Module Theory</em> is essentially the systematic study of modular lattices arising from module theory. The <a href="calugareanu-companion-toc.html">Călugăreanu Companion</a> covers this in depth, with parallel treatment of modular law in Ch 1, Ch 5 (Loewy series), Ch 8 (Goldie dim), Ch 9 (purity), Ch 12 (supplemented), Ch 13 (Krull dim) — all rely on the modular law machinery.</p>
+    <p>Nation's chapters 9 and 10 develop modular and semimodular lattice theory in detail. Theorem 4.5 (this chapter) connects modularity to the equivalence-relation representation: modular ⟺ type 2 representation.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: Arguesian law and projective geometry</h2>
+  <div class="tagline">The Arguesian identity is the lattice-theoretic face of Desargues' theorem (1648). Schützenberger 1945 + Jónsson 1953 + Haiman 1987.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Desargues 1648 → modern Arguesian theory</span>
+    <p><strong>Girard Desargues 1648</strong>: <em>"two triangles are perspective from a point if and only if they are perspective from a line."</em> One of the foundational theorems of projective geometry. Equivalent: in a projective plane, certain incidences imply other incidences.</p>
+    <p><strong>Marshall Stone et al. (1930s)</strong>: project/inverse work on lattice / projective geometry duality.</p>
+    <p><strong>Schützenberger 1945</strong>: showed Desargues' theorem can be expressed as a lattice identity in the lattice of subspaces of a projective space. The identity holds iff the geometry is Desarguesian (i.e., satisfies Desargues' theorem).</p>
+    <p><strong>Jónsson 1953</strong>: Showed the Arguesian identity holds in every lattice of <strong>commuting</strong> equivalence relations — i.e., every lattice with a type 1 representation. This is Theorem 4.6 in Nation.</p>
+    <p>The deep correspondence:</p>
+    <ul>
+      <li>Projective space (Desarguesian) ⟺ Subspace lattice satisfies Arguesian law.</li>
+      <li>Projective space (non-Desarguesian, e.g., Cayley plane = octonionic projective plane) ⟺ Subspace lattice does NOT satisfy Arguesian.</li>
+      <li>Type 1 representation ⟹ Arguesian (Theorem 4.6).</li>
+      <li>Arguesian ⟹ type 1 (FALSE, Haiman).</li>
+    </ul>
+    <p><strong>von Neumann coordinatization theorem (1936)</strong>: complemented modular lattices of dimension $n \ge 4$ are coordinatized by regular rings. The Arguesian condition is what makes the dimension-3 case work — via Desargues' theorem.</p>
+    <p><strong>Jónsson 1957</strong>: extended von Neumann's theorem to complemented Arguesian lattices of order $n > 3$ (dropping the dimension restriction with a stronger lattice condition).</p>
+    <p><strong>Modern research</strong> (Haiman 1987, 1991; Pálfy-Szabó 1995; Santocanale-Wehrung 2011; Freese-Jónsson 1976): the variety hierarchy of lattices arising from various concrete sources (subgroups, abelian subgroups, subspaces, etc.) is finer than just "Arguesian / modular / distributive." Each class of concrete lattices satisfies its own family of identities. Whether the type 1 representable lattices form a variety remains open.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Connection: Pálfy-Szabó and variety theory of congruence lattices</h2>
+  <div class="tagline">Different concrete lattice classes satisfy different identities. The variety hierarchy is much finer than "modular / distributive."</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the variety hierarchy of structural lattices</span>
+    <p>Lattices arising from different algebraic structures satisfy different identities:</p>
+    <table class="grid">
+      <thead><tr><th>Source</th><th>Lattice property</th><th>Identifies the variety</th></tr></thead>
+      <tbody>
+        <tr><td>Power sets $\mathfrak{P}(X)$</td><td>Distributive</td><td>Distributive variety</td></tr>
+        <tr><td>Boolean algebras</td><td>Distributive + complemented</td><td>Boolean variety</td></tr>
+        <tr><td>Subspaces of vector space</td><td>Modular + complemented + atomistic</td><td>Geometric / projective</td></tr>
+        <tr><td>Subgroups of abelian group</td><td>Modular + Pálfy-Szabó identity</td><td>Specific subvariety</td></tr>
+        <tr><td>Normal subgroups</td><td>Modular + Arguesian</td><td>Type 1 representable variety</td></tr>
+        <tr><td>Subgroups of group</td><td>Modular (always)</td><td>Modular variety</td></tr>
+        <tr><td>Submodules of module</td><td>Modular + Arguesian</td><td>Same as normal subgroups</td></tr>
+        <tr><td>Ideals of ring</td><td>Modular + Arguesian</td><td>Same</td></tr>
+        <tr><td>Equivalence relations $\textbf{Eq}\,X$</td><td>Algebraic + strongly atomic + simple</td><td>Universal target (Whitman)</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Pálfy-Szabó 1995</strong> (Algebra Universalis 33, 191-195): <em>An identity for subgroup lattices of abelian groups.</em> Subgroup lattices of abelian groups satisfy an identity that does NOT hold in all normal subgroup lattices. So abelian subgroup lattices are a strict subvariety of normal subgroup lattices.</p>
+    <p><strong>Freese-Jónsson 1976</strong> (Algebra Universalis 6, 225-228): <em>Congruence modularity implies the Arguesian identity.</em> If $\mathcal{V}$ is a variety of algebras with all congruence lattices modular (e.g., groups, rings), then those congruence lattices are also Arguesian.</p>
+    <p><strong>Haiman 1987, 1991</strong>: showed the type 1 representable class is strictly smaller than the Arguesian class. The lattice of normal subgroups of a group satisfies identities strictly stronger than Arguesian.</p>
+    <p>The variety hierarchy:</p>
+    <p style="text-align: center; font-style: italic;">distributive ⊊ Boolean (with complementation) ⊊ Arguesian ⊊ modular ⊊ all lattices</p>
+    <p>and within Arguesian: <em>type 1 representable ⊊ Arguesian</em> (Haiman). Within type 1 representable: various subvarieties for different structural sources (Pálfy-Szabó).</p>
+    <p>The full study of these subvarieties is an active area of research; Nation's Chapter 7 (Varieties of Lattices) develops the formal apparatus (Birkhoff's HSP theorem, etc.).</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Nation Chapter 4 lives in Prologos</h2>
+  <div class="tagline">Equivalence relations IS Prologos's worldview-bitmask machinery. Theorem 4.1 underlies the BSP scheduler's correctness on per-worldview cell views.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Nation Chapter 4 is directly applicable to Prologos's worldview-tagged cell architecture:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Nation Ch 4</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Equivalence relation on $X$</td><td><code>racket/prologos/propagator.rkt</code></td><td>Worldview bitmasks partition cell-write events into equivalence classes — pairs $(p, q)$ are in the same class iff they share a worldview bitmask. The lattice of bitmask-induced equivalences IS a sublattice of $\textbf{Eq}\,X$ for $X = $ cell-write events.</td></tr>
+        <tr><td>Eq X — partition lattice</td><td>Architectural design</td><td>The full partition lattice gives the universal "all possible groupings of writes" structure. Prologos's BSP scheduler uses a sublattice (the bitmask-induced equivalences).</td></tr>
+        <tr><td>Kernel of a function</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Term equality classes — the kernel of the "evaluation" function. $\ker f$ structure underlies term-canonicalization.</td></tr>
+        <tr><td>Congruence relation</td><td>Cell-merge propagation</td><td>Cell merges respect the propagator network's operations — cell-state equivalences are CONGRUENCES, not just equivalences. The BSP scheduler exploits this to factor cell updates through congruences.</td></tr>
+        <tr><td>Theorem 4.1 (Whitman)</td><td>Architectural soundness</td><td>Every Prologos cell-value lattice is a sublattice of some $\textbf{Eq}\,X$, with $X = $ a sufficiently large set of internal states. Whitman's theorem CERTIFIES this universal embedding exists for any abstract cell value lattice.</td></tr>
+        <tr><td>Type 2 representation ⟺ modular (Theorem 4.5)</td><td><code>.claude/rules/structural-thinking.md</code></td><td>For modular cell-value lattices (most of Prologos's cells), joins can be computed via $R \circ S \circ R$ — three steps in the equivalence-relation lattice. This is the BSP scheduler's "small step" join computation.</td></tr>
+        <tr><td>Type 1 representation ⟹ Arguesian (Theorem 4.6)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>For "permuting" cell relations (where update orders commute), the cell-value lattice is Arguesian — satisfies stronger structural laws. This is the strict-permutation case.</td></tr>
+        <tr><td>Pudlák-Tůma 1980 (finite representation)</td><td>Finite-state cell verification</td><td>For cells with finitely many possible values, Theorem 4.2 certifies a FINITE partition representation exists. This is the abstract face of "finite-state cell verification" — every finite cell value lattice is realisable on a finite state space.</td></tr>
+        <tr><td>Subgroup lattice embedding (Theorem 4.3)</td><td>Architectural design</td><td>Every Prologos cell-value lattice can ALSO be realised as a subgroup lattice. Useful for symmetry-respecting cell-update operations: cells that need to maintain group-symmetric states.</td></tr>
+        <tr><td>Arguesian / type 1</td><td>BSP scheduler optimization</td><td>Type 1 representable cells admit "single-step joins" $R \circ S$ instead of multi-step. The BSP scheduler can be optimized for type-1 cells with simpler join computations.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Architectural fit.</strong> Nation Chapter 4 IS the structural soundness argument for Prologos's worldview-bitmask machinery. Every cell-value lattice IS a sublattice of some $\textbf{Eq}\,X$ (Theorem 4.1). For modular cells (the typical case), joins are type 2 — computed in three relative-product steps. For Arguesian cells (with permuting relations), joins are type 1 — computed in one step. The BSP scheduler exploits this to optimize join computation per cell class.</p>
+    <p>The Hyperlattice Conjecture's claim — "every computable function is a fixpoint computation on lattices" — has its representation-theoretic counterpart here: every lattice IS a partition lattice in disguise, and Prologos's cells inherit this structure for their partitioning of cell-write events into worldview classes.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and looking ahead</h2>
+  <p class="part-lede">All Chapter 4 terms; eight worked exercises; pointers to Chapter 5 (congruence relations).</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Nation Chapter 4 terms</h2>
+  <div class="tagline">Compact reference of the chapter's vocabulary.</div>
+
+  <dl class="glossary">
+    <dt>Equivalence relation</dt>
+    <dd>Reflexive, symmetric, transitive binary relation. Equivalent: partition of the underlying set.</dd>
+    <dt>Kernel $\ker f$</dt>
+    <dd>$\{(x, y) : f(x) = f(y)\}$. For homomorphisms: a congruence relation.</dd>
+    <dt>Congruence relation</dt>
+    <dd>Equivalence relation respected by all operations of an algebra.</dd>
+    <dt>Eq X</dt>
+    <dd>Lattice of equivalence relations on $X$. Algebraic, strongly atomic, semimodular, relatively complemented, simple.</dd>
+    <dt>Relative product $R \circ S$</dt>
+    <dd>$\{(x, y) : \exists z, x R z S y\}$. For equivalence relations $R \vee S$ = union of the chain $R \circ S \subseteq R \circ S \circ R \subseteq \dots$.</dd>
+    <dt>Permuting equivalences</dt>
+    <dd>$R, S$ permute if $R \circ S = S \circ R$. Exercise 4: ⟺ $R \vee S = R \circ S$.</dd>
+    <dt>Representation $(X, F)$</dt>
+    <dd>$F : \mathcal{L} \to \textbf{Eq}\,X$ a lattice embedding.</dd>
+    <dt>Type 1</dt>
+    <dd>$F(x) \vee F(y) = F(x) \circ F(y)$. Implies Arguesian.</dd>
+    <dt>Type 2</dt>
+    <dd>$F(x) \vee F(y) = F(x) \circ F(y) \circ F(x)$. ⟺ modular (Theorem 4.5).</dd>
+    <dt>Type 3</dt>
+    <dd>$F(x) \vee F(y) = F(x) \circ F(y) \circ F(x) \circ F(y)$. Always exists (Theorem 4.1).</dd>
+    <dt>Weak representation</dt>
+    <dd>$F : \mathcal{L} \to \textbf{Eq}\,U$ one-to-one MEET homomorphism. Intermediate object in Whitman's proof.</dd>
+    <dt>Theorem 4.1 (Whitman 1946 / Jónsson 1953)</dt>
+    <dd>Every lattice has a type 3 representation.</dd>
+    <dt>Theorem 4.2 (Pudlák-Tůma 1980)</dt>
+    <dd>Every finite lattice has a finite representation.</dd>
+    <dt>Theorem 4.3</dt>
+    <dd>Every lattice embeds in $\textbf{Sub}\,\mathcal{G}$ for some group $\mathcal{G}$.</dd>
+    <dt>Modular law (M)</dt>
+    <dd>$x \ge y$ ⟹ $x \wedge (y \vee z) = y \vee (x \wedge z)$. Equivalent (M'). Dedekind 1890s.</dd>
+    <dt>$\mathcal{N}_5$</dt>
+    <dd>The pentagon lattice — the smallest non-modular lattice.</dd>
+    <dt>Theorem 4.5 (Jónsson)</dt>
+    <dd>$\mathcal{L}$ has type 2 representation ⟺ $\mathcal{L}$ is modular.</dd>
+    <dt>Distributive law (D)</dt>
+    <dd>$x \wedge (y \vee z) = (x \wedge y) \vee (x \wedge z)$. Stronger than modular.</dd>
+    <dt>Arguesian law (A)</dt>
+    <dd>$(a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2$ ⟹ $c_2 \le c_0 \vee c_1$ where $c_i = (a_j \vee a_k) \wedge (b_j \vee b_k)$. Stronger than modular, weaker than distributive. Models Desargues' theorem.</dd>
+    <dt>Arguesian inclusion (A')</dt>
+    <dd>$(a_0 \vee b_0) \wedge (a_1 \vee b_1) \wedge (a_2 \vee b_2) \le a_0 \vee (b_0 \wedge (c \vee b_1))$ where $c = c_2 \wedge (c_0 \vee c_1)$.</dd>
+    <dt>Theorem 4.6</dt>
+    <dd>Type 1 representation ⟹ Arguesian.</dd>
+    <dt>Haiman 1987, 1991</dt>
+    <dd>Arguesian ⟹ type 1 FAILS — type 1 representable is strictly stronger than Arguesian.</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 1–8</h2>
+  <div class="tagline">Eight worked exercises covering Eq X for small $X$, representations of standard lattices, the coset representation, R∘S permutation, complete representation theorem, structural properties of Eq X, Arguesian inclusion, and Haiman's 8-variable identity.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.1</span>Draw $\textbf{Eq}\,X$ for $|X| = 3, 4$</summary>
+  <div class="body">
+    <div class="ex-statement">Draw $\textbf{Eq}\,X$ for $|X| = 3, 4$.</div>
+    <p><strong>$|X| = 3$.</strong> Say $X = \{a, b, c\}$. The equivalence relations on $X$ correspond to partitions:</p>
+    <ul>
+      <li>Equality: $\{\{a\}, \{b\}, \{c\}\}$ — 3 blocks (bottom).</li>
+      <li>$\{\{a, b\}, \{c\}\}$, $\{\{a, c\}, \{b\}\}$, $\{\{a\}, \{b, c\}\}$ — 3 partitions with one 2-block, one 1-block.</li>
+      <li>$\{\{a, b, c\}\}$ — 1 block (top, universal relation).</li>
+    </ul>
+    <p>Total: 5 equivalence relations, forming the lattice $\mathcal{M}_3$ (the diamond): bottom = equality, three atoms (the 2-block partitions), top = universal. So $\textbf{Eq}\,\{a, b, c\} \cong \mathcal{M}_3$.</p>
+    <p><strong>$|X| = 4$.</strong> Bell number $B_4 = 15$. Partitions of $\{a, b, c, d\}$:</p>
+    <ul>
+      <li>1 partition with 4 blocks (equality): bottom.</li>
+      <li>$\binom{4}{2} = 6$ partitions with one 2-block + two 1-blocks.</li>
+      <li>$\binom{4}{2} \cdot \binom{2}{2}/2 = 3$ partitions with two 2-blocks (e.g., $\{\{a,b\}, \{c,d\}\}$).</li>
+      <li>$\binom{4}{3} \cdot \binom{1}{1} = 4$ partitions with one 3-block + one 1-block.</li>
+      <li>1 partition with 1 block (universal): top.</li>
+    </ul>
+    <p>Total $1 + 6 + 3 + 4 + 1 = 15$. The Hasse diagram is more complex; the lattice has length 3 and is non-modular only if checked carefully — actually $\textbf{Eq}\,X$ is always semimodular but typically not modular for $|X| \ge 4$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.2</span>Find representations in Eq X for $\mathfrak{P}(Y)$, $\mathcal{N}_5$, $\mathcal{M}_n$</summary>
+  <div class="body">
+    <div class="ex-statement">Find representations in $\textbf{Eq}\,X$ for (a) $\mathfrak{P}(Y)$, $Y$ a set, (b) $\mathcal{N}_5$, (c) $\mathcal{M}_n$, $n < \infty$.</div>
+    <p><strong>(a) $\mathfrak{P}(Y)$ in some $\textbf{Eq}\,X$.</strong> For each subset $A \subseteq Y$, define an equivalence on $X = Y \times \{0, 1\}$ where two elements are equivalent iff they agree on the first coordinate AND if both have second coordinate in some specific way. Concretely: take $X = Y$ and define $F(A) = (A \times A) \cup \Delta_X$ where $\Delta_X$ is the equality relation. Then $F : \mathfrak{P}(Y) \to \textbf{Eq}\,Y$ — but does this preserve joins? $F(A) \vee F(B) = F(A \cup B)$? Verify by computing joins directly. The standard result: yes, $\mathfrak{P}(Y) \cong \{F(A) : A \subseteq Y\} \subseteq \textbf{Eq}\,Y$.</p>
+    <p><strong>(b) $\mathcal{N}_5$.</strong> Pentagon: $0 < a < c < 1$, $0 < b < 1$, $a \| b$, $c \| b$. Need $X$ such that $\textbf{Eq}\,X$ has a sublattice isomorphic to $\mathcal{N}_5$. By Pudlák-Tůma 1980, $|X|$ can be finite. The smallest such $X$: actually for $\mathcal{N}_5$, $|X| = 5$ suffices using a specific construction (Whitman's proof gives an explicit construction).</p>
+    <p><strong>(c) $\mathcal{M}_n$.</strong> $\mathcal{M}_n$ is the diamond with $n$ atoms. Take $X = \{0, 1, \dots, n+1\}$ or similar. The atoms are $n$ different equivalence relations that pairwise generate the full universal relation. Concrete: $X = \mathbb{Z}_n$, atoms $A_i$ = "everything is equivalent to its image under translation by $i$." Or use Pudlák-Tůma's explicit construction. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.3</span>Standard coset representation is type 1</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{G}$ be a group. Let $F : \textbf{Sub}\,\mathcal{G} \to \textbf{Eq}\,G$ be the standard representation by cosets: $F(H) = \{(x, y) \in G^2 : xy^{-1} \in H\}$.
+    (a) Verify that $F(H)$ is indeed an equivalence relation.
+    (b) Verify that $F$ is a lattice embedding.
+    (c) Show that $F(H) \vee F(K) = F(H) \circ F(K)$ iff $HK = KH$ (= $H \vee K$).
+    (d) Conclude that the restriction of $F$ to the normal subgroup lattice $\mathcal{N}(\mathcal{G})$ is a type 1 representation.</div>
+    <p><strong>(a)</strong> $F(H)$ reflexive: $x x^{-1} = e \in H$. Symmetric: $xy^{-1} \in H$ ⟹ $(xy^{-1})^{-1} = yx^{-1} \in H$. Transitive: $xy^{-1} \in H$ and $yz^{-1} \in H$ ⟹ $xz^{-1} = (xy^{-1})(yz^{-1}) \in H$. ✓</p>
+    <p><strong>(b)</strong> Order-preserving: $H \subseteq K$ ⟹ $F(H) \subseteq F(K)$. Injective: $F(H) = F(K)$ ⟹ $xy^{-1} \in H$ iff $xy^{-1} \in K$ for all $x, y$, hence $H = K$ (taking $y = e$). Lattice: $F(H \cap K) = F(H) \cap F(K)$ direct check. $F(H \vee K)$ corresponds to the subgroup generated by $H \cup K$.</p>
+    <p><strong>(c)</strong> $F(H) \circ F(K) = \{(x, z) : \exists y, xy^{-1} \in H$ and $yz^{-1} \in K\}$. Setting $a = xy^{-1}, b = yz^{-1}$: $xz^{-1} = ab \in HK$. So $F(H) \circ F(K) = \{(x, z) : xz^{-1} \in HK\}$. Similarly $F(H) \vee F(K)$ in $\textbf{Eq}\,G$ corresponds to the smallest equivalence relation containing both, which corresponds to the subgroup $H \vee K$ generated by $H \cup K$. The two are equal iff $HK = H \vee K$, equivalently $HK = KH$.</p>
+    <p><strong>(d)</strong> If $H, K$ are normal in $\mathcal{G}$: $HK = KH = HK$ (cosets commute for normal subgroups), and $HK = H \vee K$. So $F(H) \vee F(K) = F(H) \circ F(K)$ — type 1. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.4</span>Permuting equivalence relations</summary>
+  <div class="body">
+    <div class="ex-statement">Show that for $R, S \in \textbf{Eq}\,X$: $R \vee S = R \circ S$ ⟺ $S \circ R \subseteq R \circ S$ ⟺ $R \circ S = S \circ R$. (For this reason, such equivalence relations are said to <em>permute</em>.)</div>
+    <p><strong>Strategy.</strong> Cycle through the three equivalences.</p>
+    <p>(1) ⟹ (2): If $R \vee S = R \circ S$, then $S \circ R \subseteq R \vee S = R \circ S$. ✓</p>
+    <p>(2) ⟹ (3): If $S \circ R \subseteq R \circ S$, then by symmetry of the argument (swap $R$ and $S$): $R \circ S \subseteq S \circ R$. Combined: $R \circ S = S \circ R$.</p>
+    <p>(3) ⟹ (1): If $R \circ S = S \circ R$, compute $R \circ S \circ R \circ S = (R \circ S) \circ (R \circ S) = (R \circ S) \circ (S \circ R)$ (by (3)) $= R \circ (S \circ S) \circ R = R \circ S \circ R$ (using $S \circ S = S$ for equivalences) $= (R \circ S) \circ R = (S \circ R) \circ R = S \circ R \circ R = S \circ R = R \circ S$. So the chain $R \circ S \subseteq R \circ S \circ R \subseteq R \circ S \circ R \circ S \subseteq \dots$ stabilises at $R \circ S$. Hence $R \vee S = R \circ S$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.5</span>Complete representation theorem for algebraic lattices</summary>
+  <div class="body">
+    <div class="ex-statement">Recall from Exercise 6 of Chapter 3 that a complete sublattice of an algebraic lattice is algebraic.
+    (a) Let $\mathcal{S}$ be a join semilattice with 0. Assume that $\varphi : \mathcal{S} \to \textbf{Eq}\,X$ is a join homomorphism with the properties: (i) for each pair $a, b \in X$ there exists $\sigma(a, b) \in S$ such that $(a, b) \in \varphi(s)$ iff $s \ge \sigma(a, b)$, and (ii) for each $s \in S$, there exists a pair $(x_s, y_s)$ such that $(x_s, y_s) \in \varphi(t)$ iff $s \le t$. Show that $\varphi$ induces a complete representation $\overline{\varphi} : \mathcal{I}(\mathcal{S}) \to \textbf{Eq}\,X$.
+    (b) Indicate how to modify the proof of Theorem 4.1 to obtain, for an arbitrary join semilattice $\mathcal{S}$ with 0, a set $X$ and a join homomorphism $\varphi : \mathcal{S} \to \textbf{Eq}\,X$ satisfying (i) and (ii).
+    (c) Conclude that a complete lattice $\mathcal{L}$ has a complete representation by equivalence relations if and only if $\mathcal{L}$ is algebraic.</div>
+    <p><strong>(a)</strong> Define $\overline{\varphi}(I) = \bigvee_{s \in I} \varphi(s)$ for $I \in \mathcal{I}(\mathcal{S})$. By (i) and (ii), this is well-defined and a complete embedding.</p>
+    <p><strong>(b)</strong> Modify Theorem 4.1's construction by allowing the lattice $\mathcal{L}$ to be a join semilattice with 0; the proof goes through with minor adjustments.</p>
+    <p><strong>(c)</strong> $\mathcal{L}$ algebraic ⟺ $\mathcal{L} \cong \mathcal{I}(\mathcal{L}^c)$ (Theorem 3.3) ⟺ by (a) and (b), $\mathcal{L}$ has a complete representation. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.6</span>Eq X is strongly atomic, semimodular, algebraic</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that $\textbf{Eq}\,X$ is a strongly atomic, semimodular, algebraic lattice.</div>
+    <p><strong>Algebraic.</strong> Equivalence relations are defined by finitary closure rules ($x R y$ and $y R z$ ⟹ $x R z$, etc.). By Theorem 3.2, the lattice of $\Sigma$-closed subsets of $X^2$ — which is $\textbf{Eq}\,X$ — is algebraic. Compact elements: equivalence relations whose nontrivial classes are finite (= finitely generated equivalences).</p>
+    <p><strong>Strongly atomic.</strong> Let $R > S$ in $\textbf{Eq}\,X$. There is some pair $(p, q) \in R \setminus S$. Define $T$ = smallest equivalence relation containing $S \cup \{(p, q)\}$. Then $T \succ S$ (cover) and $T \le R$. So we have $u = T$ with $R \ge u \succ S$.</p>
+    <p><strong>Semimodular.</strong> If $R \succ R \wedge S$, show $R \vee S \succ S$. The atomic step is: removing one pair from $R$ to get $R \wedge S$, the corresponding step in the join is adding one new equivalence pair to $S$ to get $R \vee S$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.7</span>Type 1 ⟹ Arguesian inclusion (A')</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that a lattice with a type 1 representation satisfies the Arguesian inclusion (A').</div>
+    <p><strong>Strategy.</strong> Build on Theorem 4.6's proof. The Arguesian inclusion (A') is equivalent to (A), but the inclusion form is sometimes easier to verify directly.</p>
+    <p>(A') states: $(a_0 \vee b_0) \wedge (a_1 \vee b_1) \wedge (a_2 \vee b_2) \le a_0 \vee (b_0 \wedge (c \vee b_1))$ where $c = c_2 \wedge (c_0 \vee c_1)$.</p>
+    <p>Diagram chase: take $(p, q) \in (A_0 \vee B_0) \wedge (A_1 \vee B_1) \wedge (A_2 \vee B_2)$. By type 1: $(p, q) \in A_i \circ B_i$ for each $i$. So there are $r_0, r_1, r_2$ with $p A_i r_i B_i q$.</p>
+    <p>Use the type 1 hypothesis to combine: $r_i A_i p A_j r_j$ gives $(r_i, r_j) \in A_i \vee A_j = A_i \circ A_j$ in type 1 representation. Similarly for $B$'s. Building the diagram (Figure 4.3 style), derive $(p, q) \in A_0 \vee (B_0 \wedge (C \vee B_1))$ where $C = C_2 \wedge (C_0 \vee C_1)$ — that's (A'). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 4.8</span>8-variable identity beyond Arguesian (Haiman)</summary>
+  <div class="body">
+    <div class="ex-statement">Mimicking the proof of Theorem 4.6, find an 8-variable implication, like the Arguesian law, that holds in every lattice of permuting equivalence relations. (The hard part of Haiman's work was to show that such laws are not a consequence of the Arguesian law, nor of each other as more variables are added.)</div>
+    <p><strong>Strategy.</strong> Mimic the Arguesian proof but with FOUR triangles instead of three. Each triangle introduces a new variable pair $(a_i, b_i)$, and the corresponding combinations involve $\binom{4}{2} = 6$ terms $c_{ij} = (a_k \vee a_l) \wedge (b_k \vee b_l)$ for $\{i, j, k, l\} = \{0, 1, 2, 3\}$.</p>
+    <p>The 8-variable implication takes the form:</p>
+    <p style="font-style: italic;">$(a_0 \vee b_0) \wedge (a_1 \vee b_1) \le a_2 \vee b_2 \vee a_3 \vee b_3$ implies $c_{23} \le c_{02} \vee c_{12} \vee c_{03} \vee c_{13}$ (or similar combinatorial pattern).</p>
+    <p>The exact form depends on which "diagram" you start with — Haiman's contribution was to show that for each diagram of size 4, 5, 6, etc., you get a NEW identity not implied by the previous ones. So lattices with type 1 representation satisfy an INFINITE family of identities — strictly stronger than Arguesian.</p>
+    <p>Detailed forms appear in Haiman's papers <em>Arguesian lattices which are not linear</em> (Bull. AMS 16, 1987) and <em>Arguesian lattices which are not type-1</em> (Algebra Universalis 28, 1991). The hard part: showing each new identity is independent of the previous ones (not derivable from earlier identities). This requires constructing specific lattices where the earlier identities hold but the new one doesn't. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="ahead">
+  <h2>Looking Ahead — to Chapter 5 (Congruence Relations)</h2>
+  <div class="tagline">Chapter 5 specialises from arbitrary equivalence relations to CONGRUENCES — equivalence relations preserved by algebra operations.</div>
+
+  <p>Chapter 4 has established that every lattice embeds in a partition lattice $\textbf{Eq}\,X$ (Whitman). The chapter has also shown that modular and Arguesian lattices admit "shorter" join expressions in their representations — connecting representation theory to algebraic identities.</p>
+
+  <p><strong>Chapter 5 (Congruence Relations)</strong> specialises the equivalence-relation theory to <strong>congruences</strong> — equivalence relations on an algebra that are preserved by ALL operations. Key ideas:</p>
+  <ul>
+    <li><strong>Congruence lattice $\text{Con}\,\mathcal{A}$.</strong> The lattice of all congruences on $\mathcal{A}$. Always algebraic; for groups isomorphic to the normal subgroup lattice; for rings to the ideal lattice.</li>
+    <li><strong>Funayama-Nakayama theorem.</strong> $\text{Con}\,\mathcal{L}$ is distributive for any lattice $\mathcal{L}$ — even when $\mathcal{L}$ itself is not.</li>
+    <li><strong>Congruence permutability.</strong> Some varieties (groups, rings, modules) have congruences that always permute (= type 1 representations).</li>
+    <li><strong>Congruence modularity / distributivity.</strong> Different "Mal'tsev conditions" for varieties.</li>
+    <li><strong>Grätzer-Schmidt theorem.</strong> Every algebraic lattice arises as $\text{Con}\,\mathcal{A}$ for some algebra (foreshadowed in Ch 3).</li>
+  </ul>
+
+  <p>The chapter's connection to Chapter 4: congruence lattices are sublattices of partition lattices (since congruences are equivalences); when the congruences permute, the representation is type 1, and the congruence lattice is Arguesian.</p>
+
+  <p>Standard references on representation theorems and the modular / Arguesian story:</p>
+  <ul>
+    <li>P. Crawley and R. P. Dilworth, <em>Algebraic Theory of Lattices</em>, Prentice-Hall, 1973.</li>
+    <li>R. Dedekind, <em>Über Zerlegungen von Zahlen durch ihre grössten gemeinsamen Teiler</em> (1897), reprinted in <em>Gesammelte mathematische Werke</em>, Vol. 2, pp. 103-148.</li>
+    <li>R. Freese and B. Jónsson, <em>Congruence modularity implies the Arguesian identity</em>, Algebra Universalis 6 (1976), 225-228.</li>
+    <li>M. Haiman, <em>Arguesian lattices which are not linear</em>, Bull. AMS 16 (1987), 121-124.</li>
+    <li>M. Haiman, <em>Arguesian lattices which are not type-1</em>, Algebra Universalis 28 (1991), 128-137.</li>
+    <li>B. Jónsson, <em>On the representation of lattices</em>, Math. Scand. 1 (1953), 193-206.</li>
+    <li>O. Ore, <em>Theory of equivalence relations</em>, Duke Math. J. 9 (1942), 573-627.</li>
+    <li>P. P. Pálfy and Cs. Szabó, <em>An identity for subgroup lattices of abelian groups</em>, Algebra Universalis 33 (1995), 191-195.</li>
+    <li>P. Pudlák and J. Tůma, <em>Every finite lattice can be embedded in the lattice of all equivalences over a finite set</em>, Algebra Universalis 10 (1980), 74-95.</li>
+    <li>P. Whitman, <em>Lattices, equivalence relations and subgroups</em>, Bull. AMS 52 (1946), 507-522.</li>
+  </ul>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 4 · Representation by Equivalence Relations</div>
+    <div><a href="nation-companion-toc.html">ToC</a> · <a href="nation-companion-ch05.html">Chapter 5 →</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

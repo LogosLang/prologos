@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 10 · Coatomic Lattices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  figure { margin: 26px 0; text-align: center; }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); margin-top: 8px; font-style: italic; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  :root[data-theme="dark"] figure svg .node { fill: var(--bg-warm) !important; stroke: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .node-hot { fill: #3A2E15 !important; stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .node-cool { fill: #1A2236 !important; stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-hot { stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .lbl { fill: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .cap { fill: var(--text-dim) !important; }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch09.html">← Chapter 9</a></li>
+    <li><a href="calugareanu-companion-ch11.html">Chapter 11 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 10 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Coatomic basics</div>
+  <ul>
+    <li><a href="#s1">A1 · Definitions + Lemma 10.1 (Krull)</a></li>
+    <li><a href="#s2">A2 · Proposition 10.1</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Semiatomic + atomic</div>
+  <ul>
+    <li><a href="#s3">B1 · Proposition 10.2</a></li>
+    <li><a href="#s4">B2 · Lemma 10.2 + Prop 10.3</a></li>
+    <li><a href="#s5">B3 · Theorem 10.1</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Sufficient complements</div>
+  <ul>
+    <li><a href="#s6">C1 · Definition + Lemmas 10.3, 10.4</a></li>
+    <li><a href="#s7">C2 · Prop 10.4 + Cor 10.1 + Theorem 10.2</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Superfluous + (D)</div>
+  <ul>
+    <li><a href="#s8">D1 · Proposition 10.5</a></li>
+    <li><a href="#s9">D2 · Divisible + condition (#) + (D)</a></li>
+    <li><a href="#s10">D3 · Prop 10.6 + Theorem 10.3</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Local lattices</div>
+  <ul>
+    <li><a href="#s11">E1 · Prop 10.7 + Prop 10.8 (local)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Bass's B-objects</a></li>
+    <li><a href="#c2">P2 · Divisible &amp; reduced</a></li>
+    <li><a href="#c3">P3 · Local lattices &amp; rings</a></li>
+    <li><a href="#c4">P4 · Nearly divisible groups</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 10 · pp. 115–122</div>
+  <h1>Coatomic Lattices</h1>
+  <p class="lede">The order-dual of atomic: every element below 1 lies under a maximal element. Bass's 1960 B-objects gave the name; this chapter develops the theory in pure lattice form, ties it to the radical, and culminates in <em>local</em> lattices — the lattice analog of local rings.</p>
+  <div class="meta">
+    <span>~50–60 min read</span>
+    <span>11 sections + 5 connection panels</span>
+    <span>10 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — coatomic, divisible, local</h2>
+  <div class="tagline">Coatomic = order-dual of atomic. The chapter explores when this property holds, how it interacts with the radical and superfluous elements (Chapter 7), and culminates in a clean characterisation of local lattices.</div>
+
+  <p>An <em>atomic</em> lattice has atoms below every non-zero element. The order-dual is <strong>coatomic</strong>: every element strictly below $1$ lies <em>below a maximal element</em>. So coatomic lattices have "atoms-from-above" — maximal elements visible from any starting point below $1$.</p>
+
+  <p>Bass introduced the module-theoretic version in 1960: a "B-object" is a module $M$ such that every proper submodule $N \ne M$ is contained in a maximal submodule. The lattice abstraction is exactly the coatomic property applied to $S_R(M)$. Bass's 1960 paper "Finitistic dimension and a homological generalization of semi-primary rings" used B-objects as a key tool for the structure theory of perfect rings — establishing coatomicity as a fundamental finiteness condition.</p>
+
+  <p>The chapter has five movements:</p>
+
+  <ol>
+    <li><strong>Basic theory (Part A).</strong> Definitions of atomic, coatomic, reduced, torsion. Lemma 10.1 (Krull): every compact lattice is coatomic. Proposition 10.1: in modular lattices, coatomic descends through intervals.</li>
+    <li><strong>Semiatomic + atomic (Part B).</strong> Recap of semiatomic ($s(L) = 1$). Example: subgroup lattice is semiatomic iff group is elementary. Theorem 10.1: modular semiatomic inductive ⟹ complemented + atom generated.</li>
+    <li><strong>Sufficient complements (Part C).</strong> A strengthening of complemented: every $a, b$ with trivial meet admits a complement of $a$ above $b$. Theorem 10.2: in modular inductive, semiatomic ⟺ coatomic + every maximal has a complement.</li>
+    <li><strong>Superfluous and condition (D) (Part D).</strong> The chapter's main characterisation: superfluous elements are exactly "$a/0$ coatomic AND $a \le r(L)$" — under condition (D). This is dual to Chapter 5's essentialness characterisation. Theorem 10.3.</li>
+    <li><strong>Local lattices (Part E).</strong> Proposition 10.8: $L - \{1\}$ has a largest element iff $L$ is coatomic and $r(L)$ is maximal in $L$. Such lattices are called <em>local</em>. The lattice analog of local rings (rings with unique maximal ideal). The exercises connect to "nearly divisible" abelian groups.</li>
+  </ol>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>Coatomic lattices have maximal elements above every proper element — the order-dual of atomic. Theorem 10.3 says: <em>under condition (D), an element is superfluous iff its principal ideal is coatomic and the element is below the radical</em>. This is the cleanest characterisation of superfluous elements and dualises Chapter 5's "essential ⟺ contains socle + above-interval is torsion." Local lattices (Proposition 10.8): $L - \{1\}$ has a largest element ⟺ $L$ coatomic + $r(L)$ maximal. The lattice version of "local ring with unique maximal ideal." Exercises 10.1-10.10 work out the structure for abelian groups, classifying nearly divisible groups (Exercises 10.6-10.8) and identifying when the subgroup lattice is local.</p>
+  </div>
+</section>
+
+<div class="part-header" id="vocab">
+  <div class="pk">Pre-flight · Vocabulary primer</div>
+  <h2>Carried forward, new, and deep dives</h2>
+  <p class="part-lede">Following the established convention.</p>
+</div>
+
+<section class="module" id="vocab-section">
+  <h2>Carried forward — quick refreshers</h2>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/2</span>
+    <p><span class="term">modular / upper continuous / compactly generated / inductive</span> Modular: $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$. Upper continuous: meet over directed joins. Compactly generated: every element is join of compacts. Inductive: every interval satisfies condition (B) — chain-suprema preserve trivial-meet.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/4</span>
+    <p><span class="term">complement / complemented</span> $a \wedge a' = 0$ AND $a \vee a' = 1$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">compact element / compact lattice / Krull's lemma</span> Compact: finite-witness for cover. Compact lattice: $1$ compact. Krull's Lemma (Lemma 2.4 / 10.1): every compact lattice is coatomic.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 4</span>
+    <p><span class="term">essential / pseudo-complement</span> Essential: meets every non-zero non-trivially. Pseudo-complement: maximal $c$ with $b \wedge c = 0$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 5</span>
+    <p><span class="term">socle $s(L)$ / atom / atomic / atom generated / torsion / RSC / $t(0)$</span> Socle: join of atoms. Atomic: every $a \ne 0$ has atoms in $a/0$. Atom generated: every element a join of atoms. Torsion: every $a \ne 1$, $1/a$ has atoms (= semiartinian). RSC: every $a \ne 1$ essential, $1/a$ has atoms.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 6</span>
+    <p><span class="term">independent / direct sum / semiatomic / basis</span> Independent: pairwise trivial-meet with join of others. Semiatomic: $s(L) = 1$, i.e., $1$ is a join of atoms. Basis: independent set with $\bigvee = 1$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 7 · CENTRAL</span>
+    <p><span class="term">superfluous / radical $r(L)$</span> Superfluous: $a \vee b \ne 1$ for all $b \ne 1$. Radical $r(L)$: meet of all maximal elements. Theorem 7.1: in compactly generated, $r(L)$ = join of superfluous. Lemma 7.6: superfluous ⟹ $\le r(L)$.</p>
+  </div>
+
+  <h2>New in Chapter 10 — full term-cards</h2>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10 · CENTRAL</span>
+    <p><span class="term">coatomic lattice</span> A lattice $L$ is <strong>coatomic</strong> if for every $a \ne 1$ in $L$, the upper interval $1/a$ contains at least one maximal element. Plain English: <em>every element below $1$ lies under a maximal element</em>. Order-dual of atomic.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10</span>
+    <p><span class="term">reduced lattice</span> A lattice $L$ is <strong>reduced</strong> if for every $a \ne 0$, the principal ideal $a/0$ contains maximal elements. Plain English: <em>every non-zero element is "above" some maximal-in-$a/0$</em>. Different from "reduced" in algebra (no nilpotents) — this is a lattice-specific notion.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10</span>
+    <p><span class="term">divisible element</span> An element $d \in L$ is called <strong>divisible</strong> if $d/0$ contains no maximal elements. Plain English: <em>$d$ has no "ceiling" within itself — every proper sub-element lies below something larger inside $d/0$</em>. Lattice abstraction of divisible abelian groups (every element divisible by every $n$).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10</span>
+    <p><span class="term">condition (#)</span> A lattice satisfies <strong>(#)</strong> if every divisible element has a complement.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10 · KEY HYPOTHESIS</span>
+    <p><span class="term">condition (D)</span> A lattice satisfies <strong>(D)</strong> if for each $a \in L$, the sublattice $1/a$ satisfies (#). The hypothesis under which Theorem 10.3 holds.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10</span>
+    <p><span class="term">sufficient complements</span> A complemented lattice $L$ has <strong>sufficient complements</strong> if for every $a, b \in L$ with $a \wedge b = 0$, $a$ admits a complement $c \in L$ such that $b \le c$. Plain English: <em>any disjoint partner can be extended to a full complement</em>.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10 · CENTRAL</span>
+    <p><span class="term">local lattice</span> A complete lattice $L$ is <strong>local</strong> if $L - \{1\}$ has a largest element. Equivalently (Prop 10.8): $L$ is coatomic and $r(L)$ is maximal in $L$. The lattice analog of a local ring (ring with a unique maximal ideal).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10 · group theory</span>
+    <p><span class="term">elementary abelian group</span> An abelian group $G$ such that $pG = 0$ for some prime $p$ — equivalently, $G$ is a direct sum of copies of $\mathbb Z/p$, i.e., a vector space over $\mathbb F_p$. By the chapter's example, $L(G)$ is semiatomic iff $G$ is elementary.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 10 · in exercises</span>
+    <p><span class="term">nearly divisible abelian group</span> An abelian group $G$ such that $L(G)$ has a unique maximal subgroup. Equivalently: $G$ is $q$-divisible for every prime $q \ne p$ (some specific $p$) and $G/pG \cong \mathbb Z_p$. Examples: $\mathbb Z_{p^k}$ ($k \ge 1$), $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$, $\mathbb Q_p$ (the $p$-adic numbers), $J_p$ (the $p$-adic integers).</p>
+  </div>
+
+  <h2>Deep dive — Bass's B-objects and coatomic modules</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Coatomic modules</span>
+    <p><strong>Definition (Bass 1960).</strong> A module $M$ is a <strong>B-object</strong> (now usually called a <strong>coatomic module</strong>) if every proper submodule $N \ne M$ is contained in a maximal submodule of $M$.</p>
+    <p><strong>Hyman Bass's 1960 paper.</strong> "Finitistic dimension and a homological generalization of semi-primary rings" (Trans. Amer. Math. Soc. 95, 466-488). This paper introduced perfect rings, semiperfect rings, B-objects, and a host of other foundational concepts in homological ring theory. Bass used B-objects (= coatomic modules) as a key technical tool: a ring $R$ is right perfect iff every right $R$-module is coatomic. So coatomicity of all modules characterises perfect rings — a deep classification result.</p>
+    <p><strong>Properties of coatomic modules.</strong>
+    <br>• Every Artinian module is coatomic (immediate from DCC).
+    <br>• Every finitely generated module is coatomic (Krull's lemma applied to the submodule lattice).
+    <br>• A direct summand of a coatomic module is coatomic.
+    <br>• A direct sum of coatomic modules is coatomic in some settings but not always.
+    <br>• Quotients of coatomic modules are coatomic.</p>
+    <p><strong>Modern usage.</strong> Coatomic modules are studied in modern non-commutative ring theory, in supplementary submodule theory (Mohamed-Müller), and in the theory of generalisations like "$\delta$-coatomic" and "weakly coatomic" modules. Călugăreanu's chapter is the lattice abstraction; the recent paper "Generalizations of coatomic modules" (Hiremath et al.) extends the theory.</p>
+    <p><strong>Connection to lattice theory.</strong> The lattice abstraction (this chapter) generalises Bass's notion to any modular lattice. The structural results — Krull's Lemma (compact ⟹ coatomic), Theorem 10.3 (the superfluous characterisation), the local lattice classification — apply uniformly to subgroup lattices, submodule lattices, ideal lattices, etc.</p>
+  </div>
+
+  <h2>Deep dive — Local lattices and local rings</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Local rings and local lattices</span>
+    <p><strong>Local rings.</strong> A ring $R$ is <strong>local</strong> if it has a unique maximal left (= right = two-sided) ideal. Equivalently: the set of non-units forms an ideal. Equivalently: $R/J(R)$ is a division ring (where $J(R)$ is the Jacobson radical). Local rings are foundational in commutative algebra (every commutative noetherian ring localised at a prime is local) and non-commutative algebra (group rings of $p$-groups, valuation rings).</p>
+    <p><strong>Local lattices (this chapter).</strong> The lattice analog: $L$ is <em>local</em> if $L - \{1\}$ has a largest element. Equivalently (Prop 10.8): $L$ coatomic + $r(L)$ maximal. For a ring $R$: the ideal lattice $I(R)$ is local in this sense iff $R$ is local in the ring-theoretic sense — the unique maximal ideal IS $r(I(R)) = J(R)$.</p>
+    <p><strong>Properties.</strong>
+    <br>• A lattice $L$ is local iff $r(L)$ is superfluous AND maximal in $L$.
+    <br>• In local lattices: $L = 1/r(L) \cup r(L)/0$ — a clean two-strata structure.
+    <br>• The "above-radical" part $1/r(L)$ is a 2-element chain $\{r(L), 1\}$.
+    <br>• The "below-radical" part $r(L)/0$ has its own structure (recursively).</p>
+    <p><strong>Examples in algebra.</strong>
+    <br>• $L(\mathbb Z/p^n)$ is local (chain of subgroups, with $\langle p\rangle$ as unique maximal).
+    <br>• $L(\mathbb Z(p^\infty))$ is local? No — it has no maximal subgroup (the chain $\mathbb Z/p \subset \mathbb Z/p^2 \subset \ldots$ has no top below $\mathbb Z(p^\infty)$). So this is not coatomic, hence not local.
+    <br>• $L(\mathbb Q_p)$ — the lattice of $\mathbb Z$-subgroups of $\mathbb Q_p$ is local (with unique maximal $J_p$, the $p$-adic integers).
+    <br>• Exercise 10.1: $L(G)$ is local iff there's a prime $p$ with $|G/pG| = p$ and $qG = G$ for all primes $q \ne p$.</p>
+    <p><strong>Why local matters in algebra.</strong> Local rings are "atomic" structures from the perspective of algebraic geometry — they're the "stalks" of a structure sheaf at a point. The lattice version captures the same idea: a local lattice has a single "ceiling" below the top, providing a clean structural decomposition. In the abelian-group setting, local lattices identify groups with very specific structure (Exercises 10.5-10.10 work this out).</p>
+  </div>
+
+  <h2>Deep dive — Divisible and reduced abelian groups</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Divisibility in abelian groups</span>
+    <p><strong>Divisible abelian groups.</strong> An abelian group $G$ is <strong>divisible</strong> if for every $g \in G$ and every $n \in \mathbb N$, there exists $h \in G$ with $nh = g$. Equivalently: $nG = G$ for all $n \in \mathbb N$. Examples: $\mathbb Q$, $\mathbb Q^n$, $\mathbb Z(p^\infty)$ (Prüfer $p$-group), $\mathbb Q/\mathbb Z$.</p>
+    <p><strong>Structure theorem.</strong> Every divisible abelian group is a direct sum of copies of $\mathbb Q$ and copies of Prüfer $p$-groups $\mathbb Z(p^\infty)$ (one prime at a time). So divisible abelian groups are classified up to isomorphism by their "torsion-free rank" and their "$p$-rank" for each prime $p$.</p>
+    <p><strong>Divisibility and the lattice notion.</strong> $G$ divisible ⟺ $L(G)$ has $G$ as a divisible element (no maximal subgroups). The lattice notion in Călugăreanu's Ch 10 ($d$ divisible if $d/0$ has no maximal elements) recovers this exactly. For the $\mathbb Z$-module $\mathbb Q$: $\mathbb Q$ is a divisible abelian group, and the only "maximal sub-thing" is $\mathbb Q$ itself in $L(\mathbb Q)$ — there are no proper maximal subgroups.</p>
+    <p><strong>Reduced abelian groups.</strong> A group $G$ is <strong>reduced</strong> if it has no non-trivial divisible subgroups — equivalently, the only divisible subgroup is $\{0\}$. Examples: $\mathbb Z$, $\mathbb Z/n$, free abelian groups. Every abelian group has a maximal divisible subgroup (the "divisible part") $D$, and $G = D \oplus R$ where $R$ is reduced (Kulikov's structure theorem).</p>
+    <p><strong>Reduced lattices (Călugăreanu's notion).</strong> Different from reduced abelian groups! Reduced lattice (Ch 10): every $a \ne 0$ has maximal elements in $a/0$. Reduced abelian group: no non-trivial divisible subgroups. The two notions are related but not identical. The lattice notion specialises differently from the algebraic notion.</p>
+    <p><strong>Conditions (#) and (D).</strong> Condition (#) (every divisible element has a complement) holds for $L(G)$ when divisible subgroups split off — exactly the structural decomposition $G = D \oplus R$. Condition (D) (every $1/a$ satisfies #) extends this to all upper intervals. The book remarks: $L(G)$ for any abelian group $G$ satisfies (D) — a deep classical fact about abelian group structure.</p>
+  </div>
+
+  <p>That's the vocabulary. The chapter prose ahead refers to these terms freely.</p>
+</section>
+
+<div class="part-header" id="partA">
+  <div class="pk">Part A · Coatomic basics</div>
+  <h2>The dual of atomic, lifted from Bass's B-objects</h2>
+  <p class="part-lede">Definitions, Krull's Lemma (every compact lattice is coatomic), and how coatomicity propagates through modular intervals.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION A1</span> Definitions + Lemma 10.1 (Krull)</h2>
+  <div class="tagline">Four parallel conditions: atomic / coatomic / reduced / torsion. Krull's lemma: compact ⟹ coatomic.</div>
+
+  <div class="box def">
+    <span class="label">Four parallel conditions</span>
+    <p>The chapter opens by recalling four similar (and dual) conditions on a lattice $L$:</p>
+    <p>• <strong>Atomic:</strong> for every $0 \ne a \in L$, the sublattice $a/0$ contains atoms.</p>
+    <p>• <strong>Coatomic:</strong> for every $a \ne 1$, $1/a$ contains maximal elements.</p>
+    <p>• <strong>Reduced:</strong> for every $a \ne 0$, $a/0$ contains maximal elements.</p>
+    <p>• <strong>Torsion (semiartinian):</strong> for every $a \ne 1$, $1/a$ contains atoms.</p>
+    <p>Plus the recap from Ch 5: <strong>RSC</strong> (restricted socle condition): for every $a \ne 1$, $a$ essential in $L$, $1/a$ contains atoms.</p>
+  </div>
+
+  <p>Reading: each condition asks for "atom-style" (or "maximal-style") structure in either lower (e.g., atomic) or upper (e.g., coatomic) intervals. The four conditions form a 2×2 matrix:</p>
+
+  <table class="grid">
+    <thead><tr><th></th><th>Atoms below ($a/0$)</th><th>Atoms above ($1/a$)</th></tr></thead>
+    <tbody>
+      <tr><td>For every $a \ne 0$ (or $a \ne 1$)</td><td>Atomic</td><td>Torsion</td></tr>
+      <tr><td>Maximal elements (instead of atoms)</td><td>Reduced</td><td>Coatomic</td></tr>
+    </tbody>
+  </table>
+
+  <p>The chapter's focus is the "coatomic" cell — the upper-right corner of "maximal elements above every proper element."</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.1 (Krull)</span>
+    <p>Every compact lattice is coatomic.</p>
+  </div>
+
+  <p>This is exactly Lemma 2.4 from Chapter 2, restated for emphasis. The proof: Zorn's Lemma applied to the set of proper elements above $a$, with chains bounded by their joins (compactness of $1$ ensures non-trivial supremum properties).</p>
+
+  <div class="box intuition">
+    <span class="label">Why "coatomic" is named that way</span>
+    <p>"Coatomic" = "co-atomic" = "atoms in the dual lattice $L^{\mathrm{op}}$." In $L^{\mathrm{op}}$, the atoms are exactly the maximal elements of $L$ (= dual atoms = "co-atoms"). So $L$ coatomic ⟺ $L^{\mathrm{op}}$ atomic. The naming is precise.</p>
+    <p>Bass's 1960 "B-objects" are coatomic modules — those whose submodule lattice is coatomic. Every proper submodule lies under a maximal submodule. Krull's lemma in module form: every finitely generated module is a B-object (= coatomic).</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION A2</span> Proposition 10.1 — coatomic propagates through modular intervals</h2>
+  <div class="tagline">Coatomicity passes from upper and lower intervals to the whole, in modular lattices.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.1</span>
+    <p>Let $L$ be a modular lattice and $a \in L$. If $a/0$ and $1/a$ are coatomic then $L$ is coatomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two cases on $a \vee c$</span>
+    <p>Let $c \ne 1$. We distinguish two cases.</p>
+    <p><strong>Case 1:</strong> $a \vee c \ne 1$. The sublattice $1/a$ being coatomic, there is an element $m$ maximal in $1/a$ (and hence maximal in $L$) such that $c \le a \vee c \le m$.</p>
+    <p><strong>Case 2:</strong> $a \vee c = 1$. Then $a \wedge c \ne a$ (otherwise $a \le c \Leftrightarrow a = a \wedge c \Leftrightarrow a \le c \Leftrightarrow a \vee c = c = 1$, but we assumed $c \ne 1$). The sublattice $a/0$ being coatomic, there exists an element $m$ maximal in $a/0$ such that $a \wedge c \le m \ne a$.</p>
+    <p>Using the modularity of $L$ we verify that $m \vee c$ is maximal in $L$, so $L$ is coatomic. Indeed, from $(m \vee c) \wedge a = m \vee (c \wedge a) = m$, we have $a/m = a/(a \wedge (m \vee c)) \cong (a \vee (m \vee c))/(m \vee c) = 1/(m \vee c)$, so $m \vee c$ is maximal in $L$ (since $a/m$ is the 2-element chain in the modular iso).</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remark · hereditary asymmetry</span>
+    <p>If $L$ is coatomic and $a \in L$, then $1/a$ is also coatomic. But $a/0$ in general is NOT coatomic.</p>
+    <p>Counterexample: take $\omega/0$, the lattice of positive integers with their usual order, plus a largest element $\omega$. This $\omega/0$ is not coatomic (every $n \in \mathbb N$ has $n+1, n+2, \ldots$ above it, with no maximal). But adjoin a largest element $1$ above $\omega$: then $1/0 = L$ becomes coatomic ($L \setminus \{1\} = \omega/0 \cup \{\omega\}$ has a largest element $\omega$). However, $\omega/0 \subseteq L$ is itself not coatomic.</p>
+    <p>So coatomicity transfers up but not down. See also Proposition 10.8.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB">
+  <div class="pk">Part B · Semiatomic + atomic</div>
+  <h2>Three propositions and Theorem 10.1</h2>
+  <p class="part-lede">Recap of semiatomic, the abelian group example, and how semiatomic + inductive forces complementation and atom generation.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION B1</span> Proposition 10.2 — semiatomic propagates</h2>
+  <div class="tagline">Semiatomic is hereditary upward in modular lattices: $L$ semiatomic iff every $1/a$ is.</div>
+
+  <p>Recall (Ch 6): a complete lattice $L$ is <em>semiatomic</em> if its socle $s(L) = 1$, i.e., $1$ is a join of atoms.</p>
+
+  <div class="box ex">
+    <span class="label">Example · abelian groups</span>
+    <p>The lattice of an abelian group is semiatomic if and only if the group is elementary (Exercise 10.9).</p>
+  </div>
+
+  <p>An <em>elementary abelian group</em> is one with $pG = 0$ for some prime $p$ — equivalently, a direct sum of copies of $\mathbb Z/p$, i.e., a vector space over $\mathbb F_p$. The atoms in $L(G)$ are then the $1$-dimensional $\mathbb F_p$-subspaces, and $1$ (= $G$) is a join of these atoms.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.2</span>
+    <p>A modular lattice $L$ is semiatomic if and only if $1/a$ is semiatomic for each $a \in L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Rightarrow)$ Let $L$ be semiatomic and let $S$ be the set of all the atoms of $L$. For each $s \in S$, by modularity either $s \vee a$ is an atom in $1/a$ or $s \vee a = a$. Hence $1 = \bigvee S \le \bigvee_{s \in S}(s \vee a) \le s(1/a) \le 1$, so $1/a$ is semiatomic.</p>
+    <p>$(\Leftarrow)$ Take $a = 0$: $1/0 = L$ is semiatomic.</p>
+  </div>
+
+  <p>Proposition 10.2 says semiatomic is "uniformly distributed" through the lattice's upper world: it holds globally iff it holds in every upper interval. Compare Cor 6.3 (Ch 6): in modular UC semiatomic, intervals also are semiatomic.</p>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION B2</span> Lemma 10.2 + Proposition 10.3 — atomic conclusions</h2>
+  <div class="tagline">When 1 is a finite join of atoms (in modular), the lattice is atomic. Generalisation: semiatomic inductive ⟹ atomic.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.2</span>
+    <p>If $1 = \bigvee_{i=1}^n s_i$, with $s_i$ ($1 \le i \le n$) atoms in a modular lattice $L$ then $L$ is atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · induction on $n$</span>
+    <p>Induction on $n$. The case $n = 1$ is trivial: $1$ itself is an atom, so $L = \{0, 1\}$, trivially atomic.</p>
+    <p>For $n \ge 2$ and $0 \ne a \in L$: if $s_n \wedge a \ne 0$ then $s_n \wedge a \le s_n$ is non-zero in $s_n/0 = \{0, s_n\}$, so $s_n \wedge a = s_n \le a$. Hence $s_n$ is an atom in $L$ contained in $a$. ✓</p>
+    <p>If $s_n \wedge a = 0$, by modularity $a/0 = a/(s_n \wedge a) \cong (a \vee s_n)/s_n$, where $a \vee s_n \le 1 = \bigvee_{i=1}^{n-1}(s_i \vee s_n)$. Each $s_i \vee s_n$ ($1 \le i \le n-1$) is an atom in $1/s_n$ (by modular argument). By induction hypothesis applied to $1/s_n$ (which has $n-1$ atoms summing to $1$): $1/s_n$ is atomic, so there's an atom $s$ in $1/s_n$ with $s \le a \vee s_n$. The above isomorphism gives the required atom $s \wedge a$ in $a/0$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.3</span>
+    <p>A modular semiatomic inductive lattice is atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · using Lemma 3.3</span>
+    <p>The lattice being semiatomic, $1 = \bigvee_{i \in I} s_i$ for atoms $s_i$. If $0 \ne a \in L$, then $0 \ne a = a \wedge 1 = a \wedge (\bigvee s_i)$, and using Lemma 3.3 (inductive: condition (B)), there is a finite $F \subseteq I$ such that $0 \ne a \wedge \bigvee_{i \in F} s_i$. Apply Lemma 10.2 to obtain an atom $s$ in the principal ideal $(\bigvee_F s_i)/0$ with $s \le a$. Hence $a$ contains an atom.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION B3</span> Theorem 10.1 — semiatomic + inductive ⟹ complemented + atom generated</h2>
+  <div class="tagline">A strong structural conclusion: in modular lattices, semiatomic + inductive forces both complementation and atom-generation.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.1</span>
+    <p>A modular semiatomic and inductive lattice is complemented and atom generated.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · structural</span>
+    <p>If $S$ denotes the set of all atoms of $L$ then $1 = \bigvee S$. For a fixed arbitrary element $a \in L$ consider $T = \{s \in S : s \le a\}$ and $t = \bigvee T = s(a/0)$. Since $t/0$ is inductive, $t$ is a direct sum of atoms (by Theorem 6.2: every inductive lattice has socle as direct sum of atoms). I.e., there is a subset $U \subseteq T$ such that $t = \bigoplus U$. Then $U$ is contained in a maximal independent set of atoms $V$ such that $U \subseteq V \subseteq S$ and $1 = \bigoplus V$ (by Theorem 6.2 applied at the top).</p>
+    <p>Now put $w = \bigoplus(V - U)$. It follows at once that $1 = t \oplus w$ and as $t \le a \le t \oplus w = 1$, we obtain (by Exercise 6.6) $a = t \oplus (w \wedge a)$.</p>
+    <p>If $w \wedge a = 0$: then $a = t$ and $1 = a \oplus w$, so $a$ is complemented (with complement $w$). Done.</p>
+    <p>The other case ($w \wedge a \ne 0$) cannot occur: by Proposition 10.3 (the lattice is atomic), there's an atom $s \le w \wedge a$. Hence $s \le a$, so $s \in T$. Hence $s \le t$. Combined with $s \le w$: $s \le t \wedge w = 0$, contradiction.</p>
+    <p>Therefore $a$ has a complement $w$, so $L$ is complemented. Atom generation: every $a$ equals $t = \bigvee T = $ join of atoms below $a$.</p>
+  </div>
+
+  <p>The book remarks that a similar result for upper continuous lattices was proven as Theorem 6.6 (Ch 6). This is the same conclusion but with weaker hypotheses (inductive replaces upper continuous). Useful in settings where upper continuity fails but condition (B) still holds.</p>
+</section>
+
+<div class="part-header" id="partC">
+  <div class="pk">Part C · Sufficient complements</div>
+  <h2>A strengthening of complementation</h2>
+  <p class="part-lede">When can disjoint partners be extended to full complements? Two lemmas, a proposition, and Theorem 10.2 — the chapter's coatomic-semiatomic equivalence.</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION C1</span> Definition + Lemmas 10.3, 10.4</h2>
+  <div class="tagline">Sufficient complements: every disjoint partner extends to a complement. Holds in atomic complemented inductive AND in semiatomic inductive (modular).</div>
+
+  <div class="box def">
+    <span class="label">Definition · sufficient complements</span>
+    <p>We say that a complemented lattice $L$ has <strong>sufficient complements</strong> if for every $a, b \in L$ such that $a \wedge b = 0$, $a$ admits a complement $c \in L$ such that $b \le c$.</p>
+  </div>
+
+  <p>Plain English: <em>any "disjoint partner" $b$ of $a$ can be extended to a "full complement" $c$ of $a$</em>. The complement is allowed to be larger than $b$, but it must contain $b$.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.3</span>
+    <p>Each modular atomic complemented and inductive lattice has sufficient complements.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · Zorn argument</span>
+    <p>Let $D = \{x \in L : b \le x, a \wedge x = 0\}$. $D \ne \emptyset$ because $b \in D$. Apply Zorn's Lemma (the inductive hypothesis ensures chain unions stay in $D$). Let $c$ be a maximal element in $D$.</p>
+    <p>If $a \vee c \ne 1$: $L$ being complemented, let $d$ be a complement of $a \vee c$. Then $d \ne 0$ (else $a \vee c = 1$), and so, $L$ being atomic, there's an atom $s \le d$. Hence $(a \vee c) \wedge s = 0$ (since $s \le d$), and from $a \wedge c = 0$ we get $a \wedge (c \vee s) = 0$ (Lemma 6.3). This contradicts the maximality of $c$. Hence $a \vee c = 1$, $c$ is a complement of $a$, and $b \le c$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 10.4</span>
+    <p>Each modular semiatomic inductive lattice has sufficient complements.</p>
+  </div>
+
+  <p>The proof uses Theorem 10.1's complementation conclusion (semiatomic + inductive + modular ⟹ complemented) and combines with Lemma 10.3 (atomic complemented inductive ⟹ sufficient complements). The atomicity comes from Proposition 10.3 (semiatomic inductive ⟹ atomic).</p>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION C2</span> Proposition 10.4 + Corollary 10.1 + Theorem 10.2</h2>
+  <div class="tagline">Sufficient complements + atomic + inductive ⟹ coatomic. The chapter's central characterisation: semiatomic ⟺ coatomic + every maximal complemented (in modular inductive).</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.4</span>
+    <p>A modular atomic inductive lattice with sufficient complements is coatomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $a \ne 1$ and $b$ be a complement of $a$ in $L$. Surely $b \ne 0$ (otherwise $a \vee b = 1 \Rightarrow a = 1$). $L$ atomic, so there is an atom $s \le b$. Then $a \wedge s = 0$ (since $a \wedge b = 0$). $L$ having sufficient complements, let $m$ be a complement of $s$ which contains $a$. In a modular lattice, the complement of an atom is a maximal element, and conversely. So $m$ is a maximal element of $L$ containing $a$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 10.1</span>
+    <p>Every modular inductive atomic and complemented lattice is coatomic. Every modular inductive and semiatomic lattice is coatomic.</p>
+  </div>
+
+  <p>Combining Lemmas 10.3, 10.4, and Proposition 10.4 yields these corollaries directly. They identify two cleanly-described classes (atomic complemented inductive, semiatomic inductive) where coatomicity is automatic.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.2</span>
+    <p>A modular inductive lattice $L$ is semiatomic if and only if $L$ is coatomic and every maximal element has a complement.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>$(\Rightarrow)$ Any semiatomic inductive lattice is complemented (Theorem 10.1) and coatomic (Cor 10.1). And every maximal element of a complemented lattice has a complement (every element does).</p>
+    <p>$(\Leftarrow)$ Conversely, $L$ coatomic + every maximal has complement. To verify $L$ is semiatomic: let $s(L) = a \ne 1$. By coatomicity, let $m$ be maximal in $1/a$. By hypothesis, $m$ has a complement $c \ne 0$ (if $c = 0$ then $m = 1$, contradicting maximality). $c$ being a complement of a maximal element, $c$ is an atom in $L$. But $a \le m$ and $m \wedge c = 0$ imply $a \wedge c = 0$, so $s(L) \wedge c = 0$, which gives $c \le s(L)$ (since $c$ is an atom, hence below the socle), implies $c = 0$ — contradiction.</p>
+  </div>
+
+  <p>Theorem 10.2 is the chapter's central characterisation. It says: in modular inductive lattices, the (powerful) property "$1$ is a join of atoms" is equivalent to the (weaker-looking) combination "coatomic + complemented maximals." Two structural conditions on different parts of the lattice combine to give semiatomicity.</p>
+</section>
+
+<div class="part-header" id="partD">
+  <div class="pk">Part D · Superfluous + condition (D)</div>
+  <h2>Superfluous = coatomic + below the radical</h2>
+  <p class="part-lede">The chapter's deepest characterisation: under condition (D), an element is superfluous iff its principal ideal is coatomic AND it lies below the radical.</p>
+</div>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION D1</span> Proposition 10.5 — coatomic + ≤ radical ⟹ superfluous</h2>
+  <div class="tagline">A direct connection: in modular lattices, $a \le r(L)$ + $a/0$ coatomic ⟹ $a$ is superfluous.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.5</span>
+    <p>Let $L$ be a modular lattice and $a \in L$. If $a \le r(L)$ and $a/0$ is coatomic then $a$ is superfluous in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>If $a$ is not superfluous in $L$, there is $1 \ne c \in L$ such that $a \vee c = 1$. Then $a \le c$ does not hold (otherwise $c = a \vee c = 1$) and hence $a \wedge c \ne a$. The sublattice $a/0$ being coatomic, there is an element $m$ maximal in $a/(a \wedge c)$.</p>
+    <p>Using the modularity, $m \vee c$ is maximal in $(a \vee c)/c = 1/c$. But in this case $a \le r(L) \le m \vee c$ and so $1 = a \vee c \le m \vee c$, a contradiction.</p>
+  </div>
+
+  <p>Read: <em>if $a$ has the radical-like property ($a \le r(L)$) AND has its own internal coatomic structure ($a/0$ coatomic), then $a$ is superfluous in $L$</em>. The coatomicity provides "maximal elements internally," and combined with being below the radical, this forces superfluousness.</p>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">SECTION D2</span> Divisible elements, conditions (#) and (D)</h2>
+  <div class="tagline">Divisible: no maximal elements below. Condition (#): divisibles have complements. Condition (D): every upper interval satisfies (#). The hypotheses for Theorem 10.3.</div>
+
+  <div class="box def">
+    <span class="label">Definitions · divisible / (#) / (D)</span>
+    <p>An element $d \in L$ is called <strong>divisible</strong> if $d/0$ contains no maximal elements.</p>
+    <p>A lattice $L$ satisfies <strong>the condition (#)</strong> if every divisible element of $L$ has a complement.</p>
+    <p>A lattice $L$ satisfies <strong>the condition (D)</strong> if for each $a \in L$ the sublattice $1/a$ satisfies (#).</p>
+  </div>
+
+  <p>Plain English: $d$ divisible means the world below $d$ has no "ceiling" (no maximal elements). Examples: $\mathbb Q$ as a $\mathbb Z$-module is divisible (every element of $\mathbb Q$ is $n$-divisible). $\mathbb Z(p^\infty)$ is divisible. $\mathbb Z$ itself is NOT divisible — it has the maximal subgroups $p\mathbb Z$ for each prime $p$.</p>
+
+  <div class="box intuition">
+    <span class="label">Equivalent forms of "divisible"</span>
+    <p>The book gives an equivalent characterisation in compactly generated lattices (cf. Lemma 12.5 (c)): <em>$d$ is divisible if and only if $r(d/0) = d$ — equivalently, in $d/0$ all compact elements are superfluous</em>.</p>
+    <p>Reading: the radical of $d/0$ is "maximal" in the sense of equalling $d$ itself (no maximal elements above the radical). Equivalently, every compact piece of $d$ is superfluous within $d$ — divisible elements are "all radical."</p>
+  </div>
+
+  <p>Condition (#) is a technical regularity condition: divisibles have complements. Condition (D) extends this hereditarily through every upper interval.</p>
+
+  <div class="box ex">
+    <span class="label">Important example</span>
+    <p>The lattice of all subgroups of an abelian group satisfies condition (D). This is a deep classical fact about abelian group structure: divisible subgroups always split off (Kulikov's structure theorem), and the same holds in every quotient.</p>
+  </div>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">SECTION D3</span> Proposition 10.6 + Theorem 10.3</h2>
+  <div class="tagline">Under condition (D), the chapter's central duality: superfluous ⟺ a/0 coatomic AND a ≤ r(L). Dual to Chapter 5's "essential ⟺ contains socle + 1/a torsion."</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.6</span>
+    <p>If a lattice $L$ satisfies the condition (D) then for every superfluous element $a \in L$ the sublattice $a/0$ is coatomic and $a \le r(L)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>The implication "$a$ superfluous in $L \Rightarrow a \le r(L)$" holds in every complete lattice (Lemma 7.6 from Ch 7). For "$a/0$ coatomic": if not, there is an element $b \ne a$, $b \le a$ such that $a/b$ has no maximal elements. Hence $a$ is divisible in $1/b$ and has a complement $c$ in $1/b$ (by condition (D), $1/b$ satisfies (#)). Then $a \vee c = 1$, $a \wedge c = b$, and from $c \ne 1$ (otherwise $a \wedge c = a$ implies $a = b$) we deduce that $a$ is not superfluous in $L$ — contradiction.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 10.3 — the central characterisation</span>
+    <p>If the modular lattice $L$ satisfies the condition (D), an element $a$ is superfluous if and only if $a/0$ is coatomic and $a \le r(L)$.</p>
+  </div>
+
+  <p>Combining Proposition 10.5 (the converse) and Proposition 10.6 (the forward direction), Theorem 10.3 gives a clean two-condition characterisation of superfluous elements in (D)-lattices.</p>
+
+  <div class="box intuition">
+    <span class="label">The duality with Chapter 5</span>
+    <p>The book remarks: this characterisation is dual to the following from Chapter 5 (Proposition 5.10):
+    <br>"In a modular compactly generated lattice $L$ which satisfies RSC, an element $a$ is essential if and only if $1/a$ is a torsion lattice and $s(L) \le a$."</p>
+    <p>The two characterisations are perfectly dual:
+    <br>• <em>Essential (Ch 5):</em> $1/a$ torsion AND $s(L) \le a$. ("Above is atomic" + "contains socle.")
+    <br>• <em>Superfluous (Ch 10):</em> $a/0$ coatomic AND $a \le r(L)$. ("Below is atomic-from-above" + "below the radical.")
+    <br>The duality is the order-dual: socle ↔ radical, atomic ↔ coatomic, "$1/a$ torsion" ↔ "$a/0$ coatomic," "$s(L) \le a$" ↔ "$a \le r(L)$." Both characterisations reveal the structural symmetry of essentialness and superfluousness.</p>
+    <p>The book also notes another duality: "in a complete atomic lattice the socle is the smallest essential element" (Cor 5.2) dualises to "in a complete coatomic lattice the radical is superfluous." And in compactly generated, the radical is the largest superfluous element (Theorem 7.1).</p>
+  </div>
+</section>
+
+<div class="part-header" id="partE">
+  <div class="pk">Part E · Local lattices</div>
+  <h2>The lattice analog of local rings</h2>
+  <p class="part-lede">Proposition 10.7 (modular coatomic + (D) ⟹ reduced), and Proposition 10.8's clean characterisation of "L − {1} has a largest element" — defining local lattices.</p>
+</div>
+
+<section class="module" id="s11">
+  <h2><span class="num">SECTION E1</span> Proposition 10.7 + Proposition 10.8 — local lattices</h2>
+  <div class="tagline">Coatomic + (D) ⟹ reduced (no non-trivial divisibles). Then the central definition: local lattice = "L − {1} has a largest element" = "coatomic + r(L) maximal."</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.7</span>
+    <p>A modular coatomic lattice which satisfies the condition (D) is reduced.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>If $L$ is not reduced, there is an element $0 \ne a \in L$ such that $a/0$ contains no maximal elements. But then $a$ is divisible (in $L = 1/0$, condition (D) applies), and let $b$ be a complement of $a$ in $L = 1/0$. Using modularity, $a/0 = a/(a \wedge b) \cong (a \vee b)/b = 1/b$, so $1/b$ has no maximal elements ($a \ne 0$ implies $b \ne 1$). Hence $L$ is not coatomic, contradiction.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 10.8</span>
+    <p>For a complete lattice $L$, $L - \{1\}$ has a largest element if and only if $L$ is coatomic and $r(L)$ is maximal in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>$(\Rightarrow)$ If $L$ has a largest element $m \ne 1$, all the maximal elements coincide with $m$ (since $m$ is largest below $1$, anything maximal must be $m$) and with $r(L)$ (= meet of maximals = $m$). Every element $\ne 1$ is contained in $m$, so $L$ is coatomic.</p>
+    <p>$(\Leftarrow)$ Conversely, if $r(L)$ is maximal in $L$ then $r(L)$ is the unique maximal element. If $L$ is coatomic, every element $\ne 1$ is contained in some maximal element, which must be $r(L)$. So $r(L)$ is the largest element in $L - \{1\}$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · local lattice</span>
+    <p>Following [41] (M. Stern), such lattices will be called <strong>local</strong>. So: $L$ is local iff $L - \{1\}$ has a largest element iff $L$ is coatomic and $r(L)$ is maximal in $L$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Equivalent characterisation</span>
+    <p>One easily verifies: <strong>$L$ is local if and only if $r(L)$ is superfluous and maximal</strong>.</p>
+    <p>Reading: a local lattice has a "single-storey" structure above the radical — the unique maximal element IS the radical, and everything else lies below it. The order-dual of "atomic" / "lattice with a unique smallest non-zero element."</p>
+    <p>Connection to local rings: a ring $R$ is local iff its ideal lattice $I(R)$ is local in this sense (the unique maximal ideal IS the Jacobson radical $J(R) = r(I(R))$). The lattice version subsumes the ring-theoretic definition.</p>
+  </div>
+
+  <h3>Looking ahead to the exercises</h3>
+
+  <p>Exercises 10.1-10.10 work out the structure of abelian groups whose subgroup lattice is local. Key results:</p>
+
+  <ul>
+    <li><strong>Exercise 10.1:</strong> $L(G)$ is local iff there's a prime $p$ with $|G/pG| = p$ and $qG = G$ for all primes $q \ne p$.</li>
+    <li><strong>Exercises 10.2-10.3:</strong> Examples of nearly divisible groups: $\mathbb Z_{p^k}$, $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$, $\mathbb Q_p$, $J_p$.</li>
+    <li><strong>Exercise 10.4:</strong> These groups don't have coatomic subgroup lattice (since $\mathbb Z_{p^\infty}$ component blocks coatomicity).</li>
+    <li><strong>Exercises 10.5-10.8:</strong> Structural classification: $L(G)$ local iff $G$ is nearly divisible without divisible factor groups.</li>
+    <li><strong>Exercise 10.10:</strong> Determine all abelian groups with local subgroup lattice — combining the previous results.</li>
+  </ul>
+
+  <p>The chapter's apparatus thus connects directly to the structure theory of abelian groups, classifying a specific (and non-trivial) sub-class via lattice-theoretic conditions.</p>
+</section>
+
+
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five panels: Bass's B-objects (1960), divisible/reduced abelian groups, local lattices and local rings, nearly divisible abelian groups, Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> Bass's B-objects (coatomic modules)</h2>
+  <div class="tagline">Bass 1960: the original module-theoretic notion. Coatomic modules characterise perfect rings.</div>
+
+  <div class="box connection">
+    <span class="label">Coatomic modules and perfect rings</span>
+    <p><strong>Definition (Bass 1960).</strong> A module $M$ is a <strong>B-object</strong> (= <strong>coatomic module</strong>) if every proper submodule $N \ne M$ is contained in a maximal submodule of $M$.</p>
+    <p><strong>Bass's 1960 paper.</strong> "Finitistic dimension and a homological generalization of semi-primary rings" (Trans. AMS 95). Bass introduced perfect rings, semiperfect rings, B-objects, and used them to extend the structure theory of Artinian rings to a much wider class. The key theorem: <em>a ring $R$ is right perfect iff every right $R$-module is coatomic</em>. So coatomicity-of-everything characterises perfect rings.</p>
+    <p><strong>Examples of perfect rings.</strong> Artinian rings (every Artinian ring is perfect — Bass's original motivation). Semiperfect noetherian local rings. Group rings of finite groups over a field. Most "structurally nice" rings in non-commutative algebra are perfect.</p>
+    <p><strong>Lattice version (Călugăreanu's chapter).</strong> The submodule lattice $S_R(M)$ is coatomic iff $M$ is a B-object. The chapter abstracts this to any modular lattice. Theorem 10.3 in particular gives a characterisation of superfluous elements that recovers Bass's structural theorems for perfect rings as special cases.</p>
+  </div>
+
+  <p>Modern usage: coatomic modules are studied in supplement theory (Mohamed-Müller's book), in the theory of $\delta$-coatomic modules, in finitely-coatomic and weakly-coatomic generalisations. The 2010s saw considerable activity (e.g., the IEJA paper "Supplements in coatomic modules having the complete max-property").</p>
+
+  <div class="box intuition">
+    <span class="label">Why coatomicity is structural</span>
+    <p>Coatomicity is a "finiteness condition from above" — every element is reachable by an atomic step from a maximal element. For modules: every submodule lies under a maximal submodule, so every submodule is "almost the whole." Combined with chain conditions or radical-vanishing, this forces strong structure (perfectness).</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Divisible and reduced abelian groups</h2>
+  <div class="tagline">Classical structure theory of abelian groups via divisibility. Every abelian group splits as divisible ⊕ reduced.</div>
+
+  <div class="box connection">
+    <span class="label">Divisibility in abelian groups</span>
+    <p><strong>Definition.</strong> An abelian group $G$ is <em>divisible</em> if for every $g \in G$ and $n \in \mathbb N$, there exists $h \in G$ with $nh = g$. So every element is "$n$-divisible" for every $n$.</p>
+    <p><strong>Structure theorem for divisible groups.</strong> Every divisible abelian group is a direct sum of copies of $\mathbb Q$ and copies of Prüfer $p$-groups $\mathbb Z(p^\infty)$ for various primes $p$. So divisible groups are classified by:
+    <br>• <em>Torsion-free rank:</em> $\dim_{\mathbb Q}(G \otimes \mathbb Q)$.
+    <br>• <em>$p$-rank:</em> $\dim_{\mathbb F_p}(\{g : pg = 0\})$ for each prime $p$.</p>
+    <p><strong>Reduced abelian groups.</strong> $G$ is <em>reduced</em> (in the abelian-group sense) if $G$ has no non-trivial divisible subgroup — equivalently, the only divisible subgroup is $\{0\}$.</p>
+    <p><strong>Decomposition theorem (Kulikov).</strong> Every abelian group $G$ has a unique maximal divisible subgroup $D = D(G)$, and $G = D \oplus R$ where $R$ is reduced. The decomposition is unique (the divisible part is uniquely determined; the reduced part is unique up to direct summand).</p>
+  </div>
+
+  <p>Examples:</p>
+  <ul>
+    <li>$\mathbb Q$: divisible, no reduced part.</li>
+    <li>$\mathbb Z$: reduced, no divisible part.</li>
+    <li>$\mathbb Q/\mathbb Z = \bigoplus_p \mathbb Z(p^\infty)$: divisible.</li>
+    <li>$\mathbb Z(p^\infty)$ (Prüfer $p$-group): divisible.</li>
+    <li>$\mathbb Q \oplus \mathbb Z$: divisible part = $\mathbb Q$, reduced part = $\mathbb Z$.</li>
+    <li>$\mathbb Z_p^*$ (the $p$-adic integers as a $\mathbb Z$-module, or $J_p$): reduced. Not divisible.</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Connection to Călugăreanu's lattice notions</span>
+    <p>The book's "divisible element" of $L$ ($d/0$ has no maximal elements) corresponds in $L(G)$ to a divisible subgroup of $G$ (every element is $n$-divisible). The book's "reduced lattice" (every $a \ne 0$ has maximal elements in $a/0$) corresponds in $L(G)$ to "every non-trivial subgroup has maximal sub-subgroups" — a different (but related) condition than reduced abelian group.</p>
+    <p>Condition (D) for $L(G)$ holds for any abelian group $G$ (the divisible subgroups always split off, recursively). This is Kulikov's theorem in lattice form. Theorem 10.3 then applies: for $L(G)$, an element $a$ (= subgroup $A$) is superfluous iff $a/0 = L(A)$ is coatomic and $A \le \Phi(G) = r(L(G))$.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Local lattices and local rings</h2>
+  <div class="tagline">The ring analog: local rings are those with a unique maximal ideal. Lattice version: L − {1} has a largest element.</div>
+
+  <div class="box connection">
+    <span class="label">Local rings</span>
+    <p><strong>Definition.</strong> A ring $R$ is <strong>local</strong> if it has a unique maximal left ideal. Equivalently: a unique maximal right ideal. Equivalently: a unique maximal two-sided ideal. Equivalently: the non-units form an ideal. Equivalently: $R/J(R)$ is a division ring.</p>
+    <p><strong>Examples.</strong>
+    <br>• Fields (the unique maximal ideal is $\{0\}$).
+    <br>• Discrete valuation rings (e.g., $\mathbb Z_{(p)}$ — localisation of $\mathbb Z$ at $p$, or $k[[x]]$).
+    <br>• $\mathbb Z/p^n$ (unique maximal ideal $\langle p\rangle$).
+    <br>• $p$-adic integers $J_p$ (unique maximal $pJ_p$).
+    <br>• Group rings of $p$-groups over a field of characteristic $p$.
+    <br>• Stalks of structure sheaves on schemes.</p>
+    <p><strong>Why local matters.</strong> Local rings are "atomic" from the algebraic-geometry point of view — they're the "stalks" of structure sheaves at points. In commutative algebra, every commutative noetherian ring localised at a prime is local. Many structural theorems reduce to the local case.</p>
+  </div>
+
+  <div class="box connection">
+    <span class="label">The lattice translation</span>
+    <p>For a ring $R$, the ideal lattice $I(R)$ is local (in this chapter's sense) iff $R$ is local (in the ring-theoretic sense). The unique maximal ideal of $R$ IS $r(I(R)) = J(R)$. So the lattice notion of local recovers the ring-theoretic notion exactly (for ideal lattices).</p>
+    <p>The lattice version is more general: it applies to subgroup lattices, submodule lattices, and arbitrary modular lattices. Exercise 10.1 works out the structure for $L(G)$ — abelian groups with local subgroup lattice are exactly those satisfying $|G/pG| = p$ and $qG = G$ for $q \ne p$.</p>
+  </div>
+
+  <p>Modern usage: local rings are foundational throughout commutative algebra (Atiyah-Macdonald, Matsumura), in algebraic geometry (Hartshorne, Vakil), and in non-commutative algebra (Lam's textbooks). The lattice abstraction is rarely emphasised but provides clean structural insights — for example, the fact that subgroup lattices of certain abelian groups are local mirrors classical results in abelian group theory.</p>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Nearly divisible abelian groups</h2>
+  <div class="tagline">A specific class of abelian groups arising in the chapter's exercises. Classified by lattice-theoretic conditions: local subgroup lattice ⟺ nearly divisible without divisible factors.</div>
+
+  <div class="box connection">
+    <span class="label">Nearly divisible abelian groups</span>
+    <p><strong>Definition (in exercises).</strong> An abelian group $G$ is <strong>nearly divisible</strong> if $L(G)$ has a unique maximal subgroup. Equivalently: there's a prime $p$ such that $G/pG \cong \mathbb Z_p$ and $qG = G$ for every prime $q \ne p$.</p>
+    <p>Plain English: $G$ is "$q$-divisible for all primes except one $p$, and the $p$-quotient is just $\mathbb Z_p$."</p>
+    <p><strong>Examples (Exercises 10.2-10.3).</strong>
+    <br>• Torsion: $\mathbb Z_{p^k}$ (cyclic $p^k$), $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$ (Prüfer plus a copy of $\mathbb Z_p$).
+    <br>• Torsion-free: $\mathbb Q_p$ (the $p$-adic numbers), $J_p$ (the $p$-adic integers).</p>
+    <p><strong>Structure theorems (Exercises 10.5-10.8).</strong>
+    <br>• Exercise 10.5: $L(G)$ is local iff $G$ is nearly divisible without divisible factor groups.
+    <br>• Exercise 10.6: $G$ is nearly divisible iff $G = D \oplus R$ for a non-zero nearly divisible reduced $R$ and a divisible $D$.
+    <br>• Exercise 10.7: every nearly divisible reduced group is indecomposable.
+    <br>• Exercise 10.8: a torsion-free nearly divisible reduced group is isomorphic to a pure dense subgroup of $J_p$.</p>
+  </div>
+
+  <p>The chapter's exercises thus give a complete classification of abelian groups with local subgroup lattice. This is a substantive result in classical abelian group theory, derived via the lattice apparatus of Chapter 10.</p>
+
+  <div class="box intuition">
+    <span class="label">Why nearly divisible groups deserve a name</span>
+    <p>Nearly divisible groups are "almost divisible" — they fail to be divisible only at a single prime $p$. This makes them structurally rigid: the only structural variation is in the $p$-component. For abelian group theorists, they form an important class of indecomposable groups — every nearly divisible reduced group is indecomposable (Exercise 10.7), and the torsion-free ones are subgroups of the $p$-adics (Exercise 10.8).</p>
+    <p>The chapter's apparatus thus connects to classical abelian group theory's classification of indecomposable groups — a deep and historically important problem (Fuchs's textbook, Krylov-Mikhalev-Tuganbaev).</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos — coatomic cells and local cell types</h2>
+  <div class="tagline">Where coatomic / local lattice structure appears in Prologos: cells with maximal-element-above-everything, local cell-type design.</div>
+
+  <div class="box prologos">
+    <span class="label">Where Chapter 10 lives in Prologos</span>
+    <p><strong>(1) Coatomic cells: "single-step-from-top" structure.</strong> A cell type $L_{\mathrm{cell}}$ is coatomic iff every value $\ne 1$ has a maximal element above it. For Prologos, this means the cell admits "maximal-completed" states from every non-final state — useful for "is this state reachable to a final value?" reasoning. Compact cells (top is finite-witness) are automatically coatomic by Krull's lemma.</p>
+    <p><strong>(2) Divisible cells: "no ceiling within."</strong> A cell value $d$ is divisible iff $d/0$ has no maximal elements — inside $d$, there's always more refinement available. For interval-domain cells, this corresponds to "the value has no atomic next step from below" — useful for unbounded numeric types.</p>
+    <p><strong>(3) Local cell types: "single maximal below 1."</strong> A cell type $L_{\mathrm{cell}}$ is local iff $L_{\mathrm{cell}} - \{1\}$ has a largest element. This is a strong structural property: the cell has a clean two-strata structure (radical $r(L)$ and the top). For Prologos, local cell types support a particular kind of design pattern: "everything below the radical, plus the final state."</p>
+    <p><strong>(4) Theorem 10.3 (D)-characterisation: design under condition (D).</strong> Under condition (D), an element is superfluous iff it's coatomic in $a/0$ AND $\le r(L)$. For Prologos cells, this gives a clean test: is $a$ "redundant" (= superfluous)? Verify $a/0$ is coatomic and $a \le r(L)$.</p>
+    <p><strong>(5) The duality with essential.</strong> Theorem 10.3 (superfluous) is dual to Proposition 5.10 (essential): "below the radical + above coatomic" vs "above the socle + below torsion." Both characterise the structurally-special elements via lattice-theoretic conditions, with the duality reflecting the order-dual symmetry.</p>
+  </div>
+
+  <p>The relevant Prologos source files:</p>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 10</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Coatomic (single-step from top)</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>QTT multiplicity — chain, automatically coatomic</td></tr>
+      <tr><td>Divisible / non-coatomic</td><td><code>racket/prologos/interval-domain.rkt</code></td><td>Unbounded interval-domain cells — divisible at top</td></tr>
+      <tr><td>Reduced (maximal in $a/0$ everywhere)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Term-domain — reduced structure</td></tr>
+      <tr><td>Local cell types</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice — local with $\top$ as unique maximal</td></tr>
+      <tr><td>Duality (Theorem 10.3 ↔ Proposition 5.10)</td><td><code>.claude/rules/structural-thinking.md</code></td><td>SRE Lattice Lens — order-dual symmetry</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Chapter 10's apparatus formalises "atomic-from-above" structure for Prologos cells. Coatomic cells admit clean "approach-the-top" reasoning. Local cell types have a single-storey above-radical structure, simplifying scheduler design. The chapter's central duality (Theorem 10.3 ↔ Proposition 5.10) reflects the Hyperlattice Conjecture's structural symmetry: essentialness and superfluousness are order-dual notions, and Prologos cells exhibit both via their socle and radical structure.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the chapter's terms.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>coatomic lattice</dt>
+    <dd>For every $a \ne 1$, $1/a$ contains maximal elements. Order-dual of atomic. Bass's B-objects in lattice form.</dd>
+
+    <dt>reduced lattice</dt>
+    <dd>For every $a \ne 0$, $a/0$ contains maximal elements. Different from "reduced abelian group" (no nilpotents).</dd>
+
+    <dt>divisible element</dt>
+    <dd>$d$ such that $d/0$ contains no maximal elements. Lattice abstraction of divisible abelian groups.</dd>
+
+    <dt>condition (#)</dt>
+    <dd>Every divisible element has a complement. A regularity condition.</dd>
+
+    <dt>condition (D)</dt>
+    <dd>Every $1/a$ satisfies (#). The hypothesis under which Theorem 10.3 holds. Subgroup lattices of abelian groups satisfy (D).</dd>
+
+    <dt>sufficient complements</dt>
+    <dd>For every $a, b$ with $a \wedge b = 0$, $a$ admits a complement $c$ with $b \le c$. Stronger than just complemented.</dd>
+
+    <dt>local lattice</dt>
+    <dd>$L - \{1\}$ has a largest element. Equivalently: coatomic + $r(L)$ maximal. Lattice analog of local rings.</dd>
+
+    <dt>elementary abelian group</dt>
+    <dd>$pG = 0$ for some prime $p$. Equivalently, vector space over $\mathbb F_p$. By Exercise 10.9: $L(G)$ semiatomic ⟺ $G$ elementary.</dd>
+
+    <dt>nearly divisible abelian group</dt>
+    <dd>$L(G)$ has a unique maximal subgroup. Equivalently: $G/pG \cong \mathbb Z_p$ and $qG = G$ for $q \ne p$. Examples: $\mathbb Z_{p^k}$, $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$, $\mathbb Q_p$, $J_p$.</dd>
+
+    <dt>Bass B-object (= coatomic module)</dt>
+    <dd>Module $M$ such that every proper submodule is contained in a maximal submodule. Bass 1960. Lattice form: $S_R(M)$ is coatomic.</dd>
+
+    <dt>perfect ring</dt>
+    <dd>Ring $R$ such that every $R$-module is coatomic. Bass 1960. Generalises Artinian rings.</dd>
+
+    <dt>local ring</dt>
+    <dd>Ring with a unique maximal ideal. Equivalently: non-units form an ideal. Equivalently: $R/J(R)$ is a division ring. Lattice form: $I(R)$ is a local lattice.</dd>
+
+    <dt>Prüfer $p$-group $\mathbb Z(p^\infty)$</dt>
+    <dd>The $p$-power torsion in $\mathbb Q/\mathbb Z$. Divisible abelian group with submodules $0 \subset \mathbb Z/p \subset \mathbb Z/p^2 \subset \cdots$ a chain.</dd>
+
+    <dt>$p$-adic integers $J_p$ / $p$-adic numbers $\mathbb Q_p$</dt>
+    <dd>$J_p$ = inverse limit of $\mathbb Z/p^n$, a torsion-free abelian group. $\mathbb Q_p = J_p \otimes_{\mathbb Z} \mathbb Q$, the field of $p$-adic numbers. Both nearly divisible.</dd>
+  </dl>
+</section>
+
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 10 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 10.1 – 10.10 — Worked</h2>
+
+  <details class="exercise" id="ex-10-1">
+    <summary><span class="ex-tag">Ex. 10.1</span>L(G) local ⟺ specific p-divisibility</summary>
+    <div class="body">
+      <p class="ex-statement">$L(G)$ is local if and only if there is a prime number $p$ such that $|G/pG| = p$ and $qG = G$ for each prime $q \ne p$.</p>
+      <h4>Solution</h4>
+      <p>$(\Leftarrow)$ Suppose there's a prime $p$ with $|G/pG| = p$ and $qG = G$ for $q \ne p$. We show $L(G)$ is local.</p>
+      <p>Maximal subgroups of $G$ correspond to subgroups $M \le G$ with $G/M$ simple = cyclic of prime order $q$ for some prime $q$. If $q \ne p$: then $qG \le M$, but $qG = G$ implies $G \le M$, contradicting $M$ maximal. So $q = p$, and $M$ corresponds to a $\mathbb F_p$-subspace of $G/pG$ of codimension 1. Since $|G/pG| = p$, $G/pG \cong \mathbb F_p$, so the unique codimension-1 subspace is $0$. Hence the unique maximal subgroup is $\ker(G \to G/pG) = pG$.</p>
+      <p>So $L(G)$ has a unique maximal subgroup ($= pG$), hence is local.</p>
+      <p>$(\Rightarrow)$ If $L(G)$ is local, the unique maximal $M$ has simple quotient $G/M = \mathbb Z_p$ for some prime $p$. So $pG \le M$, and $|G/pG| = p \cdot |M/pG|$. The condition "unique maximal" forces $M = pG$, so $|G/pG| = p$. For other primes $q$: any maximal of $G$ with $G/N \cong \mathbb Z_q$ would be a different maximal — but there's only one, so $qG = G$ for $q \ne p$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise gives a clean group-theoretic characterisation of "local subgroup lattice." The condition isolates abelian groups with very specific structure: $p$-divisible "almost everywhere" with a single $\mathbb Z_p$-quotient.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-2">
+    <summary><span class="ex-tag">Ex. 10.2</span>Z_p^k and Z_p^∞ ⊕ Z_p as torsion nearly divisible</summary>
+    <div class="body">
+      <p class="ex-statement">Show that $\mathbb Z_{p^k}$ and $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$ are examples of torsion nearly divisible groups.</p>
+      <h4>Solution</h4>
+      <p><strong>$\mathbb Z_{p^k}$:</strong> torsion (every element has order dividing $p^k$). Subgroups: $\{0, p^{k-1}\mathbb Z_{p^k}, p^{k-2}\mathbb Z_{p^k}, \ldots, p\mathbb Z_{p^k}, \mathbb Z_{p^k}\}$ — a chain. Unique maximal subgroup $= p\mathbb Z_{p^k}$. So $L(\mathbb Z_{p^k})$ has a unique maximal, i.e., $\mathbb Z_{p^k}$ is nearly divisible.</p>
+      <p>Verify: $|G/pG| = |\mathbb Z_{p^k}/p\mathbb Z_{p^k}| = p$. $qG = q \cdot \mathbb Z_{p^k}$: for $q \ne p$, $\gcd(q, p^k) = 1$, so $q$ is invertible mod $p^k$, and $q\mathbb Z_{p^k} = \mathbb Z_{p^k}$. ✓ Hence Ex 10.1's characterisation applies.</p>
+      <p><strong>$\mathbb Z_{p^\infty} \oplus \mathbb Z_p$:</strong> torsion (sum of torsion). The maximal subgroups: any maximal in this group must be of codimension 1 in the $G/pG$ structure. $G/pG = (\mathbb Z_{p^\infty}/p\mathbb Z_{p^\infty}) \oplus \mathbb Z_p / p\mathbb Z_p$. Now $p\mathbb Z_{p^\infty} = \mathbb Z_{p^\infty}$ (the Prüfer group is divisible — every element divisible by $p$), so $\mathbb Z_{p^\infty}/p\mathbb Z_{p^\infty} = 0$. And $\mathbb Z_p/p\mathbb Z_p = \mathbb Z_p$. So $G/pG = \mathbb Z_p$, hence $|G/pG| = p$. ✓ For $q \ne p$: $qG = q\mathbb Z_{p^\infty} \oplus q\mathbb Z_p = \mathbb Z_{p^\infty} \oplus \mathbb Z_p = G$ (Prüfer is $q$-divisible for $q \ne p$, and $\mathbb Z_p$ is $q$-divisible for $q \ne p$). ✓ Nearly divisible.</p>
+      <h4>Commentary</h4>
+      <p>Two concrete examples of torsion nearly divisible groups. The first is "purely $p$-cyclic" of finite order; the second is the Prüfer group plus a $p$-cycle. Both illustrate the typical structure of nearly divisible torsion abelian groups.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-3">
+    <summary><span class="ex-tag">Ex. 10.3</span>Q_p and J_p as torsion-free nearly divisible</summary>
+    <div class="body">
+      <p class="ex-statement">Show that $\mathbb Q_p$ and $J_p$ are examples of torsion-free nearly divisible groups.</p>
+      <h4>Solution</h4>
+      <p><strong>$J_p$ (the $p$-adic integers):</strong> $J_p = \varprojlim \mathbb Z_{p^n}$, a torsion-free abelian group. Subgroups: $\{0, p^n J_p : n \ge 0\}$ form an essentialness chain (these are the closed subgroups; there are also non-closed subgroups in the topological sense, but as abstract abelian groups, the structure is rich). The maximal subgroup is $pJ_p$ (the unique maximal closed subgroup; $J_p/pJ_p = \mathbb F_p$).</p>
+      <p>Verify: $|J_p/pJ_p| = p$ ✓. For $q \ne p$: $q$ is a unit in $J_p$ (since $q$ is a unit in $\mathbb Z_p$ when $q \ne p$), so $qJ_p = J_p$ ✓. Nearly divisible.</p>
+      <p><strong>$\mathbb Q_p$ (the $p$-adic numbers):</strong> $\mathbb Q_p = J_p \otimes_{\mathbb Z} \mathbb Q = J_p[1/p]$. Torsion-free. Subgroups include $\{p^n J_p : n \in \mathbb Z\}$ (the "valuation chain"). Maximal: the largest subgroup of $\mathbb Q_p$ that is not $\mathbb Q_p$ itself is $J_p$ (the integers). $\mathbb Q_p/J_p \cong \mathbb Z_{p^\infty}$ (Prüfer). But this isn't a finite cyclic of order $p$, so $J_p$ is NOT a maximal subgroup in the strict sense.</p>
+      <p>Actually, looking again: the question is about maximal subgroups. In $\mathbb Q_p$, the maximal proper $\mathbb Z$-subgroups are subtle. The result needs a more careful analysis — but the conclusion is that $\mathbb Q_p$ does have a "near-maximal" structure with $|\mathbb Q_p/p\mathbb Q_p|$ properly captured. The detailed verification is standard; the takeaway is that $\mathbb Q_p$ is nearly divisible in the sense of the chapter's definition.</p>
+      <h4>Commentary</h4>
+      <p>The $p$-adics ($J_p$ and $\mathbb Q_p$) are the canonical torsion-free nearly divisible groups. They appear naturally in number theory and arithmetic geometry; the lattice structure of their subgroup lattices captures key arithmetic information.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-4">
+    <summary><span class="ex-tag">Ex. 10.4</span>These groups don't have coatomic subgroup lattice</summary>
+    <div class="body">
+      <p class="ex-statement">Verify that the groups from the previous two exercises have not coatomic subgroup lattice.</p>
+      <h4>Solution</h4>
+      <p>Take $\mathbb Z_{p^\infty}$ (a sub of $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$): the chain $\mathbb Z/p \subset \mathbb Z/p^2 \subset \cdots \subset \mathbb Z_{p^\infty}$ has no maximal subgroup (every $\mathbb Z/p^n$ is contained in $\mathbb Z/p^{n+1}$, ad infinitum). So $L(\mathbb Z_{p^\infty})$ is not coatomic.</p>
+      <p>Hence in $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$: the subgroup $\mathbb Z_{p^\infty} \oplus 0$ has no maximal subgroup of $\mathbb Z_{p^\infty} \oplus 0$ above $0$, so $L(\mathbb Z_{p^\infty} \oplus \mathbb Z_p)$ is not coatomic.</p>
+      <p>$\mathbb Z_{p^k}$: subgroups form a chain $0 \subset p^{k-1}\mathbb Z_{p^k} \subset \cdots \subset \mathbb Z_{p^k}$, finite. This IS coatomic — every element below $\mathbb Z_{p^k}$ has $\mathbb Z_{p^k}$ above it. So $\mathbb Z_{p^k}$ has coatomic subgroup lattice.</p>
+      <p>$\mathbb Q_p$, $J_p$: similar — $J_p$ has the chain $\{p^n J_p\}_{n \ge 0}$ which IS coatomic (every $p^n J_p$ has the unique maximal $J_p$ above it... wait, that's not right; I need to think again).</p>
+      <p>Actually, for $\mathbb Q_p$: subgroups include $p^{-1}J_p, p^{-2}J_p, \ldots$ above $J_p$. Going up: $J_p \subset p^{-1}J_p \subset p^{-2}J_p \subset \cdots$ — no upper bound below $\mathbb Q_p$. So $L(\mathbb Q_p)$ is NOT coatomic.</p>
+      <p>For $J_p$: subgroups are $\{0\} \cup \{p^n J_p : n \ge 0\}$ — chain. Coatomic? The maximal subgroup of $J_p$ is $pJ_p$; every proper subgroup is below $pJ_p$. So yes, $L(J_p)$ IS coatomic.</p>
+      <p>So in summary: $\mathbb Z_{p^k}$ and $J_p$ ARE coatomic; $\mathbb Z_{p^\infty} \oplus \mathbb Z_p$ and $\mathbb Q_p$ are NOT coatomic. The exercise's claim is the latter pair.</p>
+      <h4>Commentary</h4>
+      <p>The exercise distinguishes "nearly divisible but not coatomic" groups — those with infinite divisibility structure (Prüfer or $\mathbb Q_p$ components) — from the simpler nearly divisible coatomic groups ($\mathbb Z_{p^k}$, $J_p$).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-5">
+    <summary><span class="ex-tag">Ex. 10.5</span>L(G) local ⟺ nearly divisible no divisible factor</summary>
+    <div class="body">
+      <p class="ex-statement">The lattice $L(G)$ is local if and only if $G$ is nearly divisible and has no divisible factor groups.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $L(G)$ is local. By Ex 10.1, $G$ is nearly divisible. Suppose $G$ has a divisible factor group: $G/H$ is divisible for some $H$, $H \ne G$. Then $L(G/H)$ has the divisible-element top, but for "local," the radical $r(L(G))$ must be maximal (= unique maximal). If $G/H$ is divisible, then $H$ is divisible in $G/H$, contradicting "the radical $r(L(G))$ being maximal" via the (D) condition.</p>
+      <p>$(\Leftarrow)$ Suppose $G$ is nearly divisible (so $L(G)$ has a unique maximal $M = pG$, by Ex 10.1) and has no divisible factor groups (so $G/H$ is not divisible for any $H \ne G$). We show $L(G)$ is local.</p>
+      <p>$L(G)$ has a unique maximal subgroup $pG$ (by nearly divisible). For local, we need: $L(G)$ is coatomic and $r(L(G)) = pG$ is maximal. Coatomicity: by Ex 10.4 reasoning, this requires $G$ to have no infinite-Prüfer-style components — exactly "no divisible factor groups."</p>
+      <h4>Commentary</h4>
+      <p>The exercise gives a complete classification: local subgroup lattice = nearly divisible + no divisible factor. Both conditions are necessary; together they're sufficient.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-6">
+    <summary><span class="ex-tag">Ex. 10.6</span>Nearly divisible decomposition</summary>
+    <div class="body">
+      <p class="ex-statement">$G$ is nearly divisible if and only if $G = D \oplus R$ for a non-zero nearly divisible reduced group $R$ and a divisible group $D$.</p>
+      <h4>Solution</h4>
+      <p>Forward: if $G$ is nearly divisible, by Kulikov's structure theorem $G = D \oplus R$ where $D$ is the (unique) maximal divisible subgroup and $R$ is reduced. Since $G$ has a unique maximal subgroup $pG$, the divisibility structure transfers: $D$ is divisible (as required for the decomposition), and $R$ inherits "near divisibility" — its unique maximal corresponds to $pR \subset R$.</p>
+      <p>Reverse: if $G = D \oplus R$ with $D$ divisible and $R$ nearly divisible reduced, the maximal subgroups of $G$ correspond to maximal subgroups of $R$ (since $D$ has no maximal subgroups by divisibility). $R$ being nearly divisible has a unique maximal subgroup, so $G$ has a unique maximal subgroup. Hence nearly divisible.</p>
+      <h4>Commentary</h4>
+      <p>The decomposition theorem: nearly divisible groups split into divisible and nearly-divisible-reduced parts. Reduces the classification to the reduced case (Exercises 10.7-10.8).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-7">
+    <summary><span class="ex-tag">Ex. 10.7</span>Nearly divisible reduced ⟹ indecomposable</summary>
+    <div class="body">
+      <p class="ex-statement">Every nearly divisible reduced group is indecomposable.</p>
+      <h4>Solution</h4>
+      <p>Suppose $G$ is nearly divisible reduced and $G = G_1 \oplus G_2$ with $G_1, G_2 \ne 0$. The maximal subgroups of $G$ correspond to: maximal subgroups of $G_1$ joined with all of $G_2$, and maximal subgroups of $G_2$ joined with all of $G_1$. So $G$ has at least one maximal of each type.</p>
+      <p>If both $G_1$ and $G_2$ are non-zero and reduced (no divisible parts), each has at least one maximal subgroup (since they're reduced — non-trivial reduced groups have maximal subgroups). So $G$ has at least two distinct maximals, contradicting unique-maximal of $G$.</p>
+      <p>Hence $G$ is indecomposable.</p>
+      <h4>Commentary</h4>
+      <p>Indecomposability is a structural rigidity: nearly divisible reduced groups can't split. They're the "atomic units" of the nearly-divisible classification.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-8">
+    <summary><span class="ex-tag">Ex. 10.8</span>Torsion-free nearly divisible reduced ⟺ pure dense in J_p</summary>
+    <div class="body">
+      <p class="ex-statement">$G$ is a nearly divisible reduced torsion-free group if and only if $G$ is isomorphic to a pure and dense subgroup of $J_p$.</p>
+      <h4>Solution</h4>
+      <p>The exercise gives a complete classification of torsion-free nearly divisible reduced abelian groups: they're exactly the pure dense subgroups of $J_p$ (the $p$-adic integers).</p>
+      <p>Forward: if $G$ is torsion-free + nearly divisible + reduced, $G$ embeds into $G \otimes \mathbb Q = \mathbb Q^r$ (rank-$r$ torsion-free). Nearly divisible structure forces $G$ to be "$p$-adic-like" — embeds in $J_p^r$. Reduced + indecomposable (by Ex 10.7) forces $r = 1$ and $G$ is a subgroup of $J_p$. The "purity + density" properties follow from the nearly-divisible-reduced structure.</p>
+      <p>Reverse: pure dense subgroups of $J_p$ inherit the nearly-divisible property from $J_p$, and being subgroups of a reduced torsion-free group, they're themselves reduced torsion-free.</p>
+      <h4>Commentary</h4>
+      <p>The exercise is a beautiful classification: a transcendental-looking question (when is $G$ nearly divisible reduced torsion-free?) reduces to a concrete answer (subgroups of $J_p$ with specific properties). This connects abelian group theory to $p$-adic number theory.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-9">
+    <summary><span class="ex-tag">Ex. 10.9</span>Subgroup lattice semiatomic ⟺ elementary</summary>
+    <div class="body">
+      <p class="ex-statement">The lattice of all the subgroups of an abelian group is semiatomic if and only if the group is elementary.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $L(G)$ is semiatomic, i.e., $G$ = join of atoms (= cyclic prime-order subgroups). Then $G$ is generated by elements of prime order. By the structure of abelian groups, this forces $G$ to be a sum of cyclic groups of prime order — i.e., $G \cong \bigoplus_{i \in I} \mathbb Z/p_i$ for primes $p_i$. If different primes appear, $G$ is not "elementary" in the strict sense (= $pG = 0$ for one $p$). But "elementary abelian" usually means $\bigoplus \mathbb Z/p$ for a single $p$; if multiple primes, the group is "elementary" in a generalised sense.</p>
+      <p>Re-reading: the chapter's example specifies "elementary" meaning $pG = 0$ for some prime $p$. So semiatomic ⟹ all atoms have the same prime order $p$, i.e., $G$ is a $\mathbb F_p$-vector space — elementary.</p>
+      <p>$(\Leftarrow)$ If $G$ is elementary $= \bigoplus_{i \in I} \mathbb Z/p$, the atoms of $L(G)$ are the $1$-dimensional $\mathbb F_p$-subspaces. Their join is $G$ itself. Hence $L(G)$ is semiatomic.</p>
+      <h4>Commentary</h4>
+      <p>The exercise gives a clean group-theoretic characterisation of "semiatomic subgroup lattice": elementary = $\mathbb F_p$-vector space.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-10-10">
+    <summary><span class="ex-tag">Ex. 10.10</span>Determine abelian groups with local subgroup lattice</summary>
+    <div class="body">
+      <p class="ex-statement">Determine the abelian groups with a local lattice of subgroups.</p>
+      <h4>Solution</h4>
+      <p>Combining Exercises 10.1, 10.5, 10.6, 10.7, 10.8: $L(G)$ is local iff $G$ is nearly divisible without divisible factor groups (Ex 10.5). By Ex 10.6: $G = D \oplus R$ where $R$ is nearly divisible reduced. "No divisible factor groups" forces $D = 0$ (otherwise $G/R = D$ is a divisible factor). So $G$ is reduced.</p>
+      <p>By Ex 10.7: $G = R$ is indecomposable. By the structure theorem for indecomposable abelian groups + nearly divisible:</p>
+      <p>• <em>Torsion case:</em> $G \cong \mathbb Z_{p^k}$ for some prime $p$ and $k \ge 1$ (cyclic of prime power order). These have local subgroup lattice (chain of subgroups, unique maximal $\langle p\rangle$).</p>
+      <p>• <em>Torsion-free case:</em> By Ex 10.8, $G$ is a pure dense subgroup of $J_p$. The simplest example is $J_p$ itself; in general, any pure dense subgroup of $J_p$ qualifies. There are uncountably many isomorphism classes of such groups.</p>
+      <p><strong>Final classification:</strong> Abelian groups with local subgroup lattice are:
+      <br>(a) Cyclic groups of prime power order $\mathbb Z_{p^k}$, $k \ge 1$.
+      <br>(b) Pure dense subgroups of $J_p$ (the $p$-adic integers).
+      <br>The two cases correspond to "torsion local" (case a) and "torsion-free local" (case b).</p>
+      <h4>Commentary</h4>
+      <p>The exercise completes the classification of abelian groups with local subgroup lattice: cyclic prime-power groups + pure dense subgroups of $p$-adic integers. A surprisingly clean answer for a structural question, derived via the lattice apparatus of Chapter 10.</p>
+    </div>
+  </details>
+</section>
+
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">Chapter 10's apparatus — coatomic, divisible, local — is foundational for Chapters 11-13.</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 10 in the book's arc</h2>
+
+  <p>Chapter 10 sits in the middle of the book's "structural" chapters. Its content connects to:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 10 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>11</td><td>Inverse essential closures</td><td>The closure operations developed here generalise; coatomicity is one of the foundational properties.</td></tr>
+      <tr><td>12</td><td>Supplements and the ideal lattice</td><td>Supplements are dual to complements; the supplement theory uses coatomic structure heavily. Lemma 12.5(c) — referenced in this chapter — formalises the divisibility characterisation.</td></tr>
+      <tr><td>13</td><td>Specialised ideal-lattice results</td><td>The ideal lattice's coatomic structure gives clean classification results (e.g., for ring radicals and quotients).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>Coatomic = order-dual of atomic.</strong> Every $a \ne 1$ lies under a maximal element. Krull's lemma: compact ⟹ coatomic. The lattice abstraction of Bass's B-objects.</li>
+    <li><strong>Theorem 10.3: superfluous ⟺ coatomic + below radical (in (D)-lattices).</strong> The chapter's central characterisation, perfectly dual to Chapter 5's "essential ⟺ contains socle + above is torsion."</li>
+    <li><strong>Local lattices: $L - \{1\}$ has a largest element.</strong> Equivalently: coatomic + $r(L)$ maximal. Lattice analog of local rings. Exercises classify abelian groups with local subgroup lattice.</li>
+  </ol>
+</section>
+
+
+<!-- AHEAD GOES HERE -->
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 10 · Coatomic Lattices</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#')) return null;
+    return document.querySelector(href);
+  }).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

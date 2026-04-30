@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 7 · Varieties of Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch06.html">← Chapter 6</a></li>
+    <li><a href="nation-companion-ch08.html">Chapter 8 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 7 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Equations &amp; varieties</div>
+  <ul>
+    <li><a href="#s1">1 · Equations, varieties, K-free</a></li>
+    <li><a href="#s2">2 · Theorem 7.1 — Birkhoff HSP</a></li>
+  </ul>
+
+  <div class="section-label">Part B · The lattice $\Lambda$</div>
+  <ul>
+    <li><a href="#s3">3 · Endomorphisms &amp; fully invariant</a></li>
+    <li><a href="#s4">4 · Theorem 7.2 — relatively free quotients</a></li>
+    <li><a href="#s5">5 · Theorem 7.3 — $\Lambda$ dually algebraic</a></li>
+    <li><a href="#s6">6 · HSP closure &amp; Lemma 7.4</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Ultraproducts</div>
+  <ul>
+    <li><a href="#s7">7 · Filters, ultrafilters, Lemma 7.5</a></li>
+    <li><a href="#s8">8 · First-order language; Łoś (Theorem 7.6)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Jónsson + finite basis</div>
+  <ul>
+    <li><a href="#s9">9 · Jónsson's Lemma (Theorems 7.7-7.9)</a></li>
+    <li><a href="#s10">10 · Finite basis (Theorems 7.10-7.12)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · HSP across algebra</a></li>
+    <li><a href="#c2">P2 · Łoś + ultraproducts in model theory</a></li>
+    <li><a href="#c3">P3 · Word problems for free modular lattices</a></li>
+    <li><a href="#c4">P4 · Finite basis lineage</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Nation · Notes on Lattice Theory · Chapter 7</div>
+  <h1>Varieties of Lattices</h1>
+  <p class="lede">From a single free lattice to the lattice $\Lambda$ of all lattice varieties — and the model-theoretic apparatus (ultraproducts, Łoś's theorem, Jónsson's lemma) that makes the structure theory tractable.</p>
+  <div class="meta">
+    <span>~95–110 min read</span>
+    <span>10 sections + 5 connections</span>
+    <span>11 worked exercises</span>
+    <span>PDF pp. 75–86</span>
+  </div>
+</section>
+
+<aside class="epigraph">
+  <p>Variety is the spice of life.</p>
+  <span class="attrib">— Chapter epigraph (proverbial; chosen by Nation)</span>
+</aside>
+
+<p>Chapter 6 built one free lattice, $\text{FL}(X)$, the universal object for the variety of all lattices. Chapter 7 zooms out: the <em>variety</em> $\mathbf{L}$ of all lattices is one element of a much larger structure — the <strong>lattice $\Lambda$ of all lattice varieties</strong>, ordered by containment. Inside $\mathbf{L}$ live the variety $\mathbf{M}$ of modular lattices, the variety $\mathbf{D}$ of distributive lattices, the trivial variety $\mathbf{T}$ — and an enormous (in fact, of cardinality $2^{\aleph_0}$) family of named and unnamed sublatices. The chapter develops the machinery to understand $\Lambda$ itself.</p>
+
+<p>The narrative arc has three movements. <strong>First</strong>: a lattice equation $p \approx q$ defines a variety $V(\Sigma)$. Birkhoff (1935) proved the <strong>HSP theorem</strong> — the existence of free objects, and the equivalence "variety = closed under H, S, P" — and the lattice version (Theorem 7.1) is the chapter's first major result. <strong>Second</strong>: every variety $\mathbf{V}$ corresponds to a <em>fully invariant congruence</em> $\theta$ on $\text{FL}(\omega)$, and $\Lambda$ is dually isomorphic to the lattice of all such congruences. This makes $\Lambda$ <strong>dually algebraic</strong> (Theorem 7.3). The <em>finitely based</em> varieties — those defined by finitely many equations — are the dually compact elements. <strong>Third</strong>: how does one compute $\Lambda$ in practice? Via <strong>ultraproducts</strong> (Łoś 1955) and <strong>Jónsson's Lemma</strong> (1967): the subdirectly irreducibles of a finitely-generated congruence-distributive variety lie inside HS of the generating algebras. From this fall: McKenzie's theorem (1970) that every finite lattice generates a finitely based variety; the distributivity of $\Lambda$ itself; and the Baker-Hales theorem $\mathcal{I}(\mathcal{L}) \in HSP_u(\mathcal{L})$.</p>
+
+<p>The chapter is also where lattice theory crosses into <strong>model theory</strong>. Filters and ultrafilters on $\mathfrak{P}(I)$, first-order sentences over the lattice signature, ultraproducts $\prod \mathcal{L}_i / \equiv_U$, the Łoś transfer theorem — these are the standard model-theoretic tools, here applied to lattices. Some properties (semidistributivity, Whitman's $(W)$, having $\le 7$ elements, isomorphism to $\mathcal{M}_5$) are first-order; others (finite, ACC, finite width, subdirectly irreducible) are not. The chapter teaches both the boundary and the technique for crossing it.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">A three-pane glance: terms <strong>carried forward</strong> from earlier chapters, terms introduced <strong>new</strong> in Chapter 7, and the <strong>deep dives</strong> the chapter rewards close reading on.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chs 1–6</span>
+    <p>The chapter assumes: lattice morphisms, embeddings, sublattices (Chs 1, 2); congruences, $\textbf{Con}\,\mathcal{L}$, principal congruence, First/Second Iso, <strong>subdirect product</strong>, <strong>subdirectly irreducible</strong> (SI), <strong>monolith</strong>, Birkhoff's <strong>subdirect representation theorem</strong> (Ch 5); <strong>algebraic lattice</strong>, <strong>compact element</strong> (Ch 3); the <strong>free lattice</strong> $\text{FL}(X)$ + word algebra $W(X)$, the construction $\text{FL}(X) = W(X)/\lambda$ (Ch 6); <strong>Whitman's condition</strong> $(W)$ and the <strong>semidistributive laws</strong> $\text{SD}_\vee$, $\text{SD}_\wedge$ (Ch 6). Also recalled: <strong>distributive lattices</strong> (Ch 5: $\textbf{Con}\,\mathcal{L}$ is always distributive — Funayama–Nakayama 1942), <strong>modular law</strong> (Ch 4: Dedekind's), <strong>$\textbf{Eq}\,X$</strong> partition lattice (Ch 4).</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter 7 vocabulary</span>
+    <p>The new vocabulary clusters around four concepts. <strong>Equational logic for lattices.</strong> A <em>lattice equation</em> $p \approx q$ is "$p$ and $q$ evaluate the same in every lattice." A <em>variety</em> (or <em>equational class</em>) is the class of all lattices satisfying a fixed set $\Sigma$ of equations. Familiar varieties: $\mathbf{L}$ (all lattices), $\mathbf{M}$ (modular), $\mathbf{D}$ (distributive), $\mathbf{T}$ (one-element). <strong>$\mathbf{K}$-free generation</strong>: in a class $\mathbf{K}$, $\mathcal{F}$ is $\mathbf{K}$-freely generated by $X$ if $\mathcal{F} \in \mathbf{K}$, $X$ generates $\mathcal{F}$, and every map to $\mathcal{L} \in \mathbf{K}$ extends. <strong>Fully invariant congruence</strong>: a congruence $\theta$ on $\mathcal{L}$ such that $(x, y) \in \theta \Rightarrow (f(x), f(y)) \in \theta$ for every endomorphism $f$. <strong>Endomorphism semigroup</strong> $\textbf{End}\,\mathcal{L}$. <strong>The lattice $\Lambda$ of all lattice varieties</strong> ordered by containment. <strong>HSP closure operator</strong>: $\text{HSP}(\mathbf{K})$ = smallest variety containing $\mathbf{K}$. <strong>Filter</strong> on a power set $\mathfrak{P}(I)$, <strong>principal/nonprincipal filter</strong>, <strong>ultrafilter</strong>. <strong>Reduced product</strong> $\prod \mathcal{L}_i / \equiv_F$, <strong>ultraproduct</strong> $\prod \mathcal{L}_i / \equiv_U$. <strong>First-order language for lattices</strong>: alphabet, equations, AND/OR/NOT, $\forall$ $\exists$, well-formed formulas, $(\mathcal{L}, h) \models \varphi$. <strong>$P_u(\mathbf{K})$</strong> ultraproducts class. <strong>Finitely based variety</strong>: $\mathbf{V} = V(\Sigma)$ for finite $\Sigma$. The <strong>ideal lattice</strong> $\mathcal{I}(\mathcal{L})$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Three threads reward close reading. <strong>The lattice $\Lambda$ of lattice varieties</strong> — uncountably infinite, distributive (Theorem 7.11 corollary), dually algebraic (Theorem 7.3), with a rich internal structure: the chain of distributive sub-varieties is just $\{\mathbf{T}, \mathbf{D}, \mathbf{L}\}$-stuff at the bottom; the modular sublattice $\Lambda_M$ has been mapped extensively (Jónsson, McKenzie, Rose, Jipsen). Standard reference: Jipsen-Rose <em>Varieties of Lattices</em>, Lecture Notes in Math 1533, Springer 1991. <strong>Ultraproducts and Łoś's theorem</strong> — Jerzy Łoś 1955, the model-theoretic transfer principle: the ultraproduct satisfies a first-order sentence iff "almost all" factors do (where "almost all" means in the ultrafilter). Łoś's theorem is the bridge from model theory to algebra; nonstandard analysis, the compactness theorem, and Keisler's ultrapower characterisation of elementary equivalence all use it. <strong>Jónsson's Lemma and the finite-basis theorems</strong> — Jónsson 1967 (Math. Scand. 21): in a congruence-distributive variety generated by $\mathbf{K}$, every SI is in $\text{HSP}_u(\mathbf{K})$. This SHARP result enables: McKenzie 1970 (every finite lattice generates a finitely based variety), Baker 1977 (every finite algebra in any congruence-distributive variety with finitely many operations is finitely based), Oates-Powell 1964 (finite group → finitely based), Kruse 1973 (finite ring → finitely based). The line ends at McNulty 1985 (counterexamples) and Willard 2004 survey.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · EQUATIONS AND VARIETIES</div>
+  <h2>From single equations to closed classes — Birkhoff's HSP for lattices</h2>
+  <p class="part-lede">A lattice equation defines a variety. The variety is closed under homomorphic images, sublattices, and direct products. And — crucially — admits free objects.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 7.1</span> Equations, varieties, $\mathbf{K}$-free generation</h2>
+  <div class="tagline">The basic vocabulary: equations $p \approx q$, equational classes, the canonical sub-varieties $\mathbf{M}$ and $\mathbf{D}$, and a generalisation of Chapter 6's free generation to arbitrary classes $\mathbf{K}$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · lattice equation</span>
+    <p>A <strong>lattice equation</strong> is an expression $p \approx q$ where $p$ and $q$ are lattice terms (built from variables $x_1, \dots, x_n$ via $\vee$ and $\wedge$). A lattice $\mathcal{L}$ <strong>satisfies $p \approx q$</strong> if $p(x_1, \dots, x_n) = q(x_1, \dots, x_n)$ whenever elements of $\mathcal{L}$ are substituted for the variables — equivalently, $h(p) = h(q)$ for every homomorphism $h : W(X) \to \mathcal{L}$.</p>
+    <p>$\mathcal{L}$ <strong>satisfies a set $\Sigma$ of equations</strong> if it satisfies every equation in $\Sigma$. A class $\mathbf{K}$ of lattices satisfies $\Sigma$ if every $\mathcal{L} \in \mathbf{K}$ does so.</p>
+  </div>
+
+  <p>It is often more natural to think of equations as relations between elements of $\text{FL}(X)$. Two terms $p$ and $p'$ evaluate the same in $\text{FL}(X)$ iff they evaluate the same in every lattice — so we can replace $p$ and $q$ in an equation with the corresponding elements of $\text{FL}(X)$ without changing meaning.</p>
+
+  <div class="box def">
+    <span class="label">Definition · variety / equational class</span>
+    <p>A <strong>variety</strong> (or <strong>equational class</strong>) of lattices is the class of all lattices satisfying some set $\Sigma$ of lattice equations. The class $\mathbf{L}$ of all lattices is the variety defined by $\Sigma = \{\text{idempotency, commutativity, associativity, absorption}\}$. Inside $\mathbf{L}$:</p>
+    <ol>
+      <li><strong>$\mathbf{M}$</strong>, the variety of modular lattices: $(x \vee y) \wedge (x \vee z) \approx x \vee (z \wedge (x \vee y))$.</li>
+      <li><strong>$\mathbf{D}$</strong>, the variety of distributive lattices: $x \wedge (y \vee z) \approx (x \wedge y) \vee (x \wedge z)$.</li>
+      <li><strong>$\mathbf{T}$</strong>, the variety of one-element lattices: $x \approx y$.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the variety hierarchy</span>
+    <p>$\mathbf{T} \subsetneq \mathbf{D} \subsetneq \mathbf{M} \subsetneq \mathbf{L}$. Each containment is strict: distributive lattices are modular but not vice versa ($\mathcal{N}_5$ is the witness); modular lattices are lattices but not vice versa ($\mathcal{N}_5$ again). Inside this picture lie countably many additional named varieties (Arguesian, modular Arguesian, etc.) and uncountably many unnamed ones.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · $\mathbf{K}$-free generation</span>
+    <p>If $\mathbf{K}$ is any class of lattices, a lattice $\mathcal{F}$ is <strong>$\mathbf{K}$-freely generated</strong> by its subset $X$ if</p>
+    <ol>
+      <li>$\mathcal{F} \in \mathbf{K}$,</li>
+      <li>$X$ generates $\mathcal{F}$,</li>
+      <li>for every $\mathcal{L} \in \mathbf{K}$, every map $h_0 : X \to L$ extends to a homomorphism $h : \mathcal{F} \to \mathcal{L}$.</li>
+    </ol>
+    <p>A lattice is <strong>$\mathbf{K}$-free</strong> if it is $\mathbf{K}$-freely generated by one of its subsets, and <strong>relatively free</strong> if it is $\mathbf{K}$-free for some (unspecified) class $\mathbf{K}$.</p>
+  </div>
+
+  <p>This generalises Chapter 6's free generation. Chapter 6 took $\mathbf{K} = \mathbf{L}$ (all lattices); now $\mathbf{K}$ can be any class. The relatively-free lattice in $\mathbf{V}$ on $X$ is denoted $\mathcal{F}_\mathbf{V}(X)$. For $\mathbf{V} = \mathbf{D}$: $\mathcal{F}_\mathbf{D}(X) = 2^{2^X}$ — the antichains in the Boolean lattice. For $\mathbf{V} = \mathbf{M}$: $\mathcal{F}_\mathbf{M}(X)$ has Dedekind's 28 elements when $|X| = 3$ (Dedekind 1900).</p>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 7.2</span> Theorem 7.1: Birkhoff's HSP for lattices</h2>
+  <div class="tagline">Three equivalent characterisations of varieties — the equational definition, the closure under H/S/P, and the existence of relatively free objects.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.1 · Birkhoff's HSP theorem (Birkhoff 1935)</span>
+    <p>If $\mathbf{K}$ is a nonempty class of lattices, then the following are equivalent.</p>
+    <ol>
+      <li>$\mathbf{K}$ is a variety.</li>
+      <li>$\mathbf{K}$ is closed under the formation of homomorphic images, sublattices, and direct products.</li>
+      <li>Either $\mathbf{K} = \mathbf{T}$, or for every nonempty set $X$ there is a lattice $\mathcal{F}_\mathbf{K}(X)$ that is $\mathbf{K}$-freely generated by $X$, and $\mathbf{K}$ is closed under homomorphic images.</li>
+    </ol>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p><strong>(1) $\Rightarrow$ (2).</strong> Varieties are equationally defined; equations are preserved under H, S, P. (Standard universal-algebra check.)</p>
+
+  <p><strong>(2) $\Rightarrow$ (3).</strong> The construction of $\mathcal{F}_\mathbf{K}(X)$ adapts Chapter 6's. Let $\mathbf{K}$ be closed under S and P. Let $\kappa = \bigcap \{\theta \in \textbf{Con}\,W(X) : W(X)/\theta \in \mathbf{K}\}$. Then $W(X)/\kappa$ is a subdirect product of lattices in $\mathbf{K}$, so by S + P it is in $\mathbf{K}$; it is $\mathbf{K}$-freely generated by $\{x\kappa : x \in X\}$. Unless $\mathbf{K} = \mathbf{T}$, the classes $x\kappa$ are distinct.</p>
+
+  <p><strong>(3) $\Rightarrow$ (1).</strong> Given the relatively free lattices, fix a countable set $X_0 = \{x_1, x_2, \dots\}$, and let $\Sigma$ be all equations $p \approx q$ such that $(p, q) \in \ker f_{X_0}$, where $f_X : W(X) \twoheadrightarrow \mathcal{F}_\mathbf{K}(X)$ is the homomorphism that is the identity on $X$. The Sublemma (next paragraph) says $\Sigma$ characterises $\mathbf{K}$.</p>
+
+  <div class="box lemma">
+    <span class="label">Sublemma · the equational characterisation</span>
+    <p>Let $\mathcal{F}_\mathbf{K}(Y)$ be a relatively free lattice. Let $p, q \in W(Y)$ and $f_Y : W(Y) \twoheadrightarrow \mathcal{F}_\mathbf{K}(Y)$ with $f_Y$ the identity on $Y$. Then $\mathbf{K}$ satisfies $p \approx q$ if and only if $f_Y(p) = f_Y(q)$.</p>
+  </div>
+
+  <p>The Sublemma is a clean statement: <em>satisfying $p \approx q$</em> in $\mathbf{K}$ is the same as <em>identifying $p$ and $q$</em> inside the relatively free $\mathcal{F}_\mathbf{K}(Y)$. (One direction is trivial; the other uses the mapping property (III).) The footnote: $\mathcal{F}_\mathbf{K}(Y)$ may satisfy equations not satisfied by $\mathcal{F}_\mathbf{K}(Z)$ when $Y \subsetneq Z$. The Sublemma applies to equations with at most $|Y|$ variables.</p>
+
+  <p>Applying the Sublemma with $Y = X_0$ shows $\mathbf{K} \subseteq \mathbf{V}_\Sigma$. The converse uses the Second Iso Theorem to embed any $\mathcal{L} \in \mathbf{V}_\Sigma$ as a homomorphic image of $\mathcal{F}_\mathbf{K}(X)$ for $X = $ generating set of $\mathcal{L}$. Since $\mathbf{K}$ is closed under homomorphic images, $\mathcal{L} \in \mathbf{K}$. So $\mathbf{V}_\Sigma \subseteq \mathbf{K}$, and equality follows.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · three views of a variety</span>
+    <p>Theorem 7.1 says <em>variety</em> can be defined three equivalent ways: <strong>(equation-first)</strong> as the class satisfying a set of equations; <strong>(closure-first)</strong> as a class closed under H, S, P; <strong>(free-first)</strong> as a class with relatively free objects, closed under H. Each viewpoint has its strengths: equations give finite presentations; closure operators give algebraic-geometry-style structure; free objects connect to category theory and universal constructions.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · why HSP and not, say, HSPI?</span>
+    <p>Birkhoff's HSP includes <em>direct products</em> ($P$) but NOT <em>arbitrary inverse limits</em>. Some closure conditions appear naturally but are not equational: for instance, the class of <em>finite</em> lattices is closed under H and S but NOT under P (infinite products of finite lattices are infinite). It is a <em>quasi-variety</em>, not a variety. Adding "$\le \aleph_0$ elements" still doesn't yield a variety. The HSP closure is exactly the right amount: large enough to give an equational class, small enough to be tractable. The dual closure $\text{HSP}_u$ (replacing $P$ with $P_u$ — ultraproducts) is also natural and corresponds to <em>quasi-varieties closed under ultraproducts</em>, which by Łoś's theorem is the model-theoretic notion of <em>universal class</em>.</p>
+  </div>
+
+  <h3>The disappointing footnote on $\mathcal{F}_\mathbf{M}(X)$</h3>
+
+  <p>Birkhoff's theorem says relatively free lattices exist. But it does NOT say their <em>arithmetic</em> is computable. Consider the variety $\mathbf{M}$ of modular lattices.</p>
+
+  <ul>
+    <li><strong>Dedekind 1900</strong>: $\mathcal{F}_\mathbf{M}(3)$ has 28 elements (drawn in Figure 9.2 of Nation).</li>
+    <li><strong>Christian Herrmann (1982)</strong>: the word problem for $\mathcal{F}_\mathbf{M}(4)$ is unsolvable.</li>
+    <li><strong>Ralph Freese (1980)</strong>: the word problem for $\mathcal{F}_\mathbf{M}(5)$ is unsolvable. <em>There is no algorithm for determining whether $p = q$ in $\mathcal{F}_\mathbf{M}(5)$.</em></li>
+  </ul>
+
+  <p><strong>Consequence</strong>: the variety $\mathbf{M}$ of modular lattices is not generated by its finite members. <em>There is a lattice equation that holds in all finite modular lattices but not in all modular lattices.</em> This is one of the deepest negative results in lattice theory — the word-problem solvability for free lattices (Whitman / Skolem, Ch 6) was a happy accident of the variety being "the largest." Adding modularity adds enough equations to push the word problem past decidability.</p>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · FULLY INVARIANT CONGRUENCES AND $\Lambda$</div>
+  <h2>The lattice of lattice varieties is dually algebraic</h2>
+  <p class="part-lede">Each variety $\mathbf{V}$ corresponds to a fully invariant congruence on $\text{FL}(\omega)$ — and the resulting bijection makes $\Lambda$ dually isomorphic to a complete sublattice of $\textbf{Con}\,\text{FL}(\omega)$.</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 7.3</span> Endomorphisms and fully invariant congruences</h2>
+  <div class="tagline">Endomorphisms of a lattice form a semigroup; the congruences invariant under all endomorphisms form a complete sublattice of $\textbf{Con}\,\mathcal{L}$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · endomorphism &amp; semigroup $\textbf{End}\,\mathcal{L}$</span>
+    <p>An <strong>endomorphism</strong> of a lattice $\mathcal{L}$ is a homomorphism $f : \mathcal{L} \to \mathcal{L}$. The set $\textbf{End}\,\mathcal{L}$ of endomorphisms forms a <em>semigroup</em> under composition. An endomorphism of $\text{FL}(X)$ is determined by its action on the generating set $X$: it corresponds to a substitution $x_i \mapsto f(x_i)$ of elements for the generators.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · fully invariant congruence</span>
+    <p>A congruence $\theta$ on $\mathcal{L}$ is <strong>fully invariant</strong> if $(x, y) \in \theta$ implies $(f(x), f(y)) \in \theta$ for every endomorphism $f$ of $\mathcal{L}$. Equivalently: $\theta$ is a congruence of the algebra $\mathcal{L}^* = (L, \wedge, \vee, \{f : f \in \textbf{End}\,\mathcal{L}\})$ obtained by adjoining all endomorphisms as unary operations. The fully invariant congruences form a <strong>complete sublattice</strong> of $\textbf{Con}\,\mathcal{L}$ — in fact, an algebraic lattice.</p>
+  </div>
+
+  <p>Why "fully invariant"? Because the substitution $f$ is allowed to be <em>any</em> endomorphism. A fully invariant congruence on $\text{FL}(X)$ is a congruence stable under arbitrary substitution of generators. This is exactly the closure condition that turns "an equation holds for these specific generators" into "an equation holds for all substitutions" — which is what variety membership requires.</p>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 7.4</span> Theorem 7.2: relatively free quotients</h2>
+  <div class="tagline">A quotient $\text{FL}(X)/\theta$ is relatively freely generated iff $\theta$ is fully invariant.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.2 · Birkhoff's invariant-congruence theorem</span>
+    <p>$\text{FL}(X)/\theta$ is relatively freely generated by $\{x\theta : x \in X\}$ if and only if $\theta$ is fully invariant.</p>
+  </div>
+
+  <h3>Proof outline</h3>
+
+  <p>($\Rightarrow$) Suppose $\text{FL}(X)/\theta$ is $\mathbf{V}$-freely generated for some lattice variety $\mathbf{V}$, and let $h : \text{FL}(X) \twoheadrightarrow \text{FL}(X)/\theta$ with $\ker h = \theta$. Let $f$ be any endomorphism of $\text{FL}(X)$. We compute, using the Sublemma's substitutivity:</p>
+  $$h(f(p)) = h(p(f(x_1), \dots, f(x_n))) = h(p)(h(f(x_1)), \dots, h(f(x_n)))$$
+  <p>and similarly for $h(f(q))$. So if $h(p) = h(q)$, then $h(f(p)) = h(f(q))$, i.e., $(f(p), f(q)) \in \ker h = \theta$. Thus $\theta$ is fully invariant.</p>
+
+  <p>($\Leftarrow$) Suppose $\theta$ is fully invariant on $\text{FL}(X)$. Excluding the trivial case $\theta = 1_{\textbf{Con}\,\text{FL}(X)}$ (which gives the trivial variety $\mathbf{T}$), let $k : \text{FL}(X) \twoheadrightarrow \text{FL}(X)/\theta$ be the canonical map. Let $\mathbf{V}$ be the variety determined by $\Sigma = \{p \approx q : (p, q) \in \theta\}$. We show that $\text{FL}(X)/\theta$ is $\mathbf{V}$-freely generated by $\{x\theta : x \in X\}$:</p>
+  <ul>
+    <li>$\text{FL}(X)/\theta \in \mathbf{V}$: every equation $p \approx q$ in $\Sigma$ holds in $\text{FL}(X)/\theta$ because $\theta$ is fully invariant — every substitution into $p$ and $q$ produces an element of $\theta$.</li>
+    <li>Mapping property: given $\mathcal{M} \in \mathbf{V}$ and $h_0 : X \to M$, extend $h_0$ to $g : \text{FL}(X) \to \mathcal{M}$ by freeness of $\text{FL}(X)$. Since $\mathcal{M} \in \mathbf{V}$, $g(p) = g(q)$ whenever $p \approx q \in \Sigma$, so $\theta = \ker k \subseteq \ker g$. By Second Iso, $g$ factors as $h \circ k$ for $h : \text{FL}(X)/\theta \to \mathcal{M}$.</li>
+  </ul>
+  <p>So $\text{FL}(X)/\theta$ is $\mathbf{V}$-freely generated.  $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · Theorem 7.2 in one phrase</span>
+    <p>Varieties are in bijective correspondence with fully invariant congruences on $\text{FL}(\omega)$ — the countably-generated free lattice. <em>Each fully invariant congruence is "all the equations the variety enforces"; each variety is "all the lattices satisfying those equations."</em></p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 7.5</span> Theorem 7.3: $\Lambda$ is dually algebraic</h2>
+  <div class="tagline">The lattice of all lattice varieties, structurally — and the characterisation of <em>finitely based</em> varieties as the dually compact elements.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.3</span>
+    <p>The set of all lattice varieties ordered by containment forms a lattice $\Lambda$ that is <strong>dually isomorphic to the lattice of all fully invariant congruences of $\text{FL}(\omega)$</strong>. Thus $\Lambda$ is dually algebraic, and a variety $\mathbf{V}$ is dually compact in $\Lambda$ if and only if $\mathbf{V} = V(\Sigma)$ for some <strong>finite</strong> set of equations $\Sigma$.</p>
+  </div>
+
+  <p>Theorem 7.3 follows immediately from Theorem 7.2 + the fact that fully invariant congruences form a complete sublattice of $\textbf{Con}\,\text{FL}(\omega)$. The duality reverses order: bigger congruence (more equations) = smaller variety (fewer lattices satisfying them).</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the geometry of $\Lambda$</span>
+    <p>$\Lambda$ has $\mathbf{T}$ at the bottom (most equations: "$x \approx y$"), $\mathbf{L}$ at the top (fewest: only the lattice axioms). $\mathbf{D}$ sits inside $\mathbf{M}$ inside $\mathbf{L}$. There are $2^{\aleph_0}$ lattice varieties in total — uncountably many. Some named landmarks: the variety generated by $\mathcal{N}_5$, the variety generated by $\mathcal{M}_3$, the variety of Arguesian lattices, the variety $\mathbf{V}(\textbf{Sub}(\mathbb{Z}^2))$ generated by subgroup lattices of $\mathbb{Z}^2$, etc.</p>
+  </div>
+
+  <p><strong>Finitely based varieties</strong> are the dually compact elements of $\Lambda$. The variety $\mathbf{D}$ of distributive lattices is finitely based (one equation suffices). $\mathbf{M}$ of modular is finitely based. As we will see in Theorem 7.10 (McKenzie 1970), the variety generated by any finite lattice is finitely based — a substantial result.</p>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 7.6</span> The HSP closure operator and Lemma 7.4</h2>
+  <div class="tagline">A model-theoretic view: variety = closed under H, S, P. The closure operator HSP, and the fact that varieties are determined by their subdirectly irreducibles.</div>
+
+  <p>Theorem 7.1's third statement gives a different perspective: a variety is a class closed under three operators on classes. <strong>$H(\mathbf{K})$</strong> = all homomorphic images of lattices in $\mathbf{K}$. <strong>$S(\mathbf{K})$</strong> = all sublattices of lattices in $\mathbf{K}$. <strong>$P(\mathbf{K})$</strong> = all direct products of families of lattices in $\mathbf{K}$.</p>
+
+  <p>Standard elementary arguments show, for any class $\mathbf{K}$:</p>
+  $$PS(\mathbf{K}) \subseteq SP(\mathbf{K}) \quad\quad PH(\mathbf{K}) \subseteq HP(\mathbf{K}) \quad\quad SH(\mathbf{K}) \subseteq HS(\mathbf{K})$$
+
+  <p>Thus the smallest variety containing a class $\mathbf{K}$ of lattices is <strong>$\text{HSP}(\mathbf{K})$</strong>, the class of all homomorphic images of sublattices of direct products of lattices in $\mathbf{K}$. We refer to $\text{HSP}(\mathbf{K})$ as the <strong>variety generated by</strong> $\mathbf{K}$.</p>
+
+  <p>$\text{HSP}$ is a closure operator on classes — but NOT an algebraic one: $\Lambda$ is not upper continuous, so $\text{HSP}$ cannot be algebraic. (Exercise 7.6 explores this: every lattice equation that fails fails in some finite lattice, but the variety generated by all finite lattices is not equal to the variety of all lattices via finitary closure.)</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.4 · varieties determined by SIs</span>
+    <p>Two lattice varieties are equal if and only if they contain the same subdirectly irreducible lattices.</p>
+  </div>
+
+  <h3>Proof</h3>
+
+  <p>Recall (Theorem 5.6): every lattice $\mathcal{L}$ is a subdirect product of subdirectly irreducible lattices $\mathcal{L}/\varphi$ with $\varphi$ completely meet irreducible in $\textbf{Con}\,\mathcal{L}$. Suppose $\mathbf{V}$ and $\mathbf{K}$ are varieties with the same subdirectly irreducible members. For any $X$ the relatively free lattice $\mathcal{F}_\mathbf{V}(X)$, being a subdirect product of subdirectly irreducible lattices $\mathcal{F}_\mathbf{V}(X)/\varphi$ in $\mathbf{V}$ (hence in $\mathbf{K}$ by hypothesis), is itself a subdirect product of lattices in $\mathbf{K}$. Hence $\mathcal{F}_\mathbf{V}(X) \in \mathbf{K}$ and $\mathbf{V} \subseteq \mathbf{K}$. By symmetry $\mathbf{K} \subseteq \mathbf{V}$.  $\square$</p>
+
+  <p>Lemma 7.4 is the lever for everything in Part D. <em>To classify a variety, it suffices to classify its subdirectly irreducibles.</em> Jónsson's Lemma will tell us where to look for those.</p>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · FILTERS, ULTRAFILTERS, AND ULTRAPRODUCTS</div>
+  <h2>The model-theoretic apparatus</h2>
+  <p class="part-lede">Filters and ultrafilters on power sets; the reduced product and ultraproduct constructions; the first-order language for lattices; and Łoś's transfer theorem (1955).</p>
+</header>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 7.7</span> Filters, ultrafilters, and Lemma 7.5</h2>
+  <div class="tagline">The notions of filter and ultrafilter on a power set $\mathfrak{P}(I)$, the reduced-product equivalence $\equiv_F$, and five useful characterisations.</div>
+
+  <div class="box def">
+    <span class="label">Definition · filter</span>
+    <p>A <strong>filter</strong> (or <strong>dual ideal</strong>) of a lattice $\mathcal{L}$ with greatest element $1$ is a subset $F \subseteq L$ such that</p>
+    <ol>
+      <li>$1 \in F$,</li>
+      <li>$x, y \in F$ implies $x \wedge y \in F$,</li>
+      <li>$z \ge x \in F$ implies $z \in F$.</li>
+    </ol>
+    <p>For $x \in L$, the set $\uparrow x = \{y : y \ge x\}$ is the <strong>principal filter</strong> generated by $x$. A <strong>nonprincipal filter</strong> is one not of this form. In $\mathfrak{P}(X)$ for an infinite $X$, the filter $F$ of all complements of finite subsets of $X$ is a canonical nonprincipal filter (the <strong>cofinite filter</strong>). A <strong>maximal proper filter</strong> is called an <strong>ultrafilter</strong>.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · the congruence $\equiv_F$ on a direct product</span>
+    <p>Let $\mathcal{L}_i$ ($i \in I$) be lattices, and let $F$ be a filter on $\mathfrak{P}(I)$. Define an equivalence relation on $\prod_{i \in I} \mathcal{L}_i$ by</p>
+    $$x \equiv_F y \quad\text{if}\quad \{i \in I : x_i = y_i\} \in F.$$
+    <p>A routine check shows $\equiv_F$ is a congruence relation on $\prod \mathcal{L}_i$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.5 · five filter properties</span>
+    <ol>
+      <li>Let $\mathcal{L}$ be a lattice, $F$ a filter on $\mathcal{L}$, and $a \notin F$. Then there exists a filter $G$ on $\mathcal{L}$ maximal with respect to $F \subseteq G$ and $a \notin G$. (Zorn's lemma extension.)</li>
+      <li>A proper filter $U$ on $\mathfrak{P}(I)$ is an ultrafilter if and only if for every $A \subseteq I$, either $A \in U$ or $I - A \in U$.</li>
+      <li>If $U$ is an ultrafilter on $\mathfrak{P}(I)$, then its complement $\mathfrak{P}(I) - U$ is a maximal proper ideal.</li>
+      <li>If $U$ is an ultrafilter and $A_1 \cup \cdots \cup A_n \in U$, then $A_i \in U$ for some $i$.</li>
+      <li>An ultrafilter $U$ is nonprincipal if and only if it contains the filter of all complements of finite subsets of $I$.</li>
+    </ol>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary</span>
+    <p>If $I$ is an infinite set, then there is a nonprincipal ultrafilter on $\mathfrak{P}(I)$.</p>
+  </div>
+
+  <p>The corollary follows by applying Lemma 7.5(1) with $\mathcal{L} = \mathfrak{P}(I)$, $F$ = the cofinite filter, $a = \emptyset$. Existence requires the axiom of choice (Zorn's lemma).</p>
+
+  <div class="box def">
+    <span class="label">Definition · reduced product, ultraproduct</span>
+    <p>If $F$ is a filter on $\mathfrak{P}(I)$, the quotient lattice $\prod_{i \in I} \mathcal{L}_i / \equiv_F$ is called a <strong>reduced product</strong>. If $U$ is an ultrafilter, then $\prod_{i \in I} \mathcal{L}_i / \equiv_U$ is an <strong>ultraproduct</strong>. The interesting case is when $U$ is a <em>nonprincipal</em> ultrafilter — otherwise the ultraproduct collapses to one of the factors.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · "almost all"</span>
+    <p>An ultrafilter $U$ on $I$ functions as a notion of "<strong>almost all</strong> $i \in I$." A subset is "large" iff it's in $U$. Lemma 7.5(2) says: ANY subset is either large or its complement is — there are no "medium-sized" sets under $U$. The ultraproduct $\prod \mathcal{L}_i / \equiv_U$ identifies tuples that agree on almost all coordinates. For nonprincipal $U$ on infinite $I$, this is a genuinely new lattice — typically larger than any single factor.</p>
+  </div>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 7.8</span> First-order language; Łoś's theorem (Theorem 7.6)</h2>
+  <div class="tagline">A precise grammar for lattice-theoretic statements, and the model-theoretic result that ultraproducts preserve them.</div>
+
+  <h3>The first-order language for lattices</h3>
+
+  <p>The elements of a <strong>first-order language</strong> for lattices are: (1) a countable alphabet $X$ with members $x, y, z, \dots$; (2) equations $p \approx q$ with $p, q \in W(X)$; (3) logical connectives AND, OR, $\neg$; (4) quantifiers $\forall x$ and $\exists x$ for $x \in X$.</p>
+
+  <p>These symbols combine to form <strong>well-formed formulas</strong> (wffs) recursively: every equation is a wff; if $\alpha, \beta$ are wffs, then so are $(\neg\alpha)$, $(\alpha \;\text{AND}\; \beta)$, $(\alpha \;\text{OR}\; \beta)$; if $\gamma$ is a wff and $x \in X$, then so are $(\forall x\,\gamma)$ and $(\exists x\,\gamma)$.</p>
+
+  <div class="box def">
+    <span class="label">Definition · models</span>
+    <p>Let $\mathcal{L}$ be a lattice and $h : W(X) \to \mathcal{L}$ a homomorphism. The pair $(\mathcal{L}, h)$ <strong>models</strong> the wff $\varphi$, written $(\mathcal{L}, h) \models \varphi$, by the standard recursive definition: $(\mathcal{L}, h) \models p \approx q$ iff $h(p) = h(q)$; AND, OR, $\neg$ propagate as expected; $(\mathcal{L}, h) \models \forall x\,\gamma$ iff $(\mathcal{L}, g) \models \gamma$ for every $g$ agreeing with $h$ off $\{x\}$. $\mathcal{L}$ <strong>satisfies $\varphi$</strong> if $(\mathcal{L}, h) \models \varphi$ for every $h$.</p>
+  </div>
+
+  <p>A <strong>first-order sentence</strong> is a wff with no free variables. Whether $\mathcal{L} \models \varphi$ depends only on the values $h$ takes on the free variables of $\varphi$ — for sentences, no values matter, and $\mathcal{L}$ either satisfies $\varphi$ or satisfies $\neg\varphi$.</p>
+
+  <h4>Examples · what's first-order and what isn't</h4>
+
+  <p><strong>First-order properties</strong> (expressible by a single sentence):</p>
+  <ul>
+    <li>$\mathcal{L}$ satisfies $p \approx q$.</li>
+    <li>$\mathcal{L}$ satisfies $\text{SD}_\vee$ and $\text{SD}_\wedge$ (Ch 6).</li>
+    <li>$\mathcal{L}$ satisfies Whitman's $(W)$.</li>
+    <li>$\mathcal{L}$ has width 7. (Express: there exist 7 pairwise incomparable elements; no 8 do.)</li>
+    <li>$\mathcal{L}$ has at most 7 elements. (Express: $\forall x_1 \dots x_8\,(x_1 = x_2 \;\text{OR}\; x_1 = x_3 \;\text{OR}\;\dots)$ — any 8 elements collapse.)</li>
+    <li>$\mathcal{L}$ has exactly 7 elements (combine the previous two).</li>
+    <li>$\mathcal{L}$ is isomorphic to $\mathcal{M}_5$ (express the entire multiplication table).</li>
+  </ul>
+
+  <p><strong>NOT first-order</strong> (no single sentence captures these):</p>
+  <ul>
+    <li>$\mathcal{L}$ is finite. (Compactness shows: if every finite subset of an infinite axiom set is satisfiable, the whole set is — so "finite" cannot be axiomatised by sentences.)</li>
+    <li>$\mathcal{L}$ satisfies the ACC. (The same argument.)</li>
+    <li>$\mathcal{L}$ has finite width.</li>
+    <li>$\mathcal{L}$ is subdirectly irreducible. (Requires quantification over arbitrary congruences, not first-order.)</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the boundary of first-order</span>
+    <p>First-order sentences over $\{\vee, \wedge\}$ can express finitely-presentable structural properties, equations, equational schemes, and finitistic arithmetic. They CANNOT express infinitary properties (finiteness, well-foundedness, ACC) — these require second-order or infinitary logic. The boundary is sharp: every "finite" statement is first-order, every "infinite" statement is not.</p>
+  </div>
+
+  <h3>Łoś's Theorem</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.6 · Łoś 1955</span>
+    <p>Let $\varphi$ be a first-order lattice sentence, $\mathcal{L}_i$ ($i \in I$) lattices, and $U$ an ultrafilter on $\mathfrak{P}(I)$. Then the ultraproduct $\prod_{i \in I} \mathcal{L}_i / \equiv_U$ satisfies $\varphi$ if and only if $\{i \in I : \mathcal{L}_i \text{ satisfies } \varphi\} \in U$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary</span>
+    <p>If each $\mathcal{L}_i$ satisfies $\varphi$, then so does the ultraproduct.</p>
+  </div>
+
+  <p>The corollary is immediate: if every $\mathcal{L}_i$ satisfies $\varphi$, the index set is all of $I$, which is always in $U$. The full theorem is the "transfer principle": ultraproducts preserve first-order truth, but the value of "preserve" is moderated by the ultrafilter — if "almost all" factors satisfy $\varphi$, so does the ultraproduct.</p>
+
+  <h3>Proof outline</h3>
+
+  <p>By induction on the complexity of $\varphi$. The easy cases — equations, AND, $\neg$ — use that ultrafilters are closed under intersection (for AND) and complementation (for $\neg$, via Lemma 7.5(2)). The non-trivial case is $\forall x\,\gamma$: requires juggling between "(structure, homomorphism) models $\forall x\,\gamma$" and "structure models $\forall x\,\gamma$ at every assignment to $x$." The proof handles both directions by using the finiteness of free variables in $\gamma$ and the closure of $U$ under finite intersections.  $\square$</p>
+
+  <p>Łoś's theorem is the foundation of model theory's "ultraproduct method." Applications: a clean proof of the <strong>compactness theorem</strong> (a set of sentences has a model iff every finite subset does); an algebraic characterisation of <strong>elementary equivalence</strong> via Keisler's ultrapower theorem; <strong>nonstandard analysis</strong> (the ultrapower of $\mathbb{R}$ contains infinitesimals); the reduction of structural properties to first-order ones.</p>
+
+  <div class="box recap">
+    <span class="label">Recap · the operators</span>
+    <p>To Birkhoff's $H$, $S$, $P$ we now add $P_u$ — the operator taking a class $\mathbf{K}$ to its <strong>class of ultraproducts</strong> $P_u(\mathbf{K})$. The composite $\text{HSP}_u$ is a closure operator that we'll see is the right tool for Jónsson's Lemma. By Łoś, $P_u$ preserves first-order properties; the variety $\text{HSP}(\mathbf{K})$ generated by a class is in general STRICTLY LARGER than $\text{HSP}_u(\mathbf{K})$, but they agree on subdirectly irreducibles when the variety is congruence distributive. (The next section.)</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · JÓNSSON'S LEMMA AND FINITE BASIS</div>
+  <h2>Where do subdirectly irreducibles come from?</h2>
+  <p class="part-lede">Bjarni Jónsson's 1967 answer for congruence-distributive varieties: from $\text{HSP}_u$ of the generators. The cascade of consequences includes McKenzie's finite-basis theorem, the distributivity of $\Lambda$, and the Baker-Hales theorem on ideal lattices.</p>
+</header>
+
+<section class="module" id="s9">
+  <h2><span class="num">§ 7.9</span> Jónsson's Lemma + Theorems 7.7-7.9</h2>
+  <div class="tagline">The model-theoretic crown jewel: subdirectly irreducible members of a variety generated by a class lie in $\text{HSP}_u$ of that class.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.7 · Jónsson's Lemma (1967)</span>
+    <p>Let $\mathbf{K}$ be a class of lattices. If $\mathcal{L}$ is subdirectly irreducible and $\mathcal{L} \in \text{HSP}(\mathbf{K})$, then $\mathcal{L} \in \text{HSP}_u(\mathbf{K})$.</p>
+  </div>
+
+  <p>Jónsson's Lemma narrows the search dramatically. Without it, $\mathcal{L} \in \text{HSP}(\mathbf{K})$ tells you only that $\mathcal{L}$ is a homomorphic image of a sublattice of an arbitrary product. With Jónsson, when $\mathcal{L}$ is SI, you can replace "arbitrary product" with "ultraproduct."</p>
+
+  <h3>Proof sketch</h3>
+
+  <p>$\mathcal{L} \in \text{HSP}(\mathbf{K})$ means there are lattices $\mathcal{K}_i \in \mathbf{K}$ ($i \in I$), a sublattice $\mathcal{S}$ of $\prod_{i \in I} \mathcal{K}_i$, and a surjective homomorphism $h : \mathcal{S} \twoheadrightarrow \mathcal{L}$. Assume $\mathcal{L}$ is finitely subdirectly irreducible. Then $\ker h$ is meet-irreducible in $\textbf{Con}\,\mathcal{S}$. Since $\textbf{Con}\,\mathcal{S}$ is distributive (Funayama-Nakayama, Theorem 5.8), $\ker h$ is meet-prime: $\varphi \wedge \psi \le \ker h$ implies $\varphi \le \ker h$ or $\psi \le \ker h$.</p>
+
+  <p>For each $J \subseteq I$, let $\pi_J$ be the kernel of the projection $\mathcal{S} \to \prod_{j \in J} \mathcal{K}_j$. Then $\pi_{H \cup J} = \pi_H \wedge \pi_J$ for $H, J \subseteq I$.</p>
+
+  <p>Let $\mathfrak{H} = \{J \subseteq I : \pi_J \le \ker h\}$. By the meet-primeness of $\ker h$ + the distributivity-driven primeness, $\mathfrak{H}$ has these properties: (1) $I \in \mathfrak{H}$, $\emptyset \notin \mathfrak{H}$; (2) $\mathfrak{H}$ is an order filter; (3) $J \cup K \in \mathfrak{H}$ implies $J \in \mathfrak{H}$ or $K \in \mathfrak{H}$.</p>
+
+  <p>$\mathfrak{H}$ is not necessarily a lattice filter, but Zorn's Lemma applied to the lattice filters contained in $\mathfrak{H}$ produces a maximal one $U$ — and the meet-primeness ensures $U$ is an ultrafilter. The restriction of $\equiv_U$ to $\mathcal{S}$ is a congruence; $\mathcal{S}/\equiv_U$ is a sublattice of $\prod \mathcal{K}_i / \equiv_U$. The kernel of the restriction is below $\ker h$, so $\mathcal{L} = h(\mathcal{S})$ is a homomorphic image of $\mathcal{S}/\equiv_U$. Therefore $\mathcal{L} \in \text{HSP}_u(\mathbf{K})$.  $\square$</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · why congruence-distributivity is essential</span>
+    <p>The proof uses distributivity of $\textbf{Con}\,\mathcal{S}$ in a CRUCIAL way — the meet-irreducibility-implies-meet-primeness step. Without congruence distributivity (e.g., for groups, rings), Jónsson's Lemma fails. <strong>This means varieties of LATTICES are more well-behaved than varieties of groups or rings.</strong> The Funayama-Nakayama theorem (Ch 5: $\textbf{Con}\,\mathcal{L}$ is always distributive) is what makes lattice variety theory cleaner than group variety theory. Generalisations: Jónsson's Lemma extends to <em>any</em> congruence-distributive variety (Jónsson 1967, Math. Scand. 21). In particular: lattices, distributive algebras, Heyting algebras, Boolean algebras, semilattices.</p>
+  </div>
+
+  <h3>Lemma 7.8 — filters within ultrafilters</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 7.8</span>
+    <p>Let $U$ be an ultrafilter on $\mathfrak{P}(I)$ and $J \in U$. Then $V = \{B \subseteq J : B \in U\}$ is an ultrafilter on $\mathfrak{P}(J)$, and $\prod_{j \in J} \mathcal{L}_j / \equiv_V$ is isomorphic to $\prod_{i \in I} \mathcal{L}_i / \equiv_U$.</p>
+  </div>
+
+  <p>An ultrafilter on a "large" subset $J$ extends to one on $I$ — restriction is reversible. Useful for finitising arguments.</p>
+
+  <h3>Theorem 7.9 — finite generators</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.9</span>
+    <p>Let $\mathbf{K} = \{\mathcal{K}_1, \dots, \mathcal{K}_n\}$ be a finite collection of finite lattices. If $\mathcal{L}$ is a subdirectly irreducible lattice in the variety $\text{HSP}(\mathbf{K})$, then $\mathcal{L} \in HS(\mathcal{K}_j)$ for some $j$.</p>
+  </div>
+
+  <p>By Jónsson's Lemma, $\mathcal{L} \in \text{HSP}_u(\mathbf{K})$, so $\mathcal{L}$ is a homomorphic image of a sublattice of some ultraproduct $\prod_{i \in I} \mathcal{L}_i / \equiv_U$ where each $\mathcal{L}_i \in \mathbf{K}$. Partition $I$ into blocks $A_j = \{i : \mathcal{L}_i \cong \mathcal{K}_j\}$. By Lemma 7.5(4), some $A_j \in U$. By Lemma 7.8, the ultraproduct over $A_j$ (with restricted ultrafilter $V$) is isomorphic to the original. Each $\mathcal{L}_k \cong \mathcal{K}_j$ for $k \in A_j$. By Łoś's theorem applied to "$\mathcal{L} \cong \mathcal{K}_j$" (a first-order property since $\mathcal{K}_j$ is finite), the ultraproduct is also $\cong \mathcal{K}_j$. Hence $\mathcal{L} \in HS(\mathcal{K}_j)$.  $\square$</p>
+
+  <div class="box cor">
+    <span class="label">Corollary · finitely many subvarieties</span>
+    <p>If $\mathbf{V} = \text{HSP}(\mathbf{K})$ where $\mathbf{K}$ is a finite collection of finite lattices, then $\mathbf{V}$ contains only finitely many subvarieties.</p>
+  </div>
+
+  <p>By Lemma 7.4 (varieties determined by SIs) and Theorem 7.9 (SIs of $\mathbf{V}$ are inside $HS$ of finitely many finite lattices), there are only finitely many SI lattices in $\mathbf{V}$, hence finitely many subvarieties.</p>
+
+  <p><strong>Note</strong>: $\text{HSP}(\{\mathcal{K}_1, \dots, \mathcal{K}_n\}) = \text{HSP}(\mathcal{K}_1 \times \cdots \times \mathcal{K}_n)$, so we can speak of the variety generated by a single finite lattice. Nation has shown the converse of the corollary is FALSE: there is an infinite SI lattice $\mathcal{L}$ such that $\text{HSP}(\mathcal{L})$ has only finitely many subvarieties, each generated by a finite lattice (J. B. Nation, <em>A counterexample to the finite height conjecture</em>, Order 13 (1996), 1–9).</p>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">§ 7.10</span> Finite basis theorems (Theorems 7.10-7.12)</h2>
+  <div class="tagline">McKenzie's foundational theorem and its lineage; Theorem 7.11 + the distributivity of $\Lambda$; Baker-Hales on the ideal lattice.</div>
+
+  <h3>McKenzie's finite basis theorem</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.10 · McKenzie 1970</span>
+    <p>The variety generated by a finite lattice is finitely based.</p>
+  </div>
+
+  <p><strong>Implication</strong>: a variety $\mathbf{V} = V(\Sigma)$ generated by a finite lattice $\mathcal{K}$ admits a finite $\Sigma$ — even though Birkhoff's HSP only gives an infinite (countable) $\Sigma$ in general. <strong>Corollary</strong> via Theorem 7.3: $V(\mathcal{K})$ is dually compact in $\Lambda$ for any finite $\mathcal{K}$.</p>
+
+  <p>The proof uses Theorem 7.9 + Jónsson's Lemma: the SIs of $V(\mathcal{K})$ are inside $HS(\mathcal{K})$, hence finite and finitely many; each is "axiomatised" by a single first-order sentence (its multiplication table); the conjunction is finite.</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the finite-basis theorem lineage</span>
+    <p>McKenzie's theorem (Math. Scand. 27, 1970) fits in a sequence of finite-basis results across algebra:</p>
+    <ul>
+      <li><strong>1962 — Frayne, Morel, Scott</strong>: the foundations of ultraproducts in model theory (Fund. Math. 51).</li>
+      <li><strong>1964 — Oates &amp; Powell</strong>: variety generated by a finite group is finitely based (J. Algebra 1).</li>
+      <li><strong>1970 — McKenzie</strong>: variety generated by a finite lattice is finitely based.</li>
+      <li><strong>1973 — Kruse</strong>: variety generated by a finite ring is finitely based (J. Algebra 26).</li>
+      <li><strong>1977 — Baker</strong>: every finite algebra in a congruence-distributive variety with finitely many operations is finitely based (Adv. Math. 24). The big generalisation.</li>
+      <li><strong>1985 — McNulty</strong>: how to construct finite algebras NOT in any finitely-based variety (LNM 1149). The negative side.</li>
+      <li><strong>1987 — McKenzie</strong>: finite equational bases for congruence modular varieties (Algebra Universalis 24).</li>
+      <li><strong>2004 — Willard</strong>: <em>The finite basis problem</em> — survey of progress and open questions (Contributions to General Algebra 15).</li>
+    </ul>
+    <p>The dichotomy: nice varieties (congruence-distributive) → finite-basis theorems; pathological varieties (without congruence distributivity) → finite algebras need not be finitely based. The Funayama-Nakayama theorem (Ch 5: $\textbf{Con}\,\mathcal{L}$ always distributive) puts lattices in the nice category — McKenzie's theorem is essentially Baker's specialised to lattices.</p>
+  </div>
+
+  <h3>Theorem 7.11 — joins of varieties</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.11</span>
+    <p>If $\mathbf{V}$ and $\mathbf{W}$ are lattice varieties, then $(\mathbf{V} \vee \mathbf{W})_{si} = \mathbf{V}_{si} \cup \mathbf{W}_{si}$.</p>
+  </div>
+
+  <p>Where $\mathbf{V}_{si}$ denotes the class of subdirectly irreducible lattices in $\mathbf{V}$. The proof is a straightforward modification of the first part of Theorem 7.9's proof: an SI in $\mathbf{V} \vee \mathbf{W}$ is in $HS$ of an ultraproduct of lattices from $\mathbf{V}$ or $\mathbf{W}$; since $\mathbf{V}$ and $\mathbf{W}$ are closed under H, S, $P_u$, we get $\mathbf{V}_{si}$ or $\mathbf{W}_{si}$.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary</span>
+    <p>$\Lambda$ is distributive.</p>
+  </div>
+
+  <p>The corollary follows from Theorem 7.11 + Lemma 7.4. The proof is standard: SI-classification turns lattice operations on varieties into set operations on SI classes, and SI-class set operations satisfy distributivity automatically.</p>
+
+  <p><strong>Important note</strong>: Theorem 7.11 does NOT extend to infinite joins. (Exercise 7.6 explores: finite lattices generate $\mathbf{L}$, but there are infinite SIs in $\mathbf{L}$ not in any HSP of finitely many finite lattices.)</p>
+
+  <h3>Theorem 7.12 — ideal lattices and ultraproducts</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 7.12 · Baker-Hales 1974</span>
+    <p>For any lattice $\mathcal{L}$, we have $\mathcal{I}(\mathcal{L}) \in \text{HSP}_u(\mathcal{L})$.</p>
+  </div>
+
+  <p>$\mathcal{I}(\mathcal{L})$ is the lattice of ideals of $\mathcal{L}$. The map $x \mapsto\,\downarrow x$ embeds $\mathcal{L}$ into $\mathcal{I}(\mathcal{L})$. A classic theorem of Birkhoff (1934) says $\mathcal{I}(\mathcal{L})$ satisfies every identity satisfied by $\mathcal{L}$, i.e., $\mathcal{I}(\mathcal{L}) \in \text{HSP}(\mathcal{L})$. Baker and Hales (1974) sharpen: $\mathcal{I}(\mathcal{L})$ lives in the smaller class $\text{HSP}_u(\mathcal{L})$ — under the ultraproduct closure. Useful for transferring first-order properties between $\mathcal{L}$ and its ideal lattice.</p>
+
+  <div class="box recap">
+    <span class="label">Recap · "This is an ideal place to stop."</span>
+    <p>Nation closes the chapter with the deadpan pun on Theorem 7.12 ("ideal place to stop"). The chapter has built the model-theoretic apparatus that the rest of lattice theory will use repeatedly. Subsequent chapters specialise: Ch 8 on distributive lattices (a particularly tractable variety), Ch 9 on modular and semimodular lattices (where Jónsson's apparatus and the SI-classification become a research program), Ch 10 on finite lattices and their congruence lattices (Dilworth's program continued).</p>
+  </div>
+</section>
+
+<!-- ============== CONNECTION PANELS ============== -->
+<header class="part-header">
+  <div class="pk">CONNECTION PANELS</div>
+  <h2>Five views of the variety landscape</h2>
+  <p class="part-lede">Birkhoff's HSP across algebra · Łoś + ultraproducts in model theory · undecidability of free modular lattices · the finite-basis theorem lineage · Prologos cross-references.</p>
+</header>
+
+<section class="module" id="c1">
+  <h2><span class="num">PANEL P1</span> Birkhoff's HSP across algebra</h2>
+  <div class="tagline">The variety theorem is one of universal algebra's foundational results — applied across all branches of algebra.</div>
+
+  <div class="box connection">
+    <span class="label">HSP · the universal-algebra fixed point</span>
+    <p>Birkhoff (1935) proved the HSP theorem for arbitrary algebras of any signature. Its lattice version is Theorem 7.1 of this chapter. The statement is identical: <em>variety = closed under H, S, P</em>. Applications across algebra:</p>
+
+    <table class="grid">
+      <thead><tr><th>Variety</th><th>Equational base</th><th>Free objects</th><th>Notable</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lattices</strong></td><td>Idempotency, comm., assoc., absorption</td><td>$\text{FL}(X)$ infinite for $\ge 3$ generators (Ch 6)</td><td>$\Lambda$ distributive, $|\Lambda| = 2^{\aleph_0}$</td></tr>
+        <tr><td><strong>Modular lattices</strong></td><td>$+$ modular law</td><td>$\mathcal{F}_M(3) = $ 28 elts (Dedekind 1900); $\mathcal{F}_M(4)$ word-problem unsolvable (Herrmann)</td><td>Not generated by finite members (Freese 1980)</td></tr>
+        <tr><td><strong>Distributive lattices</strong></td><td>$+$ distributive law</td><td>$\mathcal{F}_D(X) = 2^{2^X}$, finite for finite $X$</td><td>Equivalent to Boolean algebras of finite Stone duality</td></tr>
+        <tr><td><strong>Boolean algebras</strong></td><td>Lattice + complement</td><td>$\mathcal{F}_B(n) = 2^{2^n}$</td><td>Stone duality with totally disconnected compact spaces</td></tr>
+        <tr><td><strong>Heyting algebras</strong></td><td>Lattice + implication</td><td>$\mathcal{F}_H(n)$ Lindenbaum-Tarski algebra of intuitionistic propositional logic</td><td>Esakia duality</td></tr>
+        <tr><td><strong>Groups</strong></td><td>Identity, inverse, assoc.</td><td>Free group $F(X)$ — combinatorially well understood</td><td>Word problem decidable; Oates-Powell finite-basis</td></tr>
+        <tr><td><strong>Abelian groups</strong></td><td>$+$ commutativity</td><td>$F^{ab}(X) = \mathbb{Z}^X$</td><td>Variety lattice = chain $\{0, p\mathbb{Z}, \mathbb{Z}\}$ for primes $p$ + ω-sup</td></tr>
+        <tr><td><strong>Rings</strong></td><td>Distributive + ring axioms</td><td>Free ring $\mathbb{Z}\langle X\rangle$</td><td>Word problem undecidable in general; Kruse finite-basis</td></tr>
+        <tr><td><strong>Topological spaces</strong></td><td>Not equational</td><td>—</td><td>Not a variety; closure conditions differ</td></tr>
+      </tbody>
+    </table>
+
+    <p>The boundary between varieties and quasi-varieties is the boundary between equational and quasi-equational logic. Topological spaces, ordered spaces, partial algebras: NOT varieties. Lattices, groups, rings, modules: ARE varieties.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">PANEL P2</span> Łoś + ultraproducts in model theory</h2>
+  <div class="tagline">The ultraproduct construction is one of model theory's most powerful tools — and it was a Polish logician, Jerzy Łoś, who established its fundamental property in 1955.</div>
+
+  <div class="box connection">
+    <span class="label">Łoś's theorem · the model-theoretic transfer principle</span>
+    <p>Jerzy Łoś (1955, in <em>Quelques remarques, théorèmes et problèmes sur les classes définissables d'algèbras</em>, Mathematical interpretations of formal systems, North-Holland) introduced ultraproducts and proved: <em>an ultraproduct $\prod \mathcal{L}_i / \equiv_U$ satisfies a first-order sentence $\varphi$ iff $\{i : \mathcal{L}_i \models \varphi\} \in U$.</em> Often called the <strong>fundamental theorem of ultraproducts</strong>.</p>
+
+    <h4>Why Łoś matters across model theory</h4>
+    <ul>
+      <li><strong>Compactness theorem</strong>: a set $\Sigma$ of first-order sentences has a model iff every finite subset does. Easy proof via ultraproducts: index the finite subsets of $\Sigma$, take models of each, ultraproduct them with a suitable ultrafilter.</li>
+      <li><strong>Keisler's ultrapower theorem (1961)</strong>: structures $\mathcal{A}$ and $\mathcal{B}$ are elementarily equivalent ($\equiv$) iff they have isomorphic ultrapowers. Algebraic characterisation of "satisfies the same first-order sentences."</li>
+      <li><strong>Nonstandard analysis</strong> (Robinson 1966): the ultrapower $\mathbb{R}^\omega / \equiv_U$ for nonprincipal $U$ contains infinitesimals and "infinite" elements. A model of arithmetic with full first-order properties of $\mathbb{R}$ but new elements.</li>
+      <li><strong>Saturated models</strong>: ultraproducts produce "saturated" models with strong realisation properties.</li>
+      <li><strong>Universal classes</strong>: the model-theoretic notion of "closed under ultraproducts" turns out to coincide with Mal'cev's notion of universal class (defined by universal sentences).</li>
+    </ul>
+
+    <p>For lattice theorists, Łoś is the model-theoretic toolkit that makes Jónsson's Lemma possible. For model theorists, Łoś is the gateway to Keisler-Shelah classification theory.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">PANEL P3</span> Word problems for free modular lattices</h2>
+  <div class="tagline">From Dedekind's 1900 enumeration of $\mathcal{F}_M(3)$ to Freese's 1980 undecidability proof — the dramatic story of what happens when you add the modular law.</div>
+
+  <div class="box connection">
+    <span class="label">Free modular lattices · the word problem</span>
+    <p>For free LATTICES (Ch 6), the word problem is decidable in polynomial time (Skolem 1920, Whitman 1941). Adding the modular law changes everything.</p>
+
+    <h4>The chronology</h4>
+    <ul>
+      <li><strong>1900 — Dedekind</strong> (<em>Über die drei Modulen erzeugte Dualgruppe</em>, Math. Annalen 53, 371–403): computed $\mathcal{F}_M(3)$ has 28 elements. Drawn carefully in his paper. Effort foundational to module theory.</li>
+      <li><strong>1969 — Evans</strong>: relations between residual finiteness, finite embeddability, and the word problem (J. London Math. Soc. 2). Set framework.</li>
+      <li><strong>1980 — Freese</strong> (<em>Free modular lattices</em>, Trans. AMS 261): the word problem for $\mathcal{F}_M(5)$ is unsolvable. Proof uses McIntyre's construction of a finitely-presented field with unsolvable word problem; embeds the field problem into modular-lattice equality. Major result.</li>
+      <li><strong>1982 — Christian Herrmann</strong> (<em>Über die von vier Modulen erzeugte Dualgruppe</em>): refines Freese to $\mathcal{F}_M(4)$. Lower bound matches Dedekind's $\mathcal{F}_M(3)$ being decidable (28 elements).</li>
+      <li><strong>2024+</strong>: ongoing work on tighter bounds and connections to projective geometry's coordinatisation.</li>
+    </ul>
+
+    <h4>Implications</h4>
+    <ul>
+      <li><strong>$\mathbf{M}$ is not generated by its finite members.</strong> If it were, the word problem in $\mathcal{F}_\mathbf{M}(\omega)$ would be decidable (since each test would reduce to checking finite lattices). Freese's theorem rules this out.</li>
+      <li>There exists a lattice equation that holds in all <em>finite</em> modular lattices but not in all modular lattices. Concrete witness sought; partial answers in subsequent work.</li>
+      <li>Contrast with Theorem 7.10 (McKenzie): the variety generated by a SINGLE finite lattice is finitely based. Going from a single finite lattice (finite-based) to ALL finite lattices (not even generating $\mathbf{M}$) is a big jump.</li>
+    </ul>
+
+    <p>The undecidability of the modular-lattice word problem is one of the deepest negative results in algebra. It means: there is no general decision procedure for "does this equation hold in all modular lattices" — case analysis must be done variety by variety, often via ad-hoc arguments.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">PANEL P4</span> Finite-basis theorems lineage</h2>
+  <div class="tagline">From McKenzie 1970 to Willard 2004 — the program of identifying which finite algebras generate finitely-based varieties.</div>
+
+  <div class="box connection">
+    <span class="label">Finite-basis theorems · half a century of results</span>
+    <p>The motivating problem: given a finite algebra $\mathcal{A}$, is the variety $V(\mathcal{A})$ finitely based — i.e., presented by finitely many equations? "Yes" results are theorems; "no" results are counter-examples.</p>
+
+    <h4>Positive theorems</h4>
+    <ul>
+      <li><strong>1964 — Oates &amp; Powell</strong>: every finite group is finitely based (J. Algebra 1).</li>
+      <li><strong>1970 — McKenzie</strong>: every finite lattice is finitely based (Math. Scand. 27). The chapter's Theorem 7.10.</li>
+      <li><strong>1973 — Kruse</strong>: every finite ring is finitely based (J. Algebra 26).</li>
+      <li><strong>1977 — Kirby Baker</strong>: <em>any finite algebra in a congruence-distributive variety with finitely many operations is finitely based</em> (Adv. Math. 24, 207-243). The umbrella theorem subsuming McKenzie + many others.</li>
+      <li><strong>1987 — McKenzie</strong>: finite equational bases for congruence MODULAR varieties (Algebra Universalis 24). Extends Baker beyond congruence-distributive.</li>
+    </ul>
+
+    <h4>Counter-examples</h4>
+    <ul>
+      <li><strong>1985 — McNulty</strong>: how to construct finite algebras that are NOT in any finitely-based variety (LNM 1149).</li>
+      <li>Various small examples in subsequent work: a 7-element groupoid (Murskii); a 6-element binar (Sapir-Volkov).</li>
+    </ul>
+
+    <h4>Survey + open</h4>
+    <ul>
+      <li><strong>2004 — Willard</strong>: <em>The finite basis problem</em> (Contributions to General Algebra 15). Survey: open problems, classification by structure type, conjecture status.</li>
+      <li>Open: complete characterisation of finite algebras with finitely-based varieties remains.</li>
+    </ul>
+
+    <h4>The pattern</h4>
+    <p>Congruence-modularity (and a fortiori distributivity) implies finite-basis. The reason: Jónsson's Lemma and its analogues for modular varieties (Day's commutator theory) constrain the SIs sharply. Without congruence modularity, anything goes — small finite algebras can be infinite-base. Lattices benefit from Funayama-Nakayama: $\textbf{Con}\,\mathcal{L}$ is always distributive, so all lattice varieties are congruence-distributive, hence McKenzie 1970 applies universally.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">PANEL P5</span> Prologos cross-references</h2>
+  <div class="tagline">Equational logic, varieties, and Łoś-style transfer in Prologos's type system and effect machinery.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · varieties as type-class hierarchies</span>
+    <p>Prologos's <strong>traits</strong> (Eq, Ord, Add, Sub, Mul, etc., from `prologos.core.*`) are equational classes in Birkhoff's sense. Each trait declares a signature (the operations) and laws (the equations). When a type implements a trait, the implementation is checked against the laws — by structural-unification propagators (PUnify) plus user-provided proof obligations.</p>
+    <p>The trait hierarchy is exactly the variety lattice $\Lambda$ for the trait's signature. <strong>Bundles</strong> (e.g., `bundle Num := (Add Sub Mul)`) are intersections of varieties — taking the conjunction of multiple sets of equations. The lattice of all trait bundles is dually algebraic in Prologos's design (per Theorem 7.3 here): finitely-based bundles are dually compact, infinite intersections require infinite bundles. The Prologos compiler uses this structure for trait dispatch resolution: given a context constraint $\text{Num}\,?A$, find the smallest variety containing $?A$ that satisfies the constraint.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Łoś-style transfer in propagator semantics</span>
+    <p>Prologos's <strong>propagator network</strong> uses BSP (Bulk Synchronous Parallel) scheduling: each round fires propagators in parallel, then merges via lattice joins. Łoś-style transfer applies in the limit: the semantic content of the network at quiescence is the JOIN of all individual propagator outputs, modulo the equivalence "almost all rounds agree." For monotone-set lattices (used in fan-in readiness, per `propagator-design.md`), this is literally an ultrafilter-style argument: the readiness signal $\bigcup_i R_i$ corresponds to "almost all input sources have signaled."</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">First-order language for type assertions</span>
+    <p>Prologos's surface syntax includes <strong>spec</strong> (function signatures) and <strong>defn</strong> (implementations); both compile to first-order assertions over the type signature's algebra. Type-class membership is a first-order predicate. Trait-method satisfaction $h(\text{eq?}\,a\,b) = \text{true}$ is a first-order equation. The trait dispatch resolver is essentially a model-checker: given assumptions $\Sigma$ and goal $\varphi$, decide $\Sigma \models \varphi$. By analogy with Whitman's algorithm: for trait languages over decidable signatures (which Prologos's primary traits are), the satisfaction check is decidable.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Word problem for free modular lattices · cautionary tale</span>
+    <p>Freese 1980 (word problem for $\mathcal{F}_M(5)$ unsolvable) is a sharp warning for Prologos's design: <strong>do not impose modularity on user-defined trait lattices unless absolutely necessary</strong>. The system's structural-unification machinery (PUnify) operates on a free-lattice-like substrate; if user code introduces modularity equations, the trait-resolution procedure may become undecidable. This shapes Prologos's choice of <em>semidistributive</em> (Ch 6) lattices for the type-domain rather than modular: SD is decidable + structural; modular is undecidable beyond 3 generators. The chapter's contrast — free modular lattices undecidable, free lattices decidable — reinforces the design choice.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<header class="part-header" id="glossary">
+  <div class="pk">GLOSSARY</div>
+  <h2>Chapter 7 · vocabulary</h2>
+  <p class="part-lede">All Chapter 7 terms; eleven worked exercises; pointers to Chapter 8 (distributive lattices).</p>
+</header>
+
+<section class="module">
+  <h2><span class="num">GLOSSARY</span> Concepts in alphabetical order</h2>
+  <div class="tagline">Quick reference for chapter terminology.</div>
+
+  <dl class="glossary">
+    <dt>$\Lambda$ · variety lattice</dt>
+    <dd>The lattice of all lattice varieties ordered by containment. Dually algebraic; distributive (Theorem 7.11 corollary); $|\Lambda| = 2^{\aleph_0}$.</dd>
+
+    <dt>endomorphism</dt>
+    <dd>Lattice homomorphism $f : \mathcal{L} \to \mathcal{L}$. Form a semigroup $\textbf{End}\,\mathcal{L}$ under composition.</dd>
+
+    <dt>equational class</dt>
+    <dd>Synonym for variety. Class of all algebras of fixed signature satisfying a fixed set of equations.</dd>
+
+    <dt>filter</dt>
+    <dd>Subset $F$ of lattice $\mathcal{L}$ closed under finite meets and upward-closed; contains 1. Dual of ideal.</dd>
+
+    <dt>finitely based</dt>
+    <dd>Variety $\mathbf{V} = V(\Sigma)$ for some finite $\Sigma$. Equivalently: dually compact in $\Lambda$.</dd>
+
+    <dt>first-order language for lattices</dt>
+    <dd>Alphabet + equations $p \approx q$ + connectives AND/OR/NOT + quantifiers $\forall \exists$. WFFs built recursively.</dd>
+
+    <dt>fully invariant congruence</dt>
+    <dd>Congruence $\theta$ on $\mathcal{L}$ such that $(x, y) \in \theta \Rightarrow (f(x), f(y)) \in \theta$ for every endomorphism $f$. Fully invariant congruences form a complete sublattice of $\textbf{Con}\,\mathcal{L}$.</dd>
+
+    <dt>HSP closure</dt>
+    <dd>Smallest variety containing class $\mathbf{K}$ is $\text{HSP}(\mathbf{K})$ — homomorphic images of sublattices of products of lattices in $\mathbf{K}$.</dd>
+
+    <dt>$\text{HSP}_u$</dt>
+    <dd>Closure with $P_u$ replacing $P$: ultraproducts replace direct products. The relevant operator for Jónsson's Lemma.</dd>
+
+    <dt>ideal lattice $\mathcal{I}(\mathcal{L})$</dt>
+    <dd>The lattice of ideals of $\mathcal{L}$. $\mathcal{L} \hookrightarrow \mathcal{I}(\mathcal{L})$ via $x \mapsto\,\downarrow x$. Theorem 7.12 (Baker-Hales): $\mathcal{I}(\mathcal{L}) \in \text{HSP}_u(\mathcal{L})$.</dd>
+
+    <dt>Jónsson's Lemma (Theorem 7.7)</dt>
+    <dd>If $\mathcal{L}$ is SI in $\text{HSP}(\mathbf{K})$, then $\mathcal{L} \in \text{HSP}_u(\mathbf{K})$. Crucially uses congruence-distributivity (Funayama-Nakayama).</dd>
+
+    <dt>$\mathbf{K}$-free</dt>
+    <dd>$\mathcal{F} \in \mathbf{K}$ is $\mathbf{K}$-freely generated by $X$ if $X$ generates $\mathcal{F}$ and every $h_0 : X \to L$ ($\mathcal{L} \in \mathbf{K}$) extends to a homomorphism. Generalises Ch 6's free generation.</dd>
+
+    <dt>lattice equation $p \approx q$</dt>
+    <dd>$p, q$ are lattice terms. $\mathcal{L}$ satisfies $p \approx q$ if $h(p) = h(q)$ for every $h : W(X) \to \mathcal{L}$.</dd>
+
+    <dt>$\mathbf{L}$, $\mathbf{M}$, $\mathbf{D}$, $\mathbf{T}$</dt>
+    <dd>The variety of all lattices, modular lattices, distributive lattices, trivial (one-element) lattices. $\mathbf{T} \subsetneq \mathbf{D} \subsetneq \mathbf{M} \subsetneq \mathbf{L}$.</dd>
+
+    <dt>Łoś's theorem (Theorem 7.6)</dt>
+    <dd>$\prod \mathcal{L}_i / \equiv_U \models \varphi$ iff $\{i : \mathcal{L}_i \models \varphi\} \in U$ for first-order $\varphi$. Łoś 1955.</dd>
+
+    <dt>models · $(\mathcal{L}, h) \models \varphi$</dt>
+    <dd>The pair (lattice, homomorphism) satisfies the wff $\varphi$ — recursive definition over the structure of $\varphi$.</dd>
+
+    <dt>nonprincipal filter</dt>
+    <dd>Filter not of the form $\uparrow x$. Cofinite filter on infinite $X$ is the canonical example.</dd>
+
+    <dt>$P_u(\mathbf{K})$</dt>
+    <dd>The class of all ultraproducts of lattices from $\mathbf{K}$.</dd>
+
+    <dt>principal filter</dt>
+    <dd>$\uparrow x = \{y : y \ge x\}$. Filter generated by a single element.</dd>
+
+    <dt>reduced product</dt>
+    <dd>$\prod \mathcal{L}_i / \equiv_F$ for filter $F$. Generalises ultraproduct (where $F$ is an ultrafilter).</dd>
+
+    <dt>relatively free</dt>
+    <dd>$\mathbf{K}$-free for some unspecified $\mathbf{K}$. The relatively free lattice in $\mathbf{V}$ on $X$ is denoted $\mathcal{F}_\mathbf{V}(X)$.</dd>
+
+    <dt>ultrafilter</dt>
+    <dd>Maximal proper filter. On $\mathfrak{P}(I)$: for every $A \subseteq I$, exactly one of $A$, $I-A$ is in $U$.</dd>
+
+    <dt>ultraproduct</dt>
+    <dd>$\prod \mathcal{L}_i / \equiv_U$ for ultrafilter $U$. The interesting case is $U$ nonprincipal.</dd>
+
+    <dt>variety</dt>
+    <dd>Equational class. Closed under H, S, P (Theorem 7.1).</dd>
+
+    <dt>well-formed formula (wff)</dt>
+    <dd>Built recursively from equations using AND/OR/NOT and $\forall \exists$.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXERCISES ============== -->
+<section class="module" id="exercises">
+  <h2><span class="num">WORKED EXERCISES</span> All eleven from Chapter 7</h2>
+  <div class="tagline">Eleven worked exercises covering fully-invariant congruence sublattices, the minimum-relating congruence, SI-derived join-irreducibility in $\Lambda$, congruence relations from filters, ultrafilter intersection theorems, the finite-failure theorem, first-order sentences for atomicity properties, breadth, the $\mathbf{2} \times \mathbf{2}$ characterisation, joins of varieties, and modular/distributive ideal lattices.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.1</span>Fully invariant congruences form a complete sublattice</summary>
+  <div class="body">
+    <div class="ex-statement">Show that fully invariant congruences form a complete sublattice of $\textbf{Con}\,\mathcal{L}$.</div>
+    <p><strong>Solution.</strong> A complete sublattice means the join and meet (over arbitrary subsets) of fully invariant congruences are again fully invariant.</p>
+    <p><strong>Meets:</strong> If $\{\theta_i\}$ are fully invariant, then $\bigwedge \theta_i$ is the intersection (set-theoretically). For any $f \in \textbf{End}\,\mathcal{L}$ and $(x, y) \in \bigwedge \theta_i$: $(x, y) \in \theta_i$ for all $i$, so $(f(x), f(y)) \in \theta_i$ for all $i$ (each is fully invariant), hence $(f(x), f(y)) \in \bigwedge \theta_i$.</p>
+    <p><strong>Joins:</strong> The join $\bigvee \theta_i$ in $\textbf{Con}\,\mathcal{L}$ is the smallest congruence containing all $\theta_i$. For any $f \in \textbf{End}\,\mathcal{L}$, the image $\{(f(x), f(y)) : (x, y) \in \bigvee \theta_i\}$ is contained in the smallest congruence containing $\{f(\theta_i)\}$. Since each $f(\theta_i) \subseteq \theta_i$ (as $\theta_i$ is fully invariant), this smallest congruence is below $\bigvee \theta_i$. Hence $\bigvee \theta_i$ is fully invariant.</p>
+    <p>So fully invariant congruences are closed under arbitrary meets and arbitrary joins, hence form a complete sublattice.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.2</span>Minimum congruence $\rho_\mathbf{V}$ for variety membership</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a lattice and $\mathbf{V}$ a lattice variety. Show that there is a unique minimum congruence $\rho_\mathbf{V}$ on $\mathcal{L}$ such that $\mathcal{L}/\rho_\mathbf{V} \in \mathbf{V}$.</div>
+    <p><strong>Solution.</strong> Let $\Sigma$ be the equations defining $\mathbf{V}$. Define $\rho_\mathbf{V}$ as the smallest congruence on $\mathcal{L}$ such that $\mathcal{L}/\rho_\mathbf{V}$ satisfies $\Sigma$. Equivalently:</p>
+    $$\rho_\mathbf{V} = \bigvee \{\,(p(\vec a), q(\vec a)) : (p \approx q) \in \Sigma, \vec a \in L\,\}.$$
+    <p>Why this works: $\mathcal{L}/\rho_\mathbf{V}$ collapses every pair $(p(\vec a), q(\vec a))$ where $p \approx q$ is a $\mathbf{V}$-equation, hence satisfies $\Sigma$. Any other congruence $\theta$ with $\mathcal{L}/\theta \in \mathbf{V}$ must also collapse all such pairs (since $\mathbf{V}$-membership requires $\Sigma$ to hold), hence $\rho_\mathbf{V} \le \theta$. So $\rho_\mathbf{V}$ is the unique minimum.</p>
+    <p><strong>Uniqueness:</strong> If $\rho$ and $\rho'$ both have the property, then by minimality $\rho \le \rho'$ and $\rho' \le \rho$, so $\rho = \rho'$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.3</span>SI ⟹ HSP join-irreducible in $\Lambda$</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Prove that if $\mathcal{L}$ is a subdirectly irreducible lattice, then $\text{HSP}(\mathcal{L})$ is (finitely) join irreducible in the lattice $\Lambda$ of lattice varieties. (b) Prove that if a variety $\mathbf{V}$ is completely join irreducible in $\Lambda$, then $\mathbf{V} = \text{HSP}(\mathcal{K})$ for some finitely generated, subdirectly irreducible lattice $\mathcal{K}$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> Suppose $\text{HSP}(\mathcal{L}) = \mathbf{V} \vee \mathbf{W}$ for varieties $\mathbf{V}$, $\mathbf{W}$. By Theorem 7.11, $(\mathbf{V} \vee \mathbf{W})_{si} = \mathbf{V}_{si} \cup \mathbf{W}_{si}$. The SI lattice $\mathcal{L}$ is in $\text{HSP}(\mathcal{L}) = \mathbf{V} \vee \mathbf{W}$, hence in $(\mathbf{V} \vee \mathbf{W})_{si}$, so $\mathcal{L} \in \mathbf{V}_{si} \cup \mathbf{W}_{si}$, i.e., $\mathcal{L} \in \mathbf{V}$ or $\mathcal{L} \in \mathbf{W}$. Without loss, $\mathcal{L} \in \mathbf{V}$, hence $\text{HSP}(\mathcal{L}) \subseteq \mathbf{V} \subseteq \mathbf{V} \vee \mathbf{W} = \text{HSP}(\mathcal{L})$. So $\mathbf{V} = \text{HSP}(\mathcal{L})$, i.e., $\text{HSP}(\mathcal{L})$ is finitely join-irreducible.</li>
+      <li><strong>(b)</strong> If $\mathbf{V}$ is completely join-irreducible in $\Lambda$, then for the chain of all $\text{HSP}(\mathcal{K})$ with $\mathcal{K}$ finitely-generated SI in $\mathbf{V}$, their join (over all such $\mathcal{K}$) is at most $\mathbf{V}$ (each is in $\mathbf{V}$). By Lemma 7.4 (varieties determined by SIs), the join contains all SIs of $\mathbf{V}$. Hence the join equals $\mathbf{V}$. By complete join-irreducibility, $\mathbf{V} = \text{HSP}(\mathcal{K})$ for some single $\mathcal{K}$ — a finitely-generated SI lattice.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.4</span>$\equiv_F$ is a congruence on the direct product</summary>
+  <div class="body">
+    <div class="ex-statement">Show that if $F$ is a filter on $\mathfrak{P}(I)$, then $\equiv_F$ is a congruence relation on $\prod_{i \in I} \mathcal{L}_i$.</div>
+    <p><strong>Solution.</strong> Recall $x \equiv_F y$ iff $\{i : x_i = y_i\} \in F$. Need to show: equivalence relation + congruence (preserved by $\vee$ and $\wedge$).</p>
+    <ul>
+      <li><strong>Reflexivity:</strong> $x \equiv_F x$ since $\{i : x_i = x_i\} = I \in F$.</li>
+      <li><strong>Symmetry:</strong> $\{i : x_i = y_i\} = \{i : y_i = x_i\}$.</li>
+      <li><strong>Transitivity:</strong> $x \equiv_F y$ and $y \equiv_F z$ ⟹ $A := \{i : x_i = y_i\} \in F$ and $B := \{i : y_i = z_i\} \in F$. Then $A \cap B \in F$ (filter closed under finite intersections), and $A \cap B \subseteq \{i : x_i = z_i\}$ (where $x_i = y_i = z_i$ on $A \cap B$). By upward closure, $\{i : x_i = z_i\} \in F$. So $x \equiv_F z$.</li>
+      <li><strong>Congruence:</strong> Suppose $x \equiv_F x'$ and $y \equiv_F y'$. Then $A := \{i : x_i = x'_i\} \in F$ and $B := \{i : y_i = y'_i\} \in F$. So $A \cap B \in F$, and on $A \cap B$, $(x \vee y)_i = x_i \vee y_i = x'_i \vee y'_i = (x' \vee y')_i$. Thus $\{i : (x \vee y)_i = (x' \vee y')_i\} \supseteq A \cap B \in F$, so $x \vee y \equiv_F x' \vee y'$. Similarly for $\wedge$.</li>
+    </ul>
+    <p>Hence $\equiv_F$ is a congruence on $\prod \mathcal{L}_i$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.5</span>Filters as intersections of ultrafilters</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Show that if $F$ is a filter on $\mathfrak{P}(I)$, then $F$ is the intersection of the ultrafilters $U$ such that $U \supseteq F$. (b) Then prove that the congruence $\equiv_F$ on $\prod_{i \in I} \mathcal{L}_i$ is the intersection of the congruences $\equiv_U$ with $U$ an ultrafilter. (c) Conclude that the reduced product $\prod_{i \in I} \mathcal{L}_i / \equiv_F$ is a subdirect product of ultraproducts $\prod_{i \in I} \mathcal{L}_i / \equiv_U$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> Clearly $F \subseteq \bigcap \{U : U \supseteq F, U \text{ ultrafilter}\}$. Conversely, for any $A \notin F$: by Lemma 7.5(1), there is an ultrafilter $U \supseteq F$ with $A \notin U$. So $A \notin \bigcap \{U : U \supseteq F\}$. Hence the equality.</li>
+      <li><strong>(b)</strong> $x \equiv_F y$ iff $\{i : x_i = y_i\} \in F$ iff $\{i : x_i = y_i\} \in U$ for every ultrafilter $U \supseteq F$ (by part (a)) iff $x \equiv_U y$ for every such $U$. Hence $\equiv_F = \bigcap_{U \supseteq F} \equiv_U$.</li>
+      <li><strong>(c)</strong> By Birkhoff's subdirect representation (Theorem 5.6), if $\equiv_F = \bigcap \equiv_U$, then $\prod \mathcal{L}_i / \equiv_F$ embeds subdirectly into $\prod_U (\prod \mathcal{L}_i / \equiv_U)$. The right side is a product of ultraproducts; the left side is the reduced product. Hence the reduced product is a subdirect product of ultraproducts.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.6</span>Every failing equation fails in a finite lattice</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that every lattice equation that does not hold in all lattices fails in some finite lattice. (Let $p \neq q$ in $\text{FL}(X)$. Then there exist a finite join subsemilattice $\mathcal{S}$ of $\text{FL}(X)$ containing $p, q$ and $0 = \bigwedge X$, and a lattice homomorphism $h : \text{FL}(X) \to \mathcal{S}$, such that $h(p) = p$ and $h(q) = q$.)</div>
+    <p><strong>Solution.</strong> Suppose $p \approx q$ fails in some lattice $\mathcal{L}$. Then $p \neq q$ in $\text{FL}(X)$ (since $\text{FL}(X)$ is the most general; if $p = q$ in $\text{FL}(X)$, $p = q$ in every lattice). Following the hint:</p>
+    <p>Construct $\mathcal{S}$ inductively. Start with $S_0 = X \cup \{p, q, \bigwedge X\}$ (finite). To make this closed under $\vee$ and $\wedge$, take pairwise joins and meets — but cap them at "limits" given by lattice term complexity. Since $p, q$ are specific elements of $\text{FL}(X)$, only finitely many join-irreducibles below them are needed. Take $\mathcal{S}$ to be the (finite) sublattice generated by $S_0$ within $\text{FL}(X)$.</p>
+    <p>The standard construction: $\mathcal{S}$ turns out to be lower bounded (Exercise 11 of Chapter 6), so it satisfies $\text{SD}_\vee$. The homomorphism $h$ from $\text{FL}(X)$ to $\mathcal{S}$ is the identity on $\mathcal{S}$ and projects elements outside $\mathcal{S}$ down to their "best lower bound" in $\mathcal{S}$. By construction $h(p) = p$ and $h(q) = q$ in $\mathcal{S}$, but $p \neq q$ in $\mathcal{S}$. So $p \approx q$ fails in $\mathcal{S}$, a finite lattice.</p>
+    <p>The standard solution uses lattices that are <em>lower bounded</em> (Exercise 11 of Ch 6); they satisfy $\text{SD}_\vee$. Hence any finite collection of them generates a variety NOT containing $\mathcal{M}_3$, while all together they generate the variety of all lattices. The variety generated by $\mathcal{M}_3$ contains only $\mathbf{D}$ (generated by $\mathbf{2}$) and $\mathbf{T}$. <em>This shows $\Lambda$ is not join-continuous.</em></p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.7</span>First-order sentences for atomicity properties</summary>
+  <div class="body">
+    <div class="ex-statement">Give a first order sentence characterising each of the following properties of a lattice $\mathcal{L}$ (i.e., $\mathcal{L}$ has the property iff $\mathcal{L} \models \varphi$). (a) $\mathcal{L}$ has a least element. (b) $\mathcal{L}$ is atomic. (c) $\mathcal{L}$ is strongly atomic. (d) $\mathcal{L}$ is weakly atomic. (e) $\mathcal{L}$ has no covering relations.</div>
+    <p><strong>Solutions.</strong></p>
+    <ul>
+      <li><strong>(a) Least element:</strong> $\exists z\,\forall x\,(z \le x)$, where $z \le x$ abbreviates $z \vee x = x$.</li>
+      <li><strong>(b) Atomic:</strong> "Every $a > 0$ is above some atom." Atom: covers $0$. So: $\forall a\,(\exists z\,(z \le a) \;\text{AND}\; (a > z) \Rightarrow \exists u\,(u > z) \wedge (u \le a) \wedge (\forall v\,((u > v) \;\text{AND}\; (v \ge z) \Rightarrow v = z)))$. With abbreviations for $\le, <, \prec$.</li>
+      <li><strong>(c) Strongly atomic:</strong> "$a > b$ implies $\exists u$ with $u \succ b$ and $a \ge u$." A first-order sentence: $\forall a, b\,((a > b) \Rightarrow \exists u\,((u \succ b) \;\text{AND}\; (u \le a)))$, where $u \succ b$ abbreviates $u > b \wedge \neg \exists v\,(u > v > b)$.</li>
+      <li><strong>(d) Weakly atomic:</strong> "$a > b$ implies $\exists u, v$ with $a \ge u \succ v \ge b$." Like (c) but with $u, v$ free between $a$ and $b$. $\forall a, b\,((a > b) \Rightarrow \exists u, v\,((u \succ v) \;\text{AND}\; (a \ge u) \;\text{AND}\; (v \ge b)))$.</li>
+      <li><strong>(e) No covering relations:</strong> $\forall a, b\,(a > b \Rightarrow \exists c\,(a > c > b))$, i.e., between any two strictly comparable elements there is a third.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.8</span>Breadth $n$</summary>
+  <div class="body">
+    <div class="ex-statement">A lattice $\mathcal{L}$ has <em>breadth</em> $n$ if $L$ contains $n$ elements whose join is irredundant, but every join of $n+1$ elements of $L$ is redundant. (a) Give a first order sentence characterising lattices of breadth $n$ (for a fixed finite integer $n \ge 1$). (b) Show that the class of lattices of breadth $\le n$ is not a variety. (c) Show that a lattice $\mathcal{L}$ and its dual $\mathcal{L}^d$ have the same breadth.</div>
+    <p><strong>Solutions.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> "Breadth $\le n$" + "breadth $\ge n$":
+        <br>$\le n$: $\forall x_1, \dots, x_{n+1}\,\bigvee_i (x_i \le \bigvee_{j \neq i} x_j)$ — at least one is below the join of the others.
+        <br>$\ge n$: $\exists x_1, \dots, x_n\,\bigwedge_i (x_i \not\le \bigvee_{j \neq i} x_j)$ — irredundant join exists.
+        <br>Conjunction yields exactly breadth $n$.</li>
+      <li><strong>(b)</strong> Breadth $\le n$ is closed under sublattices and homomorphic images, but NOT under direct products: if $\mathcal{L}$ has breadth $n$, then $\mathcal{L} \times \mathcal{L}$ generally has breadth $\ge 2n$. Hence not a variety (varieties closed under P).</li>
+      <li><strong>(c)</strong> $\mathcal{L}^d$ swaps $\vee$ and $\wedge$. The dual notion of "breadth via joins" becomes "breadth via meets." But for $\mathcal{L}$, the same elements that give an irredundant <em>meet</em> can be permuted to give an irredundant <em>join</em> (and vice versa) — at least for finite breadth analysis. Concretely: in a finite lattice $\mathcal{L}$ with breadth $n$ via joins, the dual $\mathcal{L}^d$ has the same breadth $n$ via meets, which (in $\mathcal{L}^d$) is the breadth via joins. Hence $\mathcal{L}$ and $\mathcal{L}^d$ have the same breadth.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.9</span>$\mathbf{2} \times \mathbf{2}$ first-order sentence</summary>
+  <div class="body">
+    <div class="ex-statement">Give a first order sentence $\varphi$ such that a lattice $\mathcal{L}$ satisfies $\varphi$ if and only if $\mathcal{L}$ is isomorphic to the four element lattice $\mathbf{2} \times \mathbf{2}$.</div>
+    <p><strong>Solution.</strong> $\mathbf{2} \times \mathbf{2}$ is the diamond minus center: 4 elements $\{0, a, b, 1\}$ with $a, b$ incomparable, $0 < a, b < 1$. The sentence $\varphi$:</p>
+    <p>$\exists x_0, x_a, x_b, x_1$ such that:
+    <br>(i) $x_0 < x_a < x_1$ AND $x_0 < x_b < x_1$ (the structure)
+    <br>(ii) $x_a$ AND $x_b$ are incomparable: $x_a \not\le x_b$ AND $x_b \not\le x_a$
+    <br>(iii) $x_a \wedge x_b = x_0$ AND $x_a \vee x_b = x_1$ (joins/meets correct)
+    <br>(iv) $\forall y\,(y = x_0 \;\text{OR}\; y = x_a \;\text{OR}\; y = x_b \;\text{OR}\; y = x_1)$ (exactly 4 elements)</p>
+    <p>Conjunction of (i)-(iv) is a first-order sentence; $\mathcal{L} \models \varphi$ iff $\mathcal{L} \cong \mathbf{2} \times \mathbf{2}$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.10</span>Prove Theorem 7.11</summary>
+  <div class="body">
+    <div class="ex-statement">Prove Theorem 7.11: $(\mathbf{V} \vee \mathbf{W})_{si} = \mathbf{V}_{si} \cup \mathbf{W}_{si}$.</div>
+    <p><strong>Solution.</strong> ($\supseteq$) Trivially: $\mathbf{V}_{si} \subseteq (\mathbf{V} \vee \mathbf{W})_{si}$ since $\mathbf{V} \subseteq \mathbf{V} \vee \mathbf{W}$ and SI is downward-preserved. Similarly $\mathbf{W}_{si} \subseteq (\mathbf{V} \vee \mathbf{W})_{si}$.</p>
+    <p>($\subseteq$) Let $\mathcal{L}$ be SI in $\mathbf{V} \vee \mathbf{W}$. By Jónsson's Lemma (Theorem 7.7), $\mathcal{L} \in \text{HSP}_u(\mathbf{V} \cup \mathbf{W})$. Hence $\mathcal{L}$ is a homomorphic image of a sublattice of an ultraproduct $\prod \mathcal{L}_i / \equiv_U$ where each $\mathcal{L}_i \in \mathbf{V} \cup \mathbf{W}$.</p>
+    <p>Partition $I$: $A_V = \{i : \mathcal{L}_i \in \mathbf{V}\}$ and $A_W = \{i : \mathcal{L}_i \in \mathbf{W}\}$. Then $A_V \cup A_W = I \in U$. By Lemma 7.5(4), $A_V \in U$ or $A_W \in U$.</p>
+    <p>If $A_V \in U$: by Lemma 7.8, the ultraproduct restricts to $\prod_{i \in A_V} \mathcal{L}_i / \equiv_V$ where $V$ is an ultrafilter on $\mathfrak{P}(A_V)$. All $\mathcal{L}_i \in \mathbf{V}$ for $i \in A_V$, so the ultraproduct is in $\text{HSP}_u(\mathbf{V}) \subseteq \mathbf{V}$. Hence $\mathcal{L} \in \mathbf{V}$.</p>
+    <p>Similarly if $A_W \in U$, then $\mathcal{L} \in \mathbf{W}$. So $\mathcal{L} \in \mathbf{V}_{si} \cup \mathbf{W}_{si}$.  $\square$</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 7.11</span>Distributivity / modularity of ideal lattices</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that $\mathcal{I}(\mathcal{L})$ is distributive if and only if $\mathcal{L}$ is distributive. Similarly, show that $\mathcal{I}(\mathcal{L})$ is modular if and only if $\mathcal{L}$ is modular.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <p><strong>Distributive case.</strong></p>
+    <ul>
+      <li>($\Rightarrow$) Suppose $\mathcal{I}(\mathcal{L})$ is distributive. Embed $\mathcal{L}$ into $\mathcal{I}(\mathcal{L})$ via $x \mapsto\,\downarrow x$. Sublattices of distributive lattices are distributive. So $\mathcal{L}$ is distributive.</li>
+      <li>($\Leftarrow$) Suppose $\mathcal{L}$ is distributive. By Birkhoff (1934), $\mathcal{I}(\mathcal{L})$ satisfies every identity satisfied by $\mathcal{L}$ — in particular, the distributive law. So $\mathcal{I}(\mathcal{L})$ is distributive.</li>
+    </ul>
+    <p><strong>Modular case.</strong> Same arguments. ($\Rightarrow$): sublattices of modular lattices are modular. ($\Leftarrow$): Birkhoff's identity transfer.</p>
+    <p>The modular case has more bite: Birkhoff's theorem ($\mathcal{I}(\mathcal{L}) \in \text{HSP}(\mathcal{L})$) tells us $\mathcal{I}(\mathcal{L})$ inherits all equational properties of $\mathcal{L}$, but the Baker-Hales theorem (Theorem 7.12) says $\mathcal{I}(\mathcal{L}) \in \text{HSP}_u(\mathcal{L})$ — the much sharper containment. The distributivity / modularity of $\mathcal{I}(\mathcal{L})$ is one face of this transfer.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter 8 — Distributive Lattices</h2>
+  <div class="tagline">Chapter 8 specialises to the variety $\mathbf{D}$ of distributive lattices — the most tractable lattice class, with rich connections to topology, logic, and ordered-set theory.</div>
+
+  <p>Chapter 7 built the abstract machinery: $\Lambda$, varieties, Jónsson, finite-basis. Chapter 8 zooms in on $\mathbf{D}$, the variety of distributive lattices, and its representation theory.</p>
+
+  <p>Key results to anticipate: <strong>Birkhoff's theorem (1933)</strong> — every finite distributive lattice is isomorphic to the lattice of order-ideals of its poset of join-irreducibles; conversely, every poset $P$ gives a finite distributive lattice $\mathcal{O}(P)$. <strong>Stone duality (1936)</strong> — the duality between Boolean algebras and totally disconnected compact Hausdorff spaces (Stone spaces); the analogous Priestley duality for distributive lattices. <strong>Spec rings</strong> — the lattice of ideals in a commutative ring is distributive (the variety $\mathbf{D}$ contains all ideal lattices of rings). <strong>Free distributive lattices</strong> — $\mathcal{F}_D(n)$ has the well-known double-exponential growth in $n$.</p>
+
+  <p>Chapter 8 also develops the <strong>injective objects</strong> in $\mathbf{D}$, the <strong>completely meet-irreducibles</strong>, and the relationship between distributive lattices and order-preserving Boolean dualities. Distributive lattices are the bridge between algebra and topology — the chapter brings out this bridge explicitly.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter 8 uses: lattice morphisms, embeddings (Chs 1, 2); algebraic lattices, compactness (Ch 3); congruence theory + subdirect representation (Ch 5); free lattices, canonical form (Ch 6); the variety lattice $\Lambda$, Jónsson's Lemma, McKenzie's finite-basis theorem (this chapter). Distributive lattices form the simplest nontrivial variety, and the chapter pays back our investment in machinery with a complete and elegant theory.</p>
+  </div>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 7 · <a href="nation-companion-toc.html">Volume index</a></div>
+    <div><a href="nation-companion-ch06.html">← Chapter 6</a> · <a href="nation-companion-ch08.html">Chapter 8 →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('nation-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('nation-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

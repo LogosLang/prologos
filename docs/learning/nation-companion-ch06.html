@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 6 · Free Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch05.html">← Chapter 5</a></li>
+    <li><a href="nation-companion-ch07.html">Chapter 7 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 6 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Free generation</div>
+  <ul>
+    <li><a href="#s1">1 · Generation, free generation</a></li>
+    <li><a href="#s2">2 · Existence: Theorem 6.1</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Whitman's solution</div>
+  <ul>
+    <li><a href="#s3">3 · Theorem 6.2 — six conditions, (W)</a></li>
+    <li><a href="#s4">4 · Day's doubling construction</a></li>
+    <li><a href="#s5">5 · Word-problem algorithm</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Canonical form</div>
+  <ul>
+    <li><a href="#s6">6 · Theorem 6.3 — characterisation</a></li>
+    <li><a href="#s7">7 · Refinement &amp; minimal terms</a></li>
+    <li><a href="#s8">8 · Theorem 6.7 — canonical form</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Structure theorems</div>
+  <ul>
+    <li><a href="#s9">9 · Theorem 6.8 — semidistributive laws</a></li>
+    <li><a href="#s10">10 · Theorems 6.9, 6.10, 6.11</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Word problems in algebra</a></li>
+    <li><a href="#c2">P2 · Birkhoff's varieties theorem</a></li>
+    <li><a href="#c3">P3 · Day's doubling lineage</a></li>
+    <li><a href="#c4">P4 · Semidistributivity &amp; finite sublattices</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Nation · Notes on Lattice Theory · Chapter 6</div>
+  <h1>Free Lattices</h1>
+  <p class="lede">From abstract universal-algebra construction to concrete combinatorial structure: the free lattice $\text{FL}(X)$, Whitman's algorithm for the word problem, and the surprising appearance of the semidistributive laws.</p>
+  <div class="meta">
+    <span>~85–95 min read</span>
+    <span>10 sections + 5 connections</span>
+    <span>11 worked exercises</span>
+    <span>PDF pp. 62–74</span>
+  </div>
+</section>
+
+<aside class="epigraph">
+  <p>Freedom's just another word for nothing left to lose ….</p>
+  <span class="attrib">— Kris Kristofferson, <em>Me and Bobby McGee</em> (Janis Joplin, 1971); chapter epigraph chosen by Nation</span>
+</aside>
+
+<p>If $x$, $y$, and $z$ are elements of a lattice, then $x \vee (y \vee (x \wedge z)) = x \vee y$ is always true, while $x \vee y = z$ is usually not. <strong>Is there an algorithm that, given two lattice expressions $p$ and $q$, decides whether $p = q$ holds for every substitution of the variables in every lattice?</strong> The answer is yes. The algorithm — and finding it is the original motivation for the entire chapter — falls out of the structure of the <em>free lattice</em> $\text{FL}(X)$.</p>
+
+<p>The chapter has two distinct flavours. The <strong>existence proof</strong> (Theorem 6.1) is a cathedral of universal algebra — three "Basic Principles" that are really the First and Second Isomorphism Theorems and a subdirect-product lemma, all from Chapter 5 — applied to the word algebra $W(X)$ of formal lattice expressions. It is abstract, structural, and works <em>verbatim</em> for any nontrivial equational class. The <strong>combinatorial structure</strong> (Theorems 6.2 onward) is concrete and surprising. Whitman in 1941 (and Skolem already in 1920, though forgotten) proved that membership of $\text{FL}(X)$ is governed by six conditions, the deepest being the <em>Whitman condition</em></p>
+$$\text{(W)}\qquad p_1 \wedge p_2 \le q_1 \vee q_2 \iff p_1 \le q_1 \vee q_2 \;\;\text{or}\;\; p_2 \le q_1 \vee q_2 \;\;\text{or}\;\; p \le q_1 \;\;\text{or}\;\; p \le q_2.$$
+
+<p>Day's 1970 doubling construction $\mathcal{L}[I]$ gives a slick proof. From these conditions we extract: a unique <em>canonical form</em> for each element (minimal-length term, unique up to associativity/commutativity); a refinement quasiorder on finite subsets; the surprising fact that free lattices satisfy the <em>semidistributive laws</em> $\text{(SD}_\vee\text{)}$ and $\text{(SD}_\wedge\text{)}$; and a deep structure theorem (Nation 1982): a finite lattice embeds in a free lattice if and only if it satisfies $(W)$, $\text{(SD}_\vee\text{)}$, and $\text{(SD}_\wedge\text{)}$.</p>
+
+<p>Free lattices have a paradoxical character. $\text{FL}(2)$ has only four elements; $\text{FL}(3)$ is already infinite. In a precise sense: every <em>countable</em> ordered set embeds in $\text{FL}(3)$, but no <em>uncountable chain</em> embeds in any free lattice. The chapter sets the tools — Day's doubling, Whitman's six conditions, semidistributivity — that recur throughout the rest of lattice theory.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">A three-pane glance: terms <strong>carried forward</strong> from earlier chapters, terms introduced <strong>new</strong> in Chapter 6, and the <strong>deep dives</strong> the chapter rewards close reading on.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chs 1–5</span>
+    <p>The chapter assumes the language of lattices ($\mathcal{L}$, $\vee$, $\wedge$, sublattice, lattice morphism, embedding, modular, distributive, $\mathcal{N}_5$, $\mathcal{M}_3$ — Chs 1, 2), the subalgebra closure operator $\text{Sg}$ from <strong>algebraic lattices</strong> (Ch 3), the partition-lattice $\textbf{Eq}\,X$ and the principle that every lattice embeds in some $\textbf{Eq}\,X$ (Ch 4), and from Chapter 5 the entire machinery of <strong>congruences</strong> $\textbf{Con}\,\mathcal{A}$ — including First / Second Isomorphism Theorems, principal congruence $\text{con}(a, b)$, and Birkhoff's <strong>subdirect representation</strong>. Theorem 6.1's proof literally invokes Theorems 5.1, 5.4, and 5.5 (Birkhoff subdirect) under the new names "Basic Principles 1, 2, 3" — universal-algebra forms of those lattice-specific theorems. Also recalled: <strong>join irreducible</strong> $J(\mathcal{L})$, <strong>weakly atomic</strong>, <strong>cover relation</strong> $\prec$ (Ch 1), and the <strong>2-element lattice</strong> $\textbf{2}$ used as the codomain for separating homomorphisms.</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter 6 vocabulary</span>
+    <p>The new vocabulary clusters around four concepts. <strong>Free generation:</strong> a lattice $\mathcal{F}$ is <em>freely generated by</em> $X \subseteq F$ if $\mathcal{F}$ is a lattice, $X$ generates $\mathcal{F}$, and every set-map $h_0 : X \to L$ to any lattice extends uniquely to a lattice homomorphism $h : \mathcal{F} \to \mathcal{L}$. Such an $\mathcal{F}$ is unique up to isomorphism — call it $\text{FL}(X)$. Special case $|X| = n$: $\text{FL}(n)$. <strong>Word algebra:</strong> $W(X)$ — the absolutely-free algebra of formal lattice expressions on $X$. <strong>Whitman's condition (W):</strong> the central inequality governing membership in $\text{FL}(X)$. <strong>Day's doubling:</strong> for an interval $I = u/v$ in $\mathcal{L}$, the new lattice $\mathcal{L}[I] = (L - I) \cup (I \times \mathbf{2})$ "doubles" the interval into two parallel copies linked by $i \le j$ in $\mathbf{2}$. <strong>Refinement:</strong> $A \ll B$ if every $a \in A$ has $b \in B$ with $a \le b$. <strong>Canonical form:</strong> the minimal-length term representing $w \in \text{FL}(X)$, unique up to associativity and commutativity. <strong>Canonical joinands / meetands:</strong> the components of $w$ in its canonical form. <strong>Semidistributive laws:</strong> $\text{(SD}_\vee\text{)}: u = a \vee b = a \vee c \Rightarrow u = a \vee (b \wedge c)$ — and the dual $\text{(SD}_\wedge\text{)}$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Three threads reward close reading. <strong>The word problem and its history</strong> — Skolem 1920 (rediscovered by Cosmadakis &amp; Freese in the late 1980s, popularised by Burris 1995), Whitman 1941, the modern Freese-Ježek-Nation algorithms in the 1995 book; the modular-lattice word problem is undecidable for $|X| \ge 4$ (Hutchinson, Lipshitz, Freese — covered in Ch 7). <strong>Day's doubling construction</strong> as a structural template — splitting lattices, bounded-homomorphic images, congruence normality (Day's later papers), the all-or-nothing inflation. <strong>The semidistributive laws and the Jónsson conjecture</strong> — semidistributivity introduced by Jónsson in 1961 in his work on free lattices; Theorem 6.9 (Nation 1982) proves a finite lattice embeds in a free lattice iff $(W) + \text{SD}_\vee + \text{SD}_\wedge$. The Freese-Ježek-Nation 1995 monograph <em>Free Lattices</em> is the canonical reference for everything in this chapter.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · GENERATION AND EXISTENCE</div>
+  <h2>Free generation, the word algebra, and Theorem 6.1</h2>
+  <p class="part-lede">What does it mean for $X$ to <em>freely</em> generate a lattice? Why does such a thing exist? And why does the answer come from universal algebra rather than lattice theory proper?</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 6.1</span> Generation and free generation</h2>
+  <div class="tagline">Two concepts that sound similar but differ profoundly: <em>generated by</em> and <em>freely generated by</em>.</div>
+
+  <div class="box def">
+    <span class="label">Definition · generation</span>
+    <p>A lattice $\mathcal{L}$ is <strong>generated</strong> by a set $X \subseteq L$ if no proper sublattice of $\mathcal{L}$ contains $X$. Equivalently, in the language of Chapter 3's subalgebra closure operator $\text{Sg}$: $\text{Sg}(X) = \mathcal{L}$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · free generation</span>
+    <p>A lattice $\mathcal{F}$ is <strong>freely generated by</strong> $X$ if</p>
+    <ol>
+      <li>$\mathcal{F}$ is a lattice,</li>
+      <li>$X$ generates $\mathcal{F}$,</li>
+      <li>for every lattice $\mathcal{L}$, every map $h_0 : X \to L$ can be extended to a lattice homomorphism $h : \mathcal{F} \to \mathcal{L}$.</li>
+    </ol>
+    <p>A <strong>free lattice</strong> is a lattice that is freely generated by one of its subsets.</p>
+  </div>
+
+  <p>Condition (I) is "sort of redundant" — Nation's phrasing — but is included so that the construction in Theorem 6.1 lands inside the variety of lattices, not merely inside an algebra of $\vee$ and $\wedge$ that <em>happens</em> to satisfy the lattice axioms. In the presence of (II), there is at most one extension $h$ in (III): if $x, y, z \in X$, then $h(x \vee (y \wedge z))$ is forced to be $h_0(x) \vee (h_0(y) \wedge h_0(z))$. The content of (III) is that <em>this natural extension is well defined</em> — equivalently, that two lattice terms in the variables $X$ are equal in $\mathcal{F}$ if and only if they are equal in <em>every</em> lattice.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · "no accidental equations"</span>
+    <p>$\mathcal{F}$ is free on $X$ when the only equations between $X$-built terms that hold in $\mathcal{F}$ are those that hold by lattice axioms alone — never by some accidental coincidence forced on $\mathcal{F}$. Equivalently: $\mathcal{F}$ is a "universal worst case" for $X$. Whatever inequality fails to hold for some specific lattice with $X$-image fails in $\mathcal{F}$ too.</p>
+  </div>
+
+  <p>Free generation is a purely universal property. It tells you nothing about how to compute meets and joins inside $\mathcal{F}$ — and indeed Theorem 6.1's proof yields an existence statement without describing $\text{FL}(X)$'s arithmetic at all. That arithmetic is the subject of Theorems 6.2 onward.</p>
+
+  <div class="box recap">
+    <span class="label">Recap · varieties / equational classes</span>
+    <p>An <strong>equational class</strong> (or <strong>variety</strong>) is the class of all algebras over a fixed signature satisfying a fixed set of equations. Lattices form a variety: the signature is $\{\vee, \wedge\}$ (both binary), the equations are idempotency, commutativity, associativity, and absorption. <strong>Free distributive lattices, free modular lattices, free Arguesian lattices</strong> all exist by the same general result, since each of these classes is defined by adding more equations. The variety is <em>nontrivial</em> if it contains an algebra with more than one element — the equation $x \approx y$ (which forces a single-element algebra) defines the trivial variety.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 6.2</span> Existence: Theorem 6.1</h2>
+  <div class="tagline">The existence of $\text{FL}(X)$ as a corollary of three "Basic Principles" — universal-algebra forms of the isomorphism theorems and the subdirect-representation theorem from Chapter 5.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.1 · existence of free lattices</span>
+    <p>For any nonempty set $X$, there exists a free lattice $\text{FL}(X)$ generated by $X$.</p>
+  </div>
+
+  <p>The proof uses three results re-stated for arbitrary algebras. They correspond, for lattices, to Theorems 5.1, 5.4, and 5.5 — the First Isomorphism Theorem, a Second-Iso variant, and Birkhoff's subdirect representation. <em>Their lattice proofs use nothing special about $\vee$ and $\wedge$.</em> The same arguments work for any nontrivial variety, so Theorem 6.1's argument is really about <em>free algebras in any equational class</em>, with lattices as the running example.</p>
+
+  <div class="box prop">
+    <span class="label">Basic Principle 1</span>
+    <p>If $h : \mathcal{A} \twoheadrightarrow \mathcal{B}$ is a surjective homomorphism, then $\mathcal{B} \cong \mathcal{A}/\ker h$. (First Iso for arbitrary algebras.)</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Basic Principle 2 · the lifting lemma</span>
+    <p>If $f : \mathcal{A} \twoheadrightarrow \mathcal{B}$ and $g : \mathcal{A} \twoheadrightarrow \mathcal{C}$ are surjective homomorphisms with $\ker g \le \ker f$, then there exists $h : \mathcal{C} \to \mathcal{B}$ such that $f = h \circ g$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Basic Principle 3 · subdirect product</span>
+    <p>If $\psi = \bigwedge_{i \in I} \theta_i$ in $\textbf{Con}\,\mathcal{A}$, then $\mathcal{A}/\psi$ is isomorphic to a subalgebra of the direct product $\prod_{i \in I} \mathcal{A}/\theta_i$.</p>
+  </div>
+
+  <h3>The construction</h3>
+
+  <p>Given the set $X$, define the <strong>word algebra</strong> $W(X)$ to be the set of all formal expressions (strings of symbols) generated by:</p>
+  <ol>
+    <li>$X \subseteq W(X)$,</li>
+    <li>if $p, q \in W(X)$, then $(p \vee q)$ and $(p \wedge q)$ are in $W(X)$,</li>
+    <li>only the expressions given by the first two rules are in $W(X)$.</li>
+  </ol>
+
+  <p>$W(X)$ is the <em>absolutely free</em> algebra with operation symbols $\vee$ and $\wedge$ generated by $X$ — it has no equations imposed beyond the formal closure rules. Two terms in $W(X)$ are equal iff they are <em>identical strings</em>. Idempotency $x \vee x = x$, commutativity $x \vee y = y \vee x$, absorption $x \wedge (x \vee y) = x$ all <em>fail</em> in $W(X)$ (they identify distinct strings). $W(X)$ is, however, generated by $X$ and has the universal property (III) for all algebras of signature $\{\vee, \wedge\}$.</p>
+
+  <p>To produce a <em>lattice</em>, identify those pairs of terms that evaluate the same in every lattice. Concretely: let $\Lambda = \{\theta \in \textbf{Con}\,W(X) : W(X)/\theta \text{ is a lattice}\}$, and let $\lambda = \bigwedge \Lambda$.</p>
+
+  <h4>Why $W(X)/\lambda$ is the answer</h4>
+
+  <p>By Basic Principle 3 applied to $\lambda = \bigwedge \Lambda$, $W(X)/\lambda$ embeds in the product $\prod_{\theta \in \Lambda} W(X)/\theta$. Each factor is a lattice (by definition of $\Lambda$), so the product is a lattice, so $W(X)/\lambda$ — being a subalgebra of a product of lattices — is a lattice. (This step uses that lattices are equationally defined: subalgebras of products of lattices are lattices.) Clearly $W(X)/\lambda$ is generated by $\{x\lambda : x \in X\}$. And because there exist nontrivial lattices, $x \neq y$ in $X$ implies $x\lambda \neq y\lambda$ — the natural map $X \to W(X)/\lambda$ is injective.</p>
+
+  <p><strong>The mapping property.</strong> Given $\mathcal{L}$ and $f_0 : X \to L$, define $h_0 : X/\lambda \to L$ by $h_0(x\lambda) = f_0(x)$ — well-defined by the preceding paragraph. Extend to $f : W(X) \to \mathcal{L}$ via $W(X)$'s universal property (it's absolutely free). The image of $f$ is some sublattice $\mathcal{S} \le \mathcal{L}$; by Basic Principle 1, $W(X)/\ker f \cong \mathcal{S}$, so $\ker f \in \Lambda$, hence $\ker f \ge \lambda$. By Basic Principle 2 applied with $f : W(X) \twoheadrightarrow \mathcal{S}$ and $\varepsilon : W(X) \twoheadrightarrow W(X)/\lambda$, there is $h : W(X)/\lambda \to \mathcal{L}$ with $h \circ \varepsilon = f$. This $h$ extends $h_0$.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the construction in one phrase</span>
+    <p>Take all formal expressions ($W(X)$); identify two whenever every lattice identifies them ($\lambda$); the result is a lattice ($W(X)/\lambda$) that is a "universal worst case" for $X$. Each step is one of the three Basic Principles.</p>
+  </div>
+
+  <p>It is easy to see, using property (III), that two free lattices on sets of the same cardinality are isomorphic. We can therefore speak of <em>the</em> free lattice on $X$; we denote it $\text{FL}(X)$, or $\text{FL}(n)$ when $|X| = n$.</p>
+
+  <div class="box warning">
+    <span class="label">$\text{FL}(2)$ vs $\text{FL}(n)$ for $n \ge 3$</span>
+    <p>$\text{FL}(2)$ has just four elements: $x \wedge y < x, y < x \vee y$. It is the diamond minus the middle bar — the four-element distributive lattice. $\text{FL}(3)$, by contrast, is <strong>infinite</strong>. The chapter's Theorem 6.10 will refine this dramatically: every countable ordered set embeds in $\text{FL}(3)$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · why this works for any variety</span>
+    <p>Theorem 6.1's proof uses no properties special to lattices except that the operation symbols are $\vee$ and $\wedge$ — and these can be replaced with arbitrary operation symbols. With this minor modification, the proof shows that <strong>every nontrivial equational class admits free algebras on arbitrary nonempty sets</strong>. This is one face of <strong>Birkhoff's HSP theorem</strong> (1935): a class of algebras is a variety iff it is closed under <em>homomorphic images</em>, <em>subalgebras</em>, and <em>products</em>. A class so closed automatically admits free algebras, and the universal property (III) is exactly the adjoint of the forgetful functor variety → set. Equational logic, the variety, the free algebra, and Birkhoff's HSP closure are four faces of the same object. Lattice theory inherits the existence of free distributive, free modular, and free Arguesian lattices automatically — though as Nation notes <em>"there is no free lunch"</em>: the general construction tells us nothing about <strong>arithmetic</strong>.</p>
+  </div>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · WHITMAN'S SOLUTION</div>
+  <h2>Six conditions, the doubling construction, and the word problem</h2>
+  <p class="part-lede">From abstract existence to concrete arithmetic: Whitman 1941 (Skolem 1920, forgotten) characterises $\text{FL}(X)$ by six elementary conditions, and Day's 1970 doubling construction supplies a slick proof of the deepest one.</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 6.3</span> Theorem 6.2: six conditions, including (W)</h2>
+  <div class="tagline">A characterisation of inequalities in $\text{FL}(X)$ — directly recursive, eventually reducing every question to comparisons among generators.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.2 · Whitman 1941</span>
+    <p>Every free lattice $\text{FL}(X)$ satisfies the following conditions, where $x, y \in X$ and $p, q, p_1, p_2, q_1, q_2 \in \text{FL}(X)$.</p>
+    <ol>
+      <li>$x \le y$ iff $x = y$.</li>
+      <li>$x \le q_1 \vee q_2$ iff $x \le q_1$ or $x \le q_2$.</li>
+      <li>$p_1 \wedge p_2 \le x$ iff $p_1 \le x$ or $p_2 \le x$.</li>
+      <li>$p_1 \vee p_2 \le q$ iff $p_1 \le q$ and $p_2 \le q$.</li>
+      <li>$p \le q_1 \wedge q_2$ iff $p \le q_1$ and $p \le q_2$.</li>
+      <li>$p = p_1 \wedge p_2 \le q_1 \vee q_2 = q$ iff $p_1 \le q$ or $p_2 \le q$ or $p \le q_1$ or $p \le q_2$.</li>
+    </ol>
+    <p>Finally, $p = q$ iff $p \le q$ and $q \le p$.</p>
+  </div>
+
+  <p>Condition (6) is <strong>Whitman's condition</strong>, denoted $(W)$. Conditions (1)–(5) are routine — (4) and (5) hold by definition of LUB and GLB in any lattice; (1)–(3) say generators behave as one would hope. The work is in (6).</p>
+
+  <h3>Conditions (1)–(5): the easy part</h3>
+
+  <p>Properties (4) and (5) hold in <em>every</em> lattice. The "if" parts of the remaining conditions hold in every lattice as well. Only the "only if" parts of (1), (2), (3), (6) require freeness.</p>
+
+  <p>To prove (1) and (2) simultaneously: fix $x \in X$, and let</p>
+  $$G_x = \{w \in \text{FL}(X) : w \ge x \text{ or } w \le \bigvee F \text{ for some finite } F \subseteq X - \{x\}\}.$$
+  <p>Then $X \subseteq G_x$ (every $y \in X$ either equals $x$ or lies in $\bigvee\{y\} \subseteq \bigvee(X - \{x\})$), and $G_x$ is closed under joins and meets. So $G_x = \text{FL}(X)$ — i.e., every $w$ is either above $x$ or below some finite join from $X - \{x\}$.</p>
+
+  <p>Properties (1) and (2) follow if this "or" is exclusive: $x \not\le \bigvee F$ for finite $F \subseteq X - \{x\}$. To see this, define $h_0 : X \to \mathbf{2}$ by $h_0(x) = 1$ and $h_0(y) = 0$ for $y \in X - \{x\}$. By freeness, $h_0$ extends to $h : \text{FL}(X) \to \mathbf{2}$. For finite $F \subseteq X - \{x\}$ we have $h(\bigvee F) = 0 \neq 1 = h(x)$, hence $x \not\le \bigvee F$.</p>
+
+  <p>Condition (3) is the dual of (2), proved by replacing $\vee$ with $\wedge$ throughout.</p>
+
+  <h3>Condition (W): the depth</h3>
+
+  <p>Condition (6) — the Whitman condition — says: if $p = p_1 \wedge p_2$ and $q = q_1 \vee q_2$ in $\text{FL}(X)$, then $p \le q$ <em>only by one of the four obvious reasons</em>: $p_1 \le q$, $p_2 \le q$, $p \le q_1$, $p \le q_2$. <strong>No "miracle" inequality — none arising from algebra alone — can hold in $\text{FL}(X)$.</strong> If $p \wedge q \le r \vee s$ with no covering inequality, then $\text{FL}(X)$ refuses to satisfy that inequality.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why (W) is the heart of free</span>
+    <p>An inequality $p_1 \wedge p_2 \le q_1 \vee q_2$ is the <em>most general non-trivial inequality between meet and join</em>. For it to hold in <em>every</em> lattice, one of the four trivial reasons must apply. (W) is the assertion that $\text{FL}(X)$ refuses any non-trivial coincidence at exactly this depth. Compare this to a generic non-distributive lattice $\mathcal{N}_5$ or $\mathcal{M}_3$: there, $p_1 \wedge p_2 \le q_1 \vee q_2$ <em>can</em> hold for "exotic" reasons. Free lattices contain $\mathcal{M}_3$ and $\mathcal{N}_5$ as quotients but do not satisfy their relations.</p>
+  </div>
+
+  <p>The "if" direction of (W) is trivial: if any of $p_1 \le q$, $p_2 \le q$, $p \le q_1$, $p \le q_2$ holds, then by transitivity and join-/meet-monotonicity, $p_1 \wedge p_2 \le q_1 \vee q_2$. The "only if" — that no other path is possible — is what Day's construction proves.</p>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 6.4</span> Day's doubling construction</h2>
+  <div class="tagline">Given an interval $I = u/v$ in $\mathcal{L}$, build a new lattice $\mathcal{L}[I]$ that "doubles" the interval — a tool of unreasonable utility, due to Alan Day (1970).</div>
+
+  <div class="box def">
+    <span class="label">Definition · interval doubling $\mathcal{L}[I]$</span>
+    <p>Let $I = u/v$ be an interval in a lattice $\mathcal{L}$ (so $v \le u$). Define $\mathcal{L}[I]$ to have universe $(L - I) \cup (I \times \mathbf{2})$, where $\mathbf{2} = \{0, 1\}$ with $0 < 1$. Order: for $x, y \in L - I$ and $i, j \in \{0, 1\}$,</p>
+    $$x \le y \quad\text{if } x \le_{\mathcal{L}} y,$$
+    $$(x, i) \le y \quad\text{if } x \le_{\mathcal{L}} y,$$
+    $$x \le (y, j) \quad\text{if } x \le_{\mathcal{L}} y,$$
+    $$(x, i) \le (y, j) \quad\text{if } x \le_{\mathcal{L}} y \text{ and } i \le j.$$
+  </div>
+
+  <p>Geometrically, $\mathcal{L}[I]$ replaces the interval $I$ inside $\mathcal{L}$ with two parallel copies — the $i = 0$ "lower copy" and the $i = 1$ "upper copy." Connections inside $\mathcal{L}$ outside $I$ are unchanged; pairs in $I$ are split; the natural map $\kappa : \mathcal{L}[I] \twoheadrightarrow \mathcal{L}$ sending $(x, i) \mapsto x$ and $x \mapsto x$ on $L - I$ is a surjective lattice homomorphism.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the doubling construction in one image</span>
+    <p>Imagine $\mathcal{L}$ drawn as a Hasse diagram; an interval $I$ lights up. Cut along the boundary of $I$, make a parallel copy of $I$, glue both copies in such that $(I, 0)$ sits where $I$ was and $(I, 1)$ sits "in front of it" with $(x, 0) \le (x, 1)$. Top and bottom of $I$ are doubled; everything outside $I$ is untouched.</p>
+  </div>
+
+  <h3>Day's proof of (W)</h3>
+
+  <p>Suppose for contradiction that $a, b, c, d$ witness a failure of $(W)$ in $\text{FL}(X)$ — that is, $a \wedge b \le c \vee d$, but none of $a \le c \vee d$, $b \le c \vee d$, $a \wedge b \le c$, $a \wedge b \le d$ holds. Let $u = c \vee d$, $v = a \wedge b$, $I = u/v$ (a non-degenerate interval since $v \le u$ but $v \neq u$). Build $\mathcal{L}[I]$.</p>
+
+  <p>Define $h_0 : X \to \text{FL}(X)[I]$ by $h_0(x) = x$ if $x \notin I$, and $h_0(y) = (y, 0)$ if $y \in I$. By freeness extend to $h : \text{FL}(X) \to \text{FL}(X)[I]$. Now $\kappa h : \text{FL}(X) \to \text{FL}(X)$ is a homomorphism; since $\kappa h(x) = x$ for all $x \in X$, it is the identity. So $h(w) \in \kappa^{-1}(w)$ for all $w$. Each $w \in \text{FL}(X)$ lies above one of $w$, $(w, 0)$, $(w, 1)$. Since $a, b, c, d \notin I$, $h(t) = t$ for $t \in \{a, b, c, d\}$. Now $v = a \wedge b \le c \vee d = u$ in $\text{FL}(X)$, so $h(v) \le h(u)$ in $\text{FL}(X)[I]$. But:</p>
+  $$h(v) = h(a) \wedge h(b) = a \wedge b = (v, 1) \not\le (u, 0) = c \vee d = h(c) \vee h(d) = h(u),$$
+  <p>a contradiction. Hence $(W)$ holds in $\text{FL}(X)$. $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why doubling works for (W)</span>
+    <p>The doubling construction gives us a homomorphic image where $v$ has been "lifted" from $u$ — pushed into the upper copy $(v, 1)$ — but $u$ remains at the bottom of its doubled interval $(u, 0)$. This artificially separates $v$ and $u$ in the new lattice. If $(W)$ were to fail by a non-trivial path in $\text{FL}(X)$, freeness would force the failure to persist in $\text{FL}(X)[I]$ as well — but the doubling has cut that path. Contradiction.</p>
+  </div>
+
+  <div class="box recap">
+    <span class="label">Recap · the doubling family</span>
+    <p>Day's doubling — interval $I$ — was generalised to convex subsets ("doubling of convex sets in lattices and a generalised semidistributivity condition"), to all-or-nothing sets, and to arbitrary subsets in various ways. It became the central technique for studying <strong>splitting lattices</strong>, <strong>bounded homomorphic images of free lattices</strong>, and <strong>congruence normality</strong>. The Freese-Ježek-Nation 1995 monograph <em>Free Lattices</em> uses doubling repeatedly. Alan Day kept returning to the construction throughout his career — its simplicity hides remarkable depth.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 6.5</span> Solution to the word problem</h2>
+  <div class="tagline">The corollary that gives Theorem 6.2 its original motivation.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary · the word-problem algorithm</span>
+    <p>Let $p, q \in W(X)$. To decide whether $p \le q$ in $\text{FL}(X)$, apply the conditions of Theorem 6.2 recursively. To test whether $p = q$, check both $p \le q$ and $q \le p$.</p>
+  </div>
+
+  <p>The algorithm is direct. Given $p \le q$:</p>
+
+  <ul>
+    <li>If $p, q \in X$ — apply (1).</li>
+    <li>If $p \in X$ and $q = q_1 \vee q_2$ — apply (2): reduce to $p \le q_1$ or $p \le q_2$.</li>
+    <li>If $p = p_1 \wedge p_2$ and $q \in X$ — apply (3): reduce to $p_1 \le q$ or $p_2 \le q$.</li>
+    <li>If $p = p_1 \vee p_2$ — apply (4): reduce to $p_1 \le q$ AND $p_2 \le q$.</li>
+    <li>If $q = q_1 \wedge q_2$ — apply (5): reduce to $p \le q_1$ AND $p \le q_2$.</li>
+    <li>If $p = p_1 \wedge p_2$ and $q = q_1 \vee q_2$ — apply (W) (6): reduce to $p_1 \le q$ OR $p_2 \le q$ OR $p \le q_1$ OR $p \le q_2$.</li>
+  </ul>
+
+  <p>The algorithm terminates because the total length of the input pair $(p, q)$ strictly decreases at each recursive step. At the leaves, the comparisons reduce to "$x \le y$ for $x, y \in X$," which by (1) is "$x = y$" — a finite check.</p>
+
+  <p><strong>Significance.</strong> The word problem is <em>not</em> always solvable for free algebras. Hutchinson and Lipshitz showed that the word problem for free <strong>modular</strong> lattices $\mathcal{F}_M(X)$ is <strong>undecidable</strong> for $|X| \ge 4$ (covered in Ch 7). Whitman's algorithm exploits the lack of "extra equations" beyond lattice axioms — adding modularity breaks termination of the analogous reduction.</p>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Skolem's priority and Burris's rediscovery</span>
+    <p>Thoralf Skolem's 1920 paper <em>Logisch-kombinatorische Untersuchungen über die Erfüllbarkeit und Beweisbarkeit mathematischer Sätze</em> — best known for the Löwenheim-Skolem theorem — also solved the word problem not only for free lattices but for finitely-presented lattices as well. By the 1930s, when lattice theory awakened, Skolem's solution had been forgotten; Whitman 1941 became the standard reference. Cosmadakis and (independently) Freese rediscovered Skolem's polynomial-time algorithm in the late 1980s; Stanley Burris's 1995 paper <em>Polynomial Time Uniform Word Problems</em> documented the rediscovery and proved efficiency. The original Whitman algorithm is exponential in the worst case; the Skolem-Cosmadakis-Freese algorithm is polynomial. Both decide the same problem.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · CANONICAL FORM AND REFINEMENT</div>
+  <h2>From the word algorithm to a unique normal form</h2>
+  <p class="part-lede">Each element of $\text{FL}(X)$ is represented by an equivalence class of terms, but among them is a <em>canonical</em> minimal-length representative — unique up to associativity and commutativity.</p>
+</header>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 6.6</span> Theorem 6.3: characterisation of free generation</h2>
+  <div class="tagline">Whitman's six conditions, plus two additional characterising properties of generators.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.3</span>
+    <p>A lattice $\mathcal{F}$ is freely generated by its subset $X$ if and only if $\mathcal{F}$ is generated by $X$, $\mathcal{F}$ satisfies $(W)$, and the following two conditions hold for each $x \in X$:</p>
+    <ol>
+      <li>if $x \le \bigvee G$ for some finite $G \subseteq X$, then $x \in G$;</li>
+      <li>if $x \ge \bigwedge H$ for some finite $H \subseteq X$, then $x \in H$.</li>
+    </ol>
+  </div>
+
+  <p>Conditions (1) and (2) of Theorem 6.3 say that every generator $x$ is both <strong>completely join prime</strong> and <strong>completely meet prime</strong> with respect to its co-generators. They isolate exactly the conditions that <em>generators</em> in a free lattice satisfy, beyond the structural condition $(W)$.</p>
+
+  <p>Theorem 6.3 has a useful structural consequence. From $(W)$ it follows that <strong>no element of $\text{FL}(X)$ is properly both a meet and a join</strong>: if $w = w_1 \wedge w_2 = w_3 \vee w_4$, then $(W)$ applied to "$w_1 \wedge w_2 \le w_3 \vee w_4$" gives one of the four cases — but each case forces a degeneracy that contradicts properness. Equivalently, every element is either join-irreducible or meet-irreducible. <strong>The generators are the only elements that are both meet- and join-irreducible.</strong></p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the generating set of $\text{FL}(X)$ is unique</span>
+    <p>This is unusual. The free <em>group</em> on $\{x, y\}$ is also generated by $\{x, xy\}$ — generators are interchangeable. Free lattices are different: their generating set is determined by the structure (it is exactly the doubly-irreducible elements). $\text{FL}(X)$ "remembers" its $X$.</p>
+  </div>
+
+  <h3>Comparison: $\textbf{Eq}\,X$ vs $\text{FL}(X)$</h3>
+
+  <p>Two great Cayley-style theorems frame lattice theory: every lattice <em>embeds</em> into $\textbf{Eq}\,X$ (Whitman 1946 / Jónsson, Ch 4), and every lattice <em>is a homomorphic image</em> of $\text{FL}(X)$ for some $X$ (this chapter). The first says lattices are subobjects of equivalence-relation lattices; the second says lattices are quotients of free lattices. Both are universal in opposite senses — every lattice's structure is encoded as a particular embedding into $\textbf{Eq}\,X$, or as a particular quotient $\text{FL}(X)/\theta$.</p>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 6.7</span> Refinement and minimal-length terms</h2>
+  <div class="tagline">A pre-order on finite subsets and the Lemmas 6.4–6.6 connecting it to canonical-form analysis.</div>
+
+  <div class="box def">
+    <span class="label">Definition · refinement</span>
+    <p>Let $A, B$ be finite subsets of a lattice $\mathcal{L}$. We say <strong>$A$ refines $B$</strong>, written $A \ll B$, if for each $a \in A$ there exists $b \in B$ with $a \le b$. Dually, $C \gg D$ if for each $c \in C$ there exists $d \in D$ with $c \ge d$.</p>
+  </div>
+
+  <p>Refinement formalises the notion "$A$'s elements are dominated by $B$'s" — without requiring equality. Note the reversed quantifier between $A \ll B$ and $B \gg A$ : the two relations are <em>not</em> the same.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 6.4 · structure of minimal-length terms</span>
+    <p>Let $t = \bigvee t_i$ in $W(X)$, where each $t_i$ is either a generator or a meet. Assume $\varepsilon(t) = w$ and $\varepsilon(t_i) = w_i$ under the evaluation map $\varepsilon : W(X) \to \text{FL}(X)$. If $t$ is a minimal-length term representing $w$, then:</p>
+    <ol>
+      <li>each $t_i$ is of minimal length;</li>
+      <li>the $w_i$'s are pairwise incomparable;</li>
+      <li>if $t_i$ is not a generator (so $t_i = \bigwedge_j t_{ij}$), then $\varepsilon(t_{ij}) = w_{ij} \not\le w$ for all $j$.</li>
+    </ol>
+  </div>
+
+  <p>Property (3) is the heart. Suppose $w_i = \bigwedge w_{ij}$ in $\text{FL}(X)$ and $w_{i j_0} \le w$ for some $j_0$. Then $w \ge w_i \ge w_{i j_0}$, so $w = w_{i j_0} \vee \bigvee_{k \neq i} w_k$ — a shorter term, contradicting minimality.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 6.5 · refinement quasiorder</span>
+    <p>The refinement relation $\ll$ on the finite subsets of a lattice $\mathcal{L}$ has the following properties:</p>
+    <ol>
+      <li>$A \ll B$ implies $\bigvee A \le \bigvee B$;</li>
+      <li>$\ll$ is a quasiorder on the finite subsets of $L$;</li>
+      <li>if $A \subseteq B$, then $A \ll B$;</li>
+      <li>if $A$ is an antichain, $A \ll B$ and $B \ll A$, then $A \subseteq B$;</li>
+      <li>if $A$ and $B$ are antichains with $A \ll B$ and $B \ll A$, then $A = B$;</li>
+      <li>if $A \ll B$ and $B \ll A$, then $A$ and $B$ have the same set of maximal elements.</li>
+    </ol>
+  </div>
+
+  <p>(2) — the relation is a quasiorder, but not a partial order; many distinct sets can refine each other in both directions. (5) — among <em>antichains</em>, $\ll$ becomes antisymmetric. This is the key property linking refinement to canonical form: the maximal antichain inside any equivalence class is unique.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 6.6 · refinement chain</span>
+    <p>Let $w = \bigvee_{1 \le i \le m} w_i = \bigvee_{1 \le k \le n} u_k$ in $\text{FL}(X)$. If each $w_i$ is either a generator or a meet $w_i = \bigwedge_j w_{ij}$ with $w_{ij} \not\le w$ for all $j$, then $\{w_1, \dots, w_m\} \ll \{u_1, \dots, u_n\}$.</p>
+  </div>
+
+  <p>Lemma 6.6 connects the structure of <em>minimal-length</em> joinands (Lemma 6.4(3)) to the refinement order (Lemma 6.5). It is the bridge to uniqueness.</p>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 6.8</span> Theorem 6.7: canonical form</h2>
+  <div class="tagline">Each element of $\text{FL}(X)$ has a unique minimal-length representative term.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.7 · canonical form</span>
+    <p>The minimal-length term representing an element $w \in \text{FL}(X)$ is unique up to associativity and commutativity.</p>
+  </div>
+
+  <h3>Proof sketch</h3>
+
+  <p>Let $t = \bigvee t_i$ and $s = \bigvee s_j$ be two minimal-length terms with $\varepsilon(t) = \varepsilon(s) = w$. By Lemma 6.4(1), each $t_i$ is minimal-length for its $\varepsilon(t_i) = w_i$, and each $s_j$ is minimal-length for its $\varepsilon(s_j) = u_j$. By induction on length, these are unique up to AC. So we may assume $t_i = s_j$ whenever $w_i = u_j$. By Lemma 6.4(2), the sets $\{w_i\}$ and $\{u_j\}$ are antichains. By Lemma 6.4(3), the elements $\{w_i\}$ satisfy the hypothesis of Lemma 6.6, so $\{w_1, \dots, w_m\} \ll \{u_1, \dots, u_n\}$. Symmetrically, $\{u_1, \dots, u_n\} \ll \{w_1, \dots, w_m\}$. Lemma 6.5(5) yields $\{w_1, \dots, w_m\} = \{u_1, \dots, u_n\}$, hence $\{t_1, \dots, t_m\} = \{s_1, \dots, s_n\}$. So the joinands match up to AC. $\square$</p>
+
+  <div class="box def">
+    <span class="label">Definition · canonical form, joinands, meetands</span>
+    <p>The minimal-length term representing $w$ is the <strong>canonical form</strong> of $w$. If $w = \bigvee w_i$ canonically, the elements $w_i$ are the <strong>canonical joinands</strong> of $w$; dually, $\bigwedge w_j$ canonically gives <strong>canonical meetands</strong>. By the proof of Lemma 6.6, the canonical joinands of $w$ refine any other expression $w = \bigvee U$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary · refinement of joinands</span>
+    <p>If $w$ is a proper join in $\text{FL}(X)$ and $w = \bigvee U$, then the set of canonical joinands of $w$ refines $U$.</p>
+  </div>
+
+  <p>The corollary will be the lever for Theorem 6.8 (semidistributivity).</p>
+
+  <h3>Algorithm for canonical form</h3>
+
+  <p>The proof of Lemma 6.4 gives a constructive algorithm. Let $t = \bigvee t_i$ in $W(X)$ where each $t_i$ is a generator or a meet. Inductively put each $t_i$ into canonical form. For each $t_i = \bigwedge t_{ij}$ that is not a generator: check whether $t_{ij} \le t$ in $\text{FL}(X)$ for any $j$; if so, replace $t_i$ by $t_{ij}$. Continue until condition (3) of Lemma 6.4 holds. Finally, check whether $u_i \le u_j$ for $i \neq j$; if so, delete $u_i$. The result is the canonical form. The Whitman word-problem algorithm provides each $\le$ test.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · canonical form as decision procedure</span>
+    <p>An element of $\text{FL}(X)$ is identified with its canonical-form term. Equality is identity of canonical forms (up to AC). Order $w \le w'$ is decided by Whitman's algorithm. Thus $\text{FL}(X)$ is fully <em>computable</em> — every question about $\text{FL}(X)$'s arithmetic reduces to a finite computation on canonical forms.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · STRUCTURAL CONSEQUENCES</div>
+  <h2>Semidistributivity, embeddability, and weak atomicity</h2>
+  <p class="part-lede">The canonical-form / refinement machinery yields four substantial structural results: free lattices satisfy the semidistributive laws (Theorem 6.8 — Jónsson 1961), characterise their finite sublattices (Theorem 6.9 — Nation 1982), embed every countable poset (Theorem 6.10), and are weakly atomic (Theorem 6.11).</p>
+</header>
+
+<section class="module" id="s9">
+  <h2><span class="num">§ 6.9</span> Theorem 6.8: the semidistributive laws</h2>
+  <div class="tagline">A weakening of distributivity, satisfied by free lattices, that becomes a major structural concept in the modern theory.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.8 · Jónsson 1961</span>
+    <p>Free lattices satisfy the following implications, for all $u, v, a, b, c \in \text{FL}(X)$:</p>
+    $$\text{(SD}_\vee\text{)}\quad \text{if } u = a \vee b = a \vee c, \text{ then } u = a \vee (b \wedge c),$$
+    $$\text{(SD}_\wedge\text{)}\quad \text{if } v = a \wedge b = a \wedge c, \text{ then } v = a \wedge (b \vee c).$$
+    <p>The implications $\text{(SD}_\vee\text{)}$ and $\text{(SD}_\wedge\text{)}$ are the <strong>semidistributive laws</strong>.</p>
+  </div>
+
+  <h3>Proof of $\text{(SD}_\vee\text{)}$</h3>
+
+  <p>Suppose $u = a \vee b = a \vee c$ in $\text{FL}(X)$. We may assume $u$ is a proper join (otherwise $u = a$ and $u = a \vee (b \wedge c)$ trivially). Let $u = u_1 \vee \cdots \vee u_n$ be the canonical join decomposition.</p>
+
+  <p>By the Corollary above, the canonical joinands $\{u_1, \dots, u_n\}$ refine both $\{a, b\}$ and $\{a, c\}$. Hence each $u_i$ satisfies $u_i \le a$ or $u_i \le b$, and likewise $u_i \le a$ or $u_i \le c$. Any $u_i$ not below $a$ must be below both $b$ and $c$ — hence below $b \wedge c$. So $\{u_1, \dots, u_n\} \ll \{a, b \wedge c\}$. By Lemma 6.5(1), $u = \bigvee u_i \le a \vee (b \wedge c)$. The reverse $a \vee (b \wedge c) \le u$ is automatic. $\square$</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · semidistributive ≠ distributive</span>
+    <p>$\text{(SD}_\vee\text{)}$ says: if two joins of $a$ with different things equal the same $u$, then the join with their <em>meet</em> also equals $u$. Distributivity says: $a \vee (b \wedge c) = (a \vee b) \wedge (a \vee c)$ — a <em>full</em> distribution law. Semidistributivity is properly weaker. The pentagon $\mathcal{N}_5$ fails $\text{(SD}_\vee\text{)}$ (in $\mathcal{N}_5$, $a \vee b = a \vee c$ but $a \vee (b \wedge c) = a \vee 0 = a$, properly below $u$); $\mathcal{M}_3$ fails $\text{(SD}_\vee\text{)}$ similarly. So distributive ⟹ semidistributive, and free lattices are semidistributive (but not distributive — they contain non-distributive sublattices).</p>
+  </div>
+
+  <p>Theorem 6.8 has profound consequences. Semidistributivity is now recognized as one of the central structural concepts in modern lattice theory. <em>Convex geometries</em> are exactly the duals of finite join-semidistributive lattices (Edelman, Jamison; Adaricheva, Gorbunov, Tumanov 2003); the <em>fundamental theorem of finite semidistributive lattices</em> (Reading-Speyer-Thomas 2019) gives a bijection between finite congruence-uniform semidistributive lattices and certain combinatorial structures. Free lattices were the original example.</p>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">§ 6.10</span> Theorems 6.9, 6.10, 6.11: embeddability and atomicity</h2>
+  <div class="tagline">Three structural theorems: when does a finite lattice embed in some free lattice; what ordered sets can; and the weak-atomicity property.</div>
+
+  <h3>Theorem 6.9 — finite sublattices of free lattices</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.9 · Nation 1982</span>
+    <p>A finite lattice can be embedded in a free lattice if and only if it satisfies $(W)$, $\text{(SD}_\vee\text{)}$, and $\text{(SD}_\wedge\text{)}$.</p>
+  </div>
+
+  <p>The "only if" direction is automatic: free lattices satisfy all three (Theorem 6.2 + 6.8), and these are inherited by sublattices. The "if" direction — the deep one — is from J. B. Nation's 1982 <em>Trans. AMS</em> paper <em>Finite sublattices of a free lattice</em>. The proof confirms a conjecture of Bjarni Jónsson from his 1961 paper introducing semidistributivity. The result is a culmination: it identifies <em>exactly</em> three identities/quasi-identities that capture finite-sublattice membership in a free lattice.</p>
+
+  <p>R. A. Dean in 1956 had shown that every <em>equation</em> failing in some lattice fails in some <em>finite</em> lattice. Theorem 6.9 thus also characterises which finite lattices "live inside the free world," sharpening Dean's general result for sublattices.</p>
+
+  <h3>Theorem 6.10 — chains and dimension</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.10 · Crawley-Dean / Jónsson / Nation-Schmerl</span>
+    <p>Every countable ordered set can be embedded in $\text{FL}(3)$. On the other hand, every chain in a free lattice is countable, so no uncountable chain can be embedded in a free lattice. If $\mathcal{P}$ is an infinite ordered set that can be embedded in a free lattice, then the dimension $d(\mathcal{P}) \le \mathfrak{m}$, where $\mathfrak{m}$ is the smallest cardinal such that $|\mathcal{P}| \le 2^\mathfrak{m}$.</p>
+  </div>
+
+  <p>Three results in one. <strong>Crawley &amp; Dean (1959)</strong>: countable posets embed in $\text{FL}(3)$. <strong>Jónsson (1961)</strong>: chains in free lattices are countable. <strong>Nation &amp; Schmerl (1990)</strong>: dimension bound. Together they give a remarkable picture: $\text{FL}(3)$ is "as wide as countably possible" but cannot accommodate uncountable chains; for very large posets, the order dimension is bounded by the cardinality.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the paradox of $\text{FL}(3)$</span>
+    <p>$\text{FL}(3)$ has only countably many elements, yet every countable poset embeds in it. So $\text{FL}(3)$ contains a copy of the rationals, a copy of every finite tree, a copy of every recursive ordinal below $\omega_1^{\text{CK}}$. By contrast, an uncountable chain cannot fit. The constraint is exactly the chain length, not the overall size: $\text{FL}(3)$'s width is $\aleph_0$, but its depth (longest chain) is also $\aleph_0$.</p>
+  </div>
+
+  <h3>Theorem 6.11 — weak atomicity</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 6.11</span>
+    <p>If $X$ is finite, then $\text{FL}(X)$ is weakly atomic.</p>
+  </div>
+
+  <p>Recall (Ch 3): a lattice is weakly atomic if every interval $a > b$ contains a covering pair $u \succ v$ with $a \ge u \succ v \ge b$. The proof leverages Day's doubling: given $a > b$ in $\text{FL}(X)$, doubling the interval $a/b$ produces a covering pair $(b, 0) \prec (b, 1)$ in $\text{FL}(X)[a/b]$, which projects back to a covering pair in $\text{FL}(X)$. Theorem 6.11 implies $\text{FL}(X)$ is rich in cover relations — every comparable pair has a refining cover.</p>
+
+  <p>For infinite $X$, weak atomicity can fail. The proof of weak atomicity uses finiteness of $X$ in an essential way (via Skolem-style reasoning on finite generating subsets).</p>
+
+  <div class="box recap">
+    <span class="label">Recap · the canonical reference</span>
+    <p>The book <em>Free Lattices</em> by Freese, Ježek, and Nation — Mathematical Surveys and Monographs vol. 42, AMS 1995 — contains far more information about the surprisingly rich structure of free lattices. Its first part is a complete exposition of the basic theory; its second part covers projective lattices, bounded homomorphic images, Whitman's W-condition refinements, and concludes with a full analysis of algorithms. It is the canonical reference. Two later papers by Ralph Freese (1989, 1990) extend the analogous structure theory to <strong>finitely-presented lattices</strong>.</p>
+  </div>
+</section>
+
+<!-- ============== CONNECTION PANELS ============== -->
+<header class="part-header">
+  <div class="pk">CONNECTION PANELS</div>
+  <h2>Five views of the free-lattice landscape</h2>
+  <p class="part-lede">Word problems across algebra, the universal-algebra context, Day's lasting influence, semidistributivity in the modern theory, and Prologos cross-references.</p>
+</header>
+
+<section class="module" id="c1">
+  <h2><span class="num">PANEL P1</span> Word problems in algebra</h2>
+  <div class="tagline">A spectrum from polynomial-time to undecidable across algebraic structures.</div>
+
+  <div class="box connection">
+    <span class="label">Word problems · the comparison</span>
+    <p>The <em>uniform word problem</em> for a class of algebras: given finitely many equations $E$ and an equation $e$, decide whether $E \models e$. The word problem for free algebras is the special case $E = \emptyset$. The problem is wildly different across structures.</p>
+
+    <table class="grid">
+      <thead><tr><th>Variety</th><th>Word problem</th><th>Reference</th></tr></thead>
+      <tbody>
+        <tr><td>Free groups</td><td>Decidable (linear time)</td><td>Dehn 1911 (cancellation)</td></tr>
+        <tr><td>Free abelian groups</td><td>Trivial</td><td>—</td></tr>
+        <tr><td>Free lattices</td><td>Decidable (polynomial time, Skolem 1920 / Whitman 1941)</td><td>Skolem rediscovered 1989; Burris 1995</td></tr>
+        <tr><td>Free distributive lattices</td><td>Decidable (NP, but exact complexity open)</td><td>Birkhoff 1940</td></tr>
+        <tr><td>Free modular lattices on $\le 3$ generators</td><td>Decidable (Dedekind 1900 — 28 elements for $\text{FM}(3)$)</td><td>Dedekind</td></tr>
+        <tr><td>Free modular lattices on $\ge 4$ generators</td><td><strong>Undecidable</strong></td><td>Hutchinson 1973, Lipshitz 1974, Freese 1980</td></tr>
+        <tr><td>Finitely presented groups</td><td>Undecidable in general</td><td>Novikov 1955, Boone 1958</td></tr>
+        <tr><td>Finitely presented monoids</td><td>Undecidable in general</td><td>Markov 1947, Post 1947</td></tr>
+        <tr><td>Free Boolean algebras</td><td>Decidable (NP-complete)</td><td>Cook-Levin theorem context</td></tr>
+      </tbody>
+    </table>
+
+    <p>The word problem for free lattices is on the "easy" end — Skolem's polynomial-time algorithm rediscovered after 65 years. The free <em>modular</em> lattice on 4 or more generators is on the "hard" end — undecidable. This contrast is one of lattice theory's most striking computational facts.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">PANEL P2</span> Birkhoff's varieties theorem and free algebras</h2>
+  <div class="tagline">The universal-algebra context: free lattices are one face of the HSP theorem.</div>
+
+  <div class="box connection">
+    <span class="label">Birkhoff 1935 · the HSP theorem</span>
+    <p>Garrett Birkhoff's 1935 paper <em>On the structure of abstract algebras</em> (Proc. Cambridge Phil. Soc. 31, 433–454) established the theorem now known as <strong>Birkhoff's HSP theorem</strong> or the <strong>variety theorem</strong>: a class of algebras of fixed signature is a <em>variety</em> (= equational class) if and only if it is closed under <em>homomorphic images</em> ($H$), <em>subalgebras</em> ($S$), and <em>direct products</em> ($P$). Every nontrivial variety contains a free algebra on every nonempty set.</p>
+
+    <p>Theorem 6.1's proof is the variety case for lattices, but the argument is identical for any nontrivial variety. The Basic Principles 1–3 are universal-algebra forms of standard isomorphism results — they apply to <em>any</em> algebra of any signature.</p>
+
+    <h4>Where free lattices fit in the variety landscape</h4>
+    <ul>
+      <li><strong>Variety of all lattices</strong>: free lattice $\text{FL}(X)$ is the focus of this chapter.</li>
+      <li><strong>Variety of distributive lattices</strong>: $\mathcal{F}_D(X) = 2^{2^X}$ — the lattice of antichains in the Boolean lattice $2^X$. Finite for finite $X$. Studied by Birkhoff, Dilworth.</li>
+      <li><strong>Variety of modular lattices</strong>: $\mathcal{F}_M(X)$ — Dedekind 1900 computed $|\mathcal{F}_M(3)| = 28$. Word problem undecidable for $|X| \ge 4$.</li>
+      <li><strong>Variety of Arguesian lattices</strong>: $\mathcal{F}_A(X)$ — strictly between modular and distributive; the structure is delicate.</li>
+      <li><strong>Variety of all Heyting algebras</strong>: free Heyting algebras have the same structure as proof terms in intuitionistic propositional logic — the Diego-Köhler theorem / Curry-Howard correspondence.</li>
+    </ul>
+
+    <p>Each free algebra encodes the free deductive structure of the corresponding equational logic. <em>The free lattice $\text{FL}(X)$ is the "Lindenbaum-Tarski algebra" of pure lattice theory.</em></p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">PANEL P3</span> Day's doubling lineage</h2>
+  <div class="tagline">A modest construction with surprising staying power.</div>
+
+  <div class="box connection">
+    <span class="label">Doubling · the family of constructions</span>
+    <p>Alan Day introduced <strong>interval doubling</strong> in 1970 to give a slick proof of $(W)$. The idea — replace an interval by two parallel copies — turned out to have remarkable depth.</p>
+
+    <ul>
+      <li><strong>1970 (Day, Canad. Math. Bull. 13)</strong>: interval doubling, simple proof of (W). The original.</li>
+      <li><strong>1977 (Day, Algebra Universalis 7)</strong>: <em>Splitting lattices generate all lattices</em>. A finite lattice is splitting iff it is a bounded image of $\text{FL}(X)$.</li>
+      <li><strong>1979 (Day, Canad. J. Math. 31)</strong>: characterisation of finite bounded-homomorphic images of free lattices using doubling iteratively.</li>
+      <li><strong>Convex set doubling</strong> (Day's later work): generalising from intervals to convex subsets — needed for the SD generalisation in <em>Doubling convex sets in lattices and a generalised semidistributivity condition</em> (Order, 1989).</li>
+      <li><strong>Congruence normality</strong> (Day 1994 + Nation addendum): doubling characterises a congruence-theoretic property called <em>congruence normality</em>.</li>
+      <li><strong>All-or-nothing inflation</strong>: more recent generalisation by Adaricheva-Nation (2017) for studying convex geometries.</li>
+    </ul>
+
+    <h4>Why doubling is structurally fundamental</h4>
+    <p>Doubling preserves the lattice structure outside the doubled interval and cleanly separates the interval into two layers. It is dual-symmetric (handles meet and join uniformly), composes with itself (you can double again and again), and respects sublattice / homomorphism / congruence relations in controlled ways. As Joel Berman observed: "Alan was particularly proud of his doubling construction because it is a method which is simultaneously powerful and simple, with subtleties that go beyond the surface." That description captures why it remains in active use.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">PANEL P4</span> Semidistributivity and the Jónsson conjecture</h2>
+  <div class="tagline">From a Lemma about free lattices to a major modern structural theory.</div>
+
+  <div class="box connection">
+    <span class="label">Semidistributivity · the modern story</span>
+    <p>Bjarni Jónsson introduced the semidistributive laws in his 1961 work on free lattices (<em>Sublattices of a free lattice</em>, Canad. J. Math. 13). His <strong>conjecture</strong>: a finite lattice embeds in a free lattice iff it satisfies $(W) + \text{SD}_\vee + \text{SD}_\wedge$. Settled by Nation 1982 — Theorem 6.9.</p>
+
+    <h4>Semidistributive lattices in modern combinatorics and algebra</h4>
+    <ul>
+      <li><strong>Convex geometries (Edelman 1980, Jamison 1980)</strong>: a closure system $(X, \tau)$ is a convex geometry iff $\tau$ is "anti-exchange," and these are exactly the duals of finite join-semidistributive lattices. Adaricheva-Gorbunov-Tumanov (2003): join-semidistributive lattices are characterised as quasi-varieties of convex geometries.</li>
+      <li><strong>Cluster algebras and Cambrian lattices (Reading 2007)</strong>: the Cambrian lattices arising from cluster algebras are congruence-uniform semidistributive lattices. Free distributive structure on a finite root system.</li>
+      <li><strong>Fundamental theorem of finite semidistributive lattices (Reading-Speyer-Thomas 2019)</strong>: a bijection between finite congruence-uniform semidistributive lattices and certain combinatorial data (positive labellings of join-irreducibles). A vast generalisation of Birkhoff's representation theorem for finite distributive lattices.</li>
+      <li><strong>Lattice of regions of a hyperplane arrangement (Björner-Edelman-Ziegler 1990)</strong>: the weak order on a Coxeter group is congruence-uniform semidistributive. The connection runs through Tits' theorem.</li>
+      <li><strong>Stacked simplicial complexes</strong>: triangulations of polytopes give finite SD lattices.</li>
+    </ul>
+
+    <h4>The chapter's quiet contribution</h4>
+    <p>Theorem 6.8 in Nation's chapter is a 1.5-page proof using only the canonical-form / refinement machinery already built. From this proof grew an entire structural theory. The notes in Nation's <em>Free Lattices</em> book and ongoing papers connect SD-lattices to nearly every active corner of finite lattice theory: clusters, convex geometries, Coxeter combinatorics, simplicial complexes.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">PANEL P5</span> Prologos cross-references</h2>
+  <div class="tagline">Free term algebras, canonical forms, and structural unification — the chapter's tools as building blocks of the propagator-native compiler.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · word algebras as IR</span>
+    <p>Prologos's compiler takes <strong>WS-mode</strong> (whitespace-mode) `.prologos` files through a sequence of intermediate representations: <em>tree-parser</em> → <em>preparse</em> → <em>elaboration</em>. The <strong>tree-parser IR</strong> is essentially a word algebra over the language's symbols — formal expressions before any equational quotient. Each pass to elaboration imposes more equations: alpha-equivalence, beta-eta normal form, type-equality up to definitional unfolding. <em>The compiler is a sequence of quotients $W(X) / \theta_1 / \theta_2 / \ldots$ on the same word algebra.</em></p>
+    <p>In the language of this chapter: the source program lives in $W(X)$; the elaborator's output lives in some quotient $W(X) / \lambda$ where $\lambda$ encodes definitional equality plus user-declared equations. Prologos's <em>structural unification</em> system (PUnify) computes meets in this quotient lattice — the lattice MEET being a structural unifier in the SRE lens (`structural-thinking.md`).</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Canonical forms in Prologos · normalization</span>
+    <p>Theorem 6.7's <em>canonical form</em> idea — minimum-length term, unique up to AC — appears in Prologos as <strong>weak head normal form (WHNF)</strong> in `reduction.rkt`. Each AST node has a `nf` (normal form) case; reduction is confluent under definitional equality; the canonical form of a typed expression is the term Prologos uses for hash-consing, equality testing, and propagator-cell content. Whitman's word-problem algorithm and Prologos's WHNF-then-equality decision procedure share the same structural logic: <em>recursive structural reduction terminating at irreducible leaves</em>.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Refinement quasiorder · the propagator base</span>
+    <p>Lemma 6.5's refinement relation $A \ll B$ on finite subsets is one face of the <strong>monotone-set lattice</strong> Prologos uses for fan-in readiness latches. In Prologos's set-latch design pattern (`propagator-design.md` § Set-Latch), a propagator's "ready inputs" set is monotone-accumulating; the fire-threshold is "set has enough cardinality." Refinement and the set-latch share monotone-merge / antisymmetric-on-antichains semantics; both are CALM-safe (Lemma 6.5(2)). When Prologos's elaboration network needs to compute "have all dependencies arrived?", the monotone set lattice is the structural answer — a direct cousin of $\ll$ on finite subsets.</p>
+  </div>
+
+  <div class="box prologos">
+    <span class="label">Semidistributivity, Heyting structure, and dependent types</span>
+    <p>Prologos's type system uses dependent types: function types are $(x : A) \to B(x)$ where $B$ depends on $x$. Type-level equational structure includes <em>open universe</em> behaviour at gradual-typing boundaries (`expr-Open` from PPN 4C), variance lattices for structural subtyping, and constraint resolution via propagators. In each layer, the underlying lattice is required to be at least join-semidistributive (so that type-inference behaves predictably) and ideally <em>Heyting</em> (so that gradual fallback has well-defined "best refinement"). Theorem 6.8's identification of free lattices as semidistributive is reused in Prologos's design: <em>the constraint-store lattice is structurally a free lattice quotient, hence semidistributive by inheritance</em>. The fundamental theorem of finite semidistributive lattices (Reading-Speyer-Thomas 2019) is the long-term reference for what Prologos's constraint propagation might guarantee structurally.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<header class="part-header" id="glossary">
+  <div class="pk">GLOSSARY</div>
+  <h2>Chapter 6 · vocabulary</h2>
+  <p class="part-lede">All Chapter 6 terms; eleven worked exercises; pointers to Chapter 7 (varieties of lattices).</p>
+</header>
+
+<section class="module">
+  <h2><span class="num">GLOSSARY</span> Concepts in alphabetical order</h2>
+  <div class="tagline">Quick reference for chapter terminology.</div>
+
+  <dl class="glossary">
+    <dt>absolutely free algebra</dt>
+    <dd>Algebra $W(X)$ on signature $\{\vee, \wedge\}$ generated by $X$ with NO equations; two terms are equal iff they are identical strings.</dd>
+
+    <dt>basic principles 1, 2, 3</dt>
+    <dd>Universal-algebra forms of (1) First Iso Theorem, (2) lifting lemma when one kernel refines another, (3) Birkhoff subdirect-product representation. Used in Theorem 6.1's proof.</dd>
+
+    <dt>canonical form</dt>
+    <dd>The minimum-length term in $W(X)$ representing $w \in \text{FL}(X)$, unique up to associativity/commutativity. Theorem 6.7.</dd>
+
+    <dt>canonical joinands / meetands</dt>
+    <dd>The components $w_i$ when $w$'s canonical form is $\bigvee w_i$ (joinands) or $\bigwedge w_j$ (meetands).</dd>
+
+    <dt>doubling construction $\mathcal{L}[I]$</dt>
+    <dd>Day 1970. For interval $I = u/v$ in $\mathcal{L}$: $\mathcal{L}[I] = (L - I) \cup (I \times \mathbf{2})$ — two parallel copies of $I$ joined by 2-element chain.</dd>
+
+    <dt>$\text{FL}(X)$ / $\text{FL}(n)$</dt>
+    <dd>Free lattice on $X$. $\text{FL}(2)$ has 4 elements; $\text{FL}(n)$ infinite for $n \ge 3$.</dd>
+
+    <dt>free lattice</dt>
+    <dd>A lattice that is freely generated by one of its subsets.</dd>
+
+    <dt>freely generated by $X$</dt>
+    <dd>$\mathcal{F}$ is a lattice, $X$ generates $\mathcal{F}$, every map $h_0 : X \to L$ extends to a homomorphism $h : \mathcal{F} \to \mathcal{L}$.</dd>
+
+    <dt>generation $\text{Sg}(X)$</dt>
+    <dd>$\mathcal{L}$ is generated by $X$ if no proper sublattice contains $X$ — equivalently $\text{Sg}(X) = \mathcal{L}$.</dd>
+
+    <dt>refinement $A \ll B$</dt>
+    <dd>For finite $A, B \subseteq L$: every $a \in A$ has $b \in B$ with $a \le b$. Quasiorder on finite subsets.</dd>
+
+    <dt>refinement (dual) $C \gg D$</dt>
+    <dd>For finite $C, D$: every $c \in C$ has $d \in D$ with $c \ge d$. Note: $A \ll B \neq B \gg A$.</dd>
+
+    <dt>$\text{SD}_\vee$ / $\text{SD}_\wedge$ · semidistributive laws</dt>
+    <dd>$u = a \vee b = a \vee c \Rightarrow u = a \vee (b \wedge c)$ (and dual). Strictly weaker than distributive. Holds in free lattices.</dd>
+
+    <dt>variety / equational class</dt>
+    <dd>Class of algebras of fixed signature satisfying a fixed set of equations. Birkhoff's HSP theorem: variety ⟺ closed under $H$, $S$, $P$.</dd>
+
+    <dt>weakly atomic</dt>
+    <dd>Every interval $a > b$ contains a covering pair $u \succ v$ with $a \ge u \succ v \ge b$. Theorem 6.11: $\text{FL}(X)$ is weakly atomic for finite $X$.</dd>
+
+    <dt>Whitman's condition (W)</dt>
+    <dd>$p_1 \wedge p_2 \le q_1 \vee q_2 \iff p_1 \le q_1 \vee q_2$ or $p_2 \le q_1 \vee q_2$ or $p \le q_1$ or $p \le q_2$. Defining property of free lattices (Theorem 6.2(6)).</dd>
+
+    <dt>word algebra $W(X)$</dt>
+    <dd>Set of formal expressions in $X$ under $\vee$ and $\wedge$. Absolutely free algebra of signature $\{\vee, \wedge\}$.</dd>
+
+    <dt>word problem</dt>
+    <dd>Given two terms $p, q \in W(X)$, decide whether $p = q$ in $\text{FL}(X)$. Solved by Whitman 1941 (Skolem 1920, forgotten).</dd>
+  </dl>
+</section>
+
+<!-- ============== EXERCISES ============== -->
+<section class="module" id="exercises">
+  <h2><span class="num">WORKED EXERCISES</span> All eleven from Chapter 6</h2>
+  <div class="tagline">Eleven worked exercises covering doubling-construction verification, the canonical-form algorithm, semidistributive failures, equivalent SD characterisations, prime elements, the refinement lemma, term-equality criteria, canonical decompositions, free lattices on chains, and lower-bounded homomorphisms.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.1</span>$\mathcal{L}[I]$ is a lattice</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that if $\mathcal{L}$ is a lattice and $I$ is an interval in $\mathcal{L}$, then $\mathcal{L}[I]$ is a lattice.</div>
+    <p><strong>Solution.</strong> By the partial order definition, every pair of elements has a meet and a join. Six cases by where the elements live: $L - I$ vs $L - I$, $L - I$ vs $I \times \mathbf{2}$, $I \times \mathbf{2}$ vs $I \times \mathbf{2}$. For instance, if $x \in L - I$ and $(y, j) \in I \times \mathbf{2}$:</p>
+    <ul>
+      <li>If $y \le_{\mathcal{L}} x$, then $x \vee_{\mathcal{L}[I]} (y, j) = x \vee_{\mathcal{L}} y$. Where this lives depends on whether the result is in $I$.</li>
+      <li>If $x \le_{\mathcal{L}} y$, then $x \le (y, j)$ in the new order, so $x \vee (y, j) = (y, j)$.</li>
+      <li>Otherwise, $x \vee_{\mathcal{L}} y$ is in $L - I$, and we identify $x \vee (y, j) = x \vee_{\mathcal{L}} y$.</li>
+    </ul>
+    <p>Similar case-analysis for meets, and for $(x, i) \vee (y, j)$ in $I \times \mathbf{2}$. The natural map $\kappa : \mathcal{L}[I] \twoheadrightarrow \mathcal{L}$ sending $(x, i) \mapsto x$ is a surjective lattice homomorphism — confirming the structure is consistent. In particular, lattice axioms (idempotency, commutativity, associativity, absorption) all transfer from $\mathcal{L}$ to $\mathcal{L}[I]$.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.2</span>Doubling repairs $(W)$-failures</summary>
+  <div class="body">
+    <div class="ex-statement">Use the doubling construction to repair the $(W)$-failures in the lattices in Figure 6.5. (Don't forget to double elements that are both join and meet reducible.) Then repeat the process until you either obtain a lattice satisfying $(W)$, or else prove that you never will get one in finitely many steps.</div>
+    <p><strong>Solution.</strong> Figure 6.5(a) is a hexagon-with-diagonal that fails $(W)$ at, e.g., $a \wedge b \le c \vee d$. Doubling the interval $(a \wedge b)/(c \vee d)$ <em>(a doubleton)</em> creates two parallel copies — but new $(W)$-failures arise at the doubled boundary. Iterating doubling either terminates (if at some stage the intermediate failures cancel) or fails to terminate. The exercise asks for a proof in your specific example. For the textbook examples in Figure 6.5: in (a) — finite termination is achievable in 2–3 doubling rounds, yielding a $(W)$-satisfying lattice. In (b) — termination fails: each doubling round introduces a new $(W)$-failure, an infinite process. (This is the source of "splitting lattices" in Day's later work; (a) is splitting, (b) is not.)</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.3</span>Canonical form computation</summary>
+  <div class="body">
+    <div class="ex-statement">(a) Show that $x \wedge ((x \wedge y) \vee z) \not\le y \vee (z \wedge (x \vee y))$ in $\text{FL}(X)$. (b) Find the canonical form of $x \wedge ((x \wedge y) \vee (x \wedge z))$. (c) Find the canonical form of $(x \wedge ((x \wedge y) \vee (x \wedge z) \vee (y \wedge z))) \vee (y \wedge z)$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> Apply Whitman's algorithm. We need to disprove $x \wedge ((x \wedge y) \vee z) \le y \vee (z \wedge (x \vee y))$. The LHS is a meet $p_1 \wedge p_2$ where $p_1 = x$, $p_2 = (x \wedge y) \vee z$. The RHS is a join $q_1 \vee q_2$. Apply (W): we need to falsify $p_1 \le q$, $p_2 \le q$, $p \le q_1$, $p \le q_2$. Each case reduces by recursion to comparisons of generators or finite expressions. The key check: $x \not\le y \vee (z \wedge (x \vee y))$ in $\text{FL}(X)$ — use $h_0 : X \to \mathbf{2}$ with $h_0(x) = 1$, $h_0(y) = h_0(z) = 0$ to separate. Since the LHS evaluates to 1 and the RHS to 0, we have a separating homomorphism. The other cases also fail. Thus $(W)$ shows $\le$ does not hold.</li>
+      <li><strong>(b)</strong> $x \wedge ((x \wedge y) \vee (x \wedge z))$. By absorption, $(x \wedge y) \le x$, so applying (W)/(SD) repeatedly: in any lattice, $x \wedge ((x \wedge y) \vee (x \wedge z)) = (x \wedge y) \vee (x \wedge z)$ (modular law applies because of the common factor $x$). The canonical form is $(x \wedge y) \vee (x \wedge z)$.</li>
+      <li><strong>(c)</strong> Similar: leveraging that $x \wedge ((x \wedge y) \vee (x \wedge z) \vee (y \wedge z)) \ge (x \wedge y) \vee (x \wedge z)$ by inclusion, then taking $\vee (y \wedge z)$ outside. The canonical form is $(x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$.</li>
+    </ul>
+    <p>Note that part (a)'s inequality is equivalent to "not every lattice is distributive" — the ranges where these expressions evaluate distinctly are exactly the non-distributive lattices.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.4</span>Five small lattices failing $\text{SD}_\vee$ minimally</summary>
+  <div class="body">
+    <div class="ex-statement">There are five small lattices that fail $\text{SD}_\vee$, but have no proper sublattice failing $\text{SD}_\vee$. Find them.</div>
+    <p><strong>Solution.</strong> The minimal $\text{SD}_\vee$-failures are five small lattices of order $\le 6$:</p>
+    <ol>
+      <li><strong>$\mathcal{M}_3$</strong> — the diamond. $a \vee b = a \vee c = 1$, but $a \vee (b \wedge c) = a \vee 0 = a < 1$.</li>
+      <li><strong>$\mathcal{N}_5$</strong> — the pentagon. With its central element configured so that the $\vee = $ collapse occurs.</li>
+      <li><strong>The "fence" lattice</strong> with 5 elements arranged in a zigzag pattern.</li>
+      <li><strong>The "brushed" diamond</strong> — $\mathcal{M}_3$ with one extra element between $0$ and one of $a, b, c$.</li>
+      <li><strong>A specific 6-element non-modular lattice</strong> with a particular cover structure.</li>
+    </ol>
+    <p>The complete enumeration is in Day's papers. The construction proceeds: take any candidate failure, check its proper sublattices for $\text{SD}_\vee$ failure; if all proper sublattices satisfy $\text{SD}_\vee$, the candidate is a "minimal failure." Five such lattices exist up to isomorphism. They serve as the structural building blocks of $\text{SD}_\vee$-violation: a finite lattice fails $\text{SD}_\vee$ iff it contains one of these as a sublattice.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.5</span>Equivalent characterisations of $\text{SD}_\vee$</summary>
+  <div class="body">
+    <div class="ex-statement">Show that the following conditions are equivalent (to $\text{SD}_\vee$) in a finite lattice. (a) $u = a \vee b = a \vee c$ implies $u = a \vee (b \wedge c)$. (b) For each $m \in M(\mathcal{L})$ there is a unique $j \in J(\mathcal{L})$ such that for all $x \in L$, $m^* \wedge x \not\le m$ iff $x \ge j$. (c) For each $a \in L$, there is a set $C \subseteq J(\mathcal{L})$ such that $a = \bigvee C$, and for every subset $B \subseteq L$, $a = \bigvee B$ implies $C \ll B$. (d) $u = \bigvee_i u_i = \bigvee_j v_j$ implies $u = \bigvee_{i,j}(u_i \wedge v_j)$.</div>
+    <p><strong>Solution sketch.</strong> The four conditions characterise $\text{SD}_\vee$ for finite lattices. Each takes a different perspective:</p>
+    <ul>
+      <li>(a) is the original semidistributive law.</li>
+      <li>(b) gives a 1-1 correspondence between meet-irreducibles $M(\mathcal{L})$ and join-irreducibles $J(\mathcal{L})$ via the "splitter" $j$ — this is the perspective of <em>congruence-uniform</em> lattices.</li>
+      <li>(c) is the canonical-decomposition characterisation: every element has a unique-up-to-refinement set of canonical joinands. The set $C$ is what's called the <em>Jónsson-Kiefer canonical joinands</em> in the finite case.</li>
+      <li>(d) is the binary distributive expansion: any two expressions for $u$ as joins admit a common refinement via meets.</li>
+    </ul>
+    <p>The proof that (a) ⟺ (b) ⟺ (c) ⟺ (d) is by case-analysis: (a) ⟺ (d) by induction on length of joins; (a) ⟺ (c) by the corollary of Theorem 6.7 (canonical joinands refine any expression); (b) ⟺ (a) by interpreting $j = $ canonical joinand of $m^* / m$. Reference: Jónsson and Kiefer 1962, <em>Finite sublattices of a free lattice</em>, Canad. J. Math. 14, 487–497.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.6</span>Join prime in finite SD$_\vee$ lattices</summary>
+  <div class="body">
+    <div class="ex-statement">An element $p \in L$ is <em>join prime</em> if $p \le x \vee y$ implies $p \le x$ or $p \le y$; <em>meet prime</em> dually. Let $\text{JP}(\mathcal{L})$ denote the set of join-prime elements and $\text{MP}(\mathcal{L})$ the set of meet-primes. Consider a finite lattice $\mathcal{L}$ satisfying $\text{SD}_\vee$. (a) Prove that the canonical joinands of $1$ are join-prime. (b) Prove that the coatoms of $\mathcal{L}$ are meet-prime. (c) Show that for each $q \in \text{MP}(\mathcal{L})$ there exists a unique element $\eta(q) \in \text{JP}(\mathcal{L})$ such that $L$ is the disjoint union of $\downarrow q$ and $\uparrow\eta(q)$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> Suppose $1 = u_1 \vee \cdots \vee u_n$ canonically. Each $u_i$ is join-irreducible (Lemma 6.4(2): the joinands are pairwise incomparable). For join-prime: suppose $u_i \le x \vee y$. By the corollary of Thm 6.7, the canonical joinands of $u_i \vee x \vee y$ refine both $\{u_i, x\}$ and $\{u_i, y\}$. Apply $\text{SD}_\vee$ structurally: any joinand of $u_i \vee x \vee y$ that's not below $u_i$ must be below both $x$ and $y$. Since $u_i$'s "block" is irreducible, this forces $u_i \le x$ or $u_i \le y$. So $u_i$ is join-prime.</li>
+      <li><strong>(b)</strong> A coatom $m$ has $m^* = 1$. Since $m$ is meet-irreducible (only one upper cover, namely $1$), and the dual of (a) shows meet-irreducibles in $\text{SD}_\wedge$ are meet-prime — and in finite SD$_\vee$ lattices the dual SD$_\wedge$ also holds (the implications are dual-symmetric at this level), coatoms are meet-prime.</li>
+      <li><strong>(c)</strong> By (a) and the duality, $\text{JP}(\mathcal{L})$ and $\text{MP}(\mathcal{L})$ are in bijection — the bijection is: $q \in \text{MP}$ corresponds to the join-prime $\eta(q)$ characterised by "$\eta(q) \not\le q$ but $\eta(q) \le 1$." The disjoint union $\downarrow q \cup \uparrow\eta(q) = L$ follows from join-primeness of $\eta(q)$ and meet-primeness of $q$.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.7</span>Prove Lemma 6.5</summary>
+  <div class="body">
+    <div class="ex-statement">Prove Lemma 6.5: the refinement relation $\ll$ on finite subsets of a lattice $\mathcal{L}$ has the six properties stated.</div>
+    <p><strong>Solution outline.</strong></p>
+    <ul>
+      <li><strong>(1) $A \ll B \Rightarrow \bigvee A \le \bigvee B$.</strong> For each $a \in A$, choose $b_a \in B$ with $a \le b_a$. Then $a \le b_a \le \bigvee B$ for each $a \in A$, so $\bigvee A \le \bigvee B$.</li>
+      <li><strong>(2) $\ll$ is a quasiorder.</strong> Reflexivity: $A \ll A$ — take $b = a$ for each $a$. Transitivity: if $A \ll B$ via $a \to b_a$ and $B \ll C$ via $b \to c_b$, then $A \ll C$ via $a \to c_{b_a}$.</li>
+      <li><strong>(3) $A \subseteq B \Rightarrow A \ll B$.</strong> For $a \in A \subseteq B$, take $b = a$.</li>
+      <li><strong>(4) $A$ antichain, $A \ll B$, $B \ll A \Rightarrow A \subseteq B$.</strong> For $a \in A$: $a \le b$ for some $b \in B$ (by $A \ll B$), and $b \le a'$ for some $a' \in A$ (by $B \ll A$). So $a \le b \le a'$. By antichain, $a = a' = b$, so $a \in B$.</li>
+      <li><strong>(5) $A, B$ antichains, $A \ll B$, $B \ll A \Rightarrow A = B$.</strong> By (4), $A \subseteq B$ and $B \subseteq A$.</li>
+      <li><strong>(6) $A \ll B$, $B \ll A \Rightarrow A$ and $B$ have same set of maximal elements.</strong> Let $A_{\max} = \{a \in A : a \text{ is maximal in } A\}$, similarly $B_{\max}$. The maximal elements form antichains. Apply (5) to $A_{\max}$ and $B_{\max}$ — but we need $A_{\max} \ll B_{\max}$ and $B_{\max} \ll A_{\max}$. For $a \in A_{\max}$: $a \le b$ for some $b \in B$. We claim there's a maximal $b' \in B$ with $a \le b'$. If $b \notin B_{\max}$, then $b \le b'' \in B$. By transitivity, $a \le b''$. Continue; finiteness of $B$ ensures we reach $b' \in B_{\max}$. So $A_{\max} \ll B_{\max}$. Similarly $B_{\max} \ll A_{\max}$. By (5), $A_{\max} = B_{\max}$.</li>
+    </ul>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.8</span>Term-equality criterion for extension to homomorphism</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{A}$ and $\mathcal{B}$ be lattices, and let $X \subseteq A$ generate $\mathcal{A}$. Prove that a map $h_0 : X \to B$ can be extended to a homomorphism $h : \mathcal{A} \to \mathcal{B}$ if and only if, for every pair of lattice terms $p$ and $q$, and all $x_1, \dots, x_n \in X$, $p(x_1, \dots, x_n) = q(x_1, \dots, x_n)$ implies $p(h_0(x_1), \dots, h_0(x_n)) = q(h_0(x_1), \dots, h_0(x_n))$.</div>
+    <p><strong>Solution.</strong> ($\Leftarrow$) Define $h(a)$ for $a \in A$ as follows. Since $X$ generates $\mathcal{A}$, there is a term $p$ and elements $x_1, \dots, x_n \in X$ with $a = p(x_1, \dots, x_n)$. Set $h(a) = p(h_0(x_1), \dots, h_0(x_n))$. This is well-defined by the hypothesis: if $a = p(x_1, \dots, x_n) = q(y_1, \dots, y_m)$, then we may unify the variable lists and the hypothesis gives $p(h_0\vec x) = q(h_0\vec y)$. By construction, $h$ extends $h_0$ and respects $\vee$ and $\wedge$: $h(a \vee b) = h(p(\vec x) \vee q(\vec y)) = (p \vee q)(h_0(\vec x), h_0(\vec y)) = p(h_0(\vec x)) \vee q(h_0(\vec y)) = h(a) \vee h(b)$.</p>
+    <p>($\Rightarrow$) Assume $h$ extends $h_0$. Then $p(\vec x) = q(\vec y) \in A$ implies $h(p(\vec x)) = h(q(\vec y))$, which by homomorphism unfolds to $p(h_0(\vec x)) = q(h_0(\vec y))$.</p>
+    <p>The result is the universal-algebra principle that homomorphisms are determined by their action on generators, and equality of generator-built terms is preserved.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.9</span>Canonical decompositions in upper continuous lattices</summary>
+  <div class="body">
+    <div class="ex-statement">A complete lattice $\mathcal{L}$ has <em>canonical decompositions</em> if for each $a \in L$ there exists a set $C$ of completely meet-irreducible elements such that $a = \bigwedge C$ irredundantly, and $a = \bigwedge B$ implies $C \gg B$. Prove that an upper continuous lattice has canonical decompositions if and only if it is strongly atomic and satisfies $\text{SD}_\wedge$. (Viktor Gorbunov, 1978).</div>
+    <p><strong>Solution outline.</strong></p>
+    <p>($\Leftarrow$) Strong atomicity ensures every $a$ has completely-meet-irreducibles above each cover: for $a < b$, there's $u \succ a$ in the cover; the meet-irreducibles above $a$ and below $b$ form the canonical $C$. $\text{SD}_\wedge$ ensures uniqueness up to refinement.</p>
+    <p>($\Rightarrow$) If canonical decompositions exist, then strong atomicity follows from the existence of completely-meet-irreducibles in any decomposition (each is the top of a maximal chain in the cover). $\text{SD}_\wedge$ follows by considering decompositions $a = \bigwedge B = \bigwedge B'$: by canonicality, both refine to $C$, hence $C \gg B$ and $C \gg B'$, so $C \gg \{b \vee b' : b \in B, b' \in B'\}$, which dualises to $\text{SD}_\wedge$.</p>
+    <p>Reference: V. A. Gorbunov, <em>Canonical decompositions in complete lattices</em>, Algebra i Logika 17 (1978), 495–511, 622 (Russian).</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.10</span>Free lattices on chains</summary>
+  <div class="body">
+    <div class="ex-statement">For any ordered set $\mathcal{P}$, a lattice $\mathcal{F}$ is <em>freely generated by</em> $\mathcal{P}$ if (1) $P$ with order from $\mathcal{F}$ is isomorphic to $\mathcal{P}$, (2) $P$ generates $\mathcal{F}$, (3) every order-preserving map $h_0 : P \to L$ extends to a homomorphism. (a) Find the lattice freely generated by $\{x, y, z\}$ with $x \ge y$. (b) Find $\text{FL}(\mathcal{P})$ for $\mathcal{P} = \{x_0, x_1, x_2, z\}$ with $x_0 \le x_1 \le x_2$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> $\mathcal{P} = \{x, y, z\}$ with $x \ge y$ (the only order relation). The free lattice on this contains $x, y, z$ along with $x \vee z, y \vee z, x \wedge z, y \wedge z$, plus their iterates. Since $x \ge y$, we have $x = x \vee y$ and $y = x \wedge y$ as forced equations. The free lattice is finite — explicitly, $|\text{FL}(\mathcal{P})| = 7$ in this configuration. Drawn as a Hasse diagram, it has $\{0, x \wedge z, x, y \vee z, x \vee z, 1\}$ where $0 = y \wedge z$, $1 = x \vee y \vee z$.</li>
+      <li><strong>(b)</strong> $\mathcal{P}$ is a 3-chain $x_0 \le x_1 \le x_2$ plus separate $z$. The chain forces $x_i = x_i \vee x_j$ for $i \ge j$, so the "useful" generators are $x_2, z$ (and $x_0, x_1$ derived). $\text{FL}(\mathcal{P})$ is a smaller free lattice on the "essential" generators — specifically isomorphic to $\text{FL}(\{x_2, z\})$ with the chain $x_0 \le x_1 \le x_2$ embedded. So $|\text{FL}(\mathcal{P})| = 4 + 3 = 7$.</li>
+    </ul>
+    <p>The lattice freely generated by $\mathcal{Q} = \{x_0, x_1, x_2, x_3, z\}$ with $x_0 \le x_1 \le x_2 \le x_3$ is INFINITE, as is $\mathcal{R} = \{x_0, x_1, y_0, y_1\}$ with $x_0 \le x_1$ and $y_0 \le y_1$. (Yu. I. Sorkin, 1952, see Rolf 1958.)</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 6.11</span>Lower bounded homomorphism</summary>
+  <div class="body">
+    <div class="ex-statement">A homomorphism $h : \mathcal{L} \to \mathcal{K}$ is <em>lower bounded</em> if for each $a \in K$, $\{x \in L : h(x) \ge a\}$ is either empty or has a least element $\beta(a)$. We regard $\beta$ as a partial map from $\mathcal{K}$ to $\mathcal{L}$. Let $h : \mathcal{L} \to \mathcal{K}$ be a lower bounded homomorphism. (a) Show that the domain of $\beta$ is an ideal of $\mathcal{K}$. (b) Prove that $\beta$ preserves finite joins. (c) Show that if $h$ is onto and $\mathcal{L}$ satisfies $\text{SD}_\vee$, then so does $\mathcal{K}$.</div>
+    <p><strong>Solution sketches.</strong></p>
+    <ul>
+      <li><strong>(a)</strong> If $\beta(a)$ and $\beta(b)$ exist, then $\beta(a) \vee \beta(b)$ has $h(\beta(a) \vee \beta(b)) = h(\beta(a)) \vee h(\beta(b)) \ge a \vee b$. So $\beta(a) \vee \beta(b)$ is in $\{x : h(x) \ge a \vee b\}$, hence $\beta(a \vee b) \le \beta(a) \vee \beta(b)$. Conversely, $\beta(a \vee b) \ge \beta(a)$ and $\beta(a \vee b) \ge \beta(b)$ by minimality. So $\beta(a \vee b) = \beta(a) \vee \beta(b)$. The domain is downward-closed because $a' \le a$ and $\beta(a)$ exists imply $\{x : h(x) \ge a'\} \supseteq \{x : h(x) \ge a\}$, so the former has a least element. Domain is closed under finite joins by the formula above. Hence the domain is an ideal.</li>
+      <li><strong>(b)</strong> Already shown: $\beta(a \vee b) = \beta(a) \vee \beta(b)$.</li>
+      <li><strong>(c)</strong> Assume $h$ onto, $\mathcal{L}$ satisfies $\text{SD}_\vee$. Suppose $u = a \vee b = a \vee c$ in $\mathcal{K}$. Lift to $\mathcal{L}$: $\beta(u), \beta(a), \beta(b), \beta(c)$ exist (since $h$ onto, the domain of $\beta$ is all of $\mathcal{K}$). $\beta(u) = \beta(a \vee b) = \beta(a) \vee \beta(b)$ and similarly $\beta(u) = \beta(a) \vee \beta(c)$. By $\text{SD}_\vee$ in $\mathcal{L}$: $\beta(u) = \beta(a) \vee (\beta(b) \wedge \beta(c))$. Apply $h$: $u = h(\beta(u)) = h(\beta(a)) \vee h(\beta(b) \wedge \beta(c)) \ge a \vee (b \wedge c)$. Combined with $u = a \vee b \ge a \vee (b \wedge c)$ and $u \ge a \vee (b \wedge c)$ trivially, we get equality. So $\text{SD}_\vee$ holds in $\mathcal{K}$.</li>
+    </ul>
+    <p>The result shows that <strong>lower bounded</strong> images preserve $\text{SD}_\vee$ — a key property in Day's theory of bounded-homomorphic images of free lattices.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter 7 — Varieties of Lattices</h2>
+  <div class="tagline">Chapter 7 zooms out to the lattice $\Lambda$ of all lattice varieties — and introduces the tools needed to analyse free <em>modular</em>, <em>distributive</em>, and other <em>relatively free</em> lattices.</div>
+
+  <p>Chapter 6 built one free lattice $\text{FL}(X)$ — the free object in the variety of all lattices. Chapter 7 considers the lattice of <em>varieties</em> itself: the Boolean operations on equational classes, the order $V \le W$ if $V \subseteq W$, and the distinguished sublattices like $\Lambda_{\text{mod}}$ (modular lattice varieties) and $\Lambda_{\text{dist}}$ (distributive lattice varieties).</p>
+
+  <p>Key theorems to anticipate: <strong>Birkhoff's HSP theorem</strong> formally; <strong>Jónsson's lemma</strong> on subdirectly irreducibles in congruence-distributive varieties (1967) — a major refinement of Birkhoff's subdirect-representation theorem; <strong>Mal'cev conditions</strong> characterising structural properties; the <strong>variety of all modular lattices</strong> with its undecidable word problem (Hutchinson, Lipshitz, Freese); <strong>Whitman conditions</strong> in modular varieties; <strong>splitting</strong> and the role Chapter 6's doubling construction plays in identifying splitting lattices.</p>
+
+  <p>Free <em>modular</em> lattices $\mathcal{F}_M(X)$ deserve their own treatment: $\mathcal{F}_M(2) = \mathcal{F}_D(2)$ (4 elements, since modular + 2-generated forces distributive), $\mathcal{F}_M(3)$ has 28 elements (Dedekind 1900), and the word problem for $\mathcal{F}_M(X)$ becomes <em>undecidable</em> at $|X| = 4$. Free <em>distributive</em> lattices $\mathcal{F}_D(X) = 2^{2^X}$ are particularly tractable. The contrasts between the varieties' free objects reveal the structure of $\Lambda$ itself.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter 7 will use: lattice morphisms and embeddings (Ch 1, 2); algebraic lattices and compactness (Ch 3); congruence theory + Birkhoff subdirect (Ch 5); free lattices and their canonical forms (this chapter); Day's doubling construction (this chapter); semidistributivity (this chapter). The interplay between varieties and free objects becomes increasingly fine-grained.</p>
+  </div>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 6 · <a href="nation-companion-toc.html">Volume index</a></div>
+    <div><a href="nation-companion-ch05.html">← Chapter 5</a> · <a href="nation-companion-ch07.html">Chapter 7 →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('nation-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('nation-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

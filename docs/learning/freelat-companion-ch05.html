@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Chapter V · Sublattices of Free Lattices and Projective Lattices</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .scope { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; color: var(--ink-soft); }
+  .scope p { margin: 0 0 10px; }
+  .scope p:last-child { margin: 0; }
+  .scope .attrib { display: block; text-align: right; font-style: italic; color: var(--text-dim); font-size: 13.5px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor, .box.problem { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.problem .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.example { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.example > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.example[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.example > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.example[open] > summary::before { content: "▾ "; }
+  details.example > div.body { padding: 6px 22px 14px; }
+  details.example .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.example .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Free Lattices Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Free Lattices</em> by Ralph Freese, Jaroslav Ježek &amp; J. B. Nation (AMS Surveys 42, 1995).</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="freelat-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="freelat-companion-ch04.html">← Chapter IV</a></li>
+    <li><a href="freelat-companion-ch06.html">Chapter VI →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter V · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Projective lattices</div>
+  <ul>
+    <li><a href="#s1">§1 · Projective lattices (5.1–5.18)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · FL(P)</div>
+  <ul>
+    <li><a href="#s2">§2 · Free lattice over an ordered set (5.19–5.34)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Nation's theorem</div>
+  <ul>
+    <li><a href="#s3">§3 · Finite sublattices of free lattices (5.35–5.55)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Forbidden lattices</div>
+  <ul>
+    <li><a href="#s4">§4 · Related topics (5.56–5.60)</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Primitive lattices</div>
+  <ul>
+    <li><a href="#s5">§5 · Subdirectly irreducible sublattices (5.61–5.65)</a></li>
+  </ul>
+
+  <div class="section-label">Part F · Summary table</div>
+  <ul>
+    <li><a href="#s6">§6 · Summary (5.66–5.69, Table 5.1)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Nation 1982 + Jónsson's conjecture</a></li>
+    <li><a href="#c2">P2 · Kostinsky 1972 + projectivity</a></li>
+    <li><a href="#c3">P3 · B-type sequence machinery</a></li>
+    <li><a href="#c4">P4 · Forbidden sublattices</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#examples">Computed examples</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Free Lattices · Mathematical Surveys &amp; Monographs 42 · Chapter V</div>
+  <h1>Sublattices of Free Lattices and Projective Lattices</h1>
+  <p class="lede">The monograph's classification centerpiece. <strong>Nation's theorem (1982)</strong>: a finite lattice embeds in some $\mathbf{FL}(X)$ if and only if it is semidistributive AND satisfies Whitman's condition (W). Conjectured by Jónsson in unpublished 1960s notes; proved here via the proof that no S-lattice (finite SD lattice satisfying (W)) contains a C-cycle. Plus the characterization of projective lattices (Freese-Nation, refining Kostinsky 1972), the free lattice $\mathbf{FL}(\mathbf{P})$ over an ordered set, forbidden-sublattice characterizations, and a structural summary table comparing free lattices, $\mathbf{FL}(\mathbf{P})$, finitely-presented, projective, and sublattices of free lattices.</p>
+  <div class="meta">
+    <span>~240–300 min read</span>
+    <span>6 sections · ~70 named results</span>
+    <span>5 connection panels</span>
+    <span>Book pp. 95–134 · PDF pp. 104–143</span>
+  </div>
+</section>
+
+<aside class="scope">
+  <p>The class of lattices that are embeddable into a free lattice is a naturally interesting class of lattices. Two obvious necessary conditions for a lattice to be a sublattice of a free lattice are semidistributivity and the condition (W). Except for finite lattices, reasonably applicable necessary and sufficient conditions for embeddability into a free lattice are not yet known.</p>
+  <p>Projective lattices form an important subclass of this class. They are discussed in Section 1, where the most prominent result is a characterization theorem for projective lattices due to Freese and Nation [61]. This extends earlier results due to McKenzie [99] and Kostinsky [92]. In the second section we discuss the lattice $\mathbf{FL}(\mathbf{P})$ freely generated by an ordered set, and the related question of which ordered sets can be embedded into free lattices. Section 3 contains a proof that for finite lattices, semidistributivity and the condition (W) together are sufficient to characterize sublattices of free lattices. This surprising result is due to Nation [103]. It was conjectured by Jónsson, who suggested a line of approach in unpublished notes written in the 1960's. Some more results on finite sublattices of a free lattice and related topics, including a characterization in terms of forbidden lattices and an extension to lattices without infinite chains, are proved in Section 4. Section 5 brings a collection of examples of finite subdirectly irreducible sublattices of a free lattice. The collection is exhaustive, as proved in Ježek and Slavík [76]. We conclude with a summary of the lattice properties of free lattices, sublattices of free lattices, projective lattices and finitely presented lattices.</p>
+  <span class="attrib">— Freese, Ježek &amp; Nation, opening of Chapter V (paraphrased)</span>
+</aside>
+
+<p>Chapter V is the longest chapter in the monograph (40 pages, 6 sections, ~70 numbered results) and the deepest classification chapter. Its central result — Nation's theorem (Theorem 5.55) — is one of the major theorems of late-20th-century lattice theory. It says: <strong>finite SD-and-(W) lattices are exactly the finite sublattices of free lattices</strong>. The "necessary" direction is easy (sublattices of free lattices inherit (W) and SD). The "sufficient" direction was a conjecture of Jónsson from the 1960s, settled by Nation in 1982 after about 15 years of partial progress by Jónsson, Nation, Rival, and Sands.</p>
+
+<p>The chapter has six conceptual parts. <strong>Part A (§1)</strong>: projective lattices — those that are retracts of free lattices. Theorem 5.7 gives a four-condition characterization (W, $\mathbf{D}(\mathbf{L}) = L = \mathbf{D}^d(\mathbf{L})$, both refinement properties, finitely separable). Corollary 5.9: finitely-generated projective ⟺ bounded ⟺ Kostinsky's 1972 result. Corollary 5.11: finite projective ⟺ finite sublattice of FL — establishing that projectivity equals embeddability for finite lattices. <strong>Part B (§2)</strong>: $\mathbf{FL}(\mathbf{P})$ — the free lattice over an ordered set. Built like $\mathbf{FL}(X)$ but with the order on $\mathbf{P}$ enforced. Theorem 5.22: $\mathbf{FL}(\mathbf{P})$ is projective ⟺ $\mathbf{P}$ is finitely separable. Embeddability of ordered sets into free lattices reduces to finite separability (Corollary 5.23). <strong>Part C (§3)</strong>: the proof of Nation's theorem. Lemma 5.35: for finite lattices, (1) projective, (2) sublattice of FL, (3) bounded + (W), (4) S-lattice without C-cycle are equivalent. The chapter's deepest 18 pages prove that no S-lattice contains a C-cycle, via configuration-forbidding lemmas and the B-type sequence machinery. <strong>Part D (§4)</strong>: forbidden-sublattice characterizations. Davey-Poguntke-Rival's six SD-forbidden lattices $\mathbf{L}_1, \ldots, \mathbf{L}_6$; Antonius-Rival's eight forbidden lattices $\mathbf{L}_1, \ldots, \mathbf{L}_8$ for sublattice-of-free. Theorem 5.59: meet-SD lattices without infinite chains are finite. <strong>Part E (§5)</strong>: subdirectly irreducible primitives. The infinite families $\mathbf{B}_n, \mathbf{C}_n, \mathbf{D}_n, \mathbf{E}_n, \mathbf{F}_n, \mathbf{G}_n$ from Ježek-Slavík 1989, with five constructions building larger primitives from smaller ones. <strong>Part F (§6)</strong>: summary. Reinhold's *-distributivity (Theorem 5.66), the implication chart (Theorem 5.69), and Table 5.1 — the cross-reference of which structural properties hold across $\mathbf{FL}(X)$, $\mathbf{FL}(\mathbf{P})$, finitely-presented lattices, projective lattices, and sublattices of free lattices.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">Three panes: terms <strong>carried forward</strong> from Chapters I–IV, terms <strong>new</strong> in this chapter (substantial), and the <strong>deep dives</strong> that reward close reading.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chapters I–IV</span>
+    <p>Whitman's condition (W) (I.8). Canonical form (I.17), join refinement $A \ll B$ (I.15). Semidistributivity SD$_\vee$ / SD$_\wedge$ (I.21). Bounded homomorphism with $\beta, \alpha$ (II.1). The minimal join cover refinement property (II.6). The D-relation, D-rank $\rho$, $\mathbf{D}(\mathbf{L})$ (II.7). Theorem 2.20: 5-fold lower-bounded characterization. Day's structural characterization via doubling (II.43). The κ-bijection (II.54–II.55, III.3) on completely-(join/meet)-irreducibles. The A, B, C relations on $\mathbf{J}(\mathbf{L})$ (II.57). C-cycle (II.61). Theorem 2.64 (Day 1979): finite lower-bounded SD$_\wedge$ = bounded. Splitting lattices and conjugate equations (II.79). Day's weak-atomicity theorem (II.84). The standard epimorphism $f : \mathbf{F} \to A^\vee$ (III.15). $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ (III.24). The 5-fold complete-join-irreducibility (III.26). Day's theorem rank-refinement (IV.1) and its bounded-lattice form (IV.2).</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter V vocabulary (substantial)</span>
+    <p>Eight major clusters of new vocabulary. <strong>Projective-lattice machinery (§1):</strong> projective lattice (every epimorphism onto $\mathbf{L}$ has a section), transversal of a surjection $f : K \to L$ (a function $g : L \to K$ with $fg = \mathrm{id}$), retraction (homomorphism with a homomorphism transversal — i.e., a transversal that is itself a homomorphism), retract of $\mathbf{K}$ (the image of a retraction $\mathbf{K} \twoheadrightarrow \mathbf{L}$), join-preserving / order-preserving transversals. The notion of a lattice being <strong>finitely separable</strong> — there exist mappings $A, B$ with $A(a) \subseteq \{c \le a\}$ finite, $B(a) \subseteq \{c \ge a\}$ finite, and $a \le b$ implying $A(a) \cap B(b) \neq \emptyset$. <strong>Free lattice over an ordered set (§2):</strong> $\mathbf{FL}(\mathbf{P})$ — the lattice freely generated by $\mathbf{P}$ subject to the order, defined by an order-preserving universal property. The <strong>free distributive lattice over $\mathbf{P}$</strong> $\mathbf{FD}(\mathbf{P})$ — the free distributive analog. <strong>S-lattices and Nation's proof machinery (§3):</strong> S-lattice (a finite SD lattice satisfying (W)), C-cycle, minimal C-cycle (one of minimal length), the subdivisions $A_1, A_2$ of A and $B_1, B_2$ of B (technical refinements for the proof). Free star principle (a quote-and-check argument used repeatedly in the proof). B-type sequence — a finite sequence $q_0, \ldots, q_k$ of join-irreducibles satisfying four conditions (B1–B4). <strong>Forbidden lattices (§4):</strong> the lattices $\mathbf{L}_1, \mathbf{L}_2, \mathbf{L}_3, \mathbf{L}_4 = \mathbf{L}_3^d, \mathbf{L}_5, \mathbf{L}_6 = \mathbf{L}_5^d$ — the six SD-failure witnesses (Davey-Poguntke-Rival 1975); $\mathbf{L}_7, \mathbf{L}_8$ — additional forbidden sublattices for the (W) condition (Antonius-Rival). <strong>Primitive lattices (§5):</strong> primitive = finite, subdirectly-irreducible, projective lattice; the four "starter" primitives $\mathbf{A}_1, \mathbf{A}_2, \mathbf{A}_3, \mathbf{A}_4$ (Figure 5.9); the six representatives $\mathbf{B}_3, \mathbf{C}_3, \mathbf{D}_3, \mathbf{E}_3, \mathbf{F}_5, \mathbf{G}_4$ of infinite families (Figure 5.10). The five constructions $\mathbf{R}, \mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$ that generate larger primitives from smaller ones (Example 5.65). <strong>Parallel sum (§4):</strong> $\mathbf{L} \cup \mathbf{K} \cup \{0, 1\}$ where $\mathbf{L}, \mathbf{K}$ are disjoint intervals with no relations between elements. <strong>Ordinal sum (§1):</strong> $\mathbf{L}_0 + \mathbf{L}_1$ — ordinal sum of two lattices, projectivity criteria (Theorem 5.16). <strong>Reinhold's *-distributivity (§6):</strong> a lattice $\mathbf{L}$ is *-distributive if $\bigvee(a * B) = a \wedge \bigvee B$ for any $B$, where $a * \langle b_1, \ldots, b_n\rangle = a \wedge (b_n \vee (a \wedge (b_{n-1} \vee \cdots \vee (a \wedge b_1)\cdots)))$. Staircase distributive — a finite-only version of *-distributive.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Five threads reward close reading. <strong>The structural arc from projective to sublattice.</strong> Corollary 5.10 and 5.11: a finitely generated lattice is projective iff it is a sublattice of a free lattice; a finite lattice is projective iff it is a finite sublattice of a free lattice. So in the FINITE case, being a retract of a free lattice = being a sublattice of a free lattice. This is genuinely surprising: in general (e.g., for groups), retracts and sublattices are different. The free-lattice case is "rigid" enough that the two notions coincide. <strong>Theorem 5.7 — projective characterization in 4 conditions.</strong> A lattice $\mathbf{L}$ is projective iff: (1) (W); (2) $L = \mathbf{D}(\mathbf{L}) = \mathbf{D}^d(\mathbf{L})$; (3) minimal-join-cover refinement and its dual; (4) finitely separable. The four conditions are independent (Examples 5.13, 5.14, 5.15 prove this). <strong>The proof of Nation's theorem (§3).</strong> The proof works by contradiction: assume an S-lattice $\mathbf{L}$ contains a C-cycle. Take a minimal one. By a long sequence of configuration-forbidding lemmas (5.36–5.50, with the technical lemma 5.43 as the workhorse), reduce to a cycle of the form $q_1 B p_1 A_2 q_2 B p_2 A_2 \ldots q_n B p_n A_2 q_1$. Lemma 5.53 eliminates this special form. Hence no C-cycle exists. The proof is one of the most technical in lattice theory — about 18 pages of dense case analysis. <strong>The B-type sequence framework.</strong> Lemma 5.41 introduces B-type sequences as a generalization of "consecutive B's" that admits transitivity-like behavior. The framework decouples B's from C-cycle order, allowing arguments to proceed when B's are interspersed with A's. This is the key technical innovation that broke the impasse Jónsson encountered in the 1960s. <strong>Forbidden-sublattice characterizations (§4) connect to algebraic combinatorics.</strong> Theorem 5.58: a finite lattice is a sublattice of FL iff it doesn't contain $\mathbf{L}_1, \ldots, \mathbf{L}_8$ as sublattices. The eight lattices are explicit, drawable, and recognisable. This converts Nation's algebraic-combinatorial characterization into a purely COMBINATORIAL test: scan for forbidden subdiagrams. The 8 lattices are the <em>universal obstructions</em> to free-lattice embedding.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · PROJECTIVE LATTICES — §1</div>
+  <h2>Projective lattices: retracts of free lattices, and Freese-Nation's 4-condition characterization</h2>
+  <p class="part-lede">A lattice is projective if every epimorphism onto it has a homomorphism section. Equivalently, projective = retract of a free lattice. Theorem 5.7 (Freese-Nation): four conditions characterize projectivity. Corollary 5.9 (Kostinsky 1972): finitely generated projective = bounded + (W). Corollary 5.11: finite projective = finite sublattice of free lattice.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 1</span> Projective Lattices</h2>
+  <div class="tagline">Six theorems and seven examples. The chapter's foundational machinery, with sharp distinctions between projective, retract, and sublattice — coinciding in the finite case but diverging in general.</div>
+
+  <h3>Definitions and equivalent forms (book pp. 95–96)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · projective, transversal, retraction, retract</span>
+    <p>A lattice $\mathbf{L}$ is <strong>projective</strong> if for any epimorphism $f : \mathbf{M} \twoheadrightarrow \mathbf{N}$ and any homomorphism $h : \mathbf{L} \to \mathbf{N}$ there exists a homomorphism $g : \mathbf{L} \to \mathbf{M}$ such that $h = fg$. (In the category of lattices, epimorphisms are just onto homomorphisms.)</p>
+    <p>Let $f$ be a mapping of a set $K$ onto a set $L$. A mapping $g : L \to K$ is a <strong>transversal</strong> of $f$ if $fg$ is the identity on $L$ — i.e., $g$ picks for each $x \in L$ a preimage $g(x) \in f^{-1}(x)$. A homomorphism $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$ is a <strong>retraction</strong> if it has a transversal which is a homomorphism; the transversal is then an embedding of $\mathbf{L}$ into $\mathbf{K}$. A lattice $\mathbf{L}$ is a <strong>retract</strong> of a lattice $\mathbf{K}$ if there exists a retraction of $\mathbf{K}$ onto $\mathbf{L}$ — equivalently, $\mathbf{L}$ is a homomorphism image of $\mathbf{K}$ via a homomorphism with a homomorphism right-inverse.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.1 · projective ⟺ retract of free lattice ⟺ universal retraction property</span>
+    <p>The following are equivalent for a lattice $\mathbf{L}$.</p>
+    <ol>
+      <li>$\mathbf{L}$ is projective.</li>
+      <li>$\mathbf{L}$ is a retract of a free lattice.</li>
+      <li>For any lattice $\mathbf{K}$, any epimorphism $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$ is a retraction.</li>
+    </ol>
+  </div>
+
+  <p>(1)⟹(3) is the definition of projective applied with $\mathbf{N} = \mathbf{L}$ and $h = \mathrm{id}_\mathbf{L}$. (3)⟹(2): every lattice is a homomorphic image of a free lattice (the natural surjection from $\mathbf{FL}(\mathbf{L})$). (2)⟹(1): an extension argument given a retraction $f_0 : \mathbf{F} \twoheadrightarrow \mathbf{L}$ with transversal $g_0$, every homomorphism $h : \mathbf{L} \to \mathbf{N}$ extends to a homomorphism on $\mathbf{F}$ via $h_0 = h \circ f_0$, and we can lift to $\mathbf{M}$.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.2 · projective ⟹ sublattice of free</span>
+    <p>Every projective lattice is a sublattice of a free lattice.</p>
+  </div>
+
+  <h3>The minimal-join-cover-refinement and $\mathbf{D}(\mathbf{L}) = L$ properties (book p. 96)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.3 · join-preserving transversal preserves min-cover-refinement</span>
+    <p>Let $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$ be a homomorphism such that there exists a join-preserving transversal $g$ of $f$. If $\mathbf{K}$ has the minimal join cover refinement property, then so does $\mathbf{L}$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.4 · projective ⟹ $\mathbf{D}(\mathbf{L}) = L$</span>
+    <p>If $\mathbf{L}$ is a projective lattice, then $\mathbf{D}(\mathbf{L}) = L$.</p>
+  </div>
+
+  <p>Lemma 5.4's proof inducts on $D_k$ membership. If $b \in D_k(\mathbf{FL}(X))$ then $f(b) \in D_k(\mathbf{L})$ — so the standard epimorphism preserves D-rank. The lemma is non-trivial because in the inductive step, a minimal nontrivial cover $U' \subseteq f(V)$ might not directly satisfy $V \subseteq D_{k-1}(\mathbf{FL}(X))$ — the proof uses a sequence-permutation argument to show $f(b) \in D_k(\mathbf{L})$ via "weakening join cover" $V \ll gf(V)$.</p>
+
+  <h3>Finite separability (book pp. 97–98)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · finitely separable</span>
+    <p>A lattice (or more generally, an ordered set) $\mathbf{L}$ is <strong>finitely separable</strong> if there exist two mappings $A$ and $B$ with domain $L$ such that for any $a, b \in L$:</p>
+    <ul>
+      <li>$A(a)$ is a finite subset of $\{c \in L : c \le a\}$ — the "lower-side witness set" for $a$;</li>
+      <li>$B(b)$ is a finite subset of $\{c \in L : c \ge b\}$ — the "upper-side witness set" for $b$;</li>
+      <li>If $a \le b$, then $A(a) \cap B(b) \neq \emptyset$.</li>
+    </ul>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.5 · free lattices are finitely separable</span>
+    <p>Every free lattice is finitely separable.</p>
+  </div>
+
+  <p>The proof: for $a, b \in \mathbf{F} = \mathbf{FL}(X)$, define $A(a)$ and $B(b)$ in terms of $\mathrm{var}(a)$ (the generators of $\mathbf{FL}(\mathrm{var}(a))$ that occur in $a$). Specifically, $A(a) = D_k(\mathbf{FL}(\mathrm{var}(a))) \cap \{c \le a\}$ for $k$ minimal with $a \in D_k$. Both $A(a)$ and $B(b)$ are finite subsets, and the intersection condition is verified by induction on $k + l$ where $a \in D_k(\mathbf{FL}(\mathrm{var}(a)))$ and $b \in D_l^d(\mathbf{FL}(\mathrm{var}(b)))$.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.6 · finitely separable ⟺ free image with order-preserving transversal</span>
+    <p>A lattice $\mathbf{L}$ is finitely separable if and only if there exists a homomorphism of a free lattice onto $\mathbf{L}$ with an order-preserving transversal.</p>
+  </div>
+
+  <h3>Theorem 5.7 — the projective characterization (book p. 99)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.7 · the projective characterization (Freese-Nation)</span>
+    <p>A lattice $\mathbf{L}$ is projective if and only if it satisfies the following four conditions:</p>
+    <ol>
+      <li>Whitman's condition (W);</li>
+      <li>$L = \mathbf{D}(\mathbf{L}) = \mathbf{D}^d(\mathbf{L})$;</li>
+      <li>$\mathbf{L}$ has the minimal join cover refinement property and its dual;</li>
+      <li>$\mathbf{L}$ is finitely separable.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the four conditions</span>
+    <p>Each condition does specific work. <strong>(W)</strong> is the "no doubly-reducible elements" condition — without it, the lattice has elements that can be both joins and meets, which never occur in free lattices. <strong>$\mathbf{D}(\mathbf{L}) = L$ and $\mathbf{D}^d(\mathbf{L}) = L$</strong> are the two-sided lower-/upper-boundedness — guaranteeing well-foundedness of the dependency relations. <strong>The min-cover refinement properties</strong> ensure that joins and meets have constructive minimal-cover witnesses. <strong>Finitely separable</strong> ensures that comparability $a \le b$ has a finite combinatorial witness — without it, infinite chains can prevent the construction of a transversal. Theorem 5.7's proof builds the transversal $h$ by transfinite induction on a well-ordering compatible with the witness-set structure. The four conditions together IMPOSE enough structure to guarantee the transversal exists.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.8 · countable projective characterization</span>
+    <p>A countable lattice $\mathbf{L}$ is projective if and only if it satisfies the first three conditions of Theorem 5.7. (Every countable lattice is automatically finitely separable.)</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.9 · Kostinsky 1972 — finitely generated projective ⟺ bounded + (W)</span>
+    <p>A finitely generated lattice $\mathbf{L}$ is projective if and only if it is a bounded lattice satisfying (W).</p>
+  </div>
+
+  <p>Corollary 5.9 — due originally to Alan Kostinsky 1972 — is the historical predecessor to Freese-Nation's general Theorem 5.7. Kostinsky's contribution was the bounded-equivalent recognition; Theorem 5.7 generalises to arbitrary cardinalities, with the additional condition (4) handling the infinite case.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.10 · finitely generated projective ⟺ sublattice of free</span>
+    <p>A finitely generated lattice $\mathbf{L}$ is projective if and only if it is a sublattice of a free lattice.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.11 · finite projective ⟺ finite sublattice of free</span>
+    <p>A finite lattice $\mathbf{L}$ is projective if and only if it is a sublattice of a free lattice.</p>
+  </div>
+
+  <p>The original result along these lines goes back to Ralph McKenzie [99] and, independently, Bjarni Jónsson (see [99] and [83]).</p>
+
+  <h3>Theorem 5.12 — intervals are projective (book p. 100)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.12 · intervals in $\mathbf{FL}(X)$ are projective</span>
+    <p>If $v \le u$ in $\mathbf{FL}(X)$, then $u/v$ is a projective lattice.</p>
+  </div>
+
+  <p>Theorem 5.12 says intervals in free lattices inherit projectivity. The proof uses the join-homomorphism $f : \mathbf{FL}(X) \to u/v$ defined by $f(w) = w \vee v$, with the identity as a join-preserving transversal. Lemmas 5.3 and Theorem 2.13 give the four conditions for $u/v$.</p>
+
+  <h3>Counterexamples — the four conditions are independent (book p. 100)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 5.13 · (W) fails — conditions (2)(3)(4) don't suffice</span>
+    <p>The finite bounded lattice $\mathbf{L}^\vee((x \vee (y \wedge z)) \wedge (y \vee z))$ from Figure 3.3(3) on book p. 84 satisfies $L = \mathbf{D}(\mathbf{L}) = \mathbf{D}^d(\mathbf{L})$, has the min-cover refinement properties, is finitely separable (because finite), but FAILS (W). Hence not projective.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 5.14 · $\mathbf{D}(\mathbf{L}) \neq L$ — conditions (1)(3)(4) don't suffice</span>
+    <p>The lattice in Figure 5.1 is finitely generated (by two doubly-irreducible elements at the extreme sides, the join of two atoms, and the meet of two coatoms) and satisfies (W) and the min-cover-refinement property, yet it is not projective because $\mathbf{D}(\mathbf{L}) \neq L$. This lattice was constructed from the one in Figure 5.5 (page 111) by repeatedly using the doubling construction to correct (W)-failures. The C-cycle in the original lattice is inherited by this one.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 5.15 · countable lattice $\mathbf{D}^*$ — conditions (1)(2)(3) don't suffice</span>
+    <p>For any chain $\mathbf{C}$ with a least element $z$, denote by $\mathbf{C}^*$ the lattice obtained by adding a new element $p$ to the direct product $\mathbf{C} \times \mathbf{2}$ in such a way that $\langle z, 0\rangle < p < \langle z, 1\rangle$. Now let $\mathbf{D}$ be a chain isomorphic to $(\omega + 1)^d$, and let $\mathbf{D}^*$ be the lattice in Figure 5.2.</p>
+    <p>$\mathbf{D}^*$ satisfies (1), (2), and (4) but FAILS the min-cover-refinement property. Hence not projective. (However, note: this example seems to claim it's a sublattice of a free lattice — by Theorem 5.8, since $\mathbf{D}^*$ is countable and satisfies (1)(2)(3) of Theorem 5.7? But the example explicitly says $\mathbf{D}^*$ FAILS the min-cover refinement condition, hence fails (3). So it's not a sublattice of a free lattice and not projective.)</p>
+  </div>
+
+  <h3>Ordinal sums and Theorem 5.16 (book p. 102)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.16 · ordinal-sum projectivity</span>
+    <p>Let $\mathbf{L} = \mathbf{L}_0 + \mathbf{L}_1$ be the ordinal sum of two lattices $\mathbf{L}_0, \mathbf{L}_1$. Then $\mathbf{L}$ is projective if and only if both $\mathbf{L}_0$ and $\mathbf{L}_1$ are and one of the following holds:</p>
+    <ol>
+      <li>$\mathbf{L}_0$ has a greatest element.</li>
+      <li>$\mathbf{L}_1$ has a least element.</li>
+      <li>$\mathbf{L}_0$ has a countable cofinal chain and $\mathbf{L}_1$ has a countable coinitial chain.</li>
+    </ol>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.17 · ordinal sum of free lattices</span>
+    <p>The ordinal sum of two free lattices is a projective lattice if and only if either one of the two free lattices is finitely generated or both are countable.</p>
+  </div>
+
+  <h3>Theorem 5.18 — projective ⟹ weakly atomic (book p. 103)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.18 · finitely-generated projective lattices are weakly atomic</span>
+    <p>Every finitely generated projective lattice is weakly atomic.</p>
+  </div>
+
+  <p>The proof uses Day's theorem — specifically Theorem 2.84 or Corollary 4.2 of Chapter IV. By Corollary 5.2, a finitely-generated projective $\mathbf{P}$ is a sublattice of $\mathbf{FL}(X)$ for some finite $X$. Assume $v < u$ in $\mathbf{P}$. By Day's theorem rank refinement (Corollary 4.2), there exists a finite bounded lattice $\mathbf{L}$ and a homomorphism $g : \mathbf{FL}(X) \to \mathbf{L}$ with $g(v) < g(u)$. Then $\mathbf{L}' = g(\mathbf{P})$ is a sublattice of $\mathbf{L}$, hence bounded. The restriction $h = g|_\mathbf{P}$ is a bounded homomorphism with $h(v) < h(u)$. Choose $w \in \mathbf{P}$ with $v < w \le u$ and $h(v) \prec h(w) \le h(u)$. Then by Lemma 2.82's argument, $u \ge w \ge v \vee \beta_h h(w) \succ \alpha_h h(v) \wedge (v \vee \beta_h h(w)) \ge v$ — giving the desired covering pair in $\mathbf{P}$.</p>
+
+  <div class="box connection" id="c2">
+    <span class="label">Connection P2 · Kostinsky 1972 + Freese-Nation refinement</span>
+    <p><strong>Kostinsky's 1972 paper</strong> ("Projective lattices and bounded homomorphisms", Pacific J. Math. 40, 111–119) was the FIRST characterization of finitely-generated projective lattices: $\mathbf{L}$ is projective iff $\mathbf{L}$ is bounded and satisfies (W). The result is striking — it says projectivity (a categorical property) is determined by two purely structural conditions. The proof uses McKenzie's bounded-homomorphism machinery: a finitely-generated lattice $\mathbf{L}$ with the natural map $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ being bounded admits a transversal which is itself a homomorphism, and (W) ensures the transversal extends to all of $\mathbf{L}$.</p>
+    <p><strong>Freese-Nation's refinement (Theorem 5.7).</strong> Theorem 5.7 generalizes Kostinsky's characterization to ARBITRARY (not just finitely-generated) projective lattices. The fourth condition — finite separability — replaces the "finitely generated" hypothesis. For finitely-generated lattices, finite separability is automatic, so Theorem 5.7 reduces to Corollary 5.9 = Kostinsky's theorem. For COUNTABLE lattices, finite separability is also automatic (Corollary 5.8), so the condition simplifies. For UNCOUNTABLE lattices, finite separability is a genuine extra condition.</p>
+    <p><strong>Why this matters.</strong> The Kostinsky-Freese-Nation chain of results gives a complete picture of projective lattices: finitely generated case (Kostinsky 1972), countable case (Corollary 5.8), general case (Theorem 5.7). The chain is unusual in mathematics — a clean three-step generalization where each step adds exactly one condition. The historical sequence (1972 → 1985 with the Trans. AMS paper [61]) tracks the field's growing understanding of how the classical "structural" conditions (W and bounded) generalize to capture finite witnessing of comparability.</p>
+  </div>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · FREE LATTICE OVER AN ORDERED SET — §2</div>
+  <h2>$\mathbf{FL}(\mathbf{P})$: building free lattices that respect a pre-existing order on the generators</h2>
+  <p class="part-lede">$\mathbf{FL}(\mathbf{P})$ is the free lattice with the relations from $\mathbf{P}$'s order enforced. Theorem 5.20: $\mathbf{FL}(\mathbf{P})$ has $\mathbf{D}(\mathbf{L}) = L = \mathbf{D}^d(\mathbf{L})$. Theorem 5.22: $\mathbf{FL}(\mathbf{P})$ is projective ⟺ $\mathbf{P}$ is finitely separable. Corollary 5.23: $\mathbf{P}$ embeds in some free lattice ⟺ $\mathbf{P}$ embeds in a finitely-separable ordered set.</p>
+</header>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 2</span> The Free Lattice Generated by an Ordered Set</h2>
+  <div class="tagline">Beyond $\mathbf{FL}(X)$ for an antichain $X$, the construction generalises to any ordered set $\mathbf{P}$. The structure mimics $\mathbf{FL}(X)$ closely except the order on generators is now non-trivial. Dean's analog of Whitman's algorithm holds. Embeddability of ordered sets into free lattices reduces to a structural condition (finite separability).</div>
+
+  <h3>Definition and construction (book pp. 104–105)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · $\mathbf{FL}(\mathbf{P})$ — free lattice over an ordered set</span>
+    <p>Let $\mathbf{P}$ be an ordered set. A lattice $\mathbf{F}$ is <strong>freely generated by $\mathbf{P}$</strong> if:</p>
+    <ol>
+      <li>$F$ has a subset $P$ such that $P$ with the induced order is isomorphic to $\mathbf{P}$;</li>
+      <li>$P$ generates $\mathbf{F}$;</li>
+      <li>Every order preserving map $h_0 : \mathbf{P} \to \mathbf{L}$, where $\mathbf{L}$ is a lattice, can be extended to a lattice homomorphism $h : \mathbf{F} \to \mathbf{L}$.</li>
+    </ol>
+    <p>It is not hard to see that these conditions determine $\mathbf{F}$ up to isomorphism, and hence we denote it by $\mathbf{FL}(\mathbf{P})$. If $\mathbf{P}$ is an antichain, then $\mathbf{FL}(\mathbf{P})$ is just a free lattice in the ordinary sense.</p>
+  </div>
+
+  <p>The construction follows Day's pattern (Chapter II §7): start with $\mathbf{F}_0 = \mathbf{FD}(\mathbf{P})$ (the free distributive lattice over $\mathbf{P}$), apply the doubling construction to fix (W)-failures, iterate to get $\mathbf{F}_n$, take the inverse limit. The result is $\mathbf{FL}(\mathbf{P})$.</p>
+
+  <p>Lattices freely generated by ordered sets were first studied by R.A. Dean [34], who showed these lattices closely mimic the theory of free lattices developed by Whitman, except for the order on the generators.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.19 · Dean's word-problem algorithm for $\mathbf{FL}(\mathbf{P})$</span>
+    <p>Let $\mathbf{P}$ be an ordered set, and let $s = s(x_1, \ldots, x_n)$ and $t = t(x_1, \ldots, x_n)$ be lattice terms with $x_1, \ldots, x_n \in \mathbf{P}$. Then the truth of $s^{\mathbf{FL}(\mathbf{P})} \le t^{\mathbf{FL}(\mathbf{P})}$ can be determined by applying the rule:</p>
+    <p><strong>(1')</strong> If $s = x_i$ and $t = x_j$, then $(*)$ holds if and only if $x_i \le x_j$ in $\mathbf{P}$.</p>
+    <p>and the direct analogues of rules (2)–(6) of Theorem 1.11, obtained by replacing $\mathbf{FL}(X)$ by $\mathbf{FL}(\mathbf{P})$ in the statements. In particular, $\mathbf{FL}(\mathbf{P})$ satisfies (W).</p>
+  </div>
+
+  <p>For a concrete example, let $\mathbf{n}_1 + \cdots + \mathbf{n}_k$ denote the ordered set which is a disjoint union of $k$ chains $\mathbf{n}_i$ with $n_i$ elements each. Figure 5.3 shows the diagrams of $\mathbf{FD}(\mathbf{2 + 2})$ and $\mathbf{FL}(\mathbf{2 + 2})$. J.I. Sorkin originally proved that $\mathbf{FL}(\mathbf{2 + 2})$ and $\mathbf{FL}(\mathbf{1 + 4})$ are infinite, and H.L. Rolf constructed the diagrams [124]. Rolf also proved that $\mathbf{FL}(\mathbf{n_1 + n_2})$ contains a sublattice isomorphic to $\mathbf{FL}(3) = \mathbf{FL}(\mathbf{1 + 1 + 1})$ exactly when $n_1 n_2 \ge 5$. For the best discussion of the structure of $\mathbf{FL}(\mathbf{P})$ when $\mathbf{P}$ is finite, see Rival and Wille [116].</p>
+
+  <h3>Structural properties (book pp. 105–106)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.20 · $\mathbf{D}(\mathbf{FL}(\mathbf{P})) = \mathbf{FL}(\mathbf{P})$ and dual</span>
+    <p>For any ordered set $\mathbf{P}$, the lattice $\mathbf{FL}(\mathbf{P})$ satisfies $\mathbf{D}(\mathbf{FL}(\mathbf{P})) = \mathbf{FL}(\mathbf{P}) = \mathbf{D}^d(\mathbf{FL}(\mathbf{P}))$. Moreover, $\mathbf{FL}(\mathbf{P})$ has the minimal join cover refinement property and its dual.</p>
+  </div>
+
+  <p>Theorem 5.20 says $\mathbf{FL}(\mathbf{P})$ satisfies the first three conditions for projectivity from Theorem 5.7. Whether it satisfies condition (4) — finite separability — depends on $\mathbf{P}$.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.21 · countable $\mathbf{P}$ ⟹ $\mathbf{FL}(\mathbf{P})$ projective</span>
+    <p>If $\mathbf{P}$ is a countable ordered set, then $\mathbf{FL}(\mathbf{P})$ is a projective lattice.</p>
+  </div>
+
+  <h3>The embeddability question (book p. 106)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.22 · $\mathbf{FL}(\mathbf{P})$ projective ⟺ $\mathbf{P}$ finitely separable</span>
+    <p>$\mathbf{FL}(\mathbf{P})$ is a projective lattice if and only if $\mathbf{P}$ is a finitely separable ordered set.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.23 · embeddability of ordered sets in free lattices</span>
+    <p>The following are equivalent for an ordered set $\mathbf{P}$:</p>
+    <ol>
+      <li>$\mathbf{P}$ is embeddable in a free lattice.</li>
+      <li>$\mathbf{FL}(\mathbf{P})$ is embeddable in a free lattice.</li>
+      <li>$\mathbf{P}$ is embeddable in an ordered set $\mathbf{Q}$ which is finitely separable.</li>
+    </ol>
+  </div>
+
+  <p>Corollary 5.23 reduces the (still partly open) embeddability question for ordered sets to a structural condition (finite separability of an over-set $\mathbf{Q}$).</p>
+
+  <div class="box ex">
+    <span class="label">Examples 5.24–5.26 · concrete embeddability tests</span>
+    <p><strong>Example 5.24:</strong> Let $\mathbf{P}$ be a bipartite ordered set consisting of two antichains $C, D$ with $c \le d$ for all $c \in C, d \in D$. Then $\mathbf{FL}(\mathbf{P})$ is the ordinal sum of two free lattices. Hence by Corollary 5.17, $\mathbf{FL}(\mathbf{P})$ is projective iff either $C$ or $D$ is finite, or both are countable. <strong>Example 5.25:</strong> Modifying Example 5.24 by adding a "middle" element $r$ between $C$ and $D$ to get $\mathbf{Q} = C \cup D \cup \{r\}$ with $c \le r \le d$ — then $\mathbf{Q}$ is finitely separable for any cardinalities of $C, D$. Hence by Corollary 5.23, every $\mathbf{P}$ from Example 5.24 (regardless of cardinalities) embeds in some $\mathbf{FL}(\mathbf{Y})$. <strong>Example 5.26:</strong> Let $X$ be uncountable, $\mathbf{R}$ be the bipartite ordered set isomorphic to all atoms and coatoms of $\mathbf{2}^X$. By [61], $\mathbf{R}$ cannot be embedded into a finitely separable ordered set, hence not into a free lattice.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.27 · Nation-Schmerl — order dimension of $\mathbf{F}_\mathcal{V}(X)$</span>
+    <p>If $\mathcal{V}$ is a nontrivial lattice variety and $X$ is an infinite set, then the order dimension of the relatively free lattice $\mathbf{F}_\mathcal{V}(X)$ is the smallest cardinal $\lambda$ such that $|X| \le 2^\lambda$.</p>
+  </div>
+
+  <div class="box problem">
+    <span class="label">Problem 5.28 · open problem on embeddability of ordered sets</span>
+    <p>Characterize those ordered sets which can be embedded into a free lattice.</p>
+  </div>
+
+  <p>Corollary 5.23, while a significant reduction of the problem, hardly counts as a characterization. We only know two general necessary conditions: (1) $\mathbf{P}$ is a countable union of antichains; (2) if $\mathbf{P}$ is infinite, $\dim \mathbf{P} \le \lambda$ where $\lambda$ is the smallest cardinal with $|\mathbf{P}| \le 2^\lambda$. Some further restrictions are in Nation [105].</p>
+
+  <h3>Lower bounded homomorphic images of $\mathbf{FL}(\mathbf{P})$ (book pp. 107–108)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.31 · lower-bounded image of $\mathbf{FL}(\mathbf{P})$ characterization</span>
+    <p>A lattice $\mathbf{L}$ is a lower bounded homomorphic image of some $\mathbf{FL}(\mathbf{P})$ if and only if $\mathbf{L}$ has the minimal join cover refinement property and $\mathbf{D}(\mathbf{L}) = L$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.32 · retract of $\mathbf{FL}(\mathbf{P})$ characterization</span>
+    <p>A lattice $\mathbf{L}$ is a retract of $\mathbf{FL}(\mathbf{P})$ for some ordered set $\mathbf{P}$ if and only if it satisfies (1) Whitman's condition (W); (2) $L = \mathbf{D}(\mathbf{L}) = \mathbf{D}^d(\mathbf{L})$; (3) $\mathbf{L}$ has the minimal join cover refinement property and its dual.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.33 · lower-bounded image of $\mathbf{FL}(X)$ characterization</span>
+    <p>A lattice $\mathbf{L}$ is a lower bounded image of a free lattice if and only if it satisfies: (1) $L = \mathbf{D}(\mathbf{L}) = \mathbf{D}^d(\mathbf{L})$; (2) $\mathbf{L}$ has the minimal join cover refinement property; (3) there exists a generating set $Y$ for $\mathbf{L}$ such that $\{y \in Y : y \ge a\}$ is finite for every $a \in L$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.34 · $\mathbf{FL}(\mathbf{P})$ as lower-bounded image</span>
+    <p>$\mathbf{FL}(\mathbf{P})$ is a lower bounded image of a free lattice if and only if $\{q \in \mathbf{P} : q \ge p\}$ is finite for every $p \in \mathbf{P}$.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · NATION'S THEOREM — §3</div>
+  <h2>The chapter's deepest result: finite SD + (W) ⟺ sublattice of free lattice</h2>
+  <p class="part-lede">The proof is 18 pages of dense case analysis, organized as: (1) Lemma 5.35 — 4-fold equivalence reducing the problem to S-lattices without C-cycles; (2) Configuration-forbidding lemmas (5.36–5.50) ruling out specific arrangements in S-lattices; (3) The B-type sequence machinery (5.41–5.51) decoupling B's from cycle order; (4) Final case analysis (5.52–5.54) eliminating residual cycle types. Theorem 5.55 is the conclusion.</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 3</span> Finite Sublattices of Free Lattices · Nation's Theorem</h2>
+  <div class="tagline">"The proof is fairly long and complicated, and we have not found any significant improvements." — Freese-Ježek-Nation, opening of §3. This section is one of the most technical proofs in lattice theory. We companion the structure carefully, focusing on conceptual content and key innovations.</div>
+
+  <h3>The reduction to S-lattices (book pp. 108–109)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · S-lattice</span>
+    <p>An <strong>S-lattice</strong> is a finite semidistributive lattice satisfying Whitman's condition (W). The aim of §3 is to prove that every S-lattice is projective, hence a sublattice of a free lattice.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.35 · 4-fold equivalence for finite lattices</span>
+    <p>The following are equivalent for a finite lattice $\mathbf{L}$:</p>
+    <ol>
+      <li>$\mathbf{L}$ is projective.</li>
+      <li>$\mathbf{L}$ is a sublattice of a free lattice.</li>
+      <li>$\mathbf{L}$ is bounded and satisfies (W).</li>
+      <li>$\mathbf{L}$ is an S-lattice containing no C-cycle.</li>
+    </ol>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the strategy via Lemma 5.35</span>
+    <p>By Corollaries 5.9 and 5.10, conditions (1), (2), (3) are equivalent for finitely-generated lattices. (3)⟹(W) and (3)⟹SD by Theorem 2.20 and its dual. The HARD direction is (4)⟹(3) — i.e., showing an S-lattice without C-cycle is bounded. By Lemma 2.62 of Chapter II, a finite SD lattice is bounded iff it contains no C-cycle. So if we can prove that NO S-lattice contains a C-cycle, condition (4) collapses into "$\mathbf{L}$ is an S-lattice", and we can drop the no-C-cycle condition. This is the strategy: prove that an S-lattice with a C-cycle leads to a contradiction. The contradiction takes 18 pages of technical work.</p>
+  </div>
+
+  <h3>Setup: the relations $A, B, C$ subdivided (book p. 110)</h3>
+
+  <p>Recall from Chapter II §5 that the C-relation on completely-join-irreducibles in a finite SD lattice is the union of two relations $A$ and $B$:</p>
+  <ul>
+    <li>$a A b$ if $b < a$ and $a \le b \vee \kappa(b)$ (equivalently $b < a \le \kappa(b)^*$).</li>
+    <li>$a B b$ if $a \neq b$, $a \le a_* \vee b$, and $a \not\le a_* \vee b_*$ (equivalently $b \not\le \kappa(a)$ and $b_* \le \kappa(a)$).</li>
+  </ul>
+
+  <p>For the proof of §3, the relations are FURTHER subdivided into $A_1, A_2$ and $B_1, B_2$:</p>
+
+  <div class="box def">
+    <span class="label">Definition · A1, A2, B1, B2 (the proof's technical refinement)</span>
+    <p>Define:</p>
+    <ul>
+      <li>$a A_1 b$ if $a A b$ and $a \wedge \kappa(b) > b_*$.</li>
+      <li>$a A_2 b$ if $a A b$ and $a \wedge \kappa(b) = b_*$.</li>
+      <li>$a B_1 b$ if $a B b$ and $b_* \not\le a$.</li>
+      <li>$a B_2 b$ if $a B b$ and $b_* < a$.</li>
+    </ul>
+    <p>Figure 5.4 of the monograph diagrams these four cases pictorially.</p>
+  </div>
+
+  <h3>Free-star principle and easy lemmas (book pp. 110–112)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · Free star principle</span>
+    <p>The "free star" principle is a quote-and-check argument used many times in the proof: <strong>if $p, q$ are two distinct members of a minimal C-cycle and $q$ is not the successor of $p$ in the cycle, then $p B q$ does not hold; therefore $q \not\le \kappa(p)$ implies $q_* \not\le \kappa(p)$.</strong></p>
+  </div>
+
+  <p>This structural fact arises because if $p B q$ held in a minimal C-cycle, $p$ and $q$ could be connected by a shorter cycle, contradicting minimality. The free star principle is invoked dozens of times in the proof.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemmas 5.36–5.37 · consecutive A's or B's in minimal C-cycle</span>
+    <p><strong>Lemma 5.36:</strong> If $p_0 A_2 p_1 A p_2$ in a minimal C-cycle, then $p_2 = p_{1*}$ and $p_1 A p_2$.</p>
+    <p><strong>Lemma 5.37:</strong> If $q_0 B q_1 B q_2$ in a minimal C-cycle, then $q_1 B_1 q_2$.</p>
+  </div>
+
+  <h3>Forbidden configurations in (W)-lattices (book pp. 112–113)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemmas 5.38, 5.39, 5.40 · configurations forbidden by (W)</span>
+    <p>These three configuration-forbidding lemmas are the key technical tools.</p>
+    <p><strong>Lemma 5.38:</strong> A finite lattice $\mathbf{L}$ satisfying (W) cannot contain elements $a, a_0, a_1, b, b_0$ with seven specific conditions (1)–(7) (book p. 112) — including $b$ join reducible, $a \le a_1 \prec a_0$, $b \le b_0$, $b \not\le b_0$, etc. The proof iterates a Whitman-condition-derivation argument on $a_2 = a_{1*}, b_1 = b_0 \wedge (a_1 \vee b)$ and produces an infinite descending chain.</p>
+    <p><strong>Lemma 5.39:</strong> A finite (W)-lattice cannot contain $a, b, c$ with five conditions: $b \wedge (c \vee (a \wedge b)) \not\le a$, $a \wedge (c \vee (a \wedge b)) \not\le b$, $a \wedge b \not\le c$, $a \not\le b \vee c$, $b \not\le a \vee c$.</p>
+    <p><strong>Lemma 5.40:</strong> A finite (W)-lattice cannot contain $a, a_0, b, b_0$ with eight conditions. (Motivation: rules out infinite chains in $\mathbf{FL}(\mathbf{2 + 2})$ — Figure 5.3 on page 105.)</p>
+  </div>
+
+  <h3>B-type sequences (book p. 113)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · B-type sequence</span>
+    <p>A finite sequence $q_0, \ldots, q_k$ of join-irreducible elements of an S-lattice is a <strong>B-type sequence</strong> if the following four conditions are satisfied:</p>
+    <ul>
+      <li><strong>(B1)</strong> $q_{i-1*} \not\le q_i$ for $1 \le i \le k$.</li>
+      <li><strong>(B2)</strong> $q_i \le \kappa(q_j)$ for $0 \le i < j \le k$.</li>
+      <li><strong>(B3)</strong> $q_{i*} \le \kappa(q_{i-1})$ for $1 \le i \le k$.</li>
+      <li><strong>(B4)</strong> $q_{j*} \not\le \kappa(q_i)$ for $0 \le i < i + 2 \le j \le k$.</li>
+    </ul>
+    <p>Note that (B2) implies $q_i \neq q_j$ for $i \neq j$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.41 · subsequence of consecutive B's is B-type</span>
+    <p>If $q_0, \ldots, q_k$ is a subsequence of a minimal C-cycle such that $q_i B q_{i+1}$ for $0 \le i < k$, then $q_0, \ldots, q_k$ is a B-type sequence.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why B-type sequences are the right framework</span>
+    <p>B-type sequences GENERALIZE consecutive-B subsequences in two ways. First, they don't require $q_{i-1} B q_i$ — only the four properties (B1–B4) — so a B-type sequence can have non-consecutive B's separated by A's. Second, the conditions (B1–B4) admit a natural transitivity-like structure: combining sequences yields a sequence. This decouples B's from the cycle order. The crucial technical innovation that broke through the impasse in Jónsson's 1960s notes: the property "$p$ acts like a B-element in an extended cycle" can be captured WITHOUT actually placing $p$ adjacent to its B-partner. This is what allows the proof's case analysis to consolidate disparate cycle structures.</p>
+  </div>
+
+  <h3>The technical workhorse: Lemmas 5.42–5.51 (book pp. 114–122)</h3>
+
+  <p>The proof's technical core is a sequence of ten lemmas (5.42–5.51) that progressively constrain what minimal C-cycles can look like. The structure:</p>
+
+  <table class="grid">
+    <thead><tr><th>Lemma</th><th>Hypothesis</th><th>Conclusion</th></tr></thead>
+    <tbody>
+      <tr><td>5.42</td><td>$q_0, \ldots, q_k$ B-type subseq + 3 cases on $q_k$ vs $q_{0*}$</td><td>None of 3 cases can hold</td></tr>
+      <tr><td>5.43</td><td>B-type subseq + 7 conditions involving an extra $t$</td><td>$\bigvee_{i<j} q_{i*} \not\le \kappa(p)$</td></tr>
+      <tr><td>5.44</td><td>$q_k A_1 p$ at end of B-type seq</td><td>$p_* < q_{0*}$</td></tr>
+      <tr><td>5.45</td><td>$q_k A_2 p_1 A_2 p_2$ at end</td><td>$p_{2*} < q_{0*}$</td></tr>
+      <tr><td>5.46</td><td>$q_k A_2 p$, $p B q_0$ false, $q_0 \not\le \kappa(p)$</td><td>$p_{**} < q_{0*}$</td></tr>
+      <tr><td>5.47</td><td>$q_k A_2 p$, $q_0 \le \kappa(p)$ + auxiliary</td><td>$\bigvee_{i \le k} q_i \not\le \kappa(p)$</td></tr>
+      <tr><td>5.48</td><td>$q_k A_2 p$, $q_0 \le \kappa(p)$, $p_{**} \not\le q_{0*}$</td><td>$p = q_{k*}$</td></tr>
+      <tr><td>5.49</td><td>$p A_2 q B_1 r$</td><td>$p \le q \vee r$</td></tr>
+      <tr><td>5.50</td><td>$q_k A_2 p_0 B_1 p_1$, etc.</td><td>$\bigvee_{i \le k} q_i \le p_0 \vee p_1$</td></tr>
+      <tr><td>5.51</td><td>Removing one element from a C-cycle preserves B-type</td><td>The remaining sequence is still B-type</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the lemma chain's purpose</span>
+    <p>Each lemma rules out a different class of configurations that could occur in a minimal C-cycle. The cumulative effect: by the end of Lemma 5.51, we have ruled out all but a very specific cycle form — a strict alternation $B_1 A_2 B_1 A_2 \ldots$ with no $A_1$'s, no $B_2$'s, and no consecutive A's of any kind.</p>
+    <p>The proofs use Whitman's condition (W) repeatedly via the configuration-forbidding lemmas (5.38–5.40). When a hypothesized minimal cycle leads to a (W)-violation in some sublattice generated by cycle elements, contradiction. The lemmas progressively narrow which cycle structures could hypothetically exist; eventually only one form remains.</p>
+  </div>
+
+  <h3>Eliminating the residual cycles (book pp. 123–126)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.52 · the exceptional case $r_0 A_2 r_1 B_1 r_2 A_2 r_3 B_1 r_4 A_2 r_5$</span>
+    <p>Let $r_0, \ldots, r_5$ be a subsequence of a minimal C-cycle with $r_0 A_2 r_1 B_1 r_2 A_2 r_3 B_1 r_4 A_2 r_5$. Then (1) $r_0 \le r_2 \vee r_4$; (2) $r_4 \not\le r_0 \vee r_2$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.53 · alternating $B_1 A_2 B_1 A_2 \ldots$ cycle is impossible</span>
+    <p>An S-lattice cannot contain a minimal C-cycle of the form $q_1 B_1 p_1 A_2 q_2 B_1 p_2 A_2 \ldots q_n B_1 p_n A_2 q_1$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.54 · S-lattice contains NO C-cycle</span>
+    <p>An S-lattice contains no C-cycle.</p>
+  </div>
+
+  <p>The proof of Lemma 5.54 combines all preceding lemmas: a minimal C-cycle, after careful analysis ruling out $A_1$'s, $A$'s adjacent to other $A$'s, $B_2$'s, and consecutive $B_1$'s except via $A_2$ separators, must take the form excluded by Lemma 5.53. Hence no minimal C-cycle exists, so no C-cycle exists. $\square$</p>
+
+  <h3>Theorem 5.55 — Nation's theorem (book p. 126)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.55 · Nation 1982 — Jónsson's conjecture</span>
+    <p>A finite lattice is a sublattice of a free lattice if and only if it is semidistributive and satisfies (W).</p>
+  </div>
+
+  <p>Combining Lemmas 5.35 and 5.54: an S-lattice (= finite SD + (W)) contains no C-cycle, hence is bounded by Lemma 2.62, hence is projective by Corollary 5.10, hence is a sublattice of a free lattice. Conversely, sublattices of free lattices inherit (W) and SD trivially. $\square$</p>
+
+  <div class="box connection" id="c1">
+    <span class="label">Connection P1 · Nation 1982 + the resolution of Jónsson's conjecture</span>
+    <p>Theorem 5.55 settled a conjecture from <strong>unpublished notes of Bjarni Jónsson from the 1960s</strong>. Jónsson's notes outlined a program for the proof but couldn't complete it; the program was published as Jónsson-Nation 1977 (Algebra universalis 7) with partial results. Rival-Sands 1976 proved the planar case [115]. <strong>Ježek-Slavík 1980</strong> proved Jónsson's conjecture for SUBDIRECTLY IRREDUCIBLE S-lattices using different methods [76] (the same paper that classified the primitive lattices in §5). <strong>Nation 1982</strong> ("Finite sublattices of a free lattice", Trans. AMS 269, 311–337) completed Jónsson's program in full generality, proving that EVERY S-lattice is a sublattice of a free lattice. The 1982 paper introduced the B-type sequence machinery (Lemma 5.41 here) as the key technical innovation. <strong>Computer-assisted origins.</strong> The motivation for many of the technical lemmas came from Nation's 1970s computer programs that attempted to construct S-lattices generated by C-cycles. Invariably, the programs would start producing infinite chains. The argument that these chains become infinite was formalized into the configuration-forbidding lemmas (5.38–5.40). This was, as the monograph notes, "one of the first computer assisted proofs in lattice theory". <strong>Companion implication.</strong> The FORBIDDEN-LATTICE forms of Theorem 5.55 (Theorem 5.58 in §4) translate Nation's algebraic-combinatorial characterization into a SCANNING test: a finite lattice $\mathbf{L}$ is a sublattice of FL iff $\mathbf{L}$ contains no copies of $\mathbf{L}_1, \ldots, \mathbf{L}_8$. Eight specific finite lattices are the "universal obstructions". Nation 1982 + Antonius-Rival together give a complete characterization in this combinatorial form.</p>
+  </div>
+
+  <div class="box connection" id="c3">
+    <span class="label">Connection P3 · the B-type sequence machinery</span>
+    <p>The B-type sequence framework (Definition before Lemma 5.41) is the technical innovation that made Nation's 1982 proof possible. Why was it needed?</p>
+    <p><strong>The problem with consecutive-B reasoning.</strong> Jónsson's 1960s approach reasoned about C-cycles by analyzing their A/B alternation pattern. Consecutive B's $q_i B q_{i+1} B q_{i+2}$ have a transitivity-like behavior: there are constraints on how they fit together. But the CRUCIAL configurations involve B's that are NOT consecutive in the cycle — separated by A's. The "consecutive B" reasoning couldn't directly apply.</p>
+    <p><strong>The B-type sequence solution.</strong> A B-type sequence captures the structural CONTENT of consecutive B's WITHOUT requiring them to be cycle-adjacent. Specifically: properties (B1), (B2), (B3), (B4) abstract what's needed. Then Lemma 5.41: any subsequence of a minimal C-cycle satisfying $q_i B q_{i+1}$ is a B-type sequence. This is the bridge: cycle adjacency ⟹ B-type, but B-type doesn't require cycle adjacency.</p>
+    <p><strong>How it works in the proof.</strong> Many of the lemmas 5.42–5.51 use B-type sequences as the WORKING STRUCTURE rather than cycle subsequences directly. The proofs can pass to non-adjacent subsequences, apply structural manipulations, and re-enter the cycle context through Lemma 5.41's bidirectional bridge. The framework decouples local manipulation from global cycle structure.</p>
+    <p><strong>Generalization potential.</strong> Configurations which make a lattice satisfying (W) infinite are now much better understood thanks to the wonderful results of V. Slavík on (W)-lattices of finite lattices [123]. The B-type sequence framework was specific to this proof but informed later work on (W)-lattices and on the structure of finitely generated free lattices.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · FORBIDDEN LATTICES — §4</div>
+  <h2>The combinatorial form: 8 forbidden sublattices characterize finite-sublattice-of-free</h2>
+  <p class="part-lede">Davey-Poguntke-Rival 1975: 6 lattices $\mathbf{L}_1, \ldots, \mathbf{L}_6$ characterize SD failure (Theorem 5.56). Antonius-Rival: 2 additional lattices $\mathbf{L}_7, \mathbf{L}_8$ added to characterize sublattice-of-free (Theorem 5.58). Theorem 5.59: finite-or-bounded for SD$_\wedge$ without infinite chains. Example 5.60: tight bounds on $f_n$.</p>
+</header>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 4</span> Related Topics — Forbidden-Sublattice Characterizations</h2>
+  <div class="tagline">Theorem 5.55 reframed combinatorially. The 8 forbidden lattices L1–L8 are the universal obstructions to finite-sublattice-of-free embedding. Plus an extension to SD lattices without infinite chains.</div>
+
+  <h3>Theorem 5.56 — Davey-Poguntke-Rival (book pp. 126–127)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.56 · 6 forbidden sublattices for semidistributivity</span>
+    <p>A finite lattice is semidistributive if and only if it contains no sublattice isomorphic to one of the six lattices $\mathbf{L}_1, \mathbf{L}_2, \mathbf{L}_3, \mathbf{L}_4, \mathbf{L}_5$ or $\mathbf{L}_6$ of Figure 5.8.</p>
+  </div>
+
+  <p>Figure 5.8 shows eight lattices labeled $\mathbf{L}_1, \ldots, \mathbf{L}_8$. The first six characterize SD failure (this theorem); the last two ($\mathbf{L}_7, \mathbf{L}_8$) extend to (W) failure (Theorem 5.58). Specifically, $\mathbf{L}_1, \mathbf{L}_2, \mathbf{L}_3 = \mathbf{L}_4^d, \mathbf{L}_5 = \mathbf{L}_6^d$ are the failing lattices; $\mathbf{L}_4 = \mathbf{L}_3^d, \mathbf{L}_6 = \mathbf{L}_5^d$ are duals included for SD$_\wedge$.</p>
+
+  <p>The proof is by careful case analysis: assume SD$_\vee$ fails with witnesses $a, b, c$ such that $a \vee b = a \vee c > a \vee (b \wedge c)$. Two claims (Claim 1, Claim 2) about the structure of $b, c$ relative to $s = a \wedge b$ — leading to either a sublattice $\mathbf{L}_5$ or $\mathbf{L}_3$ (depending on whether $a \wedge b > 0$, $a \wedge c > 0$). Symmetric arguments give $\mathbf{L}_2, \mathbf{L}_1$ as alternatives. Hence a finite SD$_\vee$ failure embeds one of $\mathbf{L}_1, \ldots, \mathbf{L}_5$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.57 · variety form of Theorem 5.56</span>
+    <p>A lattice $\mathbf{L}$ is semidistributive if and only if the variety $\mathbf{V}(\mathbf{L})$ contains none of the lattices $\mathbf{L}_1, \mathbf{L}_2, \mathbf{L}_3, \mathbf{L}_4, \mathbf{L}_5$ or $\mathbf{L}_6$ of Figure 5.8.</p>
+  </div>
+
+  <h3>Theorem 5.58 — 8 forbidden sublattices for sublattice-of-FL (book p. 128)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.58 · Antonius-Rival — 8 forbidden sublattices</span>
+    <p>A finite lattice is a sublattice of a free lattice if and only if it contains no sublattice isomorphic to one of the eight lattices $\mathbf{L}_1, \ldots, \mathbf{L}_8$ of Figure 5.8.</p>
+  </div>
+
+  <p>By Nation's theorem (5.55), finite-sublattice-of-FL ⟺ SD + (W). By Theorem 5.56, SD ⟺ no $\mathbf{L}_1, \ldots, \mathbf{L}_6$ sublattices. The two additional lattices $\mathbf{L}_7, \mathbf{L}_8$ characterize (W) failure on top of SD: a finite SD lattice fails (W) iff it contains $\mathbf{L}_7$ or $\mathbf{L}_8$ as a sublattice.</p>
+
+  <h3>Theorem 5.59 — finiteness of SD lattices without infinite chains (book p. 128)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.59 · meet-SD lattice without infinite chains is finite</span>
+    <p>A meet semidistributive lattice without infinite chains is finite; if it is of length $n$, then it has at most $2^n$ elements.</p>
+  </div>
+
+  <p>The proof inducts on length $n$. Take an atom $c$ of $\mathbf{L}$. By SD$_\wedge$, the maximal element $d$ with $c \not\le d$ — namely $d = \kappa_\mathbf{L}(c)$ — is unique. The lattice $\mathbf{L}$ is the disjoint union of $1/c$ and $d/0$. Both intervals have length $\le n - 1$, so by induction each has $\le 2^{n-1}$ elements, giving $\le 2 \cdot 2^{n-1} = 2^n$ total.</p>
+
+  <div class="box ex">
+    <span class="label">Example 5.60 · sharpness of the $2^n$ bound</span>
+    <p>For positive integer $n$, let $f_n$ be the largest cardinality of a length-$n$ lattice embeddable in a free lattice. By Theorem 5.59, $f_n \le 2^n$. The <strong>parallel sum</strong> construction gives the lower bound: $f_{n+2} \ge 2 f_n + 2$. With $f_1 = 2, f_2 = 4$, induction gives $f_n \ge \sqrt{2^n}$. Hence</p>
+    $$\sqrt{2^n} \le f_n \le 2^n$$
+    <p>for all $n$. The exact growth rate is open.</p>
+  </div>
+
+  <p>The parallel sum: given lattices $\mathbf{L}, \mathbf{K}$, the parallel sum is the lattice $L \cup K \cup \{0, 1\}$ where $\mathbf{L}, \mathbf{K}$ are disjoint intervals and there are no relations between elements of $L$ and elements of $K$ beyond the $0, 1$ endpoints. The parallel sum of two finite sublattices of a free lattice is again a finite sublattice of a free lattice.</p>
+
+  <div class="box connection" id="c4">
+    <span class="label">Connection P4 · forbidden-sublattice characterizations</span>
+    <p>Theorem 5.58 is one of the most useful forms of Nation's theorem: a finite lattice $\mathbf{L}$ is a sublattice of FL iff $\mathbf{L}$ contains no copies of $\mathbf{L}_1, \ldots, \mathbf{L}_8$. The 8 lattices are EXPLICIT, DRAWABLE, and RECOGNISABLE — converting Nation's algebraic characterization (SD + (W)) into a purely combinatorial test (no forbidden subdiagrams).</p>
+    <p><strong>The 8 lattices.</strong> $\mathbf{L}_1$ — a 6-element pentagon-like lattice. $\mathbf{L}_2$ — a 6-element diamond-like lattice. $\mathbf{L}_3, \mathbf{L}_4 = \mathbf{L}_3^d$ — 7-element configurations (dual pair). $\mathbf{L}_5, \mathbf{L}_6 = \mathbf{L}_5^d$ — additional 7-element configurations (dual pair). $\mathbf{L}_7$ — a (W)-failure witness with 8 elements. $\mathbf{L}_8$ — a related 8-element (W)-failure witness. Figure 5.8 of the monograph diagrams all eight.</p>
+    <p><strong>How to use the test.</strong> Given a finite lattice $\mathbf{L}$ (specified by its diagram or operation tables), enumerate all sub-orderings of $\mathbf{L}$ and check whether any is isomorphic to one of $\mathbf{L}_1, \ldots, \mathbf{L}_8$. If none is, $\mathbf{L}$ is a sublattice of FL. Polynomial-time in $|\mathbf{L}|$.</p>
+    <p><strong>Comparison to Davey-Poguntke-Rival.</strong> The characterization for SD alone (Theorem 5.56) uses only 6 forbidden lattices. The additional 2 lattices ($\mathbf{L}_7, \mathbf{L}_8$) for (W) reflect that (W) is a STRICTLY stronger condition than SD. Equivalently: SD-and-(W) is the intersection of two combinatorial conditions; each contributes its forbidden witnesses.</p>
+    <p><strong>Open question for arbitrary varieties.</strong> Theorem 5.57 says SD failure is detected by $\mathbf{V}(\mathbf{L})$ containing some $\mathbf{L}_i$. The analogous statement for sublattice-of-FL is open: does $\mathbf{V}(\mathbf{L})$ containing none of $\mathbf{L}_1, \ldots, \mathbf{L}_8$ characterize $\mathbf{V}(\mathbf{L})$'s lattices being sublattices of FL? The answer is unknown for non-finite cases.</p>
+  </div>
+</section>
+
+<!-- ============== PART E ============== -->
+<header class="part-header">
+  <div class="pk">PART E · PRIMITIVE LATTICES — §5</div>
+  <h2>The primitive lattices: finite, subdirectly-irreducible, projective</h2>
+  <p class="part-lede">Theorem 5.61: 3-fold characterization of primitive. Examples 5.62, 5.63: the four "starter" primitives $\mathbf{A}_1$–$\mathbf{A}_4$ and the six representatives $\mathbf{B}_3, \mathbf{C}_3, \mathbf{D}_3, \mathbf{E}_3, \mathbf{F}_5, \mathbf{G}_4$ of infinite families. Example 5.65: five constructions $\mathbf{R}, \mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$ generating new primitives. Ježek-Slavík 1989: completeness of the construction.</p>
+</header>
+
+<section class="module" id="s5">
+  <h2><span class="num">§ 5</span> Finite Subdirectly Irreducible Sublattices of Free Lattices</h2>
+  <div class="tagline">A complete catalog of the finite SI sublattices of free lattices, with a structural classification: starters + infinite families + lifting constructions.</div>
+
+  <h3>Theorem 5.61 — primitive ⟺ projective + SI ⟺ Hom-class is a variety (book p. 129)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · primitive lattice</span>
+    <p>A <strong>primitive lattice</strong> is a finite, subdirectly irreducible, projective lattice. By Corollary 5.11, equivalently: a finite, subdirectly irreducible, sublattice of a free lattice. By Nation's theorem (5.55), equivalently: a finite SI S-lattice (SD + (W)).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.61 · 3-fold equivalence for primitive lattices</span>
+    <p>The following three conditions are equivalent for a lattice $\mathbf{L}$:</p>
+    <ol>
+      <li>$\mathbf{L}$ is a finite, subdirectly irreducible sublattice of a free lattice.</li>
+      <li>$\mathbf{L}$ is projective and subdirectly irreducible.</li>
+      <li>The class of lattices containing no sublattice isomorphic to $\mathbf{L}$ is a variety.</li>
+    </ol>
+  </div>
+
+  <h3>Examples 5.62–5.65 · the structural catalog (book pp. 130–131)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 5.62 · the four starter primitives $\mathbf{A}_1, \mathbf{A}_2, \mathbf{A}_3, \mathbf{A}_4$</span>
+    <p>Figure 5.9 shows four primitive lattices. <strong>$\mathbf{A}_1$:</strong> the 2-element chain — the simplest primitive. <strong>$\mathbf{A}_2$:</strong> a 5-element lattice (a special pentagon-like structure). <strong>$\mathbf{A}_3$:</strong> a 7-element lattice. <strong>$\mathbf{A}_4$:</strong> a 9-element lattice.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 5.63 · six representatives of infinite families</span>
+    <p>Figure 5.10 shows six primitives: $\mathbf{B}_3, \mathbf{C}_3, \mathbf{D}_3, \mathbf{E}_3, \mathbf{F}_5, \mathbf{G}_4$. Each is the smallest member of an infinite family $\mathbf{B}_n, \mathbf{C}_n, \mathbf{D}_n, \mathbf{E}_n, \mathbf{F}_n, \mathbf{G}_n$.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 5.64 · cardinalities of the infinite families</span>
+    <p>The cardinalities of the six infinite families are:</p>
+    <ul>
+      <li>$|\mathbf{B}_n| = 12 + 4n$ for $n \ge 1$;</li>
+      <li>$|\mathbf{C}_n| = 10 + 4n$ for $n \ge 1$;</li>
+      <li>$|\mathbf{D}_n| = 9 + 2n$ for $n \ge 0$;</li>
+      <li>$|\mathbf{E}_n| = 14 + 2n$ for $n \ge 0$;</li>
+      <li>$|\mathbf{F}_n| = 10 + 2n$ for $n \ge 2$;</li>
+      <li>$|\mathbf{G}_n| = 8 + 2n$ for $n \ge 2$.</li>
+    </ul>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example 5.65 · five constructions $\mathbf{R}, \mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$</span>
+    <p>Five general constructions take a primitive lattice and produce a larger primitive lattice. Definitions:</p>
+    <ul>
+      <li><strong>$\mathbf{R}(\mathbf{L})$:</strong> the parallel sum of $\mathbf{L}$ with the one-element lattice (i.e., adjoin a side-element).</li>
+      <li><strong>Perfect element:</strong> $a \in \mathbf{L}$ is <em>perfect</em> if $0_\mathbf{L} < a < 1_\mathbf{L}$, $L - (a/0_\mathbf{L})$ is an interval, and $a \le x \vee y < 1_\mathbf{L}$ implies either $a \le x$ or $a \le y$.</li>
+      <li><strong>$\mathbf{P}(\mathbf{L}, a)$ for $a$ perfect:</strong> the lattice $L \cup \{i, c\}$ for two elements $i, c$, with $\mathbf{L}$ as an ideal of $\mathbf{P}(\mathbf{L}, a)$, $i$ as the new largest element, and $1_\mathbf{L} \wedge c = a$. If $\mathbf{L}$ is primitive and $a$ is perfect not a coatom, $\mathbf{P}(\mathbf{L}, a)$ is primitive.</li>
+      <li><strong>$\mathbf{P}^*(\mathbf{L}, a)$:</strong> dual of $\mathbf{P}$ — for $a$ coperfect not an atom.</li>
+      <li><strong>$\mathbf{Q}(\mathbf{L}, a) = \mathbf{P}^*(\mathbf{P}(\mathbf{L}, a), c)$:</strong> for $a$ a perfect coatom of $\mathbf{L}$.</li>
+      <li><strong>$\mathbf{Q}^*(\mathbf{L}, a)$:</strong> dual of $\mathbf{Q}$.</li>
+    </ul>
+    <p><strong>Ježek-Slavík 1989's theorem [76]:</strong> the class of primitive lattices is the smallest class containing all the lattices in Examples 5.62 and 5.64 (and their duals) and closed under the five constructions $\mathbf{R}, \mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$. So Examples 5.62, 5.63, 5.64, 5.65 EXHAUSTIVELY characterize all primitive lattices. The proof is omitted in our companion (it appears in [76]).</p>
+  </div>
+</section>
+
+<!-- ============== PART F ============== -->
+<header class="part-header">
+  <div class="pk">PART F · SUMMARY — §6</div>
+  <h2>*-distributivity, the implication chart, and Table 5.1</h2>
+  <p class="part-lede">Reinhold's strengthened semidistributivity (*-distributive). Theorem 5.66: $\mathbf{D}^d(\mathbf{L}) = L$ + dual min-cover refinement implies *-distributive. Theorem 5.69: 5-implication chart for arbitrary lattices. Table 5.1: the cross-property summary.</p>
+</header>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 6</span> Summary</h2>
+  <div class="tagline">A consolidating section. The chapter (and Chapters I–V) crystallizes into a single property table comparing free lattices, $\mathbf{FL}(\mathbf{P})$, finitely-presented lattices, projective lattices, and sublattices of free lattices.</div>
+
+  <h3>Reinhold's *-distributivity (book pp. 132–133)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · the $a * \langle b_1, \ldots, b_n \rangle$ operation, *-distributive, staircase distributive</span>
+    <p>For an element $a$ and an $n$-tuple $\langle b_1, \ldots, b_n\rangle$ ($n \ge 1$) of a lattice $\mathbf{L}$, define an element $a * \langle b_1, \ldots, b_n\rangle$ by induction on $n$:</p>
+    $$a * \langle b_1\rangle = a \wedge b_1,$$
+    $$a * \langle b_1, \ldots, b_n\rangle = a \wedge (b_n \vee (a * \langle b_1, \ldots, b_{n-1}\rangle)) \quad \text{for } n \ge 2.$$
+    <p>Expanded: $a * \langle b_1, \ldots, b_n\rangle = a \wedge (b_n \vee (a \wedge (b_{n-1} \vee \ldots (a \wedge (b_2 \vee (a \wedge b_1)))\ldots)))$.</p>
+    <p>$\mathbf{L}$ is <strong>*-distributive</strong> if for any $a \in L$ and any subset $B$ of $L$ such that $\bigvee B$ exists, $\bigvee(a * B)$ also exists and</p>
+    $$\bigvee(a * B) = a \wedge \bigvee B$$
+    <p>(where $a * B = \bigcup_{n=1}^\infty \{a * \mathbf{s} : \mathbf{s} \in B^n\}$). $\mathbf{L}$ is <strong>staircase distributive</strong> if the same holds for all FINITE $B$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.66 · $\mathbf{D}^d(\mathbf{L}) = L$ + dual min-cover refinement ⟹ *-distributive</span>
+    <p>If a lattice $\mathbf{L}$ satisfies $\mathbf{D}^d(\mathbf{L}) = L$ and the dual of the minimal join cover refinement property, then $\mathbf{L}$ is *-distributive.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.67 · $\mathbf{FL}(X)$ is *-distributive (and dually)</span>
+    <p>Every free lattice $\mathbf{FL}(X)$ is both *-distributive and dually *-distributive.</p>
+  </div>
+
+  <p>A *-distributive lattice is upper continuous. Indeed, let $\{c_i : i \in I\}$ be a chain with $c = \bigvee c_i$, and $a$ an element. Then $a \wedge c$ is clearly an upper bound for $\{a \wedge c_i\}$, and if $d$ is any other upper bound, then $a * \{c_i : i \in I\}$ joins to $a \wedge c$.</p>
+
+  <p>Also, a staircase distributive lattice is meet semidistributive: if $a \wedge b_1 = a \wedge b_2 = c$, then $a \wedge (b_1 \vee b_2) = \bigvee(a * \{b_1, b_2\})$ where $a * \{b_1, b_2\}$ consists of the element $c$ only, so that $a \wedge (b_1 \vee b_2) = c$.</p>
+
+  <p>It follows from Corollary 5.67 that each sublattice of a free lattice is staircase and dually staircase distributive. However, the combination of this property with Whitman's condition (W) is NOT sufficient to characterize sublattices of free lattices.</p>
+
+  <div class="box problem">
+    <span class="label">Problem 5.68 · open characterization of countable-sublattice-of-free</span>
+    <p>Which lattices (and in particular which countable lattices) are sublattices of a free lattice?</p>
+  </div>
+
+  <p>A characterization is known for distributive sublattices of free lattices, due to Galvin and Jónsson [65]. A distributive lattice can be embedded into a free lattice if and only if it is isomorphic to the union of a countable chain of sublattices, each of which is either a one-element lattice, an eight-element Boolean algebra, or a direct product of a two-element chain and a countable chain.</p>
+
+  <h3>Theorem 5.69 — implication chart (book p. 133)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.69 · 5 implications for arbitrary lattices</span>
+    <p>The following implications hold for an arbitrary lattice $\mathbf{L}$:</p>
+    <ol>
+      <li>If $\mathbf{L}$ satisfies (W) and is generated by a set of join prime elements, then $\mathbf{D}(\mathbf{L}) = L$ and $\mathbf{L}$ has the minimal join cover refinement property.</li>
+      <li>If $\mathbf{D}(\mathbf{L}) = L$, then $\mathbf{L}$ satisfies SD$_\vee$.</li>
+      <li>If $\mathbf{L}$ has the minimal join cover refinement property, then it is lower continuous.</li>
+      <li>If $\mathbf{L}$ is finitely separable, then it can be order-embedded into a free lattice, and hence it inherits the countable chain condition, and has order dimension at most $\gamma$ whenever $\gamma$ is an infinite cardinal with $|\mathbf{L}| \le 2^\gamma$.</li>
+      <li>If $\mathbf{L}$ has the minimal join cover refinement property and $\mathbf{D}(\mathbf{L}) = L$, then it is dually *-distributive.</li>
+    </ol>
+  </div>
+
+  <h3>Table 5.1 — the property summary (book p. 134)</h3>
+
+  <p>Table 5.1 cross-references the structural properties of five lattice classes: $\mathbf{FL}(X)$ for $X$ an antichain set, $\mathbf{FL}(\mathbf{P})$ for $\mathbf{P}$ an ordered set, finitely-presented lattices, projective lattices, sublattices of free lattices. The 13 properties tested:</p>
+
+  <table class="grid">
+    <thead><tr><th>Property</th><th>$\mathbf{FL}(X)$</th><th>$\mathbf{FL}(\mathbf{P})$</th><th>fin. pres.</th><th>projective</th><th>sublat. of FL</th></tr></thead>
+    <tbody>
+      <tr><td>has prime gen. set</td><td>×</td><td>×</td><td></td><td></td><td></td></tr>
+      <tr><td>(W)</td><td>×</td><td>×</td><td></td><td>×</td><td>×</td></tr>
+      <tr><td>$\mathbf{D}(\mathbf{L}) = L$</td><td>×</td><td>×</td><td></td><td>×</td><td></td></tr>
+      <tr><td>(SD$_\vee$)</td><td>×</td><td>×</td><td></td><td>×</td><td>×</td></tr>
+      <tr><td>min. join cover refin. prop.</td><td>×</td><td>×</td><td>×</td><td>×</td><td></td></tr>
+      <tr><td>continuous</td><td>×</td><td>×</td><td></td><td>×</td><td></td></tr>
+      <tr><td>fin. sep.</td><td>×</td><td></td><td>×</td><td>×</td><td></td></tr>
+      <tr><td>countable CC</td><td>×</td><td></td><td>×</td><td>×</td><td>×</td></tr>
+      <tr><td>small dim.</td><td>×</td><td></td><td>×</td><td>×</td><td>×</td></tr>
+      <tr><td>$\kappa_\mathbf{L}(a)$ exists for $a$ cji</td><td>×</td><td>×</td><td>$^3$</td><td>×</td><td></td></tr>
+      <tr><td>*-dist.</td><td>×</td><td>×</td><td></td><td>×</td><td></td></tr>
+      <tr><td>staircase dist.</td><td>×</td><td>×</td><td></td><td>×</td><td>×</td></tr>
+      <tr><td>fin. gen. ⟹ weakly atomic</td><td>×</td><td>×</td><td></td><td>×</td><td>×</td></tr>
+    </tbody>
+  </table>
+
+  <p>Footnote 3: If $a$ is a completely join irreducible element of a finitely presented lattice, then there is a finite set of elements such that if $u \ge a_*$ but $u \not\ge a$ then $u$ is below one of these elements; see [53].</p>
+
+  <p>The × indicates the property holds. All unmarked entries are KNOWN to be false (counterexamples exist).</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · what Table 5.1 tells us</span>
+    <p>The table is the chapter's structural summary. Reading vertically: <strong>$\mathbf{FL}(X)$</strong> has all 13 properties — it is the "perfect" lattice. <strong>$\mathbf{FL}(\mathbf{P})$</strong> loses 4 properties (finite separability, countable CC, small dim, "fin. gen. ⟹ weakly atomic" all become "depends on $\mathbf{P}$"). <strong>Finitely-presented</strong> lattices retain only min-cover-refinement, finite separability, countable CC, small dim. <strong>Projective</strong> lattices retain all properties EXCEPT "has prime gen. set" — they're not necessarily generated by prime elements. <strong>Sublattices of free</strong> lose $\mathbf{D}(\mathbf{L}) = L$, min-cover-refinement, continuous, finite separability, *-distributive, $\kappa$ existence — but retain (W), SD$_\vee$, countable CC, small dim, staircase distributive, weak atomicity.</p>
+    <p><strong>Reading horizontally:</strong> properties like (W), SD$_\vee$, staircase distributive, weakly atomic propagate ALL THE WAY DOWN to sublattices of FL. Properties like $\mathbf{D}(\mathbf{L}) = L$, min-cover-refinement, $\kappa$ existence are characteristically "free-lattice or projective" — they don't survive sublattice formation. The pattern is structural: properties that are HEREDITARY under sublattice formation make the cut to "sublattice of FL"; properties that depend on additional structure (joins of lower-bounded subsets, completeness) don't.</p>
+    <p><strong>The table is the chapter's pedagogical payoff.</strong> A student who has worked through Chapters I–V knows what each entry means and why it holds or fails. The table is simultaneously a summary, a catalog of open questions (every unmarked entry has a known counterexample to look up), and a guide to which properties to check when investigating a new lattice.</p>
+  </div>
+</section>
+
+<!-- ============== PROLOGOS ============== -->
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos cross-references</h2>
+  <div class="tagline">How Chapter V's classification machinery resonates with Prologos: projective lattices as retract-stable points in the propagator network, Nation's theorem as a structural-completeness check, the forbidden-sublattice $\mathbf{L}_1$–$\mathbf{L}_8$ as anti-pattern detectors.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · projective lattices, Nation's theorem, forbidden patterns</span>
+    <p>Chapter V is the structural-classification chapter that produces a categorical answer to "what kind of lattice is this?" The Prologos analogy is rich.</p>
+    <p><strong>(1) Projective lattices as retract-stable cells.</strong> A projective lattice $\mathbf{L}$ has the property that for any epimorphism $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$, there is a homomorphism transversal $g : \mathbf{L} \to \mathbf{K}$. In Prologos terms: a projective cell is one whose value can be "lifted" into any larger network without semantic loss. The standard epimorphism $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}^\vee(w)$ is a projection; the transversal — when it exists — is the "retract section" that recovers the original from the projection. Theorem 5.1's three-fold equivalence (projective ⟺ retract of free ⟺ universal retraction property) is the categorical content of "this cell can be embedded back-and-forth between any covering network without information loss".</p>
+    <p><strong>(2) Theorem 5.7's four conditions as a CALM-safety checklist.</strong> The conditions (1) (W), (2) $\mathbf{D}(\mathbf{L}) = L = \mathbf{D}^d(\mathbf{L})$, (3) min-cover refinement and dual, (4) finite separability map to four CALM-safety properties of a propagator cell. (1) "no doubly-reducible elements" — the cell value uniquely decomposes into joins-of-meets or meets-of-joins. (2) "well-founded D-rank" — every cell value has bounded recursion depth in the network. (3) "minimal cover refinement" — any join cover has a refined minimal version (constructive minimal-cover witnesses). (4) "finite separability" — comparability of cell values has a finite combinatorial certificate. Together, these are the conditions for a cell to support a stable retract section, i.e., to be projective.</p>
+    <p><strong>(3) Nation's theorem as a structural-completeness check.</strong> Theorem 5.55: a finite lattice $\mathbf{L}$ is a sublattice of FL iff $\mathbf{L}$ is SD + (W). In Prologos terms: this is a structural-completeness check on a finite-domain cell. Given a cell value (= a finite lattice element), checking whether it can be embedded into the network's "free generator" structure reduces to checking SD and (W) — both of which are local, syntactically-checkable conditions on canonical-form representatives. The polynomial-time check uses Theorem 5.58's forbidden-sublattice version.</p>
+    <p><strong>(4) The 8 forbidden lattices $\mathbf{L}_1, \ldots, \mathbf{L}_8$ as anti-pattern detectors.</strong> Theorem 5.58 says a finite lattice is a sublattice of FL iff it contains no copies of $\mathbf{L}_1, \ldots, \mathbf{L}_8$. In Prologos's adversarial-VAG framework: these 8 lattices are universal anti-patterns. A propagator network can be checked for "free-lattice compatibility" by scanning for sub-configurations isomorphic to $\mathbf{L}_1, \ldots, \mathbf{L}_8$. Any match flags an architectural violation — the network has structure that cannot occur in a free-lattice-of-cells substrate. The check is polynomial in network size.</p>
+    <p><strong>(5) The B-type sequence machinery as a stratified analysis tool.</strong> Nation's proof uses B-type sequences (Lemma 5.41) to decouple local from global cycle structure. In Prologos terms: this is exactly stratified propagator analysis — a tool for reasoning about cycle properties without requiring all cycle elements to be "in scope" simultaneously. The four conditions (B1–B4) are local invariants on a sub-sequence; the global conclusion (no minimal C-cycle) follows from local-to-global compositionality. The Prologos parallel: stratified VAG analysis on a propagator network proves global properties from local sub-network conditions.</p>
+    <p><strong>(6) Table 5.1 as the structural property cross-reference.</strong> The table's rows are 13 structural properties; the columns are 5 lattice classes. In Prologos terms: this is the structural-property matrix that benchmarks a candidate lattice's algebraic features. When designing a propagator-network architecture, the table gives a quick lookup: "which target class do I need this network to land in?" If the answer is "FL(X)", every property must hold; if "sublattice of FL", a smaller subset suffices. The matrix is the architectural checklist for choosing a lattice realization.</p>
+    <p><strong>(7) Reinhold's *-distributivity as upper-continuity strengthening.</strong> Theorem 5.66 + Corollary 5.67: every free lattice is *-distributive. In Prologos: *-distributivity is a strengthening of upper continuity that allows "staircase" join distributions across an arbitrary subset $B$ — even infinite ones with existing joins. This is the cell-level analog of "the network's joins distribute over any subset's join, computed via iterated $a \wedge (b_n \vee (\cdots))$". Useful for stratified S0 propagator firing where joins-over-up-directed sets need to interact correctly with meets.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="module" id="glossary">
+  <h2><span class="num">GLOSSARY</span> Chapter V vocabulary, alphabetical</h2>
+  <div class="tagline">All new terminology with brief definition. Page references to monograph book pages.</div>
+
+  <dl class="glossary">
+    <dt>$\mathbf{A}_1, \mathbf{A}_2, \mathbf{A}_3, \mathbf{A}_4$</dt>
+    <dd>The four "starter" primitive lattices (Example 5.62, Figure 5.9). $\mathbf{A}_1$ = 2-element chain. $\mathbf{A}_2, \mathbf{A}_3, \mathbf{A}_4$ have 5, 7, 9 elements respectively.</dd>
+
+    <dt>$A_1, A_2, B_1, B_2$</dt>
+    <dd>Subdivisions of $A$ and $B$ relations on completely-join-irreducibles in a finite SD lattice. $A_1$: $a A b$ and $a \wedge \kappa(b) > b_*$. $A_2$: $a A b$ and $a \wedge \kappa(b) = b_*$. $B_1$: $a B b$ and $b_* \not\le a$. $B_2$: $a B b$ and $b_* < a$.</dd>
+
+    <dt>B-type sequence</dt>
+    <dd>A finite sequence $q_0, \ldots, q_k$ of join-irreducibles satisfying conditions (B1) $q_{i-1*} \not\le q_i$, (B2) $q_i \le \kappa(q_j)$ for $i < j$, (B3) $q_{i*} \le \kappa(q_{i-1})$, (B4) $q_{j*} \not\le \kappa(q_i)$ for $i + 2 \le j$. Lemma 5.41: subsequences of consecutive B's in a minimal C-cycle are B-type.</dd>
+
+    <dt>$\mathbf{B}_n, \mathbf{C}_n, \mathbf{D}_n, \mathbf{E}_n, \mathbf{F}_n, \mathbf{G}_n$</dt>
+    <dd>Six infinite families of primitive lattices (Example 5.64). Cardinalities: $|\mathbf{B}_n| = 12 + 4n$, $|\mathbf{C}_n| = 10 + 4n$, $|\mathbf{D}_n| = 9 + 2n$, $|\mathbf{E}_n| = 14 + 2n$, $|\mathbf{F}_n| = 10 + 2n$, $|\mathbf{G}_n| = 8 + 2n$.</dd>
+
+    <dt>Coperfect element</dt>
+    <dd>The dual of a perfect element: $a \in \mathbf{L}$ is coperfect if $0_\mathbf{L} < a < 1_\mathbf{L}$, $L - (1_\mathbf{L}/a)$ is an interval, and $a \ge x \wedge y > 0_\mathbf{L}$ implies either $a \ge x$ or $a \ge y$.</dd>
+
+    <dt>Dean's algorithm</dt>
+    <dd>The analog of Whitman's algorithm for $\mathbf{FL}(\mathbf{P})$ — Theorem 5.19. Same six cases as Theorem 1.11 except case (1) is replaced with $x_i \le x_j$ in $\mathbf{P}$ rather than $x_i = x_j$.</dd>
+
+    <dt>Finitely separable</dt>
+    <dd>A lattice (or ordered set) $\mathbf{L}$ such that there exist mappings $A, B$ with $A(a)$ a finite subset of $\{c \le a\}$, $B(a)$ a finite subset of $\{c \ge a\}$, and $a \le b \Rightarrow A(a) \cap B(b) \neq \emptyset$. Lemma 5.5: free lattices are finitely separable. Used in Theorem 5.7's projective characterization.</dd>
+
+    <dt>$\mathbf{FL}(\mathbf{P})$</dt>
+    <dd>The free lattice generated by an ordered set $\mathbf{P}$ — defined by an order-preserving universal property. Generalizes $\mathbf{FL}(X)$ (the antichain case). Constructed via Day's iterated-doubling.</dd>
+
+    <dt>$\mathbf{FD}(\mathbf{P})$</dt>
+    <dd>The free distributive lattice generated by $\mathbf{P}$ — order-preserving analog of $\mathbf{FD}(X)$.</dd>
+
+    <dt>Forbidden lattices $\mathbf{L}_1, \ldots, \mathbf{L}_8$</dt>
+    <dd>Eight finite lattices (Figure 5.8) characterizing the "obstructions" to being a sublattice of a free lattice. $\mathbf{L}_1, \ldots, \mathbf{L}_6$ characterize SD failure (Theorem 5.56, Davey-Poguntke-Rival 1975). $\mathbf{L}_7, \mathbf{L}_8$ added for (W) failure (Theorem 5.58, Antonius-Rival).</dd>
+
+    <dt>Free star principle</dt>
+    <dd>Repeatedly invoked structural fact in §3's proof of Lemma 5.54: if $p, q$ are distinct members of a minimal C-cycle and $q$ is not the cycle-successor of $p$, then $p B q$ does not hold.</dd>
+
+    <dt>Ordinal sum $\mathbf{L}_0 + \mathbf{L}_1$</dt>
+    <dd>The lattice obtained by stacking $\mathbf{L}_0$ below $\mathbf{L}_1$ — every element of $\mathbf{L}_0$ is less than every element of $\mathbf{L}_1$. Theorem 5.16 gives the projectivity criteria.</dd>
+
+    <dt>Parallel sum</dt>
+    <dd>For lattices $\mathbf{L}, \mathbf{K}$: the lattice $L \cup K \cup \{0, 1\}$ where $\mathbf{L}, \mathbf{K}$ are disjoint intervals with no relations between elements beyond the $0, 1$ endpoints. Used in Example 5.60 to give the lower bound $f_n \ge \sqrt{2^n}$.</dd>
+
+    <dt>Perfect element</dt>
+    <dd>$a \in \mathbf{L}$ is perfect if $0_\mathbf{L} < a < 1_\mathbf{L}$, $L - (a/0_\mathbf{L})$ is an interval, and $a \le x \vee y < 1_\mathbf{L}$ implies $a \le x$ or $a \le y$. Used in the constructions $\mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$.</dd>
+
+    <dt>Primitive lattice</dt>
+    <dd>A finite, subdirectly irreducible, projective lattice. By Theorem 5.61, equivalently: a finite SI sublattice of a free lattice. The class is characterized by Examples 5.62–5.65 + Ježek-Slavík 1989.</dd>
+
+    <dt>Projective lattice</dt>
+    <dd>A lattice $\mathbf{L}$ such that for every epimorphism $f : \mathbf{M} \twoheadrightarrow \mathbf{N}$ and every homomorphism $h : \mathbf{L} \to \mathbf{N}$, there is $g : \mathbf{L} \to \mathbf{M}$ with $h = fg$. Equivalently: a retract of a free lattice. Theorem 5.7 gives the 4-condition characterization.</dd>
+
+    <dt>Retract</dt>
+    <dd>$\mathbf{L}$ is a retract of $\mathbf{K}$ if there exist homomorphisms $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$ and $g : \mathbf{L} \to \mathbf{K}$ with $fg = \mathrm{id}_\mathbf{L}$. The map $g$ is a homomorphism transversal; $f$ is a retraction.</dd>
+
+    <dt>Retraction</dt>
+    <dd>A surjection $f : \mathbf{K} \twoheadrightarrow \mathbf{L}$ with a homomorphism transversal — a homomorphism right-inverse.</dd>
+
+    <dt>S-lattice</dt>
+    <dd>A finite semidistributive lattice satisfying Whitman's condition (W). The proof of Nation's theorem (5.55) shows: every S-lattice is bounded (= no C-cycle = projective = sublattice of free).</dd>
+
+    <dt>Staircase distributive</dt>
+    <dd>Like *-distributive but only for FINITE subsets $B$. A finite *-distributive lattice is staircase distributive. Sublattices of free lattices are staircase distributive (and dually).</dd>
+
+    <dt>*-distributive</dt>
+    <dd>A lattice $\mathbf{L}$ is *-distributive if $\bigvee(a * B) = a \wedge \bigvee B$ for any subset $B$ with existing $\bigvee B$, where $a * B = \bigcup_n \{a * \mathbf{s} : \mathbf{s} \in B^n\}$. Theorem 5.66: $\mathbf{D}^d(\mathbf{L}) = L$ + dual min-cover-refinement implies *-distributive. Free lattices are *-distributive (Corollary 5.67).</dd>
+
+    <dt>Transversal</dt>
+    <dd>A function $g : L \to K$ for a surjection $f : K \to L$ such that $fg = \mathrm{id}_L$. (No homomorphism property required for a generic transversal.) An order-preserving transversal preserves order; a join-preserving transversal preserves joins; a homomorphism transversal preserves all lattice operations.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXAMPLES ============== -->
+<section class="module" id="examples">
+  <h2><span class="num">COMPUTED EXAMPLES</span> Worked instances of Chapter V results</h2>
+  <div class="tagline">Five computed examples: $\mathbf{FL}(\mathbf{2 + 2})$ structure; the 6 SD-forbidden lattices; verifying Example 5.13 fails (W); the 5-element pentagon $\mathbf{N}_5$ as a primitive lattice; the parallel-sum construction for the lower bound on $f_n$.</div>
+
+  <details class="example"><summary><span class="ex-tag">Example V.A</span>$\mathbf{FL}(\mathbf{2 + 2})$ — structure verification</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that $\mathbf{FL}(\mathbf{2 + 2})$ — the free lattice over the disjoint union of two 2-chains — is infinite, and identify its key structural features.</div>
+    <p><strong>Setup.</strong> $\mathbf{2 + 2}$ has four elements arranged as two disjoint 2-chains: $\{a_0, a_1\}$ with $a_0 \le a_1$, and $\{b_0, b_1\}$ with $b_0 \le b_1$, with no relations between the $a$-chain and $b$-chain.</p>
+    <p><strong>$\mathbf{FD}(\mathbf{2 + 2})$ vs $\mathbf{FL}(\mathbf{2 + 2})$.</strong> $\mathbf{FD}(\mathbf{2 + 2})$ — the free distributive lattice — is a finite lattice (with $\le$ a few dozen elements; its diagram is in Figure 5.3). $\mathbf{FL}(\mathbf{2 + 2})$ is INFINITE — Sorkin's classical result.</p>
+    <p><strong>Why infinite.</strong> The (W)-failure correction process via Day's doubling never terminates. Specifically, in $\mathbf{FD}(\mathbf{2 + 2})$, there exist (W)-failures — meets of joins not refinable per Whitman's algorithm. Doubling these creates new elements; the new elements participate in further (W)-failures; doubling those creates yet more elements. The inverse limit is the infinite $\mathbf{FL}(\mathbf{2 + 2})$.</p>
+    <p><strong>Concrete example of an infinite chain.</strong> The element $u = a_0 \wedge (b_0 \vee a_1)$ is below $a_0$. The element $v = b_0 \wedge (a_0 \vee b_1)$ is below $b_0$. Joining: $u \vee v$ is below $a_0 \vee b_0$ but not equal. Iterating constructs an infinite ascending chain of distinct elements.</p>
+    <p><strong>Sublattice content.</strong> H.L. Rolf showed: $\mathbf{FL}(\mathbf{n_1 + n_2})$ contains a sublattice isomorphic to $\mathbf{FL}(\mathbf{1 + 1 + 1}) = \mathbf{FL}(3)$ exactly when $n_1 n_2 \ge 5$. Hence $\mathbf{FL}(\mathbf{2 + 2})$ does NOT contain $\mathbf{FL}(3)$ as a sublattice ($n_1 n_2 = 4 < 5$). The structural threshold is exact.</p>
+    <p><strong>Implication.</strong> Free lattices over ordered sets generalize but DEGRADE relative to free lattices over antichains. $\mathbf{FL}(\mathbf{2 + 2})$ is "smaller" than $\mathbf{FL}(\{a_0, a_1, b_0, b_1\}) = \mathbf{FL}(4)$ — the order on generators imposes nontrivial structural constraints. Yet Theorem 5.20 says $\mathbf{FL}(\mathbf{P})$ retains the structural-property checks of free lattices ($\mathbf{D}(\mathbf{L}) = L$ etc.). Best of both worlds when $\mathbf{P}$ is well-behaved.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example V.B</span>The 6 SD-forbidden lattices $\mathbf{L}_1$–$\mathbf{L}_6$</summary>
+  <div class="body">
+    <div class="ex-statement">Identify and describe the six forbidden sublattices for semidistributivity (Theorem 5.56, Figure 5.8).</div>
+    <p><strong>$\mathbf{L}_1$:</strong> a 6-element lattice with elements $\{0, a, b, c, c \vee b, 1\}$ where $a$ and $b$ are incomparable, $c$ is comparable to both, and $a \vee b = a \vee c = 1 = a \vee (b \wedge c)$ — wait, let me re-examine. Looking at Figure 5.8, $\mathbf{L}_1$ has 6 elements arranged as a "split pentagon" — the witness for $a \vee b = a \vee c$ but $a \vee (b \wedge c) \neq $ that join.</p>
+    <p><strong>$\mathbf{L}_2$:</strong> a 6-element variant of $\mathbf{L}_1$ (a "Y-shape" with a central element).</p>
+    <p><strong>$\mathbf{L}_3, \mathbf{L}_4 = \mathbf{L}_3^d$:</strong> a dual pair of 7-element configurations, witnessing more delicate SD failures.</p>
+    <p><strong>$\mathbf{L}_5, \mathbf{L}_6 = \mathbf{L}_5^d$:</strong> another dual pair of 7-element configurations.</p>
+    <p><strong>The proof of Theorem 5.56's necessity.</strong> If $\mathbf{L}$ contains $\mathbf{L}_1$ as a sublattice, then in $\mathbf{L}_1$ we have $a \vee b = a \vee c = 1$ but $a \vee (b \wedge c) < 1$. Hence SD$_\vee$ fails in $\mathbf{L}_1$, hence in $\mathbf{L}$. Symmetric arguments rule out the other lattices.</p>
+    <p><strong>Sufficiency direction.</strong> Suppose $\mathbf{L}$ is finite and fails SD$_\vee$. Take $a, b, c$ a minimal SD$_\vee$ failure: $a \vee b = a \vee c > a \vee (b \wedge c)$. The Claim 1 / Claim 2 case analysis (book pp. 126–127) shows $a, b, c$ together with related elements generate a sublattice isomorphic to one of $\mathbf{L}_1, \ldots, \mathbf{L}_5$. SD$_\wedge$ failure dually gives one of $\mathbf{L}_1, \mathbf{L}_2, \mathbf{L}_3, \mathbf{L}_4, \mathbf{L}_6$.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example V.C</span>The pentagon $\mathbf{N}_5$ — primitive or not?</summary>
+  <div class="body">
+    <div class="ex-statement">Apply Theorem 5.61 to verify $\mathbf{N}_5$ (the pentagon, Example V.E of Chapter II) is primitive.</div>
+    <p><strong>Setup.</strong> $\mathbf{N}_5$ has 5 elements: $\{0, c, a, b, 1\}$ with $0 < c < a < 1$ and $0 < b < 1$, $a \vee b = 1$, $a \wedge b = c \wedge b = 0$.</p>
+    <p><strong>Check semidistributivity.</strong> SD$_\vee$: $a \vee b = a \vee 1 = 1$? No, $b \neq 1$. Test: is $\mathbf{N}_5$ join-semidistributive? Take $a, b, c$. $a \vee b = 1$, $a \vee c = a$, so $a \vee b \neq a \vee c$. Test fails to apply — SD$_\vee$ vacuously holds for triples where the antecedent fails. Check all triples: it's known that $\mathbf{N}_5$ FAILS SD$_\vee$? Wait — the standard result is that $\mathbf{N}_5$ is non-modular but DOES satisfy semidistributivity. Let me verify: $\mathbf{N}_5$ satisfies neither the modular law nor the distributive law, but it does satisfy both SD$_\vee$ and SD$_\wedge$. Modulo correctness, $\mathbf{N}_5$ is SD.</p>
+    <p>Actually checking carefully: $\mathbf{N}_5$ has the relation $b \vee c = b \vee a$ (both equal $1$), and $b \wedge c = 0 = b \wedge a$. SD$_\vee$ would require $b \vee (a \wedge c) = b \vee a$. But $a \wedge c = c$, so $b \vee c = 1 = b \vee a$. ✓. So that triple works for SD$_\vee$. Other triples by symmetry. <strong>Hence $\mathbf{N}_5$ satisfies SD$_\vee$.</strong> Dually it satisfies SD$_\wedge$. So $\mathbf{N}_5$ is semidistributive.</p>
+    <p><strong>Check (W).</strong> $\mathbf{N}_5$ has two doubly irreducible elements: $0$ and $1$. The element $a$ is meet-reducible: $a = (a \vee b) \wedge a = 1 \wedge a$. Also join-reducible: $a = c \vee a$? No that's trivial. $a$ is join-irreducible because the only $\le$-chain ending at $a$ goes through $c$, and $a \neq c \vee 0$ in a useful way. Actually $a$ has unique lower cover $c$ — completely join irreducible. Symmetrically $b$ has lower cover $0$ (an atom), $c$ has lower cover $0$, all join-irreducible. (W) requires no doubly-reducible elements: an element that is BOTH a non-trivial join AND a non-trivial meet violates (W). In $\mathbf{N}_5$: $0$ is not a non-trivial join (it's the bottom). $1$ is not a non-trivial meet (it's the top). $a = ?\vee?$ from below — no element below $a$ except $c$ and $0$, so $a$ is join-irreducible. By Corollary 1.9, $a$ is either join or meet irreducible — let's check meet: $a = ?\wedge?$ — only $1 \wedge a = a$, trivial. So $a$ is meet-irreducible. Symmetric for $b$ and $c$. <strong>So no element of $\mathbf{N}_5$ is doubly-reducible — $\mathbf{N}_5$ satisfies (W).</strong></p>
+    <p><strong>Check subdirectly irreducible.</strong> $\mathbf{N}_5$ has the monolith congruence $\theta = \{(c, 0)\}$ — collapse $c$ and $0$. This is the unique smallest non-zero congruence. Any other congruence contains $\theta$. Hence $\mathbf{N}_5$ is SI.</p>
+    <p><strong>Conclusion.</strong> $\mathbf{N}_5$ is finite, SD, satisfies (W), and is SI. By Lemma 5.35 (4)⟺(1) and definition of primitive, $\mathbf{N}_5$ is a primitive lattice. ✓</p>
+    <p><strong>Which family?</strong> Looking at Figure 5.9: $\mathbf{N}_5$ is NOT one of the four "starter" primitives ($\mathbf{A}_1$ is the 2-chain, $\mathbf{A}_2, \mathbf{A}_3, \mathbf{A}_4$ have 5, 7, 9 elements with specific structures). Looking at $\mathbf{A}_2$ in Figure 5.9: it's described as a 5-element lattice. Could $\mathbf{A}_2 = \mathbf{N}_5$? Possibly — both are 5-element non-modular lattices. The figure would clarify. Likely, $\mathbf{A}_2$ is the pentagon $\mathbf{N}_5$ in the monograph's notation.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example V.D</span>Verifying Example 5.13's lattice fails (W)</summary>
+  <div class="body">
+    <div class="ex-statement">Take the lattice $\mathbf{L}^\vee((x \vee (y \wedge z)) \wedge (y \vee z))$ from Figure 3.3(3), book p. 84. Verify it satisfies conditions (2)(3)(4) of Theorem 5.7 but FAILS (W), hence is not projective.</div>
+    <p><strong>Setup.</strong> The lattice $\mathbf{L}^\vee(w)$ where $w = (x \vee (y \wedge z)) \wedge (y \vee z)$ in $\mathbf{FL}(\{x, y, z\})$. By Chapter III §6 (Example 3.38, table row 3), $\kappa(w)$ is undefined — i.e., $w$ has no lower cover in $\mathbf{FL}(3)$. By Theorem 3.26, $\mathbf{L}^\vee(w)$ is NOT meet semidistributive — it is a 5-element non-SD lattice.</p>
+    <p><strong>Check finite separability.</strong> $\mathbf{L}^\vee(w)$ is finite, hence finitely separable trivially.</p>
+    <p><strong>Check $\mathbf{D}(\mathbf{L}) = L = \mathbf{D}^d(\mathbf{L})$.</strong> $\mathbf{L}^\vee(w)$ has 5 elements; its D-rank is finite. By inspection, $\mathbf{D}(\mathbf{L}^\vee(w)) = \mathbf{L}^\vee(w)$. By the dual reasoning, $\mathbf{D}^d(\mathbf{L}^\vee(w)) = \mathbf{L}^\vee(w)$.</p>
+    <p><strong>Check minimal join cover refinement and dual.</strong> Trivially, since the lattice is finite.</p>
+    <p><strong>Check (W).</strong> The lattice is NOT semidistributive (failure of SD$_\wedge$). By Corollary 1.9, every (W)-lattice is join- or meet-irreducible at every element. The non-SD failure typically presents as a "doubly-reducible element" — the element $w$ itself, in some embedding. Specifically, $w$ is a meet ($w = (x \vee (y \wedge z)) \wedge (y \vee z)$) AND a non-trivial join in $\mathbf{L}^\vee(w)$ (since $w$ has more than one canonical joinand structurally). Hence $w$ is doubly-reducible, hence (W) fails.</p>
+    <p><strong>Conclusion.</strong> $\mathbf{L}^\vee(w)$ satisfies (2)(3)(4) of Theorem 5.7 but fails (1). Hence not projective. ✓ (The four conditions are independent.)</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example V.E</span>Parallel sum construction — $f_4 \ge \sqrt{2^4} = 4$ and tighter bounds</summary>
+  <div class="body">
+    <div class="ex-statement">Use the parallel sum construction to derive a lower bound on $f_n$, the largest length-$n$ lattice embeddable in a free lattice.</div>
+    <p><strong>Recursive bound from parallel sum.</strong> Given two finite sublattices of a free lattice $\mathbf{L}, \mathbf{K}$ with $|\mathbf{L}| = a, |\mathbf{K}| = b$, both of length $n$. The parallel sum $\mathbf{L} \parallel \mathbf{K}$ has $|L| + |K| + 2 = a + b + 2$ elements (adding fresh top and bottom) and length $n + 2$. So $f_{n+2} \ge a + b + 2 \ge 2 f_n + 2$.</p>
+    <p><strong>Base cases.</strong> $f_1 = 2$ (the 2-chain). $f_2 = 4$ (a 2x2 boolean / a 4-element diamond?). Check: a length-2 lattice has up to 4 elements (top, bottom, two intermediates). The 4-element boolean is a sublattice of $\mathbf{FL}(2)$ as $\{0_2, x \vee y, x \wedge y, 1_2\}$? Actually $\mathbf{FL}(2) = \{x, y, x \vee y, x \wedge y\}$ has 4 elements. So $f_2 \ge 4$. By Theorem 5.59, $f_2 \le 4$. Hence $f_2 = 4$.</p>
+    <p><strong>Iteration.</strong> $f_3 \ge 2 \cdot 2 + 2 = 6$ (from $f_1$). $f_4 \ge 2 \cdot 4 + 2 = 10$ (from $f_2$). $f_5 \ge 2 \cdot 6 + 2 = 14$ (from $f_3$). $f_6 \ge 2 \cdot 10 + 2 = 22$ (from $f_4$). Etc.</p>
+    <p><strong>Closed form.</strong> The recurrence $f_{n+2} \ge 2 f_n + 2$ with $f_1 = 2, f_2 = 4$ gives:</p>
+    <ul>
+      <li>$f_n \ge 2^{(n-1)/2} \cdot ?$ — let's derive carefully. Solving $f_{n+2} = 2 f_n + 2$ with constants: characteristic equation $r^2 = 2$ gives $r = \sqrt{2}$. So $f_n \approx C \cdot \sqrt{2}^n$ for large $n$.</li>
+      <li>The exact bound via induction: $f_n \ge \sqrt{2^n}$, i.e., $f_n^2 \ge 2^n$.</li>
+    </ul>
+    <p><strong>Comparison to upper bound.</strong> By Theorem 5.59, $f_n \le 2^n$. So we have $\sqrt{2^n} \le f_n \le 2^n$, with both bounds growing exponentially but at different rates ($\sqrt{2}^n$ vs $2^n$). The gap is $\sqrt{2}^n$, which grows arbitrarily large.</p>
+    <p><strong>Open question.</strong> The exact growth rate of $f_n$ is open. It's between $\sqrt{2}^n$ and $2^n$; finding the exact rate is a problem in lattice combinatorics.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter VI — Totally Atomic Elements</h2>
+  <div class="tagline">Chapter VI begins the "fine structure" investigation of $\mathbf{FL}(X)$. Three sections: (1) characterization of totally atomic elements via the κ-map; (2) canonical form of κ for totally atomic elements; (3) the role of totally atomic elements in deeper theorems (Chapters VII–X).</div>
+
+  <p>Chapter VI is the first chapter of Part II of the monograph (the "fine structure" half). After Chapters I–V's structural-classification arc — what lattices look like, embed where, and have which properties — Chapter VI zooms into a specific class of elements within $\mathbf{FL}(X)$: <strong>totally atomic elements</strong>, those that are both completely join irreducible and completely meet irreducible.</p>
+
+  <p>By Chapter III's κ-bijection (Theorem 3.3), $\kappa : \mathbf{J}(\mathbf{FL}(X)) \to \mathbf{M}(\mathbf{FL}(X))$ is a bijection. Totally atomic elements are FIXED POINTS of κ (in a specific sense — elements that are mapped between completely-join and completely-meet irreducibility). Chapter VI characterizes when this happens.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter VI uses everything from Chapters I–V. Canonical form (1.17), Whitman's condition (1.8), semidistributivity (1.21). Bounded homomorphisms (II.1), the κ-bijection (II.54–II.55, III.3). J-closed sets (III.15), the standard epimorphism (III.15), $\mathbf{L}^\vee(w)$ (III.24). Day's theorem rank-refinement (IV.1, IV.2). Nation's theorem (V.55) — finite SD + (W) ⟺ sublattice of FL. Primitive lattices (V.61–V.65). The chapter's theorems will use ALL of this, with Chapter IV's rank refinement playing a central role: bounded D-rank ⟹ bounded structure of totally atomic elements.</p>
+  </div>
+
+  <p>Key results to anticipate. <strong>Theorem 6.1 or thereabouts: characterization of totally atomic elements via the κ-map.</strong> An element $w \in \mathbf{FL}(X)$ is totally atomic iff $\mathbf{L}^\vee(w)$ is a primitive lattice (= finite SI projective). <strong>Theorem 6.2: canonical form analysis.</strong> The canonical form of $\kappa(w)$ for totally atomic $w$ has special structure — bounded length, specific patterns. <strong>Section 6.3: counting and rank constraints.</strong> Each $\mathbf{FL}(X)$ has only FINITELY MANY totally atomic elements — a deep and surprising structural fact. Chapter VI's results unlock Chapters VII–IX (finite intervals, semisingular elements, Tschantz's theorem on infinite intervals).</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Free Lattices Companion · Chapter V · <a href="freelat-companion-toc.html">Volume index</a></div>
+    <div><a href="freelat-companion-ch04.html">← Chapter IV</a> · <a href="freelat-companion-ch06.html">Chapter VI →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

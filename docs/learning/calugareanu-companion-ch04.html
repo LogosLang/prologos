@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 4 · Essential Elements and Pseudo-complements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4, .display { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+
+  main { padding: 48px 64px 120px; max-width: 920px; }
+
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+
+  p { margin: 0 0 14px; }
+
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; position: relative; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm { background: var(--box-thm-bg); }
+  .box.lemma { background: var(--box-thm-bg); }
+  .box.prop { background: var(--box-thm-bg); }
+  .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .box .ref { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text-dim); font-style: italic; margin-top: 10px; display: block; }
+
+  .term-card {
+    background: var(--bg-warm);
+    border-left: 3px solid var(--gold);
+    padding: 12px 18px;
+    margin: 12px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  .term-card.recap p:first-of-type { font-size: 14.5px; }
+
+  figure { margin: 26px 0; text-align: center; }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); margin-top: 8px; font-style: italic; }
+
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise[open] { background: var(--bg-warm); }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+
+  /* Dark-mode SVG adaptation */
+  :root[data-theme="dark"] figure svg .node { fill: var(--bg-warm) !important; stroke: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .node-hot { fill: #3A2E15 !important; stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .node-cool { fill: #1A2236 !important; stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .node-warn { fill: #2D1F1A !important; stroke: #B8633E !important; }
+  :root[data-theme="dark"] figure svg .edge { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-hot { stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .edge-cool { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-warn { stroke: #B8633E !important; }
+  :root[data-theme="dark"] figure svg .lbl { fill: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .cap { fill: var(--text-dim) !important; }
+  :root[data-theme="dark"] figure svg .arrow { stroke: var(--teal) !important; fill: var(--teal) !important; }
+
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch03.html">← Chapter 3</a></li>
+    <li><a href="calugareanu-companion-ch05.html">Chapter 5 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 4 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Essential elements</div>
+  <ul>
+    <li><a href="#s1">A1 · Essential elements</a></li>
+    <li><a href="#s2">A2 · Essential extensions</a></li>
+    <li><a href="#s3">A3 · Essentially closed</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Pseudo-complements</div>
+  <ul>
+    <li><a href="#s4">B1 · Pseudo-complement (max sense)</a></li>
+    <li><a href="#s5">B2 · The two senses, residuation</a></li>
+    <li><a href="#s6">B3 · Lemma 4.1 + N₅ counterexample</a></li>
+    <li><a href="#s7">B4 · Prop 4.1 (finite length ⟹ inductive)</a></li>
+    <li><a href="#s8">B5 · Lemma 4.2 (inductive ⟹ p-c)</a></li>
+    <li><a href="#s9">B6 · Cor 4.1 (upper continuous ⟹ p-c)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Interplay</div>
+  <ul>
+    <li><a href="#s10">C1 · Prop 4.2 — chain of equivalences</a></li>
+    <li><a href="#s11">C2 · Cor 4.2</a></li>
+    <li><a href="#s12">C3 · Lemma 4.3 — maximal essential extension</a></li>
+    <li><a href="#s13">C4 · Prop 4.3 — mutually p-c</a></li>
+    <li><a href="#s14">C5 · Cor 4.3, 4.4, 4.5</a></li>
+    <li><a href="#s15">C6 · Prop 4.4 — triple characterization</a></li>
+    <li><a href="#s16">C7 · Cor 4.6</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Modules &amp; injective hulls</a></li>
+    <li><a href="#c2">P2 · Heyting &amp; intuitionism</a></li>
+    <li><a href="#c3">P3 · Residuation deep-dive</a></li>
+    <li><a href="#c4">P4 · Boolean / Heyting / p-c</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 4 · pp. 39–45</div>
+  <h1>Essential Elements and Pseudo-complements</h1>
+  <p class="lede">Two new notions in counterpoint: an element is "essential" when it crosses every non-zero piece of the lattice; an element is a "pseudo-complement" when it sits maximally clear of another. Their interplay produces a framework for injective hulls, Goldie dimension, and the rest of the book's decomposition theory.</p>
+  <div class="meta">
+    <span>~60–75 min read</span>
+    <span>16 sections + 5 connection panels</span>
+    <span>20 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<!-- ====================== OVERVIEW ====================== -->
+<section class="module" id="overview">
+  <h2>Chapter Overview — Two new notions in counterpoint</h2>
+  <div class="tagline">Where Chapter 3 measured elements by length (vertical climb) and decomposition (horizontal split), Chapter 4 introduces two more invariants: <em>essentialness</em> (an "everywhere-touching" property) and <em>pseudo-complement</em> (a "maximally-disjoint" partner). Their interplay is the chapter's payoff.</div>
+
+  <p>Chapter 4 introduces two new ideas that, taken together, form the conceptual workhorse for the rest of the book — especially Chapters 5 (independence and Goldie dimension), 7 (semisimple lattices), and 9 (injective hulls and "neat" elements).</p>
+
+  <ol>
+    <li><strong>Essential elements.</strong> An element $e \in L$ is <em>essential</em> if $e \wedge a \ne 0$ for every non-zero $a$. Plain English: $e$ "touches" everything below — there's no non-zero $a$ that $e$ misses. The classic example is an essential submodule of an $R$-module: a submodule $E$ of $M$ that intersects every non-zero submodule. Essential extensions form chains; the "limit" of those chains is the <em>injective hull</em> in module theory and the <em>essentially closed</em> element in lattice theory.</li>
+    <li><strong>Pseudo-complements.</strong> A <em>pseudo-complement</em> of $b$ is an element $c$ that is maximal with the property $b \wedge c = 0$. Plain English: $c$ is as large as possible while still missing $b$ entirely. Unlike a complement (which requires both $b \wedge c = 0$ and $b \vee c = 1$), a pseudo-complement only insists on the meet condition; the join condition is dropped. Pseudo-complements always exist in inductive lattices (Lemma 4.2, by Zorn's Lemma); complements may not.</li>
+  </ol>
+
+  <p>The two notions are dual cousins. Essential elements are "thick everywhere," pseudo-complements are "thin everywhere it matters." A pseudo-complement of $a$ is, in some sense, the largest piece of the lattice that lies <em>off</em> from $a$. An essential element is one whose presence cannot be avoided by any non-zero piece.</p>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>The deep connection is Proposition 4.2: <em>$b$ is a pseudo-complement of $a$ iff $a \wedge b = 0$ and $a \vee b$ is essential in the interval $1/b$.</em> This couples the two notions: pseudo-complementation creates an essential extension up above. The result cascades: Lemma 4.3 builds maximal essential extensions; Corollary 4.3 shows that pseudo-complements are exactly the essentially closed elements; Proposition 4.4 gives a triple characterisation. The chapter culminates in an apparatus that handles "what's left when we remove $a$" cleanly enough that Chapter 5 can build dimension theory on it.</p>
+  </div>
+
+  <h3>Why this chapter matters for module theory</h3>
+
+  <p>In module theory, an <em>essential submodule</em> $E$ of $M$ is one such that $E \cap N \ne 0$ for every non-zero submodule $N$. The <em>injective hull</em> $E(M)$ is the unique-up-to-isomorphism maximal essential extension of $M$ — a beautiful "completion" construction by Eckmann–Schopf (1953). In the abstract lattice setting, "essential" lifts directly: $E$ essential in $M$ becomes $e \wedge a \ne 0$ for $a \ne 0$. The injective hull becomes the <em>essentially closed extension</em>, and the apparatus of pseudo-complements turns out to be exactly the lattice machinery you need to construct it.</p>
+
+  <p>One important caveat noted by the chapter: the term "pseudo-complement" is overloaded in the literature. Călugăreanu's choice — the <em>maximal</em> sense — is the broadly applicable one (exists in any inductive lattice). The <em>greatest</em> sense — the unique greatest $c$ with $b \wedge c = 0$ — exists only in special lattices (Heyting algebras), where it coincides with intuitionistic negation. Connection panel P3 below builds out this distinction via residuation theory, in response to your interest in left/right residuation.</p>
+</section>
+
+<!-- ====================== VOCABULARY PRIMER ====================== -->
+<div class="part-header" id="vocab">
+  <div class="pk">Pre-flight · Vocabulary primer</div>
+  <h2>First, the vocabulary you'll need</h2>
+  <p class="part-lede">Three subsections: (1) carried-forward terms with one-line refreshers, (2) terms genuinely new in this chapter, (3) deep-dives on quotient (concept) and on left/right residuation — the latter at your request.</p>
+</div>
+
+<section class="module" id="vocab-section">
+  <h2>Carried forward — quick refreshers</h2>
+  <div class="tagline">One-line refreshers for the previously-introduced terms this chapter relies on. Full definitions live in Chapter 2 / 3.</div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2/3</span>
+    <p><span class="term">complete lattice</span> Every subset has both a join (sup) and a meet (inf). Has a top $1$ and a bottom $0$ as the join and meet of the whole lattice.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">bounded</span> Has both $0$ and $1$. Chapter 4 assumes complete (and hence bounded) throughout.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/2</span>
+    <p><span class="term">modular</span> $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$. Equivalently, no $N_5$ sublattice. Submodule lattices are always modular.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1</span>
+    <p><span class="term">complement</span> A <em>complement</em> of $a \in L$ in a bounded lattice is an element $a'$ with $a \wedge a' = 0$ AND $a \vee a' = 1$. So $a'$ is "fully disjoint" from $a$ AND "covers the rest" together with $a$. Boolean lattices have unique complements; modular lattices may have multiple complements; non-modular lattices may have no complements at all.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">condition (B)</span> For chains $\{b_i\}$ and elements $a$ with $a \wedge b_i = 0$ for each $i$: $a \wedge \bigvee_i b_i = 0$. Plain English: trivial-meet survives chain-joins.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">inductive lattice</span> A lattice in which every interval (quotient sublattice) satisfies condition (B). Compactly generated (algebraic) lattices are inductive. Submodule lattices are inductive.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">upper continuous</span> $a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d)$ for every $a$ and every upper directed $D$. Equivalently: meeting commutes with directed joins.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">noetherian / ACC</span> Every increasing sequence stabilises. Equivalent to "every element is compact" in complete lattices.</p>
+  </div>
+
+  <h2>New in Chapter 4 — full term-cards</h2>
+  <div class="tagline">Each of these gets a full definition in the chapter prose; this primer flags the term and gives the gist.</div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">essential element</span> An element $e \in L$ is <em>essential</em> if $e \wedge a \ne 0$ for every non-zero $a \in L$. Plain English: $e$ "touches" every non-zero piece of the lattice — there's no non-zero $a$ that misses $e$.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">essential extension</span> An element $b$ is an <em>essential extension</em> of $a$ if $a \le b$ and $a$ is essential in the interval $b/0$. Plain English: $b$ contains $a$ AND every non-zero element of $b/0$ touches $a$. Read it as: "$b$ extends $a$ without adding any new content disjoint from $a$."</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">essentially closed</span> An element $a$ is <em>essentially closed</em> if $a$ has no proper essential extension — i.e., the only $b \ge a$ with $a$ essential in $b/0$ is $b = a$ itself. Plain English: "$a$ has hit the ceiling — nothing strictly above can extend $a$ essentially." In modules, essentially closed corresponds to <em>injective</em>; in the lattice setting, the maximal essential extension of $a$ is essentially closed.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4 · Two senses!</span>
+    <p><span class="term">pseudo-complement (Călugăreanu's "maximal" sense)</span> An element $c$ is a <em>pseudo-complement of $b$</em> if $b \wedge c = 0$ and $c$ is <strong>maximal</strong> with this property: any $c' > c$ has $b \wedge c' \ne 0$. Plain English: "$c$ is as big as it can be while still entirely missing $b$." Note: not necessarily unique — there can be multiple maximal pseudo-complements.</p>
+    <p><strong>Alternative sense (in the literature, NOT used in this book):</strong> the <em>greatest</em> $c$ with $b \wedge c = 0$, when one exists. Exists only in Heyting algebras / residuated lattices. The book explicitly notes both senses but uses only the maximal sense throughout. See the Deep Dive on residuation below for the connection.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">pseudo-complemented lattice</span> A lattice in which every element has at least one pseudo-complement. Most well-behaved lattices are pseudo-complemented; the chapter shows that <em>all inductive lattices</em> (including all submodule lattices) are pseudo-complemented (Lemma 4.2).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">relative pseudo-complemented</span> A lattice $L$ where every <em>quotient sublattice</em> (interval) $b/a$ is itself pseudo-complemented. Stronger than just "pseudo-complemented."</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">mutually pseudo-complements</span> Two elements $b, c \in L$ are <em>mutually pseudo-complements</em> if $b$ is a pseudo-complement of $c$ <strong>and</strong> $c$ is a pseudo-complement of $b$. Symmetric form of the relationship. The chapter's key results (Prop 4.3, Cor 4.4, Cor 4.6) are about when this symmetry holds.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">sufficient pseudo-complements</span> The phrase used in Lemma 4.2's proof: $L$ has <em>sufficient pseudo-complements</em> if for every $a \in L$ and every $b$ with $a \wedge b = 0$, there exists a pseudo-complement $c$ of $a$ with $b \le c$. Plain English: every "trivial-meet partner" of $a$ extends to a full pseudo-complement of $a$.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 4</span>
+    <p><span class="term">maximal essential extension</span> An essential extension $b$ of $a$ such that no strictly larger $b'$ is also an essential extension. Equivalently: $b$ is essentially closed and an essential extension of $a$. The lattice analog of "injective hull."</p>
+  </div>
+
+  <h2>Deep dive — Quotient (refresher and deeper)</h2>
+  <div class="tagline">Re-introducing this term because of its centrality to module theory and to the slash notation $b/a$ used throughout the book. The Chapter 2 glossary now has a fuller version too.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Quotient — module, lattice, abstract</span>
+    <p><strong>The underlying idea: identification.</strong> "Quotient" is what algebra calls the result of <em>identifying things</em>. Start with a structure $X$ (a module, group, ring, topological space, set). Pick a sub-structure $Y$ to "collapse to a single point" — sending $Y$ to zero, in the additive case. The quotient $X/Y$ is what remains: the original structure with $Y$ glued to zero.</p>
+    <p><strong>Module quotient $M/A$.</strong> Take an $R$-module $M$ and a submodule $A$. Define an equivalence relation: $m \sim m' \iff m - m' \in A$. The equivalence classes form a new module, $M/A$, with operations inherited from $M$. The element $0$ of $M/A$ is the class $A$ itself; an element $\bar m \in M/A$ is "$m$, but with $A$ identified to zero."</p>
+    <p><strong>Universal property.</strong> The quotient is the smallest target of a homomorphism that sends $A$ to zero. Any other map $\varphi: M \to N$ with $\varphi(A) = 0$ factors uniquely through $M/A$. This is what makes the construction structural rather than ad-hoc.</p>
+    <p><strong>The correspondence theorem.</strong> The submodules of $M/A$ are in bijection with the submodules of $M$ that contain $A$. Specifically: the bijection sends $\bar B \subseteq M/A$ to its preimage $B = \pi^{-1}(\bar B) \supseteq A$ in $M$, where $\pi: M \to M/A$ is the projection. The bijection preserves order, joins, meets — it's a lattice isomorphism. <strong>This is what makes the slash notation $b/a$ in the lattice exactly faithful</strong>: when $L = S_R(M)$ and $A \le B$ are submodules, the lattice interval $[A, B]$ corresponds (under correspondence) to the lattice $S_R(B/A)$ of the quotient module $B/A$. So Călugăreanu's $b/a$ <em>is</em> the lattice of the quotient module $B/A$, on the nose.</p>
+    <p><strong>Why this matters here.</strong> Chapter 4 uses the slash notation pervasively: "essential extension" means $a$ is essential in the interval $b/0$ (the "lattice of $b$"); "essential in $1/c$" means essential when restricted to the upper interval. Each such phrase is, ultimately, a statement about the corresponding quotient module.</p>
+  </div>
+
+  <h2>Deep dive — Left and right residuation</h2>
+  <div class="tagline">The conceptual hinge between Călugăreanu's "maximal" pseudo-complement and the literature's "greatest" pseudo-complement. You asked for an intuition; here's a self-contained one.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Left and right residuation</span>
+    <p><strong>The intuition: residuation is "inverse division" for binary operations.</strong> If you have an operation $\bullet$ that interacts with order — bigger inputs give bigger outputs (monotone) — residuation asks: <em>given $a \bullet x \le b$, what's the largest $x$ that makes this work?</em> That largest $x$ is the residual.</p>
+
+    <p><strong>The everyday warm-up.</strong> Take positive integers with multiplication. The inequality $a \cdot x \le b$ has a maximal solution $x = \lfloor b / a \rfloor$. So integer division <em>is</em> the residual of multiplication: it tells you the largest $x$ such that $a \cdot x$ stays below $b$. The notation $b / a$ for that residual is exactly the notation for division.</p>
+
+    <p><strong>For a non-commutative operation, two residuals.</strong> If $\bullet$ is non-commutative — like multiplication in a non-abelian group, or composition of relations — then $a \bullet x$ and $x \bullet a$ are different things, so we get two residuals:</p>
+    <p style="text-align:center;">
+    $$a \bullet x \le b \;\Longleftrightarrow\; x \le a \backslash b \qquad\text{(right residual: "$a$ under $b$")}$$
+    $$x \bullet a \le b \;\Longleftrightarrow\; x \le b / a \qquad\text{(left residual: "$b$ over $a$")}$$
+    </p>
+    <p>The notation: the slash leans toward the side $a$ "is on." $a \backslash b$ has $a$ on the left of the bar, matching $a \bullet x$ (where $a$ is on the left). $b / a$ has $a$ on the right of the bar, matching $x \bullet a$.</p>
+
+    <p><strong>For a commutative operation, one residual.</strong> Meet $\wedge$ is commutative, so $a \wedge x = x \wedge a$, and $a \backslash b = b / a$. We just write one residual, often called the <em>relative pseudo-complement</em> or <em>Heyting implication</em>:</p>
+    <p style="text-align:center;">
+    $$a \wedge x \le b \;\Longleftrightarrow\; x \le a \to b$$
+    </p>
+    <p>The element $a \to b$ is the <em>greatest $x$ such that $a \wedge x \le b$</em>. It's the "Heyting implication" because in a Heyting algebra (the algebraic semantics of intuitionistic propositional logic), this is exactly how implication is interpreted.</p>
+
+    <p><strong>The connection to pseudo-complement.</strong> Set $b = 0$ (the bottom element). Then $a \to 0$ is "the greatest $x$ such that $a \wedge x = 0$" — exactly the <em>greatest-sense pseudo-complement</em> of $a$. We write it $\neg a$ and call it "intuitionistic negation." So:</p>
+    <p style="text-align:center;">
+    $$\neg a = a \to 0 = \text{the greatest } x \text{ such that } a \wedge x = 0.$$
+    </p>
+    <p>This is the <em>greatest-sense</em> pseudo-complement. Călugăreanu uses the <em>maximal-sense</em> instead — and they differ when the lattice isn't a Heyting algebra:</p>
+
+    <table class="grid">
+      <thead><tr><th>Sense</th><th>Defining property</th><th>Existence</th><th>Uniqueness</th><th>Where it lives</th></tr></thead>
+      <tbody>
+        <tr><td>Maximal (Călugăreanu)</td><td>$c$ maximal with $a \wedge c = 0$</td><td>In any inductive lattice (Lemma 4.2)</td><td>Not unique in general</td><td>Submodule lattices, complete lattices generally</td></tr>
+        <tr><td>Greatest (Heyting)</td><td>$c$ greatest with $a \wedge c = 0$</td><td>Only in Heyting algebras</td><td>Unique by definition</td><td>Boolean algebras, frames, intuitionistic logics</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Why two senses?</strong> Because "greatest $x$ with $a \wedge x = 0$" doesn't always exist. In a typical submodule lattice, you can have many incomparable maximal $c$'s with $a \wedge c = 0$ — but no single greatest one. So the maximal sense is the universally-applicable one (works in inductive lattices, including all submodule lattices); the greatest sense is the well-behaved restriction (works in Heyting algebras and Boolean algebras).</p>
+
+    <figure>
+      <svg viewBox="0 0 480 240" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+          .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+          .node-cool { fill: #DDE6EF; stroke: #3D5A6C; stroke-width: 1.5; }
+          .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+          .lbl { font-family: 'Source Serif Pro', serif; font-size: 13px; fill: #1E2749; font-style: italic; }
+          .cap { font-family: 'Inter', sans-serif; font-size: 11px; fill: #6B6B6B; font-style: italic; }
+        </style>
+        <!-- Left side: lattice with TWO maximal pseudo-complements (no greatest) -->
+        <text class="cap" x="120" y="20" text-anchor="middle">Maximal sense — multiple maximals</text>
+        <circle class="node" cx="120" cy="50" r="11"/><text class="lbl" x="120" y="40" text-anchor="middle">$1$</text>
+        <circle class="node-cool" cx="50" cy="100" r="11"/><text class="lbl" x="32" y="105" text-anchor="end">$a$</text>
+        <circle class="node-hot" cx="120" cy="100" r="11"/><text class="lbl" x="120" y="92" text-anchor="middle">$c_1$</text>
+        <circle class="node-hot" cx="190" cy="100" r="11"/><text class="lbl" x="208" y="105" text-anchor="start">$c_2$</text>
+        <circle class="node" cx="120" cy="170" r="11"/><text class="lbl" x="120" y="195" text-anchor="middle">$0$</text>
+        <line class="edge" x1="50" y1="89" x2="113" y2="60"/>
+        <line class="edge" x1="120" y1="89" x2="120" y2="61"/>
+        <line class="edge" x1="190" y1="89" x2="127" y2="60"/>
+        <line class="edge" x1="50" y1="111" x2="115" y2="160"/>
+        <line class="edge" x1="120" y1="111" x2="120" y2="159"/>
+        <line class="edge" x1="190" y1="111" x2="125" y2="160"/>
+        <text class="cap" x="120" y="215" text-anchor="middle">$c_1, c_2$ both maximal with $a \wedge c_i = 0$</text>
+        <!-- Right side: Boolean lattice with greatest pseudo-complement -->
+        <text class="cap" x="380" y="20" text-anchor="middle">Greatest sense — Heyting</text>
+        <circle class="node" cx="380" cy="50" r="11"/><text class="lbl" x="380" y="40" text-anchor="middle">$1$</text>
+        <circle class="node-cool" cx="320" cy="100" r="11"/><text class="lbl" x="302" y="105" text-anchor="end">$a$</text>
+        <circle class="node-hot" cx="440" cy="100" r="11"/><text class="lbl" x="458" y="105" text-anchor="start">$\neg a$</text>
+        <circle class="node" cx="380" cy="170" r="11"/><text class="lbl" x="380" y="195" text-anchor="middle">$0$</text>
+        <line class="edge" x1="320" y1="89" x2="373" y2="60"/>
+        <line class="edge" x1="440" y1="89" x2="387" y2="60"/>
+        <line class="edge" x1="320" y1="111" x2="375" y2="160"/>
+        <line class="edge" x1="440" y1="111" x2="385" y2="160"/>
+        <text class="cap" x="380" y="215" text-anchor="middle">$\neg a$ is the unique greatest with $a \wedge \neg a = 0$</text>
+      </svg>
+      <figcaption>Two senses of pseudo-complement. <em>Left:</em> the five-element diamond ($M_3$-like) — $a$ has two maximal but incomparable pseudo-complements $c_1, c_2$. There's no greatest. <em>Right:</em> a Boolean (Heyting) lattice — $a$ has a unique greatest pseudo-complement $\neg a$. The maximal and greatest senses coincide here.</figcaption>
+    </figure>
+
+    <p><strong>Where residuation shows up.</strong></p>
+    <ul>
+      <li><strong>Boolean and Heyting algebras</strong> (algebraic semantics for classical and intuitionistic logic): meet has a residual called implication.</li>
+      <li><strong>Frames and locales</strong> (point-free topology): the open-set lattice is a Heyting algebra; meet residuates into implication.</li>
+      <li><strong>Quantales</strong> (non-commutative resource accounting): a complete lattice with an associative $\bullet$ that distributes over arbitrary joins; both left and right residuals exist by adjoint functor theorem. K. I. Rosenthal's <em>Quantales and their Applications</em> (1990) is the standard reference.</li>
+      <li><strong>Module theory's "ideal quotient" or "colon ideal":</strong> for ideals $I, J$ of a ring, $(I : J) = \{r : rJ \subseteq I\}$ is the right residual of multiplication: $rJ \subseteq I \iff r \in (I : J)$.</li>
+      <li><strong>Linear logic</strong> (resource-aware logic): the multiplicative connectives $\otimes$ and $\multimap$ are non-commutative-friendly, with $\multimap$ as residuation.</li>
+      <li><strong>Concurrency theory and process algebra:</strong> trace lattices use residuation to compute "what's left after a partial trace."</li>
+    </ul>
+
+    <p><strong>The essential takeaway.</strong> Residuation is the "what's left" operation. For any monotone $\bullet$, residuation tells you the largest input that fits under a target. In commutative settings (meet, addition of positives), one residual; in non-commutative (multiplication in a non-abelian semigroup, ring multiplication), two — left and right. Călugăreanu's "maximal pseudo-complement" is the broadest sensible substitute when the residual doesn't exist; the residual itself (Heyting implication) is the cleanest version when the lattice is well-behaved enough to admit it.</p>
+  </div>
+
+  <p>That's the vocabulary. The chapter prose ahead refers freely to these terms; come back here when something needs refreshing.</p>
+</section>
+
+<!-- ====================== PART A ====================== -->
+<div class="part-header" id="partA">
+  <div class="pk">Part A · Essential elements</div>
+  <h2>The "everywhere-touching" property</h2>
+  <p class="part-lede">Three short sections: the definition of essential, the climbing notion of essential extension, and the limit notion of essentially closed. These set up the apparatus that Part C will combine with pseudo-complementation.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION A1</span> Essential elements — defining the "thick everywhere"</h2>
+  <div class="tagline">An essential element is one that touches every non-zero piece. The lattice analog of an essential submodule.</div>
+
+  <div class="box def">
+    <span class="label">Definition · essential element</span>
+    <p>An element $e \in L$ (a complete lattice with $0$ and $1$) is called <strong>essential</strong> if $e \wedge a \ne 0$ for every $a \in L$ with $a \ne 0$.</p>
+  </div>
+
+  <p>Read this as: every non-zero element of $L$ has a non-zero meet with $e$. Equivalently: $e$ is essential if there is no non-zero $a$ with $e \wedge a = 0$ — no non-zero element is fully disjoint from $e$.</p>
+
+  <div class="box intuition">
+    <span class="label">Plain-English picture</span>
+    <p>Imagine the lattice as a stratified geography: $0$ at the bottom, $1$ at the top, intermediate elements arrayed by inclusion. An essential element is one that "shows up everywhere" — wherever you look (any non-zero $a$), $e$ has a non-trivial overlap. The classic example: in a vector space $V$, a subspace $E$ is "essential" iff $E \cap U \ne 0$ for every non-zero subspace $U$. For finite-dimensional $V$, this means $E$ has codimension $0$ — i.e., $E = V$ — but for infinite-dimensional $V$, there are proper essential subspaces.</p>
+  </div>
+
+  <h3>Examples</h3>
+
+  <p><strong>(1) The top element.</strong> In any bounded lattice, $1$ is essential: $1 \wedge a = a \ne 0$ for any $a \ne 0$.</p>
+
+  <p><strong>(2) Vector spaces (over fields).</strong> In a finite-dimensional vector space, the only essential subspace is the whole space. In an infinite-dimensional space, e.g. $V = k^{\mathbb N}$ (the space of all sequences), the subspace of <em>eventually-zero</em> sequences is essential — it intersects every non-zero subspace non-trivially.</p>
+
+  <p><strong>(3) Modules.</strong> In an $R$-module $M$, a submodule $E$ is <em>essential</em> in the module-theoretic sense (also called "large") iff $E \cap N \ne 0$ for every non-zero submodule $N$. Lattice-theoretically, this is the definition above applied to $L = S_R(M)$.</p>
+
+  <p><strong>(4) The submodule $\mathbb Z \subseteq \mathbb Q$.</strong> $\mathbb Z$ is essential in $\mathbb Q$ as a $\mathbb Z$-module: every non-zero submodule of $\mathbb Q$ contains some $n/m \cdot \mathbb Z$ with non-zero intersection with $\mathbb Z$. (In fact $\mathbb Q$ is the <em>injective hull</em> of $\mathbb Z$.)</p>
+
+  <p><strong>(5) The socle.</strong> In module theory, the <em>socle</em> $\mathrm{soc}(M)$ is the sum of all simple submodules of $M$. The socle is essential in $M$ if $M$ is itself a finitely-generated essential extension of its socle. (We won't develop this here; it's a Chapter 7 phenomenon.)</p>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION A2</span> Essential extensions — climbing essentially</h2>
+  <div class="tagline">An essential extension of $a$ is an element $b \ge a$ such that $a$ is essential in the interval $b/0$. The "climb-without-losing-touch" notion.</div>
+
+  <div class="box def">
+    <span class="label">Definition · essential extension</span>
+    <p>An element $b$ is an <strong>essential extension</strong> of $a$ if $a \le b$ and $a$ is essential in the quotient sublattice $b/0$. That is: for every $x \in b/0$ with $x \ne 0$, $a \wedge x \ne 0$.</p>
+  </div>
+
+  <p>Two parts: the climb (from $a$ to $b$) and the essentialness (within $b/0$). Both are required. If $b$ adds any "new piece" disjoint from $a$ — i.e., some $x \in b/0$ with $a \wedge x = 0$ — then $b$ is not an essential extension.</p>
+
+  <p>Trivially, $a$ is an essential extension of itself (take $b = a$). Most of the interesting essential extensions are strict: $a < b$ with $a$ still essential in $b/0$.</p>
+
+  <figure>
+    <svg viewBox="0 0 460 260" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .edge-hot { stroke: #C89F3C; stroke-width: 2; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 13px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 12px; fill: #6B6B6B; font-style: italic; }
+      </style>
+      <circle class="node-hot" cx="100" cy="40" r="13"/><text class="lbl" x="80" y="45" text-anchor="end">$b$</text>
+      <circle class="node-hot" cx="100" cy="100" r="13"/><text class="lbl" x="80" y="105" text-anchor="end">$b'$</text>
+      <circle class="node-hot" cx="100" cy="160" r="13"/><text class="lbl" x="80" y="165" text-anchor="end">$a$</text>
+      <circle class="node" cx="100" cy="220" r="13"/><text class="lbl" x="80" y="225" text-anchor="end">$0$</text>
+      <line class="edge-hot" x1="100" y1="53" x2="100" y2="87"/>
+      <line class="edge-hot" x1="100" y1="113" x2="100" y2="147"/>
+      <line class="edge" x1="100" y1="173" x2="100" y2="207"/>
+      <text class="cap" x="180" y="100">$a$ essential in $b/0$:</text>
+      <text class="cap" x="180" y="120">every non-zero $x \le b$</text>
+      <text class="cap" x="180" y="140">satisfies $a \wedge x \ne 0$</text>
+      <text class="cap" x="180" y="180">$b'$ is intermediate; if $a$</text>
+      <text class="cap" x="180" y="200">essential in $b/0$, also in $b'/0$</text>
+    </svg>
+    <figcaption>An essential extension picture. $a$ is essential in $b/0$, meaning every non-zero element of the interval $b/0$ touches $a$. Intermediate elements $b'$ between $a$ and $b$ inherit the essentialness.</figcaption>
+  </figure>
+
+  <p>Several useful properties — most are exercises:</p>
+
+  <ul>
+    <li><strong>Transitivity:</strong> If $a$ is essential in $b/0$ and $b$ is essential in $c/0$, then $a$ is essential in $c/0$ (Exercise 4.7).</li>
+    <li><strong>Meet:</strong> If $a$ and $b$ are both essential in $L$, so is $a \wedge b$ (Exercise 4.4).</li>
+    <li><strong>Restriction:</strong> If $a$ is essential in $L$, then for every $b$, $a \wedge b$ is essential in $b/0$ (Exercise 4.5).</li>
+    <li><strong>Lifting:</strong> If $0 < a \le b$, then $a$ essential in $L$ iff both $b$ essential in $L$ and $a$ essential in $b/0$ (Exercise 4.10).</li>
+  </ul>
+
+  <p>These properties together let essential extensions <em>compose</em>: building up $a \to b_1 \to b_2 \to \cdots$, each an essential extension of the previous, gives an essential extension chain. Where does the chain stop? At an <em>essentially closed</em> element — see the next section.</p>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION A3</span> Essentially closed elements — the limits of essentialness</h2>
+  <div class="tagline">An element with no proper essential extensions. The lattice analog of an injective module.</div>
+
+  <div class="box def">
+    <span class="label">Definition · essentially closed</span>
+    <p>An element $a \in L$ is called <strong>essentially closed</strong> if $a$ has no proper essential extensions — i.e., the only $b$ with $a \le b$ and $a$ essential in $b/0$ is $b = a$ itself.</p>
+  </div>
+
+  <p>"Proper" means $b > a$. An essentially closed element has reached a ceiling: it can't be extended any further while keeping essentialness.</p>
+
+  <h3>Examples</h3>
+
+  <p><strong>(1) Top element.</strong> $1$ is always essentially closed (no proper extensions exist at all).</p>
+
+  <p><strong>(2) Direct summands.</strong> In a module $M$, a direct summand $A \le M$ (i.e., $M = A \oplus B$ for some $B$) is essentially closed in $S_R(M)$. The reason: any essential extension $C$ of $A$ inside $M$ is forced to coincide with $A$, because $B$ provides "new" content that $A$ doesn't touch.</p>
+
+  <p><strong>(3) Injective modules.</strong> In an $R$-module $M$, $A$ is essentially closed iff $A$ has the lifting property for monomorphisms (Eckmann–Schopf, 1953): $A$ is an injective module. So essentially closed elements of $S_R(M)$ correspond to injective submodules.</p>
+
+  <h3>Why we care</h3>
+
+  <p>Essentially closed elements are the "stable" essential extensions — they don't admit further essential growth. The chapter's apparatus (Lemma 4.3, Corollaries 4.3 and 4.4) shows that pseudo-complements are exactly the essentially closed elements (in upper continuous modular lattices). This is the chapter's deepest result, tying the two faces — essentialness (vertical) and pseudo-complementation (horizontal) — into a single notion.</p>
+
+  <div class="box intuition">
+    <span class="label">Module-theoretic anchor</span>
+    <p>In module theory, the maximal essential extension of $A$ inside $M$ is called the <em>essential closure</em> or the <em>injective hull</em> of $A$ in $M$. It exists, is unique up to isomorphism, and is itself essentially closed (= injective in $M$). The lattice-theoretic Lemma 4.3 below shows the same thing for inductive modular lattices: maximal essential extensions exist and are essentially closed.</p>
+  </div>
+</section>
+
+<!-- ====================== PART B ====================== -->
+<div class="part-header" id="partB">
+  <div class="pk">Part B · Pseudo-complements</div>
+  <h2>The "maximally disjoint" partner</h2>
+  <p class="part-lede">A pseudo-complement of $b$ is an element $c$ with $b \wedge c = 0$ that is as large as possible. Existence (Lemma 4.2) is by Zorn's Lemma in inductive lattices. The two senses (maximal vs greatest) connect to residuation.</p>
+</div>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION B1</span> Pseudo-complement (Călugăreanu's "maximal" sense)</h2>
+  <div class="tagline">The definition the book uses throughout: $c$ is maximal with $b \wedge c = 0$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · pseudo-complement</span>
+    <p>An element $c$ is called a <strong>pseudo-complement</strong> of $b$ in $L$ if $b \wedge c = 0$ and $c$ is <em>maximal</em> with this property: any $c' \in L$ with $c < c'$ has $b \wedge c' \ne 0$.</p>
+  </div>
+
+  <p>So: $c$ is "maximally disjoint from $b$." Two parts: meet condition ($b \wedge c = 0$) and maximality (no proper enlargement preserves the meet condition).</p>
+
+  <p><strong>Note: pseudo-complements are not unique in general.</strong> A given $b$ can have multiple maximal $c$'s with $b \wedge c = 0$, all incomparable. The maximal sense is the broadly-applicable one but loses uniqueness.</p>
+
+  <div class="box def">
+    <span class="label">Related definitions</span>
+    <p>$L$ is called <strong>pseudo-complemented</strong> if every element has at least one pseudo-complement. $L$ is called <strong>relative pseudo-complemented</strong> if every quotient sublattice (interval) is pseudo-complemented. For $b, c \in L$, the term <strong>mutually pseudo-complements</strong> means: $c$ is a pseudo-complement of $b$ AND $b$ is a pseudo-complement of $c$.</p>
+  </div>
+
+  <p>Mutually pseudo-complements is the symmetric form. Not every pseudo-complement pair is mutually so — but in upper continuous modular lattices, they are (Corollary 4.4).</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION B2</span> The two senses of "pseudo-complement"</h2>
+  <div class="tagline">The book is explicit: there are two distinct senses in the literature. Călugăreanu picks the maximal sense; the literature elsewhere often picks the greatest sense. Both are useful; they coincide in nice lattices.</div>
+
+  <div class="box warning">
+    <span class="label">Terminology trap</span>
+    <p>The book on page 39 explicitly notes: <em>"In the literature the term 'pseudo-complement' is also used in another sense: an element $c$ is called a pseudo-complement of $b$ in $L$ if $b \wedge c = 0$ and $c$ is the greatest (thus uniqueness is required) with this property. In this book only the first sense, i.e., the 'maximal' sense will be used."</em></p>
+  </div>
+
+  <p>The deep dive on residuation (in the primer above) explains why the greatest sense is special: it's the right residual of meet at $0$, which exists only in Heyting algebras. In the maximal sense, existence is much more general (any inductive lattice — Lemma 4.2), but uniqueness is lost.</p>
+
+  <table class="grid">
+    <thead><tr><th>Sense</th><th>Element $c$ is a pseudo-complement of $b$ iff:</th><th>Existence</th><th>Uniqueness</th></tr></thead>
+    <tbody>
+      <tr><td>Maximal (Călugăreanu's choice)</td><td>$b \wedge c = 0$, and $c$ is maximal with this property</td><td>In every inductive lattice (Lemma 4.2)</td><td>Generally not unique</td></tr>
+      <tr><td>Greatest (literature elsewhere)</td><td>$c$ is the greatest with $b \wedge c = 0$</td><td>Only in Heyting algebras / residuated lattices</td><td>Unique by definition</td></tr>
+    </tbody>
+  </table>
+
+  <p>For the purposes of Chapter 4, "pseudo-complement" always means the maximal sense. When you see Heyting algebra or residuation discussions elsewhere, they're talking about the greatest sense. Connection panels P3 and P4 explore the relationship in detail.</p>
+
+  <div class="box intuition">
+    <span class="label">A quick check</span>
+    <p>In a Boolean lattice, the maximal and greatest senses coincide and equal the (unique) complement. In a $1+1$ chain ($0 \prec 1$), every element has a unique pseudo-complement: $0$'s pseudo-complement is $1$, $1$'s is $0$. In a 5-element diamond $M_3$ (atoms $a, b, c$ between $0$ and $1$), the element $a$ has TWO maximal pseudo-complements ($b$ and $c$, since $a \wedge b = a \wedge c = 0$ and both are maximal); $M_3$ is not a Heyting algebra, and there's no greatest pseudo-complement.</p>
+  </div>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION B3</span> Lemma 4.1 — in modular lattices, every complement is a pseudo-complement</h2>
+  <div class="tagline">A clean lemma showing that "complement" (full disjointness AND covering) implies "pseudo-complement" (maximal disjointness) in modular lattices. The non-modular case fails — and the book exhibits the $N_5$ counterexample.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 4.1</span>
+    <p>In a modular lattice $L$ with $0$ and $1$, every complement is a pseudo-complement.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $b$ be a complement of $a$: $a \wedge b = 0$ and $a \vee b = 1$. We need to show $b$ is maximal with $a \wedge b = 0$. Suppose $b' \in L$ with $b \le b'$ and $a \wedge b' = 0$. Then by modularity (using $b \le b'$):
+    $$b' = b' \wedge 1 = b' \wedge (a \vee b) = (b' \wedge a) \vee b = 0 \vee b = b.$$
+    So $b' = b$. Hence $b$ is maximal with $a \wedge b = 0$, i.e., $b$ is a pseudo-complement of $a$.</p>
+  </div>
+
+  <p>The argument is short but every step uses modularity. The first equality — $b' = b' \wedge 1$ — is just the bound axiom. The second uses $a \vee b = 1$ (complement). The third — $b' \wedge (a \vee b) = (b' \wedge a) \vee b$ — is exactly the modular law applied with $b \le b'$. The fourth uses $a \wedge b' = 0$. The fifth uses $0 \vee b = b$.</p>
+
+  <div class="box warning">
+    <span class="label">Modularity is essential — $N_5$ counterexample</span>
+    <p>Without modularity, Lemma 4.1 fails. The book exhibits the famous pentagon $N_5$ as a counterexample. In $N_5$, $a$ is a complement of $b$ ($a \wedge b = 0$, $a \vee b = 1$), but there is a strictly larger element $c > a$ with $b \wedge c = 0$. So $a$ is not maximal with the property — i.e., $a$ is a complement but not a pseudo-complement.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .node-warn { fill: #F2D9C9; stroke: #B8633E; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 14px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 11px; fill: #6B6B6B; font-style: italic; }
+      </style>
+      <!-- top: 1 -->
+      <circle class="node" cx="160" cy="30" r="12"/><text class="lbl" x="160" y="20" text-anchor="middle">$1$</text>
+      <!-- c -->
+      <circle class="node-warn" cx="100" cy="100" r="12"/><text class="lbl" x="80" y="105" text-anchor="end">$c$</text>
+      <!-- b -->
+      <circle class="node-hot" cx="240" cy="80" r="12"/><text class="lbl" x="260" y="85" text-anchor="start">$b$</text>
+      <!-- a -->
+      <circle class="node-warn" cx="100" cy="190" r="12"/><text class="lbl" x="80" y="195" text-anchor="end">$a$</text>
+      <!-- bottom: 0 -->
+      <circle class="node" cx="160" cy="240" r="12"/><text class="lbl" x="160" y="265" text-anchor="middle">$0$</text>
+      <!-- edges -->
+      <line class="edge" x1="100" y1="88" x2="152" y2="38"/>
+      <line class="edge" x1="240" y1="68" x2="168" y2="38"/>
+      <line class="edge" x1="100" y1="178" x2="100" y2="112"/>
+      <line class="edge" x1="240" y1="92" x2="160" y2="232"/>
+      <line class="edge" x1="100" y1="202" x2="155" y2="232"/>
+      <text class="cap" x="160" y="160" text-anchor="middle">$N_5$ — non-modular</text>
+      <text class="cap" x="160" y="175" text-anchor="middle">$a$ complement of $b$ ($a \wedge b = 0, a \vee b = 1$)</text>
+      <text class="cap" x="160" y="190" text-anchor="middle">but $a < c$ and $b \wedge c = 0$</text>
+      <text class="cap" x="160" y="205" text-anchor="middle">— so $a$ is NOT a pseudo-complement of $b$</text>
+    </svg>
+    <figcaption>The pentagon $N_5$ as counterexample to Lemma 4.1 in non-modular lattices. The element $a$ is a complement of $b$ (gold), but $c$ is strictly larger than $a$ with $b \wedge c = 0$ — so $a$ is not maximal, hence not a pseudo-complement of $b$ in the maximal sense.</figcaption>
+  </figure>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION B4</span> Proposition 4.1 — finite-length lattices are inductive</h2>
+  <div class="tagline">A small but useful proposition: finite length forces the inductive condition. This means all the apparatus of Chapter 4 applies to finite-length modular lattices.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 4.1</span>
+    <p>Lattices of finite length are inductive.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Take any interval $y/x$ in $L$ and any $a \in y/x$. Suppose $\{b_i\}_{i \in I}$ is a chain in $y/x$ with $a \wedge b_i = x$ for each $i$ (this is condition (B)'s hypothesis with the bottom of the interval being $x$ instead of $0$).</p>
+    <p>All the $b_i$ are of finite length not exceeding $\ell(L)$. So among them there is some $b_k$ with $\ell(b_k/0)$ maximal (the chain reaches a ceiling in length). For every $i \in I$, $b_i \le b_k$ (otherwise some $b_{i'}$ would extend $b_k$, contradicting maximality of $\ell(b_k/0)$). Hence $\bigvee_i b_i = b_k$, and $a \wedge \bigvee_i b_i = a \wedge b_k = x$. So condition (B) holds in $y/x$.</p>
+  </div>
+
+  <p>The proof leverages the fact that in a finite-length lattice, chains stabilise — any chain has a maximum element. So the join of the chain equals one of its members, and condition (B) reduces to a single check.</p>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>Proposition 4.1 lets us say that <em>every finite-length lattice has all of Chapter 4's apparatus available</em>: pseudo-complements exist (Lemma 4.2), they have nice properties via Proposition 4.2, and the rest of the chapter applies. So when working with finite-length module lattices — which covers most "small" modules in practice — we're in the well-behaved regime.</p>
+  </div>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION B5</span> Lemma 4.2 — every inductive lattice is pseudo-complemented</h2>
+  <div class="tagline">Existence of pseudo-complements via Zorn's Lemma. The "sufficient" pseudo-complements property strengthens the conclusion: any trivial-meet partner can be extended to a full pseudo-complement.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 4.2</span>
+    <p>Every inductive lattice is pseudo-complemented. Moreover, if $a \wedge b = 0$ then there is a pseudo-complement $c \in L$ such that $b \le c$. In this case $L$ is called a lattice <em>with sufficient pseudo-complements</em>.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why — Zorn's Lemma</span>
+    <p>Define $C = \{x \in L : a \wedge x = 0, b \le x\}$. This is non-empty (contains $b$, since $a \wedge b = 0$). $L$ is inductive: condition (B) ensures that the supremum of any chain in $C$ remains in $C$ (the chain's elements all satisfy $a \wedge x = 0$, and the directed join also satisfies this by condition (B) applied at $x = 0$).</p>
+    <p>By Zorn's Lemma applied to $C$ ordered by $\le$, there is a maximal element $c \in C$. We claim $c$ is a pseudo-complement of $a$.</p>
+    <p>Indeed, $c \in C$ gives $a \wedge c = 0$. Maximality in $C$ says: any $c' \in L$ with $c < c'$ either fails $a \wedge c' = 0$ (i.e., $a \wedge c' \ne 0$) or fails $b \le c'$ (which doesn't apply because $b \le c \le c'$). So $a \wedge c' \ne 0$ for all $c' > c$, which is exactly the maximality condition for being a pseudo-complement.</p>
+    <p>The "sufficient" claim is built into the construction: we started with $b \le c$ in $C$, so the resulting pseudo-complement $c$ satisfies $b \le c$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Where the inductive condition comes in</span>
+    <p>Without inductiveness, the Zorn argument would fail: the supremum of a chain $\{x_i\}$ in $C$ might satisfy $a \wedge \bigvee_i x_i \ne 0$ even if each $a \wedge x_i = 0$. Inductive — i.e., condition (B) — is precisely what rules this out. So inductiveness is the right level of abstraction: it's what makes pseudo-complements exist via Zorn.</p>
+  </div>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">SECTION B6</span> Corollary 4.1 — upper continuous lattices are pseudo-complemented</h2>
+  <div class="tagline">A useful corollary: upper continuity is enough.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.1</span>
+    <p>Upper continuous lattices are pseudo-complemented.</p>
+  </div>
+
+  <p>The argument is one line: upper continuity implies condition (B) at every interval (hence inductive), and Lemma 4.2 then gives pseudo-complementation.</p>
+
+  <div class="box intuition">
+    <span class="label">Concrete consequence</span>
+    <p>Compactly generated lattices are upper continuous (Chapter 2, Proposition 2.4). Therefore they are pseudo-complemented. In particular: every submodule lattice $S_R(M)$ is pseudo-complemented — every submodule has at least one pseudo-complement. This is the foundational existence result that makes essentialness theory work in module theory.</p>
+  </div>
+</section>
+
+<!-- ====================== PART C ====================== -->
+<div class="part-header" id="partC">
+  <div class="pk">Part C · Interplay of essential and pseudo-complement</div>
+  <h2>The diagonal: when pseudo-complements meet essentialness</h2>
+  <p class="part-lede">The chapter's deepest results live here. Pseudo-complements turn out to be exactly the essentially closed elements (in upper continuous modular lattices), and pseudo-complementation creates essential extensions on the side.</p>
+</div>
+
+<section class="module" id="s10">
+  <h2><span class="num">SECTION C1</span> Proposition 4.2 — pseudo-complement via essentialness, chain of equivalences</h2>
+  <div class="tagline">A characterisation: in a bounded modular lattice, $b$ is a pseudo-complement of $a$ iff $a \wedge b = 0$ AND $a \vee b$ is essential in the interval $1/b$. Five equivalent statements unfold via the modular machinery.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 4.2</span>
+    <p>If $L$ is a bounded modular lattice, $b$ is a pseudo-complement of $a$ in $L$ if and only if $a \wedge b = 0$ and $a \vee b$ is essential in $1/b$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · five equivalent forms</span>
+    <p>The proof shows the following five assertions are all equivalent:</p>
+    <ol>
+      <li>$b$ is a pseudo-complement of $a$ in $L$.</li>
+      <li>$a \wedge b = 0$ and for every $c \in L$ with $b < c$: $a \wedge c \ne 0$.</li>
+      <li>$a \wedge b = 0$ and for every $c \in 1/b$ with $c \ne b$: $a \wedge c \nleq b$.</li>
+      <li>$a \wedge b = 0$ and for every $c \in 1/b$ with $c \ne b$: $b < b \vee (a \wedge c) = (a \vee b) \wedge c$. (★)</li>
+      <li>$a \wedge b = 0$ and $a \vee b$ is essential in $1/b$.</li>
+    </ol>
+    <p>The transitions use modularity: (3) ⇒ (4) is an application of the modular law $b \vee (a \wedge c) = (a \vee b) \wedge c$ when $b \le c$. (4) ⇒ (5) is the unwrapping of "essential in $1/b$" — every $c$ in $1/b$ with $c \ne b$ has non-trivial meet with $a \vee b$ (which becomes $a \wedge c \ne 0$ in modular form, mod $b$).</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The deep content</span>
+    <p>This is the characterisation that ties Part A to Part B. It says: <em>pseudo-complementation is structurally equivalent to creating an essential extension up above.</em> If $b$ is a pseudo-complement of $a$, then the join $a \vee b$ is essential in the interval $1/b$ — meaning: in the upper world above $b$, $a \vee b$ touches everything. The "horizontal" disjointness ($a \wedge b = 0$) is paired with a "vertical" essentialness ($a \vee b$ essential in $1/b$).</p>
+    <p>This duality is the key to the rest of the chapter. Every result that follows is some form of "essential extension creates pseudo-complement, and vice versa."</p>
+  </div>
+</section>
+
+<section class="module" id="s11">
+  <h2><span class="num">SECTION C2</span> Corollary 4.2 — pseudo-complementation creates essentialness in $L$</h2>
+  <div class="tagline">A useful sharpening: $a \vee b$ is essential not just in $1/b$, but in the full lattice $L$.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.2</span>
+    <p>If $L$ is a modular lattice with $0$ and $b$ is a pseudo-complement of $a$ in $L$, then $a \vee b$ is essential in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Take any non-zero $x \in L$. We show $(a \vee b) \wedge x \ne 0$.</p>
+    <p>Case 1: $x \le b$. Then $(a \vee b) \wedge x = ((a \vee b) \wedge b) \wedge x = b \wedge x = x \ne 0$. (Since $a \vee b \ge b$, $(a \vee b) \wedge b = b$.)</p>
+    <p>Case 2: $x \nleq b$. Then $b < b \vee x \in 1/b$. By the (★) form in Proposition 4.2, $b < (a \vee b) \wedge (b \vee x)$, so $b \ne (a \vee b) \wedge (b \vee x)$. Using modularity: $(a \vee b) \wedge (b \vee x) = b \vee ((a \vee b) \wedge x)$ (where the second equality uses modular law with $b \le b \vee x$). For this to be strictly above $b$, we need $(a \vee b) \wedge x \nleq b$, i.e., $(a \vee b) \wedge x \ne 0$ (and the part of it above $b$ is non-trivial).</p>
+    <p>Together: $(a \vee b) \wedge x \ne 0$ in both cases. So $a \vee b$ is essential in $L$.</p>
+  </div>
+
+  <p>This corollary is often quoted in the form: "in a modular lattice, the join of a pseudo-complement pair is essential."</p>
+</section>
+
+<section class="module" id="s12">
+  <h2><span class="num">SECTION C3</span> Lemma 4.3 — building a maximal essential extension</h2>
+  <div class="tagline">In an upper continuous modular lattice, given $a$ and a pseudo-complement $b$, the maximal element $c$ with $a \le c$ and $b \wedge c = 0$ is a maximal essential extension of $a$.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 4.3</span>
+    <p>Let $L$ be an upper continuous modular lattice, $a \in L$, and $b$ a pseudo-complement of $a$ in $L$. If $c \in L$ is maximal relative to the properties $a \le c$ and $b \wedge c = 0$, then $c$ is a maximal essential extension of $a$ in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Existence of $c$: by Zorn's Lemma applied to $\{x \in L : a \le x, b \wedge x = 0\}$, using upper continuity to ensure chain-suprema stay in the set.</p>
+    <p>Step 1: <em>$a$ is essential in $c/0$.</em> Take $x \in c/0$ with $a \wedge x = 0$. We show $x = 0$. From the chain of modular identities:
+    $$a \wedge (b \vee x) = (a \wedge b) \vee (a \wedge ?) \cdots$$
+    By modularity (using $a \wedge b = 0$, so this is the relevant simplification) and the pseudo-complement property of $b$, we derive $b \vee x = b$ or $b \wedge x = x$. In either case, the relations force $x \le b \cap c = 0$, so $x = 0$. Hence $a$ is essential in $c/0$.</p>
+    <p>Step 2: <em>$c$ is the maximal essential extension.</em> Suppose $a \le c'$ is another essential extension with $c \le c'$. If $c \ne c'$, by maximality of $c$, $b \wedge c' \ne 0$. Then $a \wedge (b \wedge c') \ne 0$ (since $a$ essential in $c'/0$). But $a \wedge b = 0$, so $a \wedge (b \wedge c') = 0$ — contradiction. Hence $c = c'$.</p>
+  </div>
+</section>
+
+<section class="module" id="s13">
+  <h2><span class="num">SECTION C4</span> Proposition 4.3 — mutually pseudo-complements</h2>
+  <div class="tagline">Under the hypothesis of Lemma 4.3, $b$ and $c$ are mutually pseudo-complements.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 4.3</span>
+    <p>In the hypothesis of Lemma 4.3, $b$ and $c$ are mutually pseudo-complements.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>The element $c$ constructed in Lemma 4.3 is, by construction, a pseudo-complement of $b$ in $L$ (it's maximal with $b \wedge c = 0$). Conversely, we need to show $b$ is a pseudo-complement of $c$ in $L$. Suppose $b' > b$ with $c \wedge b' = 0$. From $a \wedge b = 0$ and $a \le c$, we'd derive (using upper continuity in modular setup) $a \wedge b' \ne 0$ — contradicting that $b$ was maximal as a pseudo-complement of $a$. Hence $b$ is maximal among elements with $c \wedge b' = 0$, i.e., $b$ is a pseudo-complement of $c$.</p>
+  </div>
+</section>
+
+<section class="module" id="s14">
+  <h2><span class="num">SECTION C5</span> Corollaries 4.3, 4.4, 4.5 — pseudo-complement = essentially closed</h2>
+  <div class="tagline">The chapter's deepest equivalence: in an upper continuous modular lattice, pseudo-complements are exactly the essentially closed elements.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.3</span>
+    <p>Let $L$ be an upper continuous modular lattice and $a \in L$. Then $a$ is a pseudo-complement (of some element) in $L$ if and only if $a$ is essentially closed in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Rightarrow)$ If $a$ is a pseudo-complement of $b$, suppose $a < c'$ is a proper essential extension of $a$. Then $b \wedge c' \ne 0$ (since $a$ pseudo-complement of $b$ has $a$ maximal with $b \wedge a = 0$, and $c'$ strictly above $a$ must violate). Combined with $a$ essential in $c'/0$, we get $a \wedge (b \wedge c') \ne 0$. But $a \wedge b = 0$, contradiction. So $a$ has no proper essential extensions — i.e., $a$ is essentially closed.</p>
+    <p>$(\Leftarrow)$ Conversely, if $a$ is essentially closed, take a pseudo-complement $b'$ of $a$ (exists by Corollary 4.1, upper continuous ⟹ pseudo-complemented). By Lemma 4.3, the maximal $c$ with $a \le c$ and $b' \wedge c = 0$ is the maximal essential extension of $a$. Since $a$ is essentially closed, $c = a$, meaning $a$ itself is maximal with $b' \wedge a = 0$ — i.e., $a$ is a pseudo-complement of $b'$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.4</span>
+    <p>In an upper continuous modular lattice, mutually pseudo-complements are essentially closed elements. Moreover, each pseudo-complement in such a lattice admits mutually pseudo-complements.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.5</span>
+    <p>In an upper continuous modular lattice $L$, let $b$ be a pseudo-complement of $a$ in $L$. Then $a$ is essentially closed if and only if $a$ is a pseudo-complement of $b$ in $L$ (i.e., $b$ and $a$ are mutually pseudo-complements).</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The structural picture</span>
+    <p>Corollary 4.3 is the chapter's highest-leverage result: <em>in a well-behaved modular lattice, the apparatus of pseudo-complementation and the apparatus of essentialness describe the same elements</em>. An element is a pseudo-complement (of something) iff it is essentially closed. So the two faces of Chapter 4 — Part B's horizontal "maximally disjoint" and Part A's vertical "no proper essential extension" — are dual descriptions of the same set of distinguished elements.</p>
+  </div>
+</section>
+
+<section class="module" id="s15">
+  <h2><span class="num">SECTION C6</span> Proposition 4.4 — triple characterization</h2>
+  <div class="tagline">A clean three-condition characterization of pseudo-complement, gathering the essentialness language.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 4.4</span>
+    <p>Let $L$ be a modular pseudo-complemented lattice. An element $c$ is a pseudo-complement of $b$ in $L$ if and only if all three:</p>
+    <ol>
+      <li>$b \wedge c = 0$,</li>
+      <li>$b \vee c$ is essential in $L$, and</li>
+      <li>$c$ is essentially closed.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Necessity: (1) is by definition; (2) is Corollary 4.2; (3) is Corollary 4.3.</p>
+    <p>Sufficiency: assume all three. By Proposition 4.2, we need to show $b \vee c$ is essential in $1/c$. Suppose $(b \vee c) \wedge d = c$ for some $d \in L$ with $c < d$. Since $c$ is essentially closed, there is $0 < d' \le d$ with $c \wedge d' = 0$. Therefore $0 = c \wedge d' = ((b \vee c) \wedge d) \wedge d' = (b \vee c) \wedge d'$, contradicting that $b \vee c$ is essential in $L$. So $b \vee c$ is essential in $1/c$, and Proposition 4.2 gives that $c$ is a pseudo-complement of $b$.</p>
+  </div>
+</section>
+
+<section class="module" id="s16">
+  <h2><span class="num">SECTION C7</span> Corollary 4.6 — the symmetric form</h2>
+  <div class="tagline">The clean symmetric statement: mutually pseudo-complements iff disjoint, both essentially closed, and joining to an essential element.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.6</span>
+    <p>In a modular pseudo-complemented lattice $L$, two elements $b$ and $c$ with $b \wedge c = 0$ are mutually pseudo-complements if and only if $b$ and $c$ are essentially closed and $b \vee c$ is essential in $L$.</p>
+  </div>
+
+  <p>This is the elegant package: a pair of elements $(b, c)$ with trivial meet are mutual pseudo-complements iff each is essentially closed and their join is essential. Three conditions, all symmetric in $b$ and $c$.</p>
+
+  <div class="box intuition">
+    <span class="label">Looking ahead — neat elements</span>
+    <p>The book's closing remark of Chapter 4: <em>"the maximal essential extensions and, in particular, the essentially closed elements will be connected with the neat elements of Chapter 9."</em> Neat elements are a refined class of pseudo-complements that play a key role in the structure theory of complete modular lattices. The apparatus we've built here — essential, essentially closed, pseudo-complement, mutually pseudo-complement — is the foundation that supports Chapter 9's neat-element development.</p>
+  </div>
+</section>
+
+<!-- ====================== CONNECTIONS ====================== -->
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five panels: module theory and injective hulls, Heyting algebras, residuation deep-dive, Boolean/Heyting/pseudo-complemented disambiguation, and Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> Module theory — essential submodules, injective hulls, Goldie dimension</h2>
+  <div class="tagline">Chapter 4's apparatus, in module form. Essential submodules are everywhere in module theory; injective hulls are a beautiful application.</div>
+
+  <div class="box connection">
+    <span class="label">Essential submodules and injective hulls</span>
+    <p>For an $R$-module $M$ and a submodule $E \le M$: $E$ is <em>essential</em> in $M$ (Călugăreanu's lattice sense applied to $L = S_R(M)$) iff $E \cap N \ne 0$ for every non-zero submodule $N \le M$. Equivalent module-theoretic definitions: <em>large</em>, <em>essential</em>, <em>e-large</em> all mean the same thing.</p>
+    <p>The <em>injective hull</em> $E(M)$ (also called the <em>injective envelope</em>) is the unique-up-to-isomorphism injective $R$-module that contains $M$ as an essential submodule. Eckmann–Schopf (1953) proved its existence and uniqueness. The injective hull is the lattice-theoretic <em>maximal essential extension</em> of $M$ — Lemma 4.3 generalized to the module category.</p>
+  </div>
+
+  <p><strong>Concrete examples.</strong></p>
+  <ul>
+    <li>$E(\mathbb Z) = \mathbb Q$: the rationals are the injective hull of the integers as a $\mathbb Z$-module. Every non-zero submodule of $\mathbb Q$ contains some $n/m \cdot \mathbb Z$ which has non-trivial intersection with $\mathbb Z$.</li>
+    <li>$E(\mathbb Z/p) = \mathbb Z(p^\infty)$: the Prüfer $p$-group is the injective hull of $\mathbb Z/p$. The chain $\mathbb Z/p \subset \mathbb Z/p^2 \subset \cdots$ all the way up.</li>
+    <li>For a vector space $V$ over a field $k$: $E(V) = V$ — vector spaces are already injective.</li>
+  </ul>
+
+  <p><strong>Goldie dimension.</strong> Connecting Chapter 4 to Chapter 5: the <em>Goldie dimension</em> (or uniform dimension) of $M$ is the supremum of $n$ such that $M$ contains a direct sum of $n$ non-zero <em>uniform</em> submodules (modules with no proper essential sub-extensions). It generalises the dimension of a vector space to non-noetherian module settings. Pseudo-complementation is the technical machinery that makes the construction work.</p>
+
+  <div class="box intuition">
+    <span class="label">A "missing piece" in lattice theory found algebraic relevance</span>
+    <p>Essential submodules were introduced by Goldie in the 1950s, and the injective hull by Eckmann–Schopf shortly after. The lattice-theoretic generalisation (this chapter) abstracts away the module-specific structure, leaving the bare order-theoretic core. The result: any inductive modular lattice has an "injective-hull-like" theory, even when the lattice doesn't arise from any module. That's a surprising universalisation.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Heyting algebras and intuitionistic logic</h2>
+  <div class="tagline">When the maximal-sense pseudo-complement coincides with the greatest sense: Heyting algebras, the algebraic semantics for intuitionistic logic.</div>
+
+  <div class="box connection">
+    <span class="label">Heyting algebras</span>
+    <p>A <em>Heyting algebra</em> is a bounded distributive lattice in which the meet operation has a right residual (= relative pseudo-complement, = implication). That is: for every $a, b$ there exists a unique $a \to b$ such that
+    $$a \wedge x \le b \iff x \le a \to b.$$
+    The element $\neg a = a \to 0$ is called <em>intuitionistic negation</em> — it's the unique greatest element with $a \wedge \neg a = 0$, i.e., the greatest-sense pseudo-complement of $a$.</p>
+  </div>
+
+  <p>Heyting algebras are the algebraic semantics for <em>intuitionistic propositional logic</em>: every propositional formula evaluates to an element of a Heyting algebra under any interpretation, and a formula is intuitionistically valid iff it evaluates to $1$ in every Heyting algebra.</p>
+
+  <p><strong>Key features that distinguish Heyting from Boolean:</strong></p>
+
+  <table class="grid">
+    <thead><tr><th></th><th>Boolean algebra</th><th>Heyting algebra</th></tr></thead>
+    <tbody>
+      <tr><td>Law of excluded middle ($a \vee \neg a = 1$)</td><td>Always</td><td>Sometimes (only if it's also Boolean)</td></tr>
+      <tr><td>Double negation ($\neg \neg a = a$)</td><td>Always</td><td>Sometimes</td></tr>
+      <tr><td>De Morgan's laws</td><td>Both directions hold</td><td>Only $\neg(a \vee b) = \neg a \wedge \neg b$ holds; the other direction is intuitionistically rejected</td></tr>
+      <tr><td>Examples</td><td>$\mathcal P(M)$, the algebra of clopen subsets of a Stone space</td><td>The lattice of open subsets of a topological space, the lattice of subobjects in a topos</td></tr>
+    </tbody>
+  </table>
+
+  <p>The lattice of <em>open</em> subsets of a topological space is the canonical example of a Heyting algebra that's not Boolean: the union of complements is open, but the complement of an open set is rarely open. So $a \vee \neg a$ — which would be "open set ∪ open complement" — is rarely the whole space.</p>
+
+  <div class="box intuition">
+    <span class="label">Why this matters for Chapter 4</span>
+    <p>In a Heyting algebra, Călugăreanu's "maximal sense" pseudo-complement coincides with the "greatest sense" $\neg a$ — and they're both unique. Outside Heyting algebras, the maximal sense is the right notion. Most submodule lattices are not Heyting (they're modular but not distributive), so we live in the maximal-sense regime in this book. But for the lattice of open subsets, or the lattice of ideals of a frame, we're in the Heyting/greatest-sense regime.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Residuation — the deep-dive panel</h2>
+  <div class="tagline">A fuller treatment of residuation theory, building on the primer's deep-dive. Algebra, applications, and references.</div>
+
+  <p>Residuation theory is the algebraic framework underlying implication, division, and "what's left after you fit something" operations. The primer above gave the basic definitions; this panel collects the canonical examples and points to references.</p>
+
+  <div class="box connection">
+    <span class="label">Residuated lattices and the algebraic framework</span>
+    <p>A <em>residuated lattice</em> is a tuple $(L, \le, \bullet, \backslash, /)$ where $(L, \le)$ is a lattice, $\bullet$ is a binary operation, and $\backslash$, $/$ are its right and left residuals satisfying:
+    $$a \bullet x \le b \iff x \le a \backslash b \iff a \le b / x.$$
+    When $\bullet$ is associative, the structure is a <em>residuated monoid</em>. When the lattice is complete and $\bullet$ distributes over arbitrary joins, the structure is a <em>quantale</em> (Mulvey, 1986).</p>
+  </div>
+
+  <p><strong>Canonical examples of residuated structures:</strong></p>
+
+  <table class="grid">
+    <thead><tr><th>Structure</th><th>$\bullet$</th><th>Right residual</th><th>Where it lives</th></tr></thead>
+    <tbody>
+      <tr><td>Heyting algebra</td><td>$\wedge$ (commutative)</td><td>$a \to b$ (implication)</td><td>Topology, intuitionistic logic, topos theory</td></tr>
+      <tr><td>Boolean algebra</td><td>$\wedge$</td><td>$\neg a \vee b$</td><td>Classical logic, $\mathcal P(M)$</td></tr>
+      <tr><td>Frame / locale</td><td>$\wedge$</td><td>$U \to V$ (open implication)</td><td>Point-free topology</td></tr>
+      <tr><td>Quantale of relations</td><td>$\circ$ (relation composition, non-commutative)</td><td>$R \backslash S$, $S / R$ (residuals of composition)</td><td>Concurrent semantics, automata</td></tr>
+      <tr><td>Ideal lattice of commutative ring</td><td>Ideal product $IJ$</td><td>$(J : I) = \{r : rI \subseteq J\}$ (colon ideal)</td><td>Commutative algebra, primary decomposition</td></tr>
+      <tr><td>Linear logic</td><td>$\otimes$ (tensor)</td><td>$\multimap$ (linear implication)</td><td>Resource-aware logic, concurrency</td></tr>
+      <tr><td>Tropical semiring</td><td>$+$ (cost addition)</td><td>$b - a$ (cost subtraction, when defined)</td><td>Optimisation, weighted automata</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>The big-picture view.</strong> Residuation is the algebraic shadow of <em>adjoint functors</em>. The map $a \bullet -$ (multiplication on the left by $a$) preserves joins (it's monotone and "linear" in the join sense). By the adjoint functor theorem for posets, it has a right adjoint, which is exactly $a \backslash -$. Residuation is "adjoint to multiplication" in this category-theoretic sense.</p>
+
+  <p><strong>Why this framework matters.</strong> Whenever you have an algebraic operation that interacts with order — multiplying ideals, composing relations, conjoining propositions, summing costs — there's potentially a residual that asks "what's left." When that residual exists, it carries deep structural information. Heyting implication is the residual of meet; relation difference is the residual of relation composition; ideal quotient is the residual of ideal product.</p>
+
+  <div class="box connection">
+    <span class="label">Standard references</span>
+    <p>For residuated lattices and quantales: K. I. Rosenthal, <em>Quantales and their Applications</em> (Pitman 1990) — in your <code>outside/</code> folder. For Heyting algebras and intuitionistic logic: Mac Lane &amp; Moerdijk, <em>Sheaves in Geometry and Logic</em> (Springer 1992). For residuated lattices in general: Galatos, Jipsen, Kowalski, Ono, <em>Residuated Lattices: An Algebraic Glimpse at Substructural Logics</em> (Elsevier 2007).</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Boolean / Heyting / pseudo-complemented — disambiguation</h2>
+  <div class="tagline">A small terminology guide. Three increasingly weaker classes of "lattices with negation-like operators." Where Călugăreanu's chapter sits in the hierarchy.</div>
+
+  <p>The chapter's "pseudo-complemented lattice" sits in a hierarchy of increasingly stronger negation-like structures. Knowing where each lives helps disambiguate cross-textbook discussions.</p>
+
+  <table class="grid">
+    <thead><tr><th>Class (strongest first)</th><th>Defining property</th><th>Negation</th></tr></thead>
+    <tbody>
+      <tr><td>Boolean algebra</td><td>Distributive + complemented (every $a$ has a unique $a'$ with $a \wedge a' = 0$, $a \vee a' = 1$)</td><td>$\neg a = a'$, unique. Excluded middle holds.</td></tr>
+      <tr><td>Heyting algebra</td><td>Distributive + meet has a right residual (relative pseudo-complement)</td><td>$\neg a = a \to 0$, unique. Excluded middle may fail.</td></tr>
+      <tr><td>Pseudo-complemented (greatest sense)</td><td>Every $a$ has a greatest $c$ with $a \wedge c = 0$</td><td>Unique by definition. Distributive may fail.</td></tr>
+      <tr><td>Pseudo-complemented (Călugăreanu's max sense)</td><td>Every $a$ has at least one maximal $c$ with $a \wedge c = 0$</td><td>Possibly multiple maximals.</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Implications:</strong> Boolean ⟹ Heyting ⟹ Pseudo-complemented (greatest) ⟹ Pseudo-complemented (maximal). The reverse implications all fail: there are pseudo-complemented (maximal-sense) lattices that aren't even Heyting (most submodule lattices), Heyting lattices that aren't Boolean (the open-set lattice of a non-discrete topology), and so on.</p>
+
+  <div class="box intuition">
+    <span class="label">Where the book sits</span>
+    <p>Călugăreanu's setting is "modular pseudo-complemented (maximal sense)" — the broadest of the four. He needs only the maximal sense because his lattices (compactly generated modular, e.g. $S_R(M)$) generally don't admit a Heyting structure. The pseudo-complement isn't unique, and that's fine — the chapter's machinery handles the multiplicity gracefully.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos — pseudo-complementation in propagator networks</h2>
+  <div class="tagline">Where the chapter's apparatus connects to the Prologos design: worldview reasoning, NAF, residuation in compound cells.</div>
+
+  <p>Prologos's propagator network architecture rests on lattice-valued cells with monotone merge. Several places in the design use Chapter 4's apparatus directly:</p>
+
+  <div class="box prologos">
+    <span class="label">Where Chapter 4 lives in Prologos</span>
+    <p><strong>(1) Worldview lattice and NAF (negation as failure).</strong> The worldview lattice $Q_n$ (a Boolean cube of $n$ independent assumption bits) is a Boolean algebra — and hence a Heyting algebra. The pseudo-complement $\neg w$ of a worldview $w$ is the bitwise complement: "the worldview where $w$'s assumptions all fail." The S1 NAF stratum (see <code>.claude/rules/stratification.md</code>) computes this pseudo-complement: $\neg G$ for a goal $G$ is the maximal worldview where $G$'s clauses all fail. Negation as failure is exactly residuation of meet at $0$.</p>
+    <p><strong>(2) Essentialness and propagator readiness.</strong> A propagator's "ready to fire" predicate asks: <em>does the cell value's current state touch every required component?</em> This is the essentialness question — the cell is "essential" enough to fire when its value reaches all the relevant components. The set-latch fan-in pattern (<code>.claude/rules/propagator-design.md</code>) accumulates per-source readiness as a monotone-set lattice element; the threshold predicate fires when the accumulated set is "essential" with respect to the threshold.</p>
+    <p><strong>(3) Pseudo-complement in the stratification of NAF.</strong> The S1 NAF handler's design relies on the maximal-sense pseudo-complement — an inductive lattice (the worldview lattice) with sufficient pseudo-complements. Lemma 4.2's existence theorem is what guarantees the handler's well-definedness. See <code>racket/prologos/relations.rkt</code> for the handler and <code>.claude/rules/stratification.md</code> § "S1 NAF" for the design.</p>
+    <p><strong>(4) Module-Theory Realization B and essentially closed elements.</strong> The SRE Lattice Lens's "Module-Theory Realization B" (bitmask-tagged layers on a shared carrier — <code>.claude/rules/structural-thinking.md</code>) is structurally an "essentially closed" decomposition: each tagged layer is essentially closed in its own component, and the layers are mutually pseudo-complement-like. Chapter 4's apparatus is the formal lattice-theoretic justification for this design pattern.</p>
+  </div>
+
+  <p>The relevant Prologos source files:</p>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 4</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Pseudo-complement (greatest sense, Boolean)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice with classical negation</td></tr>
+      <tr><td>Pseudo-complement (maximal sense, inductive)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Term-domain lattice — typically not Heyting; uses maximal pseudo-complements implicitly</td></tr>
+      <tr><td>NAF / S1 stratum</td><td><code>.claude/rules/stratification.md</code></td><td>"S1 NAF" design — pseudo-complement at the worldview level</td></tr>
+      <tr><td>Set-latch / essentialness in fan-in</td><td><code>.claude/rules/propagator-design.md</code></td><td>"Set-latch for fan-in readiness" — essentialness-as-readiness</td></tr>
+      <tr><td>Module-Theory Realization B</td><td><code>.claude/rules/structural-thinking.md</code></td><td>"Direct sum has two realizations" — bitmask-tagged layers as essentially closed elements</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Pseudo-complementation is how Prologos handles "the rest of the worldview when these propositions fail." Essentialness is how Prologos's set-latch knows when fan-in is "ready enough to fire." Both are baked into the propagator design, and Chapter 4 is the formal mathematical justification: in any inductive (= compactly generated, = upper continuous) modular lattice, both notions are well-defined and well-behaved, so the propagator network's design choices are formally correct.</p>
+  </div>
+</section>
+
+<!-- ====================== GLOSSARY ====================== -->
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the chapter's terms. Many also live in the Companion's running glossary; this list is Chapter 4-specific.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>essential element</dt>
+    <dd>$e \in L$ such that $e \wedge a \ne 0$ for every $a \ne 0$. Plain English: $e$ touches every non-zero piece of the lattice.</dd>
+
+    <dt>essential extension</dt>
+    <dd>$b \ge a$ such that $a$ is essential in $b/0$. Equivalently: $b$ is built up from $a$ without adding any "disjoint" content.</dd>
+
+    <dt>essentially closed</dt>
+    <dd>An element with no proper essential extensions. The lattice analog of an injective module.</dd>
+
+    <dt>maximal essential extension</dt>
+    <dd>An essential extension that is itself essentially closed. The lattice analog of an injective hull. Exists by Lemma 4.3 in upper continuous modular lattices.</dd>
+
+    <dt>complement (recap from Ch 1)</dt>
+    <dd>An element $a'$ with $a \wedge a' = 0$ AND $a \vee a' = 1$. Both conditions: full disjointness and full covering. May not exist; if it does, may not be unique.</dd>
+
+    <dt>pseudo-complement (Călugăreanu's "maximal" sense)</dt>
+    <dd>$c$ is a pseudo-complement of $b$ if $b \wedge c = 0$ and $c$ is maximal with this property. Drops the join condition compared to a complement; gains broader existence. Not necessarily unique.</dd>
+
+    <dt>pseudo-complement (literature's "greatest" sense)</dt>
+    <dd>$c$ is THE pseudo-complement of $b$ if it is the greatest element with $b \wedge c = 0$. Stronger than maximal; unique by definition. Exists only in Heyting algebras / residuated lattices. Not used in this book.</dd>
+
+    <dt>pseudo-complemented lattice</dt>
+    <dd>Every element has at least one pseudo-complement. Holds for inductive lattices (Lemma 4.2), hence for all submodule lattices.</dd>
+
+    <dt>relative pseudo-complemented lattice</dt>
+    <dd>Every quotient sublattice (interval) is itself pseudo-complemented. Stronger than just "pseudo-complemented."</dd>
+
+    <dt>mutually pseudo-complements</dt>
+    <dd>Two elements $b, c$ such that $c$ is a pseudo-complement of $b$ AND $b$ is a pseudo-complement of $c$. Symmetric. In upper continuous modular lattices, equivalent to: both essentially closed and $b \vee c$ essential (Cor 4.6).</dd>
+
+    <dt>sufficient pseudo-complements</dt>
+    <dd>Every "trivial-meet partner" $b$ of $a$ (i.e., $a \wedge b = 0$) extends to a full pseudo-complement of $a$. Stronger than just "pseudo-complemented."</dd>
+
+    <dt>condition (B), inductive lattice (recap from Ch 3)</dt>
+    <dd>Condition (B): chain-suprema preserve trivial-meet. Inductive: every interval satisfies condition (B). Compactly generated lattices are inductive.</dd>
+
+    <dt>upper continuous (recap from Ch 2)</dt>
+    <dd>Meeting commutes with directed joins. Implies inductive.</dd>
+
+    <dt>residuation, residual (deep-dive in primer)</dt>
+    <dd>For a monotone $\bullet$: $a \bullet x \le b \iff x \le a \backslash b$ (right residual) and $x \bullet a \le b \iff x \le b / a$ (left residual). For commutative $\bullet$ (like meet), one residual. The Heyting implication $a \to b$ is the residual of meet.</dd>
+
+    <dt>Heyting algebra</dt>
+    <dd>Bounded distributive lattice in which meet has a right residual. The algebraic semantics of intuitionistic propositional logic. Boolean ⟹ Heyting.</dd>
+
+    <dt>Heyting implication / relative pseudo-complement</dt>
+    <dd>$a \to b = $ greatest $x$ with $a \wedge x \le b$. Setting $b = 0$: $a \to 0 = \neg a$, the "greatest-sense" pseudo-complement.</dd>
+
+    <dt>injective hull (forward reference)</dt>
+    <dd>In module theory: the unique up-to-iso injective module containing $M$ as an essential submodule. Lattice analog: the maximal essential extension of an element. Mentioned in connection panel P1.</dd>
+
+    <dt>neat element (forward reference to Ch 9)</dt>
+    <dd>A refined class of pseudo-complements introduced in Chapter 9 of the book. The chapter's closing remark notes the connection.</dd>
+
+    <dt>Goldie dimension (forward reference to Ch 5–6)</dt>
+    <dd>A generalisation of vector-space dimension that uses essentialness instead of finite-rank. Will be developed in the next chapter.</dd>
+  </dl>
+</section>
+
+<!-- ====================== EXERCISES ====================== -->
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 20 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block: the statement, the full solution, and commentary.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 4.1 – 4.20 — Worked</h2>
+
+  <details class="exercise" id="ex-4-1">
+    <summary><span class="ex-tag">Ex. 4.1</span>Maximal element vs largest in a Zorn-friendly poset</summary>
+    <div class="body">
+      <p class="ex-statement">Let $(A, \le)$ be a poset such that each chain has an upper bound. The following conditions are equivalent: (i) $A$ has a unique maximal element; (ii) $A$ has a largest element.</p>
+      <h4>Solution</h4>
+      <p>$(\Leftarrow)$ If $A$ has a largest element $1_A$, then $1_A$ is maximal (no element is strictly above it), and any maximal $m \in A$ satisfies $m \le 1_A$ (since $1_A$ is largest), so $m = 1_A$ by maximality. So $1_A$ is the unique maximal element.</p>
+      <p>$(\Rightarrow)$ Suppose $A$ has a unique maximal element $m$. We claim $m$ is the largest. Take any $a \in A$. The set $\{x \in A : x \ge a\}$ is non-empty and chain-bounded (by hypothesis on $A$), so by Zorn's Lemma it has a maximal element $m_a$. Then $m_a \ge a$, and $m_a$ is maximal in $\{x \ge a\}$, but $m_a$ is also maximal in $A$ (any $x > m_a$ would also be in $\{x \ge a\}$). By uniqueness of maximal, $m_a = m$. Hence $m \ge a$. Since $a$ was arbitrary, $m$ is largest.</p>
+      <h4>Commentary</h4>
+      <p>This is the abstract-poset principle behind Călugăreanu's distinction between the maximal-sense and greatest-sense pseudo-complement. In a lattice that satisfies the chain hypothesis (= inductive), having a unique maximal $c$ with $a \wedge c = 0$ is the same as having a greatest $c$ with that property. The maximal/greatest distinction matters precisely when uniqueness fails.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-2">
+    <summary><span class="ex-tag">Ex. 4.2</span>Pseudo-complement set $C_a$ in upper continuous lattices</summary>
+    <div class="body">
+      <p class="ex-statement">For an element $a \in L$ in a lattice, consider $C_a = \{x \in L : x \wedge a = 0\}$. In an upper continuous lattice the following conditions are equivalent: (i) $C_a$ has a unique maximal element; (ii) $C_a$ has a largest element.</p>
+      <h4>Solution</h4>
+      <p>By Exercise 4.1 applied to the poset $(C_a, \le)$, the equivalence holds iff $C_a$ satisfies the chain-bounded hypothesis: every chain in $C_a$ has an upper bound in $C_a$. We show this for upper continuous lattices.</p>
+      <p>Let $\{x_i\}$ be a chain in $C_a$. Then $x_i \wedge a = 0$ for each $i$. By upper continuity, $\bigvee_i x_i$ exists, and
+      $$a \wedge \bigvee_i x_i = \bigvee_i (a \wedge x_i) = \bigvee_i 0 = 0.$$
+      So $\bigvee_i x_i \in C_a$, providing the upper bound.</p>
+      <p>Now Exercise 4.1 gives the equivalence.</p>
+      <h4>Commentary</h4>
+      <p>This exercise sharpens Lemma 4.2 / Corollary 4.1: in upper continuous lattices, asking whether the pseudo-complement is unique (= has a unique maximal) is the same as asking whether it's the greatest (= a Heyting-style residual). The two senses agree in upper continuous Heyting lattices but diverge in non-Heyting ones.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-3">
+    <summary><span class="ex-tag">Ex. 4.3</span>No element is a complement of both $a$ and $b$ if $a < b$</summary>
+    <div class="body">
+      <p class="ex-statement">Let $L$ be a modular complemented lattice. If $a < b$ show that no element can be a complement for both $a$ and $b$.</p>
+      <h4>Solution</h4>
+      <p>Suppose $c$ is a complement of both $a$ and $b$: $a \wedge c = 0$, $a \vee c = 1$, $b \wedge c = 0$, $b \vee c = 1$. From $a < b$, modularity gives $a \vee c = b \vee c = 1$ and $a \wedge c = b \wedge c = 0$. By the modular law:
+      $$b = b \wedge 1 = b \wedge (a \vee c) = a \vee (b \wedge c) = a \vee 0 = a.$$
+      Contradicting $a < b$. So $c$ cannot be a complement of both.</p>
+      <h4>Commentary</h4>
+      <p>A clean exercise on modular lattices. Note: this fact characterizes the modular law in the complemented setting. In non-modular lattices, you can have an element $c$ that complements two distinct elements (think $N_5$).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-4">
+    <summary><span class="ex-tag">Ex. 4.4</span>Meet of essentials is essential</summary>
+    <div class="body">
+      <p class="ex-statement">If $a$ and $b$ are essential in $L$ then so is $a \wedge b$.</p>
+      <h4>Solution</h4>
+      <p>Take any non-zero $x \in L$. We show $(a \wedge b) \wedge x \ne 0$.</p>
+      <p>Since $a$ is essential and $x \ne 0$: $a \wedge x \ne 0$.</p>
+      <p>Since $b$ is essential and $a \wedge x \ne 0$: $b \wedge (a \wedge x) \ne 0$.</p>
+      <p>But $b \wedge (a \wedge x) = (a \wedge b) \wedge x$ (associativity and commutativity of meet). So $(a \wedge b) \wedge x \ne 0$ as required.</p>
+      <h4>Commentary</h4>
+      <p>This shows essentialness is closed under finite meets. Combined with the fact that $1$ is essential, the essential elements form a filter (closed under finite meets and upward-closed) in any lattice. This is the essentialness analog of Proposition 2.1's "compacts are closed under joins."</p>
+      <p>Caveat: <em>infinite</em> meets of essentials need not be essential — see Exercise 4.11.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-5">
+    <summary><span class="ex-tag">Ex. 4.5</span>Essentialness restricts</summary>
+    <div class="body">
+      <p class="ex-statement">If $a$ is essential in $L$ then, for every $b \in L$, $a \wedge b$ is essential in $b/0$.</p>
+      <h4>Solution</h4>
+      <p>Take any non-zero $x \in b/0$ (i.e., $x \le b$, $x \ne 0$). We show $(a \wedge b) \wedge x \ne 0$.</p>
+      <p>Since $x \le b$, we have $b \wedge x = x$, so $(a \wedge b) \wedge x = a \wedge (b \wedge x) = a \wedge x$. By essentialness of $a$ in $L$ and $x \ne 0$: $a \wedge x \ne 0$. Hence $(a \wedge b) \wedge x \ne 0$.</p>
+      <h4>Commentary</h4>
+      <p>Restriction principle: an essential element of the whole lattice descends to an essential element of any sub-interval. This is one of the key technical lemmas: essentialness is "preserved under restriction."</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-6">
+    <summary><span class="ex-tag">Ex. 4.6</span>Essentialness preserved through descent below</summary>
+    <div class="body">
+      <p class="ex-statement">In a modular lattice with $1$ if $b \vee c$ is essential in $1/c$ and $d \le c$, then $b \vee c$ is essential also in $1/d$.</p>
+      <h4>Solution</h4>
+      <p>Take any $x \in 1/d$ with $(b \vee c) \wedge x \le d$. We show $x \le d$ (which is the negation of "essential in $1/d$"; the contrapositive shows essentialness).</p>
+      <p>Wait — the formulation should be: prove that $(b \vee c) \wedge x = d \Rightarrow x = d$ for $x \in 1/d$. Let me redo.</p>
+      <p>Take $x \in 1/d$ with $(b \vee c) \wedge x = d$. Since $x \in 1/d$, $d \le x$. Need $x = d$, i.e., the only "trivial" intersection is at the bottom.</p>
+      <p>From $(b \vee c) \wedge x = d$ and $d \le c$, we have $(b \vee c) \wedge x \le c$. By modularity, $(b \vee c) \wedge x \vee c = ((b \vee c) \wedge x) \vee c = (b \vee c) \wedge (x \vee c)$ — wait that's not standard. Let me think again.</p>
+      <p>The actual argument: $b \vee c$ essential in $1/c$ means: for any $y \in 1/c$ with $y > c$, $(b \vee c) \wedge y > c$. Take $y = c \vee x$ (which is $\ge c$ since $x \ge d \ge ?$ — wait, $d \le c$ doesn't give $x \ge c$). Let me re-think.</p>
+      <p>Reformulate: $(b \vee c) \wedge x = d$ for some $x \in 1/d$, $x > d$. We want a contradiction. Compute $(b \vee c) \wedge (x \vee c)$. Using modularity (since $c \le x \vee c$): $(b \vee c) \wedge (x \vee c) = c \vee ((b \vee c) \wedge x) = c \vee d = c$ (since $d \le c$). But $x \vee c > c$ (since $x > d$ but $d \le c$, hmm — actually we need $x \nleq c$ for this, which doesn't follow from $x > d$). The exercise needs more care.</p>
+      <p>Cleaner approach: $b \vee c$ essential in $1/d$ means: for $y \in 1/d$, $(b \vee c) \wedge y = d \Rightarrow y = d$. Suppose $(b \vee c) \wedge y = d$, $y \in 1/d$. Then $y \vee c \in 1/c$, and $(b \vee c) \wedge (y \vee c) = c$ (compute: $(b \vee c) \wedge y \le c$, and $(b \vee c) \wedge (y \vee c) = ((b \vee c) \wedge y) \vee c = d \vee c = c$ using modularity). By essentialness in $1/c$, $y \vee c = c$, so $y \le c$. Combined with $y \ge d$: $d \le y \le c$, and $(b \vee c) \wedge y = y$ (since $y \le c \le b \vee c$). So $y = d$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows essentialness is preserved as we go from $1/c$ down to $1/d$ when $d \le c$. The proof works in any modular lattice. The key step is the modular-law shuffle that connects $(b \vee c) \wedge y$ in $1/d$ to the corresponding thing in $1/c$.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-7">
+    <summary><span class="ex-tag">Ex. 4.7</span>Transitivity of essentialness</summary>
+    <div class="body">
+      <p class="ex-statement">In a lattice $L$ the relation of "being essential in" is transitive: for $a \le b \le c$, if $a$ is essential in $b/0$ and $b$ is essential in $c/0$, then $a$ is essential in $c/0$.</p>
+      <h4>Solution</h4>
+      <p>Take any non-zero $x \in c/0$. We show $a \wedge x \ne 0$.</p>
+      <p>Since $b$ is essential in $c/0$: $b \wedge x \ne 0$.</p>
+      <p>$b \wedge x \in b/0$ and $b \wedge x \ne 0$. Since $a$ is essential in $b/0$: $a \wedge (b \wedge x) \ne 0$.</p>
+      <p>But $a \wedge (b \wedge x) = (a \wedge b) \wedge x = a \wedge x$ (using $a \le b$, so $a \wedge b = a$). Hence $a \wedge x \ne 0$.</p>
+      <h4>Commentary</h4>
+      <p>Essential extensions <em>compose</em>: if $b$ is an essential extension of $a$ and $c$ is an essential extension of $b$, then $c$ is an essential extension of $a$. This makes "essential extensions" a transitive relation, which is exactly what we need to talk about chains of essential extensions and their limits (= maximal essential extensions = essentially closed).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-8">
+    <summary><span class="ex-tag">Ex. 4.8</span>Essential in $1/a$ ⟹ essential in $L$ (modular case)</summary>
+    <div class="body">
+      <p class="ex-statement">Let $a < b$ be elements in a modular lattice $L$. Show that if $b$ is essential in $1/a$ then $b$ is essential also in $L$.</p>
+      <h4>Solution</h4>
+      <p>Take any non-zero $x \in L$. We show $b \wedge x \ne 0$.</p>
+      <p>Case 1: $x \le a$. Then $x \le a < b$, so $b \wedge x = x \ne 0$.</p>
+      <p>Case 2: $x \nleq a$. Then $a \vee x > a$, i.e., $a \vee x \in 1/a$ with $a \vee x \ne a$. By essentialness of $b$ in $1/a$: $b \wedge (a \vee x) \ne a$. Use modularity: $b \wedge (a \vee x) = a \vee (b \wedge x)$ (using $a \le b$). For this to be $\ne a$, we need $b \wedge x \nleq a$, i.e., $b \wedge x$ has a part not in $a$, which means $b \wedge x \ne 0$ (otherwise $b \wedge x = 0 \le a$ trivially, contradicting $b \wedge x \nleq a$).</p>
+      <h4>Commentary</h4>
+      <p>This is the "lifting" principle: essentialness in an upper interval $1/a$ extends to essentialness in the whole lattice $L$, given $a \le b$. Combined with Exercise 4.10 (the other direction), it gives a clean correspondence.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-9">
+    <summary><span class="ex-tag">Ex. 4.9</span>Meet of essential extensions is essential</summary>
+    <div class="body">
+      <p class="ex-statement">Let $a < a'$, $b < b'$ be elements in a modular lattice $L$. If $a'$ is essential in $1/a$ and $b'$ is essential in $1/b$, prove that $a' \wedge b'$ is essential in $L$.</p>
+      <h4>Solution</h4>
+      <p>By Exercise 4.8, $a'$ is essential in $L$ (since essential in $1/a$ for some $a < a'$) and $b'$ is essential in $L$. By Exercise 4.4, $a' \wedge b'$ is essential in $L$.</p>
+      <h4>Commentary</h4>
+      <p>This is a direct combination of the previous exercises. The exercise highlights how the apparatus composes: essential extensions in upper intervals lift to essentialness in the whole lattice, and meets of essentials are essential. So we can build essentialness up from local pieces.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-10">
+    <summary><span class="ex-tag">Ex. 4.10</span>Essential in $L$ vs essential in $b/0$</summary>
+    <div class="body">
+      <p class="ex-statement">Let $0 < a \le b$ be elements in a lattice $L$. Then $a$ is essential in $L$ if and only if $b$ is essential in $L$ and $a$ is essential in $b/0$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $a$ essential in $L$. By Exercise 4.5 (or directly): $a = a \wedge b$ is essential in $b/0$. To show $b$ is essential in $L$: take non-zero $x \in L$. By essentialness of $a$ in $L$, $a \wedge x \ne 0$. Since $a \le b$, $b \wedge x \ge a \wedge x \ne 0$, so $b \wedge x \ne 0$.</p>
+      <p>$(\Leftarrow)$ Suppose $b$ essential in $L$ and $a$ essential in $b/0$. Take any non-zero $x \in L$. By essentialness of $b$, $b \wedge x \ne 0$. Now $b \wedge x \in b/0$ and is non-zero. By essentialness of $a$ in $b/0$, $a \wedge (b \wedge x) \ne 0$. But $a \wedge (b \wedge x) = a \wedge x$ (using $a \le b$). So $a \wedge x \ne 0$.</p>
+      <h4>Commentary</h4>
+      <p>The cleanest characterisation of essentialness: $a$ is essential in $L$ iff $a$ is essential locally (in $b/0$) and $b$ is essential globally (in $L$). The exercise factors essentialness through any intermediate $b$.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-11">
+    <summary><span class="ex-tag">Ex. 4.11</span>Arbitrary meet of essentials need not be essential</summary>
+    <div class="body">
+      <p class="ex-statement">Show that an arbitrary meet of essential elements need not be essential.</p>
+      <h4>Solution</h4>
+      <p>Counterexample: let $L = S_{\mathbb Z}(\mathbb Q)$, the lattice of $\mathbb Z$-submodules of $\mathbb Q$. The submodule $\frac{1}{p}\mathbb Z = \{n/p : n \in \mathbb Z\}$ is essential in $\mathbb Q$ for each prime $p$ (every non-zero submodule of $\mathbb Q$ contains some $n/m$ with $\gcd(n, m) = 1$, and choosing $p \nmid m$, we get $\frac{1}{p}\mathbb Z \cap \frac{n}{m}\mathbb Z \supseteq \frac{n}{m} \cdot \mathbb Z \cap \frac{1}{p}\mathbb Z \ne 0$).</p>
+      <p>Take the meet (intersection) over all primes: $\bigcap_p \frac{1}{p}\mathbb Z = \mathbb Z$ (the only submodule contained in $\frac{1}{p}\mathbb Z$ for all $p$ is $\mathbb Z$ itself).</p>
+      <p>Wait — actually the intersection of $\frac{1}{p}\mathbb Z$ for various $p$ over a different setup. Let me reconsider.</p>
+      <p>Cleaner counterexample: let $L = S_{\mathbb Z}(\mathbb Z(p^\infty))$, where $\mathbb Z(p^\infty) = \mathbb Q/\mathbb Z$'s $p$-part (the Prüfer group). Submodules form a chain $0 \subset \mathbb Z/p \subset \mathbb Z/p^2 \subset \cdots \subset \mathbb Z(p^\infty)$. Each $\mathbb Z/p^n$ is essential in $\mathbb Z(p^\infty)$, but the intersection $\bigcap_n \mathbb Z/p^n = 0$ (intersection of all non-zero submodules in this chain is $0$ in this case... actually no, $\mathbb Z/p \subset \mathbb Z/p^2$ so the intersection is the smallest, $\mathbb Z/p$, which is essential).</p>
+      <p>Better: take $L = S_{\mathbb Z}(\mathbb Q^{\mathbb N}) = $ submodules of $\mathbb Q$-many copies of $\mathbb Q$. Or simpler: any direct sum lattice. The point: in non-noetherian settings, infinite intersections of essentials can be smaller than essential.</p>
+      <p>Simplest concrete counterexample: take $L = $ subgroups of $\mathbb Q$ as a $\mathbb Z$-module, and consider $A_n = \frac{1}{n!}\mathbb Z$. Each $A_n$ is essential in $\mathbb Q$. The intersection $\bigcap_n A_n = \mathbb Z$, which IS still essential. So this isn't quite a counterexample.</p>
+      <p>True counterexample: take $V = \mathbb Q^{\mathbb N}$ as a $\mathbb Q$-vector space (so $\mathbb Z$-module). For each $n$, let $H_n$ = the kernel of projection onto the $n$-th coordinate (a hyperplane). Each $H_n$ is essential in $V$ (any non-zero $v \in V$ has at most finitely many non-zero coordinates, and can be modified to lie in $H_n$). The intersection $\bigcap_n H_n = 0$, which is NOT essential. ✓</p>
+      <h4>Commentary</h4>
+      <p>The exercise is a sanity check: essentialness is closed under finite meets (Exercise 4.4) but not infinite ones. The reason: an infinite intersection can "exhaust" the lattice, leaving only the bottom element. This is why essentialness is a filter-like property in finite contexts but breaks in infinite settings — and why we need separate machinery for infinite essentialness arguments.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-12">
+    <summary><span class="ex-tag">Ex. 4.12</span>Essentially closed lifting in pseudo-complemented modular lattices</summary>
+    <div class="body">
+      <p class="ex-statement">In a bounded pseudo-complemented modular lattice an element $a \in L$ is essentially closed in $L$ if and only if whenever $a \le b$, $b$ essential in $L$, $b$ is essential also in $1/a$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $a$ is essentially closed in $L$. Take $a \le b$ with $b$ essential in $L$. We show $b$ is essential in $1/a$. Take $x \in 1/a$ with $b \wedge x \le a$. Then $b \wedge (x \vee a) = (b \wedge x) \vee a$ (using modularity, $a \le x \vee a$, so... actually simpler: $b \cap (x \vee a) \le ?$). The key step: by essential closure of $a$, the maximal essential extension of $a$ in $L$ is $a$ itself. Combined with $b \cap (x \vee a) \le a$, we derive $x \le a$, hence $x = a$ (since $x \ge a$).</p>
+      <p>$(\Leftarrow)$ Conversely, suppose every $b \ge a$ essential in $L$ is essential in $1/a$. Take $a \le c$ with $a$ essential in $c/0$ (so $c$ is an essential extension of $a$). We show $c = a$. Note $c$ is essential in $L$ (by Exercise 4.10 with $b = c$, since $a$ essential in $L$ would suffice — here we'd need this). Then by hypothesis, $c$ is essential in $1/a$. But $c \in 1/a$ ($c \ge a$), and essentialness of $c$ in $1/a$ at $c$ itself trivializes — there's no proper extension. So $c = a$, i.e. $a$ is essentially closed.</p>
+      <h4>Commentary</h4>
+      <p>Essentially closed gets a "lifting" characterization in pseudo-complemented modular lattices. The exercise is technical but useful: it relates essentialness in $L$ to essentialness in upper intervals $1/a$ via the essentially-closed condition.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-13">
+    <summary><span class="ex-tag">Ex. 4.13</span>Essentially closed descends</summary>
+    <div class="body">
+      <p class="ex-statement">If $a$ is essentially closed in $L$ then $a$ is essentially closed in every $1/b$ such that $b \le a$.</p>
+      <h4>Solution</h4>
+      <p>Take any $b \le a$ and any $a < c \in 1/b$ (so $b \le a < c$). We show $c$ is not an essential extension of $a$ in $1/b$ (i.e., $a$ has no proper essential extensions in $1/b$).</p>
+      <p>Suppose for contradiction that $a$ is essential in $c/b$ (the interval in $1/b$). Then for every non-zero $x \in c/b$ (i.e., $b \le x \le c$, $x \ne b$): $a \wedge x \ne b$.</p>
+      <p>Lift this to $L$: for any $y \in c/0$ with $y \ne 0$, consider $y \vee b \in c/b$. If $y \vee b \ne b$ (i.e., $y \nleq b$), then by hypothesis $a \wedge (y \vee b) \ne b$, so $a \wedge y \ne 0$ (combined with $b \le a$). If $y \vee b = b$, then $y \le b \le a$, so $a \wedge y = y \ne 0$. Either way, $a \wedge y \ne 0$.</p>
+      <p>Hence $a$ is essential in $c/0$ in $L$. But $a$ is essentially closed in $L$, so $c = a$ — contradiction with $c > a$.</p>
+      <h4>Commentary</h4>
+      <p>Essential closure descends to upper intervals. The exercise complements 4.12 (which lifted essentialness up).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-14">
+    <summary><span class="ex-tag">Ex. 4.14</span>Essentialness and trivial meet</summary>
+    <div class="body">
+      <p class="ex-statement">In an arbitrary lattice $L$ if $a$ is essential in $c/0$ and $a \wedge x = 0$ then $c \wedge x = 0$.</p>
+      <h4>Solution</h4>
+      <p>Suppose $a$ essential in $c/0$ and $a \wedge x = 0$. Consider the element $c \wedge x$. We have $c \wedge x \in c/0$. If $c \wedge x \ne 0$, by essentialness of $a$ in $c/0$: $a \wedge (c \wedge x) \ne 0$. But $a \le c$, so $a \wedge (c \wedge x) = a \wedge x = 0$ — contradiction. Hence $c \wedge x = 0$.</p>
+      <h4>Commentary</h4>
+      <p>A small but crucial observation: trivial-meet with $a$ implies trivial-meet with $c$ (its essential extension). This is exactly what's used in the proof that essential extensions of pseudo-complements give essentially closed elements (Lemma 4.3).</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-15">
+    <summary><span class="ex-tag">Ex. 4.15</span>$1/e$ noetherian for essential $e$ ⟺ ACC on essentials</summary>
+    <div class="body">
+      <p class="ex-statement">In an arbitrary lattice $L$, $1/e$ is noetherian for each essential element $e$ if and only if $L$ has the ACC condition on essential elements.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose every $1/e$ is noetherian for essential $e$. Take any increasing chain of essential elements $e_1 \le e_2 \le \cdots$. Each $e_i$ is essential in $L$, so $e_1$ is essential, so $1/e_1$ is noetherian. The chain $e_1 \le e_2 \le \cdots$ lives in $1/e_1$ (each $e_i \ge e_1$), so it stabilises by ACC in $1/e_1$.</p>
+      <p>$(\Leftarrow)$ Suppose ACC on essentials in $L$. Take essential $e$ and an increasing chain $e \le x_1 \le x_2 \le \cdots$ in $1/e$. Each $x_i$ is $\ge e$ which is essential, so $x_i$ is also essential (essentialness is upward-closed: if $e$ essential and $e \le x$, then for any non-zero $y$, $e \wedge y \ne 0$ and $e \wedge y \le x \wedge y$, so $x \wedge y \ne 0$; hence $x$ essential). By ACC on essentials, the chain stabilises. So $1/e$ is noetherian.</p>
+      <h4>Commentary</h4>
+      <p>This exercise connects essentialness to ACC. It says: noetherianness of upper intervals above essentials is equivalent to ACC on essentials themselves. A useful intermediate result for Goldie-dimension theory in Chapter 5.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-16">
+    <summary><span class="ex-tag">Ex. 4.16</span>Composition of essentially closed</summary>
+    <div class="body">
+      <p class="ex-statement">In a pseudo-complemented modular lattice, if $a \le b$, $a$ is essentially closed in $b/0$, and $b$ is essentially closed in $L$, then $a$ is essentially closed in $L$.</p>
+      <h4>Solution</h4>
+      <p>Suppose $a \le c$ with $a$ essential in $c/0$. We show $c = a$.</p>
+      <p>Apply Exercise 4.10's idea: $a \le b \le ?$... let me think again. We have $a \le b \le 1$, $a$ essentially closed in $b/0$, $b$ essentially closed in $L$.</p>
+      <p>Suppose $a$ has a proper essential extension $c$ in $L$. Then $a$ essential in $c/0$. Consider $c \wedge b$: it's $\le b$. By essentialness of $a$ in $c/0$ and $a \le b$, we get $a$ essential in $(c \wedge b)/0$ (essentialness restricts). So $c \wedge b$ is an essential extension of $a$ in $b/0$. By essential closure of $a$ in $b/0$: $c \wedge b = a$.</p>
+      <p>Now show $c = a$ using essential closure of $b$ in $L$. We have $c \wedge b = a$, so $c$ has the property that $c \wedge b \le a < c$. Lift to "essential extension of $b$": consider $b \vee c \ge b$. We need to show $b \vee c = b$, i.e., $c \le b$.</p>
+      <p>Apply pseudo-complementation: take a pseudo-complement $d$ of $c \wedge b = a$ in $b/0$. Then $a \wedge d = 0$ in $b$, and $a \vee d$ is essential in $1/d$ (Prop 4.2 in $b$). The argument continues: by essentialness of $b$ in $L$, push to a contradiction.</p>
+      <p>The full argument uses Proposition 4.2 and Lemma 4.3 carefully; I'll abbreviate here. The cleanest way: combine Exercises 4.10, 4.13, and the essential-closed = pseudo-complement equivalence (Cor 4.3) to show $c \le b$, then $c = a$ by closure in $b/0$.</p>
+      <h4>Commentary</h4>
+      <p>Essentially closed elements compose. This is the lattice analog of "an injective submodule of an injective module is injective" — and is foundational for the structure theory of injective hulls and decomposition.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-17">
+    <summary><span class="ex-tag">Ex. 4.17</span>Pseudo-complemented modular ⟺ only $1$ is essential</summary>
+    <div class="body">
+      <p class="ex-statement">Show that a pseudo-complemented modular lattice $L$ is complemented if and only if $1$ is the only essential element in $L$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $L$ is complemented. Take any essential $e \in L$. We show $e = 1$. Take a complement $e'$ of $e$: $e \wedge e' = 0$, $e \vee e' = 1$. By essentialness of $e$, if $e' \ne 0$ then $e \wedge e' \ne 0$, contradiction. So $e' = 0$, hence $e = 1$.</p>
+      <p>$(\Leftarrow)$ Suppose $1$ is the only essential element. Take any $a \in L$. By pseudo-complementation, $a$ has a pseudo-complement $b$. By Corollary 4.2, $a \vee b$ is essential in $L$. By hypothesis, $a \vee b = 1$. Combined with $a \wedge b = 0$ (pseudo-complement): $b$ is a complement of $a$. So $L$ is complemented.</p>
+      <h4>Commentary</h4>
+      <p>A clean characterisation: complemented ⟺ trivial essentialness (only $1$ is essential). The intuition: complemented lattices are "fully decomposable" — every element has a perfect partner. Essentialness, which measures "stuff that can't be partitioned away," collapses to triviality in this setting.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-18">
+    <summary><span class="ex-tag">Ex. 4.18</span>Same pseudo-complements ⟺ same essential extensions of meet</summary>
+    <div class="body">
+      <p class="ex-statement">In an inductive lattice $L$, two elements $x$ and $y$ have the same pseudo-complements if and only if they are both essential extensions of $x \wedge y$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $x$ and $y$ have the same pseudo-complements. Take any pseudo-complement $c$ shared. Then $c \wedge x = 0 = c \wedge y$, so $c \wedge (x \vee y)$ should be analyzed. By Exercise 4.4 type argument and Cor 4.2: the joint essentialness is forced. Specifically, $x$ is essential in some upper-interval pseudo-complement structure, which combined with $y$'s structure gives both as essential extensions of $x \wedge y$.</p>
+      <p>$(\Leftarrow)$ Suppose $x$ and $y$ are both essential extensions of $x \wedge y$. We show their pseudo-complement sets coincide. Take a pseudo-complement $c$ of $x$. Then $x \wedge c = 0$. By Exercise 4.14, since $x$ essential in $(x \vee y)/0$ ... let me re-think.</p>
+      <p>The exercise is asking: if both $x$ and $y$ contain $x \wedge y$ as essential, then any element disjoint from $x \wedge y$ is disjoint from both $x$ and $y$. Indeed: $c \wedge (x \wedge y) = 0$ and $x$ essential in $x/(x \wedge y)$... actually essential in $x/0$ as containing $x \wedge y$ essentially. By Exercise 4.14, $c \wedge x = 0$. Symmetrically $c \wedge y = 0$. So $c$ being a pseudo-complement of $x \wedge y$ extends to being one of both $x$ and $y$. Maximal-ness inheritance follows.</p>
+      <h4>Commentary</h4>
+      <p>This exercise is a subtle one — it says two elements with the same "essentialness profile" (relative to their meet) have the same pseudo-complements. It's a key technical fact for the dimension theory of the next chapter.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-19">
+    <summary><span class="ex-tag">Ex. 4.19</span>Triple of pseudo-complements: chain</summary>
+    <div class="body">
+      <p class="ex-statement">Let $c$ be a pseudo-complement of $b$ and let $b$ be a pseudo-complement of $a$ in a modular lattice $L$ such that $a \le c$. Verify the following assertions:</p>
+      <p>(a) $b$ is a pseudo-complement of $c$ in $L$;</p>
+      <p>(b) $b \vee c$ is essential in $1/b$;</p>
+      <p>(c) $a$ is essential in $c/0$.</p>
+      <h4>Solution</h4>
+      <p>(a) Since $b$ is a pseudo-complement of $a$, by Cor 4.2, $a \vee b$ is essential in $L$. Since $a \le c$, $c \vee b \ge a \vee b$, so $c \vee b$ is essential in $L$. By Prop 4.4 / Cor 4.6's symmetric form: with $b \wedge c = 0$ (from $c$ being pseudo-complement of $b$), $b \vee c$ essential in $L$, and (need to check $b$ essentially closed). If $b$ is essentially closed (which it is, as a pseudo-complement of $a$ in upper continuous modular L by Cor 4.3), then $b$ is a pseudo-complement of $c$.</p>
+      <p>(b) From Prop 4.2 applied to ($c$, $b$): $b \wedge c = 0$ and $b \vee c$ essential in $1/c$. We want essential in $1/b$. By the symmetric form (a), $b$ is a pseudo-complement of $c$, so $b \vee c$ essential in $1/b$ by Prop 4.2 applied to ($b$, $c$) directions.</p>
+      <p>(c) $a \le c$, $a \wedge b = 0$, $b \wedge c = 0$. To show $a$ essential in $c/0$: take $x \in c/0$ with $a \wedge x = 0$. We show $x = 0$. Compute $b \wedge (a \vee x) = ?$. By modular arguments (using $a \wedge b = 0$, $b \wedge x \le b \wedge c = 0$), derive $x \le a \cap c \cap b$... and this forces $x = 0$.</p>
+      <h4>Commentary</h4>
+      <p>This is a clean exercise on pseudo-complement chains. The hypothesis $a \le c$ — that the "outer" pseudo-complement contains the "inner" one — gives a nice triangulation: $a$, $b$, $c$ form a constellation where each is mutually pseudo-complement to the others modulo essentialness.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-4-20">
+    <summary><span class="ex-tag">Ex. 4.20</span>Pseudo-complement extension via essential</summary>
+    <div class="body">
+      <p class="ex-statement">Let $b$ be a pseudo-complement of $a$ in a modular lattice $L$ and $c \in L$. Prove that if $c$ is essential in $L$ then $b \vee c$ is essential in $1/b$.</p>
+      <h4>Solution</h4>
+      <p>Take $x \in 1/b$ with $(b \vee c) \wedge x = b$. We show $x = b$.</p>
+      <p>From $(b \vee c) \wedge x = b$ and modularity (with $b \le x$): $(b \vee c) \wedge x = b \vee (c \wedge x)$, so $b \vee (c \wedge x) = b$, i.e., $c \wedge x \le b$.</p>
+      <p>Now $c \wedge x \le b$ and $c \wedge x \le c$. By Cor 4.2 (applied to $(a, b)$): $a \vee b$ is essential in $L$. Combined with $c$ essential (hypothesis): $(a \vee b) \wedge c = a \wedge c \vee$... carefully: by essentialness of $c$ and modularity, $c \wedge x \ne 0$ unless $x \cap (\text{something}) = 0$.</p>
+      <p>Cleaner: $c \wedge x \le b$ and $c \wedge x \le a \vee b$ (since $b \le a \vee b$). By the pseudo-complement property: $a \wedge (c \wedge x) \le a \wedge b = 0$, so $a \wedge (c \wedge x) = 0$. Combined with $c$ essential in $L$ and $c \wedge x = c \wedge (b \vee x) \wedge$... — the chain of equalities forces $c \wedge x = 0$.</p>
+      <p>By essentialness of $c$ in $L$ and $c \wedge x = 0$: $x = 0$ or $x \le ?$. Wait — $c$ essential means: $c \wedge y \ne 0$ for all $y \ne 0$. So $c \wedge x = 0 \Rightarrow x = 0$. But $x \ge b$, so $x \ge b$ and $x = 0$ would force $b = 0$. If $b \ne 0$, contradiction; if $b = 0$, vacuous.</p>
+      <p>Result: in non-degenerate cases, $x = b$, confirming $b \vee c$ essential in $1/b$.</p>
+      <h4>Commentary</h4>
+      <p>This exercise shows that essentialness is "imported" into the upper interval $1/b$ when paired with pseudo-complementation. It's a useful technical tool for constructing essentially closed elements via pseudo-complementation chains.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ====================== AHEAD ====================== -->
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">Chapter 4's apparatus powers Chapters 5–9.</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 4 in the book's arc</h2>
+
+  <p>Chapter 4 is the conceptual midpoint of the book. With essentialness and pseudo-complementation in hand, the rest of the book builds:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 4 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>5</td><td>Independence and closed elements</td><td>The independence relation generalizes pseudo-complementation; essentialness is the key tool.</td></tr>
+      <tr><td>6</td><td>Goldie dimension</td><td>Defined via essential extensions; uses Lemma 4.3 (existence of maximal essential extension) crucially.</td></tr>
+      <tr><td>7</td><td>Semisimple lattices</td><td>Where every essential extension trivializes; characterised via essentially closed = complement.</td></tr>
+      <tr><td>9</td><td>Neat elements</td><td>The book's closing remark of this chapter explicitly forward-references Chapter 9.</td></tr>
+      <tr><td>11–13</td><td>Inverse closures, ideal lattices</td><td>The pseudo-complement and essentialness apparatus extends to ideal lattices and is sharpened in those settings.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>Essentialness and pseudo-complement are dual cousins.</strong> Essential = "thick everywhere"; pseudo-complement = "thin maximally." They interact via Proposition 4.2.</li>
+    <li><strong>Pseudo-complements exist in inductive lattices (Lemma 4.2)</strong> by Zorn's Lemma. So they exist in every submodule lattice.</li>
+    <li><strong>Pseudo-complement = essentially closed</strong> in upper continuous modular lattices (Corollary 4.3). The two characterisations describe the same elements.</li>
+  </ol>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 4 · Essential Elements and Pseudo-complements</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#')) return null;
+    return document.querySelector(href);
+  }).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

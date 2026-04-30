@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Freese, Ježek &amp; Nation · Table of Contents</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 17px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    color: var(--ink); letter-spacing: -0.01em;
+  }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .theme-toggle {
+    position: fixed; top: 18px; right: 20px; z-index: 100;
+    background: var(--bg-warm); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px 8px 12px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-soft); transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  .page { max-width: 980px; margin: 0 auto; padding: 56px 36px 120px; }
+
+  .hero { padding: 24px 0 36px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 12px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 12px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 760px; margin: 0; }
+  .hero .meta { display: flex; gap: 18px; margin-top: 18px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+
+  .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 11px; letter-spacing: 0.2em; color: var(--text-dim); margin: 36px 0 12px; font-weight: 700; }
+
+  .preamble { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 18px 22px; border-radius: 0 6px 6px 0; margin-bottom: 28px; font-size: 15.5px; }
+  .preamble p { margin: 0 0 10px; }
+  .preamble p:last-child { margin-bottom: 0; }
+
+  .toc-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px; margin-bottom: 24px; }
+  .toc-strip a { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; text-decoration: none; color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; transition: all 0.15s ease; }
+  .toc-strip a:hover { border-color: var(--gold); color: var(--gold); transform: translateY(-1px); box-shadow: var(--shadow-soft); }
+  .toc-strip a .num { font-weight: 700; color: var(--gold); font-size: 11px; letter-spacing: 0.12em; }
+  .toc-strip a .title { font-weight: 600; line-height: 1.25; }
+
+  .chapter-card { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; transition: all 0.15s ease; }
+  .chapter-card:hover { border-color: var(--gold); box-shadow: var(--shadow-soft); }
+  .chapter-card.pending { opacity: 0.55; border-style: dashed; }
+  .chapter-card .row1 { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chapter-card .ch-num { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+  .chapter-card .ch-meta { font-family: 'Inter', sans-serif; font-size: 12.5px; color: var(--text-dim); }
+  .chapter-card .ch-meta .status { font-weight: 700; color: var(--gold); margin-left: 8px; }
+  .chapter-card.pending .ch-meta .status { color: var(--text-dim); }
+  .chapter-card h3 { font-size: 22px; font-weight: 700; margin: 0 0 6px; line-height: 1.25; }
+  .chapter-card .tag { color: var(--teal); font-style: italic; margin: 0 0 10px; font-size: 15px; }
+  .chapter-card .desc { font-size: 15px; line-height: 1.55; margin: 0 0 14px; }
+  .chapter-card .topics { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .chapter-card .topic { font-family: 'Inter', sans-serif; font-size: 11.5px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink-soft); position: relative; cursor: help; transition: all 0.12s ease; }
+  .chapter-card .topic:hover { border-color: var(--gold); color: var(--gold); }
+  .chapter-card .topic[data-tooltip]::after {
+    content: attr(data-tooltip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    width: max-content; max-width: 320px; padding: 8px 12px; background: var(--ink); color: var(--bg);
+    font-family: 'Source Serif Pro', serif; font-size: 12.5px; line-height: 1.4; font-style: normal;
+    border-radius: 6px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+    white-space: normal; text-align: left; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+  .chapter-card .topic[data-tooltip]:hover::after { opacity: 1; }
+  .chapter-card .ch-link { display: inline-block; padding: 8px 16px; background: var(--ink); color: var(--bg); text-decoration: none; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; transition: all 0.15s ease; }
+  .chapter-card .ch-link:hover { background: var(--gold); color: var(--ink); }
+  .chapter-card.pending .ch-link { background: transparent; color: var(--text-dim); border: 1px dashed var(--line); cursor: default; }
+
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  .crosslink { background: var(--bg-warm); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+  .crosslink .crosslink-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--gold); font-weight: 700; margin-bottom: 6px; }
+  .crosslink p { margin: 0 0 8px; font-size: 14.5px; }
+  .crosslink p:last-child { margin: 0; }
+
+  footer { margin-top: 80px; padding-top: 30px; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="page">
+
+<section class="hero">
+  <div class="kicker">Free Lattices Companion · Mathematical Surveys &amp; Monographs 42 · AMS 1995</div>
+  <h1>Free Lattices</h1>
+  <p class="lede">A prose, diagrammed, and connected reading of the canonical research monograph by Ralph Freese, Jaroslav Ježek, and J. B. Nation — the definitive treatment of free-lattice theory, integrating 70 years of research on the word problem, canonical form, covers, sublattices, projective lattices, and computational aspects.</p>
+  <div class="meta">
+    <span>12 chapters + introduction + open problems</span>
+    <span>Book pp. 1–293</span>
+    <span>PDF pp. 10–308</span>
+    <span>ISBN 0-8218-0389-1</span>
+  </div>
+</section>
+
+<aside class="preamble">
+  <p>This companion volume parallels the monograph chapter-by-chapter, providing prose reformulations of the dense theorem-proof structure, marginal historical context, computed examples that illustrate abstract results concretely, and connection panels showing where each result connects to broader themes — including, in the final panel of each chapter, the design of the <strong>Prologos</strong> functional-logic language whose architecture is grounded in lattice theory.</p>
+  <p>The monograph is research-level and dense. The companion is not a substitute for the source — read both side-by-side, with the companion offering plain-English prose reformulations and the source providing rigorous proofs.</p>
+  <p>For background lattice theory at the undergraduate level, see also our companion to Nation's textbook <em>Notes on Lattice Theory</em>: <a href="nation-companion-toc.html">Nation Companion ToC</a>. Chapter 6 of Nation's textbook is the entry point; this monograph develops the same material at research depth.</p>
+</aside>
+
+<div class="section-label">Quick navigation</div>
+
+<div class="toc-strip">
+  <a href="#card-intro"><span class="num">Intro</span><span class="title">A brief history</span></a>
+  <a href="#card-ch1"><span class="num">Ch I</span><span class="title">Whitman's Solution</span></a>
+  <a href="#card-ch2"><span class="num">Ch II</span><span class="title">Bounded Homomorphisms</span></a>
+  <a href="#card-ch3"><span class="num">Ch III</span><span class="title">Covers in Free Lattices</span></a>
+  <a href="#card-ch4"><span class="num">Ch IV</span><span class="title">Day's Theorem Revisited</span></a>
+  <a href="#card-ch5"><span class="num">Ch V</span><span class="title">Sublattices &amp; Projective Lattices</span></a>
+  <a href="#card-ch6"><span class="num">Ch VI</span><span class="title">Totally Atomic Elements</span></a>
+  <a href="#card-ch7"><span class="num">Ch VII</span><span class="title">Finite Intervals &amp; Components</span></a>
+  <a href="#card-ch8"><span class="num">Ch VIII</span><span class="title">Singular &amp; Semisingular</span></a>
+  <a href="#card-ch9"><span class="num">Ch IX</span><span class="title">Tschantz's Theorem</span></a>
+  <a href="#card-ch10"><span class="num">Ch X</span><span class="title">Infinite Intervals</span></a>
+  <a href="#card-ch11"><span class="num">Ch XI</span><span class="title">Computational Aspects</span></a>
+  <a href="#card-ch12"><span class="num">Ch XII</span><span class="title">Term Rewrite Systems</span></a>
+</div>
+
+<div class="section-label">Authors</div>
+<div class="crosslink">
+  <p><strong>Ralph Freese</strong> (University of Hawai‘i): co-author of the monograph; collaborator with Nation on free lattices, finitely-presented lattices, and lattice algorithms since 1973. Author of the 1980 <em>Trans. AMS</em> paper proving the word problem for free modular lattices on 5+ generators is undecidable.</p>
+  <p><strong>Jaroslav Ježek</strong> (Charles University, Prague): Czech algebraist, expert on free algebras and term rewriting. Brings the universal-algebra and computational-rewriting perspective to the monograph.</p>
+  <p><strong>J. B. Nation</strong> (University of Hawai‘i): co-author. Settled Jónsson's 1961 conjecture in 1982 (<em>Trans. AMS</em> 269) — Nation's Theorem characterising finite sublattices of free lattices. Author of <em>Notes on Lattice Theory</em> (the textbook our other companion treats).</p>
+</div>
+
+<div class="section-label">Introduction</div>
+
+<a href="freelat-companion-intro.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card pending" id="card-intro">
+    <div class="row1">
+      <span class="ch-num">Introduction</span>
+      <span class="ch-meta">~25 min · book pp. 1–6 · 6 pages <span class="status">Pending</span></span>
+    </div>
+    <h3>A brief history of free lattices, and a guide to the book</h3>
+    <p class="tag">From Dedekind 1900 (free modular lattice on 3 generators) → Skolem 1920 (decidable word problem, forgotten) → Birkhoff 1935 (FL(3) infinite) → Whitman 1941–42 (canonical form, six conditions) → Dean, Jónsson, Galvin, Kiefer (1950s–60s) → Day 1970 (doubling) → McKenzie 1972 (bounded homomorphisms) → Nation 1982 (sublattice characterization) → Freese-Nation 1985 (covers).</p>
+    <p class="desc">The authors' own scope-setting introduction. Outlines the monograph's three-part organization (basic theory, fine structure, algorithms), gives reading paths for different audiences, and identifies contributions that are new in this volume vs. classical results being reorganized.</p>
+    <span class="ch-link">Coming soon</span>
+  </article>
+</a>
+
+<div class="section-label">Part I — Basic theory of free lattices</div>
+
+<a href="freelat-companion-ch01.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch1">
+    <div class="row1">
+      <span class="ch-num">Chapter I</span>
+      <span class="ch-meta">~110–125 min · book pp. 7–25 · 6 sections · 19 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Whitman's Solution to the Word Problem</h3>
+    <p class="tag">The foundational chapter: Day's doubling construction → Whitman's condition (W) and word-problem algorithm → canonical form → continuity → fixed-point-free polynomial showing FL(X) is incomplete for $|X| \ge 3$ → no uncountable chains in any free lattice (Galvin-Jónsson) → FL($\omega$) embeds in FL(3) (Whitman) → finite sublattices have breadth $\le 4$ (Jónsson-Kiefer).</p>
+    <p class="desc">Six conceptual movements. <strong>(§1) Basic concepts.</strong> Order, lattice, join/meet irreducibles, primality, ideals/filters, Day's doubling on convex sets — Theorem 1.1 ($\mathbf{L}[C]$ is a lattice, $\lambda : \mathbf{L}[C] \twoheadrightarrow \mathbf{L}$ is a lattice epimorphism). <strong>(§2) Free lattices.</strong> Lattice terms, length/rank, $\mathbf{FL}(X)$ as $\mathrm{T}(X)/\sim$. Lemma 1.2 (condition †: $\bigwedge S \le \bigvee T \Rightarrow S \cap T \neq \emptyset$). Lemma 1.4 (4-part characterisation of join/meet primes). Theorem 1.8 (Whitman's condition (W)). Theorem 1.10 (W+ variant). Theorem 1.11 (Whitman's six-case algorithm). Corollary 1.13 (subset generates a free sublattice iff free-prime). Corollary 1.14 (relatively-free lattices in non-trivial varieties cannot embed in any FL(Y) when $|X| \ge 3$). <strong>(§3) Canonical form.</strong> $A \ll B$ join refinement, equivalent-under-commutativity, Lemma 1.15 (6 properties of $\ll$), Theorem 1.17 (canonical form unique up to commutativity), Theorem 1.18 (4-condition characterization), canonical joinands/meetands, Theorem 1.21 (Jónsson-Kiefer 1962: free lattices semidistributive). <strong>(§4) Continuity.</strong> Theorem 1.22 (Whitman: free lattices are continuous, but Example 1.24 shows NOT complete unless $|X| \le 2$). <strong>(§5) Fixed-point-free polynomials.</strong> Theorem 1.23 (specific 7th-iterate polynomial $f$ has no fixed point on FL(3)), Example 1.24 (ascending chain without least upper bound), Problem 1.25 (open: which polynomials are fixed-point free?), Theorem 1.26 (slim polynomials: 11-case characterization). <strong>(§6) Sublattices.</strong> Theorem 1.27 (Galvin-Jónsson 1961: relatively-free lattices are countable union of antichains, no uncountable chains). Theorem 1.28 (Whitman 1942: $\mathbf{FL}(\omega) \hookrightarrow \mathbf{FL}(3)$). Theorem 1.30 (Jónsson-Kiefer: characterisation of FL(3)-sublattices). Corollary 1.31 (finite (W)-lattices have breadth $\le 4$). Corollary 1.32 (atom-generated sublattice of FL(n) infinite for $n \ge 5$).</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Day's doubling construction (1970): for convex C ⊆ L, build L[C] = (L−C) ∪ (C × 2). Theorem 1.1: this is a lattice and the projection λ : L[C] ↠ L is a lattice epimorphism. Foundational tool for the rest of the monograph and the basis of the (W)-proof in §2.">Day's doubling L[C]</span>
+      <span class="topic" data-tooltip="Whitman's condition (W): if v = v₁ ∧ ⋯ ∧ v_r ≤ u₁ ∨ ⋯ ∨ u_s = u, then either v_i ≤ u for some i or v ≤ u_j for some j. Theorem 1.8 establishes (W) for FL(X) using Day's doubling. Inherited by all sublattices, hence the universal obstruction for free-lattice embedding.">Whitman's condition (W)</span>
+      <span class="topic" data-tooltip="Theorem 1.11 (Whitman 1941): a recursive 6-case procedure for testing s^FL(X) ≤ t^FL(X). Cases (1)–(5) reduce to subterms; case (6) (formal-meet ≤ formal-join) is where (W) bites. The recursion bounds total length of (s,t), so the algorithm always terminates. Polynomial time per Skolem 1920 / Cosmadakis-Freese / Burris 1995.">Whitman's algorithm (Theorem 1.11)</span>
+      <span class="topic" data-tooltip="Theorem 1.17 (canonical form): each w ∈ FL(X) has a term of minimal rank representing it, unique up to COMMUTATIVITY (not associativity, because the rank function preferred flat n-ary form). Theorem 1.18 gives a 4-condition characterisation. Foundational for Whitman's word-problem solution and for everything in Chapters III, V–X.">canonical form (Theorem 1.17)</span>
+      <span class="topic" data-tooltip="A ≪ B if for each a ∈ A there exists b ∈ B with a ≤ b. Lemma 1.15: ≪ is a quasiorder on finite subsets of L; antisymmetric on antichains. Theorem 1.19: the canonical join representation is the unique minimal join representation under ≪. Algorithmic core for canonical-form computation.">join refinement A ≪ B</span>
+      <span class="topic" data-tooltip="Theorem 1.21 (Jónsson-Kiefer 1962): free lattices satisfy SD∨ (and dually SD∧) — semidistributivity. Equivalent to: w = ⋁a_i = ⋁b_j ⟹ w = ⋁(a_i ∧ b_j). The proof uses canonical form. SD is now a major structural concept (cf. Adaricheva-Gorbunov-Tumanov 2003 on convex geometries; Reading-Speyer-Thomas 2019 fundamental theorem of finite SD lattices).">semidistributivity (Theorem 1.21)</span>
+      <span class="topic" data-tooltip="Theorem 1.22 (Whitman): free lattices are CONTINUOUS — i.e., for any up-directed set A with ⋁A = u, ⋁(a ∧ b) = u ∧ b. But Example 1.24 shows FL(X) is NOT complete unless |X| ≤ 2, via a fixed-point-free unary polynomial that generates an ascending chain without LUB. Continuity ≠ completeness.">continuity vs completeness (Theorems 1.22, 1.24)</span>
+      <span class="topic" data-tooltip="Theorem 1.23: a specific 7th-iterate slim polynomial f on FL(3) has no fixed point. Combined with continuity (Theorem 1.22), this gives an ascending chain x ≤ f(x) ≤ f²(x) ≤ ⋯ without a least upper bound. Hence FL(3) is incomplete. Problem 1.25 (open): characterise which unary polynomials are fixed-point-free. Theorem 1.26 fully characterises slim polynomials.">fixed-point-free polynomials</span>
+      <span class="topic" data-tooltip="Theorem 1.27 (Galvin-Jónsson 1961, Canad. J. Math. 13, 265-272 'Distributive sublattices of a free lattice'): every relatively-free lattice F_V(X) is a countable union of antichains; hence contains no uncountable chains. Proof uses automorphism orbits. A fundamental constraint on free-lattice structure.">Galvin-Jónsson (Theorem 1.27)</span>
+      <span class="topic" data-tooltip="Theorem 1.28 (Whitman 1942): FL(3) contains a sublattice isomorphic to FL(ω). Hence FL(3) and FL(n) for any n ≥ 3 generate the same variety (the variety of all lattices). Construction uses the six unary polynomials f₁ … f₆ from Theorem 1.23 and their iterates. Surprising: a 'small' free lattice (3 generators) embeds an 'infinite' one (countably many).">FL(ω) ↪ FL(3) (Theorem 1.28)</span>
+      <span class="topic" data-tooltip="Theorem 1.30 (Jónsson-Kiefer 1962): characterises sublattices of FL(3) via 3 conditions on a triple of elements with a meet-irreducible witness. Corollary 1.31: finite (W)-lattice has breadth at most 4; finite sublattices of free lattices satisfy a nontrivial lattice equation (specifically, 4-distributivity). Corollary 1.32: for n ≥ 5, atom-generated sublattice of FL(n) is infinite (8-element Boolean for n=3, 22-element for n=4).">Jónsson-Kiefer + breadth-4</span>
+      <span class="topic" data-tooltip="Two crucial corollaries from §6: (1.13) a subset S generates a sublattice isomorphic to FL(|S|) iff every s ∈ S satisfies the 'free prime' conditions (s ≤ ⋁Y ⟹ s ∈ Y, dually). (1.14) Any relatively-free lattice in a proper non-trivial variety, with |X| ≥ 3, fails to embed in any FL(Y). Strong contrast with free distributive / free modular lattices.">free-prime characterisation (1.13, 1.14)</span>
+    </div>
+    <span class="ch-link">Read Chapter I →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch02.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch2">
+    <div class="row1">
+      <span class="ch-num">Chapter II</span>
+      <span class="ch-meta">~150–180 min · book pp. 27–66 · 8 sections · 90 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Bounded Homomorphisms and Related Concepts</h3>
+    <p class="tag">McKenzie's 1972 bounded-homomorphism theory + Day's doubling characterisation of finite lower-bounded lattices + the D-relation + κ-bijection for semidistributive lattices + splitting lattices and conjugate equations + Day's theorem (free lattices are weakly atomic) + applications to congruence varieties.</p>
+    <p class="desc">The largest chapter (40 pp., 8 sections, 90 numbered results). <strong>(§1) Bounded homomorphisms.</strong> Lower / upper / bounded epimorphisms, the right-/left-adjoint maps β, α, the minimal join cover refinement property, the D relation and D-rank ρ, Theorem 2.20 (5 equivalent characterisations of finite lower-bounded), Theorem 2.24 (canonical join representations characterise SD∨). <strong>(§2) Continuity.</strong> Theorem 2.25 (every lattice with $\mathbf{D}(\mathbf{L}) = L$ + min-join-cover-refinement is upper continuous). <strong>(§3) Doubling and congruences.</strong> Theorem 2.43 (Day's structural characterisation: finite lower-bounded = built from $\mathbf{1}$ by iterated doubling of lower pseudo-intervals); Corollary 2.44 (bounded version with intervals). <strong>(§4) E refinement of D.</strong> $\mathcal{M}^*(a)$, the E relation, J-closed sets, $\mathbf{J}(p)$ / $\mathbf{J}^*(p)$, Theorem 2.51 ($\mathbf{J}(p) = \mathbf{J}^*(p)$ in lower-bounded case). <strong>(§5) Semidistributive lattices.</strong> Theorem 2.54 ($\kappa_\mathbf{L}$ exists in SD∧ + dual-min-cover-refinement); Corollary 2.55 (κ is a bijection $\mathbf{J}(\mathbf{L}) \leftrightarrow \mathbf{M}(\mathbf{L})$ in semidistributive lattices); A/B/C relations on $\mathbf{J}(\mathbf{L})$; Theorem 2.64 (Day 1979: finite lower-bounded SD-lattice is bounded iff meet semidistributive); Theorem 2.67 ($\mathbf{L}$ bounded iff $|\mathbf{J}(\mathbf{L})| = |\mathbf{M}(\mathbf{L})| = |\mathbf{J}(\mathbf{Con}\,\mathbf{L})|$). <strong>(§6) Splitting lattices.</strong> Critical pair / quotient / prime critical quotient, Theorem 2.72 (conjugate equations as set of identities for $\mathbf{V}(\mathbf{L})$), Corollary 2.76 ($\mathcal{C}_\mathbf{L}$ unique), Theorems 2.79–2.80 (splitting pairs in $\mathbf{\Lambda}$ ↔ splitting lattices). <strong>(§7) Day's weak-atomicity theorem.</strong> Theorem 2.84 ($\mathbf{FL}(X)$ in the quasivariety of finite bounded lattices); Corollary 2.85 ($\mathbf{FL}(X)$ weakly atomic). <strong>(§8) Applications.</strong> Theorem 2.87 (Adaricheva: finite semilattice congruence lattices are upper bounded); Theorem 2.88 (Kearnes); Theorem 2.90 (Adaricheva-Dziobiak-Gorbunov on subquasivariety lattices).</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Definition 2.1: a homomorphism h : K → L is lower bounded iff every fiber filter h⁻¹(1/a) has a least element β(a). Upper bounded dually has a greatest element α(a). Bounded = both. β is a right adjoint of h (h ∘ β = id, β ∘ h ≤ id; Lemmas 2.2, 2.4); α is a left adjoint. Galois-connection structure is the engine of the chapter.">bounded homomorphism</span>
+      <span class="topic" data-tooltip="aDb iff a ≠ b and there exists Q ∈ M(a) with b ∈ Q (a minimal join cover containing b). The well-foundedness measure ρ(a) = D-rank counts the depth of recursive D-dependency. Theorem 2.20: finite L is lower bounded iff D(L) = L iff no D-cycle. Foundational dependency relation.">D relation + D-rank ρ</span>
+      <span class="topic" data-tooltip="Theorem 2.20 (the keystone): for a finite lattice L, the following are equivalent — (1) L is lower bounded; (2) the natural FL(X) → L is lower bounded for some X; (3) D(L) = L (every element has finite D-rank); (4) L contains no D-cycle; (5) every congruence θ has classes with least elements. Plus: lower bounded ⟹ SD∨.">5-fold characterisation (2.20)</span>
+      <span class="topic" data-tooltip="Theorem 2.43 (Day): the class of finite lower-bounded lattices is the smallest class containing the one-element lattice 1 and closed under doubling lower pseudo-intervals. Corollary 2.44: finite bounded = doubling intervals. McKenzie's algebraic notion = Day's geometric construction.">Day's structural characterisation (2.43)</span>
+      <span class="topic" data-tooltip="Definition: M*(a) = minimal join covers consisting of completely join irreducibles. Relation E uses M*. Theorem 2.46: D and E coincide on rank. Theorem 2.51: in lower-bounded lattices with min-cover-refinement, D-closed = E-closed = J-closed. After 2.51 the literature switched to 'J-closed' as standard.">E refinement of D + J-closure</span>
+      <span class="topic" data-tooltip="Theorem 2.54: in SD∧ + dual-min-cover-refinement lattices, κ_L(a) = ⋁K(a) is the unique canonical meetand of a_* not above a, where K(a) = {u : u ≥ a_*, u ≱ a}. Corollary 2.55: in semidistributive lattices satisfying both refinement properties, κ : J(L) → M(L) is a BIJECTION between completely join irreducibles and completely meet irreducibles.">κ-bijection (Theorems 2.54-2.55)</span>
+      <span class="topic" data-tooltip="Theorem 2.64 (Day 1979): a finite lower-bounded lattice is bounded if and only if it is meet semidistributive (SD∧). Equivalently for finite SD lattices: bounded = lower bounded = no C-cycle. The pivotal duality result: SD∧ + lower-bounded → upper-bounded comes for free.">Day's theorem (2.64)</span>
+      <span class="topic" data-tooltip="Definition: aAb iff b < a and a ≤ b ∨ κ(b); aBb iff a ≠ b, a ≤ a_* ∨ b, a ≱ b_* ∨ a_*; aCb iff aAb or aBb. Theorem 2.59: E|_J(L) ⊆ C ⊆ D|_J(L) in finite SD lattices, with both containments possibly proper. C generalises D from J(L) to completely-join-irreducibles in INFINITE SD lattices.">A/B/C relations on J(L)</span>
+      <span class="topic" data-tooltip="A splitting lattice is a finite, bounded, subdirectly irreducible lattice. Determines a splitting pair ⟨V(L), 𝒞_L⟩ in the lattice Λ of all lattice varieties: every variety is either V(L) or in 𝒞_L (the unique largest variety not containing L). Theorem 2.79: splitting pairs in Λ correspond bi-uniquely to splitting lattices. McKenzie 1972's central concept.">splitting lattice + splitting pair</span>
+      <span class="topic" data-tooltip="Theorem 2.72: for a finitely-generated SI lattice L with prime critical quotient u/v, the inclusions β_n,f(u) ≤ α_n,f(v) form an infinite chain of identities; V ⊉ L iff V satisfies one of them. Each splitting lattice is described by an INFINITE ascending chain of conjugate equations in Λ. Example: N₅'s ε₁ is the modular law.">conjugate equations</span>
+      <span class="topic" data-tooltip="Theorem 2.84 (Day 1979): every FL(X) embeds in an inverse limit of finite bounded lattices, each obtained from the previous by doubling all (W)-failure intervals. Corollary 2.85: FL(X) is weakly atomic. The construction uses iterated doubling starting from the free distributive lattice F_D(X). Beautiful proof — algebraic-geometric fixed point.">Day's weak-atomicity (2.84-2.85)</span>
+      <span class="topic" data-tooltip="§8: applications beyond lattice theory. Theorem 2.87 (Adaricheva): finite semilattices have upper-bounded congruence lattices. Theorem 2.88 (Kearnes, via tame congruence theory): if a variety V has SD∧ congruence lattices, then finite-algebra congruence lattices in V are upper bounded. Theorem 2.90 (Adaricheva-Dziobiak-Gorbunov): finite subquasivariety lattices of locally finite quasivarieties are lower bounded.">congruence variety applications</span>
+    </div>
+    <span class="ch-link">Read Chapter II →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch03.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch3">
+    <div class="row1">
+      <span class="ch-num">Chapter III</span>
+      <span class="ch-meta">~110–135 min · book pp. 67–89 · 7 sections · 45 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Covers in Free Lattices</h3>
+    <p class="tag">Freese-Nation 1985 made operational. Decide if $w \in \mathbf{FL}(X)$ has a lower cover, and list all of them, in polynomial time. Central tools: J-closed sets, the standard epimorphism, the lattice $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$, Theorem 3.32's explicit formula for $\kappa(w)$.</p>
+    <p class="desc">Seven sections develop the cover theory. <strong>(§1) Elementary cover theorems.</strong> Theorem 3.1 (κ in $\mathbf{FL}(X)$); Theorem 3.3 (κ-bijection $\mathbf{J}(\mathbf{FL}(X)) \leftrightarrow \mathbf{M}(\mathbf{FL}(X))$); Theorem 3.4 (canonical-meetand-uniqueness); Theorem 3.5 (cover bijection $\gamma$ — lower covers of $w$ ↔ completely-join-irreducible canonical joinands); Corollaries 3.6–3.9 (cover counts and atomicity); Example 3.10 (κ for generators). <strong>(§2) J-closed sets and the standard epimorphism.</strong> Lemma 3.11 (Whitman recipe for $\mathcal{M}^*(w)$); Theorem 3.12 (canonical-form recursion for $\mathbf{J}(w)$); $A^\vee$ for finite J-closed $A$; Theorem 3.15 (the standard epimorphism $f(u) = \bigvee\{a \in A : a \le u\}$ is lower bounded). <strong>(§3) Finite lower bounded lattices.</strong> Theorem 3.17 ($\mathbf{L}$ finite lower bounded iff $\mathbf{L} \cong A^\vee$); Theorem 3.19 (homomorphism theorem on $A^\vee$); Theorem 3.23 (4-fold bounded characterisation, Day's theorem revisited). <strong>(§4) The lattice $\mathbf{L}^\vee(w)$.</strong> Definition $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$; Theorem 3.24 ($\mathbf{L}^\vee(w)$ is finite, lower bounded, SI); Theorem 3.25 (McKenzie's congruence formula); <strong>Theorem 3.26</strong> (THE central characterisation: 5 equivalent forms of complete-join-irreducibility). <strong>(§5) Syntactic algorithms.</strong> Lemma 3.29 + Theorem 3.30 (the K-set test); <strong>Theorem 3.32</strong> (the explicit formula for $\kappa(w)$ — what the polynomial-time implementation computes); Theorems 3.34, 3.35 (canonical-form supporting lemmas). <strong>(§6) Examples.</strong> Example 3.36 (Dean 1960 coverless element); Example 3.39 (a coverless-both-ways element); Examples 3.38 + Table 3.1 + Figure 3.3 (six worked $\mathbf{L}^\vee(w)$ lattices); Example 3.40 (slim element classification). <strong>(§7) Connected components.</strong> Example 3.43 (component of generator = pentagon $\mathbf{N}_5$); Example 3.45 (the bottom of $\mathbf{FL}(n)$ for $n \ge 4$, with $1 + n^2$ atom-region elements).</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 3.5: a join reducible w has lower covers in bijection with its completely-join-irreducible canonical joinands. The bijection γ sends a lower cover v to the unique w_i not below v, with γ⁻¹(w_i) = κ(w_i) ∧ w. Reduces the cover problem to: decide if a JOIN-IRREDUCIBLE element is COMPLETELY join irreducible.">cover bijection γ (Theorem 3.5)</span>
+      <span class="topic" data-tooltip="Theorem 3.12: in FL(X), J(w) admits an explicit recursion through the canonical form. (1) w meet of generators ⟹ J(w) = {w}. (2) w = ⋀ⱼ ⋁ᵢ wᵢⱼ ∧ ⋀ₖ xₖ canonically ⟹ J(w) = {w} ∪ ⋃ J(wᵢⱼ). (3) w = ⋁ᵢ wᵢ canonically ⟹ J(w) = ⋃ J(wᵢ). Polynomial-time computable from canonical form.">canonical-form recursion for J(w) (Theorem 3.12)</span>
+      <span class="topic" data-tooltip="Theorem 3.15: for finite J-closed A in lattice F (with min-join-cover refinement), the map f(u) = ⋁{a ∈ A : a ≤ u} is a lower bounded epimorphism F → A^∨. The chapter's bridge between J-closure and lower-bounded structure. Generates ALL finite lower-bounded lattices (Theorem 3.17).">standard epimorphism (Theorem 3.15)</span>
+      <span class="topic" data-tooltip="L^∨(w) = J(w)^∨, the join-subsemilattice of FL(X) generated by J(w). For w join irreducible, finite, lower bounded, subdirectly irreducible with w/w_† as critical prime quotient (Theorem 3.24). The chapter's central technical object — every finite lower-bounded SI lattice is an L^∨(w).">L^∨(w) (Theorem 3.24)</span>
+      <span class="topic" data-tooltip="Theorem 3.26: for w join irreducible in FL(X), TFAE: (1) w is completely join irreducible; (2) every element of J(w) is completely join irreducible; (3) every subelement of w is lower atomic; (4) L^∨(w) is meet semidistributive; (5) L^∨(w) is a splitting lattice. The chapter's pivot — turns the cover question into a SD∧-test on a finite, computable lattice.">Theorem 3.26 — 5-fold characterisation</span>
+      <span class="topic" data-tooltip="Theorem 3.30: w is completely join irreducible iff (1) every u ∈ J(w) − {w} is completely join irreducible AND (2) w ⊄ ⋁K(w), where K(w) = {v ∈ J(w) : w_† ∨ v ⊄ w}. Reduces complete-join-irreducibility to a recursion plus a single Whitman-algorithm test — polynomial time.">syntactic test (Theorem 3.30)</span>
+      <span class="topic" data-tooltip="Theorem 3.32: explicit formula for κ(w) when w is completely join irreducible. κ(w) = ⋁{x ∈ X : w_† ∨ x ⊄ w} ∨ ⋁{k^† ∧ κ(v) : v ∈ J(w) − {w}, w ⊄ κ(v)}, with k^† = ⋀{κ(v) : v ∈ J(w) − {w}, κ(v) ≥ ⋁K(w)}. THE formula the polynomial-time implementation computes.">explicit κ-formula (Theorem 3.32)</span>
+      <span class="topic" data-tooltip="Example 3.36 (R.A. Dean, ad hoc 1960): w = x ∧ (y ∨ z) in FL(3) has no lower cover. The first historical example. L^∨(w) is a 5-element non-SD∧ lattice (Figure 3.2(1)). Verified via Theorem 3.26 — SD∧ fails.">Dean's coverless element (Example 3.36)</span>
+      <span class="topic" data-tooltip="Example 3.39: there exist elements with NEITHER lower nor upper covers. Example: w = ((x ∧ (y∨z)) ∨ (y∧z)) ∧ ((y ∧ (x∨z)) ∨ (x∧z)). Constructed by stacking Dean's coverless witnesses. Foreshadows Tschantz's theorem (Chapter IX): every infinite interval contains a coverless element.">coverless elements (Example 3.39)</span>
+      <span class="topic" data-tooltip="Example 3.40: a slim join-irreducible element has a lower cover iff it is either a generator or has canonical form x_n ∧ (x_{n−1} ∨ (x_{n−2} ∧ ⋯ ∨ (x_2 ∧ x_1))) with n even and x_2 = x_4 = ⋯ = x_n. Classification of slim covers — exponential growth f(n) for |X| ≥ 4, linear for |X| = 3.">slim element classification (Example 3.40)</span>
+      <span class="topic" data-tooltip="Example 3.43: the connected component of a generator x in FL(X) is a 5-element set isomorphic to N_5 (the pentagon). Elements: x_*, x_* ∨ x̱, x, x^* ∧ x̄, x^*. Even at the local level, FL(X) is structurally non-modular.">component of a generator = N_5 (Example 3.43)</span>
+      <span class="topic" data-tooltip="Example 3.45 + Figure 3.5: the bottom of FL(n) for n ≥ 4 is fully described. The atom-component has 1 + n² elements. For larger subsets J ⊂ {1,…,n} with |J| ≥ 3, the connected component has 1 + 2|J| elements. Figure 3.5 diagrams the bottom of FL(4) (33 elements with explicit covers). Concrete combinatorics of an otherwise infinite lattice.">the bottom of FL(X) (Example 3.45)</span>
+    </div>
+    <span class="ch-link">Read Chapter III →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch04.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch4">
+    <div class="row1">
+      <span class="ch-num">Chapter IV</span>
+      <span class="ch-meta">~35–45 min · book pp. 91–94 · 3 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Day's Theorem Revisited</h3>
+    <p class="tag">A constructive sharpening of Day's 1979 weak-atomicity theorem with explicit D-rank control. Theorem 4.1: for $u \not\le v$ in $\mathbf{FL}(X)$, there exists a completely-join-irreducible $q$ with $q \le u$, $v \le \kappa(q)$, and $\rho(q) \le \rho^d(u) + \rho(v) - 1$. Theorem 4.3: the bound is sharp via the explicit $s_m, t_n$ sequences.</p>
+    <p class="desc">Three named results in 4 pages, with structural weight far beyond the size. <strong>Theorem 4.1</strong>: the refined Day's theorem — for any $u, v \in \mathbf{FL}(X)$ with $u \not\le v$, a completely-join-irreducible $q$ exists with $q \le u$, $v \le \kappa(q)$, and $\rho(q) \le m + n - 1$ where $m = \rho^d(u), n = \rho(v)$. The covering pair $\kappa(q) \wedge (q \vee v) \prec q \vee v$ lies in the interval $u/v$ — making weak atomicity explicitly witnessed by a canonical-form term constructible in polynomial time. Proof by 3-case induction on canonical-form complexity (generator, join, meet-of-joins-meets), with Case 3 using Day's doubling at the level of $\mathbf{L}^\vee$. <strong>Corollary 4.2</strong>: the bounded-lattice form. Every nontrivial $u \not\le v$ in $\mathbf{FL}(X)$ is witnessed by an epimorphism onto a finite bounded splitting lattice $\mathbf{L} = \mathbf{L}^\vee(q)$ with $\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$. Recovers Theorem 2.84 with explicit complexity. <strong>Theorem 4.3</strong>: sharpness. Two recursively-defined sequences $s_m, t_n$ with $\rho^d(s_m) = m$, $\rho(t_n) = n$, where $s_1$ is Dean's coverless element $x \wedge (y \vee z)$. For these, every completely-join-irreducible $q$ with $q \le s_m, t_n \le \kappa(q)$ satisfies $\rho(q) \ge m + n - 1$ exactly. Proof inducts on $m + n$ with three cases (parity of $m, n$). Establishes that Theorem 4.1's bound is best possible and is achieved by an explicit family of canonical-form terms.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 4.1: for u ⊄ v in FL(X), there exists a completely-join-irreducible q with q ≤ u, v ≤ κ(q), and ρ(q) ≤ ρ^d(u) + ρ(v) − 1. The covering pair κ(q) ∧ (q ∨ v) ≺ q ∨ v lies in u/v. Constructive proof by 3-case induction on canonical-form complexity. The rank-bounded version of Day's 1979 theorem.">refined Day's theorem (Theorem 4.1)</span>
+      <span class="topic" data-tooltip="Corollary 4.2: every nontrivial u ⊄ v in FL(X) is witnessed by an epimorphism FL(X) → L^∨(q) onto a finite BOUNDED SPLITTING lattice with J(L) ⊆ D_{m+n−1}(L). Recovers Theorem 2.84 (Day 1979 quasivariety) with explicit complexity bound on the witness lattice.">bounded-lattice form (Corollary 4.2)</span>
+      <span class="topic" data-tooltip="The 3-case induction structure of Theorem 4.1's proof. Case 1: u or v is a generator — direct construction via Example 3.10's κ formulas. Case 2: u is a join (or v is a meet) — recurse on a canonical sub-element. Case 3: u canonical meet AND v canonical join — the deep case, using J_0 = ∪J(q(u_i,v)) ∪ ∪J(q(u,v_j)) and Day's doubling on K = J_0^∨ at the L^∨ level.">3-case induction proof structure</span>
+      <span class="topic" data-tooltip="The s_m sequence: s_0 = z, s_1 = x ∧ (y ∨ z) [= Dean's coverless element], s_{2k} = z ∧ (y ∨ s_{2k−1}), s_{2k+1} = x ∧ (y ∨ s_{2k}). Each s_m has ρ^d(s_m) = m. The dual t_n sequence: t_0 = x, t_1 = y ∨ (z ∧ x), t_{2k} = x ∨ (z ∧ t_{2k−1}), t_{2k+1} = y ∨ (z ∧ t_{2k}), with ρ(t_n) = n. s_m ≰ t_n when m even or n odd.">s_m, t_n sequences (Definition before 4.3)</span>
+      <span class="topic" data-tooltip="Theorem 4.3: for s_m, t_n above with m ≥ 1, n ≥ 0, m even or n odd, every completely-join-irreducible q with q ≤ s_m and t_n ≤ κ(q) has ρ(q) ≥ m + n − 1. Combined with Theorem 4.1's upper bound, ρ(q) = m + n − 1 EXACTLY. Sharpness witness — the bound cannot be improved. Inducts on m + n, three cases by parities.">sharpness (Theorem 4.3)</span>
+      <span class="topic" data-tooltip="The proof of Theorem 4.1 in Case 3 doubles the interval v̄/ū inside K = J_0^∨ where J_0 is a J-closed set built from inductive sub-witnesses. The doubling is Day's original 1970 construction, but applied at the L^∨ level rather than to FL(X) itself. This synthesis of Chapter II's doubling idea with Chapter III's standard-epimorphism machinery is the chapter's deepest insight.">Day's doubling at the L^∨ level</span>
+      <span class="topic" data-tooltip="The construction of q(u, v) translates to a depth-bounded fire-once cascade in the propagator-network architecture. Each level of canonical-form complexity becomes a BSP round, and the rank bound ρ(q) ≤ m + n − 1 IS the depth bound on the network's evaluation. The Hyperlattice-Conjecture instance: Hasse-diagram depth = optimal parallel decomposition.">depth-bounded cascade (Prologos)</span>
+      <span class="topic" data-tooltip="Tschantz 1992: every infinite interval u/v in FL(X) contains a sublattice isomorphic to FL(Y) for |Y| ≤ |X| + ℵ₀. The proof needs Theorem 4.1 to construct INCOMPARABLE elements inside the infinite interval — without rank control, the construction would 'run away to infinity'. Chapter IV is the structural pivot: 4 pages doing the work of unlocking Chapter IX's Tschantz-style infinite-interval analysis.">unlocks Tschantz's theorem (Chapter IX)</span>
+      <span class="topic" data-tooltip="Day 1979 (qualitative): FL(X) weakly atomic via inverse-limit of doubling. Freese-Nation 1985 (quantitative): explicit canonical-form witness q with rank bound ρ(q) ≤ m + n − 1. Theorem 4.3: bound is sharp. The 1985 paper made Day's theorem ALGORITHMIC — the cover-witness is constructible in time polynomial in canonical-form sizes of u, v.">Day 1979 → FN 1985 rank refinement</span>
+    </div>
+    <span class="ch-link">Read Chapter IV →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch05.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch5">
+    <div class="row1">
+      <span class="ch-num">Chapter V</span>
+      <span class="ch-meta">~240–300 min · book pp. 95–134 · 6 sections · ~70 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Sublattices of Free Lattices and Projective Lattices</h3>
+    <p class="tag">The classification centerpiece. <strong>Nation's theorem (1982)</strong>: a finite lattice embeds in some $\mathbf{FL}(X)$ iff it is semidistributive AND satisfies (W) — settling Jónsson's 1960s conjecture. Plus the projective-lattice characterization (Freese-Nation, generalising Kostinsky 1972), $\mathbf{FL}(\mathbf{P})$ over an ordered set, the 8 forbidden sublattices $\mathbf{L}_1$–$\mathbf{L}_8$, primitive-lattice classification (Ježek-Slavík 1989), and the structural property table.</p>
+    <p class="desc">Six sections, the longest chapter in the monograph (40 pp.). <strong>(§1) Projective lattices.</strong> Theorem 5.1 (3-fold equivalence: projective ⟺ retract of free ⟺ universal retraction property). Theorem 5.7 (Freese-Nation): 4-condition characterization (W + $\mathbf{D}(\mathbf{L}) = L = \mathbf{D}^d(\mathbf{L})$ + min-cover refinement and dual + finitely separable). Corollary 5.9 (Kostinsky 1972): finitely-generated projective ⟺ bounded + (W). Corollary 5.10: finitely-generated projective ⟺ sublattice of free. Corollary 5.11: finite projective ⟺ finite sublattice of free. Theorem 5.12 (intervals are projective). Theorem 5.16 (ordinal sums). Theorem 5.18 (finitely-generated projective ⟹ weakly atomic, via Chapter IV's rank refinement). <strong>(§2) Free lattice over an ordered set.</strong> $\mathbf{FL}(\mathbf{P})$ defined; Theorem 5.19 (Dean's word-problem algorithm); Theorem 5.20 ($\mathbf{D}(\mathbf{FL}(\mathbf{P})) = \mathbf{FL}(\mathbf{P}) = \mathbf{D}^d$); Theorem 5.22 ($\mathbf{FL}(\mathbf{P})$ projective ⟺ $\mathbf{P}$ finitely separable); Corollary 5.23 (embeddability of ordered sets in free lattices); Theorem 5.27 (Nation-Schmerl: order dimension of $\mathbf{F}_\mathcal{V}(X)$); Theorem 5.31–5.33 (lower-bounded image characterizations). <strong>(§3) Nation's theorem.</strong> Lemma 5.35 (4-fold equivalence: projective ⟺ sublattice of free ⟺ bounded + (W) ⟺ S-lattice without C-cycle). The 18-page proof: configuration-forbidding lemmas (5.36–5.40), B-type sequence machinery (5.41–5.51), case-elimination lemmas (5.52–5.54). <strong>Theorem 5.55</strong>: finite SD + (W) ⟺ sublattice of free. <strong>(§4) Forbidden lattices.</strong> Theorem 5.56 (Davey-Poguntke-Rival 1975): 6 SD-failure witnesses $\mathbf{L}_1, \ldots, \mathbf{L}_6$. Theorem 5.58 (Antonius-Rival): 8 forbidden sublattices $\mathbf{L}_1, \ldots, \mathbf{L}_8$ for finite-sublattice-of-free. Theorem 5.59 (meet-SD without infinite chains is finite, $\le 2^n$ elements). Example 5.60: $\sqrt{2^n} \le f_n \le 2^n$ via parallel sum. <strong>(§5) Primitive lattices.</strong> Theorem 5.61 (3-fold equivalence). Examples 5.62–5.65: the 4 starter primitives $\mathbf{A}_1$–$\mathbf{A}_4$, the 6 infinite families $\mathbf{B}_n, \mathbf{C}_n, \mathbf{D}_n, \mathbf{E}_n, \mathbf{F}_n, \mathbf{G}_n$, and the 5 constructions $\mathbf{R}, \mathbf{P}, \mathbf{P}^*, \mathbf{Q}, \mathbf{Q}^*$. Ježek-Slavík 1989 [76]: completeness of the catalog. <strong>(§6) Summary.</strong> Reinhold's *-distributivity (Theorem 5.66), free lattices are *-distributive (Corollary 5.67), Theorem 5.69 (5 implications for arbitrary lattices), and Table 5.1 — the 13×5 cross-property summary.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 5.1: a lattice L is projective iff L is a retract of a free lattice iff for every K, every epimorphism K → L has a homomorphism transversal. Foundational equivalence linking the categorical, structural, and universal-property formulations.">projective ⟺ retract of free (Theorem 5.1)</span>
+      <span class="topic" data-tooltip="Theorem 5.7 (Freese-Nation): a lattice L is projective iff (1) L satisfies (W); (2) L = D(L) = D^d(L); (3) L has the minimal join cover refinement property and its dual; (4) L is finitely separable. The four conditions are independent; Examples 5.13, 5.14, 5.15 prove this.">projective characterization (Theorem 5.7)</span>
+      <span class="topic" data-tooltip="Corollary 5.9 (Kostinsky 1972): a finitely-generated lattice L is projective iff L is bounded and satisfies (W). Foundational predecessor to Theorem 5.7. Pacific J. Math. 40, 111-119.">Kostinsky (Corollary 5.9)</span>
+      <span class="topic" data-tooltip="Theorem 5.18: every finitely-generated projective lattice is weakly atomic. Proved via Day's theorem rank refinement (Chapter IV Corollary 4.2). The subtle interplay: Chapter IV's rank-bounded weak atomicity, when applied to a projective lattice (= sublattice of FL), inherits down to the projective.">projective ⟹ weakly atomic (Theorem 5.18)</span>
+      <span class="topic" data-tooltip="FL(P) is the free lattice generated by an ordered set P, with the order on P enforced. Defined by an order-preserving universal property. Theorem 5.19 (Dean): word-problem algorithm. Theorem 5.20: D(FL(P)) = FL(P) = D^d. Theorem 5.22: projective iff P is finitely separable.">FL(P) — free lattice over an ordered set</span>
+      <span class="topic" data-tooltip="Lemma 5.35: for finite L, projective ⟺ sublattice of FL ⟺ bounded + (W) ⟺ S-lattice without C-cycle. The hard direction (4)⟹(3) is the crux of Nation's theorem: prove no S-lattice has a C-cycle.">4-fold equivalence (Lemma 5.35)</span>
+      <span class="topic" data-tooltip="Theorem 5.55 (Nation 1982, Trans. AMS 269): a finite lattice is a sublattice of a free lattice iff it is semidistributive AND satisfies Whitman's condition (W). Conjectured by Jónsson in unpublished 1960s notes; proved 15 years later via the B-type sequence machinery and 18 pages of dense case analysis.">Nation's theorem (5.55)</span>
+      <span class="topic" data-tooltip="The B-type sequence framework (Lemma 5.41) is the technical innovation that broke through Jónsson's 1960s impasse. Captures the structural content of consecutive B's WITHOUT requiring cycle-adjacency, allowing sub-sequence manipulation in the case analysis. Decouples local from global cycle structure.">B-type sequences (Lemma 5.41)</span>
+      <span class="topic" data-tooltip="Theorem 5.58 (Antonius-Rival): a finite lattice is a sublattice of FL iff it contains no copies of L_1, …, L_8 (Figure 5.8). The combinatorial form of Nation's theorem — 8 explicit forbidden sublattices = universal obstructions to free-lattice embedding. Polynomial-time check.">8 forbidden sublattices (Theorem 5.58)</span>
+      <span class="topic" data-tooltip="Theorem 5.61: a primitive lattice (= finite SI projective lattice) is characterized by 3 equivalent conditions. Examples 5.62-5.65: the catalog — 4 starter primitives A_1-A_4, 6 infinite families B_n, C_n, D_n, E_n, F_n, G_n, and 5 constructions R, P, P^*, Q, Q^*. Ježek-Slavík 1989: the catalog is complete.">primitive lattices (Theorem 5.61, §5)</span>
+      <span class="topic" data-tooltip="Theorem 5.59: a meet-SD lattice without infinite chains is finite, with at most 2^n elements when of length n. Example 5.60: f_n = max cardinality of a sublattice of FL of length n. Lower bound √(2^n) via parallel sum, upper bound 2^n; exact growth rate open.">finite-or-bounded (Theorem 5.59)</span>
+      <span class="topic" data-tooltip="Reinhold's *-distributivity: ⋁(a * B) = a ∧ ⋁B for any subset B with existing ⋁B, where a * ⟨b_1, …, b_n⟩ = a ∧ (b_n ∨ (a ∧ (b_{n-1} ∨ …))). Theorem 5.66: D^d(L) = L + dual min-cover-refinement implies *-distributive. Corollary 5.67: free lattices are *-distributive (and dually). Strengthening of upper continuity.">*-distributivity (Theorem 5.66)</span>
+      <span class="topic" data-tooltip="Table 5.1 (book p. 134): the 13×5 cross-property summary. Rows: 13 structural properties (W, D(L)=L, SD∨, min-cover refinement, continuous, finitely separable, countable CC, small dim, κ existence, *-distributive, staircase distributive, weakly atomic, prime gen. set). Columns: 5 lattice classes (FL(X), FL(P), finitely-presented, projective, sublattice of FL). The chapter's pedagogical payoff.">Table 5.1 — property summary</span>
+    </div>
+    <span class="ch-link">Read Chapter V →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch06.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch6">
+    <div class="row1">
+      <span class="ch-num">Chapter VI</span>
+      <span class="ch-meta">~110–135 min · book pp. 135–149 · 3 sections · 33 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Totally Atomic Elements</h3>
+    <p class="tag">The first chapter of Part II — fine structure of $\mathbf{FL}(X)$. <strong>Totally atomic</strong> = both lower atomic AND upper atomic. The chapter proves $\mathbf{FL}(X)$ contains only finitely many totally atomic elements (Corollary 6.11) — explicit count via Stirling numbers: 17 in $\mathbf{FL}(3)$, 94 in $\mathbf{FL}(4)$, 667 in $\mathbf{FL}(5)$, 125,499,820 in $\mathbf{FL}(10)$. Plus the canonical-form formula for $\kappa(w)$ when $w$ is totally atomic, and the structural role of totally atomic elements as universal cover-witnesses.</p>
+    <p class="desc">Three sections, 33 numbered results. <strong>(§1) Characterization.</strong> Theorem 6.1: 4-fold equivalence — $w$ is totally atomic iff every subelement is totally atomic iff $\mathbf{L}^\vee(w)$ AND $\mathbf{L}^\wedge(w)$ are both SD iff $w$ is $0$, $1$, or has the strict canonical-form alternation pattern. The σ/μ endomorphisms: $\sigma_x(w) = x \vee w$, $\mu_x(w) = x \wedge w$. The set $G$: smallest containing $X$ closed under $\sigma_x, \mu_x$ for fresh $x$. Theorem 6.10: $G$ = totally atomic elements. Corollary 6.11: explicit Stirling-number count formula. Corollary 6.12: automorphism action on canonical meetands; consequence $\kappa(w) = w_*$ if $w_i \le \kappa(w)$. <strong>(§2) Canonical form of κ for totally atomic.</strong> The φ_t / B_t / A_ti / E recursive scheme. Lemmas 6.13–6.20: technical lemmas establishing $\overline{\kappa}(w) = \kappa(w)$ and $\overline{\kappa}(w)$ in canonical form. Theorem 6.21: explicit canonical-form formula. Examples 6.22, 6.23: hand-computed and 10-generator examples. <strong>(§3) The role of totally atomic.</strong> Theorem 6.24: every cover-witness in $\mathbf{FL}(X)$ is totally atomic. Lemma 6.25, Theorem 6.26: when does $\kappa(w)$ have a lower cover. Theorem 6.27: $\kappa(w)^* = w \vee \kappa(w)$ is NOT completely meet irreducible. Corollary 6.28, Lemma 6.29: structural constraints on intervals around κ-images. Theorem 6.30: if $\kappa(w)$ is not totally atomic, the interval $\kappa(w)/w_*$ contains no completely-join-irreducible. Theorem 6.31: the technical "no v exists" theorem (used in Chapter VIII). Corollary 6.33: simplest concrete case.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="An element a is totally atomic if it is BOTH lower atomic AND upper atomic. Equivalently (Theorem 6.1): every subelement is totally atomic, OR L^∨(w) and L^∧(w) are both SD, OR w is 0, 1, completely-join-irreducible with completely-meet-irreducible canonical meetands, or dually completely-meet-irreducible with completely-join-irreducible canonical joinands.">totally atomic (Theorem 6.1)</span>
+      <span class="topic" data-tooltip="Theorem 6.10: an element is totally atomic iff it belongs to G — the smallest subset of FL(X) containing X and closed under σ_x, μ_x for fresh x. The σ/μ endomorphisms σ_x(w) = x ∨ w, μ_x(w) = x ∧ w. Freshness condition: x must not occur in the canonical representation of w.">G construction (Theorem 6.10)</span>
+      <span class="topic" data-tooltip="Corollary 6.11: FL(X) contains only finitely many totally atomic elements. The number is n + 2[Σ_m C(n,m) Σ_s C(m,s) Σ_k k! S(m-s, k)] where S(r,k) is Stirling 2nd kind. Concrete values: 17 in FL(3), 94 in FL(4), 667 in FL(5), 125,499,820 in FL(10). Polynomial-time enumeration.">Stirling-number count (Corollary 6.11)</span>
+      <span class="topic" data-tooltip="Theorem 6.21: explicit canonical form for κ(w) when w is a totally atomic element. Three cases by canonical-form structure: (a) n=0 case; (b) n=k_1=1 special case; (c) general case via φ_t / B_t / A_ti / E recursive scheme. Used to compute the precise canonical form of cover-witnesses' κ-images.">canonical κ-formula (Theorem 6.21)</span>
+      <span class="topic" data-tooltip="Theorem 6.24: every cover-witness in FL(X) is totally atomic. Specifically: if w is completely meet irreducible and a is a lower cover of w, the unique canonical joinand w_1 of w with w_1 ⊄ a is totally atomic. Combined with Corollary 6.11's finiteness, this is the chapter's central structural payoff.">cover-witnesses are totally atomic (Theorem 6.24)</span>
+      <span class="topic" data-tooltip="Theorem 6.27: for w join irreducible totally atomic, the upper cover κ(w)* = w ∨ κ(w) is NOT completely meet irreducible. Used in Chapter VII to bound cover-chain lengths to ≤ 5 (most ≤ 3). The structural inequality preventing infinite extension of cover chains in FL(X).">κ(w)* not completely meet irreducible (Theorem 6.27)</span>
+      <span class="topic" data-tooltip="Theorem 6.30: if w is completely join irreducible and κ(w) is NOT totally atomic, then the interval κ(w)/w_* contains no completely-join-irreducible element. Hence some intervals in FL(X) contain NO completely-join-irreducibles — a structural constraint absent from naive intuition.">interval constraint (Theorem 6.30)</span>
+      <span class="topic" data-tooltip="Theorem 6.31: a technical 'no v exists' theorem used in Chapter VIII for semisingular elements. For completely meet irreducible q with q* ≻ q ≻ p and κ^d(q) ≤ κ(q_1), no completely meet irreducible v satisfies v ≤ q* ∧ κ(q_1) AND v ⊄ p ∨ κ^d(q). Proof by minimal counter-example with case analysis on Theorem 6.26's structure.">'no v' theorem (Theorem 6.31)</span>
+      <span class="topic" data-tooltip="The σ_x and μ_x are endomorphisms of FL(X) defined by σ_x(y) = y ∨ x and μ_x(y) = y ∧ x for all generators y. Used in the G construction. The 'fresh generator' condition makes them PRESERVE total atomicity while strictly extending canonical-form length.">σ_x, μ_x endomorphisms</span>
+      <span class="topic" data-tooltip="Example 6.2: the 17 totally atomic elements of FL(3). Generators (3): x, y, z. Meets of generators (4): x∧y, x∧z, y∧z, x∧y∧z. Joins (4): x∨y, x∨z, y∨z, x∨y∨z. σ_z(x∧y) and orbit (3): (x∨z)∧(y∨z), etc. μ_z(x∨y) and orbit (3): (x∧z)∨(y∧z), etc. Total: 3+4+4+3+3 = 17.">17 totally atomic in FL(3)</span>
+      <span class="topic" data-tooltip="Example 6.2 + Corollary 6.11 at n=4: FL(4) contains 94 totally atomic elements. The new join-irreducible totally atomic elements include x∧y∧z∧u, (x∨z∨u)∧(y∨z∨u), (x∨u)∧(y∨u)∧(z∨u), and ((x∧u)∨(z∧u))∧((y∧u)∨(z∧u)). Plus their automorphism orbits and dual meet-reducible versions.">94 totally atomic in FL(4)</span>
+    </div>
+    <span class="ch-link">Read Chapter VI →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch07.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch7">
+    <div class="row1">
+      <span class="ch-num">Chapter VII</span>
+      <span class="ch-meta">~135–165 min · book pp. 151–169 · 4 sections · 33 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Finite Intervals and Connected Components</h3>
+    <p class="tag">A complete combinatorial picture of $\mathbf{FL}(X)$'s local structure. <strong>Theorem 7.2</strong>: cover chains have at most 5 elements (FL(3)) or 4 elements (FL(n) for n≥4); at most 3 not at top/bottom. <strong>Theorem 7.5</strong>: only 6 finite-lattice forms appear as intervals. <strong>Theorem 7.10</strong>: every 3-element interval has a specific construction. <strong>Theorem 7.32</strong>: connected components classify into 4 types — Boolean, connected-component-of-0/1, $\overline{\mathbf{N}}_5(k)$, $\mathbf{C}(m, k)$.</p>
+    <p class="desc">Four sections, 33 named results. <strong>(§1) Chains of covers.</strong> Lemma 7.1 (canonical-joinand-of-meetand structure). Theorem 7.2: each chain of at least 3 covers in $\mathbf{FL}(X)$ is a subchain of the explicit chains (1) (in $|X| \ge 4$) or (2) (in $|X| = 3$) at the bottom of $\mathbf{FL}(X)$, or their duals at the top. Maximum chain length: 5 elements in FL(3), 4 elements in FL(n≥4); 3 elements outside the connected components of 0 and 1. Proof via Theorems 6.24, 6.25 (totally-atomic structure forces the chain into the connected components of 0 or 1). <strong>(§2) Finite intervals.</strong> Theorem 7.3: any element of $\mathbf{FL}(X)$ other than $1$ has at most one meet-irreducible lower cover. Theorem 7.4: a finite interval not in the connected component of 0 or 1 has at most 3 elements. <strong>Theorem 7.5: the 6-form classification</strong> (Figure 7.3): the 11-element bottom of FL(3), a 7-element variant, two 4-element forms, the 3-element chain, the 2-element chain — plus duals. Theorem 7.6: structural test for whether an interval $w/u$ is exactly $\{u, v, w\}$ vs an extended interval. Corollary 7.7. <strong>(§3) Three-element intervals.</strong> Lemma 7.8. Theorem 7.9: constructive recipe — given a meet-irreducible totally atomic $q = q_1 \vee \cdots \vee q_m$ canonically and completely-join-irreducibles $p_1, \ldots, p_k$ satisfying 3 conditions, the element $w = q \wedge (\kappa^d(q) \vee p_1 \vee \cdots \vee p_k)$ is the middle of a 3-element interval. Theorem 7.10: every 3-element interval arises this way. Examples 7.11–7.13: explicit infinite families (the $a_i, b_i$ slim-element constructions). Corollary 7.14: $\mathbf{FL}(X)$ has infinitely many 3-element intervals. <strong>(§4) Connected components.</strong> The labeled-ordered-set framework: each cover-pair labeled 0 (non-cover in $\mathbf{FL}(X)$) or 1 (cover). The labeled pentagon $\overline{\mathbf{N}}_5$ — pentagon with atom-to-coatom edge labeled 0. $\overline{\mathbf{N}}_5(k)$ — k pentagons identified at common bottom + middle. $\mathbf{C}(m, k)$ — $m$ chains of length 2 + $k$ chains of length 1, top-identified, all labels 1. Examples 7.15–7.21. Lemmas 7.22–7.31 (technical). <strong>Theorem 7.32: connected components are exactly</strong> (1) 4-element Boolean (FL(2)), (2) connected-component-of-0/1 in FL(X), (3) $\overline{\mathbf{N}}_5(k)$, or (4) $\mathbf{C}(m, k)$ with $\langle m, k\rangle \neq \langle 1, 0\rangle, \langle 2, 0\rangle$. Corollary 7.33: totally-atomic-element components are $\overline{\mathbf{N}}_5(k)$ or duals.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 7.2: each chain of 3 covers in FL(X) is a subchain of the explicit chains in the connected components of 0 or 1. Maximum chain length: 5 elements in FL(3), 4 elements in FL(n≥4); 3 elements outside the connected components of 0 and 1. Proof uses Chapter VI Theorems 6.24, 6.25 to force totally-atomic structure on cover-witnesses.">cover-chain bound (Theorem 7.2)</span>
+      <span class="topic" data-tooltip="Theorem 7.3: any element of FL(X) other than 1 has at most one meet-irreducible lower cover. The proof uses Theorem 3.5(2), Theorem 3.34, and Theorem 6.24 to show that two meet-irreducible lower covers force the situation w = 1.">unique meet-irreducible lower cover (Theorem 7.3)</span>
+      <span class="topic" data-tooltip="Theorem 7.5: only 6 finite-lattice forms appear as intervals in FL(X) (Figure 7.3). The 11-element bottom of FL(3), a 7-element variant, two 4-element forms, the 3-element chain, the 2-element chain — plus duals. The 11-element form occurs ONLY at the very bottom of FL(3); the 4-element forms only as subintervals of specific connected components.">6 finite-interval forms (Theorem 7.5)</span>
+      <span class="topic" data-tooltip="Theorem 7.6: a structural characterization of when an interval w/u with u ≺ v ≺ w is exactly {u, v, w} (a 3-element chain) vs. when it's an extended interval. The dichotomy: either w/u = {u, v, w}, OR there exist r, s with u ≺ r ≤ s ≺ w making w/u the disjoint union {u, v, w} ∪ (s/r), with s/r infinite unless v is an atom or coatom.">3-element-interval test (Theorem 7.6)</span>
+      <span class="topic" data-tooltip="Theorem 7.9: constructive recipe — given a meet-irreducible totally atomic q = q_1 ∨ ⋯ ∨ q_m canonically and completely-join-irreducibles p_1, ..., p_k satisfying 3 conditions, the element w = q ∧ (κ^d(q) ∨ p_1 ∨ ⋯ ∨ p_k) is the middle of a 3-element interval κ^d(q) ∨ p_1 ∨ ⋯ ∨ p_k / w_*.">3-element-interval construction (Theorem 7.9)</span>
+      <span class="topic" data-tooltip="Theorem 7.10: every 3-element interval w_* ≺ w ≺ u in FL(X) arises from Theorem 7.9's recipe. Specifically: q is the canonical meetand of w not above u, p_1, ..., p_k are the canonical joinands of u below w, q is totally atomic, the p_i are completely join irreducible, conditions (1)-(3) of Theorem 7.9 are satisfied.">3-element-interval classification (Theorem 7.10)</span>
+      <span class="topic" data-tooltip="Corollary 7.14: FL(X) has infinitely many 3-element intervals for any finite X with |X| ≥ 3. Examples 7.12, 7.13 give explicit infinite families using slim elements (recall Example 3.40 from Chapter III). The structural fact: short intervals (3-element) are abundant, but long chains (≥4 covers) are confined to top/bottom.">infinite 3-element intervals (Corollary 7.14)</span>
+      <span class="topic" data-tooltip="A labeled ordered set is a poset where each cover-pair has a label 0 or 1: label 1 = cover in FL(X), label 0 = induced-order cover but not a cover in FL(X) (drawn dotted). An interpretation in FL(X) is an order isomorphism onto a connected component preserving the cover-vs-non-cover distinction. The framework distinguishes N_5 (all-1) from N̄_5 (atom-to-coatom labeled 0).">labeled ordered sets framework</span>
+      <span class="topic" data-tooltip="N̄_5 is the labeled pentagon — covers labeled 1 except the atom-to-coatom edge (label 0). N̄_5(k) is k copies of N̄_5 identified at all bottom and middle elements. The connected component of a generator x in FL(X) is N̄_5(1); larger N̄_5(k) arise from elements with k canonical meetands.">N̄_5(k) labeled pentagon clusters</span>
+      <span class="topic" data-tooltip="C(m, k) is m chains of length 2 plus k chains of length 1, with their greatest elements identified, all labels 1. C(m, 0): the connected component of the join of m atoms in FL(X). The chain bouquet pattern represents 'fork on union' connectivity in lattice terms.">C(m, k) chain bouquet</span>
+      <span class="topic" data-tooltip="Theorem 7.32: connected components of the covering relation in FL(X) classify into exactly 4 types (up to duality): (1) the 4-element Boolean lattice (only in FL(2)), (2) the connected component of 0 in FL(X) for |X| ≥ 3 (Examples 3.44, 3.45), (3) N̄_5(k) for some k ≥ 1, (4) C(m, k) for ⟨m, k⟩ ≠ ⟨1, 0⟩, ⟨2, 0⟩. Together with their duals.">4-form connected-component classification (Theorem 7.32)</span>
+      <span class="topic" data-tooltip="Corollary 7.33: the connected component of a totally atomic element q NOT in the connected component of 0 or 1 is always N̄_5(k) (if q is completely join irreducible with k canonical meetands) or its dual (if q is completely meet irreducible with k canonical joinands). Combines Theorem 7.32 with Chapter VI's totally-atomic structure.">totally-atomic components (Corollary 7.33)</span>
+    </div>
+    <span class="ch-link">Read Chapter VII →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch08.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch8">
+    <div class="row1">
+      <span class="ch-num">Chapter VIII</span>
+      <span class="ch-meta">~50–65 min · book pp. 171–178 · 2 sections · 7 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Singular and Semisingular Elements</h3>
+    <p class="tag">Specialised classes of completely-join-irreducible elements. <strong>Singular</strong>: $\kappa(w) = w_*$ (κ-image is the lower cover); the cover $w_* \prec w$ is then a "singular cover". <strong>Semisingular</strong>: $\kappa(w) \le w_i$ for some canonical meetand. <strong>Theorem 8.1</strong>: $w$ semisingular ⟺ $w$ singular OR $w$ is middle of a 3-element interval. <strong>Theorem 8.6</strong> (Freese-Ježek-Nation-Slavík 1986): singular elements live ONLY at the very top and bottom of $\mathbf{FL}(X)$ — retroactively justifies Theorem 7.2's footnote.</p>
+    <p class="desc">Two sections + bridge to Chapter IX, 7 named results. <strong>(§1) Semisingular Elements.</strong> Notational conventions: $w_{i1}$ for the unique canonical joinand of $w_i$ not below $w_*$. Theorem 8.1: 2-fold characterization (singular OR 3-element-interval-middle). Lemma 8.2 (structural inequality on κ): $w_{i1*} \le \kappa(w) \prec \kappa(w)^* \le \kappa(w_{i1})$. Lemma 8.3: $v \vee w_{11} = w_1$, $\{w_{1j} : j > 1\} \ll \{v_1, v_2, \ldots\}$. The 4-case proof: case i (works), cases ii and iii (don't occur — forbidden by Theorem 6.31), case iv (reduces to case i via inductive substitution). Corollary 8.4: structural location of semisingular ($w$ middle OR $w$ top of 3-element interval). Corollary 8.5 (the "useful test"): for completely-join-irreducible $w$ with $\kappa(w) \neq w_*$, if $u \wedge \kappa(w) = w_*$, then $u \in \{w_*, w\}$ or $u \succ w$; moreover, if $u \succ w$ then $w$ is semisingular. <strong>(§2) Singular Elements.</strong> Theorem 8.6: every singular element has $\kappa(w) = w_*$ being either the meet of two coatoms (so $w$ in the connected component of 1) or the join of two atoms (so $w$ in the connected component of 0). Proof uses Theorem 7.2's chain-bound + Theorem 6.31 + Lemma 7.1's "wide span" condition. <strong>(§3) Bridge.</strong> Corollary 8.7: no interval of $\mathbf{FL}(X)$ is isomorphic to an infinite chain. Proof uses Day's theorem + Theorem 7.2 + Theorem 8.6 + Corollary 8.5. The first foreshadowing of Chapter IX's Tschantz theorem — every infinite interval contains a copy of $\mathbf{FL}(\omega)$.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="A completely-join-irreducible element w is singular if κ(w) = w_* — the κ-image IS the lower cover. The cover w_* ≺ w is then a 'singular cover': the top is a meet (w completely-join-irreducible has the structure of a meet via canonical form), the bottom is a join (w_* = κ(w) completely-meet-irreducible). Example: in FL(3), the meet of two coatoms is a singular element.">singular element + singular cover</span>
+      <span class="topic" data-tooltip="A completely-join-irreducible element w is semisingular if κ(w) ≤ w_i for SOME canonical meetand w_i (renumbered to w_1 by convention). Every singular element is semisingular (since κ(w) = w_* ≤ w_i for ALL i). Theorem 8.1 characterizes semisingular as singular OR middle-of-3-element-interval — a 2-fold dichotomy.">semisingular element</span>
+      <span class="topic" data-tooltip="Theorem 8.1: a completely-join-irreducible w is semisingular iff w is singular (κ(w) = w_*) OR w is the middle element of a 3-element interval. The proof is a 4-case analysis using Theorem 6.31; cases ii and iii are 'phantom' cases that don't occur, case iv reduces inductively to case i. Forward direction is easy; the converse is the hard direction.">2-fold dichotomy (Theorem 8.1)</span>
+      <span class="topic" data-tooltip="Theorem 6.31's 'no v exists' theorem (Chapter VI) finds its semantic motivation here. Cases ii and iii of Theorem 8.1's proof use Theorem 6.31 to derive contradictions, ruling out specific canonical-form configurations. Theorem 6.31 was framed in Chapter VI without semantic motivation; it was custom-made for Theorem 8.1's case analysis.">Theorem 6.31's semantic motivation</span>
+      <span class="topic" data-tooltip="Corollary 8.4: every semisingular w is either the middle element of a 3-element interval, OR w_* = κ(w) and w is the top of a 3-element interval. A clean structural location result; consequence of Theorem 8.1's case analysis showing only cases i and iv can actually occur.">structural location (Corollary 8.4)</span>
+      <span class="topic" data-tooltip="Corollary 8.5 (the 'useful test'): for completely-join-irreducible w with κ(w) ≠ w_* (so w is NOT singular), if u is an element such that u ∧ κ(w) = w_*, then either u = w_*, u = w, or u ≻ w. Moreover, if u ≻ w then w is semisingular. Used dozens of times in Chapter IX's Tschantz proof.">'useful test' (Corollary 8.5)</span>
+      <span class="topic" data-tooltip="Theorem 8.6 (Freese-Ježek-Nation-Slavík 1986, Order 3, 39-46): every singular element w in FL(X) has κ(w) = w_* being either the meet of two coatoms (so w in the connected component of 1) or the join of two atoms (so w in the connected component of 0). Singular elements live ONLY at the very top and bottom of FL(X). Proof retroactively justifies Theorem 7.2's footnote.">Theorem 8.6 — singular elements at top/bottom</span>
+      <span class="topic" data-tooltip="Singular covers — covers a ≻ b where a is join-irreducible and b is meet-irreducible — were first studied in Freese-Ježek-Nation-Slavík 1986 ('Singular covers in free lattices', Order 3, 39-46). The paper introduced the term and proved the structural location result (Theorem 8.6). The monograph's proof is cleaner via Chapter VI's totally-atomic-element machinery.">FN-J-S 1986 reference</span>
+      <span class="topic" data-tooltip="Theorem 8.6 + Theorem 7.2 form a circular-dependency pair. Theorem 7.2's proof needs to know singular elements are confined to top/bottom (which would make Theorem 8.6 needed). The monograph organizes the proofs so Theorem 7.2 is proved WITHOUT explicit citation of Theorem 8.6, then Theorem 8.6 follows USING Theorem 7.2. Chapter VIII §2 is the 'completion' that closes the circular dependency in a one-way order.">retroactive justification of Theorem 7.2</span>
+      <span class="topic" data-tooltip="Corollary 8.7: no interval of FL(X) is isomorphic to an infinite chain. The first foreshadowing of Chapter IX's Tschantz theorem (every infinite interval contains a copy of FL(ω)). The proof uses Day's theorem + the chain-bound + Theorem 8.6 + Corollary 8.5 in a few paragraphs. 'Too easy not to include' as Chapter VIII's bridge to Chapter IX.">Corollary 8.7 — bridge to Tschantz</span>
+      <span class="topic" data-tooltip="The 4-case proof of Theorem 8.1 has a striking structural pattern: only 2 of the 4 cases actually occur (cases i and iv). Cases ii and iii are 'phantoms' — would correspond to specific canonical-form configurations forbidden by Theorem 6.31. The 'phantom case' pattern is repeated structurally throughout the chapter and is the basis for the 2-fold dichotomy in Theorem 8.1.">phantom-case pattern</span>
+    </div>
+    <span class="ch-link">Read Chapter VIII →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch09.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch9">
+    <div class="row1">
+      <span class="ch-num">Chapter IX</span>
+      <span class="ch-meta">~120–150 min · book pp. 179–187 · 3 sections · 15 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Tschantz's Theorem and Maximal Chains</h3>
+    <p class="tag">The structural payoff of Part II. <strong>Theorem 9.10 (Tschantz 1990)</strong>: every infinite interval $u/v$ in $\mathbf{FL}(X)$ contains a sublattice isomorphic to $\mathbf{FL}(\omega)$. Generalises Whitman's $\mathbf{FL}(\omega) \hookrightarrow \mathbf{FL}(3)$ from a specific embedding to ALL infinite intervals. <strong>Theorem 9.12</strong>: every infinite interval contains a coverless element. <strong>Theorem 9.15</strong>: if $c/d$ is neither atomic nor dually atomic, there's a maximal chain in $c/d$ with NO covers — surprising in light of Day's Theorem.</p>
+    <p class="desc">Three sections, 15 named results. <strong>(§1) Tschantz's Theorem.</strong> The $\mathbf{Q}(u, v)$ framework: $\mathbf{Q}(u, v) = \{q$ completely-join-irreducible : $q \le u, v \le \kappa(q)\}$. Theorem 9.1: $u \not\le v$ iff $\mathbf{Q}(u, v)$ nonempty (Day's theorem reformulation). Lemma 9.2 (κ-injectivity), Lemma 9.3 ($\mathbf{Q}(u, v) = \{q\}$ characterization). The $K$-set: $\{q$ completely-join-irreducible : $q$ or $\kappa(q)$ totally atomic$\}$ — finite by Corollary 6.11. Lemma 9.4 (branching from $\mathbf{Q}(u, v) \cap K = \emptyset$). Theorem 9.5 ($\mathbf{Q}(u, v) \cap K = \emptyset$ + $|\mathbf{Q}(u, v)| > 1$ ⟹ $\mathbf{Q}(u, v)$ infinite). Lemma 9.6 + Corollary 9.7 (avoiding $K$). <strong>Theorem 9.8</strong> (κ-incomparable pair — the critical step using Theorem 8.6 + Corollary 8.5). Theorem 9.9 (infinite κ-incomparable sequence). <strong>Theorem 9.10 (Tschantz)</strong>: every infinite interval contains $\mathbf{FL}(\omega)$. Corollary 9.11: extension to $\mathbf{FL}(Y)$ for $|Y| \le |X| + \omega$. <strong>(§2) Coverless Elements.</strong> Theorem 9.12: every infinite interval contains a coverless element. Lemmas 9.13 (embedding-preservation of canonical joinands), 9.14 (joinand structure preserves complete-join-irreducibility). The witness: $w = ((x_0 \vee x_1) \wedge [(x_2 \wedge x_3) \vee (x_4 \wedge x_5)]) \vee (x_6 \wedge [(x_7 \wedge x_8) \vee (x_9 \wedge x_{10})])$ — 11 generators encode coverlessness uniformly. <strong>(§3) Maximal Chains.</strong> Theorem 9.15: dense maximal chain construction. If $c > d$ in $\mathbf{FL}(X)$ and $c/d$ is neither atomic nor dually atomic, there's a maximal chain in $c/d$ such that every element other than the endpoints is coverless. Construction is incremental, using Theorem 9.12 to insert coverless elements at each cover-breaking step. Continuity (Theorem 1.22) handles the limit case.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Q(u, v) = {q ∈ FL(X) : q completely-join-irreducible, q ≤ u, v ≤ κ(q)}. The chapter's central technical object. By Theorem 9.1 (Day's theorem reformulation), Q(u, v) ≠ ∅ iff u ⊄ v. Monotonicity: Q(u', v') ⊆ Q(u, v) when u' ≤ u and v' ≥ v.">Q(u, v) framework</span>
+      <span class="topic" data-tooltip="K = {q : q completely-join-irreducible AND (q OR κ(q) totally atomic)}. The 'obstruction set' — finite by Corollary 6.11. The pattern Q(u, v) ∩ K = ∅ is the cleanness condition for infinite witness sets to exist.">K — obstruction set</span>
+      <span class="topic" data-tooltip="Theorem 9.5: Q(u, v) ∩ K = ∅ AND |Q(u, v)| > 1 implies Q(u, v) is infinite. Proved via Lemma 9.4's branching argument: from any q ∈ Q(u, v), construct two new witnesses in either Q(u ∧ κ(q), v) or Q(u, v ∨ q). Iterating yields infinitely many.">infinitude theorem (Theorem 9.5)</span>
+      <span class="topic" data-tooltip="Theorem 9.8: in an infinite Q(u, v), there exist q, q' such that q ≤ κ(q') AND q' ≤ κ(q) — a 'κ-incomparable pair'. The CRITICAL step in Tschantz's proof. Uses Theorem 8.6 (singular elements at top/bottom) + Corollary 8.5 (the 'useful test') to forbid the alternative configurations.">κ-incomparable pair (Theorem 9.8)</span>
+      <span class="topic" data-tooltip="Theorem 9.9: in an infinite Q(u, v), there's an infinite sequence q_1, q_2, ... such that q_i ≤ κ(q_j) for all i ≠ j. The sequence is constructed by iterated application of Theorem 9.8 with shrinking intervals.">infinite κ-incomparable sequence (Theorem 9.9)</span>
+      <span class="topic" data-tooltip="Theorem 9.10 (Tschantz 1990, Order 6, 367-388): every infinite interval u/v in FL(X) contains a sublattice isomorphic to FL(ω). The structural payoff: 6 elements from the κ-incomparable sequence form 3 generators of an FL(3) embedding, and Whitman's FL(ω) ↪ FL(3) (Theorem 1.28) extends to FL(ω).">TSCHANTZ'S THEOREM (Theorem 9.10)</span>
+      <span class="topic" data-tooltip="Corollary 9.11: every infinite interval u/v contains FL(Y) for |Y| ≤ |X| + ω. Generalisation of Theorem 9.10 to LARGER free sublattices. Strategy: for X infinite, the sublattice generated by {(x ∧ u) ∨ v : x ∈ X − var(u) − var(v)} is FL(S) with |S| = |X|.">larger Y (Corollary 9.11)</span>
+      <span class="topic" data-tooltip="Theorem 9.12: every infinite interval of FL(X) contains a coverless element (no upper AND no lower cover). Complement to Day's Theorem (every interval has covers). The witness w with 11 generators encodes coverlessness uniformly under any lattice embedding.">coverless witness (Theorem 9.12)</span>
+      <span class="topic" data-tooltip="Lemmas 9.13 (canonical-joinand preservation under embedding) + 9.14 (joinand structure preserves complete-join-irreducibility). The structural support for Theorem 9.12's construction. Show that a 'coverless template' w in FL(ω) maps to a coverless element in FL(X) under any lattice embedding.">embedding-preservation lemmas (9.13, 9.14)</span>
+      <span class="topic" data-tooltip="Theorem 9.15: c > d in FL(X) with c/d neither atomic nor dually atomic ⟹ there's a maximal chain in c/d with NO covers — every element except c, d is coverless. The construction is incremental: enumerate covers, insert coverless elements at each cover-breaking step.">dense maximal chains (Theorem 9.15)</span>
+      <span class="topic" data-tooltip="The Day-FN-Tschantz arc: Day 1979 (covers exist, Theorem 2.84), Freese-Nation 1985 (rank-bounded weak atomicity, Theorem 4.1), Tschantz 1990 (FL(ω) embeds in every infinite interval, Theorem 9.10), Theorem 9.12 (coverless elements abundantly), Theorem 9.15 (covers can be systematically avoided). The structural maturation from 'exists' to 'rich' to 'flexible'.">Day-FN-Tschantz arc</span>
+      <span class="topic" data-tooltip="Tschantz's proof was originally substantially longer (Order 6, 367-388, 1990). The monograph reduces it considerably using Chapter VIII's Corollary 8.5 (the 'useful test'). The simplification is: Chapter VIII's specialised tools forbid exactly the configurations that would prevent the κ-incomparable pair from existing.">Chapter VIII simplification</span>
+    </div>
+    <span class="ch-link">Read Chapter IX →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch10.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch10">
+    <div class="row1">
+      <span class="ch-num">Chapter X</span>
+      <span class="ch-meta">~140–170 min · book pp. 189–204 · 3 sections · 26 named results <span class="status">Available</span></span>
+    </div>
+    <h3>Infinite Intervals</h3>
+    <p class="tag">Three structural questions about $\mathbf{FL}(X)$'s infinite-region geometry. <strong>Theorem 10.1</strong>: there is no Tschantz triple — confirming Tschantz's 1990 conjecture. <strong>Theorem 10.20</strong>: only 3 types of join-irreducibles fail to be canonical joinands of others ($0$, meets of 2 coatoms, unique covers of joins of 2 atoms). <strong>Theorem 10.21</strong>: classification of all $\mathbf{FL}(X) = Y \cup (1/a) \cup (b/0)$ decompositions. Plus the κ(a) = a^∂ self-duality phenomenon, middle/upper/lower-element framework (Theorems 10.24, 10.26), and 5 open problems.</p>
+    <p class="desc">Three sections, 26 named results. <strong>(§1) Tschantz Triples.</strong> Definition: Tschantz triple is $a < c < b$ with $c/a, b/c$ both infinite AND $c$ comparable with every element of $b/a$. Theorem 10.1: no such triple exists. The proof spans Lemmas 10.2–10.16 (~9 pages of dense case analysis): Lemma 10.2 (Tschantz triple ⟹ coverless central element); Lemma 10.3 (structural inequality on meet-reducible elements); Lemma 10.4 (trichotomy via subelements); Lemmas 10.5-10.9 (canonical joinands of $c_1$ below $c$, narrowing to a UNIQUE one); Lemmas 10.10-10.14 (case analysis on $\kappa(t)$ vs $c_1$); Lemmas 10.15-10.16 (finalising the contradiction). Open Problems 10.17 (quadruple version), 10.18 (meet-reducible Tschantz-style elements). <strong>(§2) Join Irreducible Elements that are not Canonical Joinands.</strong> Lemma 10.19 (meet-reducible with finite $a_i/a$ in connected component of 1). Theorem 10.20: only 3 types of non-canonical-joinand join-irreducibles in $\mathbf{FL}(X)$. Proof uses Theorem 10.1 critically. <strong>(§3) Splittings of a Free Lattice.</strong> Decomposition (1): $\mathbf{FL}(X) = X \cup (1/a) \cup (b/0)$ where $a = \bigwedge x^*, b = \bigvee x_*$. Theorem 10.21: classification of all $\mathbf{FL}(X) = Y \cup (1/a) \cup (b/0)$ decompositions for $Y \subseteq X$. The κ(a) = a^∂ self-duality: $a$ from (1) satisfies this; 4 additional examples in $\mathbf{FL}(\{x, y, z\})$ found via LISP program. Open Problems 10.22 (which $a$ satisfy κ(a) = a^∂?), 10.23 (uniqueness of $a$ from (1)). Middle/upper/lower-element framework. Theorem 10.24: minimal middle elements ⟺ completely-join-irreducible $a$ with $\kappa(a) = a^\partial$. Open Problem 10.25 (is every middle element above a minimal one?). Theorem 10.26: no minimal upper elements except generators.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="A Tschantz triple is a, c, b in FL(X) with a < c < b, both intervals c/a and b/c infinite, AND c comparable with every element of b/a. Theorem 10.1: no such triple exists in FL(X), confirming Tschantz's 1990 conjecture. The proof is 'surprisingly difficult' — 9 pages spanning Lemmas 10.2-10.16, using essentially every tool from Chapters I-IX.">no Tschantz triple (Theorem 10.1)</span>
+      <span class="topic" data-tooltip="Theorem 10.1's proof structure: Lemma 10.2 makes the central element coverless. Lemma 10.3 gives the key structural inequality. Lemmas 10.5-10.9 narrow the canonical-joinand structure of c_1 (a canonical meetand of c) to having EXACTLY ONE canonical joinand below c, which is totally atomic. Lemmas 10.10-10.16 case-analyze on κ(t) vs c_1 (where t is that unique joinand) to derive the contradiction.">9-page proof structure</span>
+      <span class="topic" data-tooltip="Theorem 10.20: the only join-irreducibles in FL(X) that are NOT canonical joinands of any other element are: (1) 0, (2) meets of 2 distinct coatoms (e.g., x̄_i ∧ x̄_j), (3) unique covers of joins of 2 distinct atoms (e.g., (x̲_i ∨ x̲_j)*). All other join-irreducibles ARE canonical joinands. Confined to connected components of 0, 1.">3-type non-joinand classification (Theorem 10.20)</span>
+      <span class="topic" data-tooltip="Lemma 10.19: a meet-reducible element a = a_1 ∧ ⋯ ∧ a_k canonically with all intervals a_i/a finite belongs to the connected component of 1. Used in Theorem 10.20's proof to confine the non-canonical-joinand exceptions to the connected components of 0 and 1.">Lemma 10.19 — finite intervals ⟹ component of 1</span>
+      <span class="topic" data-tooltip="The 'new' decomposition (1): FL(X) = X ∪ (1/a) ∪ (b/0) where a = ⋀ x* (meet of upper covers of generators) and b = ⋁ x_* (join of lower covers). Less well-known than the classical Lemma 1.4(4) decomposition. Mutually exclusive partition into generator-set + filter + ideal.">decomposition (1) — X + filter + ideal</span>
+      <span class="topic" data-tooltip="Theorem 10.21: classifies all decompositions FL(X) = Y ∪ (1/a) ∪ (b/0) for Y ⊆ X. Parameters: pairwise disjoint Y, Z_1, Z_2 with X = Y ∪ Z_1 ∪ Z_2 (and if Y empty, both Z_i nonempty). Then a = ⋀Z_1 ∧ ⋀_{x∈Y} x*, b = ⋁Z_2 ∨ ⋁_{x∈Y} x_*. Generalizes both Lemma 1.4(4) and decomposition (1).">classification of splittings (Theorem 10.21)</span>
+      <span class="topic" data-tooltip="The element a from decomposition (1) satisfies the curious property κ(a) = a^∂ — its κ-image equals its anti-automorphism dual. Two distinct duality structures (κ-bijection from Theorem 3.3, anti-automorphism from generator-symmetry) AGREE for this element. Four additional examples a_1, a_2, a_3, a_4 in FL(3) discovered via LISP program.">κ(a) = a^∂ self-duality</span>
+      <span class="topic" data-tooltip="Open Problem 10.22: characterize all completely-join-irreducible elements a with κ(a) = a^∂. Are there infinitely many for fixed X? The chapter's known examples in FL(3): the canonical a from (1) plus four explicitly-listed a_1-a_4 (canonical-form lengths 6, 2, 5, 3 with automorphism orbits 6, 2, 6, 3). Open as of the monograph's 1995 publication.">Problem 10.22 — open question</span>
+      <span class="topic" data-tooltip="Definitions: middle element = incomparable with its dual a^∂; upper element = a ≥ a^∂; lower element = a ≤ a^∂. Middle elements form a convex subset; upper form an order filter; lower form an order ideal. Generators are simultaneously minimal upper AND maximal lower (boundary case under the natural anti-automorphism convention).">middle / upper / lower elements</span>
+      <span class="topic" data-tooltip="Theorem 10.24: minimal middle elements are EXACTLY completely-join-irreducible a with κ(a) = a^∂. Connects the κ(a) = a^∂ phenomenon to the middle-element framework. The minimal-middle-element set is the structural 'edge' between upper and lower regions.">minimal middle ⟺ κ(a) = a^∂ (Theorem 10.24)</span>
+      <span class="topic" data-tooltip="Theorem 10.26: no minimal upper elements in FL(X) except for the generators themselves. Proof uses Theorem 8.6 (singular elements at top/bottom) + Theorem 7.10 (3-element-interval classification). Generator-rigidity: the source cells of the network are structurally rigid as minimal upper elements.">no minimal upper except generators (Theorem 10.26)</span>
+      <span class="topic" data-tooltip="Chapter X ends with 5 open problems: 10.17 (quadruple version of 10.1), 10.18 (meet-reducible Tschantz-style classification), 10.22 (κ(a) = a^∂ classification), 10.23 (uniqueness of canonical a from (1)), 10.25 (is every middle element above a minimal one?). The chapter's research frontier.">5 open problems</span>
+    </div>
+    <span class="ch-link">Read Chapter X →</span>
+  </article>
+</a>
+
+<div class="section-label">Part III — Algorithms</div>
+
+<a href="freelat-companion-ch11.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch11">
+    <div class="row1">
+      <span class="ch-num">Chapter XI</span>
+      <span class="ch-meta">~180–220 min · book pp. 214–262 · 10 sections · 44 named results · 17 algorithms <span class="status">Available</span></span>
+    </div>
+    <h3>Computational Aspects of Lattice Theory</h3>
+    <p class="tag">The algorithmic capstone. Polynomial-time tests for being a lattice ($O(n^{5/2})$), being SD/lower-bounded/splitting ($O(n^2 \log n)$), congruence-lattice ($O(n^2)$); the Skolem-Cosmadakis-Freese polynomial-time word problem for finitely-presented lattices; Whitman's algorithm with memoization; Bogart-Magagnosc $O(n^{5/2})$ chain-partition / antichain-cover; Mirsky's dual; computer-generated lattice diagrams. The chapter is the bridge from theory to <em>implementation</em>.</p>
+    <p class="desc">Ten sections, 44 named results, 17 algorithm listings. <strong>(§1) Preliminaries.</strong> Big-$O$ notation, model-of-computation conventions, Listing 11.1 (binary partition for $\bigvee$/$\bigwedge$ in $O(\log_2 n)$ depth). <strong>(§2) Ordered Sets.</strong> Listing 11.2 (transitive closure), Listing 11.3 (topological sort). <strong>(§3) Finite Lattices.</strong> Theorem 11.4: cover-count bound $e_\prec \le n^{3/2}$ in semilattices. Theorem 11.5: $e_\prec = O(n)$ in SD lattices. Theorem 11.6: $O(n^{5/2})$ test for being a lattice. Theorem 11.8: $O(n^2 \log_2 n)$ test for SD, lower-bounded, splitting. <strong>(§4) Representation and Context.</strong> $J(L)$, $M(L)$, dependency relation $D$, $\mathrm{ucov}(p) / \mathrm{lcov}(m)$, the $J$-$M$ context table. <strong>(§5) Congruence Lattices.</strong> Theorem 11.13: $\mathrm{Con}(L)$ computable in $O(n^2)$. <strong>(§6) Bounded Homomorphisms and Splitting Lattices.</strong> Theorem 11.14: lower-bounded test. Theorem 11.16: splitting-lattice characterization. <strong>(§7) Antichains and Chain Partitions.</strong> Bogart-Magagnosc $O(n^{5/2})$ via Hopcroft-Karp. Mirsky's dual ($O(n^2)$). Dilworth via König-Egerváry. <strong>(§8) Free Lattices.</strong> Listings 11.10 (term-DAG hashing), 11.11 (canonical form via Theorem 2.10), 11.12 (Whitman's algorithm with memoization), 11.13 (canonical-form check). Theorem 11.22: Whitman's algorithm has at most $|s| \cdot |t|$ memoized triples. Theorem 11.23: Whitman's $O(\text{can}(s) + \text{can}(t))$ on canonical inputs. Example 11.24: exponential blowup for $L_2 \le u_2$. <strong>(§9) Finitely Presented Lattices.</strong> Definitions: $\mathbf{FL}(P)$, $\mathbf{FL}_X(R)$, partial lattice. Skolem 1920: word problem in polytime. Cosmadakis 1988: refined to $O(n^4)$. Freese refinement: $O(n^3)$ via Listing 11.17 (canonical form for $\mathbf{FL}(P)$). Theorem 11.34: $\mathbf{FL}(P) \cong \mathbf{FL}(Q)$ iff $P \cong Q$ (after canonization). <strong>(§10) Computer-Generated Lattice Diagrams.</strong> Force-directed embedding, level-by-level layouts, the practical art of drawing Hasse diagrams.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 11.4 (Daskalakis-Karp-Mossel-Riesenfeld 2011, but this is the Freese-Ježek-Nation original): the number of cover relations e_≺ in a finite (meet- or join-) semilattice with n elements is at most n^{3/2}. This is the structural bound that gates all O(n^{5/2}) lattice algorithms in the chapter. The bound is TIGHT (matched by truncated Boolean lattices).">$e_\prec \le n^{3/2}$ (Theorem 11.4)</span>
+      <span class="topic" data-tooltip="Theorem 11.5: in semidistributive lattices, the cover relation count e_≺ is O(n) — much sharper than the n^{3/2} general semilattice bound. Used in Theorem 11.8's O(n^2 log n) algorithms for testing SD, lower-bounded, splitting.">$e_\prec = O(n)$ in SD (Theorem 11.5)</span>
+      <span class="topic" data-tooltip="Theorem 11.6: given an n-element ordered set, deciding whether it is a lattice (i.e., every pair has unique join and meet) takes O(n^{5/2}) time. The cover-count bound n^{3/2} (Theorem 11.4) is the load-bearing structural input. This was a folkloric question for decades; the chapter pins it down.">$O(n^{5/2})$ lattice test (Theorem 11.6)</span>
+      <span class="topic" data-tooltip="Theorem 11.8: testing whether an n-element lattice is semidistributive, lower-bounded, or splitting takes O(n^2 log_2 n) time. Uses the SD lattice's O(n) cover-count bound (Theorem 11.5).">$O(n^2 \log n)$ SD/LB/split tests (Theorem 11.8)</span>
+      <span class="topic" data-tooltip="Theorem 11.13: the congruence lattice Con(L) of an n-element lattice L can be computed in O(n^2) time. Uses the dependency relation D on J(L) and the join-irreducible / meet-irreducible duality. This is the polynomial-time algorithm hinted at in Nation's textbook Chapter 10.">$O(n^2)$ Con(L) (Theorem 11.13)</span>
+      <span class="topic" data-tooltip="Listing 11.12: Whitman's algorithm for s ≤ t in FL(X), with memoization of (s, t) pairs already decided. The memoization keeps the algorithm polynomial in many cases but Example 11.24 shows it can be exponential. Theorem 11.22: at most |s|·|t| memoized triples are produced.">Whitman with memoization (Listing 11.12)</span>
+      <span class="topic" data-tooltip="Theorem 11.23: Whitman's algorithm runs in O(can(s) + can(t)) time when s and t are already in canonical form. The canonization step is potentially expensive (Example 11.24), but on canonical input the comparison is fast.">$O(\text{can}(s) + \text{can}(t))$ on canonical input (Theorem 11.23)</span>
+      <span class="topic" data-tooltip="Example 11.24: Whitman's memoization can produce exponentially many triples. Specifically: deciding L_2 ≤ u_2 (where L_2, u_2 are derived from a 2-generator scheme) requires β(2)^c memoized triples, exponential in input length. The known polynomial-time algorithms (Cosmadakis, Freese) bypass this via canonical form first.">$L_2 \le u_2$ exponential blowup (Example 11.24)</span>
+      <span class="topic" data-tooltip="Skolem 1920 (rediscovered by Whitman 1941, formalized by Cosmadakis 1988, refined by Freese): the word problem for finitely-presented lattices FL(P) is decidable in polynomial time. Cosmadakis: O(n^4). Freese refinement using Listing 11.17 (canonical form for FL(P)): O(n^3).">Skolem-Cosmadakis-Freese polytime word problem</span>
+      <span class="topic" data-tooltip="Theorem 11.34: two finitely-presented lattices FL(P) and FL(Q) are isomorphic iff (after canonization) P ≅ Q as partial lattices. This is decidable in polynomial time, giving a polytime ALGORITHM for testing FP-lattice isomorphism.">$\mathbf{FL}(P) \cong \mathbf{FL}(Q)$ iff $P \cong Q$ (Theorem 11.34)</span>
+      <span class="topic" data-tooltip="Bogart-Magagnosc 1988: an n-element ordered set's minimum chain partition (= maximum antichain by Dilworth's theorem) can be computed in O(n^{5/2}) time. Reduces to maximum bipartite matching, solved by Hopcroft-Karp's algorithm in O(E·√V). The dual problem (Mirsky's theorem: minimum antichain partition = maximum chain) takes only O(n^2) by simple level-numbering.">Bogart-Magagnosc $O(n^{5/2})$ chain partition</span>
+      <span class="topic" data-tooltip="The chapter is the bridge from theory to implementation. Every preceding chapter's structural theorem becomes an algorithmic specification here: Whitman's condition (W) → Listing 11.12; canonical form (Theorem 2.10) → Listing 11.11; Day's reflections → Listing 11.16 (lower-bounded test); free lattices over partial lattices (Chapter II) → Listing 11.17 (canonical form for FL(P)).">theory → implementation bridge</span>
+    </div>
+    <span class="ch-link">Read Chapter XI →</span>
+  </article>
+</a>
+
+<a href="freelat-companion-ch12.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch12">
+    <div class="row1">
+      <span class="ch-num">Chapter XII</span>
+      <span class="ch-meta">~140–170 min · book pp. 255–277 · 23 pages · 6 sections · 28 named results · 1 figure <span class="status">Available</span></span>
+    </div>
+    <h3>Term Rewrite Systems and Varieties of Lattices</h3>
+    <p class="tag">The monograph's epilogue. Two main results frame the chapter: <strong>Theorem 12.8</strong> — the variety of all lattices admits NO finite, convergent AC term rewrite system (an elegant diagonalization via Lemma 12.7's normal-form patterns); and <strong>Theorem 12.28</strong> — yet an infinite family of finitely generated lattice varieties, those of the form $V(\mathbf{L}^\vee(\bigwedge_i \bigvee_j x_{ij}))$, DOES admit an AC TRS. Open Problem 12.27: does $V(\mathbf{N}_5)$?</p>
+    <p class="desc">Six sections, 28 named results, 1 figure (Venn diagram). <strong>(§1) Term Rewrite Systems.</strong> Definitions of TRS, AC TRS, equational TRS, normal form. Historical arc: Trevor Evans 1951 → Knuth-Bendix 1970 → Lankford-Ballantyne 1977 → Peterson-Stickel 1981. Lemma 12.1 (4 preservation properties of normal forms). Lemma 12.2 (Tschantz's canonical-joinand inequality, from Lemma 3.28). Lemma 12.3 ($\underline{x}_i$-comparability). <strong>(§2) No AC TRS for Lattice Theory.</strong> Lemma 12.4 (formal join structure of $\mathrm{nf}$ via Whitman refinement). Lemma 12.5 (adding a variable preserves normal form). Lemma 12.6 (symmetry-strengthened pigeonhole counting). Lemma 12.7 (4 normal-form patterns). <strong>Theorem 12.8</strong>: no finite, convergent AC TRS for lattices — answers Problem 32 of Dershowitz-Jouannaud-Klop 1991. <strong>(§3) An Extension.</strong> Even the weakened "modified terminal" definition fails. Footnote 3: every variety $\mathcal{U} \le \mathcal{V} \le \mathcal{L}$ has no AC TRS (locally finite lower bound). The TEP table: distributive co-NP complete (Bloniarz-Hunt-Rosenkrantz), modular undecidable (Freese 1980). <strong>(§4) Variety Generated by $\mathbf{L}^\vee(w)$.</strong> Theorem 12.9 ($\mathbf{F}_{V(\mathbf{L})}(X) \cong A_X(\mathbf{L})^\vee$). Theorems 12.11-12.13 (homomorphic images, sublattices, $HS(\mathbf{L})$). Corollary 12.14 (concrete membership test). Lemma 12.15 ($\gamma$-map characterization). Theorem 12.19 (practical $\gamma$ + order-preservation condition). Examples: $\mathbf{F}_{V(\mathbf{2})}(3) = 18$ (free distributive), $\mathbf{F}_{V(\mathbf{N}_5)}(3) = 99$. Theorem 12.20: preservation properties (D-rank, M(u) sizes). <strong>(§5) An AC TRS for $V(\mathbf{L}_2)$.</strong> Theorem 12.21: $V(\mathbf{L}_2)$-canonical form syntactic characterization. Rules (9)-(29): the 21+ rewrite rules (some derived via Venn-diagram method, Figure 12.1). Lemma 12.22: Alimov-inspired construction of measure $f$. Theorem 12.25: finite, convergent AC TRS for $V(\mathbf{L}_2)$. Corollary 12.26: equational basis. <strong>(§6) More Varieties with AC TRS.</strong> Theorem 12.28: $V(\mathbf{L}^\vee(\bigwedge_i \bigvee_j x_{ij}))$ has an AC TRS for any positive integers $m, n_1, \ldots, n_m$. Problem 12.27: open question for $V(\mathbf{N}_5)$.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Theorem 12.8: there is no finite, convergent AC term rewrite system for the equational theory of lattices. The proof is a beautiful diagonalization: assume such a TRS exists; produce a specific term x ∧ w longer than any rule's LHS that nevertheless cannot have any rule applied. Lemma 12.7's four normal-form patterns close the diagonalization by exhausting all 'sufficiently general' shorter terms.">no AC TRS for $\mathcal{L}$ (Theorem 12.8)</span>
+      <span class="topic" data-tooltip="Lemma 12.7's four normal-form patterns (book p. 259-260): (4) z₁ ∧ ⋯ ∧ zₙ; (5) ⋁ᵢ (x ∧ z̲ᵢ); (6) ⋁ᵢ (x ∧ zᵢ); (7) x ∧ [⋁ᵢ (x ∧ zᵢ) ∨ ⋁ⱼ eⱼ]. Each is in normal form by symmetric pigeonhole (Lemma 12.6) plus Lemma 12.3. Pattern (7) is the 'exhaustion' family — every shorter substitution-image of a candidate rule's LHS fits this template.">Lemma 12.7's 4 normal-form patterns</span>
+      <span class="topic" data-tooltip="Trevor Evans 1951 (quasigroup TRS) → Knuth-Bendix 1970 (the famous completion algorithm, group TRS) → Lankford-Ballantyne 1977 + Peterson-Stickel 1981 (equational/AC TRSs, with distributive lattices a key example). Theorem 12.8 answers Problem 32 of Dershowitz-Jouannaud-Klop's 1991 'Open Problems in Rewriting' negatively.">Trevor Evans 1951 → Knuth-Bendix → Peterson-Stickel</span>
+      <span class="topic" data-tooltip="The TEP (term equivalence problem) is decidable in polynomial time for $\mathcal{L}$ (all lattices) — Chapter XI's Skolem-Cosmadakis-Freese result. But it is co-NP complete for distributive lattices (Bloniarz-Hunt-Rosenkrantz [12]). In fact, co-NP complete for any finite, nontrivial lattice. Modular lattices: undecidable (Freese 1980).">TEP regimes: poly / co-NP / undecidable</span>
+      <span class="topic" data-tooltip="Footnote 3 (book p. 274): the proof of Theorem 12.8 only used words in X^∧∨∧ (depth ≤ 3). With minor modifications, every variety $\mathcal{V}$ with $\mathcal{U} \le \mathcal{V} \le \mathcal{L}$ has NO AC TRS, where $\mathcal{U}$ is a small locally-finite variety generated by the lattices appearing in Theorem 12.8's proof. There is a whole interval of varieties — between $\mathcal{U}$ and $\mathcal{L}$ — for which no AC TRS exists.">interval $\mathcal{U} \le \mathcal{V} \le \mathcal{L}$ has no AC TRS</span>
+      <span class="topic" data-tooltip="Theorem 12.9: F_V(L)(X) ≅ A_X(L)^∨ where A_X(L) = {u ∈ J(FL(X)) : L^∨(u) ∈ V(L)}. The 'syntactic representation' of the variety. Examples: A_X(2) for X={x,y,z} has 6 elements, closure → 18-element free distributive lattice. A_X(N₅) has 12 elements, closure → 99-element F_V(N₅)(3).">$\mathbf{F}_{V(\mathbf{L})}(X) \cong A_X(\mathbf{L})^\vee$ (Theorem 12.9)</span>
+      <span class="topic" data-tooltip="The practical surrogate γ : J(L) → X^∧ replaces β₀ for computational purposes. Lemma 12.15 gives necessary and sufficient conditions for γ to come from a homomorphism. Theorem 12.19 weakens condition (2) to order-preservation when L is lower bounded — the version actually used in Section 5's rule derivations.">$\gamma$-map (Lemma 12.15, Theorem 12.19)</span>
+      <span class="topic" data-tooltip="Theorem 12.21: a term w is in V(L₂)-canonical form iff (1) w is in Whitman canonical form, (2) if w ∈ X or is a meet, then w ∈ X^∧ or w = t ∧ (u ∨ v) with t,u,v ∈ X^∧, (3) if w is a join then each joinand satisfies (2). Beautifully clean: depth-2 building blocks only.">V(L₂)-canonical form (Theorem 12.21)</span>
+      <span class="topic" data-tooltip="The Venn-diagram method (Figure 12.1, book p. 271): for each canonical-form-violating pattern, draw a Venn diagram of the variable sets; substitute meets-of-generators for each non-empty sector; each non-trivial substitution gives a rewrite rule. Generates rules (18)-(23), (24)-(29). The chapter writes the 'most general' rule and leaves degenerate forms as enumeration.">Venn-diagram rule derivation (Figure 12.1)</span>
+      <span class="topic" data-tooltip="Lemma 12.22 (book p. 272): given p > 1 integer, construct f : ℕ × ℕ → ℕ associative, commutative, with f(1,1) = p and f(n+1,m) ≥ p·f(n,m). Inspired by Alimov's representation theorem on totally ordered cancellative semigroups. Used to define a measure |·| on terms; Lemma 12.24 shows |u| > |v| whenever u → v by rules (9)-(29).">Alimov-inspired measure $f$ (Lemma 12.22)</span>
+      <span class="topic" data-tooltip="Theorem 12.28: V(L^∨(w)) has a finite, convergent AC TRS whenever w = ⋀ᵢ ⋁ⱼ x_{ij}. The proof generalizes Section 5's construction — modifications to rules (9)-(11) (the n+1-distributive law replaces (10)) and to the measure parameter p (≥ n+2). Despite the family being infinite, 'to actually construct an AC TRS for one of these would be prohibitively tedious.'">infinite positive family (Theorem 12.28)</span>
+      <span class="topic" data-tooltip="Problem 12.27: does every finitely generated lattice variety have a finite, convergent AC TRS? In particular, does V(N₅)? Open since the monograph's 1995 publication. The pentagon N₅ is the 'first non-distributive variety' — its V(N₅)-canonical form involves duplicated variables that defeat the Section 5 measure construction.">Problem 12.27 — open ($V(\mathbf{N}_5)$ ?)</span>
+    </div>
+    <span class="ch-link">Read Chapter XII →</span>
+  </article>
+</a>
+
+<div class="section-label">Reference</div>
+
+<div class="crosslink">
+  <p><strong>Open Problems</strong> (book p. 279). The monograph collects open problems threaded throughout the text. We will mirror this with a problems-tracker in the companion's final chapter or as an appendix page.</p>
+  <p><strong>Bibliography</strong> (book p. 281, ~135 entries). The canonical references for free-lattice theory, including Whitman 1941–42, Skolem 1920, Birkhoff 1935/40, Dean 1956, Galvin-Jónsson 1961, Jónsson-Kiefer 1962, McKenzie 1972, Day 1970/77/79, Freese 1980/89, Nation 1982/86/90, plus the universal-algebra and computation references.</p>
+  <p><strong>List of Symbols</strong> (book p. 287) and <strong>Index</strong> (book p. 289).</p>
+</div>
+
+<div class="section-label">Companion to Nation's textbook (cross-link)</div>
+
+<div class="crosslink">
+  <p class="crosslink-label">Background reading</p>
+  <p>For background in lattice theory at the undergraduate level — posets, lattices, congruence theory, distributivity, modularity, semimodularity, Stone duality, geometric lattices — see our companion to Nation's <em>Notes on Lattice Theory</em>: <a href="nation-companion-toc.html">Nation Companion ToC</a>.</p>
+  <p>The Nation textbook companion covers Chapters 1–11 of <em>Notes on Lattice Theory</em>, with 141 worked exercises and 55 connection panels across ~1.34 MB of HTML. <strong>Chapter 6 of the textbook</strong> is the entry point for free-lattice theory; <strong>Chapter I of this monograph</strong> is its research-level deepening.</p>
+</div>
+
+<footer>
+  <div>Free Lattices Companion · 2026 · companion to <em>Free Lattices</em>, AMS Mathematical Surveys &amp; Monographs vol. 42 (1995).</div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Table of Contents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+    --card-bg: #FBF8EC; --status-pending: #B8B6A6; --status-done: #C89F3C;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+    --card-bg: #1F1B10; --status-pending: #4A4538; --status-done: #D4AD52;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  h1, h2, h3 {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  code { font-family: 'JetBrains Mono', monospace; background: var(--bg-muted); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 64px 28px 120px;
+  }
+  .theme-toggle {
+    position: fixed; top: 18px; right: 20px; z-index: 100;
+    background: var(--bg-warm); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--gold); box-shadow: 0 0 6px var(--gold);
+  }
+
+  .hero {
+    padding: 16px 0 32px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 48px;
+  }
+  .hero .kicker {
+    color: var(--gold);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .hero h1 {
+    font-size: 44px;
+    font-weight: 800;
+    line-height: 1.08;
+    margin: 0 0 18px;
+  }
+  .hero .lede {
+    font-size: 19px;
+    color: var(--teal);
+    font-style: italic;
+    max-width: 660px;
+    line-height: 1.5;
+  }
+  .hero .meta {
+    display: flex;
+    gap: 22px;
+    margin-top: 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+
+  h2.section-h {
+    margin: 56px 0 18px;
+    padding: 14px 0 8px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: var(--gold);
+    border-top: 1px solid var(--line);
+  }
+
+  .chapter-card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 26px 30px 28px;
+    margin: 22px 0;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    position: relative;
+  }
+  .chapter-card.available {
+    border-color: var(--gold);
+    box-shadow: var(--shadow-soft);
+  }
+  .chapter-card.available:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(200,159,60,0.18);
+  }
+  .chapter-card .row1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .chapter-card .ch-num {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    font-weight: 700;
+  }
+  .chapter-card .ch-meta {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .chapter-card .ch-meta .status {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-left: 8px;
+  }
+  .chapter-card.available .status {
+    background: var(--status-done);
+    color: #1E2749;
+  }
+  .chapter-card.pending .status {
+    background: var(--status-pending);
+    color: var(--bg-muted);
+  }
+  .chapter-card h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+  .chapter-card .tag {
+    color: var(--teal);
+    font-style: italic;
+    font-size: 16px;
+    margin: 0 0 14px;
+  }
+  .chapter-card .desc { margin: 0 0 16px; font-size: 15px; }
+  .chapter-card .topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 14px 0 12px;
+  }
+  .chapter-card .topic {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    background: var(--bg-warm);
+  }
+  .chapter-card .ch-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold);
+    text-decoration: none;
+    border-bottom: 2px solid var(--gold);
+    padding-bottom: 1px;
+    transition: color 0.15s ease;
+  }
+  .chapter-card .ch-link:hover {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
+  .chapter-card.pending .ch-link { color: var(--text-dim); border-bottom-color: var(--text-dim); pointer-events: none; }
+
+  .companion-purpose {
+    background: var(--bg-warm);
+    border-left: 4px solid var(--gold);
+    padding: 22px 28px;
+    margin: 28px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .companion-purpose p { margin: 0 0 10px; }
+  .companion-purpose p:last-child { margin-bottom: 0; }
+
+  .nav-strip {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin: 24px 0 0;
+  }
+  .nav-strip a {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--bg-warm);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    text-decoration: none;
+    color: var(--ink);
+    transition: all 0.15s ease;
+  }
+  .nav-strip a:hover {
+    border-color: var(--gold);
+    background: var(--card-bg);
+  }
+  .nav-strip a .arrow { color: var(--gold); margin-right: 4px; }
+
+  footer.page-footer {
+    margin-top: 80px;
+    padding: 22px 0;
+    border-top: 1px solid var(--line);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  .progress-track {
+    display: flex;
+    gap: 6px;
+    margin: 18px 0 4px;
+    flex-wrap: wrap;
+  }
+  .pdot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--bg-muted);
+    border: 2px solid var(--line);
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-dim);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pdot.done {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #1E2749;
+  }
+  .pdot.upcoming {
+    background: var(--bg-muted);
+    border-color: var(--line);
+    color: var(--text-dim);
+  }
+
+  @media (max-width: 720px) {
+    .page { padding: 32px 18px 80px; }
+    .hero h1 { font-size: 32px; }
+    .chapter-card { padding: 20px 22px; }
+  }
+
+  /* Compact ToC list (intra-page navigation) */
+  nav.compact-toc {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 8px 14px;
+    margin: 0 0 36px;
+  }
+  nav.compact-toc a {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 9px 14px;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg-warm);
+    color: var(--ink);
+    transition: all 0.15s ease;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+  }
+  nav.compact-toc a:hover {
+    border-color: var(--gold);
+    background: var(--bg-muted);
+    color: var(--gold);
+  }
+  nav.compact-toc .num {
+    font-weight: 700;
+    color: var(--gold);
+    min-width: 22px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  nav.compact-toc .title {
+    flex: 1;
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  nav.compact-toc em {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-left: 4px;
+  }
+
+  /* Topic-chip hover tooltip */
+  .chapter-card .topic[data-tooltip] {
+    position: relative;
+    cursor: help;
+  }
+  .chapter-card .topic[data-tooltip]:hover::after,
+  .chapter-card .topic[data-tooltip]:focus::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: var(--bg);
+    padding: 9px 13px;
+    border-radius: 6px;
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 13px;
+    font-weight: 400;
+    font-style: normal;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: normal;
+    width: max-content;
+    max-width: 320px;
+    line-height: 1.45;
+    z-index: 100;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    pointer-events: none;
+  }
+  .chapter-card .topic[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--ink);
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  /* Lighten em-style text in light mode for italic-italic readability on cream */
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+
+<div class="page">
+
+<div class="hero">
+  <div class="kicker">Companion · Reader · Front Door</div>
+  <h1>Călugăreanu Companion</h1>
+  <p class="lede">A chapter-by-chapter prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em> (Springer, 2000) — designed to be read side-by-side with the book.</p>
+  <div class="meta">
+    <span>Faithful expansion of book content</span>
+    <span>SVG diagrams + cross-domain connections</span>
+    <span>Worked solutions to every exercise</span>
+    <span>Dark mode default</span>
+  </div>
+  <div class="nav-strip">
+    <a href="lattice-module-hub.html"><span class="arrow">↗</span> Lattice Atlas (structured curriculum)</a>
+    <a href="calugareanu-companion-process.md"><span class="arrow">↗</span> Process notes (for resuming work)</a>
+  </div>
+</div>
+
+<div class="companion-purpose">
+  <p><strong>What this is.</strong> Each chapter of Călugăreanu's book gets a companion HTML file. The companion preserves the book's numbering (Definition, Lemma 2.1, Proposition 3.3, Theorem 3.3, etc.) so you can hold the book open beside it and cross-reference. Where the book is dense, the companion slows down and explains. Where the book is concrete, the companion connects outward — to module theory, group theory, domain theory, abstract interpretation, topology, vector spaces, and the Prologos propagator network.</p>
+  <p><strong>How to use it.</strong> Read the book first. When stuck on a definition or proof, switch to the companion's matching section for prose, intuition, a diagram, and a worked-out reading. The end-of-chapter exercises are all solved in collapsible blocks — open them after attempting the exercise yourself.</p>
+</div>
+
+<h2 class="section-h">Compact ToC</h2>
+<p style="margin: 0 0 18px; color: var(--text-dim); font-size: 14.5px;">A condensed overview to locate any chapter quickly. Click any entry to jump to its chapter card below.</p>
+<nav class="compact-toc" aria-label="Compact table of contents">
+  <a href="#card-ch1"><span class="num">1</span><span class="title">Basic Notions and Results</span></a>
+  <a href="#card-ch2"><span class="num">2</span><span class="title">Compactly Generated Lattices</span></a>
+  <a href="#card-ch3"><span class="num">3</span><span class="title">Composition Series &amp; Length</span></a>
+  <a href="#card-ch4"><span class="num">4</span><span class="title">Essential Elements &amp; Pseudo-complements</span></a>
+  <a href="#card-ch5"><span class="num">5</span><span class="title">Socle, Torsion, Loewy Series</span></a>
+  <a href="#card-ch6"><span class="num">6</span><span class="title">Independence &amp; Goldie Dimension</span></a>
+  <a href="#card-ch7"><span class="num">7</span><span class="title">Superfluous Elements &amp; Radical</span></a>
+  <a href="#card-ch8"><span class="num">8</span><span class="title">Uniform Elements &amp; CS Lattices</span></a>
+  <a href="#card-ch9"><span class="num">9</span><span class="title">Pure &amp; Neat Elements</span></a>
+  <a href="#card-ch10"><span class="num">10</span><span class="title">Coatomic Lattices</span></a>
+  <a href="#card-ch11"><span class="num">11</span><span class="title">Co-compact Lattices</span></a>
+  <a href="#card-ch12"><span class="num">12</span><span class="title">Supplemented &amp; Locally Artinian</span></a>
+  <a href="#card-ch13"><span class="num">13</span><span class="title">Several Dimensions <em>(closing)</em></span></a>
+</nav>
+
+<h2 class="section-h">Chapter cards</h2>
+<p style="margin: 0 0 22px; color: var(--text-dim); font-size: 14.5px;">Detailed overview of each chapter. Click the card to open the full reading. Hover over any topic chip to see a brief description.</p>
+<a href="calugareanu-companion-ch01.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch1">
+    <div class="row1">
+      <span class="ch-num">Chapter 1</span>
+      <span class="ch-meta">~70–80 min · pp. 1–16 · 7 sections + 5 connections · 13 worked exercises (from 40) <span class="status">Available</span></span>
+    </div>
+    <h3>Basic Notions and Results</h3>
+    <p class="tag">The foundational vocabulary: posets, lattices, the modular and distributive laws, $N_5$/$M_5$ obstructions (Dedekind 1900), upper continuity, atoms, complements, ACC/DCC.</p>
+    <p class="desc">Where the book starts. Order theory basics: posets, chains, comparable elements, sup/inf, max/min/largest/smallest. The Axiom of Choice and equivalents (Zorn, Hausdorff, Zermelo). Lattices via two equivalent definitions — order-theoretic (joins + meets exist) and universal-algebraic (commutative + associative + absorption, Theorem 1.1). Complete lattices, bounded lattices, examples ($\mathcal{P}(M)$, $S_R(M)$, $S(A, \Omega)$). Sublattices, intervals $b/a$, ideals, filters, lattice morphisms (Remarks 1.3-1.5). <strong>Modular law</strong> $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$ — the lattice abstraction of "submodules behave nicely." Theorem 1.3 (cancellation form), Theorem 1.4 ($N_5$ obstruction — Dedekind 1900), Theorem 1.5 (the second isomorphism theorem for lattices). <strong>Distributive lattices</strong>, Theorems 1.6, 1.7 ($M_5$ obstruction). Upper continuity, atoms, complements, complemented vs relatively complemented (Ex 1.36: equivalent in modular). Chain conditions: Propositions 1.3, 1.4, 1.5. Connection panels: Birkhoff's 1940 textbook · Dedekind's 1900 paper · Boolean algebras + logic · universal algebra · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Set with reflexive, transitive, antisymmetric ≤ — the starting object of order theory.">poset</span>
+      <span class="topic" data-tooltip="Poset where every pair of elements has a join (sup) and meet (inf).">lattice</span>
+      <span class="topic" data-tooltip="a ≤ c ⇒ (a ∨ b) ∧ c = a ∨ (b ∧ c) — the lattice abstraction of submodule behavior.">modular</span>
+      <span class="topic" data-tooltip="The 5-element non-modular lattice; Dedekind's 1900 obstruction: L modular ⟺ no N₅ sublattice.">$N_5$ pentagon</span>
+      <span class="topic" data-tooltip="The 5-element modular non-distributive lattice; 3 atoms with shared 0 and 1.">$M_5$ diamond</span>
+      <span class="topic" data-tooltip="(a ∨ b) ∧ c = (a ∧ c) ∨ (b ∧ c) — strictly stronger than modular.">distributive</span>
+      <span class="topic" data-tooltip="a ∧ ⋁ D = ⋁d ∈ D(a ∧ d) for upper directed D — meet commutes with directed joins.">upper continuous</span>
+      <span class="topic" data-tooltip="An element a with 0 ≺ a — smallest non-zero element above the bottom.">atom</span>
+      <span class="topic" data-tooltip="a ∧ a' = 0 and a ∨ a' = 1 — direct sum decomposition a ⊕ a' = 1.">complement</span>
+      <span class="topic" data-tooltip="ACC / DCC: every ascending / descending chain stabilises.">noetherian / artinian</span>
+      <span class="topic" data-tooltip="Zorn's Lemma: every chain has an upper bound ⟹ poset has a maximal element.">Zorn</span>
+      <span class="topic" data-tooltip="Richard Dedekind's foundational paper introducing the modular law and the N₅ characterization.">Dedekind 1900</span>
+    </div>
+    <span class="ch-link">Read Chapter 1 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-hub.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch2">
+    <div class="row1">
+      <span class="ch-num">Chapter 2</span>
+      <span class="ch-meta">~50 min · pp. 17–27 · 22 sections + 5 connections · 13 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Compactly Generated Lattices</h3>
+    <p class="tag">The lattice analog of "finitely generated" — and the abstract setting in which submodule lattices live.</p>
+    <p class="desc">Defines the compact element (Nachbin–Stenström): a lattice element that is "captured by a finite slice" of any cover. Develops the equivalence with directed-cover S-compactness, the key examples ($\mathcal P(M)$, subalgebra lattices, submodule lattices), the compactly generated / algebraic class (Crawley–Dilworth), upper continuity, weak atomicity, and Crawley's Theorem 2.1 — modularity follows from the second-isomorphism shape in any compactly generated lattice. Krull's lemma on maximal elements. Two refinements (H-noetherian, join inaccessible). Five connection panels: domain theory · universal algebra · topology &amp; Stone duality · abstract interpretation · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Element c such that c ≤ ⋁ S implies c ≤ ⋁ F for some finite F ⊆ S.">compact element</span>
+      <span class="topic" data-tooltip="Compactly generated lattice — every element is the join of compact elements.">algebraic lattice</span>
+      <span class="topic" data-tooltip="a ∧ ⋁ D = ⋁d ∈ D(a ∧ d) for upper directed D — meet commutes with directed joins.">upper continuous</span>
+      <span class="topic" data-tooltip="Each non-trivial interval b/a contains a covering pair — sufficient finiteness for chain arguments.">weakly atomic</span>
+      <span class="topic" data-tooltip="Krull's Lemma: every element of a compactly generated lattice is below a maximal element.">Krull</span>
+      <span class="topic" data-tooltip="Crawley's Theorem: in compactly generated lattices, modularity ⟺ second isomorphism theorem.">Crawley</span>
+      <span class="topic" data-tooltip="Head's noetherian: noetherian elements coincide with compact elements.">H-noetherian</span>
+      <span class="topic" data-tooltip="Birkhoff–Frink: every algebraic lattice arises as the subalgebra lattice of some universal algebra.">Birkhoff–Frink</span>
+    </div>
+    <span class="ch-link">Read Chapter 2 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch03.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch3">
+    <div class="row1">
+      <span class="ch-num">Chapter 3</span>
+      <span class="ch-meta">~55 min · pp. 29–38 · 21 sections + 5 connections · 8 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Composition Series and Decompositions</h3>
+    <p class="tag">When can a lattice element be broken into simple pieces — and is that decomposition unique?</p>
+    <p class="desc">The chapter where lattice theory borrows the structural arsenal of group and module theory: similar and projective intervals, equivalent chains, Schreier's refinement theorem, composition chains (= maximally refined), the Jordan–Hölder corollary, length as a well-defined invariant in modular lattices, finite length ⟺ noetherian + artinian, the additivity of length, the modular characterization via the submodular equality. Then irreducible decompositions: the Kuros–Ore theorem (uniqueness of decomposition length in modular lattices) with the famous non-modular counterexample. Five connection panels: vector spaces &amp; dimension · module composition length · Jordan–Hölder for groups · abelian categories &amp; quivers · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Maximal chain — no further refinements possible — between 0 and 1.">composition chain</span>
+      <span class="topic" data-tooltip="Any two finite chains in a modular lattice admit equivalent refinements.">Schreier refinement</span>
+      <span class="topic" data-tooltip="Any two composition chains in a modular lattice have the same length and projective factors.">Jordan–Hölder</span>
+      <span class="topic" data-tooltip="Maximum length of a chain in L; equivalently, the length of any composition chain (Jordan–Hölder).">length</span>
+      <span class="topic" data-tooltip="Both ACC and DCC; equivalent to having finite length (Theorem 3.2).">noetherian + artinian</span>
+      <span class="topic" data-tooltip="ℓ(a ∨ b) + ℓ(a ∧ b) ≤ ℓ(a) + ℓ(b) — matroid-style length subadditivity.">submodular inequality</span>
+      <span class="topic" data-tooltip="In modular lattices, any two irreducible decompositions of an element have the same number of components.">Kuros–Ore</span>
+      <span class="topic" data-tooltip="Element written as an irredundant meet (or join) of meet-irreducibles.">irreducible decomposition</span>
+    </div>
+    <span class="ch-link">Read Chapter 3 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch04.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch4">
+    <div class="row1">
+      <span class="ch-num">Chapter 4</span>
+      <span class="ch-meta">~60 min · pp. 39–45 · 16 sections + 5 connections · 20 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Essential Elements and Pseudo-complements</h3>
+    <p class="tag">Two new notions in counterpoint — "thick everywhere" and "maximally disjoint" — and the apparatus that ties them together.</p>
+    <p class="desc">An element is <em>essential</em> if it touches every non-zero piece; <em>essentially closed</em> if it has no proper essential extensions. A <em>pseudo-complement</em> of $b$ is an element maximal with $b \wedge c = 0$. The chapter's deepest result (Cor 4.3): in upper continuous modular lattices, pseudo-complements ARE the essentially closed elements. Includes Lemma 4.1 (modular complement ⟹ pseudo-complement) with $N_5$ counterexample, Prop 4.2's chain of equivalences, Lemma 4.3 (existence of maximal essential extensions = injective hulls). Five connection panels: modules &amp; injective hulls · Heyting &amp; intuitionism · <strong>residuation deep-dive</strong> (left/right, Heyting implication, quantales, ideal quotients) · Boolean/Heyting/p-c disambiguation · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="a essential in L: a ∧ b ≠ 0 for every non-zero b — captures &quot;meets every non-trivial subspace.&quot;">essential</span>
+      <span class="topic" data-tooltip="Element equal to its own pseudo-pseudo-complement — closed under the essentialness operation.">essentially closed</span>
+      <span class="topic" data-tooltip="Largest element b^* with a ∧ b^* = 0. Order-dual to supplement (Ch 12).">pseudo-complement</span>
+      <span class="topic" data-tooltip="Mutual pseudo-complementation — pairs (a, b) where each is the pseudo-complement of the other.">mutually p-c</span>
+      <span class="topic" data-tooltip="Module-theoretic counterpart of essential closure: smallest injective module containing M essentially.">injective hull</span>
+      <span class="topic" data-tooltip="Right adjoint to meet: a ∧ b ≤ c ⟺ b ≤ a → c. The pseudo-complement is a → 0.">Heyting implication</span>
+      <span class="topic" data-tooltip="Galois adjunction between ∧ and → — the abstract face of Heyting algebras.">residuation</span>
+      <span class="topic" data-tooltip="The pentagon witnesses non-modularity by inspection — the universal obstruction.">N₅ counterexample</span>
+    </div>
+    <span class="ch-link">Read Chapter 4 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch05.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch5">
+    <div class="row1">
+      <span class="ch-num">Chapter 5</span>
+      <span class="ch-meta">~65 min · pp. 47–58 · 22 sections + 5 connections · 11 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Socle. Torsion Lattices</h3>
+    <p class="tag">The bottom-most "atomic foundation" of a lattice, and the lattices that grow from atoms upward step-by-step.</p>
+    <p class="desc">The <em>socle</em> $s(L)$ — join of all atoms — is the lattice's irreducible base. Theorem 5.1 says it equals the meet of all essential elements (in compactly generated modular lattices), tying socle to essentialness from Ch 4. Then <em>torsion lattices</em>: every upper interval has atoms, so the lattice is climbed atom-by-atom (also called <em>semiartinian</em>). The <em>Loewy series</em> $0 = s_0 \le s_1 \le \cdots$ iterates socle taking transfinitely; Prop 5.5 says torsion ⟺ this series reaches $1$. Then torsion elements form a principal ideal $t(L)/0$ with the radical property; RSC (restricted socle condition); torsion-free elements (a subtle dual concept!); and cycles. Five connection panels: modules &amp; primary decomposition · group theory &amp; locally cyclic · Loewy &amp; representation theory · t-structures &amp; radical theory · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="s(L) = join of all atoms in L; the lattice analogue of the semisimple submodule.">socle</span>
+      <span class="topic" data-tooltip="Each element is a join of atoms — synonym of &quot;semiatomic in every interval.&quot;">atom generated</span>
+      <span class="topic" data-tooltip="L torsion: every element is above some atom (or equivalently, L = ⋃ s_α(L) Loewy levels).">torsion lattice</span>
+      <span class="topic" data-tooltip="Module M where every quotient M/N has non-zero socle — the module-side of torsion lattices.">semiartinian</span>
+      <span class="topic" data-tooltip="Transfinite filtration 0 ⊆ s(L) ⊆ s₂(L) ⊆ … stabilising at the torsion part.">Loewy series</span>
+      <span class="topic" data-tooltip="τ(L): largest torsion element below a — extracted from the Loewy filtration.">torsion part</span>
+      <span class="topic" data-tooltip="Relative semi-complement condition — the technical hypothesis under which torsion theory works cleanly.">RSC</span>
+      <span class="topic" data-tooltip="Element a whose principal interval a/0 is finite — finite-length cyclic element.">cycle</span>
+    </div>
+    <span class="ch-link">Read Chapter 5 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch06.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch6">
+    <div class="row1">
+      <span class="ch-num">Chapter 6</span>
+      <span class="ch-meta">~85 min · pp. 59–75 · 19 sections + 5 connections · 15 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Independence and Semiatomic Lattices</h3>
+    <p class="tag">The lattice analog of linear independence; the Goldie dimension as the canonical numerical invariant of non-noetherian module theory; the lattice form of the Krull–Schmidt theorem.</p>
+    <p class="desc">Independent subsets generalise linearly-independent vectors: $a_i \wedge \bigvee_{j \ne i} a_j = 0$. Direct sums $\bigoplus a_i$ are the corresponding "non-overlapping" joins. Theorem 6.1: maximal independent ⟺ join essential — coupling Ch 6's apparatus to Ch 4's essentialness. <strong>Goldie dimension</strong> (uniform dimension) — Theorem 6.4's four-way equivalence defines what it means to have finite-dimensional non-noetherian module structure. <strong>Krull–Schmidt</strong> (Theorem 6.5 of Ore): in finite-length modular lattices, indecomposable decompositions are unique up to permutation. <strong>Semiatomic lattices</strong> (Theorem 6.8): four-way equivalence characterising "module of simple parts." Five connections: modules &amp; Goldie · vector space dimension · Krull–Schmidt · matroids · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Subset {aᵢ} with aᵢ ∧ ⋁ⱼ ≠ ᵢ aⱼ = 0 for each i — internal direct sum decomposition.">independent</span>
+      <span class="topic" data-tooltip="a ⊕ b = 1: a ∨ b = 1 and a ∧ b = 0 — lattice-theoretic complement notation.">direct sum</span>
+      <span class="topic" data-tooltip="Cardinality n such that L has an essential direct sum of n uniform elements; Goldie 1958.">Goldie dimension</span>
+      <span class="topic" data-tooltip="Synonym; a/0 is uniform — essential intersection of any two non-zero sub-elements.">uniform element</span>
+      <span class="topic" data-tooltip="Every finite indecomposable decomposition is unique up to permutation and isomorphism.">Krull–Schmidt</span>
+      <span class="topic" data-tooltip="Lattice where 1 is a join of atoms; equivalently (in modular CG), socle is essential at the top.">semiatomic</span>
+      <span class="topic" data-tooltip="Element a that admits no non-trivial direct sum: a = b ⊕ c ⇒ b = 0 or c = 0.">indecomposable</span>
+      <span class="topic" data-tooltip="Combinatorial structures whose flats form a geometric (atomistic, semimodular) lattice.">matroids</span>
+    </div>
+    <span class="ch-link">Read Chapter 6 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch07.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch7">
+    <div class="row1">
+      <span class="ch-num">Chapter 7</span>
+      <span class="ch-meta">~60 min · pp. 77–86 · 15 sections + 5 connections · 11 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Radical, Superfluous and Fully Invariant Elements</h3>
+    <p class="tag">The lattice form of the Jacobson radical and Frattini subgroup; characteristic-style decomposition-stable elements.</p>
+    <p class="desc">An element is <em>superfluous</em> if it can be removed from any cover of $1$. The <em>radical</em> $r(L)$ is the meet of all maximal elements. Theorem 7.1: in compactly generated lattices, $r(L)$ equals the join of all superfluous elements — recovering Bass's characterisation of the Jacobson radical and Frattini's 1885 theorem on non-generators. Theorem 7.3 gives a five-way characterisation of "atom generated of finite length and complemented" — the lattice form of Wedderburn–Artin. Then <strong>fully invariant elements</strong>: those that respect every direct decomposition of $1$. The lattice version of characteristic / fully invariant subgroups. Five connection panels: Jacobson radical · Frattini subgroup · Frattini subalgebra · characteristic vs fully invariant · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="a superfluous in L: a ∨ x = 1 ⇒ x = 1. The order-dual of essential.">superfluous</span>
+      <span class="topic" data-tooltip="r(L) = meet of all maximal elements; equivalently (modular CG, Theorem 7.1) join of all superfluous elements.">radical</span>
+      <span class="topic" data-tooltip="Group-theoretic counterpart: meet of all maximal subgroups; the r(L) for the subgroup lattice.">Frattini subgroup</span>
+      <span class="topic" data-tooltip="Ring-theoretic counterpart of r(L) for the submodule lattice: meet of all maximal one-sided ideals.">Jacobson radical</span>
+      <span class="topic" data-tooltip="Classification of semisimple Artinian rings as direct products of matrix rings over division rings.">Wedderburn–Artin</span>
+      <span class="topic" data-tooltip="Element preserved by every endomorphism of the lattice — the abstract analogue of fully invariant submodules.">fully invariant</span>
+      <span class="topic" data-tooltip="Group-theoretic counterpart: subgroup invariant under every automorphism.">characteristic subgroup</span>
+      <span class="topic" data-tooltip="Fully-invariant extending: every fully invariant element is essential in a direct summand.">FI-extending</span>
+    </div>
+    <span class="ch-link">Read Chapter 7 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch08.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch8">
+    <div class="row1">
+      <span class="ch-num">Chapter 8</span>
+      <span class="ch-meta">~75 min · pp. 87–98 · 11 sections + 5 connections · 8 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Lattices of Finite Uniform Dimension</h3>
+    <p class="tag">Goldie dimension as the central invariant; the Osofsky–Smith theorem in lattice form.</p>
+    <p class="desc">An element is <em>uniform</em> (= co-irreducible) if every non-zero element below it is essential — the "atomic units" of dimension theory. Theorem 8.1 establishes invariance of dimension. Theorem 8.2 gives a six-way characterisation of finite uniform dimension: bounded independent cardinality, ACC⊕, eventual essentialness, no infinite independent subsets, $0$ as finite meet of irreducibles. Theorem 8.3 + Cor 8.1 bound dimension via $a/0$ and $1/a$. Proposition 8.2 ties essential closure to dimension equality. Then <strong>CS (= extending) lattices</strong> — pseudo-complements coincide with complements — and the lattice form of the Osofsky–Smith theorem (Theorem 8.4): a compact modular CG H-noetherian RSC lattice with completely CS principal ideals has finite uniform dimension. Five connection panels: uniform modules · Goldie dimension · CS modules &amp; Osofsky-Smith · quasi-injective &amp; continuous · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Element a ≠ 0 such that any two non-zero x, y ≤ a have x ∧ y ≠ 0.">uniform</span>
+      <span class="topic" data-tooltip="Cardinality n such that L has an essential direct sum of n uniform elements; Goldie 1958.">Goldie dimension</span>
+      <span class="topic" data-tooltip="ACC for finite direct sums — equivalent to finite hollow dimension by Theorem 13.1.">ACC⊕</span>
+      <span class="topic" data-tooltip="Lattice where every element is essential in a direct summand — closed under essential closure.">CS / extending</span>
+      <span class="topic" data-tooltip="Theorem: a CS module with all factors CS is a finite direct sum of uniforms.">Osofsky-Smith</span>
+      <span class="topic" data-tooltip="Compact in the essentialness lattice — bounded essential closure depth.">essentially compact</span>
+      <span class="topic" data-tooltip="Element with no non-trivial irredundant join decomposition — dual of meet-irreducible.">co-irreducible</span>
+      <span class="topic" data-tooltip="The general theory of length / Goldie / Krull / Gabriel — abstract structural invariants on modular lattices.">dimension theory</span>
+    </div>
+    <span class="ch-link">Read Chapter 8 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch09.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch9">
+    <div class="row1">
+      <span class="ch-num">Chapter 9</span>
+      <span class="ch-meta">~90 min · pp. 99–114 · 11 sections + 5 connections · 12 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Purity and Neatness in Lattices</h3>
+    <p class="tag">The lattice form of Prüfer's pure subgroups (1923) and Honda's neat subgroups (1956).</p>
+    <p class="desc">An element is <em>pure</em> (T. Head 1972, generalising Prüfer 1923) if it has a complement in every compact upper interval; <em>neat</em> (Honda 1956) if it has a complement in every atomic upper interval. Pure ⟹ neat (in upper continuous, Theorem 9.14). Theorem 9.3: in compactly generated modular, every element pure ⟺ sectionally complemented. Theorem 9.7's four-way equivalence ties purity to atom-generation, complementation, and basis existence. Theorem 9.8 (the chapter's keystone): every maximal essential extension is neat. The R1/R2 refinements of RSC; Theorem 9.9 (in R1 lattices, neat ⟺ essentially closed — Honda's theorem in lattice form). Theorem 9.13 characterises "every element is neat" via $t(0)$. Five connection panels: Prüfer's pure subgroups · Honda's neat subgroups · pure submodules (Cohn) · closed/essentially-closed · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Pure submodule (Prüfer 1923): nA = A ∩ nB for all n. Lattice version: complemented in every compact interval.">pure</span>
+      <span class="topic" data-tooltip="Neat submodule (Honda 1956): pA = A ∩ pB for primes p only. Weaker than pure.">neat</span>
+      <span class="topic" data-tooltip="Lattice where every interval b/a has complements; in modular, equivalent to relatively complemented.">sectionally complemented</span>
+      <span class="topic" data-tooltip="Vector space basis ⟺ u-basis in SK(V) (Ex 13.5) — the canonical example of a lattice u-basis.">basis</span>
+      <span class="topic" data-tooltip="Călugăreanu's axioms isolating which lattice properties make purity / neatness hold.">R1, R2</span>
+      <span class="topic" data-tooltip="Element complemented in every interval containing it — stronger than relatively complemented.">absolutely complemented</span>
+      <span class="topic" data-tooltip="Heinz Prüfer's 1923 introduction of pure subgroups; foundational for abelian group theory.">Prüfer</span>
+      <span class="topic" data-tooltip="Kenkichi Honda's 1956 introduction of neat (&quot;rein&quot;) subgroups — the prime-restriction of pure.">Honda</span>
+    </div>
+    <span class="ch-link">Read Chapter 9 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch10.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch10">
+    <div class="row1">
+      <span class="ch-num">Chapter 10</span>
+      <span class="ch-meta">~55 min · pp. 115–122 · 11 sections + 5 connections · 10 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Coatomic Lattices</h3>
+    <p class="tag">The order-dual of atomic. Bass's 1960 B-objects in lattice form. Local lattices and the structural duality with Chapter 5's essentialness theory.</p>
+    <p class="desc">A lattice is <em>coatomic</em> if every $a \ne 1$ has a maximal element above it (the dual of "atomic"). Bass introduced the module version (B-objects) in 1960 to study perfect rings. Krull's Lemma: compact ⟹ coatomic. Theorem 10.1: modular semiatomic inductive ⟹ complemented + atom generated. Theorem 10.2: in modular inductive lattices, semiatomic ⟺ coatomic + every maximal complemented. The chapter's central result is <strong>Theorem 10.3</strong>: under condition (D), an element is superfluous iff $a/0$ is coatomic and $a \le r(L)$ — perfectly dual to Chapter 5's essentialness characterisation. <strong>Local lattices</strong> (Proposition 10.8): $L - \{1\}$ has a largest element ⟺ coatomic + $r(L)$ maximal. Exercises 10.1-10.10 classify abelian groups with local subgroup lattice (cyclic prime power + pure dense in $p$-adics). Five connection panels: Bass's B-objects · divisible &amp; reduced abelian groups · local lattices &amp; rings · nearly divisible groups · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Each a ≠ 1 has a maximal element above it — the order-dual of atomic.">coatomic</span>
+      <span class="topic" data-tooltip="r(L) = 1, equivalently every compact element is superfluous — &quot;approaching the top&quot; with no maximal.">divisible</span>
+      <span class="topic" data-tooltip="Each a ≠ 0 has maximal elements in a/0 — strongly coatomic (Călugăreanu's lattice sense).">reduced</span>
+      <span class="topic" data-tooltip="Every element is contained in a sum of a complement and the radical r(L).">condition (D)</span>
+      <span class="topic" data-tooltip="L ∖ {1} has a largest element — strictly stronger than &quot;unique maximal.&quot;">local lattice</span>
+      <span class="topic" data-tooltip="Bass's 1960 &quot;B-objects&quot;: modules where every quotient has a maximal submodule. Coatomic in lattice form.">Bass B-objects</span>
+      <span class="topic" data-tooltip="Abelian groups whose subgroup lattices are local: cyclic prime-power + pure dense in Jₚ.">nearly divisible</span>
+      <span class="topic" data-tooltip="Theorem 10.3: under (D), a superfluous ⟺ a/0 coatomic and a ≤ r(L) — dual of Ch 5's essentialness.">superfluous duality</span>
+    </div>
+    <span class="ch-link">Read Chapter 10 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch11.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch11">
+    <div class="row1">
+      <span class="ch-num">Chapter 11</span>
+      <span class="ch-meta">~50 min · pp. 123–129 · 8 sections + 5 connections · 6 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Co-compact Lattices</h3>
+    <p class="tag">The order-dual of compactness. Finitely cogenerated modules in lattice form. Theorem 11.2 ties co-compact to "socle compact and essential."</p>
+    <p class="desc">An element $a$ is <em>co-compact</em> if whenever $a \ge \bigwedge S$ there is a finite $F \subseteq S$ with $a \ge \bigwedge F$ — the order-dual of compactness. A lattice is co-compact when $0$ is a co-compact element. By Stenström's terminology, co-compact = <strong>finitely cogenerated</strong>. Lemma 11.2: in modular lattices, co-compact elements are closed under finite joins. Proposition 11.2: an artinian lattice is co-compact (the dual of "noetherian ⟹ compact"). Theorem 11.1 (three-way): in compactly generated modular lattices with $r(L) = 0$, co-compact ⟺ semiatomic with finite atoms ⟺ artinian. <strong>Theorem 11.2 (keystone):</strong> in compactly generated modular lattices, co-compact ⟺ socle is compact and essential — order-dual of "compact ⟺ radical is co-compact and superfluous." Connection panels: finitely cogenerated modules · order duality (compact ↔ co-compact) · linearly compact modules (Onodera 1973) · QF rings &amp; Morita duality · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Order-dual of compact: a ≥ ⋀ S has finite witness a ≥ ⋀ F.">co-compact</span>
+      <span class="topic" data-tooltip="Stenström's term: module-theoretic version of co-compact; essential socle that is finitely generated.">finitely cogenerated</span>
+      <span class="topic" data-tooltip="L → L⁰: ∨ ↔ ∧, 0 ↔ 1. Compact ↔ co-compact, atomic ↔ coatomic, essential ↔ superfluous.">order duality</span>
+      <span class="topic" data-tooltip="DCC: every descending chain stabilises.">artinian</span>
+      <span class="topic" data-tooltip="Socle s(L) is essential in L — the keystone equivalence of Theorem 11.2.">socle essential</span>
+      <span class="topic" data-tooltip="Compactly generated modular: co-compact ⟺ socle compact and essential. Order-dual of compact ⟺ radical co-compact and superfluous.">Theorem 11.2</span>
+      <span class="topic" data-tooltip="Onodera 1973: a module is finitely cogenerated ⟺ linearly compact with essential socle.">Onodera</span>
+      <span class="topic" data-tooltip="Quasi-Frobenius rings: where finitely cogenerated coincides with finitely generated; Morita self-dual.">QF rings</span>
+    </div>
+    <span class="ch-link">Read Chapter 11 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch12.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch12">
+    <div class="row1">
+      <span class="ch-num">Chapter 12</span>
+      <span class="ch-meta">~70–80 min · pp. 131–142 · 7 sections + 5 connections · 10 exercises <span class="status">Available</span></span>
+    </div>
+    <h3>Supplemented Lattices · Locally Artinian Lattices</h3>
+    <p class="tag">A <em>supplement</em> is a minimal join-witness — the order-dual of pseudo-complement. Corollary 12.2 is the keystone: in compact modular lattices, supplemented ⟺ $1$ is an irredundant join of local elements. The chapter's second half lifts Wisbauer's four-way Z-module exercise to lattice form.</p>
+    <p class="desc">An element $c$ is a <em>supplement</em> of $b$ if it is minimal with $b \vee c = 1$ — equivalently (Prop 12.1) $b \vee c = 1$ and $b \wedge c$ superfluous in $c/0$. Lemma 12.1: every complement is a supplement in bounded modular. The seven-part Proposition 12.2 unpacks how supplements behave in compactly generated modular lattices: descent along $\le$, compactness, radical-witness for maximal $b$, perturbation by superfluous, quotient transport. Hollow lattices (every $\ne 1$ superfluous) and local lattices ($L \setminus \{1\}$ has top) are introduced; the Prüfer $p$-group's subgroup lattice is the canonical hollow-not-local example. <strong>Corollary 12.2 (the keystone)</strong>: in compact modular lattices, supplemented ⟺ every maximal has a supplement ⟺ $1$ is a join of hollow elements ⟺ $1$ is an irredundant join of local elements — the lattice form of the semiperfect-module structure theorem. The chapter's second half — locally artinian lattices — generalises Wisbauer's four-way Z-module exercise: locally artinian ⟺ DCC on cyclic ⟺ essential socle ⟺ torsion. Three of the four equivalences lift cleanly under H-noetherian + (RSC); the fourth requires cyclically generated + condition (U) (Prop 12.9). Connection panels: Wisbauer's <em>Foundations</em> §41 · Krull-Schmidt-Azumaya · locally artinian Z-modules · order duality theme · Prologos.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="Minimal c with b ∨ c = 1. In L⁰, this is the pseudo-complement of b. Order-dual to pseudo-complement.">supplement</span>
+      <span class="topic" data-tooltip="Each element has a supplement. In compact modular: 1 is an irredundant join of local elements (Cor 12.2).">supplemented</span>
+      <span class="topic" data-tooltip="Each a ≠ 1 is superfluous; equivalently, every quotient 1/a is indecomposable (Prop 12.4).">hollow</span>
+      <span class="topic" data-tooltip="L ∖ {1} has a top element; equivalent to hollow + r(L) ≠ 1 in modular CG.">local</span>
+      <span class="topic" data-tooltip="r(L) = 1, equivalently every compact element is superfluous — &quot;approaching the top&quot; with no maximal.">divisible</span>
+      <span class="topic" data-tooltip="Every compact element is artinian — Wisbauer's exercise: ⟺ DCC on cyclic ⟺ essential socle ⟺ torsion.">locally artinian</span>
+      <span class="topic" data-tooltip="Each element is a join of cyclic elements; strengthens compactly generated.">cyclically generated</span>
+      <span class="topic" data-tooltip="Robert Wisbauer's <em>Foundations of Module and Ring Theory</em> §41: classical theory of supplemented + semiperfect modules.">Wisbauer §41</span>
+      <span class="topic" data-tooltip="In compact modular: supplemented ⟺ 1 is an irredundant join of local elements.">Cor 12.2 keystone</span>
+      <span class="topic" data-tooltip="L → L⁰: ∨ ↔ ∧, 0 ↔ 1. Compact ↔ co-compact, atomic ↔ coatomic, essential ↔ superfluous.">order duality</span>
+    </div>
+    <span class="ch-link">Read Chapter 12 →</span>
+  </article>
+</a>
+
+<a href="calugareanu-companion-ch13.html" style="text-decoration: none; color: inherit; display: block;">
+  <article class="chapter-card available" id="card-ch13">
+    <div class="row1">
+      <span class="ch-num">Chapter 13</span>
+      <span class="ch-meta">~80–90 min · pp. 143–163 · 9 sections + 5 connections · 13 exercises · <strong>Closing chapter</strong> <span class="status">Available</span></span>
+    </div>
+    <h3>Several Dimensions</h3>
+    <p class="tag">The closing chapter: <em>four</em> dimension concepts on lattices — dual Goldie (hollow), infinite Goldie via the ideal lattice, the transfinite Krull dimension of Gabriel-Rentschler-Hart, and Gabriel dimension. Krause's punchline: $k$-dim $\le g$-dim $\le k$-dim$+1$.</p>
+    <p class="desc">Chapter 13 collects four distinct notions of dimension. <strong>Dual Goldie (hollow) dimension</strong> $h$-dim$(L) = $ dim$(L^0)$ — the order-dual of Goldie dim via $L \mapsto L^0$. Theorem 13.1 gives the five-way characterisation in bounded modular. <strong>Infinite Goldie</strong> via the ideal lattice $I_0(L)$: a compactly generated upper continuous home into which $L$ embeds; Theorem 13.4 (Crawley-style cardinal bound), Theorem 13.5 (4-way: $L$ has u-basis ⟺ each non-zero element contains a uniform). <strong>Krull dimension</strong> via Gabriel-Rentschler deviation — a transfinite ordinal recursive definition. Lemmonier's Theorem 13.6: $A$ has no Krull dim ⟺ $A$ contains a copy of the dyadic numbers $\mathbf{D}$. Hart's $\alpha$-critical lattices as building blocks (Lemmas 13.7, 13.8). Krause's Theorem 13.7: upper continuous modular + Krull dim ⟹ finite uniform dim. <strong>Gabriel dimension</strong> $g$-dim$(L)$: $0 \iff L = \{0\}$; $1 \iff $ torsion. Krause's comparison Theorem 13.9: $k$-dim$(L) \le g$-dim$(L) \le k$-dim$(L) + 1$. Theorem 13.10: noetherian ⟹ $g$-dim $= k$-dim $+ 1$. Connection panels: Goldie's theorem · Krull dim in commutative algebra → Gabriel-Rentschler · Gabriel categories + localization · synthesis (the four-dimension fingerprint) · Prologos. The closing "Looking Back" section synthesizes the journey from Chapter 1's compactness primitives to the four-dimensional fingerprint at Chapter 13's close.</p>
+    <div class="topics">
+      <span class="topic" data-tooltip="h-dim(L) =  dim(L⁰) — order-dual of Goldie dimension.">dual Goldie</span>
+      <span class="topic" data-tooltip="Dual Goldie dimension via hollow elements: ⋁ aₖ = 1 irredundant with each aₖ/0 hollow.">hollow dim</span>
+      <span class="topic" data-tooltip="Lattice of non-zero ideals of L — compactly generated upper continuous home for infinite Goldie theory.">ideal lattice $I_0(L)$</span>
+      <span class="topic" data-tooltip="Maximal independent subset of L ∖ {0} consisting only of uniform elements; vector space basis is the canonical case.">u-basis</span>
+      <span class="topic" data-tooltip="Gabriel-Rentschler-Hart: ordinal-valued deviation. -1 trivial, 0 artinian, ω transfinite, no-deviation if 𝐃-embedded.">Krull dim</span>
+      <span class="topic" data-tooltip="The recursive ordinal that defines Krull dimension.">deviation</span>
+      <span class="topic" data-tooltip="Lemmonier: A has no Krull dim ⟺ A contains a copy of the dyadic numbers 𝐃. Structural obstruction.">Lemmonier $\mathbf{D}$</span>
+      <span class="topic" data-tooltip="Hart: bounded lattice with k-dim = α and k-dim(1/a) &lt; α for a ≠ 0. Atoms are 0-critical.">α-critical</span>
+      <span class="topic" data-tooltip="Pierre Gabriel's transfinite ordinal: 0 for trivial, 1 for torsion lattices.">Gabriel dim</span>
+      <span class="topic" data-tooltip="Gabriel's α-simple objects: build the α-th level of the Gabriel filtration.">α-simple</span>
+      <span class="topic" data-tooltip="Krause's comparison: k-dim(L) ≤ g-dim(L) ≤ k-dim(L) + 1 for lattices with both dimensions.">Krause $k \le g \le k+1$</span>
+      <span class="topic" data-tooltip="Final chapter of the book — synthesizes the four-dimensional fingerprint of a lattice.">closing chapter</span>
+    </div>
+    <span class="ch-link">Read Chapter 13 →</span>
+  </article>
+</a>
+
+<div class="companion-purpose" style="margin-top: 20px; border: 2px solid var(--gold); background: var(--bg-warm);">
+  <p><strong>📚 The companion is complete.</strong> All 13 chapters of <em>Lattice Concepts of Module Theory</em> are now available as side-by-side reading companions. The lattice journey runs from compactness primitives (Ch 1–2) through composition series, essential extensions, socle, independence, Goldie dim, radicals, uniform/CS, purity, coatomic, co-compact, supplemented, locally artinian, and the final four-dimensional fingerprint of Ch 13. Each chapter's vocab primer cross-references the previous; the process notes (in <code>calugareanu-companion-process.md</code>) record the term ledger and design conventions.</p>
+</div>
+
+<h2 class="section-h">Reference</h2>
+
+<div class="companion-purpose">
+  <p><strong>How chapters are organised.</strong> Each chapter file has a sidebar with sections grouped into thematic parts, followed by five outward connection panels, a glossary, and worked exercises. Theme toggle (dark/light) preserves your choice via <code>localStorage</code>. The brand block in each chapter's sidebar links back here.</p>
+  <p><strong>Math rendering.</strong> All chapters use MathJax 3.2 (loaded from cdnjs); allow a few seconds for initial typeset on first load. Math notation follows the book where unambiguous, with Călugăreanu's <code>b/a</code> for the interval $[a, b]$ preserved (modern texts usually write $[a, b]$).</p>
+  <p><strong>Source.</strong> Companion to <em>Lattice Concepts of Module Theory</em> by Grigore Călugăreanu (Springer Science+Business Media Dordrecht, 2000). All theorem numberings, definitions, and exercise statements are from that book.</p>
+</div>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Front Door</div>
+    <div>Built to be read alongside the book.</div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Theme toggle persists across chapters via localStorage.</div>
+    <div>Last updated: April 2026.</div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

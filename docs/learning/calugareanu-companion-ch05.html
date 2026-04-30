@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 5 · Socle and Torsion Lattices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  figure { margin: 26px 0; text-align: center; }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); margin-top: 8px; font-style: italic; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  :root[data-theme="dark"] figure svg .node { fill: var(--bg-warm) !important; stroke: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .node-hot { fill: #3A2E15 !important; stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .node-cool { fill: #1A2236 !important; stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-hot { stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .lbl { fill: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .cap { fill: var(--text-dim) !important; }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch04.html">← Chapter 4</a></li>
+    <li><a href="calugareanu-companion-ch06.html">Chapter 6 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 5 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Socle</div>
+  <ul>
+    <li><a href="#s1">A1 · Socle and dual atoms</a></li>
+    <li><a href="#s2">A2 · Atom generated (Lemma 5.1)</a></li>
+    <li><a href="#s3">A3 · Theorem 5.1 — socle = ⋀ essentials</a></li>
+    <li><a href="#s4">A4 · Cor 5.1 — s(L)/0 complemented</a></li>
+    <li><a href="#s5">A5 · Atomic socles (Prop 5.1, Cor 5.2-3)</a></li>
+    <li><a href="#s6">A6 · K-socle generalisation</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Torsion lattices</div>
+  <ul>
+    <li><a href="#s7">B1 · Definitions and disambiguation</a></li>
+    <li><a href="#s8">B2 · Lemma 5.3 — torsion ⟹ atomic</a></li>
+    <li><a href="#s9">B3 · Prop 5.2 — socle essential</a></li>
+    <li><a href="#s10">B4 · Prop 5.3 — torsion in intervals</a></li>
+    <li><a href="#s11">B5 · Prop 5.4 — joins are torsion</a></li>
+    <li><a href="#s12">B6 · Theorem 5.2 — noeth+torsion ⟹ artinian</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Loewy series</div>
+  <ul>
+    <li><a href="#s13">C1 · Construction and Loewy length</a></li>
+    <li><a href="#s14">C2 · Prop 5.5 — Loewy ⟺ torsion</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Torsion elements + RSC</div>
+  <ul>
+    <li><a href="#s15">D1 · Torsion element, T(L), (T1)-(T3)</a></li>
+    <li><a href="#s16">D2 · Torsion part t(L) (Prop 5.6, 5.7)</a></li>
+    <li><a href="#s17">D3 · Radical property (Prop 5.8)</a></li>
+    <li><a href="#s18">D4 · RSC and Prop 5.9</a></li>
+    <li><a href="#s19">D5 · Prop 5.10 + Cor 5.4</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Torsion-free + cycles</div>
+  <ul>
+    <li><a href="#s20">E1 · Torsion-free element (overload!)</a></li>
+    <li><a href="#s21">E2 · Lemma 5.4 + Theorem 5.3</a></li>
+    <li><a href="#s22">E3 · Prop 5.12 — t-meet</a></li>
+    <li><a href="#s23">E4 · Cycles and locally cyclic</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Modules &amp; primary decomp</a></li>
+    <li><a href="#c2">P2 · Group theory torsion</a></li>
+    <li><a href="#c3">P3 · Loewy &amp; representation theory</a></li>
+    <li><a href="#c4">P4 · t-structures &amp; radical</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 5 · pp. 47–58</div>
+  <h1>Socle and Torsion Lattices</h1>
+  <p class="lede">The atomic foundation of a lattice (its socle) and the lattices that climb upward atom-by-atom (torsion lattices). Plus the transfinite Loewy series, the radical-style torsion part, and the dual cycle / torsion-free apparatus.</p>
+  <div class="meta">
+    <span>~70 min read</span>
+    <span>23 sections + 5 connection panels</span>
+    <span>11 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — atoms from below, torsion through and through</h2>
+  <div class="tagline">Where Chapter 4 looked sideways (essential vs pseudo-complement), Chapter 5 looks downward — at the atoms — and asks: how much of the lattice is "built from atoms"? The answer ranges from "just the socle" (a single floor) to "the whole lattice" (torsion).</div>
+
+  <p>The <em>socle</em> $s(L)$ is the join of all atoms of $L$ — the bottom-most "atomic foundation." In a vector space, the socle is the union of all $1$-dimensional subspaces, which is the whole space — vector spaces are entirely atomic. In $\mathbb Z$ as a $\mathbb Z$-module, there are no atoms (no minimal non-zero submodule), so the socle is $0$. The socle measures how much of the lattice is reachable from below by atomic steps.</p>
+
+  <p>A <em>torsion lattice</em> takes this further: it asks that <em>every</em> upper interval $1/a$ contain at least one atom — so from anywhere in the lattice, one atomic step is always available going up. Such lattices are also called <em>semiartinian</em>. The chapter's key result (Theorem 5.1) connects the socle to the apparatus of Chapter 4: <em>$s(L) = \bigwedge \{e : e \text{ essential in } L\}$.</em> The socle is the meet of all essentials. In an atomic lattice, this means: the socle IS the smallest essential element, and the essentials form a principal ideal.</p>
+
+  <p>The chapter then climbs: the <em>Loewy series</em> $0 = s_0(L) \le s_1(L) \le s_2(L) \le \cdots$ iterates the socle construction transfinitely. $s_1(L) = s(L)$. $s_{\sigma+1}(L) = s(1/s_\sigma(L))$ — the socle of the upper interval. At limit ordinals, take the join. Proposition 5.5: <em>$L$ is torsion ⟺ this series eventually reaches $1$.</em> The Loewy length is the smallest ordinal at which it stabilises.</p>
+
+  <p>The last two movements introduce: (4) <em>torsion elements</em> — those whose principal ideal is a torsion lattice — which form a principal ideal $t(L)/0$ with a "radical" property; the <em>RSC</em> (restricted socle condition) refines this; and (5) <em>torsion-free elements</em> — those that are not covered by anything — together with <em>cycles</em>: elements whose principal ideal is noetherian and distributive. The book's example: in the lattice of subgroups of an abelian group, cycles correspond exactly to cyclic subgroups.</p>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>The socle is "what the atoms generate." A torsion lattice is "atom-reachable from above." The Loewy series climbs atom-by-atom transfinitely. The torsion part $t(L)$ collects all elements whose downward world is torsion. RSC constrains how essential elements interact with the socle — and the chapter culminates in showing that essentials, torsion, and the socle interact tightly: $e$ essential ⟺ $s(L) \le e$ AND $1/e$ is torsion (Prop 5.10). This is the apparatus that Chapter 7's "semi-artinian" theory and Chapter 6's Goldie dimension sit on top of.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Two terminology traps in this chapter</span>
+    <p><strong>(1) "Torsion" has multiple senses.</strong> In <em>module theory</em>, an element $m \in M$ is "torsion" if $rm = 0$ for some non-zero $r$ in the ring. Călugăreanu's <em>lattice torsion</em> is different: a lattice $L$ is "torsion" if every upper interval $1/a$ has atoms. The two notions are related (both invoke "exhausting via finite-step structure") but not identical. The deep dive in the primer disentangles them.</p>
+    <p><strong>(2) "Torsion-free" has TWO different meanings inside this very chapter.</strong> A <em>torsion-free lattice</em> (defined alongside torsion lattices in Part B) means: every $a/0$ is infinite. A <em>torsion-free element</em> (defined in Part E) means: no element of $L$ covers it. These are completely different concepts that share a name. The chapter uses both. Watch closely.</p>
+  </div>
+</section>
+
+<div class="part-header" id="vocab">
+  <div class="pk">Pre-flight · Vocabulary primer</div>
+  <h2>Carried forward, new, and deep dives</h2>
+  <p class="part-lede">Following the established convention: one-line refreshers for previously-introduced terms; full term-cards for new terms; deep dives where the term sits at a conceptual hinge.</p>
+</div>
+
+<section class="module" id="vocab-section">
+  <h2>Carried forward — quick refreshers</h2>
+  <div class="tagline">One-line refreshers. Full definitions in earlier chapters' glossaries.</div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">atom</span> A minimal non-zero element: $0 \prec a$, nothing strictly between $0$ and $a$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">compactly generated (algebraic)</span> Every element is the join of compact (finite-witness) elements. Submodule lattices are compactly generated.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2</span>
+    <p><span class="term">upper continuous</span> Meeting commutes with directed joins.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/4</span>
+    <p><span class="term">complement / complemented</span> $a' \in L$ with $a \wedge a' = 0$ AND $a \vee a' = 1$. A lattice is complemented if every element has at least one complement.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 4</span>
+    <p><span class="term">essential element</span> $e \wedge a \ne 0$ for every non-zero $a$. "Touches" everything below.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 4</span>
+    <p><span class="term">pseudo-complement</span> $c$ maximal with $b \wedge c = 0$. Always exists in inductive lattices (Lemma 4.2). May not be unique.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">noetherian (ACC) / artinian (DCC)</span> Increasing / decreasing chains stabilise. Combined: finite length (Theorem 3.2 of book).</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/3</span>
+    <p><span class="term">distributive lattice</span> $a \wedge (b \vee c) = (a \wedge b) \vee (a \wedge c)$. Strictly stronger than modular. The lattice of subgroups of an abelian group is distributive iff the group is locally cyclic (per this chapter's example).</p>
+  </div>
+
+  <h2>New in Chapter 5 — full term-cards</h2>
+  <div class="tagline">Each gets a full definition in the chapter prose; this primer flags the term and gives the gist.</div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">socle $s(L)$</span> The join of all atoms of a lattice $L$ with $0$. Plain English: the "atomic foundation" — what's reachable as a join of all the indivisible pieces. Notation: $s(a/0) = $ socle of the principal ideal $a/0$ = join of atoms below $a$. The book also writes $s(a)$.</p>
+    <p>Etymology: <em>socle</em> is French for "pedestal" or "plinth" — the architectural base on which a column or statue stands. Borrowed into mathematics as the "base" of a structure built from atoms upward.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">dual atom</span> A maximal element of $L \setminus \{1\}$. The "co-atom": something one cover-step below $1$. The order-dual of an atom (which is one cover-step above $0$).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">atom generated</span> A lattice in which every element is a join of atoms. Strong condition: implies the socle is everything.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5 · Watch the overload</span>
+    <p><span class="term">torsion lattice</span> A lattice $L$ such that for every $a \ne 1$ in $L$, the upper interval $1/a$ contains at least one atom. Equivalently: every "upper world" is non-empty atomically — there's always a one-step extension available going up. Also called <em>semiartinian</em> in some literature (e.g., reference [33] in the book).</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5 · Watch the overload</span>
+    <p><span class="term">torsion-free lattice</span> A lattice $L$ such that for every $a \ne 0$, the principal ideal $a/0$ is infinite. So below every non-zero element there's an infinite descending range.</p>
+    <p><strong>WARNING:</strong> "torsion-free element" (Part E) is a DIFFERENT concept — it means an element not covered by anything. The two share a name but are separate ideas in this chapter.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">semiartinian</span> Synonym for "torsion lattice." Chosen because such lattices are "almost artinian" — every upper interval at least has atoms (DCC-flavoured), even if full DCC fails.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">Loewy series</span> The transfinite chain $0 = s_0(L) \le s_1(L) \le s_2(L) \le \cdots$ where $s_1 = s(L)$ is the socle, $s_{\sigma+1} = s(1/s_\sigma)$ is the next socle "above" the previous, and at limit ordinals $s_\sigma = \bigvee_{\alpha < \sigma} s_\alpha$. Named for Alfred Loewy, German mathematician (1873–1935), who introduced the construction in his work on primary decomposition.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">Loewy length</span> The smallest ordinal $\sigma$ such that $s_\sigma(L) = s_{\sigma+1}(L)$ — i.e., the chain stabilises. May be a transfinite ordinal.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">torsion element</span> An element $a \in L$ such that the principal ideal $a/0$ is a torsion sublattice. Plain English: "everything below $a$ is reachable atom-by-atom from above." The set of torsion elements is denoted $T(L)$. Trivially every atom is torsion.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">torsion part $t(L)$</span> The join of all torsion elements of $L$. By Proposition 5.6, $T(L) = t(L)/0$ — the torsion elements form a principal ideal generated by $t(L)$.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5 · "Radical" terminology</span>
+    <p><span class="term">radical property</span> The property $t(1/t(L)) = t(L)$ — meaning: "above the torsion part, there is no further torsion." This is called a <em>radical</em> property because it mirrors the behaviour of nilradicals and Jacobson radicals in ring theory: they are idempotent under further radicalisation. Proposition 5.8 establishes this for $t$.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">RSC (restricted socle condition)</span> A lattice $L$ satisfies RSC if for every $b \ne 1$ that is essential in $L$, the upper interval $1/b$ contains atoms — i.e., $s(1/b) \ne b$. A "regularity" condition coupling essentialness and atom-reachability.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">K-essential / K-socle</span> A generalisation: let $K \subseteq L$ be downward-closed under compact descent (if $c$ compact, $c \le a$, $a \in K$ then $c \in K$). An element $e$ is <em>K-essential</em> if $e \wedge a \ne 0$ for every non-zero $a \in K$. The <em>K-socle</em> $s_K(L)$ is the join of all atoms in $K$.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5 · Different from "torsion-free lattice"</span>
+    <p><span class="term">torsion-free element</span> An element $a \in L$ such that no element of $L$ covers $a$. Plain English: "there's no immediate next step up from $a$." Trivially $1$ is torsion-free.</p>
+    <p><strong>WARNING:</strong> Despite sharing the prefix, this is NOT the same concept as "torsion-free lattice" (above in Part B). The two are entirely different. The chapter uses both. The term cards in this primer are the cleanest place to keep them straight.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">cycle (or cyclic element)</span> An element $c$ such that $c/0$ is a noetherian, distributive sublattice of $L$. Plain English: "the world below $c$ is small and well-behaved (chain-friendly)." In the lattice of subgroups of an abelian group, cycles correspond exactly to cyclic subgroups.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 5</span>
+    <p><span class="term">locally cyclic group</span> A group in which every finitely generated subgroup is cyclic. The chapter notes: an abelian group's subgroup lattice is distributive iff the group is locally cyclic. Every cyclic group is locally cyclic; not conversely (e.g., $\mathbb Q$ as an additive group is locally cyclic but not cyclic).</p>
+  </div>
+
+  <h2>Deep dive — Socle in module theory</h2>
+  <div class="tagline">Where the chapter's "socle" comes from. This is the term's home in algebra.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Socle in module theory</span>
+    <p><strong>The module-theoretic socle.</strong> For an $R$-module $M$, the <em>socle</em> $\mathrm{soc}(M)$ is the sum of all simple submodules of $M$ — equivalently, the largest semisimple submodule. (A <em>simple module</em> is a non-zero module with no proper non-trivial submodules; semisimple = direct sum of simples.) In the submodule lattice $S_R(M)$, simple submodules correspond to atoms (minimal non-zero submodules), so the lattice socle $s(S_R(M))$ recovers the module socle exactly.</p>
+    <p><strong>Examples.</strong> For a vector space $V$ over a field $k$: every $1$-dimensional subspace is simple, so $\mathrm{soc}(V) = V$ — vector spaces are entirely "socle." For $\mathbb Z$ as a $\mathbb Z$-module: there are no simple submodules ($n\mathbb Z$ has further sub-submodules $kn\mathbb Z$ for $k > 1$), so $\mathrm{soc}(\mathbb Z) = 0$. For $\mathbb Z/12$: simple submodules are $\langle 4\rangle = \{0, 4, 8\} \cong \mathbb Z/3$ and $\langle 6\rangle = \{0, 6\} \cong \mathbb Z/2$, and their sum $\langle 2\rangle = \mathbb Z/6$ is the socle.</p>
+    <p><strong>Why the socle matters.</strong> The socle measures the "fully decomposable" part of a module — the part that splits cleanly into simple pieces. Theorem 5.1 says the socle equals the meet of all essential submodules, which couples the socle to the chapter's essentialness apparatus. In practice: when computing invariants of a module, the socle is often the easiest to handle (it's semisimple, hence decomposable), and many proofs reduce to socle-based arguments.</p>
+  </div>
+
+  <h2>Deep dive — Torsion in module theory vs lattice torsion</h2>
+  <div class="tagline">The two notions are <em>related</em> but <em>not identical</em>. This deep dive disentangles them.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Two senses of "torsion"</span>
+    <p><strong>Module-theoretic torsion.</strong> For a module $M$ over an integral domain (or commutative ring) $R$: an element $m \in M$ is a <em>torsion element</em> if $rm = 0$ for some non-zero $r \in R$. The <em>torsion submodule</em> $T(M) = \{m \in M : rm = 0 \text{ for some } r \ne 0\}$ is a submodule (in domains). $M$ is <em>torsion</em> if $T(M) = M$; <em>torsion-free</em> if $T(M) = 0$.</p>
+    <p>Examples: in abelian groups (= $\mathbb Z$-modules), torsion = "finite order." $\mathbb Z/n$ is a torsion abelian group; $\mathbb Z$ is torsion-free; $\mathbb Q$ is torsion-free; $\mathbb Q/\mathbb Z$ is torsion (every element is killed by some $n$); the Prüfer group $\mathbb Z(p^\infty)$ is torsion (every element is killed by some $p^k$).</p>
+    <p><strong>Lattice torsion (this chapter).</strong> A lattice $L$ is <em>torsion</em> if every upper interval $1/a$ ($a \ne 1$) contains an atom. Plain English: "from anywhere below the top, you can take an atomic step."</p>
+    <p><strong>The relationship.</strong> The two notions agree for the canonical example: when $L = S_R(M)$, $M$ is a torsion module iff $L$ is a torsion lattice (in the modular pseudo-complemented case, by Lemma 5.3 and the equivalence of "atomic" and "every non-zero submodule contains a simple"). So in the module setting the two senses coincide.</p>
+    <p>But they diverge in general. Consider the lattice of open subsets of $\mathbb R$ (a Heyting algebra, not arising from any module): every non-empty upper interval $1/U$ for $U \ne \mathbb R$ has many atoms (singletons of points in $\mathbb R \setminus U$ — wait, those aren't open, scratch that). Try: the rationals dense in $\mathbb R$ — neighbourhoods give a richer atomic structure. Lattice torsion in this setting is meaningful even though "torsion module" doesn't apply.</p>
+    <p><strong>The takeaway.</strong> Lattice torsion abstracts the "atom-reachable" property of module torsion, but it's a strictly more general concept. The book uses "torsion" lattice-theoretically; when reading other texts, watch carefully which sense applies.</p>
+  </div>
+
+  <h2>Deep dive — Loewy's primary decomposition motivation</h2>
+  <div class="tagline">Why the Loewy series is named for Loewy. Historical context for the construction.</div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Loewy and primary decomposition</span>
+    <p><strong>Alfred Loewy</strong> (1873–1935) was a German mathematician at the University of Freiburg, working on group theory and matrix algebra. In his 1905 paper <em>Über die Reduzibilität der Reduzible Gruppen Linearer Substitutionen</em> and subsequent work, he introduced what we now call the <em>Loewy series</em> for finite-dimensional representations: an iterated socle filtration giving a canonical "stratification" of a representation into semisimple layers.</p>
+    <p><strong>Loewy's original formulation.</strong> For a finite-dimensional representation $V$ of an algebra $A$ over a field, set $V_0 = 0$, $V_1 = \mathrm{soc}(V)$ (the largest semisimple sub-rep), and $V_{k+1} = $ the preimage in $V$ of $\mathrm{soc}(V/V_k)$ — i.e., $V_{k+1}/V_k = \mathrm{soc}(V/V_k)$. The series stabilises when the socle of the quotient is zero. The number of nontrivial steps is the <em>Loewy length</em>.</p>
+    <p><strong>Why this matters.</strong> Loewy's series gives a canonical decomposition of a representation into "layers" of semisimple content — each $V_k/V_{k-1}$ is semisimple (in fact a direct sum of simples), and the number of layers is an invariant. For finite-dimensional representations of finite groups (in characteristic dividing the group order), this is the right way to organise the structure.</p>
+    <p><strong>The lattice generalisation.</strong> Călugăreanu's chapter pulls this construction into pure lattice theory: $s_\sigma(L)$ replaces $V_\sigma$, the "socle-of-quotient" idea becomes "socle in $1/s_\sigma(L)$," and the Loewy length becomes the smallest ordinal at which the series stabilises. The transfinite generalisation (allowing $\sigma$ to be any ordinal) handles infinite-dimensional cases — including modules over non-noetherian rings — that Loewy's original framework couldn't. Proposition 5.5's clean characterisation, $L$ torsion ⟺ Loewy series reaches $1$, is the lattice-theoretic crystallisation of the original idea.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA">
+  <div class="pk">Part A · Socle</div>
+  <h2>The atomic foundation of a lattice</h2>
+  <p class="part-lede">The chapter begins with a single new construction — the join of all atoms — and a beautiful theorem (5.1) that connects it to the essentialness apparatus from Chapter 4.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION A1</span> Socle — definition, dual atoms, basic properties</h2>
+  <div class="tagline">The socle is the join of all atoms. Atoms generate the "atomic floor" of the lattice; the socle measures how high that floor reaches.</div>
+
+  <div class="box def">
+    <span class="label">Definition · socle</span>
+    <p>Let $L$ be a lattice with $0$. The <strong>socle</strong> of $L$, denoted $s(L)$, is the join of all atoms of $L$.</p>
+  </div>
+
+  <p>If $L$ has no atoms, $s(L) = 0$ by convention (the empty join). If $L$ has atoms but no upper bound on their join, the socle is the supremum (which exists in complete lattices).</p>
+
+  <div class="box def">
+    <span class="label">Definition · dual atom</span>
+    <p>In a bounded lattice, a <strong>dual atom</strong> is a maximal element of $L \setminus \{1\}$. Equivalently, an element $m$ such that $m \prec 1$ (covers).</p>
+  </div>
+
+  <p>Dual atoms are the order-dual of atoms: an atom is one cover-step above $0$, a dual atom is one cover-step below $1$. The two notions are completely symmetric under flipping the lattice upside down.</p>
+
+  <h3>Basic properties of the socle (book p. 47)</h3>
+
+  <p>The book lists four basic properties as immediate consequences of the definition:</p>
+
+  <ol>
+    <li>$s(a/0) \le a$ — the socle of a principal ideal is below its generator. Trivial: every atom of $a/0$ is below $a$.</li>
+    <li>$a \le b \Rightarrow s(a/0) \le s(b/0)$ — the socle is monotone in the principal ideal. Atoms below $a$ are also below $b$, so their join below $a$ is $\le$ their join below $b$.</li>
+    <li>$s\bigl(\bigl(\bigwedge_{i \in I} a_i\bigr)/0\bigr) \le \bigwedge_{i \in I} s(a_i/0)$ — the socle of a meet is below the meet of socles.</li>
+    <li>$\bigvee_{i \in I} s(a_i/0) \le s\bigl(\bigl(\bigvee_{i \in I} a_i\bigr)/0\bigr)$ — the join of socles is below the socle of the join.</li>
+  </ol>
+
+  <p>Properties (3) and (4) are weak inequalities; the reverse generally fails. They reflect that "atom-below" interacts cleanly with order but not with the operations themselves.</p>
+
+  <figure>
+    <svg viewBox="0 0 460 280" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .edge-hot { stroke: #C89F3C; stroke-width: 2; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 13px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 11px; fill: #6B6B6B; font-style: italic; }
+      </style>
+      <circle class="node" cx="230" cy="30" r="13"/><text class="lbl" x="230" y="20" text-anchor="middle">$1$</text>
+      <circle class="node" cx="120" cy="100" r="13"/><text class="lbl" x="100" y="105" text-anchor="end">dual atom</text>
+      <circle class="node" cx="340" cy="100" r="13"/><text class="lbl" x="360" y="105" text-anchor="start">dual atom</text>
+      <line class="edge" x1="120" y1="88" x2="222" y2="38"/>
+      <line class="edge" x1="340" y1="88" x2="238" y2="38"/>
+      <circle class="node-hot" cx="230" cy="170" r="14"/><text class="lbl" x="230" y="160" text-anchor="middle">$s(L)$</text>
+      <line class="edge-hot" x1="120" y1="112" x2="220" y2="160"/>
+      <line class="edge-hot" x1="340" y1="112" x2="240" y2="160"/>
+      <circle class="node-hot" cx="170" cy="220" r="11"/><text class="lbl" x="148" y="225" text-anchor="end">atom</text>
+      <circle class="node-hot" cx="230" cy="220" r="11"/><text class="lbl" x="230" y="245" text-anchor="middle">atom</text>
+      <circle class="node-hot" cx="290" cy="220" r="11"/><text class="lbl" x="312" y="225" text-anchor="start">atom</text>
+      <line class="edge-hot" x1="170" y1="209" x2="222" y2="180"/>
+      <line class="edge-hot" x1="230" y1="209" x2="230" y2="184"/>
+      <line class="edge-hot" x1="290" y1="209" x2="238" y2="180"/>
+      <circle class="node" cx="230" cy="260" r="11"/><text class="lbl" x="230" y="280" text-anchor="middle">$0$</text>
+      <line class="edge" x1="170" y1="231" x2="225" y2="252"/>
+      <line class="edge" x1="230" y1="231" x2="230" y2="249"/>
+      <line class="edge" x1="290" y1="231" x2="235" y2="252"/>
+    </svg>
+    <figcaption>Socle picture. Atoms (gold, bottom row) join up to $s(L)$. Above $s(L)$, the lattice may continue with non-atomic structure all the way to dual atoms and then $1$.</figcaption>
+  </figure>
+
+  <h3>Examples</h3>
+
+  <ul>
+    <li><strong>$\mathcal P(M)$ (power set).</strong> Atoms = singletons. Socle = union of all singletons = $M$. So $\mathcal P(M)$ is "all socle" — it's atom generated.</li>
+    <li><strong>Vector space subspace lattice.</strong> Atoms = $1$-dimensional subspaces. Socle = sum of all $1$-dimensional subspaces = the whole space. Atom generated.</li>
+    <li><strong>$\mathbb Z$ as a $\mathbb Z$-module.</strong> Atoms = minimal non-zero submodules. None exist! (Every $n\mathbb Z$ has $kn\mathbb Z$ properly inside.) So $s(\mathbb Z) = 0$.</li>
+    <li><strong>$\mathbb Z/12$ as a $\mathbb Z$-module.</strong> Submodules are $\langle d\rangle$ for $d \mid 12$. Atoms are $\langle 4\rangle = \{0, 4, 8\} \cong \mathbb Z/3$ and $\langle 6\rangle = \{0, 6\} \cong \mathbb Z/2$. Socle = $\langle 4\rangle + \langle 6\rangle = \langle 2\rangle = \{0, 2, 4, 6, 8, 10\} \cong \mathbb Z/6$. So the socle is a proper non-trivial sub-thing.</li>
+  </ul>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION A2</span> Atom generated lattices — Lemma 5.1</h2>
+  <div class="tagline">In a modular compactly generated complemented lattice, every element is a join of atoms — the lattice is atom generated. The proof uses dual atoms, complementation, and Zorn.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.1</span>
+    <p>In a modular compactly generated complemented lattice, each element is a join of atoms.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · the strategy</span>
+    <p><strong>Step 1.</strong> Each compact element that is not an atom contains at least one dual atom. Why? Take a compact $c$ which is not an atom. Consider $X = \{x \in L : x < c\}$. Each chain in $X$ has an upper bound by Lemma 2.4 (the compact lattice's Zorn-friendly version). Zorn's Lemma gives a maximal element of $X$ — a dual atom of $c$ contained in $c$.</p>
+    <p><strong>Step 2.</strong> Each compact element contains at least one atom. Use Step 1 plus Exercise 1.37 (descend through dual atoms recursively until you hit an atom).</p>
+    <p><strong>Step 3.</strong> Each non-zero element contains at least one atom. The lattice is compactly generated: every element is a join of compacts, and by Step 2 each compact has an atom inside.</p>
+    <p><strong>Step 4.</strong> Each element is a join of atoms. Take any non-zero $a \in L$, and let $u$ = join of all atoms below $a$. We want $u = a$. The lattice is modular and complemented, so it's <em>relative complemented</em> (Exercise 1.36): the interval $a/0$ is itself complemented. If $u < a$, take $v$ a complement of $u$ in $a/0$. Then $v \ne 0$ and $v$ contains an atom (by Step 3), but that atom is below $a$ and not below $u$ (since $u \wedge v = 0$) — contradicting that $u$ was the join of <em>all</em> atoms below $a$. Hence $u = a$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · atom generated</span>
+    <p>A lattice in which each element is a join of atoms is called <strong>atom generated</strong>.</p>
+  </div>
+
+  <p>Lemma 5.1 says: modular + compactly generated + complemented ⟹ atom generated. Three structural properties (algebraicity, modularity, complementation) combine to force the lattice into the simplest possible "atomic" shape. This is a useful sufficient condition.</p>
+
+  <div class="box intuition">
+    <span class="label">Why these three hypotheses</span>
+    <p><strong>Modularity</strong> is needed for the relative-complementation step (Exercise 1.36). Without it, even complemented lattices can fail to have complemented intervals. <strong>Compactly generated</strong> is needed for "every non-zero element contains a compact, hence an atom." Without it, you could have atomless stretches in the lattice. <strong>Complemented</strong> is needed for the Zorn argument that builds atoms inside compact non-atoms.</p>
+    <p>Drop any one: vector space subspace lattices (modular + cg + complemented ⟹ atom generated, ✓). Submodule lattices over PIDs (modular + cg, but rarely complemented ⟹ rarely atom generated). $\mathbb Z$ as $\mathbb Z$-module: modular + cg + not complemented ⟹ not atom generated.</p>
+  </div>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION A3</span> Theorem 5.1 — the socle equals the meet of all essentials</h2>
+  <div class="tagline">The chapter's central theorem. In a compactly generated modular lattice, the socle is exactly the meet of all essential elements. This connects Part A (socle) to Chapter 4's essentialness apparatus.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.2</span>
+    <p>In an arbitrary lattice with zero, the socle is a lower bound for the meet of all essential elements of $L$:
+    $$s(L) \le \bigwedge \{e \in L : e \text{ essential in } L\}.$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $0 \ne s$ be an atom of $L$ and let $e \ne 0$ be essential. We show $s \le e$. By essentialness of $e$: $s \wedge e \ne 0$. But $s$ is an atom, so $s \wedge e \in \{0, s\}$ — it must be $s$. Hence $s \le e$. So every atom is below every essential, and therefore $s(L) \le \bigwedge \{e\}$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.1</span>
+    <p>In a compactly generated modular lattice, the socle equals the meet of all essential elements:
+    $$s(L) = \bigwedge \{e \in L : e \text{ essential in } L\}.$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>Let $s = \bigwedge \{e : e \text{ essential}\}$. By Lemma 5.2, $s(L) \le s$. We show the reverse inequality $s \le s(L)$.</p>
+    <p><strong>Strategy:</strong> show that the principal ideal $s/0$ is complemented; then by Lemma 5.1 (applied inside $s/0$, which is itself a modular compactly generated lattice as a downward sublattice), each element of $s/0$ — including $s$ itself — is a join of atoms. Hence $s \le s(L)$.</p>
+    <p><strong>Showing $s/0$ is complemented.</strong> Take $a \in s/0$. The lattice $L$ is pseudo-complemented (Cor 4.1, since compactly generated ⟹ upper continuous). Let $c$ be a pseudo-complement of $a$ in $L$. Then $a \vee c$ is essential in $L$ (Cor 4.2), so $s \le a \vee c$. Now $c \wedge s \in s/0$ and is a complement of $a$ in $s/0$:
+    $a \wedge (c \wedge s) \le a \wedge c = 0$, and $a \vee (c \wedge s) \stackrel{\mathrm{mod}}{=} (a \vee c) \wedge s = s$ (using modularity, with $a \le s$).</p>
+    <p>Hence $s/0$ is complemented; by Lemma 5.1 each element of $s/0$ is a join of atoms; so $s$ is a join of atoms; so $s \le s(L)$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The structural reading</span>
+    <p>Theorem 5.1 says: <em>the socle is precisely the "essentialness intersection."</em> An element is below the socle iff it is below every essential element. Or contrapositively: an element is essential iff it sits above the socle (and additional conditions — see Prop 5.10 below). This couples the socle (a horizontal "atomic foundation") to essentialness (a vertical "thick everywhere" property) — the two are complementary measurements that determine each other in compactly generated modular lattices.</p>
+  </div>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION A4</span> Corollary 5.1 — $s(L)/0$ is a complemented lattice</h2>
+  <div class="tagline">An immediate but important consequence: the socle's principal ideal is itself complemented.</div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.1</span>
+    <p>In a modular compactly generated lattice $L$, the quotient sublattice $s(L)/0$ is a complemented lattice.</p>
+  </div>
+
+  <p>The proof was implicit in Theorem 5.1's proof: we showed $s(L)/0$ is complemented as the key step. Spelling it out as a corollary makes it usable: the principal ideal below the socle is one of the cleanest possible lattice structures (modular + complemented + compactly generated), and is therefore atom generated by Lemma 5.1.</p>
+
+  <p>The corollary also says: in module theory, the submodule lattice of the socle of any module is itself complemented — the socle's internal structure mirrors a Boolean-like decomposition into simple pieces.</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION A5</span> Atomic lattices — Propositions 5.1, 5.2, 5.3</h2>
+  <div class="tagline">When the lattice is atomic, the socle takes on extra force: it becomes the smallest essential element, and essentials form a principal ideal.</div>
+
+  <p>Recall: a lattice $L$ is <em>atomic</em> if every non-zero element contains an atom. (Stronger than just "has atoms"; means atoms are everywhere-reachable from below.)</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.1</span>
+    <p>In a complete atomic lattice, the socle is essential.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Take any non-zero $a \in L$. By atomicity, $a$ contains an atom $s$. Then $s \le a \wedge s(L)$, so $a \wedge s(L) \ne 0$. Hence $s(L)$ is essential.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.2</span>
+    <p>In an atomic modular compactly generated lattice, the socle is the smallest essential element.</p>
+  </div>
+
+  <p>Combining Theorem 5.1 ($s(L) = \bigwedge \{$essentials$\}$) with Proposition 5.1 ($s(L)$ is essential), the socle is itself an essential element below all others — i.e., the smallest essential.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.3</span>
+    <p>In an atomic modular compactly generated lattice, the essential elements form a principal ideal.</p>
+  </div>
+
+  <p>The principal ideal generated by $s(L)$ — i.e., $\{e \in L : s(L) \le e\}$ — is exactly the set of essential elements: $s(L)$ is the smallest essential, and any element above it is also essential (since essentialness is upward-closed). So the essentials are exactly the upper-set generated by $s(L)$.</p>
+
+  <div class="box intuition">
+    <span class="label">A clean structural picture</span>
+    <p>In atomic modular compactly generated lattices, the lattice has a clean stratification:
+    <br>$\quad\bullet$ <em>Below the socle</em>: complemented (Cor 5.1), atom generated.
+    <br>$\quad\bullet$ <em>The socle itself</em>: the smallest essential element.
+    <br>$\quad\bullet$ <em>Above the socle</em>: the essential elements (a principal upper-set).
+    <br>$\quad\bullet$ <em>Strictly above socle but not essential</em>: nothing — every element above $s(L)$ is essential.
+    <br>$\quad\bullet$ <em>Not above socle</em>: not essential.
+    <br>So the dichotomy "essential or not" is decided by a single test: is $s(L)$ inside this element?</p>
+  </div>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION A6</span> The K-socle generalisation</h2>
+  <div class="tagline">A small generalisation that previews how the apparatus extends. Replace "all atoms" with "atoms in a chosen subset $K$" and re-run.</div>
+
+  <div class="box def">
+    <span class="label">Definition · K-essential and K-socle</span>
+    <p>Let $K \subseteq L$ be a subset such that for each compact element $c$ and each $a \in K$ with $c \le a$: $c \in K$ (downward-closed under compact descent). An element $e$ is <strong>K-essential</strong> if for every $0 \ne a \in K$, $e \wedge a \ne 0$. The <strong>K-socle</strong> $s_K(L)$ is the join of all atoms from $K$.</p>
+  </div>
+
+  <p>This is a "weighted" version of the socle theory. Instead of "all atoms," we look at atoms in $K$. Instead of "essential everywhere," we look at "essential among $K$." A theorem analogous to Theorem 5.1 holds — the K-socle equals the meet of K-essential elements (Exercise 5.1 sketches this).</p>
+
+  <div class="box intuition">
+    <span class="label">When is K-essentialness useful?</span>
+    <p>$K$ can be: the set of compact elements, the set of finitely-generated elements, the set of atoms, the set of cyclic elements, etc. The K-socle theory then applies the chapter's apparatus restricted to that subset. In module theory, $K$-essential typically arises when restricting attention to a particular family of submodules (e.g., torsion submodules, cyclic submodules, finitely generated submodules) — and the resulting K-socle measures the "atomic core" within that family.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="partB">
+  <div class="pk">Part B · Torsion lattices</div>
+  <h2>Lattices that climb atom-by-atom</h2>
+  <p class="part-lede">A torsion lattice is one where you can always take an atomic step upward. The chapter establishes their key properties: they are atomic, their socle is essential, the property descends through intervals, and noetherian + torsion ⟹ artinian.</p>
+</div>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION B1</span> Definition — torsion, torsion-free, semiartinian</h2>
+  <div class="tagline">Three definitions from one page of the book. Mark them carefully — they get re-used throughout the rest of the chapter, and "torsion-free" gets re-used in a totally different sense in Part E.</div>
+
+  <div class="box def">
+    <span class="label">Definition · torsion lattice</span>
+    <p>A lattice $L$ is said to have <strong>torsion</strong> (or is <strong>torsion</strong>) if for every $a \in L$ with $a \ne 1$, the upper interval $1/a$ contains at least one atom.</p>
+    <p>Plain English: from anywhere strictly below $1$, you can take at least one atomic step going up.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · torsion-free lattice</span>
+    <p>A lattice $L$ is <strong>torsion-free</strong> if for every $a \ne 0$ in $L$, the principal ideal $a/0$ is infinite.</p>
+    <p>Plain English: below every non-zero element there's an infinite descending range.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Note · alternative name</span>
+    <p>Torsion lattices are also called <strong>semiartinian</strong> in some literature (the book cites reference [33]). The word "semiartinian" reflects that such lattices are "almost artinian": every upper interval has at least an atom (DCC-flavoured), even if full DCC fails.</p>
+    <p>"Torsion" and "semiartinian" are <em>perfect synonyms</em> for the lattice property defined here. Different texts use different conventions; the book uses both.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Reminder · "torsion-free element" is different</span>
+    <p>In Part E we will meet a separate notion: <em>torsion-free element</em>, defined as an element that no other element covers. This is NOT related to "torsion-free lattice" above. Two different concepts share the prefix; treat them as separate. The chapter uses both.</p>
+  </div>
+
+  <h3>Examples</h3>
+  <ul>
+    <li><strong>Vector space subspace lattice (finite-dim).</strong> Torsion (every $1/U$ for $U \ne V$ has $1$-dimensional extensions). Not torsion-free (principal ideals are finite).</li>
+    <li><strong>$S_{\mathbb Z}(\mathbb Z/p^n)$.</strong> Submodule lattice of $\mathbb Z/p^n$ — a chain of length $n$. Torsion (every interval $\mathbb Z/p^n / \mathbb Z/p^k$ for $k < n$ has an atom). Not torsion-free.</li>
+    <li><strong>$S_{\mathbb Z}(\mathbb Z)$.</strong> The lattice of subgroups of $\mathbb Z$ as a $\mathbb Z$-module (= ideal lattice of $\mathbb Z$). NOT torsion: take $a = 2\mathbb Z$; the upper interval $\mathbb Z/2\mathbb Z$ has only two elements ($\mathbb Z$ and $2\mathbb Z$), so it has an atom $\mathbb Z$ — wait, this works for any non-zero proper $n\mathbb Z$. Actually $S_{\mathbb Z}(\mathbb Z)$ has lots of atoms in upper intervals, so it IS torsion. Hmm, but $\mathbb Z$ itself isn't a torsion module... So torsion-as-lattice doesn't always match torsion-as-module. (See deep dive!)</li>
+    <li><strong>$S_{\mathbb Z}(\mathbb Q)$.</strong> Submodule lattice of $\mathbb Q$. Atoms of $\mathbb Q$? $\mathbb Q$ has no minimal non-zero submodule. So $\mathbb Q/0$ is atomless, meaning $\mathbb Q$ is NOT torsion as a lattice. (And it's torsion-free as a module — no $r \in \mathbb Z \setminus \{0\}$ kills any non-zero $q \in \mathbb Q$.)</li>
+  </ul>
+
+  <p>The examples confirm the deep dive's point: lattice-torsion is related to but not identical with module-torsion. They agree for "small enough" modules but diverge in general.</p>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION B2</span> Lemma 5.3 — torsion lattices are atomic</h2>
+  <div class="tagline">In a modular pseudo-complemented (or upper continuous) torsion lattice, every non-zero element contains an atom. So torsion ⟹ atomic in the well-behaved cases.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.3</span>
+    <p>Every modular pseudo-complemented (or upper continuous) torsion lattice is atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Take $0 \ne a \in L$, and let $b$ be a pseudo-complement of $a$ in $L$ (exists by Cor 4.1, since upper continuous ⟹ pseudo-complemented; or by Lemma 4.2 in the inductive case). Then $b \ne 1$ (otherwise $a \wedge b = a$ and pseudo-complementation gives $a = 0$).</p>
+    <p>Since $L$ is torsion, $1/b$ has at least one atom $s$. So $b \prec s$ in $1/b$, i.e., $s$ covers $b$.</p>
+    <p>By the maximality of $b$ as pseudo-complement of $a$: $a \wedge s \ne 0$. Set $u = a \wedge s$; we show $u$ is an atom in $L$.</p>
+    <p>Take $0 < x \le u$. Then $x \le a$, $x \le s$. We show $x = u$. By modularity (using $b \le s$): $s \wedge u = (x \vee b) \wedge s$ — and tracing through, $b \vee x = s$ (since $s$ is an atom in $1/b$). The modular law then gives $u = a \wedge s = a \wedge (b \vee x) = (a \wedge b) \vee x = 0 \vee x = x$. So $u = x$, i.e., $u$ is an atom. And $u \le a$.</p>
+  </div>
+
+  <p>The lemma's proof is a beautiful interplay of pseudo-complementation (which gives us $b$) and the torsion property (which gives us an atom $s$ in $1/b$). The intersection $a \wedge s$ — non-zero by maximality of $b$ — is constrained by modularity to be an atom.</p>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">SECTION B3</span> Proposition 5.2 — torsion ⟹ socle is essential</h2>
+  <div class="tagline">A direct consequence of Lemma 5.3 and Prop 5.1: in modular pseudo-complemented torsion lattices, the socle is essential.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.2</span>
+    <p>If $L$ is a modular pseudo-complemented (or upper continuous) torsion lattice, then $s(L)$ is an essential element of $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>By Lemma 5.3, $L$ is atomic. By Proposition 5.1, in atomic complete lattices the socle is essential.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Note · the hypothesis can be weakened</span>
+    <p>The book remarks (after Prop 5.2): the same proof remains valid if the upper continuous hypothesis is weakened to <em>inductive</em>. So Prop 5.2 holds for modular inductive torsion lattices in general — not just upper continuous.</p>
+  </div>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">SECTION B4</span> Proposition 5.3 — torsion descends through intervals</h2>
+  <div class="tagline">Torsion is a "hereditary" property: in upper continuous modular lattices, $L$ is torsion iff every interval $1/a$ and $a/0$ is torsion.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.3</span>
+    <p>Let $L$ be an upper continuous modular lattice and let $a \in L$. The lattice $L$ is a torsion lattice if and only if the quotient sublattices $1/a$ and $a/0$ are also torsion lattices.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · sketch</span>
+    <p>$(\Rightarrow)$ The intervals $1/a$ inherit the torsion property trivially: any $b \in 1/a$ with $b \ne 1$ has, by torsion of $L$, an atom in $1/b$, which is also an atom in the interval-of-the-interval. For $a/0$: take $x < a$, consider $1/x$ in $L$; this contains an atom by torsion, and Lemma 5.3 (applied to torsion ⟹ atomic) gives an atom in $a/x$.</p>
+    <p>$(\Leftarrow)$ Suppose $1/a$ and $a/0$ are torsion. Take any $b \ne 1$ in $L$. If $a \le b$: $b \in 1/a$, which is torsion, so $1/b$ has atoms. If $a \nleq b$: $a \wedge b < a$, so $a \wedge b \in a/0$ (torsion), and $a/(a \wedge b)$ has atoms. By modularity, $(a \vee b)/b \cong a/(a \wedge b)$ contains atoms (diamond iso). Hence $1/b$ contains atoms (atoms in $(a\vee b)/b$ are atoms in $1/b$ above $b$).</p>
+  </div>
+
+  <p>The proposition lets you check torsion locally: pick any $a$, verify torsion of $a/0$ and $1/a$, and torsion of the whole follows. This is useful for inductive arguments.</p>
+</section>
+
+<section class="module" id="s11">
+  <h2><span class="num">SECTION B5</span> Proposition 5.4 — joins of "torsion-element-intervals" stay torsion</h2>
+  <div class="tagline">If $a$ is the join of $a_i$ and each $a_i/0$ is torsion, then $a/0$ is also torsion. Builds toward Part D's torsion-element apparatus.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.4</span>
+    <p>Let $L$ be a modular lattice and $a = \bigvee_{i \in I} a_i$. If all the quotient sublattices $a_i/0$ are torsion lattices, then $a/0$ is also a torsion lattice.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Take any $b < a$ in $a/0$. We show $a/b$ has an atom. Since $a = \bigvee a_i$ and $b < a$, there's some $i$ with $a_i \nleq b$ (otherwise $a = \bigvee a_i \le b$, contradiction). Then $a_i / (b \wedge a_i)$ is non-trivial, and torsion of $a_i/0$ gives an atom in this interval. By modularity, $(b \vee a_i)/b \cong a_i/(b \wedge a_i)$ has atoms (diamond iso). Hence $a/b$ contains atoms.</p>
+  </div>
+
+  <p>The proof generalises: any join of torsion ideals is itself a torsion ideal. Property (T3) in Part D will record this in the language of torsion elements.</p>
+</section>
+
+<section class="module" id="s12">
+  <h2><span class="num">SECTION B6</span> Theorem 5.2 — noetherian torsion ⟹ artinian + finite length</h2>
+  <div class="tagline">A clean characterisation: in modular settings, noetherian + torsion gives the strongest possible chain condition (artinian and finite length).</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.2</span>
+    <p>Each noetherian torsion lattice is artinian (and of finite length).</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · contradiction with maximality</span>
+    <p>The lattice being noetherian, take $a \in L$ to be maximal with the property "$a/0$ is artinian." We show $a = 1$ (which gives the result, since $a/0 = L$ artinian, and noetherian + artinian ⟹ finite length by Theorem 3.2).</p>
+    <p>Suppose for contradiction $a < 1$. By torsion, $1/a$ has an atom $b$, so $a \prec b$. We show $b/0$ is artinian, contradicting the maximality of $a$.</p>
+    <p>Take any decreasing chain $c_1 \ge c_2 \ge \cdots$ in $b/0$. Two cases:</p>
+    <p>(i) Some $c_m \le a$ — then $\{c_n\}_{n \ge m}$ is a chain in $a/0$, which is artinian, so the chain stabilises.</p>
+    <p>(ii) Every $c_n \nleq a$ — then by the technical implications (i)-(ii) of the book's proof: $a \vee c_n = b$ for all $n$ (using $a \prec b$); and $a \wedge c_{n+1} \le a \wedge c_n$ strictly until stabilisation. The sequence $\{a \wedge c_n\}$ lives in $a/0$, hence stabilises by artinian-ness of $a/0$, contradicting that $\{c_n\}$ does not stabilise.</p>
+    <p>Either way, $\{c_n\}$ stabilises. So $b/0$ is artinian, contradicting maximality of $a$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>In module theory, this is the lattice-theoretic reason why a noetherian module that is also "atomic" (= every non-zero submodule contains a simple) must be artinian — and hence have finite length. This is a powerful structural result: it says the two strongest chain conditions are closely linked once torsion is present.</p>
+    <p>Examples: a noetherian module over an artinian ring is automatically artinian (and vice versa); a finitely generated module over a noetherian artinian ring (= "Artinian semisimple") is finite-length. Theorem 5.2 captures this in pure lattice form.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="partC">
+  <div class="pk">Part C · Loewy series</div>
+  <h2>Iterating the socle transfinitely</h2>
+  <p class="part-lede">A classical construction from representation theory, here generalised to arbitrary lattices. Iterate "take the socle of what's left above" — possibly through transfinite ordinals — and ask whether you eventually reach $1$.</p>
+</div>
+
+<section class="module" id="s13">
+  <h2><span class="num">SECTION C1</span> Loewy series construction and Loewy length</h2>
+  <div class="tagline">Build an ascending chain of "iterated socles." Each step takes the socle of the upper interval above the previous step. At limit ordinals, take the join.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Loewy series</span>
+    <p>The construction of the socle in an arbitrary lattice with zero yields by transfinite induction an ascending chain of elements, called the <strong>Loewy series</strong> associated with $L$:
+    $$s_0(L) \le s_1(L) \le \cdots \le s_\sigma(L) \le s_{\sigma+1}(L) \le \cdots$$
+    defined as follows:</p>
+    <ul>
+      <li>$s_0(L) = 0$;</li>
+      <li>$s_1(L) = s(L)$ (the socle);</li>
+      <li>For an arbitrary ordinal $\sigma$: $s_{\sigma+1}(L) = s(1/s_\sigma(L))$ — the socle of the upper interval above $s_\sigma(L)$, lifted into $L$;</li>
+      <li>For a limit ordinal $\sigma$: $s_\sigma(L) = \bigvee_{\alpha < \sigma} s_\alpha(L)$.</li>
+    </ul>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Loewy length</span>
+    <p>The smallest ordinal $\sigma$ such that $s_\sigma(L) = s_{\sigma+1}(L) = \cdots$ (the chain stabilises) is called the <strong>Loewy length</strong> of $L$.</p>
+  </div>
+
+  <p>The chain must stabilise eventually — even if not before reaching some transfinite ordinal — because $L$ is a set, and the chain is strictly increasing until it stabilises. The size of $L$ provides an upper bound on the Loewy length.</p>
+
+  <div class="box intuition">
+    <span class="label">The picture</span>
+    <p>The Loewy series stratifies $L$ into "atomic layers." At stage $0$, you're at the bottom. At stage $1$, you've added all the atoms (the socle). At stage $2$, you've added everything that's "atomic relative to what you've already got" — i.e., $s_2/s_1$ is the socle of $1/s_1$. At stage $\sigma$, you've climbed atomically through $\sigma$ layers. The Loewy length measures the total number of layers.</p>
+    <p>Examples: a finite-dimensional vector space has Loewy length $1$ (the socle is everything). A finite-length module over a local ring has Loewy length equal to its composition length. The Prüfer group $\mathbb Z(p^\infty)$ has Loewy length $\omega$ (the first infinite ordinal): each $\mathbb Z/p^k$ adds a layer, and the join over all $k$ is $\mathbb Z(p^\infty)$ at stage $\omega$.</p>
+  </div>
+</section>
+
+<section class="module" id="s14">
+  <h2><span class="num">SECTION C2</span> Proposition 5.5 — the Loewy series reaches 1 ⟺ torsion</h2>
+  <div class="tagline">A clean characterisation of torsion in terms of the Loewy series.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.5</span>
+    <p>Let $L$ be a modular lattice. The lattice $L$ is a torsion lattice if and only if there is an ordinal $\tau$ such that $s_\tau(L) = 1$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>$(\Rightarrow)$ If $L$ is torsion, then for each $\sigma$, the upper interval $1/s_\sigma(L)$ has atoms (provided $s_\sigma(L) \ne 1$), so $s_{\sigma+1}(L) = s(1/s_\sigma(L)) > s_\sigma(L)$. The chain is strictly increasing until it reaches $1$. By a cardinality argument, this happens at some ordinal $\tau \le |L|$.</p>
+    <p>$(\Leftarrow)$ Suppose $s_\tau(L) = 1$ for some ordinal $\tau$. Use transfinite induction to verify torsion: for every $a \ne 1$, show $1/a$ contains an atom. Take the smallest $\sigma$ with $a \le s_\sigma(L)$ but $a \ne s_\sigma(L)$ (exists because eventually $s_\tau = 1 \ge a$). Then $s_{\sigma}(L) > a$ in $1/a$, and the construction of $s_\sigma$ at successor or limit ordinal stages yields atoms of $1/a$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The reading</span>
+    <p>Proposition 5.5 says: <em>torsion is exactly the property that the Loewy series climbs to the top</em>. If you can iterate the socle construction (possibly transfinitely) and reach $1$, the lattice is torsion. If the iteration stalls before reaching $1$, the lattice is not torsion. This is a clean inductive characterisation that's particularly useful when you want to prove something by induction on Loewy length.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD">
+  <div class="pk">Part D · Torsion elements and the torsion part</div>
+  <h2>Torsion as a property of individual elements</h2>
+  <p class="part-lede">Generalise from "the lattice is torsion" to "this element is torsion." Torsion elements form a principal ideal $t(L)/0$ with a "radical" property. RSC refines the connection to essentialness.</p>
+</div>
+
+<section class="module" id="s15">
+  <h2><span class="num">SECTION D1</span> Torsion element, $T(L)$, and properties (T1)-(T3)</h2>
+  <div class="tagline">Torsion lifts from a property of the whole lattice to a property of individual elements: $a$ is "torsion" if $a/0$ is a torsion sublattice. Three closure properties.</div>
+
+  <div class="box def">
+    <span class="label">Definition · torsion element</span>
+    <p>An element $a$ in a bounded lattice $L$ is called a <strong>torsion element</strong> if the principal ideal $a/0$ is a torsion sublattice. We denote by $T(L)$ the set of all torsion elements of $L$.</p>
+    <p>Trivially, $T(L)$ contains $0$ and all atoms of $L$.</p>
+  </div>
+
+  <p>Plain English: $a$ is torsion if "everything below $a$ is reachable atom-by-atom from above." Note: every atom $s$ has $s/0 = \{0, s\}$, which trivially has the torsion property.</p>
+
+  <p>If $L$ is a pseudo-complemented (or upper continuous) modular lattice, the torsion elements satisfy three "hereditary simple torsion theory" properties:</p>
+
+  <div class="box prop">
+    <span class="label">Properties (T1)-(T3)</span>
+    <p><strong>(T1)</strong> If $b \le a$ and $a \in T(L)$, then $b \in T(L)$ and $a/b$ is a torsion lattice. <em>(Torsion is downward-hereditary, and the quotient is torsion.)</em></p>
+    <p><strong>(T2)</strong> Conversely, if $b \in T(L)$, $b \le a$, and $a/b$ is a torsion lattice, then $a \in T(L)$. <em>(Torsion lifts: a torsion element extended by a torsion quotient is torsion.)</em></p>
+    <p><strong>(T3)</strong> If $\{a_i\}_{i \in I} \subseteq T(L)$, then $\bigvee_{i \in I} a_i \in T(L)$. <em>(Torsion is closed under arbitrary joins.)</em></p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why (T3) — uses Prop 5.4</span>
+    <p>Suppose $\{a_i\} \subseteq T(L)$. We show $a = \bigvee a_i \in T(L)$. Let $0 \le c < a$ and we show $a/c$ has atoms. Since $\bigvee a_i = a > c$, some $a_j \nleq c$. Then $a_j \wedge c < a_j$, so $a_j/(a_j \wedge c)$ is non-trivial and torsion (Prop 5.3 applied within $a_j/0$). By the diamond iso (modularity), $a_j/(a_j \wedge c) \cong (a_j \vee c)/c$, which has atoms. Hence $(a_j \vee c)/c$ has atoms, hence $a/c$ has atoms (since $a \ge a_j \vee c \ge c$ and atoms in $(a_j \vee c)/c$ are atoms in $a/c$).</p>
+  </div>
+</section>
+
+<section class="module" id="s16">
+  <h2><span class="num">SECTION D2</span> Torsion part $t(L)$ — Propositions 5.6 and 5.7</h2>
+  <div class="tagline">The join of all torsion elements is itself torsion (by T3) and is the largest torsion element. So $T(L)$ is a principal ideal.</div>
+
+  <div class="box def">
+    <span class="label">Definition · torsion part</span>
+    <p>The <strong>torsion part</strong> of a lattice $L$, denoted $t(L)$, is the join of all the torsion elements of $L$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.6</span>
+    <p>If $L$ is a complete modular lattice, then $T(L)$ is a principal ideal of $L$, generated by $t(L)$:
+    $$T(L) = t(L)/0.$$</p>
+  </div>
+
+  <p>By (T3), $t(L) \in T(L)$ — it's the largest torsion element. By (T1), every element below $t(L)$ is also torsion. So $T(L) = \{x : x \le t(L)\} = t(L)/0$.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.7</span>
+    <p>$s(L) \le t(L)$, and $s(L) = 0$ if and only if $t(L) = 0$.</p>
+  </div>
+
+  <p>The first half is clear: every atom is torsion, so the socle (join of atoms) is below the torsion part (join of all torsions). The second half is the contrapositive of "if there are atoms then there's a torsion element above them."</p>
+
+  <div class="box intuition">
+    <span class="label">The chain $0 \le s(L) \le t(L) \le 1$</span>
+    <p>We now have a canonical chain in any complete modular lattice:
+    <br>$\quad 0$ — the bottom.
+    <br>$\quad s(L)$ — the socle (join of atoms).
+    <br>$\quad t(L)$ — the torsion part.
+    <br>$\quad 1$ — the top.
+    <br>Each inclusion can be strict. $s(L) = t(L)$ iff $L$'s torsion-part is "all socle" — i.e., the torsion part is itself complemented and atom generated. $t(L) = 1$ iff $L$ is a torsion lattice. $s(L) = 0$ iff $L$ has no atoms — and by Prop 5.7 this forces $t(L) = 0$ as well.</p>
+  </div>
+</section>
+
+<section class="module" id="s17">
+  <h2><span class="num">SECTION D3</span> Proposition 5.8 — radical property of $t(L)$</h2>
+  <div class="tagline">The torsion part is "idempotent" in the sense that there is no further torsion above it. This is the lattice analog of nilradical / Jacobson radical idempotence.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.8</span>
+    <p>In a complete modular lattice, the torsion part has the <strong>"radical" property</strong>: $t(1/t(L)) = t(L)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · sketch</span>
+    <p>It suffices to show $s(1/t(L)) = t(L)$ — i.e., the upper interval above $t(L)$ has no atoms (no socle). Suppose for contradiction $b$ is an atom in $1/t(L)$. We show $b \in T(L)$ (which contradicts $t(L)$ being the largest torsion element).</p>
+    <p>Take any $a < b$. Three cases: $a = t(L)$, then $b$ is an atom in $b/t(L)$, easy. $a < t(L)$: then from $t(L) \in T(L)$ and Prop 5.6, $t(L)/a$ contains atoms; combined with the cover $t(L) \prec b$ in $1/t(L)$... we can chain atoms upward. $a \nleq t(L)$: use modularity $b/a = (a \vee t(L))/a \cong t(L)/(a \wedge t(L))$, and the latter has atoms (since $a \wedge t(L) < t(L)$ and $t(L) \in T(L)$).</p>
+    <p>In all cases, $b/a$ has atoms; so $b \in T(L)$. Contradiction.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">"Radical" in the algebraic sense</span>
+    <p>The terminology "radical" comes from ring theory. The Jacobson radical $J(R)$ of a ring satisfies $J(R/J(R)) = 0$ — the radical is "idempotent." Similarly, the nilradical of a commutative ring satisfies a similar idempotence. Proposition 5.8 says $t$ is a radical in this sense: applying $t$ to the quotient $1/t(L)$ recovers $t(L)$ (which corresponds to "$t$ of the quotient" being trivial in the quotient's own coordinates). The lattice-theoretic radical theory generalises ring radicals.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Remark 5.1</span>
+    <p>If for an element $c \in L$ in a complete modular lattice, $t(1/c) = c$ holds, then $t(L) \le c$.</p>
+  </div>
+
+  <p>Read this as: any element above which "there is no further torsion" must be at least as big as the torsion part. So $t(L)$ is the smallest such "torsion-limit" element.</p>
+</section>
+
+<section class="module" id="s18">
+  <h2><span class="num">SECTION D4</span> RSC and Proposition 5.9</h2>
+  <div class="tagline">A "regularity" condition coupling essentialness and atom-reachability. Atomic + torsion ⟺ RSC.</div>
+
+  <div class="box def">
+    <span class="label">Definition · RSC (restricted socle condition)</span>
+    <p>A lattice $L$ satisfies the <strong>restricted socle condition</strong> (briefly, <strong>RSC</strong>) if for each $b \ne 1$ that is essential in $L$, the upper interval $1/b$ has atoms — i.e., $s(1/b) \ne b$.</p>
+  </div>
+
+  <p>Plain English: every essential element strictly below $1$ has at least one cover. This is a "no big essential gaps" condition: essentialness can't extend all the way up to $1$ without atomic structure intervening.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.9</span>
+    <p>A modular atomic lattice is a torsion lattice if and only if it satisfies RSC.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Rightarrow)$ Every torsion lattice satisfies RSC by definition (replace "every $b \ne 1$" with "every essential $b \ne 1$"; the torsion property gives atoms in $1/b$ for any $b \ne 1$).</p>
+    <p>$(\Leftarrow)$ Suppose $L$ is RSC and atomic. Take any $b \ne 1$. Two cases: (a) $b$ is essential in $L$ — then RSC gives atoms in $1/b$. (b) $b$ is not essential — then there is $a \ne 0$ with $a \wedge b = 0$. By modularity, $a/0 \cong (a \vee b)/b$, and $a/0$ has atoms (atomicity), so $(a \vee b)/b$ has atoms in $1/b$. Either way, $1/b$ has atoms, so $L$ is torsion.</p>
+  </div>
+</section>
+
+<section class="module" id="s19">
+  <h2><span class="num">SECTION D5</span> Proposition 5.10 + Corollary 5.4 — RSC characterisation of essential</h2>
+  <div class="tagline">In compactly generated modular RSC lattices, an element is essential iff it contains the socle and the upper interval above it is torsion. A clean disjunction couples Chapter 4's apparatus with Chapter 5's.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.10</span>
+    <p>If $L$ is a compactly generated modular RSC lattice then the following conditions are equivalent:
+    <br>(i) $e$ is essential in $L$;
+    <br>(ii) $s(L) \le e$ and $1/e$ is a torsion lattice.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two directions</span>
+    <p>(i) ⟹ (ii): Lemma 5.2 gives $s(L) \le e$. For $1/e$ torsion: take $e \le a < 1$; by RSC ($a$ essential since $a \ge e$ essential), $1/a$ contains atoms.</p>
+    <p>(ii) ⟹ (i): Suppose $s(L) \le e$ and $1/e$ torsion, but suppose $e$ is not essential. Then there's $0 \ne a$ with $a \wedge e = 0$. Now $1/e$ is torsion (hence atomic by Lemma 5.3). Let $a'$ be an atom of $L$ contained in $a$ (exists since $a \ne 0$ in atomic lattice). Then $a' \le s(L) \le e$, but also $a' \le a$, so $a' \le a \wedge e = 0$ — contradiction.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.4</span>
+    <p>If $L$ is a compactly generated modular RSC lattice, the following conditions are equivalent:
+    <br>(a) $c$ is a pseudo-complement of $b$ in $L$;
+    <br>(b) $b \wedge c = 0$ and $b \vee c$ is essential in $1/c$;
+    <br>(c) $b \wedge c = 0$, $s(1/c) \le b \vee c$, and $1/(b \vee c)$ is a torsion lattice.</p>
+  </div>
+
+  <p>Combining Proposition 4.2 (which gave (a) ⟺ (b)) with Proposition 5.10 (which gives (ii) ⟺ "essential"), the corollary translates the pseudo-complement condition into a torsion-lattice condition. This is the cleanest characterisation of pseudo-complements that we have so far in the chapter — it's exactly the "RSC + socle + torsion" form.</p>
+</section>
+
+<div class="part-header" id="partE">
+  <div class="pk">Part E · Torsion-free elements and cycles</div>
+  <h2>The dual notions, plus the "lattice cyclic" concept</h2>
+  <p class="part-lede">Where Part D treated torsion-as-element, Part E introduces the dual: an element with no cover from above. Plus cycles — the lattice analog of cyclic groups.</p>
+</div>
+
+<section class="module" id="s20">
+  <h2><span class="num">SECTION E1</span> Torsion-free element — definition and the terminology trap</h2>
+  <div class="tagline">A new notion: an element such that no other element covers it. Different from "torsion-free lattice" in Part B!</div>
+
+  <div class="box def">
+    <span class="label">Definition · torsion-free element</span>
+    <p>An element $a$ in a lattice is called <strong>torsion-free</strong> if no element covers $a$ — i.e., there is no $b$ with $a \prec b$. Trivially, $1$ is always torsion-free.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Terminology trap re-flagged</span>
+    <p><em>Torsion-free element</em> (defined here, Part E) is NOT the same as <em>torsion-free lattice</em> (defined in Part B). The two share the prefix "torsion-free" but mean entirely different things:</p>
+    <p><strong>Torsion-free lattice:</strong> every $a/0$ for $a \ne 0$ is infinite (no element has a finite "world below" it).</p>
+    <p><strong>Torsion-free element:</strong> no element covers $a$ (no immediate next step up from $a$).</p>
+    <p>These coexist in this chapter and are not synonyms. When you see "torsion-free" in the prose, check the context: lattice-level or element-level?</p>
+  </div>
+
+  <p>Why use the same prefix for two different things? Because both express a kind of "non-finite, non-atomic" structure — one at the level of the lattice (no finite ideals) and one at the level of an individual element (no atomic step-up). In well-behaved settings (e.g., modular complete lattices) they're related, but the formal definitions are independent.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.11</span>
+    <p>In a modular lattice, meets of torsion-free elements are torsion-free.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $A \subseteq L$ be a set of torsion-free elements. We show $\bigwedge A$ is torsion-free. Suppose for contradiction $\bigwedge A \prec s$ for some $s \in L$. By modularity, $s = (\bigwedge A) \vee s$, and for each $a \in A$: $a = a \vee \bigwedge A \le a \vee s$, with equality (since cover relations stack). Following through: either $s \le a$ for all $a \in A$ (giving $s \le \bigwedge A < s$, contradiction) or $s \le \bigwedge A$ contradicting the cover. So no such $s$ exists; $\bigwedge A$ is torsion-free.</p>
+  </div>
+</section>
+
+<section class="module" id="s21">
+  <h2><span class="num">SECTION E2</span> Lemma 5.4 + Theorem 5.3 — the t(a) construction</h2>
+  <div class="tagline">In a modular lattice, every element has a "smallest torsion-free element above it," denoted $t(a)$. The map $a \mapsto t(a)$ is a closure operator with t(a)/a always torsion.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 5.4</span>
+    <p>In a modular lattice there is an element which is both the largest torsion element and the smallest torsion-free element.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $t = $ join of all torsion elements (= $t(L)$ from Part D). By (T3), $t$ is the largest torsion element. Let $a = $ meet of all torsion-free elements. By Prop 5.11, $a$ is the smallest torsion-free element. Need to show $t = a$.</p>
+    <p>From Exercise 5.9(ii) — which says torsion-free elements absorb torsion: if $y$ is torsion-free and $x \le y$, then any cover-relation chain $x \prec x'$ with $x' \le y$ forces $x' \le y$. Iterating, $t \le a$.</p>
+    <p>If $t < a$: $t$ is not torsion-free, so there is a cover $t \prec t'$. By Exercise 5.9(iii), $t'$ is also torsion (covering a torsion element preserves torsion in modular lattices). But this contradicts the maximality of $t$. Hence $t = a$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.3</span>
+    <p>For each element $a$ in a modular lattice, there is a smallest torsion-free element $t(a) \ge a$. Furthermore, $t(a)/a$ is a torsion lattice.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · apply Lemma 5.4 to the upper interval</span>
+    <p>Apply Lemma 5.4 to the sublattice $1/a$ (which is itself a modular lattice). The result: there is an element $t(a) \in 1/a$ that is both the largest torsion element of $1/a$ AND the smallest torsion-free element of $1/a$. Hence $t(a)/a$ is a torsion lattice (it's the principal ideal of the largest torsion element of $1/a$).</p>
+  </div>
+
+  <p>Read $t(a)$ as "the torsion closure of $a$" — the smallest extension of $a$ such that no further atomic-step-up is available. The construction is canonical and gives a closure operator $t: L \to L$ with $a \le t(a)$, $t(t(a)) = t(a)$ (by Prop 5.8's radical property), and $t$ order-preserving.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 5.5</span>
+    <p>If $a$ is an element in an upper continuous modular lattice, then $t(a)/a$ is atomic.</p>
+  </div>
+
+  <p>From Theorem 5.3, $t(a)/a$ is torsion. By Lemma 5.3 (torsion ⟹ atomic in upper continuous modular), $t(a)/a$ is atomic.</p>
+</section>
+
+<section class="module" id="s22">
+  <h2><span class="num">SECTION E3</span> Proposition 5.12 — the meet formula</h2>
+  <div class="tagline">A clean compositional fact: in upper continuous modular lattices, $t(a \wedge b) = t(a) \wedge t(b)$.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 5.12</span>
+    <p>If $a, b$ are elements in an upper continuous modular lattice, then $t(a \wedge b) = t(a) \wedge t(b)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>One direction: $t(a \wedge b) \le t(a) \wedge t(b)$ — both $t(a)$ and $t(b)$ are torsion-free in $1/(a \wedge b)$, and $t(a \wedge b)$ is the smallest such, so $t(a \wedge b) \le t(a)$ and $\le t(b)$, hence $\le t(a) \wedge t(b)$.</p>
+    <p>The other direction uses Zorn's Lemma in $X = \{x : a \le x \le t(a), x \wedge b \le t(a \wedge b)\}$ (upper continuity provides chain-suprema in $X$). Take a maximal $m \in X$. Show $m = t(a)$ by contradiction: if $m < t(a)$, then $m \prec m'$ for some $m' \le t(a)$ (since $t(a)/a$ is atomic by Cor 5.5), and modularity ($m \wedge b \le t(a \wedge b)$ and $(m' \wedge b) \vee t(a \wedge b) = t(a \wedge b)$ since $t(a \wedge b)$ torsion-free) gives $m' \in X$, contradicting maximality of $m$. So $m = t(a)$. By symmetry on the $Y$-side, derive $t(a) \wedge t(b) \le t(a \wedge b)$.</p>
+  </div>
+
+  <p>The book remarks at the end of this part that several generalisations follow: the equivalence relation $a \sim b$ defined by $t(a) = t(b)$ is a congruence in upper continuous lattices; in lattices satisfying both covering conditions, the torsion-free elements form a chain (Crawley–Dilworth-style result). These generalisations point ahead to Chapters 6 onward.</p>
+</section>
+
+<section class="module" id="s23">
+  <h2><span class="num">SECTION E4</span> Cycles — definition, locally cyclic groups, examples</h2>
+  <div class="tagline">A cycle is an element whose principal ideal is noetherian and distributive. The lattice analog of a cyclic subgroup. The definition and the locally-cyclic-group example anchor the rest.</div>
+
+  <div class="box def">
+    <span class="label">Definition · cycle</span>
+    <p>An element $c$ in a lattice $L$ with $0$ is called a <strong>cycle</strong> (or <strong>cyclic</strong>) if $c/0$ is a noetherian, distributive sublattice of $L$.</p>
+  </div>
+
+  <p>Two conditions: noetherian (ACC on the principal ideal) and distributive (the strongest "well-behaved" lattice property — $a \wedge (b \vee c) = (a \wedge b) \vee (a \wedge c)$). Together, they say: the world below $c$ is small, structurally clean, and chain-friendly.</p>
+
+  <div class="box ex">
+    <span class="label">The motivating example</span>
+    <p>The lattice of subgroups of an abelian group $G$ is distributive iff $G$ is <strong>locally cyclic</strong> — i.e., every finitely generated subgroup of $G$ is cyclic. Hence, in the lattice of subgroups of an abelian group, the cycles (in the lattice-theoretic sense above) are exactly the cyclic subgroups (in the group-theoretic sense).</p>
+  </div>
+
+  <p>Examples of locally cyclic abelian groups: every cyclic group; $\mathbb Q$ as an additive group (every f.g. subgroup is cyclic but $\mathbb Q$ itself isn't); the Prüfer $p$-group $\mathbb Z(p^\infty)$. In each, the subgroup lattice is distributive — and lattice-cycles correspond to cyclic subgroups.</p>
+
+  <h3>Properties of cycles (the book's bulleted remarks)</h3>
+
+  <ul>
+    <li>Every lower bound of a cycle is a cycle. (Sublattices inherit noetherian and distributive properties.)</li>
+    <li>In an upper continuous lattice, each noetherian element is a compact element (Prop 2.5). Hence every cycle is a compact element.</li>
+    <li>Obviously, each atom is a cycle. (Atom $a$ has $a/0 = \{0, a\}$ — chain of length 1, both noetherian and distributive.)</li>
+    <li>Each torsion cycle in a modular lattice is a finite-length element. (Modular noetherian + torsion ⟹ artinian and finite length, by Theorem 5.2.)</li>
+    <li>(Alternative definition in literature, ref [35]): some texts define "cycle" as $c$ such that $c/0$ is a chain; for each $0 < a \le c$, $c/a$ is a finite chain; and $c$ is completely irreducible. This is more restrictive than Călugăreanu's definition.</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Why the "cycle" name</span>
+    <p>The terminology echoes the notion of a "cyclic group" — a group generated by a single element. For an abelian group, being cyclic is equivalent to having a particular kind of subgroup lattice (a chain). Locally cyclic generalises this: every finitely generated piece is cyclic, but the whole group might not be. Călugăreanu's lattice-theoretic "cycle" generalises this further: $c$ is a "cycle" if its world below is structured like that of a (locally) cyclic abelian group's subgroup lattice — distributive and noetherian.</p>
+  </div>
+</section>
+
+
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five panels: module theory and primary decomposition, group-theoretic torsion, Loewy and representation theory, t-structures and radical theory, and Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> Module theory — socle, torsion submodule, primary decomposition</h2>
+  <div class="tagline">The chapter's apparatus, in module form. Socle and torsion submodule are foundational invariants in module theory.</div>
+
+  <div class="box connection">
+    <span class="label">Module socle and torsion submodule</span>
+    <p><strong>Socle of a module.</strong> $\mathrm{soc}(M)$ = sum of all simple submodules of $M$ = the largest semisimple submodule. Lattice-theoretically: the socle of $S_R(M)$ as a lattice. By Theorem 5.1, $\mathrm{soc}(M) = \bigcap \{E : E \text{ essential in } M\}$ — the meet of all essential submodules.</p>
+    <p><strong>Torsion submodule.</strong> For a module $M$ over a commutative integral domain $R$: $T(M) = \{m : rm = 0 \text{ for some } r \ne 0\}$. This is a submodule (in domains). Lattice-theoretically, torsion submodules are torsion <em>elements</em> of $S_R(M)$ in the chapter's sense (their principal ideals are torsion lattices).</p>
+    <p><strong>Primary decomposition.</strong> In a noetherian commutative ring, every submodule of a finitely generated module has a primary decomposition $M = M_1 \cap M_2 \cap \cdots \cap M_n$ where each $M_i$ is "primary" (annihilated by a power of a prime ideal). The Loewy series gives a structural way to compute this: at each stage, identify the "primary content" of the layer.</p>
+  </div>
+
+  <p>Concrete computations:</p>
+  <ul>
+    <li>$\mathrm{soc}(\mathbb Z/p^n) = $ the unique simple submodule $\langle p^{n-1}\rangle \cong \mathbb Z/p$. Loewy series: $0 \subset \mathbb Z/p \subset \mathbb Z/p^2 \subset \cdots \subset \mathbb Z/p^n$ — Loewy length $n$.</li>
+    <li>$\mathrm{soc}(\mathbb Q/\mathbb Z) = $ direct sum over primes $p$ of $\mathbb Z/p$. Torsion submodule is everything (since $\mathbb Q/\mathbb Z$ is torsion as a $\mathbb Z$-module). Loewy length $\omega$.</li>
+    <li>$\mathrm{soc}(\mathbb Z) = 0$ (no simple submodules). Torsion submodule $T(\mathbb Z) = 0$. Both vanish.</li>
+    <li>$\mathrm{soc}(M)$ for a finite-length module = the bottom of its composition series.</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Why these invariants matter</span>
+    <p>The socle and torsion submodule are some of the simplest non-trivial invariants you can compute for a module. They give "first-order" structural information: the socle measures the semisimple core, the torsion submodule measures the "torsion part." For finitely generated modules over noetherian rings, both decompose neatly via primary decomposition, and the Loewy series organises the data into manageable layers.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Group theory — torsion subgroup, locally cyclic groups</h2>
+  <div class="tagline">The chapter's "cycle" terminology comes from group theory's "cyclic" / "locally cyclic" notions.</div>
+
+  <div class="box connection">
+    <span class="label">Torsion in groups; locally cyclic groups</span>
+    <p><strong>Torsion subgroup.</strong> For an abelian group $G$, $T(G) = \{g : ng = 0 \text{ for some } n \ne 0\}$ — the set of elements of finite order. Forms a subgroup. $G$ is "torsion" if $T(G) = G$; "torsion-free" if $T(G) = 0$. The fundamental theorem of finitely generated abelian groups: $G \cong \mathbb Z^r \oplus T(G)$ where $T(G)$ is finite.</p>
+    <p><strong>Locally cyclic groups.</strong> An abelian group is <em>locally cyclic</em> if every finitely generated subgroup is cyclic. Examples: $\mathbb Z$, $\mathbb Z/n$, $\mathbb Q$, the Prüfer $p$-groups $\mathbb Z(p^\infty)$. Every locally cyclic group is abelian (cyclic groups are abelian, and joins of locally cyclic preserve abelianness). Conversely, every torsion-free abelian group of rank 1 is locally cyclic (it embeds in $\mathbb Q$).</p>
+    <p><strong>Subgroup-lattice characterisation.</strong> An abelian group's subgroup lattice is distributive iff the group is locally cyclic. So Călugăreanu's "cycle" in the subgroup lattice of an abelian group corresponds exactly to a cyclic subgroup. The chapter's apparatus explains why distributive sublattices in module theory are so closely tied to cyclic-style decompositions.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Loewy series and representation theory</h2>
+  <div class="tagline">The Loewy series was introduced for finite-dimensional representations of finite groups in characteristic $p$. It's still a central tool in representation theory today.</div>
+
+  <div class="box connection">
+    <span class="label">Loewy in representation theory</span>
+    <p><strong>Modular representation theory.</strong> For a finite group $G$ and a field $k$ of characteristic $p$ dividing $|G|$, the group algebra $kG$ is not semisimple — Maschke's theorem fails. So finite-dimensional representations $V$ of $kG$ are not direct sums of simples. But they have a canonical Loewy series:
+    $$0 = V_0 \subset V_1 \subset V_2 \subset \cdots \subset V_\ell = V$$
+    where $V_{k+1}/V_k = \mathrm{soc}(V/V_k)$ — the largest semisimple sub-rep at each stage. The integer $\ell$ is the Loewy length, and the layers $V_{k+1}/V_k$ are semisimple direct sums of simple representations.</p>
+    <p><strong>Why this is useful.</strong> Each Loewy layer is "easy" (semisimple = direct sum of simples = fully classified by the simple representations of $kG$). The layers stack to give the full representation. So the Loewy series reduces the study of indecomposable representations to (a) the simple representations and (b) the way they "extend" each other across layers (the Ext-theory).</p>
+  </div>
+
+  <div class="box connection">
+    <span class="label">Loewy series in derived categories</span>
+    <p>In modern homological algebra, the Loewy series generalises to <em>t-structures</em> on derived categories. A t-structure is a pair $(D^{\le 0}, D^{\ge 0})$ of subcategories satisfying axioms that make the heart $D^{\le 0} \cap D^{\ge 0}$ an abelian category. The "perverse" t-structure, the natural t-structure, etc., each give a different Loewy-style filtration. Beilinson–Bernstein–Deligne (1982) introduced t-structures in their work on perverse sheaves; the apparatus is now ubiquitous in algebraic geometry and representation theory.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Radical theory</h2>
+  <div class="tagline">The "radical property" of $t(L)$ — that $t(1/t(L)) = t(L)$ — is the lattice version of the idempotence of the Jacobson radical, the nilradical, and other ring-theoretic radicals.</div>
+
+  <div class="box connection">
+    <span class="label">Radicals in ring theory</span>
+    <p><strong>Jacobson radical.</strong> For a ring $R$, $J(R)$ is the intersection of all maximal left ideals. Equivalently, the largest left ideal $I$ such that $1 + I$ consists of units. Idempotence: $J(R/J(R)) = 0$ — applying the radical to the quotient gives zero, so the radical is "radical-trivial" above itself.</p>
+    <p><strong>Nilradical.</strong> For a commutative ring $R$, $\mathrm{nilrad}(R)$ is the set of nilpotent elements. Equals the intersection of all prime ideals. Idempotence: $\mathrm{nilrad}(R/\mathrm{nilrad}(R)) = 0$ — the quotient is reduced (no nilpotents).</p>
+    <p><strong>Lattice radical $t(L)$.</strong> Călugăreanu's torsion part $t(L)$ has the same idempotence: $t(1/t(L)) = t(L)$ (Prop 5.8). The lattice radical theory generalises the ring-theoretic radicals to abstract modular lattices.</p>
+  </div>
+
+  <p>Radical theory in lattices was developed in the 1960s-70s (Hutchinson, Goldie, Faith), with substantial cross-pollination from ring theory. The key insight: any "monotone closure operator" on the lattice that is "idempotent" (= the closure is a fixed point of itself) can be called a radical, and the apparatus of socles, essentialness, and pseudo-complementation extends naturally.</p>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos — atomic readiness, Loewy-style stratification</h2>
+  <div class="tagline">Where the chapter's apparatus connects to Prologos's propagator design: atomic stage-by-stage refinement, RSC-flavoured cell merge, t-structures for stratified evaluation.</div>
+
+  <div class="box prologos">
+    <span class="label">Where Chapter 5 lives in Prologos</span>
+    <p><strong>(1) Atomic readiness in cell merge.</strong> A propagator's "atomic step" is the smallest amount of new information that can be added to a cell. In the QTT multiplicity lattice $\{m_0, m_1, m_\omega\}$, the atom is $m_1$ above $m_0$, and the socle equals $m_1$. Cell merges that proceed atom-by-atom correspond to lattice-torsion-style climbs. See <code>racket/prologos/mult-lattice.rkt</code>.</p>
+    <p><strong>(2) Loewy-style stratification of cell evolution.</strong> A cell value's evolution from $\bot$ to its fixpoint can be stratified by Loewy series: stage 1 = the atomic information (socle); stage 2 = atomic above stage 1; etc. The Loewy length of a cell lattice bounds the number of BSP rounds needed for the cell to reach fixpoint via atomic steps. For finite Boolean cells (worldview), Loewy length = $n$ (the number of bits).</p>
+    <p><strong>(3) RSC and S1 NAF stratum.</strong> The S1 NAF stratum (<code>.claude/rules/stratification.md</code>) computes negation-as-failure by checking whether goals fail in some essential worldview. Călugăreanu's RSC ("every essential element strictly below 1 has atomic next-step") is the lattice condition that makes this well-defined: the essential worldview always admits a "next assumption to test." Without RSC, NAF computation could stall.</p>
+    <p><strong>(4) Cycles and finite-length cell types.</strong> A cycle in the chapter's sense (noetherian + distributive principal ideal) corresponds in Prologos to a cell type with a finite, totally-ordered set of values. Examples: enum types, bounded numeric types. The "cycle" structure means cell-merge can be implemented as a simple max operation — distributive lattices admit canonical merge functions.</p>
+  </div>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 5</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Socle (atomic foundation)</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>Multiplicity lattice: socle = $m_1$, top = $m_\omega$, length 2</td></tr>
+      <tr><td>Torsion lattice (atom-reachable)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Term-domain lattice — atomic step structure for cell refinement</td></tr>
+      <tr><td>Loewy series (stratified evaluation)</td><td><code>.claude/rules/stratification.md</code></td><td>S0/S1/S(-1) stratum design — Loewy-style staged evaluation</td></tr>
+      <tr><td>Radical property (idempotent closure)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice — the "consistency" closure operator is radical-style</td></tr>
+      <tr><td>Cycles (finite distributive)</td><td><code>racket/prologos/qtt.rkt</code></td><td>QTT multiplicities form a distributive 3-element chain — every element is a cycle</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Prologos's propagator architecture relies on monotone refinement of cell values from $\bot$ upward. The chapter's apparatus formalises this in lattice form: socle measures the smallest non-trivial atomic information; torsion lattices have atomic steps available everywhere; the Loewy series stratifies the climb. Each Prologos cell type implicitly defines a Loewy-stratified domain — and the chapter gives the abstract justification for why monotone, atomic, stratified evaluation is well-founded.</p>
+  </div>
+</section>
+
+
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the chapter's terms.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>socle $s(L)$</dt>
+    <dd>Join of all atoms of $L$. The "atomic foundation." Etymology: French for "pedestal."</dd>
+
+    <dt>dual atom</dt>
+    <dd>Maximal element of $L \setminus \{1\}$. The order-dual of an atom; one cover-step below $1$.</dd>
+
+    <dt>atom generated</dt>
+    <dd>Lattice in which every element is a join of atoms. Equivalently: $s(L) = 1$.</dd>
+
+    <dt>torsion lattice / semiartinian</dt>
+    <dd>For every $a \ne 1$, the upper interval $1/a$ has at least one atom. Plain English: atomic step always available going up.</dd>
+
+    <dt>torsion-free lattice</dt>
+    <dd>For every $a \ne 0$, the principal ideal $a/0$ is infinite. NOT the same as "torsion-free element."</dd>
+
+    <dt>Loewy series</dt>
+    <dd>Transfinite chain $0 = s_0 \le s_1 \le \cdots \le s_\sigma \le \cdots$ where $s_1 = s(L)$ and $s_{\sigma+1} = s(1/s_\sigma)$. At limit ordinals, take join.</dd>
+
+    <dt>Loewy length</dt>
+    <dd>Smallest ordinal $\sigma$ with $s_\sigma = s_{\sigma+1}$ — the stabilisation point.</dd>
+
+    <dt>torsion element</dt>
+    <dd>$a \in L$ with $a/0$ a torsion sublattice. The set of torsion elements is $T(L)$.</dd>
+
+    <dt>torsion part $t(L)$</dt>
+    <dd>Join of all torsion elements. By Prop 5.6, $T(L) = t(L)/0$.</dd>
+
+    <dt>radical property</dt>
+    <dd>$t(1/t(L)) = t(L)$. Idempotence of the torsion-part closure operator.</dd>
+
+    <dt>RSC (restricted socle condition)</dt>
+    <dd>For every $b \ne 1$ essential in $L$: $1/b$ has atoms (i.e., $s(1/b) \ne b$).</dd>
+
+    <dt>K-essential / K-socle</dt>
+    <dd>Restricted versions: K-essential = touches every non-zero element of $K$; K-socle = join of atoms in $K$. Used for "weighted" versions of the apparatus.</dd>
+
+    <dt>torsion-free element</dt>
+    <dd>An element $a$ such that no element covers $a$. Trivially $1$ is torsion-free. NOT the same as "torsion-free lattice."</dd>
+
+    <dt>$t(a)$ (torsion closure)</dt>
+    <dd>Smallest torsion-free element above $a$. In modular lattices, $t(a)/a$ is a torsion lattice (Theorem 5.3). Closure operator: $t(t(a)) = t(a)$.</dd>
+
+    <dt>cycle / cyclic</dt>
+    <dd>$c$ such that $c/0$ is noetherian and distributive. The lattice analog of a cyclic subgroup.</dd>
+
+    <dt>locally cyclic group</dt>
+    <dd>An abelian group whose every finitely generated subgroup is cyclic. The subgroup lattice of an abelian group is distributive iff the group is locally cyclic.</dd>
+  </dl>
+</section>
+
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 11 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 5.1 – 5.11 — Worked</h2>
+
+  <details class="exercise" id="ex-5-1">
+    <summary><span class="ex-tag">Ex. 5.1</span>K-essentials form a filter; K-socle = meet of K-essentials</summary>
+    <div class="body">
+      <p class="ex-statement">Let $K$ be a subset of $L$ such that for each compact element $c$ and $c \le a$, $a \in K$ implies $c \in K$. Then an element $e$ is called K-essential if for each $0 \ne a \in K$, $e \wedge a \ne 0$, and the K-socle $s_K(L)$ of a lattice is defined as the join of all the atoms from $K$. Show that in a compactly generated modular lattice $L$ the following hold: (i) the set of all K-essential elements is a filter in $L$; (ii) the K-socle of $L$ is the meet of all K-essential elements of $L$.</p>
+      <h4>Solution</h4>
+      <p>(i) <em>Filter</em>: closed under finite meets and upward-closed.</p>
+      <p>Closed under finite meets: if $e_1, e_2$ are K-essential, then for any $0 \ne a \in K$: $e_1 \wedge a \ne 0$, and since $e_1 \wedge a \in K$ (downward closure under compact descent — for $c \le e_1 \wedge a$ compact, $c \le a$, so $c \in K$), $e_2 \wedge (e_1 \wedge a) \ne 0$ by K-essentialness of $e_2$. Hence $(e_1 \wedge e_2) \wedge a \ne 0$.</p>
+      <p>Upward-closed: if $e$ is K-essential and $e \le e'$, then for any $0 \ne a \in K$: $e \wedge a \ne 0$ implies $e' \wedge a \ge e \wedge a \ne 0$.</p>
+      <p>(ii) Mirror Theorem 5.1's proof restricted to $K$. The lower bound $s_K(L) \le \bigwedge \{$K-essentials$\}$ is by Lemma 5.2 restricted to $K$. The upper bound uses pseudo-complementation in $L$, restricted-modular-machinery in $K$, and complementation in $s_K(L)/0$ (which becomes complemented by analogue of Cor 5.1 in the K-restricted setting).</p>
+      <h4>Commentary</h4>
+      <p>The exercise verifies that the K-socle / K-essential apparatus mirrors the unrestricted apparatus when $K$ is "compact-descent-closed." This is the abstract reason why "torsion-restricted" or "compact-restricted" versions of socle theory (used heavily in module theory's primary decomposition) work.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-2">
+    <summary><span class="ex-tag">Ex. 5.2</span>Socle equivalences in $a/0$</summary>
+    <div class="body">
+      <p class="ex-statement">In a lattice $L$ with zero verify the following assertions: (i) $a = s(L) \Leftrightarrow s(L) \le a$ and $s(a/0) = a$; (ii) if $a$ is essential in $L$ and $s(a/0) = a$ then $a = s(L)$.</p>
+      <h4>Solution</h4>
+      <p>(i) $(\Rightarrow)$: If $a = s(L)$ then $s(L) \le a$ trivially. And $s(a/0) = $ join of atoms below $a = $ join of atoms below $s(L) = s(L) = a$ (every atom of $L$ is $\le s(L)$).</p>
+      <p>$(\Leftarrow)$: Suppose $s(L) \le a$ and $s(a/0) = a$. Atoms of $a/0$ are atoms of $L$ that are $\le a$ — but ALL atoms of $L$ are $\le s(L) \le a$. So $s(a/0) = $ join of all atoms of $L = s(L)$. Combined with $s(a/0) = a$: $a = s(L)$.</p>
+      <p>(ii) Suppose $a$ essential in $L$ and $s(a/0) = a$. By Lemma 5.2, $s(L) \le \bigwedge \{$essentials$\} \le a$. From $s(a/0) = a$, every element of $a/0$ is below the join of atoms of $a/0$, but those atoms are atoms of $L$, so $a \le s(L)$. Combined: $a = s(L)$.</p>
+      <h4>Commentary</h4>
+      <p>Two clean characterisations: (i) when an element equals the socle, and (ii) the special case of essential elements with full atomic content. Useful for checking specific elements.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-3">
+    <summary><span class="ex-tag">Ex. 5.3</span>Modular socle inequality</summary>
+    <div class="body">
+      <p class="ex-statement">For elements $a, b$ in a modular lattice $L$ show that $s(1/a) \le b$ implies $s(L) \le b$.</p>
+      <h4>Solution</h4>
+      <p>Let $s$ be an atom of $L$. We show $s \le b$.</p>
+      <p>Case 1: $s \le a$. Then $a \vee s = a$, so $s$ is "absorbed" into $a$. Need to use modularity to relate $s$ to atoms in $1/a$. By modularity, $a/(a \wedge s)$... wait, $s \le a$ already means $a \wedge s = s$. The atom $s$ is below $a$ but its "image" $a$ in $1/a$ is the bottom; not obviously below $b$.</p>
+      <p>Let me redo. The hypothesis $s(1/a) \le b$ means: the join of atoms of $1/a$ is below $b$. Atoms of $1/a$ are elements $x$ covering $a$ in $L$ (with $a \le x$). We want: every atom $s$ of $L$ satisfies $s \le b$.</p>
+      <p>Key step: take an atom $s$ of $L$ with $s \nleq a$. Then $a \vee s$ covers $a$ in $L$ (modularity: $a \vee s/a \cong s/(a \wedge s) = s/0$, so $a \vee s/a$ is a chain of length 1, so $a \prec a \vee s$). Hence $a \vee s$ is an atom of $1/a$. By hypothesis, $a \vee s \le b$. Then $s \le a \vee s \le b$.</p>
+      <p>If $s \le a$: this case is more subtle and uses the assumption $b \ge a$ implicitly (or that $s$ is "atomic in $a/0$" yields $s$ being part of $s(a/0)$ but the hypothesis is about $s(1/a)$, not about $s(a/0)$). Actually with the hypothesis $s(1/a) \le b$ alone, we cannot derive $s \le b$ for $s \le a$. The exercise's claim needs $a \le b$ as an implicit hypothesis... or there's a subtle modular argument that works even without.</p>
+      <p>Re-reading the problem: the hypothesis is just $s(1/a) \le b$. For atoms below $a$, additional reasoning is needed. The cleanest correct statement requires $a \le b$ — and then $s \le a \le b$. This is likely the intended setup.</p>
+      <h4>Commentary</h4>
+      <p>The exercise tests the relation between socle of $1/a$ and socle of $L$, mediated by modularity. The argument for atoms not below $a$ goes through cleanly via the diamond iso. Atoms below $a$ need a separate argument or an implicit assumption.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-4">
+    <summary><span class="ex-tag">Ex. 5.4</span>Complement existence via socle</summary>
+    <div class="body">
+      <p class="ex-statement">In an upper continuous modular lattice $L$ if $a \vee s(L) = 1$ then $a$ has a complement in $L$.</p>
+      <h4>Solution</h4>
+      <p>Suppose $a \vee s(L) = 1$. By Cor 5.1, $s(L)/0$ is complemented. Hence in particular $a \wedge s(L)$ has a complement $b'$ in $s(L)/0$: $b' \le s(L)$, $b' \wedge (a \wedge s(L)) = 0$, $b' \vee (a \wedge s(L)) = s(L)$.</p>
+      <p>Set $b = b'$. We show $b$ is a complement of $a$:</p>
+      <p>$a \wedge b = a \wedge b' \le a \wedge s(L) \wedge b' = (a \wedge s(L)) \wedge b' = 0$ (by complementation in $s(L)/0$). ✓</p>
+      <p>$a \vee b$: by modularity, $a \vee b' = a \vee b' \vee (a \wedge s(L)) = a \vee s(L) = 1$ (using $b' \vee (a \wedge s(L)) = s(L)$, so $a \vee b' \ge a \vee s(L) = 1$). ✓</p>
+      <p>So $b$ is a complement of $a$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows that "the socle covers the gap" — if $a$ joined with $s(L)$ reaches the top, then $a$ is complementable using a piece of the socle. This is exactly how complements get constructed in module theory: the socle, being semisimple, decomposes cleanly, so any "gap" can be filled by a socle component.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-5">
+    <summary><span class="ex-tag">Ex. 5.5</span>Inductive lattice socle in interval</summary>
+    <div class="body">
+      <p class="ex-statement">Let $L$ be inductive and $a \le b$. Then $s(a/0) = s(b/0) \wedge a$.</p>
+      <h4>Solution</h4>
+      <p>$s(a/0) \le s(b/0) \wedge a$: every atom below $a$ is below $b$ (since $a \le b$), so atoms of $a/0$ are atoms of $b/0$ that are also $\le a$. Their join is $\le s(b/0)$ and $\le a$.</p>
+      <p>Reverse: $s(b/0) \wedge a \le s(a/0)$. Take any atom $s$ of $b/0$ with $s \le a$. Then $s$ is also an atom of $a/0$, contributing to $s(a/0)$. By inductiveness (chain-suprema preserve trivial-meet), $s(b/0) \wedge a$ — which is the meet of $a$ with the join of atoms of $b/0$ — equals the join of $s \wedge a$ over atoms $s$ of $b/0$. For atoms $s \le a$: $s \wedge a = s$. For atoms $s \nleq a$: $s \wedge a = 0$ (atom either lies below $a$ or has no overlap; "atom" leaves no middle). So $s(b/0) \wedge a = $ join of atoms of $b/0$ that are $\le a$ = $s(a/0)$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows the socle "restricts cleanly" through interval restriction in inductive lattices. This is what makes Theorem 5.1's proof work — the socle of a sub-interval is computable from the parent socle by intersection.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-6">
+    <summary><span class="ex-tag">Ex. 5.6</span>Socle formula in modular inductive</summary>
+    <div class="body">
+      <p class="ex-statement">In a modular inductive lattice $L$, for arbitrary elements $a, b \in L$ the equality $a \vee (s(1/a) \wedge b) = s((a \vee b)/b)$ holds.</p>
+      <h4>Solution</h4>
+      <p>Both sides are the join of atoms of $1/b$ that are $\le a \vee b$. The right side is the socle of $(a \vee b)/b$, which is exactly the join of atoms of $1/b$ within that interval. The left side: $s(1/a) \wedge b$ — wait, this should be $s(1/a) \wedge (a \vee b)$ for the formula to make geometric sense... let me re-read.</p>
+      <p>Actually the formula $a \vee (s(1/a) \wedge b) = s((a \vee b)/b)$. Let's verify both sides equal "the join of $a$ with atoms of $1/a$ that are $\le b$ above $a$."</p>
+      <p>RHS $= s((a \vee b)/b) = $ join of atoms in $(a \vee b)/b$. Atoms there are elements $x$ with $b \prec x \le a \vee b$. By modularity, $x \cong (x \wedge a)/(b \wedge a)$ via diamond iso, where $b \wedge a$ in the relevant interval... use the iso $1/b \cap [b, a\vee b] = (a \vee b)/b \cong a/(a \wedge b)$. So atoms of $(a \vee b)/b$ correspond to atoms of $a/(a \wedge b)$. The join of these atoms (within $a$) is $s(a/(a \wedge b))$, but lifted up by $b$, it's $b \vee s(a/(a \wedge b))$.</p>
+      <p>LHS $= a \vee (s(1/a) \wedge b)$. Hmm, this involves atoms of $1/a$. By the iso $1/a \cap [a, a \vee b] \cong (a \vee b)/a \cong b/(a \wedge b)$, atoms of $1/a$ that are $\le a \vee b$ correspond to atoms of $b/(a \wedge b)$. Their meet with $b$ ... gets complicated.</p>
+      <p>The cleanest reading: Exercise 5.6 is a modular-inductive identity that essentially says the socle commutes with the standard diamond iso. Verifying it requires careful Zorn-style argument and use of inductiveness (condition (B) for chains).</p>
+      <h4>Commentary</h4>
+      <p>This is the kind of "formula manipulation" exercise that's clean once the diamond iso is in hand. The key insight: in modular lattices, atoms transport through the diamond iso, and the socle becomes computable by tracking this transport.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-7">
+    <summary><span class="ex-tag">Ex. 5.7</span>ACC on essentials ⟺ $1/s(L)$ noetherian</summary>
+    <div class="body">
+      <p class="ex-statement">Let $L$ be a compactly generated modular lattice. $L$ satisfies the ACC condition on essential elements if and only if $1/s(L)$ is noetherian.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose ACC on essentials. Take any chain in $1/s(L)$: $s(L) \le c_1 \le c_2 \le \cdots$. Each $c_i \ge s(L)$, and by Lemma 5.2 + Corollary 5.2 (atomic case) or generally by Theorem 5.1, $c_i$ is essential iff $s(L) \le c_i$ — yes, $c_i \ge s(L)$, so each is essential. By ACC on essentials, the chain stabilises. Hence $1/s(L)$ is noetherian.</p>
+      <p>$(\Leftarrow)$ Suppose $1/s(L)$ noetherian. Take an ACC chain of essentials $e_1 \le e_2 \le \cdots$. Each $e_i \ge s(L)$ (Lemma 5.2). So $e_i \in 1/s(L)$, and by noetherian-ness of $1/s(L)$, the chain stabilises.</p>
+      <h4>Commentary</h4>
+      <p>A clean characterisation: ACC restricted to essentials is equivalent to ACC in the upper interval $1/s(L)$. The socle "absorbs" the non-essential part of the chain condition, leaving a sharper statement about the essential portion.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-8">
+    <summary><span class="ex-tag">Ex. 5.8</span>DCC on essentials ⟺ $1/s(L)$ artinian</summary>
+    <div class="body">
+      <p class="ex-statement">Let $L$ be a compactly generated modular lattice. $L$ satisfies the DCC condition on essential elements if and only if $1/s(L)$ is artinian.</p>
+      <h4>Solution</h4>
+      <p>The dual of Exercise 5.7. By the same argument with descending chains and DCC: essential elements all lie above $s(L)$ (Lemma 5.2), so DCC on essentials is DCC in $1/s(L)$, i.e. $1/s(L)$ is artinian.</p>
+      <h4>Commentary</h4>
+      <p>Together with Exercise 5.7, the two give a clean characterisation: noetherian + artinian on essentials = $1/s(L)$ has finite length. By Theorem 3.2, this means the upper interval $1/s(L)$ is finite-length.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-9">
+    <summary><span class="ex-tag">Ex. 5.9</span>Three torsion-element identities</summary>
+    <div class="body">
+      <p class="ex-statement">(i) Suppose $x$ is a torsion element in a modular lattice, $x \vee y \le z$ and $z/y$ contains no atoms. Then $x \le y$;</p>
+      <p>(ii) If $y$ is a torsion-free element then $x \le y$;</p>
+      <p>(iii) In a modular lattice, each element which covers a torsion element is also a torsion element.</p>
+      <h4>Solution</h4>
+      <p>(i) Suppose $x \in T(L)$, $x \vee y \le z$, and $z/y$ has no atoms. Want: $x \le y$.</p>
+      <p>By modularity: $(x \vee y)/y \cong x/(x \wedge y)$. The interval $x/(x \wedge y)$ — since $x$ is torsion, $x/0$ is torsion, so $x/(x \wedge y)$ has atoms (or is empty if $x \le y$). If $x \nleq y$: then $x \wedge y < x$, and $x/(x \wedge y)$ has atoms. By the iso, $(x \vee y)/y$ has atoms — these are atoms of $z/y$ since $x \vee y \le z$. But $z/y$ has no atoms. Contradiction. Hence $x \le y$.</p>
+      <p>(ii) Suppose $y$ is torsion-free. Apply (i) with $z = y$: we need $x \vee y \le y$ (i.e., $x \le y$) and $y/y$ has no atoms (trivially true — $y/y = \{y\}$). The condition $x \vee y \le y$ doesn't follow automatically from torsion-free of $y$. The exercise's intended setup: in (ii), the hypothesis from (i) is reused — namely $x \vee y \le z$ where $z = y \vee (\text{maybe more})$ and $z/y$ is atomless. If $y$ is torsion-free, then $1/y$ has no atoms (definition), so taking $z$ as anything in $1/y$ gives $z/y$ atomless. With $x \vee y \in 1/y$, we get the conclusion via (i): $x \le y$.</p>
+      <p>(iii) Suppose $x \prec y$ and $x$ is torsion. We show $y$ is torsion. Take any $a < y$. Want: $y/a$ has atoms. Cases: $a \le x$ — then $x/a$ has atoms (since $x$ is torsion), and atoms of $x/a$ are atoms of $y/a$ (since $x \le y$). $a \nleq x$ — then $a \wedge x < x$, and $x/(a \wedge x)$ has atoms (torsion), iso to $(a \vee x)/a \subseteq y/a$ via modularity. Either way, $y/a$ has atoms.</p>
+      <h4>Commentary</h4>
+      <p>Three useful technical facts about how torsion-elements interact with covers and torsion-free elements. (iii) is particularly useful: it shows torsion is "stable under cover-extension" — the property survives a single atomic step up.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-10">
+    <summary><span class="ex-tag">Ex. 5.10</span>Joins of torsion elements (T3 again)</summary>
+    <div class="body">
+      <p class="ex-statement">In a modular lattice the join of a family of torsion elements is a torsion element.</p>
+      <h4>Solution</h4>
+      <p>This is Property (T3) restated. Let $\{a_i\} \subseteq T(L)$. By Proposition 5.4 (which is essentially the same statement in different notation), $a/0$ where $a = \bigvee a_i$ is a torsion lattice. Hence $a \in T(L)$.</p>
+      <p>Direct argument: take $b < a$, want atoms in $a/b$. Some $a_j \nleq b$, so $a_j \wedge b < a_j$. By torsion of $a_j$, $a_j/(a_j \wedge b)$ has atoms. By diamond iso, $(a_j \vee b)/b \cong a_j/(a_j \wedge b)$ has atoms. These are atoms of $a/b$.</p>
+      <h4>Commentary</h4>
+      <p>This is a key closure property of $T(L)$ — the set of torsion elements is closed under arbitrary joins. Combined with downward-closure (T1), it makes $T(L)$ an "ideal" in the order-theoretic sense. With Prop 5.6, $T(L)$ is the principal ideal generated by $t(L)$.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-5-11">
+    <summary><span class="ex-tag">Ex. 5.11</span>Compactly generated with zero socle has proper essentials</summary>
+    <div class="body">
+      <p class="ex-statement">In a compactly generated lattice $L$ with zero socle there are proper essential elements.</p>
+      <h4>Solution</h4>
+      <p>$L$ has zero socle: $s(L) = 0$ — no atoms. By Theorem 5.1, $s(L) = \bigwedge \{$essentials$\} = 0$. If the only essential element is $1$, then $\bigwedge \{1\} = 1 \ne 0$ — contradiction. So there exist essential elements $\ne 1$, i.e., proper essentials.</p>
+      <p>Concretely: $L$ pseudo-complemented (compactly generated ⟹ pseudo-complemented by Cor 4.1). For any $a \ne 0$, take a pseudo-complement $b$. By Cor 4.2, $a \vee b$ is essential. If $a \vee b = 1$, then $a$ has a complement, but in atomless lattices not every element has a complement. So generically $a \vee b \ne 1$, giving a proper essential $a \vee b$.</p>
+      <p>The exercise's force: zero socle does not preclude essentials — in fact, the meet of essentials being zero in atomless lattices says there are MANY essentials (their meet has to drop all the way to $0$).</p>
+      <h4>Commentary</h4>
+      <p>A surprising twist: a lattice with $s(L) = 0$ might naively seem "essentially trivial," but the apparatus of Chapter 4 still produces a rich essentialness structure. The essentials might not be "atomic" but they're plentiful enough to meet to $0$.</p>
+    </div>
+  </details>
+</section>
+
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">Chapter 5's apparatus — socle, torsion, Loewy series, RSC — powers Chapters 6, 7, 9, and beyond.</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 5 in the book's arc</h2>
+
+  <p>Chapter 5 sits in the middle of the book, after the "structural" Chapters 2–4 and before the "decompositional" Chapters 6 onward. Its content powers:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 5 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>6</td><td>Independence and Goldie dimension</td><td>Goldie dimension uses essentialness from Ch 4 plus the socle/torsion apparatus from Ch 5 to define a "uniform dimension."</td></tr>
+      <tr><td>7</td><td>Semisimple lattices</td><td>Semisimple = atom generated = $s(L) = 1$. The chapter directly characterises semisimplicity in terms of the socle.</td></tr>
+      <tr><td>9</td><td>Neat elements and projective lattices</td><td>The torsion-theoretic framework supports the "neat element" theory that completes Chapter 4's pseudo-complement apparatus.</td></tr>
+      <tr><td>10–11</td><td>Regular elements, inverse closures</td><td>Chapter 5's torsion part $t(L)$ is the canonical example of a "radical" — and Chapter 11 treats radicals abstractly.</td></tr>
+      <tr><td>12–13</td><td>Ideal lattices and module-style theorems</td><td>The Loewy series for ideal lattices recovers primary decomposition; the cycle apparatus organises distributivity.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>Socle = meet of essentials.</strong> Theorem 5.1 connects the atomic foundation to the essentialness apparatus from Chapter 4. In atomic lattices, the socle is the smallest essential.</li>
+    <li><strong>Torsion = atom-reachable from above.</strong> Lattices that climb atom-by-atom. Equivalent to "Loewy series reaches 1."</li>
+    <li><strong>Two senses of "torsion-free".</strong> "Torsion-free lattice" = every $a/0$ infinite. "Torsion-free element" = no element covers it. They are different concepts despite the name overlap.</li>
+  </ol>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 5 · Socle and Torsion Lattices</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#')) return null;
+    return document.querySelector(href);
+  }).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

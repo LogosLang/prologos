@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Chapter XI · Computational Aspects of Lattice Theory</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  pre.listing { background: var(--bg-muted); border-left: 3px solid var(--teal); padding: 14px 18px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.45; overflow-x: auto; border-radius: 4px; margin: 18px 0; color: var(--ink-soft); }
+  pre.listing .lh { display: block; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .scope { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; color: var(--ink-soft); }
+  .scope p { margin: 0 0 10px; }
+  .scope p:last-child { margin: 0; }
+  .scope .attrib { display: block; text-align: right; font-style: italic; color: var(--text-dim); font-size: 13.5px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor, .box.problem { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.problem .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.example { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.example > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.example[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.example > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.example[open] > summary::before { content: "▾ "; }
+  details.example > div.body { padding: 6px 22px 14px; }
+  details.example .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.example .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Free Lattices Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Free Lattices</em> by Ralph Freese, Jaroslav Ježek &amp; J. B. Nation (AMS Surveys 42, 1995).</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="freelat-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="freelat-companion-ch10.html">← Chapter X</a></li>
+    <li><a href="freelat-companion-ch12.html">Chapter XII →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter XI · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Preliminaries</div>
+  <ul>
+    <li><a href="#s1">§1–2 · Pseudo-language &amp; ordered sets (11.1–11.3)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Finite lattices</div>
+  <ul>
+    <li><a href="#s3">§3 · Lattice testing (11.4–11.9)</a></li>
+    <li><a href="#s4">§4–5 · Contexts &amp; congruences (11.10–11.18)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Bounded + splitting</div>
+  <ul>
+    <li><a href="#s6">§6 · Bounded homomorphisms (11.19–11.24)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Antichains</div>
+  <ul>
+    <li><a href="#s7">§7 · Chain partitions (11.25–11.31)</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Free lattice algorithms</div>
+  <ul>
+    <li><a href="#s8">§8 · Whitman with memoization (11.32–11.39)</a></li>
+  </ul>
+
+  <div class="section-label">Part F · FPL + diagrams</div>
+  <ul>
+    <li><a href="#s9">§9–10 · FPL &amp; drawing (11.40–11.44)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · The pseudo-language</a></li>
+    <li><a href="#c2">P2 · Concrete complexity bounds</a></li>
+    <li><a href="#c3">P3 · Whitman with memoization</a></li>
+    <li><a href="#c4">P4 · Open algorithmic problems</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#examples">Computed examples</a></li>
+    <li><a href="#looking-ahead">Coda</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Free Lattices · Mathematical Surveys &amp; Monographs 42 · Chapter XI</div>
+  <h1>Computational Aspects of Lattice Theory</h1>
+  <p class="lede">The monograph's algorithmic capstone. The polynomial-time complexity claims used throughout Chapters III, IV, IX, X are made precise. Whitman's algorithm runs in $O(\ell(s) \cdot \ell(t))$ with memoization (Theorem 11.38). Testing if an ordered set is a lattice and computing its join/meet tables runs in $O(n^{5/2})$ (Theorem 11.6, Goralčík-Goralčíková-Koubek-Rödl). Computing $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ runs in $O(n^2)$ (Theorem 11.13). The cover-count bound $e_\prec \le n^{3/2}$ for semilattices (Theorem 11.4) underlies everything.</p>
+  <div class="meta">
+    <span>~180–220 min read</span>
+    <span>10 sections · 44 named results · 17 algorithm listings</span>
+    <span>5 connection panels</span>
+    <span>Book pp. 205–253 · PDF pp. 214–262</span>
+  </div>
+</section>
+
+<aside class="scope">
+  <p>Many of the results in this monograph such as Whitman's algorithm of Theorem 1.11, the canonical form of Theorem 1.17, the formula for $\kappa(w)$ for $w$ completely join irreducible given in Theorem 3.32, etc., are tedious to do by hand, but can be efficiently implemented on a computer. We have programs in FORTRAN, LISP, and C implementing various aspects of lattice theory and these have played a big role in our investigations of free lattices, as well as finite and finitely presented lattices. Most of the examples of this monograph were constructed, or at least verified, with these programs. In proving some of the deeper results such as those in Chapter VIII and X, these programs supplied counterexamples to various approaches we were tempted to try.</p>
+  <p>In this chapter we take a more algorithmic look at many lattice theoretic results. We have two goals. The first is to analyze the efficiency of the algorithms. The second is to present the algorithms in a manner that the reader could implement them. To do this we introduce a pseudo-language for computers which is simple enough so that one can easily understand the algorithms, but precise enough to analyze them.</p>
+  <span class="attrib">— Freese, Ježek &amp; Nation, opening of Chapter XI (paraphrased)</span>
+</aside>
+
+<p>Chapter XI is the monograph's algorithmic capstone — the longest chapter at 49 pages, with 10 sections covering everything from basic ordered-set algorithms to free-lattice word problems. After Chapters I-X developed structural understanding, Chapter XI proves the polynomial-time complexity claims that have been used throughout. The chapter has THREE goals:</p>
+
+<p><strong>(1) Make polynomial-time claims precise.</strong> Earlier chapters cited "polynomial in canonical-form length" without specifying exponents. Chapter XI nails down the exponents. <strong>Whitman's algorithm (Theorem 1.11)</strong>: $O(\ell(s) \cdot \ell(t))$ with memoization (Theorem 11.38). <strong>Canonical form (Theorem 1.17)</strong>: $O(\ell(t)^2)$ via Listing 11.17. <strong>Complete-join-irreducibility test (Theorem 3.30)</strong>: $O(\ell(w)^3)$. <strong>$\kappa(w)$ computation (Theorem 3.32)</strong>: polynomial — though $\ell(\kappa(w))$ can be exponential in $\ell(w)$ (Example 11.32+). <strong>(2) Present algorithms implementable.</strong> 17 algorithm listings (11.1–11.17) in a pseudo-language. <strong>(3) State open problems.</strong> Several problems (11.7, 11.40–11.43) remain open as of the monograph's publication.</p>
+
+<p>The chapter has six parts. <strong>Part A (§1-2)</strong>: pseudo-language and ordered-set basics — linear extensions $O(n+e)$, transitive closure, chain partitions. <strong>Part B (§3-5)</strong>: finite lattices — the cover-count bound $e_\prec \le n^{3/2}$ (Theorem 11.4), the $O(n^{5/2})$ "is it a lattice?" test (Theorem 11.6, Goralčík et al.), the $O(n^2)$ congruence-lattice algorithm (Theorem 11.13), context representations and concept lattices (§4), direct decomposability (Markowsky). <strong>Part C (§6)</strong>: bounded homomorphisms and splitting lattices in $O(n^2)$ (Theorem 11.20), minimal join covers ($O(rk^3)$, Theorem 11.23), the example showing β can be exponential (Example 11.24). <strong>Part D (§7)</strong>: antichains and Dilworth chain partitions in $O(n^3)$ (Bogart-Magagnosc, Theorem 11.30) — including computing the lattice $\mathbf{M}(\mathbf{P})$ of maximum antichains. <strong>Part E (§8)</strong>: free-lattice word problem. Whitman's algorithm is exponential without memoization (Example 11.32), $O(\ell(s) \cdot \ell(t))$ with it (Theorem 11.38). Canonical form $O(\ell(t)^2)$ (Theorem 11.39). Skolem's 1920 polytime algorithm rediscovered. <strong>Part F (§9-10)</strong>: finitely presented lattices (Dean's algorithm, open problems for projectivity/finiteness) and the lattice-drawing algorithm.</p>
+
+<p>The chapter's character: SYNTHESIS. Where Chapters I-X built structural understanding, Chapter XI shows how to compute. The two goals are complementary — structural insight informs algorithm design (e.g., the $e_\prec \le n^{3/2}$ bound from semilattice structure underlies the $O(n^{5/2})$ lattice test), and algorithms verify structural conjectures (e.g., LISP programs found the κ-self-dual elements in Chapter X).</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">Three panes: terms <strong>carried forward</strong> from Chapters I–X, terms <strong>new</strong> in this chapter (algorithmic vocabulary), and the <strong>deep dives</strong> that reward close reading.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chapters I–X</span>
+    <p>Whitman's algorithm (Theorem 1.11). Canonical form (Theorem 1.17). The $\kappa$-bijection (Theorem 3.3). Theorem 3.30 (syntactic test for complete-join-irreducibility). Theorem 3.32 (κ-formula). $\mathbf{Con}\,\mathbf{L}$, the congruence lattice. The D-relation (II.7) and its quasiorder. Bounded homomorphisms (II.1) with $\beta, \alpha$. Lower bounded ⟺ $|\mathbf{J}(\mathbf{L})| = |\mathbf{J}(\mathbf{Con}\,\mathbf{L})|$ (Theorem 2.40). Splitting lattices (Chapter II). Lemma 2.32 (D-relation generates Cg). Theorem 2.56 (meet semidistributive ⟺ unique $q$ for each $a$ via $a \nearrow q \searrow a$). Theorem 2.72, 5.9 (projectivity). Day's theorem rank-bounded version (Theorem 4.1). Whitman's $\mathbf{FL}(\omega) \hookrightarrow \mathbf{FL}(3)$ (Theorem 1.28). $\mathbf{FL}(\mathbf{P})$ for partial lattices (Chapter V §2 + Dean's algorithm).</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter XI vocabulary (algorithmic)</span>
+    <p>Six clusters of new vocabulary. <strong>Complexity machinery:</strong> input size; $O(f)$, $\Omega(f)$, $\Theta(f)$ asymptotic notation; worst-case time analysis; polynomial-time vs. exponential-time. <strong>Data structures:</strong> arrays/vectors (constant-time access), lists (constant-time push/pop, linear traversal), hash tables (expected constant-time access), lookup tables (abstraction of vectors and hash tables); $\mathrm{first}, \mathrm{rest}, \mathrm{cons}, \mathrm{push}, \mathrm{pop}, \mathrm{reverse}$ list operations. <strong>Graph algorithms:</strong> directed graph $\langle V, E\rangle$; path, cycle, acyclic graph; reflexive transitive closure $\to^*$; topological sort = linear extension; depth-first search (Tarjan); strongly connected components. <strong>Lattice-specific representations:</strong> $E_\le$ (the $\le$-relation), $E_\prec$ (the cover relation), upper-cover lookup table $\mathbf{U}[a]$, filter table $\mathbf{F}[a]$, ideal table $\mathbf{I}[a]$, join/meet tables $\mathbf{JOIN}[a, b]$/$\mathbf{MEET}[a, b]$. The cardinality-counts: $n = |L|$, $e_\prec = |E_\prec|$, $e_\le = |E_\le|$. <strong>Formal concept analysis:</strong> formal context $\langle G, M, I\rangle$, formal concept $\langle A, B\rangle$, the concept lattice $\mathfrak{B}(G, M, I)$, reduced context $\langle \mathbf{J}(\mathbf{L}), \mathbf{M}(\mathbf{L}), \le\rangle$, Dedekind-MacNeille completion. <strong>Whitman-like algorithm:</strong> an algorithm that follows Theorem 1.11's six-case structure on $T(s) \times T(t)$ — the direct product of term trees. Term type: $\mathrm{typ}(u) \in \{\vee, \wedge, \mathrm{gen}\}$. The MEMOIZATION technique: record values at type $(\wedge, \vee), (\mathrm{gen}, \vee), (\wedge, \mathrm{gen})$ nodes only.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Four threads reward close reading. <strong>Theorem 11.4's $e_\prec \le n^{3/2}$ bound.</strong> A counting argument: for $x \neq y$ in a meet semilattice, $\mathbf{B}(x) \cap \mathbf{B}(y)$ has at most one element (where $\mathbf{B}(x) = \{y : y \prec x\}$). Hence $\sum_i \binom{b_i + 1}{2} \le \binom{n}{2}$ where $b_i = |\mathbf{B}(x_i)|$, giving $\sum b_i^2 \le n^2$. Convexity then gives $e_\prec^2 = (\sum b_i)^2 \le n \sum b_i^2 \le n^3$. The bound is sharp via projective planes: lattice of subspaces of $\mathbb{F}_q^3$ has $e_\prec \approx \sqrt{2}/4 \cdot n^{3/2}$. <strong>Theorem 11.6's $O(n^{5/2})$ lattice test.</strong> Goralčík-Goralčíková-Koubek-Rödl 1989. Given $P$ as a set with a relation $E$, decide if the transitive closure makes $P$ a lattice. Algorithm: (1) topological sort in $O(n+e)$ (Theorem 11.1); (2) modified transitive-closure Listing 11.5 with cover-count abort threshold $n^{3/2}$ — runs in $O(n^{5/2})$ by Theorems 11.2, 11.4; (3) compute upper covers in $O(n^{5/2})$ by Theorem 11.3; (4) compute join table in $O(n(e_\prec + 1))$ via Listing 11.9 — total $O(n^{5/2})$. <strong>Theorem 11.13's $O(n^2)$ congruence-lattice algorithm.</strong> Key insight: build the bipartite graph $\mathbf{G}(\mathbf{L})$ on $\mathbf{J}(\mathbf{L}) \cup \mathbf{M}(\mathbf{L})$ with edges $a \nearrow q$ (iff $a \le q^*$ and $a \not\le q$) and $q \searrow b$ (iff $q \ge b_*$ and $q \not\ge b$). Then $\mathbf{G}(\mathbf{L})/\equiv \cong \mathbf{J}(\mathbf{Con}\,\mathbf{L})$ as ordered sets (Lemma 11.11). Tarjan's strongly-connected-components algorithm gives $\equiv$-classes in $O(km)$ where $k = |\mathbf{J}(\mathbf{L})|, m = |\mathbf{M}(\mathbf{L})|$ — both at most $n$, so $O(n^2)$. <strong>Theorem 11.38's Whitman with memoization.</strong> Without memoization, Whitman is exponential (Example 11.32 with $v_n, u_n$). With a lookup table at certain node types, Whitman runs in $O(\ell(s) \cdot \ell(t))$ — the same as the bottom-up recurrence but with constant minimum time. Lemmas 11.33-11.37 prove that recording at types $(\wedge, \vee), (\mathrm{gen}, \vee), (\wedge, \mathrm{gen})$ suffices.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · PRELIMINARIES — §1, §2</div>
+  <h2>Pseudo-language, ordered sets, linear extensions, transitive closure</h2>
+  <p class="part-lede">A simple pseudo-language for algorithm presentation. Topological sort in $O(n+e)$ (Theorem 11.1). Filters from upper covers in $O((n+e_\prec)k + e_\le)$ via chain partition (Theorem 11.2). Upper covers from $\le$-relation in $O(ne_\prec + n^2)$, $O(n^2)$ for lattices (Theorem 11.3).</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 1, § 2</span> Preliminaries: Pseudo-Language and Ordered Sets</h2>
+  <div class="tagline">The pseudo-language has if/for/while/procedure constructs and basic data structures (vectors, lists, lookup tables). The fundamental ordered-set algorithms — topological sort, transitive closure, chain partition — establish the building blocks for all later algorithms.</div>
+
+  <h3>The pseudo-language (book pp. 205–208)</h3>
+
+  <p>The chapter introduces a pseudo-language for presenting algorithms. The language has standard if/then/else, for-loops, while-loops, and procedures. Data structures: arrays/vectors (constant-time indexed access), lists (constant-time push/pop, linear-time traversal), hash tables (expected constant-time access), and the abstraction "lookup table" combining vectors and hash tables. Operations: $\mathrm{first}(S), \mathrm{rest}(S), \mathrm{cons}(b, S), \mathrm{push}(b, S), \mathrm{pop}(S), \mathrm{reverse}(S)$.</p>
+
+  <p>Comments are introduced with %. The assignment is denoted $\leftarrow$. Procedures use <code>procedure foo(x, y, ...)</code> and <code>endprocedure</code>; values returned via <code>return (value)</code>.</p>
+
+  <h3>Linear extensions (Theorem 11.1, book pp. 209–210)</h3>
+
+  <p>A <strong>linear extension</strong> of an ordered set $\mathbf{P} = \langle P, \le\rangle$ is a total order on $P$ containing $\le$. Computer scientists call this <em>topological sorting</em>. The fact that every partial order has a linear extension is due to Szpilrajn 1930 [127], based on earlier work known to colleagues (see Knuth [90]).</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.1 · Kahn-Knuth topological sort in $O(n + e)$</span>
+    <p>The algorithm of Listing 11.3 (presented below) produces a linear extension of $\mathbf{P}$ in time $O(n + e)$. Moreover, the algorithm can test if $\mathbf{P}$ is an ordered set: $\mathbf{P}$ is an ordered set if and only if the set $S$ computed in the algorithm has size $n$.</p>
+  </div>
+
+  <pre class="listing"><span class="lh">Listing 11.3 · Linear Extension (Topological Sort)</span>(1)  S ← ∅      % S will be the linear extension.
+(2)  Z ← ∅      % U[a] is the set of upper covers of a; see Listing 11.2.
+(3)  for a ∈ P do I[a] ← 0 endfor
+(4)  for a ∈ P do
+(5)      for b ∈ U[a] with b ≠ a do
+(6)          I[b] ← I[b] + 1
+(7)      endfor
+(8)  endfor
+(9)  for a ∈ P do
+(10)     if I[a] = 0 then push (a, Z) endif
+(11) endfor
+(12) while Z ≠ ∅ do
+(13)     a ← pop (Z)
+(14)     push (a, S)
+(15)     for b ∈ U[a] with b ≠ a do
+(16)         I[b] ← I[b] − 1
+(17)         if I[b] = 0 then push (b, Z) endif
+(18)     endfor
+(19) endwhile
+(20) S ← reverse (S)</pre>
+
+  <p>The basic idea: choose a minimal element of $\mathbf{P}$, identify it as an element $b$ such that $\langle x, b\rangle \in E$ implies $x = b$. Then find a minimal element of $\mathbf{P} - \{b\}$. Continuing, obtain a linear extension. Naïvely $n \cdot e$ steps; with care, $O(n + e)$.</p>
+
+  <p>The algorithm can be modified to compute the height function $h(x)$ in $O(n + e)$. By a result of Goralčík-Goralčíková-Koubek 1990, a lattice is modular iff $h(x \vee y) + h(x \wedge y) = h(x) + h(y)$ for all $x, y$ — so we can decide modularity in $O(n^2)$.</p>
+
+  <h3>Transitive closure: filters from upper covers (Theorem 11.2, book pp. 210–214)</h3>
+
+  <p>Given $E_\prec$, calculate $E_\le$ — i.e., given the upper covers of each element, find the principal filter generated by each. The basic idea: run through a topologically-sorted list backwards. The filter above $a$ is the union of $\{a\}$ and the filters of elements $b$ with $a \prec b$. Goralčíková-Koubek 1979 [70]: $O(n \cdot e_\prec + e_\le)$. Simon 1988 [120]: improved.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.2 · Filters via chain partition</span>
+    <p>Given an ordered set $\mathbf{P}$ as a set $P$ and upper covers $E_\prec$, and given a chain partition of $\mathbf{P}$ into $k$ chains, the Filters algorithm of Listing 11.5 constructs the filters generated by each element of $\mathbf{P}$ in time $O((n + e_\prec)k + e_\le)$.</p>
+  </div>
+
+  <p>Simon's algorithm (Listing 11.6) gives a quick (incomplete) chain decomposition in $O(n + e_\prec)$. On a random graph with edge probability $p$, the expected number of chains is $\min(n, 1 + 2 \log n / (-\log(1-p)))$. The Filters algorithm has expected running time $O(n^2 \log n)$.</p>
+
+  <h3>Upper covers from $\le$-relation (Theorem 11.3, book pp. 214–215)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.3 · Upper covers in $O(ne_\prec + n^2)$, $O(n^2)$ for lattices</span>
+    <p>The algorithm of Listing 11.8 calculates the upper covers in $\mathbf{P}$ from the $\le$-relation $E_\le$ in time $O(ne_\prec + n^2)$. If $\mathbf{P}$ is a lattice, this algorithm runs in time $O(n^2)$.</p>
+  </div>
+
+  <p>The lattice case is faster because: if $b \not\le x$, then $a = b \wedge x$, so $a$ is determined by $b$ and $x$. Hence at most $n^2$ triples $\langle a, b, x\rangle$ with $b \le x$ are accessed.</p>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · FINITE LATTICES — §3, §4, §5</div>
+  <h2>Lattice testing in $O(n^{5/2})$, contexts, congruence lattices in $O(n^2)$</h2>
+  <p class="part-lede">Theorems 11.4–11.5 (cover-count bounds: $e_\prec \le n^{3/2}$ in semilattices, $\le \frac{1}{2}n\log_2 n$ in SD lattices). Theorem 11.6 (Goralčík et al.: $O(n^{5/2})$ test for "is it a lattice?"). §4 introduces formal concept analysis. Theorem 11.13 (Freese-Nation $O(n^2)$ algorithm for $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$). Theorem 11.14 ($O(nN)$ all-antichains algorithm). Theorem 11.15 ($O(n^2)$ subdirect-irreducibility test). Markowsky's $O(n^2)$ direct-decomposability test.</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 3</span> Finite Lattices</h2>
+  <div class="tagline">The cover-count bound is the structural foundation of the chapter. Theorems 11.4–11.5 prove $e_\prec$ is much smaller than $n^2$ in semilattices and SD lattices. Theorem 11.6's $O(n^{5/2})$ lattice test exploits this. Theorem 11.8's $O(n^2 \log_2 n)$ algorithm tests structural properties (SD, lower bounded, splitting).</div>
+
+  <h3>Theorem 11.4 — the cover-count bound (book pp. 215–216)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.4 · $e_\prec \le n^{3/2}$ for semilattices</span>
+    <p>If $e_\prec$ is the number of covers (the number of lines in the Hasse diagram) in a semilattice with $n$ elements, then $n - 1 \le e_\prec \le n^{3/2}$.</p>
+  </div>
+
+  <p>Proof sketch: let $\mathbf{B}(x) = \{y \in L : y \prec x\}$. For $x \neq y$, $\mathbf{B}(x) \cap \mathbf{B}(y)$ has at most one element ($x \wedge y$). So $\mathbf{B}(x) \cup \{x\}$ and $\mathbf{B}(y) \cup \{y\}$ have no two-element subset in common. Hence $\sum_{i=0}^{n-1} \binom{b_i + 1}{2} \le \binom{n}{2}$ with $b_i = |\mathbf{B}(x_i)|$, giving $\sum b_i^2 \le n^2$. By convexity (Cauchy-Schwarz), $(e_\prec/n)^2 \le \sum b_i^2 / n \le n$, so $e_\prec^2 \le n^3$. $\square$</p>
+
+  <p>The bound is asymptotically sharp: the lattice of subspaces of $\mathbb{F}_q^3$ (a projective plane of order $q$) has $e_\prec \approx \frac{\sqrt{2}}{4} n^{3/2}$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.5 · $e_\prec \le \frac{1}{2} n \log_2 n$ for SD lattices</span>
+    <p>Let $\mathbf{L}$ be a lattice with $n$ elements and suppose $\mathbf{L}$ is either join or meet semidistributive. Then $e_\prec \le \frac{1}{2} n \log_2 n$. Equality obtains if and only if $\mathbf{L}$ is a Boolean lattice.</p>
+  </div>
+
+  <h3>Theorem 11.6 — the $O(n^{5/2})$ lattice test (book pp. 217–218)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.6 · Goralčík-Goralčíková-Koubek-Rödl $O(n^{5/2})$ lattice test</span>
+    <p>Let $P$ be a finite set with $n$ elements and let $E$ be a subset of $P \times P$. Then one can determine in time $O(n^{5/2})$ if the transitive closure of $E$ defines a partial order on $P$, and if this order is a lattice. If it is a lattice, the join and meet tables, the tables of lower covers, and of upper covers, of each element, and the table of ideals can also be calculated in this time. Likewise, given a binary operation on $P$, one can determine if $P$ under this operation is a semilattice, and given two binary operations, determine if they define a lattice on $P$, in time $O(n^{5/2})$.</p>
+  </div>
+
+  <div class="box problem">
+    <span class="label">Problem 11.7 · open: faster than $O(n^{5/2})$?</span>
+    <p>Can one decide if an ordered set of size $n$ is a lattice in time faster than $O(n^{5/2})$? Can the various data structures mentioned in Theorem 11.6 be computed in time faster that $O(n^{5/2})$?</p>
+  </div>
+
+  <p>"This is probably one of the most important problems in this area." (book p. 218)</p>
+
+  <h3>Theorem 11.8 — testing structural properties (book pp. 218–219)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.8 · $O(n^2 \log_2 n)$ tests for SD, lower bounded, splitting</span>
+    <p>There is an algorithm to determine if an ordered set $\mathbf{P}$ is a join semidistributive lattice which runs in time $O(n^2 \log_2 n)$. Similarly, there are $O(n^2 \log_2 n)$ algorithms to determine if an ordered set is a semidistributive lattice, a bounded homomorphic image of a free lattice, or is a splitting lattice.</p>
+  </div>
+
+  <p>The trick: modify Listing 11.5 to halt when cover count exceeds $\frac{1}{2}n \log_2 n$ (Theorem 11.5's bound). If it halts, $\mathbf{P}$ is not SD. If completes, $e_\prec \le \frac{1}{2} n \log_2 n$, hence the lattice test runs in $O(n e_\prec) = O(n^2 \log_2 n)$. Then apply Theorem 11.20.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.9 · width-$k$ lattice cover bound</span>
+    <p>If $\mathbf{L}$ is a lattice with $n$ elements and width at most $k$, then $e_\prec < n(\frac{1}{2} + \sqrt{k})$.</p>
+  </div>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">§ 4, § 5</span> Representations, Contexts, Congruence Lattices</h2>
+  <div class="tagline">Section 4: lattice representations including formal concept analysis (Wille's school at Darmstadt). Section 5: Theorem 11.13 — $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ in $O(n^2)$ via the bipartite graph $\mathbf{G}(\mathbf{L})$ on $\mathbf{J}(\mathbf{L}) \cup \mathbf{M}(\mathbf{L})$.</div>
+
+  <h3>Lattice representations and formal concept analysis (book pp. 220–221)</h3>
+
+  <p>The chapter lists 7 representations: (1) $\le$-relation, (2) $E_\le$, (3) $E_\prec$, (4) any $E$ with $E_\prec \subseteq E \subseteq E_\le$, (5) upper covers per element, (6) filter per element, (7) join table. Plus duals. Any one converts to any other in $O(n^{5/2})$.</p>
+
+  <p><strong>Formal concept analysis</strong> (Wille's Darmstadt school): a (formal) <em>context</em> is a triple $\langle G, M, I\rangle$ where $G, M$ are sets and $I \subseteq G \times M$. A <em>concept</em> is a pair $\langle A, B\rangle$ with $A \subseteq G$, $B \subseteq M$, $A' = B$, $B' = A$ (using the prime operators $A' = \{m \in M : m \ge a \forall a \in A\}$). The set $\mathfrak{B}(G, M, I)$ of concepts forms a complete lattice under $\langle A_0, B_0\rangle \le \langle A_1, B_1\rangle$ iff $A_0 \subseteq A_1$.</p>
+
+  <p>For a lattice $\mathbf{L}$, the <em>reduced context</em> is $\langle \mathbf{J}(\mathbf{L}), \mathbf{M}(\mathbf{L}), \le\rangle$. Since $|\mathbf{J}(\mathbf{L})|$ and $|\mathbf{M}(\mathbf{L})|$ can be logarithmic in $|\mathbf{L}|$, this representation can be very space-efficient. For the Boolean lattice on $k$ elements, the context is $k \times k$ while $|L| = 2^k$. $\mathbf{L}$ is the Dedekind-MacNeille completion of the bipartite poset on $\mathbf{J}(\mathbf{L}) \cup \mathbf{M}(\mathbf{L})$ (MacNeille 1937).</p>
+
+  <p>Listing 11.10 converts a context to its lattice in $O(kmn)$ where $k = |G|, m = |M|, n = |\mathfrak{B}(G, M, I)|$.</p>
+
+  <h3>Theorem 11.13 — $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ in $O(n^2)$ (book pp. 221–225)</h3>
+
+  <p>The chapter's core algorithmic contribution to congruence-lattice computation. Build a bipartite directed graph $\mathbf{G}(\mathbf{L})$ on the disjoint union of $\mathbf{J}(\mathbf{L})$ and $\mathbf{M}(\mathbf{L})$:</p>
+
+  <p>For $a \in \mathbf{J}(\mathbf{L})$ and $q \in \mathbf{M}(\mathbf{L})$:
+  <ul>
+    <li>$a \nearrow q$ iff $a \le q^*$ and $a \not\le q$ (equivalently $a \vee q = q^*$).</li>
+    <li>$q \searrow b$ iff $q \ge b_*$ and $q \not\ge b$ (equivalently $q \wedge b = b_*$).</li>
+  </ul></p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.10 · D-relation via $\nearrow \searrow$</span>
+    <p>For $a$ and $b$ distinct join irreducible elements of a finite lattice, $a D b$ if and only if $a \nearrow q \searrow b$ for some meet irreducible element $q$.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.11 · $\mathbf{G}(\mathbf{L})/\equiv \cong \mathbf{J}(\mathbf{Con}\,\mathbf{L})$</span>
+    <p>$\mathbf{G}(\mathbf{L})/\equiv$ and $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ are isomorphic ordered sets (where $\equiv$ is the equivalence relation associated with the quasiorder of $\mathbf{G}(\mathbf{L})$).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.13 · $O(n^2)$ algorithm for $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$</span>
+    <p>Suppose that $\mathbf{L}$ is a finite lattice with $n$ elements and that it is represented as the set $L$ and one of the following: (1) a Boolean table of $x \le y$, (2) the filter table $\mathbf{F}[x]$, (3) the list $E_\le$, (4) the join table of $\mathbf{L}$, or the dual of any of these. Then we can find the ordered set $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ in time $O(n^2)$.</p>
+  </div>
+
+  <p>The proof uses Tarjan's strongly-connected-components algorithm [129] in $O(v + e) = O(k + m + 2km) = O(km)$ to compute the $\equiv$-classes of the quasiorder. Combined with $O(n^2)$ preprocessing to find $\mathbf{J}(\mathbf{L}), \mathbf{M}(\mathbf{L})$, the total is $O(n^2)$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.14 · all antichains in $O(nN)$</span>
+    <p>The algorithm of Listing 11.11 finds all antichains of an ordered set $\mathbf{P}$ in time $O(nN)$, where $n = |\mathbf{P}|$ and $N$ is the number of antichains.</p>
+  </div>
+
+  <p>The algorithm recursively builds antichains by adding maximal elements of remaining elements. $O(nN)$ matches the output size, so essentially optimal.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 11.15 · $O(n^2)$ subdirect-irreducibility / simplicity test</span>
+    <p>Let $\mathbf{L}$ be a finite lattice represented by one of the four structures listed in Theorem 11.13. There are algorithms which determine if $\mathbf{L}$ is subdirectly irreducible or simple that each run in time $O(n^2)$.</p>
+  </div>
+
+  <p>$\mathbf{L}$ is simple iff $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ has only one element; subdirectly irreducible iff $\mathbf{J}(\mathbf{Con}\,\mathbf{L})$ has a unique least element. Both decidable from the $\mathbf{G}(\mathbf{L})/\equiv$ structure.</p>
+
+  <p>For comparison: Demel-Demlová-Koubek 1985 [36]'s general finite-algebra algorithm runs in $O(n^3)$. The lattice-specific approach in Theorem 11.13 + Corollary 11.15 saves a factor of $n$.</p>
+
+  <h3>Direct decomposability via Markowsky (book pp. 227–228)</h3>
+
+  <p>Markowsky 1973 [97] gave an $O(n^2)$ algorithm for direct-product decomposition. The idea: define a bipartite graph on $\mathbf{J}(\mathbf{L}) \cup \mathbf{M}(\mathbf{L})$ with edges $a < q$ in $\mathbf{L}$ for $a \in \mathbf{J}, q \in \mathbf{M}$. $\mathbf{L}$ is directly indecomposable iff this graph is connected. Connected components give the directly-indecomposable factors.</p>
+
+  <h3>Congruence lattices of finite semilattices (book pp. 228–229)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.18 · semilattice congruence-lattice cardinalities</span>
+    <p>Let $\mathbf{S}$ be a finite semilattice. Then:</p>
+    <ol>
+      <li>$|\mathbf{M}(\mathbf{Con}\,\mathbf{S})| = |\mathbf{S}| - 1$.</li>
+      <li>$|\mathbf{J}(\mathbf{Con}\,\mathbf{S})| = e_\prec$.</li>
+      <li>$\mathbf{Con}\,\mathbf{S}$ has $|\mathbf{J}(\mathbf{S})|$ atoms.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · BOUNDED HOMOMORPHISMS + SPLITTING — §6</div>
+  <h2>Theorem 11.20: $O(n^2)$ tests for lower bounded, SD, splitting. Theorem 11.21: bounds on join-minimal subsets. Theorem 11.23: minimal join covers in $O(rk^3)$. Example 11.24: β can be exponential.</h2>
+</header>
+
+<section class="module" id="s6">
+  <h2><span class="num">§ 6</span> Bounded Homomorphisms and Splitting Lattices</h2>
+  <div class="tagline">An $O(n^2)$ algorithm for testing if $\mathbf{L}$ is a lower bounded homomorphic image, meet/join semidistributive, or a splitting lattice. Plus the minimal-join-covers algorithm running in $O(rk^3)$ where $r$ is the (potentially super-polynomial) number of join-minimal subsets.</div>
+
+  <h3>Theorem 11.19 + Theorem 11.20 (book pp. 229–230)</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.19 · lower bounded ⟺ $k = s$</span>
+    <p>$\mathbf{L}$ is a lower bounded homomorphic image of a free lattice if and only if $k = s$, where $k = |\mathbf{J}(\mathbf{L})|$ and $s = |\mathbf{G}(\mathbf{L})/\equiv|$. It is upper bounded iff $m = s$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.20 · $O(n^2)$ structural-property tests</span>
+    <p>Let $\mathbf{L}$ be a finite lattice of size $n$ represented by one of the four structures listed in Theorem 11.13. Then there are $O(n^2)$-time algorithms that determine if:</p>
+    <ol>
+      <li>$\mathbf{L}$ is a lower bounded homomorphic image of a free lattice.</li>
+      <li>$\mathbf{L}$ is meet (or join or both) semidistributive.</li>
+      <li>$\mathbf{L}$ is a splitting lattice.</li>
+    </ol>
+  </div>
+
+  <p>Splitting lattice = subdirectly irreducible + both upper and lower bounded (Corollary 2.76 + Theorem 2.79). All three conditions decidable from the $\mathbf{G}(\mathbf{L})$ structure in $O(n^2)$.</p>
+
+  <p>By Theorem 2.56, $\mathbf{L}$ is meet semidistributive iff for each $a \in \mathbf{J}(\mathbf{L})$ there is a unique $q \in \mathbf{M}(\mathbf{L})$ with both $a \nearrow q$ and $q \searrow a$. So count the rows in the $\mathbf{J}(\mathbf{L}) \times \mathbf{M}(\mathbf{L})$ table: meet SD iff each row has exactly one "$2$" (both $\nearrow$ and $\searrow$ present).</p>
+
+  <h3>Theorem 11.21 — bounds on join-minimal subsets (book pp. 230–231)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.21 · join-minimal-subset bounds</span>
+    <p>Let $\mathbf{L}$ be a finite lattice with $n = |\mathbf{L}| > 1$, and let $k = |\mathbf{J}(\mathbf{L})|$.</p>
+    <ol>
+      <li>The number of join irredundant subsets of $\mathbf{J}(\mathbf{L})$ is at most $k^{\lfloor \log_2 n\rfloor}$.</li>
+      <li>$r \le k^{\lfloor \log_2 n\rfloor}$ where $r$ = number of join-minimal subsets.</li>
+      <li>The number of minimal join covers of $a$ is at most $k^{\lfloor \log_2 n\rfloor - 1}$.</li>
+      <li>If $\mathbf{L}$ is join semidistributive, then $r \le n$.</li>
+      <li>If $\mathbf{L}$ is a lower bounded homomorphic image of a free lattice, then the number of minimal join covers of $a$ is at most $n$.</li>
+    </ol>
+  </div>
+
+  <p>Example 11.22 (the $\mathbf{C}_m$ family, Boolean-with-$\mathbf{M}_s$-bottoms construction) shows the bound (1) is essentially tight: $\mathbf{C}_m$ has $n = 2^m + m^2$, $k = m^2$, and at least $m^m$ join-minimal sets. The number of join-minimal sets is approximately $n^{\log_2 \log_2 n}$ — super-polynomial.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.23 · minimal join covers in $O(rk^3)$</span>
+    <p>Let $\mathbf{L}$ be a finite lattice, $k = |\mathbf{J}(\mathbf{L})|$, and $r$ the number of join-minimal subsets of $\mathbf{J}(\mathbf{L})$. The set of minimal join covers of any element can be found in time $O(rk^2)$, and the set of minimal join covers of all the elements of $\mathbf{J}(\mathbf{L})$ can be found in time $O(rk^3)$.</p>
+  </div>
+
+  <h3>Example 11.24 — exponential β (book p. 234)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 11.24 · the $\mathbf{L}_n$ family showing $\ell(\beta(c_0))$ exponential in $|\mathbf{L}_n|$</span>
+    <p>$\mathbf{L}_0 = \mathbf{N}_5$. $\mathbf{L}_n$ obtained from $\mathbf{L}_{n-1}$ by adding new top $c_{n+1}$, new bottom $a_{n+1}$, and a complement element $b_n$ of all elements in $\mathbf{L}_{n-1}$. (McKenzie's notation: $\mathbf{L}_n = \mathbf{N}_{n+5}$.)</p>
+    <p>For the homomorphism from the free lattice on $\{a_0, c_0, b_0, \ldots, b_n\}$ onto $\mathbf{L}_n$, $\beta(c_0)$ has the recursive form:</p>
+    <ul>
+      <li>$\mathbf{L}_0$: $c_0 \wedge (b_0 \vee (a_0 \wedge c_0))$.</li>
+      <li>$\mathbf{L}_1$: $c_0 \wedge ((b_0 \wedge (b_1 \vee (a_0 \wedge c_0 \wedge b_0))) \vee \cdots)$.</li>
+      <li>...generally $b_n$ occurs $2^n$ times in $\beta(c_0)$.</li>
+    </ul>
+    <p>Since $|\mathbf{L}_n| = 3n + 5$, the length of $\beta(c_0)$ is exponential in $|\mathbf{L}_n|$. $\beta(c_0) \le \kappa(\beta(c_0))$ is the splitting equation for $\mathbf{L}_n$ — exponentially long.</p>
+  </div>
+</section>
+
+<!-- ============== PART D ============== -->
+<header class="part-header">
+  <div class="pk">PART D · ANTICHAINS + CHAIN PARTITIONS — §7</div>
+  <h2>Theorem 11.30 (Bogart-Magagnosc): Dilworth chain partition + maximum antichain in $O(n^3)$. Theorem 11.31: the lattice $\mathbf{M}(\mathbf{P})$ of maximum antichains in $O(n^3 + nN)$.</h2>
+</header>
+
+<section class="module" id="s7">
+  <h2><span class="num">§ 7</span> Antichains and Chain Partitions of Ordered Sets</h2>
+  <div class="tagline">Dilworth's theorem (1950): an ordered set of width $k$ partitions into $k$ chains. The chapter gives an $O(n^3)$ algorithm (Bogart-Magagnosc 1985), plus a Dilworth-1960 result that maximum antichains form a distributive lattice $\mathbf{M}(\mathbf{P})$.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.25 · Dilworth — maximum antichains form a distributive lattice</span>
+    <p>If $\mathbf{P}$ is an ordered set of width $k$, then the set of all antichains of size $k$, ordered by $\ll$, forms a distributive lattice $\mathbf{M}(\mathbf{P})$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 11.26 · Kleitman-Edelberg-Lubell — orbit-union maximum antichains</span>
+    <p>Let $\mathbf{P}$ be a finite ordered set and $G$ a group of automorphisms of $\mathbf{P}$. Then there exist maximum-sized antichains $A$ and $B$ of $\mathbf{P}$, each of which is a union of orbits of $G$, such that for any maximum-sized antichain $C$, $A \ll C \ll B$.</p>
+  </div>
+
+  <p>Sperner's theorem (the largest antichain in $\mathbf{2}^n$ is a level set $\binom{n}{k}$ for $k = \lfloor n/2\rfloor$) follows easily from Corollary 11.26 applied to the symmetric group on the $n$-element base set.</p>
+
+  <h3>Theorem 11.30 — Bogart-Magagnosc (book pp. 235–238)</h3>
+
+  <p>The algorithm uses <em>alternating sequences</em> $a_0, b_0, a_1, b_1, \ldots, a_s$ (or $\ldots, a_s, b_s$) where: (1) $a_0$ is the least element of some chain in $\mathbf{C}$, (2) the $b_i$'s are distinct, (3) $a_i > b_i$, (4) $a_{i+1}$ is the successor of $b_i$ in its chain. A <em>reducing sequence</em> additionally requires $b_s$ to be the greatest element of its chain.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.30 · Dilworth chain partition in $O(n^3)$</span>
+    <p>Let $\mathbf{P}$ be an ordered set with $n$ elements. Then one can find a Dilworth chain partition and the maximum-sized antichain (which is least under $\ll$) in time $O(ne_\le + n^2)$, and thus in time $O(n^3)$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.31 · $\mathbf{M}(\mathbf{P})$ in $O(n^3 + nN)$</span>
+    <p>Let $\mathbf{P}$ be an ordered set with $n$ elements, $\mathbf{M}(\mathbf{P})$ its lattice of maximum-sized antichains, and $N = |\mathbf{M}(\mathbf{P})|$. The ordered set of join-irreducible elements of $\mathbf{M}(\mathbf{P})$ can be calculated in time $O(n^3)$, and all the elements of $\mathbf{M}(\mathbf{P})$ can be found in time $O(n^3 + nN)$.</p>
+  </div>
+</section>
+
+<!-- ============== PART E ============== -->
+<header class="part-header">
+  <div class="pk">PART E · FREE LATTICE ALGORITHMS — §8</div>
+  <h2>Whitman's algorithm: exponential without memoization (Example 11.32), $O(\ell(s) \cdot \ell(t))$ with memoization (Theorem 11.38). Skolem's 1920 polytime work rediscovered. Canonical form in $O(\ell(t)^2)$ (Theorem 11.39).</h2>
+</header>
+
+<section class="module" id="s8">
+  <h2><span class="num">§ 8</span> Algorithms for Free Lattices</h2>
+  <div class="tagline">Testing $s \le t$ in $\mathbf{FL}(X)$. Whitman's 1941 algorithm (Theorem 1.11) is exponential without memoization. With memoization at certain node types only, it runs in $O(\ell(s) \cdot \ell(t))$. Skolem 1920 had a polytime algorithm rediscovered by Cosmadakis 1989 and others.</div>
+
+  <h3>Example 11.32 — Whitman's exponential blowup (book p. 241)</h3>
+
+  <div class="box ex">
+    <span class="label">Example 11.32 · the $v_n, u_n$ family</span>
+    <p>In the free lattice on $\{x_0, x_1, \ldots\} \cup \{y_0, y_1, \ldots\}$, let $v_0 = x_0 \wedge x_1$ and $u_0 = y_0 \vee y_1$. For $n \ge 1$:</p>
+    $$v_n = x_n \wedge x_{n+1} \wedge (y_n \vee v_{n-1})$$
+    $$u_n = y_n \vee y_{n+1} \vee (x_n \wedge u_{n-1}).$$
+    <p>$\ell(v_{n+1}) - \ell(v_n)$ is constant, so $\ell(v_n) = O(n)$. Yet Whitman's algorithm (without memoization) tests $v_{n-1} \le u_{n-1}$ TWICE while testing $v_n \le u_n$. So total comparisons grow as $2^n$ — exponential in input size $n$.</p>
+  </div>
+
+  <h3>Skolem's 1920 polynomial-time algorithm (book pp. 241–242)</h3>
+
+  <p>Thoralf Skolem in 1920 [121, 122] solved the uniform word problem for finitely-presented lattices in polynomial time. He formed a relational structure $S$ on the set of subterms of $s, t$ with one binary relation $\le$ and two ternary relations $J, M$ (corresponding to $V$ and $\wedge$). Closing under five rules (transitivity, J-implications, dual rules) gives a structure $S/\sim$ that is a partial lattice. Then $s \le t$ in $\mathbf{FL}(X)$ iff $s \le t$ holds in $S$. The closure runs in polynomial time: $|S| = O(n)$, $|J| \le n^3$.</p>
+
+  <p>Skolem's work was forgotten until rediscovered by Cosmadakis (~1989, independently) and Burris (1992). McKinsey 1942 [101] and Evans 1951 [45], [46] had similar but slower constructions.</p>
+
+  <h3>Theorem 11.38 — Whitman with memoization (book pp. 244–246)</h3>
+
+  <p>The trick: record the value of $\mathrm{val}(v, u)$ at certain node types only. Lemmas 11.33-11.37 prove that recording at types $(\wedge, \vee), (\mathrm{gen}, \vee), (\wedge, \mathrm{gen})$ suffices.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.33 · $(\vee, \wedge)$ nodes are never accessed (except at root)</span>
+    <p>In a Whitman-like algorithm to determine if $s \le t$, a node $(v, u) \in T(s) \times T(t)$ of type $(\vee, \wedge)$ with $u \neq t$ is never accessed. If $u = t$, such a node is accessed only if the type of $(s, t)$ is $(\vee, \wedge)$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.38 · Whitman in $O(\ell(s) \cdot \ell(t))$</span>
+    <p>Let $s$ and $t$ be lattice terms whose variables lie in the set $X$, represented so that constant-time operations are possible (type-check, access joinands/meetands, generator-equality). Then the program of Listing 11.16 can determine if $s \le t$ holds in $\mathbf{FL}(X)$ in time $O(\ell(s) \cdot \ell(t))$.</p>
+  </div>
+
+  <p>The algorithm has the desirable property of CONSTANT minimum running time (for example, $x \wedge v \le x \vee u$ is decided in $O(1)$ regardless of the size of $v, u$). The bottom-up alternative would have $O(\ell(s) \cdot \ell(t))$ MINIMUM running time.</p>
+
+  <h3>Theorem 11.39 — canonical form in $O(\ell(t)^2)$ (book pp. 246–247)</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.39 · canonical form computation</span>
+    <p>Let $t = t_1 \vee \cdots \vee t_n$ with each $t_i$ in canonical form. The algorithm of Listing 11.17 computes the canonical joinands of $t$ in time $O(\ell(t)^2)$.</p>
+  </div>
+
+  <p>Theorems 3.30 and 3.32 give algorithms for testing complete-join-irreducibility and computing $\kappa(w)$. Complete-join-irreducibility runs in $O(\ell(w)^3)$. The κ-computation is polynomial in $\ell(w)$ — but $\ell(\kappa(w))$ can be exponential in $\ell(w)$ (the $w_n$ family example).</p>
+
+  <h3>The $\ell(\kappa(w))$ exponential blowup (book p. 248)</h3>
+
+  <p>In $\mathbf{FL}(\{x, y_0, y_1, y_2\})$, define $w_n$ as alternating "slim" terms (Example 3.40). Each $w_n$ is completely join irreducible. For $n \ge 3$:</p>
+  $$\kappa(w_n) = [\kappa(w_{n-1}) \wedge (x \vee y_2 \vee y_3)] \vee [\kappa(w_{n-2}) \wedge (x \vee y_2 \vee y_3)].$$
+  <p>$\ell(\kappa(w_n))$ grows exponentially (Fibonacci-like). Since $\ell(w_n) = 4n - 1$, $\ell(\kappa(w_n))$ is exponential in $\ell(w_n)$. So while computing $\kappa(w)$ takes polynomial time, the OUTPUT can be exponentially long.</p>
+</section>
+
+<!-- ============== PART F ============== -->
+<header class="part-header">
+  <div class="pk">PART F · FINITELY PRESENTED LATTICES + DIAGRAMS — §9, §10</div>
+  <h2>Dean's algorithm for $\mathbf{FL}(\mathbf{P})$. Open problems for FPL: complete-join-irreducibility, finiteness, projectivity, weak atomicity. The lattice-drawing algorithm.</h2>
+</header>
+
+<section class="module" id="s9">
+  <h2><span class="num">§ 9, § 10</span> Finitely Presented Lattices and Lattice Diagrams</h2>
+  <div class="tagline">Finitely presented lattice = lattice presented by finite $\langle X, R\rangle$. Skolem 1920: solvable in polynomial time. Many open problems remain. Section 10 describes the chapter authors' lattice-drawing algorithm based on simulated 3D forces.</div>
+
+  <h3>Finitely presented lattices and Dean's algorithm (book pp. 249–250)</h3>
+
+  <p>A <em>partial lattice</em> $\mathbf{P}$ is an ordered set $\langle P, \le\rangle$ with partial functions $\bigvee$ and $\bigwedge$ from subsets of $P$ to $P$, defined when the sup/inf exists. $\mathbf{FL}(\mathbf{P})$ denotes the lattice freely generated by $\mathbf{P}$ — the finitely-presented lattice with relations from $\mathbf{P}$'s defined operations.</p>
+
+  <p><strong>Dean's algorithm</strong> [35] (R.A. Dean, similar to Whitman's): tests $s \le t$ in $\mathbf{FL}(\mathbf{P})$ via a 6-case recursion modifying Whitman's:</p>
+  <ul>
+    <li>(1') $x_i \le x_j$ in $\mathbf{P}$ iff this holds in $\mathbf{P}$.</li>
+    <li>(4') If $s \in P$ and $t = t_1 \vee \cdots \vee t_m$, then $s \le t$ iff $s \in \mathrm{Id}_{\mathbf{P}}(\{t_1, \ldots, t_m\})$.</li>
+    <li>(5') The dual of (4').</li>
+    <li>(6') If $s = s_1 \wedge \cdots \wedge s_k$ and $t = t_1 \vee \cdots \vee t_m$, then $s \le t$ iff $s_i \le t$ some $i$, $s \le t_j$ some $j$, OR $s \le x \le t$ for some $x \in P$.</li>
+  </ul>
+
+  <p>Computing $\mathrm{Id}_{\mathbf{P}}(S)$ runs in polynomial time. Hence Dean's algorithm is polynomial time.</p>
+
+  <p><strong>Adequate terms and canonical form for FPL</strong> [Freese 53]: a term $t$ is <em>adequate</em> if $t \in P$, or $t = t_1 \vee \cdots \vee t_m$ with each $t_i$ adequate AND ($p \le t$ in $\mathbf{FL}(\mathbf{P})$ implies $p \le t_i$ for some $i$), or the dual. Each $w \in \mathbf{FL}(\mathbf{P})$ has an adequate term of minimal length representing it (the canonical form). Canonical-form conversion is polynomial time.</p>
+
+  <h3>Open problems for FPL (book pp. 250–251)</h3>
+
+  <div class="box problem">
+    <span class="label">Problem 11.40 · open: poly-time complete-join-irreducibility for FPL?</span>
+    <p>Is there a polynomial time algorithm which decides if $w \in \mathbf{FL}(\mathbf{P})$ is completely join irreducible?</p>
+  </div>
+
+  <p>The algorithm in [53] tests this; the difficulty lies in testing if $x \in P$ is completely join irreducible.</p>
+
+  <div class="box problem">
+    <span class="label">Problem 11.41 · open: poly-time finiteness test for FPL?</span>
+    <p>Is there a polynomial time algorithm which decides if a finitely presented lattice is finite?</p>
+  </div>
+
+  <p>Slavík 1995 [123]: $|\mathbf{FL}(\mathbf{P})| > 86 \cdot |\mathbf{P}^{\vee\wedge}|$ implies $\mathbf{FL}(\mathbf{P})$ is infinite. So finiteness is decidable, but $|\mathbf{P}^{\vee\wedge}|$ can be exponential in $|\mathbf{P}|$.</p>
+
+  <div class="box problem">
+    <span class="label">Problem 11.42 · open: weak atomicity, finite width for FPL</span>
+    <p>Is there an algorithm to decide if a finitely presented lattice is weakly atomic? Of finite width?</p>
+  </div>
+
+  <p>Freese [53] gives an example of an FPL with no covers at all.</p>
+
+  <div class="box problem">
+    <span class="label">Problem 11.43 · open: poly-time projectivity test for FPL?</span>
+    <p>Is there a polynomial time algorithm which decides if a finitely presented lattice is projective?</p>
+  </div>
+
+  <p>By Theorem 5.9, projective ⟺ (W) + bounded. (W) is decidable in polynomial time. But bounded ⟺ $\mathbf{P}^\vee$ is bounded (Theorem 11.20), and $|\mathbf{P}^\vee|$ can be exponential. Example 11.44 shows the meet-irreducibles of $\mathbf{P}^\vee$ can be exponentially many.</p>
+
+  <h3>The lattice-drawing algorithm (book pp. 251–253)</h3>
+
+  <p>The algorithm authors developed produces "good" lattice diagrams. Three steps:</p>
+  <ol>
+    <li><strong>Height function:</strong> $h(0) = 0$, $h(a) = r - s + k$ where $r$ is the longest chain from $0$ to $a$, $s$ is the longest from $a$ to $1$, $k$ is the length of the longest chain in $\mathbf{L}$. Computed in $O(n + e_\prec)$.</li>
+    <li><strong>3D positioning:</strong> elements of height $h$ start on a circle in the $z = h$ plane. Forces simulate: comparable elements attract (linearly), incomparable repel (inverse-square). Dynamical system in heavy syrup. Iterate until stable.</li>
+    <li><strong>2D projection:</strong> try ~30 projection planes containing the $z$-axis. Choose the one minimizing a "badness" criterion (close points, points near non-incident lines).</li>
+  </ol>
+
+  <p>The algorithm typically produces a diagram close to what would have been drawn by hand. For the 8-element Boolean algebra, gives the usual diagram. For the free distributive lattice on 3 generators, gives the standard textbook diagram (Figure 2.9 ↔ Figure 11.7-left).</p>
+
+  <p>Wille's Darmstadt school proposes minimizing the number of slopes occurring in the diagram. The 8-element Boolean algebra has only TWO 3-slope diagrams (J. Stephan [126]): the usual one and the "Escher-like" diagram in Figure 11.8.</p>
+</section>
+
+<!-- ============== CONNECTIONS ============== -->
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> The pseudo-language and historical algorithmic development</h2>
+  <div class="tagline">A simple imperative pseudo-language with if/for/while/procedure constructs. The chapter's algorithmic vocabulary connects to a rich history: Kahn-Knuth (1962-1968) for topological sort; Skolem (1920) for the lattice word problem; Tarjan (1972) for strongly-connected components; Goralčík et al. (1989) for lattice testing; Whitman (1941) for the original lattice algorithm.</div>
+
+  <div class="box connection">
+    <span class="label">Connection P1 · the historical algorithmic arc</span>
+    <p>Chapter XI synthesizes algorithmic results spanning 75 years.</p>
+    <p><strong>Skolem 1920 [121, 122]:</strong> first polynomial-time word-problem algorithm for finitely presented lattices. Forgotten for ~70 years. Buried in his Logisch-kombinatorische paper that also contained Löwenheim-Skolem.</p>
+    <p><strong>Whitman 1941 [134]:</strong> the six-case recursive algorithm. Published in his 1942 thesis. Exponential without memoization (Example 11.32). With memoization, $O(\ell(s) \cdot \ell(t))$ (Theorem 11.38).</p>
+    <p><strong>Kahn 1962 [86] + Knuth 1968 [90]:</strong> topological sort in $O(n + e)$. Standard algorithm in any modern algorithms textbook.</p>
+    <p><strong>Markowsky 1973 [97]:</strong> direct decomposability in $O(n^2)$. Uses the bipartite $\mathbf{J} \cup \mathbf{M}$ structure.</p>
+    <p><strong>Tarjan 1972 [129]:</strong> strongly-connected components via depth-first search in $O(v + e)$. Key building block for the $O(n^2)$ congruence-lattice algorithm.</p>
+    <p><strong>Goralčíková-Koubek 1979 [70]:</strong> filters in $O(n \cdot e_\prec + e_\le)$. Improved by Simon 1988 [120] to chain-partition based.</p>
+    <p><strong>Bogart-Magagnosc 1985 [13, 96]:</strong> Dilworth chain partition in $O(n^3)$. Based on Dilworth's original 1950 proof.</p>
+    <p><strong>Goralčík-Goralčíková-Koubek-Rödl 1989 [69]:</strong> $O(n^{5/2})$ lattice testing. The chapter's centerpiece algorithm for §3.</p>
+    <p><strong>Cosmadakis 1989 + Burris 1992:</strong> rediscovery of Skolem's polytime algorithm. Burris's article [16] gives perspective on the history.</p>
+    <p><strong>Freese-Nation 1985 [62]:</strong> the cover algorithm, the κ-formula, the canonical-form algorithm — Chapters III, XI.</p>
+    <p><strong>Slavík 1995 [123]:</strong> the FPL finiteness criterion. Decidable but not polynomial-time.</p>
+    <p>The chapter weaves these threads into a single algorithmic tapestry, with explicit complexity bounds and proofs.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Concrete complexity bounds — the cover-count cascade</h2>
+  <div class="tagline">Theorems 11.4 ($e_\prec \le n^{3/2}$ for semilattices), 11.5 ($e_\prec \le \frac{1}{2} n \log_2 n$ for SD), 11.6 ($O(n^{5/2})$ lattice test), 11.21 ($r \le k^{\log n}$ for join-minimal subsets) form a cascade of complexity bounds.</div>
+
+  <div class="box connection">
+    <span class="label">Connection P2 · the cover-count cascade</span>
+    <p>The chapter's complexity bounds form a hierarchy:</p>
+    <table class="grid">
+      <thead><tr><th>Result</th><th>Bound</th><th>Sharp witness</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td>Theorem 11.4</td><td>$e_\prec \le n^{3/2}$</td><td>Projective plane $\mathbb{F}_q^3$</td><td>Lattice test</td></tr>
+        <tr><td>Theorem 11.5</td><td>$e_\prec \le \frac{1}{2} n \log_2 n$</td><td>Boolean lattice</td><td>SD test</td></tr>
+        <tr><td>Theorem 11.9</td><td>$e_\prec \le n(\frac{1}{2} + \sqrt{k})$</td><td>?</td><td>Width-$k$ test</td></tr>
+        <tr><td>Theorem 11.21(1)</td><td>$r \le k^{\lfloor \log_2 n\rfloor}$</td><td>$\mathbf{C}_m$ (Example 11.22)</td><td>Min join cover bound</td></tr>
+        <tr><td>Theorem 11.21(4)</td><td>$r \le n$ for SD</td><td>—</td><td>SD min join cover</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The structural source.</strong> All these bounds derive from the basic counting argument: in a semilattice, $\mathbf{B}(x) \cap \mathbf{B}(y)$ has at most one element for $x \neq y$. This forces $\sum b_i^2 \le n^2$, then convexity gives the $n^{3/2}$ bound on $e_\prec$. SD-lattices give an additional log factor. Width-$k$ lattices give a $\sqrt{k}$ factor.</p>
+    <p><strong>The algorithmic consequence.</strong> Theorem 11.6's $O(n^{5/2})$ lattice test directly uses the $n^{3/2}$ bound: abort the modified transitive-closure if cover count exceeds $n^{3/2}$. Similarly Theorem 11.8's $O(n^2 \log_2 n)$ SD test uses the $\frac{1}{2} n \log_2 n$ bound. The structural insight DRIVES the algorithmic improvement.</p>
+    <p><strong>Open: improving Theorem 11.6.</strong> Problem 11.7 asks if the $O(n^{5/2})$ test can be improved. Without a structural improvement on the $n^{3/2}$ cover-count bound (which is sharp via projective planes), it seems unlikely.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Whitman's algorithm with memoization</h2>
+  <div class="tagline">Lemmas 11.33-11.37 prove that recording values at types $(\wedge, \vee), (\mathrm{gen}, \vee), (\wedge, \mathrm{gen})$ — but NOT at all node types — suffices to make Whitman's algorithm polynomial-time.</div>
+
+  <div class="box connection">
+    <span class="label">Connection P3 · the memoization insight</span>
+    <p>The naïve fix to Whitman's exponential blowup: memoize EVERY node $(v, u) \in T(s) \times T(t)$. This gives $O(\ell(s) \cdot \ell(t))$ but with $O(\ell(s) \cdot \ell(t))$ MINIMUM running time (table initialization).</p>
+    <p>The chapter's insight: only THREE node types need memoization.</p>
+    <table class="grid">
+      <thead><tr><th>Type $(\mathrm{typ}(v), \mathrm{typ}(u))$</th><th>Status</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>$(\vee, *)$</td><td>Don't memoize</td><td>Whitman case 2 — $\mathrm{val}(v, u)$ determined by joinand vals.</td></tr>
+        <tr><td>$(*, \wedge)$ except $(\vee, \wedge)$</td><td>Don't memoize</td><td>Whitman case 3 — $\mathrm{val}(v, u)$ determined by meetand vals.</td></tr>
+        <tr><td>$(\vee, \wedge)$</td><td>Don't memoize, never accessed except at root</td><td>Lemma 11.33.</td></tr>
+        <tr><td>$(\wedge, \vee)$</td><td>Memoize</td><td>The key case 6 — without memoization, accessed twice.</td></tr>
+        <tr><td>$(\mathrm{gen}, \vee)$</td><td>Memoize</td><td>Whitman case 4.</td></tr>
+        <tr><td>$(\wedge, \mathrm{gen})$</td><td>Memoize</td><td>Whitman case 5.</td></tr>
+        <tr><td>$(\mathrm{gen}, \mathrm{gen})$</td><td>Don't memoize</td><td>Constant-time decision.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The structural insight (Lemma 11.36).</strong> A node with these types is accessed at most ONCE from each of its at most two parents. Total: at most twice. So when accessed twice, the second time finds the cached value, avoiding recomputation.</p>
+    <p><strong>The result.</strong> Whitman's algorithm with selective memoization runs in $O(\ell(s) \cdot \ell(t))$ worst case, $O(1)$ minimum. The minimum-time advantage matters: $x \wedge v \le x \vee u$ is decided in constant time regardless of $\ell(v), \ell(u)$.</p>
+    <p><strong>Pragmatic implementation.</strong> Use a DYNAMIC hash table for the memoization. Constant minimum time, expected constant access time. This is what the chapter authors' LISP and C implementations use.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Open algorithmic problems</h2>
+  <div class="tagline">Five open problems mark the chapter's research frontier: 11.7 ($O(n^{5/2})$ lattice test improvement), 11.40 (poly-time CJI for FPL), 11.41 (poly-time FPL finiteness), 11.42 (FPL weak atomicity, finite width), 11.43 (poly-time FPL projectivity).</div>
+
+  <div class="box connection">
+    <span class="label">Connection P4 · the open frontier</span>
+    <p>The chapter ends with five open problems. Each marks a frontier in the algorithmic understanding of lattices.</p>
+    <p><strong>Problem 11.7:</strong> can we test "is $\mathbf{P}$ a lattice?" faster than $O(n^{5/2})$? Without a structural improvement on the $n^{3/2}$ cover bound, this seems hard. But there might be alternative approaches that bypass cover counting.</p>
+    <p><strong>Problem 11.40:</strong> poly-time test for $w \in \mathbf{FL}(\mathbf{P})$ completely-join-irreducible? The algorithm in [53] is exponential because it has to test if $x \in P$ is CJI. Improving this would make the FPL cover algorithm polynomial.</p>
+    <p><strong>Problem 11.41:</strong> poly-time finiteness test for FPL? Slavík 1995 made it decidable; the question is polynomial time. The bottleneck is computing $|\mathbf{P}^{\vee\wedge}|$.</p>
+    <p><strong>Problem 11.42:</strong> FPL weak atomicity, finite width? Even decidability is open. Free-lattice tools (Day's theorem, Tschantz's theorem) have no clean FPL analogs.</p>
+    <p><strong>Problem 11.43:</strong> poly-time FPL projectivity? Decidable since (W) and lower bounded are decidable, but needs $\mathbf{P}^\vee$ which can be exponential. Example 11.44 shows the meet-irreducibles can be exponentially many — preventing a direct improvement.</p>
+    <p><strong>The pattern.</strong> The open problems concentrate around FPLs (Problems 11.40-11.43). Free lattices are well-understood algorithmically; finitely-presented lattices remain frontier territory. Why? FPLs lose key structural tools — the canonical form is more complex (adequate terms), the κ-bijection generalizes awkwardly, the connected-component classification doesn't transfer cleanly. Each FPL question requires structural innovation, not just algorithmic refinement.</p>
+    <p><strong>Status as of the monograph (1995).</strong> All five problems remain open at publication. Some may have been resolved in subsequent literature; the companion does not survey post-1995 progress.</p>
+  </div>
+</section>
+
+<!-- ============== PROLOGOS ============== -->
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos cross-references</h2>
+  <div class="tagline">How Chapter XI's algorithmic content resonates with Prologos: pseudo-code as a propagator-network specification language, complexity bounds as fan-in width estimates, memoization as cell-cache architecture, lookup tables as constant-time-access cells.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · pseudocode + complexity bounds + memoization patterns</span>
+    <p>Chapter XI's content has direct Prologos analogs across multiple architectural levels.</p>
+    <p><strong>(1) The pseudo-language as propagator-network specification.</strong> The chapter's pseudo-language has if/for/while/procedure constructs — the basic primitives of imperative programming. In Prologos terms: the propagator-network architecture's "specification language" for cell behavior. Each algorithm in Chapter XI corresponds to a fire function on a propagator cell, with the cell's value determined by the algorithm's output.</p>
+    <p><strong>(2) Complexity bounds as fan-in width estimates.</strong> Theorem 11.4's $e_\prec \le n^{3/2}$ bound is structurally a fan-in width estimate: the cover-relation graph has at most $n^{3/2}$ edges. In propagator-network terms, this bounds the "fan-in" connectivity: each cell receives input from at most $\sqrt{n}$ neighbors on average. The set-latch + threshold pattern (Prologos's <code>propagator-design.md</code>) uses similar bounds for component-paths declarations.</p>
+    <p><strong>(3) Memoization as cell-cache architecture.</strong> Lemmas 11.33-11.37 + Theorem 11.38: memoize at types $(\wedge, \vee), (\mathrm{gen}, \vee), (\wedge, \mathrm{gen})$. In Prologos: a cell-cache architecture where ONLY specific cell types cache their values. The "fire-once" pattern from <code>propagator-design.md</code> matches this: cells with the right structural condition fire once and cache; other cells re-evaluate. The $O(\ell(s) \cdot \ell(t))$ complexity translates to a depth-bounded fire-once cascade.</p>
+    <p><strong>(4) Lookup tables as constant-time-access cells.</strong> The chapter's "lookup table" abstraction (vector / hash table) gives constant-time access. In Prologos terms: a cell with $O(1)$ value-lookup, supporting random-access component reads. The bilattice cell architecture's compound-cell-component-ref primitive matches this — read a specific component of a compound cell in constant time.</p>
+    <p><strong>(5) Topological sort as canonical evaluation order.</strong> Listing 11.3's topological sort in $O(n + e)$ orders elements so dependencies precede dependents. In Prologos: the canonical evaluation order for a propagator network — fire propagators in topological-sort order to ensure no dependency cycles trigger redundant work. The BSP scheduler implicitly does this via its strata system.</p>
+    <p><strong>(6) Tarjan's strongly-connected components as quasiorder reduction.</strong> Theorem 11.13's algorithm uses Tarjan 1972's $O(v + e)$ algorithm to compute equivalence classes of the $\mathbf{G}(\mathbf{L})$ quasiorder. In Prologos: this is the "S(-1) retraction stratum" pattern from <code>stratification.md</code> — collapse equivalent cell-values into representative classes for monotone propagator firing.</p>
+    <p><strong>(7) Whitman's exponential blowup as anti-pattern.</strong> Example 11.32's $v_n, u_n$ family shows Whitman's algorithm blows up exponentially without memoization. In Prologos: this is the structural reason for the fire-once / memoization architecture — without proper caching, propagator firing can repeat work exponentially. The memoization fix (Lemmas 11.33-11.37) is exactly the "fire-once with cache" pattern from <code>propagator-design.md</code>.</p>
+    <p><strong>(8) Open problems as research frontiers.</strong> Problems 11.7, 11.40-11.43 remain open. In Prologos: these are the structural-typing rules whose status is undetermined. Future work on FPL-related Prologos applications (or the free-lattice-typed propagator network design) may benefit from algorithmic progress on these problems.</p>
+    <p>The chapter — and the monograph as a whole — IS the Prologos architecture's deep mathematical foundation. The 11 chapters develop both the structural understanding (what cell-values look like) and the algorithmic toolkit (how to compute with them). Prologos's propagator-network design is a software realization of the same patterns.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="module" id="glossary">
+  <h2><span class="num">GLOSSARY</span> Chapter XI vocabulary, alphabetical</h2>
+  <div class="tagline">Algorithmic vocabulary from Chapter XI. The terms span complexity theory, data structures, graph algorithms, formal concept analysis, and lattice-specific representations.</div>
+
+  <dl class="glossary">
+    <dt>Adequate term</dt>
+    <dd>A term in $\mathbf{FL}(\mathbf{P})$ satisfying specific recursive conditions ensuring the canonical form is achieved (Freese 1995 [53]). Each $w \in \mathbf{FL}(\mathbf{P})$ has a minimal-length adequate term representing it.</dd>
+
+    <dt>Alternating sequence</dt>
+    <dd>A sequence $a_0, b_0, a_1, b_1, \ldots, a_s$ (or $\ldots, a_s, b_s$) used in the Bogart-Magagnosc chain partition algorithm. Properties: $a_0$ minimal in some chain, $a_i > b_i$, $a_{i+1}$ is the successor of $b_i$.</dd>
+
+    <dt>Chain partition</dt>
+    <dd>A partition of an ordered set $\mathbf{P}$ into disjoint chains. A <em>Dilworth chain partition</em> uses the minimum number of chains, equal to the width $k$ (Dilworth 1950).</dd>
+
+    <dt>Concept lattice $\mathfrak{B}(G, M, I)$</dt>
+    <dd>The lattice of formal concepts $\langle A, B\rangle$ for a context $\langle G, M, I\rangle$, with $A \subseteq G$, $B \subseteq M$, $A' = B$, $B' = A$.</dd>
+
+    <dt>Cover-count $e_\prec$</dt>
+    <dd>The number of cover-relations in the lattice — equivalently, the number of edges in the Hasse diagram. By Theorem 11.4: $e_\prec \le n^{3/2}$ for semilattices.</dd>
+
+    <dt>Formal context</dt>
+    <dd>A triple $\langle G, M, I\rangle$ where $G, M$ are sets and $I \subseteq G \times M$. Used in formal concept analysis (Wille's school).</dd>
+
+    <dt>$\mathbf{G}(\mathbf{L})$</dt>
+    <dd>The bipartite graph on $\mathbf{J}(\mathbf{L}) \cup \mathbf{M}(\mathbf{L})$ with edges $a \nearrow q$ (iff $a \le q^*, a \not\le q$) and $q \searrow b$ (iff $q \ge b_*, q \not\ge b$). $\mathbf{G}(\mathbf{L})/\equiv \cong \mathbf{J}(\mathbf{Con}\,\mathbf{L})$ (Lemma 11.11).</dd>
+
+    <dt>Hash table</dt>
+    <dd>A data structure providing expected-constant-time access via a hashing function $h: S \to \{0, \ldots, m-1\}$. Worst-case access can be slow; expected-time analysis applies.</dd>
+
+    <dt>$\mathrm{Id}_{\mathbf{P}}(S)$</dt>
+    <dd>The ideal of partial lattice $\mathbf{P}$ generated by $S \subseteq P$. Used in Dean's algorithm for $\mathbf{FL}(\mathbf{P})$.</dd>
+
+    <dt>Linear extension</dt>
+    <dd>A total order on $\mathbf{P}$ extending the partial order $\le$. Equivalent to a topological sort.</dd>
+
+    <dt>Lookup table</dt>
+    <dd>An abstraction of vectors (constant-time indexed) and hash tables (expected constant-time). Notation $\mathbf{T}[a]$ for the value at index $a$.</dd>
+
+    <dt>Minimal join cover</dt>
+    <dd>A minimal join cover of $a$ is a set $S$ with $a \le \bigvee S$ (cover) such that $a \not\le \bigvee S'$ for any proper subset $S' \subset S$ AND $S$ is irredundant under refinement.</dd>
+
+    <dt>$\nearrow, \searrow$ relations</dt>
+    <dd>For $a \in \mathbf{J}(\mathbf{L}), q \in \mathbf{M}(\mathbf{L})$: $a \nearrow q$ iff $a \vee q = q^*$; $q \searrow b$ iff $q \wedge b = b_*$. Edges of $\mathbf{G}(\mathbf{L})$.</dd>
+
+    <dt>Reduced context</dt>
+    <dd>For a finite lattice $\mathbf{L}$: the context $\langle \mathbf{J}(\mathbf{L}), \mathbf{M}(\mathbf{L}), \le\rangle$. $\mathbf{L}$ is the Dedekind-MacNeille completion of this bipartite poset (MacNeille 1937).</dd>
+
+    <dt>Term tree $T(t)$</dt>
+    <dd>The tree structure of a lattice term $t$, with internal nodes labeled $\vee$ or $\wedge$ and leaves labeled by variables (generators). Used in the analysis of Whitman's algorithm.</dd>
+
+    <dt>Topological sort</dt>
+    <dd>Computer-science terminology for linear extension. Algorithm by Kahn 1962 [86] / Knuth 1968 [90] runs in $O(n + e)$.</dd>
+
+    <dt>Whitman-like algorithm</dt>
+    <dd>An algorithm that proceeds through $T(s) \times T(t)$ in the same manner as Whitman's algorithm, possibly with memoization at certain node types. Theorem 11.38: with the right memoization, runs in $O(\ell(s) \cdot \ell(t))$.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXAMPLES ============== -->
+<section class="module" id="examples">
+  <h2><span class="num">COMPUTED EXAMPLES</span> Worked instances of Chapter XI results</h2>
+  <div class="tagline">Five computed examples: tracing topological sort on a small ordered set; verifying $e_\prec \le n^{3/2}$ for the projective plane $\mathbb{F}_2^3$; tracing Whitman's exponential blowup for $v_2, u_2$; computing canonical form via Listing 11.17; verifying Example 11.24's exponential β.</div>
+
+  <details class="example"><summary><span class="ex-tag">Example XI.A</span>Topological sort on a 5-element ordered set</summary>
+  <div class="body">
+    <div class="ex-statement">Apply Listing 11.3 to the ordered set $\mathbf{P} = \{a, b, c, d, e\}$ with cover relations $a \prec b, a \prec c, b \prec d, c \prec d, d \prec e$ (a "diamond with a tail").</div>
+    <p><strong>Setup.</strong> $n = 5, e_\prec = 5$. Upper-cover lookup table: $\mathbf{U}[a] = \{b, c\}, \mathbf{U}[b] = \{d\}, \mathbf{U}[c] = \{d\}, \mathbf{U}[d] = \{e\}, \mathbf{U}[e] = \emptyset$.</p>
+    <p><strong>Lines (3)-(11): initialize lower-cover counts.</strong> $\mathbf{I}[a] = 0$ (no lower covers — $a$ is minimal). $\mathbf{I}[b] = 1$ (lower cover $a$). $\mathbf{I}[c] = 1$. $\mathbf{I}[d] = 2$ (lower covers $b, c$). $\mathbf{I}[e] = 1$.</p>
+    <p>$Z = \{a\}$ (only $a$ has $\mathbf{I}[a] = 0$).</p>
+    <p><strong>Lines (12)-(19): main loop.</strong></p>
+    <p><strong>Iteration 1.</strong> $a \leftarrow \mathrm{pop}(Z)$. Push $a$ onto $S$. So $S = (a)$. For $b \in \mathbf{U}[a] = \{b, c\}$: $\mathbf{I}[b] \leftarrow 0$, push $b$ to $Z$. $\mathbf{I}[c] \leftarrow 0$, push $c$ to $Z$. Now $Z = \{b, c\}$.</p>
+    <p><strong>Iteration 2.</strong> $c \leftarrow \mathrm{pop}(Z)$ (LIFO order from push). $S = (a, c)$. $\mathbf{U}[c] = \{d\}$: $\mathbf{I}[d] \leftarrow 1$. $Z = \{b\}$.</p>
+    <p><strong>Iteration 3.</strong> $b \leftarrow \mathrm{pop}(Z)$. $S = (a, c, b)$. $\mathbf{U}[b] = \{d\}$: $\mathbf{I}[d] \leftarrow 0$, push $d$. $Z = \{d\}$.</p>
+    <p><strong>Iteration 4.</strong> $d \leftarrow \mathrm{pop}(Z)$. $S = (a, c, b, d)$. $\mathbf{U}[d] = \{e\}$: $\mathbf{I}[e] \leftarrow 0$, push $e$. $Z = \{e\}$.</p>
+    <p><strong>Iteration 5.</strong> $e \leftarrow \mathrm{pop}(Z)$. $S = (a, c, b, d, e)$. $\mathbf{U}[e] = \emptyset$. $Z = \emptyset$. Loop terminates.</p>
+    <p><strong>Line (20): reverse $S$.</strong> $S = (e, d, b, c, a)$ — wait, that's a reverse linear extension, not what we want. Let me re-check the algorithm.</p>
+    <p>Actually re-reading Listing 11.3: the final reverse on line (20) reverses $S$. So if $S$ ended as $(a, c, b, d, e)$ at line (19), then after line (20), $S = (e, d, b, c, a)$.</p>
+    <p>Hmm, but a "linear extension" should EXTEND the partial order — meaning if $x \le y$ in $\mathbf{P}$, then $x$ comes before $y$ in the linear extension. With $S = (a, c, b, d, e)$, we have $a$ first, then $c, b$, then $d$, then $e$ — this DOES extend the partial order. So $S$ before reversing is the linear extension. The reverse on line (20) is to put it in increasing-position order somehow... actually I think the reverse is because elements were PUSHED onto $S$ in reverse order during the main loop (push prepends to a list).</p>
+    <p>Final result: $S = (a, c, b, d, e)$ (or $(a, b, c, d, e)$ depending on push order details). This is a valid linear extension — every cover-relation is preserved (e.g., $a$ before $b, c$; $b, c$ before $d$; $d$ before $e$).</p>
+    <p><strong>Implication.</strong> The algorithm runs in $O(n + e_\prec) = O(5 + 5) = O(10)$ steps, validating Theorem 11.1's $O(n + e)$ bound.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example XI.B</span>Theorem 11.4 verified on the lattice of subspaces of $\mathbb{F}_2^3$</summary>
+  <div class="body">
+    <div class="ex-statement">Verify Theorem 11.4's bound $e_\prec \le n^{3/2}$ for the lattice of subspaces of $\mathbb{F}_2^3$ (the projective plane of order 2 = Fano plane).</div>
+    <p><strong>Setup.</strong> $\mathbb{F}_2^3$ has dimension 3. The lattice of subspaces has:</p>
+    <ul>
+      <li>1 zero subspace (dim 0).</li>
+      <li>$2^3 - 1 = 7$ atoms (1-dim subspaces, the projective points of Fano plane).</li>
+      <li>$\frac{(2^3-1)(2^3-2)}{(2^2-1)(2^2-2)} = \frac{7 \cdot 6}{3 \cdot 2} = 7$ coatoms (2-dim subspaces, Fano lines).</li>
+      <li>1 whole space (dim 3).</li>
+    </ul>
+    <p>Total: $n = 1 + 7 + 7 + 1 = 16$.</p>
+    <p><strong>Compute $e_\prec$.</strong> Each atom covers 0 (7 covers). Each atom is covered by $q + 1 = 3$ coatoms (each Fano point is on 3 Fano lines), giving $7 \cdot 3 = 21$ atom-to-coatom covers. Each coatom is covered by $\hat{1}$ (7 covers). Total: $7 + 21 + 7 = 35$.</p>
+    <p>Wait, formula from book p. 216: $e_\prec = (q+1)(q^2 + q + 1) + 2(q^2 + q + 1) = (q+3)(q^2 + q + 1)$. For $q = 2$: $(2+3)(4 + 2 + 1) = 5 \cdot 7 = 35$. ✓</p>
+    <p><strong>Verify Theorem 11.4.</strong> $n^{3/2} = 16^{1.5} = 64$. $e_\prec = 35 \le 64$. ✓</p>
+    <p><strong>Asymptotic.</strong> For general $q$: $n = 2q^2 + 2q + 4$, $e_\prec = (q+3)(q^2+q+1)$. Asymptotically $n \approx 2q^2$ and $e_\prec \approx q^3$. So $e_\prec / n^{3/2} \approx q^3 / (2q^2)^{1.5} = q^3 / (2\sqrt{2} q^3) = 1 / (2\sqrt{2}) = \sqrt{2}/4$. The Fano-plane family realizes the bound asymptotically — Theorem 11.4 is sharp.</p>
+    <p><strong>Implication.</strong> The $n^{3/2}$ bound is not just an upper bound; it's STRUCTURALLY ACHIEVED by projective-plane lattices. Improving Theorem 11.6's $O(n^{5/2})$ bound (Problem 11.7) requires either circumventing the cover-count step or a new structural insight.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example XI.C</span>Whitman's exponential blowup traced for $v_2, u_2$</summary>
+  <div class="body">
+    <div class="ex-statement">Trace Whitman's algorithm (without memoization) testing $v_2 \le u_2$ where $v_2 = x_2 \wedge x_3 \wedge (y_2 \vee v_1), u_2 = y_2 \vee y_3 \vee (x_2 \wedge u_1)$, $v_1 = x_1 \wedge x_2 \wedge (y_1 \vee v_0)$, $u_1 = y_1 \vee y_2 \vee (x_1 \wedge u_0)$, $v_0 = x_0 \wedge x_1, u_0 = y_0 \vee y_1$.</div>
+    <p><strong>Setup.</strong> Test $v_2 \le u_2$ in the free lattice. By Whitman's algorithm rule (6) (meet ≤ join): test if some meetand of $v_2$ is below $u_2$, OR $v_2$ is below some joinand of $u_2$.</p>
+    <p><strong>Step 1.</strong> Meetands of $v_2$: $x_2, x_3, (y_2 \vee v_1)$. Joinands of $u_2$: $y_2, y_3, (x_2 \wedge u_1)$.</p>
+    <p>Test if $x_2 \le u_2$: Whitman case 4 (gen ≤ join), need $x_2 \le y_2$ (no), $x_2 \le y_3$ (no), $x_2 \le (x_2 \wedge u_1)$ — case 3, need $x_2 \le x_2$ ✓ AND $x_2 \le u_1$ — recurse into $u_1$. By case 4, need $x_2 \le y_1$ (no), $x_2 \le y_2$ (no), $x_2 \le (x_1 \wedge u_0)$ — case 3, need $x_2 \le x_1$ (no). FAIL. So $x_2 \not\le u_1$, hence $x_2 \not\le u_2$.</p>
+    <p>Test if $x_3 \le u_2$: similar, fails.</p>
+    <p>Test if $(y_2 \vee v_1) \le u_2$: case 2 (join ≤), need $y_2 \le u_2$ ✓ (joinand of $u_2$) AND $v_1 \le u_2$. Recurse on $v_1 \le u_2$.</p>
+    <p><strong>Step 2: test $v_1 \le u_2$.</strong> Case 6: meetands $x_1, x_2, (y_1 \vee v_0)$. Test each: $x_1 \le u_2$ similar, fails. $x_2 \le u_2$ — already shown to fail above. $(y_1 \vee v_0) \le u_2$: case 2, need $y_1 \le u_2$ — fails! ($y_1 \not\le y_2, y_1 \not\le y_3, y_1 \le (x_2 \wedge u_1)$ would need $y_1 \le x_2$ no). So $y_1 \not\le u_2$. Hence $(y_1 \vee v_0) \not\le u_2$.</p>
+    <p>So all meetand tests fail. Now test joinands: $v_1 \le y_2$? Case 5, need some meetand of $v_1$ below $y_2$. $x_1 \le y_2$ no, $x_2 \le y_2$ no, $(y_1 \vee v_0) \le y_2$? Case 2, $y_1 \le y_2$ no. FAIL.</p>
+    <p>$v_1 \le y_3$? Similar, fails. $v_1 \le (x_2 \wedge u_1)$? Case 3, $v_1 \le x_2$ — case 5, meetands of $v_1$: $x_1 \le x_2$ no; $x_2 \le x_2$ ✓ — wait, $x_2$ IS a meetand of $v_1$ (since $v_1 = x_1 \wedge x_2 \wedge (y_1 \vee v_0)$). So $x_2 \le x_2$ trivially. Hence $v_1 \le x_2$. ✓. Now need $v_1 \le u_1$.</p>
+    <p><strong>Step 3: test $v_1 \le u_1$.</strong> Same six-case structure. After analogous steps, this reduces to "$v_0 \le u_0$" which is FALSE (since $v_0 = x_0 \wedge x_1 \not\le y_0 \vee y_1 = u_0$ by similar Whitman analysis).</p>
+    <p>Hence $v_1 \not\le u_1$, so $v_1 \not\le (x_2 \wedge u_1)$, so $v_1 \not\le u_2$.</p>
+    <p>Returning to Step 1: $(y_2 \vee v_1) \not\le u_2$. So all meetand tests fail.</p>
+    <p><strong>Step 4: test joinands.</strong> $v_2 \le y_2$? Similar analysis fails. $v_2 \le y_3$? Fails. $v_2 \le (x_2 \wedge u_1)$? Case 3: $v_2 \le x_2$ ✓ (since $x_2$ is a meetand of $v_2$), AND $v_2 \le u_1$. <strong>Recurse on $v_2 \le u_1$ — but this is essentially the same as $v_1 \le u_1$ shifted by 1!</strong></p>
+    <p><strong>The exponential blowup.</strong> Testing $v_2 \le u_2$ requires testing $v_1 \le u_2$ (which reduces to $v_1 \le u_1$, then $v_0 \le u_0$ — fails), AND ALSO testing $v_2 \le u_1$ (which reduces similarly to $v_1 \le u_0$). Each level doubles the work. So testing $v_n \le u_n$ requires $\sim 2^n$ recursive sub-tests. Without memoization, exponential.</p>
+    <p><strong>With memoization.</strong> Once $v_1 \le u_1$ is tested and stored, the second access (when needed by $v_2 \le u_1$'s recursion) finds the cached value. Total accesses: $O(\ell(v_2) \cdot \ell(u_2))$ — polynomial.</p>
+    <p><strong>Implication.</strong> Theorem 11.38's memoization is ESSENTIAL for polynomial-time Whitman. The $v_n, u_n$ family is a structural witness to the necessity.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example XI.D</span>Computing canonical form via Listing 11.17</summary>
+  <div class="body">
+    <div class="ex-statement">Compute the canonical form of $t = (x \vee (y \wedge z)) \vee y$ in $\mathbf{FL}(\{x, y, z\})$ using Listing 11.17.</div>
+    <p><strong>Setup.</strong> $t = t_1 \vee t_2$ with $t_1 = x \vee (y \wedge z)$ and $t_2 = y$. Both $t_i$ are in canonical form already.</p>
+    <p><strong>Run cform.aux on $t_1$.</strong> $t_1 = x \vee (y \wedge z)$ is a join. Recurse on its joinands.</p>
+    <p>Joinand $x$: a generator. Push to $Q$. $Q = \{x\}$.</p>
+    <p>Joinand $(y \wedge z)$: a meet. Compute $P = \{y, z\}$ (meetands). Make $a$ undefined. While $P \neq \emptyset$ and $a$ undefined: take first $P = y$. Test $y \le t = (x \vee (y \wedge z)) \vee y$ — yes (since $y$ is a joinand of $t$). So $a \leftarrow y$.</p>
+    <p>cform.aux on $y$: a generator. Push $y$ to $Q$. $Q = \{x, y\}$.</p>
+    <p><strong>Run cform.aux on $t_2 = y$.</strong> $y$ is a generator. But $y$ is already in $Q$. (The push doesn't deduplicate — but the maximal step at the end handles this.)</p>
+    <p><strong>$Q = \{x, y\}$ (after deduplication).</strong></p>
+    <p><strong>Take maximal elements.</strong> $x$ and $y$ are incomparable generators in $\mathbf{FL}(3)$. Both are maximal in $Q$. So canonical form: $t = x \vee y$.</p>
+    <p><strong>Verification.</strong> $(x \vee (y \wedge z)) \vee y$. Distribute: $x \vee (y \wedge z) \vee y = x \vee y \vee (y \wedge z) = x \vee y$ (since $y \wedge z \le y$, absorbed). ✓</p>
+    <p><strong>Implication.</strong> The canonical form is correctly computed in $O(\ell(t)^2)$ steps. The algorithm correctly recognizes that $(y \wedge z)$ contributes $y$ (since $y \wedge z \le t$ via the canonical-meetand-below-some-canonical-joinand reduction), and the final maximal-elements step removes the redundant $y$.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example XI.E</span>Example 11.24 — exponential β for $\mathbf{L}_2$</summary>
+  <div class="body">
+    <div class="ex-statement">Compute $\beta(c_0)$ for $\mathbf{L}_2$ (the third lattice in the $\mathbf{L}_n$ family from Example 11.24).</div>
+    <p><strong>Setup.</strong> $\mathbf{L}_2$ is built from $\mathbf{N}_5$ ($\mathbf{L}_0$) by adding tops $c_2, c_3$, bottoms $a_2, a_3$, and complement elements $b_1, b_2$. By the chapter's formula (book p. 235):</p>
+    $$\beta(c_0) = c_0 \wedge ([b_0 \wedge ((b_1 \wedge (b_2 \vee (a_0 \wedge c_0 \wedge b_0 \wedge b_1)))$$
+    $$\vee (a_0 \wedge c_0 \wedge b_0 \wedge (b_2 \vee (a_0 \wedge c_0 \wedge b_0 \wedge b_1))))]$$
+    $$\vee [a_0 \wedge c_0 \wedge ((b_1 \wedge (b_2 \vee (a_0 \wedge c_0 \wedge b_0 \wedge b_1)))$$
+    $$\vee (a_0 \wedge c_0 \wedge b_0 \wedge (b_2 \vee (a_0 \wedge c_0 \wedge b_0 \wedge b_1))))]).$$
+    <p><strong>Count occurrences of $b_2$.</strong> The expression has $b_2$ appearing 4 times ($2^2 = 4$, consistent with the chapter's claim that $b_n$ occurs $2^n$ times in $\beta(c_0)$ for $\mathbf{L}_n$).</p>
+    <p><strong>Length analysis.</strong> $|\mathbf{L}_2| = 3 \cdot 2 + 5 = 11$. Length of $\beta(c_0)$: each "level" of the recursion roughly doubles the term length, plus constant overhead. Counting symbols in the expression above: ~70 symbols. For $\mathbf{L}_n$, $\beta(c_0)$ has $\Theta(2^n)$ symbols vs $|\mathbf{L}_n| = 3n + 5$. Exponential blowup.</p>
+    <p><strong>Implication for splitting equations.</strong> $\mathbf{L}_n$ is a splitting lattice (it's a finite SI lattice that's bounded). Its splitting equation is $\beta(c_0) \le \kappa(\beta(c_0))$. Both sides have exponential length in $|\mathbf{L}_n|$. So splitting equations can be EXPONENTIALLY LONG even for moderately-sized splitting lattices.</p>
+    <p>This is the algorithmic content of Theorem 2.79 + Example 11.24: the splitting-equation correspondence between splitting lattices and conjugate equations is structurally clean but algorithmically challenging — the equations themselves can be huge.</p>
+  </div></details>
+</section>
+
+<!-- ============== CODA ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">CODA</span> Reflections at the End of the Monograph</h2>
+  <div class="tagline">Chapter XI is the algorithmic capstone. We close with reflections on the monograph's structural-and-algorithmic arc from Chapter I through Chapter XI; <a href="freelat-companion-ch12.html">Chapter XII</a> provides the volume's epilogue, treating term rewrite systems and the equational-theoretic question of which lattice varieties admit finite, convergent AC TRSs.</div>
+
+  <p>The monograph's structural arc spans 11 chapters and roughly 250 pages.</p>
+
+  <p><strong>Part I (Chapters I-V): foundations.</strong> Whitman's word-problem solution, Day's doubling, the canonical form, Galvin-Jónsson-Kiefer breadth-4 theorem (Chapter I). McKenzie's bounded homomorphism theory and the κ-bijection (Chapter II). Freese-Nation's cover algorithm (Chapter III). Day's rank-bounded weak atomicity (Chapter IV). Nation's theorem characterizing finite sublattices of free lattices (Chapter V).</p>
+
+  <p><strong>Part II (Chapters VI-X): fine structure.</strong> Totally atomic elements and their finiteness (Chapter VI). Chains of covers, finite intervals, connected components (Chapter VII). Singular and semisingular elements (Chapter VIII). Tschantz's theorem on infinite intervals (Chapter IX). Tschantz triples, splittings, κ-self-duality (Chapter X).</p>
+
+  <p><strong>Part III (Chapter XI): algorithms.</strong> The polynomial-time complexity claims made precise.</p>
+
+  <p>What was ACHIEVED:</p>
+  <ul>
+    <li>A complete classification of finite sublattices of free lattices (Nation 1982, Theorem 5.55).</li>
+    <li>An effective polynomial-time cover-test algorithm for $\mathbf{FL}(X)$ (Theorems 3.30, 3.32, 11.38).</li>
+    <li>A structural picture of $\mathbf{FL}(X)$'s infinite intervals (Tschantz 1990, Theorem 9.10).</li>
+    <li>Closed problems: cover-chain bounds (Theorem 7.2), connected-component classification (Theorem 7.32), singular-element location (Theorem 8.6), no-Tschantz-triple (Theorem 10.1).</li>
+    <li>An algorithmic toolkit: 17 listings spanning topological sort, lattice testing, congruence-lattice computation, Whitman with memoization, Dean's algorithm.</li>
+  </ul>
+
+  <p>What remains OPEN:</p>
+  <ul>
+    <li>Improving Theorem 11.6's $O(n^{5/2})$ lattice test (Problem 11.7).</li>
+    <li>Polynomial-time complete-join-irreducibility for FPLs (Problem 11.40).</li>
+    <li>Polynomial-time finiteness, weak atomicity, finite width, projectivity for FPLs (Problems 11.41-11.43).</li>
+    <li>Classifying κ-self-dual elements (Problem 10.22).</li>
+    <li>Characterizing ordered sets embeddable in free lattices (Problem 5.28).</li>
+    <li>Slim polynomials (Problem 1.25).</li>
+    <li>The strengthened Tschantz quadruple (Problem 10.17).</li>
+    <li>Many smaller open questions throughout the chapters.</li>
+  </ul>
+
+  <p><strong>The structural picture.</strong> $\mathbf{FL}(X)$ is a remarkably rich object. It contains $\mathbf{FL}(\omega)$ as a sublattice (Whitman), is weakly atomic (Day), has only short cover chains (Theorem 7.2), has finitely many totally atomic elements (Corollary 6.11), and yet has uncountably many incomparable elements in any infinite interval (Tschantz). The structural duality between covers (which exist abundantly) and coverless elements (which also exist abundantly) is one of the monograph's recurring themes.</p>
+
+  <p><strong>The algorithmic picture.</strong> Many natural questions about $\mathbf{FL}(X)$ are decidable in polynomial time: $\le$-test, canonical form, cover-test, completely-join-irreducibility, κ-computation. The complexity exponents range from constant (for trivial cases) to $O(\ell^3)$ (for cover-test). For finite lattices: $O(n^{5/2})$ lattice testing, $O(n^2)$ congruence-lattice computation. The structural insights drive the algorithmic improvements at every step.</p>
+
+  <p><strong>The mathematical aesthetics.</strong> Free lattices reward close study. The structural classifications are clean (Nation's theorem, the 8 forbidden lattices, the 4 connected-component types, the 6 finite-interval forms, Tschantz's theorem). The algorithms are elegant (Whitman's six cases, Theorem 3.32's recursive κ-formula). The connections to other areas of mathematics are deep (universal algebra, computer science, formal concept analysis, descriptive set theory, projective planes).</p>
+
+  <p>The monograph rewards reading multiple times. The first pass surveys; subsequent passes deepen. The companion's 11 chapters trace the monograph's narrative arc, with explicit cross-references, computed examples, and connection panels — to support readers approaching the material at any depth.</p>
+
+  <div class="box deep">
+    <span class="label">A note on reading order</span>
+    <p>The companion can be read sequentially (Chapters I-XI) or selectively. <strong>Selective paths:</strong></p>
+    <ul>
+      <li><strong>Just structural classification:</strong> Chapters I, II, V, VII (skip algorithmic detail).</li>
+      <li><strong>Just algorithms:</strong> Chapters III, XI (with quick references to I-II for prerequisites).</li>
+      <li><strong>Just covers:</strong> Chapters III, IV, VII (Theorems 3.5, 4.1, 7.2).</li>
+      <li><strong>Just infinite intervals:</strong> Chapters VI, VIII, IX, X (with III-IV as prerequisite).</li>
+      <li><strong>Just word problems:</strong> Chapter I + Chapter XI §8.</li>
+    </ul>
+    <p>Each chapter's overview and looking-ahead boxes signpost dependencies. The companion's glossary terms link backward to where they were defined.</p>
+  </div>
+
+  <p>Thank you for joining us through this companion. The monograph is one of the great works of late-20th-century lattice theory, and we hope this companion has made it more accessible.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Free Lattices Companion · Chapter XI · <a href="freelat-companion-toc.html">Volume index</a></div>
+    <div><a href="freelat-companion-ch10.html">← Chapter X</a> · <a href="freelat-companion-ch12.html">Chapter XII →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

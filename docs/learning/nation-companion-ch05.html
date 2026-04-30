@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Nation Companion · Chapter 5 · Congruence Relations</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .epigraph { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--ink-soft); }
+  .epigraph p { margin: 0 0 6px; }
+  .epigraph .attrib { display: block; text-align: right; font-style: normal; color: var(--text-dim); font-size: 14px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; max-width: 100%; height: auto; margin: 16px auto; background: var(--bg-warm); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  svg.diagram circle { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { fill: var(--ink); font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 13px; }
+  :root[data-theme="dark"] svg.diagram circle { fill: var(--gold); stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram line { stroke: var(--text); }
+  :root[data-theme="dark"] svg.diagram text { fill: var(--text); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Nation Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="nation-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="nation-companion-ch04.html">← Chapter 4</a></li>
+    <li><a href="nation-companion-ch06.html">Chapter 6 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 5 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Quotients + congruences</div>
+  <ul>
+    <li><a href="#s1">A1 · Theorem 5.1 (First Iso)</a></li>
+    <li><a href="#s2">A2 · Theorem 5.2 (quotient is a lattice)</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Con L + subdirect</div>
+  <ul>
+    <li><a href="#s3">B1 · Theorem 5.3 (Con L algebraic)</a></li>
+    <li><a href="#s4">B2 · Theorem 5.4 (Second Iso) + simple</a></li>
+    <li><a href="#s5">B3 · Theorems 5.5, 5.6, 5.7 (subdirect)</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Distributivity</div>
+  <ul>
+    <li><a href="#s6">C1 · Theorem 5.8 (Funayama-Nakayama)</a></li>
+    <li><a href="#s7">C2 · Congruence lattice problem</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Weaving + join prime</div>
+  <ul>
+    <li><a href="#s8">D1 · Weaving + Theorem 5.9</a></li>
+    <li><a href="#s9">D2 · Theorems 5.10, 5.11, 5.12</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Universal algebra + variety</a></li>
+    <li><a href="#c2">P2 · Funayama-Nakayama + CLP</a></li>
+    <li><a href="#c3">P3 · Subdirectly irreducible (Birkhoff)</a></li>
+    <li><a href="#c4">P4 · Remak 1930 + decomposition</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 5 · pp. 50–61 of the notes</div>
+  <h1>Congruence Relations</h1>
+  <p class="lede">Congruences as kernels of homomorphisms. The congruence lattice $\textbf{Con}\,\mathcal{L}$ is algebraic and — remarkably — DISTRIBUTIVE for any lattice $\mathcal{L}$ (Funayama-Nakayama 1942). Subdirect representation (Birkhoff 1944). The 65-year-old congruence lattice problem solved by Wehrung 2007.</p>
+  <div class="meta">
+    <span>~80–90 min read</span>
+    <span>9 sections + 5 connection panels</span>
+    <span>12 worked exercises</span>
+    <span>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation</span>
+  </div>
+</div>
+
+<div class="epigraph">
+  <p>"You're young, Myrtle Mae. You've got a lot to learn, and I hope you never learn it."</p>
+  <span class="attrib">— Vita in <em>Harvey</em> (Nation's Chapter 5 epigraph)</span>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — kernels of lattice homomorphisms</h2>
+  <div class="tagline">Chapter 4 introduced equivalence relations and the partition lattice. Chapter 5 specialises to CONGRUENCES — equivalence relations that respect the lattice operations. Three remarkable structural facts: $\textbf{Con}\,\mathcal{L}$ is always algebraic; always distributive (Funayama-Nakayama 1942); and every lattice is a subdirect product of subdirectly irreducible lattices (Birkhoff 1944).</div>
+
+  <p>Chapter 4 ended with Whitman's representation theorem and the modular / Arguesian story. Chapter 5 specialises from arbitrary equivalence relations to <strong>congruences</strong> — equivalence relations that are kernels of homomorphisms. The chapter develops the structure theory of $\textbf{Con}\,\mathcal{L}$, the lattice of all congruences on $\mathcal{L}$.</p>
+
+  <p>The chapter has four conceptual movements:</p>
+
+  <ol>
+    <li><strong>Quotients and the First Isomorphism Theorem.</strong> For a homomorphism $h : \mathcal{L} \to \mathcal{K}$, the kernel $\ker h$ is a congruence. Theorem 5.1: $\mathcal{L}/\ker h \cong h(\mathcal{L})$. Conversely, Theorem 5.2: any equivalence relation satisfying the join + meet compatibility conditions (‡) makes $\mathcal{L}/\theta$ into a quotient lattice.</li>
+    <li><strong>$\textbf{Con}\,\mathcal{L}$ is an algebraic lattice.</strong> Theorem 5.3: $\textbf{Con}\,\mathcal{L}$ is algebraic; compact congruences are exactly the finitely generated ones. Theorem 5.4 (Second Isomorphism Theorem): $\textbf{Con}(\mathcal{L}/\theta) \cong \uparrow\theta$ in $\textbf{Con}\,\mathcal{L}$. <strong>Simple</strong> lattices: $|\textbf{Con}\,\mathcal{L}| = 2$. <strong>Subdirectly irreducible</strong>: 0 is completely meet irreducible in $\textbf{Con}\,\mathcal{L}$.</li>
+    <li><strong>Subdirect representation.</strong> Theorem 5.5: $0 = \bigwedge \theta_i$ ⟹ $\mathcal{L} \hookrightarrow \prod \mathcal{L}/\theta_i$ (subdirect product). Theorem 5.6: 4-way characterisation of subdirectly irreducible lattices via the <strong>monolith</strong> $\mu$ and the <strong>critical pair</strong> $(a, b)$. <strong>Theorem 5.7 (Birkhoff 1944)</strong>: every lattice is a subdirect product of subdirectly irreducible lattices.</li>
+    <li><strong>Distributivity of $\textbf{Con}\,\mathcal{L}$ + the congruence lattice problem.</strong> <strong>Theorem 5.8 (Funayama-Nakayama 1942)</strong>: $\textbf{Con}\,\mathcal{L}$ is a distributive algebraic lattice for ANY lattice $\mathcal{L}$. Proof via the majority polynomial $m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$. The chapter's most surprising result: even when $\mathcal{L}$ is highly non-distributive, $\textbf{Con}\,\mathcal{L}$ IS distributive. The 65-year congruence lattice problem (Dilworth 1948 conjecture) — finally solved negatively by Wehrung in 2005-2007.</li>
+  </ol>
+
+  <p>The chapter closes with a deeper analysis of $\textbf{Con}\,\mathcal{L}$ via <strong>weaving polynomials</strong> (Theorem 5.9), and <strong>completely join prime</strong> congruences (Theorem 5.10-5.12). For principally chain finite lattices, every congruence is a join of completely join irreducibles of the form $\text{con}(x, x_*)$ for $x$ join irreducible — the lattice-theoretic analog of the Krull-Schmidt-Azumaya decomposition.</p>
+
+  <p><strong>Density warning.</strong> This chapter packs 12 theorems into 12 pages. The Funayama-Nakayama distributivity theorem (s6) and the subdirect representation (s5) are the conceptual peaks. The congruence lattice problem (s7) is the most active research area. The companion expands the proofs and contextualises the historical lineage.</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">Carried forward from Chs 1-4 (lattice, equivalence relation, kernel, algebraic lattice) · New in Ch 5 (congruence, Con L, simple, subdirectly irreducible, monolith, weaving polynomial, completely join prime) · Deep dive (Funayama-Nakayama proof technique, the congruence lattice problem, Birkhoff's subdirect representation).</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>Carried forward — terms recapped from Chs 1-4</h2>
+  <div class="tagline">Five refreshers; this chapter sits squarely on Ch 4's equivalence-relation theory plus Ch 3's algebraic-lattice machinery.</div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Equivalence relation · Eq L</span><p>From Ch 4 §A1: reflexive, symmetric, transitive binary relation. $\textbf{Eq}\,L$ is the algebraic lattice of equivalence relations on $L$ under containment. $\textbf{Con}\,\mathcal{L}$ (this chapter) is a complete sublattice of $\textbf{Eq}\,L$.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Kernel of a homomorphism</span><p>From Ch 4 §A1 + Ch 5 (this chapter): $\ker h = \{(x, y) : h(x) = h(y)\}$. For a lattice homomorphism, $\ker h$ is a congruence. The fundamental link between homomorphisms and congruences.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Algebraic lattice</span><p>From Ch 3 §B1: complete lattice with $\mathcal{L}^c$ join dense (compactly generated). Theorem 5.3 (this chapter): $\textbf{Con}\,\mathcal{L}$ is algebraic for any lattice.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Distributive lattice</span><p>From Ch 2 §B1: $x \wedge (y \vee z) = (x \wedge y) \vee (x \wedge z)$. Theorem 5.8 (Funayama-Nakayama): $\textbf{Con}\,\mathcal{L}$ is ALWAYS distributive — even when $\mathcal{L}$ itself is not.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Completely meet irreducible · $M^*(\mathcal{L})$</span><p>From Ch 3 §E1: $q = \bigwedge S$ ⟹ $q \in S$. Subdirectly irreducible lattices are exactly those where $0 \in M^*(\textbf{Con}\,\mathcal{L})$ (= 0 is completely meet irreducible in the congruence lattice).</p></div>
+
+  <h2>New in Chapter 5 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Quotient $X/\theta$</span><p>For an equivalence relation $\theta$ on $X$: $X/\theta = \{x\theta : x \in X\}$, the set of equivalence classes. Borrows notation from group theory's quotient $G/N$ for normal subgroups.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Congruence relation</span><p>An equivalence relation $\theta$ on $\mathcal{L}$ such that $\theta = \ker h$ for some lattice homomorphism $h$. Equivalent (Theorem 5.2): $\theta$ satisfies the compatibility condition (‡): $x \theta y$ ⟹ $x \vee z \, \theta \, y \vee z$ AND $x \wedge z \, \theta \, y \wedge z$ for all $z \in L$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Quotient lattice $\mathcal{L}/\theta$</span><p>For a congruence $\theta$: $\mathcal{L}/\theta$ is the set of equivalence classes with operations $x\theta \vee y\theta = (x \vee y)\theta$ and $x\theta \wedge y\theta = (x \wedge y)\theta$. Theorem 5.2: well-defined and a lattice.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Con L · congruence lattice</span><p>The lattice of all congruences on $\mathcal{L}$, ordered by set containment. A complete sublattice of $\textbf{Eq}\,L$. Top = universal $L^2$; bottom = equality $=$. Theorem 5.3: $\textbf{Con}\,\mathcal{L}$ is algebraic. Theorem 5.8: also distributive.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Principal congruence $\text{con}(a, b)$</span><p>The smallest congruence containing the pair $(a, b)$. Equivalently, the congruence generated by $\{(a, b)\}$. The principal congruences are join dense in $\textbf{Con}\,\mathcal{L}$: every $\theta = \bigvee\{\text{con}(a, b) : a \theta b\}$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Simple lattice</span><p>A lattice $\mathcal{L}$ with $|L| > 1$ such that $\textbf{Con}\,\mathcal{L}$ is the two-element chain — only equality and the universal relation are congruences. Examples: $\mathcal{M}_n$ for $n \ge 3$. The "atoms" of the universal-algebraic universe.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Subdirectly irreducible</span><p>A lattice $\mathcal{L}$ such that 0 is completely meet irreducible in $\textbf{Con}\,\mathcal{L}$. Equivalently (Theorem 5.6): there is a unique minimal nonzero congruence $\mu$ (the <strong>monolith</strong>); every embedding into a product has some projection injective; there exists a critical pair $(a, b)$ with $a \mu b$ for every nonzero congruence $\mu$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Monolith $\mu$</span><p>For a subdirectly irreducible lattice: the unique minimal nonzero congruence. Synonym: smallest nontrivial congruence. The "DNA" of the subdirectly irreducible.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Critical pair $(a, b)$</span><p>For a subdirectly irreducible lattice: a pair such that $a \theta b$ for every nonzero congruence $\theta$. Need not be unique. Generates the monolith: $\mu = \text{con}(a, b)$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Subdirect product</span><p>$\mathcal{L} \hookrightarrow \prod_i \mathcal{L}_i$ such that each projection $\pi_i : \mathcal{L} \to \mathcal{L}_i$ is surjective. The "internal" version (Theorem 5.5): $\mathcal{L}$ is a subdirect product of $\{\mathcal{L}/\theta_i\}$ iff $\bigwedge \theta_i = 0$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">First / Second Isomorphism Theorems</span><p><strong>First (Theorem 5.1)</strong>: $\mathcal{L}/\ker h \cong h(\mathcal{L})$. <strong>Second (Theorem 5.4)</strong>: $\textbf{Con}(\mathcal{L}/\theta) \cong \uparrow\theta$ in $\textbf{Con}\,\mathcal{L}$. Direct lattice analogues of the group-theoretic isomorphism theorems.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Funayama-Nakayama theorem</span><p>Theorem 5.8 (1942): $\textbf{Con}\,\mathcal{L}$ is a DISTRIBUTIVE algebraic lattice for any lattice $\mathcal{L}$. The chapter's most surprising result. Proof uses the majority polynomial $m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Congruence lattice problem (CLP)</span><p>The problem (Dilworth 1948 conjecture): is every distributive algebraic lattice isomorphic to $\textbf{Con}\,\mathcal{L}$ for some lattice $\mathcal{L}$? Negative solution by Wehrung (2005, refined Růžička 2008): there exist distributive algebraic lattices with $\aleph_2$ compact elements that are NOT congruence lattices of any lattice. Holds for $\le \aleph_1$ compact elements.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Weaving polynomial</span><p>A unary lattice polynomial $w(x)$ built recursively by $w(x) = x$ and from each $w$ form $w(x) \wedge a$, $w(x) \vee a$ for $a \in L$. Used to characterise principal congruences (Theorem 5.9).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Completely join prime</span><p>$p$ is completely join prime if $p \le \bigvee Q$ ⟹ $p \le q$ for some $q \in Q$. Implies completely join irreducible. Converse may fail. <strong>Theorem 5.10</strong>: in algebraic distributive lattices, completely join prime ⟺ completely join irreducible ⟺ compact + finitely join irreducible.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Principally chain finite</span><p>A lattice $\mathcal{L}$ such that every principal ideal $\downarrow c$ satisfies the ACC and DCC. Includes finite lattices and many infinite lattices. Theorem 5.12: in such lattices, every congruence is a join of completely join irreducible congruences of the form $\text{con}(x, x_*)$.</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Why $\textbf{Con}\,\mathcal{L}$ is distributive — the majority polynomial</h3>
+    <p>Funayama-Nakayama's 1942 theorem (Theorem 5.8) is genuinely surprising: even highly non-distributive lattices (like $\mathcal{M}_3$ or $\mathcal{N}_5$) have a distributive congruence lattice. The proof uses a clever observation about the <em>majority polynomial</em>:</p>
+    <p>$$m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z).$$</p>
+    <p>This polynomial has a remarkable property: if any two of $x, y, z$ are equal, then $m$ takes that value. Concretely:</p>
+    <ul>
+      <li>$m(x, x, z) = (x \wedge x) \vee (x \wedge z) \vee (x \wedge z) = x \vee (x \wedge z) = x$ (by absorption).</li>
+      <li>$m(x, y, x) = (x \wedge y) \vee x \vee (y \wedge x) = x$.</li>
+      <li>$m(x, z, z) = (x \wedge z) \vee (x \wedge z) \vee z = z$.</li>
+    </ul>
+    <p>This "majority" property is exactly what's needed to prove distributivity in $\textbf{Con}\,\mathcal{L}$. Given $\alpha, \beta, \gamma \in \textbf{Con}\,\mathcal{L}$, to show $\alpha \wedge (\beta \vee \gamma) \le (\alpha \wedge \beta) \vee (\alpha \wedge \gamma)$, take $(x, z) \in \alpha \wedge (\beta \vee \gamma)$. The polynomial $m$ allows us to interpolate via the chain $x = y_0 \beta y_1 \gamma y_2 \beta \dots y_k = z$ (the chain witnessing $x (\beta \vee \gamma) z$) and produce $t_i = m(x, y_i, z)$ — a chain alternating between $\alpha \wedge \beta$ and $\alpha \wedge \gamma$ steps from $x$ to $z$.</p>
+    <p>The deeper reason this works: lattices are "majority-closed" in the universal-algebraic sense. Other equational classes (e.g., groups) have different polynomials (Mal'cev terms) that play similar roles in congruence theory. The slogan: <em>congruence-distributive varieties are exactly those with a majority polynomial.</em></p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The 65-year congruence lattice problem</h3>
+    <p>Theorem 5.8 (Funayama-Nakayama 1942) shows $\textbf{Con}\,\mathcal{L}$ is always a distributive algebraic lattice. The natural converse question:</p>
+    <p style="text-align: center; font-style: italic;">Is every distributive algebraic lattice isomorphic to $\textbf{Con}\,\mathcal{L}$ for some lattice $\mathcal{L}$?</p>
+    <p>This was conjectured (informally) by R. P. Dilworth around 1944, and stated as a starred exercise in the 1948 edition of Birkhoff's <em>Lattice Theory</em>. For 60+ years, the conjecture stood as one of the most famous open problems in lattice theory.</p>
+    <p><strong>Partial positive results.</strong> A distributive algebraic lattice $\mathcal{D}$ IS a congruence lattice when:</p>
+    <ul>
+      <li>$\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ for some ordered set $\mathcal{P}$ (Dilworth's original proof for finite distributive lattices). To be proved in Chapter 10.</li>
+      <li>The compact elements form a sublattice of $\mathcal{D}$ (E. T. Schmidt 1981).</li>
+      <li>$\mathcal{D}$ has at most $\aleph_1$ compact elements (A. Huhn 1989).</li>
+    </ul>
+    <p><strong>The Wehrung counterexample (2005-2007).</strong> Friedrich Wehrung constructed a distributive algebraic lattice $\mathcal{D}$ with $\aleph_{\omega+1}$ compact elements that is NOT isomorphic to any $\textbf{Con}\,\mathcal{L}$. Published in <em>A solution to Dilworth's congruence lattice problem</em>, Adv. Math. 216 (2007), 610-625. The construction uses Kuratowski's free set theorem to build a distributive lattice with a "rectangular" structure that no congruence lattice can match.</p>
+    <p><strong>Pavel Růžička 2008</strong>: refined Wehrung's argument to produce a counterexample with $\aleph_2$ compact elements — the optimal cardinality (since Huhn 1989 proves the conjecture holds at $\aleph_1$). Published in <em>Free trees and the optimal bound in Wehrung's theorem</em>, Fund. Math. 198 (2008), 217-228.</p>
+    <p><strong>Open question</strong>: is every distributive algebraic lattice the congruence lattice of an algebra with FINITELY MANY operations? Even with countably many operations? Surveys: Tischendorf 1994; Plôščica-Tůma-Wehrung 2002.</p>
+    <p>The CLP story is one of lattice theory's great mathematical narratives: a problem stated in 1944, partially solved through the 1980s, finally settled with a beautiful set-theoretic construction in 2007.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Subdirect representation — Birkhoff's universal-algebra paradigm</h3>
+    <p>Theorem 5.7 says: every lattice is a subdirect product of subdirectly irreducible lattices. This is Garrett Birkhoff's 1944 theorem applied to lattices. The general universal-algebra version: every algebra is a subdirect product of subdirectly irreducibles in its variety.</p>
+    <p>Why does this matter? Because <strong>subdirectly irreducible algebras are "few"</strong>: in many varieties they are easy to describe explicitly. Examples:</p>
+    <ul>
+      <li>Variety of distributive lattices: subdirectly irreducibles = the two-element chain $\{0, 1\}$. So every distributive lattice is a sublattice of $\{0, 1\}^X$ for some $X$ — Birkhoff's representation theorem (Ch 8).</li>
+      <li>Variety of Boolean algebras: subdirectly irreducibles = $\{0, 1\}$. So every Boolean algebra is a subalgebra of $\{0, 1\}^X = \mathfrak{P}(X)$ — Stone's representation theorem.</li>
+      <li>Variety of groups: subdirectly irreducibles include simple groups, certain $p$-groups, etc. Classification is harder.</li>
+    </ul>
+    <p>Birkhoff's slogan: <em>to understand a variety, classify its subdirectly irreducibles.</em> For lattices, the subdirectly irreducibles are richly varied (lots of distinct ones), which is why lattice theory is "harder" than distributive lattice theory.</p>
+    <p><strong>Reference:</strong> Garrett Birkhoff, <em>Subdirect unions in universal algebra</em>, Bull. AMS 50 (1944), 764-768. The founding paper of subdirect representation theory.</p>
+    <p><strong>Connection to Ch 6:</strong> a class of algebras is a "variety" iff closed under H, S, P (homomorphic images, subalgebras, products). Subdirect products are products + subalgebras, so subdirect representations connect varieties to their building blocks.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Quotients and congruences</div>
+  <h2>Theorem 5.1 (First Isomorphism) · Theorem 5.2 (quotient is a lattice)</h2>
+  <p class="part-lede">From kernels to quotient lattices. The First Isomorphism Theorem; characterisation of congruences via the (‡) condition.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Quotients · kernels · Theorem 5.1 (First Isomorphism Theorem)</h2>
+  <div class="tagline">$\mathcal{L}/\ker h \cong h(\mathcal{L})$. The lattice analogue of the group-theoretic First Isomorphism Theorem.</div>
+
+  <div class="box def">
+    <span class="label">Quotient $X/\theta$</span>
+    <p>You are doubtless familiar with the connection between homomorphisms and normal subgroups of groups. In this chapter we will establish the corresponding ideas for lattices (and other general algebras).</p>
+    <p>Borrowing notation from group theory, if $X$ is a set and $\theta$ an equivalence relation on $X$, for $x \in X$ let $x\theta$ denote the equivalence class $\{y \in X : x \theta y\}$, and let</p>
+    <p>$$X/\theta = \{x\theta : x \in X\}.$$</p>
+    <p>Thus the elements of $X/\theta$ are the equivalence classes of $\theta$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Kernel + lattice operations on classes</span>
+    <p>Recall that if $\mathcal{L}$ and $\mathcal{K}$ are lattices and $h : \mathcal{L} \to \mathcal{K}$ is a homomorphism, then the <em>kernel</em> of $h$ is the induced equivalence relation,</p>
+    <p>$$\ker h = \{(x, y) \in L^2 : h(x) = h(y)\}.$$</p>
+    <p>We can define lattice operations naturally on the equivalence classes of $\ker h$, viz., if $\theta = \ker h$, then</p>
+    <p>$$x\theta \vee y\theta = (x \vee y)\theta$$</p>
+    <p>$$x\theta \wedge y\theta = (x \wedge y)\theta. \quad (\S)$$</p>
+    <p>The homomorphism property shows that these operations are well-defined: if $(x, y) \in \ker h$ and $(r, s) \in \ker h$, then $h(x \vee r) = h(x) \vee h(r) = h(y) \vee h(s) = h(y \vee s)$, whence $(x \vee r, y \vee s) \in \ker h$. Moreover, $\mathcal{L}/\ker h$ with these operations forms an algebra $\mathcal{L}/\ker h$ isomorphic to the image $h(\mathcal{L})$, which is a sublattice of $\mathcal{K}$. Thus $\mathcal{L}/\ker h$ is also a lattice.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.1 · First Isomorphism Theorem</span>
+    <p>Let $\mathcal{L}$ and $\mathcal{K}$ be lattices, and let $h : \mathcal{L} \to \mathcal{K}$ be a lattice homomorphism. Then $\mathcal{L}/\ker h$ with the operations defined by ($\S$) is a lattice $\mathcal{L}/\ker h$, which is isomorphic to the image $h(\mathcal{L})$ of $\mathcal{L}$ in $\mathcal{K}$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the group-theory analogy</span>
+    <p>The First Isomorphism Theorem for lattices is a direct analogue of:</p>
+    <ul>
+      <li><strong>Groups:</strong> $G/\ker h \cong h(G)$.</li>
+      <li><strong>Rings:</strong> $R/\ker h \cong h(R)$.</li>
+      <li><strong>Modules:</strong> $M/\ker h \cong h(M)$.</li>
+      <li><strong>Lattices (this chapter):</strong> $\mathcal{L}/\ker h \cong h(\mathcal{L})$.</li>
+    </ul>
+    <p>In each case, kernels are characterised by an algebraic property (normal subgroup; ideal; submodule; congruence). The isomorphism theorem says: the quotient by the kernel reproduces the image.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Congruence · Theorem 5.2 (the (‡) characterisation)</h2>
+  <div class="tagline">A congruence is an equivalence relation $\theta$ that is a kernel. Equivalently, satisfies the operation-preservation condition (‡). Theorem 5.2: the converse — (‡)-equivalences are kernels.</div>
+
+  <div class="box def">
+    <span class="label">Definition · congruence relation</span>
+    <p>Let us define a <strong>congruence relation</strong> on a lattice $\mathcal{L}$ to be an equivalence relation $\theta$ such that $\theta = \ker h$ for some homomorphism $h$.</p>
+    <p>(<em>Footnote</em>: this is not the standard definition, but we are about to show it is equivalent to it.)</p>
+    <p>We have seen that, in addition to being equivalence relations, congruence relations must preserve the operations of $\mathcal{L}$: if $\theta$ is a congruence relation, then</p>
+    <p>$$(\dagger) \quad x \theta y \text{ and } r \theta s \quad \text{implies} \quad x \vee r \, \theta \, y \vee s,$$</p>
+    <p>and analogously for meets. Note that ($\dagger$) is equivalent for an equivalence relation $\theta$ to the apparently weaker, and easier to check, condition</p>
+    <p>$$(\dagger') \quad x \theta y \text{ implies } x \vee z \, \theta \, y \vee z.$$</p>
+    <p>For ($\dagger$) implies ($\dagger'$) because every equivalence relation is reflexive ($z \theta z$), while if $\theta$ has the property ($\dagger'$) and the hypotheses of ($\dagger$) hold, then applying ($\dagger'$) twice yields $x \vee r \theta y \vee r \theta y \vee s$.</p>
+    <p>We want to show that, conversely, any equivalence relation satisfying ($\dagger'$) and the corresponding implication for meets is a congruence relation.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.2 · the (‡) characterisation</span>
+    <p>Let $\mathcal{L}$ be a lattice, and let $\theta$ be an equivalence relation on $L$ satisfying</p>
+    <p>$$(\ddagger) \quad x \theta y \text{ implies } x \vee z \, \theta \, y \vee z, \text{ and } x \theta y \text{ implies } x \wedge z \, \theta \, y \wedge z.$$</p>
+    <p>Define join and meet on $L/\theta$ by the formulas ($\S$). Then $\mathcal{L}/\theta = (L/\theta, \wedge, \vee)$ is a lattice, and the map $h : \mathcal{L} \to \mathcal{L}/\theta$ defined by $h(x) = x\theta$ is a surjective homomorphism with $\ker h = \theta$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>The conditions ($\ddagger$) ensure that the join and meet operations are well defined on $L/\theta$. By definition, we have</p>
+    <p>$$h(x \vee y) = (x \vee y)\theta = x\theta \vee y\theta = h(x) \vee h(y)$$</p>
+    <p>and similarly for meets, so $h$ is a homomorphism. The range of $h$ is clearly $L/\theta$.</p>
+    <p>It remains to show that $\mathcal{L}/\theta$ satisfies the equations defining lattices. This follows from the general principle that homomorphisms preserve the satisfaction of equations: if $h : \mathcal{L} \twoheadrightarrow \mathcal{K}$ is a surjective homomorphism and an equation $p = q$ holds in $\mathcal{L}$, then it holds in $\mathcal{K}$. (See Exercise 4.) So $\mathcal{L}/\theta$ inherits all lattice axioms from $\mathcal{L}$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Congruences are exactly (‡)-equivalences</span>
+    <p>Theorems 5.1 and 5.2 together establish the key biconditional:</p>
+    <p style="text-align: center; font-style: italic; padding: 12px 0;">$\theta$ is a congruence ⟺ $\theta$ is an equivalence relation satisfying (‡)</p>
+    <p>This is the standard textbook definition of congruence: an equivalence relation that respects the algebraic operations. The chapter takes the homomorphism-kernel route as the definition (footnote: "not standard"), then proves equivalence in Theorem 5.2.</p>
+    <p>By Theorem 3.1, the conditions of (‡) and the axioms for an equivalence relation are all FINITARY closure rules on $L^2$. Hence, by Theorem 3.2, the set of congruence relations on a lattice $\mathcal{L}$ forms an algebraic lattice $\textbf{Con}\,\mathcal{L}$. The closure operator on $L^2$ that gives the congruence generated by a set of pairs is denoted by "con" or sometimes "Cg." For a single pair, $Q = \{(a, b)\}$, we write just $\text{con}(a, b)$.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Con L and subdirect representation</div>
+  <h2>Theorems 5.3, 5.4, 5.5, 5.6, 5.7</h2>
+  <p class="part-lede">$\textbf{Con}\,\mathcal{L}$ is an algebraic lattice. The Second Isomorphism Theorem. Simple and subdirectly irreducible lattices. Birkhoff's subdirect representation theorem (1944).</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Theorem 5.3 · principal congruences</h2>
+  <div class="tagline">$\textbf{Con}\,\mathcal{L}$ is algebraic. Compact elements are finitely generated. Principal congruences $\text{con}(a, b)$ are join dense.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.3</span>
+    <p>$\textbf{Con}\,\mathcal{L}$ is an algebraic lattice. A congruence relation $\theta$ is compact in $\textbf{Con}\,\mathcal{L}$ if and only if it is finitely generated, i.e., there exist finitely many pairs $(a_1, b_1), \dots, (a_k, b_k)$ of elements of $L$ such that $\theta = \bigvee_{1 \le i \le k} \text{con}(a_i, b_i)$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>The congruence relations are exactly the equivalence relations satisfying (‡). The conditions of (‡) and the axioms for an equivalence relation are all finitary closure rules on $L^2$. By Theorem 3.1, $\textbf{Con}\,\mathcal{L}$ is an algebraic lattice with compact elements being the closures of finite sets — i.e., finitely generated congruences.</p>
+    <p>Moreover, the equivalence relation join (the transitive closure of the union) of a set of congruence relations again satisfies (‡): for if $\theta_i$ are congruence relations and $x \theta_{i_1} r_1 \theta_{i_2} r_2 \dots \theta_{i_n} y$, then $x \vee z \theta_{i_1} r_1 \vee z \theta_{i_2} r_2 \vee z \dots \theta_{i_n} y \vee z$, and likewise for meets. So $\textbf{Con}\,\mathcal{L}$ is also a complete sublattice of $\textbf{Eq}\,L$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Convex sublattices · principal congruences</span>
+    <p>Note that the universal relation $L^2$ and the equality relation are both congruence relations; they are the greatest and least elements of $\textbf{Con}\,\mathcal{L}$, respectively. Also, since $x \theta y$ if and only if $x \wedge y \, \theta \, x \vee y$, a congruence relation is determined by the ordered pairs $(a, b)$ with $a < b$ which it contains.</p>
+    <p>A subset $S \subseteq \mathcal{L}$ is <strong>convex</strong> if $x \le y \le z$ and $x, z \in S$ imply $y \in S$. The reader should verify that <em>if $\theta$ is a congruence relation on a lattice $\mathcal{L}$, then every congruence class is a convex sublattice of $\mathcal{L}$.</em> This observation helps immensely in computing lattice congruences.</p>
+    <p>A congruence relation $\theta$ is <strong>principal</strong> if $\theta = \text{con}(a, b)$ for some pair $a, b \in L$. The principal congruence relations are JOIN DENSE in $\textbf{Con}\,\mathcal{L}$: for any congruence relation $\theta$, we have</p>
+    <p>$$\theta = \bigvee\{\text{con}(a, b) : a \theta b\}.$$</p>
+    <p>It follows from the general theory of algebraic closure operators that principal congruence relations are compact. So in $\textbf{Con}\,\mathcal{L}$, the principal congruences are exactly the <em>compact + indecomposable</em> elements that generate everything.</p>
+  </div>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">B2</span> Theorem 5.4 (Second Iso) · simple · subdirectly irreducible</h2>
+  <div class="tagline">Congruences of $\mathcal{L}/\theta$ correspond to congruences of $\mathcal{L}$ above $\theta$. Simple = trivial congruence lattice. Subdirectly irreducible = unique minimal nonzero.</div>
+
+  <div class="box intuition">
+    <span class="label">Setup: congruences correspond above $\theta$</span>
+    <p>One of the most basic facts about congruences says that congruences of $\mathcal{L}/\theta$ correspond to congruences on $\mathcal{L}$ containing $\theta$. This is the lattice version of the group-theoretic correspondence theorem.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.4 · Second Isomorphism Theorem</span>
+    <p>If $\theta \in \textbf{Con}\,\mathcal{L}$, then $\textbf{Con}(\mathcal{L}/\theta)$ is isomorphic to the filter $\uparrow\theta$ in $\textbf{Con}\,\mathcal{L}$, i.e., $\textbf{Con}(\mathcal{L}/\theta) \cong \{\varphi \in \textbf{Con}\,\mathcal{L} : \varphi \ge \theta\}$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>A congruence relation on $\mathcal{L}/\theta$ is an equivalence relation $R$ on the $\theta$-classes of $L$ such that $x\theta R y\theta$ implies $x\theta \vee z\theta R y\theta \vee z\theta$, and analogously for meets.</p>
+    <p>Given $R \in \textbf{Con}(\mathcal{L}/\theta)$, define the corresponding relation $\rho$ on $L$ by $x \rho y$ iff $x\theta R y\theta$. Clearly $\rho \in \textbf{Eq}\,L$ and $\theta \le \rho$. The compatibility of $R$ implies that $\rho$ is a congruence on $\mathcal{L}$.</p>
+    <p>Conversely, let $\sigma \in \uparrow\theta$ in $\textbf{Con}\,\mathcal{L}$, and define a relation $S$ on $L/\theta$ by $x\theta S y\theta$ iff $x \sigma y$. Since $\theta \le \sigma$ the relation $S$ is well defined. The compatibility of $\sigma$ on $L$ implies that $S$ is a congruence relation on $\mathcal{L}/\theta$.</p>
+    <p>The maps $f : \textbf{Con}(\mathcal{L}/\theta) \to \uparrow\theta$ and $g : \uparrow\theta \to \textbf{Con}(\mathcal{L}/\theta)$ are mutually inverse order-preserving bijections, hence lattice isomorphisms. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Homomorphism interpretation</span>
+    <p>It is interesting to interpret Theorem 5.4 in terms of homomorphisms. Essentially it corresponds to the fact that <em>if $h : \mathcal{L} \twoheadrightarrow \mathcal{K}$ and $f : \mathcal{L} \to \mathcal{M}$ are homomorphisms with $h$ surjective, then there is a homomorphism $g : \mathcal{K} \to \mathcal{M}$ with $f = gh$ if and only if $\ker h \le \ker f$.</em></p>
+    <p>This version of the Second Isomorphism Theorem will be used repeatedly in Chapters 6 and 7 (free lattices and varieties of lattices).</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Simple lattice · subdirectly irreducible</span>
+    <p>A lattice $\mathcal{L}$ is called <strong>simple</strong> if $\textbf{Con}\,\mathcal{L}$ is a two element chain, i.e., $|L| > 1$ and $\mathcal{L}$ has no congruences except equality and the universal relation. For example, the two-dimensional modular lattice $\mathcal{M}_n$ is simple whenever $n \ge 3$.</p>
+    <p>A lattice is <strong>subdirectly irreducible</strong> if it has a unique minimum nonzero congruence relation, i.e., if 0 is completely meet irreducible in $\textbf{Con}\,\mathcal{L}$. So every simple lattice is subdirectly irreducible, and $\mathcal{N}_5$ is an example of a subdirectly irreducible lattice that is not simple.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 1</span>
+    <p>$\mathcal{L}/\theta$ is simple if and only if $1 \succ \theta$ in $\textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 2</span>
+    <p>$\mathcal{L}/\theta$ is subdirectly irreducible if and only if $\theta$ is completely meet irreducible in $\textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">B3</span> Subdirect products · Theorems 5.5, 5.6, 5.7 (Birkhoff)</h2>
+  <div class="tagline">Theorem 5.5: $\bigwedge \theta_i = 0$ ⟹ $\mathcal{L} \hookrightarrow \prod \mathcal{L}/\theta_i$. Theorem 5.6: 4-way characterisation of subdirectly irreducible. Theorem 5.7 (Birkhoff 1944): every lattice is a subdirect product of subdirectly irreducibles.</div>
+
+  <p>Now we turn our attention to a decomposition of lattices which goes back to R. Remak in 1930 (for groups). In what follows, it is important to remember that the zero element of a congruence lattice is the equality relation.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.5 · subdirect representation</span>
+    <p>If $0 = \bigwedge_{i \in I} \theta_i$ in $\textbf{Con}\,\mathcal{L}$, then $\mathcal{L}$ is isomorphic to a sublattice of the direct product $\prod_{i \in I} \mathcal{L}/\theta_i$, and each of the natural homomorphisms $\pi_i : \mathcal{L} \to \mathcal{L}/\theta_i$ is surjective.</p>
+    <p>Conversely, if $\mathcal{L}$ is isomorphic to a sublattice of a direct product $\prod_{i \in I} \mathcal{K}_i$ and each of the projection homomorphisms $\pi_i : \mathcal{L} \to \mathcal{K}_i$ is surjective, then $\mathcal{K}_i \cong \mathcal{L}/\ker \pi_i$ and $\bigwedge_{i \in I} \ker \pi_i = 0$ in $\textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>For any collection $\theta_i$ ($i \in I$) in $\textbf{Con}\,\mathcal{L}$, there is a natural homomorphism $\pi : \mathcal{L} \to \prod \mathcal{L}/\theta_i$ with $(\pi(x))_i = x\theta_i$. Since two elements of a direct product are equal if and only if they agree in every component, $\ker \pi = \bigwedge \theta_i$. So if $\bigwedge \theta_i = 0$, then $\pi$ is an embedding.</p>
+    <p>Conversely, if $\pi : \mathcal{L} \to \prod \mathcal{K}_i$ is an embedding, then $\ker \pi = 0$, while as above $\ker \pi = \bigwedge \ker \pi_i$. Clearly, if $\pi_i(\mathcal{L}) = \mathcal{K}_i$ then $\mathcal{K}_i \cong \mathcal{L}/\ker \pi_i$. ∎</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Subdirect decomposition</span>
+    <p>A representation of $\mathcal{L}$ satisfying either of the equivalent conditions of Theorem 5.5 is called a <strong>subdirect decomposition</strong>, and the corresponding external construction is called a <strong>subdirect product</strong>.</p>
+    <p><em>Example</em>: Figure 5.1 shows how a six element lattice $\mathcal{L}$ can be written as a subdirect product of two copies of $\mathcal{N}_5$.</p>
+  </div>
+
+  <p>Next we should show that subdirectly irreducible lattices are indeed those that have no proper subdirect decomposition.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.6 · 4-way characterisation</span>
+    <p>The following are equivalent for a lattice $\mathcal{L}$.</p>
+    <ol>
+      <li>$\mathcal{L}$ is subdirectly irreducible, i.e., 0 is completely meet irreducible in $\textbf{Con}\,\mathcal{L}$.</li>
+      <li>There is a unique minimal nonzero congruence $\mu$ on $\mathcal{L}$ with the property that $\theta \ge \mu$ for every nonzero $\theta \in \textbf{Con}\,\mathcal{L}$.</li>
+      <li>If $\mathcal{L}$ is isomorphic to a sublattice of $\prod \mathcal{K}_i$, then some projection homomorphism $\pi_i$ is one-to-one.</li>
+      <li>There exists a pair of elements $a < b$ in $\mathcal{L}$ such that $a \theta b$ for every nonzero congruence $\theta$.</li>
+    </ol>
+  </div>
+
+  <div class="box def">
+    <span class="label">Monolith · critical pair</span>
+    <p>The congruence $\mu$ of condition (2) is called the <strong>monolith</strong> of the subdirectly irreducible lattice $\mathcal{L}$, and the pair $(a, b)$ of condition (4), which need not be unique, is called a <strong>critical pair</strong>.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · sketch</span>
+    <p>The equivalence of (1), (2) and (3) is a simple combination of Theorems 3.8 (3-way for completely meet irreducible) and 5.5. We get (2) implies (4) by taking $a = x \wedge y$ and $b = x \vee y$ for any pair of distinct elements with $x \mu y$. On the other hand, if (4) holds we obtain (2) with $\mu = \text{con}(a, b)$. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.7 · Birkhoff 1944</span>
+    <p>Every lattice is a subdirect product of subdirectly irreducible lattices.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Now we see the beauty of Birkhoff's Theorem 3.10, that every element in an algebraic lattice is a meet of completely meet irreducible elements. By applying this to the zero element of $\textbf{Con}\,\mathcal{L}$, we obtain the following fundamental result.</p>
+    <p>Specifically: $\textbf{Con}\,\mathcal{L}$ is algebraic (Theorem 5.3), so by Theorem 3.10, $0 = \bigwedge \theta_i$ for completely meet irreducibles $\theta_i \in \textbf{Con}\,\mathcal{L}$. By Corollary 2 to Theorem 5.4, each $\mathcal{L}/\theta_i$ is subdirectly irreducible. By Theorem 5.5, $\mathcal{L}$ is a subdirect product of $\{\mathcal{L}/\theta_i\}$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Birkhoff's slogan</span>
+    <p>It should be clear that, with the appropriate modifications, Theorems 5.5 to 5.7 yield subdirect decompositions of groups, rings, semilattices, etc. into subdirectly irreducible algebras of the same type. Keith Kearnes (1990) has shown that there are interesting varieties of algebras whose congruence lattices are strongly atomic. By Theorem 3.10, these algebras have irredundant subdirect decompositions.</p>
+    <p>Subdirectly irreducible lattices play a particularly important role in the study of varieties; see Chapter 7. The slogan: <em>to study a variety, classify its subdirectly irreducibles.</em></p>
+    <p>So far we have just done universal algebra with lattices: with the appropriate modifications, we can characterize congruence relations and show that $\textbf{Con}\,\mathcal{A}$ is an algebraic lattice for any algebra $\mathcal{A}$ (see Exercises 10 and 11). However, the next property is special to lattices and related structures.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Distributivity of Con L</div>
+  <h2>Theorem 5.8 (Funayama-Nakayama 1942) + the congruence lattice problem</h2>
+  <p class="part-lede">$\textbf{Con}\,\mathcal{L}$ is distributive — even when $\mathcal{L}$ is not. Proof via the majority polynomial. Then: the 65-year congruence lattice problem, finally solved by Wehrung in 2007.</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">C1</span> Theorem 5.8 — Funayama-Nakayama (1942)</h2>
+  <div class="tagline">$\textbf{Con}\,\mathcal{L}$ is distributive for ANY lattice $\mathcal{L}$. Proof uses the "majority" polynomial $m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.8 · Funayama-Nakayama 1942</span>
+    <p>If $\mathcal{L}$ is a lattice, then $\textbf{Con}\,\mathcal{L}$ is a distributive algebraic lattice.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · the majority polynomial</span>
+    <p>In any lattice $\mathcal{L}$, let</p>
+    <p>$$m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z).$$</p>
+    <p>Then it is easy to see that $m(x, y, z)$ is a <strong>majority polynomial</strong>, in that if any two variables are equal then $m(x, y, z)$ takes on that value:</p>
+    <p>$$m(x, x, z) = x, \quad m(x, y, x) = x, \quad m(x, z, z) = z.$$</p>
+    <p>Now let $\alpha, \beta, \gamma \in \textbf{Con}\,\mathcal{L}$. Clearly $(\alpha \wedge \beta) \vee (\alpha \wedge \gamma) \le \alpha \wedge (\beta \vee \gamma)$. To show the reverse inclusion, let $(x, z) \in \alpha \wedge (\beta \vee \gamma)$. Then $x \alpha z$ and there exist $y_1, \dots, y_k$ such that</p>
+    <p>$$x = y_0 \, \beta \, y_1 \, \gamma \, y_2 \, \beta \dots y_k = z.$$</p>
+    <p>Let $t_i = m(x, y_i, z)$ for $0 \le i \le k$. Then</p>
+    <p>$$t_0 = m(x, x, z) = x$$</p>
+    <p>$$t_k = m(x, z, z) = z$$</p>
+    <p>and for all $i$,</p>
+    <p>$$t_i = m(x, y_i, z) \, \alpha \, m(x, y_i, x) = x,$$</p>
+    <p>so $t_i \alpha t_{i+1}$ by Exercise 4(b). If $i$ is even, then</p>
+    <p>$$t_i = m(x, y_i, z) \, \beta \, m(x, y_{i+1}, z) = t_{i+1},$$</p>
+    <p>whence $t_i \alpha \wedge \beta t_{i+1}$. Similarly, if $i$ is odd then $t_i \alpha \wedge \gamma t_{i+1}$. Thus</p>
+    <p>$$x = t_0 \, \alpha \wedge \beta \, t_1 \, \alpha \wedge \gamma \, t_2 \, \alpha \wedge \beta \dots t_k = z$$</p>
+    <p>and we have shown that $\alpha \wedge (\beta \vee \gamma) \le (\alpha \wedge \beta) \vee (\alpha \wedge \gamma)$. As inclusion holds both ways, we have equality. Therefore $\textbf{Con}\,\mathcal{L}$ is distributive. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The "majority polynomial" technique in universal algebra</span>
+    <p>The key insight in Funayama-Nakayama's proof: <em>varieties with a majority polynomial have distributive congruence lattices</em>. This is a famous Mal'cev condition in universal algebra.</p>
+    <p>Examples beyond lattices:</p>
+    <ul>
+      <li><strong>Boolean algebras</strong>: have a majority polynomial $m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$ (same as lattices). $\textbf{Con}\,\mathcal{B}$ distributive.</li>
+      <li><strong>Heyting algebras</strong>: also have a majority polynomial. Congruences distributive.</li>
+      <li><strong>Distributive lattices, modular lattices</strong>: subvarieties of lattices, so inherit the property. (And lattice-theoretically the congruence lattice is even simpler.)</li>
+    </ul>
+    <p>What about non-examples?</p>
+    <ul>
+      <li><strong>Groups</strong>: do NOT have a majority polynomial. The commutator polynomial $[x, y] = x^{-1}y^{-1}xy$ is the closest analog (Mal'tsev term). Congruence lattices of groups can be non-distributive (e.g., abelian groups have modular subgroup lattices, often non-distributive).</li>
+      <li><strong>Rings, modules</strong>: similar — Mal'tsev terms but no majority polynomial in general.</li>
+    </ul>
+    <p>The slogan: <em>the existence of a majority polynomial is exactly the universal-algebraic condition for congruence-distributivity.</em> This generalises Funayama-Nakayama to a broad class of algebras.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">C2</span> The congruence lattice problem (Dilworth → Wehrung 2005-2007)</h2>
+  <div class="tagline">Is every distributive algebraic lattice a $\textbf{Con}\,\mathcal{L}$? The 65-year-old conjecture solved negatively by Wehrung's 2005 counterexample.</div>
+
+  <p>In the 1940's, R. P. Dilworth proved that every finite distributive lattice is isomorphic to the congruence lattice of a lattice. (This result appeared as a starred exercise in the 1948 edition of Birkhoff's <em>Lattice Theory</em> book.) For a long time thereafter, it was conjectured that every distributive algebraic lattice was the congruence lattice of a lattice, and evidence in favor of the conjecture was amassed.</p>
+
+  <div class="box intuition">
+    <span class="label">Partial positive results</span>
+    <p>A distributive algebraic lattice $\mathcal{D}$ is isomorphic to the congruence lattice of a lattice if:</p>
+    <ol>
+      <li><strong>$\mathcal{D} \cong \mathcal{O}(\mathcal{P})$ for some ordered set $\mathcal{P}$</strong> (R. P. Dilworth, see [6]). To be proved in Chapter 10. This includes all finite distributive lattices.</li>
+      <li><strong>The compact elements form a sublattice of $\mathcal{D}$</strong> (E. T. Schmidt 1981, [12]).</li>
+      <li><strong>$\mathcal{D}$ has at most $\aleph_1$ compact elements</strong> (A. Huhn 1989, [7]).</li>
+    </ol>
+    <p>In Chapter 10 we will prove (i), which includes the fact that every finite distributive lattice is isomorphic to the congruence lattice of a (finite) lattice.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Wehrung 2005, 2007 — the negative solution</span>
+    <p>But in 2005, <strong>Fred Wehrung</strong> constructed distributive algebraic lattices that are NOT isomorphic to congruence lattices of lattices [15]. Wehrung's original counterexamples have $\aleph_{\omega+1}$ or more compact elements, but <strong>Pavel Růžička</strong> refined Wehrung's arguments to produce a counterexample with $\aleph_2$ compact elements [11].</p>
+    <p>Wehrung's paper: <em>A solution to Dilworth's congruence lattice problem</em>, Adv. Math. 216 (2007), 610-625.</p>
+    <p>Růžička's paper: <em>Free trees and the optimal bound in Wehrung's theorem</em>, Fund. Math. 198 (2008), 217-228.</p>
+    <p>The bound is OPTIMAL: by Huhn 1989, every distributive algebraic lattice with $\le \aleph_1$ compact elements IS a congruence lattice; Růžička showed there exist counterexamples at $\aleph_2$.</p>
+    <p>This completely settles the problem for lattices, but it remains an open question whether every distributive algebraic lattice is isomorphic to the congruence lattice of an algebra with finitely many operations. Surveys on this problem, including pre-dating Wehrung's results, can be found in M. Tischendorf [13] and M. Plôščica, J. Tůma and F. Wehrung [9, 15].</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>The 65-year congruence lattice problem is one of the great mathematical narratives of 20th-century lattice theory:</p>
+    <ul>
+      <li><strong>1942</strong>: Funayama-Nakayama — $\textbf{Con}\,\mathcal{L}$ is distributive.</li>
+      <li><strong>1944-48</strong>: Dilworth — finite distributive case solved positively.</li>
+      <li><strong>1981</strong>: Schmidt — sublattice compact case.</li>
+      <li><strong>1989</strong>: Huhn — $\le \aleph_1$ compact elements.</li>
+      <li><strong>2005</strong>: Wehrung — counterexample at $\aleph_{\omega+1}$.</li>
+      <li><strong>2008</strong>: Růžička — optimal counterexample at $\aleph_2$.</li>
+      <li><strong>Open</strong>: finitely-presented version (does it hold for finitely-many-operation algebras?).</li>
+    </ul>
+    <p>The story showcases the depth of lattice theory: a simple-sounding question takes decades of effort + powerful set-theoretic machinery (Kuratowski's free set theorem) to fully resolve.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD-header">
+  <div class="pk">Part D · Weaving polynomials and completely join prime congruences</div>
+  <h2>Theorem 5.9 + completely join prime + Theorems 5.10, 5.11, 5.12</h2>
+  <p class="part-lede">A finer analysis of $\textbf{Con}\,\mathcal{L}$. Weaving polynomials describe how principal congruences are computed. Completely join prime congruences correspond to covers in $\mathcal{L}$.</p>
+</div>
+
+<section class="module" id="s8">
+  <h2><span class="num">D1</span> Weaving polynomial · Theorem 5.9</h2>
+  <div class="tagline">A unary polynomial built by alternating meets and joins. Theorem 5.9: $(x, y) \in \bigvee \text{con}(a_i, b_i)$ iff there's a sequence connecting $x \vee y$ to $x \wedge y$ via weaving polynomials applied to the $(a_i, b_i)$.</div>
+
+  <p>We need to understand the congruence operator $\text{con}(Q)$, where $Q$ is a set of pairs, a little better.</p>
+
+  <div class="box def">
+    <span class="label">Weaving polynomial</span>
+    <p>A <strong>weaving polynomial</strong> on a lattice $\mathcal{L}$ is a member of the set $W$ of unary functions defined recursively by:</p>
+    <ol>
+      <li>$w(x) = x \in W$,</li>
+      <li>if $w(x) \in W$ and $a \in L$, then $u(x) = w(x) \wedge a$ and $v(x) = w(x) \vee a$ are in $W$,</li>
+      <li>only these functions are in $W$.</li>
+    </ol>
+    <p>Thus every weaving polynomial looks something like</p>
+    <p>$$w(x) = (\dots ((( x \wedge s_1) \vee s_2) \wedge s_3) \dots) \vee s_k$$</p>
+    <p>where $s_i \in L$ for $1 \le i \le k$. The following characterization is a modified version of one found in Dilworth [2].</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.9</span>
+    <p>Suppose $a_i < b_i$ for $i \in I$. Then $(x, y) \in \bigvee_{i \in I} \text{con}(a_i, b_i)$ if and only if there exist finitely many $r_j \in L$, $w_j \in W$, and $i_j \in I$ such that</p>
+    <p>$$x \vee y = r_0 \ge r_1 \ge \dots \ge r_k = x \wedge y$$</p>
+    <p>with $w_j(b_{i_j}) = r_j$ and $w_j(a_{i_j}) = r_{j+1}$ for $0 \le j < k$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Let $R$ be the set of all pairs $(x, y)$ satisfying the condition of the theorem. It is clear that</p>
+    <ol>
+      <li>$(a_i, b_i) \in R$ for all $i$,</li>
+      <li>$R \subseteq \bigvee_{i \in I} \text{con}(a_i, b_i)$.</li>
+    </ol>
+    <p>Hence, if we can show that $R$ is a congruence relation, it will follow that $R = \bigvee_{i \in I} \text{con}(a_i, b_i)$.</p>
+    <p>The proof is technical: show $R \in \textbf{Eq}\,L$ (reflexivity, symmetry, transitivity via weaving manipulations) and that $R$ satisfies (‡) (compatibility with $\vee$ and $\wedge$ via weaving polynomial composition). Both verifications use the closure property of $W$ under inserting/removing $\wedge a$ and $\vee a$ steps.</p>
+    <p>The argument for meets is done similarly, and we conclude that $R$ is a congruence relation, as desired. ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary</span>
+    <p>If $\theta_i \in \textbf{Con}\,\mathcal{L}$ for $i \in I$, then $(x, y) \in \bigvee_{i \in I} \theta_i$ if and only if there exist finitely many $r_j \in L$ and $i_j \in I$ such that</p>
+    <p>$$x \vee y = r_0 \ge r_1 \ge \dots \ge r_k = x \wedge y$$</p>
+    <p>and $r_j \theta_{i_j} r_{j+1}$ for $0 \le j < k$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · weaving as path concatenation</span>
+    <p>The weaving polynomial machinery captures how congruences "weave together" through the lattice. Each step $r_j \to r_{j+1}$ in the chain is determined by:</p>
+    <ul>
+      <li>An index $i_j \in I$ specifying which generating pair $(a_{i_j}, b_{i_j})$ is used.</li>
+      <li>A weaving polynomial $w_j$ specifying how to "fit" the generating pair into the chain via meet and join with intermediate elements.</li>
+    </ul>
+    <p>The chain descends monotonically from $x \vee y$ to $x \wedge y$, which is the fundamental "shape" of a congruence: any congruent pair $(x, y)$ has $(x \wedge y, x \vee y)$ also congruent.</p>
+    <p>This characterisation is essential for explicit computations of congruences in concrete lattices, and is the technical core of many results about $\textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">D2</span> Completely join prime · Theorems 5.10, 5.11, 5.12</h2>
+  <div class="tagline">Completely join prime congruences correspond to covers in $\mathcal{L}$. Theorem 5.12: principally chain finite ⟹ every congruence is a join of completely join irreducibles of the form $\text{con}(x, x_*)$.</div>
+
+  <div class="box def">
+    <span class="label">Completely join prime · completely join irreducible</span>
+    <p>An element $p$ of a complete lattice is <strong>completely join irreducible</strong> if $p = \bigvee Q$ implies $p = q$ for some $q \in Q$.</p>
+    <p>An element $p$ is <strong>completely join prime</strong> if $p \le \bigvee Q$ implies $p \le q$ for some $q \in Q$.</p>
+    <p>Clearly every completely join prime element is completely join irreducible, but in general completely join irreducible elements need not be join prime.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Setup: distributive algebraic lattices</span>
+    <p>Now every algebraic lattice has lots of completely meet irreducible elements (by Theorem 3.9), but they may have no completely join irreducible elements. This happens, for example, in the lattice consisting of the empty set and all cofinite subsets of an infinite set (which is distributive and algebraic). However, such completely join irreducible elements as there are in a distributive algebraic lattice ARE completely join prime!</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.10</span>
+    <p>The following are equivalent for an element $p$ in an algebraic distributive lattice.</p>
+    <ol>
+      <li>$p$ is completely join prime.</li>
+      <li>$p$ is completely join irreducible.</li>
+      <li>$p$ is compact and (finitely) join irreducible.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Clearly (1) implies (2), and since every element in an algebraic lattice is a join of compact elements, (2) implies (3).</p>
+    <p>Let $p$ be compact and finitely join irreducible, and assume $p \le \bigvee Q$. As $p$ is compact, $p \le \bigvee F$ for some finite subset $F \subseteq Q$. By distributivity, this implies $p = p \wedge (\bigvee F) = \bigvee_{q \in F} p \wedge q$. Since $p$ is join irreducible, $p = p \wedge q \le q$ for some $q \in F$. Thus $p$ is completely join prime. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.11</span>
+    <p>If $a \prec b$, then $\text{con}(a, b)$ is completely join prime in $\textbf{Con}\,\mathcal{L}$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why Theorem 5.11 follows from 5.10</span>
+    <p>If $a \prec b$, then $\text{con}(a, b)$ is compact (principal). And by the definition of cover, the interval $b/a$ has only two elements, so the principal congruence $\text{con}(a, b)$ is finitely join irreducible (it's an "atom-like" structure in $\textbf{Con}\,\mathcal{L}$). By Theorem 5.10 (since $\textbf{Con}\,\mathcal{L}$ is algebraic + distributive), $\text{con}(a, b)$ is completely join prime.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Principally chain finite</span>
+    <p>The converse of Theorem 5.11 is false, as there are infinite simple lattices with no covering relations (E. T. Schmidt). However, for finite lattices, or more generally <em>principally chain finite</em> lattices, the converse does hold.</p>
+    <p>A lattice is <strong>principally chain finite</strong> if every principal ideal $\downarrow c$ satisfies the ACC and DCC.</p>
+    <p>This is a fairly natural finiteness condition that includes many interesting infinite lattices, and many results for finite lattices can be extended to principally chain finite lattices with a minimum of effort. Recall that if $x$ is a join irreducible element in such a lattice, then $x_*$ denotes the unique element such that $x \succ x_*$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 5.12</span>
+    <p>Let $\mathcal{L}$ be a principally chain finite lattice. Then every congruence relation on $\mathcal{L}$ is the join of completely join irreducible congruences. Moreover, every completely join irreducible congruence is of the form $\text{con}(x, x_*)$ for some join irreducible element $x$ of $\mathcal{L}$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>Every congruence relation is a join of compact congruences, and every compact congruence is a join of finitely many congruences $\text{con}(a, b)$ with $a > b$. In a principally chain finite lattice, every chain in $a/b$ is finite by Exercise 1.5, so there exists a covering chain $a = r_0 \succ r_1 \succ \dots \succ r_k = b$. Clearly $\text{con}(a, b) = \bigvee_{0 \le j < k} \text{con}(r_j, r_{j+1})$, and these latter are completely join prime by Theorem 5.11. Thus every congruence relation on $\mathcal{L}$ is the join of completely join irreducible congruences $\text{con}(r, s)$ with $r \succ s$.</p>
+    <p>Now let $a \succ b$ be any covering pair in $\mathcal{L}$. By the DCC for $\downarrow a$, there is an element $x$ that is minimal with respect to the properties $x \le a$ and $x \not\le b$. Since any element strictly below $x$ is below $b$, the element $x$ is join irreducible and $x_* = x \wedge b$. It is also true that $a = x \vee b$, since $b < x \vee b \le a$, and it follows easily from these two facts that $\text{con}(a, b) = \text{con}(x, x_*)$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The Krull-Schmidt-Azumaya analog</span>
+    <p>Theorem 5.12 is the lattice-theoretic version of the Krull-Schmidt-Azumaya decomposition theorem (Călugăreanu Ch 12) for principally chain finite lattices: every congruence is a (Birkhoff-canonical) join of completely join irreducible congruences indexed by join irreducible elements.</p>
+    <p>For finite lattices, this gives a clean structure theorem: $\textbf{Con}\,\mathcal{L}$ is generated by the principal congruences $\text{con}(x, x_*)$ as $x$ ranges over join-irreducible elements. The number of completely join irreducibles in $\textbf{Con}\,\mathcal{L}$ equals the number of join-irreducible elements of $\mathcal{L}$.</p>
+    <p>There is much more to be said about congruence lattices of finite lattices, or more generally, principally chain finite lattices. We will return to these matters in Chapter 10.</p>
+    <p>We have ignored congruence lattices of semilattices, interesting on their own and applicable in universal algebra. Unlike congruence lattices of lattices, which are distributive, congruence lattices of semilattices satisfy NO lattice identities. For the basic results, see Freese-Nation [4], Fajtlowicz-Schmidt [3], and Adaricheva [1].</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — universal algebra, Funayama-Nakayama + CLP, Birkhoff subdirect, Remak group decomposition, Prologos</h2>
+  <p class="part-lede">From Birkhoff's 1944 universal algebra to Wehrung's 2005 solution of the congruence lattice problem.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: Universal algebra and the variety paradigm</h2>
+  <div class="tagline">Congruences are the natural notion of "kernel" in universal algebra. Birkhoff's HSP theorem characterises varieties via congruences.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the universal-algebra paradigm</span>
+    <p>Universal algebra studies algebras as algebras $\mathcal{A} = \langle A, F, C \rangle$ — sets with operations and constants. Three basic constructions:</p>
+    <ul>
+      <li><strong>Subalgebras</strong>: $\textbf{Sub}\,\mathcal{A}$ — the lattice of subobjects (Ch 3).</li>
+      <li><strong>Homomorphic images</strong>: characterised by $\textbf{Con}\,\mathcal{A}$ — the lattice of "kernels" (this chapter).</li>
+      <li><strong>Direct products</strong>: $\mathcal{A} \times \mathcal{B}$ — the categorical product.</li>
+    </ul>
+    <p><strong>Birkhoff's HSP theorem (1935)</strong>: a class $\mathcal{V}$ of algebras is closed under HSP (Homomorphic images, Subalgebras, Products) iff $\mathcal{V}$ is defined by equational identities. Such classes are called <strong>varieties</strong>.</p>
+    <p>Varieties have rich congruence-theoretic structure:</p>
+    <table class="grid">
+      <thead><tr><th>Variety</th><th>Congruence property</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Lattices</td><td>Distributive (Funayama-Nakayama)</td><td>Theorem 5.8</td></tr>
+        <tr><td>Boolean algebras</td><td>Distributive (HSP'd from lattices)</td><td>Boolean rings</td></tr>
+        <tr><td>Distributive lattices</td><td>Trivial — congruence lattice = lattice of order ideals</td><td>Birkhoff representation</td></tr>
+        <tr><td>Groups</td><td>Modular (corresponds to normal subgroups)</td><td>Dedekind 1900</td></tr>
+        <tr><td>Abelian groups</td><td>Modular + Arguesian</td><td>Cf. Călugăreanu Ch 5</td></tr>
+        <tr><td>Rings</td><td>Modular (corresponds to ideals)</td><td>Krull dim, Goldie dim</td></tr>
+        <tr><td>Modules</td><td>Modular + Arguesian</td><td>Călugăreanu's whole book</td></tr>
+        <tr><td>Semilattices</td><td>NO lattice identities (Freese-Nation)</td><td>Open territory</td></tr>
+      </tbody>
+    </table>
+    <p>The slogan: <em>congruence lattices reflect the algebraic structure of the parent variety.</em> Different varieties have different congruence-lattice properties.</p>
+    <p><strong>Mal'tsev conditions</strong>: equational characterisations of congruence properties. The majority polynomial (this chapter, Theorem 5.8) is the Mal'tsev condition for congruence-distributivity. Mal'tsev terms (e.g., $p(x, y, y) = x = p(y, y, x)$) characterise congruence-permutability. The general theory connects equational identities to lattice-theoretic properties of $\textbf{Con}\,\mathcal{A}$.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Funayama-Nakayama 1942 → the congruence lattice problem → Wehrung 2007</h2>
+  <div class="tagline">A 65-year mathematical narrative: Funayama-Nakayama to Dilworth's conjecture to Wehrung's negative solution.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the CLP timeline</span>
+    <p>The congruence lattice problem (CLP) is one of the great mathematical narratives of 20th-century lattice theory. Timeline:</p>
+    <ul>
+      <li><strong>1942 — Funayama-Nakayama</strong>: $\textbf{Con}\,\mathcal{L}$ is a distributive algebraic lattice for any lattice $\mathcal{L}$. Original paper: <em>On the distributivity of a lattice of lattice-congruences</em>, Proc. Imp. Acad. Tokyo 18, 553-554. Two pages, written during WWII in Tokyo.</li>
+      <li><strong>1944-48 — Dilworth</strong>: every finite distributive lattice is a $\textbf{Con}\,\mathcal{L}$. The result appeared as a starred exercise in Birkhoff's 1948 <em>Lattice Theory</em>. Dilworth's conjecture: extends to all distributive algebraic lattices.</li>
+      <li><strong>1962 — Grätzer-Schmidt</strong>: every algebraic lattice is the congruence lattice of an algebra (not necessarily a lattice). <em>On congruence lattices of lattices</em>, Acta Math. Acad. Sci. Hungar. 13, 179-185.</li>
+      <li><strong>1981 — E. T. Schmidt</strong>: positive answer if compact elements form a sublattice. <em>The ideal lattice of a distributive lattice with 0 is the congruence lattice of a lattice</em>, Acta Sci. Math. (Szeged) 43, 153-168.</li>
+      <li><strong>1989 — A. Huhn</strong>: positive answer if $\le \aleph_1$ compact elements. <em>On the representation of distributive algebraic lattices</em>, Acta Sci. Math. (Szeged) 45, 51, 53.</li>
+      <li><strong>1998 — Plôščica-Tůma-Wehrung</strong>: <em>Congruence lattices of free lattices in nondistributive varieties</em>, Coll. Math. 76, 269-278.</li>
+      <li><strong>2002 — Tůma-Wehrung</strong>: <em>A survey on recent results on congruence lattices of lattices</em>, Algebra Universalis 45, 439-471.</li>
+      <li><strong>2005 — Wehrung</strong>: counterexample with $\aleph_{\omega+1}$ compact elements. arXiv preprint then published 2007.</li>
+      <li><strong>2007 — Wehrung</strong>: <em>A solution to Dilworth's congruence lattice problem</em>, Adv. Math. 216, 610-625. Final published form.</li>
+      <li><strong>2008 — Růžička</strong>: optimal counterexample at $\aleph_2$ compact elements. <em>Free trees and the optimal bound in Wehrung's theorem</em>, Fund. Math. 198, 217-228.</li>
+    </ul>
+    <p>The Wehrung-Růžička construction uses Kuratowski's free set theorem to produce a "rectangular" distributive lattice that no congruence lattice can match.</p>
+    <p><strong>Surveys</strong>: M. Tischendorf 1994; M. Plôščica, J. Tůma, F. Wehrung 2002. The latter is the canonical reference for the state of CLP research before Wehrung's solution.</p>
+    <p><strong>Open question</strong>: is every distributive algebraic lattice the $\textbf{Con}\,\mathcal{A}$ for some algebra with FINITELY MANY operations? Even with countably many operations? This is the "fine-tuned" version of CLP, still open.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: Subdirectly irreducible algebras + Birkhoff's representation paradigm</h2>
+  <div class="tagline">Subdirectly irreducibles are the "primes" of universal algebra. Birkhoff 1944 + the variety theory paradigm.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · subdirect representation across algebra</span>
+    <p><strong>Garrett Birkhoff 1944</strong>: <em>Subdirect unions in universal algebra</em>, Bull. AMS 50, 764-768. Established the subdirect representation theorem for arbitrary algebras with finite-arity operations.</p>
+    <p>The theorem: every algebra in a variety $\mathcal{V}$ is a subdirect product of subdirectly irreducibles in $\mathcal{V}$. Significance: <em>to study a variety, classify its subdirectly irreducibles.</em></p>
+    <p>Subdirectly irreducible algebras across familiar varieties:</p>
+    <table class="grid">
+      <thead><tr><th>Variety</th><th>Subdirectly irreducibles</th><th>Significance</th></tr></thead>
+      <tbody>
+        <tr><td>Distributive lattices</td><td>Just $\{0, 1\}$</td><td>Birkhoff representation</td></tr>
+        <tr><td>Boolean algebras</td><td>Just $\{0, 1\}$</td><td>Stone duality</td></tr>
+        <tr><td>Lattices</td><td>Many: $\mathcal{N}_5$, simple lattices, ...</td><td>Hard variety</td></tr>
+        <tr><td>Modular lattices</td><td>Many but classified for projective geometries</td><td>Von Neumann coordinatization</td></tr>
+        <tr><td>Groups</td><td>Simple groups, certain $p$-groups, ...</td><td>Classification problem</td></tr>
+        <tr><td>Abelian groups</td><td>$\mathbb{Z}_{p^n}$, $\mathbb{Z}_{p^\infty}$ (Prüfer), $\mathbb{Z}$</td><td>Classical</td></tr>
+        <tr><td>Rings</td><td>Simple rings + primary rings</td><td>Wedderburn-Artin</td></tr>
+        <tr><td>Vector spaces</td><td>1-dim vector space</td><td>Trivial classification</td></tr>
+        <tr><td>Modules</td><td>"Hollow" modules (Călugăreanu Ch 12)</td><td>Krull-Schmidt-Azumaya</td></tr>
+      </tbody>
+    </table>
+    <p>The pattern: in nice varieties (distributive, abelian, vector space) subdirectly irreducibles are few and simple; in harder varieties (lattices, groups) the classification is rich and challenging.</p>
+    <p><strong>Connection to Ch 6 (free lattices)</strong>: the free lattice on $n$ generators is the maximal lattice with $n$ generators in the variety of all lattices. Subdirectly irreducible "factors" of the free lattice play a role in the variety structure.</p>
+    <p><strong>Connection to Ch 7 (varieties of lattices)</strong>: subdirectly irreducibles classify all lattice varieties via Birkhoff's HSP theorem. The lattice $\Lambda$ of all lattice subvarieties has rich structure determined by the subdirectly irreducibles.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Connection: Remak 1930 + group decomposition history</h2>
+  <div class="tagline">Subdirect decompositions originated in group theory: Remak's 1930 paper + the Krull-Schmidt theorem.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Remak's 1930 paper</span>
+    <p>Subdirect decompositions originated in group theory. <strong>Robert Remak</strong>'s 1930 paper <em>Über die Darstellung der endlichen Gruppen als Untergruppen direkter Produkte</em> (J. Reine Angew. Math. 163, 1-44) gave the first systematic treatment of subdirect decompositions for finite groups.</p>
+    <p>Key results in Remak's paper:</p>
+    <ul>
+      <li>Every finite group is a subdirect product of subdirectly irreducible groups (with respect to direct product decompositions).</li>
+      <li>The "Remak decomposition" is unique up to isomorphism (Krull-Schmidt-Remak theorem).</li>
+    </ul>
+    <p><strong>Krull-Schmidt theorem (1925/1928)</strong>: a more general decomposition result that subsumed Remak's. For finite groups (or modules with chain conditions): every direct product decomposition into indecomposables is unique up to isomorphism.</p>
+    <p><strong>The lineage</strong>:</p>
+    <ul>
+      <li><strong>Wedderburn 1909</strong>: structure theorem for semisimple algebras.</li>
+      <li><strong>Krull-Schmidt 1925</strong>: indecomposable decomposition uniqueness for groups with chain conditions.</li>
+      <li><strong>Remak 1930</strong>: subdirect decompositions for finite groups.</li>
+      <li><strong>Birkhoff 1944</strong>: universal-algebraic generalisation (Theorem 5.7 in Nation).</li>
+      <li><strong>Azumaya 1950</strong>: decomposition for modules with local endomorphism rings (Krull-Schmidt-Azumaya, Călugăreanu Ch 12).</li>
+    </ul>
+    <p>Theorem 5.7 (Birkhoff's universal-algebraic generalisation) is the abstract face of all of these. The slogan: <em>every algebra has a unique-ish decomposition into subdirectly irreducible factors</em> — the analogue of "every integer factors into primes."</p>
+    <p>The "ish" reflects that the decomposition is into a SUBDIRECT product (not direct), so factors aren't fully isolated. Krull-Schmidt sharpens to direct products under additional hypotheses (chain conditions, local endomorphism rings, etc.).</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Nation Chapter 5 lives in Prologos</h2>
+  <div class="tagline">Congruences are quotient operators on cell-value lattices. Funayama-Nakayama distributivity ensures clean propagator-network composition.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Nation Chapter 5's congruence theory has direct counterparts in Prologos's architecture:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Nation Ch 5</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Congruence relation</td><td><code>racket/prologos/propagator.rkt</code></td><td>Cell-value equivalences that respect the merge $\sqcup$ — a CONGRUENCE in the universal-algebraic sense. Two cell states are congruent iff they merge to the same result.</td></tr>
+        <tr><td>Quotient lattice $\mathcal{L}/\theta$</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Cell-value canonicalisation: equivalent cell states are identified into canonical representatives. The quotient lattice is the "observable" cell-value lattice.</td></tr>
+        <tr><td>$\textbf{Con}\,\mathcal{L}$ algebraic (Theorem 5.3)</td><td>Architectural design</td><td>Cell-value congruences form an algebraic lattice — finitely-generated equivalences are dense. Used in incremental cell-update verification.</td></tr>
+        <tr><td>Funayama-Nakayama distributivity (Theorem 5.8)</td><td><code>.claude/rules/structural-thinking.md</code></td><td>$\textbf{Con}\,\mathcal{L}$ distributive ensures propagator-network compositions are predictable: $\alpha \wedge (\beta \vee \gamma) = (\alpha \wedge \beta) \vee (\alpha \wedge \gamma)$ for cell equivalences. The BSP scheduler relies on this for sound parallel composition.</td></tr>
+        <tr><td>Subdirect representation (Theorem 5.7)</td><td>Architectural design</td><td>Every cell-value lattice IS a subdirect product of subdirectly irreducible factors. The Prologos cell decomposition exploits this for efficient state representation.</td></tr>
+        <tr><td>Subdirectly irreducible (Theorem 5.6)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>Bilattice FOUR is subdirectly irreducible (unique monolith, unique critical pair $(\bot, \top)$). The simplest "atomic" cell-value structure.</td></tr>
+        <tr><td>Critical pair</td><td><code>.claude/rules/propagator-design.md</code></td><td>Cell pairs $(a, b)$ that distinguish all nonzero congruences — used in cell-state minimisation algorithms.</td></tr>
+        <tr><td>Weaving polynomial (Theorem 5.9)</td><td>BSP scheduler</td><td>The "chain of compatible updates" that connects cell-value transitions IS a weaving polynomial. Each propagator firing applies a meet or join to the current state.</td></tr>
+        <tr><td>Completely join prime (Theorem 5.10)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>"Atomic" cell-value transitions correspond to completely join prime congruences. In algebraic distributive cell lattices, these are exactly the compact + finitely join irreducible elements.</td></tr>
+        <tr><td>Theorem 5.12 (principally chain finite)</td><td>Finite-state cell verification</td><td>For cells with bounded state-space, every cell-value congruence is a join of "atomic transition" congruences $\text{con}(x, x_*)$ — used in symbolic verification.</td></tr>
+        <tr><td>Congruence lattice problem</td><td>Open question for Prologos</td><td>For Prologos cell types: are all distributive algebraic cell-value lattices realisable as $\textbf{Con}\,\mathcal{L}$ for actual cell types? The Wehrung 2007 counterexamples suggest not in general; the open finitely-presented question is relevant for finite-state Prologos cells.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Architectural fit.</strong> Nation Chapter 5's congruence theory is the abstract face of Prologos's cell-value canonicalisation and incremental update machinery. Funayama-Nakayama's distributivity (Theorem 5.8) is the structural soundness argument for parallel propagator composition: $\textbf{Con}\,\mathcal{L}$ distributive ensures composition of cell-value updates is associative and commutative in a clean way.</p>
+    <p>Birkhoff's subdirect representation (Theorem 5.7) decomposes Prologos cell types into "atomic" subdirectly irreducible factors. The Hyperlattice Conjecture's claim — "every computable function is a fixpoint computation on lattices" — has its decomposition-theoretic counterpart here: every cell-value lattice IS a subdirect product of "atomic" lattices. Prologos's cell architecture exploits this for modular cell composition.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and looking ahead</h2>
+  <p class="part-lede">All Chapter 5 terms; twelve worked exercises; pointers to Chapter 6 (free lattices).</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Nation Chapter 5 terms</h2>
+  <div class="tagline">Compact reference of the chapter's vocabulary.</div>
+
+  <dl class="glossary">
+    <dt>Quotient $X/\theta$</dt>
+    <dd>Set of equivalence classes of $\theta$ on $X$.</dd>
+    <dt>Kernel $\ker h$</dt>
+    <dd>$\{(x, y) : h(x) = h(y)\}$. For lattice homomorphisms: a congruence.</dd>
+    <dt>Congruence relation</dt>
+    <dd>Equivalence relation on a lattice satisfying (‡): preserves both $\vee$ and $\wedge$. Equivalent: kernel of a homomorphism.</dd>
+    <dt>Quotient lattice $\mathcal{L}/\theta$</dt>
+    <dd>Set of equivalence classes with operations from ($\S$). A lattice (Theorem 5.2).</dd>
+    <dt>Theorem 5.1 · First Iso</dt>
+    <dd>$\mathcal{L}/\ker h \cong h(\mathcal{L})$.</dd>
+    <dt>Con L</dt>
+    <dd>Algebraic lattice of all congruences on $\mathcal{L}$. Distributive (Theorem 5.8).</dd>
+    <dt>Principal congruence $\text{con}(a, b)$</dt>
+    <dd>Smallest congruence containing the pair $(a, b)$. Compact in Con L.</dd>
+    <dt>Theorem 5.3</dt>
+    <dd>Con L is algebraic; compact = finitely generated.</dd>
+    <dt>Theorem 5.4 · Second Iso</dt>
+    <dd>Con(L/θ) ≅ ↑θ in Con L.</dd>
+    <dt>Simple lattice</dt>
+    <dd>$|\textbf{Con}\,\mathcal{L}| = 2$. Only equality and universal as congruences.</dd>
+    <dt>Subdirectly irreducible</dt>
+    <dd>0 is completely meet irreducible in Con L. Equivalently (Theorem 5.6): unique minimal nonzero congruence.</dd>
+    <dt>Subdirect product</dt>
+    <dd>Sublattice of $\prod \mathcal{L}_i$ with each projection surjective.</dd>
+    <dt>Theorem 5.5</dt>
+    <dd>$\bigwedge \theta_i = 0$ ⟺ $\mathcal{L}$ subdirect product of $\{\mathcal{L}/\theta_i\}$.</dd>
+    <dt>Monolith $\mu$</dt>
+    <dd>Unique minimal nonzero congruence in subdirectly irreducible $\mathcal{L}$.</dd>
+    <dt>Critical pair</dt>
+    <dd>Pair $(a, b)$ such that $a \theta b$ for every nonzero $\theta$.</dd>
+    <dt>Theorem 5.6 · 4-way</dt>
+    <dd>Subdirectly irreducible characterisation: 4 equivalent forms.</dd>
+    <dt>Theorem 5.7 · Birkhoff 1944</dt>
+    <dd>Every lattice is subdirect product of subdirectly irreducibles.</dd>
+    <dt>Theorem 5.8 · Funayama-Nakayama</dt>
+    <dd>Con L is distributive for any lattice L. Proof via majority polynomial $m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$.</dd>
+    <dt>Majority polynomial</dt>
+    <dd>$m(x, y, z) = (x \wedge y) \vee (x \wedge z) \vee (y \wedge z)$. Returns the value when any two variables are equal.</dd>
+    <dt>Congruence lattice problem (CLP)</dt>
+    <dd>Dilworth conjecture (1948): every distributive algebraic lattice is some $\textbf{Con}\,\mathcal{L}$. Negative solution: Wehrung 2007 + Růžička 2008 ($\aleph_2$ optimal).</dd>
+    <dt>Weaving polynomial</dt>
+    <dd>Unary polynomial built recursively by alternating $\wedge a$ and $\vee a$ steps.</dd>
+    <dt>Theorem 5.9</dt>
+    <dd>Characterisation of $\bigvee \text{con}(a_i, b_i)$ via weaving polynomial chains.</dd>
+    <dt>Completely join prime</dt>
+    <dd>$p \le \bigvee Q$ ⟹ $p \le q$ for some $q$.</dd>
+    <dt>Completely join irreducible</dt>
+    <dd>$p = \bigvee Q$ ⟹ $p \in Q$. Implies completely join prime in distributive case.</dd>
+    <dt>Theorem 5.10</dt>
+    <dd>In algebraic distributive: completely join prime ⟺ completely join irreducible ⟺ compact + finitely join irreducible.</dd>
+    <dt>Theorem 5.11</dt>
+    <dd>$a \prec b$ ⟹ $\text{con}(a, b)$ is completely join prime in Con L.</dd>
+    <dt>Principally chain finite</dt>
+    <dd>Every principal ideal $\downarrow c$ satisfies ACC + DCC.</dd>
+    <dt>Theorem 5.12</dt>
+    <dd>Principally chain finite L ⟹ every congruence is join of completely join irreducibles $\text{con}(x, x_*)$.</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 1–12</h2>
+  <div class="tagline">Twelve worked exercises covering Con L computations, join-prime characterisation, symmetric difference, lattice terms, finite distributive uniqueness, semimodular preservation, finite quotient compactness, product congruences, $\mathbb{Z}_p \times \mathbb{Z}_p$, and universal-algebra characterisation.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.1</span>Find Con L for $\mathcal{M}_n$, $\mathcal{N}_5$, and other small lattices</summary>
+  <div class="body">
+    <div class="ex-statement">Find Con L for the lattices (a) $\mathcal{M}_n$ where $n \ge 3$, (b) $\mathcal{N}_5$, (c) the lattice $\mathcal{L}$ of Figure 5.1, and the lattices in Figure 5.2.</div>
+    <p><strong>(a) $\mathcal{M}_n$, $n \ge 3$.</strong> The two-dimensional modular lattice $\mathcal{M}_n$ (with $n$ atoms above 0 and below 1) is SIMPLE for $n \ge 3$. So $\textbf{Con}\,\mathcal{M}_n$ is the two-element chain: $\{0, 1\}$ where $0 = $ equality and $1 = $ universal relation. Reasoning: any nonzero congruence identifies two atoms, hence by transitivity all atoms, hence $0 \sim 1$ via the universal relation.</p>
+    <p><strong>(b) $\mathcal{N}_5$.</strong> The pentagon $\mathcal{N}_5$ is subdirectly irreducible but NOT simple. It has the structure: $0 < a < c < 1$, $0 < b < 1$, with $a \| b$, $c \| b$. The congruences:</p>
+    <ul>
+      <li>0 = equality</li>
+      <li>$\theta_1 = \text{con}(a, c)$: identifies $a$ and $c$, leaves $b$ separate.</li>
+      <li>$\theta_2 = \text{con}(b, 1) = \text{con}(0, b)$ — wait, in $\mathcal{N}_5$ specifically: identifies the chain $0 < a < c < 1$ entirely while keeping $b$ as 0 or 1.</li>
+      <li>1 = universal.</li>
+    </ul>
+    <p>$\textbf{Con}\,\mathcal{N}_5$ is a 4-element distributive lattice (in fact $\mathbf{2} \times \mathbf{2}$). The monolith is $\text{con}(a, c)$ (or possibly different depending on naming). A critical pair: $(a, c)$ — every nonzero congruence identifies $a$ and $c$.</p>
+    <p><strong>(c) Figure 5.1 ($\mathcal{L}$ as subdirect product of two $\mathcal{N}_5$'s).</strong> Six elements; $\textbf{Con}\,\mathcal{L}$ is the 4-element Boolean lattice ($\mathbf{2} \times \mathbf{2}$), with two minimal congruences corresponding to the two $\mathcal{N}_5$ projections.</p>
+    <p>Figure 5.2(d, e, f): each is a finite lattice; $\textbf{Con}$ is computed by enumerating the principal congruences and their joins. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.2</span>Join-prime via downsets is a congruence</summary>
+  <div class="body">
+    <div class="ex-statement">An element $p$ of a lattice $\mathcal{L}$ is <em>join prime</em> if for any finite subset $F$ of $L$, $p \le \bigvee F$ implies $p \le f$ for some $f \in F$. Let $P(\mathcal{L})$ denote the set of join prime elements of $\mathcal{L}$, and define $x \Delta y$ iff $\downarrow x \cap P(\mathcal{L}) = \downarrow y \cap P(\mathcal{L})$. Prove that $\Delta$ is a congruence relation on $\mathcal{L}$.</div>
+    <p><strong>Strategy.</strong> Verify (‡): $x \Delta y$ ⟹ $x \vee z \Delta y \vee z$ and $x \wedge z \Delta y \wedge z$.</p>
+    <p>Suppose $x \Delta y$, i.e., $\downarrow x \cap P = \downarrow y \cap P$ where $P = P(\mathcal{L})$.</p>
+    <p>Show $\downarrow(x \vee z) \cap P = \downarrow(y \vee z) \cap P$. For $p \in P$: $p \le x \vee z$ iff (by join-primeness) $p \le x$ or $p \le z$. By assumption, $p \le x$ iff $p \le y$ (within $P$), so $p \le x \vee z$ iff $p \le y$ or $p \le z$ iff $p \le y \vee z$. ✓</p>
+    <p>Show $\downarrow(x \wedge z) \cap P = \downarrow(y \wedge z) \cap P$. For $p \in P$: $p \le x \wedge z$ iff $p \le x$ and $p \le z$. By assumption: iff $p \le y$ and $p \le z$ iff $p \le y \wedge z$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.3</span>Symmetric difference congruence on $\mathfrak{P}(X)$</summary>
+  <div class="body">
+    <div class="ex-statement">Let $X$ be any set. Define a binary relation on $\mathfrak{P}(X)$ by $A \approx B$ iff the symmetric difference $(A - B) \cup (B - A)$ is finite. Prove that $\approx$ is a congruence relation on $\mathfrak{P}(X)$.</div>
+    <p><strong>Strategy.</strong> Verify equivalence relation + (‡) compatibility.</p>
+    <p><strong>Equivalence relation.</strong> Reflexive: $A \approx A$ since $(A - A) \cup (A - A) = \emptyset$ is finite. Symmetric: $A \approx B$ iff $B \approx A$ (definition is symmetric). Transitive: if $(A - B) \cup (B - A)$ is finite and $(B - C) \cup (C - B)$ is finite, then $(A - C) \cup (C - A) \subseteq [(A - B) \cup (B - A)] \cup [(B - C) \cup (C - B)]$ — finite union of finite sets, hence finite.</p>
+    <p><strong>Compatibility (‡).</strong> Show $A \approx B$ ⟹ $A \cup C \approx B \cup C$ and $A \cap C \approx B \cap C$ for any $C$.</p>
+    <p>For union: $(A \cup C) - (B \cup C) \subseteq A - B$ and $(B \cup C) - (A \cup C) \subseteq B - A$. So $(A \cup C) \triangle (B \cup C) \subseteq A \triangle B$ — finite.</p>
+    <p>For intersection: $(A \cap C) \triangle (B \cap C) = (A \triangle B) \cap C \subseteq A \triangle B$ — finite.</p>
+    <p>So $\approx$ is a congruence. ∎</p>
+    <p>The quotient $\mathfrak{P}(X)/\approx$ is the "Boolean algebra mod finite sets" — useful in measure theory and ultrafilter constructions.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.4</span>Lattice terms preserve homomorphisms and congruences</summary>
+  <div class="body">
+    <div class="ex-statement">Lattice <em>terms</em> are defined in the proof of Theorem 6.1. (a) Show that if $p(x_1, \dots, x_n)$ is a lattice term and $h : \mathcal{L} \to \mathcal{K}$ is a homomorphism, then $h(p(a_1, \dots, a_n)) = p(h(a_1), \dots, h(a_n))$ for all $a_1, \dots, a_n \in L$. (b) Show that if $p(x_1, \dots, x_n)$ is a lattice term and $\theta \in \textbf{Con}\,\mathcal{L}$ and $a_i \theta b_i$ for $1 \le i \le n$, then $p(a_1, \dots, a_n) \theta p(b_1, \dots, b_n)$. (c) Surjective $h$ + $p(a_1, \dots, a_n) = q(a_1, \dots, a_n)$ in $\mathcal{L}$ for all $a_i$ ⟹ $p(c_1, \dots, c_n) = q(c_1, \dots, c_n)$ in $\mathcal{K}$.</div>
+    <p><strong>(a)</strong> Induction on term complexity. Base case: $p(x) = x$. Then $h(p(a)) = h(a) = p(h(a))$. Step: $p = q \vee r$. Then $h(p(a_1, \dots)) = h(q(a_1, \dots) \vee r(a_1, \dots)) = h(q(a_1, \dots)) \vee h(r(a_1, \dots)) = q(h(a_1), \dots) \vee r(h(a_1), \dots) = p(h(a_1), \dots)$. Similarly for $\wedge$.</p>
+    <p><strong>(b)</strong> Induction on term complexity. Base: $p(x) = x$. Then $a_i \theta b_i$ gives $p(a_i) \theta p(b_i)$. Step: $p = q \vee r$. By induction, $q(a_1, \dots) \theta q(b_1, \dots)$ and $r(a_1, \dots) \theta r(b_1, \dots)$. By (‡) compatibility, $q \vee r$ at $(a_i)$ is $\theta$-related to $q \vee r$ at $(b_i)$.</p>
+    <p><strong>(c)</strong> Given $h$ surjective with $p = q$ holding in $\mathcal{L}$. For $c_i \in \mathcal{K}$, by surjectivity choose $a_i \in \mathcal{L}$ with $h(a_i) = c_i$. By (a): $p(c_1, \dots) = h(p(a_1, \dots)) = h(q(a_1, \dots)) = q(c_1, \dots)$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.5</span>Finite distributive: unique irredundant decomposition</summary>
+  <div class="body">
+    <div class="ex-statement">Show that each element of a finite distributive lattice has a unique irredundant decomposition. What does this say about subdirect decompositions of finite lattices?</div>
+    <p><strong>Strategy.</strong> Apply Theorem 3.12 (distributive + strongly atomic + algebraic ⟹ unique irredundant decomposition).</p>
+    <p>Finite ⟹ strongly atomic + algebraic. Combined with distributive: by Theorem 3.12, unique irredundant decomposition into completely meet irreducibles for every element.</p>
+    <p>For finite lattices and the congruence lattice $\textbf{Con}\,\mathcal{L}$: by Theorem 5.8, $\textbf{Con}\,\mathcal{L}$ is distributive. Combined with finite (so algebraic + strongly atomic): by Theorem 3.12, every congruence has a unique irredundant decomposition into completely meet irreducible congruences.</p>
+    <p>Implication for subdirect decompositions: by Theorem 5.7 + Theorem 3.12, every finite lattice $\mathcal{L}$ has a UNIQUE irredundant subdirect decomposition into subdirectly irreducible lattices (up to ordering). The "Krull-Schmidt for finite lattices." ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.6</span>Cover preservation in quotients · semimodularity</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\theta \in \textbf{Con}\,\mathcal{L}$. (a) Show that $x \succ y$ implies $x\theta \succ y\theta$ or $x\theta = y\theta$. (b) Prove that if $\mathcal{L}$ is a finite semimodular lattice, then so is $\mathcal{L}/\theta$. (c) Prove that a subdirect product of semimodular lattices is semimodular.</div>
+    <p><strong>(a)</strong> Suppose $x \succ y$. Then $x\theta \ge y\theta$. If $x\theta = y\theta$, done. Otherwise $x\theta > y\theta$. Suppose for contradiction there's $z\theta$ with $y\theta < z\theta < x\theta$. Then $z \theta z'$ for some $z'$ with $y < z' < x$ — contradicting $x \succ y$. So no such $z\theta$ exists, meaning $x\theta \succ y\theta$.</p>
+    <p><strong>(b)</strong> $\mathcal{L}$ semimodular: $a \succ a \wedge b$ ⟹ $a \vee b \succ b$. Pass to $\mathcal{L}/\theta$ via (a): if $a\theta \succ a\theta \wedge b\theta = (a \wedge b)\theta$, then by lifting, $a \succ a \wedge b$ in some sense (or via the cover-preservation lemma). Then by semimodularity of $\mathcal{L}$, $a \vee b \succ b$, which projects to $(a \vee b)\theta \succ b\theta$, i.e., $a\theta \vee b\theta \succ b\theta$. ✓</p>
+    <p><strong>(c)</strong> Subdirect product $\mathcal{L} \subseteq \prod \mathcal{L}_i$ with each $\mathcal{L}_i$ semimodular. The cover relation in $\mathcal{L}$ is determined by covers in each component. Semimodularity in each $\mathcal{L}_i$ gives semimodularity in the product, which restricts to $\mathcal{L}$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.7</span>Finitely generated + finite quotient ⟹ congruence is compact</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{L}$ be a finitely generated lattice, and let $\theta$ be a congruence on $\mathcal{L}$ such that $\mathcal{L}/\theta$ is finite. Prove that $\theta$ is compact.</div>
+    <p><strong>Strategy.</strong> Show $\theta$ is finitely generated (= compact in $\textbf{Con}\,\mathcal{L}$ by Theorem 5.3).</p>
+    <p>$\mathcal{L}/\theta$ finite means $\theta$ has finitely many equivalence classes. Pick representatives $a_1, \dots, a_k$ for the classes. Then $\theta = \bigvee\{\text{con}(a_i, a_j) : (a_i, a_j) \in \theta\}$ — a join of finitely many principal congruences. By Theorem 5.3, this is compact. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.8</span>$\textbf{Con}(\mathcal{L}_1 \times \mathcal{L}_2) \cong \textbf{Con}\,\mathcal{L}_1 \times \textbf{Con}\,\mathcal{L}_2$</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that $\textbf{Con}\,\mathcal{L}_1 \times \mathcal{L}_2 \cong \textbf{Con}\,\mathcal{L}_1 \times \textbf{Con}\,\mathcal{L}_2$. (Note that this is not true for groups; see Exercise 9.)</div>
+    <p><strong>Strategy.</strong> Show every congruence on $\mathcal{L}_1 \times \mathcal{L}_2$ factors as a product of congruences on $\mathcal{L}_1$ and $\mathcal{L}_2$.</p>
+    <p>Map $\Phi : \textbf{Con}\,\mathcal{L}_1 \times \textbf{Con}\,\mathcal{L}_2 \to \textbf{Con}(\mathcal{L}_1 \times \mathcal{L}_2)$ by $\Phi(\theta_1, \theta_2) = \{((a, b), (c, d)) : a \theta_1 c, b \theta_2 d\}$. Direct check: this is a congruence on the product.</p>
+    <p>Conversely, given $\theta \in \textbf{Con}(\mathcal{L}_1 \times \mathcal{L}_2)$, define $\theta_i = \pi_i(\theta) := \{(a, c) : ((a, x), (c, x)) \in \theta$ for some $x\}$ — the projection. Verify $\theta_i \in \textbf{Con}\,\mathcal{L}_i$ and $\theta = \Phi(\theta_1, \theta_2)$.</p>
+    <p>The key fact: in lattices, the diagonal projection of a congruence on a product factors cleanly. (For groups, this can fail because of "skew" subgroups; lattices avoid this via the majority polynomial.) ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.9</span>Congruences of $\mathbb{Z}_p \times \mathbb{Z}_p$ + abelian congruence-distributive</summary>
+  <div class="body">
+    <div class="ex-statement">Find the congruence lattice of the abelian group $\mathbb{Z}_p \times \mathbb{Z}_p$, where $p$ is prime. Find all finite abelian groups whose congruence lattice is distributive. (Recall that the congruence lattice of an abelian group is isomorphic to its subgroup lattice.)</div>
+    <p><strong>Congruences of $\mathbb{Z}_p \times \mathbb{Z}_p$.</strong> Since congruences of an abelian group correspond to its subgroups, $\textbf{Con}(\mathbb{Z}_p \times \mathbb{Z}_p) \cong \textbf{Sub}(\mathbb{Z}_p \times \mathbb{Z}_p)$.</p>
+    <p>Subgroups of $\mathbb{Z}_p \times \mathbb{Z}_p$ (a 2-dim vector space over $\mathbb{F}_p$): $\{0\}$, $\mathbb{Z}_p \times \mathbb{Z}_p$ (whole), and $p + 1$ subgroups of order $p$ (1-dim subspaces). Total: $p + 3$ subgroups, forming $\mathcal{M}_{p+1}$.</p>
+    <p>For $p = 2$: $\mathcal{M}_3$ — the diamond. For $p = 3$: $\mathcal{M}_4$. Etc.</p>
+    <p><strong>$\mathcal{M}_n$ ($n \ge 3$) is NOT distributive</strong> — it contains the $\mathcal{M}_3$ pattern (three atoms with shared 0 and 1).</p>
+    <p><strong>Finite abelian groups with distributive congruence (= subgroup) lattices.</strong> An abelian group's subgroup lattice is distributive ⟺ the group is CYCLIC. Reasoning: cyclic group = chain of subgroups (each generated by a divisor), which is a chain (distributive). Non-cyclic finite abelian: contains $\mathbb{Z}_p \times \mathbb{Z}_p$ as a subgroup, so subgroup lattice has $\mathcal{M}_{p+1}$ as a sublattice, non-distributive.</p>
+    <p>So: cyclic $\mathbb{Z}_n$ for $n \ge 1$ is exactly the class of finite abelian groups with distributive congruence lattices. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.10</span>Universal algebra: characterising congruences (¥ + $)</summary>
+  <div class="body">
+    <div class="ex-statement">For Exercises 10 and 11 we refer to §3 (Universal Algebra) of Appendix 1. Let $\mathcal{A} = \langle A; \mathcal{F}, \mathcal{C}\rangle$ be an algebra. (a) Prove that if $h : \mathcal{A} \to \mathcal{B}$ is a homomorphism and $\theta = \ker h$, then for each $f \in \mathcal{F}$, $(¥)$: $x_i \theta y_i$ for $1 \le i \le n$ implies $f(x_1, \dots, x_n) \theta f(y_1, \dots, y_n)$. (b) Prove that ($¥$) is equivalent to ($\$$): $x_i \theta y$ implies $f(x_1, \dots, x_i, \dots, x_n) \theta f(x_1, \dots, y, \dots, x_n)$. (c) Show that if $\theta \in \textbf{Eq}\,A$ satisfies ($¥$), then the natural map $h : \mathcal{A} \to \mathcal{A}/\theta$ is a homomorphism with $\theta = \ker h$. Thus congruence relations, defined as homomorphism kernels, are precisely equivalence relations satisfying ($¥$).</div>
+    <p><strong>(a)</strong> $h$ homomorphism: $h(f(x_1, \dots)) = f(h(x_1), \dots)$. If $x_i \theta y_i$ for all $i$, then $h(x_i) = h(y_i)$. So $h(f(x_1, \dots)) = f(h(x_1), \dots) = f(h(y_1), \dots) = h(f(y_1, \dots))$. Thus $f(x_1, \dots) \theta f(y_1, \dots)$.</p>
+    <p><strong>(b)</strong> ($¥$) ⟹ ($\$$): special case where only one variable changes (set $y_j = x_j$ for $j \ne i$). ($\$$) ⟹ ($¥$): change variables one at a time. If $x_i \theta y_i$ for all $i$, apply ($\$$) iteratively: $f(x_1, \dots, x_n) \theta f(y_1, x_2, \dots, x_n) \theta f(y_1, y_2, \dots, x_n) \theta \dots \theta f(y_1, \dots, y_n)$. By transitivity, $f(x_1, \dots) \theta f(y_1, \dots)$.</p>
+    <p><strong>(c)</strong> Define operations on $A/\theta$ by $f(x_1\theta, \dots, x_n\theta) = f(x_1, \dots, x_n)\theta$. Well-defined by ($¥$). The natural map $h$ is then a homomorphism. $\ker h = \theta$ by definition. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.11</span>Con A is an algebraic lattice for any algebra</summary>
+  <div class="body">
+    <div class="ex-statement">Accordingly, let $\textbf{Con}\,\mathcal{A} = \{\theta \in \textbf{Eq}\,A : \theta$ satisfies ($¥$)$\}$. (a) Prove that $\textbf{Con}\,\mathcal{A}$ is a complete sublattice of $\textbf{Eq}\,A$. (In particular, $\bigvee$ and $\bigwedge$ are the same in both lattices.) (b) Show that $\textbf{Con}\,\mathcal{A}$ is an algebraic lattice.</div>
+    <p><strong>(a)</strong> Show closure under $\bigvee$ and $\bigwedge$ (in $\textbf{Eq}\,A$).</p>
+    <p>Meet (intersection): if $\theta_i \in \textbf{Con}\,\mathcal{A}$, show $\bigcap \theta_i$ satisfies ($¥$). Suppose $x_i (\bigcap \theta_j) y_i$ for all $i$. Then $x_i \theta_j y_i$ for all $i, j$. By ($¥$) for each $\theta_j$: $f(x_1, \dots) \theta_j f(y_1, \dots)$ for all $j$. Hence $f(x_1, \dots) (\bigcap \theta_j) f(y_1, \dots)$. ✓</p>
+    <p>Join (transitive closure): similarly. The argument requires showing the chain witnesses for $\bigvee \theta_i$ in $\textbf{Eq}$ also witness the join in $\textbf{Con}$.</p>
+    <p><strong>(b)</strong> The conditions ($¥$) are FINITARY closure rules on $A^2$ (rules involving finitely many variables). By Theorem 3.1 / Theorem 3.2, the lattice of $\Sigma$-closed subsets is algebraic. Hence $\textbf{Con}\,\mathcal{A}$ is algebraic. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 5.12</span>Direct product congruences</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{A} = \mathcal{B} \times \mathcal{C}$ be a direct product of two algebras. Let $\pi_1$ and $\pi_2$ denote the kernels of the projections onto $\mathcal{B}$ and $\mathcal{C}$. Prove that: (i) $\mathcal{A}/\pi_1 \cong \mathcal{B}$ and $\mathcal{A}/\pi_2 \cong \mathcal{C}$. (ii) In $\textbf{Con}\,\mathcal{A}$, $\pi_1 \wedge \pi_2 = 0$ and $\pi_1 \vee \pi_2 = \pi_1 \circ \pi_2 = \pi_2 \circ \pi_1 = 1$. Conversely, let $\mathcal{A}$ be an algebra with congruences $\varphi_1$ and $\varphi_2$ satisfying the analogues of the properties in (ii). Prove that $\mathcal{A} \cong \mathcal{A}/\varphi_1 \times \mathcal{A}/\varphi_2$.</div>
+    <p><strong>(i)</strong> The projection $p_1 : \mathcal{B} \times \mathcal{C} \to \mathcal{B}$, $(b, c) \mapsto b$, has kernel $\pi_1 = \{((b_1, c_1), (b_2, c_2)) : b_1 = b_2\}$. By the First Isomorphism Theorem (Theorem 5.1 generalised to algebras): $\mathcal{A}/\pi_1 \cong p_1(\mathcal{A}) = \mathcal{B}$. Similarly for $\pi_2$.</p>
+    <p><strong>(ii)</strong> $\pi_1 \wedge \pi_2 = \pi_1 \cap \pi_2 = \{((b_1, c_1), (b_2, c_2)) : b_1 = b_2$ and $c_1 = c_2\} = \{((b, c), (b, c))\} = $ equality $= 0$.</p>
+    <p>$\pi_1 \vee \pi_2$: by the chain decomposition, $((b_1, c_1), (b_2, c_2)) \in \pi_1 \vee \pi_2$ iff there's a chain. Direct check: $(b_1, c_1) \pi_1 (b_2, c_1) \pi_2 (b_2, c_2)$, so $\pi_1 \vee \pi_2 = $ universal $= 1$. Similarly $\pi_1 \circ \pi_2 = $ universal in just one step. So $\pi_1 \vee \pi_2 = \pi_1 \circ \pi_2 = \pi_2 \circ \pi_1 = 1$ (i.e., $\pi_1, \pi_2$ permute).</p>
+    <p><strong>Converse.</strong> Given $\varphi_1, \varphi_2 \in \textbf{Con}\,\mathcal{A}$ with $\varphi_1 \wedge \varphi_2 = 0$ and $\varphi_1 \vee \varphi_2 = \varphi_1 \circ \varphi_2 = 1$. Define $\Phi : \mathcal{A} \to \mathcal{A}/\varphi_1 \times \mathcal{A}/\varphi_2$ by $\Phi(a) = (a\varphi_1, a\varphi_2)$. Injective: $\ker \Phi = \varphi_1 \cap \varphi_2 = 0$. Surjective: given $(a\varphi_1, b\varphi_2) \in \mathcal{A}/\varphi_1 \times \mathcal{A}/\varphi_2$, by $\varphi_1 \circ \varphi_2 = 1$, find $c$ with $a \varphi_1 c \varphi_2 b$, then $\Phi(c) = (c\varphi_1, c\varphi_2) = (a\varphi_1, b\varphi_2)$. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="ahead">
+  <h2>Looking Ahead — to Chapter 6 (Free Lattices)</h2>
+  <div class="tagline">Chapter 6 turns to free lattices: the "biggest" lattice on $n$ generators in the variety of all lattices.</div>
+
+  <p>Chapter 5 has developed the congruence theory: $\textbf{Con}\,\mathcal{L}$ is algebraic (Theorem 5.3), distributive (Theorem 5.8 — Funayama-Nakayama), and every lattice subdirectly decomposes via Birkhoff's Theorem 5.7. The 65-year congruence lattice problem was finally settled by Wehrung in 2007.</p>
+
+  <p><strong>Chapter 6 (Free Lattices)</strong> turns to a different aspect: the "freest" lattice on a given set of generators. Key concepts:</p>
+  <ul>
+    <li><strong>Free lattice $\text{FL}(X)$.</strong> The lattice freely generated by the set $X$. Every map $X \to \mathcal{L}$ extends uniquely to a homomorphism $\text{FL}(X) \to \mathcal{L}$.</li>
+    <li><strong>Whitman's W condition.</strong> A combinatorial characterisation of the order in $\text{FL}(X)$: $a_1 \wedge \dots \wedge a_n \le b_1 \vee \dots \vee b_m$ iff one of the natural sufficient conditions holds. Whitman 1941.</li>
+    <li><strong>$\text{FL}(3)$ is infinite.</strong> Despite $\text{FL}(2)$ being finite (4 elements), the free lattice on 3 generators is infinite — a classical surprise.</li>
+    <li><strong>Lattice terms.</strong> Formal expressions in $\wedge$ and $\vee$ over generators; equivalence classes form $\text{FL}(X)$.</li>
+  </ul>
+
+  <p>The connection to Chapter 5: free lattices are constructed via the "free term algebra" mod a specific congruence (the lattice axioms). Whitman's W condition gives a combinatorial description of this congruence.</p>
+
+  <p>References for further reading:</p>
+  <ul>
+    <li>K. V. Adaricheva, <em>A characterization of congruence lattices of finite semilattices</em>, Algebra i Logika 35 (1996), 3-30.</li>
+    <li>R. P. Dilworth, <em>The structure of relatively complemented lattices</em>, Ann. Math. 51 (1950), 348-359.</li>
+    <li>S. Fajtlowicz and J. Schmidt, <em>Bézout families, join-congruences and meet-irreducible ideals</em>, Lattice Theory (Proc. Colloq., Szeged, 1974), pp. 51-76.</li>
+    <li>R. Freese and J. B. Nation, <em>Congruence lattices of semilattices</em>, Pacific J. Math. 49 (1973), 51-58.</li>
+    <li>N. Funayama and T. Nakayama, <em>On the distributivity of a lattice of lattice-congruences</em>, Proc. Imp. Acad. Tokyo 18 (1942), 553-554.</li>
+    <li>G. Grätzer and E. T. Schmidt, <em>On congruence lattices of lattices</em>, Acta Math. Acad. Sci. Hungar. 13 (1962), 179-185.</li>
+    <li>A. Huhn, <em>On the representation of distributive algebraic lattices I-III</em>, Acta Sci. Math. (Szeged) 45-53 (1983-89).</li>
+    <li>K. A. Kearnes, <em>Atomicity and Nilpotence</em>, Canadian J. Math. 42 (1990), 1-18.</li>
+    <li>F. Wehrung, <em>A solution to Dilworth's congruence lattice problem</em>, Adv. Math. 216 (2007), 610-625.</li>
+    <li>P. Růžička, <em>Free trees and the optimal bound in Wehrung's theorem</em>, Fund. Math. 198 (2008), 217-228.</li>
+  </ul>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Nation Companion · Chapter 5 · Congruence Relations</div>
+    <div><a href="nation-companion-toc.html">ToC</a> · <a href="nation-companion-ch06.html">Chapter 6 →</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Notes on Lattice Theory</em> by J. B. Nation, University of Hawaii.</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

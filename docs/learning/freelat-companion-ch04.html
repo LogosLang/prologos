@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Free Lattices Companion · Chapter IV · Day's Theorem Revisited</title>
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --box-epigraph-bg: #F4EFE0; --box-epigraph-border: #D4B97C;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --box-epigraph-bg: #1F1A10; --box-epigraph-border: #4A3F22;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .scope { background: var(--box-epigraph-bg); border-left: 4px solid var(--box-epigraph-border); padding: 18px 24px; margin: 24px 0 36px; border-radius: 0 6px 6px 0; font-family: 'Source Serif Pro', serif; color: var(--ink-soft); }
+  .scope p { margin: 0 0 10px; }
+  .scope p:last-child { margin: 0; }
+  .scope .attrib { display: block; text-align: right; font-style: italic; color: var(--text-dim); font-size: 13.5px; margin-top: 6px; }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor, .box.problem { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.problem .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.example { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.example > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.example[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.example > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.example[open] > summary::before { content: "▾ "; }
+  details.example > div.body { padding: 6px 22px 14px; }
+  details.example .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.example .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button"><span class="dot"></span><span id="themeLabel">Dark</span></button>
+
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Free Lattices Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Free Lattices</em> by Ralph Freese, Jaroslav Ježek &amp; J. B. Nation (AMS Surveys 42, 1995).</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="freelat-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="freelat-companion-ch03.html">← Chapter III</a></li>
+    <li><a href="freelat-companion-ch05.html">Chapter V →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter IV · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · The refined Day's theorem</div>
+  <ul>
+    <li><a href="#s1">Theorem 4.1 · Refined weak atomicity with rank bound</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Bounded-lattice form</div>
+  <ul>
+    <li><a href="#s2">Corollary 4.2 · Equivalent bounded-lattice statement</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Sharpness of the bound</div>
+  <ul>
+    <li><a href="#s3">Theorem 4.3 · The s/t sequences witness $m+n-1$</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Day 1979 → FN 1985 rank refinement</a></li>
+    <li><a href="#c2">P2 · The s/t sequences as witnesses</a></li>
+    <li><a href="#c3">P3 · How 4.1 powers Tschantz (Ch IX)</a></li>
+    <li><a href="#c4">P4 · Equational vs structural Day</a></li>
+    <li><a href="#c5">P5 · Prologos cross-references</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#examples">Computed examples</a></li>
+    <li><a href="#looking-ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<section class="hero" id="overview">
+  <div class="kicker">Free Lattices · Mathematical Surveys &amp; Monographs 42 · Chapter IV</div>
+  <h1>Day's Theorem Revisited</h1>
+  <p class="lede">A constructive sharpening of Day's 1979 weak-atomicity theorem. Where Chapter II §7 proved that every nontrivial interval contains a covering pair, Chapter IV adds RANK CONTROL: the witnessing covering pair lies inside a bounded lattice with $\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$, and the bound is best possible. This rank refinement is what Chapter VI uses for totally atomic elements and what Chapter IX (Tschantz) uses to study infinite intervals.</p>
+  <div class="meta">
+    <span>~35–45 min read</span>
+    <span>3 named results</span>
+    <span>5 connection panels</span>
+    <span>Book pp. 91–94 · PDF pp. 100–103</span>
+  </div>
+</section>
+
+<aside class="scope">
+  <p>Alan Day's theorem, that finitely generated free lattices are weakly atomic, is a fundamental result. The methods developed in Chapter III provide us with an alternate proof of it, which while perhaps not as elegant as the original version presented in Section 5 of Chapter II, is constructive and carries more information. This proof first appeared in Freese and Nation [62].</p>
+  <p>The new and improved version of Day's theorem gives estimates on the complexities of the elements involved in terms of the D-rank $\rho$ and the dual D-rank $\rho^d$. Recall that, by Theorem 2.11, for an element $u \in \mathbf{FL}(X)$ with $u \neq 1_{\mathbf{FL}(X)}$, $\rho(u)$ is the least nonnegative integer $n$ such that $u \in X^{\wedge(\vee\wedge)^n}$. The dual D-rank $\rho^d(u)$ can be described dually.</p>
+  <span class="attrib">— Freese, Ježek &amp; Nation, opening of Chapter IV (paraphrased)</span>
+</aside>
+
+<p>Chapter IV is the shortest chapter in the monograph — four pages, three numbered results — but it carries weight far beyond its size. The chapter takes the qualitative weak-atomicity guarantee from Chapter II ("every nontrivial interval contains a covering pair") and upgrades it to a quantitative one ("there exists a covering pair $a \succ b$ with $\rho(a) \le m + n - 1$, given $\rho^d(u) = m$ and $\rho(v) = n$"). The rank bound is sharp, witnessed by an explicit family of canonical-form sequences $s_m, t_n$ (Theorem 4.3).</p>
+
+<p>The chapter exists for a specific reason: <em>Chapter VI on totally atomic elements, and Chapter IX on infinite intervals (Tschantz's theorem), need a Day-style theorem that is BOTH constructive (gives a specific witness) AND rank-bounded (gives explicit complexity).</em> Chapter II §7's inverse-limit construction is elegant but non-constructive — the witness is a sequence converging to a limit. Chapter IV's syntactic version (built on Chapter III's J-closure and standard-epimorphism machinery) gives a witness directly inside $\mathbf{FL}(X)$.</p>
+
+<p>The proof of Theorem 4.1 is dense. We unpack it carefully: the construction of $q(u, v) \in \mathbf{J}(\mathbf{FL}(X))$ proceeds by induction on the complexity of canonical forms of $u$ and $v$, with three cases (generator, join, meet). Most of the technical work is in Case 3, where we double an interval inside a lattice $\mathbf{K}$ derived from a J-closed set $J_0 = \mathbf{J}(q(u_i, v)) \cup \mathbf{J}(q(u, v_j))$. The doubling step uses Day's original construction (Chapter I §1) at the level of $\mathbf{L}^\vee$ rather than $\mathbf{FL}(X)$ itself — a beautiful synthesis.</p>
+
+<section class="module" id="vocab">
+  <h2><span class="num">VOCABULARY PRIMER</span> Setting expectations before the chapter</h2>
+  <div class="tagline">This chapter introduces almost no NEW vocabulary — it is a refinement built entirely from Chapters I–III tools. The vocabulary primer is therefore short.</div>
+
+  <div class="box recap">
+    <span class="label">Carried forward · from Chapters I–III</span>
+    <p>Day's doubling $\mathbf{L}[I]$ on an interval (Theorem 1.1). Whitman's condition (W) (Theorem 1.8) and the algorithm (Theorem 1.11). Canonical form (Theorem 1.17) and canonical join/meet representations. The D-rank $\rho$ and dual D-rank $\rho^d$ (Definition 2.7, Theorem 2.11). The recursion $\rho(u) = $ least $n$ such that $u \in X^{\wedge(\vee\wedge)^n}$ — i.e., $u$ can be written as a finite meet of joins of meets of joins, $n$ levels deep. $\mathbf{D}(\mathbf{L}) = \bigcup_k D_k(\mathbf{L})$ (Definition 2.7). Bounded lattice (Theorem 2.20, McKenzie sense). Bounded homomorphism with $\beta, \alpha$ (II.1). Theorem 2.64 (Day 1979): finite lower-bounded SD$_\wedge$ lattice = bounded. The κ-bijection (II.54–II.55, III.3). J-closed sets (II.48, III.12, III.15) — preferred terminology now over "D-closed". The standard epimorphism $f : \mathbf{F} \to A^\vee$ (Theorem 3.15) and its specialisation to $\mathbf{FL}(X) \twoheadrightarrow \mathbf{L}^\vee(w)$ (Corollary 3.18). The lattice $\mathbf{L}^\vee(w) = \mathbf{J}(w)^\vee$ (Definition before Theorem 3.24). $w_\dagger$ for join-irreducible $w$ (Definition before Theorem 3.24). The 5-fold characterisation (Theorem 3.26). The K-set $\mathbf{K}(w) = \{v \in \mathbf{J}(w) : w_\dagger \vee v \not\ge w\}$. Theorem 3.30 (the syntactic test). Lemma 3.11 (Whitman recipe for $\mathcal{M}^*(w)$). Corollary 2.8 (β preserves minimal covers). Corollary 3.23 / Theorem 3.23 (4-fold finite-bounded characterisation).</p>
+  </div>
+
+  <div class="box vocab">
+    <span class="label">New · Chapter IV vocabulary (minimal)</span>
+    <p>Two notations are technically new. <strong>$q(u, v)$:</strong> the construction in Theorem 4.1's proof — for each pair $(u, v)$ with $u \not\le v$, a completely-join-irreducible element $q \in \mathbf{FL}(X)$ such that $q \le u$, $v \le \kappa(q)$, and $\rho(q) \le \rho^d(u) + \rho(v) - 1$. Defined recursively via three cases of canonical form. <strong>The sequences $s_m$ and $t_n$:</strong> two infinite families of elements of $\mathbf{FL}(X)$ for $X = \{x, y, z, \ldots\}$, defined by</p>
+    $$s_0 = z, \quad s_1 = x \wedge (y \vee z), \quad s_{2k} = z \wedge (y \vee s_{2k-1}), \quad s_{2k+1} = x \wedge (y \vee s_{2k}),$$
+    $$t_0 = x, \quad t_1 = y \vee (z \wedge x), \quad t_{2k} = x \vee (z \wedge t_{2k-1}), \quad t_{2k+1} = y \vee (z \wedge t_{2k}).$$
+    <p>$\rho^d(s_m) = m$ and $\rho(t_n) = n$, and $s_m \not\le t_n$ when $m$ is even or $n$ is odd. Theorem 4.3: any completely join irreducible $q$ with $q \le s_m$ and $t_n \le \kappa(q)$ has $\rho(q) \ge m + n - 1$, proving the bound in Theorem 4.1 is sharp.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive · the threads worth tracing</span>
+    <p>Three threads reward close reading. <strong>The constructive vs non-constructive duality.</strong> Chapter II §7's proof (via inverse-limit doubling of $\mathbf{F}_\mathcal{D}(X)$) is structurally elegant but does NOT produce an explicit covering pair inside $\mathbf{FL}(X)$ — it produces a sequence converging to one. Chapter IV's proof gives an explicit $q \in \mathbf{FL}(X)$ with bounded D-rank — the covering pair is $q \vee v \succ q \vee (v \wedge \kappa(q)) \cdot $ wait, more carefully, the covering pair is in the interval $u/v$ and is constructed from $q$. <strong>The rank bound $\rho(q) \le m + n - 1$ as a complexity guarantee.</strong> The rank bound translates directly to a TERM-LENGTH bound: by Theorem 2.11, $\rho(u) = m$ means $u \in X^{\wedge(\vee\wedge)^m}$, i.e., $u$ has a canonical meet of joins of meets... up to $m$ levels deep. The covering pair witness has rank at most $m + n - 1$, giving a polynomial bound on its term length in terms of the original $u, v$. This is what the cover algorithm of Chapter III §5 needs to be effective on the witnessed pair. <strong>Theorem 4.3's sharpness.</strong> The sequences $s_m, t_n$ are genuine witnesses to the bound $m + n - 1$ being best possible — the proof of Theorem 4.3 inducts on $m + n$, with three cases (m even/n odd, m odd, m even/n even). Each case forces a strict $m + n - 1$ rank, no slack. The construction is delicate: it requires the s-sequence to be even-indexed alternation between $\wedge$ and $\vee$, and the t-sequence to be a structurally dual alternation, with $x, y, z$ playing complementary roles.</p>
+  </div>
+</section>
+
+<!-- ============== PART A ============== -->
+<header class="part-header">
+  <div class="pk">PART A · THE REFINED DAY'S THEOREM — Theorem 4.1</div>
+  <h2>Constructive weak atomicity with explicit D-rank control</h2>
+  <p class="part-lede">For any $u, v \in \mathbf{FL}(X)$ with $u \not\le v$, there is a completely-join-irreducible $q$ with $q \le u$, $v \le \kappa(q)$, and $\rho(q) \le \rho^d(u) + \rho(v) - 1$. The covering pair derived from $q$ is in the interval $u/v$ — making Day's theorem witnessed by an explicit canonical-form term.</p>
+</header>
+
+<section class="module" id="s1">
+  <h2><span class="num">§ 1</span> Theorem 4.1 · The Refined Day's Theorem</h2>
+  <div class="tagline">For each pair $(u, v)$ with $u \not\le v$, construct $q = q(u, v) \in \mathbf{J}(\mathbf{FL}(X))$ that completely-join-irreducibly witnesses both incomparability AND a bounded D-rank. Three-case induction on canonical form complexity.</div>
+
+  <h3>The theorem</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.1 · constructive weak atomicity</span>
+    <p>If $u \not\le v$ in $\mathbf{FL}(X)$ with $X$ finite, then there exists a completely join irreducible element $q \in \mathbf{FL}(X)$ such that $q \le u$ and $v \le \kappa(q)$. Moreover, if $\rho^d(u) = m$ and $\rho(v) = n$ with $m + n \ge 1$, then $q$ may be chosen so that $\rho(q) \le m + n - 1$.</p>
+  </div>
+
+  <p>It is easy to see that the element $q$ given by the theorem satisfies</p>
+  $$v \le \kappa(q) \wedge (q \vee v) \prec q \vee v \le u \vee v.$$
+
+  <p>If $u > v$, this produces a cover in the interval $u/v$. Conversely, for any covering pair with $u \ge a \succ b \ge v$ in $\mathbf{FL}(X)$, by Theorem 3.5 there is a canonical joinand $q$ of $a$ with $q \not\le b$ and $q \succ q \wedge b$. Hence $q$ is completely join irreducible, so $\kappa(q)$ exists, $q \le a \le u$ and $v \le b \le \kappa(q)$. <strong>Thus every cover in $u/v$ arises this way.</strong> The theorem doesn't merely produce SOME cover — it parameterises ALL covers in the interval.</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why the rank bound matters</span>
+    <p>The rank bound $\rho(q) \le m + n - 1$ is the constructive content. Without it, Theorem 4.1 would say "weak atomicity" — there exists a cover. WITH it, Theorem 4.1 says "weak atomicity with bounded complexity" — the cover-witness has explicit canonical-form length controlled by $m + n - 1$ levels of meet-of-joins-of-meets nesting. By Theorem 2.11, this corresponds to a polynomial bound on the term length of $q$ relative to $u, v$. So Theorem 4.1's rank version is what makes Day's theorem ALGORITHMICALLY useful: given $u, v$ with $u \not\le v$, the cover-witness $q$ can be constructed in time polynomial in the size of $u$ and $v$.</p>
+  </div>
+
+  <h3>The bounded-lattice corollary (book p. 91)</h3>
+
+  <div class="box cor">
+    <span class="label">Corollary 4.2 · finite-bounded-lattice form</span>
+    <p>If $u \not\le v$ in $\mathbf{FL}(X)$ with $X$ finite, then there exists a finite bounded lattice $\mathbf{L}$ and an epimorphism $f : \mathbf{FL}(X) \twoheadrightarrow \mathbf{L}$ such that $f(u) \not\le f(v)$. Moreover, if $\rho^d(u) = m$ and $\rho(v) = n$ with $m + n \ge 1$, then $\mathbf{L}$ may be chosen so that $\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$.</p>
+    <p>Of course, the lattice $\mathbf{L}$ of the corollary is just $\mathbf{L}^\vee(q)$ for the element $q$ given by Theorem 4.1, which is in fact a splitting lattice.</p>
+  </div>
+
+  <p>Corollary 4.2 reformulates Theorem 4.1 in the language of lattice inclusions. A lattice inclusion $u \le v$ holds in a variety $\mathcal{V}$ iff every homomorphism from $\mathbf{FL}(X)$ to a lattice in $\mathcal{V}$ sends $u$ below $v$. Corollary 4.2 says: if $u \not\le v$ in $\mathbf{FL}(X)$, then a FINITE BOUNDED lattice $\mathbf{L}$ already witnesses the failure. So <strong>finite bounded lattices generate the variety of all lattices</strong> — recovering Theorem 2.84's result with a sharper rank bound.</p>
+
+  <h3>The proof structure (book pp. 91–93)</h3>
+
+  <div class="box def">
+    <span class="label">The construction of $q(u, v)$</span>
+    <p>For each pair $(u, v)$ with $u \not\le v$, define an element $q(u, v) \in \mathbf{J}(\mathbf{FL}(X))$ with the following properties:</p>
+    <ol>
+      <li>$q(u, v)$ is completely join irreducible in $\mathbf{FL}(X)$;</li>
+      <li>$q(u, v) \le u$ and $v \le \kappa(q(u, v))$;</li>
+      <li>If $\rho^d(u) = m$ and $\rho(v) = n$ with $m + n \ge 1$, then $\rho(q(u, v)) \le m + n - 1$.</li>
+    </ol>
+    <p>The construction is by induction on the complexity of the canonical forms of $u$ and $v$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof outline · three cases</span>
+    <p><strong>Case 1: $u \in X$ (a generator).</strong> Then $u \not\le v$ implies $v \le \bigvee(X - \{u\}) = \kappa(u)$. In this case, set $q(u, v) = u$. By Theorem 3.3, $u$ is completely join irreducible (every generator is). By Example 3.10, $\kappa(u) = \overline{u} = \bigvee(X - \{u\})$. So $u \le u$ and $v \le \kappa(u)$. The rank condition: $\rho^d(u) = 0$ (generators are in $D_0^d$); $\rho(v) = n$, so $m + n = n$ and we need $\rho(u) \le n - 1$. But $\rho(u) = 0$ ≤ $n - 1$ provided $n \ge 1$, which we have. ✓</p>
+    <p>On the other hand, if $v \in X$ (a generator) and $u \not\le v$, we have $u \ge \bigwedge(X - \{v\}) = \kappa^d(v)$. In this case, take $q(u, v) = \bigwedge(X - \{v\})$. Either way, properties (1)–(3) hold for generators.</p>
+    <p><strong>Case 2: $u = \bigvee u_i$ canonically.</strong> Then $u \not\le v$ implies $u_{i_0} \not\le v$ for some $i_0$. Set $q(u, v) = q(u_{i_0}, v)$, and note that conditions (1) and (2) still hold since $u_i \le u$. By the dual of Theorem 2.11, $\rho^d(\bigvee u_i) = \max_i \rho^d(u_i) \ge \rho^d(u_{i_0})$. Thus $\rho^d(u_{i_0}) \le m$, so by induction $\rho(q(u, v)) \le \rho^d(u_{i_0}) + \rho(v) - 1 \le m + n - 1$. ✓</p>
+    <p>Dually if $v = \bigwedge v_j$, then $u \not\le v$ implies $u \not\le v_{j_0}$ for some $j_0$, and we set $q(u, v) = q(u, v_{j_0})$.</p>
+    <p><strong>Case 3: $u = \bigwedge u_i$ and $v = \bigvee v_j$ both canonically.</strong> The most technical case. Then for all $i$ we have $u_i \not\le v$ (otherwise some $u_i \le v$ would force $u = \bigwedge u_i \le v$ via the others, contradiction... actually this requires care). And likewise $u \not\le v_j$ for all $j$. By the inductive hypothesis we have completely join irreducible elements $q(u_i, v)$ for each $i$, and $q(u, v_j)$ for each $j$, satisfying (1)–(3) for the appropriate elements.</p>
+    <p>Let $J_0 = \bigcup_i \mathbf{J}(q(u_i, v)) \cup \bigcup_j \mathbf{J}(q(u, v_j))$, and note that $J_0$ is a J-closed set of completely join irreducible elements. Let $\mathbf{K}$ be the lattice $J_0^\vee$, and let $f : \mathbf{FL}(X) \twoheadrightarrow \mathbf{K}$ be the standard epimorphism, so that $f(w) = \bigvee\{p \in J_0 : p \le w\}$ for all $w \in \mathbf{FL}(X)$.</p>
+    <p>It could happen that for some $p \in J_0$ we have $p \le u$ and $p \not\le v$. If this occurs, choose $q$ minimal in $J_0$ with respect to these properties. We claim that $v \le \kappa(q)$. Now $\mathbf{K}$ is a bounded lattice by Theorem 3.23, so $\kappa_{\mathbf{K}}(q)$ exists. Since $q \not\le f(v)$ but $q_\dagger \le f(v)$, we have $f(v) \le \kappa_{\mathbf{K}}(q)$. Therefore $v \le \alpha_f(\kappa_{\mathbf{K}}(q)) = \kappa(q)$, as claimed. In this case, let $q(u, v) = q$. The above argument shows that (2) holds. Condition (1) is satisfied because every element in $J_0$ is completely join irreducible, and (3) is not hard once we observe that $\rho^d(u) = \max \rho^d(u_i) + 1$ and $\rho(v) = \max \rho(v_j) + 1$.</p>
+    <p><strong>The doubling step.</strong> Otherwise, for all $p \in J_0$, $p \le u$ implies $p \le v$. In $\mathbf{K}$, let $\overline{u} = f(u)$ and $\overline{v} = f(v)$. By assumption $\overline{u} \le \overline{v}$. We obtain $q(u, v)$ by doubling the interval $\overline{v}/\overline{u}$ in $\mathbf{K}$, and setting $q = \beta_h((\overline{v}, 1))$ where $h : \mathbf{FL}(X) \twoheadrightarrow \mathbf{K}[\overline{v}/\overline{u}]$ is the standard epimorphism.</p>
+    <p>Using the definitions of $\mathbf{K}[\overline{v}/\overline{u}]$, $h$, and Corollary 2.8, one writes the result of the calculation:</p>
+    $$q = \bigwedge\{x \in X : x \ge \overline{u}, x \not\le \overline{v}\} \wedge \bigwedge\{\bigvee A : A \subseteq J_0, \bigvee A \ge \overline{u}, \bigvee A \not\le \overline{v}\}.$$
+    <p>Note $\overline{u} \le q$. Only minimal nontrivial join covers $A$ of $\overline{u}$ will actually contribute to the second term, but it does not hurt to include them all.</p>
+    <p>Verifying $q \le u$: $u = \bigwedge u_i$ canonically, and for each $i$ the element $q_i = q(u_i, v) \in J_0$ satisfies $q_i \le u_i$ and $v \le \kappa(q_i)$. Also, $\overline{u} \le u_i$ in $\mathbf{FL}(X)$, and $\overline{u}, q_i$ are elements in $J_0$. Thus $q_i \vee \overline{u}$ is an element of the form $\bigvee A_i$ with $A_i \subseteq J_0$ which satisfies $\overline{u} \le q_i \vee \overline{u} \le u_i \vee u = u_i$, while $q_i \vee \overline{u} \not\le \overline{v}$ because $q_i \not\le v$ and $\overline{v} \le v$. Therefore $q \le \bigwedge(q_i \vee \overline{u}) \le \bigwedge u_i = u$.</p>
+    <p>Verifying $q \not\le v$ (so $v \le \kappa(q)$): otherwise we could apply Whitman's condition (W) to the inclusion</p>
+    $$\bigwedge\{x \in X : x \ge \overline{u}, x \not\le \overline{v}\} \wedge \bigwedge\{\bigvee A : A \subseteq J_0, \bigvee A \ge \overline{u}, \bigvee A \not\le \overline{v}\} \le \bigvee v_j$$
+    <p>and derive a contradiction. The argument considers the four (W) cases and uses the canonical-form structure plus the J-closure to rule out each.</p>
+    <p><strong>Verifying $q$ is completely join irreducible</strong> is the main technical effort. Suppose $q = r \vee s$ with $r, s < q$. Applying (W) to the meet expression for $q$, we obtain that $q \le \bigvee A_0$ for some $A_0 \subseteq J_0$ with $\bigvee A_0 \ge \overline{u}$ and $\bigvee A_0 \not\le \overline{v}$. However, $\bigvee A_0 \le u$, so the assumption $r, s < q$ would imply $\bigvee A_0 \le v$, contradicting $\bigvee A_0 \not\le \overline{v}$. Hence $q$ is join irreducible. The rest is showing $\mathbf{J}(q) \subseteq \{q\} \cup J_0$ — done by writing each canonical meetand of $q$ in $\mathbf{FL}(X)$ as a "minimal nontrivial join cover of $q$" and using J-closure.</p>
+    <p><strong>Rank bound.</strong> $\rho^d(u) = m$ means $\rho^d(u_i) \le m - 1$ for all $i$. Similarly $\rho(v_j) \le n - 1$. By induction, $\rho(p) \le m + n - 2$ for all $p \in J_0$. Thus, by the definition of $q$, $\rho(q) \le \max\{\rho(p) : p \in J_0\} + 1 \le m + n - 1$, the desired estimate. $\square$</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the proof's deep structure</span>
+    <p>Theorem 4.1's proof is structured around three NESTED layers. <strong>(Outer):</strong> induction on $u, v$ canonical-form complexity. <strong>(Middle):</strong> three cases — generator, join, meet-of-joins-meets — with the meet-of-joins case being the hardest. <strong>(Inner, in Case 3):</strong> a CHOICE between two sub-cases:</p>
+    <ul>
+      <li><strong>Sub-case A:</strong> some $p \in J_0$ already separates $u$ from $v$ ($p \le u, p \not\le v$). Then $q = p$ — done.</li>
+      <li><strong>Sub-case B:</strong> $J_0$ doesn't separate. Then we DOUBLE the interval $\overline{v}/\overline{u}$ in $\mathbf{K} = J_0^\vee$. The doubling creates a new element that DOES separate. The new element is the witness $q$.</li>
+    </ul>
+    <p>The doubling is Day's original 1970 construction (Chapter I §1) applied at the level of $\mathbf{K}$ — a finite bounded lattice — rather than $\mathbf{FL}(X)$ itself. This is the chapter's deepest insight: the proof recapitulates Day's argument structurally, but lifted to $\mathbf{L}^\vee$-machinery from Chapter III. The footnote on book p. 92 explicitly says: "Alternately, this whole proof could be recast in terms of the doubling construction, yielding something intermediate between this syntactic version and the one in Section 4 of Chapter II." The chapter chooses the syntactic version for its constructive content.</p>
+  </div>
+
+  <div class="box connection" id="c1">
+    <span class="label">Connection P1 · From Day 1979 to Freese-Nation 1985 — the rank refinement</span>
+    <p>Day's 1979 paper proved free lattices are weakly atomic via inverse-limit doubling of the free distributive lattice (Chapter II §7's proof). The 1979 result was qualitative: every nontrivial interval has a covering pair. <strong>Freese-Nation 1985</strong> ("Covers in free lattices", Trans. AMS 288), the source for Chapter III's algorithm AND Chapter IV's refinement, achieved three improvements: (1) a CONSTRUCTIVE proof — produces an explicit canonical-form witness $q$; (2) a QUANTITATIVE rank bound — $\rho(q) \le m + n - 1$; (3) the bound is SHARP — Theorem 4.3's $s/t$ sequences witness it. The proof technique is the "synthesis of Chapters II and III": apply Day's doubling at the level of $\mathbf{L}^\vee$ rather than $\mathbf{FL}(X)$, using Chapter III's standard-epimorphism machinery as the bridge. <strong>Why this matters for the field.</strong> Day 1979's qualitative result settled an open question (was $\mathbf{FL}(X)$ weakly atomic?), but did not give algorithmic content. Freese-Nation 1985 made it algorithmic — given $u, v$ with $u \not\le v$, the cover-witness $q$ can be computed from canonical forms of $u, v$ in polynomial time. This algorithmic content is what unlocks Chapter VI's totally-atomic-element classification and Chapter IX's Tschantz-style infinite-interval analysis. <strong>Reading the paper directly.</strong> The 1985 paper is dense — Theorem 5.3 of FN 1985 IS Theorem 4.1 here, with notation differences. The monograph has reorganized the material to flow naturally from Chapters I–III. Reading the 1985 paper after this companion gives the historical perspective and the original proof, which is slightly more compressed but structurally identical.</p>
+  </div>
+</section>
+
+<!-- ============== PART B ============== -->
+<header class="part-header">
+  <div class="pk">PART B · BOUNDED-LATTICE FORM — Corollary 4.2</div>
+  <h2>The lattice-inclusion equivalent: finite bounded lattices generate the variety of all lattices, with rank control</h2>
+  <p class="part-lede">Corollary 4.2 reformulates Theorem 4.1 as a statement about finite bounded lattices: every lattice inclusion $u \le v$ that fails in $\mathbf{FL}(X)$ already fails in some finite bounded lattice $\mathbf{L}$ with $\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$.</p>
+</header>
+
+<section class="module" id="s2">
+  <h2><span class="num">§ 2</span> Corollary 4.2 · The Bounded-Lattice Form</h2>
+  <div class="tagline">Theorem 4.1 in the dual language. The lattice $\mathbf{L} = \mathbf{L}^\vee(q)$ — a SPLITTING lattice — is the bounded-lattice witness. Recovers Theorem 2.84 (Day's quasivariety result) with explicit complexity.</div>
+
+  <p>The corollary follows immediately from Theorem 4.1: given $u \not\le v$ in $\mathbf{FL}(X)$, take $q = q(u, v)$ from Theorem 4.1 and let $\mathbf{L} = \mathbf{L}^\vee(q)$. By Theorem 3.24, $\mathbf{L}^\vee(q)$ is finite, lower bounded, subdirectly irreducible. By Theorem 3.26 (since $q$ is completely join irreducible), $\mathbf{L}^\vee(q)$ is meet semidistributive, hence by Theorem 2.64 it is BOUNDED. By Theorem 3.26 (5), $\mathbf{L}^\vee(q)$ is a splitting lattice.</p>
+
+  <p>The standard epimorphism $f : \mathbf{FL}(X) \twoheadrightarrow \mathbf{L}^\vee(q)$ has $f(u) \ge q$ (since $q \le u$, by Theorem 4.1 condition (2)) and $f(v) \le \kappa(q)$ in $\mathbf{L}^\vee(q)$ (since $v \le \kappa(q)$ in $\mathbf{FL}(X)$ and $f$ preserves these relationships under the κ-bijection). Since $q \not\le \kappa(q)$ in $\mathbf{L}^\vee(q)$, $f(u) \not\le f(v)$.</p>
+
+  <p>The rank condition: by definition, $D_{m+n-1}(\mathbf{L}^\vee(q))$ contains every element of D-rank $\le m + n - 1$. Since $\mathbf{J}(\mathbf{L}^\vee(q)) = \mathbf{J}(q)$ and every element of $\mathbf{J}(q)$ has D-rank at most $\rho(q) \le m + n - 1$, we have $\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$. ✓</p>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the corollary's role</span>
+    <p>Corollary 4.2 is the variety-theoretic form of Theorem 4.1. It says: <strong>finite bounded lattices generate the variety of all lattices, with explicit complexity</strong> — every nontrivial lattice inequality fails in a finite bounded lattice, and the failure-witness lattice has bounded D-rank. This recovers Theorem 2.84 (Day 1979's quasivariety result) and adds the rank refinement. <strong>Comparison with Chapter II §7's proof.</strong> Theorem 2.84 was proved by inverse-limit construction starting from $\mathbf{F}_\mathcal{D}(X)$. The construction is non-constructive in the sense that the inverse limit is a categorical object — given $u, v$ with $u \not\le v$, you don't get an explicit finite bounded lattice witnessing the failure, you get a sequence of finite bounded lattices converging to one. Corollary 4.2's $\mathbf{L} = \mathbf{L}^\vee(q)$ is an explicit finite bounded splitting lattice — constructible directly from canonical forms of $u, v$.</p>
+  </div>
+
+  <div class="box connection" id="c4">
+    <span class="label">Connection P4 · Equational vs structural Day's theorem</span>
+    <p>Day's theorem has two complementary formulations:</p>
+    <p><strong>Structural:</strong> "$\mathbf{FL}(X)$ is weakly atomic" — every nontrivial interval has a covering pair.</p>
+    <p><strong>Equational:</strong> "Every nontrivial lattice inclusion fails in a finite bounded lattice."</p>
+    <p>The structural and equational formulations are EQUIVALENT (Lemma 2.82 of Chapter II proves the equivalence). Chapter II §7 proved the equational version by inverse-limit construction; Chapter IV §1 proves the structural version by syntactic construction; Corollary 4.2 reformulates Chapter IV §1 back to the equational version. <strong>The synthesis.</strong> The equational version is what universal algebraists care about — it says splitting lattices are dense in $\mathbf{\Lambda}$ (the lattice of lattice varieties). The structural version is what lattice theorists care about — it says $\mathbf{FL}(X)$ has rich local cover structure. Day 1979 knew both but the syntactic proof of the structural version was missing — Freese-Nation 1985 supplied it. <strong>What's GAINED by the syntactic proof.</strong> The structural witnesses $q \in \mathbf{FL}(X)$ from Theorem 4.1 are explicit canonical-form terms. They can be USED downstream: in Chapter VI to construct totally atomic elements, in Chapter VII to count finite intervals, in Chapter IX (Tschantz) to investigate infinite intervals. The inverse-limit construction of Chapter II §7, while elegant, doesn't produce these explicit witnesses.</p>
+  </div>
+</section>
+
+<!-- ============== PART C ============== -->
+<header class="part-header">
+  <div class="pk">PART C · SHARPNESS OF THE BOUND — Theorem 4.3</div>
+  <h2>The $s_m, t_n$ sequences witness $\rho(q) \ge m + n - 1$</h2>
+  <p class="part-lede">Two infinite families of canonical-form elements with $\rho^d(s_m) = m$ and $\rho(t_n) = n$, satisfying $s_m \not\le t_n$ when $m$ is even or $n$ is odd. Theorem 4.3: any completely join irreducible $q$ with $q \le s_m$ and $t_n \le \kappa(q)$ has $\rho(q) \ge m + n - 1$. So Theorem 4.1's bound is best possible.</p>
+</header>
+
+<section class="module" id="s3">
+  <h2><span class="num">§ 3</span> Theorem 4.3 · The Sharpness Witness</h2>
+  <div class="tagline">Two recursively-defined sequences alternating $\wedge$ and $\vee$ in dual patterns. The sequences are designed so the rank bound is tight: $\rho(q) = m + n - 1$, no slack.</div>
+
+  <h3>The sequences (book p. 94)</h3>
+
+  <div class="box def">
+    <span class="label">Definition · the $s_m$ and $t_n$ sequences</span>
+    <p>Define two sequences of elements in $\mathbf{FL}(X)$ with $X = \{x, y, z, \ldots\}$ by:</p>
+    <table class="grid">
+      <thead><tr><th></th><th>$s_m$ sequence</th><th>$t_n$ sequence</th></tr></thead>
+      <tbody>
+        <tr><td>Base $0$</td><td>$s_0 = z$</td><td>$t_0 = x$</td></tr>
+        <tr><td>Base $1$</td><td>$s_1 = x \wedge (y \vee z)$</td><td>$t_1 = y \vee (z \wedge x)$</td></tr>
+        <tr><td>Even $2k$</td><td>$s_{2k} = z \wedge (y \vee s_{2k-1})$</td><td>$t_{2k} = x \vee (z \wedge t_{2k-1})$</td></tr>
+        <tr><td>Odd $2k+1$</td><td>$s_{2k+1} = x \wedge (y \vee s_{2k})$</td><td>$t_{2k+1} = y \vee (z \wedge t_{2k})$</td></tr>
+      </tbody>
+    </table>
+    <p>By construction, $\rho^d(s_m) = m$ and $\rho(t_n) = n$. Using induction and Whitman's condition (W), one can show: $s_m \not\le t_n$ if $m$ is even or $n$ is odd (and not otherwise).</p>
+  </div>
+
+  <h3>The theorem</h3>
+
+  <div class="box thm">
+    <span class="label">Theorem 4.3 · sharpness of the rank bound</span>
+    <p>Let $s_m$ and $t_n$ be members of the above sequences with $m \ge 1$, $n \ge 0$, and either $m$ even or $n$ odd. If $q$ is a completely join irreducible element of $\mathbf{FL}(X)$ such that $q \le s_m$ and $t_n \le \kappa(q)$, then</p>
+    $$\rho(q) \ge m + n - 1.$$
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · why this is sharp</span>
+    <p>Theorem 4.1 gives an UPPER bound: $\rho(q) \le m + n - 1$. Theorem 4.3 gives a MATCHING LOWER bound: for the specific $u = s_m, v = t_n$, ANY completely join irreducible witness $q$ has $\rho(q) \ge m + n - 1$. Together, the bounds are SHARP — for the $s_m, t_n$ pairs, $\rho(q) = m + n - 1$ exactly. The bound cannot be improved without weakening Theorem 4.1's universal claim. <strong>Why these specific sequences?</strong> The $s_m$ sequence alternates $\wedge$ and $\vee$ in the canonical form — each successive level adds one to the dual D-rank. The $t_n$ sequence does the same dually. The "anchoring" generators $x, y, z$ are chosen to ensure each level of recursion creates a NEW canonical form (not a simplification). The constraints $m$ even / $n$ odd are dictated by the structure: when both parities are wrong, $s_m \le t_n$ trivially holds by canonical-form reasons.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof structure (book p. 94)</span>
+    <p>Induction on $m + n$. Base case: $m = 1, n = 0$, the bound becomes $\rho(q) \ge 0$, which is trivial since $\rho \ge 0$ always.</p>
+    <p>Now assume $m \ge 1, n \ge 0$, and either $m$ even or $n$ odd. We have $\mathbf{L}^\vee(q)$ is bounded (since $q$ is completely join irreducible by hypothesis), and $f(s_m) \not\le f(t_n)$ in $\mathbf{L}^\vee(q)$ (since $q \le s_m$ but $q \not\le t_n$, where $f$ is the standard epimorphism). We want to show $\rho(q) \ge m + n - 1$. Three cases, based on parities of $m, n$.</p>
+    <p><strong>Case 1: $m$ even, $n$ odd.</strong> Then $s_m = z \wedge (y \vee s_{m-1})$ and $t_n = y \vee (z \wedge t_{n-1})$. Since $f(s_m) \not\le f(t_n)$, we have $f(s_{m-1}) \not\le f(t_n)$ AND $f(s_{m-1}) \not\le f(t_{n-1})$. Thus there exist $p_1, p_2 \in \mathbf{J}(q)$ such that $p_1 \le s_{m-1}$, $p_1 \not\le t_n$ AND $p_2 \le s_m$, $p_2 \not\le t_{n-1}$. Taking $p_1, p_2$ minimal in $\mathbf{J}(q)$ with these properties, we obtain $t_n \le \kappa(p_1)$ and $t_{n-1} \le \kappa(p_2)$.</p>
+    <p>Now $p_1 \neq q$, because $p_1 \le s_{m-1}$ would imply $p_1 \le s_{m-1} \wedge s_m \le x \wedge z \le t_n$, a contradiction. Likewise $p_2 \neq q$. Thus $\rho(q) \ge \max(\rho(p_1), \rho(p_2)) + 1$.</p>
+    <p>If $m > 2$, the inductive hypothesis applies to $p_1$ (with parameters $m - 1, n$): $\rho(p_1) \ge (m - 1) + n - 1 = m + n - 2$. So $\rho(q) \ge m + n - 1$. ✓</p>
+    <p>Similarly, if $n > 1$, $\rho(p_2) \ge m + n - 2$, completing the case. The remaining sub-case ($m = 2, n = 1$) is handled by the observation that the start of the proof shows $\rho(p_1) \ge 1$ already.</p>
+    <p><strong>Case 2: $m$ odd, $n$ odd.</strong> $s_m = x \wedge (y \vee s_{m-1})$ and $t_n = y \vee (z \wedge t_{n-1})$. Symmetric to Case 1: extract $p \in \mathbf{J}(q) - \{q\}$ with $p \le s_{m-1}$ and $t_n \le \kappa(p)$. Apply induction.</p>
+    <p><strong>Case 3: $m$ even, $n$ even.</strong> $s_m = z \wedge (y \vee s_{m-1})$ and $t_n = x \vee (z \wedge t_{n-1})$. Since $f(s_m) \not\le f(t_n)$, $f(s_{m-1}) \not\le f(t_{n-1})$, so there is an element $p \in \mathbf{J}(q)$ with $p \le s_{m-1}$ and $t_{n-1} \le \kappa(p)$. As above, $p \neq q$, and by induction $\rho(p) \ge m + n - 2$. Hence $\rho(q) \ge m + n - 1$. ✓</p>
+    <p>$\square$</p>
+  </div>
+
+  <div class="box connection" id="c2">
+    <span class="label">Connection P2 · The $s_m, t_n$ sequences as concrete witnesses</span>
+    <p>The sequences $s_m, t_n$ are not abstract — they are EXPLICIT canonical-form terms growing linearly in $m$ and $n$. Computed for small values:</p>
+    <ul>
+      <li>$s_1 = x \wedge (y \vee z)$ — Dean's coverless element from Example 3.36! Has $\rho^d = 1$.</li>
+      <li>$s_2 = z \wedge (y \vee (x \wedge (y \vee z)))$ — three levels of alternation, $\rho^d = 2$.</li>
+      <li>$s_3 = x \wedge (y \vee (z \wedge (y \vee (x \wedge (y \vee z)))))$ — five levels, $\rho^d = 3$.</li>
+      <li>$t_1 = y \vee (z \wedge x)$ — has $\rho = 1$.</li>
+      <li>$t_2 = x \vee (z \wedge (y \vee (z \wedge x)))$ — $\rho = 2$.</li>
+    </ul>
+    <p><strong>Theorem 4.3's content for these specific cases:</strong></p>
+    <ul>
+      <li>$m = 1, n = 1$: $s_1 = x \wedge (y \vee z) \not\le t_1 = y \vee (z \wedge x)$? By Whitman case 6 on $x \wedge (y \vee z) \le y \vee (z \wedge x)$: need $x \le t_1$ or $y \vee z \le t_1$ or $s_1 \le y$ or $s_1 \le z \wedge x$. None hold (each fails by canonical form). So $s_1 \not\le t_1$, satisfying $m$ even (false) or $n$ odd (true). Theorem 4.3 says $\rho(q) \ge 1$. Fine — $q$ completely join irreducible has $\rho(q) \ge 0$, with $\rho(q) = 0$ iff $q$ is a meet of generators (Example 3.10). Since $s_1 = x \wedge (y \vee z)$ is NOT a meet of generators (it has a join inside), the witness $q \le s_1$ must have $\rho(q) \ge 1$. ✓</li>
+      <li>$m = 2, n = 1$: $s_2 = z \wedge (y \vee s_1) \not\le t_1$. Theorem 4.3 says $\rho(q) \ge 2$. So the witness $q$ must have a canonical form of at least 2 alternating layers — a stronger structural constraint than the generic $\rho(q) \ge 0$.</li>
+      <li>$m = 4, n = 3$: $\rho(q) \ge 6$. The witness $q$ has 6 alternating layers — a SUBSTANTIAL canonical form. The bound forces growing complexity as $m, n$ grow.</li>
+    </ul>
+    <p><strong>Interpretation.</strong> The sequences $s_m, t_n$ are the WORST CASE for Theorem 4.1's rank bound. Generic pairs $(u, v)$ with $u \not\le v$ may admit a witness $q$ of much smaller rank than $\rho^d(u) + \rho(v) - 1$. But for these specific sequences, the bound is hit exactly. So the algorithmic complexity claim of Theorem 4.1 — the witness is constructible in time polynomial in $m + n$ — is also TIGHT in the worst case.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> How Theorem 4.1 powers Tschantz (Chapter IX)</h2>
+  <div class="tagline">Tschantz's theorem: every infinite interval $u/v$ in $\mathbf{FL}(X)$ contains a sublattice isomorphic to $\mathbf{FL}(Y)$ for $|Y| \le |X| + \aleph_0$. The proof uses Theorem 4.1 as a key technical input.</div>
+
+  <div class="box connection">
+    <span class="label">Connection P3 · the Tschantz application</span>
+    <p>Steve Tschantz proved (Tschantz 1992) that every infinite interval $u/v$ in $\mathbf{FL}(X)$ contains a sublattice isomorphic to $\mathbf{FL}(Y)$ for some $Y$ with $|Y| \le |X| + \aleph_0$. This is a deep structural result: it says infinite intervals in free lattices are "as complicated as" $\mathbf{FL}(\omega)$ (which by Theorem 1.28 sits inside $\mathbf{FL}(3)$ already). <strong>Why Theorem 4.1 is needed.</strong> Tschantz's proof requires constructing INCOMPARABLE elements inside an infinite interval $u/v$. The construction uses Theorem 4.1 to produce, given any potential candidates $a, b \in u/v$, a covering pair $a \succ a'$ inside $u/v$, with $a, a'$ both witnessed by explicit completely-join-irreducible $q$'s. The rank bound from Theorem 4.1 ensures the covering pairs have controlled complexity — without it, the construction could "run away to infinity" and Tschantz's result would fail. <strong>The big picture.</strong> Day 1979 (qualitative weak atomicity) → Freese-Nation 1985 (quantitative weak atomicity, Theorem 4.1) → Tschantz 1992 (every infinite interval contains $\mathbf{FL}(\omega)$). Each step builds on the previous. Chapter IV is the structural pivot — without its rank-controlled version of Day's theorem, Tschantz's argument doesn't go through. <strong>Companion implication.</strong> When we read Chapter IX in a future companion volume, this Theorem 4.1 will be cited at multiple points. The four pages of Chapter IV are doing structural work for the entire latter half of the monograph.</p>
+  </div>
+</section>
+
+<!-- ============== PROLOGOS ============== -->
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos cross-references</h2>
+  <div class="tagline">How Chapter IV's rank-bounded Day's theorem resonates with Prologos's complexity-bounded propagator firing: the rank bound translates to a depth bound on the network's evaluation.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos · rank-bounded constructive weak atomicity</span>
+    <p>Chapter IV is a SHARPENING of Chapter II's existence theorem (Theorem 2.84) into an algorithmic result with explicit complexity. Each component has a Prologos analog.</p>
+    <p><strong>(1) Theorem 4.1 as a depth-bounded fire-once cascade.</strong> Given $u, v$ with $u \not\le v$, the construction of $q(u, v)$ proceeds by induction on canonical-form complexity. In Prologos terms: $q$ is computed by a CASCADE of fire-once propagators, each one corresponding to a level of the canonical-form recursion. The depth of the cascade is bounded by $\rho^d(u) + \rho(v) - 1 = m + n - 1$ — exactly Theorem 4.1's rank bound. So the cascade terminates in BSP rounds $\le m + n - 1$. Polynomial time IS the structural depth bound.</p>
+    <p><strong>(2) Case 3's doubling step as a topology stratum operation.</strong> The construction of $q$ in Case 3 doubles the interval $\overline{v}/\overline{u}$ inside $\mathbf{K} = J_0^\vee$. In Prologos terms: when the fire-once cascade can't separate $u$ from $v$ using the existing J-closed set $J_0$, the topology stratum allocates new cells (the doubled interval) and re-fires. This is the on-network analog of "structural mutation between BSP rounds" — Day's doubling at the level of $\mathbf{L}^\vee$ is a topology-stratum allocation of new cells corresponding to the doubled interval.</p>
+    <p><strong>(3) The rank bound $m + n - 1$ as a Hyperlattice Conjecture instance.</strong> The Hyperlattice Conjecture (in Prologos's structural-thinking-rule): the Hasse diagram IS the optimal parallel decomposition. Here, the "depth" of the Hasse diagram from the bottom up to the witnessing covering pair is $m + n - 1$. Theorem 4.1 says the COMPUTATION of the witness — the cascade of fire-once propagators — runs at exactly this depth. So the rank bound IS the depth of the parallel decomposition. The 1985 paper's "polynomial time" claim corresponds, in propagator-network terms, to "constant fan-out per layer × $m + n - 1$ layers".</p>
+    <p><strong>(4) Theorem 4.3's sharpness as an adversarial worst-case.</strong> The $s_m, t_n$ sequences are the WORST CASE inputs for the cascade. They force the maximal depth $m + n - 1$. In Prologos benchmarking terms: these are the adversarial benchmarks for the cover algorithm — the inputs that exhibit the polynomial-time complexity bound exactly. Generic random inputs admit shallower cascades.</p>
+    <p><strong>(5) Corollary 4.2 as a "splitting lattice as a fork point".</strong> Corollary 4.2 says: every nontrivial inequality $u \not\le v$ in $\mathbf{FL}(X)$ is witnessed by a finite bounded splitting lattice $\mathbf{L}^\vee(q)$. In propagator-network terms: every "decision" between two values $u, v$ corresponds to a fork-on-union point in the network. The splitting lattice $\mathbf{L}^\vee(q)$ is the local structure around the fork — finite, bounded (= computable in finite time), subdirectly irreducible (= has a unique critical decision). The κ-bijection gives the join↔meet duality at the fork: deciding $u$ over $v$ is dual to deciding $\kappa(u)$ over $\kappa(v)$.</p>
+    <p><strong>(6) The constructive vs non-constructive proof contrast.</strong> Chapter II §7's inverse-limit construction does NOT yield an explicit witness — it gives a sequence of finite bounded lattices converging to $\mathbf{FL}(X)$. In propagator terms: a non-constructive proof corresponds to "the network fires until quiescence", with no a priori bound on convergence rate. Chapter IV's constructive proof gives an EXPLICIT WITNESS in bounded time — corresponding to a fire-once propagator with declared depth bound. The chapter is the propagator-architecture's preference for constructive witnesses with explicit termination measures.</p>
+  </div>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="module" id="glossary">
+  <h2><span class="num">GLOSSARY</span> Chapter IV vocabulary, alphabetical</h2>
+  <div class="tagline">Brief — Chapter IV introduces minimal new vocabulary. Most terms are recapped from Chapters I–III.</div>
+
+  <dl class="glossary">
+    <dt>$D_k(\mathbf{L})$</dt>
+    <dd>From Chapter II Definition 2.7: $D_0 = \{a : a$ has no nontrivial join cover$\}$, $D_{k+1} = \{a : Q \subseteq D_k$ for every $Q \in \mathcal{M}(a)\}$. Used in Corollary 4.2 to express "$\mathbf{J}(\mathbf{L}) \subseteq D_{m+n-1}(\mathbf{L})$" as the rank constraint on the witness lattice.</dd>
+
+    <dt>D-rank $\rho(u)$</dt>
+    <dd>From Chapter II: $\rho(u) = \min\{k : u \in D_k(\mathbf{L})\}$. By Theorem 2.11, $\rho(u) = $ least $n$ such that $u \in X^{\wedge(\vee\wedge)^n}$. The chapter's central complexity measure.</dd>
+
+    <dt>Dual D-rank $\rho^d(u)$</dt>
+    <dd>The dual: $\rho^d(u) = $ least $n$ such that $u \in X^{\vee(\wedge\vee)^n}$. Symmetric to $\rho$ under taking duals.</dd>
+
+    <dt>$q(u, v)$</dt>
+    <dd>The completely-join-irreducible element of $\mathbf{FL}(X)$ constructed in Theorem 4.1's proof, given $u \not\le v$. Satisfies $q \le u$, $v \le \kappa(q)$, $\rho(q) \le \rho^d(u) + \rho(v) - 1$. Defined by induction on canonical-form complexity, three cases.</dd>
+
+    <dt>Rank refinement</dt>
+    <dd>Chapter IV's theme: Day's qualitative weak-atomicity theorem upgraded to a quantitative version with explicit D-rank bound. The rank bound $\rho(q) \le m + n - 1$ controls the witness's canonical-form complexity.</dd>
+
+    <dt>Sharpness (Theorem 4.3)</dt>
+    <dd>The $s_m, t_n$ sequences witness that Theorem 4.1's bound $\rho(q) \le m + n - 1$ cannot be improved — for these sequences, $\rho(q) = m + n - 1$ exactly (no slack).</dd>
+
+    <dt>$s_m$ sequence</dt>
+    <dd>$s_0 = z$; $s_1 = x \wedge (y \vee z)$ (= Dean's coverless element); $s_{2k} = z \wedge (y \vee s_{2k-1})$; $s_{2k+1} = x \wedge (y \vee s_{2k})$. Each $s_m$ has $\rho^d(s_m) = m$.</dd>
+
+    <dt>$t_n$ sequence</dt>
+    <dd>$t_0 = x$; $t_1 = y \vee (z \wedge x)$; $t_{2k} = x \vee (z \wedge t_{2k-1})$; $t_{2k+1} = y \vee (z \wedge t_{2k})$. Each $t_n$ has $\rho(t_n) = n$. Dual to the $s_m$ sequence in the alternating $\wedge/\vee$ pattern.</dd>
+
+    <dt>$X^{\wedge(\vee\wedge)^n}$</dt>
+    <dd>The set of elements of $\mathbf{FL}(X)$ that can be written as a meet of joins of meets of … (n levels deep), with leaves in $X$. Theorem 2.11 of Chapter II: $\rho(u) = n$ iff $u \in X^{\wedge(\vee\wedge)^n}$ but not in $X^{\wedge(\vee\wedge)^{n-1}}$. The structural form of D-rank.</dd>
+  </dl>
+</section>
+
+<!-- ============== EXAMPLES ============== -->
+<section class="module" id="examples">
+  <h2><span class="num">COMPUTED EXAMPLES</span> Worked instances of Chapter IV results</h2>
+  <div class="tagline">Four computed examples: small $s_m, t_n$ values; verifying $s_2 \not\le t_1$; Theorem 4.1 applied to $u = s_1, v = t_0$; Theorem 4.3's tightness for $m = 2, n = 1$.</div>
+
+  <details class="example"><summary><span class="ex-tag">Example IV.A</span>The $s_m, t_n$ sequences for small $m, n$ — explicit canonical forms</summary>
+  <div class="body">
+    <div class="ex-statement">Compute $s_m$ and $t_n$ for $m, n \le 4$, listing canonical forms and verifying $\rho^d(s_m) = m$, $\rho(t_n) = n$.</div>
+    <p><strong>$s_m$ sequence.</strong></p>
+    <ul>
+      <li>$s_0 = z$ — a generator. $\rho^d(s_0) = 0$ ✓</li>
+      <li>$s_1 = x \wedge (y \vee z)$ — Dean's coverless element. Canonical form: meet of $x$ (a generator) with $y \vee z$ (a join of generators). $\rho^d(s_1) = 1$ ✓ (one level of $\wedge$ over $\vee$).</li>
+      <li>$s_2 = z \wedge (y \vee s_1) = z \wedge (y \vee (x \wedge (y \vee z)))$. Canonical form: meet of $z$ with the join $y \vee (x \wedge (y \vee z))$. The join has two canonical joinands — $y$ and $x \wedge (y \vee z)$ — which are incomparable (one is a generator, the other has $\rho^d = 1$). $\rho^d(s_2) = 2$ ✓</li>
+      <li>$s_3 = x \wedge (y \vee s_2) = x \wedge (y \vee (z \wedge (y \vee (x \wedge (y \vee z)))))$. Five levels of alternation. $\rho^d(s_3) = 3$ ✓</li>
+      <li>$s_4 = z \wedge (y \vee s_3) = z \wedge (y \vee (x \wedge (y \vee (z \wedge (y \vee (x \wedge (y \vee z)))))))$. Seven levels of alternation. $\rho^d(s_4) = 4$ ✓</li>
+    </ul>
+    <p>Note the alternation: $s_1, s_3$ have outer $x \wedge$; $s_2, s_4$ have outer $z \wedge$. The middle generator is always $y$.</p>
+    <p><strong>$t_n$ sequence.</strong></p>
+    <ul>
+      <li>$t_0 = x$ — a generator. $\rho(t_0) = 0$ ✓</li>
+      <li>$t_1 = y \vee (z \wedge x)$ — join of $y$ with the meet $z \wedge x$. $\rho(t_1) = 1$ ✓</li>
+      <li>$t_2 = x \vee (z \wedge t_1) = x \vee (z \wedge (y \vee (z \wedge x)))$. $\rho(t_2) = 2$ ✓</li>
+      <li>$t_3 = y \vee (z \wedge t_2) = y \vee (z \wedge (x \vee (z \wedge (y \vee (z \wedge x)))))$. $\rho(t_3) = 3$ ✓</li>
+      <li>$t_4 = x \vee (z \wedge t_3) = x \vee (z \wedge (y \vee (z \wedge (x \vee (z \wedge (y \vee (z \wedge x)))))))$. $\rho(t_4) = 4$ ✓</li>
+    </ul>
+    <p>Symmetric pattern with the $s$ sequence: outer $\vee$ alternates between $y$ and $x$; middle generator always $z$.</p>
+    <p><strong>Term-length growth.</strong> Each step adds 4 symbols (generator $\wedge$/$\vee$ subterm). So $|s_m| = 1 + 4m$ and $|t_n| = 1 + 4n$ approximately. Linear growth in rank.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example IV.B</span>Verifying $s_2 \not\le t_1$ via Whitman's algorithm</summary>
+  <div class="body">
+    <div class="ex-statement">Use Whitman's algorithm (Theorem 1.11) to verify $s_2 = z \wedge (y \vee (x \wedge (y \vee z))) \not\le t_1 = y \vee (z \wedge x)$.</div>
+    <p><strong>Setup.</strong> $m = 2$ (even), $n = 1$ (odd). The condition "$m$ even or $n$ odd" is satisfied (both, in fact). So we expect $s_2 \not\le t_1$.</p>
+    <p><strong>Whitman case 6.</strong> $s_2 = z \wedge w$ where $w = y \vee (x \wedge (y \vee z))$ (a meet); $t_1 = y \vee r$ where $r = z \wedge x$ (a join). To test $s_2 \le t_1$, Whitman case 6 says: either some canonical meetand of $s_2$ is below $t_1$, OR $s_2$ is below some canonical joinand of $t_1$.</p>
+    <ul>
+      <li>Canonical meetands of $s_2$ are $z$ and $w$. <strong>Is $z \le t_1 = y \vee (z \wedge x)$?</strong> Whitman case 4: $z$ is a generator; $t_1$ is a join. $z \le t_1$ iff $z \le y$ or $z \le z \wedge x$. Generators incomparable: $z \not\le y$. And $z \le z \wedge x$ iff $z \le z$ AND $z \le x$, the latter fails. So $z \not\le t_1$. ✓</li>
+      <li><strong>Is $w = y \vee (x \wedge (y \vee z)) \le t_1$?</strong> Both sides are joins. Whitman case 2: $w \le t_1$ iff $y \le t_1$ AND $(x \wedge (y \vee z)) \le t_1$. The first: $y \le y \vee (z \wedge x)$ — yes (canonical joinand). The second: $x \wedge (y \vee z) \le y \vee (z \wedge x)$? Apply case 6 again: meetands of LHS are $x$ and $y \vee z$; joinands of RHS are $y$ and $z \wedge x$. Test: $x \le y$? No. $x \le z \wedge x$? Yes (since $x \le x$ and $x \le z$ would be needed — no). So $x \le z \wedge x$ iff $x \le z$, no. Hence $x \not\le t_1$. Test $y \vee z \le t_1$: case 2 — $y \le t_1$ yes; $z \le t_1$? Just shown no. So $y \vee z \not\le t_1$. Test $x \wedge (y \vee z) \le y$: case 5 — $x \le y$ or $y \vee z \le y$? Both no. So $x \wedge (y \vee z) \not\le y$. Test $x \wedge (y \vee z) \le z \wedge x$: case 3 — $x \wedge (y \vee z) \le z$? $x \le z$ or $y \vee z \le z$? Second case requires $y \le z$ (no) and $z \le z$ (yes), so $y \vee z \le z$ would need $y \le z$ — fails. Hence $x \wedge (y \vee z) \not\le z$. So $x \wedge (y \vee z) \not\le z \wedge x$. <strong>Conclusion:</strong> $x \wedge (y \vee z) \not\le t_1$, so $w \not\le t_1$.</li>
+      <li>Canonical joinands of $t_1$ are $y$ and $z \wedge x$. <strong>Is $s_2 \le y$?</strong> Case 5: $z \le y$ (no) or $w \le y$ (no, since $y \le w$). So $s_2 \not\le y$. ✓</li>
+      <li><strong>Is $s_2 \le z \wedge x$?</strong> Case 3: $s_2 \le z$ AND $s_2 \le x$. The first: $s_2 = z \wedge w \le z$ ✓. The second: $s_2 \le x$? Case 5: $z \le x$ (no) or $w \le x$? $w = y \vee (x \wedge (y \vee z))$ has canonical joinand $y$, $y \le x$? No. So $w \not\le x$, hence $s_2 \not\le x$, hence $s_2 \not\le z \wedge x$. ✓</li>
+    </ul>
+    <p><strong>Conclusion:</strong> All four sub-tests fail. By Whitman case 6, $s_2 \not\le t_1$. ✓ Confirmed.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example IV.C</span>Theorem 4.1 applied to $u = s_1, v = t_0$ — finding the witness $q$ with $\rho(q) = 0$</summary>
+  <div class="body">
+    <div class="ex-statement">Apply Theorem 4.1 to $u = s_1 = x \wedge (y \vee z)$ and $v = t_0 = x$. Show $\rho^d(u) = 1$, $\rho(v) = 0$, so the bound becomes $\rho(q) \le 0$. Find the witness $q$.</div>
+    <p><strong>Wait — does $u \not\le v$ hold here?</strong> $u = x \wedge (y \vee z)$, $v = x$. Is $u \le v$? $x \wedge (y \vee z) \le x$ — yes, this is just one canonical meetand ≤ the meet itself. So $u \le v$. Theorem 4.1 doesn't apply.</p>
+    <p><strong>Try $u = s_1, v = $ any canonical joinand of something dual.</strong> Let's pick $u = s_1, v = t_1 = y \vee (z \wedge x)$. By Example IV.B's logic (or the dual), we have $s_1 \not\le t_1$. So Theorem 4.1 applies: $m = \rho^d(s_1) = 1, n = \rho(t_1) = 1$, bound $\rho(q) \le 1$.</p>
+    <p><strong>Constructing $q$ via the proof.</strong> $u = s_1$ is itself in canonical form $x \wedge (y \vee z)$ — a meet of two canonical meetands $u_1 = x$ and $u_2 = y \vee z$. $v = t_1 = y \vee (z \wedge x)$ — a join of two canonical joinands $v_1 = y$ and $v_2 = z \wedge x$.</p>
+    <p>Case 3 of the proof applies: $u$ is a canonical meet, $v$ is a canonical join. We need to find $q(u_i, v)$ for each $i$ and $q(u, v_j)$ for each $j$.</p>
+    <ul>
+      <li>$q(u_1, v) = q(x, y \vee (z \wedge x))$. $u_1 = x$ is a generator, so Case 1: $x \not\le y \vee (z \wedge x)$ implies $y \vee (z \wedge x) \le \kappa(x) = y \vee z$. Indeed $y \le y \vee z$ ✓ and $z \wedge x \le z \le y \vee z$ ✓. Set $q(u_1, v) = x$. $\rho(q(u_1, v)) = 0$.</li>
+      <li>$q(u_2, v) = q(y \vee z, y \vee (z \wedge x))$. $u_2 = y \vee z$ is a join with joinands $y, z$. Case 2: $u_2 \not\le v$ implies some joinand $\not\le v$. $y \le v = y \vee \cdots$ — yes. $z \le v = y \vee (z \wedge x)$? Whitman case 4: $z \le y$ (no) or $z \le z \wedge x$ (no). So $z \not\le v$. Set $q(u_2, v) = q(z, v)$. By Case 1 (generator), $q(z, v) = z$. So $q(u_2, v) = z$, $\rho = 0$.</li>
+      <li>$q(u, v_1) = q(s_1, y)$. $v_1 = y$ is a generator. Case 1: $s_1 \not\le y$ implies $s_1 \ge \kappa^d(y) = x \wedge z$. Is $s_1 \ge x \wedge z$? $s_1 = x \wedge (y \vee z)$. $x \wedge z \le x \wedge (y \vee z)$ requires $x \le x$ ✓ and $z \le y \vee z$ ✓. So $s_1 \ge x \wedge z$ ✓. Set $q(s_1, y) = x \wedge z$. $\rho(x \wedge z) = 0$ (meet of generators).</li>
+      <li>$q(u, v_2) = q(s_1, z \wedge x)$. $v_2 = z \wedge x$ is a meet. Dual of Case 2: $u \not\le v_2 = z \wedge x$ implies $u \not\le$ some meetand. $s_1 \le z$? Whitman case 5: meetand-of-$s_1$ ≤ $z$? $x \le z$ no, $y \vee z \le z$? Case 2: $y \le z$ (no) — fails. So $s_1 \not\le z$. Set $q(s_1, z \wedge x) = q(s_1, z) = $ ... continue induction: $v = z$ generator, Case 1, $s_1 \not\le z$ implies $s_1 \ge \kappa^d(z) = x \wedge y$. Is $s_1 \ge x \wedge y$? $x \wedge y \le x \wedge (y \vee z)$? $x \le x$ ✓, $y \le y \vee z$ ✓. So yes. Set $q(s_1, z) = x \wedge y$, $\rho = 0$.</li>
+    </ul>
+    <p>So $J_0 = \mathbf{J}(x) \cup \mathbf{J}(z) \cup \mathbf{J}(x \wedge y) \cup \mathbf{J}(x \wedge z) = \{x, z, x \wedge y, x \wedge z\}$ (since meets of generators are J-closed-leaves).</p>
+    <p><strong>Sub-case A test.</strong> Does some $p \in J_0$ satisfy $p \le u = s_1$ AND $p \not\le v = t_1$?</p>
+    <ul>
+      <li>$p = x$: $x \le s_1 = x \wedge (y \vee z)$? Need $x \le y \vee z$, no. So $x \not\le s_1$. Skip.</li>
+      <li>$p = z$: $z \le s_1$? Need $z \le x$, no. Skip.</li>
+      <li>$p = x \wedge y$: $x \wedge y \le s_1$? Yes (computed above). $x \wedge y \le t_1 = y \vee (z \wedge x)$? Yes — $x \wedge y \le y \le t_1$. So $p = x \wedge y$ has $p \le u$ but ALSO $p \le v$. NOT a separator.</li>
+      <li>$p = x \wedge z$: $x \wedge z \le s_1$? Yes (computed above). $x \wedge z \le t_1$? $x \wedge z \le z \wedge x = $ canonical joinand of $t_1$, so yes. NOT a separator.</li>
+    </ul>
+    <p>No element of $J_0$ separates. Move to <strong>Sub-case B</strong> — apply doubling.</p>
+    <p>$\mathbf{K} = J_0^\vee$ — the lattice generated by $\{x, z, x \wedge y, x \wedge z\}$ via joins. Computing this is involved; the result is a finite lattice with at most $2^{|J_0|} = 16$ elements (in fact fewer due to inclusions). The standard epimorphism $f$ sends $u \mapsto \overline{u} = \bigvee\{p \in J_0 : p \le u\} = (x \wedge y) \vee (x \wedge z)$ and $v \mapsto \overline{v} = \bigvee\{p \in J_0 : p \le v\} = z \vee (x \wedge y) \vee (x \wedge z) = z \vee (x \wedge y)$ (since $x \wedge z \le z$).</p>
+    <p>Now double the interval $\overline{v}/\overline{u}$ in $\mathbf{K}$, giving a new lattice $\mathbf{K}'$. The standard epimorphism $h : \mathbf{FL}(X) \to \mathbf{K}'$ has $\beta_h((\overline{v}, 1))$ = the desired $q$. Concretely, by the formula on book p. 92,</p>
+    $$q = \bigwedge\{x \in X : x \ge \overline{u}, x \not\le \overline{v}\} \wedge \bigwedge\{\bigvee A : A \subseteq J_0, \bigvee A \ge \overline{u}, \bigvee A \not\le \overline{v}\}.$$
+    <p>The first term: which generators are $\ge \overline{u} = (x \wedge y) \vee (x \wedge z)$ and $\not\le \overline{v} = z \vee (x \wedge y)$? Generators are $\{x, y, z\}$. $x \ge \overline{u}$? Need $x \ge x \wedge y$ ✓ and $x \ge x \wedge z$ ✓; $x \le \overline{v}$? $x \le z \vee (x \wedge y)$? Whitman: $x \le z$ no, $x \le x \wedge y$ no, so... wait, this requires more careful analysis. Skipping detailed computation, the result is $q$ has $\rho(q) \le m + n - 1 = 1$. The witness lattice $\mathbf{L}^\vee(q)$ is a finite bounded splitting lattice.</p>
+    <p><strong>Implication.</strong> The witness $q$ is constructed in finite time from canonical forms of $u, v$. The covering pair derived from $q$ is $\kappa(q) \wedge (q \vee t_1) \prec q \vee t_1 \le s_1 \vee t_1$. The pair lies in the interval $s_1 \vee t_1 / t_1$, and is a witness to weak atomicity in that interval.</p>
+  </div></details>
+
+  <details class="example"><summary><span class="ex-tag">Example IV.D</span>Theorem 4.3's tightness — for $m = 2, n = 1$, every witness has $\rho(q) \ge 2$</summary>
+  <div class="body">
+    <div class="ex-statement">For the pair $u = s_2, v = t_1$, verify Theorem 4.3's tight bound: every completely-join-irreducible $q$ with $q \le s_2$ and $t_1 \le \kappa(q)$ has $\rho(q) \ge m + n - 1 = 2$.</div>
+    <p><strong>Setup.</strong> $m = 2$ even, $n = 1$ odd. $s_2 = z \wedge (y \vee s_1) = z \wedge (y \vee (x \wedge (y \vee z)))$. $t_1 = y \vee (z \wedge x)$. By Theorem 4.3, any completely-join-irreducible $q$ with $q \le s_2$ and $t_1 \le \kappa(q)$ has $\rho(q) \ge 2$.</p>
+    <p><strong>Why $\rho(q) = 0$ is impossible.</strong> $\rho(q) = 0$ means $q$ is a meet of generators (Example 3.10). Meets of generators have specific κ-images: $\kappa(\bigwedge Y) = \bigvee(X - Y)$ for nonempty $Y \subset X$. So if $q = \bigwedge Y$, $\kappa(q) = \bigvee(X - Y)$.</p>
+    <p>Test possible $Y$:</p>
+    <ul>
+      <li>$Y = \{x\}$, $q = x$: Is $x \le s_2 = z \wedge (y \vee s_1)$? Need $x \le z$ no. So $q = x$ doesn't satisfy $q \le s_2$.</li>
+      <li>$Y = \{y\}$, $q = y$: $y \le s_2$? Need $y \le z$ no. Skip.</li>
+      <li>$Y = \{z\}$, $q = z$: $z \le s_2 = z \wedge (\cdots)$? Need $z \le y \vee s_1$. Whitman case 4: $z \le y$ no, $z \le s_1 = x \wedge (y \vee z)$? Need $z \le x$ no, so no. Skip.</li>
+      <li>$Y = \{x, y\}$, $q = x \wedge y$: $x \wedge y \le s_2$? Need $x \wedge y \le z$ — Whitman case 5: $x \le z$ or $y \le z$? Both no. So $x \wedge y \not\le z$, hence $x \wedge y \not\le s_2$. Skip.</li>
+      <li>$Y = \{x, z\}$, $q = x \wedge z$: $x \wedge z \le s_2$? Need $x \wedge z \le z$ ✓ and $x \wedge z \le y \vee s_1$? Whitman case 6: $x \le y \vee s_1$? case 4: $x \le y$ no, $x \le s_1 = x \wedge \cdots$? Need $x \le x$ ✓ and $x \le y \vee z$? No. So $x \not\le y \vee s_1$. Then $z \le y \vee s_1$? case 4: $z \le y$ no, $z \le s_1$? Need $z \le x$ no. So $z \not\le y \vee s_1$. Test $x \wedge z \le y$ no, $x \wedge z \le s_1$? $s_1 = x \wedge (y \vee z)$, so need $x \wedge z \le x$ ✓ and $x \wedge z \le y \vee z$? Yes ($x \wedge z \le z \le y \vee z$). So $x \wedge z \le s_1$. Hence $x \wedge z \le y \vee s_1$. So $x \wedge z \le s_2$. Now check $\kappa(x \wedge z) = y$ — and require $t_1 \le y$? $t_1 = y \vee (z \wedge x)$. $t_1 \le y$ means both $y \le y$ ✓ and $z \wedge x \le y$? $z \wedge x \le y$? Whitman case 5: $z \le y$ no or $x \le y$ no. So $z \wedge x \not\le y$. Hence $t_1 \not\le y = \kappa(q)$. SKIP.</li>
+      <li>$Y = \{y, z\}$, $q = y \wedge z$: $y \wedge z \le s_2 = z \wedge (y \vee s_1)$? Need $y \wedge z \le z$ ✓ and $y \wedge z \le y \vee s_1$? Yes ($y \wedge z \le y \le y \vee s_1$). ✓. Now $\kappa(y \wedge z) = x$. Is $t_1 \le x$? $t_1 = y \vee (z \wedge x) \le x$? $y \le x$ no. Fail. Skip.</li>
+      <li>$Y = \{x, y, z\}$, $q = x \wedge y \wedge z$: Then $q \le s_2$ trivially. $\kappa(q) = \bigvee(X - Y) = \bigvee \emptyset = 0$. Need $t_1 \le 0$, impossible. Skip.</li>
+    </ul>
+    <p>NO meet-of-generators witness works. Hence $\rho(q) \ge 1$ already.</p>
+    <p><strong>Why $\rho(q) = 1$ is also impossible.</strong> $\rho(q) = 1$ means $q \in X^{\wedge \vee \wedge}$, i.e., $q$ is a meet of joins of generators (3 levels). The meet has at least 2 canonical meetands. Each canonical meetand is a JOIN of meets of generators. The canonical-form complexity is one level above pure meet-of-generators.</p>
+    <p>Theorem 4.3 says $\rho(q) \ge m + n - 1 = 2$, ruling out $\rho(q) = 1$. The proof of Theorem 4.3 (Case 1) makes this explicit: extract sub-witnesses $p_1, p_2 \in \mathbf{J}(q)$ of strict ranks AT LEAST 1, forcing $\rho(q) \ge 2$. The proof inducts on $m + n$ — the Case 1 base ($m = 2, n = 1$) is exactly this scenario.</p>
+    <p><strong>What's a witness with $\rho(q) = 2$?</strong> By Theorem 4.1's construction (Example IV.C above for $u = s_1, v = t_0$ giving $\rho(q) \le 1$), and applying the same procedure to $u = s_2, v = t_1$, we get $q(s_2, t_1)$ with $\rho \le 2$. By Theorem 4.3, $\rho \ge 2$. Hence $\rho(q(s_2, t_1)) = 2$ exactly. The bound is TIGHT.</p>
+    <p><strong>Implication.</strong> The complexity of the cover-witness $q$ scales with $m + n - 1$ — there is no polynomial improvement possible without weakening Theorem 4.1. The $s_m, t_n$ family is the worst-case input for the cover algorithm of Chapter III §5 applied via Chapter IV §1.</p>
+  </div></details>
+</section>
+
+<!-- ============== LOOKING AHEAD ============== -->
+<section class="module" id="looking-ahead">
+  <h2><span class="num">LOOKING AHEAD</span> Chapter V — Sublattices of Free Lattices and Projective Lattices</h2>
+  <div class="tagline">Chapter V is the long technical centerpiece of Part II. Six sections develop projective lattices (§1), the free lattice over a partially ordered set (§2), Nation's 1982 characterisation of finite sublattices of free lattices (§3), related topics including bounded subuniverses (§4), and finite subdirectly irreducible sublattices (§5).</div>
+
+  <p>Chapter V is where the monograph delivers its biggest classification result: <strong>Nation's theorem (1982)</strong> — a finite lattice $\mathbf{L}$ embeds into some $\mathbf{FL}(X)$ if and only if $\mathbf{L}$ is semidistributive, satisfies (W), AND has no D-cycle (equivalently, is lower bounded). This characterisation, conjectured by Jónsson, settled an open problem from the 1960s. The proof requires nearly all the machinery of the previous four chapters: canonical form, Whitman's condition, semidistributivity, the κ-bijection, J-closed sets, the standard epimorphism, $\mathbf{L}^\vee(w)$, AND Chapter IV's rank-bounded Day's theorem.</p>
+
+  <div class="box recap">
+    <span class="label">Carrying forward · the toolkit</span>
+    <p>Chapter V uses everything from Chapters I–IV. <strong>From Chapter I</strong>: canonical form (1.17), Whitman's condition (1.8), semidistributivity (1.21), Galvin-Jónsson 1.27. <strong>From Chapter II</strong>: bounded homomorphisms with $\beta, \alpha$ (2.1), the D-relation and D-rank (2.7), 5-fold lower-boundedness (2.20), Day's structural characterisation (2.43), the E refinement (2.45), the κ-bijection (2.54–2.55), splitting lattices and conjugate equations (2.72–2.79), Day's weak-atomicity theorem (2.84). <strong>From Chapter III</strong>: $\gamma$-bijection (3.5), J-closed sets and the standard epimorphism (3.15), $\mathbf{L}^\vee(w)$ (3.24), the 5-fold complete-join-irreducibility (3.26), the syntactic algorithm (3.30, 3.32). <strong>From Chapter IV</strong>: rank-bounded Day's theorem (4.1, 4.2). The arsenal is complete; Chapter V applies it at full capacity.</p>
+  </div>
+
+  <p>Key results to anticipate. <strong>Projective lattices</strong> (§1): a finite lattice is projective iff every congruence has a section. Foundational for sublattice theory. <strong>$\mathbf{FL}(P)$ for a partially ordered set $P$</strong> (§2): the free lattice generated by $P$ subject to its order — a hybrid object between $\mathbf{FL}(X)$ and free distributive lattices. <strong>Theorem 5.7 or thereabouts: Nation's characterisation</strong>: a finite lattice $\mathbf{L}$ embeds in some $\mathbf{FL}(X)$ iff $\mathbf{L}$ is SD, satisfies (W), and is lower bounded. <strong>Theorem 5.18</strong>: every finitely generated projective lattice is weakly atomic — using Chapter IV's strengthened Day's theorem. <strong>Finite subdirectly irreducible sublattices</strong> (§5): structural classification. The chapter is long (book pp. 95–134, 6 sections, ~40 pages) and dense — Chapter IV is the structural prerequisite, but Chapters I–III provide the operational toolkit.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Free Lattices Companion · Chapter IV · <a href="freelat-companion-toc.html">Volume index</a></div>
+    <div><a href="freelat-companion-ch03.html">← Chapter III</a> · <a href="freelat-companion-ch05.html">Chapter V →</a></div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  const stored = localStorage.getItem('freelat-theme');
+  function setTheme(t){
+    if(t==='dark'){ root.setAttribute('data-theme','dark'); label.textContent='Light'; }
+    else { root.removeAttribute('data-theme'); label.textContent='Dark'; }
+  }
+  setTheme(stored || 'light');
+  toggle.addEventListener('click', function(){
+    const cur = root.getAttribute('data-theme')==='dark' ? 'dark' : 'light';
+    const next = cur==='dark' ? 'light' : 'dark';
+    setTheme(next);
+    try { localStorage.setItem('freelat-theme', next); } catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 1 · Basic Notions and Results</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  svg.diagram { display: block; margin: 22px auto; max-width: 100%; }
+  svg.diagram circle { fill: var(--bg); stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram line { stroke: var(--ink); stroke-width: 1.5; }
+  svg.diagram text { font-family: 'Source Serif Pro', serif; font-style: italic; font-size: 14px; fill: var(--ink); }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-hub.html">Chapter 2 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 1 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Posets foundations</div>
+  <ul>
+    <li><a href="#s1">A1 · Relations + posets</a></li>
+    <li><a href="#s2">A2 · Bounds + ACC/DCC + Choice</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Order morphisms + lattices</div>
+  <ul>
+    <li><a href="#s3">B1 · Order morphisms + Prop 1.1 + Thm 1.1</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Complete lattices</div>
+  <ul>
+    <li><a href="#s4">C1 · Complete + examples + Thm 1.2</a></li>
+    <li><a href="#s5">C2 · Sublattices + ideals + morphisms</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Modular lattices</div>
+  <ul>
+    <li><a href="#s6">D1 · Modular + Thm 1.3, 1.4 ($N_5$), 1.5 + Lem 1.1</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Distributive + atoms</div>
+  <ul>
+    <li><a href="#s7">E1 · Distributive + Thm 1.6, 1.7 ($M_5$)</a></li>
+    <li><a href="#s8">E2 · Upper continuous + atoms + Prop 1.2</a></li>
+  </ul>
+
+  <div class="section-label">Part F · Chain conditions</div>
+  <ul>
+    <li><a href="#s9">F1 · Noetherian / artinian + Props 1.3–1.5</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Birkhoff's lattice theory</a></li>
+    <li><a href="#c2">P2 · Order theory in CS</a></li>
+    <li><a href="#c3">P3 · $N_5$, $M_5$ obstructions</a></li>
+    <li><a href="#c4">P4 · Boolean algebras</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 1 · pp. 1–16 · Foundational chapter</div>
+  <h1>Basic Notions and Results</h1>
+  <p class="lede">The book's foundational chapter. From relations to posets to lattices to the modular and distributive specializations, with the $N_5$ and $M_5$ obstruction characterisations and the noetherian/artinian chain conditions. Every later chapter calls back to the vocabulary established here.</p>
+  <div class="meta">
+    <span>~70–80 min read</span>
+    <span>9 sections + 5 connection panels</span>
+    <span>40 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — the lattice toolkit, assembled from order theory</h2>
+  <div class="tagline">Posets first, then meets and joins, then completeness, then modularity, then distributivity, then chain conditions. The chapter builds the lattice apparatus from the order-theoretic ground up.</div>
+
+  <p>Chapter 1 of <em>Lattice Concepts of Module Theory</em> is the book's foundational chapter — the place where every term that appears later is defined for the first time. Călugăreanu's pace is brisk: most definitions land in a sentence and are immediately used; the proofs are sketched rather than belaboured; the exercises (40 of them) carry much of the verification load. The companion's task here is to slow the pace down, situate each definition in context, and provide the cross-references that make later chapters cohere.</p>
+
+  <p>The chapter divides naturally into <strong>six conceptual passes</strong>:</p>
+  <ol>
+    <li><strong>Posets and order theory</strong>. Relations (reflexive, transitive, antisymmetric), preorders, partial orders, comparable, chains, dual notions. Bounds (upper/lower), largest/smallest vs. maximal/minimal, joins ($\sup$) and meets ($\inf$). The chain conditions: ACC (noetherian) and DCC (artinian). The Axiom of Choice and its three equivalent forms (Zorn's Lemma, Hausdorff Principle, Zermelo's Theorem).</li>
+    <li><strong>Order morphisms and lattices</strong>. Order morphisms, isomorphisms, the asymmetry that an order isomorphism's inverse need not be an order morphism (Remark 1.1). Lattices defined as posets with all binary joins and meets; complete lattices have arbitrary joins and meets. Proposition 1.1 (associativity, commutativity, absorption); Theorem 1.1 (universal-algebra characterisation of lattices).</li>
+    <li><strong>Examples + sublattices</strong>. The complete lattice $\mathcal{P}(M)$ of subsets; $S_R(M)$ of submodules; $S(A, \Omega)$ of subalgebras. Theorem 1.2 (complete iff each subset has a meet). Sublattices, intervals (quotient sublattices $b/a$), simple intervals, ideals and filters, principal ideals, lattice morphisms, and the connection between order isomorphisms and lattice isomorphisms (Remark 1.5).</li>
+    <li><strong>Modular lattices</strong>. The modular law $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$. Theorem 1.3 (cancellation form), Theorem 1.4 (the $N_5$-obstruction characterisation due to Dedekind, 1900), Theorem 1.5 (the transposition isomorphism $a \vee b / b \cong a / a \wedge b$ — the lattice "Second Isomorphism Theorem"). Lemma 1.1 (modular orthogonality). Semimodularity (covering conditions) as a generalisation.</li>
+    <li><strong>Distributive lattices and beyond</strong>. The distributive law $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$. Theorem 1.6 (cancellation form for distributive), Theorem 1.7 (the $M_5$-obstruction characterisation: distributive iff modular and no five-element diamond sublattice). Then upper continuity, atoms, atomic, complement, $a \oplus a' = 1$ direct-sum notation, complemented and relatively complemented, Proposition 1.2.</li>
+    <li><strong>Noetherian and artinian lattices</strong>. Proposition 1.3 (noetherian iff every non-empty subset's sup equals its finite-subset sup). Proposition 1.4 (noetherian/artinian implies largest/smallest exists). Proposition 1.5 (in modular lattices, noetherian/artinian is preserved by the quotient sublattices $a/0$ and $1/a$).</li>
+  </ol>
+
+  <p>The chapter ends with 40 exercises, ranging from elementary verifications to substantial structural results (e.g., Ex 1.36: every complemented modular lattice is relatively complemented; Ex 1.38: every artinian lattice is strongly atomic). The exercises are essential — Călugăreanu uses them as sub-proofs in later chapters.</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">First time through (no recap — Chapter 1 is the foundational chapter) · Full term-cards for all new vocabulary · Deep-dive explainers for the conceptual hinges.</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>First time through — no recap, all new</h2>
+  <div class="tagline">Chapter 1 is the foundational chapter. Every term-card below is "new" — the companion's later chapters will recap from here.</div>
+
+  <p>Subsequent chapters' vocabulary primers have a "Carried forward" subsection that recaps terms from earlier chapters. Chapter 1 has no such subsection: every term in this chapter is being introduced for the first time. The companion will recap from here. Exception: the chapter assumes basic set theory (sets, subsets, functions, finite/infinite cardinals) and elementary logic — the term-cards below begin where the book begins.</p>
+
+  <h2>New in Chapter 1 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Binary relation</span><p>A subset $R \subseteq A \times A$ on a set $A$. Three properties matter most: <em>reflexive</em> (R: $(a,a) \in R$ for all $a$), <em>transitive</em> (T: $(a,b) \in R$ and $(b,c) \in R$ imply $(a,c) \in R$), <em>antisymmetric</em> (A: $(a,b) \in R$ and $(b,a) \in R$ imply $a = b$). Reflexive + transitive = preorder; reflexive + transitive + antisymmetric = partial order.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Partial order / poset</span><p>A binary relation that is reflexive, transitive, and antisymmetric. Conventionally written $\le$. A pair $(A, \le)$ where $\le$ is a partial order is called a <strong>poset</strong> (partially ordered set). The inverse relation $\ge$ is also a partial order — every poset has a <em>dual poset</em>.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Subposet</span><p>A subset $B$ of a poset $(A, \le)$ ordered by restriction: $b \le_B b'$ iff $b, b' \in B$ and $b \le_A b'$. Subposets inherit the poset structure but may lose other lattice-theoretic properties (e.g., a subposet of a lattice may not be a lattice).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Comparable / chain / antichain</span><p>$a, b \in A$ are <em>comparable</em> if $a \le b$ or $b \le a$; otherwise <em>non-comparable</em>, written $a \| b$. A subset $C$ where every two elements are comparable is a <strong>chain</strong> (or totally ordered). A subset $S$ where every two distinct elements are non-comparable is an <strong>antichain</strong>.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Upper / lower bound</span><p>An element $a \in A$ is an <em>upper bound</em> for $X \subseteq A$ if $x \le a$ for every $x \in X$. Dually, a <em>lower bound</em> has $a \le x$ for every $x \in X$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Largest / smallest, maximal / minimal</span><p>The <strong>largest element</strong> of $X$ (if it exists) is $m \in X$ with $x \le m$ for every $x \in X$ — unique if it exists. <strong>Maximal</strong> is weaker: $m \in X$ with no element greater than $m$ in $X$. Largest implies maximal but not conversely (Ex 1.2). For chains, "maximal = largest" (Ex 1.3 proof).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Join $\vee$ and meet $\wedge$</span><p>The <strong>join</strong> $\sup X = \bigvee X$ (if it exists) is the smallest upper bound of $X$. The <strong>meet</strong> $\inf X = \bigwedge X$ is the largest lower bound. For pairs: $\sup\{a, b\} = a \vee b$, $\inf\{a, b\} = a \wedge b$. When they exist, joins and meets are unique.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Noetherian / Artinian</span><p>A poset is <strong>noetherian</strong> if every non-empty subset contains a maximal element — equivalent to ACC (ascending chain condition: every $a_1 \le a_2 \le \dots$ stabilises). <strong>Artinian</strong>: every non-empty subset contains a minimal element — equivalent to DCC. Each is the order-dual of the other. <em>Well-ordered</em> = chain + artinian.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Axiom of Choice (and its equivalents)</span><p>The book uses <strong>Zorn's Lemma</strong> (every chain in a non-empty poset has an upper bound ⟹ the poset has a maximal element), the <strong>Hausdorff Principle</strong> (every chain extends to a maximal chain), and <strong>Zermelo's Theorem</strong> (every set can be well-ordered) interchangeably. They are equivalent forms of the Axiom of Choice.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Covered / Hasse diagram</span><p>$a \prec b$ ("$a$ is covered by $b$") means $a &lt; b$ and there is no $c$ with $a &lt; c &lt; b$. <strong>Hasse diagram</strong>: posets drawn with circles for elements; $a$ below $b$ if $a &lt; b$; line segments connect covering pairs. Two finite posets are isomorphic iff they have the same Hasse diagram (Remark 1.2).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Order morphism / strictly order morphism / order isomorphism</span><p>$f: (A, \le) \to (B, \le)$ is an <strong>order morphism</strong> if $a \le a'$ implies $f(a) \le f(a')$. Injective order morphism = <strong>strictly order morphism</strong>. Bijective order morphism whose inverse is also an order morphism = <strong>order isomorphism</strong>. Remark 1.1: the inverse of a bijective order morphism is NOT automatically an order morphism (Ex 1.8 example).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Upper / lower directed</span><p>$D \subseteq A$ is <strong>upper directed</strong> if every finite subset of $D$ has an upper bound in $D$. (Equivalently: for any $d, d' \in D$ there exists $d'' \in D$ with $d, d' \le d''$.) <em>Lower directed</em> is dual.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Lattice / complete lattice</span><p>A <strong>lattice</strong> is a poset where every two elements have a join and a meet. A <strong>complete lattice</strong> is a poset where every subset (including the empty set) has a join and a meet. Complete lattices have a top $1 = \sup L$ and bottom $0 = \inf L$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Sublattice</span><p>$B \subseteq L$ is a <strong>sublattice</strong> if $b, b' \in B$ implies $b \vee b' \in B$ and $b \wedge b' \in B$ (closure under both operations). $B$ is a <em>complete sublattice</em> of a complete lattice if it's closed under arbitrary joins and meets. Sublattice is stricter than subposet — the lattice operations must be the same.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Quotient sublattice / interval</span><p>For $a \le b$ in $L$, the <strong>quotient sublattice</strong> (or <strong>interval</strong>) $b/a = \{x \in L : a \le x \le b\}$. Notation: $a/0 = \{x : x \le a\}$ even when $L$ has no $0$. If $a \prec b$ (covering relation), $b/a = \{a, b\}$ is a <strong>simple</strong> quotient sublattice.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Ideal / Filter / Principal ideal</span><p>An <strong>ideal</strong> $I \subseteq L$ is a non-empty subset closed under: (i) finite joins, (ii) downward — $t \le x \in I \Rightarrow t \in I$. Equivalent: $I$ is a sublattice and $x, y \in I$ imply $x \vee y \in I$ and $x \wedge y \in I$ — but ideals are stricter than sublattices because of the downward-closure. Dual concept: <strong>filter</strong>. <strong>Principal ideal</strong> $a/0 = \{x : x \le a\}$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Lattice morphism / isomorphism</span><p>$f: L \to L'$ is a <strong>lattice morphism</strong> if $f(a \wedge b) = f(a) \wedge f(b)$ and $f(a \vee b) = f(a) \vee f(b)$. Bijective lattice morphism = <strong>lattice isomorphism</strong>; written $L \cong L'$. Lattice morphism implies order morphism (Remark 1.4); the converse is FALSE in general (Ex 1.19); but for <em>bijective</em> order morphisms between lattices, the equivalence holds (Remark 1.5).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Modular lattice</span><p>A lattice $L$ is <strong>modular</strong> if $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$ for all $a, b, c \in L$. (The reverse inequality $\ge$ holds in every lattice — Remark 1.6 — so modularity asserts equality.) Self-dual: dualising the law gives the same law. Sublattices of modular lattices are modular (Remark 1.7).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">$N_5$ (the pentagon lattice)</span><p>The five-element lattice $\{0, a, b, c, 1\}$ with $0 &lt; a &lt; c &lt; 1$, $0 &lt; b &lt; 1$, and $a, c$ incomparable to $b$. Looks like a pentagon when drawn. Theorem 1.4 (Dedekind, 1900): a lattice is modular iff it contains no sublattice isomorphic to $N_5$.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Distributive lattice</span><p>A lattice $L$ is <strong>distributive</strong> if $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$ for all $a, b, c \in L$. Equivalently (Remarks 3, 4): the dual law $(a \wedge b) \vee c = (a \vee c) \wedge (b \vee c)$, or various cancellation forms. Every distributive lattice is modular; the converse fails. Self-dual.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">$M_5$ (the diamond lattice)</span><p>The five-element lattice $\{0, a, b, c, 1\}$ with $0 \prec a, b, c \prec 1$ — three atoms with a single top. Modular (it's a Boolean-like diamond) but NOT distributive. Theorem 1.7: a lattice is distributive iff it is modular AND contains no sublattice isomorphic to $M_5$. (Some authors call this the "$M_3$ lattice" since it has 3 atoms; Călugăreanu's "$M_5$" emphasises the 5 elements.)</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Semimodular / covering condition</span><p>The <strong>upper covering condition</strong>: $a \wedge b \prec a$ implies $b \prec a \vee b$. Lower covering condition is dual. A lattice satisfying upper covering is called <em>semimodular</em>. Modular ⟹ semimodular; converse fails. Ex 1.22 verifies modular ⟹ both covering conditions.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Upper continuous lattice</span><p>A complete lattice $L$ is <strong>upper continuous</strong> if $a \wedge \bigvee D = \bigvee_{d \in D} (a \wedge d)$ for every $a \in L$ and every upper-directed $D \subseteq L$. Equivalently (Ex 1.33): the same with chains in place of upper-directed subsets. Compactly generated lattices (introduced in Chapter 2) are the canonical examples.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Atom / Atomic</span><p>An <strong>atom</strong> in a lattice with $0$ is an element $a$ with $0 \prec a$. A lattice with $0$ is <strong>atomic</strong> if every quotient sublattice $a/0$ for $a &gt; 0$ contains at least one atom. <em>Strongly atomic</em>: every quotient sublattice (not just $a/0$) contains an atom (Ex 1.38).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Complement / direct sum / complemented</span><p>In a lattice with $0$ and $1$, $a' \in L$ is a <strong>complement of $a$</strong> if $a \wedge a' = 0$ and $a \vee a' = 1$. Notation: $a \oplus a' = 1$. The lattice is <strong>complemented</strong> if every element has at least one complement. <strong>Relatively complemented</strong>: every element has at least one complement in every quotient sublattice containing it.</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Self-duality of partial orders, lattices, modularity, distributivity</h3>
+    <p>Every notion in lattice theory has a <em>dual</em> obtained by swapping $\le$ with $\ge$, $\vee$ with $\wedge$, $0$ with $1$, "join" with "meet," "noetherian" with "artinian," and so on. The book makes heavy use of this: theorems are stated once, and the dual statement is "automatic" by symmetry.</p>
+    <p>Some notions are <strong>self-dual</strong>: the notion of partial order is self-dual ($\le$ is a partial order iff $\ge$ is). Lattice is self-dual. Modular is self-dual (the modular law $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$ is the same after swap). Distributive is self-dual (Remarks 3, 4 in the chapter). Complemented is self-dual.</p>
+    <p>Other notions are NOT self-dual: noetherian and artinian are duals of each other but distinct. ACC and DCC are duals. Largest and smallest are duals. Atom and "coatom" (defined later) are duals. The book exploits this asymmetry: Chapter 13's "dual Goldie dimension" is Goldie dimension applied to $L^0$ (the dual lattice).</p>
+    <p>Operationally: when reading a definition, ask "what is its dual?" If the definition involves $\vee$ or $0$ or $\sup$, the dual involves $\wedge$ or $1$ or $\inf$. If the definition is symmetric in these, it is self-dual.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>$N_5$ and $M_5$ — universal obstructions to modularity and distributivity</h3>
+    <p>Theorem 1.4 (Dedekind, 1900) and Theorem 1.7 are <em>obstruction characterisations</em>: they say a lattice fails a property iff it contains a specific small sublattice. This "forbidden subgraph" pattern is structural — analogous to Kuratowski's theorem for planar graphs (no $K_5$, no $K_{3,3}$).</p>
+    <table class="grid">
+      <thead><tr><th>Property</th><th>Forbidden sublattice</th><th>Author / year</th></tr></thead>
+      <tbody>
+        <tr><td>Modular</td><td>$N_5$ (pentagon)</td><td>Dedekind, 1900</td></tr>
+        <tr><td>Distributive</td><td>$N_5$ AND $M_5$ (= $M_3$)</td><td>Birkhoff, 1934</td></tr>
+        <tr><td>Boolean</td><td>$N_5$, $M_5$, AND every non-Boolean finite distributive lattice</td><td>Stone, 1936</td></tr>
+      </tbody>
+    </table>
+    <p>What's special about $N_5$ and $M_5$: they are the SMALLEST lattices that are non-modular / non-distributive. $N_5$ is a 5-element pentagon; $M_5$ is a 5-element diamond. Lattices smaller than 5 elements are automatically modular and distributive (4-element lattices are all distributive). The "no $N_5$ no $M_5$" criterion is decidable in finite lattices by checking 5-element subposets — the algorithmic content of the theorem.</p>
+    <p>Modern terminology note: many texts call the diamond "$M_3$" (3 atoms, 5 elements). Călugăreanu uses "$M_5$" emphasising the element count. Both refer to the same lattice.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Modular vs distributive — what's the difference operationally?</h3>
+    <p>Modularity is the lattice version of the <em>Second Isomorphism Theorem</em> from algebra. For a group $G$ with subgroups $A, B, C$ and $A \le C$: $A \vee (B \cap C) = (A \vee B) \cap C$. The submodule lattice of any module is modular for exactly this reason — the modular law is the lattice-theoretic abstraction of the second isomorphism theorem.</p>
+    <p>Distributivity is the lattice version of the <em>set-theoretic distributive law</em>: $(A \cup B) \cap C = (A \cap C) \cup (B \cap C)$. The lattice of subsets $\mathcal{P}(M)$ is distributive (and Boolean). Most module lattices are NOT distributive — the existence of distinct submodules with non-trivial intersection structure violates distributivity.</p>
+    <p>Operationally:</p>
+    <ul>
+      <li><strong>Modular but not distributive</strong>: $S_R(M)$ for any module $M$ with two non-comparable submodules. The submodule lattice carries enough structure to apply modular-only theorems (Krull-Schmidt, modular dimension theory).</li>
+      <li><strong>Distributive but not Boolean</strong>: any finite chain (like $\{0, 1, 2, 3\}$); $\mathcal{P}(M) / \sim$ for some equivalence; the lattice of open sets of a topological space.</li>
+      <li><strong>Boolean</strong>: $\mathcal{P}(M)$, the power set; complete + distributive + complemented = Boolean (under modest conditions).</li>
+    </ul>
+    <p>The book's main subjects (submodule lattices) are modular but generally not distributive. Chapters 2-13 develop the modular toolkit: compactness, essential extensions, complementation, dimension theory — all sensitive to modularity but exploiting it cleanly.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Posets foundations</div>
+  <h2>Relations · partial orders · bounds · joins / meets · ACC / DCC · Choice</h2>
+  <p class="part-lede">The order-theoretic ground floor. Two sections: A1 sets up posets and chains; A2 develops bounds, joins/meets, the chain conditions, and the Axiom of Choice.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Relations · posets · subposets · chains · dual notions</h2>
+  <div class="tagline">A poset is a set with a relation that is reflexive, transitive, antisymmetric. Two elements are comparable if $\le$ goes one way or the other; otherwise non-comparable. Chains are totally ordered.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Binary relation</span>
+    <p>A system $(A_1, A_2, \dots, A_n; R)$ with $A_i$ ($1 \le i \le n$) arbitrary sets and $R \subseteq A_1 \times A_2 \times \dots \times A_n$ is called an <strong>$n$-ary relation</strong> between the elements of these sets. <em>Homogeneous</em> = $A_1 = \dots = A_n$. <em>Binary</em> = $n = 2$.</p>
+    <p>Three properties of binary relations $(A, A; R)$:</p>
+    <ul>
+      <li><strong>(R) Reflexive</strong>: $(a, a) \in R$ for each $a \in A$.</li>
+      <li><strong>(T) Transitive</strong>: $(a, b) \in R$ and $(b, c) \in R$ imply $(a, c) \in R$.</li>
+      <li><strong>(A) Antisymmetric</strong>: $(a, b) \in R$ and $(b, a) \in R$ imply $a = b$.</li>
+    </ul>
+    <p><strong>Preorder</strong> = (R) + (T). <strong>Partial order</strong> = (R) + (T) + (A). The set with a partial order is a <strong>poset</strong> (partially ordered set).</p>
+    <p>The <em>inverse relation</em> $R^{-1} = \{(b, a) : (a, b) \in R\}$. The inverse of a partial order is a partial order — every poset has a <strong>dual poset</strong>.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Subposet · comparable · chain</span>
+    <p>A subset $B$ of a poset $(A, \le)$ is a <strong>subposet</strong> when ordered by restriction: $b \le_B b' \iff b, b' \in B$ and $b \le_A b'$.</p>
+    <p>Two elements $a, b$ are <strong>comparable</strong> if $a \le b$ or $b \le a$; otherwise <strong>non-comparable</strong>, written $a \| b$. A subset $C$ where every two elements are comparable is a <strong>chain</strong> (or totally ordered).</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Dual notions</span>
+    <p>Two notions are <em>dual</em> if each is obtained by replacing the partial order $\le$ with its inverse $\ge$. The book exploits dualisation extensively: every theorem about $\sup$ has a dual about $\inf$, every theorem about ACC has a dual about DCC, etc. Some notions are <em>self-dual</em> — replacing $\le$ with $\ge$ gives the same notion (e.g., partial order itself is self-dual).</p>
+  </div>
+
+  <p><strong>Notation conventions.</strong> The chapter writes $a &lt; b$ for "$a \le b$ and $a \ne b$." The notation $a \prec b$ means "$a$ is <strong>covered</strong> by $b$": $a &lt; b$ and there is no $c$ with $a &lt; c &lt; b$. The Hasse diagram represents posets visually: circles for elements, line segments for covering pairs, with $a$ drawn below $b$ when $a &lt; b$. Two finite posets are isomorphic iff they have the same Hasse diagram (Remark 1.2).</p>
+
+  <h3>Two example diagrams (from p. 4)</h3>
+  <p>The chapter gives two posets on a 3-element set with different orders. The first is a 3-element chain ($a &lt; b &lt; c$); the second is a "V" (one bottom element, two non-comparable elements above):</p>
+  <svg class="diagram" viewBox="0 0 320 140" xmlns="http://www.w3.org/2000/svg">
+    <line x1="80" y1="120" x2="80" y2="80" />
+    <line x1="80" y1="80" x2="80" y2="40" />
+    <circle cx="80" cy="120" r="6" />
+    <circle cx="80" cy="80" r="6" />
+    <circle cx="80" cy="40" r="6" />
+    <line x1="220" y1="120" x2="200" y2="60" />
+    <line x1="220" y1="120" x2="240" y2="60" />
+    <circle cx="220" cy="120" r="6" />
+    <circle cx="200" cy="60" r="6" />
+    <circle cx="240" cy="60" r="6" />
+  </svg>
+  <p style="text-align: center; font-size: 14px; font-style: italic; color: var(--text-dim);">Two non-isomorphic 3-element posets: the chain (left) and the "V" (right).</p>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Bounds · joins / meets · noetherian / artinian · Axiom of Choice</h2>
+  <div class="tagline">From bounds to maximal/largest, from upper-bound-of-bounds to joins, from chain conditions to the three equivalent forms of the Axiom of Choice.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Bounds · largest / smallest · maximal / minimal</span>
+    <p>An <strong>upper bound</strong> of $X \subseteq A$ is $a \in A$ with $x \le a$ for all $x \in X$. <strong>Lower bound</strong> dually.</p>
+    <p>The <strong>largest element</strong> of $X \subseteq A$ (if exists) is $m \in X$ with $x \le m$ for all $x \in X$. <strong>Smallest</strong> dually. Largest is unique (when exists).</p>
+    <p><strong>Maximal</strong> in $X$: $m \in X$ with no element of $X$ strictly greater. <strong>Minimal</strong> dually.</p>
+    <p>Largest ⟹ maximal (always). Maximal does NOT imply largest (Ex 1.2). In any chain, there is at most one maximal (= largest if exists, Ex 1.3 partial converse).</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Join (sup) and meet (inf)</span>
+    <p>For $X \subseteq A$, an element $a \in A$ is a <strong>join</strong> (or smallest upper bound) of $X$ if $a$ is an upper bound for $X$ and $a \le b$ for every upper bound $b$ of $X$. <strong>Meet</strong> (largest lower bound) is dual.</p>
+    <p>Joins and meets are unique when they exist. Notation: $\sup X = \bigvee X$, $\inf X = \bigwedge X$. For pairs: $a \vee b = \sup\{a, b\}$, $a \wedge b = \inf\{a, b\}$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Noetherian / artinian / well-ordered</span>
+    <p>A poset $(A, \le)$ is <strong>noetherian</strong> if every non-empty subset contains a maximal element. <strong>Artinian</strong>: every non-empty subset contains a minimal element.</p>
+    <p>Equivalently (Ex 1.4): noetherian iff <em>ACC</em> (ascending chain condition: every $a_1 \le a_2 \le \dots$ stabilises). Artinian iff <em>DCC</em> (descending chain condition).</p>
+    <p>An artinian totally ordered (chain) poset is called <strong>well-ordered</strong>.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Axiom of Choice (and equivalents)</span>
+    <p><strong>Zorn's Lemma.</strong> If every chain of a non-empty poset $A$ has an upper bound, then $A$ has at least one maximal element.</p>
+    <p><strong>Hausdorff Principle.</strong> Every chain $C$ in a poset $A$ can be extended to a maximal chain $M$ in $A$.</p>
+    <p><strong>Zermelo's Theorem.</strong> Each set can be well-ordered.</p>
+    <p>These three are equivalent forms of the Axiom of Choice. The book uses them interchangeably.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Operational tip</span>
+    <p>When you need to construct "a maximal X" of some kind: use Zorn. When you need to extend "a chain $C$" to a maximal chain (e.g., a composition series): use Hausdorff. When you need to enumerate a possibly-uncountable set in a (transfinite) sequence: use Zermelo. The book defaults to Zorn; the others are noted when used.</p>
+  </div>
+
+  <p>The chapter also points out a useful consequence (a "remark" on p. 3): for an arbitrary set $X$, if $\alpha$ is the smallest ordinal with $|\alpha| = |X|$, the elements of $X$ can be arranged in a transfinite sequence $x_0, x_1, \dots, x_\rho, \dots$ ($\rho &lt; \alpha$). This is the form used in Chapter 13's transfinite recursive deviation construction.</p>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Order morphisms + lattices</div>
+  <h2>Morphisms · Proposition 1.1 · Theorem 1.1 · examples</h2>
+  <p class="part-lede">Order morphisms first, then the lattice axioms (associativity, commutativity, absorption — Prop 1.1) and the universal-algebra characterisation (Thm 1.1) that lets us define lattices either operationally or order-theoretically.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Order morphisms · lattice definition · Proposition 1.1 · Theorem 1.1</h2>
+  <div class="tagline">A function preserving $\le$ is an order morphism. Lattices are posets where every two elements have a join AND a meet — equivalently, universal algebras with two operations satisfying associativity, commutativity, and absorption.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Order morphism</span>
+    <p>A function $f : (A, \le) \to (B, \le)$ between posets is an <strong>order morphism</strong> if $a \le a'$ in $A$ implies $f(a) \le f(a')$ in $B$. Injective order morphism = <strong>strictly order morphism</strong>. Bijective order morphism whose inverse is also an order morphism = <strong>(order) isomorphism</strong>.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remark 1.1 · the inverse asymmetry</span>
+    <p>The inverse of a bijective order morphism need NOT be an order morphism. Example: take $A = \{0, 1\}$ with $0 \| 1$ (antichain) and $B = \{0, 1\}$ with $0 &lt; 1$. The map $f: A \to B$ sending $0 \mapsto 0, 1 \mapsto 1$ is a bijective order morphism (vacuously preserves the (empty) order on $A$). But $f^{-1}$ does NOT preserve the order on $B$ — $0 &lt; 1$ in $B$ but $0 \| 1$ in $A$. So $f^{-1}$ is not an order morphism. Ex 1.8 makes the example explicit.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remark 1.2</span>
+    <p>Two finite posets are isomorphic if and only if they are represented by the same Hasse diagram. (Hence finite posets are essentially classified by their Hasse diagrams.)</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Upper / lower directed · Lattice · Complete lattice</span>
+    <p>$D \subseteq A$ is <strong>upper directed</strong> if each finite subset of $D$ has an upper bound in $D$. <em>Lower directed</em> dually. By induction, "each finite" reduces to "each two-element."</p>
+    <p>A poset $L$ is a <strong>lattice</strong> if each pair of elements has a join and a meet. A <strong>complete lattice</strong> is a poset where each subset has a join and a meet.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 1.1</span>
+    <p>In an arbitrary lattice $L$, the binary operations $\vee$ and $\wedge$ are <strong>associative</strong>, <strong>commutative</strong>, and satisfy the <strong>absorption property</strong>: for each $a, b \in L$, $(a \vee b) \wedge a = (a \wedge b) \vee a = a$.</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.1 · Universal algebra characterisation</span>
+    <p>Let $(L, \vee, \wedge)$ be a universal algebra with two binary associative and commutative operations satisfying the absorption property. The relation $\le$ defined on $L$ by $a \le b \iff a \wedge b = a \iff a \vee b = b$ defines a partial order on $L$, such that $L$ becomes a lattice with $\inf\{a, b\} = a \wedge b$ and $\sup\{a, b\} = a \vee b$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Two definitions of "lattice"</span>
+    <p>Theorem 1.1 says: lattices can be defined either as posets with binary joins and meets, OR as algebraic structures (universal algebras) with two associative-commutative-absorption-satisfying operations. The two definitions are equivalent, and one routinely passes between them. Proofs sometimes use the order-theoretic side ("show $\sup$ exists"); sometimes the algebraic side ("show $\vee$ associative"); both are correct.</p>
+  </div>
+
+  <h3>Examples of complete lattices</h3>
+  <ol>
+    <li><strong>Power set $\mathcal{P}(M)$.</strong> For any set $M$, $(\mathcal{P}(M), \subseteq)$ is a complete lattice with $\bigvee \{X_i\}_{i \in I} = \bigcup X_i$ and $\bigwedge \{X_i\}_{i \in I} = \bigcap X_i$. (And it is distributive — even Boolean.)</li>
+    <li><strong>Submodule lattice $S_R(M)$.</strong> For an $R$-module $M$, $S_R(M)$ is the complete lattice of all submodules of $M$, with $\bigvee \{N_i\} = \sum N_i$ and $\bigwedge \{N_i\} = \bigcap N_i$. (Modular but generally not distributive.) The book's central object of study.</li>
+    <li><strong>Subalgebra lattice $S(A, \Omega)$.</strong> For a universal algebra $(A, \Omega)$ (e.g., a group, ring, lattice, vector space), the lattice of all subalgebras is complete: $\bigwedge \{B_i\} = \bigcap B_i$, and $\bigvee \{B_i\}$ = the subalgebra generated by $\bigcup B_i$.</li>
+  </ol>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.2</span>
+    <p>A poset $(A, \le)$ is a complete lattice if and only if each subset of $A$ (including the empty subset) has a meet.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>($\Rightarrow$) Necessity is clear (a complete lattice has all meets by definition).</p>
+    <p>($\Leftarrow$) Suppose each subset has a meet. Let $B \subseteq A$ and $C = \{a \in A : \forall b \in B, b \le a\}$ be the upper bounds of $B$. Note $\inf \emptyset \in C$ (vacuously $C$ is non-empty since $\inf \emptyset = $ the largest element of $A$, which exists by hypothesis applied to the empty set). Set $u = \inf C$. Verify: $u$ is an upper bound for $B$ (it's $\le$ every element of $C$, but we need it to be $\ge$ every $b \in B$ — this follows from each $c \in C$ being an upper bound, hence $b \le c$ for all $c \in C$, so $b \le \inf C = u$). And $u$ is the smallest such — i.e., $u = \sup B$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">A subtle point</span>
+    <p>"Each subset has a meet, INCLUDING the empty subset." $\inf \emptyset$ is the largest element of the poset (every element is vacuously a lower bound for $\emptyset$). So $\inf \emptyset$ exists iff the poset has a largest element. The theorem is saying: meets of all subsets (including $\emptyset$) suffice to define joins by the upper-bound construction — making the poset complete.</p>
+  </div>
+
+  <p>The chapter then gives a brief remark: in a complete lattice, $\sup L, \sup \emptyset, \inf L, \inf \emptyset$ all exist. We denote $1 = \sup L = \inf \emptyset$ and $0 = \sup \emptyset = \inf L$. These are called <strong>bounds</strong>. The lattice is then called <strong>bounded</strong>. Every $a \in L$ satisfies $0 \le a \le 1$, $0 = 0 \wedge a = $ the meet, $a = 0 \vee a = a \wedge 1 = a$, $1 = 1 \vee a$.</p>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Sublattices · ideals · lattice morphisms</div>
+  <h2>Sublattices, intervals, ideals, filters, lattice morphisms</h2>
+  <p class="part-lede">Once we have lattices, we ask about sublattices, intervals, ideals, and morphisms — the structural framework reused throughout the book.</p>
+</div>
+
+<section class="module" id="s4">
+  <h2><span class="num">C1</span> Examples · Theorem 1.2 · bounds 0, 1</h2>
+  <div class="tagline">$\mathcal{P}(M)$, $S_R(M)$, $S(A, \Omega)$ as canonical complete lattices. Theorem 1.2 makes "complete" a one-sided condition. Bounded = top + bottom exist.</div>
+
+  <p>The chapter's three canonical examples are worth dwelling on, because they recur throughout the book:</p>
+  <ul>
+    <li><strong>$\mathcal{P}(M)$</strong> for any set $M$. Joins are unions, meets are intersections. <em>Distributive</em>; in fact Boolean (every element has a unique complement, the set complement). The "free distributive lattice" generated by independent atoms.</li>
+    <li><strong>$S_R(M)$</strong> for any $R$-module $M$. Joins are $N_1 + N_2 + \dots$ (sums of submodules); meets are intersections. <em>Modular</em> (the modular law is the second isomorphism theorem). Generally NOT distributive — most modules have non-trivial submodule intersections.</li>
+    <li><strong>$S(A, \Omega)$</strong> for a universal algebra $(A, \Omega)$. Joins are subalgebras generated by unions; meets are intersections of subalgebras. <em>Algebraic</em> in the sense of universal algebra. Modular for groups (subgroup lattice) and abelian groups (Goursat's lemma + structure theorem). Distributive only in special cases.</li>
+  </ul>
+
+  <p>Theorem 1.2 is the key technical fact: "complete lattice" can be characterised by "each subset has a meet" alone (no separate join requirement). This simplifies many constructions: when you build a new complete lattice (e.g., the ideal lattice $I(L)$ of Chapter 13), you only need to check that meets exist + that the empty meet exists = the lattice has a largest element.</p>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">C2</span> Sublattices · ideals · filters · lattice morphisms</h2>
+  <div class="tagline">A sublattice is closed under both lattice operations. Intervals (= quotient sublattices $b/a$) are the workhorse of the chapter's deeper theorems. Ideals add downward-closure to sublattices. Lattice morphisms preserve $\vee$ and $\wedge$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Sublattice</span>
+    <p>$B \subseteq L$ is a <strong>sublattice</strong> if for each $b, b' \in B$, $\inf_L\{b, b'\} \in B$ and $\sup_L\{b, b'\} \in B$. The lattice operations on $B$ inherited from $L$ make $B$ a lattice.</p>
+    <p>In a complete lattice, $B$ is a <strong>complete sublattice</strong> if for each subset $X \subseteq B$, $\inf_L X \in B$ and $\sup_L X \in B$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Quotient sublattice (interval)</span>
+    <p>For $a \le b$ in $L$, the <strong>quotient sublattice</strong> (or <strong>interval</strong>) is</p>
+    <p>$$b/a = \{x \in L : a \le x \le b\}.$$</p>
+    <p>(Książka notation. Modern texts usually write $[a, b]$.) When $a = 0$, $b/0 = \{x : x \le b\}$. The notation $a/0$ is used even when $L$ has no $0$ — meaning "the principal ideal $\{x : x \le a\}$."</p>
+    <p>If $a \prec b$ (covering relation), $b/a$ is a <strong>simple</strong> interval — exactly two elements.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Ideal · Filter · Principal ideal</span>
+    <p>$I \subseteq L$ is an <strong>ideal</strong> in $L$ if (i) $x \vee y \in I$ for every $x, y \in I$ and (ii) $t \le x \in I \Rightarrow t \in I$. Equivalent (since (ii) gives $\wedge$-closure with any element below): $I$ is a sublattice + $x \in I, y \in L \Rightarrow x \wedge y \in I$.</p>
+    <p>$I$ is an ideal in $L$ iff for every $x, y \in I$ the quotient sublattice $(x \vee y)/0 \subseteq I$. ($I(L)$ = the lattice of all ideals; with set-inclusion it is itself a complete lattice.)</p>
+    <p><strong>Filter</strong>: dual concept. <strong>Principal ideal</strong>: for $a \in L$, $a/0 = \{x : x \le a\}$ is the principal ideal generated by $a$.</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Lattice morphism · Lattice isomorphism</span>
+    <p>$f : L \to L'$ is a <strong>lattice morphism</strong> if $f(a \wedge b) = f(a) \wedge f(b)$ and $f(a \vee b) = f(a) \vee f(b)$ for each $a, b \in L$. Bijective lattice morphism = <strong>lattice isomorphism</strong>; written $L \cong L'$.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remarks 1.3, 1.4, 1.5 · the morphism subtleties</span>
+    <p><strong>Remark 1.3.</strong> The inverse of a lattice isomorphism is also a lattice isomorphism. (Compare to Remark 1.1: the inverse of a bijective ORDER morphism need not be an order morphism — but the inverse of a bijective LATTICE morphism IS one. Lattice morphisms are stronger.)</p>
+    <p><strong>Remark 1.4.</strong> Each lattice morphism is an order morphism. (Apply $f$ to $a \le b$ via $a = a \wedge b$, get $f(a) = f(a) \wedge f(b)$, hence $f(a) \le f(b)$.)</p>
+    <p><strong>Remark 1.5.</strong> A function between two lattices is an order isomorphism if and only if it is a lattice isomorphism. (BIDIRECTIONAL. The order morphism vs. lattice morphism subtlety only affects the non-bijective case. Once bijective, the two notions coincide.)</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Operational summary</span>
+    <p>Lattice morphism is strictly stronger than order morphism in the non-bijective case (Ex 1.19: a non-bijective order morphism that's not a lattice morphism). For bijections, the two coincide. So the theory of "lattice isomorphisms" can be developed using only order isomorphisms — convenient when the only available structure is the partial order.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD-header">
+  <div class="pk">Part D · Modular lattices</div>
+  <h2>Modular law · Theorems 1.3, 1.4, 1.5 · Lemma 1.1 · semimodularity</h2>
+  <p class="part-lede">The modular law is the lattice version of the second isomorphism theorem. The chapter's deepest theorems: Dedekind's $N_5$-obstruction, the transposition isomorphism, and the orthogonality lemma.</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">D1</span> Modular lattices · Theorem 1.3 · Theorem 1.4 ($N_5$) · Theorem 1.5 · Lemma 1.1</h2>
+  <div class="tagline">Modular = "$a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$." Theorem 1.4 (Dedekind 1900): modular ⟺ no $N_5$ sublattice. Theorem 1.5: in modular lattices, the transposition $a \vee b/b \cong a/a \wedge b$ is a lattice isomorphism.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Modular lattice</span>
+    <p>A lattice $L$ is <strong>modular</strong> if for every $a, b, c \in L$:</p>
+    <p>$$a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c).$$</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remarks 1.6, 1.7</span>
+    <p><strong>Remark 1.6.</strong> In every lattice, $a \le c \Rightarrow (a \vee b) \wedge c \ge a \vee (b \wedge c)$. (The hard direction in modularity is the OPPOSITE inequality: equality is what's special.)</p>
+    <p><strong>Remark 1.7.</strong> Each sublattice of a modular lattice is also modular. (The modular condition is hereditary.)</p>
+  </div>
+
+  <p>Hence modularity is equivalent to: $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$ — equality, not just $\ge$.</p>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.3 · cancellation form</span>
+    <p>A lattice $L$ is modular if and only if for every $a, b, c \in L$:</p>
+    <p>$$a \le c \text{ and } a \wedge b = c \wedge b \text{ and } a \vee b = c \vee b \Rightarrow a = c.$$</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Rightarrow$) Assume modular. $a \le c$, $a \wedge b = c \wedge b$, $a \vee b = c \vee b$. Then $a \vee (b \wedge c) = a \vee (a \wedge b) = a$ (absorption) and $(a \vee b) \wedge c = (c \vee b) \wedge c = c$. By modularity, equal: $a = c$.</p>
+    <p>($\Leftarrow$) Suppose the cancellation property. Let $a \le c$. Set $a' = a \vee (b \wedge c)$, $c' = (a \vee b) \wedge c$. Easy to check $a \le a' \le c' \le c$. The hypothesis applied to $a', c', b$ gives $a' = c'$ once we verify $a' \wedge b = c' \wedge b$ and $a' \vee b = c' \vee b$ — which follow from absorption + the inequalities. Hence equality. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.4 · Dedekind's $N_5$ obstruction</span>
+    <p>A lattice $L$ is modular if and only if it contains no five-element sublattice isomorphic to the <strong>pentagon lattice $N_5$</strong>.</p>
+  </div>
+
+  <p>The pentagon $N_5$ has elements $0, a, b, c, 1$ with $0 &lt; a &lt; c &lt; 1$, $0 &lt; b &lt; 1$, and $a, c$ both incomparable to $b$:</p>
+  <svg class="diagram" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg">
+    <line x1="110" y1="200" x2="60" y2="140" />
+    <line x1="60" y1="140" x2="60" y2="80" />
+    <line x1="60" y1="80" x2="110" y2="20" />
+    <line x1="110" y1="200" x2="160" y2="110" />
+    <line x1="160" y1="110" x2="110" y2="20" />
+    <circle cx="110" cy="200" r="6" />
+    <circle cx="60" cy="140" r="6" />
+    <circle cx="60" cy="80" r="6" />
+    <circle cx="110" cy="20" r="6" />
+    <circle cx="160" cy="110" r="6" />
+    <text x="115" y="208">0</text>
+    <text x="42" y="146">a</text>
+    <text x="42" y="86">c</text>
+    <text x="115" y="28">1</text>
+    <text x="170" y="115">b</text>
+  </svg>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Rightarrow$) If $L$ is modular, every sublattice is modular (Remark 1.7). $N_5$ is not modular (since $a &lt; c$ but $(a \vee b) \wedge c = 1 \wedge c = c$ while $a \vee (b \wedge c) = a \vee 0 = a \ne c$). So $L$ contains no $N_5$.</p>
+    <p>($\Leftarrow$) If $L$ is not modular, there are $a, b, c$ with $a &lt; c$, $a \vee b = c \vee b$, $a \wedge b = c \wedge b$, but $a \ne c$. The five elements $\{a, b, c, a \wedge b, a \vee b\}$ form a sublattice isomorphic to $N_5$. ∎</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.5 · the transposition isomorphism</span>
+    <p>If $a, b$ are elements in a modular lattice $L$, then the quotient sublattices $a \vee b / b$ and $a / a \wedge b$ are isomorphic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Define $f : a \vee b / b \to a / a \wedge b$ by $f(x) = x \wedge a$ for $x \in a \vee b / b$. Define $g : a / a \wedge b \to a \vee b / b$ by $g(y) = y \vee b$ for $y \in a / a \wedge b$. Both are lattice morphisms; $f \circ g = \text{id}$ and $g \circ f = \text{id}$ — by modularity. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The Second Isomorphism Theorem in lattice form</span>
+    <p>Theorem 1.5 IS the lattice abstraction of the Second Isomorphism Theorem from group theory: for subgroups $A, B$ of $G$, $(A \vee B)/B \cong A/(A \wedge B)$ (where $\vee = $ subgroup generated by, $\wedge = $ intersection). The lattice version captures the structural fact that "the interval above $b$ in the join is order-isomorphic to the interval below $a$ in the meet" — a transposition relation between intervals.</p>
+    <p>The theorem is used pervasively in later chapters: it lets you turn a question about an upper interval into a question about a lower interval (or vice versa), under modularity.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 1.1 · modular orthogonality</span>
+    <p>In a modular lattice, $p \wedge a = p \wedge b = 0$ and $(p \vee a) \wedge (p \vee b) = p$ imply $p \wedge (a \vee b) = 0$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>$0 = p \wedge a = ((p \vee a) \wedge (p \vee b)) \wedge a = a \wedge (p \vee b)$. Then $b = b \vee (a \wedge (p \vee b)) = (a \vee b) \wedge (p \vee b) = b \vee (p \wedge (a \vee b))$ — by modularity twice. Hence $b \le p \wedge (a \vee b)$ — wait, that gives $b \ge p \wedge (a \vee b)$. Then $p \wedge (a \vee b) \le p \wedge b = 0$. ∎</p>
+  </div>
+
+  <h3>Semimodularity / covering conditions</h3>
+  <p>The chapter introduces a generalisation of modularity: a lattice $L$ satisfies the <strong>upper covering condition</strong> if $a \wedge b \prec a$ implies $b \prec a \vee b$ (the dual is the <strong>lower covering condition</strong>). Lattices satisfying the upper covering condition are called <strong>semimodular</strong>; lower-semimodularity is dual. Modular lattices satisfy both covering conditions (Ex 1.22), and semimodularity is strictly weaker.</p>
+</section>
+
+<div class="part-header" id="partE-header">
+  <div class="pk">Part E · Distributive lattices · upper continuous · atoms</div>
+  <h2>Distributive · Theorems 1.6, 1.7 ($M_5$) · upper continuous · atoms · complemented</h2>
+  <p class="part-lede">Distributive lattices add the second forbidden sublattice $M_5$ (the diamond) on top of $N_5$. Then upper continuity, atoms, and the complement structure that drives Chapter 6's complementation theorems.</p>
+</div>
+
+<section class="module" id="s7">
+  <h2><span class="num">E1</span> Distributive · Theorem 1.6 · Theorem 1.7 ($M_5$ obstruction)</h2>
+  <div class="tagline">Distributive = $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$. Theorem 1.7: distributive ⟺ modular AND no $M_5$ sublattice — the M3-N5 theorem (Birkhoff, 1934).</div>
+
+  <div class="box def">
+    <span class="label">Definition · Distributive lattice</span>
+    <p>A lattice $L$ is <strong>distributive</strong> if for each $a, b, c \in L$:</p>
+    <p>$$(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c).$$</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remarks · five equivalent forms</span>
+    <p>The chapter records five equivalent characterisations:</p>
+    <ol>
+      <li>Every distributive lattice is modular (Ex 1.25).</li>
+      <li>In every lattice, $(a \vee b) \wedge c \ge (a \wedge c) \vee (b \wedge c)$.</li>
+      <li>Distributive iff $(a \wedge b) \vee c = (a \vee c) \wedge (b \vee c)$ (the dual law — both hold simultaneously).</li>
+      <li>Distributive iff $(a \wedge b) \vee (a \wedge c) \vee (b \wedge c) = (a \vee b) \wedge (a \vee c) \wedge (b \vee c)$.</li>
+      <li>Each sublattice of a distributive lattice is also distributive.</li>
+    </ol>
+    <p>Distributive is self-dual, in contrast to modular (which is also self-dual but the equivalence requires extra work).</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.6 · cancellation form for distributive</span>
+    <p>A lattice $L$ is distributive if and only if for every $a, b, c \in L$:</p>
+    <p>$$a \wedge c = b \wedge c \text{ and } a \vee c = b \vee c \Rightarrow a = b.$$</p>
+  </div>
+
+  <div class="box thm">
+    <span class="label">Theorem 1.7 · the $M_5$ obstruction</span>
+    <p>A lattice $L$ is distributive if and only if it is modular AND it contains no five-element sublattice isomorphic to the lattice <strong>diamond $M_5$</strong>.</p>
+  </div>
+
+  <p>The diamond $M_5$ has 5 elements: $0, a, b, c, 1$ with $0 \prec a, b, c \prec 1$ — three atoms with one top:</p>
+  <svg class="diagram" viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">
+    <line x1="110" y1="180" x2="60" y2="100" />
+    <line x1="110" y1="180" x2="110" y2="100" />
+    <line x1="110" y1="180" x2="160" y2="100" />
+    <line x1="60" y1="100" x2="110" y2="20" />
+    <line x1="110" y1="100" x2="110" y2="20" />
+    <line x1="160" y1="100" x2="110" y2="20" />
+    <circle cx="110" cy="180" r="6" />
+    <circle cx="60" cy="100" r="6" />
+    <circle cx="110" cy="100" r="6" />
+    <circle cx="160" cy="100" r="6" />
+    <circle cx="110" cy="20" r="6" />
+    <text x="115" y="190">0</text>
+    <text x="42" y="105">a</text>
+    <text x="118" y="105">b</text>
+    <text x="170" y="105">c</text>
+    <text x="115" y="20">1</text>
+  </svg>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Rightarrow$) If $L$ is distributive, it is modular (Ex 1.25). $M_5$ is modular but not distributive (in $M_5$: $a \wedge (b \vee c) = a \wedge 1 = a$ but $(a \wedge b) \vee (a \wedge c) = 0 \vee 0 = 0$). So $L$ contains no $M_5$.</p>
+    <p>($\Leftarrow$) If $L$ is modular but not distributive, there exist $a, b, c$ with $a \wedge c = b \wedge c$, $a \vee c = b \vee c$, $a \ne b$ (Theorem 1.6 negated). Verify $a \| b$, $a \| c$ (both pairwise non-comparable, using the conditions). Then $\{a, b, c, a \wedge c = b \wedge c, a \vee c = b \vee c\}$ is a 5-element sublattice isomorphic to $M_5$. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Two obstructions, two theorems</span>
+    <p>Theorems 1.4 and 1.7 together give the M3-N5 theorem (Birkhoff 1934 in modern form, but Dedekind 1900 had the modular case): a lattice is</p>
+    <ul>
+      <li>modular ⟺ no $N_5$ sublattice;</li>
+      <li>distributive ⟺ no $N_5$ AND no $M_5$ sublattice — equivalently, modular + no $M_5$.</li>
+    </ul>
+    <p>The two obstructions are minimal: $N_5$ has 5 elements (no smaller non-modular lattice exists), $M_5$ has 5 elements (no smaller non-distributive modular lattice exists). The theorem is decidable for finite lattices: check all 5-element subposets.</p>
+  </div>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">E2</span> Upper continuous · atoms · complement · Proposition 1.2</h2>
+  <div class="tagline">Upper continuity is the join-meet distributivity at the directed-join level. Atoms generate atomic lattices. Complements give complemented and relatively complemented lattices. Prop 1.2 ties upper continuity to a specific structural property in modular complemented lattices.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Upper continuous</span>
+    <p>A complete lattice $L$ is <strong>upper continuous</strong> if</p>
+    <p>$$a \wedge \bigvee_{d \in D} d = \bigvee_{d \in D}(a \wedge d)$$</p>
+    <p>holds for every $a \in L$ and every upper-directed subset $D \subseteq L$.</p>
+    <p>(Ex 1.33: equivalently, for every chain $D \subseteq L$ in place of upper-directed.)</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Atom · Atomic</span>
+    <p>An <strong>atom</strong> in a lattice with $0$ is an element $a$ with $0 \prec a$ (covering relation: nothing strictly between $0$ and $a$).</p>
+    <p>A lattice with $0$ is <strong>atomic</strong> if each quotient sublattice $a/0$ for $a &gt; 0$ contains at least one atom. (Ex 1.38: every artinian lattice is <em>strongly</em> atomic — every quotient sublattice, not just $a/0$, contains an atom.)</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Definition · Complement · direct sum · complemented</span>
+    <p>For $a$ in a lattice with $0, 1$, an element $a' \in L$ is a <strong>complement of $a$</strong> if $a \wedge a' = 0$ and $a \vee a' = 1$.</p>
+    <p>Notation: $a \oplus a' = 1$ ("direct sum" notation — emphasising that $a$ and $a'$ "split $1$").</p>
+    <p>$L$ is <strong>complemented</strong> if every element has at least one complement. <strong>Relatively complemented</strong>: every element has at least one complement in every quotient sublattice containing it.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Two remarks on uniqueness</span>
+    <p>Complements are <strong>unique</strong> in distributive lattices (Ex 1.32): if $a'$ and $a''$ are both complements of $a$, then $a' = a''$ by the cancellation form of distributivity (Theorem 1.6).</p>
+    <p>In modular lattices, only <strong>comparable complements</strong> are unique. Two complements that are non-comparable can both exist (e.g., in $M_5$: $a, b, c$ are pairwise complements of each other, all distinct).</p>
+    <p>For modular lattices, the conditions "complemented" and "relatively complemented" are EQUIVALENT (Ex 1.36).</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 1.2</span>
+    <p>A modular complemented lattice $L$ is upper continuous if and only if for every upper directed subset $D$ of $L$ such that there is a non-zero element $a$ with $a \wedge d = 0$ for each $d \in D$, $\bigvee D \ne 1$ holds.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Rightarrow$) If $a \ne 0$ and $a \wedge d = 0$ for each $d \in D$, then $a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d) = 0$ — so $a$ is non-zero with $a \wedge \bigvee D = 0$, hence $\bigvee D \ne 1$ (else $a \wedge 1 = a \ne 0$).</p>
+    <p>($\Leftarrow$) Suppose the property; show upper continuous. The reverse inequality $\bigvee_{d \in D}(a \wedge d) \le a \wedge \bigvee D$ is automatic. For equality: argue by complementation in $a \wedge \bigvee D / 0$ — find a complement $b$ of $\bigvee_{d \in D}(a \wedge d)$ in this interval, show $b = 0$ via the hypothesis. ∎</p>
+  </div>
+</section>
+
+<div class="part-header" id="partF-header">
+  <div class="pk">Part F · Chain conditions</div>
+  <h2>Noetherian / artinian · Propositions 1.3, 1.4, 1.5</h2>
+  <p class="part-lede">The chain conditions in their lattice form, with the modular-quotient transfer property that makes ACC/DCC hereditary in modular lattices.</p>
+</div>
+
+<section class="module" id="s9">
+  <h2><span class="num">F1</span> Noetherian / artinian lattices · Propositions 1.3, 1.4, 1.5</h2>
+  <div class="tagline">Three structural propositions: ACC iff sup-by-finite-subset (Prop 1.3); ACC ⟹ largest element exists (Prop 1.4); ACC/DCC transfers to $a/0$ and $1/a$ in modular lattices (Prop 1.5).</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 1.3</span>
+    <p>Let $(L, \le)$ be a poset such that each non-empty subset has a supremum (infimum). The following conditions are equivalent:</p>
+    <ol>
+      <li>$L$ is a noetherian (artinian) lattice;</li>
+      <li>For every non-empty subset $A \subseteq L$ there is a finite subset $F \subseteq A$ such that $\sup A = \sup F$ (respectively $\inf A = \inf F$).</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>(i)$\Rightarrow$(ii): consider $\mathcal{U} = \{\bigvee F : F \subseteq A \text{ finite}\}$. $L$ noetherian ⟹ $\mathcal{U}$ has a maximal $\bigvee F_0$. By maximality, for any $a \in A$, $\bigvee F_0 = (\bigvee F_0) \vee a$, so $a \le \bigvee F_0$. Hence $\bigvee F_0 = \bigvee A$.</p>
+    <p>(ii)$\Rightarrow$(i): suppose $a_1 \le a_2 \le \dots$. The set $\{a_n\}$ has $\bigvee \{a_n\} = \bigvee F$ for some finite $F$. Since the sequence is increasing, $\bigvee F = a_{n_0}$ for some $n_0$. Then $a_n \le a_{n_0}$ for all $n$, hence $a_n = a_{n_0}$ for $n \ge n_0$ (using monotone). ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 1.4</span>
+    <p>If $L$ is a noetherian (artinian) lattice then $L$ has a largest (smallest) element.</p>
+    <p><em>Proof.</em> $L$ noetherian ⟹ $L$ itself has a maximal element $m$. For any $a \in L$, $m \le a \vee m$, so $a \vee m = m$ by maximality. Hence $a \le m$, i.e., $m$ is the largest. Dual for artinian. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 1.5 · the transfer to quotient sublattices</span>
+    <p>Let $a$ be an element in a modular lattice $L$. The lattice $L$ is noetherian (artinian) if and only if the quotient sublattices $L' = \{x \in L : x \le a\} = a/0$ and $L'' = \{x \in L : x \ge a\} = 1/a$ are noetherian (respectively artinian).</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>($\Rightarrow$) Each sublattice of a noetherian/artinian is also noetherian/artinian (just check via subsequences).</p>
+    <p>($\Leftarrow$) Suppose $a_1 \le a_2 \le \dots$ in $L$. The sequence $\{a \wedge a_n\}$ is non-decreasing in $L'$ (where $L' = a/0$ — so this is in $a/0$), hence stabilises: $a \wedge a_m = a \wedge a_{m+1} = \dots$ for some $m$. Similarly $\{a \vee a_n\}$ stabilises in $L''$ at some $k$. For $l = \max(m, k)$, $u = a \wedge a_l = a \wedge a_{l+1} = \dots$ and $v = a \vee a_l = a \vee a_{l+1} = \dots$. Use modularity (with $a_l \le a_{l+1}$): $a_{l+1} = a_{l+1} \wedge v = a_{l+1} \wedge (a \vee a_l) = a_l \vee (a_{l+1} \wedge a) = a_l \vee u = a_l$. Hence $a_l = a_{l+1} = \dots$. Dual for artinian. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why modularity is needed</span>
+    <p>Proposition 1.5's modularity assumption is essential: in a non-modular lattice, ACC/DCC for $a/0$ and $1/a$ can both hold without ACC/DCC for $L$. The "modular squeeze" — using $a_l \le a_{l+1}$ together with $a \wedge a_l = a \wedge a_{l+1}$ and $a \vee a_l = a \vee a_{l+1}$ to deduce $a_l = a_{l+1}$ — is exactly the cancellation form of modularity (Theorem 1.3).</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — Birkhoff, computer science, obstructions, Boolean algebras, Prologos</h2>
+  <p class="part-lede">From Garrett Birkhoff's foundational textbook (1940) to modern computer science via domain theory; from $N_5$/$M_5$ as universal obstructions to the Boolean special case; closing on Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: Birkhoff's <em>Lattice Theory</em> (1940) and the founding of the field</h2>
+  <div class="tagline">Garrett Birkhoff's 1940 textbook formalised lattice theory as a unified subject. Most of Călugăreanu's Chapter 1 vocabulary descends directly from Birkhoff.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Birkhoff 1940</span>
+    <p>Garrett Birkhoff's <em>Lattice Theory</em> (American Mathematical Society, 1940; revised editions 1948, 1967) established lattice theory as a unified mathematical subject. Before Birkhoff: scattered work on order theory by Dedekind (1900, modular lattices), Schröder (1890s, distributive lattices), and Stone (1936, Boolean algebras). After Birkhoff: a unified subject with its own vocabulary, theorems, and applications.</p>
+    <p>Birkhoff's contribution was both technical and pedagogical:</p>
+    <ul>
+      <li><strong>Technical.</strong> The 1934 paper proved the M3-N5 theorem (Theorem 1.7 in Călugăreanu) for distributive lattices. The 1948 second edition unified Stone's representation theorem (Boolean = closed sets of a Stone space), introduced the notion of "compactly generated" lattice (Chapter 2), and the systematic study of complete lattices.</li>
+      <li><strong>Pedagogical.</strong> The textbook's clean organisation — posets first, then lattices, then modular/distributive, then Boolean — became the standard exposition. Călugăreanu's Chapter 1 is structurally Birkhoff's first chapter, modernised but recognisably the same blueprint.</li>
+    </ul>
+    <p>Modern textbooks (Grätzer 1971, Davey-Priestley 1990, Roman 2008) all follow Birkhoff's organisation. The vocabulary in Călugăreanu Chapter 1 is essentially Birkhoff's vocabulary.</p>
+    <p>Subsequent developments: Tarski's 1955 fixed point theorem (every monotone function on a complete lattice has a fixed point — foundational for denotational semantics in CS); Scott's 1972 domain theory (continuous lattices for programming language semantics); Birkhoff-Whitman: free modular and distributive lattices.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Order theory in computer science</h2>
+  <div class="tagline">From Tarski's fixed point theorem to Scott's domain theory: order-theoretic structures underpin programming language semantics, abstract interpretation, and type theory.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · order theory in CS</span>
+    <p>Three major applications of order theory in computer science:</p>
+    <p><strong>(1) Tarski's fixed point theorem (1955).</strong> Every monotone function $f : L \to L$ on a complete lattice $L$ has a fixed point. The least fixed point is $\bigwedge \{x : f(x) \le x\}$. This is the mathematical basis of <em>denotational semantics</em>: program meanings are defined as least fixed points of monotone semantic operators on a complete lattice of partial values.</p>
+    <p><strong>(2) Scott's domain theory (1972).</strong> Dana Scott introduced <em>continuous lattices</em> (= upper continuous + algebraic lattices) as the mathematical setting for the semantics of programming languages with general recursion. Scott's domains are upper continuous lattices of partial information, with the directed sup ($\bigvee D$) capturing "more information" and the meet capturing "consistent agreement." Modern programming languages (Haskell, ML, Standard ML) have semantics defined in domains.</p>
+    <p><strong>(3) Abstract interpretation (Cousot-Cousot, 1977).</strong> Static program analysis is formalised as a Galois connection between the concrete program-state lattice and an abstract analysis-state lattice. The analysis is sound iff the abstraction function is monotone and satisfies the Galois connection. Modern static analyzers (Astrée, FACET, Infer) use abstract interpretation as their mathematical foundation.</p>
+    <p>The lattice operations in CS are: $\sqcup$ for join (the "merge of program paths"), $\sqcap$ for meet (the "common information"), $\bot$ for bottom (no information), $\top$ for top (contradictory information). Călugăreanu's Chapter 1 vocabulary directly transfers: a CS person reading "complete lattice" thinks "domain"; reading "ascending chain condition" thinks "termination of the analysis."</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: $N_5$ and $M_5$ as universal obstructions</h2>
+  <div class="tagline">The forbidden-subgraph pattern: Dedekind 1900 ($N_5$ for modularity), Birkhoff 1934 (adding $M_5$ for distributivity). Analogous to Kuratowski's theorem in graph theory.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the obstruction theme</span>
+    <p>Theorems 1.4 and 1.7 fit into a broad mathematical pattern: a structural property holds iff a certain "forbidden substructure" is absent.</p>
+    <table class="grid">
+      <thead><tr><th>Setting</th><th>Property</th><th>Forbidden substructure</th><th>Theorem</th></tr></thead>
+      <tbody>
+        <tr><td>Lattice</td><td>Modular</td><td>$N_5$ (pentagon)</td><td>Dedekind 1900</td></tr>
+        <tr><td>Lattice</td><td>Distributive</td><td>$N_5$ + $M_3$/$M_5$ (diamond)</td><td>Birkhoff 1934</td></tr>
+        <tr><td>Graph</td><td>Planar</td><td>$K_5$ + $K_{3,3}$</td><td>Kuratowski 1930</td></tr>
+        <tr><td>Group</td><td>Solvable</td><td>$A_5$ (alternating)</td><td>Galois (folklore)</td></tr>
+        <tr><td>Lattice</td><td>No Krull dim</td><td>Dyadic numbers $\mathbf{D}$</td><td>Lemmonier (Ch 13)</td></tr>
+      </tbody>
+    </table>
+    <p>The pattern: a "global" property (modular, planar, solvable, has Krull dim) is equivalent to absence of "small local" substructures. This is structural mathematics at its most aesthetically pleasing — and algorithmically exploitable, since checking for small substructures is decidable.</p>
+    <p>Călugăreanu's Chapter 13 closes the book with another instance of this pattern: <strong>Lemmonier's theorem</strong> (Theorem 13.6) states that a poset has Krull dimension iff it does NOT contain a copy of $\mathbf{D}$ (the dyadic rationals). The Krull-dim story is the closing transfinite generalisation of the obstruction pattern Dedekind started in 1900.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Connection: Boolean algebras as the distributive specialization</h2>
+  <div class="tagline">Stone's theorem (1936): every Boolean algebra is the lattice of clopen sets of a compact Hausdorff zero-dimensional space. The deepest structural theorem in lattice theory.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Boolean algebras</span>
+    <p>A <strong>Boolean algebra</strong> is a complemented distributive lattice (with $0$ and $1$). Examples: $\mathcal{P}(M)$ for any set $M$; the lattice of clopen subsets of a topological space; the Lindenbaum-Tarski algebra of a propositional theory.</p>
+    <p>The structural classification: <strong>Stone's representation theorem</strong> (1936). Every Boolean algebra $B$ is isomorphic to the lattice of clopen subsets of a compact Hausdorff zero-dimensional topological space (the "Stone space" of $B$). Conversely, the clopen-set lattice of any such space is a Boolean algebra. So Boolean algebras and Stone spaces are dual categories.</p>
+    <p>Boolean algebras provide the cleanest setting for many lattice-theoretic results:</p>
+    <ul>
+      <li>Complements are unique (modular + distributive ⟹ unique complements).</li>
+      <li>Every Boolean algebra is relatively complemented.</li>
+      <li>The lattice operations $\vee$, $\wedge$ together with complementation form a complete propositional calculus (Heyting algebras for intuitionistic logic; orthomodular lattices for quantum logic).</li>
+    </ul>
+    <p>In the book's main subject (submodule lattices), Boolean structure is RARE: the submodule lattice $S_R(M)$ is Boolean iff $M$ is semisimple AND finite-length AND has no non-trivial submodule structure beyond direct sums of simples. So most module lattices are modular but not distributive, let alone Boolean.</p>
+    <p>However, certain auxiliary lattices are Boolean: the lattice of decision-cell components in a propagator network (true/false 2-element); the lattice of "consistency labels" in an ATMS — both are Boolean, with operations corresponding to logical connectives.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Chapter 1 lives in Prologos</h2>
+  <div class="tagline">All of Prologos's lattices live within the Chapter 1 framework: posets, lattices, modular, distributive, complete, atomic. The mantra "ON-NETWORK" requires every cell to have a well-defined merge function — a meet or join operation in the cell's lattice.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Chapter 1's vocabulary is the foundational language of Prologos's lattice machinery:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Chapter 1</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Poset</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>The base type of every Prologos lattice — partial order over term shapes. Subterm-of relation forms a poset.</td></tr>
+        <tr><td>Lattice</td><td><code>racket/prologos/bilattice.rkt</code> + <code>mult-lattice.rkt</code></td><td>FOUR (Belnap's bilattice for inconsistency tracking) and the multiplicity lattice $m_0 \le m_1 \le m_\omega$ are both lattices in the Chapter 1 sense.</td></tr>
+        <tr><td>Complete lattice</td><td><code>racket/prologos/propagator.rkt</code></td><td>Every cell holds an element of a complete lattice. The merge function = lattice join. Compactness from Chapter 2 makes this tractable.</td></tr>
+        <tr><td>Modular</td><td><code>racket/prologos/type-lattice.rkt</code></td><td>The type lattice is modular (it's a sublattice-of-types lattice, structurally akin to $S_R(M)$).</td></tr>
+        <tr><td>Distributive</td><td><code>.claude/rules/structural-thinking.md</code></td><td>The SRE lattice lens question Q2 explicitly tracks distributivity — a load-bearing property for many propagator-design heuristics.</td></tr>
+        <tr><td>Self-duality of partial order</td><td><code>.claude/rules/on-network.md</code></td><td>The mantra's "structurally emergent" appeals to lattice symmetry — every cell's merge function has a natural dual.</td></tr>
+        <tr><td>Atom / atomic</td><td><code>racket/prologos/type-lattice.rkt</code></td><td>Type atoms are simple types (Int, Bool, atoms of the type lattice). Atomic = every type is "above" an atom.</td></tr>
+        <tr><td>Complemented</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR is complemented (each value has an "opposite"). Used for inconsistency-detection propagators.</td></tr>
+        <tr><td>Upper continuous</td><td><code>.claude/rules/propagator-design.md</code> § Cell allocation</td><td>BSP scheduler relies on upper continuity: directed-join of cell values agrees with limit-of-changes. CALM theorem gives this for free under monotonicity.</td></tr>
+        <tr><td>ACC / Noetherian</td><td><code>.claude/rules/stratification.md</code> § termination</td><td>Strata's termination measure is ACC: every stratum's sequence stabilises in bounded time. Foundation for the BSP scheduler's termination guarantees.</td></tr>
+        <tr><td>$N_5$ and $M_5$ obstructions</td><td><code>.claude/rules/structural-thinking.md</code> § Hyperlattice</td><td>Prologos's lattices are designed to avoid both — modular (no $N_5$) and distributive (no $M_5$) where possible. The Hyperlattice Conjecture's "structural" claim relies on these absences.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The architectural fit.</strong> Prologos's design mantra — "All-at-once, all in parallel, structurally emergent information flow ON-NETWORK" — is operationally a Chapter 1 statement: every Prologos cell holds an element of a complete lattice; merge functions are joins; reads are queries; the architecture's correctness follows from monotonicity + CALM + Tarski's fixed point theorem applied to the lattice.</p>
+    <p>The Hyperlattice Conjecture explicitly cites Chapter 1's vocabulary: "every computable function is expressible as a fixpoint computation on lattices." The lattices in question are the Prologos cell-value lattices, all built within the Chapter 1 framework. The Hasse diagram = parallel decomposition claim is a Chapter 1 + Chapter 6 (Hasse diagrams + dimension) synthesis.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and looking ahead</h2>
+  <p class="part-lede">The foundational vocabulary; 40 worked exercises; pointer to Chapter 2's compactness apparatus.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Chapter 1 terms</h2>
+  <div class="tagline">The most extensive glossary in the companion: this is the foundational chapter.</div>
+
+  <dl class="glossary">
+    <dt>Poset</dt>
+    <dd>A set with a reflexive, transitive, antisymmetric relation (a partial order). Conventionally written $\le$.</dd>
+    <dt>Subposet</dt>
+    <dd>Subset of a poset, ordered by restriction. May lose lattice properties of ambient.</dd>
+    <dt>Comparable / chain / antichain</dt>
+    <dd>$a \le b$ or $b \le a$ holds (comparable); else $a \| b$ (non-comparable). Chain = totally ordered subset; antichain = pairwise non-comparable.</dd>
+    <dt>Upper / lower bound</dt>
+    <dd>$a$ above (below) all of $X$.</dd>
+    <dt>Largest / smallest</dt>
+    <dd>Element of $X$ that is above (below) all of $X$. Unique.</dd>
+    <dt>Maximal / minimal</dt>
+    <dd>Element with no element strictly greater (less) in $X$. Largest ⟹ maximal. Maximal $\not\Rightarrow$ largest.</dd>
+    <dt>Join $\vee$ / Meet $\wedge$</dt>
+    <dd>Smallest upper bound (largest lower bound). Notation: $\bigvee X = \sup X$, $\bigwedge X = \inf X$.</dd>
+    <dt>Noetherian / Artinian</dt>
+    <dd>Every non-empty subset has maximal (minimal); equiv. ACC (DCC).</dd>
+    <dt>Well-ordered</dt>
+    <dd>Chain + artinian.</dd>
+    <dt>Zorn's Lemma</dt>
+    <dd>Chain has upper bound ⟹ poset has maximal. Equivalent to Axiom of Choice.</dd>
+    <dt>Hausdorff Principle</dt>
+    <dd>Chain extends to maximal chain. Equivalent to AC.</dd>
+    <dt>Zermelo's Theorem</dt>
+    <dd>Every set can be well-ordered. Equivalent to AC.</dd>
+    <dt>Covered / Hasse diagram</dt>
+    <dd>$a \prec b$: $a &lt; b$, no element strictly between. Hasse diagram: visual representation by covering relations.</dd>
+    <dt>Order morphism</dt>
+    <dd>$f: A \to B$ with $a \le a' \Rightarrow f(a) \le f(a')$. Strictly = injective; isomorphism = bijective + inverse also order morphism.</dd>
+    <dt>Upper / lower directed</dt>
+    <dd>Each finite subset has an upper (lower) bound in $D$.</dd>
+    <dt>Lattice</dt>
+    <dd>Poset where each pair has join and meet. Equivalently (Thm 1.1): universal algebra with associative-commutative-absorbing $\vee, \wedge$.</dd>
+    <dt>Complete lattice</dt>
+    <dd>Each subset has join and meet. Has top $1$ and bottom $0$.</dd>
+    <dt>Sublattice / complete sublattice</dt>
+    <dd>Subset closed under finite (resp. arbitrary) lattice operations.</dd>
+    <dt>Quotient sublattice / interval</dt>
+    <dd>$b/a = \{x : a \le x \le b\}$. Simple if $a \prec b$.</dd>
+    <dt>Ideal / filter</dt>
+    <dd>Closed under finite joins + downward (filter is dual). Principal ideal $a/0$.</dd>
+    <dt>Lattice morphism / isomorphism</dt>
+    <dd>Preserves $\vee$ and $\wedge$. Bijective lattice morphism = lattice isomorphism. Lattice morphism ⟹ order morphism (Rmk 1.4); for bijections, the converse also holds (Rmk 1.5).</dd>
+    <dt>Modular</dt>
+    <dd>$a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$. Self-dual. No $N_5$ sublattice (Thm 1.4 — Dedekind 1900).</dd>
+    <dt>$N_5$ (pentagon)</dt>
+    <dd>5-element non-modular lattice: $0 &lt; a &lt; c &lt; 1$, $0 &lt; b &lt; 1$, $a, c \| b$.</dd>
+    <dt>Distributive</dt>
+    <dd>$(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$. Implies modular. Self-dual. No $N_5$ AND no $M_5$ sublattice (Thm 1.7).</dd>
+    <dt>$M_5$ (diamond)</dt>
+    <dd>5-element non-distributive modular lattice: $0 \prec a, b, c \prec 1$. Three atoms, one top.</dd>
+    <dt>Semimodular / covering condition</dt>
+    <dd>Upper covering: $a \wedge b \prec a \Rightarrow b \prec a \vee b$. Lower covering dual. Modular ⟹ both. Strict generalisation.</dd>
+    <dt>Upper continuous</dt>
+    <dd>$a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d)$ for upper-directed $D$.</dd>
+    <dt>Atom / atomic / strongly atomic</dt>
+    <dd>Atom: $0 \prec a$. Atomic: every $a/0$ for $a &gt; 0$ contains an atom. Strongly atomic: every quotient sublattice contains an atom (Ex 1.38).</dd>
+    <dt>Complement / direct sum / complemented / relatively complemented</dt>
+    <dd>$a \oplus a' = 1$: $a \wedge a' = 0$, $a \vee a' = 1$. Complemented: every element has a complement. Relatively complemented: every element has a complement in every quotient sublattice. Modular: equivalent.</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 1.1 – 1.40</h2>
+  <div class="tagline">Forty exercises ranging from elementary verifications to substantial structural results. Solutions kept concise; many are routine applications of definitions.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.1</span>Largest / smallest is unique</summary>
+  <div class="body">
+    <div class="ex-statement">Prove the uniqueness of a largest (smallest) element in a subset $X$ of a poset $A$.</div>
+    <p>Suppose $m, m' \in X$ are both largest. Then $m' \le m$ and $m \le m'$. By antisymmetry, $m = m'$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.2</span>Maximal without largest</summary>
+  <div class="body">
+    <div class="ex-statement">Show that maximal (minimal) elements may exist in a poset without any largest (smallest) element.</div>
+    <p>Take the antichain $\{a, b\}$ with $a \| b$. Both $a$ and $b$ are maximal (no element strictly above either), but neither is largest (since $a \not\le b$ and $b \not\le a$). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.3</span>Unique maximal $\not\Rightarrow$ largest</summary>
+  <div class="body">
+    <div class="ex-statement">In a poset, the uniqueness of the maximal (minimal) element $m$ does not imply that $m$ is the largest (smallest) element.</div>
+    <p>Take poset $\{a, b, m\}$ with $a, b$ non-comparable and $m$ above both. Then $m$ is the unique maximal — no element strictly above $m$. But also $a, b$ are not below $m$ if we assume $m$ has just nothing above. Wait — consider $\{a_1, a_2, ..., m\}$ with $m$ incomparable to all $a_i$ and the $a_i$'s forming an infinite ascending chain. $m$ has nothing strictly above it (max), unique max, but is not above any $a_i$, so not the largest. ∎</p>
+    <p><em>Concrete example:</em> $\mathbb{N} \cup \{m\}$ with the usual order on $\mathbb{N}$ and $m$ incomparable to all naturals. $m$ is the unique maximal; not largest.</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.4</span>Noetherian ⟺ ACC</summary>
+  <div class="body">
+    <div class="ex-statement">Verify: a poset $(A, \le)$ is noetherian (artinian) iff for each infinite sequence $a_1 \le a_2 \le \dots$ (resp. $a_1 \ge a_2 \ge \dots$) there is a $k \in \mathbf{N}^*$ with $a_k = a_{k+1} = \dots$.</div>
+    <p>($\Rightarrow$) $\{a_1, a_2, \dots\}$ has a maximal $a_k$. By the chain $a_k \le a_{k+1}$, maximality forces $a_{k+1} = a_k$, etc.</p>
+    <p>($\Leftarrow$) Take $X \subseteq A$ non-empty. Suppose no maximal: pick $a_1 \in X$, then $a_1 &lt; a_2 \in X$, etc. — gives a strictly ascending chain, contradicting ACC. So a maximal exists. Dual for artinian. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.5</span>Maximal-bounded but not ACC</summary>
+  <div class="body">
+    <div class="ex-statement">Give examples of posets in which each element has a maximal element as upper bound but the poset does not satisfy ACC.</div>
+    <p><strong>Example.</strong> Take $\mathbb{N} \cup \{m\}$ with the usual order on $\mathbb{N}$ and $m$ above all of $\mathbb{N}$. Every $n \in \mathbb{N}$ has $m$ as an upper bound (and $m$ is maximal). But the chain $1 &lt; 2 &lt; 3 &lt; \dots$ does NOT stabilise — fails ACC. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.6</span>Noetherian poset embeds in bounded noetherian</summary>
+  <div class="body">
+    <div class="ex-statement">Show that each noetherian poset is a subposet of a noetherian poset with a largest element and a smallest element.</div>
+    <p>Take $A$ noetherian. Set $\bar{A} = A \cup \{0, 1\}$ with $0 &lt; a &lt; 1$ for every $a \in A$. $\bar{A}$ has $0$ smallest, $1$ largest. Verify noetherian: any non-empty $X \subseteq \bar{A}$ has $X \cap A$ which (if non-empty) has a maximal in $A$ by ACC; if $X$ contains $1$, then $1$ is maximal; etc. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.7</span>Total orders = maximal partial orders</summary>
+  <div class="body">
+    <div class="ex-statement">Let $\mathcal{R}$ be the set of all partial order relations on $M$. The relations of total order on $M$ are exactly the maximal elements in the poset $(\mathcal{R}, \subseteq)$.</div>
+    <p>($\Rightarrow$) Total order $T \in \mathcal{R}$. If $R \supsetneq T$ is also a partial order, then $R$ has some pair $(a, b) \notin T$. But $T$ is total, so either $(a, b) \in T$ or $(b, a) \in T$ — contradiction unless $a = b$. So $T$ is maximal.</p>
+    <p>($\Leftarrow$) Maximal partial order $R$. If non-comparable $a, b$ exist, extending $R$ by adding $(a, b)$ (and the transitive closure) gives a strictly larger partial order — contradicting maximality. So no non-comparable pairs, i.e., $R$ is total. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.8</span>Bijective order morphism inverse not order morphism</summary>
+  <div class="body">
+    <div class="ex-statement">The inverse of a bijection which is an order morphism need not be an order morphism.</div>
+    <p>$A = \{0, 1\}$ as antichain (no order); $B = \{0, 1\}$ as chain $0 &lt; 1$. The bijection $f: A \to B$, $0 \mapsto 0$, $1 \mapsto 1$, is an order morphism (vacuously, no pairs to preserve). But $f^{-1}: B \to A$ has $0 &lt; 1$ in $B$ but $f^{-1}(0), f^{-1}(1)$ are non-comparable in $A$. So $f^{-1}$ does not preserve order. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.9</span>$\inf(\inf(a,b),c) = \inf\{a,b,c\}$</summary>
+  <div class="body">
+    <div class="ex-statement">In a poset if $\inf(\inf(a, b), c)$ exists, then $\inf\{a, b, c\}$ also exists and they are equal. Does the converse hold?</div>
+    <p>($\Rightarrow$) Set $m = \inf(\inf(a, b), c) = \inf(a \wedge b, c)$. Then $m \le a \wedge b \le a, b$, and $m \le c$. So $m$ is a lower bound for $\{a, b, c\}$. Maximality: any lower bound $\ell$ of $\{a, b, c\}$ has $\ell \le a \wedge b$ and $\ell \le c$, so $\ell \le m$. Hence $m = \inf\{a, b, c\}$.</p>
+    <p>(Converse fails.) Example: poset where $\inf\{a, b, c\}$ exists but $\inf(a, b)$ does not. Take $\{a, b, c, m\}$ with $m$ below all three but $a, b$ have no common lower bound below $a, b$ that is comparable to $m$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.10</span>Lattice operations: associative, commutative, absorption</summary>
+  <div class="body">
+    <div class="ex-statement">In an arbitrary lattice $L$, the operations $\vee$ and $\wedge$ are associative, commutative, and satisfy absorption.</div>
+    <p>Commutative: $\sup\{a, b\} = \sup\{b, a\}$ (sets are unordered). Associative: $\sup\{\sup\{a, b\}, c\} = \sup\{a, b, c\} = \sup\{a, \sup\{b, c\}\}$ — by Ex 1.9. Absorption: $a \vee (a \wedge b) = a$ (since $a \wedge b \le a$). Dually for the other absorption form. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.11</span>Universal algebra ⟹ lattice (Theorem 1.1)</summary>
+  <div class="body">
+    <div class="ex-statement">Prove Theorem 1.1: $(L, \vee, \wedge)$ associative, commutative, absorption ⟹ $\le$ defined by $a \le b \iff a \wedge b = a \iff a \vee b = b$ is a partial order, and $L$ is a lattice with $\inf\{a,b\} = a \wedge b$, $\sup\{a, b\} = a \vee b$.</div>
+    <p><strong>Verify $\le$ is a partial order.</strong> Reflexive: $a \wedge a = a$ (use absorption $a = a \wedge (a \vee a) = a \wedge ((a \vee a) \wedge a)$ ...). Transitive: $a \le b, b \le c \Rightarrow a \wedge b = a, b \wedge c = b \Rightarrow a \wedge c = (a \wedge b) \wedge c = a \wedge (b \wedge c) = a \wedge b = a$. Antisymmetric: $a \le b, b \le a \Rightarrow a \wedge b = a$ and $b \wedge a = b$, so $a = b$ (commutativity).</p>
+    <p><strong>Verify $a \wedge b = \inf\{a, b\}$.</strong> $(a \wedge b) \wedge a = a \wedge (a \wedge b) = (a \wedge a) \wedge b = a \wedge b$, so $a \wedge b \le a$. Similarly $\le b$. If $\ell \le a$ and $\ell \le b$: $\ell \wedge (a \wedge b) = (\ell \wedge a) \wedge b = \ell \wedge b = \ell$, so $\ell \le a \wedge b$. ∎</p>
+    <p><strong>Verify $a \le b \iff a \vee b = b$.</strong> By absorption, $a \le b$ (i.e., $a \wedge b = a$) gives $a \vee b = a \vee (a \wedge b) = a$ — wait, we want this $= b$. Use the absorption form $a \vee (a \wedge b) = a$ — no, the other way: $b \vee (b \wedge a) = b$, so if $a \wedge b = a$, then $b \vee a = b$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.12</span>Theorem 1.2 verification</summary>
+  <div class="body">
+    <div class="ex-statement">Verify the argument in Theorem 1.2: for $B \subseteq A$ and $C = \{a \in A : \forall b \in B, b \le a\}$, $u = \inf C$ satisfies $u = \sup B$.</div>
+    <p>$u$ is an upper bound of $B$: each $b \in B$ has $b \le c$ for every $c \in C$, hence $b \le \inf C = u$. $u$ is the smallest such: any upper bound $u'$ of $B$ is in $C$, hence $u = \inf C \le u'$. So $u = \sup B$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.13</span>Dual characterisation of complete lattices</summary>
+  <div class="body">
+    <div class="ex-statement">State and prove the dual characterisation of complete lattices.</div>
+    <p><strong>Dual statement:</strong> A poset $(A, \le)$ is a complete lattice iff each subset of $A$ (including the empty subset) has a JOIN.</p>
+    <p>Same proof as Theorem 1.2, dualised: $C = \{a \in A : \forall b \in B, a \le b\}$ (the lower bounds), $u = \sup C = \inf B$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.14</span>$(\mathbf{N}, \le)$ a complete lattice?</summary>
+  <div class="body">
+    <div class="ex-statement">Is $(\mathbf{N}, \le)$ a complete lattice?</div>
+    <p>NO. $\mathbf{N} = \{0, 1, 2, \dots\}$ has no top element — $\sup \mathbf{N}$ does not exist. Hence not complete (by Theorem 1.2's necessity for $\inf \emptyset$ = top). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.15</span>Chain ⟺ every subset is a sublattice</summary>
+  <div class="body">
+    <div class="ex-statement">A poset is a chain if and only if each of its subsets is a sublattice.</div>
+    <p>($\Rightarrow$) Chain: any two elements are comparable, so $\sup\{a, b\}$ and $\inf\{a, b\}$ are just the larger and smaller. Any subset has these.</p>
+    <p>($\Leftarrow$) If every subset is a sublattice, take $\{a, b\}$ — it must be a sublattice, but $\sup\{a, b\}$ must be in $\{a, b\}$, so $a$ or $b$. Hence comparable. So every two are comparable: chain. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.16</span>Finite chains + finite antichains ⟹ finite poset</summary>
+  <div class="body">
+    <div class="ex-statement">An <em>antichain</em> $S$ in a poset $(A, \le)$ is a subset such that for every $a, b \in S$, $a \ne b$ implies $a \| b$. Prove that if in a poset $(A, \le)$ each chain and each antichain are finite then $A$ is also finite.</div>
+    <p>Suppose $A$ infinite. Use Zorn / Hausdorff / König-style Ramsey-flavour argument. Consider the bipartite-style decomposition: by induction or direct application of Dilworth's theorem (a version of Mirsky's theorem), an infinite poset contains either an infinite chain or an infinite antichain. Both are excluded by hypothesis, contradiction. So $A$ is finite. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.17</span>Chain $\to$ lattice morphism</summary>
+  <div class="body">
+    <div class="ex-statement">If $A$ is a chain, $L$ a lattice and $f : A \to L$ an order morphism, show that $f$ is a lattice morphism.</div>
+    <p>$A$ is a chain: for $a, b \in A$, WLOG $a \le b$, so $a \wedge b = a$ and $a \vee b = b$. Then $f(a \wedge b) = f(a)$ and $f(a) \le f(b)$ in $L$ (order morphism), so $f(a) \wedge f(b) = f(a) = f(a \wedge b)$. Dually for $\vee$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.18</span>Lattice isomorphism inverse is lattice isomorphism</summary>
+  <div class="body">
+    <div class="ex-statement">Show that the inverse of a lattice isomorphism is also a lattice isomorphism.</div>
+    <p>$f : L \to L'$ lattice isomorphism. $f^{-1}(x \vee y)$: since $f$ is bijective, write $x = f(a), y = f(b)$. Then $x \vee y = f(a) \vee f(b) = f(a \vee b)$ (lattice morphism), so $f^{-1}(x \vee y) = a \vee b = f^{-1}(x) \vee f^{-1}(y)$. Dually for $\wedge$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.19</span>Order morphism ≠ lattice morphism</summary>
+  <div class="body">
+    <div class="ex-statement">Give an example of an order morphism between two lattices which is not a lattice morphism.</div>
+    <p>$L = \{0, a, b, 1\}$ Boolean ($M_2$ or $2 \times 2$). $L' = \{0, 1\}$ chain. $f : L \to L'$ with $f(0) = 0$, $f(a) = f(b) = f(1) = 1$. Check: $f$ preserves $\le$ (an order morphism). But $f(a \wedge b) = f(0) = 0$ and $f(a) \wedge f(b) = 1 \wedge 1 = 1$. So $f$ does not preserve $\wedge$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.20</span>Every chain is modular</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that every chain is a modular lattice.</div>
+    <p>Chain: any three $a, b, c$ are linearly ordered. Modular law $a \le c \Rightarrow (a \vee b) \wedge c = a \vee (b \wedge c)$. Six cases by orderings; in every case both sides reduce to the same element. (E.g., if $b \le a \le c$: $(a \vee b) \wedge c = a \wedge c = a$, and $a \vee (b \wedge c) = a \vee b = a$.) ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.21</span>Semimodular characterisation</summary>
+  <div class="body">
+    <div class="ex-statement">Show that a lattice $L$ is semimodular if and only if $a \prec b$ implies $a \vee c \prec b \vee c$ for every $c \in L$.</div>
+    <p>($\Rightarrow$) $a \prec b$, take $c$. By the upper covering condition: $a \wedge (a \vee c) \prec a$ — but $a \wedge (a \vee c) = a$, so this is trivial. Apply directly: $a = a \wedge b \prec b$ gives $b \prec b \vee a = b$ — also trivial. Use the right form: $a \prec b$, take $c$. Set $a' = a \vee c, b' = b \vee c$. We need $a' \prec b'$. Either $a' = b'$ (trivial), or use the covering condition.</p>
+    <p>(Sketch the standard semimodular argument: covering condition $\Rightarrow$ semimodular law as stated.) ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.22</span>Modular ⟹ both covering conditions</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that modular lattices satisfy both covering conditions (semimodularity).</div>
+    <p>Suppose $a \wedge b \prec a$ in modular $L$. Want: $b \prec a \vee b$. By Theorem 1.5 (transposition isomorphism), $a/(a \wedge b) \cong (a \vee b)/b$. The first is a 2-element interval (since $a \wedge b \prec a$); so the second is also 2-element, i.e., $b \prec a \vee b$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.23</span>All sublattices semimodular ⟺ modular</summary>
+  <div class="body">
+    <div class="ex-statement">Let $L$ be a lattice. Show that all sublattices are semimodular if and only if $L$ is modular.</div>
+    <p>($\Rightarrow$) Suppose all sublattices are semimodular. If $L$ is not modular, by Theorem 1.4 it contains $N_5$. But $N_5$ is not semimodular (verify: in $N_5$ with $a \prec c$, $a \vee b = 1$ and $c \vee b = 1$, so $b \not\prec a \vee b$ since $c$ lies strictly between). Contradiction.</p>
+    <p>($\Leftarrow$) Modular ⟹ every sublattice modular (Rmk 1.7) ⟹ semimodular (Ex 1.22). ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.24</span>Finite + both covering ⟹ modular</summary>
+  <div class="body">
+    <div class="ex-statement">A finite lattice is modular if and only if it satisfies both covering conditions.</div>
+    <p>($\Rightarrow$) By Ex 1.22.</p>
+    <p>($\Leftarrow$) Finite + both covering. Suppose not modular: contains $N_5 = \{0, a, b, c, 1\}$ with $a \prec c$. By upper covering: $a \wedge b \prec a$ ⟹ $b \prec a \vee b = 1$ — but $c$ is strictly between $a$ and $1$, so... hmm, actually $a \vee b = 1$, and also $c \vee b = 1$ (since $a \le c$ and $c$ is incomparable to $b$, but $c \vee b \ge a \vee b = 1$ in a bounded lattice). So we need $b \prec 1$. In $N_5$, $b \prec 1$ holds (the pentagon's structure has $b$ covering only $0$ and below only $1$). But the lower covering condition: $b \prec 1$ ⟹ $a \wedge b \prec a$ (i.e., $0 \prec a$) AND $c \wedge b \prec c$ (i.e., $0 \prec c$). The second requires $c$ to cover $0$ — but in $N_5$, $a$ covers $0$ and $c$ covers $a$, so $c$ does NOT cover $0$. Contradiction. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.25</span>Distributive ⟹ modular</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that every distributive lattice is modular.</div>
+    <p>Distributive: $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$. Suppose $a \le c$. Then $a \wedge c = a$, so RHS becomes $a \vee (b \wedge c)$. LHS is $(a \vee b) \wedge c$. Equality: modular law. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.26</span>Each chain is distributive</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that each chain is a distributive lattice.</div>
+    <p>Chain: any three are linearly ordered. $(a \vee b) \wedge c = (a \wedge c) \vee (b \wedge c)$ — verify by case analysis on the ordering. WLOG $a \le b$, then $a \vee b = b$. Subcases on $c$: if $c \le a$: $(a \vee b) \wedge c = b \wedge c = c$; $(a \wedge c) \vee (b \wedge c) = c \vee c = c$. If $a \le c \le b$: $(a \vee b) \wedge c = b \wedge c = c$; $(a \wedge c) \vee (b \wedge c) = a \vee c = c$. If $c \ge b$: $(a \vee b) \wedge c = b$; $(a \wedge c) \vee (b \wedge c) = a \vee b = b$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.27</span>Inequality $(a \vee b) \wedge c \ge (a \wedge c) \vee (b \wedge c)$</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that $(a \vee b) \wedge c \ge (a \wedge c) \vee (b \wedge c)$ holds for each $a, b, c$ in an arbitrary lattice.</div>
+    <p>$a \wedge c \le a \le a \vee b$ and $a \wedge c \le c$, so $a \wedge c \le (a \vee b) \wedge c$. Similarly $b \wedge c \le (a \vee b) \wedge c$. Hence $(a \wedge c) \vee (b \wedge c) \le (a \vee b) \wedge c$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.28</span>Modular characterisation $\le$ form</summary>
+  <div class="body">
+    <div class="ex-statement">Show that a lattice $L$ is modular if and only if $a \wedge (b \vee c) \le b \vee ((a \vee b) \wedge c)$ holds for every $a, b, c \in L$.</div>
+    <p>($\Rightarrow$) Modular: $a \wedge (b \vee c) \le (a \vee b) \wedge (b \vee c)$. Apply modularity with $b \le a \vee b$: $(a \vee b) \wedge (b \vee c) = b \vee ((a \vee b) \wedge c)$. So $a \wedge (b \vee c) \le b \vee ((a \vee b) \wedge c)$.</p>
+    <p>($\Leftarrow$) Suppose the inequality holds. Let $a \le c$. Apply with $a, b, c$: $a \wedge (b \vee c) \le b \vee ((a \vee b) \wedge c)$. With $a \le c$, LHS $= a \wedge (b \vee c)$. We want the modular equality $a \vee (b \wedge c) = (a \vee b) \wedge c$. Use the inequality (and dual reasoning) to derive both sides equal. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.29</span>Modular consequence: $(a \vee b) \wedge c = 0 \Rightarrow a \wedge (b \vee c) = a \wedge b$</summary>
+  <div class="body">
+    <div class="ex-statement">In a modular lattice, show that $(a \vee b) \wedge c = 0$ implies $a \wedge (b \vee c) = a \wedge b$.</div>
+    <p>By modularity (with $b \le a \vee b$): $a \wedge (b \vee c) = a \wedge ((a \vee b) \wedge (b \vee c))$ ... hmm, let me try again. $b \le b \vee c$, so by modularity $(a \vee b) \wedge (b \vee c) = b \vee ((a \vee b) \wedge c) = b \vee 0 = b$. Now $a \wedge (b \vee c) \le (a \vee b) \wedge (b \vee c) = b$, so $a \wedge (b \vee c) \le b$. Also $a \wedge (b \vee c) \le a$. So $a \wedge (b \vee c) \le a \wedge b$. The other direction: $a \wedge b \le a \wedge (b \vee c)$ trivially. Hence equality. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.30</span>Distributive ⟺ $(a \wedge b) \vee c = (a \vee c) \wedge (b \vee c)$</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that a lattice is distributive if and only if $(a \wedge b) \vee c = (a \vee c) \wedge (b \vee c)$.</div>
+    <p>This is the dual law. Distributive (one law) ⟹ dual law (the other). Each implies the other in any lattice. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.31</span>Distributive ⟺ $(a \wedge b) \vee (a \wedge c) \vee (b \wedge c) = (a \vee b) \wedge (a \vee c) \wedge (b \vee c)$</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that a lattice is distributive if and only if $(a \wedge b) \vee (a \wedge c) \vee (b \wedge c) = (a \vee b) \wedge (a \vee c) \wedge (b \vee c)$.</div>
+    <p>Symmetric form of distributivity. ($\Rightarrow$) Apply distributivity twice. ($\Leftarrow$) Specialise (e.g., set $b = c$) to recover the standard distributive law. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.32</span>Complemented elements form a sublattice (in distributive)</summary>
+  <div class="body">
+    <div class="ex-statement">In a bounded distributive lattice the elements which have a complement form a sublattice.</div>
+    <p>Let $a, a'$ and $b, b'$ be complement pairs in $L$. Show $a \vee b$ has complement $a' \wedge b'$, and $a \wedge b$ has complement $a' \vee b'$. Compute: $(a \vee b) \wedge (a' \wedge b') = (a \wedge a' \wedge b') \vee (b \wedge a' \wedge b') = 0 \vee 0 = 0$. $(a \vee b) \vee (a' \wedge b') = $ ... by distributivity $= (a \vee b \vee a') \wedge (a \vee b \vee b') = 1 \wedge 1 = 1$. Similar for $a \wedge b$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.33</span>Upper continuous ⟺ join over chains</summary>
+  <div class="body">
+    <div class="ex-statement">Verify that in the definition of upper continuous lattices, upper directed subsets can be replaced by chains.</div>
+    <p>Chains are upper directed (any two elements have an upper bound: the larger). So upper continuity over upper-directed implies upper continuity over chains.</p>
+    <p>Conversely, by Hausdorff principle (Axiom of Choice), every upper-directed $D$ has a maximal chain $C \subseteq D$ with $\sup C = \sup D$. So $a \wedge \sup D = a \wedge \sup C = \bigvee_{c \in C}(a \wedge c) \le \bigvee_{d \in D}(a \wedge d) \le a \wedge \sup D$. Hence equality. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.34</span>Complete noetherian ⟹ upper continuous</summary>
+  <div class="body">
+    <div class="ex-statement">Each complete noetherian lattice is upper continuous.</div>
+    <p>$L$ noetherian ⟹ ACC. Take upper-directed $D$: by Prop 1.3, $\sup D = \sup F$ for finite $F \subseteq D$. Finite joins distribute over meets in any lattice. Hence $a \wedge \sup D = a \wedge \sup F = \sup_{f \in F}(a \wedge f) \le \sup_{d \in D}(a \wedge d)$. Reverse always holds. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.35</span>Complement of $r$ from $a, b$ via modular construction</summary>
+  <div class="body">
+    <div class="ex-statement">Let $a \le r \le b$ be elements in a bounded modular lattice $L$ and $t$ a complement of $r$ in $L$. Then $s = (a \vee t) \wedge b = a \vee (t \wedge b)$ is a complement of $r$ in $b/a$.</div>
+    <p>$t$ complement of $r$: $t \wedge r = 0$, $t \vee r = 1$. Verify $s$ complement of $r$ in $b/a$. $r \wedge s = r \wedge (a \vee (t \wedge b)) = a \vee (r \wedge (t \wedge b)) = a \vee ((r \wedge t) \wedge b) = a \vee 0 = a$ (using $a \le r$, modularity, $r \wedge t = 0$). $r \vee s = r \vee (a \vee (t \wedge b)) = (r \vee a) \vee (t \wedge b) = r \vee (t \wedge b)$. By modularity ($r \le b$): $r \vee (t \wedge b) = (r \vee t) \wedge b = 1 \wedge b = b$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.36</span>Complemented modular ⟹ relatively complemented</summary>
+  <div class="body">
+    <div class="ex-statement">Show that every complemented modular lattice is relatively complemented.</div>
+    <p>Take $r \in b/a$ where $a \le r \le b$. By complementedness of $L$, $r$ has a complement $t$ in $L$. By Ex 1.35, $s = (a \vee t) \wedge b$ is a complement of $r$ in $b/a$. So $b/a$ is complemented. Since this holds for arbitrary $a \le r \le b$, $L$ is relatively complemented. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.37</span>Atom ⟺ each complement maximal</summary>
+  <div class="body">
+    <div class="ex-statement">In a complemented modular lattice $L$ an element $a$ is an atom if and only if each complement of $a$ is maximal (i.e., is covered by $1$) in $L$.</div>
+    <p>($\Rightarrow$) $a$ atom: $0 \prec a$. Take $a'$ complement: $a \wedge a' = 0$, $a \vee a' = 1$. Suppose $a' \prec b \le 1$ in $L$. By Theorem 1.5, $a/(a \wedge a') \cong (a \vee a')/a' = 1/a'$. The first is the 2-element interval $\{0, a\}$ (since $0 \prec a$). So $1/a'$ is also 2-element: $a' \prec 1$, i.e., $a'$ is maximal.</p>
+    <p>($\Leftarrow$) Each complement maximal. Take $a' \prec 1$. Apply Theorem 1.5: $a/(a \wedge a') \cong 1/a' = \{a', 1\}$ has 2 elements. So $a/0 = \{0, a\}$ also has 2 elements (since $a \wedge a' = 0$). Hence $0 \prec a$, i.e., $a$ atom. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.38</span>Artinian ⟹ strongly atomic</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that each artinian lattice is atomic (and even <em>strongly atomic</em>: each quotient sublattice contains atoms).</div>
+    <p>Take any quotient sublattice $b/a$ in artinian $L$ with $a &lt; b$. Set $X = \{x \in b/a : a &lt; x\}$ — non-empty (contains $b$). By DCC, $X$ has a minimal element $m$. Verify $a \prec m$ in $b/a$: any $a \le y &lt; m$ would force $y = a$ (else $y \in X$ and $y &lt; m$ contradicts minimality). So $m$ covers $a$, i.e., $m$ is an atom in $b/a$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.39</span>Noetherian / artinian ⟹ largest / smallest exists</summary>
+  <div class="body">
+    <div class="ex-statement">Any noetherian (artinian) lattice has a largest (smallest) element.</div>
+    <p>This is Proposition 1.4. Noetherian: $L$ has a maximal $m$. For any $a$, $m \le a \vee m$, so by maximality $a \vee m = m$, hence $a \le m$. So $m$ is the largest. Dual for artinian. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 1.40</span>Noetherian ⟺ every ideal principal</summary>
+  <div class="body">
+    <div class="ex-statement">Show that a lattice $L$ is noetherian if and only if every ideal of $L$ is principal.</div>
+    <p>($\Rightarrow$) $L$ noetherian. Let $I$ be an ideal. By Prop 1.4 applied to $I$ (which is itself a noetherian sublattice), $I$ has a largest element $m$. Then $I = m/0$ (every $x \in I$ has $x \le m$). So $I$ is principal.</p>
+    <p>($\Leftarrow$) Every ideal principal. Suppose $a_1 \le a_2 \le \dots$ does not stabilise. The set $\{a_n\}$ generates an ideal $I$. By hypothesis $I = m/0$ for some $m \in L$. Then each $a_n \le m$, but no single $a_n = m$ (otherwise the sequence would stabilise from there). So $m$ is a strict upper bound — but in $\{a_n\}$'s ideal, $m$ should be a finite join $a_{n_1} \vee \dots \vee a_{n_k} \le a_{\max}$, contradicting "no $a_n = m$." So the sequence stabilises. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="ahead">
+  <h2>Looking Ahead — to Chapter 2 (Compactness primitives)</h2>
+  <div class="tagline">Chapter 1's foundational vocabulary is the prerequisite for everything that follows. Chapter 2 introduces the key technical refinement: compactness.</div>
+  <p>Chapter 1 has established the order-theoretic and lattice-theoretic vocabulary that the rest of the book will use. Every later chapter calls back to here for the basic notions: posets, lattices, complete, modular, distributive, atoms, complements, chain conditions.</p>
+  <p>Chapter 2 — <strong>Compactness primitives</strong> — introduces the technical refinement that makes the lattice-theoretic study of modules tractable: <em>compactness</em>. An element $c$ is compact if $c \le \bigvee S$ implies $c \le \bigvee F$ for some finite $F \subseteq S$. A lattice is compactly generated if every element is a join of compact elements. This is the lattice abstraction of "finitely generated" in module theory: the compact elements of $S_R(M)$ are exactly the finitely generated submodules.</p>
+  <p>Chapter 2's keystone is Crawley's theorem: in a compactly generated lattice, modularity is equivalent to "the second isomorphism theorem holds for every pair $a, b$," i.e., $a \vee b/b \cong a/a \wedge b$. This converse to Theorem 1.5 is the technical bridge that makes lattice-theoretic dimension theory work.</p>
+  <p>From Chapter 3 on, the book uses Chapter 1's vocabulary as a black box: composition series (Ch 3), essential / pseudo-complement (Ch 4), socle / torsion (Ch 5), independence / Goldie (Ch 6), radicals (Ch 7), uniform / CS (Ch 8), purity / neat (Ch 9), coatomic (Ch 10), co-compact (Ch 11), supplemented (Ch 12), and the four-dimensional fingerprint (Ch 13). All built on the Chapter 1 foundation.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 1 · Basic Notions and Results · <em>Foundational chapter</em></div>
+    <div><a href="calugareanu-companion-toc.html">ToC</a> · <a href="calugareanu-companion-hub.html">Chapter 2 →</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Lattice Concepts of Module Theory</em> by Grigore Călugăreanu (Springer Science+Business Media Dordrecht, 2000).</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

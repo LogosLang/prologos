@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 11 · Co-compact Lattices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch10.html">← Chapter 10</a></li>
+    <li><a href="calugareanu-companion-ch12.html">Chapter 12 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 11 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Co-compact basics</div>
+  <ul>
+    <li><a href="#s1">A1 · Definition + Lemmas 11.1, 11.2</a></li>
+    <li><a href="#s2">A2 · Lemmas 11.3, 11.4 + Prop 11.1</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Artinian + direct sums</div>
+  <ul>
+    <li><a href="#s3">B1 · Proposition 11.2 (artinian)</a></li>
+    <li><a href="#s4">B2 · Proposition 11.3 + Cor 11.1</a></li>
+  </ul>
+
+  <div class="section-label">Part C · r(L)=0 + Theorem 11.1</div>
+  <ul>
+    <li><a href="#s5">C1 · Prop 11.4 + Cor 11.2</a></li>
+    <li><a href="#s6">C2 · Theorem 11.1 (3-way)</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Theorem 11.2 + dual compact</div>
+  <ul>
+    <li><a href="#s7">D1 · Theorem 11.2 (the keystone)</a></li>
+    <li><a href="#s8">D2 · Dual compact + Prop 11.5</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Finitely cogenerated modules</a></li>
+    <li><a href="#c2">P2 · Order duality</a></li>
+    <li><a href="#c3">P3 · Linearly compact modules</a></li>
+    <li><a href="#c4">P4 · Torsionless + finite essential socle</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 11 · pp. 123–129</div>
+  <h1>Co-compact Lattices</h1>
+  <p class="lede">The order-dual of compact: every meet that lands at $0$ has a finite sub-meet that already lands at $0$. The lattice abstraction of <em>finitely cogenerated</em> modules. Theorem 11.2 — the keystone — characterises co-compact lattices via "compact essential socle."</p>
+  <div class="meta">
+    <span>~50–60 min read</span>
+    <span>8 sections + 5 connection panels</span>
+    <span>6 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — the order-dual of compactness</h2>
+  <div class="tagline">A complete lattice is co-compact when arbitrary trivial meets are witnessed by finite trivial meets — the dual of "arbitrary cover witnessed by finite subcover." Theorem 11.2: in compactly generated modular lattices, co-compact ⟺ socle is compact and essential.</div>
+
+  <p>Chapter 2 introduced <em>compact</em> lattice elements: $c \le \bigvee X$ implies $c \le \bigvee F$ for some finite $F \subseteq X$. The compact lattice is the case $c = 1$ — the entire lattice can be "covered" by a finite sub-cover. Chapter 11 develops the order-dual: a lattice is <strong>co-compact</strong> if every "trivial meet" $\bigwedge X = 0$ is witnessed by a finite trivial meet $\bigwedge F = 0$ for some $F \subseteq X$.</p>
+
+  <p>In module theory, the lattice $S_R(M)$ is co-compact iff the module $M$ is <em>finitely cogenerated</em> — a notion introduced in the 1960s as the order-dual of finitely generated. Just as compact lattices generalise finitely generated modules, co-compact lattices generalise finitely cogenerated modules. The connection runs through Theorem 11.2 (the chapter's keystone): in compactly generated modular lattices, co-compact lattices coincide with those whose socle $s(L)$ is compact and essential — exactly the lattice form of "$M$ finitely cogenerated iff $\mathrm{soc}(M)$ is essential and finitely generated."</p>
+
+  <p>Four movements in the chapter:</p>
+
+  <ol>
+    <li><strong>Definition + basic properties (Part A).</strong> Co-compact = "trivial meets are finite-witnessed." Artinian ⟹ co-compact (immediate). Co-compact propagates downward (Lemma 11.1). Essential extension preserves co-compactness (Lemma 11.2). Compactly generated co-compact lattices have the socle essential (Lemma 11.4).</li>
+    <li><strong>Artinian + direct sums (Part B).</strong> Proposition 11.2: $L$ artinian ⟺ every $1/a$ co-compact. Proposition 11.3: in modular inductive, $a/0$ + $1/a$ co-compact ⟹ $L$ co-compact. The book emphasises this is a "purely lattice proof," avoiding the injective hull (a non-lattice construction).</li>
+    <li><strong>$r(L) = 0$ + Theorem 11.1 (Part C).</strong> Proposition 11.4: in compactly generated co-compact with $r(L) = 0$, $L$ is semiatomic and compact. Theorem 11.1: in compactly generated semiatomic modular, "compact ⟺ co-compact ⟺ $1$ is finite direct sum of atoms" — a clean three-way equivalence.</li>
+    <li><strong>Theorem 11.2 + dual compact (Part D).</strong> The keystone: in compactly generated modular, co-compact ⟺ socle is compact and essential. Then a separate notion of "dual compact" element, with the surprising fact that "dual compact lattice" = "co-compact lattice" but the corresponding elements differ (Proposition 11.5: in Boolean lattices, co-compact = compact for elements).</li>
+  </ol>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>Co-compact lattices generalise finitely cogenerated modules — modules whose every "intersection zero" is finite-witnessed. Theorem 11.2 (the chapter's keystone) gives a clean structural characterisation: in compactly generated modular lattices, co-compact ⟺ socle is compact and essential. The duality with compact lattices is rich but imperfect: while "co-compact lattice" coincides with "dual compact lattice," the corresponding elements differ in general. Proposition 11.5: in Boolean lattices, this asymmetry collapses — every co-compact element is compact. The chapter is short but structurally important: it ties the apparatus of socle, essentialness, and compactness together for the dimension-theoretic results of Chapter 8.</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Terminology trap: "co-compact" vs "coatomic"</span>
+    <p>Chapter 10 was about <em>coatomic</em> lattices (every $a \ne 1$ has a maximal element above it). Chapter 11 is about <em>co-compact</em> lattices (the order-dual of compact, finitely cogenerated). These are different concepts.</p>
+    <p>Coatomic = "atoms in every upper interval" (where "atom" of upper interval is a maximal element).</p>
+    <p>Co-compact = "trivial meets are finite-witnessed" = "$1$ is compact in $L^{\mathrm{op}}$."</p>
+    <p>The terminology overlap is unfortunate but standard. Read carefully which "co-" is intended.</p>
+  </div>
+</section>
+
+<div class="part-header" id="vocab">
+  <div class="pk">Pre-flight · Vocabulary primer</div>
+  <h2>Carried forward, new, and deep dives</h2>
+  <p class="part-lede">Following the established convention.</p>
+</div>
+
+<section class="module" id="vocab-section">
+  <h2>Carried forward — quick refreshers</h2>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 1/2</span>
+    <p><span class="term">complete lattice / modular / upper continuous / compactly generated / inductive</span> Complete: every subset has join + meet. Modular: $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$. Upper continuous: meet over directed joins. Compactly generated: every element a join of compacts. Inductive: every interval satisfies condition (B).</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 2 · CENTRAL DUAL</span>
+    <p><span class="term">compact element / compact lattice</span> Compact element: $c \le \bigvee X$ implies $c \le \bigvee F$ for finite $F$. Compact lattice: $1$ is compact. <em>This chapter is the order-dual.</em></p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 3</span>
+    <p><span class="term">artinian (DCC)</span> Every decreasing chain stabilises. Equivalent (Prop 1.3): every subset $A$ has finite $F \subseteq A$ with $\bigwedge F = \bigwedge A$. By Remark 11.1: artinian ⟹ co-compact.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 4</span>
+    <p><span class="term">essential / pseudo-complement</span> Essential: meets every non-zero element non-trivially. Pseudo-complement: maximal $c$ with $b \wedge c = 0$.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 5</span>
+    <p><span class="term">socle $s(L)$ / atom / atomic / RSC / torsion</span> Socle: join of atoms. Atomic: every $a \ne 0$ has atoms in $a/0$. RSC: every $a \ne 1$ essential, $1/a$ has atoms. Torsion: every $a \ne 1$, $1/a$ has atoms.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 6</span>
+    <p><span class="term">independent / direct sum / semiatomic</span> Semiatomic: $s(L) = 1$, i.e., $1$ is a join of atoms.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 7</span>
+    <p><span class="term">superfluous / radical $r(L)$</span> Superfluous: $a \vee b \ne 1$ for all $b \ne 1$. Radical: meet of all maximals.</p>
+  </div>
+
+  <div class="term-card recap">
+    <span class="term-tag">Recap · Ch 8</span>
+    <p><span class="term">finite uniform dimension</span> By the deep dive in Ch 8: finite Goldie dimension. By Theorem 11.2's content: co-compact lattices have finite uniform dimension automatically (compact essential socle ⟹ finite Goldie dim).</p>
+  </div>
+
+  <h2>New in Chapter 11 — full term-cards</h2>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 11 · CENTRAL</span>
+    <p><span class="term">co-compact lattice (= finitely cogenerated)</span> A complete lattice $L$ is <strong>co-compact</strong> (or <strong>finitely cogenerated</strong>, in [34]) if for every subset $X$ of $L$ such that $\bigwedge X = 0$, there is a finite subset $F \subseteq X$ such that $\bigwedge F = 0$. Equivalently: $L$ is co-compact iff the dual lattice $L^{\mathrm{op}}$ is compact. The lattice abstraction of finitely cogenerated modules.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 11</span>
+    <p><span class="term">co-compact element</span> An element $a \in L$ is called <strong>co-compact</strong> if the sublattice $a/0$ is co-compact. So co-compactness as a property of elements is "co-compactness of their principal ideal."</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 11 · WATCH</span>
+    <p><span class="term">dual compact element</span> An element $a \in L$ is called <strong>dual compact</strong> if for each subset $X \subseteq L$ such that $a \ge \bigwedge X$, there is a finite subset $F \subseteq X$ such that $a \ge \bigwedge F$. Plain English: <em>"$a$ is order-dually compact"</em> — finite witness for being above-meet.</p>
+    <p><strong>WARNING:</strong> The notion of "dual compact lattice" coincides with "co-compact lattice" (the same property of $1$). But "dual compact element" is in general DIFFERENT from "co-compact element" — they're not the same notion at the element level. See Proposition 11.5.</p>
+  </div>
+
+  <div class="term-card">
+    <span class="term-tag">New · Ch 11 · alternative name</span>
+    <p><span class="term">finitely cogenerated</span> Synonym for co-compact (Reference [34] = Stenström 1975, <em>Rings of quotients</em>). The module-theoretic origin: a module is finitely cogenerated iff every set of submodules with intersection zero has a finite sub-set with intersection zero. The dual of "finitely generated."</p>
+  </div>
+
+  <h2>Deep dive — Order duality in lattice theory</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · The order-dual lattice $L^{\mathrm{op}}$</span>
+    <p><strong>Definition.</strong> For any lattice $L$, the <strong>order-dual lattice</strong> $L^{\mathrm{op}}$ has the same underlying set as $L$ but with the order reversed: $a \le_{L^{\mathrm{op}}} b$ iff $b \le_L a$. Joins in $L$ become meets in $L^{\mathrm{op}}$, and vice versa. The bottom $0$ of $L$ becomes the top of $L^{\mathrm{op}}$.</p>
+    <p><strong>Why dualise?</strong> Many lattice notions come in dual pairs:
+    <br>• Compact ↔ Co-compact
+    <br>• Atomic ↔ Coatomic (every $a \ne 1$ has a maximal element above)
+    <br>• Atom ↔ Dual atom (= co-atom = maximal)
+    <br>• Socle $s(L)$ ↔ Radical $r(L)$
+    <br>• Essential ↔ Superfluous
+    <br>• Pseudo-complement ↔ Supplement (Ch 12)
+    <br>• Noetherian (ACC) ↔ Artinian (DCC)</p>
+    <p><strong>The duality principle.</strong> Any theorem about lattices, when applied to $L^{\mathrm{op}}$, gives a "dual theorem" about lattices. So results about compact lattices automatically yield results about co-compact lattices via $L \leftrightarrow L^{\mathrm{op}}$.</p>
+    <p><strong>Asymmetries to watch for.</strong> Most module-theoretic constructions break duality. The submodule lattice $S_R(M)$ has a natural top (= $M$) and bottom (= $0$), but the dual would correspond to "quotient submodules" — a structurally different notion. So while lattice-theoretic dualities are clean, their module-theoretic interpretations can require care.</p>
+    <p><strong>The chapter's specific use.</strong> Chapter 11 uses order-duality to lift Chapter 2's compact-lattice apparatus to co-compact-lattice apparatus. Theorem 11.2 has a clean dual form (essentially: in compactly generated modular, co-compact ⟺ "the dual of finitely generated structure" holds). The chapter occasionally notes asymmetries (e.g., the dual compact vs co-compact element distinction).</p>
+  </div>
+
+  <h2>Deep dive — Finitely cogenerated modules</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Finitely cogenerated modules</span>
+    <p><strong>Definition.</strong> A module $M$ is <strong>finitely cogenerated</strong> if for every family of submodules $\{M_i\}$ with $\bigcap M_i = 0$, there's a finite sub-family $\{M_{i_1}, \ldots, M_{i_n}\}$ with $\bigcap_{j=1}^n M_{i_j} = 0$. Plain English: <em>"every intersection-zero family is finitely-witnessed."</em></p>
+    <p><strong>Equivalent characterisations</strong> (the lattice form of Theorem 11.2):
+    <br>• $M$ is finitely cogenerated iff $\mathrm{soc}(M)$ is finitely generated AND essential in $M$.
+    <br>• $M$ is finitely cogenerated iff $M$ has finite uniform dimension AND every uniform submodule has a simple submodule (= atomic socle in lattice terms).
+    <br>• $M$ is finitely cogenerated iff $E(M)$ (the injective hull) is a finite direct sum of indecomposable injectives, each containing a simple submodule.</p>
+    <p><strong>Why finitely cogenerated matters.</strong> The dual of finitely generated. Just as finitely generated modules over noetherian rings have nice structure (composition series, finite length, Krull-Schmidt), finitely cogenerated modules over artinian rings have parallel structure. In abelian group theory, finitely cogenerated = "finite or has socle a finite direct sum of cyclic groups of prime order."</p>
+    <p><strong>Examples.</strong>
+    <br>• Every Artinian module is finitely cogenerated.
+    <br>• Every finite module is finitely cogenerated.
+    <br>• $\mathbb Z(p^\infty)$ (the Prüfer $p$-group) is finitely cogenerated (socle = $\mathbb Z/p$ is finite and essential).
+    <br>• $\mathbb Z$ as a $\mathbb Z$-module: not finitely cogenerated (socle = $0$ is not essential).
+    <br>• $\mathbb Q$ as a $\mathbb Z$-module: not finitely cogenerated (socle = $0$).
+    <br>• $\bigoplus_p \mathbb Z_p$ over distinct primes: not finitely cogenerated (Exercise 11.2).</p>
+    <p><strong>Onodera's theorem (1973).</strong> "Linearly compact modules and cogenerators II" (Hokkaido Math. J.): finitely cogenerated modules are exactly the linearly compact modules with essential socle. This connects to topological lattice theory and linearly compact rings.</p>
+    <p><strong>The lattice version (Călugăreanu's chapter).</strong> Theorem 11.2 abstracts the module-theoretic characterisation: in compactly generated modular lattices, co-compact ⟺ socle compact + essential. The lattice form generalises beyond modules to any modular CG lattice.</p>
+  </div>
+
+  <h2>Deep dive — Theorem 11.2 and dimension theory</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive · Theorem 11.2 in context</span>
+    <p>Theorem 11.2 (the chapter's keystone): <em>in a compactly generated modular lattice, co-compact ⟺ the socle $s(L)$ is compact and essential in $L$</em>.</p>
+    <p><strong>Why this is striking.</strong> Two superficially unrelated conditions — "every trivial meet is finite-witnessed" and "the socle is compact and essential" — turn out to be equivalent. The connection runs through the structural theory of socles and essentialness developed in Chapters 4-5.</p>
+    <p><strong>The forward direction.</strong> Co-compact ⟹ socle compact (Theorem 11.1, in semiatomic context — when applied to $s(L)/0$) and essential (Lemma 11.4). The forward proof uses Lemma 11.4's key insight: in compactly generated co-compact, the socle is essential because the meet of all essential elements is $0$ (since these elements are essential), and co-compactness gives a finite-witness — but their finite meet is then essential too, forcing the meet to be the socle itself.</p>
+    <p><strong>The reverse direction.</strong> Compact essential socle ⟹ co-compact uses Lemma 11.2 (essential extension preserves co-compactness): if $s(L)$ is essential in $L$ and $s(L)/0$ is co-compact (which follows from $s(L)$ compact + semiatomic), then $L$ is co-compact.</p>
+    <p><strong>The Goldie connection.</strong> Theorem 11.2 implies: every co-compact lattice has finite Goldie dimension (Chapter 8). Reason: compact essential socle ⟹ finite essential decomposition into atoms, which IS a finite uniform-dimension witness. So co-compact is a strong dimensional condition.</p>
+    <p><strong>Modern applications.</strong> Finitely cogenerated modules are used heavily in:
+    <br>• Cogenerator theory: a module $C$ is a <em>cogenerator</em> if every module embeds in a product of copies of $C$. Finitely cogenerated modules and their duals have rich cogenerator structure.
+    <br>• Morita duality: rings $R$ and $S$ are Morita-dual iff there's a bimodule giving a duality between $\mathrm{mod-R}$ and $S\mathrm{-mod}$ that exchanges finitely generated and finitely cogenerated.
+    <br>• Coalgebra theory: cogenerator-type properties dualise generator properties.</p>
+  </div>
+
+  <p>That's the vocabulary. The chapter prose ahead refers to these terms freely.</p>
+</section>
+
+<div class="part-header" id="partA">
+  <div class="pk">Part A · Co-compact basics</div>
+  <h2>Definitions, basic propagation, and the socle connection</h2>
+  <p class="part-lede">Definition, the immediate "artinian ⟹ co-compact" remark, hereditary properties (Lemmas 11.1–11.4), the RSC consequence (Prop 11.1).</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION A1</span> Definition + Lemmas 11.1, 11.2 — basic propagation</h2>
+  <div class="tagline">Co-compact = trivial meets are finite-witnessed. Hereditary downward (Lemma 11.1) and preserved under essential extensions (Lemma 11.2).</div>
+
+  <div class="box def">
+    <span class="label">Definition · co-compact (= finitely cogenerated)</span>
+    <p>A complete lattice $L$ is called <strong>co-compact</strong> (or <strong>finitely cogenerated</strong>, in [34]) if for every subset $X$ of $L$ such that $\bigwedge X = 0$, there is a finite subset $F \subseteq X$ such that $\bigwedge F = 0$. Obviously, $L$ is co-compact if and only if the dual $L^{\mathrm{op}}$ is compact. An element $a \in L$ is called <strong>co-compact</strong> if the sublattice $a/0$ is co-compact.</p>
+  </div>
+
+  <p>Plain English: <em>$L$ is co-compact when every "intersection-zero family" is witnessed by a finite sub-family</em>. This is the dual of "every cover-of-1 is finite-witnessed" (= compact).</p>
+
+  <p>The chapter recalls Proposition 1.3 from Chapter 1: <em>$L$ is artinian iff for each subset $A$ there's a finite $F \subseteq A$ with $\bigwedge F = \bigwedge A$</em>. As an immediate consequence:</p>
+
+  <div class="box prop">
+    <span class="label">Remark</span>
+    <p>Every artinian lattice is co-compact.</p>
+  </div>
+
+  <p>Reason: artinian gives finite witness for arbitrary meets (any subset $A$ has finite $F$ with $\bigwedge F = \bigwedge A$), so in particular the case $\bigwedge A = 0$ has finite witness — exactly the co-compact condition.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.1</span>
+    <p>If $L$ is a co-compact lattice, for each $0 \ne a \in L$ the sublattice $a/0$ is also co-compact.</p>
+  </div>
+
+  <p>The converse trivially holds if $L$ has $1$: take $a = 1$ and $a/0 = L$.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.2</span>
+    <p>Let $a$ be an essential element of a lattice $L$. If $a/0$ is co-compact then $L$ is also co-compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $\{a_i\}_{i \in I}$ be a family of non-zero elements of $L$ such that $\bigwedge_{i \in I} a_i = 0$. The element $a$ being essential in $L$, we have $a \wedge a_i \ne 0$ for each $i$, and $\bigwedge_{i \in I}(a \wedge a_i) = a \wedge \bigwedge_{i \in I} a_i = a \wedge 0 = 0$.</p>
+    <p>The sublattice $a/0$ being co-compact, there is a finite subset $F \subseteq I$ such that $\bigwedge_{i \in F}(a \wedge a_i) = a \wedge \bigwedge_{i \in F} a_i = 0$.</p>
+    <p>Finally, $a$ being essential, $\bigwedge_{i \in F} a_i = 0$. Hence $L$ is co-compact.</p>
+  </div>
+
+  <p>Lemma 11.2 is the dual of "compact extension preserves compact": essential extension preserves co-compact. The proof uses essentialness exactly to push trivial-meets up from $a/0$ to $L$.</p>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION A2</span> Lemmas 11.3, 11.4 + Proposition 11.1 — connecting to the socle</h2>
+  <div class="tagline">Co-compact lattices have $r(L) = 0$ (in semiatomic), socle is essential (Lemma 11.4). Combined with RSC: co-compact CG ⟹ torsion (Prop 11.1).</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.3</span>
+    <p>In a compactly generated modular semiatomic lattice the radical $r(L) = 0$.</p>
+  </div>
+
+  <p>(This is a dimensional consequence of semiatomicity in modular CG, recapped here for use in the chapter's main results.)</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 11.4 · the socle-essential lemma</span>
+    <p>In a compactly generated co-compact lattice $L$ the socle $s(L)$ is essential in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $a \in L$ be such that $s(L) \wedge a = 0$ or, equivalently, $s(a/0) = 0$. The sublattice $a/0$ being compactly generated, the socle is also the join of all the essential elements of $a/0$. So, being co-compact, $0 = \bigwedge_{i \in F} e_i$ for a finite family of essential elements $\{e_i\}_{i \in F}$ of $a/0$. Hence $0$ is essential in $a/0$, and so $a = 0$.</p>
+  </div>
+
+  <p>Plain English: <em>in compactly generated co-compact lattices, the socle is "everywhere" — every non-zero element has a non-trivial atomic core</em>. This is half of Theorem 11.2 (the keystone): co-compact ⟹ socle essential.</p>
+
+  <div class="box prop">
+    <span class="label">Remark 11.1</span>
+    <p>In every atomic lattice, the socle is essential (see Proposition 5.1). If the lattice $L$ is inductive then the converse is also true.</p>
+  </div>
+
+  <p>Reading: atomic ⟹ socle essential always; in inductive lattices, socle essential ⟹ atomic. So in inductive lattices, "atomic" and "socle essential" are equivalent.</p>
+
+  <p>Combining this with Lemma 11.4 and the inductive case (compactly generated ⟹ inductive): <em>compactly generated co-compact lattices are atomic</em>.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 11.1</span>
+    <p>Compactly generated co-compact lattices which satisfy the condition (RSC) are torsion lattices.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Immediate by Proposition 5.9: in modular atomic lattices, RSC + atomic ⟹ torsion. We've established (CG co-compact ⟹ atomic) above, and RSC is given.</p>
+  </div>
+
+  <p>Proposition 11.1 connects co-compactness back to Chapter 5's torsion theory. It says: <em>in well-behaved settings (CG + RSC), co-compact lattices are torsion lattices</em>. Combined with Theorem 8.4 (Osofsky-Smith style results), this gives strong dimensional consequences.</p>
+</section>
+
+<div class="part-header" id="partB">
+  <div class="pk">Part B · Artinian + direct sums</div>
+  <h2>Two structural propositions</h2>
+  <p class="part-lede">Proposition 11.2's clean characterisation of artinian via co-compact upper intervals; Proposition 11.3's "purely lattice" proof of co-compact lifting.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION B1</span> Proposition 11.2 — artinian via co-compact</h2>
+  <div class="tagline">A clean characterisation: L is artinian iff every upper interval $1/a$ is co-compact.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 11.2</span>
+    <p>A lattice $L$ is artinian if and only if for every $a \ne 1$ the sublattice $1/a$ is co-compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>$(\Rightarrow)$ Each sublattice of an artinian lattice is clearly artinian and so, by the Remark 11.1, is co-compact.</p>
+    <p>$(\Leftarrow)$ Conversely, let $\ldots \le a_n \le \ldots \le a_2 \le a_1$ be an ascending chain of elements in $L$ (we're verifying ACC for the dual, which is artinian for $L$). Wait — we need DCC. Let me re-read.</p>
+    <p>Actually: artinian = DCC. So suppose $a_1 \ge a_2 \ge \ldots$ is a descending chain. If $a = \bigwedge_{n \in \mathbb N} a_n$ then $\{a_n\}_{n \in \mathbb N}$ is a subset of $1/a$ (each $a_n \ge a$). The sublattice $1/a$ being co-compact, there is a finite subset $F \subseteq \mathbb N$ such that $a = \bigwedge_{n \in F} a_n$. Hence $a = a_m$ where $m = \max(F)$, and $a_{m+\ell} = a_m$ for each $\ell \in \mathbb N$, so the chain is finite and $L$ is artinian.</p>
+  </div>
+
+  <p>Proposition 11.2 makes the artinian/co-compact connection precise: <em>artinian = "every upper interval is co-compact."</em> The only-1 case ($a = 0$, $1/a = L$) gives "$L$ co-compact" as a special case, but artinian is the global condition that this holds in every upper world.</p>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION B2</span> Proposition 11.3 + Corollary 11.1 — direct sums of co-compact</h2>
+  <div class="tagline">In modular inductive lattices, $a/0$ + $1/a$ co-compact ⟹ L co-compact. The "purely lattice proof" avoids injective hull.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 11.3</span>
+    <p>If for an element $a$ of a modular inductive lattice $L$ the sublattices $a/0$ and $1/a$ are co-compact then the lattice $L$ is also co-compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · purely lattice argument</span>
+    <p>If $a = 0$ nothing remains to be proved. If $a \ne 0$, let $\{b_i\}_{i \in I}$ be a subset of $L$ with $\bigwedge_{i \in I} b_i = 0$. Then $\bigwedge_{i \in I}(a \wedge b_i) = a \wedge \bigwedge_{i \in I} b_i = a \wedge 0 = 0$ in $a/0$.</p>
+    <p>By co-compactness of $a/0$, there is a finite subset $F \subseteq I$ such that $\bigwedge_{i \in F}(a \wedge b_i) = a \wedge \bigwedge_{i \in F} b_i = 0$. If $\bigwedge_{i \in F} b_i = 0$ (e.g., if $a$ is essential in $L$), the proof is complete.</p>
+    <p>If $\bigwedge_{i \in F} b_i \ne 0$, then let $c$ be a pseudo-complement of $a$ which contains $\bigwedge_{i \in F} b_i$. We have $\bigwedge_{i \in F} b_i \in c/0 = c/(a \wedge c) \cong (a \vee c)/a \subseteq 1/a$ (the iso is given by modularity). The sublattice $1/a$ being co-compact, $(a \vee c)/a$ and hence $c/0$ are also co-compact.</p>
+    <p>But $0 = \bigwedge_{i \in F}(c \wedge b_i)$ in $c/0$, and there's a finite subset $G \subseteq I$ such that $0 = \bigwedge_{i \in G}(c \wedge b_i) = c \wedge \bigwedge_{i \in G} b_i$. Now, for $b = \bigwedge_{i \in F \cup G} b_i$ we have $b \le \bigwedge_{i \in F} b_i \le c$ and $c \wedge b \le c \wedge \bigwedge_{i \in G} b_i = 0$, so $b = 0$, and we have the required finite subset.</p>
+  </div>
+
+  <p>The book emphasises: <em>this is a purely lattice proof which avoids the injective hull, a non-lattice notion (see [41])</em>. Many module-theoretic proofs of analogous statements use the injective hull as a tool, but the lattice apparatus we've built up (essentialness, pseudo-complement, modular iso theorem) is enough.</p>
+
+  <div class="box cor">
+    <span class="label">Corollary 11.1</span>
+    <p>A finite direct sum of co-compact elements in an inductive modular lattice is co-compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · induction on number of summands</span>
+    <p>If $a/0, b/0$ are co-compact and $a \oplus b = 1$ ($b$ is a complement of $a$) then by modularity $b/0 \cong b/(a \wedge b) \cong (a \vee b)/a = 1/a$, and we use Proposition 11.3. The rest is done by induction.</p>
+  </div>
+
+  <p>Useful in practice: when constructing co-compact lattices, you can build them as finite direct sums of smaller co-compact pieces. This dualises Proposition 2.1 (finite joins of compacts are compact).</p>
+</section>
+
+<div class="part-header" id="partC">
+  <div class="pk">Part C · $r(L) = 0$ + Theorem 11.1</div>
+  <h2>The radical-zero corner of co-compact theory</h2>
+  <p class="part-lede">When the radical vanishes, co-compact lattices have a very clean structure (Prop 11.4). Theorem 11.1 gives the keystone three-way equivalence in CG semiatomic modular settings.</p>
+</div>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION C1</span> Proposition 11.4 + Corollary 11.2</h2>
+  <div class="tagline">CG co-compact + r(L)=0 ⟹ semiatomic + compact. The strongest immediate consequence of Lemma 11.4 + radical theory.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 11.4</span>
+    <p>Let $L$ be a compactly generated co-compact lattice with the radical $r(L) = 0$. Then $L$ is semiatomic and compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two parts</span>
+    <p><strong>Semiatomic:</strong> From Lemma 11.4 we already know that $L$ is atomic. The lattice $L$ being compactly generated, the radical is also the union of all the superfluous elements (Theorem 7.1). Hence the condition $r(L) = 0$ implies that the only superfluous element of $L$ is $0$. Equivalently, for each $0 \ne a \in L$ there is an $x \ne 1$ such that $a \vee x = 1$. In particular, each atom has a complement (maximal if $L$ is also modular).</p>
+    <p>If $s(L) \ne 1$ then let $x \ne 1$ be such that $s(L) \vee x = 1$ ($L \ne 0$ atomic implies $s(L) \ne 0$). One obtains an atom which would not be contained in $s(L)$ — a contradiction. Hence $L$ is semiatomic.</p>
+    <p><strong>Compact:</strong> $L$ being co-compact, the radical $r(L)$ is the intersection of all the maximal elements, and there's a finite subset, say with $n$ maximal elements, which has zero intersection. Compactness of $L$ follows by induction on $n$: each subset $X$ of $L$ with the join equal to $1$ has a finite subset which has also the join equal to $1$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 11.2</span>
+    <p>Let $L$ be a compactly generated co-compact modular lattice with the radical $r(L) = 0$. Then $L$ is semiatomic.</p>
+  </div>
+
+  <p>(Direct application of Proposition 11.4 + the structural results from Chapters 6 and 10.)</p>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION C2</span> Theorem 11.1 — three-way equivalence</h2>
+  <div class="tagline">In CG semiatomic modular: compact ⟺ co-compact ⟺ 1 is finite direct sum of atoms.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.1</span>
+    <p>Let $L$ be a compactly generated semiatomic and modular lattice. Then the following conditions are equivalent:</p>
+    <p><strong>(a)</strong> $L$ is compact;</p>
+    <p><strong>(b)</strong> $L$ is co-compact;</p>
+    <p><strong>(c)</strong> $1$ is a finite direct sum of atoms.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · the three-way chain</span>
+    <p>(a) ⟹ (c): $L$ being semiatomic and inductive (semiatomic CG ⟹ inductive), we have $1 = \bigoplus_{i \in I} s_i$ with $s_i$ atoms (Theorem 6.2). $\{s_i\}_{i \in I}$ has the join equal to $1$, a compact element, so a finite subset $F \subseteq I$ exists such that $1 = \bigoplus_{i \in F} s_i$.</p>
+    <p>(c) ⟹ (b): Suppose $1 = \bigoplus_{i=1}^n s_i$. We prove that if $0 = \bigwedge_{i \in I} a_i$ there's a finite subset $F$ of $I$ such that $0 = \bigwedge_{i \in F} a_i$, by induction on $n$. If $n = 1$, the assertion is obvious. Assume the assertion holds for at most $n - 1$ atoms.</p>
+    <p>First, observe there's $k \in I$ with $a_k \wedge s_n = 0$. Indeed, otherwise $a_i \wedge s_n = s_n$ for every $i \in I$ or $s_n \le \bigwedge_{i \in I} a_i$, contradiction. The element $a_k$ is also a direct sum of at most $n - 1$ atoms (modularity is needed for the use of the Jordan-Hölder theorem). By induction, a finite subset of $\{a_i \wedge a_k\}_{i \in I}$ has intersection $0$. Hence $L$ is co-compact.</p>
+    <p>(b) ⟹ (a): follows from Lemma 11.3 (which assures $r(L) = 0$ in semiatomic) and Proposition 11.4.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>Theorem 11.1 says: <em>in compactly generated semiatomic modular lattices, "compact" and "co-compact" coincide — both are equivalent to "1 is a finite direct sum of atoms."</em> This is a striking equivalence: two superficially different finiteness conditions (compact = "1 has finite-witness from below"; co-compact = "trivial meet has finite-witness") collapse in this setting.</p>
+    <p>The collapse is enabled by semiatomicity: when $L$ is built from atoms, both finiteness conditions reduce to "finitely many atoms suffice."</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Remark</span>
+    <p>The implication (c) ⟹ (a) follows easily: in an upper continuous lattice every atom is compact and finite unions of compact elements are compact.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD">
+  <div class="pk">Part D · Theorem 11.2 + dual compact</div>
+  <h2>The chapter's keystone, plus an order-dual subtlety</h2>
+  <p class="part-lede">Theorem 11.2 — co-compact ⟺ socle compact and essential. Then dual compact elements (which differ from co-compact at the element level) and Proposition 11.5 (in Boolean lattices, they coincide).</p>
+</div>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION D1</span> Theorem 11.2 — the chapter's keystone</h2>
+  <div class="tagline">In compactly generated modular lattices, co-compact ⟺ socle is compact and essential.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 11.2 — the keystone</span>
+    <p>Let $L$ be a compactly generated modular lattice. Then $L$ is co-compact if and only if the socle $s(L)$ is compact and essential in $L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · two halves</span>
+    <p>$(\Rightarrow)$ If $L$ is co-compact and $a \ne 0$ then clearly $a/0$ is also co-compact. Hence the sublattice $s(L)/0$ is co-compact and semiatomic. By Theorem 11.1, $a/0$ is also compact, i.e., $s(L)$ is compact in $L$. The essentialness follows from Lemma 11.4.</p>
+    <p>$(\Leftarrow)$ Conversely, if $s(L)$ is compact then $s(L)/0$ is semiatomic and compact, hence co-compact (again by the above theorem). The socle $s(L)$ being also essential in $L$, $L$ is co-compact by Lemma 11.2.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this is the chapter's keystone</span>
+    <p>Theorem 11.2 gives a clean structural test for co-compactness in compactly generated modular lattices: <em>check the socle</em>. If the socle is compact (= finitely generated as a sub-lattice / module) and essential (touches every non-zero element), then $L$ is co-compact. The essentialness ensures the socle "sees" everything; compactness ensures the socle is itself "small enough" to allow finite-witness arguments.</p>
+    <p>For modules: $M$ is finitely cogenerated ⟺ $\mathrm{soc}(M)$ is finitely generated and essential. This is the classical module-theoretic characterisation, recovered as a special case of Theorem 11.2.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Remark · alternative form</span>
+    <p>From [34] (Stenström): the conditions in the previous Theorem are also equivalent with $s(L)$ essential in $L$ and $s(L)/0$ co-compact.</p>
+    <p>So the third equivalent: "$s(L)$ essential AND $s(L)/0$ co-compact." This is sometimes more convenient when the compactness of the socle isn't directly checkable but co-compactness of $s(L)/0$ is.</p>
+  </div>
+
+  <h3>Connection to dimension theory</h3>
+
+  <p>Theorem 11.2 has a strong dimensional consequence: <em>every co-compact lattice (in CG modular) has finite uniform dimension</em>. Reason: compact essential socle ⟹ finite essential decomposition into atoms (each atom is a uniform element by Theorem 8.1 / 8.2). The number of atoms in this decomposition is the Goldie dimension. So co-compact ⟹ finite Goldie dim.</p>
+
+  <p>This recovers the classical fact: finitely cogenerated modules have finite uniform dimension. The lattice version makes this transparent.</p>
+</section>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION D2</span> Dual compact elements + Proposition 11.5</h2>
+  <div class="tagline">A separate notion: dual compact elements. The lattice notion coincides with co-compact, but the elements differ. In Boolean lattices, the asymmetry collapses.</div>
+
+  <p>The chapter notes a subtlety: there's a separate "dual" notion that one might define for elements.</p>
+
+  <div class="box def">
+    <span class="label">Definition · dual compact element</span>
+    <p>An element $a \in L$ is called <strong>dual compact</strong> if for each subset $X \subseteq L$ such that $a \ge \bigwedge X$ there is a finite subset $F \subseteq X$ such that $a \ge \bigwedge F$.</p>
+  </div>
+
+  <p>Plain English: <em>"dual compact" means "finite witness for above-meet"</em> — symmetric to compact's "finite witness for below-join."</p>
+
+  <div class="box prop">
+    <span class="label">Remark · lattices coincide, elements differ</span>
+    <p>The corresponding notion of <em>dual compact lattice</em> is the same as the co-compact lattices we already have defined (and used) above. Indeed, a lattice $L$ is called dual compact if for each $X \subseteq L$ such that $0 \ge \bigwedge X$ we have a finite subset $F \subseteq X$ such that $0 \ge \bigwedge F$. Hence the dual compact lattices are exactly the co-compact lattices.</p>
+    <p>However, in general there is no relation between co-compact elements and dual compact elements! In fact, co-compact elements are more likely to be related to compact elements (see Exercises).</p>
+  </div>
+
+  <p>The asymmetry: at the lattice level, dual compact = co-compact (both are "$\bigwedge X = 0$ ⟹ finite $\bigwedge F = 0$"). But at the element level, "co-compact element" = "$a/0$ is co-compact" (a property of the principal ideal) is generally different from "dual compact element" (a property of $a$ relative to subsets of $L$).</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 11.5</span>
+    <p>In a complete Boolean lattice, each co-compact element is compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why · de Morgan</span>
+    <p>Notice that complete Boolean lattices are infinitely distributive, uniquely (relatively) complemented and the generalized de Morgan formulas hold. Denote by $a'$ the complement of $a$ in $L$.</p>
+    <p>Let $a \in L$ be a co-compact element of $L$ and let $a \le \bigvee X$ for a subset $X \subseteq L$. Then $a = a \wedge \bigvee X = \bigvee_{x \in X}(a \wedge x)$, and considering only complements relative to the sublattice $a/0$, we derive $0 = \bigwedge_{x \in X}(a \wedge x)'$.</p>
+    <p>Hence there exists a finite subset $F \subseteq X$ such that $0 = \bigwedge_{x \in F}(a \wedge x)'$ and, complementing once again, $a = \bigvee_{x \in F}(a \wedge x)$ or $a \le \bigvee F$.</p>
+  </div>
+
+  <p>Proposition 11.5: in Boolean lattices, the asymmetry collapses — co-compact elements are compact. This is because Boolean lattices have de Morgan duality, which turns the co-compact condition into the compact condition via complementation.</p>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>The proposition isolates a setting (Boolean lattices) where the order-dual machinery is fully symmetric. For non-Boolean lattices, the asymmetry persists, and the chapter's notation distinguishes "co-compact element" (= $a/0$ co-compact) from "dual compact element" (= finite witness above) — they're genuinely different.</p>
+    <p>In abelian group lattices: $L(G)$ is rarely Boolean (it's modular and complemented for elementary abelian groups, but in general non-distributive). So the asymmetry is real for typical algebra examples.</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five panels: finitely cogenerated modules, order duality, linearly compact modules, torsionless modules with finite essential socle, Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION P1</span> Finitely cogenerated modules</h2>
+  <div class="tagline">The module-theoretic origin. Finitely cogenerated modules satisfy "every intersection-zero family is finite-witnessed."</div>
+
+  <div class="box connection">
+    <span class="label">Finitely cogenerated modules</span>
+    <p><strong>Definition.</strong> A module $M$ is <strong>finitely cogenerated</strong> if for every family of submodules $\{M_i\}_{i \in I}$ with $\bigcap_i M_i = 0$, there's a finite sub-family $\{M_{i_1}, \ldots, M_{i_n}\}$ with $\bigcap_{j=1}^n M_{i_j} = 0$.</p>
+    <p>Equivalently: $\mathrm{soc}(M)$ is finitely generated AND essential in $M$. (This is the module-theoretic version of Theorem 11.2 in this chapter.)</p>
+  </div>
+
+  <p>Examples:</p>
+  <ul>
+    <li>Every Artinian module is finitely cogenerated. (Artinian ⟹ co-compact via Remark 11.1.)</li>
+    <li>Every finite module is finitely cogenerated.</li>
+    <li>$\mathbb Z(p^\infty)$: socle $= \mathbb Z/p$, finitely generated AND essential. Finitely cogenerated.</li>
+    <li>$\mathbb Z$: socle $= 0$. Not finitely cogenerated.</li>
+    <li>$\mathbb Q$: socle $= 0$. Not finitely cogenerated.</li>
+    <li>$\bigoplus_{p \in \mathbb P} \mathbb Z_p$: socle is the entire module, but it's not finitely generated. Not finitely cogenerated (Exercise 11.2).</li>
+  </ul>
+
+  <div class="box intuition">
+    <span class="label">Why finitely cogenerated matters</span>
+    <p>The dual of finitely generated. In abelian group theory, finitely cogenerated abelian groups are exactly the groups $G$ such that $\mathrm{soc}(G) = T(G)[p]$ for finitely many $p$ is finite and essential. They include all finite abelian groups and the cocyclic groups $\mathbb Z(p^\infty)$.</p>
+    <p>In ring theory, finitely cogenerated modules play a key role in cogenerator theory and Morita duality. The chapter's lattice apparatus is the abstract scaffold for these classical module-theoretic results.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION P2</span> Order duality in lattice theory</h2>
+  <div class="tagline">A list of dual pairs and how Chapter 11 fits the bigger picture.</div>
+
+  <div class="box connection">
+    <span class="label">Order-dual pairs</span>
+    <p>Many notions in lattice theory come in dual pairs:</p>
+  </div>
+
+  <table class="grid">
+    <thead><tr><th>Notion in $L$</th><th>Order-dual notion in $L$ (= notion in $L^{\mathrm{op}}$)</th></tr></thead>
+    <tbody>
+      <tr><td>Compact ($\bigvee X \ge c$ ⟹ finite witness)</td><td>Co-compact ($\bigwedge X \le 0$ ⟹ finite witness)</td></tr>
+      <tr><td>Atomic (every $a \ne 0$ has atoms)</td><td>Coatomic (every $a \ne 1$ has maximals)</td></tr>
+      <tr><td>Atom (minimal non-zero)</td><td>Co-atom = dual atom (maximal non-1)</td></tr>
+      <tr><td>Socle $s(L)$ = $\bigvee$ atoms</td><td>Radical $r(L)$ = $\bigwedge$ maximals</td></tr>
+      <tr><td>Essential ($e \wedge a \ne 0$ for $a \ne 0$)</td><td>Superfluous ($e \vee b \ne 1$ for $b \ne 1$)</td></tr>
+      <tr><td>Pseudo-complement (max $c$ with $b \wedge c = 0$)</td><td>Supplement (min $c$ with $b \vee c = 1$)</td></tr>
+      <tr><td>Noetherian (ACC)</td><td>Artinian (DCC)</td></tr>
+      <tr><td>Pure (complement in compact upper interval)</td><td>(Open dual notion — undeveloped here)</td></tr>
+    </tbody>
+  </table>
+
+  <p>The chapter's apparatus exploits this duality. Theorem 11.2 (co-compact ⟺ compact essential socle) is structurally dual to the compact-generation theorems of Chapter 2 — but with socle and essentialness replacing the corresponding compact-generation notions.</p>
+
+  <div class="box intuition">
+    <span class="label">When duality fails</span>
+    <p>Not every theorem dualises cleanly. The submodule lattice $S_R(M)$ has a natural top ($M$) and bottom ($0$), but its structural asymmetry (modules vs quotient modules) means many module-theoretic results don't have clean duals. The lattice-theoretic apparatus, by contrast, is fully self-dual when one works abstractly. This is one of the reasons the lattice approach is sometimes more powerful than the module-theoretic approach — it makes structural symmetries explicit that algebra obscures.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION P3</span> Linearly compact modules</h2>
+  <div class="tagline">A topological refinement: linearly compact modules have a topology making them "compact" in a topological sense. Connects to finitely cogenerated via Onodera's theorem.</div>
+
+  <div class="box connection">
+    <span class="label">Linearly compact modules (Lefschetz, Zelinsky)</span>
+    <p><strong>Definition.</strong> A module $M$ over a topological ring is <strong>linearly compact</strong> if it carries a linear topology (open submodules form a base of neighbourhoods of $0$) such that $M$ is complete in this topology and every "closed" sub-thing is "linearly compact."</p>
+    <p>More concretely: $M$ is linearly compact if every system of closed cosets $\{m_i + N_i\}$ with the finite intersection property has a non-empty intersection.</p>
+    <p><strong>Examples.</strong> $p$-adic integers $J_p$ as a topological $\mathbb Z_p$-module. Profinite groups (Pontryagin-dual). Rings of formal power series.</p>
+    <p><strong>Onodera's theorem (1973).</strong> "Linearly compact modules and cogenerators II" (Hokkaido Math. J.): a module is finitely cogenerated iff it's linearly compact with essential socle.</p>
+    <p>So the chapter's "co-compact lattice" via Theorem 11.2 corresponds to "linearly compact module" — with topology coming from the open submodule structure.</p>
+  </div>
+
+  <p>The connection is deep: lattice co-compactness has a topological shadow via linear compactness. This connects abstract lattice theory to functional analysis (Banach spaces with weak topologies), $p$-adic analysis (linearly compact $p$-adic modules), and topological ring theory.</p>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION P4</span> Torsionless modules with finite essential socle</h2>
+  <div class="tagline">A specific class of finitely cogenerated modules studied in the 1980s-90s. Connects to QF rings and Morita duality.</div>
+
+  <div class="box connection">
+    <span class="label">Torsionless modules and rings with finite essential socle</span>
+    <p><strong>Definition.</strong> A module $M$ is <strong>torsionless</strong> if it embeds into a product of copies of the ring $R$ (as a right $R$-module). Equivalently: $M$ has a generating family of "torsion-free" elements.</p>
+    <p><strong>Connection to finitely cogenerated.</strong> A torsionless module with finitely generated essential socle is finitely cogenerated. The converse (finitely cogenerated ⟹ torsionless) requires additional ring-theoretic conditions (e.g., over QF rings, every finitely cogenerated module is torsionless).</p>
+    <p><strong>QF (Quasi-Frobenius) rings.</strong> A ring $R$ is QF if $R$ is right Artinian and right self-injective. Equivalently: $R$ is right Artinian and the regular module $R_R$ is finitely cogenerated. Finite-dimensional Hopf algebras over a field are QF.</p>
+    <p><strong>Morita duality.</strong> For a QF ring $R$, the categories $\mathrm{mod-R}$ and $R\mathrm{-mod}$ are dually equivalent — finitely generated and finitely cogenerated swap roles under the duality. The chapter's apparatus is the lattice scaffold for this classical result.</p>
+  </div>
+
+  <p>Recent research extends these ideas: the 2018 paper "Torsionless Modules and Rings with Finite Essential Socle" (Gómez-Pardo, Guil-Asensio) develops the theory in detail, with applications to ring classifications.</p>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION P5</span> Prologos — co-compact cells and finite-witness from above</h2>
+  <div class="tagline">Where co-compactness appears in Prologos: cells with finite-meet structure, dual finiteness conditions, and topological-flavoured cell types.</div>
+
+  <div class="box prologos">
+    <span class="label">Where Chapter 11 lives in Prologos</span>
+    <p><strong>(1) Co-compact cells: finite-witness for "trivial intersection."</strong> A cell type $L_{\mathrm{cell}}$ is co-compact iff every "meeting-to-bottom" family is finite-witnessed. For Prologos: this is the dual of the compactness condition for fan-out joins; it provides a finiteness guarantee for fan-in meets. Useful when validating "all hypotheses null" / "all assumptions falsified" reasoning.</p>
+    <p><strong>(2) The socle-essential-and-compact condition (Theorem 11.2).</strong> For a cell type $L_{\mathrm{cell}}$ to be co-compact (in CG modular settings) iff $s(L_{\mathrm{cell}})$ is compact and essential — i.e., the cell's "atomic foundation" is finitely generated AND touches every non-zero state. This is a strong design constraint for cells admitting clean dual reasoning.</p>
+    <p><strong>(3) Order duality and the Hyperlattice Conjecture.</strong> Prologos's design mantra is "all-at-once, all in parallel, structurally emergent information flow ON-NETWORK." Order duality (Chapter 11's deep dive) suggests a mirror principle: information flow can be analysed structurally via either direction (joins or meets). The Hyperlattice Conjecture's claim — that the Hasse diagram IS the parallel decomposition — is order-self-dual: it makes the same claim for $L$ and $L^{\mathrm{op}}$.</p>
+    <p><strong>(4) Linearly compact cell types: the topological connection.</strong> Connection Panel P3's linearly compact modules suggest a topology-flavoured cell type design, where cells carry a topology making them "compact" in a topological sense. Useful for cells representing $p$-adic-style content or asymptotic information.</p>
+    <p><strong>(5) The Boolean coincidence (Proposition 11.5).</strong> In Boolean cell types (e.g., the worldview cube $Q_n$), co-compact element ⟺ compact element. This is a special-case symmetry that simplifies design for fully-Boolean cells but doesn't apply to non-distributive cells (most QTT and term-domain lattices).</p>
+  </div>
+
+  <p>Relevant Prologos source files:</p>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 11</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Co-compact (finite-meet witness)</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>QTT lattice — finite, hence trivially co-compact</td></tr>
+      <tr><td>Theorem 11.2 (socle-essential-compact)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice — finite socle, essential</td></tr>
+      <tr><td>Order duality</td><td><code>.claude/rules/structural-thinking.md</code></td><td>SRE Lattice Lens — duality and self-dual structure</td></tr>
+      <tr><td>Linearly compact cells</td><td><code>racket/prologos/interval-domain.rkt</code></td><td>Interval-domain cells — linearly-compact-flavoured topological structure</td></tr>
+      <tr><td>Boolean cell types (Prop 11.5)</td><td><code>.claude/rules/propagator-design.md</code></td><td>Worldview $Q_n$ — Boolean, co-compact = compact for elements</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Chapter 11 formalises "finiteness from above" for cells: cells that admit clean fan-in meet reasoning, where any "meeting-to-bottom" family has a finite-witness. Theorem 11.2's characterisation gives a design test: <em>does the cell's atomic foundation (socle) suffice to witness the meet structure?</em> For finite cells, automatic. For infinite cells (interval domains, term lattices), a real design constraint. The chapter's apparatus complements Chapter 2's compact-generation framework, providing the dual side of finiteness reasoning.</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the chapter's terms.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>co-compact lattice (= finitely cogenerated)</dt>
+    <dd>$\bigwedge X = 0$ ⟹ finite $F \subseteq X$ with $\bigwedge F = 0$. Equivalently: dual lattice is compact. The lattice abstraction of finitely cogenerated modules.</dd>
+
+    <dt>co-compact element</dt>
+    <dd>$a$ such that $a/0$ is a co-compact lattice. Property of the principal ideal.</dd>
+
+    <dt>dual compact element</dt>
+    <dd>$a \ge \bigwedge X$ ⟹ finite $F$ with $a \ge \bigwedge F$. Dual of compact (which has $\bigvee$). Generally different from co-compact element.</dd>
+
+    <dt>finitely cogenerated module</dt>
+    <dd>$\bigcap M_i = 0$ ⟹ finite sub-family with $\bigcap = 0$. Equivalently: socle is finitely generated and essential. Module-theoretic origin of co-compact lattice.</dd>
+
+    <dt>linearly compact module</dt>
+    <dd>Topologically compact module with linear topology. Onodera 1973: finitely cogenerated ⟺ linearly compact with essential socle.</dd>
+
+    <dt>order-dual lattice $L^{\mathrm{op}}$</dt>
+    <dd>Same set as $L$, opposite order. Joins ↔ meets, top ↔ bottom. $L$ co-compact ⟺ $L^{\mathrm{op}}$ compact.</dd>
+
+    <dt>QF (quasi-Frobenius) ring</dt>
+    <dd>Right Artinian + right self-injective. Equivalently: right Artinian + $R_R$ finitely cogenerated. Connection panel P4.</dd>
+
+    <dt>Morita duality</dt>
+    <dd>Categorical duality between $\mathrm{mod-R}$ and $S\mathrm{-mod}$ for QF rings. Swaps finitely generated and finitely cogenerated.</dd>
+
+    <dt>cogenerator (module)</dt>
+    <dd>Module $C$ such that every module embeds in a product of copies of $C$. Connection to finitely cogenerated.</dd>
+  </dl>
+</section>
+
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 6 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 11.1 – 11.6 — Worked</h2>
+
+  <details class="exercise" id="ex-11-1">
+    <summary><span class="ex-tag">Ex. 11.1</span>P(M) — dual compact / co-compact characterisation</summary>
+    <div class="body">
+      <p class="ex-statement">(i) For an arbitrary set $M$, let $(\mathcal P(M), \subseteq)$ be the complete lattice of all the subsets of $M$. A subset $X \subseteq M$ is dual compact in this lattice if and only if $\mathcal C_M(X) = M - X$ is finite. (ii) A subset $X \subseteq M$ is co-compact in this lattice if and only if $X$ is finite (i.e., if and only if $X$ is compact in this lattice).</p>
+      <h4>Solution</h4>
+      <p><strong>(i) Dual compact:</strong> $X$ dual compact means: for every family $\{Y_i\}$ with $X \supseteq \bigcap Y_i$, there's a finite $F$ with $X \supseteq \bigcap_{i \in F} Y_i$.</p>
+      <p>If $M - X$ is finite (= $X$ has finite complement), say $M - X = \{m_1, \ldots, m_n\}$, then for any $\{Y_i\}$ with $\bigcap Y_i \subseteq X$, each $m_k$ is not in $\bigcap Y_i$, so $m_k \notin Y_{i_k}$ for some $i_k$. Hence $\bigcap_{k=1}^n Y_{i_k} \subseteq M - \{m_1, \ldots, m_n\} = X$. Finite witness.</p>
+      <p>Conversely, if $M - X$ is infinite, take $Y_i = M - \{m_i\}$ for each $m_i \in M - X$. Then $\bigcap Y_i = X$, but no finite intersection equals $X$ (since each finite intersection misses a finite set, but $M - X$ is infinite). So $X$ is not dual compact.</p>
+      <p><strong>(ii) Co-compact:</strong> $X$ co-compact means $X/0 \subseteq \mathcal P(M)$ is co-compact. Now $X/0 = \mathcal P(X)$, a Boolean lattice on $X$.</p>
+      <p>$\mathcal P(X)$ is co-compact iff every $\bigcap Y_i = \emptyset$ in $\mathcal P(X)$ has finite witness. This holds iff $X$ is finite: if $X$ finite, every intersection-zero family has finite witness; if $X$ infinite, take singletons $\{x\}$ for each $x \in X$; their intersection is empty but no finite sub-family suffices.</p>
+      <p>So $X$ co-compact ⟺ $X$ finite ⟺ $X$ compact in $\mathcal P(M)$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise illustrates the key asymmetry: dual compact (finite complement) ≠ co-compact (finite). For $\mathcal P(M)$ they're related but distinct: dual compact = "cofinite," co-compact = "finite."</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-11-2">
+    <summary><span class="ex-tag">Ex. 11.2</span>$\bigoplus_p \mathbb Z_p$ submodule lattice not co-compact</summary>
+    <div class="body">
+      <p class="ex-statement">Let $\mathbb P$ be the set of all prime numbers. In $\mathbb Z$-Mod show that the lattice of all the $\mathbb Z$-submodules of $G = \bigoplus_{p \in \mathbb P} \mathbb Z_p$ is not co-compact.</p>
+      <h4>Solution</h4>
+      <p>Take the family $\{H_p : p \in \mathbb P\}$ where $H_p = \bigoplus_{q \ne p} \mathbb Z_q$ (the direct sum of all $\mathbb Z_q$ except for $q = p$).</p>
+      <p>Each $H_p$ is a submodule of $G$. We have $\bigcap_p H_p = \bigcap_p \bigoplus_{q \ne p} \mathbb Z_q = 0$ (any element in all $H_p$ has zero $q$-component for every $q$, so is $0$).</p>
+      <p>For finite witness: take any finite subset $F \subseteq \mathbb P$. Then $\bigcap_{p \in F} H_p = \bigoplus_{q \notin F} \mathbb Z_q \ne 0$ (since $F$ is finite, infinitely many primes remain).</p>
+      <p>So no finite sub-family witnesses the trivial intersection, and the submodule lattice of $G$ is not co-compact.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows: $G = \bigoplus_p \mathbb Z_p$ is a "co-uniform-dimension" abelian group with infinite Goldie dimension — the socle (= $G$) is essential but not finitely generated. By Theorem 11.2, this rules out co-compactness.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-11-3">
+    <summary><span class="ex-tag">Ex. 11.3</span>Determine abelian groups with co-compact subgroup lattice</summary>
+    <div class="body">
+      <p class="ex-statement">Determine the abelian groups which have a co-compact lattice of subgroups.</p>
+      <h4>Solution</h4>
+      <p>By Theorem 11.2, $L(G)$ is co-compact iff $\mathrm{soc}(G)$ is finitely generated and essential in $G$.</p>
+      <p>For abelian groups: $\mathrm{soc}(G) = $ join of $\{g \in G : pg = 0\}$ over primes $p$ that divide elements' orders. $\mathrm{soc}(G)$ finitely generated iff $\mathrm{soc}(G)$ is finite (since elements of finite order in abelian groups, if finitely generated, are finite). So $\mathrm{soc}(G)$ is finite.</p>
+      <p>Essential in $G$: every non-zero subgroup intersects $\mathrm{soc}(G)$ non-trivially. For abelian groups, this rules out:
+      <br>• Torsion-free non-trivial parts: $\mathbb Z$ has $\mathrm{soc} = 0$, not essential.
+      <br>• Mixed groups with non-trivial torsion-free part: socle doesn't see the torsion-free part.</p>
+      <p>So $G$ must be torsion. Combined with finite socle: $G$ is a torsion abelian group with finite socle that's essential.</p>
+      <p><strong>Classification:</strong> $G$ has co-compact subgroup lattice iff $G$ is a finite direct sum of cocyclic groups (= a sum of finitely many $\mathbb Z_{p^k}$ and $\mathbb Z_{p^\infty}$ for various primes $p$ and $k$).</p>
+      <p>Examples: $\mathbb Z_{p^n}$, $\mathbb Z_{p^\infty}$, $\mathbb Z/n$ (finite), finite direct sums of these.</p>
+      <p>Non-examples: $\mathbb Z$, $\mathbb Q$, $\mathbb Q/\mathbb Z = \bigoplus_p \mathbb Z_{p^\infty}$ (infinite direct sum of distinct-prime cocyclics — socle infinite).</p>
+      <h4>Commentary</h4>
+      <p>The classification: abelian groups with co-compact subgroup lattice = finite direct sums of cocyclic groups. A clean structural answer obtained via Theorem 11.2 + classical abelian group theory.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-11-4">
+    <summary><span class="ex-tag">Ex. 11.4</span>Vector spaces with co-compact subspace lattice</summary>
+    <div class="body">
+      <p class="ex-statement">Which are the vector spaces having a co-compact lattice of subspaces?</p>
+      <h4>Solution</h4>
+      <p>By Theorem 11.2: $L = \mathrm{Sub}(V)$ is co-compact iff $\mathrm{soc}(V)$ is compact (= finitely generated as a sublattice / vector space) and essential.</p>
+      <p>For vector spaces over a field $k$: every subspace is "atomic" in the sense that 1-dimensional subspaces are atoms. So $\mathrm{soc}(V) = V$ (every non-zero vector space is semiatomic). The socle is essential iff $V \ne 0$ and the socle equals $V$.</p>
+      <p>The socle is finitely generated (= compact) iff $V$ is finite-dimensional.</p>
+      <p>So: <strong>$\mathrm{Sub}(V)$ is co-compact iff $V$ is finite-dimensional</strong> (or $V = 0$).</p>
+      <p>This is a clean answer: among vector spaces, co-compactness of the subspace lattice is equivalent to finite-dimensionality.</p>
+      <h4>Commentary</h4>
+      <p>For vector spaces, "co-compact" matches "finite-dimensional." This recovers the classical fact: finite-dimensional vector spaces are exactly the finitely cogenerated modules over a field. The Goldie dimension equals the linear dimension.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-11-5">
+    <summary><span class="ex-tag">Ex. 11.5</span>$c \wedge a$ co-compact in $a/0$</summary>
+    <div class="body">
+      <p class="ex-statement">If $c$ is a co-compact (or dual compact) element in a complete lattice $L$ and $a \in L$, show that $c \wedge a$ is co-compact (respectively dual compact) in $a/0$.</p>
+      <h4>Solution</h4>
+      <p><strong>Co-compact case:</strong> $c$ co-compact means $c/0$ is co-compact. We show $(c \wedge a)/0$ is co-compact (within $a/0$). Note $(c \wedge a)/0 = \{x \in L : 0 \le x \le c \wedge a\} = c/0 \cap a/0$, with the obvious order.</p>
+      <p>Take any $\{x_i\}_{i \in I}$ in $(c \wedge a)/0$ with $\bigwedge_i x_i = 0$. Each $x_i \le c$, so $\{x_i\} \subseteq c/0$. By co-compactness of $c/0$: finite witness $F$ with $\bigwedge_{i \in F} x_i = 0$. Same finite witness works in $(c \wedge a)/0$.</p>
+      <p><strong>Dual compact case:</strong> $c$ dual compact in $L$ means: for $X \subseteq L$ with $c \ge \bigwedge X$, there's finite $F \subseteq X$ with $c \ge \bigwedge F$.</p>
+      <p>For $c \wedge a$ dual compact in $a/0$: take $X \subseteq a/0$ with $c \wedge a \ge \bigwedge X$. Then $c \ge c \wedge a \ge \bigwedge X$, so by dual compactness of $c$ in $L$: finite $F \subseteq X$ with $c \ge \bigwedge F$. Combined with $\bigwedge F \le a$ (since $X \subseteq a/0$), we get $c \wedge a \ge \bigwedge F$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise shows both notions descend cleanly through interval restriction. Useful for inductive arguments over interval sublattices.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-11-6">
+    <summary><span class="ex-tag">Ex. 11.6</span>Three equivalent conditions for $r(1/a) = 0$ everywhere</summary>
+    <div class="body">
+      <p class="ex-statement">Verify the equivalence of the following assertions:
+      <br>(a) $r(1/a) = 0$ for each $a \in L$;
+      <br>(b) each proper element of $L$ is a meet of maximal elements.
+      <br>The conditions imply in a modular compactly generated lattice $L$ the condition:
+      <br>(c) each co-compact quotient sublattice $1/a$ ($a \in L$) is semiatomic.
+      <br>If $L$ is artinian all the conditions are equivalent.</p>
+      <h4>Solution</h4>
+      <p><strong>(a) ⟺ (b):</strong> $r(1/a) = $ meet of all maximal elements in $1/a$ (= elements of $L$ maximal among those $\ge a$ but $< 1$).</p>
+      <p>$r(1/a) = 0$ in $1/a$ means: the meet of maximals (in $1/a$) equals the bottom of $1/a$, which is $a$. Lifting to $L$: $a$ = meet of maximals of $L$ that are $\ge a$.</p>
+      <p>So (a) ⟺ "every $a$ is the meet of maximal elements of $L$ above $a$" ⟺ (b).</p>
+      <p><strong>(a, b) ⟹ (c) (in CG modular):</strong> If $1/a$ is co-compact, by the dual of Lemma 11.4 (applied to $L^{\mathrm{op}}$) or via Theorem 11.2 dualised: $1/a$ has $r(1/a) = 0$ + co-compact ⟹ semiatomic. Or directly: in CG modular co-compact, by Prop 11.4, $1/a$ is semiatomic when $r(1/a) = 0$.</p>
+      <p><strong>If $L$ artinian, all equivalent:</strong> Artinian ⟹ co-compact (every $1/a$ is artinian, hence co-compact). So (c) becomes "every $1/a$ semiatomic." Combined with (a)/(b) implications, all three are equivalent.</p>
+      <h4>Commentary</h4>
+      <p>The exercise gives three equivalent conditions for the radical to vanish "everywhere" — in every upper interval. In artinian lattices, this also forces semiatomicity in every upper interval. The pattern: radical zero + chain conditions ⟹ very strong structural decomposition.</p>
+    </div>
+  </details>
+</section>
+
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">Chapter 11's apparatus connects to Chapter 12 (supplements and the ideal lattice) and Chapter 13 (specialised ideal-lattice results).</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 11 in the book's arc</h2>
+
+  <p>Chapter 11 is the order-dual of much of Chapters 2-8. Its content connects to:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 11 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>12</td><td>Supplements and the ideal lattice</td><td>Supplements are the dual of complements; co-compact lattices are the natural setting for supplement theory.</td></tr>
+      <tr><td>13</td><td>Specialised ideal-lattice results</td><td>The ideal lattice's co-compact structure has implications for ring radicals and module quotients.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>Co-compact = order-dual of compact.</strong> Every $\bigwedge X = 0$ has finite witness. Lattice abstraction of finitely cogenerated modules.</li>
+    <li><strong>Theorem 11.2 — the keystone.</strong> In CG modular: co-compact ⟺ socle is compact and essential. The lattice form of "$M$ finitely cogenerated ⟺ $\mathrm{soc}(M)$ finitely generated and essential."</li>
+    <li><strong>Co-compact ⟹ finite Goldie dimension.</strong> Theorem 11.2 + Chapter 8's apparatus give this immediately. Co-compact lattices are dimensionally well-behaved.</li>
+  </ol>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 11 · Co-compact Lattices</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#')) return null;
+    return document.querySelector(href);
+  }).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

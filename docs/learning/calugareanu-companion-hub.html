@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 2 · Compactly Generated Lattices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg:          #F8F4EC;
+    --bg-warm:     #F2ECDD;
+    --bg-muted:    #EFE9D8;
+    --ink:         #1E2749;
+    --ink-soft:    #2B3560;
+    --text:        #2B2B2B;
+    --text-dim:    #6B6B6B;
+    --gold:        #C89F3C;
+    --gold-soft:   #E6C876;
+    --teal:        #3D5A6C;
+    --line:        #D6CFBE;
+    --nav-bg:      linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text:    #D9D4BF;
+    --nav-mute:    #8A8875;
+    --nav-sub:     #BBB8A6;
+    --nav-brand:   #E6C876;
+    --box-def-bg:  #F2ECDD;
+    --box-ex-bg:   #F2ECDD;
+    --box-thm-bg:  #F2ECDD;
+    --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC;
+    --box-check-bg:#EEF2F5;
+    --box-check-border:#B9CAD1;
+    --box-conn-bg: #EFE7F2;
+    --box-conn-border: #C9B7D2;
+    --shadow-soft: 0 1px 3px rgba(30, 39, 73, 0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg:          #0E1420;
+    --bg-warm:     #151C2E;
+    --bg-muted:    #1C2236;
+    --ink:         #E8E2D1;
+    --ink-soft:    #C9C4B3;
+    --text:        #C5C0B0;
+    --text-dim:    #8A8575;
+    --gold:        #D4AD52;
+    --gold-soft:   #E6C876;
+    --teal:        #7FA3B8;
+    --line:        #2A3042;
+    --nav-bg:      linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text:    #B8B1A0;
+    --nav-mute:    #6A6555;
+    --nav-sub:     #8A8575;
+    --nav-brand:   #D4AD52;
+    --box-def-bg:  #151C2E;
+    --box-ex-bg:   #141B2B;
+    --box-thm-bg:  #1A1F30;
+    --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10;
+    --box-check-bg:#121C24;
+    --box-check-border:#334652;
+    --box-conn-bg: #1B1726;
+    --box-conn-border: #3D2F4A;
+    --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  h1, h2, h3, h4, .display {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar {
+    background: var(--nav-bg);
+    color: var(--nav-text);
+    padding: 28px 22px;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+  }
+  nav .brand {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 16px;
+    color: var(--nav-brand);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 4px;
+  }
+  nav .sub {
+    font-family: 'Source Serif Pro', serif;
+    font-style: italic;
+    color: var(--nav-sub);
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.4;
+  }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a {
+    display: block;
+    color: var(--nav-text);
+    text-decoration: none;
+    padding: 6px 10px;
+    border-left: 2px solid transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    transition: all 0.15s ease;
+    border-radius: 0 4px 4px 0;
+  }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label {
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+    color: var(--nav-mute);
+    margin: 18px 10px 6px;
+  }
+
+  .theme-toggle {
+    position: fixed;
+    top: 18px;
+    right: 20px;
+    z-index: 100;
+    background: var(--bg-warm);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 14px 8px 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow-soft);
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+  }
+
+  main {
+    padding: 48px 64px 120px;
+    max-width: 920px;
+  }
+
+  .hero {
+    padding: 40px 0 24px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 40px;
+  }
+  .hero .kicker {
+    color: var(--gold);
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .hero h1 {
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1.12;
+    margin: 0 0 14px;
+  }
+  .hero .lede {
+    font-size: 19px;
+    color: var(--teal);
+    font-style: italic;
+    max-width: 700px;
+  }
+  .hero .meta {
+    display: flex;
+    gap: 20px;
+    margin-top: 22px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+  }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+
+  .part-header {
+    margin: 72px 0 24px;
+    padding: 18px 0 14px;
+    border-top: 2px solid var(--ink);
+    border-bottom: 1px solid var(--line);
+  }
+  .part-header .pk {
+    font-family: 'Inter', sans-serif;
+    color: var(--gold);
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .part-header h2 {
+    font-size: 30px;
+    font-weight: 800;
+    margin: 4px 0 6px;
+  }
+  .part-header .part-lede {
+    color: var(--teal);
+    font-style: italic;
+    font-size: 17px;
+    margin: 0;
+    max-width: 700px;
+  }
+
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  section.module > h2 .num {
+    font-family: 'Inter', sans-serif;
+    color: var(--gold);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.2em;
+  }
+  section.module .tagline {
+    font-style: italic;
+    color: var(--teal);
+    font-family: 'Source Serif Pro', serif;
+    font-size: 16px;
+    margin-bottom: 22px;
+    border-left: 3px solid var(--gold);
+    padding-left: 12px;
+  }
+  section.module h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 26px;
+    color: var(--ink-soft);
+  }
+  section.module h4 {
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--teal);
+    margin-top: 22px;
+  }
+
+  p { margin: 0 0 14px; }
+
+  .box {
+    border: 1px solid var(--line);
+    background: var(--bg-warm);
+    border-radius: 6px;
+    padding: 18px 22px;
+    margin: 20px 0;
+    position: relative;
+  }
+  .box .label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+  }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm { background: var(--box-thm-bg); }
+  .box.lemma { background: var(--box-thm-bg); }
+  .box.prop { background: var(--box-thm-bg); }
+  .box.ex  { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.ex  .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection {
+    background: var(--box-conn-bg);
+    border: 1px solid var(--box-conn-border);
+  }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos {
+    border: 2px solid var(--gold);
+    background: var(--box-prol-bg);
+  }
+  .box.prologos .label {
+    background: var(--gold);
+    color: #1E2749;
+  }
+  .box.warning {
+    background: var(--box-check-bg);
+    border-color: var(--box-check-border);
+  }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .box .ref {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-top: 10px;
+    display: block;
+  }
+
+  figure {
+    margin: 26px 0;
+    text-align: center;
+  }
+  figure svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+  }
+  figcaption {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  table.grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 22px 0;
+    font-size: 15px;
+  }
+  table.grid th, table.grid td {
+    border: 1px solid var(--line);
+    padding: 10px 14px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.grid th {
+    background: var(--ink);
+    color: var(--bg);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  code {
+    background: var(--bg-muted);
+    color: var(--ink-soft);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  details.exercise {
+    margin: 18px 0;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg-warm);
+    padding: 0;
+    overflow: hidden;
+  }
+  details.exercise[open] { background: var(--bg-warm); }
+  details.exercise > summary {
+    cursor: pointer;
+    padding: 14px 22px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: var(--ink);
+    border-bottom: 1px solid transparent;
+    list-style: none;
+  }
+  details.exercise[open] > summary {
+    border-bottom: 1px dashed var(--line);
+    color: var(--gold);
+  }
+  details.exercise > summary::before {
+    content: "▸ ";
+    color: var(--gold);
+    margin-right: 4px;
+  }
+  details.exercise[open] > summary::before {
+    content: "▾ ";
+  }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement {
+    color: var(--ink);
+    font-style: italic;
+    margin-bottom: 14px;
+    border-left: 3px solid var(--gold);
+    padding-left: 12px;
+  }
+  details.exercise .ex-tag {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+
+  /* Glossary */
+  dl.glossary {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 8px 20px;
+    margin: 20px 0;
+  }
+  dl.glossary dt {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: var(--ink);
+    padding-top: 4px;
+  }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+
+  /* Dark-mode SVG adaptation */
+  :root[data-theme="dark"] figure svg .node { fill: var(--bg-warm) !important; stroke: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .node-hot { fill: #3A2E15 !important; stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .node-cool { fill: #1A2236 !important; stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .edge-hot { stroke: var(--gold) !important; }
+  :root[data-theme="dark"] figure svg .edge-cool { stroke: var(--teal) !important; }
+  :root[data-theme="dark"] figure svg .lbl  { fill: var(--ink) !important; }
+  :root[data-theme="dark"] figure svg .cap  { fill: var(--text-dim) !important; }
+  :root[data-theme="dark"] figure svg .arrow { stroke: var(--teal) !important; fill: var(--teal) !important; }
+
+  footer.page-footer {
+    margin-top: 80px;
+    padding: 30px 0;
+    border-top: 2px solid var(--ink);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch01.html">← Chapter 1</a></li>
+    <li><a href="calugareanu-companion-ch03.html">Chapter 3 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 2 · Overview</a></li>
+  </ul>
+
+  <div class="section-label">Part 1 · Compactness</div>
+  <ul>
+    <li><a href="#s1">1 · The Word "Compact"</a></li>
+    <li><a href="#s2">2 · Definition (Nachbin–Stenström)</a></li>
+    <li><a href="#s3">3 · S-compact &amp; Equivalence</a></li>
+    <li><a href="#s4">4 · The Two Foundational Examples</a></li>
+    <li><a href="#s5">5 · Joins of Compacts (Prop 2.1)</a></li>
+    <li><a href="#s6">6 · Meets Are Not Compact (Rmk 2.2)</a></li>
+    <li><a href="#s7">7 · Atoms in Continuous Lattices (Prop 2.2)</a></li>
+  </ul>
+
+  <div class="section-label">Part 2 · Compactly Generated</div>
+  <ul>
+    <li><a href="#s8">8 · Crawley–Dilworth Definition</a></li>
+    <li><a href="#s9">9 · Generalising Noetherianness</a></li>
+    <li><a href="#s10">10 · Compactness in Quotients (Lem 2.1)</a></li>
+    <li><a href="#s11">11 · All-compact ⟺ Noetherian (Prop 2.3)</a></li>
+    <li><a href="#s12">12 · Algebraic ⟹ Upper Continuous (Prop 2.4)</a></li>
+    <li><a href="#s13">13 · Lemma 2.2 &amp; Proposition 2.5</a></li>
+  </ul>
+
+  <div class="section-label">Part 3 · Compact vs Algebraic</div>
+  <ul>
+    <li><a href="#s14">14 · "Compact lattice" vs "compactly generated"</a></li>
+    <li><a href="#s15">15 · Submodule and Hilbert Examples</a></li>
+    <li><a href="#s16">16 · Krull's Lemma (Lem 2.4)</a></li>
+  </ul>
+
+  <div class="section-label">Part 4 · Modularity Test</div>
+  <ul>
+    <li><a href="#s17">17 · Coverings (Lem 2.5)</a></li>
+    <li><a href="#s18">18 · Weak Atomicity (Lem 2.6)</a></li>
+    <li><a href="#s19">19 · Crawley's Theorem 2.1</a></li>
+  </ul>
+
+  <div class="section-label">Part 5 · Refinements</div>
+  <ul>
+    <li><a href="#s20">20 · H-noetherian (Head)</a></li>
+    <li><a href="#s21">21 · Theorem 2.2</a></li>
+    <li><a href="#s22">22 · Join Inaccessible (Birkhoff–Frink)</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">C1 · Domain Theory</a></li>
+    <li><a href="#c2">C2 · Universal Algebra (Birkhoff–Frink)</a></li>
+    <li><a href="#c3">C3 · Topology &amp; Stone Duality</a></li>
+    <li><a href="#c4">C4 · Abstract Interpretation</a></li>
+    <li><a href="#c5">C5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 2 · pp. 17–27</div>
+  <h1>Compactly Generated Lattices</h1>
+  <p class="lede">A faithful prose reading of Călugăreanu's Chapter 2 — every result expanded with intuition, diagrammed where useful, and connected outward to domain theory, universal algebra, abstract interpretation, and the Prologos propagator network.</p>
+  <div class="meta">
+    <span>~45–60 min read</span>
+    <span>22 sections + 5 connection panels</span>
+    <span>13 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<!-- ====================== OVERVIEW ====================== -->
+<section class="module" id="overview">
+  <h2>Chapter Overview — Why Bother With Compactness?</h2>
+  <div class="tagline">Chapter 2 is the chapter where lattice theory meets algebra: it carves out the lattices that <em>look like</em> the submodule lattice of a module, and gives the abstract apparatus to do algebra inside them.</div>
+
+  <p>Chapter 1 of Călugăreanu sets up the basic order-theoretic vocabulary: posets, lattices, complete lattices, modular and distributive lattices, the modular law $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$, and complementation. That chapter is in some sense purely formal: lattices are sets with $\vee$ and $\wedge$, full stop.</p>
+
+  <p>Chapter 2 introduces the first piece of <strong>algebraic content</strong>. The submodule lattice $L(M)$ of a module — the running motivation for the whole book — is not just a complete lattice; it has a finiteness property. Every submodule is the sum (= join) of its <em>finitely generated</em> sub-submodules. Equivalently: every submodule is a directed union of finitely generated ones. Pull that property up into the abstract setting and you get the notion this chapter develops:</p>
+
+  <div class="box intuition">
+    <span class="label">The chapter's punchline in one paragraph</span>
+    <p>A <strong>compact element</strong> in a complete lattice is the lattice analog of a finitely generated piece. A <strong>compactly generated lattice</strong> (also called <strong>algebraic</strong>) is one where every element is the join of compact elements — the lattice analog of "every object is a directed union of its finitely generated subobjects." Submodule lattices are always compactly generated. So is every subgroup lattice, subring lattice, every lattice of subalgebras of a universal algebra. This chapter builds the toolkit that lets us do module theory <em>using only the lattice</em>: chain conditions, modularity tests, maximal elements (Krull), atomicity. By the end, three fundamental things are true: every $R$-module's submodule lattice is in this nice class; the class is characterised by elementary lattice axioms; and Theorem 2.1 will tell us that a deep test for modularity comes <em>for free</em> from the second-isomorphism-theorem-shaped relation $a\vee b/b \cong a/a\wedge b$ holding lattice-theoretically.</p>
+  </div>
+
+  <p>The chapter has four conceptual movements. First, <em>compactness</em> itself: definition, equivalent forms, foundational examples, what survives joins (yes) and meets (no). Second, <em>compact generation</em>: every element a join of compacts; this is the abstract counterpart of "every module is the union of its finitely generated submodules." Third, the careful but easy-to-miss separation between two superficially similar terms: a <em>compact lattice</em> means $1$ is compact (a global statement about the top), versus a <em>compactly generated lattice</em> (a statement about every element). Fourth, the modularity payoff: Crawley's Theorem 2.1, which says that in a compactly generated lattice, the lattice version of the second isomorphism theorem holding for every pair $a, b$ is enough to force the lattice to be modular.</p>
+
+  <p>Along the way the chapter introduces several refinements that show up later in the book: H-noetherian (Head), join inaccessibility (Birkhoff–Frink), upper continuity, weakly atomic, the Krull-style maximal-element lemma. These will all be load-bearing in Chapters 4, 5, 7, 9.</p>
+
+  <h3>How to read this companion</h3>
+
+  <p>Each section corresponds to a specific definition, lemma, proposition, or theorem in the book. The original numbering (Definition, Remark 2.1, Proposition 2.3, etc.) is preserved as labels, so you can hold the book open beside this and cross-reference. Where the book is dense, this prose tries to slow down and answer "what is this really saying, and where else does it show up?". Where the book is concrete, this prose tries to extend the example. There is a worked-exercise section at the end with full solutions to all 13 exercises, and a glossary translating the dense terminology into plain English.</p>
+
+  <p>Five connection panels at the end map the chapter's ideas onto domain theory, universal algebra (Birkhoff–Frink), topology (where the word "compact" was born), abstract interpretation, and the Prologos propagator network. These are the "broader applications" face of the book — the same idea wearing different clothes.</p>
+</section>
+
+<!-- ====================== PART 1 ====================== -->
+<div class="part-header" id="part1">
+  <div class="pk">Part 1 · The Compactness Primitive</div>
+  <h2>What does it mean for a lattice element to be "compact"?</h2>
+  <p class="part-lede">The first six pages of the chapter introduce a single new word — <em>compact</em> — and explore everything that does and doesn't follow from it.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">SECTION 1</span> The word "compact" comes from topology</h2>
+  <div class="tagline">Borrowed metaphor: in topology, "compact" means every open cover admits a finite subcover. Călugăreanu takes the same idea and re-houses it inside a complete lattice.</div>
+
+  <p>If you've seen point-set topology, the word <em>compact</em> is already familiar in this shape: a topological space $X$ is compact when every open cover $\{U_\alpha\}$ has a finite subcover $\{U_{\alpha_1}, \ldots, U_{\alpha_n}\}$ that still covers $X$. The intuition there is "I only need to look at finitely many of the things you're offering me to see all of $X$."</p>
+
+  <p>Translate that into lattice language. Replace the topological space with an element $c$ of a complete lattice $L$. Replace "open cover" with "any subset $X$ whose join is at least $c$" (so $c \le \bigvee X$). Replace "finite subcover" with "a finite subset $F \subseteq X$ that already does the job" (so $c \le \bigvee F$). What you get is the definition of a compact lattice element.</p>
+
+  <p>The metaphor is more than wordplay. The deep theorem of <em>Stone duality</em> says that there is a precise correspondence between certain topological spaces (Stone spaces — compact, Hausdorff, totally disconnected) and certain lattices (Boolean algebras), and "compact" matches up on both sides. The word lives a double life because it really is the same property in two outfits. We'll come back to this in Connection Panel C3.</p>
+
+  <div class="box intuition">
+    <span class="label">Plain-English gist</span>
+    <p><em>An element is compact when, however much information you throw at it, only a finite slice was ever needed.</em> If $c$ sits below the join of some collection $X$, then it sat below the join of just <em>finitely many</em> of those things all along. The infinite collection was overkill; the finite witness was always lurking.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">SECTION 2</span> Definition (Nachbin, Stenström)</h2>
+  <div class="tagline">The formal definition. Three quantifiers; once you parse them, the rest of the chapter unfolds.</div>
+
+  <div class="box def">
+    <span class="label">Definition · compact element</span>
+    <p>An element $c$ of a complete lattice $L$ is called <strong>compact</strong> if for every subset $X \subseteq L$ such that $c \le \bigvee X$, there exists a <em>finite</em> subset $F \subseteq X$ such that $c \le \bigvee F$.</p>
+  </div>
+
+  <p>Read it as a quantifier sandwich. <em>For every</em> subset $X$ of $L$ — the inputs we'll cover $c$ with. <em>Such that</em> $c \le \bigvee X$ — the cover hypothesis. <em>There exists</em> a finite $F \subseteq X$ — the finite witness. <em>Such that</em> $c \le \bigvee F$ — the witness already did the job. The crucial thing is that $F$ is drawn from $X$ itself: we don't get to invent new elements, we have to point to a finite slice of the offered cover.</p>
+
+  <p>Two non-examples to keep in mind. (1) If $L$ is finite, every $X$ is finite, so every element is trivially compact. The notion is interesting precisely when the lattice is infinite. (2) If $X$ has a maximum, then $\{x_{\max}\}$ is a finite witness automatically. The interesting case is when $X$ is unbounded above (or has no top inside it).</p>
+
+  <h3>The covering picture</h3>
+  <figure>
+    <svg viewBox="0 0 580 240" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .edge-hot { stroke: #C89F3C; stroke-width: 2; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 14px; fill: #1E2749; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 12px; fill: #6B6B6B; font-style: italic; }
+      </style>
+      <!-- Bottom: c -->
+      <circle class="node-hot" cx="80" cy="190" r="14"/>
+      <text class="lbl" x="80" y="226" text-anchor="middle">$c$</text>
+      <!-- Middle row: VF -->
+      <circle class="node-hot" cx="80" cy="110" r="14"/>
+      <text class="lbl" x="58" y="115" text-anchor="end">$\bigvee F$</text>
+      <line class="edge-hot" x1="80" y1="176" x2="80" y2="124"/>
+      <!-- VX top -->
+      <circle class="node" cx="80" cy="40" r="14"/>
+      <text class="lbl" x="58" y="45" text-anchor="end">$\bigvee X$</text>
+      <line class="edge" x1="80" y1="96" x2="80" y2="54"/>
+      <!-- Right side: F as scattered points -->
+      <text class="cap" x="220" y="35">$X = \{x_1, x_2, x_3, x_4, x_5, \ldots\}$</text>
+      <circle class="node-hot" cx="240" cy="80" r="9"/>
+      <text class="lbl" x="240" y="105" text-anchor="middle" font-size="12">$x_1$</text>
+      <circle class="node" cx="290" cy="80" r="9"/>
+      <text class="lbl" x="290" y="105" text-anchor="middle" font-size="12">$x_2$</text>
+      <circle class="node-hot" cx="340" cy="80" r="9"/>
+      <text class="lbl" x="340" y="105" text-anchor="middle" font-size="12">$x_3$</text>
+      <circle class="node" cx="390" cy="80" r="9"/>
+      <text class="lbl" x="390" y="105" text-anchor="middle" font-size="12">$x_4$</text>
+      <circle class="node-hot" cx="440" cy="80" r="9"/>
+      <text class="lbl" x="440" y="105" text-anchor="middle" font-size="12">$x_5$</text>
+      <text class="lbl" x="475" y="85">$\ldots$</text>
+      <text class="cap" x="220" y="155">$F = \{x_1, x_3, x_5\}$ — a finite witness</text>
+      <text class="cap" x="220" y="175">$c \le \bigvee F$ already</text>
+    </svg>
+    <figcaption>The compactness picture. Some finite sub-collection $F$ of any cover $X$ already joins above $c$.</figcaption>
+  </figure>
+
+  <p>The definition is named for Nachbin and Stenström because they crystallised this exact form. There is also an older, equivalent formulation due to Birkhoff–Frink in terms of <em>directed</em> subsets, which we meet in the next section.</p>
+</section>
+
+<section class="module" id="s3">
+  <h2><span class="num">SECTION 3</span> S-compact and Remark 2.1 — two definitions, one notion</h2>
+  <div class="tagline">The textbook hands you two definitions and immediately proves they are equivalent. Knowing why each is convenient is the point.</div>
+
+  <div class="box def">
+    <span class="label">Definition · S-compact element</span>
+    <p>An element $c$ of a complete lattice $L$ is <strong>S-compact</strong> if for every <em>upper directed</em> subset $D \subseteq L$ with $c \le \bigvee D$, there exists $d_0 \in D$ such that $c \le d_0$.</p>
+  </div>
+
+  <p>"Upper directed" means: any two elements of $D$ have an upper bound inside $D$. (Pictorially: $D$ has no two-pronged disagreements; you can always find a third element above any two.) The S-compact form is what categorical algebra and domain theory tend to use, because directed colimits are the natural notion of "filtered limit" in those settings. The plain compact form is what elementary lattice proofs prefer, because subsets are simpler to manipulate than directed subsets.</p>
+
+  <div class="box prop">
+    <span class="label">Remark 2.1</span>
+    <p>An element in a complete lattice is compact if and only if it is S-compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why this is true</span>
+    <p>The forward direction is a small induction. If $c$ is compact and $c \le \bigvee D$ with $D$ upper directed, compactness gives a finite $F \subseteq D$ with $c \le \bigvee F$. By an easy induction (on $|F|$, using directedness pairwise), $D$ contains an upper bound $d_0$ for $F$, so $\bigvee F \le d_0$ and hence $c \le d_0$.</p>
+    <p>The reverse direction takes a subset $X$ with $c \le \bigvee X$ and replaces it by the family of all <em>finite joins</em> drawn from $X$:
+    $$\mathcal F = \{\bigvee F : F \subseteq X, F \text{ finite}\}.$$
+    Ordered by inclusion of underlying $F$, this $\mathcal F$ is upper directed (the join of two finite-supported elements is itself finite-supported), and $\bigvee \mathcal F = \bigvee X$. S-compactness then gives some $\bigvee F \in \mathcal F$ with $c \le \bigvee F$ — exactly the finite witness we needed.</p>
+  </div>
+
+  <p>The takeaway: the two forms are interchangeable. Books and papers may pick whichever is more convenient for the proof at hand. We will use both, freely.</p>
+</section>
+
+<section class="module" id="s4">
+  <h2><span class="num">SECTION 4</span> The two foundational examples</h2>
+  <div class="tagline">Everything in the chapter pivots on these two examples, especially the second.</div>
+
+  <h3>Example 1 — power sets: compact = finite</h3>
+
+  <p>For an arbitrary set $M$, take the lattice $(\mathcal P(M), \subseteq)$ — all subsets of $M$, ordered by inclusion. Joins are unions, meets are intersections, $0 = \emptyset$, $1 = M$. <em>A subset $X \subseteq M$ is compact in this lattice iff $X$ is finite.</em></p>
+
+  <p>Why? If $X$ is finite, then any cover of $X$ by a family of subsets must place each of the finitely many elements of $X$ into <em>some</em> of the covering sets; pick one such for each element and you get a finite subcover. Conversely if $X$ is infinite, write $X = \bigcup_{x \in X} \{x\}$. The cover $\{\{x\} : x \in X\}$ has no finite subcover, since any finite collection of singletons covers only finitely many elements.</p>
+
+  <h3>Example 2 — subalgebras: compact = finitely generated</h3>
+
+  <p>This is the example that drives the whole book. Let $(A, \Omega)$ be a universal algebra — a set $A$ with a family $\Omega$ of finitary operations (binary, ternary, $n$-ary, possibly nullary). Form the lattice $(S(A, \Omega), \subseteq)$ of all subalgebras (subsets closed under all the operations of $\Omega$), ordered by inclusion. This lattice is complete: arbitrary intersections of subalgebras are subalgebras (so meets exist), and arbitrary joins exist as the smallest subalgebra containing the given collection.</p>
+
+  <div class="box prop">
+    <span class="label">Worked claim</span>
+    <p>A subalgebra $B \in S(A, \Omega)$ is compact iff $B$ is finitely generated.</p>
+  </div>
+
+  <p>The "$\Leftarrow$" direction: if $B = \langle b_1, \ldots, b_n \rangle$ is finitely generated, and $B \le \bigvee \mathcal F$ for some family $\mathcal F$ of subalgebras, then each generator $b_i$ lies in $\bigvee \mathcal F$. But $\bigvee \mathcal F$ is the closure under operations of the union $\bigcup \mathcal F$, so each $b_i$ can be expressed using only finitely many elements drawn from finitely many members of $\mathcal F$. Take all those finitely many members together — call them $\mathcal F_0$ — and you get $B \le \bigvee \mathcal F_0$.</p>
+
+  <p>The "$\Rightarrow$" direction: if $B$ is compact, write $B = \bigvee \{ \langle b \rangle : b \in B \}$ as the join of all its monogenic (singly generated) sub-subalgebras. Compactness gives a finite $F \subseteq B$ with $B \le \bigvee \{ \langle f \rangle : f \in F \} = \langle F \rangle$, so $B$ is generated by the finite set $F$.</p>
+
+  <div class="box intuition">
+    <span class="label">Why this example is central</span>
+    <p>Almost every algebraic structure you've met fits in this scheme. Groups: operations $\{\cdot, ()^{-1}, e\}$, subalgebras are subgroups. Rings: operations $\{+, -, \cdot, 0, 1\}$, subalgebras are subrings. $R$-modules over a fixed $R$: operations $\{+, -, 0\}$ together with one unary operation $r \cdot {-}$ for each $r \in R$ — subalgebras are submodules. Lattices: operations $\{\vee, \wedge\}$, subalgebras are sublattices. In every one of these settings, "compact subobject" = "finitely generated subobject" via the same argument. The chapter's machinery is built to operate on the lattice $S(A,\Omega)$ once and apply uniformly to all of those.</p>
+  </div>
+</section>
+
+<section class="module" id="s5">
+  <h2><span class="num">SECTION 5</span> Proposition 2.1 — finite joins of compacts are compact</h2>
+  <div class="tagline">The first piece of structure: compact elements are closed under finite joins.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.1</span>
+    <p>Each finite join of compact elements is a compact element.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof sketch (using S-compactness)</span>
+    <p>By induction it's enough to show: $a, b$ S-compact $\Rightarrow$ $a \vee b$ S-compact. Suppose $D$ is upper directed and $a \vee b \le \bigvee D$. Then $a \le \bigvee D$ and $b \le \bigvee D$, so by S-compactness there are $d_a, d_b \in D$ with $a \le d_a$ and $b \le d_b$. Directedness gives $d \in D$ above both, and then $a \vee b \le d_a \vee d_b \le d$. Done.</p>
+  </div>
+
+  <p>Read this as: <em>finite witnesses combine under joins</em>. If I can pin down $a$ with one finite slice of the cover, and $b$ with another, I can pin down $a \vee b$ with the union of the two slices. The induction is unsurprising; what's worth taking away is the structural conclusion.</p>
+
+  <div class="box intuition">
+    <span class="label">Structural consequence</span>
+    <p>Let $K(L) \subseteq L$ denote the set of compact elements. Proposition 2.1 says $K(L)$ is closed under finite joins, so $K(L)$ is a <em>join-subsemilattice</em> of $L$. It always contains $0$ (vacuously compact: any cover of $0$ has the empty subcover). So $(K(L), \vee, 0)$ is a join-semilattice with bottom. This semilattice is the engine of compact generation: a lattice is compactly generated exactly when every element of $L$ is the directed join (= sup of an upper-directed subset) of elements of $K(L)$. That's the fact this chapter is building toward — Section 8.</p>
+  </div>
+</section>
+
+<section class="module" id="s6">
+  <h2><span class="num">SECTION 6</span> Remark 2.2 — meets are <em>not</em> compact (Grätzer's example)</h2>
+  <div class="tagline">The asymmetry: joins of compacts are compact, but meets need not be. Here is a clean counterexample.</div>
+
+  <p>You might hope that compact elements are also closed under finite meets. They are not. The book quotes a remark of Grätzer's that produces a clean counterexample.</p>
+
+  <h3>The construction</h3>
+
+  <p>Start with the join-semilattice $\mathbb N$ (well-ordered: $0 < 1 < 2 < \cdots$). Adjoin three new elements $a, b, u$ with the relations:
+  \[ n < a \text{ and } n < b \text{ for every } n \in \mathbb N, \qquad a \parallel b \text{ (incomparable)}, \qquad a \vee b = u. \]
+  So $a$ and $b$ are two parallel "caps" sitting above the entire $\mathbb N$ chain, and $u$ is the join of the two caps. The Hasse diagram is the kite shape from the book.</p>
+
+  <figure>
+    <svg viewBox="0 0 380 380" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .edge-hot { stroke: #C89F3C; stroke-width: 2; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 14px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 12px; fill: #6B6B6B; }
+      </style>
+      <!-- u -->
+      <circle class="node" cx="190" cy="40" r="13"/>
+      <text class="lbl" x="190" y="28" text-anchor="middle">$u$</text>
+      <!-- a, b -->
+      <circle class="node-hot" cx="100" cy="120" r="13"/>
+      <text class="lbl" x="80" y="125" text-anchor="end">$a$</text>
+      <circle class="node-hot" cx="280" cy="120" r="13"/>
+      <text class="lbl" x="300" y="125" text-anchor="start">$b$</text>
+      <line class="edge" x1="100" y1="107" x2="180" y2="48"/>
+      <line class="edge" x1="280" y1="107" x2="200" y2="48"/>
+      <!-- N chain (only first few) -->
+      <circle class="node" cx="190" cy="200" r="11"/>
+      <text class="lbl" x="208" y="205" text-anchor="start">$3$</text>
+      <circle class="node" cx="190" cy="240" r="11"/>
+      <text class="lbl" x="208" y="245" text-anchor="start">$2$</text>
+      <circle class="node" cx="190" cy="280" r="11"/>
+      <text class="lbl" x="208" y="285" text-anchor="start">$1$</text>
+      <circle class="node" cx="190" cy="320" r="11"/>
+      <text class="lbl" x="208" y="325" text-anchor="start">$0$</text>
+      <!-- chain edges -->
+      <line class="edge" x1="190" y1="211" x2="190" y2="229"/>
+      <line class="edge" x1="190" y1="251" x2="190" y2="269"/>
+      <line class="edge" x1="190" y1="291" x2="190" y2="309"/>
+      <text class="cap" x="190" y="180" text-anchor="middle">⋮</text>
+      <!-- a, b connected to top of chain -->
+      <line class="edge" x1="100" y1="133" x2="183" y2="194"/>
+      <line class="edge" x1="280" y1="133" x2="197" y2="194"/>
+      <text class="cap" x="60" y="240">ℕ chain</text>
+    </svg>
+    <figcaption>Grätzer's join-semilattice: $\mathbb N$ extended by two parallel caps $a, b$ and their join $u$.</figcaption>
+  </figure>
+
+  <p>Now form the <em>ideal lattice</em> $I(L)$ — the lattice whose elements are the (lattice-theoretic) ideals, ordered by inclusion. The principal ideal $a/0 = \{x : x \le a\}$ corresponds to "everything below $a$", and similarly for $b/0$.</p>
+
+  <p>In $I(L)$, both $a/0$ and $b/0$ are <em>compact</em>: each is principal (generated by a single element of the original semilattice), and principal ideals are always compact in $I(L)$. But their meet $a/0 \cap b/0$ is the ideal of all elements that lie below both $a$ and $b$ — which is exactly $\mathbb N$ itself, the infinite chain. This ideal is <em>not</em> principal (no single element of the semilattice generates it), and it is not compact: cover it by the principal ideals $\{n/0 : n \in \mathbb N\}$ and no finite sub-collection suffices.</p>
+
+  <div class="box intuition">
+    <span class="label">Lesson</span>
+    <p>Compactness behaves like "finitely generated." Finitely generated submodules of a module are closed under finite sums (joins) but not finite intersections — the intersection of two finitely generated submodules can fail to be finitely generated, in fact in general it can be very wild. The lattice picture inherits exactly this asymmetry.</p>
+  </div>
+</section>
+
+<section class="module" id="s7">
+  <h2><span class="num">SECTION 7</span> Proposition 2.2 — atoms in upper continuous lattices are compact</h2>
+  <div class="tagline">A small but useful link: the smallest non-zero pieces of an upper continuous lattice are always compact.</div>
+
+  <p>An <em>atom</em> is a minimal non-zero element: $0 \prec a$ (covers), nothing strictly between $0$ and $a$. <em>Upper continuous</em> is a continuity condition relating meets and directed joins: for every $a \in L$ and every upper directed $D \subseteq L$,
+  \[ a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d). \]
+  This says meets distribute over directed joins — a Scott-continuity property at the level of meets.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.2</span>
+    <p>In an upper continuous lattice $L$, each atom is a compact element.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Let $a$ be an atom and suppose $a \le \bigvee D$ for some upper directed $D$. Use upper continuity: $a = a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d)$. For each $d$, $a \wedge d \le a$, and since $a$ is an atom, $a \wedge d$ is either $0$ or $a$. If <em>every</em> $a \wedge d$ were $0$, the join would be $0$, not $a$ — contradiction. So some $a \wedge d_0 = a$, i.e. $a \le d_0$, i.e. $a$ is S-compact. By Remark 2.1, $a$ is compact.</p>
+  </div>
+
+  <p>The proposition is small but illustrative: it shows how upper continuity buys you a "case analysis" — for an atom, the meet $a \wedge d$ is forced into a binary choice, which is exactly the lever the proof uses.</p>
+</section>
+
+<!-- ====================== PART 2 ====================== -->
+<div class="part-header" id="part2">
+  <div class="pk">Part 2 · Compactly Generated Lattices</div>
+  <h2>Every element a join of finite witnesses</h2>
+  <p class="part-lede">The notion that organises the whole chapter: a lattice in which every element is the join of compact elements. This is the abstract setting that makes module-like reasoning available.</p>
+</div>
+
+<section class="module" id="s8">
+  <h2><span class="num">SECTION 8</span> Definition (Crawley–Dilworth) — compactly generated / algebraic</h2>
+  <div class="tagline">The definition that names the class. Two synonyms for the same idea, drawn from two different traditions.</div>
+
+  <div class="box def">
+    <span class="label">Definition · compactly generated lattice</span>
+    <p>A complete lattice $L$ is called <strong>compactly generated</strong> (or <strong>algebraic</strong>) if every element of $L$ is a join of compact elements.</p>
+  </div>
+
+  <p>Two names for one notion. <em>Compactly generated</em> is the name preferred in lattice theory, in the tradition of Crawley and Dilworth's textbook on modular and algebraic lattices. <em>Algebraic</em> is the name preferred in domain theory and theoretical computer science, where these lattices arise as Scott domains and as $\mathrm{Sub}(A)$-style lattices of substructures of algebras. The two terms refer to exactly the same class of lattices.</p>
+
+  <p>Equivalently (using S-compactness): $L$ is compactly generated iff every $x \in L$ is the join of an <em>upper directed</em> subset of compact elements. The two formulations are equivalent because Proposition 2.1 lets us replace "join of compacts $C$" with "directed join of finite joins of $C$," which is again a join of compacts.</p>
+
+  <h3>Examples</h3>
+  <ol>
+    <li><strong>Power sets.</strong> $\mathcal P(M)$ is compactly generated: every subset $X$ is the union of its singletons (compact), or equivalently the directed join of its finite subsets (compact).</li>
+    <li><strong>Subalgebra lattices.</strong> $S(A,\Omega)$ is compactly generated: every subalgebra is the directed join of its finitely generated sub-subalgebras (compact). This covers groups, rings, modules, lattices.</li>
+    <li><strong>Submodule lattices.</strong> $S_R(M)$ for any $R$-module $M$ is compactly generated — the canonical example for this book.</li>
+    <li><strong>Open sets of a Scott domain.</strong> The lattice of Scott-open subsets of a Scott domain is algebraic; Scott topology was named after this fact.</li>
+    <li><strong>Ideal lattices.</strong> For any lattice $L$, the lattice $I(L)$ of ideals is compactly generated; the principal ideals $a/0$ are exactly the compact elements (Exercise 2.11).</li>
+  </ol>
+
+  <h3>The diagram for a small example</h3>
+
+  <figure>
+    <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.3; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 13px; fill: #1E2749; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 11px; fill: #6B6B6B; font-style: italic; }
+      </style>
+      <!-- top {1,2,3} -->
+      <circle class="node-hot" cx="240" cy="40" r="14"/>
+      <text class="lbl" x="240" y="28" text-anchor="middle">$\{1,2,3\}$</text>
+      <!-- middle row: pairs -->
+      <circle class="node-hot" cx="120" cy="130" r="14"/>
+      <text class="lbl" x="100" y="135" text-anchor="end">$\{1,2\}$</text>
+      <circle class="node-hot" cx="240" cy="130" r="14"/>
+      <text class="lbl" x="240" y="118" text-anchor="middle">$\{1,3\}$</text>
+      <circle class="node-hot" cx="360" cy="130" r="14"/>
+      <text class="lbl" x="380" y="135" text-anchor="start">$\{2,3\}$</text>
+      <line class="edge" x1="120" y1="116" x2="226" y2="48"/>
+      <line class="edge" x1="240" y1="116" x2="240" y2="54"/>
+      <line class="edge" x1="360" y1="116" x2="254" y2="48"/>
+      <!-- singletons -->
+      <circle class="node-hot" cx="120" cy="220" r="14"/>
+      <text class="lbl" x="100" y="225" text-anchor="end">$\{1\}$</text>
+      <circle class="node-hot" cx="240" cy="220" r="14"/>
+      <text class="lbl" x="240" y="208" text-anchor="middle">$\{2\}$</text>
+      <circle class="node-hot" cx="360" cy="220" r="14"/>
+      <text class="lbl" x="380" y="225" text-anchor="start">$\{3\}$</text>
+      <line class="edge" x1="120" y1="206" x2="120" y2="144"/>
+      <line class="edge" x1="240" y1="206" x2="126" y2="144"/>
+      <line class="edge" x1="120" y1="206" x2="234" y2="144"/>
+      <line class="edge" x1="240" y1="206" x2="354" y2="144"/>
+      <line class="edge" x1="360" y1="206" x2="246" y2="144"/>
+      <line class="edge" x1="360" y1="206" x2="360" y2="144"/>
+      <!-- empty -->
+      <circle class="node-hot" cx="240" cy="290" r="14"/>
+      <text class="lbl" x="240" y="295" text-anchor="middle">$\emptyset$</text>
+      <line class="edge" x1="120" y1="234" x2="234" y2="278"/>
+      <line class="edge" x1="240" y1="234" x2="240" y2="276"/>
+      <line class="edge" x1="360" y1="234" x2="246" y2="278"/>
+    </svg>
+    <figcaption>$\mathcal P(\{1,2,3\})$ — every element is finite, hence compact, so the whole lattice is "made of compacts." All eight nodes are highlighted gold.</figcaption>
+  </figure>
+
+  <p>For finite lattices, every element is compact, so compact generation is automatic. The notion only earns its keep in infinite lattices — which is where the chapter spends its time.</p>
+</section>
+
+<section class="module" id="s9">
+  <h2><span class="num">SECTION 9</span> Remark 2.3 — compact generation generalises noetherianness</h2>
+  <div class="tagline">Why this notion is the right level of abstraction: it captures noetherian rings/modules but is strictly weaker.</div>
+
+  <div class="box prop">
+    <span class="label">Remark 2.3</span>
+    <p>Compact generation generalises the noetherian property (the ascending chain condition) of a lattice.</p>
+  </div>
+
+  <p>Recall: a lattice $L$ is <strong>noetherian</strong> if it satisfies the <em>ascending chain condition</em> — every increasing sequence $a_1 \le a_2 \le \cdots$ eventually stabilises at some $a_n$. Equivalently, every non-empty subset has a maximal element.</p>
+
+  <p>For an $R$-module $M$, the submodule lattice $S_R(M)$ is noetherian iff $M$ is a noetherian module — i.e., iff every submodule is finitely generated. Compare with our compactness theorem: $S_R(M)$ is always compactly generated (every submodule is a directed union of finitely generated submodules), and in $S_R(M)$ every element is compact iff $M$ is noetherian.</p>
+
+  <p>So we have a hierarchy:</p>
+
+  <table class="grid">
+    <thead><tr><th>Lattice property</th><th>Module-theoretic meaning (in $S_R(M)$)</th></tr></thead>
+    <tbody>
+      <tr><td>Compactly generated (algebraic)</td><td>Always holds (every submodule is the directed union of its f.g. sub-submodules).</td></tr>
+      <tr><td>Compact lattice (1 is compact)</td><td>$M$ itself is finitely generated.</td></tr>
+      <tr><td>Noetherian (ACC)</td><td>$M$ is a noetherian module: every submodule is f.g.</td></tr>
+    </tbody>
+  </table>
+
+  <p>The chapter will show — in Proposition 2.3 — that "every element is compact" is equivalent to "noetherian". So compact generation is a strict generalisation: every noetherian lattice is compactly generated, but the converse fails (think of $\mathbb Z$ as a $\mathbb Z$-module: not noetherian as a lattice in the strong sense the book uses, but its submodule lattice is compactly generated since every submodule of $\mathbb Z$ is principal hence finitely generated).</p>
+
+  <p>Wait — that example needs care. $\mathbb Z$ as a $\mathbb Z$-module <em>is</em> noetherian (it's a PID; every submodule is principal, hence f.g.). The clean example of "compactly generated but not noetherian" is something like $\mathbb Z[x_1, x_2, x_3, \ldots]$ as a $\mathbb Z$-module on countably many generators, or equivalently $\bigoplus_{i=1}^\infty \mathbb Z$ — its submodule lattice is compactly generated (any module's is), but the chain $\mathbb Z e_1 \subset \mathbb Z e_1 + \mathbb Z e_2 \subset \cdots$ never stabilises, so the lattice is not noetherian.</p>
+</section>
+
+<section class="module" id="s10">
+  <h2><span class="num">SECTION 10</span> Lemma 2.1 — compactness in quotient sublattices</h2>
+  <div class="tagline">A technical glue lemma: compactness localises and globalises in the way you'd hope.</div>
+
+  <p>For elements $a \le b$ in a lattice $L$, the <strong>quotient sublattice</strong> (or interval) $b/a$ is $\{x \in L : a \le x \le b\}$ with the induced order, joins, and meets. The notation is from the book; modern sources usually write $[a, b]$. The slash echoes the module-theoretic notation: $b/a$ in the lattice corresponds to the quotient module $B/A$ when $L$ is a submodule lattice and $A \le B$ are submodules.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.1</span>
+    <p>Let $L$ be a compactly generated lattice and let $a \le b$ in $L$. An element $k$ of the quotient sublattice $b/a$ is compact in $b/a$ if and only if there exists a compact element $c$ of $L$ such that $k = a \vee c$ and $a \vee c \le b$.</p>
+  </div>
+
+  <p>Read this as a translation rule. To find compact elements <em>inside</em> the interval $b/a$, find compacts $c$ in the ambient $L$ that fit, and lift them to $a \vee c$. To translate back: any compact element of the interval came from some ambient compact via this construction.</p>
+
+  <div class="box proof">
+    <span class="label">Sketch</span>
+    <p>$(\Rightarrow)$ Suppose $k$ is compact in $b/a$. Since $L$ is compactly generated, $k = \bigvee_{i \in I} c_i$ for some compacts $c_i$ in $L$. Then $k = a \vee k = \bigvee_{i \in I}(a \vee c_i)$ inside $b/a$, with each $a \vee c_i \in b/a$ (because $c_i \le k \le b$ gives $a \vee c_i \le b$). Compactness of $k$ in $b/a$ means a finite subset $J \subseteq I$ works: $k = \bigvee_{i \in J}(a \vee c_i) = a \vee \bigvee_{i \in J} c_i = a \vee c$ where $c = \bigvee_{i \in J} c_i$. By Proposition 2.1, $c$ (a finite join of compacts) is compact. And $a \vee c = k \le b$.</p>
+    <p>$(\Leftarrow)$ Suppose $c$ is compact in $L$ and $k = a \vee c$, $a \vee c \le b$. Let $X \subseteq b/a$ with $k \le \bigvee X$ in $b/a$ (note $\bigvee X \le b$ inside the interval). Then $c \le k \le \bigvee X$ in $L$, so by compactness of $c$ in $L$ there is a finite $F \subseteq X$ with $c \le \bigvee F$. But $F \subseteq b/a$ means each $f \ge a$, so $a \le \bigvee F$ too, hence $k = a \vee c \le \bigvee F$. So $k$ is compact in $b/a$.</p>
+  </div>
+
+  <p>The lemma is unglamorous but indispensable: every later result that wants to "do induction on intervals" relies on compactness behaving sensibly under taking intervals.</p>
+</section>
+
+<section class="module" id="s11">
+  <h2><span class="num">SECTION 11</span> Proposition 2.3 — every-element-compact ⟺ noetherian</h2>
+  <div class="tagline">A characterisation of the noetherian property entirely in terms of compactness.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.3</span>
+    <p>Every element in a complete lattice $L$ is compact if and only if $L$ is noetherian (i.e. satisfies the ascending chain condition).</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Leftarrow)$ Suppose $L$ is noetherian. Take any $a \in L$ and any $X \subseteq L$ with $a \le \bigvee X$. Form the directed family $\mathcal F$ of finite joins from $X$. The family $\mathcal F$ is upper directed, so its elements form (partially) an increasing sequence; ACC says the sequence eventually stabilises at some $\bigvee F_0$. But $\bigvee \mathcal F = \bigvee X$, so $\bigvee F_0 = \bigvee X \ge a$, i.e. some finite $F_0 \subseteq X$ already covers $a$. Hence $a$ is compact.</p>
+    <p>$(\Rightarrow)$ Suppose every element is compact. Take any increasing chain $a_1 \le a_2 \le \cdots$ and let $c = \bigvee_n a_n$. Compactness of $c$ applied to the cover $\{a_n\}_{n \in \mathbb N^*}$ gives a finite $F$ with $c \le \bigvee F$, hence some $n_0$ with $c \le a_{n_0}$. But $c \ge a_n$ for all $n$, so $a_{n_0} = a_{n_0+1} = \cdots = c$. ACC.</p>
+  </div>
+
+  <p>The forward direction uses the directed-family trick from Remark 2.1. The reverse direction uses ACC to "force" a finite witness out of an infinite cover.</p>
+
+  <div class="box intuition">
+    <span class="label">A clean way to remember it</span>
+    <p>"Every element compact" = "every element is its own finitely-generated witness." That's exactly the noetherian condition: every chain stabilises, every element is captured at some finite stage.</p>
+  </div>
+</section>
+
+<section class="module" id="s12">
+  <h2><span class="num">SECTION 12</span> Proposition 2.4 — compactly generated ⟹ upper continuous</h2>
+  <div class="tagline">A regularity property comes for free: in algebraic lattices, meets distribute over directed joins.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.4</span>
+    <p>Each compactly generated lattice is upper continuous: for every $a \in L$ and every upper directed $D \subseteq L$,
+    \[ a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d). \]</p>
+  </div>
+
+  <p>Upper continuity is a continuity property: it says $a \wedge {-}$ commutes with directed joins. In domain-theoretic language, $a \wedge {-}$ is <em>Scott-continuous</em>. This is the lattice analog of "intersection commutes with directed unions of submodules," which is true and almost trivial in module theory.</p>
+
+  <div class="box proof">
+    <span class="label">Sketch</span>
+    <p>The inequality $\bigvee_{d \in D}(a \wedge d) \le a \wedge \bigvee D$ is automatic in any lattice. For the reverse, the book uses a slick trick: in a compactly generated lattice, $x \le y$ holds iff every compact $c \le x$ also satisfies $c \le y$. So pick any compact $c \le a \wedge \bigvee D$. Then $c \le \bigvee D$ and S-compactness of $c$ gives some $d_0 \in D$ with $c \le d_0$. Combined with $c \le a$ this gives $c \le a \wedge d_0 \le \bigvee_{d \in D}(a \wedge d)$. So every compact below $a \wedge \bigvee D$ is also below $\bigvee_{d \in D}(a \wedge d)$, hence the desired inequality.</p>
+  </div>
+
+  <p>The proof uses a tactic worth naming: in compactly generated lattices, <em>inequalities can be checked on compact elements</em>. We'll use this trick again.</p>
+
+  <div class="box connection">
+    <span class="label">Connection — Scott continuity</span>
+    <p>In domain theory, a function between cpos is <em>Scott-continuous</em> if it preserves directed joins. Upper continuity of $a \wedge {-}$ says exactly that this map is Scott-continuous as a function $L \to L$. Algebraic lattices are exactly the dcpos (directed-complete posets) in which every element is the directed sup of compact elements; that they are in particular continuous (in the Scott sense) is the domain-theoretic shadow of Proposition 2.4.</p>
+  </div>
+</section>
+
+<section class="module" id="s13">
+  <h2><span class="num">SECTION 13</span> Lemma 2.2 &amp; Proposition 2.5 — refining the picture</h2>
+  <div class="tagline">Two more equivalences that polish what we have.</div>
+
+  <p>The book introduces a notational convenience: an element $a$ is said to <em>have property $\mathcal P$</em> if the principal ideal $a/0 = \{x : x \le a\}$ has $\mathcal P$. So "$a$ is noetherian" means "$a/0$ is a noetherian sublattice"; "$a$ is upper continuous" means "$a/0$ is upper continuous"; etc. This lets us transfer global lattice properties down to specific elements.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.2 — finitary characterisation of upper continuity</span>
+    <p>A lattice $L$ is upper continuous iff for every $a \in L$, every $X \subseteq L$, and every collection $\mathcal X = \mathcal P_0(X)$ of finite subsets of $X$,
+    \[ a \wedge \bigvee X = \bigvee_{F \in \mathcal X}\bigl(a \wedge \bigvee F\bigr). \]</p>
+  </div>
+
+  <p>This is the "$X$-form" of upper continuity, free of the directedness hypothesis. The proof goes by transfinite induction on $|X|$ (so it really uses the axiom of choice / Zorn's Lemma somewhere). Where Lemma 2.2 gets used: it gives a uniform tool for proving upper continuity in concrete settings — including the next proposition.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.5</span>
+    <p>In an upper continuous lattice, each noetherian element is compact.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Suppose $a$ is noetherian (i.e. $a/0$ is ACC) in an upper continuous $L$. Then by Proposition 2.3 applied inside $a/0$, every element of $a/0$ is compact <em>in $a/0$</em>. In particular $a$ is compact in $a/0$. Now use upper continuity of $L$: any cover $a \le \bigvee X$ in $L$ can be intersected with $a$ to give $a = a \wedge \bigvee X = \bigvee_{F \in \mathcal X}(a \wedge \bigvee F)$ — a join of elements of $a/0$. Compactness of $a$ in $a/0$ extracts a finite witness, which back in $L$ shows $a$ is compact.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Three boxes nesting</span>
+    <p>Compact $\subseteq$ noetherian-element. In compactly generated lattices: every element is a join of compacts. In noetherian lattices: every element <em>is</em> compact. Proposition 2.5 closes the loop: in upper continuous lattices, noetherian elements are themselves compact. So in upper continuous, compactly generated lattices, "noetherian" and "compact" coincide as adjectives applied to elements.</p>
+  </div>
+</section>
+
+<!-- ====================== PART 3 ====================== -->
+<div class="part-header" id="part3">
+  <div class="pk">Part 3 · Compact vs Algebraic — a subtle terminology distinction</div>
+  <h2>"Compact lattice" is not "compactly generated lattice"</h2>
+  <p class="part-lede">Easy to conflate, easy to get burned by. Two terms a vowel apart describe genuinely different conditions.</p>
+</div>
+
+<section class="module" id="s14">
+  <h2><span class="num">SECTION 14</span> "Compact lattice" vs "compactly generated"</h2>
+  <div class="tagline">A bookkeeping section, but the distinction matters: it underlies Lemma 2.3, Lemma 2.4, and Theorem 2.2.</div>
+
+  <div class="box def">
+    <span class="label">Definition · compact lattice</span>
+    <p>A complete lattice $L$ is called <strong>compact</strong> if its top element $1$ is compact.</p>
+  </div>
+
+  <p>That is: any cover of $1$ has a finite subcover. Equivalently: $1$ is a finitely generated thing in the lattice — a finite witness.</p>
+
+  <div class="box warning">
+    <span class="label">Terminology warning</span>
+    <p>"Compact lattice" and "compactly generated lattice" are independent properties. There are compact lattices that are not compactly generated, and compactly generated lattices that are not compact. The two terms are sometimes both abbreviated to "compact" in the literature; Călugăreanu is careful to keep them distinct, and you should be too.</p>
+    <span class="ref">— Călugăreanu, p. 22: "Observe that despite the names there are no relations between compact and compactly generated lattices."</span>
+  </div>
+
+  <p>The picture worth keeping in your head:</p>
+
+  <table class="grid">
+    <thead><tr><th></th><th>Compact lattice</th><th>Not compact lattice</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Compactly generated</strong></td><td>$S_R(M)$ for $M$ finitely generated; finite lattices.</td><td>$S_R(\bigoplus_{i=1}^\infty \mathbb Z)$ — every submodule is a directed union of f.g. submodules, but the whole module isn't f.g.</td></tr>
+      <tr><td><strong>Not compactly generated</strong></td><td>The lattice of closed subspaces of a Hilbert space (see next section): $1$ (the full space) is compact but the lattice fails upper continuity.</td><td>Various pathological constructions.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="module" id="s15">
+  <h2><span class="num">SECTION 15</span> Two key examples — submodule lattices and Hilbert subspaces</h2>
+  <div class="tagline">The example that sets up the rest of the book, and a famous example that sits in the "compact but not algebraic" corner.</div>
+
+  <div class="box ex">
+    <span class="label">Example · submodule lattices</span>
+    <p>For each $R$-module $M$, the lattice $S_R(M)$ of all submodules is <em>always</em> compactly generated. It is compact (i.e. $M$ itself is compact in the lattice) iff $M$ is finitely generated as an $R$-module.</p>
+  </div>
+
+  <p>The first half is Example 2 from the chapter, applied with $A = M$ and $\Omega$ encoding the module operations: $S_R(M) = S(M, \Omega)$. The second half is just unwinding what "$M$ is compact in $S_R(M)$" means: any covering family of submodules whose sum is $M$ has a finite sub-family whose sum is also $M$, i.e., $M$ has a finite generating set.</p>
+
+  <div class="box ex">
+    <span class="label">Example · closed subspaces of a Hilbert space</span>
+    <p>Let $H$ be a separable Hilbert space and $L$ the lattice of closed subspaces of finite dimension or finite codimension. This $L$ is an atom-generated, complemented, modular, <em>compact</em> lattice that is <strong>not</strong> upper continuous, hence by Proposition 2.4 not compactly generated.</p>
+  </div>
+
+  <p>Why is it compact but not compactly generated? The full space $H$ itself is "compact" in the lattice sense — any cover of $H$ by closed subspaces has a finite subfamily whose closed-span is $H$ — by a topological compactness argument. But upper continuity fails: there exist directed families $D$ of closed subspaces and a closed subspace $a$ such that $a \cap \overline{\bigcup D}$ strictly exceeds $\bigvee_{d \in D}(a \cap d)$. The closure operator does not commute with directed unions in general — the gap is exactly where infinite-dimensional analysis becomes interesting.</p>
+
+  <div class="box intuition">
+    <span class="label">Why this lattice deserves a moment</span>
+    <p>This example matters for quantum logic. In the orthodox (von Neumann) interpretation of quantum measurements, the propositions about a quantum system form the lattice of closed subspaces of the system's Hilbert space. The fact that this lattice is <em>not</em> distributive (modular but not distributive) is the lattice-theoretic shadow of quantum non-classicality. The fact that it's not compactly generated is the technical reason why the abstract "module-theoretic" toolkit doesn't transfer cleanly — quantum logic needs its own machinery.</p>
+  </div>
+
+  <h3>Lemma 2.3 — a clean corollary</h3>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.3</span>
+    <p>A complete noetherian lattice is compact.</p>
+  </div>
+
+  <p>The proof is one line: if $L$ is noetherian, every element (including $1$) is compact by Proposition 2.3. So in particular $1$ is compact, i.e. $L$ is a compact lattice.</p>
+</section>
+
+<section class="module" id="s16">
+  <h2><span class="num">SECTION 16</span> Krull's Lemma (Lemma 2.4) — every proper element sits below a maximal one</h2>
+  <div class="tagline">A lattice-theoretic Zorn's-Lemma argument that has a famous shadow in commutative algebra.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.4 (Krull)</span>
+    <p>Let $L$ be a compact lattice and let $1 \ne a \in L$. The sublattice $1/a = \{x \in L : a \le x \le 1\}$ has at least one maximal element $\ne 1$.</p>
+  </div>
+
+  <p>"Maximal element" here means an element $m \in 1/a$ with $m \ne 1$ and no element of $1/a$ strictly between $m$ and $1$. The lemma asserts the existence of such $m$ for every proper $a$.</p>
+
+  <div class="box proof">
+    <span class="label">Why — a Zorn's-Lemma argument</span>
+    <p>Let $S = 1/a \setminus \{1\}$ — the proper elements above $a$. We want to show $S$ has a maximal element. By Zorn's Lemma, it suffices to show that every chain $C \subseteq S$ has an upper bound in $S$. The natural candidate is $\bigvee C$. Clearly $\bigvee C \ge c \ge a$ for any $c \in C$, so $\bigvee C \in 1/a$. The only thing to check is $\bigvee C \ne 1$. Suppose for contradiction $\bigvee C = 1$. Then $1$ is in the join of $C$. Since $1$ is compact (the lattice is compact!), there's a finite $F \subseteq C$ with $1 \le \bigvee F$. But $C$ is a chain, so $F$ has a largest element $c_0$, and $\bigvee F = c_0$. Hence $c_0 = 1$, contradicting $c_0 \in C \subseteq S \subseteq L \setminus \{1\}$.</p>
+  </div>
+
+  <div class="box connection">
+    <span class="label">Connection — Krull's theorem in commutative algebra</span>
+    <p>In commutative algebra, Krull's theorem says: every proper ideal of a (commutative, unital) ring $R$ is contained in a maximal ideal. The lattice version of this is exactly Lemma 2.4 applied to $L = $ ideal lattice of $R$ and $a = $ the proper ideal in question. The ideal lattice of a unital ring is compact (the unit ideal $R$ itself is f.g. — by 1 — hence compact in $S_R(R)$). So Lemma 2.4 gives a maximal ideal above $a$. The whole abstract Krull–Zorn machinery transparently descends from the lattice fact.</p>
+    <p>Where this becomes vivid: in a non-noetherian ring (e.g., $C[0,1]$, the ring of continuous functions on the unit interval), there are infinitely many maximal ideals, and Lemma 2.4 still cheerfully produces a maximal containing any given proper ideal. The argument is exactly the lattice argument above, with "compactness of 1" matching "1 is f.g. as a generator of the unit ideal."</p>
+  </div>
+
+  <p>The lemma will be used over and over again in Călugăreanu — anywhere a "maximal something exists" argument appears, it's this lemma in disguise. Module theory is full of such arguments: maximal proper submodule, maximal essential extension, maximal divisible subgroup, maximal nilpotent ideal. Each of these is Lemma 2.4 applied to a particular $a$ in a particular compact lattice.</p>
+</section>
+
+<!-- ====================== PART 4 ====================== -->
+<div class="part-header" id="part4">
+  <div class="pk">Part 4 · Atomicity and Crawley's Modularity Theorem</div>
+  <h2>Why compactly generated lattices have small steps</h2>
+  <p class="part-lede">A surprising payoff: in compactly generated lattices, between any two strictly comparable elements you can always insert a covering pair. And that "small-step" property, plus a second-isomorphism-style condition, forces modularity.</p>
+</div>
+
+<section class="module" id="s17">
+  <h2><span class="num">SECTION 17</span> Lemma 2.5 — coverings under iso quotients</h2>
+  <div class="tagline">A piece of preparation. Coverings (close-comparison relations) behave well under the natural lattice-theoretic isomorphisms.</div>
+
+  <p>Recall: $q \prec p$ means "$p$ covers $q$" — i.e., $q < p$ and there is no element strictly between. In a Hasse diagram, this is a single edge with no intermediate stop.</p>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.5</span>
+    <p>Let $L$ be a lattice in which $a \vee b / b$ and $a / a \wedge b$ are isomorphic for every $a, b \in L$, and let $p, q, r \in L$ with $q \prec p$. Then either $r \wedge p = r \wedge q$ or $r \wedge q \prec r \wedge p$. Symmetrically for joins: either $r \vee p = r \vee q$ or $r \vee q \prec r \vee p$.</p>
+  </div>
+
+  <p>The hypothesis "$a \vee b / b \cong a / a \wedge b$ for every $a, b$" is the lattice version of the second isomorphism theorem from algebra (you should think of $a$ as a submodule, $b$ as another, and the isomorphism as the natural map $a/(a \cap b) \to (a + b)/b$ in module theory). In a modular lattice this is automatic — it's a theorem. In a non-modular lattice, the hypothesis is a strong constraint.</p>
+
+  <p>The lemma's content: under that hypothesis, if you take a covering pair $q \prec p$ and meet both with some $r$, the result is either equal (the meet collapses the cover) or still a cover. Coverings are <em>preserved</em> up to collapse. Same for joins.</p>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>From $q \prec p$ we have $q < p$ hence $r \wedge q \le r \wedge p$. If equality fails, suppose for contradiction there's $z \in L$ with $r \wedge q < z < r \wedge p$. Use the iso hypothesis on $(r \wedge p)/(r \wedge q)$ pulling up to $((r \wedge p) \vee q)/q \subseteq p/q$ — but $p/q$ has no intermediate elements (because $q \prec p$), forcing the same on the lower interval. Contradiction.</p>
+  </div>
+</section>
+
+<section class="module" id="s18">
+  <h2><span class="num">SECTION 18</span> Weak atomicity — Lemma 2.6</h2>
+  <div class="tagline">Compactly generated lattices have "small steps" everywhere: between any two strictly comparable elements, a covering pair can be inserted.</div>
+
+  <div class="box def">
+    <span class="label">Definition · weakly atomic lattice</span>
+    <p>A lattice $L$ is called <strong>weakly atomic</strong> if for every $a, b \in L$ with $a < b$, there exist $u, v \in L$ such that $a \le u \prec v \le b$.</p>
+  </div>
+
+  <p>"Atomic" in the strict sense means the lattice is generated by atoms (minimal non-zero elements). "Weakly atomic" relaxes this: we don't ask that every element be a join of atoms, only that there are <em>covering pairs throughout</em> — between any two distinct comparables, you can always find a one-step gap.</p>
+
+  <figure>
+    <svg viewBox="0 0 380 240" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .edge-hot { stroke: #C89F3C; stroke-width: 2; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 14px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 12px; fill: #6B6B6B; }
+      </style>
+      <circle class="node" cx="190" cy="40" r="13"/>
+      <text class="lbl" x="210" y="45" text-anchor="start">$b$</text>
+      <circle class="node-hot" cx="190" cy="100" r="13"/>
+      <text class="lbl" x="210" y="105" text-anchor="start">$v$</text>
+      <circle class="node-hot" cx="190" cy="150" r="13"/>
+      <text class="lbl" x="210" y="155" text-anchor="start">$u$</text>
+      <circle class="node" cx="190" cy="210" r="13"/>
+      <text class="lbl" x="210" y="215" text-anchor="start">$a$</text>
+      <line class="edge" x1="190" y1="53" x2="190" y2="87" stroke-dasharray="3,3"/>
+      <line class="edge-hot" x1="190" y1="113" x2="190" y2="137"/>
+      <line class="edge" x1="190" y1="163" x2="190" y2="197" stroke-dasharray="3,3"/>
+      <text class="cap" x="100" y="115">cover ≺</text>
+    </svg>
+    <figcaption>Weak atomicity: between $a < b$ there exists a single-step gap $u \prec v$.</figcaption>
+  </figure>
+
+  <div class="box lemma">
+    <span class="label">Lemma 2.6</span>
+    <p>Every compactly generated lattice is weakly atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why — Zorn's Lemma in disguise</span>
+    <p>Suppose $a < b$ in a compactly generated $L$. Since $L$ is compactly generated, there's a compact $c$ with $c \le b$ and $c \nleq a$. Set $A = \{x \in L : a \le x \le a \vee c, c \nleq x\}$. Note $a \in A$ (since $c \nleq a$). Show $A$ has a maximal element by Zorn's Lemma: any chain $C \subseteq A$ has $\bigvee C$ as upper bound, and we need $\bigvee C \in A$, i.e. $c \nleq \bigvee C$. If $c \le \bigvee C$, by compactness $c \le \bigvee F$ for some finite $F \subseteq C$. Since $C$ is a chain, $\bigvee F \in C$, so $c$ would be below an element of $A$, contradiction. So Zorn's Lemma applies and gives maximal $u \in A$.</p>
+    <p>Claim: $u \prec u \vee c$. Indeed $u \le u \vee c \le a \vee c \le b$. Suppose $u < u' \le u \vee c$. Then $u' \notin A$ (by maximality of $u$), so $c \le u'$. But then $u \vee c \le u'$, forcing $u' = u \vee c$. So nothing strictly between $u$ and $u \vee c$ — i.e. $u \prec u \vee c$. Take $v = u \vee c$; then $a \le u \prec v \le b$.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Why this matters</span>
+    <p>Weak atomicity gives compactly generated lattices a workable "step structure." It says: even though there might not be atoms (think of the lattice of submodules of $\mathbb Q$ as a $\mathbb Z$-module — no atoms!), there are covering pairs throughout. That's enough for many inductive arguments — especially the Crawley theorem coming next.</p>
+  </div>
+</section>
+
+<section class="module" id="s19">
+  <h2><span class="num">SECTION 19</span> Theorem 2.1 (Crawley) — the modularity test</h2>
+  <div class="tagline">The chapter's keystone. A second-isomorphism-theorem-style condition forces modularity in compactly generated lattices.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.1 (Crawley)</span>
+    <p>If a compactly generated lattice $L$ has the property that the quotient sublattices $a \vee b / b$ and $a / a \wedge b$ are isomorphic for every $a, b \in L$, then $L$ is modular.</p>
+  </div>
+
+  <p>This is striking. Modularity — the law $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$ — is a global identity. Crawley says: in a compactly generated lattice, you can detect modularity by checking a single property pairwise: the second-isomorphism-style intervals match up.</p>
+
+  <h3>Why the hypothesis is natural</h3>
+
+  <p>In a modular lattice, the famous <em>diamond isomorphism theorem</em> states $a \vee b/b \cong a/a \wedge b$ for every $a, b$. So in modular lattices the hypothesis is automatic. Crawley's theorem says: in compactly generated lattices, the converse holds. The hypothesis is exactly the conclusion of the second isomorphism theorem; Crawley shows that you can run the implication in reverse to <em>force</em> modularity.</p>
+
+  <h3>Why the proof needs compact generation</h3>
+
+  <p>If a lattice fails to be modular, it contains a sublattice isomorphic to $N_5$ (the pentagon) — the famous Birkhoff–Dedekind characterisation. The proof of Crawley's theorem proceeds by contradiction: assume $L$ is not modular, locate an $N_5$ inside $L$, and use weak atomicity (Lemma 2.6, available because $L$ is compactly generated) plus Lemma 2.5 to show that the iso hypothesis forces a covering pair where there cannot be one. The pieces have to fit together exactly, and weak atomicity is what lets the inductive argument terminate.</p>
+
+  <figure>
+    <svg viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg">
+      <style>
+        .node { fill: #FBF8EC; stroke: #1E2749; stroke-width: 1.5; }
+        .node-hot { fill: #FBE9B5; stroke: #C89F3C; stroke-width: 2; }
+        .edge { stroke: #3D5A6C; stroke-width: 1.4; fill: none; }
+        .lbl { font-family: 'Source Serif Pro', serif; font-size: 14px; fill: #1E2749; font-style: italic; }
+        .cap { font-family: 'Inter', sans-serif; font-size: 11px; fill: #6B6B6B; }
+      </style>
+      <!-- top -->
+      <circle class="node" cx="160" cy="30" r="12"/>
+      <text class="lbl" x="160" y="20" text-anchor="middle">$1$</text>
+      <!-- a -->
+      <circle class="node-hot" cx="80" cy="100" r="12"/>
+      <text class="lbl" x="60" y="105" text-anchor="end">$a$</text>
+      <!-- b -->
+      <circle class="node-hot" cx="240" cy="80" r="12"/>
+      <text class="lbl" x="260" y="85" text-anchor="start">$b$</text>
+      <!-- c -->
+      <circle class="node-hot" cx="240" cy="180" r="12"/>
+      <text class="lbl" x="260" y="185" text-anchor="start">$c$</text>
+      <!-- bottom -->
+      <circle class="node" cx="160" cy="240" r="12"/>
+      <text class="lbl" x="160" y="265" text-anchor="middle">$0$</text>
+      <line class="edge" x1="80" y1="88" x2="152" y2="40"/>
+      <line class="edge" x1="240" y1="68" x2="168" y2="38"/>
+      <line class="edge" x1="80" y1="112" x2="155" y2="232"/>
+      <line class="edge" x1="240" y1="92" x2="240" y2="168"/>
+      <line class="edge" x1="240" y1="192" x2="168" y2="232"/>
+      <text class="cap" x="160" y="160" text-anchor="middle">$N_5$ — non-modular</text>
+      <text class="cap" x="160" y="175" text-anchor="middle">$b < c$, $a \vee b = a \vee c$, $a \wedge b = a \wedge c$</text>
+    </svg>
+    <figcaption>The pentagon $N_5$ — the universal forbidden sublattice of modular lattices. If $L$ is not modular, $N_5 \hookrightarrow L$ as a sublattice (Birkhoff–Dedekind). Crawley's proof uses weak atomicity to derive a contradiction from the existence of this sublattice.</figcaption>
+  </figure>
+
+  <div class="box intuition">
+    <span class="label">The reading</span>
+    <p>Crawley's theorem says: <em>once your lattice is "made of finitely generated pieces" (compact generation), the second isomorphism theorem is enough on its own to do all the heavy lifting that modularity requires.</em> This is why it's the chapter's keystone: it ties together compactness (Section 8), atomicity (Section 18), and modularity (defined back in Chapter 1) into a single equivalence-style statement.</p>
+  </div>
+
+  <div class="box connection">
+    <span class="label">Connection — why this matters for module theory</span>
+    <p>In module theory, the second isomorphism theorem is a <em>theorem</em>: $A/(A \cap B) \cong (A+B)/B$ for any submodules $A, B$ of any module $M$. It holds always. Translated to the submodule lattice, this says $a/(a \wedge b) \cong (a \vee b)/b$ as lattices — exactly Crawley's hypothesis. Combined with the fact that $S_R(M)$ is always compactly generated, Crawley's theorem then immediately gives that $S_R(M)$ is modular. The chapter is thus reverse-engineering: it strips out all module-specific content, and shows that the lattice-theoretic hypotheses alone (compact generation + iso theorem) are enough to force modularity. The submodule lattice's modularity is a structural theorem about lattices, not a peculiarity of modules.</p>
+  </div>
+</section>
+
+<!-- ====================== PART 5 ====================== -->
+<div class="part-header" id="part5">
+  <div class="pk">Part 5 · Refinements and Loose Ends</div>
+  <h2>H-noetherian, join inaccessibility</h2>
+  <p class="part-lede">Two further notions that show up in later chapters of the book. Brief but worth meeting now: the chapter introduces both as refinements of the compactness machinery.</p>
+</div>
+
+<section class="module" id="s20">
+  <h2><span class="num">SECTION 20</span> Head's H-noetherian condition</h2>
+  <div class="tagline">When the compact elements form an ideal — a tighter form of compact generation.</div>
+
+  <div class="box def">
+    <span class="label">Definition · H-noetherian (Head)</span>
+    <p>A lattice $L$ is called <strong>H-noetherian</strong> if its compact elements form an <em>ideal</em> in $L$.</p>
+  </div>
+
+  <p>An ideal of a lattice is a non-empty subset $I$ closed downward (if $x \in I$ and $y \le x$ then $y \in I$) and closed under finite joins. Compactness is closed under finite joins (Proposition 2.1); the H-noetherian condition asks that it be closed downward as well — i.e., every lower bound of a compact element be compact.</p>
+
+  <div class="box prop">
+    <span class="label">Equivalent formulation</span>
+    <p>$L$ is H-noetherian iff every lower bound of a compact element is compact.</p>
+  </div>
+
+  <div class="box ex">
+    <span class="label">Example</span>
+    <p>The lattice $S_R(M)$ of submodules of an $R$-module $M$ is H-noetherian if and only if the ring $R$ is a noetherian ring (Exercise 2.12).</p>
+  </div>
+
+  <p>Why is that example true? A submodule is compact in $S_R(M)$ iff it's finitely generated. So H-noetherian means: every submodule of a finitely generated submodule is finitely generated. Equivalently, every f.g. submodule is itself a noetherian module. By a theorem of commutative algebra, this happens uniformly across all $M$ iff $R$ is noetherian: over a noetherian ring, finitely generated modules are noetherian, hence their submodules are f.g.</p>
+</section>
+
+<section class="module" id="s21">
+  <h2><span class="num">SECTION 21</span> Theorem 2.2 — characterising H-noetherian</h2>
+  <div class="tagline">In upper continuous lattices, H-noetherian is exactly the property that all compact elements are noetherian.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem 2.2</span>
+    <p>In an upper continuous lattice, all compact elements are noetherian if and only if the lattice is H-noetherian.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>$(\Leftarrow)$ Suppose $L$ is H-noetherian: compacts form an ideal. Take a compact $c \in L$. Every element of $c/0$ is a lower bound of $c$, hence (H-noetherian!) compact. So every element of $c/0$ is compact, i.e., $c/0$ is noetherian by Proposition 2.3, i.e. $c$ is a noetherian element.</p>
+    <p>$(\Rightarrow)$ Suppose every compact in $L$ is noetherian. By Proposition 2.5 (using upper continuity), every noetherian element is compact. So "noetherian" and "compact" name the same elements in $L$. The set of noetherian elements is always closed downward (a sublattice of a noetherian one is noetherian — exercise). So compacts are closed downward, and by Proposition 2.1 they're closed under finite joins — i.e., they form an ideal. H-noetherian.</p>
+  </div>
+
+  <p>The theorem is a clean two-step closure of the compact/noetherian/upper-continuous triangle: when upper continuity is in place, those three notions interact transparently.</p>
+</section>
+
+<section class="module" id="s22">
+  <h2><span class="num">SECTION 22</span> Birkhoff–Frink's join inaccessibility</h2>
+  <div class="tagline">A close cousin of compactness, and the subtle distinction between them.</div>
+
+  <div class="box def">
+    <span class="label">Definition · join inaccessible (Birkhoff–Frink)</span>
+    <p>An element $c$ in a complete lattice $L$ is called <strong>join inaccessible</strong> if for every upper directed $D \subseteq L$ with $c = \bigvee D$ there exists $d_0 \in D$ such that $c = d_0$.</p>
+  </div>
+
+  <p>Compare with S-compactness: the latter only required $c \le d_0$. Join inaccessibility is stronger — it requires $c$ to <em>literally appear</em> in any directed family that joins to it.</p>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.6</span>
+    <p>In every complete lattice, any compact element is join inaccessible.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Why</span>
+    <p>Suppose $c$ is compact and $c = \bigvee D$ with $D$ upper directed. By S-compactness, there's $d_0 \in D$ with $c \le d_0$. But $d_0 \in D$ means $d_0 \le \bigvee D = c$, so $c = d_0$.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 2.7</span>
+    <p>In an upper continuous lattice, the compact elements are exactly the join inaccessible elements.</p>
+  </div>
+
+  <p>So in upper continuous lattices the two notions agree, but in arbitrary lattices join inaccessibility is potentially weaker (no proof of the reverse direction is available without upper continuity). This explains the textbook's parenthetical "note the resemblance with S-compact elements."</p>
+
+  <div class="box intuition">
+    <span class="label">When do these notions matter?</span>
+    <p>Compact elements show up everywhere; join-inaccessible elements show up in specific reasoning patterns where the equality version (rather than the inequality $c \le d_0$ version) is what's needed. For instance, in a fixpoint argument where you want to know "the limit was already attained at some stage" rather than "the limit is bounded by some stage," join inaccessibility is the right notion. In the chapter's later use, it shows up when reasoning about <em>stabilisation</em> arguments.</p>
+  </div>
+</section>
+
+<!-- ====================== CONNECTIONS ====================== -->
+<div class="part-header" id="connections">
+  <div class="pk">Connection Panels</div>
+  <h2>Where else this material lives</h2>
+  <p class="part-lede">Five short panels mapping the chapter's vocabulary onto domain theory, universal algebra, topology, abstract interpretation, and the Prologos propagator network.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">CONNECTION C1</span> Domain Theory and Scott Domains</h2>
+  <div class="tagline">Algebraic lattices are the canonical Scott domains. The vocabulary of this chapter is the founding vocabulary of denotational semantics.</div>
+
+  <div class="box connection">
+    <span class="label">Reading the chapter through Dana Scott's eyes</span>
+    <p>Dana Scott's <em>domain theory</em>, developed in the 1970s for denotational semantics of programming languages, takes algebraic lattices (and their generalisations to "continuous lattices" and "Scott domains") as its primary objects of study. The dictionary translates almost word-for-word:</p>
+  </div>
+
+  <table class="grid">
+    <thead><tr><th>Călugăreanu (Chapter 2)</th><th>Domain theory</th></tr></thead>
+    <tbody>
+      <tr><td>Compact element</td><td>Finite element / compact element / isolated element</td></tr>
+      <tr><td>Compactly generated lattice</td><td>Algebraic dcpo / algebraic lattice</td></tr>
+      <tr><td>Upper continuous lattice</td><td>Continuous lattice (when bottom-completed)</td></tr>
+      <tr><td>S-compact via directed sets</td><td>The way-below relation $\ll$, restricted</td></tr>
+      <tr><td>Proposition 2.4 (algebraic ⟹ upper continuous)</td><td>Algebraic ⟹ continuous</td></tr>
+      <tr><td>Lemma 2.6 (weakly atomic)</td><td>Density of compact elements</td></tr>
+    </tbody>
+  </table>
+
+  <p>The compact elements are sometimes called <em>finite</em> in the domain theory literature — because they represent finite computations, finitely-observable approximations to a limit. The picture is: a computation produces increasingly informative outputs (the directed system), and the limit (the join) is the meaning of the computation. <em>Compact = the meaning was already attained at some finite stage.</em></p>
+
+  <div class="box intuition">
+    <span class="label">Where this matters in CS</span>
+    <p>Denotational semantics: meanings of programs live in domains. Static analysis: abstract domains are typically algebraic lattices. Type theory: subtyping lattices are often algebraic. Concurrent semantics: trace lattices, event structures, all live in this world. The chapter's apparatus — compactness, S-compactness, upper continuity, weak atomicity — is the technical foundation of all of it.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">CONNECTION C2</span> Universal Algebra — the Birkhoff–Frink Theorem</h2>
+  <div class="tagline">Every algebraic lattice <em>is</em> a subalgebra lattice. The example becomes a characterisation.</div>
+
+  <div class="box thm">
+    <span class="label">Theorem (Birkhoff &amp; Frink, 1948)</span>
+    <p>A complete lattice $L$ is algebraic (= compactly generated) if and only if $L$ is isomorphic to the subalgebra lattice $S(A, \Omega)$ of some universal algebra $(A, \Omega)$.</p>
+  </div>
+
+  <p>Călugăreanu Example 2 from Section 4 says: subalgebra lattices are algebraic. Birkhoff–Frink completes the picture: there is no other source. Every algebraic lattice is, up to isomorphism, the subalgebra lattice of some algebra. Pick your favourite algebraic lattice, and you can manufacture a universal algebra whose subalgebras live in that lattice.</p>
+
+  <p>The construction goes like this. Given an algebraic $L$, take $A = K(L)$, the set of compact elements. For each finite subset $\{c_1, \ldots, c_n\} \subseteq A$ and each compact $d$ with $d \le c_1 \vee \cdots \vee c_n$, introduce an $n$-ary operation $f$ with $f(c_1, \ldots, c_n) = d$. The resulting universal algebra $(A, \Omega)$ has $S(A, \Omega) \cong L$.</p>
+
+  <div class="box intuition">
+    <span class="label">The "shape" of an algebraic lattice</span>
+    <p>An algebraic lattice is "freely built from its compact elements." It is the ideal lattice (in a suitable sense) of its compact part. The compact elements are the "atoms of finite information"; the lattice is what you get by closing them under directed joins. Birkhoff–Frink says: this construction is faithful — different algebraic lattices come from different sets of "finite information," and every set of "finite information" gives an algebraic lattice.</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">CONNECTION C3</span> Topology and Stone Duality — where "compact" comes from</h2>
+  <div class="tagline">The word is borrowed from topology, and the borrowing is more than metaphor — it's a precise duality.</div>
+
+  <p>In topology, a space $X$ is compact if every open cover has a finite subcover. The lattice analog (this chapter's definition) replaces "open set" with "lattice element" and "$X$ is in the union" with "$1$ is below the join."</p>
+
+  <p>The connection is made precise by <em>Stone duality</em>. Stone proved (1936) that every Boolean algebra is isomorphic to the algebra of <em>clopen</em> (closed-and-open) subsets of a unique compact, Hausdorff, totally disconnected topological space — its <em>Stone space</em>. Under this correspondence:</p>
+
+  <table class="grid">
+    <thead><tr><th>Side: Boolean algebra $B$</th><th>Side: Stone space $S(B)$</th></tr></thead>
+    <tbody>
+      <tr><td>$B$ is finite</td><td>$S(B)$ is finite</td></tr>
+      <tr><td>$B$ is countable</td><td>$S(B)$ is metrisable</td></tr>
+      <tr><td>$1$ is compact in the lattice sense (always)</td><td>$S(B)$ is compact in the topological sense (always)</td></tr>
+      <tr><td>Compact element of $B$</td><td>Clopen set of $S(B)$</td></tr>
+      <tr><td>Ideal of $B$</td><td>Open set of $S(B)$</td></tr>
+      <tr><td>Maximal ideal (Lemma 2.4 / Krull)</td><td>Point of $S(B)$</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box connection">
+    <span class="label">Why this is the same word</span>
+    <p>The compactness of an algebraic lattice element $c$ — "every cover of $c$ has a finite subcover" — translates under Stone-style duality into the topological compactness of a corresponding clopen subset. The two notions match because both are saying: <em>finite information always suffices</em>. Topological compactness is finite information about open covers; lattice compactness is finite information about lattice covers. The duality between sets and Boolean algebras turns one into the other, exactly.</p>
+  </div>
+
+  <p>The duality has been extended by Hofmann and Lawson, and by Johnstone, to <em>continuous frames</em> and <em>continuous lattices</em>. The general statement: continuous (and algebraic) lattices arise as the open-set lattices of certain locally compact spaces. The chapter's apparatus is the algebraic shadow of a deep topological story.</p>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">CONNECTION C4</span> Abstract Interpretation — termination via ACC</h2>
+  <div class="tagline">In static program analysis, the noetherian condition is the termination guarantee for fixpoint iterations.</div>
+
+  <p>Abstract interpretation (Cousot &amp; Cousot, 1977) interprets programs over <em>abstract domains</em> instead of concrete states. Abstract domains are lattices: states are elements, the join is "least upper bound of possibilities," the meet is "greatest information common to all possibilities," and the analysis computes a least fixpoint by Kleene iteration:
+  \[ \bot \le F(\bot) \le F^2(\bot) \le F^3(\bot) \le \cdots \le \mathrm{lfp}(F). \]</p>
+
+  <p>For the iteration to <em>terminate</em>, the chain must stabilise after finitely many steps — i.e., the abstract domain must be noetherian (ACC). By Proposition 2.3, this is equivalent to "every element is compact." The compactness of every element is exactly the guarantee that finite information always wins, even at the fixpoint.</p>
+
+  <div class="box connection">
+    <span class="label">Why analyses pick noetherian domains</span>
+    <p>The abstract domain $\mathbb Z \cup \{\bot, \top\}$ (constant propagation) is noetherian — has finite height — so analyses over it terminate. The abstract domain of intervals $\{[a, b] : a \in \mathbb Z \cup \{-\infty\}, b \in \mathbb Z \cup \{+\infty\}, a \le b\}$ is <em>not</em> noetherian — chains $[0, 0] \subset [0, 1] \subset [0, 2] \subset \cdots$ don't stabilise. To make analyses on intervals terminate, you have to apply a <em>widening operator</em> $\nabla$, which extrapolates such chains to a stable element in finitely many steps. Widening is exactly the engineering response to a non-noetherian abstract domain.</p>
+  </div>
+
+  <p>The chapter's vocabulary maps onto abstract interpretation as follows: compactly generated lattices are the abstract domains where every fact is "made of finite facts"; noetherian elements are the elements at which Kleene iteration terminates; H-noetherian is the regularity property that makes "downward analysis" well-behaved. Cousot's textbook treatment (the 2021 MIT volume on the user's shelf) is the comprehensive reference.</p>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">CONNECTION C5</span> Prologos — propagator readiness, CALM, and finite witness</h2>
+  <div class="tagline">The chapter's compactness vocabulary is the lattice substrate of the Prologos propagator architecture.</div>
+
+  <p>Prologos is a functional-logic language whose compiler runs on a propagator network: cells hold lattice values, propagators react to changes, the BSP scheduler fires propagators in parallel rounds. The Design Mantra — <em>"All-at-once, all in parallel, structurally emergent information flow ON-NETWORK"</em> — leans on compactly generated lattices in three load-bearing ways.</p>
+
+  <div class="box prologos">
+    <span class="label">Where compactness lives in Prologos</span>
+    <p><strong>(1) Cell readiness as join inaccessibility.</strong> A propagator's "ready to fire" predicate asks whether a cell has reached a particular ground value. In compactly generated cells this asks: has the directed family of writes accumulated to a compact element yet? The set-latch fan-in pattern (<code>.claude/rules/propagator-design.md</code> § Set-Latch for Fan-In Readiness) accumulates per-source readiness as a monotone-set lattice element; the threshold predicate fires when the accumulated set is "compact enough." Join inaccessibility is the discipline that makes this well-defined: when the cell value equals the join, some specific source already produced it.</p>
+    <p><strong>(2) CALM theorem and finite witness.</strong> The Hellerstein–Ameloot CALM theorem says: a distributed computation is coordination-free iff it is monotone. Compactness is the finite-witness face of monotonicity: a monotone computation that "becomes true" does so at some finite stage of its accumulation. Every Prologos cell with monotone merge is, in this sense, an algebraic lattice and inherits the chapter's apparatus directly.</p>
+    <p><strong>(3) Hyperlattice Conjecture and the Hasse diagram.</strong> Prologos's foundational conjecture says: every computable function is expressible as a fixpoint on lattices, and the Hasse diagram of the lattice <em>is</em> the optimal parallel decomposition. The compact elements are the "atomic units of parallel work"; the directed-join structure is the "fanout pattern of the schedule." Crawley's Theorem 2.1 — modularity from second-isomorphism + compactness — is the cell-level analog of why Prologos's worldview lattice can decompose Boolean information flow into Hasse adjacencies.</p>
+  </div>
+
+  <p>The relevant Prologos source files are:</p>
+
+  <table class="grid">
+    <thead><tr><th>Concept from Chapter 2</th><th>Prologos source</th><th>What's there</th></tr></thead>
+    <tbody>
+      <tr><td>Algebraic lattice as monotone cell</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>Term-domain lattice with finite-witness merge</td></tr>
+      <tr><td>Set-latch fan-in (Sec 18 weak atomicity inspires the structure)</td><td><code>.claude/rules/propagator-design.md</code></td><td>The set-latch + broadcast pattern</td></tr>
+      <tr><td>Compact element = finite witness</td><td><code>.claude/rules/on-network.md</code></td><td>"Every Racket make-parameter holding a hasheq is a candidate for a cell"</td></tr>
+      <tr><td>Modular law in compactly generated (Crawley)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>FOUR bilattice — modular compactly generated structure</td></tr>
+      <tr><td>QTT multiplicities as a small algebraic lattice</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>$m_0, m_1, m_\omega$ — a finite (hence trivially algebraic) lattice</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box intuition">
+    <span class="label">The clean read for Prologos</span>
+    <p>Every cell in a Prologos propagator network whose merge function is monotone makes that cell into an element of an algebraic lattice. Cell readiness is join inaccessibility. CHAMP merges are directed joins of compact deltas. The architecture <em>is</em> a directed-join computation in algebraic lattices — and Chapter 2 is the abstract apparatus that makes the architecture coherent.</p>
+  </div>
+</section>
+
+<!-- ====================== GLOSSARY ====================== -->
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary</h2>
+  <p class="part-lede">Plain-English entries for the dense terminology used in the chapter.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary of Terms</h2>
+
+  <dl class="glossary">
+    <dt>compact element</dt>
+    <dd>An element $c$ of a complete lattice such that whenever $c \le \bigvee X$ for some $X$, already $c \le \bigvee F$ for some finite $F \subseteq X$. Plain English: <em>the lattice version of "finitely generated."</em></dd>
+
+    <dt>S-compact element</dt>
+    <dd>Same as compact, but the cover $X$ is required to be upper directed and the witness is a single $d_0 \in D$ rather than a finite subset $F$. Equivalent to compactness (Remark 2.1).</dd>
+
+    <dt>compactly generated lattice (= algebraic lattice)</dt>
+    <dd>A complete lattice in which every element is the join of compact elements. Plain English: <em>built from finitely-generated pieces.</em></dd>
+
+    <dt>compact lattice</dt>
+    <dd>A complete lattice whose top element $1$ is compact. Distinct from "compactly generated"! See Section 14's warning.</dd>
+
+    <dt>upper continuous lattice</dt>
+    <dd>A complete lattice in which $a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d)$ for every $a$ and every upper directed $D$. Equivalently: the meet operation is Scott-continuous.</dd>
+
+    <dt>noetherian lattice</dt>
+    <dd>A lattice satisfying ACC: every increasing chain $a_1 \le a_2 \le \cdots$ stabilises. Equivalently, every element is compact (Proposition 2.3).</dd>
+
+    <dt>H-noetherian lattice</dt>
+    <dd>A lattice in which the compact elements form an ideal (closed under finite joins and downward-closed). Stronger than compact generation alone.</dd>
+
+    <dt>weakly atomic lattice</dt>
+    <dd>A lattice in which between any $a < b$ there is a covering pair $u \prec v$ with $a \le u \prec v \le b$. <em>Small steps everywhere.</em></dd>
+
+    <dt>atom</dt>
+    <dd>A minimal non-zero element: $0 \prec a$. Has nothing strictly between $0$ and $a$.</dd>
+
+    <dt>covering relation $q \prec p$</dt>
+    <dd>"$p$ covers $q$": $q < p$ and no element strictly between them. The Hasse-diagram edges.</dd>
+
+    <dt>join inaccessible (Birkhoff–Frink)</dt>
+    <dd>Element $c$ such that whenever $c = \bigvee D$ for upper directed $D$, $c = d_0$ for some $d_0 \in D$. Stronger version of S-compactness; equivalent in upper continuous lattices (Proposition 2.7).</dd>
+
+    <dt>quotient (the underlying idea)</dt>
+    <dd>"Quotient" is what algebra calls the result of <em>identifying things together</em>. In a module $M$ with a submodule $A$, the <strong>quotient module</strong> $M/A$ is what you get by treating two elements of $M$ as equal whenever their difference lies in $A$ — collapsing $A$ to a single point (zero), and pulling all of $M$ along. The result is itself a module. The same idea applies in groups (quotient group $G/N$ for normal $N$), rings (quotient ring $R/I$ for an ideal $I$), and topological spaces (quotient space $X/{\sim}$ for an equivalence relation). The construction is universal: $M/A$ is the smallest target of a homomorphism out of $M$ that sends $A$ to zero.</dd>
+
+    <dt>quotient sublattice $b/a$ — the lattice of $b/a$</dt>
+    <dd>Călugăreanu's slash notation for the interval $\{x \in L : a \le x \le b\}$, equipped with the induced lattice operations of $L$ restricted to that range. Modern texts usually write $[a, b]$. The slash is chosen to echo the module quotient: when $L$ is the submodule lattice $S_R(M)$ and $A \le B$ are submodules, the <em>correspondence theorem</em> gives a natural bijection between the lattice interval $[A, B]$ and the submodule lattice $S_R(B/A)$ of the quotient module — submodules of $B/A$ correspond to submodules of $B$ that contain $A$, and that's exactly the interval $b/a$ in the slash notation. So "$b/a$" really IS the lattice of the quotient module $B/A$, when $L$ is a submodule lattice. The notation is faithful.</dd>
+
+    <dt>principal ideal $a/0$</dt>
+    <dd>The interval $[0, a] = \{x : x \le a\}$, also a special case of the slash notation. The downward-closed ideal generated by $a$. Read as "the lattice of $a$" — when $L = S_R(M)$, this is exactly the submodule lattice $S_R(a)$ of the submodule $a$.</dd>
+
+    <dt>ideal</dt>
+    <dd>A non-empty subset of a lattice closed downward (under $\le$) and under finite joins. The lattice analog of an ideal in ring theory.</dd>
+
+    <dt>finitely generated subalgebra</dt>
+    <dd>A subalgebra generated by finitely many elements under the algebra's operations. In a module: a finitely generated submodule. In a group: a finitely generated subgroup.</dd>
+
+    <dt>universal algebra $(A, \Omega)$</dt>
+    <dd>A set $A$ equipped with a family $\Omega$ of finitary operations $A^n \to A$. Generalises groups, rings, modules, lattices, semigroups, etc.</dd>
+
+    <dt>upper directed subset</dt>
+    <dd>A subset $D$ such that any two elements $d_1, d_2 \in D$ have an upper bound $d_3 \in D$. Models a system that "grows together."</dd>
+
+    <dt>complete lattice</dt>
+    <dd>A lattice in which every subset has a join and a meet. Has both top $1$ and bottom $0$.</dd>
+
+    <dt>ascending chain condition (ACC)</dt>
+    <dd>Every increasing sequence stabilises. The defining property of noetherianness.</dd>
+
+    <dt>modular lattice</dt>
+    <dd>A lattice satisfying $a \le c \Rightarrow a \vee (b \wedge c) = (a \vee b) \wedge c$. Equivalently: contains no $N_5$. Submodule lattices are modular.</dd>
+
+    <dt>distributive lattice</dt>
+    <dd>A lattice satisfying $a \wedge (b \vee c) = (a \wedge b) \vee (a \wedge c)$. Strictly stronger than modular. Sublattice of a Boolean algebra is distributive.</dd>
+
+    <dt>second isomorphism theorem (lattice form)</dt>
+    <dd>The condition that $a \vee b/b \cong a/a \wedge b$ as lattices for every $a, b$. In modular lattices this is automatic. In compactly generated lattices, it forces modularity (Crawley's Theorem 2.1).</dd>
+
+    <dt>$N_5$ (the pentagon)</dt>
+    <dd>The 5-element non-modular lattice. Birkhoff–Dedekind theorem: a lattice is modular iff it has no $N_5$ sublattice.</dd>
+
+    <dt>Krull's lemma</dt>
+    <dd>In a compact lattice, every $a < 1$ lies below some maximal $m \ne 1$. The lattice version of "every proper ideal lies in a maximal ideal."</dd>
+  </dl>
+</section>
+
+<!-- ====================== EXERCISES ====================== -->
+<div class="part-header" id="exercises-header">
+  <div class="pk">Exercises</div>
+  <h2>Worked solutions to all 13 exercises</h2>
+  <p class="part-lede">Each exercise expands into a click-open block: the statement, a hint, the full solution, and commentary on what the exercise is really teaching.</p>
+</div>
+
+<section class="module" id="exercises">
+  <h2>Exercises 2.1 – 2.13 — Worked</h2>
+
+  <details class="exercise" id="ex-2-1">
+    <summary><span class="ex-tag">Ex. 2.1</span>$\mathcal P(M)$ — compact iff finite</summary>
+    <div class="body">
+      <p class="ex-statement">For an arbitrary set $M$, let $(\mathcal P(M), \subseteq)$ be the complete lattice of all subsets of $M$. Show that a subset $X \subseteq M$ is compact in this lattice if and only if it is finite.</p>
+      <h4>Solution</h4>
+      <p>$(\Leftarrow)$ Suppose $X$ is finite, $X = \{x_1, \ldots, x_n\}$. Let $\mathcal Y \subseteq \mathcal P(M)$ with $X \subseteq \bigcup \mathcal Y$. For each $x_i$, pick some $Y_i \in \mathcal Y$ with $x_i \in Y_i$. Then $\{Y_1, \ldots, Y_n\}$ is a finite subset of $\mathcal Y$ and $X \subseteq Y_1 \cup \cdots \cup Y_n$. So $X$ is compact.</p>
+      <p>$(\Rightarrow)$ Suppose $X$ is infinite. Take $\mathcal Y = \{\{x\} : x \in X\}$, the family of all singletons of elements of $X$. Then $X \subseteq \bigcup \mathcal Y$ (in fact equality). Any finite subfamily $\{\{x_1\}, \ldots, \{x_n\}\} \subseteq \mathcal Y$ has union $\{x_1, \ldots, x_n\}$, which is finite, hence does not contain the infinite $X$. So no finite subfamily covers $X$ — $X$ is not compact.</p>
+      <h4>Commentary</h4>
+      <p>The exercise is the cleanest possible warm-up: compactness = finiteness in the simplest possible setting. Notice that the singleton-cover $\{\{x\} : x \in X\}$ is the killer cover — any infinite $X$ admits this overcoming-by-singletons. This is the prototype of "the cover that forces compactness to fail."</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-2">
+    <summary><span class="ex-tag">Ex. 2.2</span>$S(A,\Omega)$ — compact iff finitely generated</summary>
+    <div class="body">
+      <p class="ex-statement">If $(A, \Omega)$ is a universal algebra and $(S(A, \Omega), \subseteq)$ is the complete lattice of all subalgebras of $A$, show that a subalgebra $B \in S(A, \Omega)$ is compact if and only if it is finitely generated.</p>
+      <h4>Solution</h4>
+      <p>$(\Leftarrow)$ Let $B = \langle b_1, \ldots, b_n\rangle$, the subalgebra generated by $\{b_1, \ldots, b_n\}$. Suppose $B \subseteq \bigvee \mathcal F = \langle \bigcup \mathcal F\rangle$ (the smallest subalgebra containing the union of $\mathcal F$). Each generator $b_i$ lies in $\bigvee \mathcal F$, so $b_i$ is built from finitely many elements of $\bigcup \mathcal F$ via finitely many operations of $\Omega$. Each such element comes from <em>some</em> member of $\mathcal F$, so finitely many members of $\mathcal F$ — say $\mathcal F_i$ — already contain enough to produce $b_i$. Take $\mathcal F_0 = \mathcal F_1 \cup \cdots \cup \mathcal F_n$ (still finite). Then each $b_i \in \langle \bigcup \mathcal F_0\rangle = \bigvee \mathcal F_0$, hence $B = \langle b_1, \ldots, b_n\rangle \subseteq \bigvee \mathcal F_0$. So $B$ is compact with finite witness $\mathcal F_0$.</p>
+      <p>$(\Rightarrow)$ Suppose $B$ is compact. Consider the family $\mathcal F = \{\langle b\rangle : b \in B\}$ of all monogenic subalgebras of $A$ generated by elements of $B$. We have $B = \bigvee \mathcal F$ (every $b \in B$ lies in $\langle b\rangle \in \mathcal F$). Compactness gives a finite $\mathcal F_0 \subseteq \mathcal F$ with $B \subseteq \bigvee \mathcal F_0$. Write $\mathcal F_0 = \{\langle b_1\rangle, \ldots, \langle b_n\rangle\}$. Then $B \subseteq \langle b_1, \ldots, b_n\rangle \subseteq B$, so $B = \langle b_1, \ldots, b_n\rangle$ — finitely generated.</p>
+      <h4>Commentary</h4>
+      <p>This is Exercise 2.1's grown-up sibling. The key move is the same: write $B$ as a join of "small things" you control, then use compactness to extract a finite witness. The "small things" here are the monogenic subalgebras. The proof is one of those where every step is forced by the structure — there is no clever choice — and its uniformity across groups, rings, modules, lattices is what makes the chapter's machinery so powerful.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-3">
+    <summary><span class="ex-tag">Ex. 2.3</span>$\mathcal P(M)$ is compactly generated</summary>
+    <div class="body">
+      <p class="ex-statement">Show that $(\mathcal P(M), \subseteq)$, the complete lattice of all subsets of $M$, is a compactly generated lattice.</p>
+      <h4>Solution</h4>
+      <p>By Exercise 2.1, the compact elements of $\mathcal P(M)$ are exactly the finite subsets of $M$. We need to show every $X \subseteq M$ is the join of a family of finite subsets. Take the family $\mathcal F = \{\{x\} : x \in X\}$. Each singleton is finite, hence compact. And $\bigcup \mathcal F = X$, i.e. $\bigvee \mathcal F = X$. So $X$ is a join of compact elements. This holds for every $X$, so $\mathcal P(M)$ is compactly generated.</p>
+      <h4>Commentary</h4>
+      <p>One of the cleanest "every set is generated by its elements" facts in mathematics, lifted to lattice form. The exercise also illustrates: in $\mathcal P(M)$ <em>every</em> element $X$ has the very nice presentation as the directed join of its finite subsets, $X = \bigcup \{F \subseteq X : F \text{ finite}\}$. This is the canonical witness of compact generation.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-4">
+    <summary><span class="ex-tag">Ex. 2.4</span>$S(A,\Omega)$ is compactly generated</summary>
+    <div class="body">
+      <p class="ex-statement">Show that $(S(A, \Omega), \subseteq)$, the complete lattice of all subalgebras of the universal algebra $(A, \Omega)$, is a compactly generated lattice.</p>
+      <h4>Solution</h4>
+      <p>By Exercise 2.2, the compact elements of $S(A, \Omega)$ are exactly the finitely generated subalgebras. We need every subalgebra $B$ to be a join of f.g. subalgebras. Take the family $\mathcal F = \{\langle b\rangle : b \in B\}$ of monogenic sub-subalgebras. Each $\langle b\rangle$ is f.g. (by one element), hence compact. And $\bigvee \mathcal F = \langle \bigcup_b \langle b\rangle\rangle = \langle B\rangle = B$. So $B$ is a join of compacts. Hence $S(A, \Omega)$ is compactly generated.</p>
+      <h4>Commentary</h4>
+      <p>This is the grand instance of Birkhoff–Frink's "every algebraic lattice arises as $S(A, \Omega)$": already on the example side, every $S(A, \Omega)$ <em>is</em> compactly generated. The exercise is technically Exercise 2.3 done in the universal-algebra setting, but it carries enormous weight because it's the universal source of compactly generated lattices in algebra. Submodule lattices, subgroup lattices, sublattice lattices, subring lattices — all special cases.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-5">
+    <summary><span class="ex-tag">Ex. 2.5</span>Direct proof: noetherian ⟹ upper continuous</summary>
+    <div class="body">
+      <p class="ex-statement">Give a direct proof to: each noetherian lattice is upper continuous.</p>
+      <h4>Solution</h4>
+      <p>Let $L$ be noetherian and let $D \subseteq L$ be upper directed, $a \in L$. We want $a \wedge \bigvee D = \bigvee_{d \in D}(a \wedge d)$.</p>
+      <p>The inequality $\bigvee_{d \in D}(a \wedge d) \le a \wedge \bigvee D$ is automatic.</p>
+      <p>For the reverse, observe that the family $\{a \wedge d : d \in D\}$ is an increasing family in $L$ (because $D$ is upper directed and meets are monotone in each argument). By ACC in $L$, this family has a maximum element, say $a \wedge d^*$ for some $d^* \in D$. So $\bigvee_{d \in D}(a \wedge d) = a \wedge d^*$.</p>
+      <p>Now $D$ itself is increasing-with-finite-witnesses, and by ACC there is some $d^{**} \in D$ above all others, so $\bigvee D = d^{**}$. By directedness we can assume $d^{**} \ge d^*$.</p>
+      <p>Now: $a \wedge \bigvee D = a \wedge d^{**}$. Since the family $\{a \wedge d : d \in D\}$ has maximum $a \wedge d^*$, in particular $a \wedge d^{**} \le a \wedge d^*$. But trivially $a \wedge d^* \le a \wedge d^{**}$ since $d^* \le d^{**}$ — contradiction unless $a \wedge d^* = a \wedge d^{**}$. Hence $a \wedge \bigvee D = a \wedge d^* = \bigvee_{d \in D}(a \wedge d)$.</p>
+      <h4>Commentary</h4>
+      <p>The exercise is asking you to redo Proposition 2.4 without going through compactness — i.e., directly from ACC. The trick is that ACC gives you a maximum element of any directed family, which collapses both sides of the upper-continuity equation to the same "maximum" expression. This is a useful direct proof that doesn't go through Proposition 2.3.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-6">
+    <summary><span class="ex-tag">Ex. 2.6</span>Compact in $a/0$ vs in $L$</summary>
+    <div class="body">
+      <p class="ex-statement">Let $a$ be an element in a (complete) upper continuous lattice $L$. Prove that the compact elements in $a/0$ are exactly the compact elements from $L$ that belong to $a/0$.</p>
+      <h4>Solution</h4>
+      <p>$(\Leftarrow)$ Suppose $c$ is compact in $L$ and $c \le a$. Take any $X \subseteq a/0$ with $c \le \bigvee X$ (the join in $a/0$, which equals the join in $L$ since $a/0$ is an ideal). Since $c$ is compact in $L$, there's a finite $F \subseteq X$ with $c \le \bigvee F$. So $c$ is compact in $a/0$.</p>
+      <p>$(\Rightarrow)$ Suppose $c$ is compact in $a/0$. Take $X \subseteq L$ with $c \le \bigvee X$ (in $L$). By upper continuity of $L$,
+      $$c = c \wedge \bigvee X = \bigvee_{F \subseteq X \text{ finite}} (c \wedge \bigvee F)$$
+      (using Lemma 2.2). The family $\{c \wedge \bigvee F : F \subseteq X \text{ finite}\}$ is upper directed (union of finite subsets), and lies in $a/0$ (each $c \wedge \bigvee F \le c \le a$). So compactness of $c$ in $a/0$ produces a finite $F^* \subseteq X$ with $c \le c \wedge \bigvee F^* \le \bigvee F^*$. So $c$ is compact in $L$.</p>
+      <h4>Commentary</h4>
+      <p>Compactness in an ideal sublattice is compatible with compactness in the full lattice — but the proof needs upper continuity to get one direction. This is a place where upper continuity is genuinely used (not just for elegance) — without it, the implication $(\Rightarrow)$ can fail. The exercise pins down exactly what's needed.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-7">
+    <summary><span class="ex-tag">Ex. 2.7</span>Compactly generated descends to $a/0$</summary>
+    <div class="body">
+      <p class="ex-statement">If $a$ is an element in a compactly generated lattice, then $a/0$ is also compactly generated.</p>
+      <h4>Solution</h4>
+      <p>Let $L$ be compactly generated and $a \in L$. Take any $x \in a/0$. By Lemma 2.1, the compact elements of $a/0$ have the form $0 \vee c = c$ for compact $c$ of $L$ with $c \le a$. (Here the "$a$ in Lemma 2.1" plays the role of $0$ in the sublattice $a/0$.)</p>
+      <p>$L$ compactly generated gives $x = \bigvee \{c_i : c_i \in L \text{ compact}, c_i \le x\}$. For each $i$, $c_i \le x \le a$, so $c_i \in a/0$ and (by the previous exercise, using Proposition 2.4 to give upper continuity) $c_i$ is compact in $a/0$. Hence $x$ is the join of compact elements of $a/0$. So $a/0$ is compactly generated.</p>
+      <h4>Commentary</h4>
+      <p>"Compact generation is hereditary down to principal ideals." The exercise leans on Proposition 2.4 (compactly generated ⟹ upper continuous) to get upper continuity for free, then uses Exercise 2.6 to translate compactness into the ideal. This kind of "the property descends to ideals" result will be applied many times in later chapters.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-8">
+    <summary><span class="ex-tag">Ex. 2.8</span>Modular compactly generated: covering near 1</summary>
+    <div class="body">
+      <p class="ex-statement">In a modular compactly generated lattice $L$, if $a < 1$ prove the existence of two elements $b, c \in L$ such that $a \le b \prec c \le 1$.</p>
+      <h4>Solution</h4>
+      <p>This is Lemma 2.6 (every compactly generated lattice is weakly atomic) applied with $a$ as below and $1$ as above. Weak atomicity says: there exist $b, c \in L$ with $a \le b \prec c \le 1$. Done.</p>
+      <p>Modularity is not needed — the result is true in every compactly generated lattice. So the exercise gives the modular hypothesis but it's redundant.</p>
+      <h4>Commentary</h4>
+      <p>The exercise is asking the reader to extract the special case of weak atomicity that they care about in module theory. The presence of "modular" is a hint that the application is in a modular setting (e.g., $S_R(M)$), but the lemma itself doesn't need it. A nice example of: <em>state more than you need so you can apply more cleanly.</em></p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-9">
+    <summary><span class="ex-tag">Ex. 2.9</span>Three facts about $1/a$</summary>
+    <div class="body">
+      <p class="ex-statement">(i) If $c$ is a compact element in a complete lattice $L$ and $a \in L$, show that $c \vee a$ is compact in $1/a$. (ii) If $L$ is a compact lattice and $a \in L$, then $1/a$ is also a compact lattice. (iii) If $L$ is a compactly generated lattice, then for every element $a$, the sublattice $1/a$ is also compactly generated.</p>
+      <h4>Solution</h4>
+      <p><strong>(i)</strong> This is Lemma 2.1 applied with the interval $b/a$ replaced by $1/a$. Take any cover $X \subseteq 1/a$ with $c \vee a \le \bigvee X$. Each $x \in X$ satisfies $a \le x$, so $\bigvee X \ge a$ trivially; the content is $c \vee a \le \bigvee X$, i.e. $c \le \bigvee X$. Compactness of $c$ in $L$ gives a finite $F \subseteq X$ with $c \le \bigvee F$. Then $c \vee a \le \bigvee F \vee a = \bigvee F$ (since each element of $F$ is $\ge a$). So $c \vee a$ is compact in $1/a$.</p>
+      <p><strong>(ii)</strong> $L$ compact means $1$ is compact in $L$. Apply (i) with $c = 1$: $1 \vee a = 1$ is compact in $1/a$. So $1/a$ is a compact lattice.</p>
+      <p><strong>(iii)</strong> $L$ compactly generated means every $x \in L$ is a join of compacts. Take $x \in 1/a$. Write $x = \bigvee \{c_i : c_i \in L \text{ compact}, c_i \le x\}$. Then $x = x \vee a = \bigvee_i (c_i \vee a)$, and each $c_i \vee a$ is compact in $1/a$ by (i), and $c_i \vee a \le x \vee a = x$. So $x$ is a join of compact elements of $1/a$. Hence $1/a$ is compactly generated.</p>
+      <h4>Commentary</h4>
+      <p>"Compact generation is hereditary upward to filters $1/a$ as well as downward to ideals $a/0$" (cf. Exercise 2.7). The two together say: compact generation passes to <em>any</em> interval $b/a$. The proof uses the lift $c \mapsto c \vee a$ from compacts of $L$ to compacts of $1/a$ — symmetric to the $c \mapsto c$ (or $c \wedge a$) lift used for ideals. Together, these are the basic Lemma 2.1 patterns that recur throughout module theory.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-10">
+    <summary><span class="ex-tag">Ex. 2.10</span>Generalisation to arbitrary intervals</summary>
+    <div class="body">
+      <p class="ex-statement">Generalise the preceding exercises to arbitrary complete sublattices (intervals $b/a$).</p>
+      <h4>Solution</h4>
+      <p>Combining Exercises 2.7 and 2.9: if $L$ is compactly generated and $a \le b$ in $L$, then the interval $b/a$ is compactly generated. Proof: the compact elements of $b/a$ are exactly $\{a \vee c : c \in L \text{ compact}, a \vee c \le b\}$ (this is Lemma 2.1). Every $x \in b/a$ writes as $x = \bigvee \{c_i : c_i \le x, c_i \text{ compact in } L\} = \bigvee \{a \vee c_i : c_i \le x\}$, with each $a \vee c_i \le a \vee x = x$ (last equality because $a \le x$). So $x$ is a join of compacts of $b/a$. Done.</p>
+      <p>Likewise: if $L$ is compact, $b/a$ is a compact lattice when $b$ is compact in $L$.</p>
+      <h4>Commentary</h4>
+      <p>The unified statement: for compactly generated $L$, every interval $b/a$ is compactly generated. This is heavily used in the rest of the book — every theorem proved for compactly generated lattices applies to every interval of $S_R(M)$, e.g. $B/A$ for submodules $A \le B$ corresponds to the submodule lattice of $B/A$, which lives inside the same family of compactly generated modular lattices.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-11">
+    <summary><span class="ex-tag">Ex. 2.11</span>Ideal lattice $I(L)$ is compactly generated</summary>
+    <div class="body">
+      <p class="ex-statement">For every lattice $L$, $I(L)$, the lattice of all ideals of $L$, is compactly generated, and the mapping $a \mapsto a/0$ is an isomorphism from $L$ to the principal-ideal sublattice of $I(L)$.</p>
+      <h4>Solution</h4>
+      <p><em>(Compactly generated.)</em> The compact elements of $I(L)$ are exactly the principal ideals — those of the form $a/0$ for $a \in L$. To see this: $a/0$ is compact because if $a/0 \subseteq \bigvee \mathcal I$ for a family of ideals $\mathcal I$, then $a \in \bigvee \mathcal I$, i.e. $a$ is a finite join of elements drawn from $\bigcup \mathcal I$, so $a \in \bigvee F$ for some finite $F \subseteq \mathcal I$, hence $a/0 \subseteq \bigvee F$. Conversely, every compact ideal $J$ has $J = \bigvee \{x/0 : x \in J\}$ (every ideal is the join of its principal sub-ideals), so compactness gives a finite $F \subseteq J$ with $J = \bigvee_{x \in F} x/0 = (\bigvee F)/0$, principal.</p>
+      <p>Now every ideal $J \in I(L)$ writes as $J = \bigvee \{x/0 : x \in J\}$ (every element of $J$ generates a principal sub-ideal contained in $J$, and their union under "ideal-generated" closure is $J$). So every $J$ is the join of principals, i.e. of compacts. Hence $I(L)$ is compactly generated.</p>
+      <p><em>(Iso to principal-ideal sublattice.)</em> Define $\varphi : L \to I(L)$ by $\varphi(a) = a/0$. $\varphi$ is order-preserving: $a \le b \Rightarrow a/0 \subseteq b/0$. $\varphi$ is injective: $a/0 = b/0$ implies $a \in b/0$ and $b \in a/0$, so $a \le b$ and $b \le a$, hence $a = b$. The image of $\varphi$ is exactly the set of principal ideals — a sublattice of $I(L)$ in its own right (joins of principals are still principal: $a/0 \vee b/0 = (a \vee b)/0$; meets too: $a/0 \cap b/0 = (a \wedge b)/0$). $\varphi$ preserves both: $\varphi(a \vee b) = (a \vee b)/0 = a/0 \vee b/0 = \varphi(a) \vee \varphi(b)$, and similarly for meets. So $\varphi$ is a lattice isomorphism onto its image.</p>
+      <h4>Commentary</h4>
+      <p>This exercise proves that <em>every</em> lattice $L$ embeds into a compactly generated lattice (the ideal lattice $I(L)$), with the embedding preserving lattice structure. It's the lattice-theoretic version of "every algebra embeds in its ideal lattice" — and the source of compact generation always being available in the ideal-completion. The book uses this implicitly throughout: when it says "let's pass to the ideal lattice," it's invoking exactly this result.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-12">
+    <summary><span class="ex-tag">Ex. 2.12</span>$S_R(M)$ is H-noetherian iff $R$ is noetherian</summary>
+    <div class="body">
+      <p class="ex-statement">Verify that the lattice $S_R(M)$ of all submodules of an $R$-module $M$ is H-noetherian if and only if $R$ is noetherian.</p>
+      <h4>Solution</h4>
+      <p>By Section 14 / Example 2 of the chapter, the compact elements of $S_R(M)$ are exactly the finitely generated submodules. So $S_R(M)$ is H-noetherian iff f.g. submodules form an ideal of $S_R(M)$ — i.e., iff every submodule of an f.g. submodule is itself f.g.</p>
+      <p>$(\Leftarrow)$ Suppose $R$ is a noetherian ring. Then every f.g. $R$-module is noetherian (every submodule of an f.g. module is f.g. — this is a standard result). So submodules of f.g. submodules are f.g., i.e., compacts in $S_R(M)$ are closed downward. Combined with closure under finite joins (Proposition 2.1), compacts form an ideal, i.e. $S_R(M)$ is H-noetherian.</p>
+      <p>$(\Rightarrow)$ Suppose $S_R(M)$ is H-noetherian for every $R$-module $M$. In particular take $M = R$ as a left $R$-module. Then submodules of $R$ are left ideals of $R$. The whole module $R$ itself is generated by $1$, hence f.g., hence compact in $S_R(R)$. By H-noetherian, every sub-submodule of $R$ — i.e. every left ideal — is compact, i.e. f.g. So every left ideal of $R$ is f.g., which is exactly: $R$ is left-noetherian. (Right-noetherian follows symmetrically by taking right modules.)</p>
+      <h4>Commentary</h4>
+      <p>This is a clean translation of the ring-theoretic notion of "noetherian" into the lattice-theoretic notion of "H-noetherian," via the running correspondence "compact = f.g." The exercise underscores why H-noetherian is the right finiteness condition to study — it tracks ring-noetherianness exactly. Hilbert's basis theorem (every f.g. module over a noetherian ring is noetherian) is what makes the forward direction work; the reverse direction is just unwinding the definitions.</p>
+    </div>
+  </details>
+
+  <details class="exercise" id="ex-2-13">
+    <summary><span class="ex-tag">Ex. 2.13</span>Principal iff join-inaccessible in $I(L)$</summary>
+    <div class="body">
+      <p class="ex-statement">Prove that an ideal of a lattice $L$ is principal if and only if it is join inaccessible in the lattice of all ideals of $L$.</p>
+      <h4>Solution</h4>
+      <p>$(\Rightarrow)$ Suppose $J = a/0$ is principal. Take any upper directed $\mathcal D \subseteq I(L)$ with $\bigvee \mathcal D = a/0$. We have $a \in \bigvee \mathcal D$, so $a$ is in some $D_0 \in \mathcal D$ (since $\bigvee \mathcal D$ is the directed union of the $D \in \mathcal D$). Then $a \in D_0$ means $a/0 \subseteq D_0$. Combined with $D_0 \subseteq \bigvee \mathcal D = a/0$, we get $D_0 = a/0$. So principal ideals are join inaccessible.</p>
+      <p>$(\Leftarrow)$ Suppose $J$ is a join-inaccessible ideal. We have $J = \bigvee \{x/0 : x \in J\}$, the directed family of principal sub-ideals. (This family is directed: $x/0 \cup y/0 \subseteq (x \vee y)/0$ for any $x, y \in J$.) Join inaccessibility forces $J = x_0/0$ for some $x_0 \in J$ — i.e., $J$ is principal.</p>
+      <h4>Commentary</h4>
+      <p>This is a clean reading of join inaccessibility in a particular setting, and incidentally a complete classification: in $I(L)$, join inaccessibility coincides with compactness coincides with principality. By Exercise 2.11, this is the same as saying that $I(L)$ is upper continuous (so Proposition 2.7 gives compactness ⟺ join inaccessibility). The exercise underscores how cleanly all the chapter's vocabulary lines up in this canonical setting.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ====================== AHEAD ====================== -->
+<div class="part-header" id="ahead">
+  <div class="pk">Looking Ahead</div>
+  <h2>Where the chapter goes from here</h2>
+  <p class="part-lede">A short orientation to the rest of the book, locating Chapter 2 in the larger arc.</p>
+</div>
+
+<section class="module" id="ahead-content">
+  <h2>Chapter 2 in the book's arc</h2>
+
+  <p>Chapter 2 sits in the foundation layer of Călugăreanu's book. After establishing compactly generated lattices, the book builds upward in roughly this order:</p>
+
+  <table class="grid">
+    <thead><tr><th>Chapter</th><th>Topic</th><th>How Chapter 2 feeds in</th></tr></thead>
+    <tbody>
+      <tr><td>3</td><td>Atomistic and complemented lattices</td><td>Atoms (Section 7) become the building blocks; weak atomicity (Section 18) strengthens to genuine atomicity in many cases.</td></tr>
+      <tr><td>4</td><td>Decomposition and direct factors</td><td>H-noetherian (Section 20) is used to establish uniqueness of decompositions à la Krull–Schmidt.</td></tr>
+      <tr><td>5</td><td>Independence and the Goldie dimension</td><td>Compact generation provides the framework for "essential" submodules and uniform dimension; Krull's lemma (Section 16) drives existence proofs.</td></tr>
+      <tr><td>6, 7</td><td>Semi-simple and semi-artinian lattices</td><td>The chain conditions tracked by Proposition 2.3 generalise to descending chains and "semi" versions; Theorem 2.2 gives the regularity needed.</td></tr>
+      <tr><td>8, 9</td><td>Local lattices, projectivity, and lifting</td><td>Crawley's Theorem 2.1 gets sharpened to characterise modular semi-modular and similar weakly modular conditions; the second-isomorphism-style hypotheses become the source of structural results.</td></tr>
+      <tr><td>10–13</td><td>Linear independence, regular elements, ideal lattices</td><td>The ideal lattice (Section 4 ex 5; Exercise 2.11) is studied for its own sake; chapter 13 specialises Crawley's theorem and weak atomicity to that setting.</td></tr>
+    </tbody>
+  </table>
+
+  <p>The vocabulary established in Chapter 2 — compact, compactly generated, upper continuous, weakly atomic, H-noetherian, join inaccessible, modular under iso intervals — is referenced throughout the remaining ~200 pages. Reading Chapter 2 carefully and absorbing the proofs is the highest-leverage investment in the book.</p>
+
+  <h3>If you remember three things</h3>
+
+  <ol>
+    <li><strong>"Compact = finitely generated."</strong> The lattice notion of compactness is the abstraction of the algebraic notion of finite generation. Most theorems about f.g. submodules / subgroups / subrings are special cases of theorems about compact elements.</li>
+    <li><strong>"Algebraic = compactly generated."</strong> The class of lattices that look like submodule lattices is exactly the algebraic lattices. Birkhoff–Frink: every algebraic lattice is the subalgebra lattice of some universal algebra.</li>
+    <li><strong>"Crawley's Theorem 2.1."</strong> In a compactly generated lattice, the second isomorphism theorem holding pointwise forces modularity. This is the entry point through which abstract lattice theory becomes module theory.</li>
+  </ol>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 2 · Compactly Generated Lattices</div>
+    <div>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000.</div>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div>Built to be read alongside the book, with prose, diagrams, and outward connections.</div>
+    <div>Theme-toggle preserves your light/dark choice via localStorage.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  // Scroll-spy for sidebar
+  const links = document.querySelectorAll('nav.sidebar a');
+  const targets = Array.from(links).map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function onScroll() {
+    const y = window.scrollY + 120;
+    let current = targets[0];
+    for (const t of targets) { if (t.offsetTop <= y) current = t; }
+    if (current) {
+      links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + current.id));
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // Theme toggle — dark is the default (matches Lattice Atlas hub)
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', () => {
+      const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+      try { localStorage.setItem('prologos-theme', t); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>

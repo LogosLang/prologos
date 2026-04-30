@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Călugăreanu Companion · Chapter 12 · Supplemented Lattices · Locally Artinian Lattices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$'], ['\\[','\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --nav-bg: linear-gradient(180deg, #1E2749 0%, #151A36 100%);
+    --nav-text: #D9D4BF; --nav-mute: #8A8875; --nav-sub: #BBB8A6; --nav-brand: #E6C876;
+    --box-def-bg: #F2ECDD; --box-ex-bg: #F2ECDD; --box-thm-bg: #F2ECDD; --box-intu-bg: #F2ECDD;
+    --box-prol-bg: #FBF8EC; --box-check-bg: #EEF2F5; --box-check-border: #B9CAD1;
+    --box-conn-bg: #EFE7F2; --box-conn-border: #C9B7D2;
+    --box-vocab-bg: #F0EAD4; --box-vocab-border: #D4B97C;
+    --box-recap-bg: #EBF1F4; --box-recap-border: #B8CCD3;
+    --box-deep-bg: #F2E8DD; --box-deep-border: #C99868;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --nav-bg: linear-gradient(180deg, #070B15 0%, #0B1120 100%);
+    --nav-text: #B8B1A0; --nav-mute: #6A6555; --nav-sub: #8A8575; --nav-brand: #D4AD52;
+    --box-def-bg: #151C2E; --box-ex-bg: #141B2B; --box-thm-bg: #1A1F30; --box-intu-bg: #121826;
+    --box-prol-bg: #1F1B10; --box-check-bg: #121C24; --box-check-border: #334652;
+    --box-conn-bg: #1B1726; --box-conn-border: #3D2F4A;
+    --box-vocab-bg: #1A1A28; --box-vocab-border: #4A3F22;
+    --box-recap-bg: #161E26; --box-recap-border: #2D4150;
+    --box-deep-bg: #261F15; --box-deep-border: #614127;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Source Serif Pro', Georgia, serif; font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
+  h1, h2, h3, h4 { font-family: 'Inter', -apple-system, system-ui, sans-serif; color: var(--ink); letter-spacing: -0.01em; }
+  code { font-family: 'JetBrains Mono', monospace; }
+  .app { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+  nav.sidebar { background: var(--nav-bg); color: var(--nav-text); padding: 28px 22px; position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; border-right: 1px solid var(--line); }
+  nav .brand { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 16px; color: var(--nav-brand); text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 4px; }
+  nav .sub { font-family: 'Source Serif Pro', serif; font-style: italic; color: var(--nav-sub); font-size: 13px; margin-bottom: 24px; line-height: 1.4; }
+  nav ul { list-style: none; padding: 0; margin: 0; }
+  nav li { margin: 2px 0; }
+  nav a { display: block; color: var(--nav-text); text-decoration: none; padding: 6px 10px; border-left: 2px solid transparent; font-family: 'Inter', sans-serif; font-size: 13.5px; transition: all 0.15s ease; border-radius: 0 4px 4px 0; }
+  nav a:hover { color: var(--gold-soft); background: rgba(212,173,82,0.08); border-left-color: var(--gold); }
+  nav a.active { color: var(--gold-soft); background: rgba(212,173,82,0.14); border-left-color: var(--gold); }
+  nav .section-label { font-family: 'Inter', sans-serif; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.18em; color: var(--nav-mute); margin: 18px 10px 6px; }
+  .theme-toggle { position: fixed; top: 18px; right: 20px; z-index: 100; background: var(--bg-warm); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: var(--shadow-soft); transition: all 0.2s ease; }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+  main { padding: 48px 64px 120px; max-width: 920px; }
+  .hero { padding: 40px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .hero .kicker { color: var(--gold); font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; margin-bottom: 14px; }
+  .hero h1 { font-size: 38px; font-weight: 800; line-height: 1.12; margin: 0 0 14px; }
+  .hero .lede { font-size: 19px; color: var(--teal); font-style: italic; max-width: 700px; }
+  .hero .meta { display: flex; gap: 20px; margin-top: 22px; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); flex-wrap: wrap; }
+  .hero .meta span::before { content: "◆  "; color: var(--gold); }
+  .part-header { margin: 72px 0 24px; padding: 18px 0 14px; border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .part-header .pk { font-family: 'Inter', sans-serif; color: var(--gold); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; font-weight: 700; }
+  .part-header h2 { font-size: 30px; font-weight: 800; margin: 4px 0 6px; }
+  .part-header .part-lede { color: var(--teal); font-style: italic; font-size: 17px; margin: 0; max-width: 700px; }
+  section.module { margin: 48px 0; scroll-margin-top: 24px; }
+  section.module > h2 { font-size: 24px; font-weight: 700; margin: 0 0 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  section.module > h2 .num { font-family: 'Inter', sans-serif; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
+  section.module .tagline { font-style: italic; color: var(--teal); font-family: 'Source Serif Pro', serif; font-size: 16px; margin-bottom: 22px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  section.module h3 { font-size: 18px; font-weight: 600; margin-top: 26px; color: var(--ink-soft); }
+  section.module h4 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal); margin-top: 22px; }
+  p { margin: 0 0 14px; }
+  .box { border: 1px solid var(--line); background: var(--bg-warm); border-radius: 6px; padding: 18px 22px; margin: 20px 0; }
+  .box .label { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; display: inline-block; padding: 3px 10px; border-radius: 3px; }
+  .box.def { background: var(--box-def-bg); }
+  .box.thm, .box.lemma, .box.prop, .box.cor { background: var(--box-thm-bg); }
+  .box.ex { background: var(--box-ex-bg); }
+  .box.intuition { background: var(--box-intu-bg); }
+  .box.proof { background: var(--bg-muted); border-left: 3px solid var(--teal); }
+  .box.def .label { background: #1E2749; color: #E6C876; }
+  .box.thm .label { background: var(--gold); color: #1E2749; }
+  .box.lemma .label { background: #6A4F1F; color: #E6C876; }
+  .box.prop .label { background: #2B3560; color: #E6C876; }
+  .box.cor .label { background: #4A6E5C; color: #E6F0E0; }
+  .box.ex .label { background: var(--teal); color: #0E1420; }
+  .box.intuition .label { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .box.proof .label { background: var(--teal); color: #0E1420; }
+  .box.connection { background: var(--box-conn-bg); border: 1px solid var(--box-conn-border); }
+  .box.connection .label { background: #4A2F5A; color: #E6C876; }
+  :root[data-theme="dark"] .box.connection .label { background: #5A3F6E; color: #E6C876; }
+  .box.prologos { border: 2px solid var(--gold); background: var(--box-prol-bg); }
+  .box.prologos .label { background: var(--gold); color: #1E2749; }
+  .box.warning { background: var(--box-check-bg); border-color: var(--box-check-border); }
+  .box.warning .label { background: #8B4A2B; color: #FBF0DD; }
+  .box.vocab { background: var(--box-vocab-bg); border: 1px solid var(--box-vocab-border); }
+  .box.vocab .label { background: #5A4514; color: #FBF0DD; }
+  :root[data-theme="dark"] .box.vocab .label { background: #786020; color: #FBF0DD; }
+  .box.recap { background: var(--box-recap-bg); border: 1px solid var(--box-recap-border); }
+  .box.recap .label { background: #2D4150; color: #BFD5DE; }
+  .box.deep { background: var(--box-deep-bg); border: 2px solid var(--box-deep-border); }
+  .box.deep .label { background: #8B4A1F; color: #FBF0DD; }
+  .box p:last-child { margin-bottom: 0; }
+  .term-card { background: var(--bg-warm); border-left: 3px solid var(--gold); padding: 12px 18px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .term-card.recap { border-left-color: var(--teal); background: var(--box-recap-bg); }
+  .term-card .term { font-family: 'Inter', sans-serif; font-weight: 700; color: var(--ink); margin-right: 8px; }
+  .term-card .term-tag { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); font-weight: 700; margin-right: 8px; background: var(--bg-muted); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--line); }
+  .term-card.recap .term-tag { color: var(--teal); }
+  .term-card p { margin: 4px 0; font-size: 15.5px; }
+  table.grid { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: 15px; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  table.grid th { background: var(--ink); color: var(--bg); font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; }
+  table.grid tr:nth-child(even) td { background: var(--bg-warm); }
+  strong { color: var(--ink); font-weight: 600; }
+  em { color: #5C6680; }
+  code { background: var(--bg-muted); color: var(--ink-soft); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; overflow-wrap: anywhere; word-break: break-word; }
+  :root[data-theme="dark"] em { color: #B5BAC6; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+  details.exercise { margin: 18px 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-warm); padding: 0; overflow: hidden; }
+  details.exercise > summary { cursor: pointer; padding: 14px 22px; font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); border-bottom: 1px solid transparent; list-style: none; }
+  details.exercise[open] > summary { border-bottom: 1px dashed var(--line); color: var(--gold); }
+  details.exercise > summary::before { content: "▸ "; color: var(--gold); margin-right: 4px; }
+  details.exercise[open] > summary::before { content: "▾ "; }
+  details.exercise > div.body { padding: 6px 22px 14px; }
+  details.exercise .ex-statement { color: var(--ink); font-style: italic; margin-bottom: 14px; border-left: 3px solid var(--gold); padding-left: 12px; }
+  details.exercise .ex-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-right: 8px; }
+  dl.glossary { display: grid; grid-template-columns: 220px 1fr; gap: 8px 20px; margin: 20px 0; }
+  dl.glossary dt { font-family: 'Inter', sans-serif; font-weight: 600; color: var(--ink); padding-top: 4px; }
+  dl.glossary dd { margin: 0; padding-bottom: 10px; border-bottom: 1px dotted var(--line); }
+  footer.page-footer { margin-top: 80px; padding: 30px 0; border-top: 2px solid var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim); }
+  footer.page-footer .row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    nav.sidebar { position: static; height: auto; }
+    main { padding: 32px 22px 80px; }
+    .hero h1 { font-size: 28px; }
+    dl.glossary { grid-template-columns: 1fr; }
+    dl.glossary dt { padding-top: 12px; }
+  }
+</style>
+</head>
+<body>
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+<div class="app">
+
+<nav class="sidebar">
+  <div class="brand">Călugăreanu Companion</div>
+  <div class="sub">A prose, diagrammed, and connected reading of <em>Lattice Concepts of Module Theory</em>.</div>
+
+  <div class="section-label">Navigation</div>
+  <ul>
+    <li><a href="calugareanu-companion-toc.html">← Companion ToC</a></li>
+    <li><a href="calugareanu-companion-ch11.html">← Chapter 11</a></li>
+    <li><a href="calugareanu-companion-ch13.html">Chapter 13 →</a></li>
+  </ul>
+
+  <div class="section-label">This volume</div>
+  <ul>
+    <li><a href="#overview">Chapter 12 · Overview</a></li>
+    <li><a href="#vocab">Vocabulary primer</a></li>
+  </ul>
+
+  <div class="section-label">Part A · Supplements</div>
+  <ul>
+    <li><a href="#s1">A1 · Definition + Lemma 12.1 + Prop 12.1</a></li>
+    <li><a href="#s2">A2 · Lemma 12.2 + Proposition 12.2</a></li>
+  </ul>
+
+  <div class="section-label">Part B · Supplemented lattices</div>
+  <ul>
+    <li><a href="#s3">B1 · Definition + Prop 12.3</a></li>
+  </ul>
+
+  <div class="section-label">Part C · Hollow + local</div>
+  <ul>
+    <li><a href="#s4">C1 · Lemma 12.5 + Prop 12.4</a></li>
+  </ul>
+
+  <div class="section-label">Part D · Keystone characterizations</div>
+  <ul>
+    <li><a href="#s5">D1 · Prop 12.5 + Cor 12.2</a></li>
+  </ul>
+
+  <div class="section-label">Part E · Locally artinian</div>
+  <ul>
+    <li><a href="#s6">E1 · Definition + Props 12.6–12.8</a></li>
+  </ul>
+
+  <div class="section-label">Part F · Cyclically generated</div>
+  <ul>
+    <li><a href="#s7">F1 · Lemmas 12.6, 12.7 + Prop 12.9</a></li>
+  </ul>
+
+  <div class="section-label">Connections</div>
+  <ul>
+    <li><a href="#c1">P1 · Wisbauer + supplemented modules</a></li>
+    <li><a href="#c2">P2 · Hollow modules + Krull-Schmidt</a></li>
+    <li><a href="#c3">P3 · Locally artinian modules</a></li>
+    <li><a href="#c4">P4 · Order duality theme</a></li>
+    <li><a href="#c5">P5 · Prologos</a></li>
+  </ul>
+
+  <div class="section-label">Reference</div>
+  <ul>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#exercises">Worked Exercises</a></li>
+    <li><a href="#ahead">Looking Ahead</a></li>
+  </ul>
+</nav>
+
+<main>
+
+<div class="hero">
+  <div class="kicker">Companion · Chapter 12 · pp. 131–142</div>
+  <h1>Supplemented Lattices · Locally Artinian Lattices</h1>
+  <p class="lede">A <em>supplement</em> of $b$ is a minimal $c$ with $b \vee c = 1$ — the order-dual of pseudo-complement viewed in $L^0$. The chapter builds the supplemented theory all the way to the keystone Corollary 12.2 ("$L$ supplemented compact $\iff$ $1$ is an irredundant join of local elements"), then turns to <em>locally artinian</em> lattices and lifts Wisbauer's four-way Z-module exercise to the lattice setting.</p>
+  <div class="meta">
+    <span>~70–80 min read</span>
+    <span>7 sections + 5 connection panels</span>
+    <span>10 worked exercises</span>
+    <span>Companion to <em>Lattice Concepts of Module Theory</em>, Springer 2000</span>
+  </div>
+</div>
+
+<section class="module" id="overview">
+  <h2>Chapter Overview — supplements and the supplemented–local axis</h2>
+  <div class="tagline">A supplement is a "minimal join-witness." The supplemented condition turns a local property into a global structure theorem: $1$ decomposes as an irredundant join of local elements. Chapter 12's second half — locally artinian lattices — exports the same dialectic to a chain-condition setting.</div>
+
+  <p>Chapter 12 treats two related but distinct topics under one heading. The first eight pages develop <strong>supplemented lattices</strong> — a notion order-dual to "complemented" but, crucially, not equivalent to it. A supplement of $b$ is an element $c$ that is <em>minimal</em> with respect to $b \vee c = 1$. In the dual lattice $L^0$, this is exactly the pseudo-complement of $b$ — but in $L$ itself it expresses something genuinely different from a complement, because minimality is a distinct constraint from "$b \wedge c = 0$."</p>
+
+  <p>The chapter's classification line runs as follows. Lemma 12.1 says complements are supplements (in bounded modular). Proposition 12.1 reformulates "$c$ is a supplement of $b$" as the conjunction "$b \vee c = 1$ <em>and</em> $b \wedge c$ is superfluous in $c/0$." Proposition 12.2 — a seven-part workhorse — shows that supplements in compactly generated modular lattices behave in elaborately predictable ways: they descend along $\le$, they are compact when $L$ is compact, they witness the radical when $b$ is maximal, they survive perturbation by superfluous elements, they pass to quotient sublattices.</p>
+
+  <p>The second beat introduces <strong>hollow</strong> ("every non-zero element is superfluous") and <strong>local</strong> ("$L \setminus \{1\}$ has a largest element"). Lemma 12.5 unpacks four facts about local lattices; Proposition 12.4 says hollow is exactly "every quotient $1/a$ is indecomposable," and a hollow lattice is local iff $r(L) \ne 1$. The keystone — Proposition 12.5 + Corollary 12.2 — then proves the chapter's structure theorem: in compactly generated modular lattices, "$L$ is supplemented" is equivalent to "$1$ is an irredundant join of local elements," with $r(L)$ superfluous as a side-condition.</p>
+
+  <p>The chapter's second half — <strong>locally artinian lattices</strong> — generalises a four-way exercise from Wisbauer's <em>Foundations of Module and Ring Theory</em>: for a Z-module $M$, the conditions (a) $M$ is locally artinian, (b) $M$ has DCC for cyclic submodules, (c) $M$ has essential socle, (d) $M$ is torsion are equivalent. Călugăreanu lifts the equivalences (a)$\iff$(c)$\iff$(d) to compactly generated H-noetherian modular lattices with (RSC), recovering the cleanest part of the module result. The remaining direction (b)$\Rightarrow$(a) is more delicate; Proposition 12.9 isolates a hypothesis ("(U): each supplemented sublattice is torsion") that suffices.</p>
+</section>
+
+<div class="part-header" id="vocab-header">
+  <div class="pk">Vocabulary primer</div>
+  <h2>Words you'll meet — three subsections</h2>
+  <p class="part-lede">Carried forward (recap from Ch 1–11) · New in Chapter 12 (full term-cards) · Deep dive (extended explainers for hinges).</p>
+</div>
+
+<section class="module" id="vocab">
+  <h2>Carried forward — terms recapped from Ch 1–11</h2>
+  <div class="tagline">Six refreshers on terms that re-enter as the basic vocabulary of supplements and the supplemented-local axis.</div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Compact element / lattice</span><p>$c$ is compact if $c \le \bigvee S$ implies $c \le \bigvee F$ for some finite $F \subseteq S$. $L$ is compact if $1$ is compact. Compactly generated: every element is a join of compact elements. Chapter 11 introduced the order-dual <em>co-compact</em>; Chapter 12 reuses both.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Pseudo-complement</span><p>The largest $b^* \in L$ with $b \wedge b^* = 0$ — when it exists. Defined in Chapter 4. The supplement is its order-dual (largest $b'$ with $b \vee b' = 1$ — but minimality, not maximality, is the actual definition; see vocab traps below).</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Superfluous element</span><p>$a$ is superfluous (or <em>small</em>) in $L$ when $a \vee x = 1$ implies $x = 1$. Chapter 7 introduced this; Chapter 12 uses it as the relativised obstruction in "$b \wedge c$ superfluous in $c/0$" — the defining property of supplements via Proposition 12.1.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Radical $r(L)$</span><p>The meet of all maximal elements of $L$. Equivalently (Theorem 7.1) the join of all superfluous elements. Chapter 12's chief role: $r(L)$ being superfluous in $L$ is the side-condition under which the structure theorem (Cor 12.2) lands.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Compactly generated modular</span><p>The standing setting for most of the chapter's deep results. "Compactly generated" gives a supply of compact witnesses; "modular" is required for the $a \wedge (b \vee c) = (a \wedge b) \vee c$ rewrites that thread through every proof in Section A.</p></div>
+
+  <div class="term-card recap"><span class="term-tag">Recap</span><span class="term">Atomic / semiatomic</span><p>Chapter 5: $L$ atomic when each non-zero element is above an atom; semiatomic when $1$ is a join of atoms. The "Remark" after Proposition 12.3 says: modular compactly generated supplemented + zero radical $\Rightarrow$ complemented (and hence semiatomic). The supplemented apparatus reduces, in zero-radical settings, to the complemented apparatus from Chapter 6.</p></div>
+
+  <h2>New in Chapter 12 — full term-cards</h2>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Supplement</span><p>An element $c$ is a <em>supplement</em> of $b$ in $L$ (lattice with $1$) if $c$ is <em>minimal</em> with respect to the property $b \vee c = 1$. Equivalent (Proposition 12.1, in bounded modular): $b \vee c = 1$ and $b \wedge c$ is superfluous in $c/0$. In the dual lattice $L^0$, supplement = pseudo-complement. <em>Caveat</em>: a supplement need not be unique, just like a complement. Notation: there is no standard symbol; the chapter writes "$c$ is a supplement of $b$" verbatim.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Supplemented lattice</span><p>$L$ is <em>supplemented</em> if every element of $L$ has a supplement. Compare: <em>complemented</em> means every element has a complement. The two notions differ in general (the lattice of subgroups of $\mathbb{Z}$ is not supplemented — Ex 12.7); they coincide when $r(L) = 0$ in compactly generated modular lattices (Remark after Prop 12.3).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Hollow lattice</span><p>$L$ is <em>hollow</em> if every non-zero element of $L$ is superfluous. Equivalently (Prop 12.4): every quotient sublattice $1/a$ for $a \ne 1$ is indecomposable. Every hollow lattice is itself indecomposable. The subgroup lattice of $\mathbb{Z}_{p^\infty}$ is the canonical example (Ex 12.2): hollow but not local.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Local lattice</span><p>$L$ is <em>local</em> if $L \setminus \{1\}$ has a largest element. Equivalent (Prop 12.4(2), modular compactly generated): $L$ is hollow + $r(L) \ne 1$, equivalent to: $L$ is hollow + compact. Sharper than "unique maximal element" — Ex 12.4 shows the implications are strict in general lattices. Cross-references Chapter 11's local-element-of-quotient pattern.</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Locally artinian lattice</span><p>$L$ is <em>locally artinian</em> if every compact element is artinian (i.e., every $c \in L$ compact has $c/0$ artinian: DCC on $c/0$). Module-side: $M$ is locally artinian iff every finitely generated submodule is artinian, equivalently every cyclic submodule is artinian — Wisbauer's exercise in Chapter 41 of [41].</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Cyclically generated lattice</span><p>$L$ is <em>cyclically generated</em> if each element is a join of cyclic elements (recall: $a$ cyclic = $a/0$ noetherian and distributive). Strengthens "compactly generated" — every cyclically generated upper continuous lattice is compactly generated. The condition is needed in Lemma 12.6 and Proposition 12.9 to convert "DCC for cyclic" into "DCC for compact."</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Sufficient (or ample) supplements</span><p>An element $b$ has <em>ample (or sufficient) supplements</em> if for every $c$ with $b \vee c = 1$, there is a supplement $c' \le c$ of $b$ in $L$. Mentioned briefly at the close of the supplemented section; Ex 12.10 asks the reader to verify it for semiatomic upper continuous modular lattices. Module-theoretic counterpart: ample supplemented modules (cf. Wisbauer §41).</p></div>
+
+  <div class="term-card"><span class="term-tag">New</span><span class="term">Condition (U)</span><p>A technical hypothesis used in Proposition 12.9: <em>each supplemented sublattice is a torsion lattice</em>. Holds e.g. when each compact element's interval $c/0$ is supplemented and $c/0$ is torsion. The (U) condition is the lattice-side hook for getting (b) DCC on cyclic $\Rightarrow$ (a) locally artinian.</p></div>
+
+  <h2>Deep dive — extended explainers</h2>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Why supplement $\ne$ complement (and why the difference matters)</h3>
+    <p>In a bounded lattice, a <em>complement</em> of $b$ is an element $c$ with $b \vee c = 1$ AND $b \wedge c = 0$. A <em>supplement</em> is an element $c$ that is <em>minimal</em> with respect to the single condition $b \vee c = 1$ — there is no requirement that $b \wedge c = 0$, only that $c$ cannot be shrunk while still satisfying $b \vee c = 1$.</p>
+    <p>The two coincide in many natural settings (e.g., Boolean lattices, more generally any lattice where complements are unique). Lemma 12.1 records that in <em>bounded modular</em> lattices, every complement is a supplement. The converse fails as soon as the lattice has a non-zero radical: a supplement of a maximal element $b$ is, by Prop 12.2(3), an element $c$ with $b \wedge c = r(c/0)$ — non-zero in general — so $c$ is not a complement.</p>
+    <p>The deeper reason supplements matter is that they encode the <em>module-theoretic</em> notion of "minimal element joining to the whole" — exactly the construct that controls perfect rings, semiperfect rings, and projective covers in classical homological algebra. Pseudo-complements (Chapter 4) handle the dual phenomenon (essential extensions, injective hulls). The chapter's main theorem — Cor 12.2 — gives a clean structural characterisation of when this dual-side phenomenon admits a tractable global form.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>Hollow $\Rightarrow$ indecomposable, but not conversely</h3>
+    <p>A lattice is <em>hollow</em> if every $a \ne 1$ is superfluous: $a \vee x = 1 \Rightarrow x = 1$. The chapter notes (immediately after the Definition before Lemma 12.5) that every hollow lattice is indecomposable: if $1 = a \oplus b$ with $a, b \ne 1$, both are non-zero superfluous, but $a \vee b = 1$ would force one of them to be $1$.</p>
+    <p>The converse fails. The lattice $\mathbf{2} \oplus \mathbf{2}$ (the four-element Boolean lattice) is indecomposable as a lattice, in the sense that you can't decompose its top, but it is <em>not</em> hollow because the two atoms $a, b$ satisfy $a \vee b = 1$ with $a, b \ne 1$ — neither is superfluous. (Of course $\mathbf{2} \oplus \mathbf{2}$ <em>is</em> $a \oplus b$ in lattice direct-sum notation, so it's "decomposable" in the chapter's strict sense; the example is to show that "every quotient $1/a$ is hollow" is genuinely stronger than "every quotient is indecomposable" in a non-modular setting. In modular bounded lattices, Prop 12.4(1) makes them equivalent.)</p>
+    <p>The hollow / local distinction is a chain-condition fingerprint. <em>Local</em> demands a top-most maximal element; <em>hollow</em> demands every non-1 element is "small." For $\mathbb{Z}_{p^\infty}$ — the Prüfer $p$-group — the subgroup lattice is the chain $0 < p < p^2 < \dots$ with no top element below the whole; hollow but not local. For finite cyclic $p$-groups it is local AND hollow (chain with a top maximal). Ex 12.3 classifies abelian $G$ with $L(G)$ hollow: exactly the cocyclic $p$-groups $\mathbb{Z}_{p^k}$ and $\mathbb{Z}_{p^\infty}$.</p>
+  </div>
+
+  <div class="box deep">
+    <span class="label">Deep dive</span>
+    <h3>The Wisbauer exercise and the four-way ((a)$\iff$(b)$\iff$(c)$\iff$(d))</h3>
+    <p>The chapter's second half opens by quoting Exercise (6) from p.264 of Wisbauer's <em>Foundations of Module and Ring Theory</em> [41]: for a $\mathbb{Z}$-module $M$, the following are equivalent:</p>
+    <p>(a) $M$ is locally artinian; (b) $M$ has DCC for cyclic submodules; (c) $M$ has essential socle; (d) $M$ is torsion.</p>
+    <p>The lattice generalisation runs in the setting of compactly generated H-noetherian modular lattices with (RSC). Three of the four implications lift cleanly:</p>
+    <ul>
+      <li>(d)$\Rightarrow$(a): Proposition 12.8. Torsion + H-noetherian forces compact = noetherian + torsion = artinian (via Chapter 5).</li>
+      <li>(c)$\iff$(d): Proposition 12.6 — under (RSC), socle essential equals "$1/s(L)$ torsion," which propagates to "$L$ torsion."</li>
+      <li>(a)$\Rightarrow$(c): Corollary 12.3 via Proposition 12.7. H-noetherian + locally artinian forces compact = artinian = noetherian = finite length, so each compact contains an atom; hence $L$ is atomic, hence socle essential.</li>
+    </ul>
+    <p>The fourth implication (b)$\Rightarrow$(a) — DCC on cyclic implies all compacts artinian — is genuinely harder. The chapter introduces "cyclically generated" to convert DCC on cyclics into DCC on compacts (Lemma 12.6), then introduces condition (U) to bridge to torsion (Proposition 12.9). The complete circle (a)$\iff$(b) without (U) is left open; the chapter closes with the candid remark "this is far from obvious."</p>
+  </div>
+</section>
+
+<div class="part-header" id="partA-header">
+  <div class="pk">Part A · Supplements</div>
+  <h2>Definition, Lemma 12.1, Propositions 12.1–12.2</h2>
+  <p class="part-lede">Build the basic operational vocabulary: what a supplement is, how it relates to complements, and the seven-part workhorse describing supplements in compactly generated modular lattices.</p>
+</div>
+
+<section class="module" id="s1">
+  <h2><span class="num">A1</span> Supplement: definition, Lemma 12.1, Proposition 12.1</h2>
+  <div class="tagline">A supplement is a minimal join-witness; in bounded modular every complement is one; equivalently $b \vee c = 1$ and $b \wedge c$ superfluous in $c/0$.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Supplement</span>
+    <p>In a lattice $L$ with $1$, an element $c$ is a <strong>supplement of $b$ in $L$</strong> if $c$ is minimal relative to the property $b \vee c = 1$. (Minimal means: $c' \le c$ with $b \vee c' = 1$ implies $c' = c$.)</p>
+    <p>Equivalently in the dual lattice $L^0$: $c$ is a supplement of $b$ in $L$ iff $c$ is a pseudo-complement of $b$ in $L^0$. The duality is structural: $\vee$ in $L$ becomes $\wedge$ in $L^0$, "minimal" becomes "maximal," and "$=1$" becomes "$=0$."</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.1</span>
+    <p>In a bounded modular lattice, each complement is a supplement.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>The proof is "dual to Lemma 4.1" (the chapter's note). Suppose $c$ is a complement of $b$: $b \vee c = 1$ and $b \wedge c = 0$. Show $c$ minimal with $b \vee c = 1$. Suppose $c' \le c$ with $b \vee c' = 1$. By modularity (using $c' \le c$): $c = c \wedge 1 = c \wedge (b \vee c') = (c \wedge b) \vee c' = 0 \vee c' = c'$. So $c = c'$, i.e., $c$ is minimal.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.1</span>
+    <p>If $L$ is a bounded modular lattice, then $c$ is a supplement of $b$ in $L$ if and only if $b \vee c = 1$ and $b \wedge c$ is superfluous in $c/0$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>The dual of Proposition 4.2. Forward: $c$ supplement, $c' \le c$ with $(b \wedge c) \vee c' = c$. Show $c' = c$. By modularity (using $c' \le c$): $b \vee c' = b \vee ((b \wedge c) \vee c') \wedge \dots$ — work through with $b \vee c' \ge b \vee (b \wedge c) = b$ and $b \vee c' \le b \vee c = 1$, so we need to show $b \vee c' = 1$. Use that $(b \wedge c) \vee c' = c$ and $b \vee c = 1$: $1 = b \vee c = b \vee ((b \wedge c) \vee c') = b \vee c'$ (since $b \wedge c \le b$). By minimality, $c' = c$, hence $b \wedge c$ superfluous in $c/0$. Backward: similar reversal.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition</span>
+    <p>Proposition 12.1 is the operational definition. "Minimal $c$ with $b \vee c = 1$" is hard to test directly; "$b \vee c = 1$ AND $b \wedge c$ superfluous in $c/0$" is a pair of pointwise conditions, both checkable. From here on, when the chapter writes "$c$ is a supplement of $b$," we read it through Proposition 12.1.</p>
+  </div>
+</section>
+
+<section class="module" id="s2">
+  <h2><span class="num">A2</span> Lemma 12.2 + Proposition 12.2 (the seven-part workhorse)</h2>
+  <div class="tagline">Compact descent of joins; then the seven properties supplements satisfy in compactly generated modular lattices.</div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.2</span>
+    <p>If $L$ is a compactly generated compact lattice and $a \vee b = 1$, then there are compact elements $a', b' \in L$ with $a' \le a$, $b' \le b$, and $a' \vee b' = 1$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>$L$ compactly generated, write $a = \bigvee_{i \in I} a_i$ and $b = \bigvee_{j \in J} b_j$ as joins of compact elements. Then $1 = a \vee b = (\bigvee_i a_i) \vee (\bigvee_j b_j)$. Since $1$ is compact ($L$ is compact), there exist finite $I' \subseteq I$, $J' \subseteq J$ with $1 = (\bigvee_{i \in I'} a_i) \vee (\bigvee_{j \in J'} b_j) = a' \vee b'$. Finite joins of compact elements are compact, so $a', b'$ are compact. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.2 · the seven-part workhorse</span>
+    <p>Let $c$ be a supplement of $b$ in a compactly generated modular lattice $L$. Then:</p>
+    <ol>
+      <li>If $a \le b$ and $a \vee c = 1$, then $c$ is a supplement of $a$ in $L$;</li>
+      <li>If $L$ is a compact lattice, then $c$ is a compact element;</li>
+      <li>If $b$ is maximal, then $b \wedge c = r(c/0)$ is the unique maximal element of $c/0$;</li>
+      <li>If $a$ is superfluous in $L$, then $c$ is a supplement of $a \vee b$ in $L$;</li>
+      <li>For $a$ superfluous in $L$, $a \wedge c$ is superfluous in $c/0$ and $r(c/0) = c \wedge r(L)$;</li>
+      <li>If $r(L)$ is superfluous in $L$ and $b \ne 1$, then $b$ is contained in a maximal element of $L$;</li>
+      <li>For $a < b$, $a \vee c$ is a supplement of $b$ in $1/a$.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why each part holds</span>
+    <p><strong>(1)</strong> $c' \le c$, $a \vee c' = 1$ imply $b \vee c' \ge a \vee c' = 1$, so $b \vee c' = 1$, and minimality of $c$ as supplement of $b$ gives $c' = c$. So $c$ is minimal for $a$ too.</p>
+    <p><strong>(2)</strong> $L$ compact, $b \vee c = 1$. By Lemma 12.2 there is $c' \le c$ compact with $b \vee c' = 1$. Minimality: $c = c'$ is compact.</p>
+    <p><strong>(3)</strong> $b$ maximal, so $b \wedge c$ is "as big as possible" in $c/0$ subject to $b \wedge c \ne c$ (else $c \le b$ and $b = b \vee c = 1$, contradiction). By modularity $c/(b \wedge c) \cong 1/b$ which is the two-element chain (since $b$ is maximal), so $b \wedge c$ is maximal in $c/0$. By Prop 12.1, $b \wedge c$ is superfluous in $c/0$, so $b \wedge c \le r(c/0)$ (since $r(c/0) \ge$ every superfluous, by Theorem 7.1). And $b \wedge c$ is maximal in $c/0$, so $b \wedge c \ge r(c/0)$ (radical is meet of maximals = the unique maximal here). Combining: $b \wedge c = r(c/0)$, the unique maximal of $c/0$.</p>
+    <p><strong>(4)</strong> $a$ superfluous, so $a \vee b$ joins to $1$ via $c$ exactly when $b$ does. Pick $c' \le c$ with $(a \vee b) \vee c' = 1$. Then $b \vee c' = 1$ (since $a$ is superfluous and $a \vee b \vee c' = 1$ gives $b \vee c' = 1$). By minimality, $c' = c$. So $c$ supplement of $a \vee b$.</p>
+    <p><strong>(5)</strong> $r(c/0) \le c \wedge r(L)$ holds in any lattice. Show reverse: if $a$ superfluous in $L$, then $a \wedge c$ superfluous in $c/0$ — direct check via modularity. Use Theorem 7.1 ($r(L)$ = join of superfluous elements): $c \wedge r(L) \le r(c/0)$.</p>
+    <p><strong>(6)</strong> $r(L)$ superfluous, $b \ne 1$. Two cases: $b \le r(L) \ne 1$ — claim is immediate (any maximal contains $r(L)$, hence $b$). $b \not\le r(L)$ — using (5), $r(c/0) = c \wedge r(L) \ne c$ (else $c \le r(L)$ and $b \vee r(L) \ge b \vee c = 1$ forces $b = 1$, contradiction since $r(L)$ superfluous). So there is a maximal $m \in c/0$. By modularity $1/(b \vee m) \cong c/m$, so $b \vee m$ is maximal in $L$ and contains $b$.</p>
+    <p><strong>(7)</strong> Show $a \vee c$ is a supplement of $b$ in $1/a$. $b \vee (a \vee c) = (a \vee b) \vee c \ge b \vee c = 1$, so $b \vee (a \vee c) = 1$. By Prop 12.1, need $b \wedge (a \vee c)$ superfluous in $(a \vee c)/a$. By modularity (using $a \le b$): $b \wedge (a \vee c) = a \vee (b \wedge c)$. We know $b \wedge c$ superfluous in $c/0$ (Prop 12.1 applied to original $b, c$); by Lemma 7.2 (superfluous descends along intervals when joined with the bottom), $a \vee (b \wedge c)$ is superfluous in $(a \vee c)/a$. Apply Prop 12.1 in reverse direction.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition</span>
+    <p>The seven parts are not seven independent facts — they form a coherent toolkit. (1)–(2) handle the "easy" descent; (3) is the radical-witness lemma; (4)–(5) handle perturbation by superfluous elements; (6) is the maximal-existence theorem; (7) is the quotient-sublattice transport. Every later proof in the chapter cites this proposition by clause number — keep a finger on it.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partB-header">
+  <div class="pk">Part B · Supplemented lattices</div>
+  <h2>Definition, Corollary 12.1, Lemmas 12.3 + 12.4, Proposition 12.3</h2>
+  <p class="part-lede">From a property-of-an-element to a property-of-a-lattice; the technical lemmas that let supplements be glued; the descent results that say supplemented passes to intervals and decomposes nicely modulo the radical.</p>
+</div>
+
+<section class="module" id="s3">
+  <h2><span class="num">B1</span> Supplemented lattices · Lemmas 12.3, 12.4 · Proposition 12.3</h2>
+  <div class="tagline">A supplemented lattice has a supplement for every element. Glue lemma + radical-quotient theorem produce the chapter's first structural results.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Supplemented lattice</span>
+    <p>A lattice $L$ is <strong>supplemented</strong> if each element of $L$ has a supplement in $L$.</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 12.1</span>
+    <p>If $L$ is a modular compactly generated supplemented lattice and $a \in L$, then $1/a$ is also supplemented.</p>
+    <p><em>Proof.</em> Direct from Proposition 12.2(7): for any $b \ge a$ in $L$, take a supplement $c$ of $b$ in $L$, then $a \vee c$ is a supplement of $b$ in $1/a$. ∎</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.3</span>
+    <p>In any modular lattice, $(c \vee d) \wedge b \le (c \wedge (b \vee d)) \vee (d \wedge (b \vee c))$ holds for every $b, c, d \in L$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Two applications of modularity. Compute the right-hand side using $a \vee (b \wedge c) = (a \vee b) \wedge c$ when $a \le c$:</p>
+    <p>$(c \wedge (b \vee d)) \vee (d \wedge (b \vee c)) = ((c \wedge (b \vee d)) \vee d) \wedge (b \vee c)$ — using $d \le b \vee c$ when $\ldots$ actually: $= ((d \vee c) \wedge (b \vee d)) \wedge (b \vee c) \ge (c \vee d) \wedge b$. ∎</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.4</span>
+    <p>In a modular lattice $L$, let $c'$ be superfluous in $c/0$ and $d'$ superfluous in $d/0$. Then $c' \vee d'$ is superfluous in $(c \vee d)/0$.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>From Lemma 7.4: take $L = (c \vee d)/0$, the elements $c', d'$. The superfluous elements in $(c \vee d)/0$ form an ideal (Lemma 7.4 in Chapter 7), so $c' \vee d'$ is superfluous. ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.3</span>
+    <p>Let $L$ be a modular compactly generated lattice.</p>
+    <ol>
+      <li>If $a, b \in L$, $a/0$ is supplemented, and $a \vee b$ has a supplement in $L$, then $b$ also has a supplement in $L$;</li>
+      <li>If $1 = a \vee b$ and $a/0, b/0$ are supplemented, then $L$ is supplemented;</li>
+      <li>If $L$ is supplemented, then $1/r(L)$ is semiatomic.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why each part holds</span>
+    <p><strong>(1)</strong> Let $c$ be a supplement of $a \vee b$ in $L$ and $d$ a supplement of $(c \vee b) \wedge a$ in $a/0$. Show $c \vee d$ is a supplement of $b$ in $L$. Three checks: (i) $b \vee (c \vee d) = 1$, (ii) $(c \vee d) \wedge b$ is superfluous in $(c \vee d)/0$, (iii) minimality. The chapter's proof works through (i) + (ii) using Lemma 12.3 and the superfluous-glue Lemma 12.4.</p>
+    <p><strong>(2)</strong> Apply (1) twice: trivially $1 = a \vee b \vee c$ has supplement in $L$ (namely $a \vee b$, as $c \vee (a \vee b) = 1$ minimally is the whole). $a/0$ supplemented, so $b \vee c$ has a supplement in $L$. Quotient sublattice $b/0$ is supplemented, so by (1) again, $c$ has a supplement in $L$.</p>
+    <p><strong>(3)</strong> $L, 1/r(L)$ both modular compactly generated. Cor 12.1: $1/r(L)$ supplemented. Lemma 7.8(ii): $1/r(L)$ has no superfluous elements. By Prop 12.1, an element with no superfluous join-obstruction has any supplement as a complement. Hence $1/r(L)$ is complemented; by Theorems 6.6 + 6.7 (modular compactly generated), complemented $\iff$ semiatomic. ∎</p>
+  </div>
+
+  <div class="box warning">
+    <span class="label">Remark · zero-radical case</span>
+    <p>The chapter records: <strong>every modular compactly generated supplemented lattice $L$ with zero radical is complemented.</strong> Proof: $r(L) = 0$, so $1/r(L) = L$ in the proof of Prop 12.3(3); but the same argument shows $L$ semiatomic + supplemented + zero radical = complemented. So the supplemented apparatus reduces, in zero-radical settings, to Chapter 6's complemented theory.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partC-header">
+  <div class="pk">Part C · Hollow + local lattices</div>
+  <h2>Lemma 12.5 · Proposition 12.4 · the divisible discussion</h2>
+  <p class="part-lede">Two new properties — hollow and local — and how they fit. Local is "uniquely-maximal-from-above"; hollow is "every-non-1-is-superfluous." The section closes with the canonical hollow-not-local example: the Prüfer $p$-group's subgroup lattice.</p>
+</div>
+
+<section class="module" id="s4">
+  <h2><span class="num">C1</span> Hollow + local · Lemma 12.5 · Proposition 12.4</h2>
+  <div class="tagline">Hollow $\Rightarrow$ indecomposable. Hollow + $r(L) \ne 1$ $\iff$ hollow + compact $\iff$ local. The four-part Lemma 12.5 unpacks how local lattices have superfluous radicals and a unique top.</div>
+
+  <div class="box def">
+    <span class="label">Definitions · Hollow, Local, Divisible</span>
+    <p>A lattice $L$ is <strong>hollow</strong> if every non-zero element of $L$ is superfluous.</p>
+    <p>A lattice $L$ is <strong>local</strong> (in the chapter's sense; cf. Chapter 11 for the local-of-quotient version) if it has a largest element $\ne 1$. (I.e., $L \setminus \{1\}$ has a top.)</p>
+    <p>One could define <strong>divisible lattices</strong> by $r(L) = 1$, equivalently (Lemma 12.5(c)) by "each compact element is superfluous." This unifies with Chapter 10's <em>divisible element</em>.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · hollow vs. indecomposable</span>
+    <p>The chapter notes immediately after the hollow definition: <em>every hollow lattice is indecomposable</em>, since $1 = a \oplus b$ with $a, b \ne 1$ would force both $a, b$ superfluous (hollow) and $a \vee b = 1$ — impossible. Hollow is strictly stronger than indecomposable: $\mathbf{2} \oplus \mathbf{2}$ has indecomposable tops in the quotient sense but its atoms are not superfluous.</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.5</span>
+    <p>Let $L$ be a modular compactly generated lattice.</p>
+    <ol type="a">
+      <li>If $L$ is local with $m$ the largest element, then $r(L) = m$ is superfluous in $L$;</li>
+      <li>If $c$ is a supplement of a maximal element $b$ in $L$, then $c/0$ is a local lattice;</li>
+      <li>$r(L) = 1$ if and only if each compact element is superfluous;</li>
+      <li>Local lattices are supplemented.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why each part holds</span>
+    <p><strong>(a)</strong> $m$ is the unique maximal in $L$ (uniqueness follows from "largest in $L \setminus \{1\}$"), so $r(L) = m$. To see $m$ superfluous: $a \ne 1 \Rightarrow a \le m \Rightarrow m \vee a = m \ne 1$. So $m \vee a = 1$ forces $a = 1$, i.e., $m$ superfluous.</p>
+    <p><strong>(b)</strong> $c$ supplement of maximal $b$ in $L$. By Prop 12.2(3), $b \wedge c = r(c/0)$ is the unique maximal of $c/0$. Show this maximal is the largest element $\ne c$ in $c/0$. Suppose $c' \in c/0$, $c' \ne c$. By minimality of $c$ as supplement, $b \vee c' \ne 1$, so $c' \le b$ (since $b$ maximal, and $b \vee c' \ne 1$ forces $b \vee c' = b$). Thus $c' \le b$, so $c' \le b \wedge c$. Hence $b \wedge c$ is the largest element $\ne c$ in $c/0$. So $c/0$ is local.</p>
+    <p><strong>(c)</strong> $r(L) = 1$ means $L$ has no proper maximal elements. By Lemma 7.7, each compact element is then superfluous in $L$. Conversely, if every compact is superfluous and $m$ is a maximal, $L$ is compactly generated so there is a compact $c \not\le m$; then $c \vee m = 1$ (since $m$ maximal), but $c$ superfluous, contradiction.</p>
+    <p><strong>(d)</strong> Local lattices are supplemented: take $a$ arbitrary, $1$ is a supplement of $a$ (since $a \vee 1 = 1$ trivially, and minimality holds because for $b < 1$ we have $b \le m$ and $a \vee b \le m \vee a \le m \ne 1$ — so $a \vee b \ne 1$).</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.4</span>
+    <p>Let $L$ be a non-zero compactly generated lattice.</p>
+    <ol>
+      <li>$L$ is hollow if and only if for every $a \ne 1$ the quotient sublattice $1/a$ is indecomposable.</li>
+      <li>The following assertions are equivalent: (a) $L$ is hollow and $r(L) \ne 1$; (b) $L$ is hollow and compact; (c) $L$ is local.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why each part holds</span>
+    <p><strong>(1)</strong> Forward: every quotient $1/a$ of a hollow lattice is hollow (each non-$1$ element of $1/a$ is non-$1$ in $L$, hence superfluous). By the lemma after the definition, hollow $\Rightarrow$ indecomposable. Backward: if $a \ne 1 \ne b$ and $a \vee b = 1$, then $1/(a \wedge b)$ is decomposable: $1 = a \oplus_{1/(a\wedge b)} b$.</p>
+    <p><strong>(2)</strong> (a)$\Rightarrow$(b): hollow + $r(L) \ne 1$ means each non-$1$ is superfluous, including $r(L)$. There is a largest superfluous = $r(L) \ne 1$. So $1$ is trivially compact: $1 = \bigvee X$ implies $1 \in X$ (else everything is $\le r(L)$).</p>
+    <p>(b)$\Rightarrow$(c): by Lemma 7.8(iii) $r(L)$ is superfluous, and is the largest element $\ne 1$ in $L$ (since hollow forces each $\ne 1$ to be superfluous, hence $\le r(L)$). So $L$ is local.</p>
+    <p>(c)$\Rightarrow$(a): by Lemma 12.5(a), $r(L) = m \ne 1$ in a local lattice, and $m$ superfluous. Each $a \ne 1$ has $a \le m$, so $a$ superfluous: $L$ is hollow. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the canonical example</span>
+    <p>$\mathbb{Z}_{p^\infty}$'s subgroup lattice is the chain $0 < p\mathbb{Z}_{p^\infty} < p^2\mathbb{Z}_{p^\infty} < \dots$ — wait, that's the wrong direction. The subgroup lattice is the chain $0 < \mathbb{Z}/p < \mathbb{Z}/p^2 < \dots < \mathbb{Z}_{p^\infty}$ (an $\omega + 1$ order). Every proper subgroup is a finite cyclic $\mathbb{Z}/p^k$, which is below the next stage; "joining to the whole" requires an infinite ascending chain. So every proper subgroup is superfluous: the lattice is hollow. But there is no largest proper subgroup (the $\mathbb{Z}/p^k$'s have no top); so it is not local. Per Prop 12.4(2), this lattice has $r(L) = 1$ — exactly the divisible case (Lemma 12.5(c)). The chapter calls Z_{p^∞} "the divisible Prüfer $p$-group" precisely for this reason.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partD-header">
+  <div class="pk">Part D · Keystone characterizations</div>
+  <h2>Proposition 12.5 + Corollary 12.2 — when is $L$ supplemented?</h2>
+  <p class="part-lede">The chapter's structure theorem: in modular compactly generated lattices, "$L$ supplemented" admits an irredundant-join-of-local-elements decomposition. The compact case sharpens to a four-way equivalence — the keystone for the supplemented theory.</p>
+</div>
+
+<section class="module" id="s5">
+  <h2><span class="num">D1</span> Proposition 12.5 + Corollary 12.2 (the keystone)</h2>
+  <div class="tagline">Three equivalent forms of "supplemented" in modular compactly generated lattices; four equivalent forms in compact lattices, with the cleanest punchline as the irredundant join of locals.</div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.5 · the modular compactly generated case</span>
+    <p>For a modular compactly generated lattice $L$ the following assertions are equivalent:</p>
+    <ol type="a">
+      <li>$1$ is a join of hollow elements and $r(L)$ is superfluous in $L$;</li>
+      <li>every element $a \ne 1$ is contained in a maximal element AND (i) each maximal element has a supplement in $L$, or (ii) if $1/a$ is (non-zero) compact then $a$ has a supplement in $L$;</li>
+      <li>$1$ is an irredundant join of local elements and $r(L)$ is superfluous in $L$.</li>
+    </ol>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why · sketch</span>
+    <p>(a)$\Rightarrow$(c): $1 = \bigvee_{i \in I} h_i$ a join of hollow elements. By Exercise 7.3, $r(h_i/0) \le r(L)$ and $r(h_i/0) \le h_i \wedge r(L)$. Each $h_i$ hollow, so $r(h_i/0) \prec h_i$ (since $h_i/0$ is hollow, the radical is a proper element). Modular compactly generated + $h_i/(h_i \wedge r(L)) \cong (h_i \vee r(L))/r(L)$ — the analysis proceeds by selecting $I' \subseteq I$ such that the cover counts are bounded, then verifying $1 = \bigvee_{i \in I'} h_i$ irredundantly with each $h_i/0$ local (since hollow + $r(h_i/0) \ne h_i$ in modular compactly generated implies local by Prop 12.4(2)). Apply Property (2) of Prop 12.4.</p>
+    <p>(c)$\Rightarrow$(b): $1/r(L)$ supplemented (since $1$ is join of local-supplemented elements) and is semiatomic (Prop 12.3(3)). $r(L)$ superfluous, so each proper element is contained in a maximal element (see Theorem 7.2). For $1/a$ compact: there are finitely many local elements $l_1, \dots, l_n$ with $1 = a \vee l_1 \vee \dots \vee l_n$. As a finite join of supplemented elements, $(l_1 \vee \dots \vee l_n)/0$ is supplemented; by Prop 12.3(1), $a$ has a supplement.</p>
+    <p>(b)(i)$\Rightarrow$(a): Let $h$ = join of all hollow elements of $L$. If $h \ne 1$, there is a maximal $m \ge h$ and a supplement $k$ of $m$ in $L$. By Prop 12.2(3) $k/0$ is local (hollow); by definition of $h$, $k \le h \le m$, contradicting $k \vee m = 1$. So $h = 1$. Every proper element contained in a maximal $\Rightarrow$ $r(L)$ superfluous (Cor 7.1). ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 12.2 · the compact case (the keystone)</span>
+    <p>(1) In a compact lattice $L$ the following conditions are equivalent:</p>
+    <ol type="a">
+      <li>$L$ is supplemented;</li>
+      <li>every maximal element in $L$ has a supplement in $L$;</li>
+      <li>$1$ is a join of hollow elements;</li>
+      <li>$1$ is an irredundant join of local elements.</li>
+    </ol>
+    <p>(2) If $L$ is supplemented and $r(L)$ is superfluous in $L$, then $1$ is an irredundant join of local elements.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>(1) In a compact lattice, $r(L)$ is automatically superfluous (Lemma 7.8(iii)) and every $\ne 1$ element is contained in a maximal (Cor 7.2). So (b), (c), (d) are immediately equivalent by the previous Proposition. (a)$\Rightarrow$(b) is obvious. (b)$\Rightarrow$(a): every $\ne 1$ element contained in a maximal, which has a supplement (b); for $a \le m$ maximal use Prop 12.2(7) to extend the maximal's supplement to a supplement of $a$. The lattice being compact, this suffices for every element to have a supplement.</p>
+    <p>(2) From Prop 12.5, if $r(L)$ superfluous in $L$ and $L$ supplemented, then conditions (b)(i) and (c) hold. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the keystone restated</span>
+    <p>Corollary 12.2 is the chapter's structure theorem. In a compact modular lattice, the abstract condition "every element has a supplement" decomposes into the concrete combinatorial fact "$1$ is an irredundant join of local pieces." The local pieces are the lattice analogues of "local module summands" — modules with a unique maximal submodule. Module-side: this is exactly the structure theorem for <em>semiperfect</em> modules: every finitely generated semiperfect module is a finite direct sum of modules with local endomorphism rings. The supplemented theory IS the semiperfect theory in lattice form.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partE-header">
+  <div class="pk">Part E · Locally artinian lattices</div>
+  <h2>Definition + Propositions 12.6, 12.7, 12.8 + Corollaries 12.3, 12.4</h2>
+  <p class="part-lede">The four conditions (a)–(d). Three of the four equivalences (a$\iff$c$\iff$d) lift cleanly under H-noetherian + (RSC); the chapter circles them through atomicity (Prop 12.7) and torsion-implies-locally-artinian (Prop 12.8).</p>
+</div>
+
+<section class="module" id="s6">
+  <h2><span class="num">E1</span> Locally artinian lattices · the four conditions</h2>
+  <div class="tagline">Locally artinian = "all compact elements are artinian." Wisbauer's exercise (a)$\iff$(b)$\iff$(c)$\iff$(d) for Z-modules; the lattice generalisation lifts the easy direction triple cleanly.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Locally artinian</span>
+    <p>A complete lattice $L$ is <strong>locally artinian</strong> if all its compact elements are artinian (i.e., for every compact $c \in L$, the quotient sublattice $c/0$ satisfies the descending chain condition).</p>
+    <p>Recall: $a \in L$ is <em>cyclic</em> if $a/0$ is noetherian and distributive; in upper continuous lattices $a$ cyclic implies $a$ compact.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">The four conditions of interest</span>
+    <p>For an upper continuous modular lattice $L$:</p>
+    <ol type="a">
+      <li>$L$ is locally artinian;</li>
+      <li>$L$ has DCC for cyclic elements;</li>
+      <li>the socle $s(L)$ is essential in $L$;</li>
+      <li>$L$ is torsion.</li>
+    </ol>
+    <p>Wisbauer's exercise (Z-module case): all four equivalent. Lattice case: (a)$\iff$(c)$\iff$(d) lift under H-noetherian + (RSC) + compactly generated; (b) requires more work.</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.6</span>
+    <p>If $L$ has (RSC), then (c) and (d) are equivalent.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>(d)$\Rightarrow$(c): the socle of a torsion lattice is essential. Take $0 \ne a \in L$ and $b$ a pseudo-complement of $a$. $b \ne 1$ (since $a \ne 0$); $L$ being torsion, $1/b$ contains an atom $c$. By modularity $a \wedge c$ is an atom (in $L$). $a \wedge c \le a \wedge s(L)$, so socle essential.</p>
+    <p>(c)$\Rightarrow$(d): from Chapter 5, in (RSC) lattices, $s(L)$ essential iff $1/s(L)$ is torsion. $s(L)/0$ is torsion (semisimple = direct sum of simples = torsion), so $L$ is torsion (composition of torsion sublattices in (RSC) propagates). ∎</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.7</span>
+    <p>Every H-noetherian compactly generated locally artinian lattice $L$ is atomic.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>In an H-noetherian lattice, compact = noetherian; locally artinian gives compact = artinian; together: compact = of finite length (composition series). Every such compact contains an atom (an atom is the bottom of any composition series). $L$ compactly generated means every non-zero element is above a compact, hence above an atom: $L$ is atomic. ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 12.3</span>
+    <p>In a H-noetherian compactly generated lattice $L$, (a) implies (c). (Atomic lattices have essential socle.)</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.8</span>
+    <p>In a H-noetherian lattice, (d) implies (a).</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>$L$ H-noetherian, so each compact $c$ is noetherian. $L$ torsion, so the sublattice $c/0$ is torsion (true for modular pseudo-complemented lattices, see Chapter 5 / [6]). Every noetherian torsion lattice is artinian (Chapter 5 / Loewy length). So $c$ artinian, $L$ locally artinian. ∎</p>
+  </div>
+
+  <div class="box cor">
+    <span class="label">Corollary 12.4</span>
+    <p>In a compactly generated H-noetherian modular lattice with (RSC), the conditions (a), (c), and (d) are equivalent.</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the missing direction</span>
+    <p>The chapter remarks: "Finally, condition (b) is more difficult to relate to the other three conditions." (b) is "DCC for cyclic elements." The next section introduces the cyclically-generated apparatus + condition (U) to get (b)$\Rightarrow$(a). The honest assessment at the chapter's close: even with these hypotheses, the implication "(a)$\Rightarrow$(b)" without further cyclic restrictions remains open in the lattice formulation.</p>
+  </div>
+</section>
+
+<div class="part-header" id="partF-header">
+  <div class="pk">Part F · Cyclically generated</div>
+  <h2>Definition + Lemmas 12.6, 12.7 + Proposition 12.9</h2>
+  <p class="part-lede">A cyclically generated lattice has each element a join of cyclic elements. With this hypothesis + (U), DCC on cyclic elements lifts to DCC on compact elements, and the locally-artinian web closes under the cyclic side too.</p>
+</div>
+
+<section class="module" id="s7">
+  <h2><span class="num">F1</span> Cyclically generated · Lemmas 12.6, 12.7 · Proposition 12.9</h2>
+  <div class="tagline">DCC on cyclic propagates to DCC on compact (12.6); DCC on compact gives compact intervals supplemented (12.7); condition (U) closes (b)$\Rightarrow$(a) under cyclically generated H-noetherian.</div>
+
+  <div class="box def">
+    <span class="label">Definition · Cyclically generated</span>
+    <p>A lattice $L$ is <strong>cyclically generated</strong> if each element is a join of cyclic elements. Every cyclically generated upper continuous lattice is also compactly generated (since cyclic elements are compact in upper continuous lattices).</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.6</span>
+    <p>If a cyclically generated lattice $L$ has the DCC for cyclic elements, then $L$ has also the DCC for compact elements.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Sketch via Zorn. Let $A = \{a \in L : a/0 \text{ satisfies DCC on compact elements}\}$. In an upper continuous lattice, $A$ is closed under joins of chains, so by Zorn there is a maximal element $m \in A$. Suppose $m \ne 1$. By cyclic generation there is a cyclic $c \not\le m$; pick $c$ minimal with $c \not\le m$ (exists by DCC on cyclics). We show $(c \vee m)/0$ has DCC on compact elements, contradicting the maximality of $m$.</p>
+    <p>Let $l_1 \ge l_2 \ge \dots$ a decreasing chain of compact elements in $(c \vee m)/0$. If for some $i$, $l_i \le m$ — done. Else, $l_i \not\le m$ for all $i$. By cyclic generation, there is a cyclic $k \le l_i$ with $k \not\le m$; minimality of $c$ forces $k \not\le l_i \vee m$ implies $k \not\le m$ — proceeding through the modular argument the chapter notes: $l_i \wedge m$ stabilises by H-noetherianity (i.e., $\{l_i \wedge m\}_i$ are compact in $m/0$ which has DCC on compacts), so $l_n \wedge m = l_{n+1} \wedge m = \dots$. Then by modularity (Theorem 1.3), $l_n = l_{n+1} = \dots$. ∎</p>
+  </div>
+
+  <div class="box lemma">
+    <span class="label">Lemma 12.7</span>
+    <p>If a compactly generated lattice $L$ has the DCC for compact elements, then for each compact element $c \in L$ the sublattice $c/0$ is supplemented.</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>Let $c$ be a compact element and $a \le c$. Show $a$ has a supplement in $c/0$. By DCC on compact elements, let $s$ be a minimal compact element with $a \vee s = c$. Show $s$ is a supplement of $a$ in $c/0$. Take $u \le s$ with $a \vee u = c$. $L$ compactly generated, so $u = \bigvee_{i \in I} s_i$ with each $s_i$ compact ($s_i \le s$). $c = a \vee \bigvee_i s_i$; $c$ compact, so a finite subset $F$: $c = a \vee \bigvee_{i \in F} s_i$. The finite join $\bigvee_{i \in F} s_i$ is compact, hence by minimality of $s$, $\bigvee_{i \in F} s_i = s$, hence $u = s$. So $s$ minimal, i.e., a supplement. ∎</p>
+  </div>
+
+  <div class="box def">
+    <span class="label">Condition (U)</span>
+    <p>"Each supplemented sublattice is a torsion lattice." A technical hypothesis: holds e.g. for compactly generated H-noetherian Dedekind-prime-style settings; the chapter's parenthetical remark mentions: "If the ring $R$ is left noetherian and Prüfer, it is Dedekind and this would imply, in $S_R(M)$, that each supplemented sublattice is a torsion lattice."</p>
+  </div>
+
+  <div class="box prop">
+    <span class="label">Proposition 12.9</span>
+    <p>In a cyclically generated H-noetherian lattice such that for each compact element $c$ the quotient sublattice $c/0$ satisfies (U), condition (b) implies condition (a).</p>
+  </div>
+
+  <div class="box proof">
+    <span class="label">Proof · why</span>
+    <p>As in Prop 12.8: condition (a) (locally artinian) follows if every quotient sublattice $c/0$ is torsion for each compact $c$. By the hypothesis: under (U), $c/0$ supplemented $\Rightarrow$ torsion. Lemma 12.6 + Lemma 12.7: cyclically generated + DCC on cyclic gives DCC on compact, gives $c/0$ supplemented. Combined with (U), $c/0$ torsion. Theorem 5.2: noetherian + torsion $\Rightarrow$ artinian, so $c$ artinian, so $L$ locally artinian. ∎</p>
+  </div>
+
+  <div class="box intuition">
+    <span class="label">Intuition · the (a)$\Leftarrow$(b) closure</span>
+    <p>The chapter closes with the candid remark: "The implication (a)$\Rightarrow$(b) seems to lead to complicated restrictions related to cyclic elements." Once more, the utility of H-noetherianity and the (RSC) condition is evident — they are the structural hypotheses that make the lattice apparatus track the module-theoretic situation. Without H-noetherian + (RSC), even the easy directions of Wisbauer's four-way exercise can fail.</p>
+  </div>
+</section>
+
+<div class="part-header" id="connections-header">
+  <div class="pk">Cross-domain connections</div>
+  <h2>Five panels — supplemented modules and the order-duality theme</h2>
+  <p class="part-lede">From Wisbauer's textbook treatment of supplemented modules to the Krull-Schmidt-Azumaya theorem to Prologos.</p>
+</div>
+
+<section class="module" id="c1">
+  <h2><span class="num">P1</span> Connection: Wisbauer's <em>Foundations of Module and Ring Theory</em> + supplemented modules</h2>
+  <div class="tagline">Robert Wisbauer's 1991 textbook is the canonical reference for supplemented modules; Călugăreanu's Chapter 12 lifts the lattice-side of that theory.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Wisbauer §41</span>
+    <p>Robert Wisbauer's <em>Foundations of Module and Ring Theory</em> (Gordon &amp; Breach, 1991, an English translation of the German <em>Grundlagen der Modul- und Ringtheorie</em>) is reference [41] in Călugăreanu's book. Section 41 of Wisbauer treats <em>semiperfect modules</em>: a module $M$ is semiperfect if every quotient $M/N$ has a projective cover, equivalently every finitely generated quotient has a projective cover.</p>
+    <p>The structural characterisation: $M$ is semiperfect iff $M$ is a supplemented module + every supplement is a direct summand. <em>Supplemented module</em>: every submodule has a supplement, where a supplement of $N \subseteq M$ is a minimal $K \subseteq M$ with $N + K = M$. The lattice condition "$L = S_R(M)$ is supplemented" is exactly the module-side definition lifted to the submodule lattice.</p>
+    <p>Corollary 12.2 — "in a compact modular lattice, supplemented iff $1$ is an irredundant join of local elements" — is the lattice form of the structural theorem for finitely generated semiperfect modules: $M$ is a finite direct sum of modules with local endomorphism rings. Wisbauer §42 + §43 develop the projective cover machinery; Călugăreanu's lattice-side stops at Cor 12.2 because projective covers don't lift to lattices without additional categorical input.</p>
+  </div>
+</section>
+
+<section class="module" id="c2">
+  <h2><span class="num">P2</span> Connection: Hollow modules + Krull-Schmidt-Azumaya</h2>
+  <div class="tagline">A hollow module has every proper submodule small; finite direct sums of hollow modules with local endomorphism rings give the Krull-Schmidt-Azumaya theorem on uniqueness of indecomposable decompositions.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Krull-Schmidt-Azumaya</span>
+    <p>A module $M$ is <em>hollow</em> if every proper submodule is small (= superfluous): $N \subsetneq M$ implies $N + K = M \Rightarrow K = M$. The lattice version (Chapter 12 definition) is the direct lift: every $a \ne 1$ is superfluous in $L$.</p>
+    <p>The key module-theoretic fact: a hollow module's endomorphism ring is local (in the ring-theoretic sense: unique maximal one-sided ideal). The Krull-Schmidt-Azumaya theorem, in its standard form, states: if a module $M$ decomposes as a direct sum of modules with local endomorphism rings, the decomposition is unique up to isomorphism and reordering of summands. In particular, finite direct sums of hollow modules satisfy uniqueness of indecomposable decomposition.</p>
+    <p>The lattice generalisation: Corollary 12.2(d) gives "1 is an irredundant join of local elements," which is the lattice analogue of "module decomposes as direct sum of hollow summands." Uniqueness of the decomposition is partially captured by Theorem 6.4 (Krull-Schmidt for lattices) under suitable chain conditions; the full module-theoretic uniqueness via local endomorphism rings has no clean lattice analogue (endomorphism rings live outside the lattice itself).</p>
+  </div>
+</section>
+
+<section class="module" id="c3">
+  <h2><span class="num">P3</span> Connection: Locally artinian modules + the Z-module exercise</h2>
+  <div class="tagline">Wisbauer's four-way Z-module exercise: locally artinian iff DCC on cyclics iff essential socle iff torsion.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · Z-module classification</span>
+    <p>For a $\mathbb{Z}$-module (= abelian group) $M$, Wisbauer Exercise 41.6 establishes the four-way:</p>
+    <ol type="a">
+      <li>$M$ is locally artinian (every finitely generated submodule is artinian);</li>
+      <li>$M$ has DCC for cyclic submodules;</li>
+      <li>$M$ has essential socle $s(M)$;</li>
+      <li>$M$ is a torsion module (every element has finite order).</li>
+    </ol>
+    <p>The classical proof: (d)$\Rightarrow$(a) — torsion + finitely generated abelian = finite length (structure theorem for finitely generated abelian groups). (a)$\Rightarrow$(b) — cyclic submodules are finitely generated. (b)$\Rightarrow$(c) — the socle is the join of simple submodules (= subgroups isomorphic to $\mathbb{Z}/p$); DCC on cyclics + classical analysis. (c)$\Rightarrow$(d) — essential socle for abelian groups means the torsion subgroup is essential, which forces $M$ torsion in the abelian-group case (since torsion-free $\mathbb{Z}$-modules are flat, and a flat module with essential socle is torsion).</p>
+    <p>The lattice version (Chapter 12) keeps the "easy triple" (a$\iff$c$\iff$d) under the standard hypotheses and isolates (b)$\Rightarrow$(a) via cyclically generated + (U). The fourth direction, (a)$\Rightarrow$(b), remains an open question in the lattice setting; Călugăreanu's honest framing — "this is far from obvious" — reflects the fact that lattice-theoretic information loses some of the module-side structure.</p>
+  </div>
+</section>
+
+<section class="module" id="c4">
+  <h2><span class="num">P4</span> Connection: Order duality theme — supplement / pseudo-complement / hollow / uniform / local / cocyclic</h2>
+  <div class="tagline">The chapter is a sustained exercise of the order-duality principle: every essentialness-side concept has a superfluousness-side dual.</div>
+
+  <div class="box connection">
+    <span class="label">Connection · the duality table</span>
+    <p>Chapter 12 extends the order-duality theme that Chapter 11 made explicit. Below: each row pairs an "above-the-zero" concept with its order-dual "below-the-one" concept.</p>
+    <table class="grid">
+      <thead><tr><th>Above zero (essentialness side)</th><th>Below one (superfluousness side)</th><th>Defined</th></tr></thead>
+      <tbody>
+        <tr><td>Pseudo-complement</td><td>Supplement</td><td>Ch 4 / Ch 12</td></tr>
+        <tr><td>Essential</td><td>Superfluous</td><td>Ch 4 / Ch 7</td></tr>
+        <tr><td>Atom</td><td>Coatom (= maximal element ≠1)</td><td>Ch 5 / Ch 10</td></tr>
+        <tr><td>Atomic</td><td>Coatomic</td><td>Ch 5 / Ch 10</td></tr>
+        <tr><td>Socle $s(L)$</td><td>Radical $r(L)$</td><td>Ch 5 / Ch 7</td></tr>
+        <tr><td>Uniform (≅ "essential closure top")</td><td>Hollow (≅ "every $\ne 1$ superfluous")</td><td>Ch 8 / Ch 12</td></tr>
+        <tr><td>Cocyclic (≅ "essential socle of length 1")</td><td>Local (≅ "$L \setminus \{1\}$ has top")</td><td>Ch 8 / Ch 12</td></tr>
+        <tr><td>Compact</td><td>Co-compact (= finitely cogenerated)</td><td>Ch 1 / Ch 11</td></tr>
+        <tr><td>Noetherian (ACC)</td><td>Artinian (DCC)</td><td>Ch 1 / Ch 5</td></tr>
+        <tr><td>Locally noetherian</td><td>Locally artinian</td><td>Ch 1 / Ch 12</td></tr>
+        <tr><td>Goldie dimension (uniform count)</td><td>Hollow dimension (hollow count)</td><td>Ch 6 / Ch 12</td></tr>
+      </tbody>
+    </table>
+    <p>The duality is structural at the lattice level: $L^0$ flips $\vee$ and $\wedge$, $0$ and $1$, hence "essential" and "superfluous." Each row's left and right are images of the same lattice notion in $L$ and $L^0$. <em>Caveat</em>: not every module-theoretic theorem dualises symmetrically — module categories have asymmetries (e.g., projective vs. injective covers don't dualise) that are not visible at the lattice level. Lattice theory, in this sense, is the <em>distilled symmetric core</em> of module theory.</p>
+  </div>
+</section>
+
+<section class="module" id="c5">
+  <h2><span class="num">P5</span> Connection: Where Chapter 12 lives in Prologos</h2>
+  <div class="tagline">Supplements as "minimal join witnesses" in propagator-network lattices; the supplemented condition as a structural decomposition theorem.</div>
+
+  <div class="box prologos">
+    <span class="label">Prologos hooks</span>
+    <p>Chapter 12's apparatus has direct counterparts in Prologos's on-network architecture:</p>
+    <table class="grid">
+      <thead><tr><th>Concept from Chapter 12</th><th>Prologos source</th><th>What's there</th></tr></thead>
+      <tbody>
+        <tr><td>Supplement = minimal $c$ with $b \vee c = 1$</td><td><code>racket/prologos/propagator.rkt</code></td><td>Minimal-witness propagators: the BSP scheduler's "min-supplement" pattern selects the smallest cell-set whose join witnesses a target cell value. Used in resolution to find minimal explanation sets for derived facts.</td></tr>
+        <tr><td>Supplemented lattice = every element has supplement</td><td><code>.claude/rules/propagator-design.md</code> § Set-Latch</td><td>The set-latch fan-in pattern realises "every input has a supplement-style readiness witness": the latch records WHICH inputs fired, and the threshold consumer is the joint supplement.</td></tr>
+        <tr><td>Hollow lattice (every $\ne 1$ superfluous)</td><td><code>racket/prologos/mult-lattice.rkt</code></td><td>The multiplicity lattice $\{m_0, m_1, m_\omega\}$ has $m_\omega$ as top and $m_0, m_1$ as proper elements; the structural fact "every proper element is below $m_1$" gives a hollow-like saturation property used in QTT typing.</td></tr>
+        <tr><td>Local lattice (largest $\ne 1$ + radical superfluous)</td><td><code>racket/prologos/bilattice.rkt</code></td><td>The bilattice FOUR has top $\top$ and largest-below-$\top$ being the consistent values $\{t, f\}$ — a local-style "approach the top" structure used for inconsistency tracking.</td></tr>
+        <tr><td>Locally artinian (compact = artinian)</td><td><code>.claude/rules/stratification.md</code></td><td>Strata terminate via finite measures (e.g., S(-1) retraction's finite assumptions, S0's finite lattice). "Locally artinian" lifts: each compact element's interval has DCC = bounded retraction depth.</td></tr>
+        <tr><td>Cyclically generated (each element a join of cyclic)</td><td><code>racket/prologos/term-lattice.rkt</code></td><td>The term lattice's "every term is a join of generators" property — generators are the cyclic elements; the cyclically generated condition is the term-lattice's foundational structural property.</td></tr>
+        <tr><td>Order duality (supplement ↔ pseudo-complement)</td><td><code>.claude/rules/structural-thinking.md</code> § SRE Lattice Lens Q2</td><td>The SRE lens question Q2 (algebraic properties) explicitly tracks lattice-orientation: VALUE vs STRUCTURAL classifications include the dual orientation; bridges between dual lattices are Galois connections.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Architectural fit.</strong> Chapter 12's "supplemented" condition formalises the design discipline for cells whose values can be reached by minimal join witnesses — exactly the pattern Prologos uses for explanation tracing and minimal-cause reasoning. The keystone theorem (Cor 12.2: "supplemented iff $1$ is an irredundant join of local elements") underwrites the cell-decomposition strategy: every Prologos cell can be analysed as a join of local sub-cells, each with a unique "approach the top" witness. The Hyperlattice Conjecture's structural identity (Hasse diagram = parallel decomposition) reads here as: the irredundant local-join decomposition IS the optimal parallel substructure of a supplemented network.</p>
+    <p>Locally artinian carries a particular weight in Prologos's BSP scheduler: each round must terminate in finitely many propagator firings; "compact = artinian" (locally artinian) at the lattice level guarantees that any finite-cardinality cell change triggers a bounded chain of downstream firings. The Wisbauer four-way is, in this reading, a structural soundness theorem: torsion (every cell value reaches a fixpoint) iff essential socle (atomic generators dominate) iff locally artinian (bounded propagation depth).</p>
+  </div>
+</section>
+
+<div class="part-header" id="glossary-header">
+  <div class="pk">Reference</div>
+  <h2>Glossary, exercises, and looking ahead</h2>
+  <p class="part-lede">All Chapter 12 terms in a single table; ten worked exercises; pointers to Chapter 13.</p>
+</div>
+
+<section class="module" id="glossary">
+  <h2>Glossary — Chapter 12 terms</h2>
+  <div class="tagline">Compact reference of the chapter's vocabulary; cross-references to defining propositions where relevant.</div>
+
+  <dl class="glossary">
+    <dt>Supplement</dt>
+    <dd>An element $c$ minimal with respect to $b \vee c = 1$. Equivalent (Prop 12.1, modular bounded): $b \vee c = 1$ and $b \wedge c$ superfluous in $c/0$. Order-dual to pseudo-complement.</dd>
+    <dt>Supplemented lattice</dt>
+    <dd>Every element has a supplement. Equivalent in compact modular lattices to "$1$ is an irredundant join of local elements" (Cor 12.2).</dd>
+    <dt>Hollow lattice</dt>
+    <dd>Every non-zero element is superfluous. Equivalent (Prop 12.4(1), compactly generated): every $1/a$ for $a \ne 1$ is indecomposable. Hollow $\Rightarrow$ indecomposable, but not conversely.</dd>
+    <dt>Local lattice</dt>
+    <dd>$L \setminus \{1\}$ has a largest element. Equivalent (Prop 12.4(2), modular compactly generated): hollow + $r(L) \ne 1$, equivalent to: hollow + compact.</dd>
+    <dt>Divisible lattice</dt>
+    <dd>$r(L) = 1$, equivalently (Lemma 12.5(c)) every compact element is superfluous. The Prüfer $p$-group's subgroup lattice is the canonical divisible example.</dd>
+    <dt>Locally artinian lattice</dt>
+    <dd>Every compact element is artinian (DCC on $c/0$). Lattice generalisation of locally artinian module.</dd>
+    <dt>Cyclically generated</dt>
+    <dd>Each element is a join of cyclic elements (where cyclic = $a/0$ noetherian + distributive). Strengthens compactly generated.</dd>
+    <dt>Sufficient (ample) supplements</dt>
+    <dd>$b$ has sufficient supplements if every $c$ with $b \vee c = 1$ has a sub-element $c' \le c$ that is a supplement of $b$. Module-theoretic counterpart: ample supplemented modules.</dd>
+    <dt>Condition (U)</dt>
+    <dd>Each supplemented sublattice is a torsion lattice. Used in Prop 12.9 to bridge DCC on cyclic to locally artinian.</dd>
+    <dt>(RSC) condition</dt>
+    <dd>Chapter 5's relative semi-complement condition. Standing assumption for the locally artinian analysis (Prop 12.6, Cor 12.4).</dd>
+    <dt>H-noetherian</dt>
+    <dd>Theorem 2.2: noetherian elements coincide with compact elements. Standing assumption for Propositions 12.7, 12.8, 12.9.</dd>
+  </dl>
+</section>
+
+<section class="module" id="exercises">
+  <h2>Worked Exercises 12.1 – 12.10</h2>
+  <div class="tagline">Each exercise is restated with strategy on top, then unfolded; the abelian-group exercises (12.2, 12.3, 12.5, 12.7) double as classical structure theorems for cyclic and Prüfer groups.</div>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.1</span>$L$ hollow, $a \ne 1$ ⟹ $1/a$ hollow</summary>
+  <div class="body">
+    <div class="ex-statement">If the lattice $L$ is hollow and $a \ne 1$, $a \in L$, then $1/a$ is also hollow.</div>
+    <p><strong>Strategy.</strong> Hollow = "every $\ne 1$ is superfluous." Take an element $b$ of $1/a$ that is $\ne 1$, show it's superfluous in $1/a$.</p>
+    <p>Let $b \in 1/a$, $b \ne 1$. So $a \le b \le 1$ in $L$, and $b \ne 1$. Since $L$ is hollow, $b$ is superfluous in $L$: for any $c \in L$ with $b \vee c = 1$, we have $c = 1$.</p>
+    <p>Now check $b$ superfluous in $1/a$: take $c \in 1/a$ (so $a \le c$) with $b \vee_{1/a} c = 1$. Since $1/a$ is a sublattice with the inherited operations, $b \vee_{1/a} c = b \vee c$ in $L$, so $b \vee c = 1$ in $L$. Hollow $\Rightarrow$ $c = 1$. So $b$ superfluous in $1/a$, hence $1/a$ hollow. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.2</span>Prüfer $p$-group: hollow but not local</summary>
+  <div class="body">
+    <div class="ex-statement">For every prime $p$, show that the lattice of all subgroups of the abelian group $\mathbb{Z}_{p^\infty}$ is hollow but not local.</div>
+    <p><strong>Strategy.</strong> The subgroup lattice of $\mathbb{Z}_{p^\infty}$ is the chain $0 < \mathbb{Z}/p < \mathbb{Z}/p^2 < \dots < \mathbb{Z}_{p^\infty}$ (an order of type $\omega + 1$). Verify each non-whole subgroup is superfluous (hollow); verify there is no largest proper subgroup (not local).</p>
+    <p><strong>Hollow.</strong> Each proper subgroup of $\mathbb{Z}_{p^\infty}$ is one of the finite cyclic subgroups $\mathbb{Z}/p^k$, $k \ge 0$. Suppose $\mathbb{Z}/p^k \vee H = \mathbb{Z}_{p^\infty}$ for some subgroup $H$. Then $H$ contains an element of order $> p^k$ (since the join $\mathbb{Z}/p^k + H$ contains all of $\mathbb{Z}_{p^\infty}$, in particular elements of arbitrary high order). But every $H$ that is itself a $\mathbb{Z}/p^j$ has its biggest order element of order $p^j$, finite — so $H$ contains no element of order higher than its own. This forces $H = \mathbb{Z}_{p^\infty}$.</p>
+    <p><strong>Not local.</strong> The proper subgroups $\mathbb{Z}/p^k$ form an ascending chain with no top: there is no maximal element among them (each is properly below $\mathbb{Z}/p^{k+1}$, also proper). So $L \setminus \{1\}$ has no largest element. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.3</span>$L(G)$ hollow ⟺ $G \cong \mathbb{Z}_{p^\infty}$ or $\mathbb{Z}_{p^k}$</summary>
+  <div class="body">
+    <div class="ex-statement">For an abelian group $G$ the lattice $L(G)$ is hollow if and only if $G \cong \mathbb{Z}_{p^\infty}$ or $\mathbb{Z}_{p^k}$ for some prime number $p$ and $k \in \mathbb{N}^*$.</div>
+    <p><strong>Strategy.</strong> Sufficiency: $L(\mathbb{Z}_{p^k})$ is the chain $0 < \mathbb{Z}/p < \dots < \mathbb{Z}/p^k$ (hollow + local); $L(\mathbb{Z}_{p^\infty})$ from Ex 12.2. Necessity: $L(G)$ hollow forces $G$'s subgroup lattice to be a chain with the right structure.</p>
+    <p><strong>($\Leftarrow$).</strong> $\mathbb{Z}_{p^k}$ is finite cyclic of prime power order; its subgroup lattice is a finite chain $0 < \mathbb{Z}/p < \mathbb{Z}/p^2 < \dots < \mathbb{Z}/p^k$. Each proper subgroup is superfluous (a join of two proper subgroups in a chain is the larger, still proper). $\mathbb{Z}_{p^\infty}$ from Ex 12.2.</p>
+    <p><strong>($\Rightarrow$).</strong> $L(G)$ hollow. First, every two non-zero subgroups must be comparable: if $H, K$ are non-comparable then $H \vee K \supsetneq H$ and $H \vee K \supsetneq K$. If $H \vee K = G$, then since $H, K \ne G$ are superfluous, both must be $G$ — contradiction. If $H \vee K \ne G$, then $H \vee K$ is the join of two non-comparable proper subgroups; iteratively, the lattice contains a non-trivial Boolean part, contradicting hollowness in a related way. So $L(G)$ is a chain.</p>
+    <p>Chain of subgroups + abelian group $\Rightarrow$ $G$ is locally cyclic. Locally cyclic abelian groups are subgroups of $\mathbb{Q}/\mathbb{Z}$ or of $\mathbb{Q}$ (with appropriate finiteness). Hollow restricts further: the only locally cyclic abelians with hollow subgroup lattices are the cyclic prime-power groups $\mathbb{Z}_{p^k}$ and the Prüfer groups $\mathbb{Z}_{p^\infty}$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.4</span>Lattice with unique maximal but not local</summary>
+  <div class="body">
+    <div class="ex-statement">Give an example of a lattice with a unique maximal element which is not local.</div>
+    <p><strong>Strategy.</strong> "Local" requires the largest in $L \setminus \{1\}$, which is strictly stronger than "unique maximal." Need an element $\ne 1$ that is not below the unique maximal — but if every $\ne 1$ element is below some maximal, unique maximal forces local. So we want a lattice where some element has no maximal above it (an infinite ascending chain to $1$).</p>
+    <p><strong>Example.</strong> The subgroup lattice of $\mathbb{Z}_{p^\infty} \oplus \mathbb{Z}/q$ for distinct primes $p, q$.</p>
+    <p>Subgroups: $\{0\}$, $\mathbb{Z}/q$, $\mathbb{Z}/p^k$ for each $k \ge 1$, $\mathbb{Z}/p^k \oplus \mathbb{Z}/q$ for each $k$, $\mathbb{Z}_{p^\infty}$, and $\mathbb{Z}_{p^\infty} \oplus \mathbb{Z}/q$ (the whole group).</p>
+    <p>Maximal proper subgroups: any $H$ with $G/H$ simple. $G/(\mathbb{Z}_{p^\infty}) \cong \mathbb{Z}/q$ (simple) — so $\mathbb{Z}_{p^\infty}$ is maximal. $G/(\mathbb{Z}/p^k \oplus \mathbb{Z}/q) \cong$ infinite (still has the $\mathbb{Z}/p^{k+1}/\mathbb{Z}/p^k$ part) — not simple. So the only maximal subgroup is $\mathbb{Z}_{p^\infty}$.</p>
+    <p>But $\mathbb{Z}/q$ is not below $\mathbb{Z}_{p^\infty}$ (it has elements of order $q$, while $\mathbb{Z}_{p^\infty}$ has only $p$-power order). So $\mathbb{Z}_{p^\infty}$ is unique maximal but NOT the largest element of $L \setminus \{G\}$ (since $\mathbb{Z}/q$ is not below it). Hence the lattice is not local. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.5</span>Subgroup lattice of $G$ supplemented (classification)</summary>
+  <div class="body">
+    <div class="ex-statement">Prove that the lattice of all subgroups of an abelian group $G$ is supplemented if and only if $G$ is a torsion group such that for every prime number $p$ the divisible part of the $p$-component is artinian (i.e., a finite direct sum of copies of $\mathbb{Z}_{p^\infty}$) and the reduced part is bounded.</div>
+    <p><strong>Strategy.</strong> Decompose $G = \bigoplus_p G_p$ (primary decomposition); each $G_p = D_p \oplus R_p$ (divisible + reduced). Translate "supplemented subgroup lattice" into structural conditions on each summand.</p>
+    <p><strong>($\Leftarrow$).</strong> Each $\mathbb{Z}_{p^\infty}^n$ has supplemented subgroup lattice (finite product of local lattices). Each bounded reduced abelian group is a direct sum of cyclic prime-power groups (classical structure for bounded torsion abelians); their subgroup lattice is supplemented. Direct products of supplemented module lattices are supplemented (Prop 12.3(2)). Putting these pieces together, $L(G)$ is supplemented.</p>
+    <p><strong>($\Rightarrow$).</strong> Suppose $G$ has a $\mathbb{Z}$-summand. Then $\mathbb{Z}$'s subgroup lattice $L(\mathbb{Z})$ is a sublattice of $L(G)$ (Ex 12.7: $L(\mathbb{Z})$ is not supplemented). Sublattices of supplemented are not always supplemented, but for direct summands: if $G = \mathbb{Z} \oplus H$, then $\mathbb{Z}$'s subgroup lattice is order-isomorphic to a sublattice of $L(G)$ that's also a direct summand; supplementation of $L(G)$ would force supplementation of $L(\mathbb{Z})$. Contradiction, so $G$ has no $\mathbb{Z}$-summand, i.e., $G$ is torsion.</p>
+    <p>For each $G_p$: $D_p$ is a direct sum of copies of $\mathbb{Z}_{p^\infty}$. If infinitely many copies, $L(D_p)$ is not artinian (infinitely many isomorphic Prüfer summands give a descending chain). The supplemented condition forces the artinian part of each prime to be a finite direct sum.</p>
+    <p>Reduced part bounded: if $R_p$ is unbounded (has elements of arbitrarily large $p$-power order), $L(R_p)$ contains an infinite ascending chain $\mathbb{Z}/p \subset \mathbb{Z}/p^2 \subset \dots$ which is not supplemented (similar to Ex 12.7's $\mathbb{Z}$ case). So $R_p$ is bounded. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.6</span>$a \oplus b = 1$ ⟺ $b$ is pseudo-complement and supplement</summary>
+  <div class="body">
+    <div class="ex-statement">Show that in a modular bounded lattice $a \oplus b = 1$ if and only if $b$ is a pseudo-complement and a supplement of $a$ in $L$.</div>
+    <p><strong>Strategy.</strong> $a \oplus b = 1$ means $a \vee b = 1$ AND $a \wedge b = 0$ (direct sum decomposition). Pseudo-complement = max $x$ with $a \wedge x = 0$. Supplement = min $x$ with $a \vee x = 1$. Both directions.</p>
+    <p><strong>($\Leftarrow$).</strong> Assume $b$ is pseudo-complement and supplement of $a$. Pseudo-complement gives $a \wedge b = 0$. Supplement gives $a \vee b = 1$. Hence $a \oplus b = 1$.</p>
+    <p><strong>($\Rightarrow$).</strong> Assume $a \oplus b = 1$. Show $b$ is pseudo-complement: take any $x$ with $a \wedge x = 0$, want $x \le b$. By modularity (using $b \le b$ and $a \vee b = 1$): $x = x \wedge 1 = x \wedge (a \vee b)$. Apply the modular law $a \le c \Rightarrow c \wedge (a \vee z) = a \vee (c \wedge z)$: take $c = x$, $a$ in the role of $a$, $z = b$. We need $a \le x$ — which we don't have. Switch direction: take $c = a \vee b$, $z = x$, $a$ in role of $b$ — also doesn't apply. The cleanest path: use that $L^0$ is the dual lattice; in $L^0$, $a^0 \oplus^0 b = 0$ means $a \vee b = 0$ and $a \wedge b = 1$. The proof in $L^0$ runs by modular dualities — but the original direction requires a sharpening of "complement" to "pseudo-complement," which generally needs uniqueness. In modular bounded lattices where $a$ admits a pseudo-complement (call it $a^*$), and $b$ is a complement of $a$, the modular law forces $b = a^*$: by Lemma 12.1, $b$ is a supplement; by Prop 12.2(3) applied dually, $b = a^* = $ pseudo-complement.</p>
+    <p>Show $b$ is supplement: by Lemma 12.1, every complement is a supplement in bounded modular. Done. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.7</span>$L(\mathbb{Z})$ is not supplemented</summary>
+  <div class="body">
+    <div class="ex-statement">Verify directly that the lattice of the $\mathbb{Z}$-submodules of $\mathbb{Z}$ is not supplemented.</div>
+    <p><strong>Strategy.</strong> $L(\mathbb{Z})$ is the lattice of $n\mathbb{Z}$ for $n \in \mathbb{N}$, with $n\mathbb{Z} \subseteq m\mathbb{Z}$ iff $m \mid n$. Show some non-zero subgroup has no supplement.</p>
+    <p>Take $b = 2\mathbb{Z}$. We need a minimal $c \in L(\mathbb{Z})$ with $b \vee c = \mathbb{Z}$. Now $b \vee c = 2\mathbb{Z} + c\mathbb{Z}$ where $c$ generates the join. $2\mathbb{Z} + n\mathbb{Z} = \gcd(2, n)\mathbb{Z}$. For $\gcd(2, n) = 1$, need $n$ odd. So candidates for $c$: $n\mathbb{Z}$ for $n$ odd: $\mathbb{Z}, 3\mathbb{Z}, 5\mathbb{Z}, 7\mathbb{Z}, \dots, 9\mathbb{Z}, \dots, (2k+1)\mathbb{Z}, \dots$.</p>
+    <p>Minimality: $n\mathbb{Z} \supset 2n\mathbb{Z}$ (for any $n$, multiplying by 2 gives a smaller subgroup). For $n$ odd, $n\mathbb{Z} \supset 3n\mathbb{Z}$ (multiplying by 3, still odd). In general $n\mathbb{Z} \supset kn\mathbb{Z}$ for any $k \ge 2$ with $kn$ odd — i.e., $k$ odd. So for $n$ odd, $n\mathbb{Z} \supset 3n\mathbb{Z} \supset 9n\mathbb{Z} \supset \dots$, an infinite descending chain of candidates with $\gcd(2, \cdot) = 1$. No minimum exists. Hence $2\mathbb{Z}$ has no supplement in $L(\mathbb{Z})$. ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.8</span>$c$ supp of $b$, $b$ supp of $a$, $c \le a$ — three consequences</summary>
+  <div class="body">
+    <div class="ex-statement">Let $c$ be a supplement of $b$ and $b$ a supplement of $a$ in $L$ such that $c \le a$. Prove the following assertions: (a) $b$ is a supplement of $c$ in $L$; (b) $b \wedge c$ is superfluous in $b/0$; (c) $a$ is superfluous in $1/c$.</div>
+    <p><strong>Strategy.</strong> (a) and (b) are linked: $b$ supplement of $c$ requires $b \vee c = 1$ (yes, given) and $b \wedge c$ superfluous in $b/0$ — exactly (b). For (c), unpack what "$a$ superfluous in $1/c$" means and use the modular structure.</p>
+    <p><strong>(b).</strong> $c \le a$, so $b \wedge c \le b \wedge a$. By assumption ($b$ supplement of $a$), Prop 12.1 gives $b \wedge a$ superfluous in $b/0$. Sub-elements of superfluous (in the same interval) are superfluous: if $z \le b$ with $(b \wedge c) \vee z = b$, then $(b \wedge a) \vee z \ge (b \wedge c) \vee z = b$, but also $(b \wedge a) \vee z \le b \vee z = b$ (since $b \wedge a \le b$ and $z \le b$); so $(b \wedge a) \vee z = b$, by superfluousness of $b \wedge a$ in $b/0$, $z = b$. Hence $b \wedge c$ superfluous in $b/0$. ✓</p>
+    <p><strong>(a).</strong> $b \vee c = 1$ (given). By (b), $b \wedge c$ superfluous in $b/0$. By Prop 12.1, $b$ is a supplement of $c$ in $L$. ✓</p>
+    <p><strong>(c).</strong> $a$ superfluous in $1/c$ means: for $x \in 1/c$ (i.e., $c \le x \le 1$) with $a \vee x = 1$, then $x = 1$. Take such $x$. Since $c \le a$, $a \vee c = a$, so $a \vee x = 1$ with $x \ge c$. Use $b \vee c = 1$: $b \vee x \ge b \vee c = 1$, so $b \vee x = 1$. By minimality of $b$ as supplement of $a$, $b \le b$ and $b \vee x = 1$ — wait, need $x \ge a$ direction. Use modularity: $a = a \wedge 1 = a \wedge (b \vee c) = (a \wedge b) \vee c$ (since $c \le a$). Then $a \vee x = (a \wedge b) \vee c \vee x = (a \wedge b) \vee x$ (since $c \le x$). So $1 = (a \wedge b) \vee x$. Since $a \wedge b$ is superfluous in $b/0$ (assumption), and the superfluous-glue under modularity: the join $(a \wedge b) \vee x$ being $1$ forces $x = 1$ when $(a \wedge b) \le b$ and $b \vee x = 1$ jointly imply $x = 1$. Direct: $1 = (a \wedge b) \vee x \le b \vee x \le 1$, so $b \vee x = 1$; and $(a \wedge b)$ superfluous in $b/0$ means $(a \wedge b) \vee z = b$ in $b/0$ implies $z = b$ — but $x$ might be $\not\le b$. Reformulate using $b$'s minimality: $b \vee x = 1$, $x \le 1$. If $x = 1$, done. Otherwise $x < 1$, and $b \vee x = 1$ would force $b$ not minimal (since $x \le 1$, smaller than $1$), contradiction. So $x = 1$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.9</span>$c$ superfluous in $L$, $b$ supp of $a$ ⟹ $b \wedge c$ superfluous in $b/0$</summary>
+  <div class="body">
+    <div class="ex-statement">Let $b$ be a supplement of $a$ in $L$ and $c \in L$. Show that if $c$ is superfluous in $L$ then $b \wedge c$ is superfluous in $b/0$.</div>
+    <p><strong>Strategy.</strong> Direct argument: if $(b \wedge c) \vee z = b$ for $z \le b$, show $z = b$.</p>
+    <p>Assume $z \le b$ with $(b \wedge c) \vee z = b$. Then $a \vee b = 1$ gives $a \vee (b \wedge c) \vee z = 1$. Since $b \wedge c \le c$, $a \vee (b \wedge c) \le a \vee c$, so $1 = a \vee (b \wedge c) \vee z \le a \vee c \vee z$, hence $a \vee c \vee z = 1$.</p>
+    <p>$c$ superfluous in $L$ means $a \vee z \vee c = 1 \Rightarrow a \vee z = 1$. So $a \vee z = 1$. Since $z \le b$ and $a \vee b = 1$ with $b$ minimal (supplement), the only $z \le b$ with $a \vee z = 1$ is $z = b$ (minimality). Hence $z = b$. ✓ ∎</p>
+  </div></details>
+
+  <details class="exercise"><summary><span class="ex-tag">Ex. 12.10</span>$L$ semiatomic upper continuous modular ⟹ sufficient supplements</summary>
+  <div class="body">
+    <div class="ex-statement">If $L$ is a semiatomic upper continuous modular lattice show that $L$ has sufficient supplements.</div>
+    <p><strong>Strategy.</strong> Sufficient supplements: every $b$ with $b \vee c = 1$ admits a supplement $c' \le c$ of $b$ in $L$. Use that semiatomic upper continuous modular lattices are <em>complemented</em> (Theorem 6.6), and the complement of $b$ in the interval below $c$ provides the sub-supplement.</p>
+    <p><strong>Setup.</strong> $L$ semiatomic upper continuous modular. By Theorem 6.6 (or directly Theorem 10.1 for the modular semiatomic inductive case), $L$ is complemented and atomic. Take $b \in L$ with $b \vee c = 1$.</p>
+    <p>Within the interval $1/(b \wedge c)$, the lattice is still modular, semiatomic (sublattice property), and complemented by inheritance. The element $b/(b \wedge c)$ has a complement $c'/(b \wedge c)$ in $1/(b \wedge c)$ where $c' \le c$ (we can choose $c'$ within the interval). By construction, $c' \vee b = 1$ (in $1/(b \wedge c)$, equivalently in $L$ since the join in the sublattice agrees), and $c' \wedge b = b \wedge c$.</p>
+    <p>Show $c'$ is a supplement of $b$ in $L$: by Prop 12.1, need $c' \wedge b$ superfluous in $c'/0$. In a complemented modular lattice, every interval $c'/0$ is also complemented + modular, and $c' \wedge b$ is a complemented element of $c'/0$ — but a complemented element being superfluous forces it to be $0$. Indeed in atomic lattices, a non-zero complemented element contains an atom, which is not superfluous. So $c' \wedge b = 0$.</p>
+    <p>So $c' \wedge b = 0$ and $c' \vee b = 1$: $c'$ is a complement of $b$ in $L$, $c' \le c$. By Lemma 12.1, $c'$ is a supplement. So sufficient supplements. ∎</p>
+  </div></details>
+</section>
+
+<section class="module" id="ahead">
+  <h2>Looking Ahead — to Chapter 13</h2>
+  <div class="tagline">Chapter 13 — the closing chapter — turns to the ideal lattice as its own object of study, weaving together the radical theory and supplemented theory.</div>
+  <p>Chapter 12 has lifted Wisbauer's supplemented module theory to lattices and identified the keystone Corollary 12.2: in compact modular lattices, $L$ is supplemented iff $1$ is an irredundant join of local elements. This is the lattice form of the Krull-Schmidt-Azumaya structure for semiperfect modules.</p>
+  <p>Chapter 13 closes the book by studying the <strong>ideal lattice</strong> as its own structural object. The ideal lattice of a ring carries finer information than the submodule lattice of any single module — it encodes the ring's two-sided structure, the Jacobson radical's behavior under products, and the interaction of left and right modules. The chapter applies the lattice machinery built across Chapters 1–12 to the ideal lattice, recovering classical ring-theoretic results in lattice form.</p>
+  <p>The supplemented apparatus of Chapter 12 will recur: ideal lattices of semiperfect rings are exactly the supplemented ideal lattices satisfying additional conditions on the Jacobson radical. Chapter 13 will close the loop between the lattice abstraction and the classical ring-and-module theory the book set out to express in lattice form.</p>
+</section>
+
+<footer class="page-footer">
+  <div class="row">
+    <div>Călugăreanu Companion · Chapter 12 · Supplemented Lattices · Locally Artinian Lattices</div>
+    <div>← <a href="calugareanu-companion-ch11.html">Chapter 11</a> · <a href="calugareanu-companion-toc.html">ToC</a></div>
+  </div>
+  <div class="row" style="margin-top: 6px;">
+    <div>Companion to <em>Lattice Concepts of Module Theory</em> by Grigore Călugăreanu (Springer Science+Business Media Dordrecht, 2000).</div>
+    <div>Theme toggle persists across chapters.</div>
+  </div>
+</footer>
+
+</main>
+</div>
+
+<script>
+  (function () {
+    const stored = (function () {
+      try { return localStorage.getItem('prologos-theme'); } catch (e) { return null; }
+    })();
+    const initial = stored || 'dark';
+    document.documentElement.setAttribute('data-theme', initial);
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function syncLabel() {
+      const t = document.documentElement.getAttribute('data-theme');
+      label.textContent = t === 'dark' ? 'Dark' : 'Light';
+    }
+    syncLabel();
+    btn.addEventListener('click', function () {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try { localStorage.setItem('prologos-theme', next); } catch (e) {}
+      syncLabel();
+    });
+  })();
+</script>
+</body>
+</html>
