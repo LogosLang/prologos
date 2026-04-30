@@ -46,7 +46,7 @@ fidelity.
 | 6A | Multi-arity record encoder fix | ✅ | encode-record in syrup-wire.prologos |
 | 6B | Node peer-handshake script | ✅ | tools/interop/peer-handshake.mjs |
 | 6C | Racket-side handshake test | ✅ | tests/test-ocapn-handshake.rkt — 1/1 green |
-| 6D | Phase-6 commit + green suite | 🔄 | |
+| 6D | Phase-6 commit + green suite | ✅ | commit 3c51f41 |
 
 ## Design Mantra Audit
 
@@ -412,3 +412,37 @@ Single test, two assertions:
 - **Decoder perf fix** — lift decode-many-loop out of the
   Prologos reducer's recursion-heavy path, OR teach the reducer
   to handle this shape efficiently
+
+## Phase 7 — Multi-message conversation
+
+Builds on Phase 6 with a three-frame exchange in each direction:
+
+  1. `op:start-session  ver="0.1"  loc=...`
+  2. `op:deliver-only   target=<desc:export 0>  args="ping"`
+  3. `op:abort          reason="goodbye"`
+
+Both peers send all three; both peers read and assert on the
+other's three. Byte equality on the Racket side; JSON summary
+on the Node side.
+
+This is a "lockstep echo" test, NOT a real CapTP conversation —
+neither peer reacts to what it receives. Phase 8+ would build
+the conversational state machine. Phase 7 just establishes that
+multi-frame, multi-op-type sequences round-trip.
+
+### What this proves
+
+- The encoder fix from Phase 6 works for ALL multi-arity ops, not
+  just start-session. op:deliver-only is exercised end-to-end.
+- Byte-stream framing (one Syrup record per `\n`-terminated line)
+  works for at least 3 back-to-back frames in each direction.
+- Both peers can process arbitrary mixes of 1-arity and N-arity
+  records in sequence.
+
+### Progress
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 7A | Node peer-conversation script | ✅ | tools/interop/peer-conversation.mjs |
+| 7B | Racket-side multi-message test | ✅ | tests/test-ocapn-conversation.rkt — 1/1 green |
+| 7C | Phase-7 commit + CI step | 🔄 | |
