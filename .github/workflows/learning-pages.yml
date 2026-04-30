@@ -1,0 +1,92 @@
+name: Deploy Companion Readers to GitHub Pages
+
+# Auto-deploys docs/learning/ to GitHub Pages on every push to main that
+# touches the learning content. The internal tracking/research/spec/
+# directories under docs/ are NOT exposed — only docs/learning/ is
+# uploaded as the Pages artifact.
+#
+# Setup (one-time, in repo settings):
+#   Settings → Pages → Source: GitHub Actions
+#
+# After this workflow's first successful run, the companion readers will
+# be live at: https://logoslang.github.io/prologos/
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/learning/**'
+      - '.github/workflows/learning-pages.yml'
+  workflow_dispatch:  # allow manual trigger
+
+# Pages deployments are mutually exclusive — cancel any in-progress run
+# when a new one starts so we always deploy the latest commit.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# GitHub Actions → Pages permissions (required for actions/deploy-pages).
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage companion readers (filter to public-safe types)
+        run: |
+          mkdir -p _site
+          # Copy only public-safe file types. Excludes anything that
+          # might leak source-code or process artifacts. We include:
+          #   - html (rendered companion chapters + landing page)
+          #   - md (curriculum, worksheet, process notes)
+          #   - pdf (curriculum + worksheet + research catalog)
+          #   - css/js if any (none today, but allowed for future)
+          #   - svg/png/jpg/webp (diagrams + images, none today)
+          rsync -av \
+            --include='*/' \
+            --include='*.html' \
+            --include='*.md' \
+            --include='*.pdf' \
+            --include='*.css' \
+            --include='*.js' \
+            --include='*.svg' \
+            --include='*.png' \
+            --include='*.jpg' \
+            --include='*.jpeg' \
+            --include='*.webp' \
+            --exclude='*' \
+            docs/learning/ _site/
+
+          # Sanity check — the landing page is the entry point
+          if [ ! -f _site/index.html ]; then
+            echo "ERROR: _site/index.html missing — landing page didn't survive staging."
+            ls -la _site/ | head -20
+            exit 1
+          fi
+
+          echo "Staged files:"
+          find _site -type f | sort | head -60
+          echo "..."
+          echo "Total: $(find _site -type f | wc -l) files"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

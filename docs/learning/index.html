@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prologos Companion Readers</title>
+<meta name="description" content="A library of companion readers for the lattice and module theory texts that inform Prologos's design." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+Pro:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8F4EC; --bg-warm: #F2ECDD; --bg-muted: #EFE9D8;
+    --ink: #1E2749; --ink-soft: #2B3560; --text: #2B2B2B; --text-dim: #6B6B6B;
+    --gold: #C89F3C; --gold-soft: #E6C876; --teal: #3D5A6C; --line: #D6CFBE;
+    --shadow-soft: 0 1px 3px rgba(30,39,73,0.05);
+    --shadow-card: 0 2px 8px rgba(30,39,73,0.06);
+    --card-bg: #FBF8EC;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1420; --bg-warm: #151C2E; --bg-muted: #1C2236;
+    --ink: #E8E2D1; --ink-soft: #C9C4B3; --text: #C5C0B0; --text-dim: #8A8575;
+    --gold: #D4AD52; --gold-soft: #E6C876; --teal: #7FA3B8; --line: #2A3042;
+    --shadow-soft: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-card: 0 2px 8px rgba(0,0,0,0.3);
+    --card-bg: #1F1B10;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Source Serif Pro', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+  h1, h2, h3 {
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  code { font-family: 'JetBrains Mono', monospace; background: var(--bg-muted); padding: 1px 6px; border-radius: 3px; font-size: 0.9em; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+  a:hover { color: var(--gold); }
+
+  .theme-toggle {
+    position: fixed; top: 18px; right: 18px; z-index: 50;
+    background: var(--card-bg); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 14px;
+    font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink-soft);
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-soft); transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { border-color: var(--gold); color: var(--gold); }
+  .theme-toggle .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); }
+
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px 32px 80px;
+  }
+
+  .hero {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 36px;
+    margin-bottom: 48px;
+  }
+  .hero .kicker {
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 12px;
+  }
+  .hero h1 {
+    font-size: 44px; line-height: 1.1; margin: 0 0 18px;
+    font-weight: 800;
+  }
+  .hero .lede {
+    font-size: 19px; line-height: 1.6; color: var(--ink-soft);
+    max-width: 720px; margin: 0 0 22px;
+  }
+  .hero .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 16px;
+    font-family: 'Inter', sans-serif; font-size: 13px;
+    color: var(--text-dim);
+  }
+  .hero .meta span::before { content: "· "; color: var(--gold); margin-right: 4px; }
+  .hero .meta span:first-child::before { content: ""; margin-right: 0; }
+
+  .section-label {
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--gold); margin-top: 48px; margin-bottom: 16px;
+  }
+
+  .companion-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .companion-card {
+    background: var(--card-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 28px 26px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-soft);
+  }
+  .companion-card:hover {
+    border-color: var(--gold);
+    box-shadow: var(--shadow-card);
+    transform: translateY(-1px);
+  }
+  .companion-card .source {
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 10px;
+  }
+  .companion-card h2 {
+    font-size: 22px; margin: 0 0 8px; font-weight: 700;
+  }
+  .companion-card .author {
+    font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim);
+    margin: 0 0 14px;
+  }
+  .companion-card .summary {
+    font-size: 15px; line-height: 1.55; color: var(--text);
+    margin: 0 0 16px;
+  }
+  .companion-card .stats {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    font-family: 'Inter', sans-serif; font-size: 12.5px; color: var(--text-dim);
+    padding-top: 14px; border-top: 1px solid var(--line);
+  }
+  .companion-card .stats strong { color: var(--ink-soft); font-weight: 600; }
+
+  .standalone-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .standalone-card {
+    background: var(--bg-warm);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+    text-decoration: none; color: inherit;
+    transition: all 0.2s ease;
+    display: block;
+  }
+  .standalone-card:hover { border-color: var(--gold); transform: translateY(-1px); }
+  .standalone-card .kind {
+    font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 6px;
+  }
+  .standalone-card h3 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .standalone-card p { font-size: 13px; color: var(--text-dim); margin: 0; line-height: 1.5; }
+
+  .why-section {
+    background: var(--bg-warm);
+    border-left: 3px solid var(--gold);
+    padding: 22px 26px;
+    margin-top: 32px;
+    border-radius: 0 8px 8px 0;
+  }
+  .why-section h3 {
+    margin: 0 0 12px; font-size: 17px; color: var(--ink);
+  }
+  .why-section p {
+    margin: 0 0 10px; font-size: 15px; color: var(--text); line-height: 1.6;
+  }
+  .why-section p:last-child { margin-bottom: 0; }
+
+  .footer {
+    margin-top: 64px; padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text-dim);
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .footer a { color: var(--text-dim); text-decoration-color: var(--line); }
+  .footer a:hover { color: var(--gold); text-decoration-color: var(--gold); }
+
+  @media (max-width: 600px) {
+    .page { padding: 32px 20px 60px; }
+    .hero h1 { font-size: 32px; }
+    .hero .lede { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark/light theme">
+  <span class="dot" aria-hidden="true"></span>
+  <span class="label" id="themeLabel">Dark</span>
+</button>
+
+<div class="page">
+
+  <div class="hero">
+    <div class="kicker">Prologos · Companion Readers</div>
+    <h1>Companion readers for lattice &amp; module theory</h1>
+    <p class="lede">A small library of chapter-by-chapter prose, diagrammed, and connected readings for the texts that inform Prologos's design — the <strong>lattice theory and module theory</strong> foundations the language's type system, structural reasoning engine, and propagator network architecture all build on.</p>
+    <div class="meta">
+      <span>Designed to be read alongside the source texts</span>
+      <span>Cross-referenced to Prologos design</span>
+      <span>SVG diagrams &amp; worked exercises</span>
+      <span>Light + dark mode</span>
+    </div>
+  </div>
+
+  <div class="section-label">The Companions</div>
+
+  <div class="companion-grid">
+
+    <a class="companion-card" href="calugareanu-companion-toc.html">
+      <div class="source">Companion · Module Theory</div>
+      <h2>Călugăreanu Companion</h2>
+      <div class="author">Grigore Călugăreanu — <em>Lattice Concepts of Module Theory</em> (Springer, 2000)</div>
+      <p class="summary">A chapter-by-chapter reading of the foundational text for the module-theoretic view of lattices: posets, modular &amp; distributive lattices, $N_5$ and $M_5$ obstructions, composition series, socle, Goldie dimension, supplemented lattices.</p>
+      <div class="stats">
+        <span><strong>13</strong> chapters</span>
+        <span><strong>~70–80 min</strong>/chapter</span>
+        <span>Worked solutions to every exercise</span>
+      </div>
+    </a>
+
+    <a class="companion-card" href="freelat-companion-toc.html">
+      <div class="source">Companion · Free Lattices</div>
+      <h2>Free Lattices Companion</h2>
+      <div class="author">Freese, Ježek, Nation — <em>Free Lattices</em> (AMS Mathematical Surveys, 1995)</div>
+      <p class="summary">A reading of the foundational text on free lattices: Whitman's solution to the word problem, finitely presented lattices, the structure of FL(X) and its sublattices, decidability and complexity bounds.</p>
+      <div class="stats">
+        <span><strong>12</strong> chapters</span>
+        <span>Diagrammed proofs</span>
+        <span>CS-relevant connections</span>
+      </div>
+    </a>
+
+    <a class="companion-card" href="nation-companion-toc.html">
+      <div class="source">Companion · Lattice Theory</div>
+      <h2>Nation Companion</h2>
+      <div class="author">JB Nation — <em>Notes on Lattice Theory</em></div>
+      <p class="summary">A reading of Nation's lattice theory notes — the broad-stroke companion that ties together the order-theoretic, algebraic, and topological views of lattices, with strong threads to model theory and universal algebra.</p>
+      <div class="stats">
+        <span><strong>11</strong> chapters</span>
+        <span>Connections across volumes</span>
+        <span>Research-catalog cross-references</span>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="why-section">
+    <h3>Why these texts</h3>
+    <p>Prologos's design rests on a thesis that <strong>every computable function is expressible as a fixpoint computation on lattices</strong> (the Hyperlattice Conjecture). The compiler runs as a propagator network where every cell carries a lattice value, every merge is a lattice join, and every typing rule is a structural unification — the lattice <em>meet</em>. The math foundations matter directly to the engineering.</p>
+    <p>These three texts cover the foundations from complementary angles: Călugăreanu for the module-theoretic perspective (lattices as algebraic structures over modules), Freese-Ježek-Nation for the free-lattice / word-problem / decidability perspective, and Nation's notes for the broad lattice-theory survey. Read together, they're the math equivalent of a triangulation: the same structures, viewed from three angles, the points of agreement are where Prologos's design lives.</p>
+  </div>
+
+  <div class="section-label">Standalone materials</div>
+
+  <div class="standalone-grid">
+
+    <a class="standalone-card" href="lattice-module-curriculum.md">
+      <div class="kind">Curriculum · md</div>
+      <h3>Lattice + Module Theory Curriculum</h3>
+      <p>Structured study path tying the three companions together. Markdown source.</p>
+    </a>
+
+    <a class="standalone-card" href="lattice-module-curriculum.pdf">
+      <div class="kind">Curriculum · pdf</div>
+      <h3>Lattice + Module Theory Curriculum</h3>
+      <p>Print-ready PDF version of the curriculum.</p>
+    </a>
+
+    <a class="standalone-card" href="lattice-module-worksheet.md">
+      <div class="kind">Worksheet · md</div>
+      <h3>Module Theory Worksheet</h3>
+      <p>Companion exercise sheet with progressive difficulty.</p>
+    </a>
+
+    <a class="standalone-card" href="lattice-module-worksheet.pdf">
+      <div class="kind">Worksheet · pdf</div>
+      <h3>Module Theory Worksheet</h3>
+      <p>Print-ready PDF version of the worksheet.</p>
+    </a>
+
+    <a class="standalone-card" href="lattice-module-hub.html">
+      <div class="kind">Atlas · hub</div>
+      <h3>Lattice Atlas</h3>
+      <p>Cross-companion structured navigation hub.</p>
+    </a>
+
+    <a class="standalone-card" href="nation-research-catalog.pdf">
+      <div class="kind">Catalog · pdf</div>
+      <h3>Nation Research Catalog</h3>
+      <p>Reference catalog of Nation's lattice theory publications.</p>
+    </a>
+
+  </div>
+
+  <div class="footer">
+    <span>Companion readers · part of <a href="https://github.com/LogosLang/prologos">Prologos</a></span>
+    <span>Process notes are checked in alongside each companion's source files</span>
+  </div>
+
+</div>
+
+<script>
+  // Theme toggle (matches the per-companion implementation)
+  (function() {
+    const STORAGE_KEY = 'prologos-companion-theme';
+    const root = document.documentElement;
+    const btn = document.getElementById('themeToggle');
+    const label = document.getElementById('themeLabel');
+    function setTheme(t) {
+      if (t === 'dark') { root.setAttribute('data-theme', 'dark'); label.textContent = 'Light'; }
+      else { root.removeAttribute('data-theme'); label.textContent = 'Dark'; }
+    }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    setTheme(stored || (prefersDark ? 'dark' : 'light'));
+    btn.addEventListener('click', () => {
+      const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      localStorage.setItem(STORAGE_KEY, next);
+      setTheme(next);
+    });
+  })();
+</script>
+
+</body>
+</html>
