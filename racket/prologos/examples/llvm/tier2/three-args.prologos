@@ -1,0 +1,6 @@
+spec mul3 Int Int Int -> Int
+defn mul3 [a b c] [int* a [int* b c]]
+
+def main : Int := [mul3 2 3 7]
+
+;; :expect-exit 42

@@ -1,0 +1,9 @@
+spec dbl Int -> Int
+defn dbl [x] [int* x 2]
+
+spec inc Int -> Int
+defn inc [x] [int+ x 1]
+
+def main : Int := [dbl [inc 20]]
+
+;; :expect-exit 42

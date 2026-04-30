@@ -34,13 +34,13 @@ Tier 2 is the natural break before deeper Phase-2 blockers (closure conversion, 
 | T1.A | Lowering for `expr-int-{add,sub,mul,div,mod,neg,abs}` | ✅ | scope narrowed: comparisons deferred to a later tier (no `if`/match yet means Bool is unusable) |
 | T1.B | `expr-app` for primitive-rooted application | ✅ | OQ-T1-1 resolved: parser produces `surf-int-add` directly; elaborator → `expr-int-add`. No eta-expansion to handle. |
 | T1.C | Tier 1 acceptance file + tests + CI | ✅ | 8 example programs + 10 rackunit tests + CI step |
-| T1.✅ | Tier 1 commit | 🔄 | next |
-| T2.A | `expr-lam` lowering at top level (non-capturing only) | ⬜ | |
-| T2.B | `expr-bvar` → SSA local; `expr-app` → `call` | ⬜ | |
-| T2.C | `m0` binder drop (single-line erasure at top level) | ⬜ | |
-| T2.D | Free-variable detector (refuses captures with clear error) | ⬜ | |
-| T2.E | Tier 2 acceptance file + tests + CI | ⬜ | |
-| T2.✅ | Tier 2 commit | ⬜ | |
+| T1.✅ | Tier 1 commit | ✅ | `307e995` |
+| T2.A | `expr-lam` lowering at top level (non-capturing only) | ✅ | `lower-function/tier2` walks the curried lambda chain via `collect-lambdas`, asserts it matches the type's Pi chain |
+| T2.B | `expr-bvar` → SSA local; `expr-app` → `call` | ✅ | `current-bvar-env` parameter holds innermost-first env; `lower-app/tier2` uncurries the application chain |
+| T2.C | `m0` binder drop (single-line erasure at top level) | ✅ | m0 binders contribute `'erased` to env (so de Bruijn distances stay correct) but emit no LLVM parameter; m0 args at call sites are dropped via `#:when` filter |
+| T2.D | Free-variable detector (refuses captures with clear error) | ✅ | `lookup-bvar` raises `unsupported-llvm-node` when index ≥ env length, with a hint about closure capture |
+| T2.E | Tier 2 acceptance file + tests + CI | ✅ | 4 example programs + 8 rackunit tests (positive + negative paths) + CI step |
+| T2.✅ | Tier 2 commit | 🔄 | next |
 
 ## 3. Scope
 
