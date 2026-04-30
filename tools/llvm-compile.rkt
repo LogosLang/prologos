@@ -37,6 +37,8 @@
            (out-path path)]
    [("--run") "Lower, link, and run (default)."
               (run? #t)]
+   [("--no-run") "Lower, link, but do not run (use this when the caller will run the binary)."
+                 (run? #f)]
    #:args (file)
    file))
 

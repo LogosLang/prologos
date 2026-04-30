@@ -374,10 +374,18 @@
        (unsupported! body
                      (format "def ~a: lambda chain length ~a does not match Pi chain length ~a"
                              name (length params) (length pi-params))))
-     (unless (expr-Int? return-type)
+     ;; Return type: must be Int *or* a bvar referring to an m0 (erased) binder.
+     ;; The latter is the common case for polymorphic identity-like functions
+     ;; (forall A, A -> A) after m0 erasure: the runtime type is i64.
+     (unless (or (expr-Int? return-type)
+                 (and (expr-bvar? return-type)
+                      (let ([idx (expr-bvar-index return-type)])
+                        (and (< idx (length pi-params))
+                             (eq? (car (list-ref pi-params (- (length pi-params) 1 idx)))
+                                  'm0)))))
        (unsupported! return-type
-                     (format "def ~a: only Int-returning functions are supported in Tier 2"
-                             name)))
+                     (format "def ~a: only Int-returning functions are supported in Tier 2 (return type: ~v)"
+                             name return-type)))
      ;; Build SSA params (skipping m0 binders) and the de Bruijn env.
      ;; params is outer-to-inner; env must be innermost-first to match
      ;; expr-bvar 0 = innermost.
