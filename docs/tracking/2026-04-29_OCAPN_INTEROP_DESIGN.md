@@ -280,3 +280,60 @@ structural-equal. Plus full suite green.
 - OCapN CapTP spec: same repo, `CapTP.md`
 - Spritely racket-goblins Syrup impl (Racket reference, structural cross-check)
 - Pitfall log: `docs/tracking/2026-04-27_GOBLIN_PITFALLS.md` (esp. #18)
+
+## Phase 5 — Live Racket↔Node wire exchange
+
+Phase 4 proved byte-equality for static vectors. Phase 5 closes
+the remaining gap: Prologos and `@endo/ocapn` running as separate
+OS processes, exchanging real CapTP messages over a real TCP
+socket.
+
+### Goals
+
+- Test A (**Prologos sends → Node decodes**): Racket binds an
+  ephemeral port, spawns a Node child running `peer-recv.mjs
+  <port>`, accepts, sends `encode-op (op-abort "phase-5")`, and
+  asserts that Node's stdout reports a successfully-decoded
+  `op:abort` record with the matching reason.
+- Test B (**Node sends → Prologos decodes**): Racket spawns Node
+  running `peer-send.mjs`, reads the chosen port from Node's
+  stdout, connects, reads the line Node writes, decodes via
+  Prologos's `decode-op`, asserts it matches the expected
+  `CapTPOp`.
+
+### What this proves
+
+Together with Phase 4's byte equality, Phase 5 demonstrates that
+the two implementations are wire-compatible at runtime — bytes
+go out, bytes come in, both sides agree on the message. This is
+the strongest interop signal short of a full handshake.
+
+### Out of scope (Phase 6+)
+
+- Bidirectional `op:start-session` handshake (both peers send
+  their pubkey + accepted location types and verify each other's
+  signatures)
+- Multi-message conversations (op:deliver / op:listen / op:abort
+  in sequence)
+- Cryptographic auth (`@endo/ocapn`'s tcp-test-only netlayer is
+  intentionally unauth'd; secure netlayer is its own track)
+- GC of refrs / answers
+- Persistent connection lifecycle
+
+### Module layout
+
+| Path | Role |
+|---|---|
+| `tools/interop/peer-recv.mjs` | Node script: connect, read line, decode, print JSON |
+| `tools/interop/peer-send.mjs` | Node script: bind, accept, send a known op, print port |
+| `tests/test-ocapn-live-interop.rkt` | Racket test: orchestrate two child processes, assert |
+| `.github/workflows/interop.yml` | Add `live-interop` job |
+
+### Progress
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 5A | Node peer scripts (recv + send) | ✅ | tools/interop/peer-{recv,send}.mjs |
+| 5B | Racket-side bidirectional test | ✅ | tests/test-ocapn-live-interop.rkt — 2/2 green on Racket 9.1 |
+| 5C | Add live-interop job to interop CI | ✅ | extends `.github/workflows/interop.yml` |
+| 5D | Phase-5 commit + green suite | 🔄 | |
