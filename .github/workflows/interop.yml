@@ -73,3 +73,6 @@ jobs:
 
       - name: Run handshake test (Phase 6 — bidirectional op:start-session)
         run: cd racket/prologos && raco test tests/test-ocapn-handshake.rkt
+
+      - name: Run conversation test (Phase 7 — 3-frame multi-op exchange)
+        run: cd racket/prologos && raco test tests/test-ocapn-conversation.rkt
