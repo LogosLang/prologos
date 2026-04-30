@@ -58,11 +58,18 @@
 ;; lowers to a single i64 literal returned from @main.
 (define (lower-program forms)
   (case (current-llvm-tier)
-    [(0) (lower-program/tier0 forms)]
+    [(0 1) (lower-program/main-only forms)]
     [else
      (error 'lower-program
-            "tier ~a not yet implemented (Tier 0 only at this commit)"
+            "tier ~a not yet implemented (Tier 0–1 at this commit)"
             (current-llvm-tier))]))
+
+;; Guard: raise unsupported-llvm-node unless current tier is at least min-tier.
+(define (require-tier! min-tier node feature-name)
+  (when (< (current-llvm-tier) min-tier)
+    (unsupported! node
+                  (format "~a requires Tier ~a (current Tier ~a)"
+                          feature-name min-tier (current-llvm-tier)))))
 
 ;; lower-program/from-global-env : -> String
 ;; Convenience: pulls main's type+body out of (current-prelude-env)
@@ -76,44 +83,106 @@
   (lower-program (list (list 'def 'main type body))))
 
 ;; ============================================================
-;; Tier 0 — literal Int returned by main as exit code
+;; Tier 0–1 — single `def main : Int` lowered to @main
 ;; ============================================================
 
-(define (lower-program/tier0 forms)
+(define (lower-program/main-only forms)
   (match forms
     [(list (list 'def 'main type body))
-     (lower-main/tier0 type body)]
+     (lower-main type body)]
     [_
-     (error 'lower-program/tier0
-            "Tier 0 expects a single 'main' top-form; got ~v" forms)]))
+     (error 'lower-program/main-only
+            "Tiers 0–1 expect a single 'main' top-form; got ~v" forms)]))
 
-(define (lower-main/tier0 type body)
-  ;; Type must be Int (Tier 0 closes the Bool case in Tier 1).
+(define (lower-main type body)
   (unless (expr-Int? type)
-    (unsupported! type "Tier 0 only supports `def main : Int`"))
-  (define n (lower-int-literal/tier0 body))
+    (unsupported! type "main must currently have type Int"))
+  ;; Builder state for the entry basic block.
+  (define instrs '())
+  (define counter 0)
+  (define (emit! s) (set! instrs (cons s instrs)))
+  (define (fresh!)
+    (set! counter (+ counter 1))
+    (format "%t~a" counter))
+  (define abs-needed? (box #f))
+  (define final-val (lower-int-expr body emit! fresh! abs-needed?))
+  (define decls
+    (cond
+      [(unbox abs-needed?)
+       "declare i64 @llvm.abs.i64(i64, i1)\n\n"]
+      [else ""]))
   (string-append
-   "; ModuleID = 'prologos-tier0'\n"
+   (format "; ModuleID = 'prologos-tier~a'\n" (current-llvm-tier))
    "target triple = \"" (default-target-triple) "\"\n"
    "\n"
+   decls
    "define i64 @main() {\n"
    "entry:\n"
-   "  ret i64 " (number->string n) "\n"
+   (apply string-append
+          (map (lambda (s) (string-append s "\n"))
+               (reverse instrs)))
+   "  ret i64 " final-val "\n"
    "}\n"))
 
-;; In Tier 0 the body must reduce to a single integer literal.
-;; We accept (expr-int n) directly. Annotated forms (expr-ann) unwrap once.
-(define (lower-int-literal/tier0 e)
+;; lower-int-expr : Expr × (String->Void) × (->String) × Box[Bool] -> String
+;; Returns the LLVM value reference (literal or %tN) for the i64 result.
+;; emit! appends an instruction line; fresh! returns a new SSA name.
+;; abs-needed? is set when @llvm.abs.i64 is used so the declaration is added.
+(define (lower-int-expr e emit! fresh! abs-needed?)
+  (define (recur x) (lower-int-expr x emit! fresh! abs-needed?))
+  (define (binop op a b)
+    (define av (recur a))
+    (define bv (recur b))
+    (define t (fresh!))
+    (emit! (format "  ~a = ~a i64 ~a, ~a" t op av bv))
+    t)
   (match e
+    ;; -- Tier 0 --
     [(expr-int n)
      (unless (exact-integer? n)
        (unsupported! e "expr-int with non-integer payload"))
-     n]
+     (number->string n)]
     [(expr-ann inner _)
-     (lower-int-literal/tier0 inner)]
+     (recur inner)]
+
+    ;; -- Tier 1: Int arithmetic --
+    [(expr-int-add a b)
+     (require-tier! 1 e "expr-int-add")
+     (binop "add" a b)]
+    [(expr-int-sub a b)
+     (require-tier! 1 e "expr-int-sub")
+     (binop "sub" a b)]
+    [(expr-int-mul a b)
+     (require-tier! 1 e "expr-int-mul")
+     (binop "mul" a b)]
+    [(expr-int-div a b)
+     ;; LLVM sdiv: signed integer division (truncating toward zero).
+     ;; Division by zero is LLVM-undefined; matches Tier 1 unsafety budget.
+     (require-tier! 1 e "expr-int-div")
+     (binop "sdiv" a b)]
+    [(expr-int-mod a b)
+     ;; LLVM srem: signed remainder. Sign matches dividend.
+     (require-tier! 1 e "expr-int-mod")
+     (binop "srem" a b)]
+    [(expr-int-neg a)
+     (require-tier! 1 e "expr-int-neg")
+     (define av (recur a))
+     (define t (fresh!))
+     (emit! (format "  ~a = sub i64 0, ~a" t av))
+     t]
+    [(expr-int-abs a)
+     (require-tier! 1 e "expr-int-abs")
+     (set-box! abs-needed? #t)
+     (define av (recur a))
+     (define t (fresh!))
+     ;; @llvm.abs.i64 with poison-on-INT_MIN = false: returns INT_MIN as-is.
+     (emit! (format "  ~a = call i64 @llvm.abs.i64(i64 ~a, i1 false)" t av))
+     t]
+
     [_
      (unsupported! e
-                   "Tier 0 body must be an Int literal (use Tier 1 for arithmetic)")]))
+                   (format "no Tier ~a lowering for this node"
+                           (current-llvm-tier)))]))
 
 ;; ============================================================
 ;; Helpers
