@@ -780,3 +780,93 @@ Worth codifying as a reusable helper in `test-support.rkt` if
 more interop tests appear.
 
 **Discovered.** Phase 3 of OCapN interop (commit `b4493a1`).
+
+---
+
+### #26 — `syrup-tagged` model carries one payload, but OCapN records are arity-N (2026-04-29, real bug)
+
+**Symptom.** Encoding `op:start-session "0.1" "tcp-testing-only:peer-A"`
+through Phase 2's `op-to-syrup` produced
+
+```
+<16'op:start-session[3"0.128"tcp-testing-only:peer-A]>
+```
+
+— a record with ONE child, a list of two strings — instead of the
+canonical OCapN form
+
+```
+<16'op:start-session3"0.128"tcp-testing-only:peer-A>
+```
+
+— a record with TWO children. The Phase 4 cross-impl byte-equality
+test missed it because every Phase-4 vector was a 1-arity record.
+The Phase 6 handshake test caught it the moment a real `@endo/ocapn`
+peer tried to extract version + locator from the record's children
+and got `null` for both fields.
+
+**Cause.** `data SyrupValue` declares
+`syrup-tagged : String -> SyrupValue`, i.e. one label and ONE
+payload. The Phase-2 encoder packed multi-arg ops as
+`(syrup-tagged label (syrup-list args))` which round-trips
+through the Prologos decoder fine (the decoder's `decode-record-with`
+explicitly wraps arity ≥ 2 records back into `(syrup-tagged label
+(syrup-list rest))`) but emits the wrong wire bytes.
+
+**Workaround applied.** Added `encode-record : String [List
+SyrupValue] -> String` to `syrup-wire.prologos`. It produces
+`<` + symbol(label) + concat(encode each arg) + `>` directly,
+bypassing the syrup-tagged constructor for multi-arity cases.
+Phase 2's `encode-op` now uses `encode-record` for the 5
+multi-arity ops (start-session, deliver, deliver-only, listen,
+gc-export) and keeps `wire::encode (syrup-tagged ...)` only for
+the 1-arity ops (abort, gc-answer).
+
+**Verdict.** Real bug in the model abstraction. The fix is
+asymmetric — encode goes through a special path; decode wraps in
+syrup-list. A cleaner future fix is to extend `data SyrupValue`
+with an N-arity record constructor, e.g.
+`syrup-record : String -> [List SyrupValue]`, and treat the
+1-arity case as a syntactic sugar.
+
+**Discovered.** Phase 6 of OCapN interop.
+
+---
+
+### #27 — Prologos `decode-op` is catastrophically slow on multi-arity records (2026-04-29, perf bug)
+
+**Symptom.** Decoding a 60-byte op:start-session record via
+`decode-op` takes **~7 minutes** of reducer wall time. The function
+returns the correct value — the round-trip is sound — but takes
+unbounded time per decode.
+
+```
+warmup encode-op...                 cpu time: 317 ms
+decode short start-session...       cpu time: 454,832 ms
+```
+
+**Likely cause.** The decoder's recursive structure
+(`decode-many-loop` calls `decode-at` per element, which calls
+`decode-many-loop` for nested records, which closes over many
+SyrupValue cons cells) interacts badly with the Prologos reducer's
+beta-reduction strategy. Each decode step accumulates large
+substituted closures, producing exponential-ish work.
+
+**Workaround in this port.** Phase 6's bidirectional handshake
+test asserts byte-equality directly (`their-line ==
+expected-prologos-bytes`) instead of decoding the received bytes
+via Prologos. Byte equality is a strictly stronger correctness
+signal anyway: if the bytes match, both decoders trivially recover
+the same SyrupValue.
+
+**Verdict.** Real perf bug in the Prologos reducer (or the way
+the decoder's recursion compiles to it). A proper fix needs
+either a less-recursive decoder shape or compiler-level changes.
+Not a blocker for interop validation — byte equality is the
+preferred signal — but it would block any Prologos OCapN node
+running in production.
+
+**Discovered.** Phase 6 of OCapN interop.
+The 1-arity round-trip path used in Phase 5's
+`test-ocapn-live-interop.rkt` (op:abort, op:gc-answer) doesn't
+exhibit the issue — only multi-arity records do.

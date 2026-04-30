@@ -71,7 +71,12 @@ defn opt-pos [o]
     | some n -> desc-answer n
 
 ;; ===========================================================
-;; Encode a CapTPOp to a Syrup record
+;; Encode a CapTPOp to a Syrup-record VALUE (for tests that want
+;; the SyrupValue model, not bytes). Multi-arity records are
+;; modelled as `syrup-tagged label (syrup-list args)` — the same
+;; shape the decoder produces. This loses the spec-level
+;; record-N-arity distinction but is sufficient for the
+;; round-trip tests.
 ;; ===========================================================
 
 spec op-to-syrup CapTPOp -> SyrupValue
@@ -86,12 +91,25 @@ defn op-to-syrup [op]
     | op-gc-answer pos          -> [syrup-tagged "op:gc-answer" [syrup-nat pos]]
 
 ;; ===========================================================
-;; Encode a CapTPOp to wire bytes
+;; Encode a CapTPOp to wire BYTES.
 ;; ===========================================================
+;;
+;; Multi-arity records (op:start-session, op:deliver, op:listen,
+;; op:gc-export, op:deliver-only) use `encode-record` directly to
+;; produce the canonical `<label arg1 arg2 ...>` form. Single-arity
+;; records (op:abort, op:gc-answer) go through `op-to-syrup` +
+;; `wire::encode` (the syrup-tagged form is byte-equivalent in
+;; the 2-elem case).
 
 spec encode-op CapTPOp -> String
-defn encode-op [op]
-  wire::encode [op-to-syrup op]
+defn encode-op
+  | op-start-session ver loc  -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
+  | op-abort reason           -> wire::encode [syrup-tagged "op:abort" [syrup-string reason]]
+  | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]
+  | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons args nil]]
+  | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-export resolver] nil]]
+  | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
+  | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
 
 ;; ===========================================================
 ;; Decoder

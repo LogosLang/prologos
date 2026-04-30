@@ -132,6 +132,30 @@ defn encode-safe [v]
     | false -> none
 
 ;; ===========================================================
+;; Multi-arity record encoder
+;; ===========================================================
+;;
+;; Our `syrup-tagged` carries exactly ONE payload, so a value
+;; like `(syrup-tagged "op:start-session" (syrup-list [ver loc]))`
+;; serialises to `<op:start-session [ver loc]>` — wrong: the
+;; canonical OCapN form is `<op:start-session ver loc>` (the
+;; args are direct children of the record, not wrapped in a
+;; list). The decoder already handles arity ≥ 2 records correctly
+;; (it returns `(syrup-tagged label (syrup-list rest))` so all
+;; downstream dispatch already round-trips); the encoder needs
+;; an explicit multi-arity helper.
+;;
+;; `encode-record label [args]` produces the canonical bytes:
+;;   "<" + encode(syrup-symbol label) + concat(encode each arg) + ">"
+
+spec encode-record String [List SyrupValue] -> String
+  :doc "Encode `<label arg1 arg2 ... argN>` directly."
+defn encode-record [label args]
+  str::append "<"
+    [str::append [encode [syrup-symbol label]]
+      [str::append [encode-many encode args] ">"]]
+
+;; ===========================================================
 ;; Decoder
 ;; ===========================================================
 ;;
