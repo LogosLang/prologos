@@ -67,6 +67,7 @@
                        (string->bytes/utf-8 (number->string (tier-arg))))
                       ev)])
       (system* racket-exe driver-script
+               "--no-run"
                "-o" (path->string out-bin)
                (path->string file))))
   (cond
