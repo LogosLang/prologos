@@ -1,0 +1,3 @@
+def main : Int := 7
+
+;; :expect-exit 7
