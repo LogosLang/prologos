@@ -24,7 +24,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 1 | `test-sd-vee` + `test-sd-wedge` in sre-core.rkt; wire into inference + reporting; implication rules for distributive⇒SD | ⬜ | — |
+| 1 | `test-sd-vee` + `test-sd-wedge` in sre-core.rkt; wire into inference + reporting; implication rules for distributive⇒SD | ✅ | `a35d5f65`. 99 LoC sre-core.rkt + 71 LoC test-sre-algebraic.rkt. 42 tests pass via targeted runner. VAG passed adversarially. |
 | 2 | Programmatic sample generator from ctor-desc registry | ⬜ | "Lean more thorough" per user 2026-04-30. |
 | 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ⬜ | Per workflow.md MANDATORY dedicated test phase. |
