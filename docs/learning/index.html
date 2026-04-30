@@ -138,29 +138,6 @@
   }
   .companion-card .stats strong { color: var(--ink-soft); font-weight: 600; }
 
-  .standalone-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
-  }
-  .standalone-card {
-    background: var(--bg-warm);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 18px 20px;
-    text-decoration: none; color: inherit;
-    transition: all 0.2s ease;
-    display: block;
-  }
-  .standalone-card:hover { border-color: var(--gold); transform: translateY(-1px); }
-  .standalone-card .kind {
-    font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 600;
-    letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--gold); margin-bottom: 6px;
-  }
-  .standalone-card h3 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
-  .standalone-card p { font-size: 13px; color: var(--text-dim); margin: 0; line-height: 1.5; }
-
   .why-section {
     background: var(--bg-warm);
     border-left: 3px solid var(--gold);
@@ -259,48 +236,6 @@
     <h3>Why these texts</h3>
     <p>Prologos's design rests on a thesis that <strong>every computable function is expressible as a fixpoint computation on lattices</strong> (the Hyperlattice Conjecture). The compiler runs as a propagator network where every cell carries a lattice value, every merge is a lattice join, and every typing rule is a structural unification — the lattice <em>meet</em>. The math foundations matter directly to the engineering.</p>
     <p>These three texts cover the foundations from complementary angles: Călugăreanu for the module-theoretic perspective (lattices as algebraic structures over modules), Freese-Ježek-Nation for the free-lattice / word-problem / decidability perspective, and Nation's notes for the broad lattice-theory survey. Read together, they're the math equivalent of a triangulation: the same structures, viewed from three angles, the points of agreement are where Prologos's design lives.</p>
-  </div>
-
-  <div class="section-label">Standalone materials</div>
-
-  <div class="standalone-grid">
-
-    <a class="standalone-card" href="lattice-module-curriculum.md">
-      <div class="kind">Curriculum · md</div>
-      <h3>Lattice + Module Theory Curriculum</h3>
-      <p>Structured study path tying the three companions together. Markdown source.</p>
-    </a>
-
-    <a class="standalone-card" href="lattice-module-curriculum.pdf">
-      <div class="kind">Curriculum · pdf</div>
-      <h3>Lattice + Module Theory Curriculum</h3>
-      <p>Print-ready PDF version of the curriculum.</p>
-    </a>
-
-    <a class="standalone-card" href="lattice-module-worksheet.md">
-      <div class="kind">Worksheet · md</div>
-      <h3>Module Theory Worksheet</h3>
-      <p>Companion exercise sheet with progressive difficulty.</p>
-    </a>
-
-    <a class="standalone-card" href="lattice-module-worksheet.pdf">
-      <div class="kind">Worksheet · pdf</div>
-      <h3>Module Theory Worksheet</h3>
-      <p>Print-ready PDF version of the worksheet.</p>
-    </a>
-
-    <a class="standalone-card" href="lattice-module-hub.html">
-      <div class="kind">Atlas · hub</div>
-      <h3>Lattice Atlas</h3>
-      <p>Cross-companion structured navigation hub.</p>
-    </a>
-
-    <a class="standalone-card" href="nation-research-catalog.pdf">
-      <div class="kind">Catalog · pdf</div>
-      <h3>Nation Research Catalog</h3>
-      <p>Reference catalog of Nation's lattice theory publications.</p>
-    </a>
-
   </div>
 
   <div class="footer">
