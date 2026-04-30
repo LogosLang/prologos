@@ -30,11 +30,11 @@ Tier 2 is the natural break before deeper Phase-2 blockers (closure conversion, 
 | T0.B | LLVM emitter for `expr-int`, `expr-Int` | ✅ | `racket/prologos/llvm-lower.rkt` — closed pass; `unsupported-llvm-node` exn for everything else |
 | T0.C | Tier 0 acceptance file + Racket-side test | ✅ | `examples/llvm/tier0/{exit-42,exit-0,exit-7}.prologos` + `tests/test-llvm-lower.rkt` |
 | T0.D | Tier 0 CI integration | ✅ | `.github/workflows/llvm-lower.yml` runs unit + e2e |
-| T0.✅ | Tier 0 commit | 🔄 | next |
-| T1.A | Lowering for `expr-int-{add,sub,mul,div,mod,neg,abs,lt,le,eq}` | ⬜ | |
-| T1.B | `expr-app` for primitive-rooted application | ⬜ | |
-| T1.C | Tier 1 acceptance file + tests + CI | ⬜ | |
-| T1.✅ | Tier 1 commit | ⬜ | |
+| T0.✅ | Tier 0 commit | ✅ | `9f84490` |
+| T1.A | Lowering for `expr-int-{add,sub,mul,div,mod,neg,abs}` | ✅ | scope narrowed: comparisons deferred to a later tier (no `if`/match yet means Bool is unusable) |
+| T1.B | `expr-app` for primitive-rooted application | ✅ | OQ-T1-1 resolved: parser produces `surf-int-add` directly; elaborator → `expr-int-add`. No eta-expansion to handle. |
+| T1.C | Tier 1 acceptance file + tests + CI | ✅ | 8 example programs + 10 rackunit tests + CI step |
+| T1.✅ | Tier 1 commit | 🔄 | next |
 | T2.A | `expr-lam` lowering at top level (non-capturing only) | ⬜ | |
 | T2.B | `expr-bvar` → SSA local; `expr-app` → `call` | ⬜ | |
 | T2.C | `m0` binder drop (single-line erasure at top level) | ⬜ | |
@@ -223,18 +223,14 @@ Compile programs like `def main : Int := [int+ 1 [int* 2 3]]` (exit code 7).
 
 - `expr-int-add`, `expr-int-sub`, `expr-int-mul`, `expr-int-div`, `expr-int-mod`
 - `expr-int-neg`, `expr-int-abs`
-- `expr-int-lt`, `expr-int-le`, `expr-int-eq`
-- `expr-Bool`, `expr-true`, `expr-false`
-- `expr-app` — only the case where the function is one of the primitive nodes above (full `expr-app` defers to Tier 2)
 
-### Open question
+### Scope narrowing (closed during T1.A)
 
-The elaborator's `primitive-op-eta-table` returns eta-expanded `expr-lam` wrappers. For inline use like `[int+ 1 2]`, the elaborator may produce either:
+The plan originally included `expr-int-{lt,le,eq}` and `expr-Bool`/`expr-true`/`expr-false`. **Removed** because without `if` or pattern-matching control flow (Tier 3 territory), Bool values cannot be observed: a `def main : Bool` would require a Bool→exit-code coercion, and a Bool subexpression cannot drive any branch. The remaining Tier 1 surface (Int → Int → Int and Int → Int) is closed and complete.
 
-(a) `(expr-int-add 1 2)` directly (inlined), or
-(b) `((expr-lam ... (expr-lam ... (expr-int-add (expr-bvar 1) (expr-bvar 0)))) 1 2)` (eta-expanded form)
+### OQ-T1-1 resolved
 
-Phase T1.A first investigates which form survives elaboration + zonking. If (b), Tier 1 includes a small beta-reduction step at the lowering boundary (no full reducer; just a one-rule unfolder for primitive eta-redexes). If (a), no additional work.
+Investigation: `racket/prologos/parser.rkt:1110` and `tree-parser.rkt:300` both produce `surf-int-add` directly for `[int+ a b]`. Elaborator (`elaborator.rkt:1233`) emits `expr-int-add` from `surf-int-add`. **No eta-expansion** survives elaboration for inline primitive applications. The eta table is only consulted when the primitive is referenced as a value (`def f := int+`); inline usage skips it. No beta-reducer needed at the lowering boundary.
 
 ### Validation
 
