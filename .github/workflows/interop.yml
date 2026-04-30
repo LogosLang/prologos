@@ -65,5 +65,8 @@ jobs:
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 
-      - name: Run cross-impl test
+      - name: Run cross-impl test (Phase 4 — static byte-equality)
         run: cd racket/prologos && raco test tests/test-ocapn-syrup-cross-impl.rkt
+
+      - name: Run live-interop test (Phase 5 — real TCP exchange Racket↔Node)
+        run: cd racket/prologos && raco test tests/test-ocapn-live-interop.rkt
