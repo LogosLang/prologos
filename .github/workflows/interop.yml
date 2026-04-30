@@ -70,3 +70,6 @@ jobs:
 
       - name: Run live-interop test (Phase 5 — real TCP exchange Racket↔Node)
         run: cd racket/prologos && raco test tests/test-ocapn-live-interop.rkt
+
+      - name: Run handshake test (Phase 6 — bidirectional op:start-session)
+        run: cd racket/prologos && raco test tests/test-ocapn-handshake.rkt

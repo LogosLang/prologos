@@ -38,7 +38,15 @@ fidelity.
 | 4B | JS vector generator + committed fixture | ✅ | tools/interop/gen-syrup-vectors.mjs + tests/fixtures/syrup-cross-impl.txt (22 vectors) |
 | 4C | Racket cross-impl test | ✅ | tests/test-ocapn-syrup-cross-impl.rkt — 44/44 green on Racket 9.1 |
 | 4D | Interop CI workflow | ✅ | .github/workflows/interop.yml — runs gen-then-diff drift gate + Racket cross-impl test |
-| 4E | Phase-4 commit + green suite | 🔄 | |
+| 4E | Phase-4 commit + green suite | ✅ | commit 96df02c |
+| 5A | Node peer scripts (recv + send) | ✅ | tools/interop/peer-{recv,send}.mjs |
+| 5B | Racket-side bidirectional test | ✅ | tests/test-ocapn-live-interop.rkt — 2/2 green |
+| 5C | Add live-interop job to interop CI | ✅ | extends `.github/workflows/interop.yml` |
+| 5D | Phase-5 commit + green suite | ✅ | commit 0145c60 |
+| 6A | Multi-arity record encoder fix | ✅ | encode-record in syrup-wire.prologos |
+| 6B | Node peer-handshake script | ✅ | tools/interop/peer-handshake.mjs |
+| 6C | Racket-side handshake test | ✅ | tests/test-ocapn-handshake.rkt — 1/1 green |
+| 6D | Phase-6 commit + green suite | 🔄 | |
 
 ## Design Mantra Audit
 
@@ -337,3 +345,70 @@ the strongest interop signal short of a full handshake.
 | 5B | Racket-side bidirectional test | ✅ | tests/test-ocapn-live-interop.rkt — 2/2 green on Racket 9.1 |
 | 5C | Add live-interop job to interop CI | ✅ | extends `.github/workflows/interop.yml` |
 | 5D | Phase-5 commit + green suite | 🔄 | |
+
+## Phase 6 — Bidirectional `op:start-session` handshake
+
+Builds on Phase 5 with: (a) both peers exchanging structured
+`op:start-session` records (not just `op:abort` strings), (b) a
+real bug surfaced (and fixed) along the way.
+
+### Bug surfaced + fixed
+
+The handshake test proved that Phase 2's `op-to-syrup` was
+emitting WRONG bytes for any multi-arity record. Our
+`syrup-tagged` constructor only carries ONE payload, so the
+encoder packed N args as `(syrup-tagged label (syrup-list args))`,
+producing wire form `<label [arg1 arg2 ...]>` instead of the
+canonical `<label arg1 arg2 ...>`. Phase 4's cross-impl test
+missed it because every Phase-4 vector was a 1-arity record.
+
+Fix: added `encode-record : String [List SyrupValue] -> String`
+to syrup-wire.prologos that produces `<label arg1 ... argN>`
+directly (bypassing syrup-tagged for multi-arity). Phase 2's
+encode-op now uses encode-record for the 5 multi-arity ops
+(start-session, deliver, deliver-only, listen, gc-export);
+1-arity ops (abort, gc-answer) still go through syrup-tagged.
+
+Codified as goblin-pitfall #26.
+
+### Perf gap surfaced
+
+Prologos's `decode-op` of a multi-arity record (e.g., the
+60-byte op:start-session bytes) takes **~7 minutes** in the
+reducer (vs <1 second for a 1-arity op:abort). Round-trip is
+correct; just unbounded in time. Codified as pitfall #27.
+The Phase-6 test sidesteps this by asserting BYTE EQUALITY
+of the received bytes against what Prologos would have
+emitted — a strictly stronger correctness signal.
+
+### Test shape
+
+Single test, two assertions:
+
+| Assertion | Side | Mechanism |
+|---|---|---|
+| Node decoded our start-session correctly | Node-side | child stdout JSON has ok:true + matching label/version/locator |
+| Node's start-session bytes match Prologos's encoding | Racket-side | `(check-equal? their-line expected-prologos-bytes)` |
+
+### Progress
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 6A | Multi-arity record encoder fix | ✅ | encode-record in syrup-wire.prologos |
+| 6B | Node peer-handshake script | ✅ | tools/interop/peer-handshake.mjs |
+| 6C | Racket-side handshake test | ✅ | tests/test-ocapn-handshake.rkt — 1/1 green on Racket 9.1 |
+| 6D | Add handshake job to interop CI | ✅ | extends `.github/workflows/interop.yml` |
+| 6E | Phase-6 commit + green suite | 🔄 | |
+
+## Out of scope (Phase 7+)
+
+- **Multi-message conversations** post-handshake (op:deliver,
+  op:listen, op:gc-export sequences) — needs the encoder fix to
+  land first (which it has) plus richer test orchestration
+- **Secure netlayer** — Ed25519 signed locators, X25519 channel
+  keys, per-message authentication. Independent track.
+- **Full GC** — refcount tracking, op:gc-export emission on refr
+  drop, op:gc-answer on answer-table eviction
+- **Decoder perf fix** — lift decode-many-loop out of the
+  Prologos reducer's recursion-heavy path, OR teach the reducer
+  to handle this shape efficiently
