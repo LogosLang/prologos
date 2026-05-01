@@ -28,7 +28,9 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 2 | Programmatic sample generator from ctor-desc registry + sd-evidence struct + `/detailed` variants | ✅ | `f241e14e`. New file `sre-sample-generator.rkt` (~120 LoC) + sre-core.rkt enrichment (~80 LoC, sd-evidence struct + /detailed variants + backward-compat wrappers) + 11 new tests. 53 tests pass via targeted runner. VAG passed adversarially with two acknowledged Phase-3 gaps (sample-size verification, binder-ctor coverage). API note: `all-ctor-descs` takes `#:domain` keyword (not positional) — caught at compile time. |
 | 2a | Principled-fix corrective: per-component-spec generation (Option C), drop `with-handlers`, include binder ctors with closed-body limitation | ✅ | `1c0c012e`. Generator refactored: per-component-spec atom pools, sentinel filter, binders included. **Bonus discovery**: Phase 2's `with-handlers` was masking malformed compounds (bot/top in component slots → reconstruct produces invalid `(expr-Pi mw type-top type-top)`-shape values that merge can't handle). Two-pool model (lattice elements vs structural components) surfaces and fixes it. 58 tests pass. VAG passed adversarially with the masked-issue surfacing as the Move B+ pattern's intended payoff. Codebase-wide audit of remaining 72 `with-handlers` instances filed as [issue #40](https://github.com/LogosLang/prologos/issues/40). |
 | 3c | Per-relation `meet-registry` on sre-domain; retire `current-lattice-subtype-fn` callback; principled subtype-meet dispatch | ✅ | `d4e8c811`. User-flagged 2026-04-30 as principled cleanup. `meet-registry` field added to sre-domain; `type-meet-registry` registered in unify.rkt; `type-lattice-meet` refactored with `#:subtype-fn` keyword; callback retired; lint baseline updated; `type-pseudo-complement` updated to use explicit subtype-fn. **Bonus discovery**: Track 2G's "type lattice not distributive under equality merge" finding was an artifact of the always-installed callback mixing equality+subtype semantics. Post-3c with principled per-relation dispatch, equality lattice IS distributive (216/216 triples confirmed) — Track 2H (PPN 4C T-3 Commit B) had made it distributive via union-aware merge; the callback hid this. 4 stale test expectations updated in test-sre-algebraic.rkt + 4 cascading tests updated in test-sre-track2h.rkt + 5 new Phase-3c tests added. Sister callback `current-lattice-meta-solution-fn` deferred to PM Track 12 (cross-referenced in PM Master + DEFERRED.md). |
-| 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). |
+| 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). Scope refined post-Phase-3c: sweep type×equality AND type×subtype using `realistic-type-atoms` base-values + max-depth 1-2; distinguish "confirmed on full sample" / "confirmed on hand-picked-6 only" / "refuted with witness"; report hypothesis-fired/total-checked ratio per `/detailed` variants. Pseudo-complement check deferred to own phase (Phase 3.5). Bonus findings → discuss-when-found. session×equality + form×equality deferred to Phase 3b (generator extension). |
+| 3.5 | (deferred) Has-pseudo-complement empirical check; determines Heyting reach for non-Heyting-declared domains | ⬜ | New test function parallel to test-distributive et al. ~30-50 LoC. Decoupled from Phase 3 to keep that scope tight. Would inform Discussion phase decisions. |
+| 3b | (deferred) Generator extension for session/form domains; sweep extends to those | ⬜ | Requires per-domain ctor analysis + atom-pool extension in `build-atoms-by-spec`. session×equality is the OTHER empirically-interesting case (NOT declared distributive); form×equality is Heyting-via-implication. |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ⬜ | Per workflow.md MANDATORY dedicated test phase. |
 | Discussion | Review Phase 3 findings with user; decide on Phase 4 (declaration updates) | ⬜ | Out-of-band of the implementation phases per user direction. |
 
@@ -244,15 +246,49 @@ Estimated scope: ~80-100 LoC across `sre-core.rkt` + ~30 LoC of unit tests in `t
 
 ### Phase 3: Empirical sweep + findings recording
 
-**Goal**: Run the property sweep (including new SD checks) against every registered domain × relation pair using Phase 2's generator. Capture findings as a committed test fixture and a section in this design doc (§ Phase 3 Findings, populated when phase runs). **Do NOT update declared-properties at registration sites** — that's a separate post-discussion pass per user direction.
+**Goal**: Run the property sweep (including new SD checks) against every registered domain × relation pair using Phase 2a's generator + per-relation `meet-registry` lookup (Phase 3c). Capture findings as a committed test fixture and a markdown table in § Phase 3 Findings (populated when phase runs). **Do NOT update declared-properties at registration sites** — that's the Discussion phase per user direction.
 
-**Mini-design + audit**: deferred to phase open.
+**Mini-design (locked 2026-04-30, post-Phase-3c)**:
 
-**Output**: a markdown table in this doc, one row per domain × relation, columns for each algebraic property with confirmed/refuted/untested + counterexample triple if refuted.
+*Design references*:
+- This doc § Stage 2 Audit + Phase 2a mini-design (sentinel filtering enabling honest reporting)
+- Phase 3c bonus discovery (distributivity flip — equality lattice IS distributive on hand-picked-6 post-Phase-3c)
+- Phase 1 surfacing #3 (vacuous-triple risk → /detailed enrichment)
+- [PTF Lattice Hierarchy note](../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) (per-level capability catalog)
 
-**Test coverage**: regression test that the sweep produces the recorded findings (so future SRE changes that alter merge functions surface as test-fixture changes, not silent property drift).
+*Obligations carried*:
+- Use `/detailed` variants for vacuous-vs-non-vacuous reporting (Phase 1+2 obligation)
+- Use `sre-domain-meet` lookup for principled per-relation meet (Phase 3c enabling)
+- Sweep type×equality AND type×subtype (both available via meet-registry post-Phase-3c)
+- Distinguish "confirmed on full sample" / "confirmed on hand-picked-6 only" / "refuted with witness"
+- Report hypothesis-fired/total-checked ratio per finding
+- DO NOT update declared-properties at registration sites (Discussion phase)
 
-Estimated scope: ~50-75 LoC + diagnostic output. ~30-45 min.
+*Scope (locked)*:
+1. Add `run-sd-sweep` function (likely in `sre-sample-generator.rkt` — sample generation + diagnostic share concern). Walks (`'type`, `'equality`) and (`'type`, `'subtype`); uses `sre-domain-meet`; calls `/detailed` variants; produces structured `sd-finding` records.
+2. Sweep with `realistic-type-atoms` base-values + max-depth 1-2 (Phase 2a generator's ctor coverage including non-dependent binders).
+3. `format-sd-findings` produces markdown table for design doc § Phase 3 Findings.
+4. Validate distributivity-confirmed status across wider sample. Findings table makes the sample-set explicit.
+5. Capture counterexample triples (if any) as Phase T regression-test fixtures.
+6. Document any Move B+ bonus findings prominently — Phase 2a + Phase 3c precedent says expect them. Per user direction (2026-04-30): if a bonus finding surfaces, dialogue first, decide together — NOT commit speculatively.
+7. Phase 3 outputs → Discussion-phase inputs.
+
+*NOT in scope (explicit hard boundary)*:
+- Pseudo-complement empirical check → Phase 3.5 (own row in tracker)
+- Bonus-finding atomic commits → discuss-when-found per user
+- session × equality + form × equality sweeps → Phase 3b
+- Registration declaration updates → Discussion phase
+
+*Drift risks for Phase 3*:
+1. Confusing finding-reporting with declaration-updating — explicit hard boundary.
+2. Underclaiming or overclaiming the 6-atom-only result — findings table must name the sample set used.
+3. Vacuous-triple ratios buried — must surface in the findings table per `/detailed` enrichment.
+4. Move B+ pattern surfacing another bonus finding — discuss-when-found per user direction (NOT commit speculatively).
+5. Performance: sweep on 50-70 samples is ~125k-340k iterations per check per relation. Acceptable for diagnostic; if it hits perf wall, sample-size cap is the dial.
+
+**Test coverage**: regression test that the sweep produces the recorded findings (so future SRE changes that alter merge functions surface as test-fixture changes, not silent property drift). Snapshot the markdown output in a test fixture for diff-on-change.
+
+**Estimated scope**: ~80-100 LoC for sweep + format functions, + the markdown findings table. ~30-45 min implementation + ~15 min findings analysis.
 
 ### Phase T: Dedicated test file
 
