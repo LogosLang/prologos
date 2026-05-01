@@ -54,6 +54,13 @@
          relink-foreign-marshallers!
          pnet-stale?
          pnet-path-for-module
+         ;; SH Track 1 seed: format-2 versioned wrapper (2026-05-02)
+         pnet-wrap
+         pnet-unwrap
+         PNET_MAGIC
+         PNET_FORMAT_VERSION
+         PNET_VALID_MODES
+         PNET_SUBSTRATE_VERSION
          ;; For testing
          make-serializer
          deep-struct->serializable
@@ -63,8 +70,90 @@
 ;; ============================================================
 ;; .pnet format version
 ;; ============================================================
+;;
+;; Two coexisting formats:
+;;
+;;   LEGACY (format 1): a flat list whose car is the integer PNET_VERSION.
+;;     Layout: (list PNET_VERSION hash s-env s-specs s-locs exports ns ...registries...)
+;;     This is what every .pnet file shipped before the SH series wrapper
+;;     was introduced. Loaders MUST continue to accept it.
+;;
+;;   WRAPPED (format 2.0+): a list with a header, wrapping the legacy payload.
+;;     Layout: (list PNET_MAGIC PNET_FORMAT_VERSION mode substrate-version legacy-payload)
+;;       PNET_MAGIC          : symbol 'pnet (file-type identification)
+;;       PNET_FORMAT_VERSION : (list major minor) pair, e.g. '(2 0)
+;;                             — major bump = breaking change
+;;                             — minor bump = additive change
+;;       mode                : 'module (cached compile-time state, today's behavior)
+;;                             | 'program (deployment-time runtime artifact, future)
+;;       substrate-version   : string identifying the substrate/runtime version
+;;                             this artifact was emitted for. Future loaders use
+;;                             this to detect ABI mismatches.
+;;       legacy-payload      : the format-1 list, embedded unchanged.
+;;
+;; Detection: if (car raw) is the symbol 'pnet, it's format 2+. If (car raw) is
+;; an exact integer matching PNET_VERSION, it's format 1.
+;;
+;; Forward path (Track 1, future): once .pnet round-trips propagator structure
+;; as a value, the legacy-payload field will be augmented with new top-level
+;; sections (cell topology, propagator topology, fire-fn-tag table). Those are
+;; minor-version bumps. The mode flag distinguishes 'module from 'program
+;; artifacts so the substrate kernel can refuse to load a 'module .pnet at
+;; deployment time.
 
-(define PNET_VERSION 1)
+(define PNET_VERSION 1)                              ; legacy-payload format version
+(define PNET_MAGIC 'pnet)                            ; wrapper magic
+(define PNET_FORMAT_VERSION '(2 0))                  ; wrapper (major minor)
+(define PNET_FORMAT_MAJOR (car PNET_FORMAT_VERSION))
+(define PNET_FORMAT_MINOR (cadr PNET_FORMAT_VERSION))
+
+;; Substrate version: identifies the runtime substrate this .pnet was emitted
+;; for. Used by future loaders to detect ABI mismatches. Bumped when the
+;; substrate's exported API changes incompatibly.
+(define PNET_SUBSTRATE_VERSION "0.1")
+
+;; Supported modes. New as of format 2.0.
+;;   'module  — compile-time module state cache. Current and only behavior today.
+;;   'program — runtime deployment artifact. Track 1 work will populate this.
+(define PNET_VALID_MODES '(module program))
+(define PNET_DEFAULT_MODE 'module)
+
+;; pnet-wrap : Listof Any -> Listof Any
+;; Wrap a legacy-payload list in the format-2 header.
+(define (pnet-wrap legacy-payload [mode PNET_DEFAULT_MODE])
+  (unless (memq mode PNET_VALID_MODES)
+    (error 'pnet-wrap "unknown mode ~v; valid: ~v" mode PNET_VALID_MODES))
+  (list PNET_MAGIC PNET_FORMAT_VERSION mode PNET_SUBSTRATE_VERSION legacy-payload))
+
+;; pnet-unwrap : Any -> (values mode substrate-version legacy-payload) | #f
+;; Detect format and return the legacy payload + metadata. Returns #f if the
+;; input is not a valid .pnet (neither format).
+(define (pnet-unwrap raw)
+  (cond
+    ;; Format 2+ (wrapped)
+    [(and (list? raw)
+          (>= (length raw) 5)
+          (eq? (car raw) PNET_MAGIC))
+     (define ver (cadr raw))
+     (define mode (caddr raw))
+     (define subv (cadddr raw))
+     (define payload (list-ref raw 4))
+     (cond
+       ;; Major-version compat: refuse if major doesn't match what we know.
+       [(not (and (list? ver) (= (length ver) 2)
+                  (= (car ver) PNET_FORMAT_MAJOR)))
+        #f]
+       ;; Mode must be one we recognize.
+       [(not (memq mode PNET_VALID_MODES)) #f]
+       [else (values mode subv payload)])]
+    ;; Format 1 (legacy unwrapped)
+    [(and (list? raw)
+          (>= (length raw) 1)
+          (exact-integer? (car raw))
+          (= (car raw) PNET_VERSION))
+     (values PNET_DEFAULT_MODE 'pre-versioned raw)]
+    ;; Anything else: not a .pnet
+    [else #f]))
 
 ;; ============================================================
 ;; Serialization: struct->vector + gensym tagging + foreign-proc
@@ -489,11 +578,24 @@
       (infrastructure-stale? pnet-path)
       (let ([cached-data (with-handlers ([exn? (lambda (_) #f)])
                            (call-with-input-file pnet-path read))])
-        (or (not cached-data)
-            (not (list? cached-data))
-            (not (= (car cached-data) PNET_VERSION))
-            (not (equal? (cadr cached-data)
-                         (source-hash-for-module ns-sym source-path)))))))
+        (cond
+          [(not cached-data) #t]
+          [else
+           (define unwrap-result
+             (with-handlers ([exn? (lambda (_) #f)])
+               (call-with-values (lambda () (pnet-unwrap cached-data)) list)))
+           (cond
+             ;; pnet-unwrap returned #f (incompatible format / unknown mode /
+             ;; major-version mismatch) → invalidate the cache.
+             [(or (not unwrap-result) (= (length unwrap-result) 1)) #t]
+             [else
+              (define legacy-payload (caddr unwrap-result))
+              ;; legacy-payload[0]=PNET_VERSION, [1]=source-hash. Invalidate
+              ;; if either field doesn't match.
+              (or (not (list? legacy-payload))
+                  (not (= (car legacy-payload) PNET_VERSION))
+                  (not (equal? (cadr legacy-payload)
+                               (source-hash-for-module ns-sym source-path))))])]))))
 
 (define (serialize-module-state ns-sym source-path module-info)
   (define-values (serialize! has-foreign?) (make-serializer))
@@ -559,10 +661,16 @@
              ))
      (define pnet-path (pnet-path-for-module ns-sym))
      (make-directory* (path-only pnet-path))
+     ;; Wrap legacy-payload in format-2 header. Mode is 'module for module-state
+     ;; serialization; future Track 1 work will write 'program for deployment
+     ;; artifacts. The wrapper is purely additive — legacy readers that haven't
+     ;; been updated will fail format detection and trigger re-elaboration,
+     ;; which is the safe behavior.
+     (define wrapped (pnet-wrap pnet-data 'module))
      ;; Atomic write: write to temp, then rename
      (define tmp-path (make-temporary-file "pnet-~a" #f (path-only pnet-path)))
      (call-with-output-file tmp-path
-       (lambda (out) (write pnet-data out))
+       (lambda (out) (write wrapped out))
        #:exists 'replace)
      (rename-file-or-directory tmp-path pnet-path #t)
      pnet-path))
@@ -570,8 +678,21 @@
 (define (deserialize-module-state ns-sym source-path)
   (define pnet-path (pnet-path-for-module ns-sym))
   (and (file-exists? pnet-path)
-       (let ([raw (with-handlers ([exn? (lambda (_) #f)])
-                    (call-with-input-file pnet-path read))])
+       (let* ([disk-raw (with-handlers ([exn? (lambda (_) #f)])
+                          (call-with-input-file pnet-path read))]
+              ;; Format detection + unwrap. For legacy unwrapped files this
+              ;; returns the raw list; for format-2 wrapped files it returns
+              ;; the embedded legacy-payload. Returns #f for unknown formats.
+              [unwrap (and disk-raw
+                           (with-handlers ([exn? (lambda (_) #f)])
+                             (call-with-values
+                              (lambda () (pnet-unwrap disk-raw)) list)))]
+              [raw (and unwrap (= (length unwrap) 3) (caddr unwrap))]
+              ;; mode and substrate-version are available for future use:
+              ;; e.g. refusing to load a 'program-mode .pnet during compile-time
+              ;; module loading. Currently both modes have the same shape.
+              [_mode (and unwrap (= (length unwrap) 3) (car unwrap))]
+              [_substrate (and unwrap (= (length unwrap) 3) (cadr unwrap))])
          (and raw
               (list? raw)
               (= (car raw) PNET_VERSION)
