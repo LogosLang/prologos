@@ -166,3 +166,73 @@
   (check-exn ast-translation-error?
     (lambda ()
       (ast-to-low-pnet (expr-Int) body "t.prologos"))))
+
+;; ============================================================
+;; Sprint A: comparisons + boolrec/select (2026-05-01)
+;; ============================================================
+
+(test-case "[int-lt 3 5] : Bool — kernel-int-lt propagator"
+  (define lp (ast-to-low-pnet (expr-Bool)
+                              (expr-int-lt (expr-int 3) (expr-int 5))
+                              "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (check-equal? (count-by lp cell-decl?) 3)        ; 3, 5, result
+  (check-equal? (count-by lp propagator-decl?) 1)
+  (define p (for/first ([n (in-list (low-pnet-nodes lp))]
+                        #:when (propagator-decl? n)) n))
+  (check-equal? (propagator-decl-fire-fn-tag p) 'kernel-int-lt)
+  ;; Result cell domain is Bool, init #f
+  (define entry (for/first ([n (in-list (low-pnet-nodes lp))]
+                            #:when (entry-decl? n)) n))
+  (define result-cell
+    (for/first ([n (in-list (low-pnet-nodes lp))]
+                #:when (and (cell-decl? n)
+                            (= (cell-decl-id n) (entry-decl-main-cell-id entry)))) n))
+  (check-equal? (cell-decl-domain-id result-cell) 1)        ; BOOL-DOMAIN-ID
+  (check-equal? (cell-decl-init-value result-cell) #f))
+
+(test-case "[int-eq a b] and [int-le a b] dispatch to correct kernel tags"
+  (define lp-eq (ast-to-low-pnet (expr-Bool)
+                                 (expr-int-eq (expr-int 1) (expr-int 1))
+                                 "t.prologos"))
+  (define lp-le (ast-to-low-pnet (expr-Bool)
+                                 (expr-int-le (expr-int 1) (expr-int 2))
+                                 "t.prologos"))
+  (define (tag lp)
+    (propagator-decl-fire-fn-tag
+     (for/first ([n (in-list (low-pnet-nodes lp))]
+                 #:when (propagator-decl? n)) n)))
+  (check-equal? (tag lp-eq) 'kernel-int-eq)
+  (check-equal? (tag lp-le) 'kernel-int-le))
+
+(test-case "boolrec produces kernel-select propagator with 3 inputs"
+  ;; if 3 < 5 then 42 else 99 → 42
+  (define body (expr-boolrec (expr-Int)
+                             (expr-int 42)
+                             (expr-int 99)
+                             (expr-int-lt (expr-int 3) (expr-int 5))))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; cells: 3, 5, lt-result, 42, 99, select-result = 6
+  (check-equal? (count-by lp cell-decl?) 6)
+  ;; propagators: lt + select = 2
+  (check-equal? (count-by lp propagator-decl?) 2)
+  ;; The select propagator has 3 inputs.
+  (define select-prop
+    (for/first ([n (in-list (low-pnet-nodes lp))]
+                #:when (and (propagator-decl? n)
+                            (eq? (propagator-decl-fire-fn-tag n) 'kernel-select))) n))
+  (check-true (propagator-decl? select-prop))
+  (check-equal? (length (propagator-decl-input-cells select-prop)) 3)
+  (check-equal? (length (propagator-decl-output-cells select-prop)) 1))
+
+(test-case "boolrec with same-cell branches still emits two cells"
+  ;; if true then 7 else 7 — both branches translate independently;
+  ;; no CSE in this pass. Just verifying we don't crash on duplicate
+  ;; literal subexpressions.
+  (define body (expr-boolrec (expr-Int) (expr-int 7) (expr-int 7) (expr-true)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; cells: cond=true, then=7, else=7, result = 4
+  (check-equal? (count-by lp cell-decl?) 4)
+  (check-equal? (count-by lp propagator-decl?) 1))

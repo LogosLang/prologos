@@ -1,0 +1,4 @@
+def main : Int := [boolrec Int 7 11 [int-le 11 7]]
+
+;; if 11 <= 7 then 7 else 11 = 11
+;; :expect-exit 11

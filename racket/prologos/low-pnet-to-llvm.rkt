@@ -67,17 +67,37 @@
 ;; The kernel's switch in prologos-runtime.zig must stay in sync with
 ;; the integers here.
 
-(define FIRE-FN-TAG-REGISTRY
+;; Each shape (2,1) and (3,1) has its own tag namespace per the kernel's
+;; fire dispatch (see runtime/prologos-runtime.zig).
+
+(define FIRE-FN-TAG-REGISTRY-2-1
   '#hasheq((kernel-int-add . 0)
            (kernel-int-sub . 1)
            (kernel-int-mul . 2)
-           (kernel-int-div . 3)))
+           (kernel-int-div . 3)
+           (kernel-int-eq  . 4)
+           (kernel-int-lt  . 5)
+           (kernel-int-le  . 6)))
 
-(define (lookup-fire-fn-tag-id sym d)
-  (or (hash-ref FIRE-FN-TAG-REGISTRY sym #f)
+(define FIRE-FN-TAG-REGISTRY-3-1
+  '#hasheq((kernel-select . 0)))
+
+;; Backwards-compat alias for callers that just want the union view.
+(define FIRE-FN-TAG-REGISTRY
+  (for/fold ([h FIRE-FN-TAG-REGISTRY-2-1])
+            ([(k v) (in-hash FIRE-FN-TAG-REGISTRY-3-1)])
+    (hash-set h k v)))
+
+(define (lookup-fire-fn-tag-id sym shape d)
+  (define table
+    (case shape
+      [(2-1) FIRE-FN-TAG-REGISTRY-2-1]
+      [(3-1) FIRE-FN-TAG-REGISTRY-3-1]
+      [else (unsupported! d (format "no tag table for shape ~a" shape))]))
+  (or (hash-ref table sym #f)
       (unsupported! d
-                    (format "fire-fn-tag '~a' not in built-in registry. Phase 2.D supports only kernel-int-add/sub/mul/div; user-defined fire-fns require per-program .o emission (future work)."
-                            sym))))
+                    (format "fire-fn-tag '~a' not in shape-~a registry. Supported (2,1): kernel-int-{add,sub,mul,div,eq,lt,le}. Supported (3,1): kernel-select."
+                            sym shape))))
 
 ;; lower-low-pnet-to-llvm : low-pnet → String
 (define (lower-low-pnet-to-llvm lp)
@@ -145,28 +165,42 @@
       (format "  call void @prologos_cell_write(i32 ~a, i64 ~a)"
               (cell-ssa-name cid) vi64)))
 
-  ;; Phase 2.D: propagator-decl → prologos_propagator_install_2_1 call.
+  ;; Phase 2.D: propagator-decl → prologos_propagator_install_{2_1,3_1} call.
   ;; Each install enqueues the propagator; the run_to_quiescence call
   ;; below drains the worklist before the entry-cell read.
   (define prop-lines
     (for/list ([p (in-list propagator-decls)])
       (define ins (propagator-decl-input-cells p))
       (define outs (propagator-decl-output-cells p))
-      (unless (= (length ins) 2)
-        (unsupported! p
-                      (format "Phase 2.D supports only (2,1) propagator shape; got ~a inputs"
-                              (length ins))))
       (unless (= (length outs) 1)
         (unsupported! p
-                      (format "Phase 2.D supports only (2,1) propagator shape; got ~a outputs"
+                      (format "lowering supports single-output propagators only; got ~a outputs"
                               (length outs))))
-      (define tag-id (lookup-fire-fn-tag-id (propagator-decl-fire-fn-tag p) p))
-      (format "  %p~a = call i32 @prologos_propagator_install_2_1(i32 ~a, i32 ~a, i32 ~a, i32 ~a)"
-              (propagator-decl-id p)
-              tag-id
-              (cell-ssa-name (car ins))
-              (cell-ssa-name (cadr ins))
-              (cell-ssa-name (car outs)))))
+      (cond
+        [(= (length ins) 2)
+         (define tag-id (lookup-fire-fn-tag-id (propagator-decl-fire-fn-tag p) '2-1 p))
+         (format "  %p~a = call i32 @prologos_propagator_install_2_1(i32 ~a, i32 ~a, i32 ~a, i32 ~a)"
+                 (propagator-decl-id p)
+                 tag-id
+                 (cell-ssa-name (car ins))
+                 (cell-ssa-name (cadr ins))
+                 (cell-ssa-name (car outs)))]
+        [(= (length ins) 3)
+         (define tag-id (lookup-fire-fn-tag-id (propagator-decl-fire-fn-tag p) '3-1 p))
+         (format "  %p~a = call i32 @prologos_propagator_install_3_1(i32 ~a, i32 ~a, i32 ~a, i32 ~a, i32 ~a)"
+                 (propagator-decl-id p)
+                 tag-id
+                 (cell-ssa-name (car ins))
+                 (cell-ssa-name (cadr ins))
+                 (cell-ssa-name (caddr ins))
+                 (cell-ssa-name (car outs)))]
+        [else
+         (unsupported! p
+                       (format "lowering supports only (2,1) and (3,1) shapes; got ~a inputs"
+                               (length ins)))])))
+
+  (define have-3-1? (for/or ([p (in-list propagator-decls)])
+                      (= (length (propagator-decl-input-cells p)) 3)))
 
   ;; If any propagators were installed, emit a run-to-quiescence call
   ;; before reading the entry cell. (No propagators → constant network,
@@ -195,6 +229,9 @@
     (if propagator-decls-non-empty?
         (string-append
          "declare i32 @prologos_propagator_install_2_1(i32, i32, i32, i32)\n"
+         (if have-3-1?
+             "declare i32 @prologos_propagator_install_3_1(i32, i32, i32, i32, i32)\n"
+             "")
          "declare void @prologos_run_to_quiescence()\n")
         ""))
 

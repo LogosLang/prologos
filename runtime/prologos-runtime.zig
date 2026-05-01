@@ -10,13 +10,22 @@
 //   prologos_propagator_install_2_1(tag, in0, in1, out0) -> u32 prop-id
 //                                              binary fire-fn dispatch
 //                                              tags: 0=int-add, 1=int-sub,
-//                                                    2=int-mul, 3=int-div
+//                                                    2=int-mul, 3=int-div,
+//                                                    4=int-eq,  5=int-lt,
+//                                                    6=int-le
+//                                              comparison results: 0/1 i64
+//   prologos_propagator_install_3_1(tag, in0, in1, in2, out0) -> u32 prop-id
+//                                              ternary fire-fn dispatch
+//                                              tags: 0=select(cond,then,else)
+//                                                    cond=in0 (0/1), then=in1,
+//                                                    else=in2; out=in1 if cond
+//                                                    nonzero else in2
 //   prologos_run_to_quiescence()             -> void
 //                                              fire all scheduled
 //                                              propagators until empty
 //
 // Cell storage: fixed array of 1024 i64 cells.
-// Propagator storage: fixed array of 1024 propagators, (2,1) shape only.
+// Propagator storage: fixed array of 1024 propagators, mixed (2,1) and (3,1).
 // Subscriptions: each cell has up to 16 subscribed propagators.
 //
 // Scheduler model: Jacobi-ish worklist. Each install enqueues the
@@ -67,18 +76,23 @@ export fn prologos_cell_read(id: u32) i64 {
 }
 
 // =====================================================================
-// Propagators (Sprint 1 scope: (2,1) shape only)
+// Propagators — (2,1) and (3,1) shapes
 // =====================================================================
 //
-// For each propagator pid we store: tag, in0, in1, out0.
-// Tags are small ints (registry below). Future sprints can broaden
-// to other shapes (1,1), (3,1), or fully variable arity.
+// For each propagator pid we store: shape, tag, in0, in1, in2, out0.
+// shape=2 means in2 unused; shape=3 means all three inputs live.
+// Tags are small ints; their meaning is shape-dependent (see fire()).
 
-var prop_tags: [MAX_PROPS]u32 = undefined;
-var prop_in0:  [MAX_PROPS]u32 = undefined;
-var prop_in1:  [MAX_PROPS]u32 = undefined;
-var prop_out:  [MAX_PROPS]u32 = undefined;
-var num_props: u32 = 0;
+const SHAPE_2_1: u32 = 2;
+const SHAPE_3_1: u32 = 3;
+
+var prop_shape: [MAX_PROPS]u32 = undefined;
+var prop_tags:  [MAX_PROPS]u32 = undefined;
+var prop_in0:   [MAX_PROPS]u32 = undefined;
+var prop_in1:   [MAX_PROPS]u32 = undefined;
+var prop_in2:   [MAX_PROPS]u32 = undefined;
+var prop_out:   [MAX_PROPS]u32 = undefined;
+var num_props:  u32 = 0;
 
 // Per-cell subscriber list: which propagators wake when this cell changes.
 var cell_subs: [MAX_CELLS][MAX_DEPS]u32 = undefined;
@@ -100,13 +114,38 @@ export fn prologos_propagator_install_2_1(
 ) u32 {
     if (num_props >= MAX_PROPS) abort();
     const pid = num_props;
-    prop_tags[pid] = tag;
-    prop_in0[pid]  = in0;
-    prop_in1[pid]  = in1;
-    prop_out[pid]  = out0;
+    prop_shape[pid] = SHAPE_2_1;
+    prop_tags[pid]  = tag;
+    prop_in0[pid]   = in0;
+    prop_in1[pid]   = in1;
+    prop_in2[pid]   = 0;  // unused
+    prop_out[pid]   = out0;
     num_props += 1;
     subscribe(in0, pid);
     subscribe(in1, pid);
+    enqueue(pid);
+    return pid;
+}
+
+export fn prologos_propagator_install_3_1(
+    tag: u32,
+    in0: u32,
+    in1: u32,
+    in2: u32,
+    out0: u32,
+) u32 {
+    if (num_props >= MAX_PROPS) abort();
+    const pid = num_props;
+    prop_shape[pid] = SHAPE_3_1;
+    prop_tags[pid]  = tag;
+    prop_in0[pid]   = in0;
+    prop_in1[pid]   = in1;
+    prop_in2[pid]   = in2;
+    prop_out[pid]   = out0;
+    num_props += 1;
+    subscribe(in0, pid);
+    subscribe(in1, pid);
+    subscribe(in2, pid);
     enqueue(pid);
     return pid;
 }
@@ -125,16 +164,34 @@ fn enqueue(pid: u32) void {
 }
 
 fn fire(pid: u32) void {
+    const shape = prop_shape[pid];
     const tag = prop_tags[pid];
-    const a = cells[prop_in0[pid]];
-    const b = cells[prop_in1[pid]];
     const out_cid = prop_out[pid];
     var result: i64 = 0;
-    switch (tag) {
-        0 => result = a + b,    // kernel-int-add
-        1 => result = a - b,    // kernel-int-sub
-        2 => result = a * b,    // kernel-int-mul
-        3 => result = @divTrunc(a, b),  // kernel-int-div (signed truncating)
+    switch (shape) {
+        SHAPE_2_1 => {
+            const a = cells[prop_in0[pid]];
+            const b = cells[prop_in1[pid]];
+            switch (tag) {
+                0 => result = a + b,                   // kernel-int-add
+                1 => result = a - b,                   // kernel-int-sub
+                2 => result = a * b,                   // kernel-int-mul
+                3 => result = @divTrunc(a, b),         // kernel-int-div
+                4 => result = if (a == b) 1 else 0,    // kernel-int-eq
+                5 => result = if (a < b) 1 else 0,     // kernel-int-lt
+                6 => result = if (a <= b) 1 else 0,    // kernel-int-le
+                else => abort(),
+            }
+        },
+        SHAPE_3_1 => {
+            const c = cells[prop_in0[pid]];   // condition (0/1)
+            const t = cells[prop_in1[pid]];   // then-value
+            const e = cells[prop_in2[pid]];   // else-value
+            switch (tag) {
+                0 => result = if (c != 0) t else e,    // kernel-select
+                else => abort(),
+            }
+        },
         else => abort(),
     }
     prologos_cell_write(out_cid, result);
