@@ -44,10 +44,21 @@ jobs:
       - name: Build Zig kernel
         run: |
           zig version
-          zig build-obj runtime/prologos-runtime.zig -femit-bin=runtime/prologos-runtime.o
+          # -OReleaseFast: omit bounds/overflow safety checks. Our explicit
+          # bounds checks already cover the boundary; without ReleaseFast,
+          # implicit checks emit calls into Zig's panic handler that
+          # zig build-obj does not include in the .o, leaving unresolved
+          # symbols when clang links against plain libc.
+          # -fstrip: drop debug info to keep the .o minimal.
+          zig build-obj runtime/prologos-runtime.zig \
+            -OReleaseFast -fstrip \
+            -femit-bin=runtime/prologos-runtime.o
           ls -la runtime/prologos-runtime.o
           file runtime/prologos-runtime.o
-          nm runtime/prologos-runtime.o | grep -E "(prologos_cell|abort)" || true
+          echo "--- exported symbols (T = strong, U = undefined) ---"
+          nm runtime/prologos-runtime.o || true
+          echo "--- undefined symbols only (should be only abort + maybe libc-internals) ---"
+          nm -u runtime/prologos-runtime.o || true
 
       - name: Smoke-test runtime linkage with a minimal IR
         run: |
