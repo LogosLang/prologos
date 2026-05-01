@@ -1995,8 +1995,15 @@
            (define branches (validate-selection-paths raw-args "path" loc))
            (if (prologos-error? branches) branches
                (surf-path branches loc))]
-          ;; Not a path literal — fall through to normal application (e.g., IO Path constructor)
-          [else (parse-application head-stx args loc)])]
+          ;; Not a path literal — fall through to normal application (e.g., IO Path
+          ;; constructor) OR to goal application when we're parsing a relational
+          ;; goal (e.g., a user `defr path` shadowing the prelude's `path` function).
+          ;; Without this dispatch, `solve (path "a" dest)` would degrade to surf-app
+          ;; and the head would lose its relation-name role.
+          [else
+           (if (current-parsing-relational-goal?)
+               (parse-goal-application head args loc)
+               (parse-application head-stx args loc))])]
 
        ;; get-in: (get-in target path-spec)
        ;; path-spec is parsed as selection paths, e.g., :address.zip or :address.{zip city}
