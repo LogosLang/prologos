@@ -135,3 +135,20 @@ jobs:
             echo "exit-$f.prologos → racket exit=$ec (expected $f)"
             test "$ec" -eq "$f"
           done
+
+      - name: pnet-compile arithmetic end-to-end (n1-arith)
+        # Phase 2.D: arithmetic programs compile to a propagator network
+        # via .pnet, with kernel-int-add/sub/mul/div fire-fns dispatched
+        # by the in-kernel scheduler. 6 acceptance programs covering
+        # add, sub, mul, div, nested, and deeply-nested arithmetic.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n1-arith/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n1-arith-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
