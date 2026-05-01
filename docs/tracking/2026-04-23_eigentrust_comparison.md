@@ -191,6 +191,106 @@ infrastructure (incremental computation, parallel firing,
 worldview tagging, partial recomputation) that math can't
 express at all.
 
+## What about parallel BSP?
+
+The natural follow-up: the BSP scheduler can fire independent
+propagators across cores. Why didn't the coarse variant exploit
+that? Two reasons:
+
+1. **Default executor is sequential.** `run-to-quiescence-bsp`
+   defaults to `sequential-fire-all` unless
+   `current-parallel-executor` or `current-worker-pool` is set.
+   The benches above don't set either, so all data is
+   single-threaded.
+
+2. **Coarse topology has no parallel work to dispatch.** The
+   coarse variant is K propagators in a strict chain: t₀ → t₁ →
+   t₂ → … → t_K. Each fires only after its predecessor's cell
+   is written. One propagator per BSP round. Parallel BSP
+   needs ≥ 2 independent propagators per round.
+
+To actually exercise parallel BSP, we built a fine-grained
+variant — `eigentrust-propagators-fine-float.rkt` — with K·n
+per-peer propagators (n peer-step functions per BSP round, each
+computing one element of the new trust vector independently).
+The bench `eigentrust-parallel-bench.rkt` runs it with three
+executors: sequential, `make-parallel-thread-fire-all` (Racket-9
+`thread #:pool 'own`), and a persistent worker-pool dispatcher.
+
+K=4, NUM-RUNS=3, 4-core host, median of 3 measured runs:
+
+| n    | math (1 core) | coarse net (1) | fine-seq (1) | fine-thread (4) | fine-pool (4) | par speedup | fine-thread vs math |
+| ---: | ------------: | -------------: | -----------: | --------------: | ------------: | ----------: | ------------------: |
+|   16 |       0.06 ms |        0.27 ms |      5.67 ms |         5.24 ms |       5.70 ms |       1.08× |                 87× |
+|   32 |       0.08 ms |        0.25 ms |     19.21 ms |        13.59 ms |      12.25 ms |       1.41× |                170× |
+|   64 |       0.16 ms |        0.47 ms |     82.61 ms |        52.10 ms |      55.30 ms |       1.59× |                326× |
+|  128 |       0.49 ms |        1.15 ms |    307.25 ms |       159.97 ms |     173.11 ms |       1.92× |                326× |
+|  256 |       2.09 ms |        4.26 ms |   1348.7  ms |       624.71 ms |     618.37 ms |       2.16× |                299× |
+|  512 |      10.83 ms |       17.67 ms |   6796.4  ms |      3172.2  ms |    3154.4  ms |       2.14× |                293× |
+| 1024 |      40.74 ms |       70.62 ms |  29240.9  ms |     16164.2  ms |   16302.3  ms |       1.81× |                397× |
+
+### Two clean findings
+
+* **BSP parallelism does work**: fine-seq → fine-thread shows up
+  to **2.16× speedup at n=256** on the 4-core box. Theoretical
+  max is 4×; the measured 2.16× reflects per-fire serialization
+  costs (snapshot taking, dependency walk, write merging) that
+  Amdahl-bound the speedup. Parallel-thread and worker-pool
+  executors are within noise of each other.
+
+* **The fine-grained topology's overhead swamps the parallelism**:
+  fine-thread is still **290–400× slower than math** at every n.
+  Per-peer decomposition pays K · n² cell reads (n peer
+  propagators × n cell reads each × K rounds) + K · n cell
+  writes through CHAMP (each O(log n)). At n=1024 that's ~4M
+  CHAMP lookups vs math's 4M flonum ops. The cell-access
+  overhead, not the math, dominates per-fire cost.
+
+### Why neither variant wins
+
+The architectural bind:
+
+| Variant | Parallel work? | Per-fire overhead | Net result |
+| ------- | -------------- | ----------------- | ---------- |
+| **coarse** | none (chain) | tiny (K cell writes total) | 1.4× math at n=16384 |
+| **fine** | yes (n props/round) | K·n² CHAMP reads + K·n writes | 290–400× math at all sizes |
+
+To actually beat math via parallelism we'd need either:
+
+* **Coarse topology + parallelism inside the fire function** —
+  e.g., a fire function that internally splits its mat-vec-mul
+  across a worker pool. The propagator primitives don't directly
+  enable this: `fire-fn` is a run-to-completion thunk; the
+  scheduler doesn't decompose individual fire calls. Adding it
+  would mean the fire function manually dispatches via futures /
+  threads, paying its own coordination cost outside the BSP
+  framework.
+
+* **Much higher arithmetic intensity per fire** — e.g., dense
+  tensor ops where one fire does millions of flonum ops, so
+  per-fire BSP overhead amortizes over real work. Mat-vec-mul
+  at the per-peer grain is too small (n flonum mul-adds per
+  fire); at the whole-vector grain (coarse) there's only one
+  propagator to fire.
+
+The propagator network's parallelism lever — many independent
+propagators per BSP round — only pays off when each propagator's
+fire-fn does substantial work AND there are many of them. Dense
+linear algebra naturally factors the wrong way for this: either
+you split into many tiny independent ops (fine, too much
+bookkeeping) or you have one huge op (coarse, no parallelism).
+This isn't a propagator-network indictment — it's the same
+reason GPUs don't accelerate `BLAS-1` (vector-vector) code
+proportionally to compute throughput, and why `BLAS-3`
+(matrix-matrix) is where they shine. EigenTrust per iteration
+is a `BLAS-2` kernel (matrix-vector), squarely in the regime
+where coordination overhead vs flop count is unfavorable.
+
+For workloads that DO match the propagator-parallelism profile —
+many independent moderately-expensive sub-computations — the
+infrastructure works as designed. EigenTrust just isn't one of
+them.
+
 * **At n=4096 the network is 619 ms, math is 442 ms, Prologos
   math is intractable** — the surface variant's elaborator +
   reducer plus the O(k²) blowup means even a single 4096-peer
@@ -230,6 +330,9 @@ racket benchmarks/comparative/eigentrust-propagators-scaling.rkt
 
 # Extended scaling n=4096..16384 — math + network only
 racket benchmarks/comparative/eigentrust-scaling-large.rkt
+
+# Parallel BSP exploration — math + coarse + fine × {seq, thread, pool}
+racket benchmarks/comparative/eigentrust-parallel-bench.rkt
 
 # Prologos surface (4 surface variants, fixed n=4 W3)
 racket tools/bench-phases.rkt --runs 2 \
