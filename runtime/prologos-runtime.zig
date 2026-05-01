@@ -7,6 +7,13 @@
 //   prologos_cell_write(id, val)             -> void
 //   prologos_cell_read(id)                   -> i64
 //
+//   prologos_propagator_install_1_1(tag, in0, out0) -> u32 prop-id
+//                                              unary fire-fn dispatch
+//                                              tags: 0=identity, 1=int-neg,
+//                                                    2=int-abs
+//                                              kernel-identity is the
+//                                              feedback connector for
+//                                              iterative networks.
 //   prologos_propagator_install_2_1(tag, in0, in1, out0) -> u32 prop-id
 //                                              binary fire-fn dispatch
 //                                              tags: 0=int-add, 1=int-sub,
@@ -125,12 +132,15 @@ export fn prologos_cell_read(id: u32) i64 {
 }
 
 // =====================================================================
-// Propagators — (2,1) and (3,1) shapes
+// Propagators — (1,1), (2,1), and (3,1) shapes
 // =====================================================================
 //
 // For each propagator pid we store: shape, tag, in0, in1, in2, out0.
-// shape=2 means in2 unused; shape=3 means all three inputs live.
+// shape=1 means only in0 is live (in1, in2 unused).
+// shape=2 means in2 unused.
+// shape=3 means all three inputs live.
 
+const SHAPE_1_1: u32 = 1;
 const SHAPE_2_1: u32 = 2;
 const SHAPE_3_1: u32 = 3;
 
@@ -152,6 +162,25 @@ fn subscribe(cid: u32, pid: u32) void {
     if (n >= MAX_DEPS) abort();
     cell_subs[cid][n] = pid;
     cell_num_subs[cid] = n + 1;
+}
+
+export fn prologos_propagator_install_1_1(
+    tag: u32,
+    in0: u32,
+    out0: u32,
+) u32 {
+    if (num_props >= MAX_PROPS) abort();
+    const pid = num_props;
+    prop_shape[pid] = SHAPE_1_1;
+    prop_tags[pid]  = tag;
+    prop_in0[pid]   = in0;
+    prop_in1[pid]   = 0;  // unused
+    prop_in2[pid]   = 0;  // unused
+    prop_out[pid]   = out0;
+    num_props += 1;
+    subscribe(in0, pid);
+    schedule(pid);
+    return pid;
 }
 
 export fn prologos_propagator_install_2_1(
@@ -243,6 +272,15 @@ fn fire_against_snapshot(pid: u32) void {
     const t0: u64 = if (profile_per_tag) now_ns() else 0;
     var result: i64 = 0;
     switch (shape) {
+        SHAPE_1_1 => {
+            const a = snapshot[prop_in0[pid]];
+            switch (tag) {
+                0 => result = a,                       // kernel-identity
+                1 => result = -a,                      // kernel-int-neg
+                2 => result = if (a < 0) -a else a,    // kernel-int-abs
+                else => abort(),
+            }
+        },
         SHAPE_2_1 => {
             const a = snapshot[prop_in0[pid]];
             const b = snapshot[prop_in1[pid]];
