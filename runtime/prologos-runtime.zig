@@ -1,4 +1,4 @@
-// prologos-runtime.zig — N0 + propagator scheduler kernel.
+// prologos-runtime.zig — N0 + propagator BSP scheduler kernel.
 //
 // The "physics" of the propagator network for the smallest viable runtime.
 // Provides:
@@ -21,34 +21,61 @@
 //                                                    else=in2; out=in1 if cond
 //                                                    nonzero else in2
 //   prologos_run_to_quiescence()             -> void
-//                                              fire all scheduled
-//                                              propagators until empty
+//                                              run BSP rounds until no
+//                                              writes change any cell, OR
+//                                              fuel (default 100000) exhausted
 //
-// Cell storage: fixed array of 1024 i64 cells.
-// Propagator storage: fixed array of 1024 propagators, mixed (2,1) and (3,1).
-// Subscriptions: each cell has up to 16 subscribed propagators.
+//   prologos_set_max_rounds(max)             -> void  (set fuel; 0 = unlimited)
+//   prologos_get_stat(key)                   -> u64   (instrumentation)
+//   prologos_print_stats()                   -> void  (write summary to stderr)
+//   prologos_reset_stats()                   -> void  (zero counters; cells/props
+//                                              untouched)
 //
-// Scheduler model: Jacobi-ish worklist. Each install enqueues the
-// propagator. `run_to_quiescence` drains the worklist; firing a
-// propagator may enqueue more (subscribers of changed cells). For
-// arithmetic networks (no cycles, propagators write once) this
-// terminates in O(N) rounds where N is the number of propagators.
+// =====================================================================
+// Scheduler model: bulk-synchronous parallel (BSP).
+// =====================================================================
 //
-// No reference counting, no GC, no I/O, single-threaded.
+// Each BSP ROUND:
+//   1. Dedup the current worklist into a "round set" of unique pids.
+//   2. Snapshot cells[] → snapshot[]; reads in this round see snapshot.
+//   3. Fire each pid in round set: read inputs from snapshot, compute
+//      output, append (out_cid, value) to pending_writes.
+//   4. Barrier: apply pending_writes to cells[]. For each write that
+//      changes cells[cid], schedule cell_subs[cid] into next_worklist.
+//   5. Swap worklist ← next_worklist; if empty, terminate.
+//
+// This decouples reads from writes within a round (CALM/ACI safe).
+// For acyclic networks: terminates in O(depth) rounds. For cyclic
+// networks with monotone merges: terminates at fix-point. For
+// non-monotone cycles: termination is bounded by the fuel parameter.
+//
+// Instrumentation (Sprint C, 2026-05-01):
+//   stat_rounds, stat_fires_total, stat_fires_by_tag[N_TAGS],
+//   stat_writes_committed, stat_writes_dropped, stat_max_worklist.
+//   Exposed via prologos_get_stat / prologos_print_stats.
+//
+// No reference counting, no GC, no I/O at runtime, single-threaded.
+// Multi-thread parallelism deferred to future Sprint D (per-core
+// chunked worklist + per-thread write log + sequential merge).
+//
 // Builds via `zig build-obj prologos-runtime.zig` into prologos-runtime.o.
 // Pinned to Zig 0.13.0.
 
 extern fn abort() noreturn;
+extern fn write(fd: c_int, buf: [*]const u8, count: usize) isize;
 
 const MAX_CELLS: u32 = 1024;
 const MAX_PROPS: u32 = 1024;
 const MAX_DEPS: u32 = 16;
+const N_TAGS: u32 = 16;          // big enough for current 2-1 + 3-1 tags
+const DEFAULT_MAX_ROUNDS: u64 = 100000;
 
 // =====================================================================
 // Cells
 // =====================================================================
 
 var cells: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
+var snapshot: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
 var num_cells: u32 = 0;
 
 export fn prologos_cell_alloc() u32 {
@@ -58,15 +85,22 @@ export fn prologos_cell_alloc() u32 {
     return id;
 }
 
+// Direct cell write — bypasses the BSP barrier. Used by generated IR
+// at module init time (before any propagator runs) and by the BSP
+// merge phase. NOT safe to call from inside a fire() — fire() must
+// only emit to pending_writes.
 export fn prologos_cell_write(id: u32, value: i64) void {
     if (id >= num_cells) abort();
     if (cells[id] != value) {
         cells[id] = value;
+        stat_writes_committed += 1;
         // Schedule subscribers (the propagators that depend on this cell)
         var i: u32 = 0;
         while (i < cell_num_subs[id]) : (i += 1) {
-            enqueue(cell_subs[id][i]);
+            schedule(cell_subs[id][i]);
         }
+    } else {
+        stat_writes_dropped += 1;
     }
 }
 
@@ -81,7 +115,6 @@ export fn prologos_cell_read(id: u32) i64 {
 //
 // For each propagator pid we store: shape, tag, in0, in1, in2, out0.
 // shape=2 means in2 unused; shape=3 means all three inputs live.
-// Tags are small ints; their meaning is shape-dependent (see fire()).
 
 const SHAPE_2_1: u32 = 2;
 const SHAPE_3_1: u32 = 3;
@@ -123,7 +156,7 @@ export fn prologos_propagator_install_2_1(
     num_props += 1;
     subscribe(in0, pid);
     subscribe(in1, pid);
-    enqueue(pid);
+    schedule(pid);
     return pid;
 }
 
@@ -146,32 +179,53 @@ export fn prologos_propagator_install_3_1(
     subscribe(in0, pid);
     subscribe(in1, pid);
     subscribe(in2, pid);
-    enqueue(pid);
+    schedule(pid);
     return pid;
 }
 
 // =====================================================================
-// Scheduler — worklist BSP
+// Scheduler — BSP worklist with snapshot/diff/merge
 // =====================================================================
 
-var worklist: [MAX_PROPS * MAX_DEPS]u32 = undefined;
-var worklist_len: u32 = 0;
+var worklist:      [MAX_PROPS]u32 = undefined;  // current round's pending pids
+var worklist_len:  u32 = 0;
+var next_worklist: [MAX_PROPS]u32 = undefined;  // built during merge phase
+var next_worklist_len: u32 = 0;
 
-fn enqueue(pid: u32) void {
-    if (worklist_len >= worklist.len) abort();
-    worklist[worklist_len] = pid;
-    worklist_len += 1;
+// in_worklist[pid] = 1 iff pid is in worklist OR next_worklist OR has
+// already been claimed for the current round. Used for dedup.
+var in_worklist: [MAX_PROPS]u8 = [_]u8{0} ** MAX_PROPS;
+
+// pending_writes: collected during a round; applied during the barrier.
+// Each entry is (cid, value). Capacity = MAX_PROPS since at most one
+// write per propagator per round (each prop has exactly one output).
+var pending_cid: [MAX_PROPS]u32 = undefined;
+var pending_val: [MAX_PROPS]i64 = undefined;
+var pending_len: u32 = 0;
+
+// schedule(pid) — add pid to next_worklist if not already in either list.
+fn schedule(pid: u32) void {
+    if (in_worklist[pid] != 0) return;  // dedup
+    in_worklist[pid] = 1;
+    if (next_worklist_len >= MAX_PROPS) abort();
+    next_worklist[next_worklist_len] = pid;
+    next_worklist_len += 1;
+    if (next_worklist_len > stat_max_worklist) {
+        stat_max_worklist = next_worklist_len;
+    }
 }
 
-fn fire(pid: u32) void {
+// fire_against_snapshot(pid): read inputs from snapshot[], compute,
+// emit (out_cid, value) into pending_writes. Does NOT call cell_write.
+fn fire_against_snapshot(pid: u32) void {
     const shape = prop_shape[pid];
     const tag = prop_tags[pid];
     const out_cid = prop_out[pid];
     var result: i64 = 0;
     switch (shape) {
         SHAPE_2_1 => {
-            const a = cells[prop_in0[pid]];
-            const b = cells[prop_in1[pid]];
+            const a = snapshot[prop_in0[pid]];
+            const b = snapshot[prop_in1[pid]];
             switch (tag) {
                 0 => result = a + b,                   // kernel-int-add
                 1 => result = a - b,                   // kernel-int-sub
@@ -184,9 +238,9 @@ fn fire(pid: u32) void {
             }
         },
         SHAPE_3_1 => {
-            const c = cells[prop_in0[pid]];   // condition (0/1)
-            const t = cells[prop_in1[pid]];   // then-value
-            const e = cells[prop_in2[pid]];   // else-value
+            const c = snapshot[prop_in0[pid]];   // condition (0/1)
+            const t = snapshot[prop_in1[pid]];   // then-value
+            const e = snapshot[prop_in2[pid]];   // else-value
             switch (tag) {
                 0 => result = if (c != 0) t else e,    // kernel-select
                 else => abort(),
@@ -194,12 +248,210 @@ fn fire(pid: u32) void {
         },
         else => abort(),
     }
-    prologos_cell_write(out_cid, result);
+    if (pending_len >= MAX_PROPS) abort();
+    pending_cid[pending_len] = out_cid;
+    pending_val[pending_len] = result;
+    pending_len += 1;
+    stat_fires_total += 1;
+    if (tag < N_TAGS) {
+        stat_fires_by_tag[tag] += 1;
+    }
+}
+
+// take_snapshot(): copy live cell values into snapshot[].
+fn take_snapshot() void {
+    var i: u32 = 0;
+    while (i < num_cells) : (i += 1) {
+        snapshot[i] = cells[i];
+    }
+}
+
+// merge_pending_writes(): apply each pending write; for each write
+// that changes cells[cid], schedule subscribers via cell_write's path.
+// pending_writes are cleared (length zeroed).
+fn merge_pending_writes() void {
+    var i: u32 = 0;
+    while (i < pending_len) : (i += 1) {
+        const cid = pending_cid[i];
+        const v = pending_val[i];
+        // prologos_cell_write tracks committed/dropped counters and
+        // schedules subscribers; reuse it.
+        prologos_cell_write(cid, v);
+    }
+    pending_len = 0;
+}
+
+// =====================================================================
+// Fuel and main BSP driver
+// =====================================================================
+
+var max_rounds: u64 = DEFAULT_MAX_ROUNDS;
+
+export fn prologos_set_max_rounds(m: u64) void {
+    max_rounds = m;
 }
 
 export fn prologos_run_to_quiescence() void {
-    var idx: u32 = 0;
-    while (idx < worklist_len) : (idx += 1) {
-        fire(worklist[idx]);
+    // Move any pending installs from next_worklist into worklist for
+    // the first round. (After install, schedule() puts pids into
+    // next_worklist; we transfer once before round 1 starts.)
+    swap_worklists();
+
+    while (worklist_len > 0) {
+        if (max_rounds != 0 and stat_rounds >= max_rounds) {
+            // Fuel exhausted. Stop without abort so the caller can
+            // still read whatever cell value has been computed.
+            stat_fuel_exhausted = 1;
+            break;
+        }
+        stat_rounds += 1;
+        take_snapshot();
+
+        // Phase 1: fire all pids in current round against snapshot.
+        // Clear in_worklist[pid] as we consume it so that fires in
+        // *this* round can re-schedule the same pid for the *next*
+        // round if a downstream cell change demands it.
+        var i: u32 = 0;
+        while (i < worklist_len) : (i += 1) {
+            const pid = worklist[i];
+            in_worklist[pid] = 0;
+            fire_against_snapshot(pid);
+        }
+        worklist_len = 0;
+
+        // Phase 2 (barrier): merge pending writes; subscribers of
+        // changed cells land in next_worklist.
+        merge_pending_writes();
+
+        // Swap for next round.
+        swap_worklists();
     }
+}
+
+fn swap_worklists() void {
+    // Move next_worklist into worklist (just by swapping lengths and
+    // memcpy'ing — we can't swap arrays in-place in Zig 0.13 ergonomically
+    // since they're top-level vars; copy then zero next).
+    var i: u32 = 0;
+    while (i < next_worklist_len) : (i += 1) {
+        worklist[i] = next_worklist[i];
+    }
+    worklist_len = next_worklist_len;
+    next_worklist_len = 0;
+}
+
+// =====================================================================
+// Instrumentation (Sprint C)
+// =====================================================================
+
+var stat_rounds: u64 = 0;
+var stat_fires_total: u64 = 0;
+var stat_fires_by_tag: [N_TAGS]u64 = [_]u64{0} ** N_TAGS;
+var stat_writes_committed: u64 = 0;
+var stat_writes_dropped: u64 = 0;
+var stat_max_worklist: u64 = 0;
+var stat_fuel_exhausted: u64 = 0;
+
+// stat keys (must match the integers in get_stat).
+//   0  rounds
+//   1  fires_total
+//   2  writes_committed
+//   3  writes_dropped
+//   4  max_worklist
+//   5  fuel_exhausted (0 or 1)
+//   6  num_cells (allocated)
+//   7  num_props (installed)
+//   100..(100+N_TAGS)  fires for tag (key-100)
+//   anything else      0
+export fn prologos_get_stat(key: u32) u64 {
+    return switch (key) {
+        0 => stat_rounds,
+        1 => stat_fires_total,
+        2 => stat_writes_committed,
+        3 => stat_writes_dropped,
+        4 => stat_max_worklist,
+        5 => stat_fuel_exhausted,
+        6 => @intCast(num_cells),
+        7 => @intCast(num_props),
+        else => blk: {
+            if (key >= 100 and key < 100 + N_TAGS) {
+                break :blk stat_fires_by_tag[key - 100];
+            }
+            break :blk 0;
+        },
+    };
+}
+
+export fn prologos_reset_stats() void {
+    stat_rounds = 0;
+    stat_fires_total = 0;
+    stat_writes_committed = 0;
+    stat_writes_dropped = 0;
+    stat_max_worklist = 0;
+    stat_fuel_exhausted = 0;
+    var i: u32 = 0;
+    while (i < N_TAGS) : (i += 1) {
+        stat_fires_by_tag[i] = 0;
+    }
+}
+
+// =====================================================================
+// prologos_print_stats — write a one-line JSON summary to stderr (fd 2)
+// =====================================================================
+//
+// We avoid printf/fprintf to keep the kernel libc-light. A small
+// integer-to-decimal formatter writes into a fixed buffer; one
+// write() syscall emits the full line.
+
+var print_buf: [1024]u8 = undefined;
+var print_len: usize = 0;
+
+fn buf_putc(c: u8) void {
+    if (print_len < print_buf.len) {
+        print_buf[print_len] = c;
+        print_len += 1;
+    }
+}
+
+fn buf_puts(s: []const u8) void {
+    for (s) |c| buf_putc(c);
+}
+
+fn buf_putu64(n0: u64) void {
+    if (n0 == 0) {
+        buf_putc('0');
+        return;
+    }
+    var tmp: [24]u8 = undefined;
+    var tlen: usize = 0;
+    var n = n0;
+    while (n > 0) : (n /= 10) {
+        tmp[tlen] = @intCast('0' + (n % 10));
+        tlen += 1;
+    }
+    while (tlen > 0) {
+        tlen -= 1;
+        buf_putc(tmp[tlen]);
+    }
+}
+
+export fn prologos_print_stats() void {
+    print_len = 0;
+    buf_puts("PNET-STATS: {");
+    buf_puts("\"rounds\":");      buf_putu64(stat_rounds);
+    buf_puts(",\"fires\":");       buf_putu64(stat_fires_total);
+    buf_puts(",\"committed\":");   buf_putu64(stat_writes_committed);
+    buf_puts(",\"dropped\":");     buf_putu64(stat_writes_dropped);
+    buf_puts(",\"max_worklist\":");buf_putu64(stat_max_worklist);
+    buf_puts(",\"fuel_out\":");    buf_putu64(stat_fuel_exhausted);
+    buf_puts(",\"cells\":");       buf_putu64(@intCast(num_cells));
+    buf_puts(",\"props\":");       buf_putu64(@intCast(num_props));
+    buf_puts(",\"by_tag\":[");
+    var i: u32 = 0;
+    while (i < N_TAGS) : (i += 1) {
+        if (i > 0) buf_putc(',');
+        buf_putu64(stat_fires_by_tag[i]);
+    }
+    buf_puts("]}\n");
+    _ = write(2, &print_buf, print_len);
 }

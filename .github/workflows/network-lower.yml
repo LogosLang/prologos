@@ -110,6 +110,16 @@ jobs:
           echo "smoke exit code: $ec"
           test "$ec" -eq 99
 
+      - name: BSP scheduler + instrumentation smoke test
+        # Sprint B+C (2026-05-01). Validates run_to_quiescence runs proper
+        # BSP rounds (snapshot/diff/merge), the (3,1) select propagator
+        # works, and the prologos_get_stat / prologos_reset_stats /
+        # prologos_set_max_rounds interfaces match the kernel's exports.
+        run: |
+          clang runtime/test-bsp-stats.c runtime/prologos-runtime.o \
+            -o /tmp/test-bsp-stats
+          /tmp/test-bsp-stats
+
       - name: N0 end-to-end (lower + clang + run)
         env:
           PROLOGOS_NETWORK_TIER: "0"
