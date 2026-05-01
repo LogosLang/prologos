@@ -41,6 +41,25 @@ jobs:
       - name: Pre-compile network tools
         run: raco make tools/network-compile.rkt tools/network-test.rkt
 
+      - name: Zig HAMT unit tests
+        # SH Track 6 sub-piece (Issue #42 Path A). Zig-internal `test`
+        # blocks in runtime/prologos-hamt.zig. Requires libc for the
+        # extern abort symbol (test mode does not auto-link libc).
+        run: zig test -lc runtime/prologos-hamt.zig
+
+      - name: Build Zig HAMT object
+        run: |
+          zig build-obj runtime/prologos-hamt.zig \
+            -OReleaseFast -fstrip -fPIC \
+            -femit-bin=runtime/prologos-hamt.o
+          ls -la runtime/prologos-hamt.o
+
+      - name: HAMT C-ABI smoke test
+        # Validates that the .o links cleanly against a non-Zig caller.
+        run: |
+          clang runtime/test-hamt.c runtime/prologos-hamt.o -o /tmp/test-hamt
+          /tmp/test-hamt
+
       - name: Build Zig kernel
         run: |
           zig version
