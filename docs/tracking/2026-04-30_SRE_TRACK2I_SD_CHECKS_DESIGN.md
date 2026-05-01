@@ -28,7 +28,8 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 2 | Programmatic sample generator from ctor-desc registry + sd-evidence struct + `/detailed` variants | ✅ | `f241e14e`. New file `sre-sample-generator.rkt` (~120 LoC) + sre-core.rkt enrichment (~80 LoC, sd-evidence struct + /detailed variants + backward-compat wrappers) + 11 new tests. 53 tests pass via targeted runner. VAG passed adversarially with two acknowledged Phase-3 gaps (sample-size verification, binder-ctor coverage). API note: `all-ctor-descs` takes `#:domain` keyword (not positional) — caught at compile time. |
 | 2a | Principled-fix corrective: per-component-spec generation (Option C), drop `with-handlers`, include binder ctors with closed-body limitation | ✅ | `1c0c012e`. Generator refactored: per-component-spec atom pools, sentinel filter, binders included. **Bonus discovery**: Phase 2's `with-handlers` was masking malformed compounds (bot/top in component slots → reconstruct produces invalid `(expr-Pi mw type-top type-top)`-shape values that merge can't handle). Two-pool model (lattice elements vs structural components) surfaces and fixes it. 58 tests pass. VAG passed adversarially with the masked-issue surfacing as the Move B+ pattern's intended payoff. Codebase-wide audit of remaining 72 `with-handlers` instances filed as [issue #40](https://github.com/LogosLang/prologos/issues/40). |
 | 3c | Per-relation `meet-registry` on sre-domain; retire `current-lattice-subtype-fn` callback; principled subtype-meet dispatch | ✅ | `d4e8c811`. User-flagged 2026-04-30 as principled cleanup. `meet-registry` field added to sre-domain; `type-meet-registry` registered in unify.rkt; `type-lattice-meet` refactored with `#:subtype-fn` keyword; callback retired; lint baseline updated; `type-pseudo-complement` updated to use explicit subtype-fn. **Bonus discovery**: Track 2G's "type lattice not distributive under equality merge" finding was an artifact of the always-installed callback mixing equality+subtype semantics. Post-3c with principled per-relation dispatch, equality lattice IS distributive (216/216 triples confirmed) — Track 2H (PPN 4C T-3 Commit B) had made it distributive via union-aware merge; the callback hid this. 4 stale test expectations updated in test-sre-algebraic.rkt + 4 cascading tests updated in test-sre-track2h.rkt + 5 new Phase-3c tests added. Sister callback `current-lattice-meta-solution-fn` deferred to PM Track 12 (cross-referenced in PM Master + DEFERRED.md). |
-| 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). Scope refined post-Phase-3c: sweep type×equality AND type×subtype using `realistic-type-atoms` base-values + max-depth 1-2; distinguish "confirmed on full sample" / "confirmed on hand-picked-6 only" / "refuted with witness"; report hypothesis-fired/total-checked ratio per `/detailed` variants. Pseudo-complement check deferred to own phase (Phase 3.5). Bonus findings → discuss-when-found. session×equality + form×equality deferred to Phase 3b (generator extension). |
+| 3 | Empirical sweep across all registered domains × relations; record findings | 🔄 | Sweep + format infrastructure built; `sre-property-sweep.rkt` + `tests/test-sre-sd-properties.rkt` landed. Findings refuted for type×subtype distributive — surfaced as Scaffolding-Hides-Truth bonus discovery (Phase 4 corrective). Phase 3 close gated on Phase 4 landing first. |
+| 4 | Sweep semantic correction — per-relation join dispatch (Scaffolding-Hides-Truth corrective) | ⬜ | Refactor `test-distributive`, `test-sd-vee/detailed`, `test-sd-wedge/detailed` (+ wrappers) to take explicit `join-fn` parameter. Phase 3c retired off-network state on the meet side via `meet-registry`; Phase 4 retires the parallel hardcoded `'equality` constant on the join side. ~25 callsite updates; atomic commit per pipeline.md co-migration discipline. After fix: re-run sweep; expect all 6 findings confirmed. |
 | 3.5 | (deferred) Has-pseudo-complement empirical check; determines Heyting reach for non-Heyting-declared domains | ⬜ | New test function parallel to test-distributive et al. ~30-50 LoC. Decoupled from Phase 3 to keep that scope tight. Would inform Discussion phase decisions. |
 | 3b | (deferred) Generator extension for session/form domains; sweep extends to those | ⬜ | Requires per-domain ctor analysis + atom-pool extension in `build-atoms-by-spec`. session×equality is the OTHER empirically-interesting case (NOT declared distributive); form×equality is Heyting-via-implication. |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ⬜ | Per workflow.md MANDATORY dedicated test phase. |
@@ -290,7 +291,7 @@ Estimated scope: ~80-100 LoC across `sre-core.rkt` + ~30 LoC of unit tests in `t
 
 **Estimated scope**: ~80-100 LoC for sweep + format functions, + the markdown findings table. ~30-45 min implementation + ~15 min findings analysis.
 
-#### Locked decisions (mini-design + mini-audit dialogue 2026-04-30)
+#### Decisions (mini-design + mini-audit dialogue 2026-04-30)
 
 Mini-audit completed against actual code surfaces (`generate-domain-samples` at `sre-sample-generator.rkt:80`, `test-sd-vee/detailed` + `test-sd-wedge/detailed` at `sre-core.rkt:394,424`, `sd-evidence` struct at `sre-core.rkt:385`, `sre-domain-meet` at `sre-core.rkt:190`, `realistic-type-atoms` at `tests/test-sre-algebraic.rkt:469`). Three implementation-shape decisions resolved via dialogue:
 
@@ -325,6 +326,70 @@ Mini-audit completed against actual code surfaces (`generate-domain-samples` at 
 **Two new drift risks** (added to design doc's existing 5):
 6. Q3 scope creep — including `test-distributive` was an explicit dialogue decision, NOT a mid-flight expansion. Documented here so future-self doesn't read "scope creep" into the choice.
 7. Q2 generic-vs-typed slippage — caller-supplied atoms keeps sweep generic; if a `default-atoms` parameter that hardcodes type atoms is later added, the decoupling is silently lost. Watch for this.
+
+### Phase 4: Sweep Semantic Correction (Scaffolding-Hides-Truth corrective)
+
+**Origin**: Phase 3 wider-sample sweep refuted distributivity for type×subtype with witness `(Int, Nat, type-top)`. Audit revealed the refutation was a sweep semantic bug — `test-distributive` and `test-sd-{vee,wedge}/detailed` in `sre-core.rkt` hardcode `((sre-domain-merge-registry domain) 'equality)` for the join, mixing meet-from-relation-R with join-from-relation-equality. Track 2H's distributivity claim was for `(meet-subtype, join-subtype)` (same lattice), not the mixed pair.
+
+**Pattern**: 3rd Scaffolding-Hides-Truth data point (Phase 2a `with-handlers` masking malformed compounds; Phase 3c always-installed callback masking distributivity restoration; Phase 4 hardcoded `'equality` masking per-relation join dispatch). Crosses Watching-table promotion gate → graduate to `DEVELOPMENT_LESSONS.org` as separate commit at Phase 4 close.
+
+**Audit findings persisted** (mini-audit completed 2026-04-30):
+
+| Surface | Site | Current | Fix |
+|---|---|---|---|
+| `sre-core.rkt:330` | `test-distributive` | hardcodes `'equality` join | take `join-fn` parameter |
+| `sre-core.rkt:394` | `test-sd-vee/detailed` | hardcodes `'equality` join | take `join-fn` parameter |
+| `sre-core.rkt:424` | `test-sd-wedge/detailed` | hardcodes `'equality` join | take `join-fn` parameter |
+| `sre-core.rkt:457,465` | `test-sd-vee`, `test-sd-wedge` wrappers | thin wrappers | take + thread `join-fn` |
+| `sre-core.rkt:504,510,515` | `infer-domain-properties` callsites | pass meet-fn only | look up + pass join-fn from `merge-registry` per relation |
+| `sre-core.rkt:621-623` | `resolve-and-report-properties` callsites | same | same |
+| `sre-property-sweep.rkt:94,96,98` | `run-sd-sweep` calls | pass meet-fn only | look up + pass join-fn per relation (already has `rel` in scope) |
+| `tests/test-sre-algebraic.rkt` | ~11 callsites (Phase 1+2 tests) | pass meet-fn only | add explicit join-fn (test fixtures use `type-lattice-merge`) |
+| `tests/test-sre-track2h.rkt` | 0 callsites | — | — |
+
+Total: ~25 callsite updates across 4 files.
+
+**Decisions (mini-design + mini-audit dialogue 2026-04-30)**:
+
+1. **Shape**: explicit `join-fn` parameter on all five property-test functions; no hidden lookup, no default. Mirrors Phase 3c's `meet-fn` pattern.
+
+   ```racket
+   (define (test-distributive domain samples meet-fn join-fn) ...)
+   (define (test-sd-vee/detailed domain samples meet-fn join-fn) ...)
+   (define (test-sd-wedge/detailed domain samples meet-fn join-fn) ...)
+   (define (test-sd-vee domain samples meet-fn join-fn) ...)        ;; wrapper
+   (define (test-sd-wedge domain samples meet-fn join-fn) ...)      ;; wrapper
+   ```
+
+2. **All callsites updated atomically in one commit** per pipeline.md co-migration discipline.
+
+3. **Caller pattern**: derive both `meet-fn` and `join-fn` from the SAME relation:
+   ```racket
+   (define meet-fn (sre-domain-meet domain rel))
+   (define join-fn ((sre-domain-merge-registry domain) rel))
+   ```
+
+4. **Re-run sweep at close**. Expected: all 6 findings confirmed. If type×subtype STILL refutes after the fix → halt, escalate, dialogue (genuine Track 2H declaration error vs. sweep semantic remaining).
+
+5. **Pattern graduation** is a SEPARATE small commit after Phase 4 lands successfully. Codifies "Scaffolding-Hides-Truth" with 3 data points (Phase 2a, 3c, 4) into `DEVELOPMENT_LESSONS.org`.
+
+**Principles in play**:
+- **Correct-by-Construction** (primary): test functions operate on a `(meet, join)` pair from the same lattice; making both explicit removes the lattice-mixing failure mode
+- **Decomplection**: separates "which lattice" decision (caller) from "test the property" mechanism (function)
+- **First-Class by Default**: `join-fn` becomes a first-class argument, mirroring `meet-fn`
+
+**Mantra check**: hardcoded `'equality` is the same shape as the retired callback — off-network state injection (a constant baked into the function instead of dispatched per-relation). Phase 4 retires it. Same Scaffolding-Hides-Truth template as Phase 2a + 3c.
+
+**Drift risks**:
+1. **Asymmetric callsite updates**: caller passes meet-fn from relation R₁ but join-fn from relation R₂ → mixes lattices again. Discipline: callers always derive both fns from the SAME relation.
+2. **Missed callsite**: arity mismatch at runtime (Racket doesn't catch at compile). Mitigation: targeted test run catches all in-tree callers.
+3. **Type×subtype STILL refutes after fix**: would mean Track 2H declaration is genuinely wrong. ESCALATE before commit.
+4. **Test cascade bug**: 11 test callsites updating mechanically — risk of incorrect update. Mitigation: re-read each updated callsite manually.
+5. **API surface change**: any consumer of `test-sd-*` outside Track 2I/2G needs update. Audit confirmed none exist outside the four files listed.
+
+**Estimated scope**: ~30 LoC delta across sre-core.rkt + ~10 LoC across sre-property-sweep.rkt + ~15 LoC across test-sre-algebraic.rkt. ~30-45 min implementation + ~10 min sweep re-run + ~5 min validation.
+
+### Phase T: Dedicated test file
 
 **Goal**: `tests/test-sre-sd-properties.rkt` consolidating SD-specific tests:
 - Constructed lattice fixtures known SD / non-SD (positive + negative golden tests).
