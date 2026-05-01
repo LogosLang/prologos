@@ -153,6 +153,76 @@
 
 
 ;; ============================================================
+;; bb-builder: a mutable basic-block builder for a single function body
+;; ============================================================
+;;
+;; State:
+;;   instrs       : Hash[Symbol → ListOf String]  (reverse-instr-list per block)
+;;   cur-block    : Box Symbol | Box #f           (current block; #f after branch)
+;;   ssa-counter  : Box Integer                   (for fresh!)
+;;   block-counter: Box Integer                   (for fresh-label!)
+;;   block-order  : Box ListOf Symbol             (reverse declaration order)
+;;   abs-needed?  : Box Boolean                   (declare @llvm.abs.i64 if any abs)
+
+(struct bb-builder (instrs cur-block ssa-counter block-counter block-order abs-needed?))
+
+(define (make-bb-builder)
+  (define b (bb-builder (make-hasheq) (box #f) (box 0) (box 0) (box '()) (box #f)))
+  (bb-start-block! b "entry")
+  b)
+
+(define (bb-emit! bb str)
+  (define cur (unbox (bb-builder-cur-block bb)))
+  (unless cur
+    (error 'bb-emit! "no current block (a branch terminated the previous block)"))
+  (hash-update! (bb-builder-instrs bb) cur (lambda (xs) (cons str xs)) '()))
+
+(define (bb-fresh! bb)
+  (define b (bb-builder-ssa-counter bb))
+  (set-box! b (+ 1 (unbox b)))
+  (format "%t~a" (unbox b)))
+
+(define (bb-fresh-label! bb prefix)
+  (define b (bb-builder-block-counter bb))
+  (set-box! b (+ 1 (unbox b)))
+  (format "~a_~a" prefix (unbox b)))
+
+(define (bb-start-block! bb name)
+  (define sym (string->symbol name))
+  (set-box! (bb-builder-cur-block bb) sym)
+  (define instrs (bb-builder-instrs bb))
+  (unless (hash-has-key? instrs sym)
+    (hash-set! instrs sym '())
+    (define ord (bb-builder-block-order bb))
+    (set-box! ord (cons sym (unbox ord)))))
+
+(define (bb-cur-block-name bb)
+  (define c (unbox (bb-builder-cur-block bb)))
+  (and c (symbol->string c)))
+
+(define (bb-branch! bb label)
+  (bb-emit! bb (format "  br label %~a" label))
+  (set-box! (bb-builder-cur-block bb) #f))
+
+(define (bb-branch-cond! bb cond-i1 lt lf)
+  (bb-emit! bb (format "  br i1 ~a, label %~a, label %~a" cond-i1 lt lf))
+  (set-box! (bb-builder-cur-block bb) #f))
+
+(define (bb-ret! bb val)
+  (bb-emit! bb (format "  ret i64 ~a" val))
+  (set-box! (bb-builder-cur-block bb) #f))
+
+(define (bb-render bb)
+  (define ordered (reverse (unbox (bb-builder-block-order bb))))
+  (apply string-append
+         (for/list ([k (in-list ordered)])
+           (define lines (reverse (hash-ref (bb-builder-instrs bb) k)))
+           (string-append
+            (symbol->string k) ":\n"
+            (apply string-append
+                   (map (lambda (s) (string-append s "\n")) lines))))))
+
+;; ============================================================
 ;; Tier 0–1 — single `def main : Int` lowered to @main
 ;; ============================================================
 
@@ -165,20 +235,16 @@
             "Tiers 0–1 expect a single 'main' top-form; got ~v" forms)]))
 
 (define (lower-main type body)
-  (unless (expr-Int? type)
-    (unsupported! type "main must currently have type Int"))
-  ;; Builder state for the entry basic block.
-  (define instrs '())
-  (define counter 0)
-  (define (emit! s) (set! instrs (cons s instrs)))
-  (define (fresh!)
-    (set! counter (+ counter 1))
-    (format "%t~a" counter))
-  (define abs-needed? (box #f))
-  (define final-val (lower-int-expr body emit! fresh! abs-needed?))
+  (unless (or (expr-Int? type) (expr-Bool? type))
+    (unsupported! type "main must currently have type Int or Bool"))
+  (define bb (make-bb-builder))
+  (define final-val
+    (parameterize ([current-bvar-env '()])
+      (lower-int-expr body bb)))
+  (bb-ret! bb final-val)
   (define decls
     (cond
-      [(unbox abs-needed?)
+      [(unbox (bb-builder-abs-needed? bb))
        "declare i64 @llvm.abs.i64(i64, i1)\n\n"]
       [else ""]))
   (string-append
@@ -187,25 +253,29 @@
    "\n"
    decls
    "define i64 @main() {\n"
-   "entry:\n"
-   (apply string-append
-          (map (lambda (s) (string-append s "\n"))
-               (reverse instrs)))
-   "  ret i64 " final-val "\n"
+   (bb-render bb)
    "}\n"))
 
-;; lower-int-expr : Expr × (String->Void) × (->String) × Box[Bool] -> String
-;; Returns the LLVM value reference (literal or %tN) for the i64 result.
-;; emit! appends an instruction line; fresh! returns a new SSA name.
-;; abs-needed? is set when @llvm.abs.i64 is used so the declaration is added.
-(define (lower-int-expr e emit! fresh! abs-needed?)
-  (define (recur x) (lower-int-expr x emit! fresh! abs-needed?))
+;; lower-int-expr : Expr × bb-builder -> String
+;; Returns the LLVM value reference (literal or %tN) for the i64 result of e.
+;; bb is the builder for the current function; emits side-effect into bb.
+(define (lower-int-expr e bb)
+  (define (recur x) (lower-int-expr x bb))
   (define (binop op a b)
     (define av (recur a))
     (define bv (recur b))
-    (define t (fresh!))
-    (emit! (format "  ~a = ~a i64 ~a, ~a" t op av bv))
+    (define t (bb-fresh! bb))
+    (bb-emit! bb (format "  ~a = ~a i64 ~a, ~a" t op av bv))
     t)
+  ;; Comparisons emit `icmp <op> i64 %a, %b` (i1) then `zext i1 to i64`.
+  (define (cmpop op a b)
+    (define av (recur a))
+    (define bv (recur b))
+    (define t1 (bb-fresh! bb))
+    (define t2 (bb-fresh! bb))
+    (bb-emit! bb (format "  ~a = icmp ~a i64 ~a, ~a" t1 op av bv))
+    (bb-emit! bb (format "  ~a = zext i1 ~a to i64" t2 t1))
+    t2)
   (match e
     ;; -- Tier 0 --
     [(expr-int n)
@@ -237,16 +307,16 @@
     [(expr-int-neg a)
      (require-tier! 1 e "expr-int-neg")
      (define av (recur a))
-     (define t (fresh!))
-     (emit! (format "  ~a = sub i64 0, ~a" t av))
+     (define t (bb-fresh! bb))
+     (bb-emit! bb (format "  ~a = sub i64 0, ~a" t av))
      t]
     [(expr-int-abs a)
      (require-tier! 1 e "expr-int-abs")
-     (set-box! abs-needed? #t)
+     (set-box! (bb-builder-abs-needed? bb) #t)
      (define av (recur a))
-     (define t (fresh!))
+     (define t (bb-fresh! bb))
      ;; @llvm.abs.i64 with poison-on-INT_MIN = false: returns INT_MIN as-is.
-     (emit! (format "  ~a = call i64 @llvm.abs.i64(i64 ~a, i1 false)" t av))
+     (bb-emit! bb (format "  ~a = call i64 @llvm.abs.i64(i64 ~a, i1 false)" t av))
      t]
 
     ;; -- Tier 2: variable references and calls --
@@ -262,12 +332,111 @@
                            name))]
     [(expr-app fn arg)
      (require-tier! 2 e "expr-app")
-     (lower-app/tier2 e emit! fresh! abs-needed?)]
+     ;; Tier 3 special case: (expr-app (expr-lam mult type body) arg) is a let-binding
+     ;; emitted by the pattern compiler. Lower arg, push onto bvar-env, lower body.
+     (cond
+       [(expr-lam? fn)
+        (lower-let bb fn arg)]
+       [else
+        (lower-app/tier2 e bb)])]
+
+    ;; -- Tier 3: Bool + comparisons + conditionals --
+    [(expr-Bool)
+     (require-tier! 3 e "expr-Bool")
+     ;; Bool as a *type* should not appear at a value position; this is reached
+     ;; if a body is just the literal `Bool`. Emit the canonical 0 (vacuous).
+     "0"]
+    [(expr-true)
+     (require-tier! 3 e "expr-true")
+     "1"]
+    [(expr-false)
+     (require-tier! 3 e "expr-false")
+     "0"]
+    [(expr-int-lt a b)
+     (require-tier! 3 e "expr-int-lt")
+     (cmpop "slt" a b)]
+    [(expr-int-le a b)
+     (require-tier! 3 e "expr-int-le")
+     (cmpop "sle" a b)]
+    [(expr-int-eq a b)
+     (require-tier! 3 e "expr-int-eq")
+     (cmpop "eq" a b)]
+    [(expr-boolrec _motive true-case false-case target)
+     (require-tier! 3 e "expr-boolrec")
+     (lower-conditional bb target true-case false-case)]
+    [(expr-reduce scrutinee arms _structural?)
+     (require-tier! 3 e "expr-reduce")
+     (lower-reduce-bool bb scrutinee arms)]
 
     [_
      (unsupported! e
                    (format "no Tier ~a lowering for this node"
                            (current-llvm-tier)))]))
+
+;; lower-let : bb-builder × expr-lam × Expr -> String
+;; Lowers (expr-app (expr-lam mult type body) arg) as a let-binding:
+;;   m0 binder: don't evaluate arg, push 'erased
+;;   mw/m1   : evaluate arg, push its SSA value
+(define (lower-let bb lam arg)
+  (match lam
+    [(expr-lam mult _type body)
+     (case mult
+       [(m0)
+        (parameterize ([current-bvar-env (cons 'erased (current-bvar-env))])
+          (lower-int-expr body bb))]
+       [(m1 mw)
+        (define av (lower-int-expr arg bb))
+        (parameterize ([current-bvar-env (cons av (current-bvar-env))])
+          (lower-int-expr body bb))]
+       [else
+        (unsupported! lam (format "unknown multiplicity ~v in let-binding" mult))])]))
+
+;; lower-conditional : bb-builder × Expr × Expr × Expr -> String
+;; Emits an if-then-else with phi merging at the join block. Returns the phi's
+;; SSA name. Used by both expr-boolrec and expr-reduce-on-Bool.
+(define (lower-conditional bb target true-case false-case)
+  (define tv (lower-int-expr target bb))
+  (define cb (bb-fresh! bb))
+  (bb-emit! bb (format "  ~a = icmp ne i64 ~a, 0" cb tv))
+  (define tlab (bb-fresh-label! bb "true"))
+  (define flab (bb-fresh-label! bb "false"))
+  (define jlab (bb-fresh-label! bb "join"))
+  (bb-branch-cond! bb cb tlab flab)
+  ;; True arm
+  (bb-start-block! bb tlab)
+  (define tv-result (lower-int-expr true-case bb))
+  (define t-end-block (bb-cur-block-name bb))
+  (bb-branch! bb jlab)
+  ;; False arm
+  (bb-start-block! bb flab)
+  (define fv-result (lower-int-expr false-case bb))
+  (define f-end-block (bb-cur-block-name bb))
+  (bb-branch! bb jlab)
+  ;; Join
+  (bb-start-block! bb jlab)
+  (define r (bb-fresh! bb))
+  (bb-emit! bb (format "  ~a = phi i64 [~a, %~a], [~a, %~a]"
+                       r tv-result t-end-block fv-result f-end-block))
+  r)
+
+;; lower-reduce-bool : bb-builder × Expr × Listof expr-reduce-arm -> String
+;; Tier 3 supports expr-reduce ONLY for Bool: arms must be one each of
+;; 'true / 'false with binding-count 0. Anything else → Tier 4.
+(define (lower-reduce-bool bb scrutinee arms)
+  (define (find-arm tag)
+    (or (findf (lambda (a) (eq? (expr-reduce-arm-ctor-name a) tag)) arms)
+        (unsupported! arms
+                      (format "expr-reduce missing the '~a arm (Tier 3 requires both true and false on Bool)" tag))))
+  (define t-arm (find-arm 'true))
+  (define f-arm (find-arm 'false))
+  (for ([a (in-list arms)])
+    (unless (= 0 (expr-reduce-arm-binding-count a))
+      (unsupported! a
+                    (format "expr-reduce-arm '~a has binding-count ~a; Tier 3 supports only 0-binding (Bool) constructors"
+                            (expr-reduce-arm-ctor-name a) (expr-reduce-arm-binding-count a)))))
+  (lower-conditional bb scrutinee
+                     (expr-reduce-arm-body t-arm)
+                     (expr-reduce-arm-body f-arm)))
 
 ;; lookup-bvar : Integer -> String
 ;; Resolved against the current-bvar-env parameter set by lower-function.
@@ -317,8 +486,8 @@
   (define fn-types
     (for/fold ([h (hasheq)]) ([f (in-list forms)])
       (hash-set h (cadr f) (caddr f))))
-  ;; Build LLVM module: declarations first (collected from all bodies),
-  ;; then each function, with main last for readability.
+  ;; Build LLVM module: each function gets its own bb-builder. We also
+  ;; thread a top-level abs-needed? through to collect declarations.
   (define abs-needed? (box #f))
   (define non-main (filter (lambda (f) (not (eq? (cadr f) 'main))) forms))
   (define fn-irs
@@ -341,30 +510,24 @@
    (apply string-append (map (lambda (s) (string-append s "\n")) fn-irs))
    main-ir))
 
-(define (lower-main-tier2 form abs-needed?)
+(define (lower-main-tier2 form mod-abs-needed?)
   (match form
     [(list 'def 'main type body)
-     ;; main has no parameters in the source. Body is lowered in an empty env.
-     (define instrs '())
-     (define counter 0)
-     (define (emit! s) (set! instrs (cons s instrs)))
-     (define (fresh!)
-       (set! counter (+ counter 1))
-       (format "%t~a" counter))
-     (parameterize ([current-bvar-env '()])
-       (define final-val (lower-int-expr body emit! fresh! abs-needed?))
-       (string-append
-        "define i64 @main() {\n"
-        "entry:\n"
-        (apply string-append
-               (map (lambda (s) (string-append s "\n"))
-                    (reverse instrs)))
-        "  ret i64 " final-val "\n"
-        "}\n"))]))
+     (define bb (make-bb-builder))
+     (define final-val
+       (parameterize ([current-bvar-env '()])
+         (lower-int-expr body bb)))
+     (bb-ret! bb final-val)
+     (when (unbox (bb-builder-abs-needed? bb))
+       (set-box! mod-abs-needed? #t))
+     (string-append
+      "define i64 @main() {\n"
+      (bb-render bb)
+      "}\n")]))
 
 ;; lower-function/tier2 : TopForm × Box[Bool] -> String
 ;; Walks the curried lambda chain, drops m0 binders, lowers the body.
-(define (lower-function/tier2 form abs-needed?)
+(define (lower-function/tier2 form mod-abs-needed?)
   (match form
     [(list 'def name type body)
      (define-values (params inner-body) (collect-lambdas body))
@@ -374,17 +537,18 @@
        (unsupported! body
                      (format "def ~a: lambda chain length ~a does not match Pi chain length ~a"
                              name (length params) (length pi-params))))
-     ;; Return type: must be Int *or* a bvar referring to an m0 (erased) binder.
+     ;; Return type: must be Int/Bool *or* a bvar referring to an m0 (erased) binder.
      ;; The latter is the common case for polymorphic identity-like functions
      ;; (forall A, A -> A) after m0 erasure: the runtime type is i64.
      (unless (or (expr-Int? return-type)
+                 (expr-Bool? return-type)
                  (and (expr-bvar? return-type)
                       (let ([idx (expr-bvar-index return-type)])
                         (and (< idx (length pi-params))
                              (eq? (car (list-ref pi-params (- (length pi-params) 1 idx)))
                                   'm0)))))
        (unsupported! return-type
-                     (format "def ~a: only Int-returning functions are supported in Tier 2 (return type: ~v)"
+                     (format "def ~a: only Int- or Bool-returning functions are supported (return type: ~v)"
                              name return-type)))
      ;; Build SSA params (skipping m0 binders) and the de Bruijn env.
      ;; params is outer-to-inner; env must be innermost-first to match
@@ -405,35 +569,26 @@
             (unsupported! body
                           (format "def ~a: unknown multiplicity ~v"
                                   name mult))])))
-     ;; sigs accumulated in reverse during fold (outer-to-inner, reversed)
-     ;; so we reverse once to get outer-first signature; env is already
-     ;; innermost-first because each prepend by fold matches the outer-to-inner
-     ;; iteration of params plus de-Bruijn-0 = innermost convention.
      (define sig-str (string-join* (reverse sig-params) ", "))
-     (define instrs '())
-     (define counter 0)
-     (define (emit! s) (set! instrs (cons s instrs)))
-     (define (fresh!)
-       (set! counter (+ counter 1))
-       (format "%t~a" counter))
-     (parameterize ([current-bvar-env env-rev])
-       (define final-val (lower-int-expr inner-body emit! fresh! abs-needed?))
-       (string-append
-        (format "define i64 @~a(~a) {\n" (mangle-name name) sig-str)
-        "entry:\n"
-        (apply string-append
-               (map (lambda (s) (string-append s "\n"))
-                    (reverse instrs)))
-        "  ret i64 " final-val "\n"
-        "}\n"))]))
+     (define bb (make-bb-builder))
+     (define final-val
+       (parameterize ([current-bvar-env env-rev])
+         (lower-int-expr inner-body bb)))
+     (bb-ret! bb final-val)
+     (when (unbox (bb-builder-abs-needed? bb))
+       (set-box! mod-abs-needed? #t))
+     (string-append
+      (format "define i64 @~a(~a) {\n" (mangle-name name) sig-str)
+      (bb-render bb)
+      "}\n")]))
 
-;; lower-app/tier2 : Expr × ... -> String  (the SSA value reference)
+;; lower-app/tier2 : Expr × bb-builder -> String  (the SSA value reference)
 ;; Walks the curried application chain, skips m0 args, emits a single call.
-(define (lower-app/tier2 e emit! fresh! abs-needed?)
+(define (lower-app/tier2 e bb)
   (define-values (head args) (uncurry-app e))
   (unless (expr-fvar? head)
     (unsupported! head
-                  "Tier 2 only supports calls where the head is a named top-level function (expr-fvar)"))
+                  "Tier 2 only supports calls where the head is a named top-level function (expr-fvar) or a let-binding (expr-lam). Got something else."))
   (define name (expr-fvar-name head))
   (define ftype
     (or (hash-ref (current-fn-types) name #f)
@@ -451,12 +606,11 @@
     (for/list ([a (in-list args)]
                [p (in-list pi-params)]
                #:when (not (eq? (car p) 'm0)))
-      (define av
-        (lower-int-expr a emit! fresh! abs-needed?))
+      (define av (lower-int-expr a bb))
       (format "i64 ~a" av)))
-  (define t (fresh!))
-  (emit! (format "  ~a = call i64 @~a(~a)"
-                 t (mangle-name name) (string-join* arg-strs ", ")))
+  (define t (bb-fresh! bb))
+  (bb-emit! bb (format "  ~a = call i64 @~a(~a)"
+                       t (mangle-name name) (string-join* arg-strs ", ")))
   t)
 
 ;; collect-lambdas : Expr -> (values Listof(cons Mult Type) Expr)
