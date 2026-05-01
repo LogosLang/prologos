@@ -61,10 +61,10 @@
 (define (lower-program forms)
   (case (current-llvm-tier)
     [(0 1) (lower-program/main-only forms)]
-    [(2)   (lower-program/tier2 forms)]
+    [(2 3) (lower-program/tier2 forms)]   ; Tier 3 reuses the multi-form entry
     [else
      (error 'lower-program
-            "tier ~a not yet implemented (Tier 0–2 at this commit)"
+            "tier ~a not yet implemented (Tier 0–3 at this commit)"
             (current-llvm-tier))]))
 
 ;; Guard: raise unsupported-llvm-node unless current tier is at least min-tier.
@@ -480,8 +480,8 @@
     (or (findf (lambda (f) (eq? (cadr f) 'main)) forms)
         (error 'lower-program/tier2 "no top-form named 'main")))
   (define main-type (caddr main-form))
-  (unless (expr-Int? main-type)
-    (unsupported! main-type "main must currently have type Int"))
+  (unless (or (expr-Int? main-type) (expr-Bool? main-type))
+    (unsupported! main-type "main must currently have type Int or Bool"))
   ;; Build the name-to-type map from the form list itself.
   (define fn-types
     (for/fold ([h (hasheq)]) ([f (in-list forms)])

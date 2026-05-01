@@ -1,0 +1,8 @@
+spec choose Bool -> Int -> Int -> Int
+defn choose
+  | true  a _ -> a
+  | false _ b -> b
+
+def main : Int := [choose true 42 0]
+
+;; :expect-exit 42

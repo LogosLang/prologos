@@ -274,3 +274,106 @@
     (check-true (string-contains? ir "= call i64 @p_add(i64 1, i64 2)"))
     (check-true (regexp-match? #rx"add i64 %t[0-9]+, 100" ir)))
 )
+
+;; ============================================================
+;; Tier 3 — Bool, comparisons, conditionals
+;; ============================================================
+
+(parameterize ([current-llvm-tier 3])
+
+  (test-case "tier 3: Bool literals lower as i64 0/1"
+    (define ir-true
+      (lower-program (list (list 'def 'main (expr-Bool) (expr-true)))))
+    (define ir-false
+      (lower-program (list (list 'def 'main (expr-Bool) (expr-false)))))
+    (check-true (string-contains? ir-true "ret i64 1"))
+    (check-true (string-contains? ir-false "ret i64 0")))
+
+  (test-case "tier 3: int-eq emits icmp + zext"
+    (define ir
+      (lower-program
+       (list (list 'def 'main (expr-Bool)
+                   (expr-int-eq (expr-int 7) (expr-int 7))))))
+    (check-true (string-contains? ir "icmp eq i64 7, 7"))
+    (check-true (regexp-match? #rx"zext i1 %t[0-9]+ to i64" ir)))
+
+  (test-case "tier 3: int-lt and int-le emit slt and sle"
+    (define ir-lt
+      (lower-program
+       (list (list 'def 'main (expr-Bool)
+                   (expr-int-lt (expr-int 1) (expr-int 2))))))
+    (define ir-le
+      (lower-program
+       (list (list 'def 'main (expr-Bool)
+                   (expr-int-le (expr-int 2) (expr-int 2))))))
+    (check-true (string-contains? ir-lt "icmp slt i64 1, 2"))
+    (check-true (string-contains? ir-le "icmp sle i64 2, 2")))
+
+  (test-case "tier 3: expr-boolrec emits br i1 + 2 arms + phi"
+    ;; if (1==0) then 99 else 7 — should pick 7
+    (define body
+      (expr-boolrec (expr-Bool)
+                    (expr-int 99) (expr-int 7)
+                    (expr-int-eq (expr-int 1) (expr-int 0))))
+    (define ir
+      (lower-program (list (list 'def 'main (expr-Int) body))))
+    (check-true (regexp-match? #rx"icmp ne i64" ir)
+                "boolrec target wrapped with icmp ne 0")
+    (check-true (regexp-match? #rx"br i1 %t[0-9]+, label %true_[0-9]+, label %false_[0-9]+" ir))
+    (check-true (regexp-match? #rx"true_[0-9]+:" ir))
+    (check-true (regexp-match? #rx"false_[0-9]+:" ir))
+    (check-true (regexp-match? #rx"join_[0-9]+:" ir))
+    (check-true (regexp-match? #rx"phi i64 \\[99, %true_[0-9]+\\], \\[7, %false_[0-9]+\\]" ir)))
+
+  (test-case "tier 3: expr-reduce on Bool dispatches to true/false arms by tag"
+    ;; pick true arm value (42) via reduce on (true)
+    (define body
+      (expr-reduce (expr-true)
+                   (list (expr-reduce-arm 'false 0 (expr-int 7))
+                         (expr-reduce-arm 'true 0 (expr-int 42)))
+                   #t))  ;; arm order intentionally reversed; lookup is by tag
+    (define ir
+      (lower-program (list (list 'def 'main (expr-Int) body))))
+    (check-true (regexp-match? #rx"phi i64 \\[42, %true_[0-9]+\\], \\[7, %false_[0-9]+\\]" ir)))
+
+  (test-case "tier 3: expr-reduce missing an arm raises"
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'main (expr-Int)
+                     (expr-reduce (expr-true)
+                                  (list (expr-reduce-arm 'true 0 (expr-int 1)))
+                                  #t)))))))
+
+  (test-case "tier 3: expr-reduce-arm with binding-count > 0 raises (Tier 4 territory)"
+    (check-exn unsupported-llvm-node?
+      (lambda ()
+        (lower-program
+         (list (list 'def 'main (expr-Int)
+                     (expr-reduce (expr-true)
+                                  (list (expr-reduce-arm 'true 1 (expr-int 1))
+                                        (expr-reduce-arm 'false 0 (expr-int 0)))
+                                  #t)))))))
+
+  (test-case "tier 3: let-binding via (expr-app (expr-lam ...) arg) extends env"
+    ;; let x = 99 in x + 1   -- with x as bvar 0
+    (define body
+      (expr-app
+       (expr-lam 'mw (expr-Int)
+         (expr-int-add (expr-bvar 0) (expr-int 1)))
+       (expr-int 99)))
+    (define ir
+      (lower-program (list (list 'def 'main (expr-Int) body))))
+    (check-true (string-contains? ir "add i64 99, 1")
+                "let-binding folds the arg literal into the body's reference"))
+
+  (test-case "tier 3: m0 let-binding does not evaluate its arg"
+    ;; (\m0 x : Type . 7) Int  -- should yield 7, no evaluation of Int
+    (define body
+      (expr-app
+       (expr-lam 'm0 (expr-Type 0) (expr-int 7))
+       (expr-Int)))  ; the m0 arg is a type expression that we should NOT lower
+    (define ir
+      (lower-program (list (list 'def 'main (expr-Int) body))))
+    (check-true (string-contains? ir "ret i64 7")))
+)
