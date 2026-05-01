@@ -20,7 +20,7 @@
 ;; The result-cell of the outermost expression becomes the program's
 ;; entry-decl.
 ;;
-;; Supported AST nodes (this commit):
+;; Supported AST nodes (this commit + 2026-05-02 let-binding extension):
 ;;   expr-int n              — Int literal
 ;;   expr-int-add a b        — binary arithmetic
 ;;   expr-int-sub a b
@@ -28,6 +28,14 @@
 ;;   expr-int-div a b
 ;;   expr-true / expr-false  — Bool literals
 ;;   expr-ann inner type     — strip the annotation
+;;   expr-bvar i             — looked up in current env
+;;   (expr-app (expr-lam mult type body) arg)
+;;                           — beta-redex, treated as let-binding:
+;;                             arg is translated to a cell, that cell-id is
+;;                             pushed onto env, body translates in extended
+;;                             env. m0 args are not evaluated; their env
+;;                             slot is 'erased and any bvar referencing it
+;;                             raises ast-translation-error.
 ;;
 ;; Unsupported nodes raise; the caller should treat the program as
 ;; outside the supported subset and report so.
@@ -102,9 +110,14 @@
 ;; Translation
 ;; ============================================================
 ;;
-;; build : AST × builder × dom-id → cell-id
+;; build : AST × builder × dom-id × env → cell-id
 ;;   Recursively translates an expression. Returns the cell-id whose
 ;;   value (after run-to-quiescence) holds the expression's result.
+;;
+;; env is a list of cell-ids, indexed by de Bruijn index. expr-bvar i
+;; reads (list-ref env i). The 'erased entry stands in for m0-bound
+;; values that don't exist at runtime; any bvar that resolves to it
+;; raises ast-translation-error.
 ;;
 ;; The dom-id is the int-domain id (we use 0 for Int, 1 for Bool — see
 ;; the Low-PNet assembly below). Phase 2.D supports only these two.
@@ -112,10 +125,10 @@
 (define INT-DOMAIN-ID 0)
 (define BOOL-DOMAIN-ID 1)
 
-(define (build expr b dom-id)
+(define (build expr b dom-id env)
   (match expr
     ;; Strip annotations
-    [(expr-ann inner _) (build inner b dom-id)]
+    [(expr-ann inner _) (build inner b dom-id env)]
 
     ;; Literals: a single cell whose init-value is the literal.
     [(expr-int n)
@@ -125,24 +138,53 @@
     [(expr-true)  (emit-cell! b BOOL-DOMAIN-ID #t)]
     [(expr-false) (emit-cell! b BOOL-DOMAIN-ID #f)]
 
+    ;; Bound variable: look up in env. Each occurrence yields the SAME
+    ;; cell-id, which means downstream propagators reading from it share
+    ;; the result — this is the let-binding semantics we want.
+    [(expr-bvar i)
+     (when (or (< i 0) (>= i (length env)))
+       (translate-error!
+        expr
+        (format "expr-bvar ~a escapes the let-binding scope (env depth ~a)"
+                i (length env))))
+     (define v (list-ref env i))
+     (when (eq? v 'erased)
+       (translate-error!
+        expr
+        (format "expr-bvar ~a refers to an erased (m0) binder; cannot use at runtime"
+                i)))
+     v]
+
+    ;; Beta-redex == let-binding. (expr-app (expr-lam mult type body) arg)
+    ;; Translate arg to a cell; push the cell-id onto env; translate body.
+    ;; m0 binders are not evaluated; their env entry is 'erased.
+    [(expr-app (expr-lam mult _type body) arg)
+     (case mult
+       [(m0)
+        (build body b dom-id (cons 'erased env))]
+       [(m1 mw)
+        (define arg-cid (build arg b INT-DOMAIN-ID env))
+        (build body b dom-id (cons arg-cid env))]
+       [else
+        (translate-error! expr (format "unknown multiplicity ~v in let-binding" mult))])]
+
     ;; Binary arithmetic: recursively translate each operand to a cell,
     ;; then allocate a result cell + install the corresponding propagator.
-    [(expr-int-add a b-expr) (build-binary b a b-expr 'kernel-int-add)]
-    [(expr-int-sub a b-expr) (build-binary b a b-expr 'kernel-int-sub)]
-    [(expr-int-mul a b-expr) (build-binary b a b-expr 'kernel-int-mul)]
-    [(expr-int-div a b-expr) (build-binary b a b-expr 'kernel-int-div)]
+    [(expr-int-add a b-expr) (build-binary b a b-expr 'kernel-int-add env)]
+    [(expr-int-sub a b-expr) (build-binary b a b-expr 'kernel-int-sub env)]
+    [(expr-int-mul a b-expr) (build-binary b a b-expr 'kernel-int-mul env)]
+    [(expr-int-div a b-expr) (build-binary b a b-expr 'kernel-int-div env)]
 
     [_
      (translate-error!
       expr
-      "Phase 2.D supports only Int/Bool literals and int+/-/*//. \
-For arithmetic + functions + control flow, use the Tier 0–3 \
-sequential AST→LLVM lowering (see tools/llvm-compile.rkt) until \
-the .pnet pipeline grows that support.")]))
+      "Phase 2.D supports only Int/Bool literals, int+/-/*//, expr-bvar, \
+and let-binding via (expr-app (expr-lam ...) arg). Recursive functions \
+and conditionals require additional kernel + translator support.")]))
 
-(define (build-binary b a-expr b-expr tag)
-  (define a-cid (build a-expr b INT-DOMAIN-ID))
-  (define b-cid (build b-expr b INT-DOMAIN-ID))
+(define (build-binary b a-expr b-expr tag env)
+  (define a-cid (build a-expr b INT-DOMAIN-ID env))
+  (define b-cid (build b-expr b INT-DOMAIN-ID env))
   (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
   (emit-propagator! b a-cid b-cid r-cid tag)
   r-cid)
@@ -159,11 +201,12 @@ the .pnet pipeline grows that support.")]))
 (define (ast-to-low-pnet main-type main-body source-file)
   (define b (make-builder))
   ;; Pick an outermost domain based on main's type (for the meta only;
-  ;; the result cell's domain is set during build).
+  ;; the result cell's domain is set during build). main has no enclosing
+  ;; lambdas, so the initial env is empty.
   (define result-cid
     (cond
-      [(expr-Int? main-type) (build main-body b INT-DOMAIN-ID)]
-      [(expr-Bool? main-type) (build main-body b BOOL-DOMAIN-ID)]
+      [(expr-Int? main-type) (build main-body b INT-DOMAIN-ID '())]
+      [(expr-Bool? main-type) (build main-body b BOOL-DOMAIN-ID '())]
       [else
        (translate-error! main-type
                          "main must currently have type Int or Bool")]))
