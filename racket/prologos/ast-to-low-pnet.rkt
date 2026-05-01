@@ -257,6 +257,73 @@
              (lower-tail-rec b dom-id env shape init-args)])])]
       [_ #f])))
 
+;; ============================================================
+;; Non-recursive function inlining (Sprint F.1, 2026-05-01)
+;; ============================================================
+;;
+;; When `(expr-app^k (expr-fvar f) arg1...argk)` doesn't match the
+;; tail-rec pattern, try compile-time inlining: look up f's value V;
+;; if V is a non-recursive lambda chain, build the substituted form
+;; `(expr-app^k V arg1...argk)` and translate it as a beta-redex. The
+;; existing let-binding case in `build` handles the resulting shape.
+;;
+;; Cycle detection has two layers:
+;;   1. Immediate self-recursion: if V mentions (expr-fvar f) directly
+;;      anywhere in its body, inlining would not terminate — error
+;;      with a clear message.
+;;   2. Mutual recursion (f calls g calls f, where neither is tail-
+;;      recursive): caught by a depth limit on inline expansion.
+;;      Reasonable programs nest helpers shallowly (depth 5-10);
+;;      exceeding MAX-INLINING-DEPTH=64 indicates either pathological
+;;      nesting or a mutual-recursion cycle. Either way, the user
+;;      should rewrite the program (typically: tail-recursive form,
+;;      or fewer layers of helpers).
+
+(define MAX-INLINING-DEPTH 64)
+(define current-inlining-depth (make-parameter 0))
+
+;; Construct (expr-app^k (expr-lam-chain) arg1 ... argk) from a value V
+;; and the original application expression. Replaces the (expr-fvar f)
+;; head with V; the rest of the application chain is preserved.
+(define (substitute-head new-head expr)
+  (match expr
+    [(expr-app f a) (expr-app (substitute-head new-head f) a)]
+    [(? expr-fvar?) new-head]
+    [_ expr]))  ; should not happen
+
+(define (try-inline-fvar-call expr b dom-id env)
+  (let peel ([e expr] [arg-count 0])
+    (match e
+      [(expr-app f _) (peel f (+ arg-count 1))]
+      [(expr-fvar name)
+       (cond
+         [(>= (current-inlining-depth) MAX-INLINING-DEPTH)
+          (translate-error!
+           expr
+           (format "inlining depth limit ~a exceeded while expanding '~a'. \
+Likely cause: deeply nested helper functions (rewrite to fewer levels) \
+or mutual recursion between non-tail-recursive functions (rewrite as \
+tail-recursive). Programmatic limit; raise MAX-INLINING-DEPTH if \
+genuinely needed."
+                   MAX-INLINING-DEPTH name))]
+         [else
+          (define value (global-env-lookup-value name))
+          (cond
+            [(not value) #f]            ; unknown fvar; caller raises generic error
+            [(not (expr-lam? value)) #f] ; non-lambda binding
+            [(mentions-fvar? value name)
+             (translate-error!
+              expr
+              (format "function '~a' is non-tail-self-recursive; inlining \
+would not terminate. Use tail-recursive form (recognized by `match-tail-rec`) \
+instead — pattern: `match cond | true → base | false → [self ...]`."
+                      name))]
+            [else
+             (parameterize ([current-inlining-depth
+                             (+ 1 (current-inlining-depth))])
+               (build (substitute-head value expr) b dom-id env))])])]
+      [_ #f])))
+
 (define (literal-init-value e)
   ;; Returns the i64 (or #t/#f) value for an init-arg expression that
   ;; we can evaluate at compile time, or #f if non-literal.
@@ -417,9 +484,10 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
                 i)))
      v]
 
-    ;; Beta-redex == let-binding. (expr-app (expr-lam mult type body) arg)
-    ;; Translate arg to a cell; push the cell-id onto env; translate body.
-    ;; m0 binders are not evaluated; their env entry is 'erased.
+    ;; Beta-redex == let-binding (single-arg). The general k-arg case
+    ;; below (expr-app on an app-chain whose head is a lambda chain)
+    ;; subsumes this; we keep the single case as a fast-path for the
+    ;; common single let-binding shape.
     [(expr-app (expr-lam mult _type body) arg)
      (case mult
        [(m0)
@@ -429,6 +497,55 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
         (build body b dom-id (cons arg-cid env))]
        [else
         (translate-error! expr (format "unknown multiplicity ~v in let-binding" mult))])]
+
+    ;; Multi-arg beta-redex chain: (expr-app^k (expr-lam^k body) arg1 ... argk).
+    ;; Produced by either source-level multi-arg let-binding or by F.1
+    ;; non-recursive fvar inlining (substitute-head replaces an fvar
+    ;; with a multi-binder lambda). Peel all apps + lambdas in lockstep,
+    ;; evaluate each arg in caller env (innermost-arg first per de
+    ;; Bruijn convention), push to env, build body.
+    [(expr-app f-app arg-N)
+     #:when (let peel ([e f-app])
+              (match e
+                [(expr-app f _) (peel f)]
+                [(expr-lam _ _ _) #t]
+                [_ #f]))
+     ;; Collect args (outermost-first, since outer apps wrap inner) and
+     ;; the lambda chain.
+     (let collect ([e expr] [args '()])
+       (match e
+         [(expr-app f a) (collect f (cons a args))]
+         [_
+          ;; e is now the lambda chain head. Args is in outermost-first
+          ;; order. We must apply args left-to-right, peeling one
+          ;; binder at a time. The OUTERMOST lambda's binder is the
+          ;; first arg in the chain (highest bvar index in body).
+          (let beta ([lam e] [remaining-args args] [bound-env env])
+            (cond
+              [(null? remaining-args)
+               (build lam b dom-id bound-env)]
+              [(expr-lam? lam)
+               (define mult (expr-lam-mult lam))
+               (define inner-body (expr-lam-body lam))
+               (case mult
+                 [(m0)
+                  (beta inner-body (cdr remaining-args)
+                        (cons 'erased bound-env))]
+                 [(m1 mw)
+                  (define arg-cid
+                    (build (car remaining-args) b INT-DOMAIN-ID env))
+                  (beta inner-body (cdr remaining-args)
+                        (cons arg-cid bound-env))]
+                 [else
+                  (translate-error! expr
+                                    (format "unknown multiplicity ~v in beta-redex chain" mult))])]
+              [else
+               ;; Not enough lambdas for the args — partial overflow.
+               ;; Recombine remaining args into the result expr and
+               ;; recurse.
+               (translate-error! expr
+                                 "beta-redex chain has more args than lambda binders; \
+arity mismatch in lowering")]))]))]
 
     ;; Binary arithmetic: recursively translate each operand to a cell,
     ;; then allocate a result cell + install the corresponding propagator.
@@ -476,26 +593,42 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
                           (format "expr-reduce arm tags must be 'true and 'false; got ~a, ~a"
                                   tag-a tag-b))])]
 
-    ;; expr-app of an expr-fvar to k arguments — dispatch to the
-    ;; tail-recursion recognizer. If the fvar's body matches the
-    ;; tail-rec shape, lower as a feedback network. Otherwise fall
-    ;; through to the unsupported error below.
+    ;; expr-app of an expr-fvar to k arguments — three-way dispatch:
+    ;;   1. If the fvar's body matches the tail-rec shape, lower as a
+    ;;      feedback network.
+    ;;   2. Else if the fvar's body is a non-recursive lambda chain,
+    ;;      INLINE by substituting the lambda for the fvar reference
+    ;;      and recursing. Falls through to the existing let-binding
+    ;;      lowering since the result is (expr-app (expr-lam ...) arg).
+    ;;   3. Else, error (non-tail recursion or undefined fvar).
+    ;;
+    ;; Cycle detection: `currently-inlining` parameter holds the set of
+    ;; fvar names being expanded along this path. If we hit a name
+    ;; already in the set, that's mutual recursion (or single-fn self-
+    ;; recursion that's not tail-recursive) — error.
     [(expr-app f-expr _arg-expr)
      (let ([result (try-lower-tail-rec-call expr b dom-id env)])
        (cond
          [result result]
          [else
-          (translate-error!
-           expr
-           "function call not supported. Only tail-recursive functions matching \
-the (expr-lam* (expr-reduce cond [base | (self-call args...)])) shape are \
-recognized. For non-recursive helpers, inline the definition manually.")]))]
+          (let ([inlined (try-inline-fvar-call expr b dom-id env)])
+            (cond
+              [inlined inlined]
+              [else
+               (translate-error!
+                expr
+                "function call not supported. The function is either \
+non-tail-recursive (would need runtime call stack), self-referential in \
+a non-tail position, mutually recursive, or undefined. Tail-recursive \
+functions (recognized by `match-tail-rec`) and non-recursive helpers \
+(inlined at lowering time) ARE supported.")]))]))]
 
     ;; Bare expr-fvar (no application) — currently unsupported.
     [(expr-fvar name)
      (translate-error! expr
                        (format "bare reference to top-level definition '~a' not supported. \
-Only saturated calls to tail-recursive functions are lowered."
+Only saturated calls to tail-recursive functions and non-recursive \
+helpers are lowered."
                                name))]
 
     [_

@@ -193,3 +193,23 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile non-recursive helpers (n3-helpers)
+        # Sprint F.1 (2026-05-01). Non-recursive helper functions are
+        # inlined at lowering time via beta-substitution: when an
+        # `(expr-app^k (expr-fvar f) args)` doesn't match the tail-rec
+        # pattern, look up f's body and substitute it for the fvar.
+        # Falls through to the multi-arg beta-redex handler. Self-
+        # recursive non-tail-rec forms error cleanly; mutual recursion
+        # caught by depth limit (MAX-INLINING-DEPTH=64).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n3-helpers/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n3-helpers-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
