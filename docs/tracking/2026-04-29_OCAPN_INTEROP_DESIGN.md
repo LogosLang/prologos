@@ -1,8 +1,8 @@
-# OCapN Interop — Phase 1/2/3 Design
+# OCapN Interop — Phase 1–8 Design
 
 **Date:** 2026-04-29
 **Author:** Claude (session continuation from goblin port)
-**Status:** Design committed; Phase 1 in flight
+**Status:** Phases 1–8 implemented and CI-gated. Phase 9+ in flight.
 
 ## Context
 
@@ -507,3 +507,74 @@ compat. Codified as goblin-pitfall #28.
   exercises the wire bytes)
 - Cryptographic auth (out of scope for tcp-testing-only by design)
 - Decoder perf fix (pitfall #27)
+
+## Phase 9 — Multi-turn RPC
+
+Three sequential RPCs followed by op:abort. Each request's args
+derive from the previous reply (Racket waits for each reply
+before sending the next). Not "true pipelining" in the OCapN
+sense (no send-on-promise), but exercises a stateful Node
+responder loop.
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 9A | `peer-pipelined.mjs` | ✅ | loop: read deliver → reply with args+"-ack"; exit on abort |
+| 9B | `tests/test-ocapn-pipelined.rkt` | ✅ | 1 test, 3 rounds, byte equality on all replies |
+| 9C | CI integration | ✅ | added to `interop.yml` |
+
+## Phase 10 — Graceful op:abort teardown
+
+Both peers send `op:start-session + op:abort` and read each
+other's two frames. Tests clean shutdown semantics: no frame
+lost, abort reasons round-trip both directions, both processes
+exit cleanly.
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 10A | `peer-abort.mjs` | ✅ | sends start+abort, reads back start+abort |
+| 10B | `tests/test-ocapn-abort.rkt` | ✅ | 1 test, byte equality on both Node frames + JSON assertions |
+| 10C | CI integration | ✅ | added to `interop.yml` |
+
+## Phase 11 — CapTP ↔ Vat bridge
+
+The first wire-side semantic mapping: a `CapTPOp` value drives
+the local `Vat` directly, without going through the slow
+multi-arity decoder (pitfall #27).
+
+  op:deliver tgt args ap rm  →  enqueue VatMsg(deliver tgt args ap)
+  op:deliver-only tgt args   →  send-only tgt args
+  op:abort, op:start-session →  no-op (handled at connection layer)
+  op:listen, op:gc-*         →  no-op (Phase 12+)
+
+Test:
+  1. Spawn beh-echo actor (id 0) on a fresh vat.
+  2. fresh-promise gives promise id 1.
+  3. Apply `(op-deliver 0 (syrup-string "hi") (some 1) none)`
+     via `incoming-captp-op`.
+  4. Drain.
+  5. Assert promise 1 is fulfilled (with the actor's reply value).
+
+This is the wire-IN half of a real netlayer. The wire-OUT half
+(vat eff-resolve → outbound op:deliver) is Phase 12.
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 11A | `lib/prologos/ocapn/captp-bridge.prologos` | ✅ | `incoming-captp-op : CapTPOp -> Vat -> Vat` |
+| 11B | `tests/test-ocapn-bridge.rkt` | ✅ | 4 tests (deliver, deliver-only, abort, start-session) |
+
+## Profile: decoder perf gap
+
+Re-investigated 2026-05-01. Findings (codified in pitfall #27):
+
+- 1-arity record decode: ~28s consistently (538 reduce_steps × ~52 ms/step).
+- 3-arity record decode: ~270s (763 reduce_steps × ~354 ms/step).
+- `reset-meta-store!` between calls does NOT change timing — accumulation is NOT the cause.
+- Cost is per-step and grows super-linearly with record arity.
+- Likely culprit: HOF self-reference (`decode-many-loop dec` where `dec = decode-at`) compounds closure substitutions through the reducer.
+
+Three lines of attack (deferred — none implemented in this round):
+1. Inline `decode-many-loop` into `decode-at` — eliminate HOF passing.
+2. Move decoder to Racket FFI primitive — loses self-hosting cleanliness.
+3. Fix the reducer's closure-substitution hot path — most principled, largest scope.
+
+The 1-arity round-trip path (Phase 5: op:abort, op:gc-answer) tolerates the cost (<10s per decode); Phases 6-10 sidestep via byte equality; Phase 11 sidesteps by operating on CapTPOp values directly.

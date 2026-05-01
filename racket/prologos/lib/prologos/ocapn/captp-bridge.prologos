@@ -1,0 +1,48 @@
+ns prologos::ocapn::captp-bridge
+
+;; ===========================================================
+;; CapTP ↔ Vat bridge — Phase 11 of OCapN interop
+;; ===========================================================
+;;
+;; When a CapTP message arrives over the wire (decoded into a
+;; `CapTPOp` value), this module maps it onto operations on the
+;; local `Vat`. The dual direction (vat-side eff-resolve emerging
+;; as outbound op:deliver) is Phase 12.
+;;
+;; Mapping (Phase 11 minimum):
+;;   op:deliver   tgt args ap rm  →  enqueue VatMsg(deliver tgt args ap)
+;;   op:deliver-only tgt args     →  send-only tgt args
+;;   op:abort     reason          →  no-op (connection layer handles abort)
+;;   op:start-session  ver loc    →  no-op (session layer)
+;;   op:listen    tgt resolver    →  no-op for Phase 11 (tracked as TODO)
+;;   op:gc-*                      →  no-op for Phase 11 (no GC yet)
+;;
+;; Caller obligations:
+;;   - For op:deliver with answer-pos=Some N, the caller must
+;;     have already allocated a promise at position N via
+;;     `fresh-promise` (or otherwise ensure promise N exists).
+;;     Phase 12 will handle allocation automatically when bridging
+;;     a session.
+
+require [prologos::ocapn::message :refer-all]
+        [prologos::ocapn::vat     :refer-all]
+        [prologos::ocapn::syrup   :refer-all]
+        [prologos::data::option   :refer [Option some none]]
+
+spec incoming-captp-op CapTPOp Vat -> Vat
+  :doc "Apply an inbound CapTPOp to the vat. Phase 11."
+defn incoming-captp-op
+  | [op-deliver tgt args ap _rm] v ->
+      enqueue-msg [vmsg-deliver tgt args ap] v
+  | [op-deliver-only tgt args] v ->
+      send-only tgt args v
+  | [op-abort _reason] v ->
+      v
+  | [op-start-session _ver _loc] v ->
+      v
+  | [op-listen _tgt _resolver] v ->
+      v
+  | [op-gc-export _pos _cnt] v ->
+      v
+  | [op-gc-answer _pos] v ->
+      v

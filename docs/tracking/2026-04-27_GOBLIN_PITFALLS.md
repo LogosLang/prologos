@@ -871,6 +871,34 @@ The 1-arity round-trip path used in Phase 5's
 `test-ocapn-live-interop.rkt` (op:abort, op:gc-answer) doesn't
 exhibit the issue — only multi-arity records do.
 
+**Profile data (2026-05-01).** Decode of `<3'tag5"hello>`
+(1-arity record, 13 bytes): **~28s** consistently across 5
+iterations, with 538 reduce_steps × ~52 ms/step. Decode of
+`<16'op:start-session3"0.110"loc-string>` (3-arity record,
+~40 bytes): **~270s**, with 763 reduce_steps × ~354 ms/step.
+Resetting `reset-meta-store!` and `reset-constraint-store!`
+between calls did NOT change the timing (so the cost is NOT
+accumulation across calls). The cost is intrinsic to each
+decode and grows super-linearly with record arity.
+
+The likely culprit is the HOF self-reference: `decode-many-loop`
+takes `decode-at` as an argument; the closure-substitution path
+in the Prologos reducer compounds across recursive calls.
+Combined with the 10-constructor pattern-match per
+SyrupValue match, each step is doing ~52-354ms of work.
+
+**Three lines of attack** (deferred):
+1. Inline `decode-many-loop` into `decode-at` (eliminate HOF
+   passing). Smallest scope; tests Prologos's HOF-substitution
+   cost specifically.
+2. Move decoder to Racket FFI primitive (one big function).
+   Loses self-hosting purity.
+3. Fix the reducer's closure-substitution hot path.
+   Most principled but largest scope.
+
+The 1-arity round-trip Phase-5 tests still tolerate the cost
+(<10s per decode); Phase 6+ tests sidestep via byte equality.
+
 ---
 
 ### #28 — `@endo/ocapn` rejects `null` as a record child; use `false` for "absent" (2026-04-29, real interop bug)

@@ -26,3 +26,5 @@ test-ocapn-live-interop.rkt       # interop-only: spawns node subprocess (Phase 
 test-ocapn-handshake.rkt          # interop-only: spawns node subprocess (Phase 6)
 test-ocapn-conversation.rkt       # interop-only: spawns node subprocess (Phase 7)
 test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 8)
+test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
+test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)

@@ -79,3 +79,9 @@ jobs:
 
       - name: Run RPC test (Phase 8 — conversational state machine)
         run: cd racket/prologos && raco test tests/test-ocapn-rpc.rkt
+
+      - name: Run pipelined test (Phase 9 — multi-turn RPC)
+        run: cd racket/prologos && raco test tests/test-ocapn-pipelined.rkt
+
+      - name: Run abort test (Phase 10 — graceful op:abort teardown)
+        run: cd racket/prologos && raco test tests/test-ocapn-abort.rkt
