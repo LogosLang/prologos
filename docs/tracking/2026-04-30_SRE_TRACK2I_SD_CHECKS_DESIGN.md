@@ -290,7 +290,41 @@ Estimated scope: ~80-100 LoC across `sre-core.rkt` + ~30 LoC of unit tests in `t
 
 **Estimated scope**: ~80-100 LoC for sweep + format functions, + the markdown findings table. ~30-45 min implementation + ~15 min findings analysis.
 
-### Phase T: Dedicated test file
+#### Locked decisions (mini-design + mini-audit dialogue 2026-04-30)
+
+Mini-audit completed against actual code surfaces (`generate-domain-samples` at `sre-sample-generator.rkt:80`, `test-sd-vee/detailed` + `test-sd-wedge/detailed` at `sre-core.rkt:394,424`, `sd-evidence` struct at `sre-core.rkt:385`, `sre-domain-meet` at `sre-core.rkt:190`, `realistic-type-atoms` at `tests/test-sre-algebraic.rkt:469`). Three implementation-shape decisions resolved via dialogue:
+
+**Q1 — File placement**: NEW file `racket/prologos/sre-property-sweep.rkt` (NOT colocated in `sre-sample-generator.rkt`). Decomplection rationale: generator IS input to sweep diagnostic, different concerns. Phase 3.5 (pseudo-complement sweep) and Phase 3b (session/form sweeps) will both consume the same sweep infrastructure — separate file gives them a natural home.
+
+**Q2 — `realistic-type-atoms` location**: Sweep accepts atoms as a parameter; caller supplies per-domain. Sweep stays generic over `(domain, relations, atoms, depth-config)`. Phase 3b will want different atoms per domain. Avoids cross-cutting ownership of test-fixture constants.
+
+**Q3 — Properties swept**: Run `{distributive, sd-vee, sd-wedge}` together per `(domain, relation)`, NOT just SD∨/SD∧. Rationale per [PTF Lattice Hierarchy note](../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) §5.1+§5.2: distributive is the most informative single result; if confirmed on wider sample, Heyting is the next question (Phase 3.5); if refuted with witness, SD becomes the load-bearing finding (Reading-Speyer-Thomas canonical form applies, DNF/Birkhoff don't). Showing all three reifies the implication chain `distributive ⇒ sd-vee ∧ sd-wedge`.
+
+**`sd-finding` record shape** (locked):
+
+```racket
+(struct sd-finding
+  (domain-name      ; symbol, e.g. 'type
+   relation         ; symbol, e.g. 'equality | 'subtype
+   property         ; symbol, 'sd-vee | 'sd-wedge | 'distributive
+   sample-count     ; int — atoms count after generation
+   evidence)        ; sd-evidence struct (for SD); axiom-* (for distributive)
+  #:transparent)
+```
+
+**Markdown table columns**: Domain | Relation | Property | Samples | Status | Triples | Hypothesis fired | Conclusion held | Non-vacuity % | Witness
+
+**PTF Lattice Hierarchy connection — what the sweep results unlock**:
+
+| If wider-sample sweep confirms... | Discussion-phase declaration unlocks (per PTF note §5.1+§5.2) |
+|---|---|
+| `type×equality` is distributive | DNF canonicalization; Birkhoff representation; clean Galois bridge composition with `type×subtype` (which is also declared distributive) — bridges between equality-context and subtype-context type cells compose cleanly without algebraic-level mismatches. UCS dispatch (§6.2) gets distributive-level routing for equality contexts. |
+| `type×equality` is SD but not distributive (refuted with witness) | Reading-Speyer-Thomas canonical form applies; structural-unification MGU correctness assured; but DNF/Birkhoff/clean-bridge-composition foreclosed. Asymmetry with `type×subtype` becomes a tracked design concern. |
+| `type×subtype` empirical results | Validates (or refutes) the Track 2H Heyting declaration on the wider sample space. |
+
+**Two new drift risks** (added to design doc's existing 5):
+6. Q3 scope creep — including `test-distributive` was an explicit dialogue decision, NOT a mid-flight expansion. Documented here so future-self doesn't read "scope creep" into the choice.
+7. Q2 generic-vs-typed slippage — caller-supplied atoms keeps sweep generic; if a `default-atoms` parameter that hardcodes type atoms is later added, the decoupling is silently lost. Watch for this.
 
 **Goal**: `tests/test-sre-sd-properties.rkt` consolidating SD-specific tests:
 - Constructed lattice fixtures known SD / non-SD (positive + negative golden tests).
