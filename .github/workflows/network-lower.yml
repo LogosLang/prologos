@@ -120,6 +120,17 @@ jobs:
             -o /tmp/test-bsp-stats
           /tmp/test-bsp-stats
 
+      - name: BSP feedback smoke test (Sprint E)
+        # Sprint E (2026-05-01). Validates the (1,1) shape (kernel-identity)
+        # and that the BSP barrier keeps reads/writes consistent under
+        # cyclic networks. Includes iterative fib(0..20) computed by a
+        # gated self-feedback loop — the same algorithm a future
+        # source-level expr-iterate would lower to.
+        run: |
+          clang runtime/test-bsp-feedback.c runtime/prologos-runtime.o \
+            -o /tmp/test-bsp-feedback
+          /tmp/test-bsp-feedback
+
       - name: N0 end-to-end (lower + clang + run)
         env:
           PROLOGOS_NETWORK_TIER: "0"
