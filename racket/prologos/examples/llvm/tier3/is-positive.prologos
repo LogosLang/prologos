@@ -1,0 +1,6 @@
+spec is-pos Int -> Bool
+defn is-pos [n] [int-lt 0 n]
+
+def main : Bool := [is-pos 5]
+
+;; :expect-exit 1
