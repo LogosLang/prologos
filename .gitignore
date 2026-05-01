@@ -56,3 +56,12 @@ racket/prologos/data/cache/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Network-lowering runtime build artifacts (built by zig build-obj in CI / locally)
+runtime/*.o
+runtime/*.o.o
+runtime/prologos-runtime.o.dSYM/
+
+# Test scratch — output binaries from network-compile.rkt / llvm-compile.rkt
+/out
+/out.ll
