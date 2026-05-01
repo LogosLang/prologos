@@ -350,3 +350,65 @@
       (ast-to-low-pnet (expr-Int)  ; type says Int but body is a pair
                        (expr-pair (expr-int 1) (expr-int 2))
                        "t.prologos"))))
+
+;; ============================================================
+;; Sprint F.4: Nat match + zero/suc/nat-val (2026-05-01)
+;; ============================================================
+
+(test-case "expr-nat-val and expr-zero produce single Int cell"
+  (define lp1 (ast-to-low-pnet (expr-Nat) (expr-nat-val 42) "t.prologos"))
+  (check-true (validate-low-pnet lp1))
+  (check-equal? (count-by lp1 cell-decl?) 1)
+  (define lp2 (ast-to-low-pnet (expr-Nat) (expr-zero) "t.prologos"))
+  (check-true (validate-low-pnet lp2))
+  (check-equal? (count-by lp2 cell-decl?) 1))
+
+(test-case "expr-suc adds 1 via int-add propagator"
+  ;; (suc (suc (suc zero))) → cells: 0, 1, +1, 1, +1, 1, +1 = 7? Let's see.
+  ;; zero → 1 cell. suc inner → inner + new(1) + new(result) = 2 new cells.
+  ;; (suc zero): 3 cells (0, 1, result), 1 propagator.
+  (define lp (ast-to-low-pnet (expr-Nat)
+                              (expr-suc (expr-zero))
+                              "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (check-equal? (count-by lp cell-decl?) 3)
+  (check-equal? (count-by lp propagator-decl?) 1))
+
+(test-case "Nat match (zero/suc): is-zero shape"
+  ;; (expr-reduce scrutinee
+  ;;   (list (expr-reduce-arm 'zero 0 (expr-true))
+  ;;         (expr-reduce-arm 'suc 1 (expr-false))) #t)
+  ;; in env where bvar 0 is the Nat scrutinee (from outer lambda).
+  ;; To test in isolation, use a literal Nat as scrutinee.
+  (define body
+    (expr-reduce (expr-nat-val 0)
+                 (list (expr-reduce-arm 'zero 0 (expr-true))
+                       (expr-reduce-arm 'suc 1 (expr-false)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Bool) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Cells: scrut=0, zero-lit, cond, one-lit, pred, true-cell,
+  ;;        false-cell, select-result. 8 cells.
+  (check-equal? (count-by lp cell-decl?) 8)
+  ;; Propagators: int-eq (cond), int-sub (pred), select. 3.
+  (check-equal? (count-by lp propagator-decl?) 3))
+
+(test-case "Nat match arms in reverse order (suc first, zero second)"
+  (define body
+    (expr-reduce (expr-nat-val 0)
+                 (list (expr-reduce-arm 'suc 1 (expr-false))
+                       (expr-reduce-arm 'zero 0 (expr-true)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Bool) body "t.prologos"))
+  (check-true (validate-low-pnet lp)))
+
+(test-case "expr-reduce with 3 arms raises (only 2-arm supported)"
+  (define body
+    (expr-reduce (expr-nat-val 0)
+                 (list (expr-reduce-arm 'zero 0 (expr-int 0))
+                       (expr-reduce-arm 'suc 1 (expr-int 1))
+                       (expr-reduce-arm 'foo 0 (expr-int 2)))
+                 #t))
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet (expr-Int) body "t.prologos"))))

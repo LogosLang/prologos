@@ -1,0 +1,4 @@
+def main : Nat := [suc [suc [suc 0N]]]
+
+;; expr-suc lowering: each suc adds 1. suc(suc(suc(0))) = 3.
+;; :expect-exit 3

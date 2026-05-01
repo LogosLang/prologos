@@ -255,3 +255,23 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile Nat match (n6-nat-match)
+        # Sprint F.4 (2026-05-01). expr-zero / expr-suc / expr-nat-val
+        # lower to Int cells (Nat is i64 at runtime). Two-arm match
+        # `match n | zero -> z-body | suc m -> s-body` lowers to a
+        # cascaded select gated on (int-eq scrut 0); the suc arm's
+        # binder `m` becomes a cell holding (scrut - 1) pushed onto
+        # env. Multi-arm (>2) match for general sum types is deferred
+        # — needs tagged-union runtime representation.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n6-nat-match/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n6-nat-match-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done

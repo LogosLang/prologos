@@ -547,6 +547,23 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
     [(expr-true)  (emit-cell! b BOOL-DOMAIN-ID #t)]
     [(expr-false) (emit-cell! b BOOL-DOMAIN-ID #f)]
 
+    ;; Nat literals (Sprint F.4). expr-nat-val holds an O(1) i64 nat;
+    ;; same runtime representation as Int. expr-zero is just literal 0.
+    [(expr-nat-val n)
+     (unless (and (exact-integer? n) (>= n 0))
+       (translate-error! expr "expr-nat-val with non-nonnegative-integer payload"))
+     (emit-cell! b INT-DOMAIN-ID n)]
+    [(expr-zero) (emit-cell! b INT-DOMAIN-ID 0)]
+
+    ;; expr-suc inner — successor. Lowered as int-add(inner, 1).
+    [(expr-suc inner)
+     (define inner-vt (build inner b INT-DOMAIN-ID env))
+     (define inner-cid (assert-scalar! inner-vt inner "expr-suc operand"))
+     (define one-cid (emit-cell! b INT-DOMAIN-ID 1))
+     (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
+     (emit-propagator! b (list inner-cid one-cid) r-cid 'kernel-int-add)
+     r-cid]
+
     ;; Non-dependent pair construction (Sprint F.2). Translates each
     ;; component to a vtree; the result is the 2-element list. No
     ;; new cells allocated — the components ARE the pair (no boxing).
@@ -680,18 +697,44 @@ arity mismatch in lowering")]))]))]
     ;; lowering at the call site (expr-app dispatch below); standalone
     ;; non-recursive expr-reduce just becomes a select.
     [(expr-reduce scrutinee
-                  (list (expr-reduce-arm tag-a 0 body-a)
-                        (expr-reduce-arm tag-b 0 body-b))
+                  (list (expr-reduce-arm tag-a count-a body-a)
+                        (expr-reduce-arm tag-b count-b body-b))
                   _structural?)
      (cond
-       [(and (eq? tag-a 'true) (eq? tag-b 'false))
+       ;; Bool match — both arms have count=0; scrutinee is the cond.
+       [(and (eq? tag-a 'true) (eq? tag-b 'false)
+             (= count-a 0) (= count-b 0))
         (build-select b scrutinee body-a body-b env dom-id)]
-       [(and (eq? tag-a 'false) (eq? tag-b 'true))
+       [(and (eq? tag-a 'false) (eq? tag-b 'true)
+             (= count-a 0) (= count-b 0))
         (build-select b scrutinee body-b body-a env dom-id)]
+
+       ;; Nat match (Sprint F.4) — zero arm has count=0; suc arm has
+       ;; count=1 (binder for predecessor). Lower as int-eq dispatch
+       ;; with predecessor-cell pushed onto env for suc body.
+       [(and (eq? tag-a 'zero) (eq? tag-b 'suc)
+             (= count-a 0) (= count-b 1))
+        (build-nat-match b dom-id env scrutinee body-a body-b expr)]
+       [(and (eq? tag-a 'suc) (eq? tag-b 'zero)
+             (= count-a 1) (= count-b 0))
+        (build-nat-match b dom-id env scrutinee body-b body-a expr)]
+
        [else
-        (translate-error! expr
-                          (format "expr-reduce arm tags must be 'true and 'false; got ~a, ~a"
-                                  tag-a tag-b))])]
+        (translate-error!
+         expr
+         (format "expr-reduce two-arm match supports {true,false} (Bool) or \
+{zero,suc} (Nat); got ~a (count ~a), ~a (count ~a). Other sum types are not \
+yet lowered."
+                 tag-a count-a tag-b count-b))])]
+
+    ;; Multi-arm match with N != 2 not yet lowered.
+    [(expr-reduce _ arms _)
+     (translate-error!
+      expr
+      (format "expr-reduce with ~a arms not supported yet (only 2-arm Bool/Nat \
+match is lowered). Other sum types (Maybe, Either, List, user-defined) require \
+tagged-union runtime representation, not yet built."
+              (length arms)))]
 
     ;; expr-app of an expr-fvar to k arguments — three-way dispatch:
     ;;   1. If the fvar's body matches the tail-rec shape, lower as a
@@ -749,6 +792,30 @@ are not yet supported.")]))
   (emit-propagator! b (list a-cid b-cid) r-cid tag)
   r-cid)
 
+;; build-nat-match (Sprint F.4): lower `match scrut | zero -> z-body
+;; | suc m -> s-body` to a select gated on `(int-eq scrut 0)`. The
+;; suc body executes in env extended with a "predecessor" cell
+;; holding `(int-sub scrut 1)` — bvar 0 in s-body refers to it.
+;;
+;; Polarity: select(cond, z-body, s-body). cond=1 (scrut==0) → z-body;
+;; cond=0 → s-body.
+(define (build-nat-match b dom-id env scrut-expr z-body s-body err-expr)
+  (define scrut-vt (build scrut-expr b INT-DOMAIN-ID env))
+  (define scrut-cid (assert-scalar! scrut-vt scrut-expr "Nat match scrutinee"))
+  ;; cond = (scrut == 0)
+  (define zero-lit-cid (emit-cell! b INT-DOMAIN-ID 0))
+  (define cond-cid (emit-cell! b BOOL-DOMAIN-ID #f))
+  (emit-propagator! b (list scrut-cid zero-lit-cid) cond-cid 'kernel-int-eq)
+  ;; predecessor = scrut - 1 (only used in s-body's env)
+  (define one-lit-cid (emit-cell! b INT-DOMAIN-ID 1))
+  (define pred-cid (emit-cell! b INT-DOMAIN-ID 0))
+  (emit-propagator! b (list scrut-cid one-lit-cid) pred-cid 'kernel-int-sub)
+  ;; Build both bodies (eagerly, like boolrec). Suc body's env has
+  ;; the predecessor as a new innermost binder.
+  (define z-vt (build z-body b dom-id env))
+  (define s-vt (build s-body b dom-id (cons pred-cid env)))
+  (build-select-vtree b cond-cid z-vt s-vt err-expr dom-id))
+
 ;; build-select: cond-expr must be scalar (Bool); then/else can be
 ;; arbitrary vtrees as long as their shapes match. For pair-typed
 ;; branches, lower as a per-component select cascade (one (3,1)
@@ -795,11 +862,12 @@ are not yet supported.")]))
   ;; lambdas, so the initial env is empty.
   (define result-vt
     (cond
-      [(expr-Int? main-type) (build main-body b INT-DOMAIN-ID '())]
+      [(expr-Int? main-type)  (build main-body b INT-DOMAIN-ID '())]
+      [(expr-Nat? main-type)  (build main-body b INT-DOMAIN-ID '())]
       [(expr-Bool? main-type) (build main-body b BOOL-DOMAIN-ID '())]
       [else
        (translate-error! main-type
-                         "main must currently have type Int or Bool")]))
+                         "main must currently have type Int, Nat, or Bool")]))
   ;; The top-level entry-decl points at ONE cell. main must produce a
   ;; scalar; pair-typed `def main` is rejected (the binary's exit code
   ;; is single-valued). Helpers and intermediate expressions can be

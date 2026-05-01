@@ -1,0 +1,10 @@
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+def main : Bool := [is-zero 0N]
+
+;; Two-arm match on Nat: zero arm has 0 binders, suc arm has 1 (the
+;; predecessor). Lowered as int-eq dispatch + select. is-zero(0) = true.
+;; :expect-exit 1
