@@ -29,13 +29,13 @@ No additional eliminators (`expr-natrec`, `expr-J`, etc.) appear in the recursiv
 | Phase | Description | Status | Notes |
 |---|---|---|---|
 | T3.A | Investigate elaborator output for `defn` patterns | ✅ | findings in § 2 |
-| T3.B | `expr-Bool`, `expr-true`, `expr-false` lowering | ⬜ | Bool encoded as i64 0/1 |
-| T3.C | `expr-int-lt`/`expr-int-le`/`expr-int-eq` lowering | ⬜ | `icmp` + `zext i1 to i64` |
-| T3.D | Multi-block SSA builder refactor | ⬜ | per-block instr lists + cur-block pointer |
-| T3.E | `(expr-app (expr-lam ...) arg)` as let-binding | ⬜ | extend bvar-env, no LLVM op |
-| T3.F | `expr-boolrec` lowering | ⬜ | `icmp ne i64, 0` → `br i1` → 2 arms → phi |
-| T3.G | `expr-reduce` on Bool | ⬜ | shares mechanism with boolrec; dispatch on `'true` / `'false` arm tags |
-| T3.H | Tier 3 acceptance programs + CI step | ⬜ | fact, fib, choose, is-positive |
+| T3.B | `expr-Bool`, `expr-true`, `expr-false` lowering | ✅ | C1 `3ac25dd` |
+| T3.C | `expr-int-lt`/`expr-int-le`/`expr-int-eq` lowering | ✅ | C1 `3ac25dd` |
+| T3.D | Multi-block SSA builder refactor | ✅ | C1 `3ac25dd` |
+| T3.E | `(expr-app (expr-lam ...) arg)` as let-binding | ✅ | C1 `3ac25dd` |
+| T3.F | `expr-boolrec` lowering | ✅ | C2 `4551684` |
+| T3.G | `expr-reduce` on Bool | ✅ | C2 `4551684` |
+| T3.H | Tier 3 acceptance programs + CI step | ✅ | C3 (this commit); 9 e2e tests, fact(5)=120, fib(10)=55 |
 
 ## 4. Scope
 

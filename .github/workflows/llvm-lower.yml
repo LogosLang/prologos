@@ -52,3 +52,8 @@ jobs:
         env:
           PROLOGOS_LLVM_TIER: "2"
         run: racket tools/llvm-test.rkt --tier 2 racket/prologos/examples/llvm/tier2
+
+      - name: Tier 3 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_LLVM_TIER: "3"
+        run: racket tools/llvm-test.rkt --tier 3 racket/prologos/examples/llvm/tier3
