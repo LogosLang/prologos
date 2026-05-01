@@ -1,0 +1,53 @@
+name: Network Lowering (N-series)
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  network-lower:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.0'
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Verify clang is available
+        run: |
+          clang --version
+          which clang
+
+      - name: Install Prologos package dependencies
+        run: cd racket/prologos && raco pkg install --auto --skip-installed
+
+      - name: Pre-compile compiler + network passes
+        run: |
+          cd racket/prologos
+          raco make driver.rkt
+          raco make network-emit.rkt
+          raco make network-lower.rkt
+
+      - name: Pre-compile network tools
+        run: raco make tools/network-compile.rkt tools/network-test.rkt
+
+      - name: Build Zig kernel
+        run: |
+          cd runtime
+          zig build-obj prologos-runtime.zig
+
+      - name: N0 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_NETWORK_TIER: "0"
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: racket tools/network-test.rkt --tier 0 racket/prologos/examples/network/n0

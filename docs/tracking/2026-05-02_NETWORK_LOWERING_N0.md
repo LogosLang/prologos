@@ -140,16 +140,21 @@ New workflow `.github/workflows/network-lower.yml`:
 
 | Phase | Description | Status |
 |---|---|---|
-| N0.A | Plan doc | 🔄 |
-| N0.B | Zig kernel | ⬜ |
-| N0.C | network-emit.rkt | ⬜ |
-| N0.D | network-lower.rkt | ⬜ |
-| N0.E | network-compile.rkt CLI driver | ⬜ |
-| N0.F | network-test.rkt directory walker | ⬜ |
-| N0.G | C-shim local verification | ⬜ |
-| N0.H | Acceptance programs (3 constants) | ⬜ |
-| N0.I | CI workflow | ⬜ |
-| N0.✅ | Commit + push | ⬜ |
+| N0.A | Plan doc | ✅ committed `c223dcf` |
+| N0.B | Zig kernel | ✅ `runtime/prologos-runtime.zig` |
+| N0.C | network-emit.rkt | ✅ |
+| N0.D | network-lower.rkt | ✅ |
+| N0.E | network-compile.rkt CLI driver | ✅ |
+| N0.F | network-test.rkt directory walker | ✅ |
+| N0.G | C-shim local verification | ✅ 3/3 pass via parallel C kernel |
+| N0.H | Acceptance programs (3 constants) | ✅ exit-0, exit-42, exit-7 |
+| N0.I | CI workflow | ✅ `network-lower.yml` with `mlugg/setup-zig@v1` |
+| N0.✅ | Commit + push | 🔄 next |
+
+## Cross-references (added post-implementation)
+
+- Issue #42 — Persistent HAMT/CHAMP in Prologos (gates N3)
+- Issue #44 — PReductions output contract for downstream lowering (gates eventual walk-extract migration)
 
 ## 11. Out of scope (N1+)
 
