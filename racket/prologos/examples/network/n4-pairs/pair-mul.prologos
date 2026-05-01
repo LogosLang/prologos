@@ -1,0 +1,7 @@
+spec pair-mul <Int * Int> -> Int
+defn pair-mul [p] [int* [fst p] [snd p]]
+
+def main : Int := [pair-mul [pair 6 7]]
+
+;; 6 * 7 = 42.
+;; :expect-exit 42

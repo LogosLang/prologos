@@ -213,3 +213,24 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile non-dependent pairs (n4-pairs)
+        # Sprint F.2 (2026-05-01). Non-dependent pair lowering. build
+        # returns a value-tree (cell-id for scalars, list for pairs).
+        # expr-pair allocates per-component; expr-fst/expr-snd project.
+        # Per-component decomposition flows transparently through let-
+        # binding and conditional select. Helpers can take and return
+        # pair-typed values. Scope is simply-typed pairs only —
+        # dependent Sigma is intentionally excluded (per collaborator
+        # feedback 2026-05-01).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n4-pairs/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n4-pairs-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
