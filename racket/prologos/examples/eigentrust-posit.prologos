@@ -1,0 +1,139 @@
+ns examples.eigentrust-posit
+
+;; ========================================================================
+;;
+;;     E I G E N T R U S T   ( L I S T   +   P O S I T 3 2 )
+;;     ------------------------------------------------------
+;;
+;;     Column-stochastic convention (see examples/eigentrust.prologos):
+;;         t_{k+1} = (1 - alpha) * M * t_k + alpha * p
+;;     where M is column-stochastic (every column sums to 1) and p is
+;;     a probability distribution.
+;;
+;;     This variant swaps Rat for Posit32 (hardware floating point).
+;;     Posit32 is inexact, so the column-sum check uses exact equality
+;;     to `~1.0` — small round-off in the matrix literals would fail it.
+;;     For the fixtures here every entry is representable exactly
+;;     (powers of 2 or 0), so the check succeeds.
+;;
+;; ========================================================================
+
+
+spec dot [List Posit32] [List Posit32] -> Posit32
+defn dot [xs ys]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> match ys
+      | nil       -> ~0.0
+      | cons y bs -> p32+ [p32* x y] [dot as bs]
+
+spec vec-sum [List Posit32] -> Posit32
+defn vec-sum [xs]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> p32+ x [vec-sum as]
+
+spec scale-vec Posit32 [List Posit32] -> [List Posit32]
+defn scale-vec [s xs]
+  match xs
+    | nil       -> nil
+    | cons x as -> cons [p32* s x] [scale-vec s as]
+
+spec add-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn add-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32+ x y] [add-vec as bs]
+
+spec sub-vec [List Posit32] [List Posit32] -> [List Posit32]
+defn sub-vec [xs ys]
+  match xs
+    | nil       -> nil
+    | cons x as -> match ys
+      | nil       -> nil
+      | cons y bs -> cons [p32- x y] [sub-vec as bs]
+
+spec p32-max Posit32 Posit32 -> Posit32
+defn p32-max [a b]
+  match [p32-lt a b]
+    | true  -> b
+    | false -> a
+
+spec linf-norm [List Posit32] -> Posit32
+defn linf-norm [xs]
+  match xs
+    | nil       -> ~0.0
+    | cons x as -> p32-max [p32-abs x] [linf-norm as]
+
+spec mat-vec-mul [List [List Posit32]] [List Posit32] -> [List Posit32]
+defn mat-vec-mul [m t]
+  match m
+    | nil       -> nil
+    | cons r rs -> cons [dot r t] [mat-vec-mul rs t]
+
+
+;; Column-stochastic invariant check.
+spec col-sums [List [List Posit32]] -> [List Posit32]
+defn col-sums [m]
+  match m
+    | nil         -> nil
+    | cons r rest -> match rest
+      | nil        -> r
+      | cons _ _   -> add-vec r [col-sums rest]
+
+spec all-ones? [List Posit32] -> Bool
+defn all-ones? [xs]
+  match xs
+    | nil       -> true
+    | cons x as -> match [p32-eq x ~1.0]
+      | false -> false
+      | true  -> all-ones? as
+
+spec col-stochastic? [List [List Posit32]] -> Bool
+defn col-stochastic? [m]
+  all-ones? [col-sums m]
+
+
+spec eigentrust-step [List [List Posit32]] [List Posit32] Posit32 [List Posit32] -> [List Posit32]
+defn eigentrust-step [m p alpha t]
+  add-vec [scale-vec [p32- ~1.0 alpha] [mat-vec-mul m t]] [scale-vec alpha p]
+
+spec eigentrust-iterate [List [List Posit32]] [List Posit32] Posit32 Posit32 Int [List Posit32] [List Posit32] -> [List Posit32]
+defn eigentrust-iterate [m p alpha eps budget t tnew]
+  match [int-le budget 0]
+    | true  -> tnew
+    | false -> match [p32-lt [linf-norm [sub-vec tnew t]] eps]
+      | true  -> tnew
+      | false -> eigentrust-iterate m p alpha eps [int- budget 1] tnew [eigentrust-step m p alpha tnew]
+
+spec eigentrust [List [List Posit32]] [List Posit32] Posit32 Posit32 Int -> [List Posit32]
+defn eigentrust [m p alpha eps max-iter]
+  match [col-stochastic? m]
+    | false -> (the [List Posit32] [panic "eigentrust: M must be column-stochastic"])
+    | true  -> eigentrust-iterate m p alpha eps max-iter p [eigentrust-step m p alpha p]
+
+
+;; ========================================================================
+;; Worked examples
+;; ========================================================================
+
+def m-uniform-4 : [List [List Posit32]] := '['[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25] '[~0.25 ~0.25 ~0.25 ~0.25]]
+def p-uniform-4 : [List Posit32] := '[~0.25 ~0.25 ~0.25 ~0.25]
+
+[col-stochastic? m-uniform-4]
+[eigentrust m-uniform-4 p-uniform-4 ~0.1 ~0.001 50]
+
+def m-others-3 : [List [List Posit32]] := '['[~0.0 ~0.5 ~0.5] '[~0.5 ~0.0 ~0.5] '[~0.5 ~0.5 ~0.0]]
+def p-uniform-3 : [List Posit32] := '[~0.33333 ~0.33333 ~0.33333]
+
+[col-stochastic? m-others-3]
+[eigentrust m-others-3 p-uniform-3 ~0.1 ~0.001 50]
+
+;; Ring (already column-stochastic: each column has a single 1).
+def m-ring-4 : [List [List Posit32]] := '['[~0.0 ~0.0 ~0.0 ~1.0] '[~1.0 ~0.0 ~0.0 ~0.0] '[~0.0 ~1.0 ~0.0 ~0.0] '[~0.0 ~0.0 ~1.0 ~0.0]]
+def p-seed-0 : [List Posit32] := '[~1.0 ~0.0 ~0.0 ~0.0]
+
+[col-stochastic? m-ring-4]
+[eigentrust m-ring-4 p-seed-0 ~0.3 ~0.001 3]
