@@ -31,21 +31,35 @@ algorithm; result is `[5401/10000, 21/100, 147/1000, 1029/10000]`
 | ----------------- | --------: | --------: | ----- |
 | **math** (plain-fl) |    ~0.03 |     1×    | Racket flvector arithmetic, no overhead. |
 | **network** (float) |     0.10 |    ~3×    | Same arithmetic kernel inside fire functions; +~70 µs of cell + BSP overhead. |
-| **Prologos math** (List + Posit32) | 17 990 | **~600 000×** | Surface language, evaluated by Prologos's reducer. |
+| **Prologos math** (List + Posit32) | 15 047 | **~500 000×** | Surface language, evaluated by Prologos's reducer. Pure reduction time for the single W3 expression — elaboration, type-check, qtt, zonk, prelude load, and Racket startup are all excluded (PHASE-TIMINGS:reduce_ms only). |
 | Prologos network  |        —  |     —     | _doesn't exist yet_. |
 
-The 6-orders-of-magnitude gap between **math** and **Prologos math**
-is the cost of the Prologos surface language + reducer on a hot
+The 5-to-6 orders-of-magnitude gap between **math** and **Prologos
+math** is the cost of the Prologos surface language + reducer on a hot
 path: term-tree walks, pattern-match dispatch, pretty-printing,
 no flonum specialization, plus the O(k²) reduce-tree blowup
 (see `2026-04-23_eigentrust_pitfalls.md` §11) that makes deeper
-iteration progressively more expensive.
+iteration progressively more expensive. This is _just_ reduction —
+the other Prologos phases (elaborate, type-check, qtt, zonk) sum
+to ~1.5 s on this workload, ~100× smaller than reduce.
 
 The **network** vs **math** gap is small in absolute terms (~70 µs
 per call) and dominated by per-iteration constant cost (cell
 allocation, BSP round dispatch, fire-fn invocation, CHAMP path
 copies on each cell-write). It amortizes as n grows — see scaling
 below.
+
+### A note on what `reduce_ms` measures
+
+For the Prologos surface variant, `reduce_ms` is the
+PHASE-TIMINGS:reduce_ms emitted by `driver.rkt`'s `process-file`
+— **just** the reducer phase, not elaboration, type-checking, qtt,
+trait resolution, or zonking. So the 500 000× gap is not "Prologos
+is slow at startup", it's "the reducer walks term trees instead of
+calling flonum primitives". The `eigentrust-list-posit-w3only.prologos`
+fixture isolates the W3 expression specifically so its reduce_ms
+isn't bundled with W1/W2 (which the full benchmark file also
+contains).
 
 ## Scaling across n — math vs network
 
@@ -169,3 +183,19 @@ expected rational).
   (5 entries — fire-once vs chain, cell-merge during initial reads,
   float `equal?`, `for/sum` exact 0 vs 0.0, fine-grained cell-id
   lookup).
+
+## Reproducing the W3 Prologos-math number specifically
+
+```
+# Pure reduce_ms for ONE W3 evaluation (no W1/W2 bundled, no startup):
+racket tools/bench-phases.rkt --runs 2 \
+  benchmarks/comparative/eigentrust-list-posit-w3only.prologos
+```
+
+This file is identical to `eigentrust-list-posit.prologos` for the
+defns + fixtures, but its only top-level expression is the W3
+workload (`eigentrust m-ring-4 p-seed-0 ~0.3 ~0.0 3`). The reported
+`reduce_ms` is therefore the cost of evaluating exactly that one
+expression through the Prologos reducer, with all earlier phases
+(elaborate, type-check, qtt, zonk) reported separately and summing
+to ~1.5 s on this workload (≈100× smaller than reduce).
