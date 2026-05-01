@@ -1,0 +1,9 @@
+spec is-zero Nat -> Bool
+defn is-zero
+  | zero  -> true
+  | suc _ -> false
+
+def main : Bool := [is-zero 5N]
+
+;; is-zero(5) = false; binary exit = 0.
+;; :expect-exit 0
