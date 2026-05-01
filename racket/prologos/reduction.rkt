@@ -270,6 +270,13 @@
                       (ground->prologos-expr head)))
      (define args (map ground->prologos-expr (cdr v)))
      (foldl (lambda (a f) (expr-app f a)) func args)]
+    ;; Raw Racket primitive values from the solver's PPN normalization boundary
+    ;; (see relations.rkt comment "resolved-args normalizes AST→raw"). Wrap them
+    ;; back into the corresponding AST expression so the formatter sees a value
+    ;; it recognizes rather than falling through to the 'unknown fallback.
+    [(string? v) (expr-string v)]
+    [(boolean? v) (if v (expr-true) (expr-false))]
+    [(exact-integer? v) (expr-int v)]
     ;; Already an AST expression
     [(or (expr-zero? v) (expr-suc? v) (expr-nat-val? v) (expr-true? v) (expr-false? v)
          (expr-string? v) (expr-int? v) (expr-keyword? v) (expr-fvar? v)
