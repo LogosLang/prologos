@@ -70,7 +70,13 @@
                  [props #:auto #:mutable]
                  [deps #:auto #:mutable]
                  [next-cid #:auto #:mutable]
-                 [next-pid #:auto #:mutable])
+                 [next-pid #:auto #:mutable]
+                 ;; Sprint F.5: per-cell-id depth (longest propagator path
+                 ;; from initial cells to this cell). emit-cell sets to 0;
+                 ;; emit-propagator updates output cell's depth = max(input
+                 ;; depths) + 1. Used by lower-tail-rec's lag-matching
+                 ;; bridge insertion.
+                 [depths #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -78,7 +84,21 @@
   (define b (builder))
   (set-builder-next-cid! b 0)
   (set-builder-next-pid! b 0)
+  (set-builder-depths! b (hasheq))
   b)
+
+(define (cell-depth b cid)
+  (hash-ref (builder-depths b) cid 0))
+
+(define (set-cell-depth! b cid d)
+  (set-builder-depths! b (hash-set (builder-depths b) cid d)))
+
+;; Find the cell-decl for a given cell-id. Linear scan; only used by
+;; lift-cell-to-depth which runs O(N) times in lower-tail-rec.
+(define (find-cell-decl b cid)
+  (for/first ([c (in-list (builder-cells b))]
+              #:when (and (cell-decl? c) (= (cell-decl-id c) cid)))
+    c))
 
 (define (fresh-cid! b)
   (define id (builder-next-cid b))
@@ -94,9 +114,13 @@
   (define id (fresh-cid! b))
   (set-builder-cells! b (cons (cell-decl id dom-id init-value)
                               (builder-cells b)))
+  ;; F.5: new cells start at depth 0 (no propagator chain leading to
+  ;; them). emit-propagator updates the output cell's depth.
+  (set-cell-depth! b id 0)
   id)
 
-(define (emit-propagator! b in-cids out-cid tag)
+(define (emit-propagator! b in-cids out-cid tag
+                          #:skip-depth-update? [skip-depth-update? #f])
   (define pid (fresh-pid! b))
   (set-builder-props! b
                       (cons (propagator-decl pid in-cids
@@ -107,6 +131,20 @@
                      (append (reverse (for/list ([cid (in-list in-cids)])
                                         (dep-decl pid cid 'all)))
                              (builder-deps b)))
+  ;; F.5: out-cid's depth = max(input depths) + 1. The longest
+  ;; propagator chain from initial cells to out-cid.
+  ;;
+  ;; #:skip-depth-update? — pass #t for feedback edges (identity
+  ;; propagators that close the iteration loop by writing back to a
+  ;; state cell). Without this, the feedback would overwrite the
+  ;; state cell's depth with a high value, breaking depth-aware lift
+  ;; logic for any future build that references that state cell.
+  ;; State cells are conceptually depth 0 perpetually.
+  (unless skip-depth-update?
+    (define max-in-depth
+      (for/fold ([m 0]) ([c (in-list in-cids)])
+        (max m (cell-depth b c))))
+    (set-cell-depth! b out-cid (+ max-in-depth 1)))
   pid)
 
 ;; ============================================================
@@ -423,6 +461,51 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
          (walk sub-s sub-i))]
       [else #f])))
 
+;; F.5: lift-cell-to-depth — chain identity propagators until cell-id's
+;; depth equals target-depth. Returns the cell-id at the new depth.
+;; Each bridge cell inherits the source's domain + init value, so the
+;; chain has consistent semantics under cold-start (all bridges init
+;; to whatever the source initially holds; once values flow, bridges
+;; become 1-round-delayed copies).
+(define (lift-cell-to-depth b cid target-depth)
+  (let loop ([cid cid])
+    (cond
+      [(>= (cell-depth b cid) target-depth) cid]
+      [else
+       (define src-decl (find-cell-decl b cid))
+       (define src-domain (cell-decl-domain-id src-decl))
+       (define src-init   (cell-decl-init-value src-decl))
+       (define bridge-cid (emit-cell! b src-domain src-init))
+       (emit-propagator! b (list cid) bridge-cid 'kernel-identity)
+       (loop bridge-cid)])))
+
+;; F.5: emit-aligned-propagator! — like emit-propagator!, but first
+;; lifts every input cell to the maximum depth across all inputs via
+;; identity bridges. This guarantees the propagator's inputs are read
+;; at the same iteration boundary, fixing the lag-mismatch bug that
+;; produces wrong values in nested-arithmetic step expressions.
+;;
+;; When inputs are already at the same depth (the common case for
+;; non-nested expressions), no bridges are added — emit-aligned reduces
+;; to plain emit-propagator!.
+(define (emit-aligned-propagator! b in-cids out-cid tag)
+  (define max-d (apply max 0 (map (lambda (c) (cell-depth b c)) in-cids)))
+  (define lifted-in-cids
+    (map (lambda (c) (lift-cell-to-depth b c max-d)) in-cids))
+  (emit-propagator! b lifted-in-cids out-cid tag))
+
+;; F.5: lift each leaf of a value-tree to target-depth.
+(define (lift-vtree-to-depth b vt target-depth)
+  (cond
+    [(exact-integer? vt) (lift-cell-to-depth b vt target-depth)]
+    [else (map (lambda (sub) (lift-vtree-to-depth b sub target-depth)) vt)]))
+
+;; F.5: max depth of leaves in a value-tree.
+(define (max-vtree-depth b vt)
+  (cond
+    [(exact-integer? vt) (cell-depth b vt)]
+    [else (apply max 0 (map (lambda (sub) (max-vtree-depth b sub)) vt))]))
+
 (define (lower-tail-rec b dom-id env shape init-args)
   (define k (length init-args))
 
@@ -475,31 +558,8 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
 
   ;; 4. step-args → step-vts. Each step-vt's shape MUST match the
   ;; corresponding state-vt's shape (this is enforced by the elaborator
-  ;; via type checking; we assert defensively in the per-leaf walk).
-  ;;
-  ;; Bridge: any leaf in step-vt that points at a state cell needs a
-  ;; 1-round identity bridge to align BSP lag. Without it, lag=0 reads
-  ;; mix with lag=1 reads from arithmetic, producing inconsistent
-  ;; step-results across leaves of the same iteration. (Sprint E.3
-  ;; finding; see test-bsp-feedback.c for the C-level reference.)
-  (define state-leaf-set
-    (let h ([s (make-hasheq)] [vt state-vts])
-      (cond [(exact-integer? vt) (hash-set! s vt #t) s]
-            [(list? vt) (for-each (lambda (sub) (h s sub)) vt) s]
-            [else s])))
-
-  (define (bridge-leaves vt)
-    (cond [(exact-integer? vt)
-           (cond
-             [(hash-ref state-leaf-set vt #f)
-              (define init (init-of-state-leaf vt state-vts init-vts))
-              (define bridge-cid (emit-cell! b INT-DOMAIN-ID init))
-              (emit-propagator! b (list vt) bridge-cid 'kernel-identity)
-              bridge-cid]
-             [else vt])]
-          [else (map bridge-leaves vt)]))
-
-  (define step-vts
+  ;; via type checking; we assert defensively).
+  (define raw-step-vts
     (for/list ([step-arg (in-list (tail-rec-shape-step-args shape))]
                [state-vt  (in-list state-vts)])
       (define raw-vt (build step-arg b INT-DOMAIN-ID state-env))
@@ -507,20 +567,57 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
         (translate-error! step-arg
                           (format "tail-rec step-arg shape ~v doesn't match state shape ~v"
                                   raw-vt state-vt)))
-      (bridge-leaves raw-vt)))
+      raw-vt))
+
+  ;; F.5: lag-matching has TWO layers:
+  ;;
+  ;; (a) Per-propagator alignment via emit-aligned-propagator! —
+  ;;     fixes mismatched depths of inputs to each arithmetic /
+  ;;     comparison propagator (e.g., Pell's `int-add(int-mul(2,b), a)`
+  ;;     inputs are aligned before int-add fires).
+  ;;
+  ;; (b) Pre-select uniform lift — each per-state-slot select reads
+  ;;     (cond, state, step). If step depths vary across slots, the
+  ;;     selects produce next-state cells at different depths, which
+  ;;     means state cells update at different rounds (creating an
+  ;;     inconsistent snapshot mid-iteration). Lifting cond AND each
+  ;;     step-leaf to a common max-depth before the selects ensures
+  ;;     all selects fire at the same depth, all next-state cells
+  ;;     are at the same depth, all feedbacks fire uniformly, and
+  ;;     state updates atomically per iteration.
+  (define max-step-depth
+    (apply max (cell-depth b cond-cid)
+           (map (lambda (vt) (max-vtree-depth b vt)) raw-step-vts)))
+
+  (define cond-cid-lifted (lift-cell-to-depth b cond-cid max-step-depth))
+
+  (define step-vts
+    (for/list ([raw-vt (in-list raw-step-vts)])
+      (lift-vtree-to-depth b raw-vt max-step-depth)))
 
   ;; 5. Per-leaf: alloc next-cell + select + feedback. Walk the vtrees
-  ;; in lockstep across (state, step, init).
+  ;; in lockstep across (state, step, init). Uses the lifted cond cell
+  ;; (F.5) so all selects fire on a cond at the same depth as their
+  ;; step inputs.
   (define (emit-feedback state-vt step-vt init-vt)
     (cond
       [(exact-integer? state-vt)
        (define next-cid (emit-cell! b INT-DOMAIN-ID init-vt))
+       ;; F.5: aligned-emit so cond + state + step are read at the
+       ;; same depth in the select. cond may be at depth 1 (from
+       ;; int-lt) while step may be at depth 2+ (nested arithmetic);
+       ;; the alignment inserts bridges as needed.
        (cond
          [base-on-true?
-          (emit-propagator! b (list cond-cid state-vt step-vt) next-cid 'kernel-select)]
+          (emit-aligned-propagator! b (list cond-cid-lifted state-vt step-vt) next-cid 'kernel-select)]
          [else
-          (emit-propagator! b (list cond-cid step-vt state-vt) next-cid 'kernel-select)])
-       (emit-propagator! b (list next-cid) state-vt 'kernel-identity)]
+          (emit-aligned-propagator! b (list cond-cid-lifted step-vt state-vt) next-cid 'kernel-select)])
+       ;; Feedback identity is intentionally NOT aligned — it's a
+       ;; lag-1 bridge by design (the canonical "next-state → state"
+       ;; edge of the iteration loop). Also skip depth update: state
+       ;; cells stay at logical depth 0 for future references.
+       (emit-propagator! b (list next-cid) state-vt 'kernel-identity
+                         #:skip-depth-update? #t)]
       [else
        (for ([s (in-list state-vt)]
              [t (in-list step-vt)]
@@ -561,7 +658,8 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
      (define inner-cid (assert-scalar! inner-vt inner "expr-suc operand"))
      (define one-cid (emit-cell! b INT-DOMAIN-ID 1))
      (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
-     (emit-propagator! b (list inner-cid one-cid) r-cid 'kernel-int-add)
+     ;; F.5: align inner + one to consistent depth.
+     (emit-aligned-propagator! b (list inner-cid one-cid) r-cid 'kernel-int-add)
      r-cid]
 
     ;; Non-dependent pair construction (Sprint F.2). Translates each
@@ -789,7 +887,8 @@ are not yet supported.")]))
   (define a-cid (assert-scalar! a-vt a-expr (format "binary op '~a' lhs" tag)))
   (define b-cid (assert-scalar! b-vt b-expr (format "binary op '~a' rhs" tag)))
   (define r-cid (emit-cell! b out-dom out-init))
-  (emit-propagator! b (list a-cid b-cid) r-cid tag)
+  ;; F.5: align input depths so the binary op reads consistent values.
+  (emit-aligned-propagator! b (list a-cid b-cid) r-cid tag)
   r-cid)
 
 ;; build-nat-match (Sprint F.4): lower `match scrut | zero -> z-body
@@ -802,14 +901,15 @@ are not yet supported.")]))
 (define (build-nat-match b dom-id env scrut-expr z-body s-body err-expr)
   (define scrut-vt (build scrut-expr b INT-DOMAIN-ID env))
   (define scrut-cid (assert-scalar! scrut-vt scrut-expr "Nat match scrutinee"))
-  ;; cond = (scrut == 0)
+  ;; cond = (scrut == 0). F.5: aligned-emit so scrut + zero-lit are
+  ;; read at consistent depth.
   (define zero-lit-cid (emit-cell! b INT-DOMAIN-ID 0))
   (define cond-cid (emit-cell! b BOOL-DOMAIN-ID #f))
-  (emit-propagator! b (list scrut-cid zero-lit-cid) cond-cid 'kernel-int-eq)
-  ;; predecessor = scrut - 1 (only used in s-body's env)
+  (emit-aligned-propagator! b (list scrut-cid zero-lit-cid) cond-cid 'kernel-int-eq)
+  ;; predecessor = scrut - 1 (only used in s-body's env). Aligned.
   (define one-lit-cid (emit-cell! b INT-DOMAIN-ID 1))
   (define pred-cid (emit-cell! b INT-DOMAIN-ID 0))
-  (emit-propagator! b (list scrut-cid one-lit-cid) pred-cid 'kernel-int-sub)
+  (emit-aligned-propagator! b (list scrut-cid one-lit-cid) pred-cid 'kernel-int-sub)
   ;; Build both bodies (eagerly, like boolrec). Suc body's env has
   ;; the predecessor as a new innermost binder.
   (define z-vt (build z-body b dom-id env))
@@ -835,7 +935,8 @@ are not yet supported.")]))
     [(and (vtree-scalar? t-vt) (vtree-scalar? e-vt))
      (define init-val (case out-dom [(0) 0] [(1) #f] [else 0]))
      (define r-cid (emit-cell! b out-dom init-val))
-     (emit-propagator! b (list c-cid t-vt e-vt) r-cid 'kernel-select)
+     ;; F.5: align cond + then + else to same depth.
+     (emit-aligned-propagator! b (list c-cid t-vt e-vt) r-cid 'kernel-select)
      r-cid]
     [(and (list? t-vt) (list? e-vt) (= (length t-vt) (length e-vt)))
      (for/list ([t (in-list t-vt)] [e (in-list e-vt)])

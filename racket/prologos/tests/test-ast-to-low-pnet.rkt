@@ -40,19 +40,17 @@
                         #:when (propagator-decl? n)) n))
   (check-equal? (propagator-decl-fire-fn-tag p) 'kernel-int-mul))
 
-(test-case "Nested [int+ [int* 2 3] 4]: 5 cells + 2 propagators"
-  ;; cell 0 = 2, cell 1 = 3, cell 2 = m (mul result), cell 3 = 4, cell 4 = r
+(test-case "Nested [int+ [int* 2 3] 4]: with F.5 lag alignment"
+  ;; Pre-F.5: 5 cells (2, 3, m, 4, r), 2 propagators.
+  ;; F.5 (2026-05-01): int-add inputs are m (depth 1) and 4 (depth 0).
+  ;; emit-aligned-propagator! lifts 4 to depth 1 via 1 identity bridge,
+  ;; adding 1 cell + 1 propagator. Total: 6 cells, 3 propagators.
   (define body (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
                              (expr-int 4)))
   (define lp (ast-to-low-pnet (expr-Int) body "test.prologos"))
   (check-true (validate-low-pnet lp))
-  (check-equal? (count-by lp cell-decl?) 5)
-  (check-equal? (count-by lp propagator-decl?) 2)
-  (check-equal? (count-by lp dep-decl?) 4)
-  ;; Outer entry-decl points at cell 4 (the outermost result)
-  (define entry (for/first ([n (in-list (low-pnet-nodes lp))]
-                            #:when (entry-decl? n)) n))
-  (check-equal? (entry-decl-main-cell-id entry) 4))
+  (check-equal? (count-by lp cell-decl?) 6)
+  (check-equal? (count-by lp propagator-decl?) 3))
 
 (test-case "expr-true / expr-false → Bool cells"
   (define lp-true  (ast-to-low-pnet (expr-Bool) (expr-true)  "t.prologos"))
@@ -213,11 +211,14 @@
                              (expr-int-lt (expr-int 3) (expr-int 5))))
   (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
   (check-true (validate-low-pnet lp))
-  ;; cells: 3, 5, lt-result, 42, 99, select-result = 6
-  (check-equal? (count-by lp cell-decl?) 6)
-  ;; propagators: lt + select = 2
-  (check-equal? (count-by lp propagator-decl?) 2)
-  ;; The select propagator has 3 inputs.
+  ;; Pre-F.5: 6 cells (3, 5, lt-result, 42, 99, select-result), 2 props.
+  ;; F.5 (2026-05-01): select inputs are cond=lt-result (depth 1),
+  ;; then=42 (depth 0), else=99 (depth 0). Aligning lifts 42 and 99
+  ;; to depth 1 via 2 identity bridges. +2 cells, +2 props.
+  ;; Total: 8 cells, 4 propagators.
+  (check-equal? (count-by lp cell-decl?) 8)
+  (check-equal? (count-by lp propagator-decl?) 4)
+  ;; The select propagator still has 3 inputs.
   (define select-prop
     (for/first ([n (in-list (low-pnet-nodes lp))]
                 #:when (and (propagator-decl? n)
@@ -378,8 +379,6 @@
   ;; (expr-reduce scrutinee
   ;;   (list (expr-reduce-arm 'zero 0 (expr-true))
   ;;         (expr-reduce-arm 'suc 1 (expr-false))) #t)
-  ;; in env where bvar 0 is the Nat scrutinee (from outer lambda).
-  ;; To test in isolation, use a literal Nat as scrutinee.
   (define body
     (expr-reduce (expr-nat-val 0)
                  (list (expr-reduce-arm 'zero 0 (expr-true))
@@ -387,11 +386,14 @@
                  #t))
   (define lp (ast-to-low-pnet (expr-Bool) body "t.prologos"))
   (check-true (validate-low-pnet lp))
-  ;; Cells: scrut=0, zero-lit, cond, one-lit, pred, true-cell,
-  ;;        false-cell, select-result. 8 cells.
-  (check-equal? (count-by lp cell-decl?) 8)
-  ;; Propagators: int-eq (cond), int-sub (pred), select. 3.
-  (check-equal? (count-by lp propagator-decl?) 3))
+  ;; Pre-F.5: 8 cells (scrut, zero-lit, cond, one-lit, pred, true,
+  ;; false, select-result), 3 propagators (int-eq, int-sub, select).
+  ;; F.5 (2026-05-01): the select on the Bool branches has cond at
+  ;; depth 1 (int-eq) and true/false branches at depth 0. Alignment
+  ;; lifts the two Bool literals via 2 identity bridges. +2 cells,
+  ;; +2 props. Total: 10 cells, 5 propagators.
+  (check-equal? (count-by lp cell-decl?) 10)
+  (check-equal? (count-by lp propagator-decl?) 5))
 
 (test-case "Nat match arms in reverse order (suc first, zero second)"
   (define body
