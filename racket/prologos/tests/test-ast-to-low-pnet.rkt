@@ -257,3 +257,43 @@
   (check-exn ast-translation-error?
     (lambda ()
       (ast-to-low-pnet (expr-Int) body "t.prologos"))))
+
+;; ============================================================
+;; Sprint F.1: non-recursive function inlining (2026-05-01)
+;; ============================================================
+;;
+;; The end-to-end inlining behavior is exercised via the n3-helpers
+;; acceptance .prologos files (CI step "pnet-compile non-recursive
+;; helpers"). These tests focus on edge cases of the inlining matcher.
+
+(test-case "multi-arg beta-redex chain: ((λ x. λ y. x+y) 3 4) → 7 shape"
+  ;; (expr-app (expr-app (expr-lam mw Int (expr-lam mw Int (int-add (bvar 1) (bvar 0)))) 3) 4)
+  (define body
+    (expr-app
+     (expr-app
+      (expr-lam 'mw (expr-Int)
+                (expr-lam 'mw (expr-Int)
+                          (expr-int-add (expr-bvar 1) (expr-bvar 0))))
+      (expr-int 3))
+     (expr-int 4)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; cells: 3, 4, result = 3
+  (check-equal? (count-by lp cell-decl?) 3)
+  (check-equal? (count-by lp propagator-decl?) 1))
+
+(test-case "multi-arg with mixed multiplicities m0 + mw"
+  ;; ((λm0 _:Type. λmw x:Int. x+1) Int 5) — m0 binder erased.
+  (define body
+    (expr-app
+     (expr-app
+      (expr-lam 'm0 (expr-Type 0)
+                (expr-lam 'mw (expr-Int)
+                          (expr-int-add (expr-bvar 0) (expr-int 1))))
+      (expr-Int))
+     (expr-int 5)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; m0 binder doesn't allocate; runtime cells are 5 (literal arg) +
+  ;; 1 (literal in body) + 1 (result) = 3.
+  (check-equal? (count-by lp cell-decl?) 3))

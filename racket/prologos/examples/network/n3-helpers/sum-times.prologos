@@ -1,0 +1,9 @@
+spec sum-times Int -> Int -> Int -> Int
+defn sum-times [a b k] [int* [int+ a b] k]
+
+def main : Int := [sum-times 3 4 5]
+
+;; Multi-arg helper. After inlining, the lambda chain is peeled by the
+;; multi-arg beta-redex handler — three binders applied in lockstep
+;; with three args. (3 + 4) * 5 = 35.
+;; :expect-exit 35
