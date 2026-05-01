@@ -3033,6 +3033,22 @@
       ;; (don't look past non-constraint forms)
       [else (reverse constraints)])))
 
+;; Issue #20 / Direction 1+2 auto-introduction: rank kinds so that simpler
+;; kinds (Type) sort before higher-kinded ones (Type -> Type, etc.) when
+;; canonicalizing auto-detected implicit binder order.  Stable: equal ranks
+;; preserve relative order from `sort`.
+(define (kind-rank k)
+  (cond
+    ;; Any (Type n) — kind-Type at any universe level ranks first.
+    [(and (list? k) (= (length k) 2) (eq? (car k) 'Type) (exact-nonnegative-integer? (cadr k))) 0]
+    ;; (-> X Y) — single-arrow higher-kinded
+    [(and (list? k) (= (length k) 3) (eq? (car k) '->)) 1]
+    ;; Anything more elaborate
+    [else 2]))
+
+(define (implicit-binder-kind-ranks-before? a b)
+  (< (kind-rank (cdr a)) (kind-rank (cdr b))))
+
 ;; Format a kind datum as a readable string for error messages
 (define (datum->kind-string d)
   (cond
@@ -3362,6 +3378,10 @@
           (values body-tokens #f))))
   ;; Also handle inline keyword-headed children from WS mode
   ;; e.g. (:doc "...") as a direct child of the spec form
+  ;; List-valued keys (e.g. :where, :laws, :examples) must keep their values as
+  ;; a list even when only a single entry is present — a single-constraint
+  ;; `:where (Foo A)` would otherwise be silently flattened into the constraint
+  ;; itself, breaking expand-bundle-constraints downstream.
   (define-values (pre-meta-tokens metadata)
     (let loop ([remaining pre-meta-tokens-0]
                [kept '()]
@@ -3376,8 +3396,17 @@
          (define val (cdr entry))
          (define merged-val
            (cond
+             ;; (:doc "string") → just the string
              [(and (= (length val) 1) (string? (car val))) (car val)]
+             ;; List-valued keys: always keep val as a list of forms
+             [(memq key '(:where :properties :laws :includes :examples
+                          :see-also :implicits)) val]
+             ;; First element is a pair → assume list-of-forms (e.g. :examples
+             ;; with a single example form, or :method entries)
+             [(and (pair? val) (pair? (car val))) val]
+             ;; Single value → unwrap (e.g. :over Sym, :doc "..." already handled)
              [(= (length val) 1) (car val)]
+             ;; Multiple values → keep as list
              [else val]))
          (loop (cdr remaining) kept (hash-set meta key merged-val))]
         [else
@@ -3450,10 +3479,33 @@
         auto-detected-binders))
   (define all-implicit-binders
     (append over-binder merged-implicit-binders filtered-auto-detected-binders))
-  (define refined-implicit-binders
+  ;; Auto-detected names — used below to canonicalize their order after kind
+  ;; refinement.  Explicit (user-supplied) binder order is preserved verbatim.
+  (define auto-detected-names
+    (map car filtered-auto-detected-binders))
+  (define refined-implicit-binders-raw
     (if (or (null? all-implicit-binders) (null? all-constraints))
         all-implicit-binders
         (propagate-kinds-from-constraints all-implicit-binders all-constraints name)))
+  ;; Canonical-order auto-detected binders by kind: kind-`Type` before higher-
+  ;; kinded.  This matches the convention `{A B : Type} {C : Type -> Type}`
+  ;; that explicit-binder users have written for years and keeps the inserted-
+  ;; implicit-arg order consistent regardless of whether the user declares
+  ;; vars explicitly or relies on Direction 1/2 auto-introduction.
+  ;; Explicit (and `:over`) binders keep their declared order.
+  (define refined-implicit-binders
+    (cond
+      [(null? auto-detected-names) refined-implicit-binders-raw]
+      [else
+       (define explicit-binders
+         (filter (lambda (b) (not (memq (car b) auto-detected-names)))
+                 refined-implicit-binders-raw))
+       (define auto-binders
+         (filter (lambda (b) (memq (car b) auto-detected-names))
+                 refined-implicit-binders-raw))
+       (define sorted-auto
+         (sort auto-binders implicit-binder-kind-ranks-before?))
+       (append explicit-binders sorted-auto)]))
   ;; Detect and desugar variadic rest type: `A $rest` → `(List A)`
   ;; The $rest sentinel marks the preceding type as variadic.
   (define-values (desugared-type-tokens rest-type)

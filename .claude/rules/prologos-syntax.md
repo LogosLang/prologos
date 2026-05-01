@@ -42,7 +42,7 @@
 
 - **Prefer type inference** where unambiguous -- `def x := 42` over `def x : Int := 42`. We work hard on inference; lean on it. Use explicit annotations when the type is genuinely ambiguous (union types, polymorphic contexts) or for documentation in specs.
 - **Angle brackets for complex types** -- `<Int | String>`, `<(x : A) -> B>`.
-- **`{A B : Type}` for implicit erased binders** in `spec`.
+- **Skip `{A : Type}` and `{C : Type -> Type}` in `spec`** -- bare capitalized identifiers are auto-introduced as implicit binders. Kind-`Type` vars (D1) come from any free occurrence; higher-kinded vars (D2) get their kind inferred from `:where` / inline trait constraints. Explicit binders remain useful for pedagogic examples, for the rare spec with no constraining position (`spec empty {A : Type} [List A]`), and when the body passes type args explicitly in a specific order.
 
 ## Lists and literals
 

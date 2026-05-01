@@ -1,6 +1,8 @@
 #+TITLE: Improved Implicit Binder Inference
 #+DATE: 2026-02-22
-#+PROPERTY: Status PLANNED
+#+PROPERTY: Status DONE
+#+PROPERTY: Closed 2026-04-30
+#+PROPERTY: Issue #20
 
 * Summary
 
@@ -75,3 +77,82 @@ Should be implemented before or alongside Phase 1 of the extended spec.
 - ~propagate-kinds-from-constraints~ (macros.rkt)
 - Trait store for kind lookups
 - ~process-spec~ pipeline
+
+* Implementation (Issue #20, 2026-04-30)
+
+** What landed
+
+- *Direction 1.* The auto-introduction logic in =process-spec=
+  (=auto-detected-binders= at ~macros.rkt:3424~) walks the type tokens and
+  constraint argument lists for free capitalized identifiers, filters out
+  known type names / locally-bound Pi binder names / explicit binders, and
+  registers each survivor as an implicit binder with default kind =(Type 0)=.
+  This was already wired but not documented as canonical and not exploited by
+  the stdlib.
+
+- *Direction 2.* =propagate-kinds-from-constraints= refines an
+  auto-introduced binder's kind whenever a constraint pins it (e.g. a free
+  =C= with =:where (Seqable C)= picks up =Seqable='s declared kind
+  =Type -> Type=).  Inline trait constraints participate via
+  =extract-inline-constraints=.
+
+- *Canonical-order sort.*  After kind refinement, the auto-detected portion
+  of the binder list is sorted by =kind-rank= (kind-=Type= before
+  higher-kinded) so the inserted-implicit-arg order matches the convention
+  ={A B : Type} {C : Type -> Type}= that explicit-binder users have written
+  for years.  Explicit (and =:over=) binders keep their declared order.
+  Source-walk-order auto-introduction otherwise put inline-constraint vars
+  (e.g. =C= in =[Reducible C]=) ahead of value-position vars (=A=) and
+  silently flipped the inserted argument order.
+
+- *Single-constraint inline =:where= bug fix.*  The keyword-headed-children
+  merge in =process-spec= used to flatten a single =(:where (Foo A))= entry
+  into the bare constraint =(Foo A)=, which then crashed
+  =expand-bundle-constraints= at =(car 'Foo)=.  The merge now keeps known
+  list-valued keys (=:where=, =:properties=, =:laws=, =:includes=,
+  =:examples=, =:see-also=, =:implicits=) as lists.
+
+** Stdlib refactor
+
+Redundant ={A : Type}=, ={A B : Type}=, ={K V : Type}=, and
+={C : Type -> Type}= binders were removed from spec lines across the
+stdlib:
+
+- =racket/prologos/lib/prologos/core/= — =collections.prologos=,
+  =generic-ops.prologos=, =fio.prologos=, =map.prologos=, =pvec.prologos=,
+  =set.prologos=, =string-ops.prologos=
+- =racket/prologos/lib/prologos/data/= — =transducer.prologos=,
+  =map-entry.prologos=
+- =racket/prologos/lib/prologos/book/= — =collection-functions.prologos=,
+  =generic-operations.prologos=, =datum-and-homoiconicity.prologos=,
+  =persistent-vectors.prologos=, =sets.prologos=,
+  =characters-and-strings.prologos=, =maps.prologos=, =lattices.prologos=
+
+The =map-merge-with= and =map-lattice-leq= specs in =core/lattice.prologos=
+and =book/lattices.prologos= retain the explicit ={K V : Type}= because the
+=Map-K-V--Lattice= impl bodies pass =K V= as explicit type arguments to
+those functions.  Source-walk-order auto-detection (which sees =V= first in
+=[V V -> V]=) would silently flip the argument order at the call site;
+explicit binders pin it.  Documented in inline comments.
+
+** Tests
+
+Three new test cases in =tests/test-extended-spec.rkt=:
+
+- ="spec: D1+D2 combined — kind-Type and HKT both auto-introduced"= —
+  asserts the issue's target form produces =A=, =B= at kind =(Type 0)= and
+  =C= at kind =(-> (Type 0) (Type 0))=.
+- ="spec: bare form equals explicit form (D1+D2 idempotence)"= — asserts
+  =spec g-bare= and =spec g-explicit= produce identical implicit binders.
+- ="spec: D2 single-constraint metadata =:where= preserves list shape"= —
+  regression test for the WS-mode child-form merge bug.
+
+** Open follow-ups
+
+- The =Map K V= call-site argument-order subtlety hints at a deeper want:
+  let users opt into "auto-detect, ordered as I'd write them" without
+  spelling out kinds.  Possibly a sibling syntax (e.g. ={K V}= with no
+  kind) or a per-spec annotation (=:binder-order (K V)=).  Not pursued in
+  this pass.
+- Curried (=[A -> B -> C]=) vs uncurried (=[A B -> C]=) function-type style
+  is tracked separately; #20 explicitly leaves it out of scope.

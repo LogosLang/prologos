@@ -55,13 +55,13 @@ data MapEntry {K V}
   mk-entry : K -> V
 
 ;; Extract the key from a MapEntry.
-spec entry-key {K V : Type} [MapEntry K V] -> K
+spec entry-key [MapEntry K V] -> K
 defn entry-key [e]
   match e
     | mk-entry k _ -> k
 
 ;; Extract the value from a MapEntry.
-spec entry-val {K V : Type} [MapEntry K V] -> V
+spec entry-val [MapEntry K V] -> V
 defn entry-val [e]
   match e
     | mk-entry _ v -> v
@@ -119,24 +119,24 @@ require [prologos::data::lseq-ops    :refer [list-to-lseq lseq-to-list]]
 ;; map-filter-vals : (V -> Bool) -> Map K V -> Map K V
 ;; Keeps only entries whose value satisfies pred.
 ;; Uses native map-filter-entries with a key-ignoring predicate.
-spec map-filter-vals {K V : Type} [-> V Bool] -> [Map K V] -> [Map K V]
+spec map-filter-vals [-> V Bool] -> [Map K V] -> [Map K V]
 defn map-filter-vals [pred m]
   map-filter-entries [fn k v [pred v]] m
 
 ;; map-keys-list : Map K V -> List K  (wraps AST map-keys as a function)
-spec map-keys-list {K V : Type} [Map K V] -> [List K]
+spec map-keys-list [Map K V] -> [List K]
 defn map-keys-list [m]
   map-keys m
 
 ;; map-vals-list : Map K V -> List V  (wraps AST map-vals as a function)
-spec map-vals-list {K V : Type} [Map K V] -> [List V]
+spec map-vals-list [Map K V] -> [List V]
 defn map-vals-list [m]
   map-vals m
 
 ;; map-merge : Map K V -> Map K V -> Map K V
 ;; Merge two maps. Right map wins on key collision.
 ;; Uses native map-fold-entries to fold over m2's entries.
-spec map-merge {K V : Type} [Map K V] -> [Map K V] -> [Map K V]
+spec map-merge [Map K V] -> [Map K V] -> [Map K V]
 defn map-merge [m1 m2]
   map-fold-entries [fn acc k v [map-assoc acc k v]] m1 m2
 

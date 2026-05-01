@@ -20,13 +20,13 @@ data MapEntry {K V}
   mk-entry : K -> V
 
 ;; Extract the key from a MapEntry.
-spec entry-key {K V : Type} [MapEntry K V] -> K
+spec entry-key [MapEntry K V] -> K
 defn entry-key [e]
   match e
     | mk-entry k _ -> k
 
 ;; Extract the value from a MapEntry.
-spec entry-val {K V : Type} [MapEntry K V] -> V
+spec entry-val [MapEntry K V] -> V
 defn entry-val [e]
   match e
     | mk-entry _ v -> v
