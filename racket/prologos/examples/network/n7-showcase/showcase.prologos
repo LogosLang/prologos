@@ -1,0 +1,34 @@
+;; Showcase: a single Prologos program exercising every feature
+;; landed by Sprints A through F.4.
+;;
+;; - Sprint A     : int arith + int-lt (comparison) + boolrec/select
+;; - Sprint E.3   : tail-recursive defn (showcase iterates)
+;; - Sprint F.1   : non-recursive helper inlining (`is-pos`, `next-step`)
+;; - Sprint F.2   : pair construction (`pair`) + projection (`fst`/`snd`)
+;; - Sprint F.3   : pair-typed iteration state (showcase's first arg
+;;                  is a `<Int * Int>` pair)
+;; - Sprint F.4   : Nat match would go here too, but mixing it with
+;;                  pair-state tail-rec keeps each feature focused;
+;;                  see n6-nat-match/ for Nat coverage.
+;;
+;; Computation: standard iterative fibonacci with `<a;b>` pair state,
+;; using inlined `is-pos` for the loop guard and inlined `next-step`
+;; for the state advance.
+
+spec is-pos Int -> Bool
+defn is-pos [x] [int-lt 0 x]
+
+spec next-step <Int * Int> -> <Int * Int>
+defn next-step [p]
+  pair [snd p] [int+ [fst p] [snd p]]
+
+spec showcase <Int * Int> -> Int -> Int
+defn showcase [p k]
+  match [is-pos k]
+    | true  -> [showcase [next-step p] [int- k 1]]
+    | false -> [fst p]
+
+def main : Int := [showcase [pair 0 1] 10]
+
+;; fib(10) = 55.
+;; :expect-exit 55

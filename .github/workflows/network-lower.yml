@@ -275,3 +275,23 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile combined-features showcase (n7-showcase)
+        # Single Prologos program exercising every Sprint A-F.4 feature
+        # together: int arith + comparison (A), tail-recursive defn
+        # (E.3), non-recursive helper inlining (F.1), pair construction
+        # + projection (F.2), pair-typed iteration state (F.3).
+        # Same fib(10)=55 result as the simpler iterative variants,
+        # validating that feature composition produces the expected
+        # minimal network (12 cells, 10 props, 32 BSP rounds).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n7-showcase/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n7-showcase-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
