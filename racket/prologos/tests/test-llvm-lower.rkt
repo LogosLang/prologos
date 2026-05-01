@@ -40,11 +40,11 @@
                    (expr-ann (expr-int 7) (expr-Int))))))
     (check-true (string-contains? ir "ret i64 7")))
 
-  (test-case "tier 0: non-Int type raises unsupported-llvm-node"
+  (test-case "tier 0: non-Int/Bool type raises unsupported-llvm-node"
     (check-exn unsupported-llvm-node?
       (lambda ()
         (lower-program
-         (list (list 'def 'main (expr-Bool) (expr-int 1)))))))
+         (list (list 'def 'main (expr-Type 0) (expr-int 1)))))))
 
   (test-case "tier 0: arithmetic body raises (deferred to Tier 1)"
     (check-exn unsupported-llvm-node?
@@ -154,11 +154,11 @@
          (list (list 'def 'main (expr-Int)
                      (expr-int-lt (expr-int 1) (expr-int 2))))))))
 
-  (test-case "tier 1: still rejects non-Int main type"
+  (test-case "tier 1: still rejects non-Int/Bool main type"
     (check-exn unsupported-llvm-node?
       (lambda ()
         (lower-program
-         (list (list 'def 'main (expr-Bool) (expr-true)))))))
+         (list (list 'def 'main (expr-Type 0) (expr-int 1)))))))
 )
 
 ;; ============================================================
