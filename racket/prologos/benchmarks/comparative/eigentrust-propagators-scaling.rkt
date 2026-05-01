@@ -16,6 +16,7 @@
          "eigentrust-propagators.rkt"
          "eigentrust-propagators-fine.rkt"
          "eigentrust-propagators-float.rkt"
+         "eigentrust-plain.rkt"
          racket/list
          racket/flonum)
 
@@ -144,25 +145,41 @@
               (cond [(eq? samples 'timeout) 'timeout]
                     [else (round-2 (median samples))])]))
 
-(define (bench-row n skip-rat-coarse? skip-rat-fine? skip-float?)
-  (define m-rat (if (or skip-rat-coarse? skip-rat-fine?) #f (gen-rat-col-stochastic n)))
-  (define p-rat (if (or skip-rat-coarse? skip-rat-fine?) #f (uniform-rat n)))
-  (define m-fl  (if skip-float? #f (gen-fl-col-stochastic n)))
-  (define p-fl  (if skip-float? #f (uniform-fl n)))
+(define (bench-row n
+                   skip-plain-rat? skip-rat-coarse? skip-rat-fine?
+                   skip-plain-fl? skip-float?)
+  (define need-rat? (not (and skip-plain-rat? skip-rat-coarse? skip-rat-fine?)))
+  (define need-fl?  (not (and skip-plain-fl?  skip-float?)))
+  (define m-rat (if need-rat? (gen-rat-col-stochastic n) #f))
+  (define p-rat (if need-rat? (uniform-rat n) #f))
+  (define m-fl  (if need-fl?  (gen-fl-col-stochastic n) #f))
+  (define p-fl  (if need-fl?  (uniform-fl n) #f))
+
+  (define plain-rat-r
+    (run-or-skip skip-plain-rat?
+                 (lambda () (run-eigentrust-plain m-rat p-rat 3/10 K))))
   (define rat-coarse-r
     (run-or-skip skip-rat-coarse?
                  (lambda () (run-eigentrust-propagators m-rat p-rat 3/10 K))))
   (define rat-fine-r
     (run-or-skip skip-rat-fine?
                  (lambda () (run-eigentrust-propagators-fine m-rat p-rat 3/10 K))))
+  (define plain-fl-r
+    (run-or-skip skip-plain-fl?
+                 (lambda () (run-eigentrust-plain-fl m-fl p-fl 0.3 K))))
   (define float-r
     (run-or-skip skip-float?
                  (lambda () (run-eigentrust-propagators-fl m-fl p-fl 0.3 K))))
-  (printf "  n=~a  rat-coarse=~a  rat-fine=~a  float=~a~n"
-          (~a n) (~r rat-coarse-r) (~r rat-fine-r) (~r float-r))
+
+  (printf "  n=~a  plain-rat=~a  rat-coarse=~a  rat-fine=~a  ‖  plain-fl=~a  float=~a~n"
+          (~a n)
+          (~r plain-rat-r) (~r rat-coarse-r) (~r rat-fine-r)
+          (~r plain-fl-r)  (~r float-r))
   (values
+   (or skip-plain-rat?  (eq? plain-rat-r  'timeout))
    (or skip-rat-coarse? (eq? rat-coarse-r 'timeout))
    (or skip-rat-fine?   (eq? rat-fine-r   'timeout))
+   (or skip-plain-fl?   (eq? plain-fl-r   'timeout))
    (or skip-float?      (eq? float-r      'timeout))))
 
 
@@ -178,12 +195,16 @@
   (printf "larger n are skipped (TIMEOUT propagates monotonically in n).~n~n")
   (random-seed 42)
   (let loop ([sizes SIZES]
+             [skip-plain-rat? #f]
              [skip-rat-coarse? #f]
              [skip-rat-fine? #f]
+             [skip-plain-fl? #f]
              [skip-float? #f])
     (cond
       [(null? sizes) (void)]
       [else
-       (define-values (skc skf sf)
-         (bench-row (car sizes) skip-rat-coarse? skip-rat-fine? skip-float?))
-       (loop (cdr sizes) skc skf sf)])))
+       (define-values (spr skc skf spf sf)
+         (bench-row (car sizes)
+                    skip-plain-rat? skip-rat-coarse? skip-rat-fine?
+                    skip-plain-fl? skip-float?))
+       (loop (cdr sizes) spr skc skf spf sf)])))
