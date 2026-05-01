@@ -1,0 +1,86 @@
+#+TITLE: Standup — 2026-04-30
+#+DATE: 2026-04-30
+
+* Yesterday (since 2026-04-26 standup)
+
+A multi-day arc spanning 2026-04-26 (parallel session continuation) through
+2026-04-30 (full session). Active series: PPN 4C addendum (Pre-0 + D.2),
+SRE Track 2I (Phases 1, 2, 2a, 3c), SH (Self-Hosting) Series founding,
+two solver bugs + parser-keyword audit, several research arcs.
+
+** PPN 4C Phase 9+10+11 Addendum — D.2 self-critique drafted
+
+D.2.SC drafted with P/R/M/S — 18 findings (3 BLOCKING resolved). Pre-0
+A/E/R/S tier execution complete; hybrid pivot architecture committed for
+Phase 1C. Pre-0 phase 100% complete. (Multiple commits across the interval.)
+
+** SRE Track 2I — SD∨/SD∧ Algebraic-Property Checks (Phases 1, 2, 2a, 3c
+   ✅; Phase 3 ⬜ next)
+
+Stage 3 light design doc landed (=docs/tracking/2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md=).
+Phase 1 (=a35d5f65=): test-sd-vee/wedge in sre-core.rkt + implication rules.
+Phase 2 (=f241e14e=): programmatic sample generator + sd-evidence struct.
+Phase 2a (=1c0c012e=): Move B+ corrective — dropped with-handlers, per-component-spec
+pools, sentinel filtering, binders included. Bonus: surfaced malformed-compound bug
+the with-handlers was masking. Filed [[https://github.com/LogosLang/prologos/issues/40][issue #40]] for codebase-wide audit.
+Phase 3c (=d4e8c811=): per-relation =meet-registry= on sre-domain; retired
+=current-lattice-subtype-fn= callback. Bonus: distributivity status flip
+discovery — equality lattice IS distributive on hand-picked-6 (216/216) post-Track-2H.
+Cross-references filed at PM Master Track 12 + DEFERRED.md for sister
+=current-lattice-meta-solution-fn= callback retirement.
+
+Phase 3 mini-design locked + persisted (commit =c7e97a72= + handoff doc).
+
+** SH (Self-Hosting) Series — opened with 3 artifacts
+
+Commit =3ef7b87b= SH Master (132 lines, 11-track tracker). Commit =d5be1769=
+research note "Self-Hosting Path and Bootstrap Stages" (Stages A → A.5 → B → C
+trajectory; .pnet-as-runtime-format named as linchpin). Commit =a88ea1bd=
+research note "Propagator Network as Super-Optimizing Compiler" (12-dim
+comparison across GHC/Lean 4/Idris 2/MLIR/Cranelift/egg-egglog/HVM2/Prologos).
+Track 9 / PReduce identified as critical-path linchpin.
+
+** Free Lattices research arc — 3 research notes
+
+=docs/research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md=
+(canonical form per Freese-Nation Theorem 1.17, with §0 mempalace errata).
+=docs/research/2026-04-30_WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS.md=
+(widening/narrowing primitives for UCS, with §0 errata).
+=docs/research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md=
+(commit =2424b166= — PTF Master Track 2 row added; § 4 worked example of
+Phase 3c distributivity-status flip).
+
+** Two solver bugs + parser-keyword fall-through audit
+
+Morning bug: =unknown= rendering from default-solve dispatch path.
+Evening bug: =path= parser keyword bypassing relational-goal context.
+Audit closed: 22 fall-through sites in =parser.rkt= migrated to
+=parse-app-or-goal= helper centralizing context-sensitive dispatch.
+Both bugs caught by user inspection of acceptance file —
+=2026-03-14-wfle-acceptance.prologos= would have caught them via
+Layer-1 acceptance-file CI (issue #41 strengthened).
+
+** Capability safety research note
+
+=docs/research/2026-04-23_CAPABILITY_SAFETY_DATALOG_HYPERGRAPHS.md=
+(Spera arXiv:2603.15973 + 2603.26725 — corrected for OCap conflation
+after user feedback).
+
+** Process / methodology
+
+- prologos-syntax.md updated with multi-line clause body convention
+- Pre-commit hook added (paren balance check, =e58616eb=)
+- CLAUDE.md refresh + MEMORY.md slim
+- FFI Series founding + retirement issue filed
+
+* Today
+
+(See =docs/tracking/standups/2026-04-30_dailies.md= for the live log.)
+
+Plan: open SRE Track 2I Phase 3 (empirical SD sweep) per Stage 4
+mini-design + mini-audit cycle. Mini-design already locked in design doc
+§ Phase 3 (per the handoff =docs/tracking/handoffs/2026-04-30_SRE_TRACK2I_PHASE3_HANDOFF.md=).
+
+* Blockers
+
+None.
