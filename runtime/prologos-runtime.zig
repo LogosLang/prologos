@@ -64,6 +64,21 @@
 extern fn abort() noreturn;
 extern fn write(fd: c_int, buf: [*]const u8, count: usize) isize;
 
+// CLOCK_MONOTONIC nanoseconds via libc clock_gettime. On Linux x86_64
+// this resolves through the vDSO (~30ns per call).
+const timespec = extern struct {
+    sec: i64,
+    nsec: i64,
+};
+extern fn clock_gettime(clk_id: c_int, tp: *timespec) c_int;
+const CLOCK_MONOTONIC: c_int = 1;
+
+fn now_ns() u64 {
+    var ts: timespec = .{ .sec = 0, .nsec = 0 };
+    _ = clock_gettime(CLOCK_MONOTONIC, &ts);
+    return @as(u64, @intCast(ts.sec)) * 1_000_000_000 + @as(u64, @intCast(ts.nsec));
+}
+
 const MAX_CELLS: u32 = 1024;
 const MAX_PROPS: u32 = 1024;
 const MAX_DEPS: u32 = 16;
@@ -217,10 +232,15 @@ fn schedule(pid: u32) void {
 
 // fire_against_snapshot(pid): read inputs from snapshot[], compute,
 // emit (out_cid, value) into pending_writes. Does NOT call cell_write.
+//
+// Per-tag wall time is opt-in via prologos_set_profile_per_tag(true).
+// When enabled, we bracket the dispatch with two clock_gettime calls
+// (~60ns overhead per fire). When disabled, the cost is one branch.
 fn fire_against_snapshot(pid: u32) void {
     const shape = prop_shape[pid];
     const tag = prop_tags[pid];
     const out_cid = prop_out[pid];
+    const t0: u64 = if (profile_per_tag) now_ns() else 0;
     var result: i64 = 0;
     switch (shape) {
         SHAPE_2_1 => {
@@ -255,6 +275,10 @@ fn fire_against_snapshot(pid: u32) void {
     stat_fires_total += 1;
     if (tag < N_TAGS) {
         stat_fires_by_tag[tag] += 1;
+        if (profile_per_tag) {
+            const t1 = now_ns();
+            stat_ns_by_tag[tag] += t1 - t0;
+        }
     }
 }
 
@@ -292,6 +316,7 @@ export fn prologos_set_max_rounds(m: u64) void {
 }
 
 export fn prologos_run_to_quiescence() void {
+    const start_ns = now_ns();
     // Move any pending installs from next_worklist into worklist for
     // the first round. (After install, schedule() puts pids into
     // next_worklist; we transfer once before round 1 starts.)
@@ -326,6 +351,7 @@ export fn prologos_run_to_quiescence() void {
         // Swap for next round.
         swap_worklists();
     }
+    stat_run_ns += now_ns() - start_ns;
 }
 
 fn swap_worklists() void {
@@ -351,6 +377,13 @@ var stat_writes_committed: u64 = 0;
 var stat_writes_dropped: u64 = 0;
 var stat_max_worklist: u64 = 0;
 var stat_fuel_exhausted: u64 = 0;
+var stat_run_ns: u64 = 0;
+var stat_ns_by_tag: [N_TAGS]u64 = [_]u64{0} ** N_TAGS;
+var profile_per_tag: bool = false;
+
+export fn prologos_set_profile_per_tag(enabled: u32) void {
+    profile_per_tag = enabled != 0;
+}
 
 // stat keys (must match the integers in get_stat).
 //   0  rounds
@@ -361,7 +394,10 @@ var stat_fuel_exhausted: u64 = 0;
 //   5  fuel_exhausted (0 or 1)
 //   6  num_cells (allocated)
 //   7  num_props (installed)
+//   8  run_ns (CLOCK_MONOTONIC ns spent in run_to_quiescence)
 //   100..(100+N_TAGS)  fires for tag (key-100)
+//   200..(200+N_TAGS)  ns for tag (key-200) — only populated when
+//                      profile_per_tag=true
 //   anything else      0
 export fn prologos_get_stat(key: u32) u64 {
     return switch (key) {
@@ -373,9 +409,13 @@ export fn prologos_get_stat(key: u32) u64 {
         5 => stat_fuel_exhausted,
         6 => @intCast(num_cells),
         7 => @intCast(num_props),
+        8 => stat_run_ns,
         else => blk: {
             if (key >= 100 and key < 100 + N_TAGS) {
                 break :blk stat_fires_by_tag[key - 100];
+            }
+            if (key >= 200 and key < 200 + N_TAGS) {
+                break :blk stat_ns_by_tag[key - 200];
             }
             break :blk 0;
         },
@@ -389,9 +429,11 @@ export fn prologos_reset_stats() void {
     stat_writes_dropped = 0;
     stat_max_worklist = 0;
     stat_fuel_exhausted = 0;
+    stat_run_ns = 0;
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
         stat_fires_by_tag[i] = 0;
+        stat_ns_by_tag[i] = 0;
     }
 }
 
@@ -446,11 +488,18 @@ export fn prologos_print_stats() void {
     buf_puts(",\"fuel_out\":");    buf_putu64(stat_fuel_exhausted);
     buf_puts(",\"cells\":");       buf_putu64(@intCast(num_cells));
     buf_puts(",\"props\":");       buf_putu64(@intCast(num_props));
+    buf_puts(",\"run_ns\":");      buf_putu64(stat_run_ns);
     buf_puts(",\"by_tag\":[");
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
         if (i > 0) buf_putc(',');
         buf_putu64(stat_fires_by_tag[i]);
+    }
+    buf_puts("],\"ns_by_tag\":[");
+    i = 0;
+    while (i < N_TAGS) : (i += 1) {
+        if (i > 0) buf_putc(',');
+        buf_putu64(stat_ns_by_tag[i]);
     }
     buf_puts("]}\n");
     _ = write(2, &print_buf, print_len);
