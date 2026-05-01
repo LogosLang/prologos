@@ -1,0 +1,12 @@
+spec swap <Int * Int> -> <Int * Int>
+defn swap [p] [pair [snd p] [fst p]]
+
+spec pair-diff <Int * Int> -> Int
+defn pair-diff [p] [int- [fst p] [snd p]]
+
+def main : Int := [pair-diff [swap [pair 10 50]]]
+
+;; swap(<10;50>) = <50;10>. pair-diff(<50;10>) = 50 - 10 = 40.
+;; Validates: helper that RETURNS a pair (swap's body builds a pair),
+;; and helper that takes the pair as input (pair-diff).
+;; :expect-exit 40

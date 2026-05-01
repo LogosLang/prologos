@@ -1,0 +1,9 @@
+spec pair-add <Int * Int> -> Int
+defn pair-add [p] [int+ [fst p] [snd p]]
+
+def main : Int := [pair-add [pair 3 4]]
+
+;; Sprint F.2: non-dependent pair lowering. Pair-add takes a 2-cell
+;; pair-typed argument; build returns a 2-element value-tree. fst/snd
+;; project the components. 3 + 4 = 7.
+;; :expect-exit 7

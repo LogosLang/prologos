@@ -129,6 +129,57 @@
 (define BOOL-DOMAIN-ID 1)
 
 ;; ============================================================
+;; Value-tree representation (Sprint F.2, 2026-05-01)
+;; ============================================================
+;;
+;; build returns a "value-tree" (vtree): either a single cell-id
+;; (representing a scalar value like an Int or Bool) or a list of
+;; vtrees (representing a non-dependent pair / nested pair).
+;;
+;;   vtree ::= cell-id (exact-nonnegative-integer)
+;;           | (Listof vtree)        ; pair with components
+;;
+;; Examples:
+;;   42                  scalar Int → cell-id (e.g. 5)
+;;   <a; b>              pair → (list ca cb)
+;;   <<a; b>; c>         nested pair → (list (list ca cb) cc)
+;;
+;; Per-component decomposition: an N-component pair becomes N flat
+;; cells. fst/snd index into the list. Operations on pairs (e.g.
+;; select on a pair-typed branch) decompose into per-component
+;; operations.
+;;
+;; Scope: NON-DEPENDENT pairs only. Dependent Sigma `<n:Nat * Vec(n)>`
+;; (where snd-type depends on fst's value) is intentionally NOT
+;; supported — see docs/tracking/2026-05-01_SH_LOWERING_FEATURE_MAP.md.
+;; In practice the elaborator has discharged dependent typing into
+;; proofs that get erased before lowering; what arrives here is a
+;; tree of concrete cells.
+
+(define (vtree-scalar? vt) (exact-integer? vt))
+
+(define (assert-scalar! vt expr context)
+  (unless (vtree-scalar? vt)
+    (translate-error!
+     expr
+     (format "~a expected a scalar (Int or Bool) but got a pair-typed value. \
+fst/snd projection or destructuring is required first."
+             context)))
+  vt)
+
+(define (assert-pair! vt expr context)
+  (when (vtree-scalar? vt)
+    (translate-error!
+     expr
+     (format "~a expected a pair-typed value but got a scalar." context)))
+  (unless (= (length vt) 2)
+    (translate-error!
+     expr
+     (format "~a expected a 2-component pair but got ~a components."
+             context (length vt))))
+  vt)
+
+;; ============================================================
 ;; Tail-recursion recognition (Sprint E.3)
 ;; ============================================================
 ;;
@@ -385,7 +436,9 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
   ;; (which uses `cont = (i < N)` directly — its natural cold-start
   ;; init=0 already means "halt").
   (define base-on-true? (eq? (tail-rec-shape-base-arm-tag shape) 'true))
-  (define cond-cid (build (tail-rec-shape-cond-expr shape) b BOOL-DOMAIN-ID state-env))
+  (define cond-vt (build (tail-rec-shape-cond-expr shape) b BOOL-DOMAIN-ID state-env))
+  (define cond-cid (assert-scalar! cond-vt (tail-rec-shape-cond-expr shape)
+                                   "tail-rec cond-expr"))
   (when base-on-true?
     ;; Mutate the cond cell-decl's init-value from #f to #t.
     (set-builder-cells! b
@@ -414,7 +467,10 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
   ;; cold-start round's bridged value matches expected lag-1 behavior.
   (define step-cids
     (for/list ([step-arg (in-list (tail-rec-shape-step-args shape))])
-      (define cid (build step-arg b INT-DOMAIN-ID state-env))
+      ;; Sprint F.2: state stays scalar in tail-rec; pair-typed state
+      ;; deferred to F.3. If a step-arg is pair-typed, error early.
+      (define vt (build step-arg b INT-DOMAIN-ID state-env))
+      (define cid (assert-scalar! vt step-arg "tail-rec step-arg"))
       (cond
         [(member cid state-cids)
          (define state-idx (index-of state-cids cid))
@@ -466,6 +522,26 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
      (emit-cell! b INT-DOMAIN-ID n)]
     [(expr-true)  (emit-cell! b BOOL-DOMAIN-ID #t)]
     [(expr-false) (emit-cell! b BOOL-DOMAIN-ID #f)]
+
+    ;; Non-dependent pair construction (Sprint F.2). Translates each
+    ;; component to a vtree; the result is the 2-element list. No
+    ;; new cells allocated — the components ARE the pair (no boxing).
+    [(expr-pair fst-expr snd-expr)
+     (define fst-vt (build fst-expr b dom-id env))
+     (define snd-vt (build snd-expr b dom-id env))
+     (list fst-vt snd-vt)]
+
+    ;; Pair projection — fst returns the first component vtree.
+    [(expr-fst inner)
+     (define inner-vt (build inner b dom-id env))
+     (assert-pair! inner-vt expr "expr-fst")
+     (car inner-vt)]
+
+    ;; Pair projection — snd returns the second component vtree.
+    [(expr-snd inner)
+     (define inner-vt (build inner b dom-id env))
+     (assert-pair! inner-vt expr "expr-snd")
+     (cadr inner-vt)]
 
     ;; Bound variable: look up in env. Each occurrence yields the SAME
     ;; cell-id, which means downstream propagators reading from it share
@@ -641,20 +717,43 @@ are not yet supported.")]))
 
 (define (build-binary b a-expr b-expr tag env [out-dom INT-DOMAIN-ID]
                       [out-init 0])
-  (define a-cid (build a-expr b INT-DOMAIN-ID env))
-  (define b-cid (build b-expr b INT-DOMAIN-ID env))
+  (define a-vt (build a-expr b INT-DOMAIN-ID env))
+  (define b-vt (build b-expr b INT-DOMAIN-ID env))
+  (define a-cid (assert-scalar! a-vt a-expr (format "binary op '~a' lhs" tag)))
+  (define b-cid (assert-scalar! b-vt b-expr (format "binary op '~a' rhs" tag)))
   (define r-cid (emit-cell! b out-dom out-init))
   (emit-propagator! b (list a-cid b-cid) r-cid tag)
   r-cid)
 
+;; build-select: cond-expr must be scalar (Bool); then/else can be
+;; arbitrary vtrees as long as their shapes match. For pair-typed
+;; branches, lower as a per-component select cascade (one (3,1)
+;; propagator per scalar leaf in the result tree).
 (define (build-select b cond-expr then-expr else-expr env out-dom)
-  (define c-cid (build cond-expr b BOOL-DOMAIN-ID env))
-  (define t-cid (build then-expr b out-dom env))
-  (define e-cid (build else-expr b out-dom env))
-  (define init-val (case out-dom [(0) 0] [(1) #f]))
-  (define r-cid (emit-cell! b out-dom init-val))
-  (emit-propagator! b (list c-cid t-cid e-cid) r-cid 'kernel-select)
-  r-cid)
+  (define c-vt (build cond-expr b BOOL-DOMAIN-ID env))
+  (define c-cid (assert-scalar! c-vt cond-expr "select condition"))
+  (define t-vt (build then-expr b out-dom env))
+  (define e-vt (build else-expr b out-dom env))
+  (build-select-vtree b c-cid t-vt e-vt then-expr out-dom))
+
+;; Recursively build select propagators per leaf. t-vt and e-vt must
+;; have matching shapes; we error if not. Returns a vtree of result
+;; cell-ids matching the shape.
+(define (build-select-vtree b c-cid t-vt e-vt err-expr out-dom)
+  (cond
+    [(and (vtree-scalar? t-vt) (vtree-scalar? e-vt))
+     (define init-val (case out-dom [(0) 0] [(1) #f] [else 0]))
+     (define r-cid (emit-cell! b out-dom init-val))
+     (emit-propagator! b (list c-cid t-vt e-vt) r-cid 'kernel-select)
+     r-cid]
+    [(and (list? t-vt) (list? e-vt) (= (length t-vt) (length e-vt)))
+     (for/list ([t (in-list t-vt)] [e (in-list e-vt)])
+       (build-select-vtree b c-cid t e err-expr out-dom))]
+    [else
+     (translate-error!
+      err-expr
+      (format "select branches have mismatched shapes: then=~v else=~v"
+              t-vt e-vt))]))
 
 ;; ============================================================
 ;; ast-to-low-pnet : Expr × Expr × String → low-pnet
@@ -670,13 +769,19 @@ are not yet supported.")]))
   ;; Pick an outermost domain based on main's type (for the meta only;
   ;; the result cell's domain is set during build). main has no enclosing
   ;; lambdas, so the initial env is empty.
-  (define result-cid
+  (define result-vt
     (cond
       [(expr-Int? main-type) (build main-body b INT-DOMAIN-ID '())]
       [(expr-Bool? main-type) (build main-body b BOOL-DOMAIN-ID '())]
       [else
        (translate-error! main-type
                          "main must currently have type Int or Bool")]))
+  ;; The top-level entry-decl points at ONE cell. main must produce a
+  ;; scalar; pair-typed `def main` is rejected (the binary's exit code
+  ;; is single-valued). Helpers and intermediate expressions can be
+  ;; pair-typed; only `main` is constrained.
+  (define result-cid (assert-scalar! result-vt main-body
+                                     "main result"))
 
   ;; Determine which domains we actually emitted (any cell with that
   ;; domain-id). Emit domain-decls for those.

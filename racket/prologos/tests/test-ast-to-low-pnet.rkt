@@ -297,3 +297,56 @@
   ;; m0 binder doesn't allocate; runtime cells are 5 (literal arg) +
   ;; 1 (literal in body) + 1 (result) = 3.
   (check-equal? (count-by lp cell-decl?) 3))
+
+;; ============================================================
+;; Sprint F.2: non-dependent pair lowering (2026-05-01)
+;; ============================================================
+
+(test-case "expr-pair + expr-fst: int+ (fst <3;4>) (snd <3;4>) → 7"
+  ;; (int+ (fst (pair 3 4)) (snd (pair 3 4)))
+  (define body
+    (expr-int-add
+     (expr-fst (expr-pair (expr-int 3) (expr-int 4)))
+     (expr-snd (expr-pair (expr-int 3) (expr-int 4)))))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Each (pair 3 4) builds 2 cells (3 and 4). Two pair constructions
+  ;; (no CSE) = 4 cells. Plus 1 result cell from int+ = 5 cells.
+  (check-equal? (count-by lp cell-decl?) 5)
+  (check-equal? (count-by lp propagator-decl?) 1))
+
+(test-case "let-binding with pair-typed arg: ((λp. fst p + snd p) <10;20>) → 30"
+  ;; The lambda binder is pair-typed; bvar 0 in body resolves to a
+  ;; vtree (list of cell-ids), and fst/snd project it.
+  (define body
+    (expr-app
+     (expr-lam 'mw (expr-Sigma (expr-Int) (expr-Int))
+               (expr-int-add (expr-fst (expr-bvar 0))
+                             (expr-snd (expr-bvar 0))))
+     (expr-pair (expr-int 10) (expr-int 20))))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Pair components get 2 cells (10, 20). Result int+ allocates 1
+  ;; more. Total 3 cells.
+  (check-equal? (count-by lp cell-decl?) 3)
+  (check-equal? (count-by lp propagator-decl?) 1))
+
+(test-case "expr-fst on non-pair raises"
+  ;; (fst 42) — 42 is a scalar, fst should error.
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet (expr-Int)
+                       (expr-fst (expr-int 42))
+                       "t.prologos"))))
+
+(test-case "main with pair type raises (entry must be scalar)"
+  ;; def main : <Int*Int> := <1;2>  — should error (binary exit
+  ;; codes are single-valued; pair-typed main is rejected).
+  ;; We can't trigger this via expr-Pair at the top because the
+  ;; entry-point asserts scalar. Verify by constructing main as
+  ;; a pair.
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet (expr-Int)  ; type says Int but body is a pair
+                       (expr-pair (expr-int 1) (expr-int 2))
+                       "t.prologos"))))
