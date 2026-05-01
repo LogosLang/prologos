@@ -50,8 +50,12 @@ jobs:
           # zig build-obj does not include in the .o, leaving unresolved
           # symbols when clang links against plain libc.
           # -fstrip: drop debug info to keep the .o minimal.
+          # -fPIC: produce position-independent code. Modern clang on Linux
+          # links PIE executables by default; non-PIC objects fail with
+          # "relocation R_X86_64_32S against `.bss' can not be used when
+          # making a PIE object". -fPIC is the standard fix.
           zig build-obj runtime/prologos-runtime.zig \
-            -OReleaseFast -fstrip \
+            -OReleaseFast -fstrip -fPIC \
             -femit-bin=runtime/prologos-runtime.o
           ls -la runtime/prologos-runtime.o
           file runtime/prologos-runtime.o
