@@ -935,7 +935,12 @@
   (define files
     (if (directory-exists? examples-dir)
         (for/list ([f (in-directory examples-dir)]
-                   #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+                   #:when (regexp-match? #rx"\\.prologos$" (path->string f))
+                   ;; Skip editor lock/autosave files (Emacs: .#name, name.~undo-tree~, etc.)
+                   ;; A leading `.` or `~` in the basename is conventionally non-source.
+                   #:unless (let ([name (path->string (file-name-from-path f))])
+                              (or (regexp-match? #rx"^\\." name)
+                                  (regexp-match? #rx"^~" name))))
           f)
         '()))
   (define unbalanced 0)
@@ -1131,7 +1136,12 @@
   (define files
     (if (directory-exists? examples-dir)
         (for/list ([f (in-directory examples-dir)]
-                   #:when (regexp-match? #rx"\\.prologos$" (path->string f)))
+                   #:when (regexp-match? #rx"\\.prologos$" (path->string f))
+                   ;; Skip editor lock/autosave files (Emacs: .#name, name.~undo-tree~, etc.)
+                   ;; A leading `.` or `~` in the basename is conventionally non-source.
+                   #:unless (let ([name (path->string (file-name-from-path f))])
+                              (or (regexp-match? #rx"^\\." name)
+                                  (regexp-match? #rx"^~" name))))
           f)
         '()))
   (define passed 0)
