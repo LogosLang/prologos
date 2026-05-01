@@ -212,6 +212,33 @@
 
   (define propagator-decls-non-empty? (not (null? propagator-decls)))
 
+  ;; PROLOGOS_STATS=1 at lowering time → emit a call to
+  ;; @prologos_print_stats() after run_to_quiescence and before the
+  ;; entry-cell read. Output goes to stderr (one-line JSON), so the
+  ;; binary's exit code (the cell value) is unaffected. PROLOGOS_PROFILE=1
+  ;; additionally enables per-tag wall time recording (60ns overhead
+  ;; per fire). Default: both off.
+  (define stats-enabled?   (equal? (getenv "PROLOGOS_STATS")   "1"))
+  (define profile-enabled? (equal? (getenv "PROLOGOS_PROFILE") "1"))
+  (define stats-decls
+    (if stats-enabled?
+        (string-append
+         "declare void @prologos_print_stats()\n"
+         (if profile-enabled?
+             "declare void @prologos_set_profile_per_tag(i32)\n"
+             ""))
+        ""))
+  (define stats-line
+    (cond
+      [(not stats-enabled?) ""]
+      [else
+       (string-append
+        "  call void @prologos_print_stats()\n")]))
+  (define profile-init-line
+    (if (and stats-enabled? profile-enabled?)
+        "  call void @prologos_set_profile_per_tag(i32 1)\n"
+        ""))
+
   ;; Module metadata from meta-decls (debug / diagnostic).
   (define meta-comment-lines
     (for/list ([m (in-list meta-decls)])
@@ -245,9 +272,11 @@
    "\n"
    base-decls
    prop-decls-text
+   stats-decls
    "\n"
    "define i64 @main() {\n"
    "entry:\n"
+   profile-init-line
    (apply string-append
           (for/list ([l (in-list alloc-lines)]) (string-append l "\n")))
    (apply string-append
@@ -257,6 +286,7 @@
    (apply string-append
           (for/list ([l (in-list prop-lines)]) (string-append l "\n")))
    quiescence-line
+   stats-line
    (format "  %r = call i64 @prologos_cell_read(i32 ~a)\n"
            (cell-ssa-name entry-cell-id))
    "  ret i64 %r\n"
