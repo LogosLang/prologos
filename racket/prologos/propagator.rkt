@@ -51,6 +51,8 @@
  ;; Core structs
  (struct-out prop-cell)
  (struct-out propagator)
+ ;; SH Track 1 (2026-05-02): fire-fn tag default
+ DEFAULT-FIRE-FN-TAG
  ;; Network struct — split into hot/warm/cold inner structs (BSP-LE Track 0 Phase 3b)
  (struct-out prop-net-hot)
  (struct-out prop-net-warm)
@@ -284,7 +286,16 @@
 ;; The scheduler's fire-propagator wrapper parameterizes current-source-loc from
 ;; this field, so fire functions remain stateless (read the parameter, don't
 ;; capture srcloc in closure).
-(struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc) #:transparent)
+;; SH Track 1 (2026-05-02): fire-fn-tag field added so that propagators can
+;; be identified by a stable name when serialized to .pnet. fire-fn itself
+;; is a Racket closure and can't round-trip; the tag is the symbol the
+;; runtime kernel uses to look up the corresponding native fn. Default is
+;; 'untagged for back-compat — every existing call site just inherits this
+;; sentinel. Future Track 1 phases audit untagged propagators and assign
+;; explicit tags.
+(struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc fire-fn-tag) #:transparent)
+
+(define DEFAULT-FIRE-FN-TAG 'untagged)
 
 ;; PPN 4C Phase 1.5: scheduler fire-wrapping helper.
 ;; Invokes the propagator's fire function under `current-source-loc`
@@ -1440,7 +1451,8 @@
                             #:assumption [assumption-id #f]
                             #:decision-cell [decision-cell-id #f]
                             #:flags [flags 0]
-                            #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5: on-network srcloc
+                            #:srcloc [srcloc #f]  ;; PPN 4C Phase 1.5: on-network srcloc
+                            #:fire-fn-tag [fire-fn-tag DEFAULT-FIRE-FN-TAG])  ;; SH Track 1
   ;; PPN 4C Phase 1f (2026-04-20): structural-enforcement check.
   ;; For each input cell whose domain is classified 'structural, require
   ;; :component-paths declared for that cell. Unclassified domains skip
@@ -1452,7 +1464,7 @@
   ;; it via next-prop-id comparison. The topology stratum applies new
   ;; propagators to the canonical network and schedules them.
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-ids output-ids fire-fn #f flags srcloc))
+  (define prop (propagator input-ids output-ids fire-fn #f flags srcloc fire-fn-tag))
   (define ph (prop-id-hash pid))
   ;; CHAMP Performance Phase 7: Owner-ID transient for dependency registration.
   ;; BSP-LE Track 0 Phase 5 attempted hash-table transient here and regressed 44%.
@@ -1520,7 +1532,8 @@
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      #:srcloc [srcloc #f]  ;; PPN 4C Phase 1.5
+                                      #:fire-fn-tag [fire-fn-tag DEFAULT-FIRE-FN-TAG])  ;; SH Track 1
   ;; Flags: scheduler implements fire-once. No closure wrapper.
   (define flags (bitwise-ior PROP-FIRE-ONCE
                              (if (null? inputs) PROP-EMPTY-INPUTS 0)))
@@ -1529,6 +1542,7 @@
                         #:component-paths cpaths
                         #:assumption assumption-id
                         #:decision-cell decision-cell-id
+                        #:fire-fn-tag fire-fn-tag
                         #:flags flags
                         #:srcloc srcloc))
   (values net* pid))
@@ -1605,7 +1619,8 @@
                                       #:component-paths [component-paths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      #:srcloc [srcloc #f]  ;; PPN 4C Phase 1.5
+                                      #:fire-fn-tag [fire-fn-tag DEFAULT-FIRE-FN-TAG])  ;; SH Track 1
   (define profile (broadcast-profile items item-fn result-merge-fn))
   (define fire-fn
     (lambda (net)
@@ -1629,7 +1644,7 @@
           (net-cell-write net output-cid results))))
   ;; Install ONE propagator with the broadcast profile
   (define pid (prop-id (prop-network-next-prop-id net)))
-  (define prop (propagator input-cids (list output-cid) fire-fn profile 0 srcloc))
+  (define prop (propagator input-cids (list output-cid) fire-fn profile 0 srcloc fire-fn-tag))
   (define ph (prop-id-hash pid))
   ;; Register propagator + dependencies (same as net-add-propagator but with profile)
   ;; BSP-LE Track 2 Phase 5.1b: component-paths + assumption + decision-cell support.
