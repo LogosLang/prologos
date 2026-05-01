@@ -18,6 +18,7 @@
 |---|----------|------|--------|-----------------|
 | 0 | [Propagator Network Taxonomy](../research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.md) | 03-21 | Complete | Foundations survey: Radul, Kmett, Kuper LVars, category theory, lattice taxonomy, diagrammatic formalisms |
 | 1 | [Propagator Taxonomy — Parallel Profiles](../research/2026-03-28_PROPAGATOR_TAXONOMY.md) | 03-28 | Draft | 5 propagator kinds (Map, Reduce, Broadcast, Scatter, Gather), 3 compound patterns, array programming connection |
+| 2 | [Lattice Hierarchy and Distributivity for Propagators](../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) | 04-30 | Stage 0/1 | The hierarchy free → SD → modular → distributive → Heyting → Boolean (+ quantale, residuated). What each level unlocks per propagator-kind. Worked example: SRE Track 2I Phase 3c distributivity-status flip. Connection to UCS dispatch + NTT type-level encoding. Refines and extends [Algebraic Embeddings](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md). |
 
 ## Related Work (cross-linked)
 
