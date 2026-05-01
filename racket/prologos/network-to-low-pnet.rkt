@@ -15,9 +15,17 @@
 ;;   - Domain decls use placeholder tag values (real merge-fn-tag, bot, etc.
 ;;     come from a future domain-registry-to-low-pnet pass; placeholders are
 ;;     enough for Phase 2.B's diagnostic value)
-;;   - write-decl emission is DEFERRED — initial cell values are arbitrary
-;;     Racket values that may not survive serialization. write-decl needs
-;;     a value-marshal step that's part of the future deployment-mode work.
+;;
+;; Phase 2.B+ (post-2026-05-02 update): cell-value marshaling.
+;;   - Serializable cell values (i64, bool, symbol, null, simple lists)
+;;     emerge as the cell-decl init-value AND, when non-trivially-bot, as a
+;;     write-decl. Non-serializable values fall back to a placeholder
+;;     symbol so the structure is still emittable (Phase 2.B's diagnostic
+;;     value preserved for compile-time-only cells with rich Racket types).
+;;
+;; Out of scope:
+;;   - Stratum decls (deferred until stratum exposure on the network is finalized)
+;;   - The reverse direction (Low-PNet → prop-network)
 ;;
 ;; Out of scope:
 ;;   - Stratum decls (deferred until stratum exposure on the network is finalized)
@@ -31,7 +39,41 @@
          "champ.rkt"
          "low-pnet-ir.rkt")
 
-(provide prop-network-to-low-pnet)
+(provide prop-network-to-low-pnet
+         value-marshalable?
+         marshal-value)
+
+;; ============================================================
+;; Value marshaling
+;; ============================================================
+;;
+;; Determines whether a cell's current value can be embedded in a .pnet
+;; file and round-tripped through write/read. The set is intentionally
+;; conservative — any value that's safely Racket-`write`able as a
+;; readable s-expression is fine. Procedures, structs with private
+;; representations, mutable boxes/hashes, and anything containing those
+;; are not. Future minor versions can extend.
+
+(define (value-marshalable? v)
+  (cond
+    [(exact-integer? v) #t]
+    [(boolean? v) #t]
+    [(symbol? v) #t]
+    [(string? v) #t]
+    [(char? v) #t]
+    [(null? v) #t]
+    [(pair? v) (and (value-marshalable? (car v))
+                    (value-marshalable? (cdr v)))]
+    [(vector? v)
+     (for/and ([e (in-vector v)]) (value-marshalable? e))]
+    [else #f]))
+
+;; marshal-value : Any → Any
+;; Returns the value as-is if marshalable, else a sentinel.
+(define (marshal-value v)
+  (if (value-marshalable? v)
+      v
+      'phase-2b-placeholder))
 
 ;; prop-network-to-low-pnet : prop-network × main-cell-id → low-pnet
 ;;
@@ -74,6 +116,11 @@
        id]))
 
   ;; -------- 2. Walk cells -------------------------------------------------
+  ;; Phase 2.B+: emit the cell's current value as init-value when marshalable
+  ;; (i64 / bool / symbol / string / null / pairs of the above). Non-marshalable
+  ;; values (closures, complex Racket structs from the elaborator) get the
+  ;; 'phase-2b-placeholder sentinel — they're typically compile-time-only
+  ;; cells whose contents shouldn't survive into a deployment artifact anyway.
   (define cell-decls
     (champ-fold cells-champ
                 (lambda (cid cell acc)
@@ -81,10 +128,9 @@
                   (define dom-name
                     (or (lookup-cell-domain net cid) 'unknown))
                   (define dom-id (hash-ref domain-name->id dom-name unknown-id))
-                  ;; Phase 2.B: don't try to serialize the live cell value as
-                  ;; init-value — it may be a complex Racket struct that won't
-                  ;; survive Low-PNet → sexp roundtrip. Use a sentinel.
-                  (cons (cell-decl cid-int dom-id 'phase-2b-placeholder) acc))
+                  (define raw-value (prop-cell-value cell))
+                  (define init-value (marshal-value raw-value))
+                  (cons (cell-decl cid-int dom-id init-value) acc))
                 '()))
 
   ;; -------- 3. Walk propagators -------------------------------------------

@@ -99,6 +99,54 @@
 ;; pp + reparse roundtrip on a real network's output
 ;; ============================================================
 
+;; ============================================================
+;; Cell-value marshaling (Phase 2.B+)
+;; ============================================================
+
+(test-case "value-marshalable?: simple values"
+  (check-true (value-marshalable? 42))
+  (check-true (value-marshalable? -7))
+  (check-true (value-marshalable? #t))
+  (check-true (value-marshalable? #f))
+  (check-true (value-marshalable? 'foo))
+  (check-true (value-marshalable? "hello"))
+  (check-true (value-marshalable? '()))
+  (check-true (value-marshalable? '(1 2 3)))
+  (check-true (value-marshalable? '(a b (c d))))
+  (check-true (value-marshalable? (vector 1 'x "s"))))
+
+(test-case "value-marshalable?: rejects non-serializable values"
+  (check-false (value-marshalable? (lambda (x) x)))
+  (check-false (value-marshalable? (box 5)))
+  (check-false (value-marshalable? (make-hash)))
+  (check-false (value-marshalable? (list 1 (lambda (x) x))) "lists with closures rejected"))
+
+(test-case "marshal-value: passes marshalable, sentinels otherwise"
+  (check-equal? (marshal-value 42) 42)
+  (check-equal? (marshal-value 'foo) 'foo)
+  (check-equal? (marshal-value '(1 2)) '(1 2))
+  (check-equal? (marshal-value (lambda () 0)) 'phase-2b-placeholder))
+
+(test-case "cell init-value reflects marshalable cell value"
+  (define net (make-prop-network))
+  (define-values (net1 cid) (net-new-cell net 99 last-write-wins))
+  (define lp (prop-network-to-low-pnet net1 (cell-id-n cid)))
+  (define our-cell
+    (for/first ([n (in-list (low-pnet-nodes lp))]
+                #:when (and (cell-decl? n) (= (cell-decl-id n) (cell-id-n cid))))
+      n))
+  (check-equal? (cell-decl-init-value our-cell) 99))
+
+(test-case "cell init-value falls back to placeholder for non-marshalable"
+  (define net (make-prop-network))
+  (define-values (net1 cid) (net-new-cell net (lambda (n) n) last-write-wins))
+  (define lp (prop-network-to-low-pnet net1 (cell-id-n cid)))
+  (define our-cell
+    (for/first ([n (in-list (low-pnet-nodes lp))]
+                #:when (and (cell-decl? n) (= (cell-decl-id n) (cell-id-n cid))))
+      n))
+  (check-equal? (cell-decl-init-value our-cell) 'phase-2b-placeholder))
+
 (test-case "pp ∘ parse on prop-network-to-low-pnet output"
   (define net (make-prop-network))
   (define-values (net1 a-cid) (net-new-cell net 0 last-write-wins))
