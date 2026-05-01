@@ -1,35 +1,37 @@
 #lang racket/base
 
-;; low-pnet-to-llvm.rkt — SH Track 2 Phase 2.C.
+;; low-pnet-to-llvm.rkt — SH Track 2 Phase 2.C+D.
 ;;
 ;; Lowers a Low-PNet IR structure to LLVM IR text. Third of three Track 2
-;; phases per the design doc (e9e59ab).
+;; phases per the design doc (e9e59ab); Phase 2.D adds propagator-decl
+;; lowering on top of 2.C's cell/write/entry handling.
 ;;
 ;; Pipeline position:
 ;;   .prologos → process-file → typed AST
-;;       → network-emit (or Phase 2.B for prop-net path) → Low-PNet IR
+;;       → ast-to-low-pnet (or Phase 2.B for prop-net path) → Low-PNet IR
 ;;       → THIS PASS → LLVM IR text
 ;;       → clang + libprologos-runtime.o → native binary
 ;;
-;; Scope of Phase 2.C (this commit):
-;;   - cell-decl    → call prologos_cell_alloc; store SSA cell-id name
-;;   - write-decl   → call prologos_cell_write
-;;   - entry-decl   → emit @main with prologos_cell_read + ret
-;;   - domain-decl  → noop at lowering time (the kernel's domain registry
-;;                    is initialized separately; cell-decl ignores the
-;;                    domain-id field for the N0-equivalent kernel that
-;;                    doesn't yet do merging)
-;;   - meta-decl    → emit as LLVM module metadata
+;; Scope:
+;;   - cell-decl       → call prologos_cell_alloc; SSA name %cN
+;;   - write-decl      → call prologos_cell_write
+;;   - propagator-decl → call prologos_propagator_install_2_1 (only the
+;;                       (2,1) shape; tag resolved against fire-fn-tag
+;;                       map below); subscribes to inputs implicitly;
+;;                       enqueues for initial firing
+;;   - dep-decl        → noop (subscribe is implicit on install_2_1;
+;;                       dep-decl is informational at this kernel scope)
+;;   - entry-decl      → emit @main with prologos_run_to_quiescence
+;;                       before prologos_cell_read + ret
+;;   - domain-decl     → noop at lowering time (kernel doesn't dispatch
+;;                       merging by domain yet; domain-decls are
+;;                       informational for the IR layer)
+;;   - meta-decl       → emit as IR comment
 ;;
 ;; Out of scope (raised as unsupported):
-;;   - propagator-decl: needs a per-program .o with fire-fn implementations
-;;     and a kernel scheduler. Future work; see fire-fn-tag audit doc.
-;;   - dep-decl: meaningful only with propagators
+;;   - propagator-decl with shapes other than (2,1)
+;;   - propagator-decl with unknown fire-fn-tag (not in built-in map)
 ;;   - stratum-decl: meaningful with multi-stratum scheduler
-;;
-;; The N0 kernel (runtime/prologos-runtime.zig) provides exactly the three
-;; primitives we use here. So a simple `def main : Int := 42` lowered via
-;; this pass produces an executable binary with the existing kernel.
 
 (require racket/match
          racket/list
@@ -37,13 +39,14 @@
          "low-pnet-ir.rkt")
 
 (provide lower-low-pnet-to-llvm
-         (struct-out unsupported-low-pnet-decl))
+         (struct-out unsupported-low-pnet-decl)
+         FIRE-FN-TAG-REGISTRY)
 
 (struct unsupported-low-pnet-decl exn:fail (decl reason) #:transparent)
 
 (define (unsupported! d reason)
   (raise (unsupported-low-pnet-decl
-          (format "Phase 2.C cannot lower ~v: ~a" d reason)
+          (format "Phase 2.C/D cannot lower ~v: ~a" d reason)
           (current-continuation-marks)
           d
           reason)))
@@ -52,6 +55,30 @@
   (or (getenv "PROLOGOS_LLVM_TRIPLE")
       "x86_64-unknown-linux-gnu"))
 
+;; ============================================================
+;; Fire-fn tag → kernel-side numeric ID
+;; ============================================================
+;;
+;; The Zig kernel's prologos_propagator_install_2_1 takes a u32 tag
+;; that selects the fire-fn implementation. This is the 1:1 map
+;; between Low-PNet's symbolic tags and the kernel's numeric registry.
+;;
+;; Naming convention per fire-fn-tag audit doc § 6: 'kernel-* prefix.
+;; The kernel's switch in prologos-runtime.zig must stay in sync with
+;; the integers here.
+
+(define FIRE-FN-TAG-REGISTRY
+  '#hasheq((kernel-int-add . 0)
+           (kernel-int-sub . 1)
+           (kernel-int-mul . 2)
+           (kernel-int-div . 3)))
+
+(define (lookup-fire-fn-tag-id sym d)
+  (or (hash-ref FIRE-FN-TAG-REGISTRY sym #f)
+      (unsupported! d
+                    (format "fire-fn-tag '~a' not in built-in registry. Phase 2.D supports only kernel-int-add/sub/mul/div; user-defined fire-fns require per-program .o emission (future work)."
+                            sym))))
+
 ;; lower-low-pnet-to-llvm : low-pnet → String
 (define (lower-low-pnet-to-llvm lp)
   (unless (low-pnet? lp)
@@ -59,15 +86,10 @@
   (validate-low-pnet lp)  ;; raises if malformed
   (match-define (low-pnet version nodes) lp)
 
-  ;; Refuse propagator/dep/stratum decls — Phase 2.C doesn't lower them yet.
+  ;; Refuse stratum decls — multi-stratum scheduling deferred.
   (for ([n (in-list nodes)])
-    (cond
-      [(propagator-decl? n)
-       (unsupported! n "propagator-decl lowering deferred (needs fire-fn .o + scheduler integration)")]
-      [(dep-decl? n)
-       (unsupported! n "dep-decl is meaningful only with propagator-decls (Phase 2.C+)")]
-      [(stratum-decl? n)
-       (unsupported! n "stratum-decl lowering deferred (Phase 2.C+)")]))
+    (when (stratum-decl? n)
+      (unsupported! n "stratum-decl lowering deferred")))
 
   ;; Find the entry cell.
   (define entry
@@ -76,9 +98,10 @@
   (define entry-cell-id (entry-decl-main-cell-id entry))
 
   ;; Walk decls, build LLVM IR fragments.
-  (define cell-decls    (filter cell-decl? nodes))
-  (define write-decls   (filter write-decl? nodes))
-  (define meta-decls    (filter meta-decl? nodes))
+  (define cell-decls       (filter cell-decl? nodes))
+  (define write-decls      (filter write-decl? nodes))
+  (define propagator-decls (filter propagator-decl? nodes))
+  (define meta-decls       (filter meta-decl? nodes))
 
   ;; Map cell-decl id → SSA name for this @main scope.
   ;; Each cell-decl emits %cN where N is its id.
@@ -91,9 +114,6 @@
       (format "  ~a = call i32 @prologos_cell_alloc()" (cell-ssa-name id))))
 
   ;; init-value emission via cell-decl: if marshalable to i64, emit a write.
-  ;; (Phase 2.B+ marshals exact integers, booleans, etc. — booleans become
-  ;; 0/1, integers stay, anything else falls back to the placeholder symbol
-  ;; which we cannot emit as an i64 literal.)
   (define (init-value->i64-or-error c)
     (define v (cell-decl-init-value c))
     (cond
@@ -102,7 +122,7 @@
       [(eq? v #f) 0]
       [else
        (unsupported! c
-                     (format "init-value ~v is not i64-marshalable. Phase 2.C lowers only Int and Bool cells; complex values need a value-marshal step in Phase 2.D"
+                     (format "init-value ~v is not i64-marshalable. Phase 2.C/D lowers only Int and Bool cells."
                              v))]))
 
   (define init-lines
@@ -125,10 +145,58 @@
       (format "  call void @prologos_cell_write(i32 ~a, i64 ~a)"
               (cell-ssa-name cid) vi64)))
 
+  ;; Phase 2.D: propagator-decl → prologos_propagator_install_2_1 call.
+  ;; Each install enqueues the propagator; the run_to_quiescence call
+  ;; below drains the worklist before the entry-cell read.
+  (define prop-lines
+    (for/list ([p (in-list propagator-decls)])
+      (define ins (propagator-decl-input-cells p))
+      (define outs (propagator-decl-output-cells p))
+      (unless (= (length ins) 2)
+        (unsupported! p
+                      (format "Phase 2.D supports only (2,1) propagator shape; got ~a inputs"
+                              (length ins))))
+      (unless (= (length outs) 1)
+        (unsupported! p
+                      (format "Phase 2.D supports only (2,1) propagator shape; got ~a outputs"
+                              (length outs))))
+      (define tag-id (lookup-fire-fn-tag-id (propagator-decl-fire-fn-tag p) p))
+      (format "  %p~a = call i32 @prologos_propagator_install_2_1(i32 ~a, i32 ~a, i32 ~a, i32 ~a)"
+              (propagator-decl-id p)
+              tag-id
+              (cell-ssa-name (car ins))
+              (cell-ssa-name (cadr ins))
+              (cell-ssa-name (car outs)))))
+
+  ;; If any propagators were installed, emit a run-to-quiescence call
+  ;; before reading the entry cell. (No propagators → constant network,
+  ;; no scheduler invocation needed.)
+  (define quiescence-line
+    (if (null? propagator-decls)
+        ""
+        "  call void @prologos_run_to_quiescence()\n"))
+
+  (define propagator-decls-non-empty? (not (null? propagator-decls)))
+
   ;; Module metadata from meta-decls (debug / diagnostic).
   (define meta-comment-lines
     (for/list ([m (in-list meta-decls)])
       (format "; meta: ~a = ~v" (meta-decl-key m) (meta-decl-value m))))
+
+  ;; Always-present declarations.
+  (define base-decls
+    (string-append
+     "declare i32 @prologos_cell_alloc()\n"
+     "declare i64 @prologos_cell_read(i32)\n"
+     "declare void @prologos_cell_write(i32, i64)\n"))
+
+  ;; Conditionally-emitted declarations for the propagator API.
+  (define prop-decls-text
+    (if propagator-decls-non-empty?
+        (string-append
+         "declare i32 @prologos_propagator_install_2_1(i32, i32, i32, i32)\n"
+         "declare void @prologos_run_to_quiescence()\n")
+        ""))
 
   ;; Assemble.
   (string-append
@@ -138,9 +206,8 @@
    (apply string-append
           (for/list ([l (in-list meta-comment-lines)]) (string-append l "\n")))
    "\n"
-   "declare i32 @prologos_cell_alloc()\n"
-   "declare i64 @prologos_cell_read(i32)\n"
-   "declare void @prologos_cell_write(i32, i64)\n"
+   base-decls
+   prop-decls-text
    "\n"
    "define i64 @main() {\n"
    "entry:\n"
@@ -150,6 +217,9 @@
           (for/list ([l (in-list init-lines)]) (string-append l "\n")))
    (apply string-append
           (for/list ([l (in-list write-lines)]) (string-append l "\n")))
+   (apply string-append
+          (for/list ([l (in-list prop-lines)]) (string-append l "\n")))
+   quiescence-line
    (format "  %r = call i64 @prologos_cell_read(i32 ~a)\n"
            (cell-ssa-name entry-cell-id))
    "  ret i64 %r\n"

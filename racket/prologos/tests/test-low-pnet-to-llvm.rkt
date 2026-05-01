@@ -83,17 +83,78 @@
 ;; Failure paths
 ;; ============================================================
 
-(test-case "propagator-decl raises unsupported (Phase 2.C+ work)"
+;; Phase 2.D: propagator-decl lowering
+(test-case "propagator-decl with kernel-int-add lowers to install_2_1"
   (define lp
     (parse-low-pnet
      '(low-pnet
-       (domain-decl 0 int merge-int 0 never)
+       (domain-decl 0 int kernel-merge-int 0 never)
+       (cell-decl 0 0 1)
+       (cell-decl 1 0 2)
+       (cell-decl 2 0 0)
+       (propagator-decl 0 (0 1) (2) kernel-int-add 0)
+       (entry-decl 2))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "declare i32 @prologos_propagator_install_2_1"))
+  (check-true (string-contains? ir "declare void @prologos_run_to_quiescence"))
+  ;; tag id for kernel-int-add is 0
+  (check-true (string-contains?
+               ir
+               "%p0 = call i32 @prologos_propagator_install_2_1(i32 0, i32 %c0, i32 %c1, i32 %c2)"))
+  (check-true (string-contains? ir "call void @prologos_run_to_quiescence()")))
+
+(test-case "kernel-int-sub/mul/div have distinct tag ids"
+  (for ([sym (in-list '(kernel-int-sub kernel-int-mul kernel-int-div))]
+        [expected-id (in-list '(1 2 3))])
+    (define lp
+      (parse-low-pnet
+       `(low-pnet
+         (domain-decl 0 int kernel-merge-int 0 never)
+         (cell-decl 0 0 0)
+         (cell-decl 1 0 0)
+         (cell-decl 2 0 0)
+         (propagator-decl 0 (0 1) (2) ,sym 0)
+         (entry-decl 2))))
+    (define ir (lower-low-pnet-to-llvm lp))
+    (check-true (string-contains?
+                 ir
+                 (format "install_2_1(i32 ~a," expected-id)))))
+
+(test-case "propagator-decl with unknown tag raises unsupported"
+  (define lp
+    (parse-low-pnet
+     '(low-pnet
+       (domain-decl 0 int kernel-merge-int 0 never)
        (cell-decl 0 0 0)
        (cell-decl 1 0 0)
-       (propagator-decl 0 (0) (1) rt-some-tag 0)
+       (cell-decl 2 0 0)
+       (propagator-decl 0 (0 1) (2) some-user-tag 0)
+       (entry-decl 2))))
+  (check-exn unsupported-low-pnet-decl?
+    (lambda () (lower-low-pnet-to-llvm lp))))
+
+(test-case "propagator-decl with non-(2,1) shape raises unsupported"
+  (define lp
+    (parse-low-pnet
+     '(low-pnet
+       (domain-decl 0 int kernel-merge-int 0 never)
+       (cell-decl 0 0 0)
+       (cell-decl 1 0 0)
+       (propagator-decl 0 (0) (1) kernel-int-add 0)  ; only 1 input
        (entry-decl 1))))
   (check-exn unsupported-low-pnet-decl?
     (lambda () (lower-low-pnet-to-llvm lp))))
+
+(test-case "no-propagator program does NOT emit propagator decls/calls"
+  (define lp
+    (parse-low-pnet
+     '(low-pnet
+       (domain-decl 0 int kernel-merge-int 0 never)
+       (cell-decl 0 0 42)
+       (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-false (string-contains? ir "prologos_propagator_install_2_1"))
+  (check-false (string-contains? ir "prologos_run_to_quiescence")))
 
 (test-case "cell with non-marshalable init-value raises unsupported"
   (define lp
