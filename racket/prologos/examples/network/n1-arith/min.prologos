@@ -1,0 +1,4 @@
+def main : Int := [boolrec Int 3 5 [int-lt 3 5]]
+
+;; if 3 < 5 then 3 else 5 = 3
+;; :expect-exit 3

@@ -1,0 +1,4 @@
+def main : Int := [boolrec Int 100 1 [int-eq 5 5]]
+
+;; if 5 == 5 then 100 else 1 = 100
+;; :expect-exit 100

@@ -94,16 +94,17 @@
                               (builder-cells b)))
   id)
 
-(define (emit-propagator! b in0-cid in1-cid out-cid tag)
+(define (emit-propagator! b in-cids out-cid tag)
   (define pid (fresh-pid! b))
   (set-builder-props! b
-                      (cons (propagator-decl pid (list in0-cid in1-cid)
+                      (cons (propagator-decl pid in-cids
                                              (list out-cid) tag 0)
                             (builder-props b)))
+  ;; dep-decls: one per input cell, in input order.
   (set-builder-deps! b
-                     (cons (dep-decl pid in1-cid 'all)
-                           (cons (dep-decl pid in0-cid 'all)
-                                 (builder-deps b))))
+                     (append (reverse (for/list ([cid (in-list in-cids)])
+                                        (dep-decl pid cid 'all)))
+                             (builder-deps b)))
   pid)
 
 ;; ============================================================
@@ -175,18 +176,47 @@
     [(expr-int-mul a b-expr) (build-binary b a b-expr 'kernel-int-mul env)]
     [(expr-int-div a b-expr) (build-binary b a b-expr 'kernel-int-div env)]
 
+    ;; Integer comparisons → Bool result cell. Kernel encodes Bool as i64
+    ;; 0/1; we model the cell domain as Bool with init #f. cell-decl-init
+    ;; initialization writes #f (lowered to 0); the kernel writes 0 or 1.
+    [(expr-int-eq a b-expr)
+     (build-binary b a b-expr 'kernel-int-eq env BOOL-DOMAIN-ID #f)]
+    [(expr-int-lt a b-expr)
+     (build-binary b a b-expr 'kernel-int-lt env BOOL-DOMAIN-ID #f)]
+    [(expr-int-le a b-expr)
+     (build-binary b a b-expr 'kernel-int-le env BOOL-DOMAIN-ID #f)]
+
+    ;; expr-boolrec(motive, true-case, false-case, target):
+    ;; eager-evaluation conditional. Both branches are translated to cells;
+    ;; a select propagator picks one based on the Bool target. This is sound
+    ;; for the pure-arithmetic subset (no side effects, no nontermination
+    ;; in either branch). Recursive bodies will need lazy or feedback
+    ;; semantics handled by Sprint B's BSP scheduler.
+    [(expr-boolrec _motive true-case false-case target)
+     (build-select b target true-case false-case env dom-id)]
+
     [_
      (translate-error!
       expr
-      "Phase 2.D supports only Int/Bool literals, int+/-/*//, expr-bvar, \
-and let-binding via (expr-app (expr-lam ...) arg). Recursive functions \
-and conditionals require additional kernel + translator support.")]))
+      "Phase 2.D supports Int/Bool literals, int+/-/*//, int-eq/lt/le, \
+boolrec, expr-bvar, and let-binding. Recursive functions require Sprint B's \
+BSP feedback scheduler.")]))
 
-(define (build-binary b a-expr b-expr tag env)
+(define (build-binary b a-expr b-expr tag env [out-dom INT-DOMAIN-ID]
+                      [out-init 0])
   (define a-cid (build a-expr b INT-DOMAIN-ID env))
   (define b-cid (build b-expr b INT-DOMAIN-ID env))
-  (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
-  (emit-propagator! b a-cid b-cid r-cid tag)
+  (define r-cid (emit-cell! b out-dom out-init))
+  (emit-propagator! b (list a-cid b-cid) r-cid tag)
+  r-cid)
+
+(define (build-select b cond-expr then-expr else-expr env out-dom)
+  (define c-cid (build cond-expr b BOOL-DOMAIN-ID env))
+  (define t-cid (build then-expr b out-dom env))
+  (define e-cid (build else-expr b out-dom env))
+  (define init-val (case out-dom [(0) 0] [(1) #f]))
+  (define r-cid (emit-cell! b out-dom init-val))
+  (emit-propagator! b (list c-cid t-cid e-cid) r-cid 'kernel-select)
   r-cid)
 
 ;; ============================================================
