@@ -234,3 +234,24 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile pair-typed iteration state (n5-pair-state)
+        # Sprint F.3 (2026-05-01). Extends tail-rec lowering to support
+        # pair-typed state slots. literal-init-value recurses through
+        # expr-pair (so [pair 0 1] becomes a vtree of literals).
+        # State allocation, cond, step-args, and feedback all walk the
+        # vtrees per-leaf. Bridge logic for shared state cells operates
+        # per-leaf as well. fib via <a*b> pair state produces identical
+        # metrics to the 3-scalar fib-iter, confirming the per-leaf
+        # decomposition is equivalent.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n5-pair-state/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n5-pair-state-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
