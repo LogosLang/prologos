@@ -422,3 +422,95 @@
   ;; Total checked equals |samples|³ on confirmed; less or equal on refuted
   (define n (length gen-samples))
   (check-true (<= (sd-evidence-total-checked ev) (* n n n))))
+
+;; ========================================
+;; 13. SRE Track 2I Phase 2a: Per-Component-Spec Generation + Binder Inclusion
+;; ========================================
+;;
+;; Phase 2a refactor (Option C): drop with-handlers, drive per-ctor generation
+;; from ctor-desc-component-lattices, include binder ctors with closed bodies.
+;; These tests verify the principled refactor.
+
+(require "../syntax.rkt")  ;; for expr-Pi?, expr-Sigma?, etc.
+
+;; Phase 2a key insight: type domain has no nullary ctors registered, so
+;; without base-values the non-sentinel component pool is empty and no
+;; compounds can be generated. Tests that exercise compound generation
+;; must supply realistic base-values (the well-known atomic types).
+;; Phase 3 sweep will do the same. This is correct-by-construction:
+;; sentinels (bot/top) are valid lattice elements but not valid components
+;; (Phase 2 silently produced malformed compounds via with-handlers; 2a
+;; surfaces this and requires the generator be given a real component pool).
+
+(define realistic-type-atoms
+  (list (expr-Int) (expr-Bool) (expr-Nat) (expr-String)))
+
+(test-case "Phase 2a: generator includes binder ctors (Pi/Sigma/lam) at depth ≥ 1"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 1
+                                           #:per-ctor-count 2
+                                           #:base-values realistic-type-atoms))
+  ;; At least one Pi inhabitant should be present.
+  (define has-pi? (ormap expr-Pi? samples))
+  (check-true has-pi?))
+
+(test-case "Phase 2a: generated Pi inhabitants have valid mult components"
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 1
+                                           #:per-ctor-count 3
+                                           #:base-values realistic-type-atoms))
+  (define pis (filter expr-Pi? samples))
+  ;; Some Pi values should exist
+  (check-true (> (length pis) 0))
+  ;; All mult fields should be from {m0, m1, mw} — drawn from mult-pool
+  (define valid-mults '(m0 m1 mw))
+  (for ([pi (in-list pis)])
+    (check-not-false (memq (expr-Pi-mult pi) valid-mults))))
+
+(test-case "Phase 2a: generator produces compound samples with realistic base-values"
+  ;; With realistic base-values, compound generation works:
+  ;; depth 0: 4 atoms (Int, Bool, Nat, String) + bot + top = 6
+  ;; depth 1: per-ctor-count=2 → 2 atoms used per slot, so e.g. Pi has
+  ;;   2*2*2=8 inhabitants, plus app/Eq/Vec/Fin/pair/PVec/Sigma/lam variants.
+  ;; Conservative bound: ≥ 30 total samples after dedup.
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 1
+                                           #:per-ctor-count 2
+                                           #:base-values realistic-type-atoms))
+  (check-true (>= (length samples) 30)))
+
+(test-case "Phase 2a: sentinels (bot/top) excluded from component pools"
+  ;; Sanity: no generated compound should have bot or top as a component.
+  ;; Test by structurally inspecting Pi inhabitants — domain/codomain
+  ;; should never be the bot/top sentinels.
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 1
+                                           #:per-ctor-count 2
+                                           #:base-values realistic-type-atoms))
+  (define pis (filter expr-Pi? samples))
+  (define bot (sre-domain-bot-value td))
+  (define top (sre-domain-top-value td))
+  (for ([pi (in-list pis)])
+    (check-false (equal? (expr-Pi-domain pi) bot))
+    (check-false (equal? (expr-Pi-domain pi) top))
+    (check-false (equal? (expr-Pi-codomain pi) bot))
+    (check-false (equal? (expr-Pi-codomain pi) top))))
+
+(test-case "Phase 2a: nullary ctor reconstruction never returns #f (no silent skip)"
+  ;; Type domain has no arity-0 ctors registered, but the function should
+  ;; return '() cleanly without ever hitting an `(if v ...)` guard.
+  ;; This is a structural test that nullary-ctor-inhabitants doesn't
+  ;; rely on a #f-fallback semantics.
+  (define td (lookup-domain 'type))
+  (define samples (generate-domain-samples td
+                                           #:max-depth 0
+                                           #:per-ctor-count 1
+                                           #:include-bot-top #f))
+  ;; No bot/top, no base-values, no nullary type ctors → empty samples.
+  (check-equal? samples '())
+  ;; Critically: this should not raise any errors.
+  )

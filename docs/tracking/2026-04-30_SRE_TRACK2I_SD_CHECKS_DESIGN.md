@@ -26,6 +26,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 |-------|-------------|--------|-------|
 | 1 | `test-sd-vee` + `test-sd-wedge` in sre-core.rkt; wire into inference + reporting; implication rules for distributive⇒SD | ✅ | `a35d5f65`. 99 LoC sre-core.rkt + 71 LoC test-sre-algebraic.rkt. 42 tests pass via targeted runner. VAG passed adversarially. |
 | 2 | Programmatic sample generator from ctor-desc registry + sd-evidence struct + `/detailed` variants | ✅ | `f241e14e`. New file `sre-sample-generator.rkt` (~120 LoC) + sre-core.rkt enrichment (~80 LoC, sd-evidence struct + /detailed variants + backward-compat wrappers) + 11 new tests. 53 tests pass via targeted runner. VAG passed adversarially with two acknowledged Phase-3 gaps (sample-size verification, binder-ctor coverage). API note: `all-ctor-descs` takes `#:domain` keyword (not positional) — caught at compile time. |
+| 2a | Principled-fix corrective: per-component-spec generation (Option C), drop `with-handlers`, include binder ctors with closed-body limitation | ✅ | (commit-hash-pending). Generator refactored: per-component-spec atom pools, sentinel filter, binders included. **Bonus discovery**: Phase 2's `with-handlers` was masking malformed compounds (bot/top in component slots → reconstruct produces invalid `(expr-Pi mw type-top type-top)`-shape values that merge can't handle). Two-pool model (lattice elements vs structural components) surfaces and fixes it. 58 tests pass. VAG passed adversarially with the masked-issue surfacing as the Move B+ pattern's intended payoff. |
 | 3 | Empirical sweep across all registered domains × relations; record findings | ⬜ | Findings reported, NOT used to update registration declarations (separate pass per user 2026-04-30). |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ⬜ | Per workflow.md MANDATORY dedicated test phase. |
 | Discussion | Review Phase 3 findings with user; decide on Phase 4 (declaration updates) | ⬜ | Out-of-band of the implementation phases per user direction. |
@@ -165,6 +166,80 @@ Estimated scope: ~80-100 LoC across `sre-core.rkt` + ~30 LoC of unit tests in `t
 **Test coverage**: tests in `test-sre-algebraic.rkt` covering: generator returns non-empty for type domain; depth-0 includes bot/top + base atoms; depth > 0 produces compound values; all generated values pass classify; deduplication works. Plus tests for `sd-evidence` struct construction and `/detailed` variant return shape.
 
 **Estimated scope**: generator ~100-150 LoC; sd-evidence + /detailed variants ~70-90 LoC; tests ~80-100 LoC. ~45-60 min.
+
+### Phase 2a: Principled corrective — per-component-spec generation, drop `with-handlers`, include binders
+
+**Origin**: User-flagged 2026-04-30 mid-Phase-3 dialogue. Phase 2's `try-reconstruct` `with-handlers` matched the codified red-flag pattern from PPN 4C S2.c-iii drift (`workflow.md:56`, `DEVELOPMENT_LESSONS.org §1102-1160`). Move B+ pattern is the precedent: separate corrective sub-phase that drops the defensive scaffolding and captures the principled benefit.
+
+**Mini-design (locked 2026-04-30)**:
+
+*Design references*:
+- `.claude/rules/workflow.md:56` — VAG adversarial framing red-flag patterns (with-handlers / defensive guards)
+- `DEVELOPMENT_LESSONS.org §1102-1160` — Move B+ corrective pattern (3 data points)
+- `DEVELOPMENT_LESSONS.org §137-141` — "Prelude Errors Are Silently Swallowed" (older lesson on silent error masking)
+- `ctor-registry.rkt:85-96` — `ctor-desc` struct with `component-lattices` field that drives Option C
+- `ctor-registry.rkt:107-131` — `lattice-spec` struct + `'type` / `'session` / `'mult` sentinels
+
+*Principles in play*: **Correct-by-Construction** (primary), **Decomplection** (per-ctor generation cleanly separated from cross-ctor combinatorics), **Data Orientation** (`component-lattices` IS the data driving generation; ignoring it was the original violation).
+
+*Mantra check*: "structurally emergent" — components emerge from per-ctor lattice-specs, not from naive global pool. Phase 2's `with-handlers` violated emergence by Cartesian-producting blindly then catching failures. Option C aligns.
+
+*Drift risks named*:
+1. Scope creep into a generator rewrite that delays Phase 3 — *mitigation*: ~80-100 LoC delta; tests adjust to new shape.
+2. `component-lattices` interpretation incomplete — concrete `lattice-spec` structs vs sentinel symbols — *mitigation*: handle both in `atoms-by-spec` lookup via `equal?`-keyed hash.
+3. Validation for type-lattice components is not a single predicate — *mitigation*: per-component-spec POOL approach (draw from valid-by-construction pool; no validation predicate needed).
+4. Cascading test changes — *mitigation*: my Phase 2 tests assert structural properties (count > 0, monotonicity, dedup), not exact counts. Should pass unchanged.
+5. **Bonus risk from binder inclusion**: dependent function types (where codomain references bound parameter via `expr-bvar`) are NOT generated in 2a — closed-body Pi/Sigma/lam only. Documented in code; revisit if Phase 3 reveals gap.
+
+*Mini-audit findings persisted*:
+
+**A. With-handlers in my Phase 1+2 code** (verified `grep`):
+- 1 instance in `sre-sample-generator.rkt:160` (`try-reconstruct`) — Phase 2a target.
+- 0 elsewhere (sre-core.rkt SD additions, test-sre-algebraic.rkt SD tests have none).
+
+**B. Consequence patterns from `try-reconstruct` returning `#f`**:
+- `nullary-ctor-inhabitants`: `(if v (cons v acc) acc)` silent skip.
+- `compound-ctor-inhabitants`: same pattern.
+- Both go away once `with-handlers` is gone (reconstruction always succeeds → unconditional `cons`).
+
+**C. Type-domain ctor-desc audit** (verified `ctor-registry.rkt:426-540`):
+- All non-binder type ctors use uniform `(list type-lattice-spec ...)` for component-lattices: app, Eq, Vec, Fin, pair, PVec.
+- Binder type ctors (Pi, Sigma, lam) add `mult-lattice-spec` to one slot: Pi `(mult type type)`, lam `(mult type type)`, Sigma `(type type)`.
+- Generator needs two pools: `'type` (sentinel) and `mult-lattice-spec` (concrete struct).
+- Mult pool: `'(mw m1 m0)` — three values, trivial.
+
+**D. Reconstruct-fns blindly slot components without type-checking**:
+- `(λ (cs) (expr-Pi (first cs) (second cs) (third cs)))` constructs the struct without validating component types.
+- This means the original `with-handlers` was catching almost nothing for the type domain — defensive scaffolding for hypothetical concerns rather than observed failures.
+- Even more shape-without-benefit than initially suspected.
+
+**E. SRE-adjacent codebase-wide with-handlers audit** (deferred to GitHub issue):
+
+| File | Line(s) | Pattern | Character | Disposition |
+|---|---|---|---|---|
+| `sre-sample-generator.rkt` | 160 | `try-reconstruct` silent skip | Strong red-flag | **Phase 2a target** |
+| `form-cells.rkt` | 192, 306 | Process-form / pipeline silent skip | Ambiguous (parsing resilience or drift) | Defer to GitHub issue |
+| `form-cells.rkt` | 234 | `tree-node-to-datum` returns `#f` on failure | Medium-effort signature refactor | Defer to GitHub issue |
+| `session-propagators.rkt` | 487, 531 | `net-cell-read` fallback to sentinel | Cell-id contract analysis needed | Defer to GitHub issue |
+| Codebase-wide (other 67) | various | Heterogeneous (I/O / feature-probe / fallback / drift) | Categorize per-instance | Defer to GitHub issue |
+
+**Scope (locked)**:
+1. Refactor `sre-sample-generator.rkt` per Option C (per-component-spec pools).
+2. Drop `try-reconstruct` (the `with-handlers` and the `#f` fallback path).
+3. Drop `(if v ...)` consequence patterns in both `*-ctor-inhabitants`.
+4. Include binder ctors (remove `(zero? (ctor-desc-binder-depth desc))` filter).
+5. Add `mult-pool` for binder ctors' mult slots.
+6. Update doc comments to reflect new architecture.
+7. Update tests if needed (mostly should pass unchanged given structural assertions).
+8. After commit: draft + file ONE parent GitHub issue for codebase-wide with-handlers audit, with SRE-adjacent findings table preserved + Phase 2a commit referenced as principled-refactor precedent.
+
+**NOT in scope (deferred to GitHub issue)**:
+- form-cells.rkt error-model refactor (3 instances).
+- session-propagators.rkt cell-read contract analysis (2 instances).
+- Categorization + cleanup of remaining 67 codebase-wide instances.
+- Dependent-type generation for binder ctors (with `expr-bvar` references).
+
+**Estimated scope**: ~80-100 LoC delta on generator + ~20 LoC test additions for binder coverage. ~30-45 min implementation; ~15 min issue drafting.
 
 ### Phase 3: Empirical sweep + findings recording
 

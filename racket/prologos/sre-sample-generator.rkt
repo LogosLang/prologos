@@ -1,36 +1,46 @@
 #lang racket/base
 
-;;; sre-sample-generator.rkt — Programmatic sample generator from ctor-desc registry
+;;; sre-sample-generator.rkt — Per-component-spec sample generator
 ;;;
-;;; SRE Track 2I Phase 2 (2026-04-30).
+;;; SRE Track 2I.
+;;;   Phase 2  (commit f241e14e): initial generator + sd-evidence struct.
+;;;   Phase 2a (this version):    Option C — per-component-spec generation,
+;;;     drop with-handlers / silent-skip patterns (correct-by-construction),
+;;;     include binder ctors with closed-body limitation.
 ;;;
-;;; Walks a domain's ctor-desc table to synthesize representative inhabitants
-;;; for empirical algebraic-property checking (test-distributive, test-sd-vee,
-;;; test-sd-wedge, etc.). Produces values bottom-up from depth 0 (atoms) to
-;;; configurable max-depth.
+;;; ARCHITECTURE — DATA-DRIVEN BY ctor-desc-component-lattices
 ;;;
-;;; DESIGN NOTES:
-;;; - Decomplection: generator is orthogonal to property-check infrastructure.
-;;;   Any future algebraic-property test consumes generator output uniformly.
-;;; - Determinism: no randomness. ctor-desc iteration order + Cartesian product
-;;;   gives reproducible samples. Phase 3 findings tied to a specific generator
-;;;   call will be reproducible across runs.
-;;; - Defensive scaffolding: `with-handlers` around (reconstruct-fn ...)
-;;;   silently skips failed reconstructions. Labeled scaffolding — this is
-;;;   tolerable because the generator is naive about component-type
-;;;   compatibility; ctors that demand specific component shapes will reject
-;;;   incompatible combinations at reconstruction time. If Phase 3 reveals
-;;;   systematic sample loss obscuring property findings, revisit with
-;;;   per-ctor compatibility filtering.
+;;; Each ctor-desc declares per-component lattice-specs:
+;;;   - 'type sentinel    → component must be a type-shaped value
+;;;   - 'session sentinel → component must be a session-shaped value
+;;;   - mult-lattice-spec → component must be a multiplicity (m0, m1, mw)
+;;;   - term-lattice-spec → component must be a term-shaped value
+;;;
+;;; The generator builds an `atoms-by-spec` hash mapping each spec to a pool
+;;; of valid inhabitants. For each ctor at depth d, it draws each component
+;;; slot from the pool for that slot's spec, Cartesian-products the slots,
+;;; and reconstructs. Reconstruction is GUARANTEED to succeed because each
+;;; component is valid for its slot's lattice-spec by construction. No
+;;; with-handlers needed; no silent skip.
+;;;
+;;; This is the principled response to the codified red-flag pattern from
+;;; PPN 4C S2.c-iii drift (workflow.md:56, DEVELOPMENT_LESSONS.org §1102):
+;;; defensive `with-handlers` masks a structural issue rather than fixing it,
+;;; ships shape without benefit. The Move B+ corrective pattern (S2.c-iii
+;;; commit c86596e0) is the precedent for separate corrective sub-phases
+;;; that drop defensive scaffolding and capture the principled benefit.
 ;;;
 ;;; LIMITATIONS:
-;;; - Binder ctors (binder-depth > 0) — Pi, Sigma, lam — are SKIPPED in this
-;;;   phase. Including them properly requires gensym + binder-open-fn
-;;;   machinery beyond the empirical-SD-check scope. Documented Phase-3
-;;;   revisit if findings reveal gaps from missing function-type coverage.
-;;; - Cartesian product grows as per-ctor-count^arity. Default per-ctor-count=2
-;;;   keeps arity-2 ctors at 4 inhabitants, arity-3 at 8. No automatic budget;
-;;;   caller controls parameters.
+;;; - Binder ctors (Pi, Sigma, lam) are generated with CLOSED BODIES — the
+;;;   under-binder slot is filled with a closed type (no expr-bvar
+;;;   references). These are valid non-dependent function/pair/lambda types,
+;;;   not the full set of dependent variants. Dependent-type generation
+;;;   would require populating the type pool with bvar-bearing values
+;;;   conditionally on slot context — deferred to a future phase.
+;;; - Domains beyond type get only their own pool initialized; cross-domain
+;;;   ctors (none currently in type domain post-binder-inclusion) are not
+;;;   reachable. Per-domain generator extension is straightforward by
+;;;   adding entries to atoms-by-spec.
 
 (require racket/list)
 (require "ctor-registry.rkt")
@@ -39,21 +49,32 @@
 (provide generate-domain-samples)
 
 ;; ========================================================================
+;; Multiplicity Pool
+;; ========================================================================
+;; The three QTT multiplicities (per CLAUDE.md glossary). Atomic symbols;
+;; no struct construction needed.
+
+(define mult-pool '(mw m1 m0))
+
+;; ========================================================================
 ;; Sample Generation
 ;; ========================================================================
 
 ;; Generate a list of representative values for a domain's ctor-desc registry.
-;; Walks the registry bottom-up: depth 0 (atoms + bot/top) → depth max-depth
-;; (compound values whose components are drawn from depth (d-1)).
+;;
+;; Per-component-spec architecture (Option C, Phase 2a):
+;;   - Build depth-0 atom pool from bot/top + base-values + nullary ctors.
+;;   - For each depth d > 0: build atoms-by-spec hash, then for each ctor
+;;     draw each component slot from the pool for that slot's lattice-spec
+;;     and Cartesian-product the slots.
+;;   - Reconstruction is correct-by-construction; no with-handlers.
 ;;
 ;; #:max-depth      — max constructor nesting depth (default 2)
-;; #:per-ctor-count — number of components per arg slot in Cartesian product
-;;                    (default 2). For arity N, this gives per-ctor-count^N
-;;                    inhabitants per ctor per depth.
+;; #:per-ctor-count — components per slot in Cartesian product (default 2).
+;;                    For arity N, gives per-ctor-count^N inhabitants per ctor
+;;                    per depth.
 ;; #:include-bot-top — include bot-value and top-value at depth 0 (default #t)
-;; #:base-values    — optional list of pre-built atomic samples (e.g.,
-;;                    (list (expr-Int) (expr-Bool))). Concatenated with
-;;                    auto-generated atomics.
+;; #:base-values    — optional list of pre-built atomic samples.
 ;;
 ;; Returns: (listof value), deduplicated via equal?.
 (define (generate-domain-samples domain
@@ -79,83 +100,117 @@
       (remove-duplicates acc)))
 
   ;; ----------------------------------------------------------------------
-  ;; Depth d > 0: compound values
+  ;; Depth d > 0: per-component-spec compound generation
   ;; ----------------------------------------------------------------------
-  ;; samples-by-depth: list of lists, indexed by depth.
-  ;; Iteratively fold from 1 to max-depth, drawing components from depth (d-1).
   (define samples-by-depth
     (for/fold ([acc (list depth-0-atoms)])
               ([d (in-range 1 (+ max-depth 1))])
       (define prev-samples (last acc))
-      (define component-pool (take-up-to prev-samples per-ctor-count))
+      (define atoms-by-spec
+        (build-atoms-by-spec prev-samples per-ctor-count domain))
       (define new-samples
-        (compound-ctor-inhabitants ctor-descs component-pool domain-name))
+        (compound-ctor-inhabitants ctor-descs atoms-by-spec))
       (append acc (list (remove-duplicates new-samples)))))
 
-  ;; ----------------------------------------------------------------------
-  ;; Flatten across depths, dedupe globally
-  ;; ----------------------------------------------------------------------
   (remove-duplicates (apply append samples-by-depth)))
+
+;; ========================================================================
+;; Per-Component-Spec Pool Construction
+;; ========================================================================
+
+;; Build the atoms-by-spec hash: lattice-spec → pool of valid component values.
+;;
+;; Keys are heterogeneous (sentinel symbols + concrete lattice-spec structs).
+;; We use a hash with equal? semantics to handle both uniformly.
+;;
+;; TWO-POOL DISTINCTION (Phase 2a finding, surfaced after dropping with-handlers):
+;;   - The full-pool (depth-d-1 samples) includes lattice SENTINELS (bot/top).
+;;     These are valid lattice ELEMENTS — they participate in merge / SD checks.
+;;   - But sentinels are NOT valid STRUCTURAL COMPONENTS — feeding them into
+;;     `(expr-Pi mw type-top type-top)` etc. produces malformed values that
+;;     the merge functions' match-dispatch doesn't handle.
+;;
+;; Phase 2 masked this with `with-handlers` (silently skipping the resulting
+;; reconstruct/merge failures). Phase 2a surfaces it: filter sentinels out of
+;; component pools before feeding to ctor reconstruction. Compound types
+;; produced this way are well-formed structurally and well-behaved under
+;; merge.
+;;
+;; For Phase 2a's type-domain scope:
+;;   - 'type sentinel    → component pool excluding lattice sentinels
+;;   - mult-lattice-spec → the multiplicity pool (capped)
+;;
+;; To extend for other domains:
+;;   - Add an entry mapping 'session, term-lattice-spec, etc. to its
+;;     domain-appropriate non-sentinel pool. The compound-ctor-inhabitants
+;;     function uses the hash uniformly.
+(define (build-atoms-by-spec full-pool per-ctor-count domain)
+  (define bot (sre-domain-bot-value domain))
+  (define top (sre-domain-top-value domain))
+  (define non-sentinel-pool
+    (filter (lambda (v) (and (not (equal? v bot))
+                             (not (equal? v top))))
+            full-pool))
+  (hash 'type            (take-up-to non-sentinel-pool per-ctor-count)
+        'session         (take-up-to non-sentinel-pool per-ctor-count)
+        mult-lattice-spec (take-up-to mult-pool per-ctor-count)))
+
+;; ========================================================================
+;; Compound Inhabitant Reconstruction
+;; ========================================================================
+
+;; Reconstruct compound inhabitants per ctor by drawing each slot from the
+;; pool for that slot's component-lattice-spec.
+;;
+;; Includes binder ctors (binder-depth > 0) — for non-dependent variants
+;; (closed bodies that don't reference the bound parameter via expr-bvar).
+;; This is a documented limitation; dependent-type generation requires
+;; bvar-bearing components conditionally on slot context.
+(define (compound-ctor-inhabitants ctor-descs atoms-by-spec)
+  (for/fold ([acc '()])
+            ([desc (in-list ctor-descs)]
+             #:when (positive? (ctor-desc-arity desc)))
+    (define slot-pools
+      (for/list ([spec (in-list (ctor-desc-component-lattices desc))])
+        (hash-ref atoms-by-spec spec '())))
+    ;; If any slot-pool is empty, cartesian-of-slots returns '() — no
+    ;; inhabitants generated for this ctor. This is structurally correct:
+    ;; we have no way to fill that slot.
+    (for/fold ([acc2 acc])
+              ([combo (in-list (cartesian-of-slots slot-pools))])
+      (cons ((ctor-desc-reconstruct-fn desc) combo) acc2))))
+
+;; Reconstruct nullary ctor inhabitants. Nullary ctors take no components,
+;; so reconstruction always succeeds.
+(define (nullary-ctor-inhabitants ctor-descs)
+  (for/list ([desc (in-list ctor-descs)]
+             #:when (zero? (ctor-desc-arity desc)))
+    ((ctor-desc-reconstruct-fn desc) '())))
 
 ;; ========================================================================
 ;; Helpers
 ;; ========================================================================
 
-;; Take up to n elements from xs (without erroring if (length xs) < n).
+;; Take up to n elements from xs.
 (define (take-up-to xs n)
   (cond
     [(<= n 0) '()]
     [(null? xs) '()]
     [else (cons (car xs) (take-up-to (cdr xs) (- n 1)))]))
 
-;; Reconstruct nullary ctor inhabitants from a domain's ctor-descs.
-;; Skips binder ctors (binder-depth > 0).
-(define (nullary-ctor-inhabitants ctor-descs)
-  (for/fold ([acc '()])
-            ([desc (in-list ctor-descs)]
-             #:when (and (zero? (ctor-desc-arity desc))
-                         (zero? (ctor-desc-binder-depth desc))))
-    (define v (try-reconstruct desc '()))
-    (if v (cons v acc) acc)))
-
-;; Reconstruct compound ctor inhabitants by Cartesian-producting components.
-;; Skips:
-;;   - arity-0 ctors (handled at depth 0)
-;;   - binder ctors (binder-depth > 0; documented Phase-2 limitation)
-;;   - reconstructions that fail (try-reconstruct returns #f)
+;; Cartesian product across a list of per-slot pools (heterogeneous lengths).
+;;   '() slot-pools         → '(())  — single empty combination
+;;   '(x) slot-pools        → '((x1) (x2) ...) — each x in pool[0]
+;;   '(x y) slot-pools      → '((x1 y1) (x1 y2) ... (x2 y1) ...) — Cartesian
 ;;
-;; Validation: we rely on the ctor's reconstruct-fn to reject malformed
-;; component combinations (it raises on type mismatch). The with-handlers
-;; in try-reconstruct catches these as silent-skip. A future per-value
-;; classification check could be added if Phase 3 reveals the silent skip
-;; misses real malformedness; today's coverage is the reconstruct contract.
-(define (compound-ctor-inhabitants ctor-descs component-pool _domain-name)
-  (for/fold ([acc '()])
-            ([desc (in-list ctor-descs)]
-             #:when (and (positive? (ctor-desc-arity desc))
-                         (zero? (ctor-desc-binder-depth desc))))
-    (for/fold ([acc2 acc])
-              ([combo (in-list (cartesian-of-arity component-pool
-                                                   (ctor-desc-arity desc)))])
-      (define v (try-reconstruct desc combo))
-      (if v (cons v acc2) acc2))))
-
-;; Cartesian product of `pool` repeated `arity` times.
-;; arity=0 → '(()) (single empty combo); arity=1 → '((x) (y) ...);
-;; arity=2 → '((x x) (x y) ... (y y)); etc.
-(define (cartesian-of-arity pool arity)
+;; If ANY slot-pool is empty, the result is '() — no inhabitants reachable
+;; with at least one un-fillable slot. Structurally correct.
+(define (cartesian-of-slots slot-pools)
   (cond
-    [(zero? arity) '(())]
+    [(null? slot-pools) '(())]
+    [(null? (car slot-pools)) '()]
     [else
-     (define rest-combos (cartesian-of-arity pool (- arity 1)))
-     (for*/list ([x (in-list pool)]
+     (define rest-combos (cartesian-of-slots (cdr slot-pools)))
+     (for*/list ([x (in-list (car slot-pools))]
                  [r (in-list rest-combos)])
        (cons x r))]))
-
-;; Attempt to reconstruct via the ctor-desc's reconstruct-fn.
-;; Returns the reconstructed value on success, #f on failure.
-;; Defensive scaffolding: silently swallows reconstruction errors caused by
-;; naive component-type combinations. See file header LIMITATIONS for context.
-(define (try-reconstruct desc components)
-  (with-handlers ([exn:fail? (lambda (_e) #f)])
-    ((ctor-desc-reconstruct-fn desc) components)))
