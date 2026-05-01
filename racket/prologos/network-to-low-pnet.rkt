@@ -155,18 +155,43 @@
   (define prop-decls (car props-acc))
   (define dep-decls (cadr props-acc))
 
-  ;; -------- 4. Emit domain-decls in id order ------------------------------
+  ;; -------- 4. Collect domain bot values (domain-registry pass) ----------
+  ;; For each domain, harvest the bot value from a representative cell of
+  ;; that domain. The lattice invariant says all cells of a domain start at
+  ;; the same bot, so taking the FIRST cell's value when nothing has been
+  ;; written to it yet gives us the bot. We don't have "writes to this cell"
+  ;; tracking here, so we use the first cell of each domain that has a
+  ;; marshalable value as the proxy. Cells with non-marshalable contents
+  ;; (closures from elaborator state) fall back to a placeholder bot.
+  (define domain-name->bot (make-hasheq))
+  (champ-fold cells-champ
+              (lambda (cid cell acc)
+                (define dom-name
+                  (or (lookup-cell-domain net cid) 'unknown))
+                (unless (hash-has-key? domain-name->bot dom-name)
+                  (define v (prop-cell-value cell))
+                  (hash-set! domain-name->bot dom-name (marshal-value v)))
+                acc)
+              #f)
+
+  ;; -------- 5. Emit domain-decls in id order ------------------------------
   (define domain-decls
     (let ([by-id (make-hasheq)])
       (for ([(name id) (in-hash domain-name->id)])
         (hash-set! by-id id name))
       (for/list ([id (in-range (hash-count by-id))])
         (define name (hash-ref by-id id))
-        ;; Placeholder merge-fn-tag, bot, contradiction-pred-tag.
-        ;; Real values come from the future domain registry pass.
+        (define bot (hash-ref domain-name->bot name 'phase-2b-placeholder))
         (domain-decl id name
+                     ;; merge-fn-tag follows the 'kernel-merge-<name> convention
+                     ;; (per fire-fn tag audit doc § 6); the runtime kernel will
+                     ;; resolve these via its tag→fn-pointer registry.
                      (string->symbol (format "kernel-merge-~a" name))
-                     'phase-2b-placeholder
+                     bot
+                     ;; contradiction-pred-tag: 'never is the default for
+                     ;; lattices that don't have explicit contradiction
+                     ;; (most domains today); future domains with contradiction
+                     ;; semantics will register 'kernel-contra-<name>.
                      'never))))
 
   ;; -------- 5. Assemble the Low-PNet -------------------------------------
