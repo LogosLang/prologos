@@ -446,3 +446,64 @@ multi-frame, multi-op-type sequences round-trip.
 | 7A | Node peer-conversation script | ✅ | tools/interop/peer-conversation.mjs |
 | 7B | Racket-side multi-message test | ✅ | tests/test-ocapn-conversation.rkt — 1/1 green |
 | 7C | Phase-7 commit + CI step | 🔄 | |
+
+## Phase 8 — Conversational state machine (RPC-style)
+
+The first stateful round-trip. Unlike Phase 7's lockstep echo,
+Node ACTS on what it receives:
+
+  Racket → Node:  op:start-session  ver="0.1"  loc=peer-racket
+  Racket → Node:  op:deliver        target=<desc:export 0>
+                                    args="ping"
+                                    answer-pos=<desc:answer 0>
+                                    resolver=false
+  Node → Racket:  op:start-session  ver="0.1"  loc=peer-node
+  Node → Racket:  op:deliver        target=<desc:answer 0>     ;; the reply
+                                    args="ping-pong"           ;; computed from "ping"
+                                    answer-pos=false
+                                    resolver=false
+
+Node's reply args are **computed from the request** ("ping" +
+"-pong"). This proves Node really decoded our deliver, extracted
+the args + answer-pos, and answered to the right answer-pos —
+not just lockstep echoed pre-hardcoded bytes.
+
+### Bug surfaced + fixed
+
+@endo/ocapn's `AnyCodec` doesn't accept `null` as a record
+child. Phases 1-7 didn't surface this because none of those
+vectors emitted `null` in a record sent TO `@endo/ocapn`. Phase 8's
+deliver did (for absent answer-pos / resolver) and broke
+both Endo's decoder (on receive) and encoder (on reply).
+
+Fix: `opt-pos none` now emits `(syrup-bool false)` instead of
+`syrup-null`; `unwrap-opt-desc` accepts both for forward
+compat. Codified as goblin-pitfall #28.
+
+### Progress
+
+| Phase | Description | Status | Notes |
+|------:|------|------|------|
+| 8A | `peer-responder.mjs` (parses deliver, computes reply, sends to answer-pos) | ✅ | tools/interop/peer-responder.mjs |
+| 8B | Racket-side RPC test | ✅ | tests/test-ocapn-rpc.rkt — 1/1 green |
+| 8C | Phase-8 commit + CI step | 🔄 | |
+
+### What this proves
+
+- The full encode → wire → decode → ACT → encode → wire → decode
+  loop works between Prologos and `@endo/ocapn`.
+- Both encoders/decoders agree on the canonical record shape and
+  the `false` sentinel for absent fields.
+- A real RPC pattern (request with answer-pos → reply targeting
+  that answer-pos) round-trips byte-perfectly.
+
+### Out of scope (Phase 9+)
+
+- Multi-turn conversations with mid-stream pipelining
+- op:listen + op:deliver-only chains
+- op:abort teardown handshake
+- Real promise resolution semantics on the Prologos side
+  (currently the model holds the promise machinery; Phase 8 just
+  exercises the wire bytes)
+- Cryptographic auth (out of scope for tcp-testing-only by design)
+- Decoder perf fix (pitfall #27)

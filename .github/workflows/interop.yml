@@ -76,3 +76,6 @@ jobs:
 
       - name: Run conversation test (Phase 7 — 3-frame multi-op exchange)
         run: cd racket/prologos && raco test tests/test-ocapn-conversation.rkt
+
+      - name: Run RPC test (Phase 8 — conversational state machine)
+        run: cd racket/prologos && raco test tests/test-ocapn-rpc.rkt
