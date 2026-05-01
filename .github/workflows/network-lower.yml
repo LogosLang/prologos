@@ -120,14 +120,18 @@ jobs:
         # SH milestone: full pipeline through Track 1's deployment-mode
         # .pnet artifact format (instead of N0's network-skeleton).
         # Validates the formal SH track structure end-to-end.
+        # Note on `|| ec=$?`: racket exits with the program's exit code
+        # (e.g. 7 for exit-7.prologos), which is the expected non-zero
+        # return. Without the || guard, GitHub Actions' bash -e treats
+        # the non-zero racket exit as step failure before our test check.
         env:
           PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
         run: |
           raco make tools/pnet-compile.rkt
           for f in 0 7 42; do
+            ec=0
             racket tools/pnet-compile.rkt -o /tmp/test-pnet-$f \
-              racket/prologos/examples/network/n0/exit-$f.prologos > /dev/null 2>&1
-            ec=$?
+              racket/prologos/examples/network/n0/exit-$f.prologos > /dev/null 2>&1 || ec=$?
             echo "exit-$f.prologos → racket exit=$ec (expected $f)"
             test "$ec" -eq "$f"
           done
