@@ -61,13 +61,17 @@ spec desc-import-promise Nat -> SyrupValue
 defn desc-import-promise [n]
   syrup-tagged "desc:import-promise" [syrup-nat n]
 
-;; option-of-Nat -> SyrupValue: `none` becomes a syrup-null,
-;; `some n` becomes desc:answer N.
+;; option-of-Nat -> SyrupValue: `none` becomes `syrup-bool false`,
+;; `some n` becomes `desc:answer N`. We use false (not null) for
+;; the absent-position sentinel because @endo/ocapn's decoder
+;; rejects `null` as a record child — only `false` and the typed
+;; values are accepted as record positional fields. (Goblin
+;; pitfalls #28 — discovered Phase 8.)
 
 spec opt-pos [Option Nat] -> SyrupValue
 defn opt-pos [o]
   match o
-    | none   -> syrup-null
+    | none   -> [syrup-bool false]
     | some n -> desc-answer n
 
 ;; ===========================================================
@@ -203,14 +207,17 @@ defn unwrap-desc
   | syrup-refr _     -> none
   | syrup-promise _  -> none
 
-;; Same shape but for an Option-wrapped descriptor: `syrup-null`
-;; -> `none`, `desc:answer N` -> `some N`, anything else -> none.
+;; Same shape but for an Option-wrapped descriptor:
+;;   - `syrup-bool false` -> `none`  (canonical absent sentinel)
+;;   - `syrup-null`       -> `none`  (alternate, accepted for compat)
+;;   - `desc:answer N`    -> `some N`
+;;   - anything else      -> `none`
 
 spec unwrap-opt-desc SyrupValue -> [Option Nat]
 defn unwrap-opt-desc
   | syrup-null         -> none
-  | syrup-tagged _ p   -> wire-nat p
   | syrup-bool _       -> none
+  | syrup-tagged _ p   -> wire-nat p
   | syrup-nat _        -> none
   | syrup-int _        -> none
   | syrup-string _     -> none

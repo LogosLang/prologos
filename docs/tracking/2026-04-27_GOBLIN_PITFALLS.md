@@ -870,3 +870,49 @@ running in production.
 The 1-arity round-trip path used in Phase 5's
 `test-ocapn-live-interop.rkt` (op:abort, op:gc-answer) doesn't
 exhibit the issue — only multi-arity records do.
+
+---
+
+### #28 — `@endo/ocapn` rejects `null` as a record child; use `false` for "absent" (2026-04-29, real interop bug)
+
+**Symptom.** Phase 8's RPC test sent
+
+```
+<op:deliver <desc:export 0> 4"ping" <desc:answer 0> n>
+```
+
+— a 4-arity record where the resolver field is the Syrup `n`
+(null) atom representing `none`. `@endo/ocapn`'s `decodeSyrup`
+errors out at the first byte:
+
+```
+SyrupAnyCodec: read failed at index 0 of <unknown>
+```
+
+When the Node side then tried to encode its own reply with
+`null` in the same position, the *encoder* failed too:
+
+```
+SyrupAnyCodec: write failed at index 43 of <unknown>
+```
+
+**Cause.** `@endo/ocapn`'s `AnyCodec` (in
+`src/syrup/js-representation.js`) doesn't include `null` in
+either its read-type-hint or write-type table. The `n` atom is
+a valid wire byte but not a valid record-child *value* in
+Endo's JS representation. The OCapN spec uses `false` (the
+single-byte `f` atom) for "absent" sentinel positions.
+
+**Workaround applied.**
+- `captp-wire.prologos`'s `opt-pos` now emits
+  `(syrup-bool false)` for `none`, not `syrup-null`.
+- `unwrap-opt-desc` accepts both `syrup-bool false` and
+  `syrup-null` for `none` (forward compatibility — older
+  Prologos peers may still emit `null`).
+
+**Verdict.** Real interop bug. Phase 4-7 didn't surface it
+because none of those vectors exercised the resolver/answer-pos
+absence in a record sent TO `@endo/ocapn`. Phase 8 (RPC)
+hit it on the very first deliver.
+
+**Discovered.** Phase 8 of OCapN interop.
