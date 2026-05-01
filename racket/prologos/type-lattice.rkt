@@ -44,9 +44,7 @@
          current-lattice-meta-solution-fn
          install-lattice-meta-solution-fn!
          has-unsolved-meta?
-         ;; SRE Track 2H: subtype callback for meet
-         current-lattice-subtype-fn
-         install-lattice-subtype-fn!)
+         )
 
 ;; ========================================
 ;; Sentinel values
@@ -70,15 +68,17 @@
 (define (install-lattice-meta-solution-fn! fn)
   (current-lattice-meta-solution-fn fn))
 
-;; SRE Track 2H: Subtype callback for meet.
-;; Signature: (type1 type2 → bool) — returns #t if type1 <: type2.
-;; Installed by driver.rkt; default #f (structural meet only).
-;; When installed, type-lattice-meet can compute GLB for subtype-related atoms:
-;; meet(Nat, Int) = Nat when Nat <: Int, instead of type-bot.
-(define current-lattice-subtype-fn (make-parameter #f))
-
-(define (install-lattice-subtype-fn! fn)
-  (current-lattice-subtype-fn fn))
+;; SRE Track 2I Phase 3c (2026-04-30): Subtype-aware meet is now per-relation
+;; meet-registry on sre-domain (correct-by-construction), NOT a Racket-parameter
+;; callback (off-network state, implicit polymorphism).
+;;
+;; The retired callback was `current-lattice-subtype-fn` + `install-lattice-subtype-fn!`.
+;; Replaced by `#:subtype-fn` keyword on `type-lattice-meet`. Per-relation registration
+;; lives at the type-sre-domain definition site (unify.rkt).
+;;
+;; Sister callback `current-lattice-meta-solution-fn` retained pending PM Track 12
+;; broader parameter retirement (~5 usages across try-unify-pure / try-intersect /
+;; has-unsolved-meta?; cross-references metavar-store internals).
 
 ;; Phase E1: Check if an expression contains unsolved metavariables.
 ;; Uses the meta-solution callback to distinguish solved from unsolved.
@@ -232,7 +232,16 @@
 ;;   Invariant (=):     equality-meet (mismatch → ⊥, D.3 F6)
 ;;   Phantom (ø):       phantom (erased)
 
-(define (type-lattice-meet v1 v2)
+;; SRE Track 2I Phase 3c (2026-04-30): subtype-fn is now an explicit keyword
+;; argument (default #f → flat meet, no subtype awareness). Replaces the
+;; off-network `current-lattice-subtype-fn` Racket-parameter callback. Per-
+;; relation meet selection lives at the sre-domain meet-registry; callers
+;; look up the appropriate meet via `(sre-domain-meet domain relation)`.
+;;
+;; When subtype-fn is provided: meet(a, b) = a if a <: b, b if b <: a — the
+;; GLB of comparable atoms under subtype ordering. When #f: meet of distinct
+;; incomparable atoms is type-bot (flat meet).
+(define (type-lattice-meet v1 v2 #:subtype-fn [subtype-fn #f])
   (cond
     ;; Identity: ⊤ ⊓ x = x (dual of ⊥ ⊔ x = x)
     [(type-top? v1) v2]
@@ -248,30 +257,33 @@
     ;; SRE Track 2H: meet distributes over union-join.
     ;; meet(a, b | c) = meet(a, b) | meet(a, c)
     ;; This IS the distributivity law — implementing it here makes the
-    ;; lattice distributive by construction.
+    ;; lattice distributive by construction. subtype-fn threads through
+    ;; recursively so the per-component meets stay subtype-aware when
+    ;; the top-level call is the subtype meet.
     [(expr-union? v1)
      (define components (flatten-union v1))
      (define met (filter (lambda (r) (not (type-bot? r)))
-                         (map (lambda (c) (type-lattice-meet c v2)) components)))
+                         (map (lambda (c) (type-lattice-meet c v2 #:subtype-fn subtype-fn))
+                              components)))
      (if (null? met) type-bot (build-union-type met))]
     [(expr-union? v2)
      (define components (flatten-union v2))
      (define met (filter (lambda (r) (not (type-bot? r)))
-                         (map (lambda (c) (type-lattice-meet v1 c)) components)))
+                         (map (lambda (c) (type-lattice-meet v1 c #:subtype-fn subtype-fn))
+                              components)))
      (if (null? met) type-bot (build-union-type met))]
     [else
      ;; Structural intersection: same constructor tag → component-wise meet
      (define result (try-intersect-pure v1 v2))
      (cond
        [result result]
-       ;; SRE Track 2H: subtype-aware meet for atoms.
-       ;; When subtype callback is installed: meet(a, b) = a if a <: b,
-       ;; meet(a, b) = b if b <: a. The GLB of comparable types is the lesser.
+       ;; SRE Track 2I Phase 3c: subtype-aware meet for atoms via explicit
+       ;; subtype-fn parameter (no longer via off-network callback).
+       ;; meet(a, b) = a if a <: b; b if b <: a. GLB of comparable atoms.
        [else
-        (define sub-fn (current-lattice-subtype-fn))
         (cond
-          [(and sub-fn (sub-fn v1 v2)) v1]   ;; v1 <: v2 → GLB = v1
-          [(and sub-fn (sub-fn v2 v1)) v2]   ;; v2 <: v1 → GLB = v2
+          [(and subtype-fn (subtype-fn v1 v2)) v1]
+          [(and subtype-fn (subtype-fn v2 v1)) v2]
           [else type-bot])])]))
 
 ;; Pure structural intersection: computes greatest lower bound.

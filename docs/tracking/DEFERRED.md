@@ -626,3 +626,33 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 - This DEFERRED.md entry (cross-track tracking — ensures the work isn't missed across the multi-month Track 4D timeline)
 
 **Track 4D Stage 2 audit obligation**: when Track 4D's Stage 2 (gap analysis) opens, measure transient allocation patterns to characterize the consolidation opportunity quantitatively (concrete site enumeration with allocation counts).
+
+
+---
+
+## SRE Track 2I Phase 3c → PM Track 12 input: callback-style parameters in type-lattice.rkt
+
+**Origin**: SRE Track 2I Phase 3c (2026-04-30) retired `current-lattice-subtype-fn` (Racket-parameter callback in `type-lattice.rkt`) in favor of a per-relation `meet-registry` field on `sre-domain`. The principled retirement template is documented in [SRE Track 2I Design](2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md) § Phase 3c.
+
+**Sister callback awaiting PM Track 12**: `current-lattice-meta-solution-fn` (`type-lattice.rkt:68`)
+
+- **Pattern**: `make-parameter` callback installed at driver init (`driver.rkt:2637`); changes algebraic behavior of `type-lattice-merge`/`try-unify-pure` based on whether install was called.
+- **Surface area**: 5+ usage sites across `has-unsolved-meta?`, `try-unify-pure`, multiple `try-intersect-pure` branches (`type-lattice.rkt` lines 86, 176, 399, 403, 421).
+- **Cross-cutting concern**: ties to metavar-store internals (`metavar-store.rkt:2324` references the callback).
+- **Scope rationale**: significantly larger than the subtype callback Phase 3c addressed; appropriate for PM Track 12's module-load-time parameter migration scope.
+
+**Retirement template** (from Phase 3c, applies to meta-solution callback by analogy):
+1. Identify the structural concern the callback masks (here: implicit polymorphism — meta-aware merge depends on driver init order).
+2. Replace with explicit parameter or per-relation registration (correct-by-construction).
+3. Drop the callback parameter + install function + lint-baseline entry.
+4. Update consumers to pass the explicit parameter (or use the registry accessor).
+5. Update tests that implicitly relied on the callback.
+
+**Phase 3c bonus precedent**: the principled refactor surfaced an algebraic finding (the type lattice under equality merge was distributive post-Track-2H, but the always-installed callback was hiding it via mixed equality+subtype semantics). Expect similar surfacings when retiring the meta-solution callback — the callback may be hiding meta-handling assumptions that become visible only with explicit dispatch.
+
+**Cross-references**:
+- [SRE Track 2I Design](2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md) § Phase 3c (retirement template)
+- [PM Master Track 12](2026-03-13_PROPAGATOR_MIGRATION_MASTER.md) § Phase 3c precedent for callback-style parameter retirement
+- [Issue #40](https://github.com/LogosLang/prologos/issues/40) — sister anti-pattern (with-handlers defensive scaffolding); both are off-network state injection
+- `tools/lint-parameters.rkt` + `tools/parameter-lint-baseline.txt` — tactical interim
+

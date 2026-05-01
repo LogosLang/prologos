@@ -54,7 +54,6 @@ current-infer-constraints-mode?
 current-infra-assumption
 current-is-eval-fn
 current-lattice-meta-solution-fn
-current-lattice-subtype-fn
 current-level-meta-champ-box
 current-level-meta-store
 current-loading-set

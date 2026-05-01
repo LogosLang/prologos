@@ -16,7 +16,7 @@
          "../subtype-predicate.rkt"
          "../union-types.rkt"
          "../substitution.rkt"
-         "../driver.rkt")  ;; installs callbacks (meta-solution, subtype)
+         "../driver.rkt")  ;; installs meta-solution callback (subtype callback retired Phase 3c)
 
 ;; ========================================
 ;; Helpers
@@ -24,6 +24,12 @@
 
 (define (pi t1 t2) (expr-Pi 'mw t1 t2))
 (define (sigma t1 t2) (expr-Sigma t1 t2))
+
+;; SRE Track 2I Phase 3c (2026-04-30): subtype-aware meet is now per-relation
+;; via #:subtype-fn keyword (no longer via off-network callback). Tests that
+;; need GLB-aware meet use this helper to make the relation-dependence explicit.
+(define (subtype-meet a b)
+  (type-lattice-meet a b #:subtype-fn subtype?))
 
 ;; ========================================
 ;; Suite 1: subtype-lattice-merge produces union types
@@ -82,13 +88,15 @@
   (test-suite "type-lattice-meet"
 
     (test-case "subtype-aware: meet(Nat, Int) = Nat"
-      (check-equal? (type-lattice-meet (expr-Nat) (expr-Int)) (expr-Nat)))
+      ;; Phase 3c: subtype-aware meet now via #:subtype-fn keyword (was implicit callback).
+      (check-equal? (subtype-meet (expr-Nat) (expr-Int)) (expr-Nat)))
 
     (test-case "subtype-aware: meet(Int, Rat) = Int"
-      (check-equal? (type-lattice-meet (expr-Int) (expr-Rat)) (expr-Int)))
+      (check-equal? (subtype-meet (expr-Int) (expr-Rat)) (expr-Int)))
 
     (test-case "incomparable: meet(Int, String) = bot"
-      (check-true (type-bot? (type-lattice-meet (expr-Int) (expr-String)))))
+      ;; No subtype relation between Int and String → bot regardless of subtype-fn.
+      (check-true (type-bot? (subtype-meet (expr-Int) (expr-String)))))
 
     (test-case "identity: meet(top, x) = x"
       (check-equal? (type-lattice-meet type-top (expr-Int)) (expr-Int)))
@@ -99,10 +107,12 @@
     (test-case "meet distributes over union: meet(a, b|c) = meet(a,b) | meet(a,c)"
       (define union-bc (build-union-type (list (expr-Nat) (expr-String))))
       ;; meet(Int, Nat | String) = meet(Int,Nat) | meet(Int,String) = Nat | bot = Nat
-      (check-equal? (type-lattice-meet (expr-Int) union-bc) (expr-Nat)))
+      ;; Subtype-aware meet propagates through the union-distribute branch via #:subtype-fn.
+      (check-equal? (subtype-meet (expr-Int) union-bc) (expr-Nat)))
 
     (test-case "generic meet: PVec Nat ⊓ PVec Int = PVec Nat (covariant)"
-      (define result (type-lattice-meet (expr-PVec (expr-Nat)) (expr-PVec (expr-Int))))
+      ;; Covariant component-wise meet uses subtype-aware meet on the element type.
+      (define result (subtype-meet (expr-PVec (expr-Nat)) (expr-PVec (expr-Int))))
       (check-equal? result (expr-PVec (expr-Nat))))
 
     (test-case "Pi meet: contra domain, co codomain"
@@ -194,18 +204,21 @@
   (test-suite "algebraic properties (ground)"
 
     (test-case "distributivity: meet(a, join(b,c)) = join(meet(a,b), meet(a,c))"
+      ;; Distributivity of the SUBTYPE lattice (subtype-merge as join, subtype-aware
+      ;; meet via #:subtype-fn). Track 2H delivered this by construction.
       (for* ([a (in-list ground-samples)]
              [b (in-list ground-samples)]
              [c (in-list ground-samples)])
-        (define lhs (type-lattice-meet a (subtype-lattice-merge b c)))
-        (define rhs (subtype-lattice-merge (type-lattice-meet a b) (type-lattice-meet a c)))
+        (define lhs (subtype-meet a (subtype-lattice-merge b c)))
+        (define rhs (subtype-lattice-merge (subtype-meet a b) (subtype-meet a c)))
         (check-equal? lhs rhs
           (format "a=~a b=~a c=~a" a b c))))
 
     (test-case "absorption law: join(a, meet(a,b)) = a"
+      ;; Absorption holds in the subtype lattice (subtype-meet for the GLB).
       (for* ([a (in-list ground-samples)]
              [b (in-list ground-samples)])
-        (define m (type-lattice-meet a b))
+        (define m (subtype-meet a b))
         (define result (subtype-lattice-merge a m))
         (check-equal? result a
           (format "a=~a b=~a meet=~a" a b m))))))

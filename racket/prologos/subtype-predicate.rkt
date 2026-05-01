@@ -307,9 +307,12 @@
 ;; collection (positional identity).
 
 (define (type-pseudo-complement type context-types)
+  ;; SRE Track 2I Phase 3c (2026-04-30): pseudo-complement is a SUBTYPE-relation
+  ;; concept (compatibility under the subtype order). Use subtype-aware meet
+  ;; explicitly (was implicit via the always-installed callback pre-3c).
   (define incompatible
     (filter (lambda (t)
-              (let ([m (type-lattice-meet t type)])
+              (let ([m (type-lattice-meet t type #:subtype-fn subtype?)])
                 (type-bot? m)))
             context-types))
   (cond

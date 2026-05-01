@@ -503,6 +503,26 @@ All currently use `merge-hasheq-replace` (honest labeling of today's semantics u
 4. Test-isolation via submodule forking — flows from scope structure, not discipline
 5. 32 identity-candidate sites pre-identified (above) become clean migration targets
 
+**Phase 3c precedent for callback-style parameter retirement (SRE Track 2I, 2026-04-30)**:
+
+SRE Track 2I Phase 3c retired `current-lattice-subtype-fn` (one of the callback-style parameters in `type-lattice.rkt`) in favor of a per-relation `meet-registry` field on `sre-domain`. The retirement follows the principled pattern:
+1. Identify the structural concern the callback was masking (in this case: implicit polymorphism — meet's algebraic behavior depended on whether the callback was installed, regardless of which relation was being merged).
+2. Replace with explicit per-relation registration (correct-by-construction).
+3. Drop the callback + its install function + its baseline entry.
+4. Update tests that implicitly relied on the callback to use the explicit dispatch.
+
+The refactor surfaced a real algebraic finding: with principled per-relation dispatch, the type lattice under equality merge is distributive (Track 2H's union-aware merge plus Phase 3c's flat equality meet). The always-installed callback had been hiding this by mixing equality+subtype semantics.
+
+**Sister callback `current-lattice-meta-solution-fn` is the natural next target for PM Track 12**:
+- Same file (`type-lattice.rkt:68`)
+- Same off-network-state-injection pattern (`make-parameter` callback installed by driver)
+- 5+ usage sites across `has-unsolved-meta?`, `try-unify-pure`, multiple `try-intersect-pure` branches (lines 86, 176, 399, 403, 421)
+- Cross-references metavar-store internals — significantly larger surface than the subtype callback
+- Appropriate for PM Track 12's scope (module-load-time parameter migration with cross-cutting metavar-store implications)
+- Phase 3c's design doc (`docs/tracking/2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md` § Phase 3c) documents the retirement template; PM Track 12 can adopt the per-relation registration pattern when addressing this callback.
+
+See also: [SRE Track 2I Design](../tracking/2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md) § Phase 3c. Cross-cutting parameter retirement framework: `tools/lint-parameters.rkt` + `tools/parameter-lint-baseline.txt`.
+
 **Additional design input from PPN 4C Phase 1e-β-iii (2026-04-20)**: the Lamport timestamped-cell primitive is built and ready for activation. Consumer migration of 5 parameter-snapshot-cells awaits PM Track 12 for TWO reasons (both architectural, not effort-driven):
 
 (1) **Snapshot-cell pattern**: each of the 5 cells is initialized from a Racket parameter at network-init time and never further updated by runtime code. The Racket parameter is the LIVE state; the cell is a snapshot. Migrating these cells to timestamp-semantics today gives decorative wrapping but doesn't change runtime behavior because the cell path is secondary. When PM Track 12 retires the parameters and makes cells primary, timestamp-semantics become load-bearing:

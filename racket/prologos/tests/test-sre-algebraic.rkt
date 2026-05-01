@@ -127,20 +127,36 @@
   (define result (test-idempotent-join td type-samples))
   (check-true (axiom-confirmed? result)))
 
-(test-case "inference: distributive REFUTED for type domain"
+(test-case "inference: distributive CONFIRMED for type domain (post-Phase-3c)"
+  ;; HISTORY: Pre-Phase-3c (Track 2I, 2026-04-30) this test asserted REFUTED.
+  ;; That finding was an artifact of `current-lattice-subtype-fn` being installed
+  ;; at driver init — meet was always subtype-aware regardless of which join
+  ;; (equality/subtype) was being tested. Mixed semantics broke distributivity.
+  ;;
+  ;; Phase 3c retired the callback in favor of per-relation meet-registry.
+  ;; With principled per-relation dispatch:
+  ;;   - equality merge + flat meet (no subtype-fn) → distributive on these samples
+  ;;   - subtype merge + subtype-aware meet → also distributive (Heyting by Track 2H)
+  ;; Track 2G's "type lattice not distributive under equality merge" finding
+  ;; was correct AT THE TIME (pre-Track-2H, distinct atoms went to type-top giving
+  ;; M3 sublattice). Track 2H (PPN 4C T-3 Commit B) made equality merge produce
+  ;; unions; the always-installed callback hid that this restored distributivity.
+  ;; Phase 3c's principled refactor surfaces the post-Track-2H truth.
   (define td (lookup-domain 'type))
   (define result (test-distributive td type-samples type-lattice-meet))
-  (check-true (axiom-refuted? result))
-  ;; Witness should be a list of 3 values
-  (check-equal? (length (axiom-refuted-witness result)) 3))
+  (check-true (axiom-confirmed? result))
+  ;; All 6³ = 216 triples confirm distributivity on type-samples.
+  (check-eq? (axiom-confirmed-count result) 216))
 
 (test-case "inference: full inference pipeline"
   (define td (lookup-domain 'type))
   (define props (infer-domain-properties td type-samples #:meet-fn type-lattice-meet))
   (check-eq? (hash-ref props 'commutative-join) prop-confirmed)
   (check-eq? (hash-ref props 'associative-join) prop-confirmed)
-  ;; distributive: declared as unknown (not in type domain declarations) → inference refutes
-  (check-eq? (hash-ref props 'distributive) prop-refuted))
+  ;; Phase 3c finding: equality lattice IS distributive when using its own flat
+  ;; meet (not the subtype-aware meet that the retired callback was implicitly
+  ;; providing). Was prop-refuted pre-3c.
+  (check-eq? (hash-ref props 'distributive) prop-confirmed))
 
 ;; ========================================
 ;; 7. Implication Rules
@@ -186,11 +202,16 @@
   (check-eq? (hash-ref final 'associative-join) prop-confirmed)
   (check-eq? (hash-ref final 'idempotent-join) prop-confirmed)
   (check-eq? (hash-ref final 'has-meet) prop-confirmed)
-  ;; Refuted: distributive (inference found counterexample)
-  (check-eq? (hash-ref final 'distributive) prop-refuted)
-  ;; Derived: heyting and boolean refuted (distributive is refuted)
-  (check-eq? (hash-ref final 'heyting) prop-refuted)
-  (check-eq? (hash-ref final 'boolean) prop-refuted))
+  ;; Phase 3c finding: distributive is now confirmed (was refuted pre-3c).
+  (check-eq? (hash-ref final 'distributive) prop-confirmed)
+  ;; Derived: distributive ⇒ sd-vee + sd-wedge fire (Phase 1 implication rules).
+  (check-eq? (hash-ref final 'sd-vee) prop-confirmed)
+  (check-eq? (hash-ref final 'sd-wedge) prop-confirmed)
+  ;; heyting requires has-pseudo-complement (not declared/inferred for equality
+  ;; relation here) → sources-incomplete → derived-value = unknown.
+  ;; boolean requires heyting → also unknown.
+  (check-eq? (hash-ref final 'heyting) prop-unknown)
+  (check-eq? (hash-ref final 'boolean) prop-unknown))
 
 (test-case "resolve-and-report: produces report string"
   (define td (lookup-domain 'type))
@@ -199,7 +220,10 @@
   (check-true (string? report))
   (check-true (string-contains? report "type"))
   (check-true (string-contains? report "prop-confirmed"))
-  (check-true (string-contains? report "prop-refuted")))
+  ;; Phase 3c: equality lattice is distributive (no refutations on these samples).
+  ;; Heyting/boolean derived-unknown (sources incomplete). Report contains
+  ;; prop-unknown for the underived composite properties.
+  (check-true (string-contains? report "prop-unknown")))
 
 ;; ========================================
 ;; 9. Property-Gated Behavior
@@ -514,3 +538,46 @@
   (check-equal? samples '())
   ;; Critically: this should not raise any errors.
   )
+
+;; ========================================
+;; 14. SRE Track 2I Phase 3c: Per-relation meet-registry on sre-domain
+;; ========================================
+
+(test-case "Phase 3c: type domain has meet-registry registered"
+  (define td (lookup-domain 'type))
+  (check-not-false (sre-domain-meet-registry td)))
+
+(test-case "Phase 3c: sre-domain-meet returns flat meet for 'equality relation"
+  ;; Equality relation's meet has no subtype-fn → distinct atoms meet to type-bot.
+  (define td (lookup-domain 'type))
+  (define meet (sre-domain-meet td 'equality))
+  (check-not-false meet)
+  (check-equal? (meet (expr-Nat) (expr-Bool)) type-bot))
+
+(test-case "Phase 3c: sre-domain-meet returns subtype-aware meet for 'subtype relation"
+  ;; Subtype relation's meet uses subtype? to compute GLB for comparable atoms.
+  ;; Nat <: Int → meet(Int, Nat) = Nat (the GLB).
+  (define td (lookup-domain 'type))
+  (define meet (sre-domain-meet td 'subtype))
+  (check-not-false meet)
+  (check-equal? (meet (expr-Int) (expr-Nat)) (expr-Nat))
+  (check-equal? (meet (expr-Nat) (expr-Int)) (expr-Nat)))
+
+(test-case "Phase 3c: meet-registry equality vs subtype distinguishes flat/GLB behavior"
+  ;; The principled per-relation distinction. Pre-3c the callback was always
+  ;; installed → flat path was unreachable. Post-3c they're properly separated.
+  (define td (lookup-domain 'type))
+  (define meet-eq (sre-domain-meet td 'equality))
+  (define meet-sub (sre-domain-meet td 'subtype))
+  (check-equal? (meet-eq (expr-Int) (expr-Nat)) type-bot)
+  (check-equal? (meet-sub (expr-Int) (expr-Nat)) (expr-Nat)))
+
+(test-case "Phase 3c: registry-driven meet matches accessor"
+  ;; Verify the registry path returns the same result whether called via
+  ;; sre-domain-meet or via the registered closure directly.
+  (define td (lookup-domain 'type))
+  (define registry (sre-domain-meet-registry td))
+  (define from-registry ((registry 'subtype) (expr-Int) (expr-Nat)))
+  (define from-accessor ((sre-domain-meet td 'subtype) (expr-Int) (expr-Nat)))
+  (check-equal? from-registry from-accessor)
+  (check-equal? from-accessor (expr-Nat)))

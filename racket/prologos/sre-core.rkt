@@ -28,6 +28,7 @@
  (struct-out sre-domain)
  make-sre-domain                ;; SRE Track 2H: keyword constructor (retires positional debt L4)
  sre-domain-merge
+ sre-domain-meet                ;; SRE Track 2I Phase 3c: per-relation meet lookup
 
  ;; Relation spec (SRE Track 1 + Track 2F)
  (struct-out sre-relation)
@@ -142,6 +143,15 @@
                        ;   'unclassified (default) — legacy domains, no enforcement (progressive rollout).
                        ; Adding classification to existing domain sites is a per-session activity
                        ; as architectural understanding solidifies.
+   meet-registry       ; SRE Track 2I Phase 3c (2026-04-30): (relation-name → meet-fn) | #f
+                       ; Parallel to merge-registry. Per-relation meet (greatest lower
+                       ; bound) lookup. Default #f for backward-compat with domains that
+                       ; don't have meet implementations.
+                       ; Replaces the off-network `current-lattice-subtype-fn` Racket-
+                       ; parameter callback pattern from Track 2H — relation-determined
+                       ; meet behavior is now explicit per-relation registration,
+                       ; correct-by-construction. Same case-dispatch idiom as
+                       ; merge-registry (zero overhead, jump table).
    )
   #:transparent)
 
@@ -162,15 +172,26 @@
                           #:declared-properties [declared-properties (hasheq)]
                           #:operations [operations (hasheq)]
                           ;; PPN 4C Phase 1f: classification drives enforcement.
-                          #:classification [classification 'unclassified])
+                          #:classification [classification 'unclassified]
+                          ;; SRE Track 2I Phase 3c: per-relation meet registry.
+                          #:meet-registry [meet-registry #f])
   (sre-domain name merge-registry contradicts? bot? bot-value top-value
               meta-recognizer meta-resolver dual-pairs
               property-cell-ids declared-properties operations
-              classification))
+              classification meet-registry))
 
 ;; Merge lookup: gets the merge function for a given relation from the domain registry.
 (define (sre-domain-merge domain relation)
   ((sre-domain-merge-registry domain) (sre-relation-name relation)))
+
+;; SRE Track 2I Phase 3c: Meet lookup. Gets the meet function for a given relation,
+;; or #f if no meet-registry is registered (backward-compat for domains without meet).
+;; Accepts either an sre-relation struct or a bare relation-name symbol.
+(define (sre-domain-meet domain relation)
+  (define registry (sre-domain-meet-registry domain))
+  (and registry (registry (if (sre-relation? relation)
+                              (sre-relation-name relation)
+                              relation))))
 
 ;; ========================================================================
 ;; SRE Track 2G: Algebraic Domain Property Infrastructure

@@ -69,8 +69,9 @@
          (only-in "pnet-serialize.rkt"   ;; Track 10: .pnet serialization
                   serialize-module-state deserialize-module-state
                   pnet-stale? relink-foreign-marshallers!)
-         (only-in "subtype-predicate.rkt" ;; SRE Track 2H: subtype? for meet callback
-                  subtype?)
+         ;; SRE Track 2I Phase 3c (2026-04-30): subtype? import retired alongside
+         ;; the install-lattice-subtype-fn! call (was its only use). Per-relation
+         ;; meet registration in unify.rkt's type-sre-domain replaced the callback.
          (only-in "sre-core.rkt"         ;; PAR Track 1: topology stratum handler
                   sre-decompose-generic sre-constructor-tag
                   sre-domain-bot? sre-domain-name sre-relation-name)
@@ -2636,10 +2637,11 @@
 ;; meta-solution is a pure read from propagator cell or CHAMP store.
 (install-lattice-meta-solution-fn! meta-solution)
 
-;; SRE Track 2H: Install subtype callback for type-lattice-meet.
-;; Enables meet(Nat, Int) = Nat (GLB of comparable types) instead of type-bot.
-;; Required for distributivity of the subtype lattice.
-(install-lattice-subtype-fn! subtype?)
+;; SRE Track 2I Phase 3c (2026-04-30): subtype-aware meet callback retired.
+;; Per-relation meet now lives in `type-sre-domain`'s `meet-registry` field
+;; (unify.rkt: type-meet-registry). Callers look up the appropriate meet via
+;; `(sre-domain-meet domain relation)` — correct-by-construction, no off-network
+;; parameter callback. The previous `install-lattice-subtype-fn!` call was here.
 
 ;; PPN Track 4 D.4 Phase 7: infer-on-network/err available as propagator-native
 ;; typing entry point. Used in process-command for eval/infer/def forms.

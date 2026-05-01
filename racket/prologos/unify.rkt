@@ -75,10 +75,25 @@
   (hash-ref type-merge-table rel-name
             (λ () (error 'type-merge-registry "no merge for relation: ~a" rel-name))))
 
+;; SRE Track 2I Phase 3c (2026-04-30): per-relation meet registry. Replaces
+;; the off-network `current-lattice-subtype-fn` callback retired from
+;; type-lattice.rkt. Each relation gets its own meet function:
+;;   'equality        → flat meet (no subtype-fn → distinct atoms meet to ⊥)
+;;   'subtype         → subtype-aware meet (GLB of comparable atoms via subtype?)
+;;   'subtype-reverse → same as subtype (meet is symmetric in atom comparison)
+;; Mirrors the merge-registry case-dispatch idiom.
+(define (type-meet-registry rel-name)
+  (case rel-name
+    [(equality) type-lattice-meet]
+    [(subtype subtype-reverse)
+     (lambda (v1 v2) (type-lattice-meet v1 v2 #:subtype-fn subtype?))]
+    [else (error 'type-meet-registry "no meet for relation: ~a" rel-name)]))
+
 (define type-sre-domain
   (make-sre-domain
     #:name 'type
     #:merge-registry type-merge-registry
+    #:meet-registry type-meet-registry
     #:contradicts? type-lattice-contradicts?
     #:bot? type-bot?
     #:bot-value type-bot
