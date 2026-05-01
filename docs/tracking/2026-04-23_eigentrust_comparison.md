@@ -1,425 +1,171 @@
-# EigenTrust in Prologos — 9-way Implementation Comparison
+# EigenTrust: math vs network vs Prologos math
 
-_Session 2026-04-23 + 2026-04-29. Compares **nine** variants on the
-same algorithm:_
+_Session 2026-04-23 + 2026-04-29. Comparing **how the same algorithm
+runs through different layers of abstraction**, with float-like
+scalar types throughout. The four axes:_
 
-1–4. _**Prologos surface**: four implementations across the
-   `{List, PVec} × {Rat, Posit32}` grid._
+| Axis | What it measures | Implementation |
+|---|---|---|
+| **math** | Algorithm in plain Racket. Just function calls. | `plain-fl` — `eigentrust-plain.rkt` |
+| **network** | Same algorithm built on Prologos's propagator network infrastructure (cells + propagators + BSP scheduler), bypassing the surface language. | `float` — `eigentrust-propagators-float.rkt` |
+| **Prologos math** | Algorithm in Prologos surface language (no propagators), going through the elaborator + reducer. | `List + Posit32` (P) — `examples/eigentrust-posit.prologos` |
+| **Prologos network** | (future) Surface Prologos code that compiles to a propagator network. Not yet a thing. | — |
 
-5–7. _**Racket on propagators**: three implementations using Prologos's
-   underlying propagator network infrastructure but bypassing the
-   surface language:_
-   - _**rat-coarse**: chain-of-cells, exact rationals, one cell per iteration._
-   - _**rat-fine**: per-peer cells, exact rationals — K·n cells, K·n propagators._
-   - _**float**: chain-of-cells, hardware flonums (`flvector`)._
+All four use float-like types: Racket flonums for the first two,
+Prologos's `Posit32` (hardware posits) for the surface variant.
 
-8–9. _**Plain Racket**: no propagator network at all — iterate the
-   off-network kernel K times in a tail loop. Two scalar variants:_
-   - _**plain-rat**: exact rationals._
-   - _**plain-fl**: hardware flonums._
-
-_Variants 8–9 are the baseline that isolates "the algorithm itself
-in plain Racket" from the propagator infrastructure overhead._
-The algorithm uses the **column-stochastic** convention: the matrix
-`M` is the operational "trust-flow" matrix where `M[i][j]` is the
-fraction of peer j's outgoing trust that flows to peer i. Each
-column sums to 1; rows have no such constraint. The update is:_
-
+Algorithm: the standard EigenTrust update with column-stochastic M:
 ```
-t_{k+1} = (1 - alpha) * M * t_k + alpha * p
+t_{k+1} = (1 − α) · M · t_k  +  α · p
 ```
+`eigentrust` enforces `col-stochastic?` at the entry point.
 
-_`eigentrust` enforces the column-stochastic invariant; violating
-it panics (Prologos surface) or raises an error (Racket-direct)._
+## W3 reference workload — n=4, k=4, α=3/10
 
-## The nine variants
+A 4-peer ring matrix with all pre-trust on peer 0 (`p = [1, 0, 0, 0]`),
+4 forced iterations. Smallest workload that fairly exercises the
+algorithm; result is `[5401/10000, 21/100, 147/1000, 1029/10000]`
+(or ~`[0.5401, 0.21, 0.147, 0.1029]` in float).
 
-| # | Variant | Source | Test |
-|---|---|---|---|
-| 1 | List + Rat (P) | `examples/eigentrust.prologos` | `tests/test-eigentrust.rkt` |
-| 2 | List + Posit32 (P) | `examples/eigentrust-posit.prologos` | `tests/test-eigentrust-posit.rkt` |
-| 3 | PVec + Rat (P) | `examples/eigentrust-pvec.prologos` | `tests/test-eigentrust-pvec.rkt` |
-| 4 | PVec + Posit32 (P) | `examples/eigentrust-pvec-posit.prologos` | `tests/test-eigentrust-pvec-posit.rkt` |
-| 5 | **rat-coarse** (propagator) | `benchmarks/.../eigentrust-propagators.rkt` | `tests/test-eigentrust-propagators.rkt` |
-| 6 | **rat-fine** (propagator) | `benchmarks/.../eigentrust-propagators-fine.rkt` | `tests/test-eigentrust-propagators-fine.rkt` |
-| 7 | **float** (propagator) | `benchmarks/.../eigentrust-propagators-float.rkt` | `tests/test-eigentrust-propagators-float.rkt` |
-| 8 | **plain-rat** (no propagator) | `benchmarks/.../eigentrust-plain.rkt` | `tests/test-eigentrust-plain.rkt` |
-| 9 | **plain-fl** (no propagator) | `benchmarks/.../eigentrust-plain.rkt` | `tests/test-eigentrust-plain.rkt` |
+| Axis              | reduce_ms |  vs math  | Notes |
+| ----------------- | --------: | --------: | ----- |
+| **math** (plain-fl) |    ~0.03 |     1×    | Racket flvector arithmetic, no overhead. |
+| **network** (float) |     0.10 |    ~3×    | Same arithmetic kernel inside fire functions; +~70 µs of cell + BSP overhead. |
+| **Prologos math** (List + Posit32) | 17 990 | **~600 000×** | Surface language, evaluated by Prologos's reducer. |
+| Prologos network  |        —  |     —     | _doesn't exist yet_. |
 
-Shared benchmark runners:
-* `benchmarks/comparative/eigentrust-propagators-bench.rkt` — variants 5–7 on the W3 reference workload.
-* `benchmarks/comparative/eigentrust-propagators-scaling.rkt` — all five Racket-direct variants (5–9) across n=8..4096.
+The 6-orders-of-magnitude gap between **math** and **Prologos math**
+is the cost of the Prologos surface language + reducer on a hot
+path: term-tree walks, pattern-match dispatch, pretty-printing,
+no flonum specialization, plus the O(k²) reduce-tree blowup
+(see `2026-04-23_eigentrust_pitfalls.md` §11) that makes deeper
+iteration progressively more expensive.
 
-(P) = Prologos surface language. All variants enforce
-`col-stochastic?` at the algorithm entry; the surface variants
-panic, the Racket-direct ones `error`.
+The **network** vs **math** gap is small in absolute terms (~70 µs
+per call) and dominated by per-iteration constant cost (cell
+allocation, BSP round dispatch, fire-fn invocation, CHAMP path
+copies on each cell-write). It amortizes as n grows — see scaling
+below.
 
-**Architectural breakdown** (5-7):
-- _coarse_ (5, 7): one cell per iteration, holding the entire
-  trust vector. K plain propagators (one per step).
-- _fine_ (6): one cell per peer per iteration. K·n cells,
-  K·n propagators. Each peer-step propagator reads all n cells
-  of the previous iteration row + the 3 constants, writes one
-  scalar.
+## Scaling across n — math vs network
 
-## Shared benchmark workload
+Only the float-typed variants (math, network) are measured at large
+n. The Prologos surface variants take ~60 s of fixed overhead per
+run (Prologos prelude load + Racket startup) and the fixture
+generators are surface code, so a Prologos-surface-at-large-n bench
+is a separate piece of work. Today's data is the Racket-direct
+side.
 
-Every benchmark runs the same W1..W9 set:
+`benchmarks/comparative/eigentrust-propagators-scaling.rkt` —
+K=4, 30 s per-sample timeout, median of 3 runs.
 
-* **W1.** `eigentrust m-uniform-4 p-uniform-4 α=1/10 ε=1/1000 50` —
-  uniform matrix; converges in one step (uniform is the fixed point).
-* **W2.** `eigentrust m-others-3 p-uniform-3 α=1/10 ε=1/1000 50` —
-  symmetric 3×3; uniform is also the stationary distribution.
-* **W3.** `eigentrust m-ring-4 p-seed-0 α=3/10 ε=0 3` — **4-peer ring
-  with concentrated pre-trust (all mass on peer 0)**, forced 3 iters.
-  The ring permutation has |eigenvalue| = 1 on the unit circle; only
-  the damping `α·p` term pulls the iterate toward uniform. Concentrated
-  pre-trust amplifies the settling pattern; this is the only workload
-  that produces non-trivial `reduce_ms`.
-* **W4.** `col-stochastic? m-uniform-4` — single invariant check.
-* **W5.** `eigentrust-step m-uniform-4 p-uniform-4 α p-uniform-4` —
-  one step on the uniform matrix.
-* **W6.** `mat-vec-mul m-uniform-4 p-uniform-4` — one matrix-vector
-  multiply.
-* **W7–W9.** `scale-vec`, `add-vec`, `linf-norm ∘ sub-vec` on small
-  vectors.
+| n    | math (plain-fl) | network (float) | network overhead |
+| ---: | -------------: | --------------: | ---------------: |
+|    8 |        0.03 ms |         0.12 ms |          +300 %  |
+|   16 |        0.03 ms |         0.14 ms |          +367 %  |
+|   32 |        0.05 ms |         0.16 ms |          +220 %  |
+|   64 |        0.09 ms |         0.28 ms |          +211 %  |
+|  128 |        0.27 ms |         0.57 ms |          +111 %  |
+|  256 |        0.99 ms |         2.10 ms |          +112 %  |
+|  512 |        4.59 ms |         9.00 ms |           +96 %  |
+| 1024 |       19.40 ms |        33.86 ms |           +75 %  |
+| 2048 |       88.37 ms |       151.62 ms |           +72 %  |
+| 4096 |      442.14 ms |       619.37 ms |           +40 %  |
 
-`α=3/10` follows the standard EigenTrust convention: 70% network
-weight, 30% pre-trust anchor. Deeper budgets scale as O(k²) in
-Prologos's reducer (pitfall #11), so k=3 is the sweet spot.
+### What the scaling shows
 
-## Ergonomic differences
+* **Math scales ~O(n²)** as expected for K rounds of n×n mat-vec.
+  Doublings of n give ~3.5–5× time growth past the cache-resident
+  regime (n ≥ 128).
+* **Network adds a roughly constant absolute overhead per call.**
+  At n=8 the overhead is most of the time (0.09 ms of overhead vs
+  0.03 ms of math). At n=4096 it's 40 % (177 ms of overhead vs
+  442 ms of math). The overhead amortizes against per-fire work
+  but doesn't disappear — it asymptotes to "the cost of K BSP
+  rounds with K cell-writes of large flvectors", which is roughly
+  per-cell-write CHAMP path-copies + scheduler bookkeeping.
+* **At n=4096 the network is 619 ms, math is 442 ms, Prologos
+  math is intractable** — the surface variant's elaborator +
+  reducer plus the O(k²) blowup means even a single 4096-peer
+  iteration would take many minutes (extrapolating from the
+  W3 numbers and the chain-depth scaling, the reducer time
+  alone would be hours).
 
-| Concern                                          | List + Rat                         | List + Posit32    | PVec + Rat                       | PVec + Posit32    |
-| ------------------------------------------------ | ---------------------------------- | ----------------- | -------------------------------- | ----------------- |
-| Matrix literal zero element                      | `rz : Rat := 0/1` splice           | `~0.0` direct     | `0/1` direct in `@[...]`          | `~0.0` direct     |
-| Matrix literal one element                       | `ro : Rat := 1/1` splice           | `~1.0` direct     | `1/1` direct in `@[...]`          | `~1.0` direct     |
-| Indexing type                                    | List has `nth-int`                 | Same              | PVec is Nat-only                 | Same              |
-| Element-wise zip                                 | structural recursion on two lists  | Same              | index loops via `pvec-nth`       | Same              |
-| Source file size (example)                       | 250 LOC                            | 160 LOC           | 200 LOC                          | 200 LOC           |
-| `col-stochastic?` check cost (relative)          | baseline                           | baseline          | ~2× (needs `zeros` builder)      | ~2×               |
+## What this tells us about the layered design
 
-## Phase breakdown
-
-Measured 2026-04-23 via `tools/bench-phases.rkt --runs 2`. Medians
-across 2 measured runs (plus one warmup).
-
-### W3 (ring-4 / k=4 / α=3/10) — the reference workload
-
-| Variant             | wall   | elaborate | type_check | qtt | reduce       | user sum | outside |
-| ------------------- | -----: | --------: | ---------: | --: | -----------: | -------: | ------: |
-| list + rat (P)      | 62 475 |      212  |       716  | 400 | **18 372**   |  19 702  |  42 772 |
-| list + posit32 (P)  | 61 683 |      210  |       678  | 372 | **17 990**   |  19 252  |  42 431 |
-| pvec + rat (P)      | 76 884 |      144  |       370  | 112 | **33 006**   |  33 634  |  43 250 |
-| pvec + posit32 (P)  | 77 039 |      146  |       344  | 108 | **33 198**   |  33 798  |  43 241 |
-| **rat-coarse** (5)  |   ~850 |       —   |         —  |  —  |  **0.12**    |   0.12   |    ~850 |
-| **rat-fine** (6)    |   ~850 |       —   |         —  |  —  |  **0.23**    |   0.23   |    ~850 |
-| **float** (7)       |   ~850 |       —   |         —  |  —  |  **0.10**    |   0.10   |    ~850 |
-
-5-run median for variants 5–7 (single-process Racket; the wall ~850 ms
-is shared across 9 runs of the bench harness, dominated by Racket
-runtime startup). The four surface variants are 2-run median from
-`tools/bench-phases.rkt`. `reduce_ms` is the actual algorithm time;
-`outside` is everything else (prelude load + Racket startup + I/O).
-
-For propagator variants, `reduce_ms = build_ms + bsp_ms + read_ms`:
-```
-              build_ms   bsp_ms    reduce_ms
-rat-coarse    0.03       0.08      0.12
-rat-fine      0.07       0.16      0.23
-float         0.03       0.07      0.10
-```
-
-### W3-deep (ring-4 / k=10 / α=3/10) — chain depth scaling
-
-| Variant       | reduce_ms | Notes |
-| ------------- | --------: | ----- |
-| rat-coarse    |     0.42  | linear in K (3.5× from k=4) |
-| rat-fine      |     1.38  | linear in K·n (5.75× from k=4 — `n=4` per-step factor compounds) |
-| float         |     0.37  | linear in K (3.7× from k=4) |
-| (P) variants  | did not finish | O(k²) reducer blowup beyond k≈3 |
-
-The propagator variants stay linear in K because each fire
-function eagerly reduces to a normalised vector value; the
-Prologos surface variants keep an unreduced
-`tnew = [eigentrust-step c p α tnew]` term tree that grows
-quadratically across budget rounds.
-
-### Scaling across n — large-graph performance
-
-`benchmarks/comparative/eigentrust-propagators-scaling.rkt` runs
-**five** Racket-direct variants on random column-stochastic matrices
-at n = 8 .. 4096:
-
-* **plain-rat** / **plain-fl** — no propagator network, just iterate
-  the same `eigentrust-step` / `eigentrust-step-fl` kernel K times
-  in a tail loop with parameter-passing. Baseline: "the algorithm
-  in plain Racket".
-* **rat-coarse** / **float** — chain-of-cells propagator network,
-  K plain propagators.
-* **rat-fine** — per-peer cells, K·n propagators.
-
-The same off-network kernel is called inside each propagator's fire
-function, so `(propagator-time − plain-time)` measures pure
-**propagator infrastructure overhead** for the same workload.
-
-K=4, 3 measured runs per cell, median. **Per-sample timeout: 30 s**.
-
-| n    | plain-rat  | rat-coarse  | rat-fine    | ‖ | plain-fl   | float       |
-| ---: | ---------: | ----------: | ----------: | - | ---------: | ----------: |
-|    8 |    2.74 ms |     3.36 ms |     4.43 ms | ‖ |    0.03 ms |     0.12 ms |
-|   16 |   33.97 ms |    37.05 ms |    41.01 ms | ‖ |    0.03 ms |     0.14 ms |
-|   32 |  413.42 ms |   455.36 ms |   474.43 ms | ‖ |    0.05 ms |     0.16 ms |
-|   64 |    6.10 s  |     6.37 s  |     6.41 s  | ‖ |    0.09 ms |     0.28 ms |
-|  128 |   TIMEOUT  |   TIMEOUT   |   TIMEOUT   | ‖ |    0.27 ms |     0.57 ms |
-|  256 |   (skip)   |    (skip)   |    (skip)   | ‖ |    0.99 ms |     2.10 ms |
-|  512 |   (skip)   |    (skip)   |    (skip)   | ‖ |    4.59 ms |     9.00 ms |
-| 1024 |   (skip)   |    (skip)   |    (skip)   | ‖ |   19.40 ms |    33.86 ms |
-| 2048 |   (skip)   |    (skip)   |    (skip)   | ‖ |   88.37 ms |   151.62 ms |
-| 4096 |   (skip)   |    (skip)   |    (skip)   | ‖ |  442.14 ms |   619.37 ms |
-
-### Propagator infrastructure overhead
-
-Computing `(propagator − plain) / plain × 100%`:
-
-| n    | rat overhead | float overhead |
-| ---: | -----------: | -------------: |
-|    8 |       +23 %  |        +300 %  |
-|   16 |        +9 %  |        +367 %  |
-|   32 |       +10 %  |        +220 %  |
-|   64 |        +4 %  |        +211 %  |
-|  128 |          —   |        +111 %  |
-|  256 |          —   |        +112 %  |
-|  512 |          —   |         +96 %  |
-| 1024 |          —   |         +75 %  |
-| 2048 |          —   |         +72 %  |
-| 4096 |          —   |         +40 %  |
-
-Two distinct stories:
-
-* **For rat**, propagator overhead is small (4–23%) and shrinks as
-  n grows, because a single bigint arithmetic op already dwarfs
-  CHAMP cell ops. By n=64 the propagator version is within 4% of
-  the plain loop — the rat arithmetic is the entire cost.
-* **For float**, the picture is opposite at small n and converging
-  at large n. At n=8 the propagator version is 4× slower (300%
-  overhead, 0.12 ms vs 0.03 ms) — the per-iteration constant cost
-  (cell allocation, BSP round dispatch, fire-function closure
-  invocation) is many multiples of the float arithmetic, which
-  takes literally 0.03 ms for an 8×8 mat-vec. As n grows to 4096
-  the per-fire work climbs to hundreds of milliseconds and the
-  propagator overhead drops to +40%. The asymptote is the
-  per-cell-read CHAMP lookup cost amortised over the matrix-vec
-  multiply.
-
-In absolute terms the propagator infrastructure costs **~150 ms of
-overhead per call at n=4096** (619 − 442 = 177 ms), most of which is
-the BSP scheduler going through K=4 rounds of fire/snapshot/merge
-on cells whose values are large flvectors. CHAMP path-copy on each
-write is the likely dominant term.
-
-### Observations on scaling
-
-### Observations on scaling
-
-_Note: numbers below are from an earlier run of the bench harness;
-the headline figures (timeouts at n=128 for rat, sub-second runtime
-at n=4096 for float) match. Run-to-run variance on absolute ms is
-~30%; the scaling **shape** is stable._
-
-* **Float computes a 4 096-peer EigenTrust step (K=4) in ~620 ms
-  via propagators (442 ms plain)** — viable for real-world trust
-  graphs of thousands of peers. The scaling is sub-cubic (well
-  below O(n³)) and roughly tracks O(K·n²) plus a constant-factor
-  cache-hierarchy effect:
-  * n = 8 .. 64: time barely moves (~0.2 ms ↔ ~0.4 ms) — entire
-    matrix fits in L1; arithmetic-bound but tiny.
-  * n = 128 .. 4096: each doubling of n multiplies time by ~3.5–5×
-    (theoretical O(n²) is 4×). The slight overhead is memory
-    bandwidth as rows stream from L2/L3, plus the per-iteration cell
-    allocation + propagator construction (4 cells, 4 propagators
-    per iteration regardless of n — but the *fire-fn closures* read
-    larger vectors).
-* **Exact-rat is exponential in n and times out by n=128.**
-  At iteration k, entries of `M·t_k` are sums of n products of
-  rationals; numerators/denominators grow roughly as `O(n^k)` in
-  the worst case, and bigint arithmetic is O(d log d) in digit
-  count. By n=64 each step takes ~2 s; by n=128 it exceeds the 30 s
-  per-sample budget. **Exact-rat is for correctness verification
-  at small n only.**
-* **rat-fine / rat-coarse stays ≈ 1.0× across all measured sizes.**
-  At n=8 fine is 22% slower (per-cell construction overhead on
-  K·n = 32 cells); by n=32 they're within 5%; by n=64 within 3%.
-  Per-cell overhead amortizes as per-fire work grows. The fine
-  variant's potential parallel-BSP advantage isn't visible here
-  (single-threaded executor).
-* **The rat/float gap is exponential in n:**
-  * n=8: 28×
-  * n=16: 300×
-  * n=32: 2 600×
-  * n=64: 21 700×
-  * n=128: at-least-25 000× (rat timed out at the 30 s budget;
-    extrapolating the 10× per-doubling trend: ~125 000× — same as
-    the earlier n=128 measurement that finished in ~140 s).
-  For any graph with n > ~50, the choice between exact-rat and
-  hardware float is "exact-rat is intractable; use float."
-
-### Observations
-
-* **All three propagator variants are 5+ orders of magnitude faster
-  than the surface variants on W3 reduce_ms.** rat-coarse: 0.12 ms
-  vs List+Rat 18 372 ms (~150 000×). The Prologos reducer's overhead
-  (term-tree walk, pattern-match dispatch, exact-Rat normalisation)
-  dwarfs the arithmetic. Both versions perform identical
-  Racket-level arithmetic on identical exact-rational values; the
-  gap measures Prologos elaboration + reduction overhead.
-* **Float beats rat-coarse by ~17%** at W3 (0.10 vs 0.12 ms), in
-  line with hardware double-precision being faster than exact
-  rational arithmetic for n=4. At larger n the gap widens.
-* **Fine-grained loses to coarse by ~2× at n=4**: 0.23 vs 0.12 ms
-  for W3, 1.38 vs 0.42 ms for W3-deep. Per-cell overhead (CHAMP
-  insert, dependent registration, scheduler bookkeeping) for K·n
-  cells exceeds the benefit of finer-grained per-fire work at this
-  matrix size. The fine variant might cross over for larger n
-  (or under parallel BSP execution where the per-iteration peers
-  fire concurrently), but for n=4 the constants dominate.
-* **Iteration depth scales linearly for all 3 propagator variants**:
-  rat-coarse k=2→0.08, k=4→0.12, k=10→0.42 ms. The Prologos surface
-  variants exhibit O(k²) reduce blowup beyond k≈3 (an unreduced
-  `tnew = [eigentrust-step c p α tnew]` term tree grows
-  quadratically across forced iterations). The propagator variants
-  eagerly reduce in each fire function, so the term tree stays
-  flat — k=10 is fast where the surface versions don't terminate
-  within minutes.
-* **Among the four Prologos surface variants, on the ring workload
-  List beats PVec by ~80%** on `reduce_ms` (18 s vs 33 s). The ring
-  matrix is very sparse — each column has a single non-zero — so
-  dot-product cost is dominated by traversal overhead, not
-  arithmetic. List's structural recursion produces cleaner reducible
-  terms than PVec's nested `pvec-nth` + `pvec-push` accumulator
-  construction.
-* **Posit32 vs Rat is within 2%** in both Prologos containers for
-  the ring workload. With the ring's sparse structure, even Rat's
-  denominator growth is bounded (only the damping factor α=3/10
-  introduces the factor 10 per step), so exact-rational arithmetic
-  stays cheap.
-* **Prologos elaboration is cheaper for PVec** (user sum ~33 s has
-  most of its time in reduce, not elaborate): `type_check_ms` halves
-  for PVec (344–370 vs 678–716 ms), `qtt_ms` drops by 3× (108–112 vs
-  372–400). The index-based PVec helpers type-check with Nat
-  counters, which are simpler for the checkers than List's nested
-  structural patterns.
-* **Earlier asymmetric-matrix result reversed:** on the previous
-  `c-asym-3` workload (non-sparse, row-stochastic row-weighted sum)
-  PVec was ~35% faster. On the ring (sparse, column-stochastic
-  dot-product) List is ~80% faster. Different reducer traversal
-  patterns prefer different data structures.
-* **Iteration depth scales linearly for the propagator version**:
-  k=2 → 0.11 ms, k=4 → 0.16 ms, k=10 → 0.56 ms. The Prologos
-  surface variants exhibit O(k²) reduce blowup beyond k≈3 (an
-  unreduced `tnew = [eigentrust-step c p alpha tnew]` term tree
-  grows quadratically across forced iterations). The propagator
-  version eagerly reduces in each fire function, so the term tree
-  stays flat — k=10 is fast where the surface versions don't
-  terminate within minutes.
-
-### What this implies
-
-* **Data structure choice depends on the workload shape, not on
-  abstract asymptotics.** For this algorithm at n=3 or n=4, neither
-  container dominates across all fixtures. Dense matrices with
-  heterogeneous values favor PVec's index-based traversal; sparse
-  matrices with repetitive values favor List's structural recursion.
-* **Posit32 vs Rat at small n is noise** — the arithmetic is a tiny
-  fraction of reducer work at these matrix sizes.
-* **The `col-stochastic?` check cost is visible but not dominant.**
-  Each benchmark runs it 4× (inside `eigentrust` for W1, W2, W3 plus
-  W4 standalone). For List+Rat that's ~600 ms of the 18 s reduce
-  budget; for PVec+Rat it's ~1.5 s (PVec needs the `zeros` builder
-  + more iteration). Removing the enforcement would shave a few
-  percent off reduce_ms, but at the cost of losing the invariant
-  check — not worth the trade.
-
-## What we learned
-
-* **The operational matrix is column-stochastic.** That was initially
-  wrong in this codebase: the first version took a row-stochastic
-  matrix and computed `C^T * t` internally. Switching to explicit
-  column-stochastic `M` eliminates the `sum-rows`/`scale-rows` helper
-  pair in favor of a standard `dot`-based `mat-vec-mul`.
-* **Invariant enforcement via panic works.** Prologos supports
-  `(the T [panic "msg"])` which returns a runtime error string. The
-  `eigentrust` entry point checks `col-stochastic? m` and panics
-  if false. Overhead is ~O(n²), dominated once by the check versus
-  O(n² * k) for iteration.
-* **Ring + concentrated pre-trust is the right slow-settling
-  fixture.** The ring permutation matrix is doubly stochastic so
-  uniform is stationary, but starting `p` (and hence `t0 = p`) on a
-  single node means every step pushes trust one hop around the ring
-  while damping slowly averages it out. With `α=3/10` the settling
-  rate is the dominant eigenvalue magnitude (≈0.7), giving visible
-  asymmetry in `t` even after 3 iterations.
-* **The initial state vector doesn't matter much** (as long as it
-  sums to 1). The code uses `t0 = p` for simplicity: any valid
-  distribution converges to the same stationary solution.
-* **PVec vs List rankings are workload-dependent.** On the earlier
-  `c-asym-3` (non-sparse, row-stochastic) workload PVec was ~35%
-  faster. On the ring (sparse, column-stochastic) List is faster.
-  The comparison isn't a simple "PVec wins" or "List wins"; it's
-  "measure your workload".
-
-## What the comparison tells us about Prologos
-
-* **The propagator infrastructure is fast.** When the Prologos
-  surface language and reducer are stripped away, the underlying
-  cell + propagator machinery handles the same algorithm in
-  microseconds. The 5-orders-of-magnitude gap between the
-  surface and direct versions is mostly Prologos elaboration +
-  reduction overhead, not propagator network overhead.
-* **Apples-to-oranges, but informative.** The Racket-direct
-  implementation is what the surface implementation should
-  approach as the Prologos compiler matures (lowering Prologos
-  surface code to fast propagator network operations). The gap
-  is a measure of "how much Prologos costs you on a hot path
-  today" — useful as a yardstick for compiler optimization
-  work.
-* **The propagator chain pattern works.** Each iteration is one
-  cell holding the trust vector at that step; one plain
-  propagator per step reads the previous cell and writes the
-  next. After K BSP rounds the chain has settled. Plain (not
-  fire-once) propagators are required: the chain depends on
-  inter-round propagation through cell writes, which is exactly
-  how non-fire-once propagators chain.
+* **The propagator network is a thin wrapper over plain math.**
+  +40 % overhead at moderate n is the price of cell-based
+  incremental computation, BSP scheduling, partial-recomputation
+  potential, and parallel-fire potential. For applications that
+  need any of those, it's a reasonable cost. For one-shot
+  numerical pipelines it's pure tax — but only ~40–75 % tax, not
+  orders of magnitude.
+* **The Prologos surface language is the expensive layer right now.**
+  The ~600 000× gap between **math** and **Prologos math** at W3 is
+  almost entirely Prologos elaboration + reduction overhead. The
+  reducer is the bottleneck; the propagator network is not.
+* **The "Prologos network" axis is the interesting future direction.**
+  A surface Prologos program that compiles to a propagator network
+  (instead of being evaluated by the reducer) would inherit the
+  network's +40–75 % overhead profile, not the reducer's 6-order
+  multiplier. The path from "Prologos math" to "Prologos network"
+  is the Prologos compiler maturity story — and based on these
+  numbers, where the algorithmic-cost wins live.
 
 ## How to reproduce
 
 ```
-# Four Prologos surface variants
+# W3 reference — variants 5–7 (rat-coarse, rat-fine, float)
+racket benchmarks/comparative/eigentrust-propagators-bench.rkt
+
+# Scaling across n=8..4096 — variants 5–9 (3 propagator + 2 plain)
+racket benchmarks/comparative/eigentrust-propagators-scaling.rkt
+
+# Prologos surface (4 surface variants, fixed n=4 W3)
 racket tools/bench-phases.rkt --runs 2 \
   benchmarks/comparative/eigentrust-list-rat.prologos \
   benchmarks/comparative/eigentrust-list-posit.prologos \
   benchmarks/comparative/eigentrust-pvec-rat.prologos \
   benchmarks/comparative/eigentrust-pvec-posit.prologos
 
-# Three propagator variants on the W3 reference workload
-racket benchmarks/comparative/eigentrust-propagators-bench.rkt
-
-# Five Racket-direct variants across n=8..4096 (with 30s per-cell
-# timeout; rat times out at n=128, float scales to n=4096)
-racket benchmarks/comparative/eigentrust-propagators-scaling.rkt
-
-# Tests (4 surface + 3 propagator + 1 plain)
-raco test tests/test-eigentrust.rkt                       # 13 tests
-raco test tests/test-eigentrust-posit.rkt                 #  6 tests
-raco test tests/test-eigentrust-pvec.rkt                  #  6 tests
-raco test tests/test-eigentrust-pvec-posit.rkt            #  6 tests
+# Tests across all variants
+raco test tests/test-eigentrust.rkt                       # 13 tests (List+Rat, P)
+raco test tests/test-eigentrust-posit.rkt                 #  6 tests (List+Posit32, P)
+raco test tests/test-eigentrust-pvec.rkt                  #  6 tests (PVec+Rat, P)
+raco test tests/test-eigentrust-pvec-posit.rkt            #  6 tests (PVec+Posit32, P)
 raco test tests/test-eigentrust-propagators.rkt           # 13 tests (rat-coarse)
 raco test tests/test-eigentrust-propagators-fine.rkt      #  6 tests (rat-fine)
 raco test tests/test-eigentrust-propagators-float.rkt     #  9 tests (float)
-raco test tests/test-eigentrust-plain.rkt                 #  9 tests (plain rat + plain float)
+raco test tests/test-eigentrust-plain.rkt                 #  9 tests (plain rat + plain fl)
 ```
+
+## Appendix: rat-flavored variants
+
+Five exact-rational variants exist as correctness-verification tools
+for small n, **not as comparison data points** (exact-rat is
+intractable beyond n ≈ 64; denominators grow as O(n^k) and bigint
+arithmetic is O(d log d) in digit count):
+
+| Axis | Variant | Status at W3 (n=4) | Status at scale |
+| --- | --- | --- | --- |
+| math | `plain-rat` | 2.74 ms | times out at n=128 (>30 s) |
+| network | `rat-coarse`, `rat-fine` | 3.36 ms / 4.43 ms | times out at n=128 |
+| Prologos math | `List + Rat`, `PVec + Rat` (P) | 18 372 ms / 33 006 ms | not measured |
+
+The rat variants share the four axes but were dropped from the
+main analysis because float-typed answers are what real EigenTrust
+deployments need. The rat code is retained for golden-equality
+testing at small n (the 13-test rackunit suite for
+`test-eigentrust.rkt` checks every primitive against an exact
+expected rational).
 
 ## Pitfalls surfaced
 
-- Surface-language pitfalls: `2026-04-23_eigentrust_pitfalls.md` (16 entries).
-- Propagator-track pitfalls: `2026-04-29_eigentrust_propagators_pitfalls.md` (5 entries — fire-once vs chain, cell-merge during initial reads, float `equal?`, `for/sum` exact 0 vs 0.0, fine-grained cell-id lookup overhead).
+* **Surface-language pitfalls**: `2026-04-23_eigentrust_pitfalls.md`
+  (16 entries — closure capture, multi-line def, posit literal
+  parsing, etc.).
+* **Propagator-track pitfalls**:
+  `2026-04-29_eigentrust_propagators_pitfalls.md`
+  (5 entries — fire-once vs chain, cell-merge during initial reads,
+  float `equal?`, `for/sum` exact 0 vs 0.0, fine-grained cell-id
+  lookup).
