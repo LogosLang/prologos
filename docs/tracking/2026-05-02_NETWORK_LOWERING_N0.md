@@ -1,12 +1,30 @@
-# Network Lowering — N0 (SH Series Track 3)
+# Network Lowering — N0 (SH Series Track 3 prototype)
 
 **Date**: 2026-05-02
-**Status**: Stage 4 implementation
-**Series**: SH (Self-Hosting) — third track, the network-shaped successor to Track 1's AST→LLVM lowering
+**Status**: Stage 4 implementation — **shipped as a too-early Track 3 prototype**; artifact format will change post-Track-1
+**Series**: SH (Self-Hosting) — see [SH Master Tracker](2026-04-30_SH_MASTER.md)
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
 **Cross-references**:
+- [SH Master Tracker (formal series)](2026-04-30_SH_MASTER.md) — Track 3 ("LLVM substrate PoC") is the formal track this work prototypes
+- [Self-Hosting Path and Bootstrap Stages](../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md) — strategy doc; `.pnet`-as-runtime-format is the linchpin
+- [SH Series Alignment Delta](2026-05-02_SH_SERIES_ALIGNMENT.md) — how this work relates to the formal track structure
 - [Track 1 (Tier 0–2)](2026-04-30_LLVM_LOWERING_TIER_0_2.md), [Track 2 (Tier 3)](2026-05-01_LLVM_LOWERING_TIER_3.md)
 - Prior commits: `9f84490`, `307e995`, `ab5513a`, `a6de14d`, `3ac25dd`, `4551684`, `7d2b257`
+
+## 0. Relationship to the formal SH series (added post-rebase 2026-05-02)
+
+The SH Master Tracker landed on main on 2026-04-30 with a 10-track structure. Mapping our shipped work to that structure:
+
+| Our shipped work | Formal SH track | Relationship |
+|---|---|---|
+| Tiers 0–3 (AST→LLVM lowering) | Track 5 (Type erasure boundary) — partial; also feeds Track 4 fire-fn body compiler | Repositions as fire-fn body compilation prototype, not a track of its own |
+| **N0 (this doc)** | Track 3 (LLVM substrate PoC) | **This is the Track 3 deliverable**, but done before Tracks 1 and 2 (its formal prerequisites) |
+| Issue #42 (HAMT/CHAMP) | Track 6 (Runtime services) sub-concern | Stays open under Track 6 |
+| Issue #44 (PReductions output contract) | Cross-series — Track 9 of PRN/PReductions | Stays open under PReductions |
+
+**The artifact format will change.** N0's input to the Zig kernel is the `network-skeleton` struct emitted by `network-emit.rkt` — a Racket-side data structure. Track 1 (`.pnet` network-as-value) replaces this with a serialized `.pnet` artifact. The Zig kernel's API stays roughly the same (`prologos_cell_alloc/read/write`); the loader changes from "consume a Racket-emitted skeleton" to "load a `.pnet` file." The Tier 0–3 fire-fn body compiler and the Zig kernel both survive; only the glue between them gets replaced.
+
+**Why N0 still has value**: it validates the substrate-on-LLVM shape end-to-end. Track 3's deliverable per the SH Master is "smallest end-to-end validation of the substrate-on-LLVM path." That's exactly what N0 ships — it just used a temporary artifact format. Once Track 1 lands, the loader becomes `.pnet`-aware and N0's contribution merges into the formal track lineage.
 
 ## 1. Reframe
 
