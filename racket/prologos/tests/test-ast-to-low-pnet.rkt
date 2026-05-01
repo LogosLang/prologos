@@ -236,3 +236,24 @@
   ;; cells: cond=true, then=7, else=7, result = 4
   (check-equal? (count-by lp cell-decl?) 4)
   (check-equal? (count-by lp propagator-decl?) 1))
+
+;; ============================================================
+;; Sprint E.3: tail-recursive defn lowering (2026-05-01)
+;; ============================================================
+;;
+;; The matcher is exercised end-to-end via the n2-tailrec acceptance
+;; .prologos files (CI step "pnet-compile tail-recursive iteration").
+;; These tests focus on edge cases of the matcher itself: bare error
+;; messages, AST shapes that DON'T match.
+
+(test-case "bare expr-fvar reference (no application) raises"
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet (expr-Int) (expr-fvar 'undefined-fn) "t.prologos"))))
+
+(test-case "expr-app of unknown fvar raises with clear message"
+  ;; main := (some-undefined-fn 42) — fvar resolves to nothing.
+  (define body (expr-app (expr-fvar 'unknown-fn) (expr-int 42)))
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet (expr-Int) body "t.prologos"))))

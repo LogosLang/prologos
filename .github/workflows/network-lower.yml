@@ -173,3 +173,23 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile tail-recursive iteration (n2-tailrec)
+        # Sprint E.3 (2026-05-01). Tail-recursive defn forms are
+        # recognized by ast-to-low-pnet's `match-tail-rec` and lowered
+        # to a feedback propagator network — the same shape as
+        # test-bsp-feedback.c's hand-rolled iterative fib, but generated
+        # from regular Prologos source. Programs use 9-12 cells + 7-10
+        # propagators independent of input size; networks self-terminate
+        # via the cond gate (no fuel needed).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n2-tailrec/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n2-tailrec-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
