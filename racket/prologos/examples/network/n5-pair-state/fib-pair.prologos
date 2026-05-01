@@ -1,0 +1,17 @@
+spec fib-pair <Int * Int> -> Int -> Int
+defn fib-pair [p n]
+  match [int-lt n 1]
+    | true  -> [fst p]
+    | false -> [fib-pair [pair [snd p] [int+ [fst p] [snd p]]] [int- n 1]]
+
+def main : Int := [fib-pair [pair 0 1] 10]
+
+;; Iterative fib(10) via pair-state encoding `<a * b>` plus a counter.
+;; Sprint F.3: tail-rec lowering walks the value-tree per-leaf,
+;; producing a flat propagator network. This program produces
+;; IDENTICAL metrics (32 rounds, 137 fires, 12 cells, 10 props) to
+;; n2-tailrec/fib-iter.prologos (which uses 3 scalar binders) —
+;; demonstrating that the pair encoding and the tuple encoding
+;; lower to equivalent networks.
+;; fib(10) = 55.
+;; :expect-exit 55

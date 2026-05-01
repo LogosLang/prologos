@@ -1,0 +1,12 @@
+spec accum <Int * Int> -> Int -> Int
+defn accum [p k]
+  match [int-lt k 1]
+    | true  -> [int+ [fst p] [snd p]]
+    | false -> [accum [pair [int+ [fst p] k] [int+ [snd p] k]] [int- k 1]]
+
+def main : Int := [accum [pair 0 0] 5]
+
+;; Mixed binders: one pair-typed (K=1 of the binders is a pair),
+;; one Int. Each iteration adds k to BOTH fst and snd, then
+;; decrements k. Total: 2*(5+4+3+2+1) = 30.
+;; :expect-exit 30

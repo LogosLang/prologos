@@ -254,12 +254,12 @@ fst/snd projection or destructuring is required first."
   (define k (length arg-types))
   (cond
     [(zero? k) #f]
-    ;; Lambda binder annotations are expr-Int when a spec is given,
-    ;; expr-hole when not (the elaborator leaves bare defn args
-    ;; untyped at the lambda level — type info lives on the function's
-    ;; Pi type instead). Both shapes are fine for our Int-only
-    ;; iteration lowering; we just need k binders.
-    [(not (andmap (lambda (t) (or (expr-Int? t) (expr-hole? t))) arg-types)) #f]
+    ;; Lambda binder annotations: expr-Int when spec given, expr-hole
+    ;; when not, expr-Sigma for pair-typed binders (Sprint F.3). All
+    ;; three are fine for our lowering — we just need k binders; the
+    ;; literal-init-value check handles the actual init-leaf shape.
+    [(not (andmap (lambda (t) (or (expr-Int? t) (expr-hole? t)
+                                  (expr-Sigma? t))) arg-types)) #f]
     [else
      (match body
        [(expr-reduce cond-expr (list arm0 arm1) _structural?)
@@ -376,71 +376,95 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
       [_ #f])))
 
 (define (literal-init-value e)
-  ;; Returns the i64 (or #t/#f) value for an init-arg expression that
-  ;; we can evaluate at compile time, or #f if non-literal.
+  ;; Returns a value-tree of literal Int (or #t/#f) leaves for an
+  ;; init-arg expression that we can evaluate at compile time, or #f
+  ;; if non-literal. Pair literals like `[pair 0 1]` produce a list
+  ;; of leaves matching the pair structure; arbitrary nesting OK.
   (match e
     [(expr-int n) n]
-    [(expr-ann inner _) (literal-init-value inner)]
     [(expr-true)  #t]
     [(expr-false) #f]
+    [(expr-ann inner _) (literal-init-value inner)]
+    [(expr-pair fst-e snd-e)
+     (define a (literal-init-value fst-e))
+     (define b (literal-init-value snd-e))
+     (and (not (eq? a #f)) (not (eq? b #f)) (list a b))]
+    ;; Expr-ann with #f init becomes problematic; bail early.
     [_ #f]))
+
+;; Sprint F.3: vtree-walking helpers for pair-typed tail-rec state.
+
+;; vtree-leaves : vtree → (Listof scalar-leaf)
+;; Flatten the vtree's leaves in left-to-right order. Used to build a
+;; set of state cell-ids for the bridge check.
+(define (vtree-leaves vt)
+  (cond [(or (exact-integer? vt) (boolean? vt)) (list vt)]
+        [(list? vt) (apply append (map vtree-leaves vt))]
+        [else '()]))
+
+;; vtree-shapes-match? : vtree × vtree → Bool
+;; True iff the two vtrees have identical structure (same nesting).
+(define (vtree-shapes-match? a b)
+  (cond [(and (vtree-scalar? a) (vtree-scalar? b)) #t]
+        [(and (list? a) (list? b) (= (length a) (length b)))
+         (andmap vtree-shapes-match? a b)]
+        [else #f]))
+
+;; init-of-state-leaf : leaf-cid × state-vts × init-vts → init-leaf | #f
+;; Find the init-leaf corresponding to a given state cell-id, by walking
+;; both vtrees in lockstep. Returns #f if cell-id isn't a state cell.
+(define (init-of-state-leaf cid state-vts init-vts)
+  (let walk ([s state-vts] [i init-vts])
+    (cond
+      [(and (exact-integer? s) (= s cid)) i]
+      [(exact-integer? s) #f]
+      [(and (list? s) (list? i) (= (length s) (length i)))
+       (for/or ([sub-s (in-list s)] [sub-i (in-list i)])
+         (walk sub-s sub-i))]
+      [else #f])))
 
 (define (lower-tail-rec b dom-id env shape init-args)
   (define k (length init-args))
 
-  ;; init-args MUST be literals (Sprint E.3 v1 limitation). Each state
-  ;; cell is allocated with its init-arg's literal value as cell-decl
-  ;; init-value. Both state cells AND next-state cells take the same
-  ;; init value — feedback propagators reading next-state in round 1
-  ;; (against the snapshot) need it to match state, otherwise their
-  ;; "no-op" write of the snapshot's stale next-state value would
-  ;; incorrectly stomp the initial state.
-  (define init-vals
+  ;; 1. Each init-arg → init-vt. Sprint F.3: pair-typed init-args (e.g.
+  ;; `[pair 0 1]`) supported as nested literal vtrees. Each leaf must
+  ;; be an Int.
+  (define init-vts
     (for/list ([arg (in-list init-args)])
       (define v (literal-init-value arg))
       (unless v
         (translate-error! arg
-                          "tail-rec init-arg must be a literal Int (Sprint E.3 v1 limitation). \
+                          "tail-rec init-arg must be a literal Int (or pair of literal Ints). \
 For non-literal initializers, lift the value to a separate def or pre-compute it."))
-      ;; literal-init-value returns #t/#f for booleans; tail-rec state
-      ;; is currently Int-only, so reject Bool init-args here.
-      (unless (exact-integer? v)
-        (translate-error! arg
-                          "tail-rec init-arg must be Int (Sprint E.3 v1 supports Int state only)."))
+      ;; Bool init-leaves not yet supported in tail-rec state.
+      (let walk ([leaf v])
+        (cond [(exact-integer? leaf) (void)]
+              [(list? leaf) (for-each walk leaf)]
+              [else
+               (translate-error! arg
+                                 "tail-rec init-leaves must be Int (Bool/scalar Bool state slots not yet supported).")]))
       v))
 
-  ;; 1. Allocate state cells with literal init-values.
-  (define state-cids
-    (for/list ([v (in-list init-vals)])
-      (emit-cell! b INT-DOMAIN-ID v)))
+  ;; 2. Allocate state cells matching each init-vt's shape (recursive).
+  (define (alloc-state-vt init-vt)
+    (cond [(exact-integer? init-vt)
+           (emit-cell! b INT-DOMAIN-ID init-vt)]
+          [else
+           (map alloc-state-vt init-vt)]))
+  (define state-vts (map alloc-state-vt init-vts))
 
-  ;; State env: in the elaborated body, the OUTERMOST lambda's binder
-  ;; has the largest bvar index. init-args/state-cids are in outermost-
-  ;; first order, so env (innermost-first for bvar lookup) is the
-  ;; reverse.
-  (define state-env (reverse state-cids))
+  ;; State env: outermost lambda's binder has highest bvar index. The
+  ;; init-args/state-vts are in outermost-first order; env is innermost-
+  ;; first, so reverse.
+  (define state-env (reverse state-vts))
 
-  ;; 2. cond-expr → bool cell. For base-on-true case (the user's cond is
-  ;; "is_base_case", e.g., `n<1`), we OVERRIDE the cond cell's init from
-  ;; the default #f to #t. Reason: in cold-start round 1, computed step
-  ;; cells haven't fired yet (init = 0). Selects must pick "freeze"
-  ;; (state) in round 1 to avoid stomping good init values with stale
-  ;; step values. With base-on-true polarity (select(cond, state, step)),
-  ;; cond=1 → freeze; cond=0 → step. Setting cond's init to 1 fakes
-  ;; "halt" for round 1, so selects pick state. The cond propagator
-  ;; fires in round 1 and writes the actual cond value (e.g., 0 if not-
-  ;; yet-base-case), which takes effect in round 2.
-  ;;
-  ;; This avoids the should_step intermediate's extra hop, matching the
-  ;; structural shape of the working test-bsp-feedback.c iterative-fib
-  ;; (which uses `cont = (i < N)` directly — its natural cold-start
-  ;; init=0 already means "halt").
+  ;; 3. cond-expr → bool cell. With base-on-true? we mutate cond's
+  ;; cell-decl init from #f to #t to force round-1 freeze.
   (define base-on-true? (eq? (tail-rec-shape-base-arm-tag shape) 'true))
   (define cond-vt (build (tail-rec-shape-cond-expr shape) b BOOL-DOMAIN-ID state-env))
   (define cond-cid (assert-scalar! cond-vt (tail-rec-shape-cond-expr shape)
                                    "tail-rec cond-expr"))
   (when base-on-true?
-    ;; Mutate the cond cell-decl's init-value from #f to #t.
     (set-builder-cells! b
                         (for/list ([c (in-list (builder-cells b))])
                           (if (and (cell-decl? c) (= (cell-decl-id c) cond-cid))
@@ -449,65 +473,65 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
                                          #t)
                               c))))
 
-  ;; 3. step-args → step result cells (parallel, one per state slot).
+  ;; 4. step-args → step-vts. Each step-vt's shape MUST match the
+  ;; corresponding state-vt's shape (this is enforced by the elaborator
+  ;; via type checking; we assert defensively in the per-leaf walk).
   ;;
-  ;; Lag alignment: all step cells must have the same BSP lag relative
-  ;; to state cells, otherwise the select fan-in reads "current" vs
-  ;; "previous-round" values for different state slots and the
-  ;; iteration produces inconsistent step-results across slots.
-  ;;
-  ;; Step-args that compute via a propagator (e.g. (a+b), (n-1)) get
-  ;; lag = 1 automatically. Step-args that lower to a bare state cell
-  ;; (e.g. step-arg = (expr-bvar 1) referring to b) get lag = 0
-  ;; without intervention. Patch them via a 1-round identity bridge,
-  ;; matching the C-level iterative-fib reference (test-bsp-feedback.c
-  ;; uses `identity(b → a_step)` for exactly this reason).
-  ;;
-  ;; Bridge cell init = same as the source state cell's init, so the
-  ;; cold-start round's bridged value matches expected lag-1 behavior.
-  (define step-cids
-    (for/list ([step-arg (in-list (tail-rec-shape-step-args shape))])
-      ;; Sprint F.2: state stays scalar in tail-rec; pair-typed state
-      ;; deferred to F.3. If a step-arg is pair-typed, error early.
-      (define vt (build step-arg b INT-DOMAIN-ID state-env))
-      (define cid (assert-scalar! vt step-arg "tail-rec step-arg"))
-      (cond
-        [(member cid state-cids)
-         (define state-idx (index-of state-cids cid))
-         (define init-val (list-ref init-vals state-idx))
-         (define bridge-cid (emit-cell! b INT-DOMAIN-ID init-val))
-         (emit-propagator! b (list cid) bridge-cid 'kernel-identity)
-         bridge-cid]
-        [else cid])))
+  ;; Bridge: any leaf in step-vt that points at a state cell needs a
+  ;; 1-round identity bridge to align BSP lag. Without it, lag=0 reads
+  ;; mix with lag=1 reads from arithmetic, producing inconsistent
+  ;; step-results across leaves of the same iteration. (Sprint E.3
+  ;; finding; see test-bsp-feedback.c for the C-level reference.)
+  (define state-leaf-set
+    (let h ([s (make-hasheq)] [vt state-vts])
+      (cond [(exact-integer? vt) (hash-set! s vt #t) s]
+            [(list? vt) (for-each (lambda (sub) (h s sub)) vt) s]
+            [else s])))
 
-  ;; 4. Build next-state cell + select + feedback per state slot.
-  ;;
-  ;; Select polarity depends on what cond=1 semantically means:
-  ;; - base-on-true?  cond=1 → terminal (freeze): select(cond, state, step).
-  ;; - else (cond=1 → continue/step):              select(cond, step, state).
-  ;;
-  ;; The cold-start problem (selects firing in round 1 with stale step
-  ;; cells = 0) is handled by the cond cell init override above
-  ;; (base-on-true? ⇒ cond init = #t = "halt", forcing round-1 select
-  ;; to pick state).
-  ;;
-  ;; This polarity matches the C-level test-bsp-feedback.c iterative-fib
-  ;; structure but in Prologos's "is_base_case" cond convention.
-  (for ([state-cid (in-list state-cids)]
-        [step-cid (in-list step-cids)]
-        [v (in-list init-vals)])
-    (define next-cid (emit-cell! b INT-DOMAIN-ID v))
+  (define (bridge-leaves vt)
+    (cond [(exact-integer? vt)
+           (cond
+             [(hash-ref state-leaf-set vt #f)
+              (define init (init-of-state-leaf vt state-vts init-vts))
+              (define bridge-cid (emit-cell! b INT-DOMAIN-ID init))
+              (emit-propagator! b (list vt) bridge-cid 'kernel-identity)
+              bridge-cid]
+             [else vt])]
+          [else (map bridge-leaves vt)]))
+
+  (define step-vts
+    (for/list ([step-arg (in-list (tail-rec-shape-step-args shape))]
+               [state-vt  (in-list state-vts)])
+      (define raw-vt (build step-arg b INT-DOMAIN-ID state-env))
+      (unless (vtree-shapes-match? state-vt raw-vt)
+        (translate-error! step-arg
+                          (format "tail-rec step-arg shape ~v doesn't match state shape ~v"
+                                  raw-vt state-vt)))
+      (bridge-leaves raw-vt)))
+
+  ;; 5. Per-leaf: alloc next-cell + select + feedback. Walk the vtrees
+  ;; in lockstep across (state, step, init).
+  (define (emit-feedback state-vt step-vt init-vt)
     (cond
-      [base-on-true?
-       (emit-propagator! b (list cond-cid state-cid step-cid) next-cid 'kernel-select)]
+      [(exact-integer? state-vt)
+       (define next-cid (emit-cell! b INT-DOMAIN-ID init-vt))
+       (cond
+         [base-on-true?
+          (emit-propagator! b (list cond-cid state-vt step-vt) next-cid 'kernel-select)]
+         [else
+          (emit-propagator! b (list cond-cid step-vt state-vt) next-cid 'kernel-select)])
+       (emit-propagator! b (list next-cid) state-vt 'kernel-identity)]
       [else
-       (emit-propagator! b (list cond-cid step-cid state-cid) next-cid 'kernel-select)])
-    ;; Feedback edge — write back into state.
-    (emit-propagator! b (list next-cid) state-cid 'kernel-identity))
+       (for ([s (in-list state-vt)]
+             [t (in-list step-vt)]
+             [i (in-list init-vt)])
+         (emit-feedback s t i))]))
+  (for ([s (in-list state-vts)] [t (in-list step-vts)] [i (in-list init-vts)])
+    (emit-feedback s t i))
 
-  ;; 6. base-result expression evaluated in state env (re-fires every
-  ;;    round; settles when state stops changing). Returns the result
-  ;;    cell-id.
+  ;; 6. base-result expression evaluated in state env. Returns a vtree
+  ;; (could be scalar or pair) — caller (try-lower-tail-rec-call's
+  ;; build chain) handles whatever shape comes back.
   (build (tail-rec-shape-base-result shape) b dom-id state-env))
 
 (define (build expr b dom-id env)
