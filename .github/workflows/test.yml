@@ -24,5 +24,11 @@ jobs:
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 
-      - name: Run full test suite
+      - name: Run full test suite (skipped: heavy OCapN tests + interop)
         run: cd racket/prologos && racket tools/run-affected-tests.rkt --all --no-record
+
+      # Heavy OCapN tests skipped by run-affected-tests because they
+      # exceed the batch-worker's 120s per-file timeout. `raco test`
+      # has no such limit. Total wall ~5 min, well under our 30 min budget.
+      - name: Run heavy OCapN tests directly
+        run: cd racket/prologos && raco test tests/test-ocapn-vat.rkt tests/test-ocapn-acceptance-l3.rkt
