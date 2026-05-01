@@ -8,13 +8,19 @@ test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps), ~144s
 test-reduction-perf-02-01.rkt  # Nat arithmetic perf (fib 15 + ackermann), ~51s
 test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s
 
+# OCapN heavy tests — exceed the batch-worker's 120s per-file timeout.
+# Run directly via `raco test` (no per-file limit) in a separate step
+# of the test workflow. Local: `raco test tests/test-ocapn-vat.rkt` etc.
+test-ocapn-vat.rkt              # 158s under raco test (vat event loop, 21 tests)
+test-ocapn-acceptance-l3.rkt    # >180s under raco test (process-file Level-3)
+
 # OCapN interop tests — run via .github/workflows/interop.yml using
-# `raco test` directly (which handles top-level `(exit 0)` skip-guards
-# and `define-runtime-path` correctly). The batch-worker harness in
+# `raco test` directly. The batch-worker harness in
 # run-affected-tests.rkt crashes with DEAD WORKERS on these because
-# the skip-guard exits the worker process before any test reports.
-# Skipped here so the main `test` workflow stays green; covered by
-# the dedicated interop job. See docs/tracking/2026-04-29_OCAPN_INTEROP_DESIGN.md.
+# the (exit 0) skip-guard exits the worker process before any test
+# reports. Skipped here so the main `test` workflow stays green;
+# covered by the dedicated interop job.
+# See docs/tracking/2026-04-29_OCAPN_INTEROP_DESIGN.md.
 test-ocapn-syrup-cross-impl.rkt   # interop-only: needs @endo/ocapn-generated fixture (Phase 4)
 test-ocapn-live-interop.rkt       # interop-only: spawns node subprocess (Phase 5)
 test-ocapn-handshake.rkt          # interop-only: spawns node subprocess (Phase 6)
