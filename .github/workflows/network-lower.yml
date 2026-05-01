@@ -79,7 +79,16 @@ jobs:
           }
           EOF
           clang /tmp/smoke.ll runtime/prologos-runtime.o -o /tmp/smoke
-          /tmp/smoke ; ec=$? ; echo "smoke exit code: $ec"
+          # GitHub Actions runs `bash -eo pipefail`. /tmp/smoke is *expected*
+          # to return non-zero (the cell value as exit code). Without disabling
+          # -e around the call, set -e treats the expected return as a failure
+          # and the step exits with the smoke binary's exit code BEFORE the
+          # explicit `test` check runs.
+          set +e
+          /tmp/smoke
+          ec=$?
+          set -e
+          echo "smoke exit code: $ec"
           test "$ec" -eq 99
 
       - name: N0 end-to-end (lower + clang + run)
