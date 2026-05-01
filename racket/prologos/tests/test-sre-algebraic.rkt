@@ -581,3 +581,7 @@
   (define from-accessor ((sre-domain-meet td 'subtype) (expr-Int) (expr-Nat)))
   (check-equal? from-registry from-accessor)
   (check-equal? from-accessor (expr-Nat)))
+
+;; SRE Track 2I Phase 3 sweep tests live in tests/test-sre-sd-properties.rkt
+;; (separate file due to O(N³) sweep cost — keeps this file fast for the
+;; thread-pool worker dispatch).
