@@ -1,0 +1,11 @@
+spec countdown Int -> Int
+defn countdown [n]
+  match [int-lt n 1]
+    | true  -> n
+    | false -> [countdown [int- n 1]]
+
+def main : Int := [countdown 42]
+
+;; Single-state-variable iteration. Returns 0 (n decrements until n<1).
+;; Validates the K=1 case of the tail-rec lowering.
+;; :expect-exit 0
