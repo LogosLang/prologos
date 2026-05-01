@@ -1743,7 +1743,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-add a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(-)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1751,7 +1751,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-sub a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(*)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1759,7 +1759,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-mul a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(/)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1767,7 +1767,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-div a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
 
        ;; Comparison: (lt a b), (le a b), (eq a b)
        ;; Note: < and <= conflict with angle-bracket syntax in both reader modes.
@@ -1779,7 +1779,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-lt a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(le)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1787,7 +1787,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-le a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(gt)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1795,7 +1795,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-gt a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(ge)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1803,7 +1803,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-ge a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(eq)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1811,7 +1811,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-eq a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(mod)
         (if (= (length args) 2)
             (let ([a (parse-datum (car args))]
@@ -1819,7 +1819,7 @@
               (cond [(prologos-error? a) a]
                     [(prologos-error? b) b]
                     [else (surf-generic-mod a b loc)]))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
 
        ;; Unary: (negate a), (abs a)
        ;; When arity doesn't match, fall through to regular function application.
@@ -1827,12 +1827,12 @@
         (if (= (length args) 1)
             (let ([a (parse-datum (car args))])
               (if (prologos-error? a) a (surf-generic-negate a loc)))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
        [(abs)
         (if (= (length args) 1)
             (let ([a (parse-datum (car args))])
               (if (prologos-error? a) a (surf-generic-abs a loc)))
-            (parse-application head-stx args loc))]
+            (parse-app-or-goal head head-stx args loc))]
 
        ;; Generic conversion: (from-integer TargetType val), (from-rational TargetType val)
        [(from-integer)
@@ -1995,15 +1995,13 @@
            (define branches (validate-selection-paths raw-args "path" loc))
            (if (prologos-error? branches) branches
                (surf-path branches loc))]
-          ;; Not a path literal — fall through to normal application (e.g., IO Path
-          ;; constructor) OR to goal application when we're parsing a relational
-          ;; goal (e.g., a user `defr path` shadowing the prelude's `path` function).
-          ;; Without this dispatch, `solve (path "a" dest)` would degrade to surf-app
-          ;; and the head would lose its relation-name role.
-          [else
-           (if (current-parsing-relational-goal?)
-               (parse-goal-application head args loc)
-               (parse-application head-stx args loc))])]
+          ;; Not a path literal — fall through to ordinary dispatch (IO Path
+          ;; constructor in expression context, OR goal application when parsing
+          ;; a relational goal — e.g., a user `defr path` shadowing the prelude's
+          ;; `path` function). Without this dispatch, `solve (path "a" dest)`
+          ;; would degrade to surf-app and the head would lose its relation-name
+          ;; role. See parse-app-or-goal helper for the broader audit.
+          [else (parse-app-or-goal head head-stx args loc)])]
 
        ;; get-in: (get-in target path-spec)
        ;; path-spec is parsed as selection paths, e.g., :address.zip or :address.{zip city}
@@ -2860,7 +2858,7 @@
                        [else (surf-is v e loc)])))]
           [else
            ;; 'is' is not a functional keyword — treat as application
-           (parse-application head-stx args loc)])]
+           (parse-app-or-goal head head-stx args loc)])]
 
        ;; (not goal) — negation-as-failure in relational context
        [(not)
@@ -2872,7 +2870,7 @@
                      (surf-not g loc))))]
           [else
            ;; 'not' is not a functional keyword — treat as application
-           (parse-application head-stx args loc)])]
+           (parse-app-or-goal head head-stx args loc)])]
 
        ;; (guard [condition]) or (guard [condition] goal) — conditional in relational context
        ;; With 1 arg: tests condition, succeeds if truthy
@@ -2897,7 +2895,7 @@
              [else
               (prologos-error loc (format "guard expects 1-2 arguments, got ~a" nargs))])]
           [else
-           (parse-application head-stx args loc)])]
+           (parse-app-or-goal head head-stx args loc)])]
 
        ;; (cut) — committed choice, prunes remaining alternatives
        [(cut)
@@ -2906,7 +2904,7 @@
            (or (check-arity 'cut args 0 loc)
                (surf-cut loc))]
           [else
-           (parse-application head-stx args loc)])]
+           (parse-app-or-goal head head-stx args loc)])]
 
        ;; ---- Constraint forms (Phase 3c) ----
 
@@ -2918,7 +2916,7 @@
            (define errs (filter prologos-error? parsed-vars))
            (if (pair? errs) (car errs)
                (surf-all-different parsed-vars loc))]
-          [else (parse-application head-stx args loc)])]
+          [else (parse-app-or-goal head head-stx args loc)])]
 
        ;; (element index list-expr var) — v = xs[i]
        [(element)
@@ -2932,7 +2930,7 @@
                        [(prologos-error? xs) xs]
                        [(prologos-error? v) v]
                        [else (surf-element i xs v loc)])))]
-          [else (parse-application head-stx args loc)])]
+          [else (parse-app-or-goal head head-stx args loc)])]
 
        ;; (cumulative tasks capacity) — task scheduling
        [(cumulative)
@@ -2944,7 +2942,7 @@
                  (cond [(prologos-error? tasks) tasks]
                        [(prologos-error? cap) cap]
                        [else (surf-cumulative tasks cap loc)])))]
-          [else (parse-application head-stx args loc)])]
+          [else (parse-app-or-goal head head-stx args loc)])]
 
        ;; (minimize cost-var) — branch-and-bound minimization
        [(minimize)
@@ -2954,7 +2952,7 @@
                (let ([cv (parse-relational-goal (car args))])
                  (if (prologos-error? cv) cv
                      (surf-minimize cv loc))))]
-          [else (parse-application head-stx args loc)])]
+          [else (parse-app-or-goal head head-stx args loc)])]
 
        ;; Type constructors — bare atoms
        [(Solver) (surf-solver-type loc)]
@@ -3157,9 +3155,12 @@
         (if (current-parsing-relational-goal?)
             ;; In relational context: non-keyword head = goal application
             (parse-goal-application head args loc)
-            (parse-application head-stx args loc))])]
+            (parse-app-or-goal head head-stx args loc))])]
 
-    ;; Head is not a symbol -> application of a compound expression
+    ;; Head is not a symbol -> application of a compound expression.
+    ;; Compound heads can't be relation names, so stay with parse-application
+    ;; (don't dispatch to parse-app-or-goal — its goal-app branch would fail
+    ;; on a non-symbol head).
     [else
      (parse-application head-stx args loc)]))
 
@@ -3523,6 +3524,28 @@
                 (and (prologos-error? p) p)))
   (if err err
       (surf-goal-app name parsed-args loc)))
+
+;; ========================================
+;; Context-sensitive dispatch from keyword fall-throughs
+;; ========================================
+;; Many parser keywords have fall-through `[else ...]` branches that previously
+;; called `parse-application` directly when the keyword's expected form didn't
+;; match (e.g., `(path "hello")` where `path` is the IO Path keyword but the
+;; argument isn't a selection-path keyword). This bypassed the relational-goal
+;; context — meaning user-defined `defr <name>` for any name that happens to be
+;; a parser keyword would silently degrade to surf-app inside `solve`/`defr`.
+;;
+;; Use this helper at every keyword fall-through to preserve relational dispatch:
+;; if we're inside a relational goal, treat the form as a goal application;
+;; otherwise, treat it as a regular function application.
+;;
+;; See parser-keyword audit 2026-04-26 — fix originally landed for `path`, then
+;; generalized across all keyword fall-throughs to prevent the same class of
+;; silent degradation for other names users might `defr`.
+(define (parse-app-or-goal head head-stx arg-stxs loc)
+  (if (current-parsing-relational-goal?)
+      (parse-goal-application head arg-stxs loc)
+      (parse-application head-stx arg-stxs loc)))
 
 (define (parse-all-args stxs)
   (if (null? stxs) '()
