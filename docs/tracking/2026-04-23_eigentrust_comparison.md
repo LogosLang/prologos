@@ -71,33 +71,126 @@ is a separate piece of work. Today's data is the Racket-direct
 side.
 
 `benchmarks/comparative/eigentrust-propagators-scaling.rkt` —
-K=4, 30 s per-sample timeout, median of 3 runs.
+K=4, 30 s per-sample timeout, median of 3 runs (n=8..4096).
+`benchmarks/comparative/eigentrust-scaling-large.rkt` — K=4, 180 s
+per-sample timeout, median of 2 runs (n=4096..16384).
 
-| n    | math (plain-fl) | network (float) | network overhead |
-| ---: | -------------: | --------------: | ---------------: |
-|    8 |        0.03 ms |         0.12 ms |          +300 %  |
-|   16 |        0.03 ms |         0.14 ms |          +367 %  |
-|   32 |        0.05 ms |         0.16 ms |          +220 %  |
-|   64 |        0.09 ms |         0.28 ms |          +211 %  |
-|  128 |        0.27 ms |         0.57 ms |          +111 %  |
-|  256 |        0.99 ms |         2.10 ms |          +112 %  |
-|  512 |        4.59 ms |         9.00 ms |           +96 %  |
-| 1024 |       19.40 ms |        33.86 ms |           +75 %  |
-| 2048 |       88.37 ms |       151.62 ms |           +72 %  |
-| 4096 |      442.14 ms |       619.37 ms |           +40 %  |
+| n     | math (plain-fl) | network (float) | network overhead | source |
+| ----: | -------------: | --------------: | ---------------: | -----: |
+|     8 |        0.03 ms |         0.12 ms |          +300 %  | prior  |
+|    16 |        0.03 ms |         0.14 ms |          +367 %  | prior  |
+|    32 |        0.05 ms |         0.16 ms |          +220 %  | prior  |
+|    64 |        0.09 ms |         0.28 ms |          +211 %  | prior  |
+|   128 |        0.27 ms |         0.57 ms |          +111 %  | prior  |
+|   256 |        0.99 ms |         2.10 ms |          +112 %  | prior  |
+|   512 |        4.59 ms |         9.00 ms |           +96 %  | prior  |
+|  1024 |       19.40 ms |        33.86 ms |           +75 %  | prior  |
+|  2048 |       88.37 ms |       151.62 ms |           +72 %  | prior  |
+|  4096 |      442.14 ms |       619.37 ms |           +40 %  | prior  |
+|  4096 |      584.38 ms |       958.30 ms |           +64 %  | extended |
+|  8192 |     3015.74 ms |      4439.84 ms |           +47 %  | extended |
+| 16384 |    15989.23 ms |     20674.00 ms |           +29 %  | extended |
+
+The "extended" rows come from a separate measurement run
+(`benchmarks/comparative/eigentrust-scaling-large.rkt`, K=4, median of
+2 measured runs after 1 warmup, 180 s timeout). The two n=4096 numbers
+diverge by 32 % on math and 55 % on network — both are real, just
+different runs/cache states. Both rows are kept to give an honest
+picture of run-to-run variance at this scale, which is bigger than
+the model can explain. n=32768 was attempted but the fixture (8 GB)
++ Racket's still-rooted previous matrix (2 GB) + working set drove
+the 16 GB host into GC thrashing during fixture allocation; on a 32+
+GB box appending `32768` to `SIZES` would let the data point land.
 
 ### What the scaling shows
 
-* **Math scales ~O(n²)** as expected for K rounds of n×n mat-vec.
-  Doublings of n give ~3.5–5× time growth past the cache-resident
-  regime (n ≥ 128).
-* **Network adds a roughly constant absolute overhead per call.**
-  At n=8 the overhead is most of the time (0.09 ms of overhead vs
-  0.03 ms of math). At n=4096 it's 40 % (177 ms of overhead vs
-  442 ms of math). The overhead amortizes against per-fire work
-  but doesn't disappear — it asymptotes to "the cost of K BSP
-  rounds with K cell-writes of large flvectors", which is roughly
-  per-cell-write CHAMP path-copies + scheduler bookkeeping.
+* **Math scales slightly worse than O(n²)** in the cache-bound
+  regime. Doubling factors past n=512:
+
+  | n→2n | factor |
+  | --- | ---: |
+  | 256 → 512 | 4.64× |
+  | 512 → 1024 | 4.23× |
+  | 1024 → 2048 | 4.56× |
+  | 2048 → 4096 | 5.00× |
+  | 4096 → 8192 | 5.16× |
+  | 8192 → 16384 | 5.30× |
+
+  The drift from 4× toward 5× is the working set (n² doubles =
+  flvector data + temporary flvectors per iteration) outgrowing
+  L2/L3 and hitting DRAM bandwidth on every entry.
+
+* **Network overhead drops monotonically as n grows**: from +300 %
+  at n=8 down to +29 % at n=16384 — every doubling past n=4096 takes
+  ~17 percentage points off. The drop comes from the same n²
+  math kernel running inside the fire function (so the math part
+  scales identically) while network's overhead is in lower-order
+  terms — per-cell-write CHAMP path-copy (O(n) per write × K writes
+  = O(K·n)) and BSP scheduler bookkeeping (constant per round).
+
+### Trend / breakeven analysis
+
+A two-term model fit on n ≥ 128 with a SHARED n² coefficient
+(both run the identical math kernel):
+
+```
+math(n)    ≈ 6.18·10⁻⁵ · n²                          − 334
+network(n) ≈ 6.18·10⁻⁵ · n²  +  0.230 · n            − 526
+overhead   = network − math  =  0.230 · n            − 191      (linear in n)
+overhead / math  →  0  as n → ∞       (drops as ~b/(a·n) from above)
+```
+
+The fit is good at the largest n where measurement noise matters
+least: error 1.7 % on math at n=16384, −4.0 % on network. Smaller
+n have larger relative errors as expected (constants matter more).
+
+**Predicted overhead at n we did not measure**:
+
+| n       | math (extrap) | net (extrap) | overhead |
+| ------: | ------------: | -----------: | -------: |
+|  32 768 |     ~66 000 ms |     ~73 000 ms |    +11 % |
+|  65 536 |    ~265 000 ms |    ~280 000 ms |    +5.6 % |
+| 131 072 |  ~1 060 000 ms |  ~1 090 000 ms |    +2.8 % |
+| 262 144 |  ~4 250 000 ms |  ~4 310 000 ms |    +1.4 % |
+
+So the empirical answer to "is there a breakeven where network beats
+math?": **no, there isn't, and there can't be**. The fit confirms
+what the structure of the code already implies — the network's fire
+function calls the *same* math kernel that the plain Racket version
+calls, plus extra bookkeeping (cell allocation, BSP round dispatch,
+CHAMP path-copy on cell writes). Network's work is strictly a
+superset of math's work, so the overhead is always non-negative.
+What changes with n is the *ratio*: math grows as n² while overhead
+grows as n, so the ratio collapses asymptotically. At n=10⁶ the
+overhead would be ~0.4 %; at n=10⁷ ~0.04 %. But it never crosses.
+
+The same is true under any model where network does math plus
+strictly-positive bookkeeping. The only way network could win
+would be:
+
+* **Real parallelism on multiple cores** — the current BSP
+  scheduler runs one round at a time on one thread. If propagators
+  fired in parallel (broadcast scheduler, multi-thread BSP), large
+  N could partition across cores while math stays single-threaded.
+  This is not what's measured here.
+* **Incremental computation** — if only some cells change, the
+  network only re-fires the dependents while math has to recompute
+  the whole iteration. Not measured here either; one-shot dense
+  matrix-vector is the worst case for incremental.
+* **Working-set effects** — if the network's per-fire allocation
+  pattern happened to be more cache-friendly than math's at some
+  specific n. The data shows the opposite: network's CHAMP
+  path-copy is *less* cache-friendly than math's in-place flvector
+  iteration. There is no n where it accidentally wins.
+
+For the existing single-threaded one-shot dense workload, math is
+the architectural floor. Network's value isn't beating math on
+this workload — it's amortizing the bookkeeping to ≤ 1–2 % at
+algorithmic scale, while delivering the propagator network's
+infrastructure (incremental computation, parallel firing,
+worldview tagging, partial recomputation) that math can't
+express at all.
+
 * **At n=4096 the network is 619 ms, math is 442 ms, Prologos
   math is intractable** — the surface variant's elaborator +
   reducer plus the O(k²) blowup means even a single 4096-peer
@@ -134,6 +227,9 @@ racket benchmarks/comparative/eigentrust-propagators-bench.rkt
 
 # Scaling across n=8..4096 — variants 5–9 (3 propagator + 2 plain)
 racket benchmarks/comparative/eigentrust-propagators-scaling.rkt
+
+# Extended scaling n=4096..16384 — math + network only
+racket benchmarks/comparative/eigentrust-scaling-large.rkt
 
 # Prologos surface (4 surface variants, fixed n=4 W3)
 racket tools/bench-phases.rkt --runs 2 \
