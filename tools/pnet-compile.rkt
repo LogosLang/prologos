@@ -54,6 +54,7 @@
          "../racket/prologos/low-pnet-ir.rkt"
          "../racket/prologos/low-pnet-to-llvm.rkt"
          "../racket/prologos/pnet-deploy.rkt"
+         "../racket/prologos/ast-to-low-pnet.rkt"
          "../racket/prologos/propagator.rkt")
 
 (define out-bin-arg  (make-parameter "out"))
@@ -86,44 +87,11 @@
   (error 'pnet-compile "no top-level definition named 'main' in ~a" input-path))
 
 ;; -------- Step 2: build a Low-PNet from the typed AST --------------------
-;; This is a SOURCE-LEVEL translator, not the full prop-network-to-low-pnet
-;; pass (which walks an actual prop-network value). For the supported
-;; literal subset, we synthesize a minimal Low-PNet directly from the AST.
-;;
-;; Future work: extend to handle arithmetic by emitting propagator-decls,
-;; OR construct a real prop-network and reuse prop-network-to-low-pnet.
+;; Use ast-to-low-pnet (Phase 2.D) which handles literals + binary
+;; arithmetic via propagator-decls. Anything beyond that range raises
+;; ast-translation-error.
 
-(define (typed-ast-to-low-pnet type body)
-  ;; Unwrap expr-ann
-  (let unwrap ([b body])
-    (cond
-      [(expr-ann? b) (unwrap (expr-ann-term b))]
-      [else
-       (cond
-         [(and (expr-Int? type) (expr-int? b))
-          (low-pnet '(1 0)
-                    (list (meta-decl 'source-file (path->string input-path))
-                          (domain-decl 0 'int 'kernel-merge-int 0 'never)
-                          (cell-decl 0 0 (expr-int-val b))
-                          (entry-decl 0)))]
-         [(and (expr-Bool? type) (expr-true? b))
-          (low-pnet '(1 0)
-                    (list (meta-decl 'source-file (path->string input-path))
-                          (domain-decl 0 'bool 'kernel-merge-bool #f 'never)
-                          (cell-decl 0 0 #t)
-                          (entry-decl 0)))]
-         [(and (expr-Bool? type) (expr-false? b))
-          (low-pnet '(1 0)
-                    (list (meta-decl 'source-file (path->string input-path))
-                          (domain-decl 0 'bool 'kernel-merge-bool #f 'never)
-                          (cell-decl 0 0 #f)
-                          (entry-decl 0)))]
-         [else
-          (error 'pnet-compile
-                 "unsupported program shape: type=~v body=~v.\n  pnet-compile currently supports only:\n    def main : Int := <int-literal>\n    def main : Bool := <bool-literal>"
-                 type body)])])))
-
-(define lp (typed-ast-to-low-pnet main-type main-body))
+(define lp (ast-to-low-pnet main-type main-body (path->string input-path)))
 
 ;; -------- Step 3: write the program.pnet file --------------------------
 ;; pnet-deploy expects a prop-network as input but our Low-PNet was
