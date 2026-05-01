@@ -53,12 +53,19 @@
       '(10 20 40 60 80 92)))
 
 ;; (algorithm form-symbol) where form-symbol ∈ '(unrolled iterative).
-;; fib supports both; sum / factorial only iterative.
+;; fib supports both unrolled (gen-fib.rkt) and iterative (gen-iter.rkt
+;; in 3 encodings: fib = 3-scalar, pair-fib = pair-state, helpered-fib
+;; = inlined helper). sum / factorial only iterative.
 (define configs
-  '((fib       unrolled)
-    (fib       iterative)
-    (sum       iterative)
-    (factorial iterative)))
+  '((fib          unrolled)
+    (fib          iterative)
+    (pair-fib     iterative)
+    (helpered-fib iterative)
+    (sum          iterative)
+    (factorial    iterative)
+    (sumsq        iterative)
+    (dual-acc     iterative)
+    (pow2         iterative)))
 
 ;; ============================================================
 ;; Helpers
