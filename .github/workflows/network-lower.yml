@@ -311,6 +311,19 @@ jobs:
             test "$ec" -eq "$expected"
           done
 
+      - name: Round-trip acceptance gate (Phase 4 Day 10)
+        # 2026-05-02 kernel-pocket-universes track Phase 4 Day 10
+        # (§ 14.1 row 10 + § 15.6). For every .prologos in the network
+        # examples tree, lower through ast-to-low-pnet → low-pnet-to-prop-network
+        # → run-to-quiescence and compare to the file's :expect-exit
+        # marker. NO LLVM and NO native binary in the loop — the
+        # round-trip exercises the IR through propagator.rkt's
+        # canonical Racket interpreter. If a future IR / lowering
+        # change diverges from the native-binary path on any example,
+        # this gate catches it before the LLVM emission step. As of
+        # Day 10: 37/37 examples pass.
+        run: racket tools/round-trip-acceptance.rkt
+
       - name: pnet-compile combined-features showcase (n7-showcase)
         # Single Prologos program exercising every Sprint A-F.4 feature
         # together: int arith + comparison (A), tail-recursive defn
