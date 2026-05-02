@@ -1,0 +1,8 @@
+ns examples::n11-naf::or-false-true
+
+require [prologos::data::bool :refer [or]]
+
+def main : Bool := or false true
+
+;; or false true → true → exit 1
+;; :expect-exit 1

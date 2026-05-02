@@ -1,0 +1,8 @@
+ns examples::n11-naf::xor-mix
+
+require [prologos::data::bool :refer [xor]]
+
+def main : Bool := xor true false
+
+;; xor true false → true → exit 1
+;; :expect-exit 1

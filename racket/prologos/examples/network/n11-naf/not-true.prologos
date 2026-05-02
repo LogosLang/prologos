@@ -1,0 +1,8 @@
+ns examples::n11-naf::not-true
+
+require [prologos::data::bool :refer [not]]
+
+def main : Bool := not true
+
+;; not true → false → exit 0
+;; :expect-exit 0

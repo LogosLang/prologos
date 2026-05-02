@@ -1,0 +1,8 @@
+ns examples::n11-naf::and-true-true
+
+require [prologos::data::bool :refer [and]]
+
+def main : Bool := and true true
+
+;; and true true → true → exit 1
+;; :expect-exit 1

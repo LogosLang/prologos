@@ -1,0 +1,9 @@
+ns examples::n11-naf::implies-tautology
+
+require [prologos::data::bool :refer [implies]]
+
+def main : Bool := implies false true
+
+;; (false → true) is true → exit 1.
+;; (False antecedent makes the implication trivially true.)
+;; :expect-exit 1
