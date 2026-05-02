@@ -62,6 +62,10 @@ runtime/*.o
 runtime/*.o.o
 runtime/prologos-runtime.o.dSYM/
 
+# Compiled C/Zig binaries (built locally, not checked in)
+runtime/test-substrate
+runtime/bench-scope-enter
+
 # Test scratch — output binaries from network-compile.rkt / llvm-compile.rkt
 /out
 /out.ll

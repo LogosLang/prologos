@@ -133,13 +133,23 @@ extern fn prologos_hamt_remove(h: HamtRoot, key: u32) HamtRoot;
 extern fn prologos_hamt_size(h: HamtRoot) u32;
 
 // CLOCK_MONOTONIC nanoseconds via libc clock_gettime. On Linux x86_64
-// this resolves through the vDSO (~30ns per call).
+// this resolves through the vDSO (~30ns per call). On macOS it goes
+// through libSystem to mach_absolute_time (~50ns per call).
+//
+// CRITICAL: the CLOCK_MONOTONIC integer is OS-specific. Linux uses 1,
+// macOS uses 6. Hard-coding 1 on macOS makes clock_gettime return -1
+// silently and now_ns() return 0 — which blinds every PNET-STATS
+// run_ns measurement on macOS. Found 2026-05-02 when the bench-suite
+// reported 0 ns for every config.
 const timespec = extern struct {
     sec: i64,
     nsec: i64,
 };
 extern fn clock_gettime(clk_id: c_int, tp: *timespec) c_int;
-const CLOCK_MONOTONIC: c_int = 1;
+const CLOCK_MONOTONIC: c_int = switch (@import("builtin").os.tag) {
+    .macos, .ios, .tvos, .watchos, .visionos => 6,
+    else => 1, // Linux, FreeBSD, OpenBSD, NetBSD, DragonFly all use 1
+};
 
 fn now_ns() u64 {
     var ts: timespec = .{ .sec = 0, .nsec = 0 };
