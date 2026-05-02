@@ -89,21 +89,6 @@
                  ;; / lookup-bridge / cache-bridge!. Currently exercised by
                  ;; lower-tail-rec's depth-alignment within the iteration body.
                  [bridge-cache #:auto #:mutable]
-                 ;; iter-blocks: vestigial. Sprint G introduced this field
-                 ;; intending to accumulate iter-block-decls from
-                 ;; lower-tail-rec, but the lowering rewrite never landed —
-                 ;; nothing in this module ever appends to iter-blocks, and
-                 ;; assemble-low-pnet does not consume it. lower-tail-rec
-                 ;; instead emits the **substrate iteration pattern**
-                 ;; (cells + kernel-identity feedback propagators + per-leaf
-                 ;; kernel-select arithmetic) — this IS the dissolved
-                 ;; substrate pattern envisioned by
-                 ;; docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.5,
-                 ;; just realized via LWW + identity-feedback + propagator-
-                 ;; firing-driven enqueue rather than cell_reset + tick.
-                 ;; SCHEDULED FOR DELETION: kernel-PU Phase 6 Day 13 alongside
-                 ;; iter-block-decl (Category B retirement, § 9.1).
-                 [iter-blocks #:auto #:mutable]
                  ;; tail-rec-count: tracks how many tail-recursive call sites
                  ;; were lowered to the substrate iteration pattern. Used by
                  ;; ast-to-low-pnet to emit a meta-decl signature
@@ -124,7 +109,11 @@
   (set-builder-next-pid! b 0)
   (set-builder-depths! b (hasheq))
   (set-builder-bridge-cache! b (hasheq))
-  (set-builder-iter-blocks! b '())
+  ;; Phase 6 Day 13 (kernel-PU rev 2.1, § 9.1 Category B): vestigial
+  ;; `iter-blocks` builder field deleted alongside iter-block-decl.
+  ;; lower-tail-rec emits the substrate iteration pattern (cells +
+  ;; identity-feedback propagators) directly into builder-cells /
+  ;; builder-props; no separate iter-block accumulator is needed.
   (set-builder-tail-rec-count! b 0)
   b)
 
