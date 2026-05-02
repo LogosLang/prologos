@@ -76,7 +76,14 @@
                  ;; emit-propagator updates output cell's depth = max(input
                  ;; depths) + 1. Used by lower-tail-rec's lag-matching
                  ;; bridge insertion.
-                 [depths #:auto #:mutable])
+                 [depths #:auto #:mutable]
+                 ;; Sprint F.6: bridge cache for lift-cell-to-depth coalescing.
+                 ;; Maps source-cell-id → (Listof (cons depth bridge-cid)),
+                 ;; representing all identity-bridge cells reachable from
+                 ;; that source. When multiple consumers lift the same
+                 ;; source to (possibly different) target depths, they
+                 ;; share the bridge chain instead of duplicating it.
+                 [bridge-cache #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -85,6 +92,7 @@
   (set-builder-next-cid! b 0)
   (set-builder-next-pid! b 0)
   (set-builder-depths! b (hasheq))
+  (set-builder-bridge-cache! b (hasheq))
   b)
 
 (define (cell-depth b cid)
@@ -92,6 +100,69 @@
 
 (define (set-cell-depth! b cid d)
   (set-builder-depths! b (hash-set (builder-depths b) cid d)))
+
+;; Sprint F.6 bridge cache helpers.
+
+;; Return the cached bridge from `src-cid` at exactly `target-depth`,
+;; or #f if no such bridge exists.
+(define (lookup-bridge b src-cid target-depth)
+  (define entries (hash-ref (builder-bridge-cache b) src-cid '()))
+  (for/first ([entry (in-list entries)] #:when (= (car entry) target-depth))
+    (cdr entry)))
+
+;; Return the cached bridge from `src-cid` at the highest depth strictly
+;; less than `target-depth`, or `src-cid` itself if no such bridge.
+;; This is the starting point for extending a chain.
+(define (find-cached-below b src-cid target-depth)
+  (define entries (hash-ref (builder-bridge-cache b) src-cid '()))
+  (define candidates
+    (filter (lambda (e) (< (car e) target-depth)) entries))
+  (cond
+    [(null? candidates) src-cid]
+    [else
+     ;; argmax of car (depth)
+     (define-values (best _)
+       (for/fold ([best (car candidates)] [best-d (caar candidates)])
+                 ([c (in-list (cdr candidates))])
+         (if (> (car c) best-d) (values c (car c)) (values best best-d))))
+     (cdr best)]))
+
+;; Record bridge-cid as reachable from src-cid at its current depth.
+(define (cache-bridge! b src-cid bridge-cid)
+  (define d (cell-depth b bridge-cid))
+  (set-builder-bridge-cache!
+   b (hash-update (builder-bridge-cache b) src-cid
+                  (lambda (entries) (cons (cons d bridge-cid) entries))
+                  '())))
+
+;; Sprint F.6: post-build invariant. Every multi-input propagator's
+;; input cells should have equal depth — F.5's emit-aligned-propagator!
+;; should have lifted them via identity bridges so that's the case.
+;;
+;; Exemptions:
+;;   - kernel-identity (1-input): no fan-in to align.
+;;   - kernel-int-{neg,abs} (1-input): same.
+;;   - Any 1-input propagator: no peer inputs.
+;;
+;; If this assertion fires, F.5's lifting missed a case — the program
+;; would silently produce wrong values via stale-snapshot reads. The
+;; assertion catches the bug at compile time rather than at run time.
+(define (assert-depth-balance-invariant! b)
+  (for ([p (in-list (builder-props b))]
+        #:when (propagator-decl? p))
+    (define ins (propagator-decl-input-cells p))
+    (when (>= (length ins) 2)
+      (define depths (map (lambda (c) (cell-depth b c)) ins))
+      (unless (apply = depths)
+        (translate-error!
+         p
+         (format "F.6 depth-balance invariant violated: propagator ~a (~a) \
+has inputs at differing depths ~v. F.5's emit-aligned-propagator! should \
+have inserted identity bridges to lift shorter inputs. This is a bug in \
+the lowering; please file an issue with the source program."
+                 (propagator-decl-id p)
+                 (propagator-decl-fire-fn-tag p)
+                 (map cons ins depths)))))))
 
 ;; Find the cell-decl for a given cell-id. Linear scan; only used by
 ;; lift-cell-to-depth which runs O(N) times in lower-tail-rec.
@@ -461,23 +532,46 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
          (walk sub-s sub-i))]
       [else #f])))
 
-;; F.5: lift-cell-to-depth — chain identity propagators until cell-id's
-;; depth equals target-depth. Returns the cell-id at the new depth.
-;; Each bridge cell inherits the source's domain + init value, so the
-;; chain has consistent semantics under cold-start (all bridges init
-;; to whatever the source initially holds; once values flow, bridges
-;; become 1-round-delayed copies).
+;; F.5+F.6: lift-cell-to-depth — chain identity propagators until
+;; cell-id's depth equals target-depth. Returns the cell-id at the new
+;; depth. F.6 adds bridge-cache coalescing: when multiple consumers
+;; want the same source lifted, they share the same bridge chain
+;; instead of allocating fresh duplicate cells.
+;;
+;; Algorithm:
+;;   1. If `cid` is already at depth ≥ target, return it as-is.
+;;   2. Look up an existing bridge from `cid` at exactly target depth;
+;;      if found, return it (full coalesce).
+;;   3. Find the highest existing bridge from `cid` at depth < target;
+;;      use it as the starting point for chain extension. (If none,
+;;      start from `cid` itself.) This is partial coalescing: we reuse
+;;      whatever lower-depth chain already exists, and only build the
+;;      remaining bridges to reach target.
+;;   4. Extend the chain, caching each new bridge against the original
+;;      `cid` for future consumers.
 (define (lift-cell-to-depth b cid target-depth)
-  (let loop ([cid cid])
-    (cond
-      [(>= (cell-depth b cid) target-depth) cid]
-      [else
-       (define src-decl (find-cell-decl b cid))
-       (define src-domain (cell-decl-domain-id src-decl))
-       (define src-init   (cell-decl-init-value src-decl))
-       (define bridge-cid (emit-cell! b src-domain src-init))
-       (emit-propagator! b (list cid) bridge-cid 'kernel-identity)
-       (loop bridge-cid)])))
+  (cond
+    [(>= (cell-depth b cid) target-depth) cid]
+    [else
+     (define cached (lookup-bridge b cid target-depth))
+     (cond
+       [cached cached]
+       [else
+        (define start-cid (find-cached-below b cid target-depth))
+        (let loop ([current start-cid])
+          (cond
+            [(>= (cell-depth b current) target-depth) current]
+            [else
+             (define src-decl (find-cell-decl b current))
+             (define src-domain (cell-decl-domain-id src-decl))
+             (define src-init   (cell-decl-init-value src-decl))
+             (define bridge-cid (emit-cell! b src-domain src-init))
+             (emit-propagator! b (list current) bridge-cid 'kernel-identity)
+             ;; Cache bridge against the ORIGINAL source cid, not the
+             ;; intermediate `current`, so future consumers of `cid`
+             ;; can find this bridge at its target depth.
+             (cache-bridge! b cid bridge-cid)
+             (loop bridge-cid)]))])]))
 
 ;; F.5: emit-aligned-propagator! — like emit-propagator!, but first
 ;; lifts every input cell to the maximum depth across all inputs via
@@ -975,6 +1069,14 @@ are not yet supported.")]))
   ;; pair-typed; only `main` is constrained.
   (define result-cid (assert-scalar! result-vt main-body
                                      "main result"))
+
+  ;; Sprint F.6: depth-balance invariant check. Every multi-input
+  ;; propagator should have all its inputs at the same depth (after
+  ;; F.5's emit-aligned-propagator! lifting + F.6's coalescing).
+  ;; Identity propagators (kernel-identity) are EXEMPT — they're
+  ;; designed to bridge depths, so by definition their input is at
+  ;; depth N-1 while output is at N.
+  (assert-depth-balance-invariant! b)
 
   ;; Determine which domains we actually emitted (any cell with that
   ;; domain-id). Emit domain-decls for those.

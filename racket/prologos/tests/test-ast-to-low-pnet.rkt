@@ -414,3 +414,45 @@
   (check-exn ast-translation-error?
     (lambda ()
       (ast-to-low-pnet (expr-Int) body "t.prologos"))))
+
+;; ============================================================
+;; Sprint F.6: bridge coalescing + depth-balance invariant (2026-05-02)
+;; ============================================================
+
+(test-case "depth-balance invariant: every multi-input prop has equal-depth inputs"
+  ;; Validate via a synthetic deep arithmetic expression: int+(int*(2,3),
+  ;; int*(4,5)). Both int-mul outputs are depth 1; int-add reads both at
+  ;; depth 1, no lifting needed; depth-balance trivially holds.
+  (define body
+    (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
+                  (expr-int-mul (expr-int 4) (expr-int 5))))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; cells: 4 literals + 2 int-mul outputs + 1 int-add output = 7
+  (check-equal? (count-by lp cell-decl?) 7)
+  (check-equal? (count-by lp propagator-decl?) 3))
+
+(test-case "asymmetric depth — F.5 lifts shallower input"
+  ;; int+ (int* 2 3) 4: int-mul at depth 1, literal 4 at depth 0.
+  ;; F.5 lifts 4 to depth 1 via 1 identity bridge. Total cells: 5
+  ;; (3 literals + 1 mul-result + 1 add-result) + 1 bridge = 6.
+  (define body (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
+                             (expr-int 4)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (check-equal? (count-by lp cell-decl?) 6)
+  (check-equal? (count-by lp propagator-decl?) 3))
+
+(test-case "F.6: depth-balance invariant succeeds on balanced tree"
+  ;; int+(int*(2,3), int+(4,5)): two depth-1 children feeding outer add.
+  ;; Outer add inputs at equal depth → no lifts. 4 literals + 2 inner
+  ;; results + 1 outer result = 7 cells. 3 propagators.
+  ;; (Successful depth-balance is implicit — the assertion at end of
+  ;; ast-to-low-pnet would raise if any prop had mismatched inputs.)
+  (define body
+    (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
+                  (expr-int-add (expr-int 4) (expr-int 5))))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (check-equal? (count-by lp cell-decl?) 7)
+  (check-equal? (count-by lp propagator-decl?) 3))
