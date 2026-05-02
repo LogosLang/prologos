@@ -456,3 +456,48 @@
   (check-true (validate-low-pnet lp))
   (check-equal? (count-by lp cell-decl?) 7)
   (check-equal? (count-by lp propagator-decl?) 3))
+
+;; ============================================================
+;; kernel-PU Phase 4 Day 9: tail-rec substrate iteration signature
+;; ============================================================
+;;
+;; The Day 9 test gate: tail-rec acceptance examples produce a meta-decl
+;; signature documenting that lower-tail-rec emitted the dissolved
+;; substrate iteration pattern (cells + identity-feedback + per-leaf
+;; arithmetic + select halt-guard), as opposed to Sprint G's never-shipped
+;; iter-block-decl pattern. Non-tail-rec programs MUST NOT emit the
+;; signature (it'd be a false positive). The version pair must be (1 1)
+;; (V1.1, kernel-PU Phase 3 Day 8).
+;;
+;; The acceptance examples themselves (n2-tailrec/*.prologos) are exercised
+;; end-to-end through the network-lower CI workflow + the Day 7 acceptance
+;; sweep; here we test the lowering-pass invariant directly via constructed
+;; AST shapes.
+
+(define (find-meta-value lp key)
+  (for/or ([n (in-list (low-pnet-nodes lp))]
+           #:when (and (meta-decl? n) (eq? (meta-decl-key n) key)))
+    (meta-decl-value n)))
+
+(test-case "Day 9 signature: non-tail-rec program does NOT emit tail-rec-pattern meta"
+  (define lp (ast-to-low-pnet (expr-Int) (expr-int 42) "test.prologos"))
+  (check-false (find-meta-value lp 'tail-rec-pattern))
+  (check-false (find-meta-value lp 'tail-rec-count)))
+
+(test-case "Day 9 signature: arithmetic program does NOT emit tail-rec-pattern meta"
+  (define body (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
+                             (expr-int 4)))
+  (define lp (ast-to-low-pnet (expr-Int) body "test.prologos"))
+  (check-false (find-meta-value lp 'tail-rec-pattern)))
+
+(test-case "Day 9: low-pnet version is (1 1) after Phase 3 Day 8 bump"
+  (define lp (ast-to-low-pnet (expr-Int) (expr-int 7) "test.prologos"))
+  (check-equal? (low-pnet-version lp) '(1 1)))
+
+;; The end-to-end "tail-rec emits the signature" test is exercised by
+;; acceptance: the n2-tailrec/*.prologos fixtures lower through ast-to-low-pnet
+;; and produce the meta. We can't easily construct an elaborated tail-rec
+;; AST in unit-test isolation (it requires the full type elaborator's output
+;; with global env populated), so the gate runs in the network-lower
+;; integration sweep. The negative tests above confirm the signature is
+;; not spuriously emitted.

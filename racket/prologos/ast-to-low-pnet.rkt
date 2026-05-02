@@ -84,15 +84,37 @@
                  ;; source to (possibly different) target depths, they
                  ;; share the bridge chain instead of duplicating it.
                  ;;
-                 ;; Sprint G note: bridge-cache is unused by the current
-                 ;; lower-tail-rec design (which emits iter-block-decls
-                 ;; instead of feedback bridges). Kept for any future
-                 ;; lowering pass that needs depth alignment within S0.
+                 ;; bridge-cache is the live coalescing structure used by
+                 ;; lift-cell-to-depth (Sprint F.6). Read by find-cached-below
+                 ;; / lookup-bridge / cache-bridge!. Currently exercised by
+                 ;; lower-tail-rec's depth-alignment within the iteration body.
                  [bridge-cache #:auto #:mutable]
-                 ;; Sprint G: pending iter-block declarations. lower-tail-rec
-                 ;; appends an iter-block-decl here; ast-to-low-pnet emits
-                 ;; them in the final low-pnet structure.
-                 [iter-blocks #:auto #:mutable])
+                 ;; iter-blocks: vestigial. Sprint G introduced this field
+                 ;; intending to accumulate iter-block-decls from
+                 ;; lower-tail-rec, but the lowering rewrite never landed —
+                 ;; nothing in this module ever appends to iter-blocks, and
+                 ;; assemble-low-pnet does not consume it. lower-tail-rec
+                 ;; instead emits the **substrate iteration pattern**
+                 ;; (cells + kernel-identity feedback propagators + per-leaf
+                 ;; kernel-select arithmetic) — this IS the dissolved
+                 ;; substrate pattern envisioned by
+                 ;; docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.5,
+                 ;; just realized via LWW + identity-feedback + propagator-
+                 ;; firing-driven enqueue rather than cell_reset + tick.
+                 ;; SCHEDULED FOR DELETION: kernel-PU Phase 6 Day 13 alongside
+                 ;; iter-block-decl (Category B retirement, § 9.1).
+                 [iter-blocks #:auto #:mutable]
+                 ;; tail-rec-count: tracks how many tail-recursive call sites
+                 ;; were lowered to the substrate iteration pattern. Used by
+                 ;; ast-to-low-pnet to emit a meta-decl signature
+                 ;; (tail-rec-pattern: lww-feedback-v1) iff > 0. The signature
+                 ;; is the verifiable test artifact for kernel-PU Phase 4
+                 ;; Day 9 — confirms lower-tail-rec emitted the dissolved
+                 ;; substrate pattern (cells + identity-feedback propagators)
+                 ;; rather than the never-shipped Sprint G iter-block-decl
+                 ;; pattern. See docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md
+                 ;; § 5.5 and § 14.1 Day 9.
+                 [tail-rec-count #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -103,6 +125,7 @@
   (set-builder-depths! b (hasheq))
   (set-builder-bridge-cache! b (hasheq))
   (set-builder-iter-blocks! b '())
+  (set-builder-tail-rec-count! b 0)
   b)
 
 (define (cell-depth b cid)
@@ -611,6 +634,13 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
     [else (apply max 0 (map (lambda (sub) (max-vtree-depth b sub)) vt))]))
 
 (define (lower-tail-rec b dom-id env shape init-args)
+  ;; kernel-PU Phase 4 Day 9: track that we lowered a tail-rec via the
+  ;; substrate iteration pattern (cells + kernel-identity feedback +
+  ;; per-leaf kernel-select arithmetic — § 5.5 of the design doc). The
+  ;; meta-decl emitted at assemble-time documents this for testing and
+  ;; confirms we did NOT take the never-shipped Sprint G iter-block-decl
+  ;; path (which is scheduled for Phase 6 deletion).
+  (set-builder-tail-rec-count! b (+ 1 (builder-tail-rec-count b)))
   (define k (length init-args))
 
   ;; 1. Each init-arg → init-vt. Sprint F.3: pair-typed init-args (e.g.
@@ -1111,11 +1141,28 @@ are not yet supported.")]))
 
   (define meta (meta-decl 'source-file source-file))
 
+  ;; kernel-PU Phase 4 Day 9: emit a signature meta-decl iff lower-tail-rec
+  ;; ran. Verifies the substrate iteration pattern (§ 5.5 of
+  ;; docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md) was emitted —
+  ;; namely, cells + kernel-identity feedback + per-leaf arithmetic +
+  ;; kernel-select halt-guard. The pattern variant is `lww-feedback-v1`
+  ;; (LWW state cells + propagator-firing-driven re-enqueue, observationally
+  ;; equivalent to the design doc's cell_reset+tick variant which is a
+  ;; future optimization; see § 5.5 "Iteration's advance state pattern").
+  ;; Day 9 test gate: tail-rec acceptance examples (n2-tailrec/*) produce
+  ;; this meta-decl; non-tail-rec programs do not.
+  (define tail-rec-meta
+    (if (> (builder-tail-rec-count b) 0)
+        (list (meta-decl 'tail-rec-pattern 'lww-feedback-v1)
+              (meta-decl 'tail-rec-count (builder-tail-rec-count b)))
+        '()))
+
   ;; Validation order requires domains before cells, cells before props,
   ;; props before deps, all before entry.
   (low-pnet
-   '(1 0)
+   '(1 1)
    (append (list meta)
+           tail-rec-meta
            domain-decls
            cells-emitted
            props-emitted

@@ -333,9 +333,11 @@ Two cell-write modes (matches Racket's two-mode model — `net-cell-write` and `
 | **merge** | `cell_write(cid, value)` | apply domain merge fn; enqueue dependents | propagators (S0); also fine from handlers |
 | **reset** | `cell_reset(cid, value)` | replace value, no merge; **does NOT enqueue dependents** | stratum-handler propagators only |
 
-**Iteration's "advance state" pattern**:
+**Iteration's "advance state" pattern** (two equivalent variants):
 
-Because `cell_reset` doesn't enqueue dependents, the iteration propagator needs another way to re-fire. The pattern emitted by `lower-tail-rec`:
+Because `cell_reset` doesn't enqueue dependents, an iteration realized purely on `cell_reset` would converge after one round. Two patterns achieve a working iteration; both are dissolved (cells + propagators only; no kernel concept of "iteration"). They are observationally equivalent and produce the same final cell values for the same initial conditions.
+
+**Variant A — `cell_reset` + tick** (envisioned mega-propagator shape):
 
 ```
 ;; Compiler emits (substrate-level Low-PNet IR):
@@ -355,7 +357,36 @@ propagator-decl: iter-step
                                         ;; enqueues iter-step for next round
 ```
 
-The `tick` cell is a monotone counter (e.g., LWW); each `cell_write(tick, +1)` enqueues `iter-step` (because `iter-step` subscribes to `tick`); BSP next round fires `iter-step` again with the reset state values.
+Variant A requires kernel runtime support for an N→M propagator shape with per-output write modes (mixed `cell_reset` + `cell_write` outputs from a single fire-fn). The current kernel ships 1→1 / 2→1 / 3→1 shapes only.
+
+**Variant B — LWW state + identity-feedback** (shipped pattern as of kernel-PU Phase 4 Day 9):
+
+```
+;; Compiler emits (what `lower-tail-rec` actually emits — verified
+;; via pp-low-pnet on n2-tailrec/countdown.prologos, Day 9):
+cell-decl: state-a, state-b, n, cond, step-a, step-b, step-n, next-a, next-b, next-n, base-result
+propagator-decl: cond-prop      kernel-int-le, ins=(n, lit-1)         out=cond
+propagator-decl: step-a-prop    arithmetic on (state-a, state-b)       out=step-a
+propagator-decl: step-b-prop    arithmetic on (state-a, state-b)       out=step-b
+propagator-decl: step-n-prop    kernel-int-sub, ins=(n, lit-1)         out=step-n
+propagator-decl: select-a       kernel-select, ins=(cond, base-a, step-a) out=next-a
+propagator-decl: select-b       kernel-select, ins=(cond, base-b, step-b) out=next-b
+propagator-decl: select-n       kernel-select, ins=(cond, base-n, step-n) out=next-n
+propagator-decl: feedback-a     kernel-identity, ins=(next-a)          out=state-a
+propagator-decl: feedback-b     kernel-identity, ins=(next-b)          out=state-b
+propagator-decl: feedback-n     kernel-identity, ins=(next-n)          out=state-n
+;; (state cells are LWW; identity-feedback writes are merging cell_write
+;; calls; convergence happens when next-* = state-* for all leaves.)
+```
+
+State cells use the LWW i64 domain; the `kernel-identity` feedback propagators write via `cell_write` (merge mode) which DOES enqueue subscribers when the value changes. Re-firing happens automatically: each round's identity feedback writes new state values → state cells change → step-* / select-* / feedback-* propagators re-enqueue → next round runs the iteration again. Convergence (BSP fixpoint) happens when the halt condition is reached and all next-* cells stabilize.
+
+The two variants are observationally equivalent for the n2-tailrec class:
+- Variant A's `tick` re-fire mechanism corresponds 1-to-1 with Variant B's "identity feedback enqueues subscribers" mechanism.
+- Variant A's `cell_reset` of state cells corresponds 1-to-1 with Variant B's LWW write — under LWW i64 the merge function is `\old new -> new`, so the value semantics match exactly.
+- Variant B avoids the runtime extension cost of Variant A's mega-propagator shape; it uses only the 1→1 / 2→1 / 3→1 propagator shapes the kernel already supports.
+
+**Day 9 ratification**: Variant B is the SHIPPED pattern. Variant A remains documented as an optimization candidate for a future track (pursuing it requires extending the kernel runtime with an N→M shape + per-output write modes, ~250-400 LOC across Zig and the IR). The Day 9 `lower-tail-rec` invocation emits a verifiable signature meta-decl `(meta-decl tail-rec-pattern 'lww-feedback-v1)` so consumers can confirm the dissolved pattern was used (and NOT Sprint G's never-shipped `iter-block-decl` — which lives only as a struct definition in `low-pnet-ir.rkt` and is scheduled for Phase 6 deletion alongside the unused `iter-blocks` builder field).
 
 **Privilege enforcement** is by convention, not runtime-checked. Matches Racket's `current-bsp-fire-round?` model. Code comments at each API entry-point document which mode is permitted in S0 vs handler context. The kernel does NOT trap if an S0 propagator calls `cell_reset` (matches Racket).
 
@@ -663,9 +694,10 @@ A full audit of pre-existing scaffolding for ordering / strata / non-monotone en
 
 | Artifact | Where | Why it goes |
 |---|---|---|
-| `iter-block-decl` IR node | `racket/prologos/low-pnet-ir.rkt:29` (provide), `:102-126` (struct), `:251-262` (parse), `:288` (pp), `:373-383` (validate) | Sprint G scaffolding; replaced by substrate-level iteration pattern (§ 5.5, § 14 Phase 4). |
-| Sprint G `@main`-loop emission paths | `racket/prologos/low-pnet-to-llvm.rkt` (Sprint G additions) | Same — Phase 5 emits `cell_reset` / `cell_write` calls instead. |
-| Sprint G depth-alignment + bridge-cell helpers in `lower-tail-rec` | `racket/prologos/ast-to-low-pnet.rkt` (around `:613` `lower-tail-rec`; the depth-alignment + identity-bridge helpers introduced for Sprint G's lowering shape) | `lower-tail-rec`'s rewrite (§ 14 Phase 4) makes them unreachable. |
+| `iter-block-decl` IR node | `racket/prologos/low-pnet-ir.rkt:29` (provide), `:102-126` (struct), `:251-262` (parse), `:288` (pp), `:373-383` (validate) | Sprint G scaffolding; never wired into `lower-tail-rec` (the lowering pass that was supposed to consume it never landed). The dissolved substrate iteration pattern (§ 5.5 Variant B) is shipped instead. |
+| Unused `iter-blocks` builder field | `racket/prologos/ast-to-low-pnet.rkt` (builder struct, ~line 95) | Vestigial — Sprint G added it but never appended to it; assemble-low-pnet ignores it. Day 9 marked it for deletion via comment; Phase 6 removes the field + its initializer + the builder destructuring. |
+| Sprint G `@main`-loop emission paths | `racket/prologos/low-pnet-to-llvm.rkt` (Sprint G additions, if any landed) | Inspect during Phase 6; if zero call-sites for `iter-block-decl` exist after the IR struct deletion, this path was never live. |
+| Sprint G depth-alignment + bridge-cell helpers in `lower-tail-rec` | `racket/prologos/ast-to-low-pnet.rkt` (the depth-alignment + identity-bridge helpers introduced for Sprint G's lowering shape) | **NOT retired.** Day 9 ratification: depth-alignment + bridge-cache (Sprint F.5/F.6 helpers) are LIVE — they're used to balance multi-input arithmetic propagator inputs in the substrate iteration pattern. Without them, `factorial-iter` and `fib-iter` would have asymmetric-depth selects that read stale state. Originally flagged for retirement here on the assumption that the §5.5 mega-propagator (Variant A) would eliminate them; under shipped Variant B they're load-bearing. Removed from Phase 6 inventory as of Day 9. |
 | `run-stratified-resolution!` (imperative variant) | `racket/prologos/metavar-store.rkt:2079` | Already documented as "mostly dead code — superseded by `run-stratified-resolution-pure`" (`:2075-2078`). Phase 5 finishes the retirement. |
 | `current-in-stratified-resolution?` parameter | `racket/prologos/metavar-store.rkt:2081` | Used only by `run-stratified-resolution!`; goes with it. |
 
@@ -673,7 +705,7 @@ A full audit of pre-existing scaffolding for ordering / strata / non-monotone en
 
 | Artifact | Where | What changes |
 |---|---|---|
-| `lower-tail-rec` | `racket/prologos/ast-to-low-pnet.rkt:613` | Phase 4: emits substrate-level iteration pattern (§ 5.5) instead of `iter-block-decl`. Same function, different IR output. |
+| `lower-tail-rec` | `racket/prologos/ast-to-low-pnet.rkt:613` | Phase 4 Day 9: ratified — emits substrate-level iteration pattern Variant B (LWW + identity-feedback) per § 5.5. Already in place from earlier work; Day 9 added a verifiable signature `(meta-decl tail-rec-pattern 'lww-feedback-v1)` and updated misleading comments referencing the never-shipped iter-block-decl path. Variant A (cell_reset + tick mega-propagator) deferred to a future track requiring N→M propagator shape kernel extension. |
 | `run-stratified-resolution-pure` | `racket/prologos/metavar-store.rkt:2131` | Migrate from explicit S(-1) → S0 → S1 → S2 sequencing to a **registered set of stratum-handler propagators** subscribed to per-stratum request cells. The kernel's 2-tier outer loop drives the same sequence. Net: explicit Racket loop becomes data; ordering is enforced by topology + tier. |
 | `process-naf-request` (S1 NAF handler) | `racket/prologos/relations.rkt:115-245` | Phase 5+: re-express via dissolved pattern (handler IS a propagator; fork via HAMT root pointer-share; reset via `cell_reset`). API unchanged at the call-site level. |
 
@@ -891,7 +923,7 @@ Concrete decomposition of the phase plan above into per-day deliverables. Each d
 | **6** | 2b | Scope snapshots upgrade: interim flat-array → HAMT root pointer-share; `scope_run` writes go to scope's HAMT via CoW | `runtime/prologos-runtime.zig` | scope-snapshot-O(1) microbench (§ 14 Phase 2 ii) |
 | **7** | 2c | Regression sweep + 100K-cell `scope_enter` benchmark; HAMT GC leak documented (Track 6 follow-up) | tests | All acceptance + microbenches pass |
 | **8** | 3 | Low-PNet IR `write-decl` mode tag (`'merge` default; `'reset`); parse / pp / validate; bump LOW_PNET_FORMAT_VERSION 1.0→1.1 + add V12 validator rule. `low-pnet-to-llvm` rejects `'reset` writes (delegated to Day 11 emission). | `racket/prologos/low-pnet-ir.rkt`, `racket/prologos/low-pnet-to-llvm.rkt`, `tests/test-low-pnet-ir.rkt` | All 22 pre-existing IR tests pass + 10 new V1.1 tests = 32; LLVM tests still pass (mode-merge default); round-trip works for both modes |
-| **9** | 4a | `lower-tail-rec` rewrite: emit substrate iteration pattern (state cells + iter-step propagator + tick + halt-guard) instead of `iter-block-decl` | `racket/prologos/ast-to-low-pnet.rkt` | Tail-rec acceptance examples produce `propagator-decl` + mode-tagged `write-decl`s (verify via `pp-low-pnet`) |
+| **9** | 4a | `lower-tail-rec` rewrite — **ratified Variant B (LWW + identity-feedback)** as the shipped substrate iteration pattern (§ 5.5). Variant A (cell_reset + tick mega-propagator) deferred — would require N→M propagator shape + per-output write modes in the kernel runtime (~250-400 LOC across Zig + IR; future track). Day 9 deliverable is now: (i) emit a verifiable signature `(meta-decl tail-rec-pattern 'lww-feedback-v1)` whenever `lower-tail-rec` runs, (ii) update misleading comments about `iter-block-decl` (which `lower-tail-rec` never wired up — only the IR struct exists), (iii) mark unused `iter-blocks` builder field for Phase 6 deletion, (iv) document both variants in § 5.5. | `racket/prologos/ast-to-low-pnet.rkt`, `tests/test-ast-to-low-pnet.rkt`, design doc § 5.5 | Tail-rec acceptance examples (4/4 in n2-tailrec) emit the signature meta and produce correct results: countdown=0, factorial(5)=120, fib(10)=55, sum-to(10)=55. Negative tests confirm non-tail-rec programs do NOT emit the signature (no false positives). All 56 pre-existing lowering tests pass + 3 new Day 9 signature tests = 91 across the 4 test files. |
 | **10** | 4b | New `low-pnet-to-prop-network` adapter (~200 LOC): walks Low-PNet IR, materializes runnable `prop-network` via `propagator.rkt` primitives | `racket/prologos/low-pnet-to-prop-network.rkt` (new) | Round-trip gate: `(run-prop-network (low-pnet-to-prop-network (ast-to-low-pnet typed-ast)))` matches AST-direct interpreter for tail-rec / NAF / topology examples — **NO LLVM in the loop** |
 | **11** | 5a | LLVM emission: `lower-low-pnet-to-llvm` dispatches on write-decl mode; emits `prologos_cell_write` vs `prologos_cell_reset`; emits scope-API calls inside fire-fn bodies | `racket/prologos/low-pnet-to-llvm.rkt` | Pell N=5 = 29 via dissolved pattern; 34 acceptance examples lower and run |
 | **12** | 5b | Category-C migrations: `process-naf-request` → scope APIs (per § 5.9 worked example); `run-stratified-resolution-pure` → registered stratum-handler propagators | `racket/prologos/relations.rkt`, `racket/prologos/metavar-store.rkt` | NAF isolation gate: divergent inner goal returns `fuel_exhausted`; parent fuel intact except for `parent_fuel_charge` |
