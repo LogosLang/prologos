@@ -1,0 +1,12 @@
+spec count-pair <Int * Int> -> Int
+defn count-pair [p]
+  match [int-eq [snd p] 0]
+    | true  -> [fst p]
+    | false -> [count-pair [pair [int+ [fst p] 1] [int- [snd p] 1]]]
+
+def main : Int := [count-pair [pair 0 10]]
+
+;; Single pair-typed binder; counts fst up while counting snd down.
+;; Halts when snd=0; returns fst (= initial snd value when starting
+;; from fst=0). Validates K=1 case where the entire state is a pair.
+;; :expect-exit 10

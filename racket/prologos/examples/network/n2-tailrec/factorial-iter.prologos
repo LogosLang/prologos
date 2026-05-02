@@ -1,0 +1,11 @@
+spec factorial-iter Int -> Int -> Int
+defn factorial-iter [acc n]
+  match [int-le n 1]
+    | true  -> acc
+    | false -> [factorial-iter [int* acc n] [int- n 1]]
+
+def main : Int := [factorial-iter 1 5]
+
+;; Iterative factorial. Halts when n <= 1 (so 1! = 1, 0! = 1).
+;; 5! = 1 * 5 * 4 * 3 * 2 = 120.
+;; :expect-exit 120

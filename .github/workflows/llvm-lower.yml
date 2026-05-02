@@ -1,0 +1,59 @@
+name: LLVM Lowering
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  llvm-lower:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.0'
+
+      - name: Verify clang is available
+        run: |
+          clang --version
+          which clang
+
+      - name: Install Prologos package dependencies
+        run: cd racket/prologos && raco pkg install --auto --skip-installed
+
+      - name: Pre-compile compiler + lowering module
+        run: |
+          cd racket/prologos
+          raco make driver.rkt
+          raco make llvm-lower.rkt
+
+      - name: Pre-compile test runner
+        run: raco make tools/llvm-test.rkt tools/llvm-compile.rkt
+
+      - name: Tier 0 unit tests (IR string assertions)
+        run: cd racket/prologos && raco test tests/test-llvm-lower.rkt
+
+      - name: Tier 0 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_LLVM_TIER: "0"
+        run: racket tools/llvm-test.rkt --tier 0 racket/prologos/examples/llvm/tier0
+
+      - name: Tier 1 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_LLVM_TIER: "1"
+        run: racket tools/llvm-test.rkt --tier 1 racket/prologos/examples/llvm/tier1
+
+      - name: Tier 2 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_LLVM_TIER: "2"
+        run: racket tools/llvm-test.rkt --tier 2 racket/prologos/examples/llvm/tier2
+
+      - name: Tier 3 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_LLVM_TIER: "3"
+        run: racket tools/llvm-test.rkt --tier 3 racket/prologos/examples/llvm/tier3

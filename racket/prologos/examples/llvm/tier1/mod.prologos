@@ -1,0 +1,3 @@
+def main : Int := [int-mod 100 7]
+
+;; :expect-exit 2

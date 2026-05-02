@@ -1,0 +1,12 @@
+spec double Int -> Int
+defn double [x] [int* x 2]
+
+spec quadruple Int -> Int
+defn quadruple [x] [double [double x]]
+
+def main : Int := [quadruple 7]
+
+;; Transitive helpers: quadruple inlines to [double [double 7]] which
+;; further inlines to [int* [int* 7 2] 2] = 28. Validates that
+;; non-recursive inlining recurses through nested helper calls.
+;; :expect-exit 28

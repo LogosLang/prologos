@@ -293,12 +293,15 @@
 
   ;; --- Cross-wiring propagators ---
   ;; A.msg-out → B.msg-in: when A writes, B receives
+  ;; SH Track 1 (audit doc § 4): runtime-relevant fire-fn — must have stable
+  ;; tag so .pnet network-topology serialization (future) can name it.
   (define-values (net9 _p1)
     (net-add-propagator net8 (list a-out) (list b-in)
       (lambda (n)
         (define v (net-cell-read n a-out))
         (if (msg-bot? v) n
-            (net-cell-write n b-in v)))))
+            (net-cell-write n b-in v)))
+      #:fire-fn-tag 'rt-session-channel-forward))
 
   ;; B.msg-out → A.msg-in: when B writes, A receives
   (define-values (net10 _p2)
@@ -306,7 +309,8 @@
       (lambda (n)
         (define v (net-cell-read n b-out))
         (if (msg-bot? v) n
-            (net-cell-write n a-in v)))))
+            (net-cell-write n a-in v)))
+      #:fire-fn-tag 'rt-session-channel-forward))
 
   ;; --- Build structs ---
   (define ep-a (channel-endpoint a-out a-in a-sess a-choice))

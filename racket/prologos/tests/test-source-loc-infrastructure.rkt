@@ -82,7 +82,7 @@
   (define (capturing-fire net)
     (set-box! captured-during-fire (current-source-loc))
     net)
-  (define prop (propagator '() '() capturing-fire #f 0 loc))
+  (define prop (propagator '() '() capturing-fire #f 0 loc DEFAULT-FIRE-FN-TAG))
   (define net (make-prop-network))
   ;; Simulate scheduler invoking fire-propagator
   (fire-propagator prop net)
@@ -91,7 +91,7 @@
 (test-case "fire-propagator restores current-source-loc after fire"
   (define loc-before (srcloc "before.rkt" 1 1 1))
   (define loc-propagator (srcloc "prop.rkt" 2 2 2))
-  (define prop (propagator '() '() (lambda (net) net) #f 0 loc-propagator))
+  (define prop (propagator '() '() (lambda (net) net) #f 0 loc-propagator DEFAULT-FIRE-FN-TAG))
   (define net (make-prop-network))
   (parameterize ([current-source-loc loc-before])
     (fire-propagator prop net)
@@ -103,7 +103,7 @@
   (define (capturing-fire net)
     (set-box! captured (current-source-loc))
     net)
-  (define prop (propagator '() '() capturing-fire #f 0 #f))
+  (define prop (propagator '() '() capturing-fire #f 0 #f DEFAULT-FIRE-FN-TAG))
   (define net (make-prop-network))
   (parameterize ([current-source-loc #f])
     (fire-propagator prop net))

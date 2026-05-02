@@ -1,0 +1,9 @@
+spec sum-to Int -> Int
+defn sum-to
+  | 0 -> 0
+  | n -> [int+ n [sum-to [int- n 1]]]
+
+;; sum 1..15 = 120
+def main : Int := [sum-to 15]
+
+;; :expect-exit 120

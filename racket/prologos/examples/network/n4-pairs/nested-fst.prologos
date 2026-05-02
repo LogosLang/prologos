@@ -1,0 +1,9 @@
+spec inner-fst <<Int * Int> * Int> -> Int
+defn inner-fst [p] [fst [fst p]]
+
+def main : Int := [inner-fst [pair [pair 100 200] 300]]
+
+;; Nested pair: outer is <<Int*Int>*Int>. fst of outer = <Int*Int>;
+;; fst of that = first Int. Validates that vtree representation
+;; nests correctly. 100.
+;; :expect-exit 100

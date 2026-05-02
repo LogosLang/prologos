@@ -1,0 +1,10 @@
+spec safe-pred Nat -> Int
+defn safe-pred
+  | zero  -> 99
+  | suc n -> n
+
+def main : Int := [safe-pred 0N]
+
+;; Default value when scrutinee is zero. Validates that the zero arm's
+;; body fires when scrutinee == 0. safe-pred(0) = 99.
+;; :expect-exit 99
