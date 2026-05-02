@@ -125,6 +125,22 @@ const MAX_PROPS: u32 = 1024;
 const MAX_DEPS: u32 = 16;
 const N_TAGS: u32 = 16;          // big enough for current 2-1 + 3-1 tags
 const DEFAULT_MAX_ROUNDS: u64 = 100000;
+const MAX_SCOPES: u32 = 8;       // per-scope state stack depth (Phase 1 Day 3)
+const ROOT_SCOPE_ID: u32 = 0;    // scope_records[0] is reserved for root
+const NIL_SCOPE_ID: u32 = 0xFFFFFFFF;
+
+// RunResult enum (matches design § 6 zig signatures).
+//
+//   halt           = 0   (worklist empty AND no topo mutations)
+//   fuel_exhausted = 1   (per-scope fuel hit zero)
+//   trap           = 2   (handler propagator trapped on contradiction)
+//
+// Returned by prologos_scope_run; root prologos_run_to_quiescence does
+// not return a result code (legacy callers don't check), but sets
+// stat_fuel_exhausted as before.
+pub const RUN_RESULT_HALT: u8 = 0;
+pub const RUN_RESULT_FUEL_EXHAUSTED: u8 = 1;
+pub const RUN_RESULT_TRAP: u8 = 2;
 
 // =====================================================================
 // Cells + per-cell merge domain
@@ -590,6 +606,17 @@ export fn prologos_run_to_quiescence() void {
     stat_run_ns += now_ns() - start_ns;
 }
 
+// Fuel-exhaustion check that honors the active fuel mode:
+//   - in_scope_run = true  → check scope_run_fuel_remaining
+//   - in_scope_run = false → check (max_rounds - stat_rounds) cumulative
+// Centralizes the per-scope vs root fuel discrimination.
+fn fuel_exhausted_now() bool {
+    if (is_in_scope_run) {
+        return scope_run_fuel_remaining == 0;
+    }
+    return max_rounds != 0 and stat_rounds >= max_rounds;
+}
+
 // run_value_tier: drain BSP value rounds until worklist is empty or
 // fuel is exhausted. Returns true if any round fired (i.e. there was
 // at least one progress event), false if the worklist was already
@@ -597,11 +624,14 @@ export fn prologos_run_to_quiescence() void {
 fn run_value_tier() bool {
     var fired_any: bool = false;
     while (worklist_len > 0) {
-        if (max_rounds != 0 and stat_rounds >= max_rounds) {
+        if (fuel_exhausted_now()) {
             stat_fuel_exhausted = 1;
             return fired_any;
         }
         stat_rounds += 1;
+        if (is_in_scope_run and scope_run_fuel_remaining > 0) {
+            scope_run_fuel_remaining -= 1;
+        }
         take_snapshot();
 
         // Mark the fire phase. fire-fns dispatched here are pure compute
@@ -658,6 +688,329 @@ export fn prologos_test_alloc_during_fire(domain: u8, init: i64) u32 {
     return id;
 }
 
+// =====================================================================
+// Scope APIs (Phase 1 Day 3) — interim flat-array snapshot
+// =====================================================================
+//
+// Per § 5.9 + § 6 of 2026-05-02_KERNEL_POCKET_UNIVERSES.md.
+//
+// A *scope* is the kernel's runtime fuel-attribution unit. Each scope
+// owns its own complete copy of the kernel's mutable state: cells +
+// per-cell domain, propagator topology + subscriptions, BSP worklists +
+// pending writes, and a fuel counter. Phase 2 (Day 6) will swap the
+// flat cell-storage copy for HAMT root pointer-share, dropping
+// scope_enter from O(num_cells) to O(1).
+//
+// Scope stack discipline:
+//   - scope_records[0] is the ROOT scope (always allocated, always at
+//     the bottom of the stack). At kernel start, ROOT is the active
+//     scope and "the globals" are ROOT's data.
+//   - scope_enter pushes a new scope onto the stack. The new scope is
+//     ALLOCATED but NOT ACTIVE; its data is initialized as a copy of
+//     the current scope's data at scope_enter time (the "starting state").
+//   - scope_run(sid) saves the current scope's state into its record,
+//     loads sid's state into the globals, runs the 2-tier outer loop
+//     with sid's per-call fuel, saves sid's resulting state into its
+//     record, and restores the parent's state. Nesting is supported
+//     (scope_run can be called from inside a scope's fire-fn).
+//   - scope_read(sid, cell) reads from sid's saved cells (or from
+//     globals if sid is the currently active scope).
+//   - scope_exit(sid) pops sid (validates LIFO + that sid is not
+//     currently active).
+//
+// Stack-discipline violations abort. Failure modes documented in
+// § 15.14.
+
+// One scope's complete kernel state. Held in BSS (~120 KB per slot at
+// MAX_CELLS=1024, MAX_PROPS=1024, MAX_DEPS=16; total ~960 KB at
+// MAX_SCOPES=8). Phase 2 replaces the cells/cell_domain copy with a
+// HAMT root pointer for O(1) snapshot.
+const ScopeData = extern struct {
+    saved_cells: [MAX_CELLS]i64,
+    saved_cell_domain: [MAX_CELLS]u8,
+    saved_num_cells: u32,
+
+    saved_prop_shape: [MAX_PROPS]u32,
+    saved_prop_tags: [MAX_PROPS]u32,
+    saved_prop_in0: [MAX_PROPS]u32,
+    saved_prop_in1: [MAX_PROPS]u32,
+    saved_prop_in2: [MAX_PROPS]u32,
+    saved_prop_out: [MAX_PROPS]u32,
+    saved_num_props: u32,
+
+    saved_cell_subs: [MAX_CELLS][MAX_DEPS]u32,
+    saved_cell_num_subs: [MAX_CELLS]u32,
+
+    saved_worklist: [MAX_PROPS]u32,
+    saved_worklist_len: u32,
+    saved_next_worklist: [MAX_PROPS]u32,
+    saved_next_worklist_len: u32,
+    saved_in_worklist: [MAX_PROPS]u8,
+
+    saved_pending_cid: [MAX_PROPS]u32,
+    saved_pending_val: [MAX_PROPS]i64,
+    saved_pending_len: u32,
+
+    fuel_remaining: u64,
+    last_run_result: u8,
+    parent_scope_id: u32, // NIL_SCOPE_ID for the root scope
+    is_allocated: bool,
+    is_currently_active: bool,
+};
+
+var scope_records: [MAX_SCOPES]ScopeData = undefined;
+var scope_stack: [MAX_SCOPES]u32 = undefined;
+var scope_stack_depth: u32 = 0;
+var current_scope_id: u32 = NIL_SCOPE_ID;
+var next_scope_slot: u32 = 0;
+
+// Per-scope fuel state for the currently running scope. When inside
+// a scope_run call, the BSP loop checks scope_run_fuel_remaining
+// instead of (max_rounds - stat_rounds). Set on scope_run entry,
+// decremented per BSP round, restored on scope_run exit.
+var scope_run_fuel_remaining: u64 = 0;
+var is_in_scope_run: bool = false;
+
+// Lazy initialization of the root scope. Called from any scope API
+// before it touches scope_records. ROOT's saved_* fields are not used
+// (root is always active when no other scope is in scope_run), but
+// allocating its slot keeps the scope-stack invariants uniform.
+fn ensure_scopes_initialized() void {
+    if (scope_stack_depth != 0) return;
+    scope_records[ROOT_SCOPE_ID].fuel_remaining = 0;
+    scope_records[ROOT_SCOPE_ID].last_run_result = RUN_RESULT_HALT;
+    scope_records[ROOT_SCOPE_ID].parent_scope_id = NIL_SCOPE_ID;
+    scope_records[ROOT_SCOPE_ID].is_allocated = true;
+    scope_records[ROOT_SCOPE_ID].is_currently_active = true;
+    scope_stack[0] = ROOT_SCOPE_ID;
+    scope_stack_depth = 1;
+    current_scope_id = ROOT_SCOPE_ID;
+    next_scope_slot = 1;
+}
+
+// Save the current globals into the given scope record. Used by
+// scope_run on entry (to preserve the parent) and on exit (to commit
+// the just-finished scope's resulting state into its record).
+fn save_globals_to(rec: *ScopeData) void {
+    var i: u32 = 0;
+    while (i < MAX_CELLS) : (i += 1) {
+        rec.saved_cells[i] = cells[i];
+        rec.saved_cell_domain[i] = cell_domain[i];
+        rec.saved_cell_num_subs[i] = cell_num_subs[i];
+        var j: u32 = 0;
+        while (j < MAX_DEPS) : (j += 1) {
+            rec.saved_cell_subs[i][j] = cell_subs[i][j];
+        }
+    }
+    rec.saved_num_cells = num_cells;
+
+    i = 0;
+    while (i < MAX_PROPS) : (i += 1) {
+        rec.saved_prop_shape[i] = prop_shape[i];
+        rec.saved_prop_tags[i] = prop_tags[i];
+        rec.saved_prop_in0[i] = prop_in0[i];
+        rec.saved_prop_in1[i] = prop_in1[i];
+        rec.saved_prop_in2[i] = prop_in2[i];
+        rec.saved_prop_out[i] = prop_out[i];
+        rec.saved_worklist[i] = worklist[i];
+        rec.saved_next_worklist[i] = next_worklist[i];
+        rec.saved_in_worklist[i] = in_worklist[i];
+        rec.saved_pending_cid[i] = pending_cid[i];
+        rec.saved_pending_val[i] = pending_val[i];
+    }
+    rec.saved_num_props = num_props;
+    rec.saved_worklist_len = worklist_len;
+    rec.saved_next_worklist_len = next_worklist_len;
+    rec.saved_pending_len = pending_len;
+}
+
+// Load the given scope record into the globals. Used by scope_run
+// on entry (to activate sid) and on exit (to restore the parent).
+fn load_globals_from(rec: *const ScopeData) void {
+    var i: u32 = 0;
+    while (i < MAX_CELLS) : (i += 1) {
+        cells[i] = rec.saved_cells[i];
+        cell_domain[i] = rec.saved_cell_domain[i];
+        cell_num_subs[i] = rec.saved_cell_num_subs[i];
+        var j: u32 = 0;
+        while (j < MAX_DEPS) : (j += 1) {
+            cell_subs[i][j] = rec.saved_cell_subs[i][j];
+        }
+    }
+    num_cells = rec.saved_num_cells;
+
+    i = 0;
+    while (i < MAX_PROPS) : (i += 1) {
+        prop_shape[i] = rec.saved_prop_shape[i];
+        prop_tags[i] = rec.saved_prop_tags[i];
+        prop_in0[i] = rec.saved_prop_in0[i];
+        prop_in1[i] = rec.saved_prop_in1[i];
+        prop_in2[i] = rec.saved_prop_in2[i];
+        prop_out[i] = rec.saved_prop_out[i];
+        worklist[i] = rec.saved_worklist[i];
+        next_worklist[i] = rec.saved_next_worklist[i];
+        in_worklist[i] = rec.saved_in_worklist[i];
+        pending_cid[i] = rec.saved_pending_cid[i];
+        pending_val[i] = rec.saved_pending_val[i];
+    }
+    num_props = rec.saved_num_props;
+    worklist_len = rec.saved_worklist_len;
+    next_worklist_len = rec.saved_next_worklist_len;
+    pending_len = rec.saved_pending_len;
+}
+
+// Push a new scope. Snapshots current state as the new scope's
+// starting state (interim: O(num_cells + num_props) memcpy; Phase 2:
+// O(1) HAMT root pointer-share). Returns the scope handle (a slot
+// index into scope_records).
+//
+// `parent_fuel_charge` is decremented from the current scope's
+// fuel_remaining (only when in_scope_run; ignored at root for
+// backward compatibility — root scope uses cumulative max_rounds).
+// Phase 2 may revisit charging conventions per § 15.16.
+export fn prologos_scope_enter(parent_fuel_charge: u64) u32 {
+    ensure_scopes_initialized();
+    if (next_scope_slot >= MAX_SCOPES) abort();
+    const sid = next_scope_slot;
+    next_scope_slot += 1;
+
+    const rec = &scope_records[sid];
+    save_globals_to(rec); // capture current state as scope's starting view
+    rec.fuel_remaining = 0;
+    rec.last_run_result = RUN_RESULT_HALT;
+    rec.parent_scope_id = current_scope_id;
+    rec.is_allocated = true;
+    rec.is_currently_active = false;
+
+    // Charge parent fuel (only meaningful when parent is in a
+    // scope_run context; root's cumulative-fuel model is unaffected).
+    if (is_in_scope_run) {
+        if (scope_run_fuel_remaining < parent_fuel_charge) {
+            scope_run_fuel_remaining = 0;
+        } else {
+            scope_run_fuel_remaining -= parent_fuel_charge;
+        }
+    }
+
+    stat_scope_enters += 1;
+    return sid;
+}
+
+// Run the 2-tier outer loop on `sid` with its own fuel budget. Saves
+// parent state, loads sid's state, drives the BSP loop, saves sid's
+// resulting state, restores parent state. Returns RUN_RESULT_*.
+//
+// Stack discipline: sid must be allocated, not currently active, and
+// have parent_scope_id == current_scope_id. Violations abort
+// (§ 15.14).
+export fn prologos_scope_run(sid: u32, fuel: u64) u8 {
+    ensure_scopes_initialized();
+    if (sid >= next_scope_slot) abort();
+    if (!scope_records[sid].is_allocated) abort();
+    if (scope_records[sid].is_currently_active) abort();
+    if (scope_records[sid].parent_scope_id != current_scope_id) abort();
+
+    const parent_id = current_scope_id;
+
+    // Save current state into the parent's record so we can restore
+    // it after sid finishes.
+    save_globals_to(&scope_records[parent_id]);
+    scope_records[parent_id].is_currently_active = false;
+    // Save the parent's per-scope fuel state too (matters when this
+    // scope_run call is nested inside another scope_run).
+    const parent_was_in_scope_run = is_in_scope_run;
+    const parent_fuel_remaining = scope_run_fuel_remaining;
+
+    // Activate sid: load its data into globals, set its fuel budget.
+    load_globals_from(&scope_records[sid]);
+    scope_records[sid].is_currently_active = true;
+    current_scope_id = sid;
+    scope_records[sid].fuel_remaining = fuel;
+    scope_run_fuel_remaining = fuel;
+    is_in_scope_run = true;
+
+    if (scope_stack_depth >= MAX_SCOPES) abort();
+    scope_stack[scope_stack_depth] = sid;
+    scope_stack_depth += 1;
+
+    // Run the BSP outer loop. Inside run_to_quiescence the fuel-check
+    // code path now consults check_fuel_exhausted(), which honors
+    // is_in_scope_run.
+    prologos_run_to_quiescence();
+
+    // Determine result. trap is not yet implementable (no fire-fn
+    // currently traps); future work will surface contradictions here.
+    const result: u8 = if (stat_fuel_exhausted != 0) RUN_RESULT_FUEL_EXHAUSTED else RUN_RESULT_HALT;
+    scope_records[sid].last_run_result = result;
+    // Reset stat_fuel_exhausted so the parent (or subsequent scope_run)
+    // doesn't observe a stale flag from the just-finished child.
+    stat_fuel_exhausted = 0;
+
+    // Save sid's resulting state for scope_read.
+    save_globals_to(&scope_records[sid]);
+    scope_records[sid].is_currently_active = false;
+
+    // Pop sid off the stack and restore parent.
+    scope_stack_depth -= 1;
+    load_globals_from(&scope_records[parent_id]);
+    scope_records[parent_id].is_currently_active = true;
+    current_scope_id = parent_id;
+    is_in_scope_run = parent_was_in_scope_run;
+    scope_run_fuel_remaining = parent_fuel_remaining;
+
+    stat_scope_runs += 1;
+    return result;
+}
+
+// Read a cell value out of `sid`'s saved state. If sid is the
+// currently active scope (e.g. you call scope_read on the active
+// scope's cells from inside a fire-fn — the fire-fn shouldn't, but
+// the kernel handles it sanely), reads from globals. Otherwise reads
+// from the saved record.
+export fn prologos_scope_read(sid: u32, cell: u32) i64 {
+    ensure_scopes_initialized();
+    if (sid >= next_scope_slot) abort();
+    if (!scope_records[sid].is_allocated) abort();
+    if (scope_records[sid].is_currently_active) {
+        if (cell >= num_cells) abort();
+        return cells[cell];
+    }
+    if (cell >= scope_records[sid].saved_num_cells) abort();
+    return scope_records[sid].saved_cells[cell];
+}
+
+// Pop `sid` off the scope stack. Validates LIFO (sid must be the
+// most-recently allocated scope) + that sid is not currently active.
+// Aborts on stack-discipline violation.
+export fn prologos_scope_exit(sid: u32) void {
+    ensure_scopes_initialized();
+    if (sid >= next_scope_slot) abort();
+    if (!scope_records[sid].is_allocated) abort();
+    if (scope_records[sid].is_currently_active) abort();
+    // LIFO: sid must be the top of the allocation stack (= the most
+    // recently allocated still-allocated slot).
+    if (sid != next_scope_slot - 1) abort();
+
+    scope_records[sid].is_allocated = false;
+    next_scope_slot -= 1;
+    stat_scope_exits += 1;
+}
+
+// Inspection: number of scopes currently on the allocation stack
+// (including root). Useful for debug + tests.
+export fn prologos_scope_depth() u32 {
+    ensure_scopes_initialized();
+    return next_scope_slot;
+}
+
+// Inspection: per-scope last-run-result lookup.
+export fn prologos_scope_get_last_result(sid: u32) u8 {
+    ensure_scopes_initialized();
+    if (sid >= next_scope_slot) abort();
+    if (!scope_records[sid].is_allocated) abort();
+    return scope_records[sid].last_run_result;
+}
+
 fn swap_worklists() void {
     // Move next_worklist into worklist (just by swapping lengths and
     // memcpy'ing — we can't swap arrays in-place in Zig 0.13 ergonomically
@@ -685,6 +1038,9 @@ var stat_run_ns: u64 = 0;
 var stat_resets: u64 = 0;          // explicit-replace traffic (cell_reset)
 var stat_topo_mutations: u64 = 0;  // alloc/install calls inside a fire round
 var stat_outer_iters: u64 = 0;     // 2-tier outer-loop iterations
+var stat_scope_enters: u64 = 0;    // scope_enter calls
+var stat_scope_runs: u64 = 0;      // scope_run calls
+var stat_scope_exits: u64 = 0;     // scope_exit calls
 var stat_ns_by_tag: [N_TAGS]u64 = [_]u64{0} ** N_TAGS;
 var profile_per_tag: bool = false;
 
@@ -706,6 +1062,10 @@ export fn prologos_set_profile_per_tag(enabled: u32) void {
 //   10 topo_mutations (mid-fire cell_alloc + prop_install count)
 //   11 outer_iters   (2-tier outer-loop iteration count for the
 //                     last + cumulative run_to_quiescence calls)
+//   12 scope_enters
+//   13 scope_runs
+//   14 scope_exits
+//   15 scope_depth   (live; current next_scope_slot)
 //   100..(100+N_TAGS)  fires for tag (key-100)
 //   200..(200+N_TAGS)  ns for tag (key-200) — only populated when
 //                      profile_per_tag=true
@@ -724,6 +1084,10 @@ export fn prologos_get_stat(key: u32) u64 {
         9 => stat_resets,
         10 => stat_topo_mutations,
         11 => stat_outer_iters,
+        12 => stat_scope_enters,
+        13 => stat_scope_runs,
+        14 => stat_scope_exits,
+        15 => @intCast(next_scope_slot),
         else => blk: {
             if (key >= 100 and key < 100 + N_TAGS) {
                 break :blk stat_fires_by_tag[key - 100];
@@ -747,6 +1111,9 @@ export fn prologos_reset_stats() void {
     stat_resets = 0;
     stat_topo_mutations = 0;
     stat_outer_iters = 0;
+    stat_scope_enters = 0;
+    stat_scope_runs = 0;
+    stat_scope_exits = 0;
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
         stat_fires_by_tag[i] = 0;

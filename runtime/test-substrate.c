@@ -41,6 +41,17 @@ extern void     prologos_run_to_quiescence(void);
 extern uint64_t prologos_get_stat(uint32_t key);
 extern void     prologos_reset_stats(void);
 
+extern uint32_t prologos_scope_enter(uint64_t parent_fuel_charge);
+extern uint8_t  prologos_scope_run(uint32_t sid, uint64_t fuel);
+extern int64_t  prologos_scope_read(uint32_t sid, uint32_t cell);
+extern void     prologos_scope_exit(uint32_t sid);
+extern uint32_t prologos_scope_depth(void);
+extern uint8_t  prologos_scope_get_last_result(uint32_t sid);
+
+#define RUN_RESULT_HALT            0
+#define RUN_RESULT_FUEL_EXHAUSTED  1
+#define RUN_RESULT_TRAP            2
+
 #define DOMAIN_LWW_I64  0
 #define DOMAIN_MIN_I64  1
 
@@ -252,6 +263,37 @@ int main(void) {
                 (unsigned long long)outer_after_first,
                 (unsigned long long)prologos_get_stat(11));
         return 1;
+    }
+
+    /* -------- T_scope_smoke: scope_enter/run/read/exit basic shape -------- */
+    /* Day 3 deliverable smoke: prove the four scope APIs link and exhibit
+     * the documented stack-discipline. Full isolation tests (fuel,
+     * write-isolation, explicit-publish, trap, nested) ship Day 4. */
+    {
+        prologos_reset_stats();
+        uint32_t depth_before = prologos_scope_depth();
+        if (depth_before < 1) {
+            fprintf(stderr,
+                "FAIL scope_smoke.depth_before: expected >=1 (root), got %u\n",
+                depth_before);
+            return 1;
+        }
+        uint32_t sid = prologos_scope_enter(0);
+        ASSERT_EQ("scope_smoke.depth_after_enter",
+                  prologos_scope_depth(), depth_before + 1);
+        ASSERT_EQ("scope_smoke.enters_stat", prologos_get_stat(12), 1);
+
+        uint8_t r = prologos_scope_run(sid, 100);
+        ASSERT_EQ("scope_smoke.run_result_halt", r, RUN_RESULT_HALT);
+        ASSERT_EQ("scope_smoke.runs_stat", prologos_get_stat(13), 1);
+
+        int64_t v = prologos_scope_read(sid, 0); /* root cell 0 from T1 = 7 (LWW final) */
+        ASSERT_EQ("scope_smoke.read_inherits_root", v, 7);
+
+        prologos_scope_exit(sid);
+        ASSERT_EQ("scope_smoke.depth_after_exit",
+                  prologos_scope_depth(), depth_before);
+        ASSERT_EQ("scope_smoke.exits_stat", prologos_get_stat(14), 1);
     }
 
     /* -------- T12: regression — between-call install still fires -------- */
