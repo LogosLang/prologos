@@ -298,3 +298,232 @@ The retiming pass:
 5. **At what scale does token-tagged dataflow become competitive?** For our current kernel (i64 cells, simple kernels), bridges win on simplicity. For ~10K-cell programs with deep nesting and multi-rate behavior, the constant overhead of `(tag, value)` cells might be amortized by removing thousands of bridges.
 
 This research note will be revisited if/when worldview tagging lands at the runtime layer; the conclusions above may invert at that point.
+
+---
+
+## Revision 2 (2026-05-02) — Collaborator critique: CALM, stratification, Pocket Universes
+
+After F.5/F.6 shipped, a collaborator pushed back with a deeper architectural critique. Quoting:
+
+> "I would encourage it to think of doing this, not as 'propagator chains' to 'synchronize' — this will break under different schedulers. What it's doing is essentially non-monotonic. According to the CALM theorem, anything on a single stratum should be coordination-free. If you need coordination, ordering, retraction, topological network changes, negation, accumulation — anything non-monotonic, the answer is always: STRATIFICATION. Do this reduction as a stratification in its own PU (Pocket Universe). Review the prior art."
+
+Research into the codebase confirms this is the project's stated discipline, and F.5/F.6 are implementing a tactical workaround to a problem whose strategic solution is stratification. This revision documents the critique, the prior art, and what the strategic solution would actually look like.
+
+### What F.5/F.6 are actually doing (reframed)
+
+The framing in §1-§9 above ("synchronous pipelining via Z⁻¹ delay elements") is operationally accurate but architecturally misleading. The accurate framing:
+
+**Tail-recursive iteration is fundamentally non-monotonic.** State cells get *overwritten* each iteration with new values. That's a retraction (the previous iteration's value is gone), not a monotone refinement. Per CALM, retraction inside a stratum is an anti-pattern.
+
+**F.5/F.6's identity bridges are forcing ordering inside a single S0 stratum** to make the non-monotone iteration produce coherent values. That ordering is exactly what CALM forbids: BSP guarantees coordination-free monotone fixpoints, which doesn't apply to our iteration semantics.
+
+**What we should be doing**: stratify. Each iteration is a stratum boundary; within an iteration, all operations are monotone (read state, compute step, propose next state); between iterations, the iteration stratum non-monotonically commits next-state values to state cells.
+
+### The project's canonical CALM rule
+
+Per [`.claude/rules/stratification.md`](../../.claude/rules/stratification.md) lines 64-83 ("When to Consider a New Stratum"):
+
+> "Reach for a new stratum when a computation:
+> - Is **non-monotone**: it can retract information (the result can decrease, not just grow). S0 is monotone by CALM; non-monotone work belongs at a higher stratum.
+> - Requires **fixpoint of another stratum** before evaluating: e.g., NAF needs S0 quiescence before checking provability.
+> - Is **order-sensitive**: ordering comes from the stratum stack (Sk only fires after S0...S(k-1) quiesce), not from imperative control flow."
+
+Tail-recursive iteration matches all three criteria. F.5/F.6 try to keep it inside S0 by inserting ordering machinery (depth bridges); the rule says: don't, escalate to a stratum.
+
+### Prior art: PAR Track 0 CALM audit (2026-03-27)
+
+The cleanest precedent is documented in `docs/tracking/2026-03-27_PAR_TRACK0_CALM_AUDIT.md`. SRE decomposition (`sre-core.rkt:456-435`) and narrowing (`narrowing.rkt:304-323`) had fire functions that performed non-monotone topology changes inside S0 — creating new propagators dynamically based on input values.
+
+The fix direction: **don't do topology changes inside S0; emit a topology-change request as a cell value, and let the topology stratum process the request between rounds**. Same pattern: separate the monotone observation (request emission) from the non-monotone action (topology change), with a stratum boundary between them.
+
+F.5/F.6 are doing the symmetric thing: rather than emitting "advance iteration" as a request handled by an iteration stratum, they're forcing the entire iteration into S0 with delay-line bridges. The right move is the same as PAR Track 0's: stratify.
+
+### Prior art: SRE Track 2G scatter case (2026-03-30)
+
+The canonical "we needed a Pocket Universe" case study. Phase 6 of SRE Track 2G originally proposed an elaborate PU with internal stratification for implication-rule scattering. The NTT model caught a non-monotone scatter operation hidden inside the design. The PIR's lesson (`SRE_TRACK2G_PIR.md` §5, Pattern 5):
+
+> "NTT modeling catches architectural impurities (2/2 tracks that used it)."
+
+The actual Phase 6 implementation was 30 lines of eager evaluation (no PU yet), with technical debt explicitly accepted: "Implication rules as eager function (not network propagators) — Elaborate Pocket Universe design is Track 3-4 scope. Scaffolding is 30 lines."
+
+F.5/F.6 are in the same situation: they're scaffolding (eager bridges-as-ordering) standing in for a more architecturally-correct future (PU + iteration stratum).
+
+### What "iteration as a Pocket Universe" would look like
+
+Per the codebase definitions:
+
+- **Pocket Universe** (`docs/research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.md` §9.3 + `docs/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md` §4.3a): a scoped sub-network with its own stratification + worldview, communicating with the parent network only via designated entry/exit cells.
+
+- **Stratum** (`.claude/rules/stratification.md`): a request-accumulator cell + handler function, registered via `register-stratum-handler!`. After S0 quiescence, the BSP outer loop invokes registered handlers.
+
+A PU + iteration stratum design for tail-recursion:
+
+```
+Parent network
+   │
+   │  init args (cells)
+   ▼
+┌──────────────────────────────────────────────┐
+│ Pocket Universe: tail-rec iteration          │
+│                                              │
+│  S0 (within PU):                              │
+│    state cells (a, b, n)                      │
+│    step body propagators (read state →        │
+│      compute "next-state proposals")          │
+│    cond propagator (read state → compute      │
+│      "should continue" Bool)                  │
+│    monotone, coordination-free, BSP fixpoint  │
+│                                              │
+│  Iteration stratum (within PU):               │
+│    Handler runs after S0 quiescence.          │
+│    Reads cond cell + next-state-proposal      │
+│      cells.                                   │
+│    If cond = continue: commit proposals to    │
+│      state cells (non-monotone overwrite),    │
+│      reset S0 worklist, reenter S0.           │
+│    If cond = halt: read result cell, exit PU. │
+│                                              │
+└──────────────────────────────────────────────┘
+   │
+   │  result (cell)
+   ▼
+Parent network
+```
+
+**Properties of this design**:
+
+1. **CALM-compliant**: S0 within the PU is fully monotone. Each iteration's S0 fixpoint computes next-state PROPOSALS (monotone refinement), then exits to the iteration stratum which COMMITS them (non-monotone, but in its own stratum).
+
+2. **No identity bridges needed**: depth alignment is handled by S0 fixpoint within an iteration. All step values coherently reflect "the current iteration's state" because they all read from the same state cells which are stable during S0.
+
+3. **Termination is structural**: cond cell is read by the iteration handler, which decides whether to re-enter S0 or exit. No fuel needed; no cyclic feedback edges in the network.
+
+4. **Scheduler-independent**: works under BSP, work-stealing, topological-order, or any other scheduler that guarantees S0 fixpoint before stratum handlers run. F.5/F.6's bridges, by contrast, are tied to BSP's specific snapshot-then-merge semantics — they would break under e.g. a Datalog-style seminaive scheduler that fires propagators in topological order.
+
+5. **Composable**: PUs can nest. An iteration whose body itself contains an iteration becomes a PU within a PU.
+
+### Cost of the PU + stratification approach
+
+**Kernel changes required**:
+
+1. **Nested networks**: the kernel must support sub-networks (cells + propagators scoped to a PU; not visible from outside). Currently the Zig kernel has one flat cell array.
+
+2. **Stratum handler infrastructure**: between S0 rounds, run registered handlers. Currently the kernel only has S0; no handler hook.
+
+3. **PU lifecycle**: install PU → run to S0 quiescence → invoke iteration handler → either re-enter S0 (advance iteration) or exit (read result cell, propagate to parent).
+
+4. **Per-PU statistics**: rounds, fires, iteration count separate from the parent network's stats.
+
+**Estimated effort**: ~5-10 days for the kernel infrastructure; ~2-3 days for the lowering changes (`ast-to-low-pnet.rkt` emits PU declarations instead of feedback edges); ~2-3 days for the LLVM lowering (`low-pnet-to-llvm.rkt` emits `prologos_pu_*` calls instead of identity bridges); ~2 days for tests + acceptance file updates.
+
+**Total**: ~10-15 days of focused work. Substantial but well-scoped.
+
+### Trade-off: what F.5/F.6 actually buy us, vs the strategic cost
+
+This is the honest accounting:
+
+**F.5/F.6's wins**:
+- Shipped today, no kernel changes
+- 34 acceptance examples pass
+- Pell works
+- ~10-25% structural overhead per program (real cost)
+
+**F.5/F.6's hidden costs**:
+- Architecturally violates CALM (non-monotone iteration enforced via ordering inside S0)
+- Tied to BSP semantics; would break under other schedulers
+- Doesn't match the project's stated stratification discipline
+- Each future translator (NTT, expr-iterate, …) inherits the same anti-pattern
+- The depth-balance invariant we added (F.6) is a SYMPTOM of the missing stratum: we're checking that bridges balance the network *because we need ordering inside what should be a monotone stratum*
+
+**PU + iteration stratum's wins**:
+- CALM-compliant; aligns with project discipline
+- Scheduler-agnostic
+- No bridge cells; smaller networks
+- Composable (nested PUs)
+- Each future translator gets stratification-aware lowering for free
+
+**PU + iteration stratum's costs**:
+- ~10-15 days of kernel + lowering work
+- Multi-stratum runtime is genuinely new infrastructure
+- Larger scope, more risk
+
+### Revised recommendation
+
+F.5 + F.6 are correctly identified as **scaffolding**, not the strategic solution. They ship today because the strategic solution (PU + iteration stratum) requires kernel infrastructure we don't have yet.
+
+**Position F.5/F.6 explicitly as scaffolding** in the project tracking (analogous to SRE Track 2G's "30-line eager Phase 6 scaffolding"), with the strategic followup tracked as a future track.
+
+**The strategic followup** ("Sprint G: tail-rec as Pocket Universe with iteration stratum") becomes the canonical tail-rec lowering once kernel multi-stratum infrastructure lands. At that point F.5/F.6's bridges + retiming + depth-balance invariant get retired.
+
+**Don't do retiming optimization (F.6 was the optimization layer over F.5) beyond what's already shipped** — investing more in F.6's optimization is investing in scaffolding that gets retired when stratification lands.
+
+**Reorder the SH track sequence** so PU + stratification is closer to the front:
+
+| Sprint | Was (per SH_LOWERING_FEATURE_MAP) | Revised |
+|---|---|---|
+| F.5 / F.6 | tactical lag-matching | tactical scaffolding (shipped) — leave as-is |
+| G | Heap + GC for runtime | **PU + iteration stratum** (architectural correctness — retires F.5/F.6) |
+| H | Heap + GC for runtime | (was G) |
+
+This reordering is justified by: F.5/F.6 are a known CALM violation. Each new translator we build on top inherits the violation. Retiring it earlier means less debt accumulation.
+
+### Generalization beyond tail-rec
+
+The same critique applies to several places in the project:
+
+- **PReduce / Track 9** (per agent research §4): currently designed to fire reduction propagators in S0 alongside type propagators. But reduction is incremental and CAN retract if a meta solution changes. This is the same pattern: non-monotone behavior being forced into S0. The CALM-aware design would put reduction in its own stratum or PU.
+
+- **SRE Track 2G Phase 6** (already known): eager evaluation as scaffolding; PU is Track 3-4 scope.
+
+- **Constraint retry** (metavar-store.rkt): currently uses set-latch fan-in within a single stratum. Per the rules, this is correct — readiness AGGREGATION is monotone. But the action triggered (constraint retry) is non-monotone and lives in L2 Resolution stratum. So this case is already CALM-compliant.
+
+- **The set-latch refactor I considered for F.5b**: would have been a wrong move. Set-latch is for monotone readiness aggregation, not for non-monotone iteration. Confirmed by the agent research: "Set-latch is the right pattern for fan-in readiness across heterogeneous sources, which we don't have yet at the runtime level."
+
+### What the research doc said in revision 1 vs revision 2
+
+**Revision 1**: "F.5 is the right pattern for our problem; retiming optimization (F.6) is the principled improvement."
+
+**Revision 2**: "F.5/F.6 are tactical scaffolding for an architectural problem (non-monotone iteration in a monotone stratum). The strategic fix is PU + iteration stratum. Ship F.5/F.6, but mark them as scaffolding and prioritize the strategic followup."
+
+The collaborator was right. Three reasons revision 1 missed it:
+
+1. **Frame-confusion**: revision 1 framed the problem as "synchronous pipelining" — a hardware/circuit metaphor where Z⁻¹ delays are the primitive. That metaphor is operationally accurate but architecturally misleading; in our software substrate, the right metaphor is "non-monotone iteration in a CALM-aware stratification system."
+
+2. **Tactical-vs-strategic conflation**: revision 1 evaluated each option's correctness + cost but didn't distinguish "is this a tactical fix or a strategic structure." F.5/F.6 are tactical; the strategic fix is PU + stratum.
+
+3. **Underweighting prior art**: the project has a clear `stratification.md` rule and a documented CALM-audit precedent (PAR Track 0). Revision 1 cited propagator-design.md and on-network.md but missed stratification.md as the load-bearing rule.
+
+### Lessons (process, distilled)
+
+1. **The mantra catches structural debt; the rules catch CALM debt.** When a fix feels like it's solving a synchronization problem inside a monotone stratum, that's the smell. The answer is almost always "stratify, don't synchronize."
+
+2. **"Pocket Universe" is the project's idiom for stratified-sub-network**. When in doubt about how to handle non-monotone sub-computations, reach for PU before reaching for in-stratum scaffolding.
+
+3. **Tactical fixes aren't shameful, but mark them as such**. SRE Track 2G's 30-line eager Phase 6 was correct to ship. The mistake would have been pretending it was the architectural solution. F.5/F.6 should be marked the same way.
+
+4. **The depth-balance invariant in F.6 is itself a smell**. Inventing a structural invariant to enforce ordering inside a monotone stratum is the opposite of CALM. Future "we need an invariant to enforce X inside a stratum" should trigger the question: "should X be a stratum?"
+
+### Updated open questions
+
+In addition to the open questions in revision 1:
+
+6. **What's the minimum-viable kernel infrastructure for PU + iteration stratum?** Could it be implemented as a "scheduler outer loop with handlers", without rearchitecting cells? (Probably yes — the BSP-LE Track 2B project already has `register-stratum-handler!` as a pattern; we'd port that to the Zig kernel.)
+
+7. **Can the PU realization be incremental?** Could we add stratum-handler infrastructure to the kernel WITHOUT immediately migrating F.5/F.6, and then migrate program-by-program? Or does it need to be all-or-nothing?
+
+8. **What does this say about PReduce / Track 9?** PReduce currently designs reduction-on-S0; same critique applies. Should PReduce design be updated to use a reduction stratum or PU before implementation begins?
+
+9. **NTT semantics + iteration**: when NTT lands, will user-written `propagator` declarations be allowed to express "this is an iteration; it lives in its own PU"? Or do iteration boundaries have to be inferred from the AST shape (as F.5's tail-rec recognizer does)?
+
+These should drive the SH track resequencing if the critique is accepted.
+
+### References (revision 2 additions)
+
+- `docs/tracking/2026-03-27_PAR_TRACK0_CALM_AUDIT.md` — the canonical "non-monotone behavior in S0 → stratify" precedent
+- `docs/research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.md` §9.3 — Pocket Universe as structural decomposition
+- `docs/research/2026-04-07_BSP_LE_TRACK2_STAGE1_AUDIT.md` §4.3a — Pocket Universe as worldview boundary (ATMS branches)
+- `docs/tracking/2026-03-30_SRE_TRACK2G_PIR.md` §5 (Pattern 5), §8 — the "30-line eager scaffolding for what's structurally a PU" case study
+- `docs/tracking/2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md` — PReduce design, currently with the same in-S0 anti-pattern
+- `racket/prologos/propagator.rkt:2441` — `register-stratum-handler!` API (the runtime pattern to port)
+- `racket/prologos/relations.rkt:115` — S1 NAF: example of a non-monotone stratum implemented via the handler API
+- `racket/prologos/metavar-store.rkt:1392` — S(-1) Retraction: another non-monotone stratum precedent
