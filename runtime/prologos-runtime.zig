@@ -787,12 +787,17 @@ export fn prologos_test_alloc_during_fire(domain: u8, init: i64) u32 {
 // Stack-discipline violations abort. Failure modes documented in
 // § 15.14.
 
-// One scope's complete kernel state. Held in BSS (~120 KB per slot at
-// MAX_CELLS=1024, MAX_PROPS=1024, MAX_DEPS=16; total ~960 KB at
-// MAX_SCOPES=8). Phase 2 replaces the cells/cell_domain copy with a
-// HAMT root pointer for O(1) snapshot.
+// One scope's complete kernel state. Held in BSS. As of Phase 2 Day 6
+// (2026-05-02), per-scope cell *values* are held by HAMT root pointer
+// share (saved_cells_root) — O(1) save/restore via path-copy CoW
+// semantics. The flat saved_cells array is gone; per-cell domain and
+// topology mirrors stay flat (immutable after alloc, small overhead).
+//
+// BSS impact at MAX_CELLS=1024, MAX_PROPS=1024, MAX_DEPS=16:
+// Day 5: ~120 KB per slot × 8 = ~960 KB (saved_cells dominated).
+// Day 6: ~70 KB per slot × 8 = ~560 KB (saved_cells_root is 8 bytes).
 const ScopeData = extern struct {
-    saved_cells: [MAX_CELLS]i64,
+    saved_cells_root: HamtRoot, // O(1) HAMT root pointer-share
     saved_cell_domain: [MAX_CELLS]u8,
     saved_num_cells: u32,
 
@@ -838,9 +843,9 @@ var scope_run_fuel_remaining: u64 = 0;
 var is_in_scope_run: bool = false;
 
 // Lazy initialization of the root scope. Called from any scope API
-// before it touches scope_records. ROOT's saved_* fields are not used
-// (root is always active when no other scope is in scope_run), but
-// allocating its slot keeps the scope-stack invariants uniform.
+// before it touches scope_records. ROOT is always active when no
+// other scope is in scope_run; its saved_* fields are populated only
+// when a child scope_run pushes the root state out via save_globals_to.
 fn ensure_scopes_initialized() void {
     if (scope_stack_depth != 0) return;
     scope_records[ROOT_SCOPE_ID].fuel_remaining = 0;
@@ -848,6 +853,7 @@ fn ensure_scopes_initialized() void {
     scope_records[ROOT_SCOPE_ID].parent_scope_id = NIL_SCOPE_ID;
     scope_records[ROOT_SCOPE_ID].is_allocated = true;
     scope_records[ROOT_SCOPE_ID].is_currently_active = true;
+    scope_records[ROOT_SCOPE_ID].saved_cells_root = null; // empty HAMT
     scope_stack[0] = ROOT_SCOPE_ID;
     scope_stack_depth = 1;
     current_scope_id = ROOT_SCOPE_ID;
@@ -858,19 +864,14 @@ fn ensure_scopes_initialized() void {
 // scope_run on entry (to preserve the parent) and on exit (to commit
 // the just-finished scope's resulting state into its record).
 //
-// Day 5 interim: cell *values* are materialized from cells_root into
-// the flat saved_cells mirror via hamt_lookup over [0, num_cells).
-// O(num_cells * log32 num_cells). Day 6 swaps this for a single
-// HAMT-root pointer copy (true O(1)).
+// Day 6 (this commit): cell *values* are saved via single root pointer
+// copy (HAMT pointer-share) — O(1). The HAMT's persistent path-copy
+// CoW semantics mean any subsequent cell_put on a derived cells_root
+// yields a new root that shares structure with the saved root; the
+// saved root is unaffected. This is the key isolation invariant.
 fn save_globals_to(rec: *ScopeData) void {
+    rec.saved_cells_root = cells_root;
     var i: u32 = 0;
-    while (i < num_cells) : (i += 1) {
-        rec.saved_cells[i] = cell_get(i);
-    }
-    while (i < MAX_CELLS) : (i += 1) {
-        rec.saved_cells[i] = 0;
-    }
-    i = 0;
     while (i < MAX_CELLS) : (i += 1) {
         rec.saved_cell_domain[i] = cell_domain[i];
         rec.saved_cell_num_subs[i] = cell_num_subs[i];
@@ -904,11 +905,11 @@ fn save_globals_to(rec: *ScopeData) void {
 // Load the given scope record into the globals. Used by scope_run
 // on entry (to activate sid) and on exit (to restore the parent).
 //
-// Day 5 interim: cell *values* are rebuilt from the flat saved_cells
-// mirror into a fresh cells_root via repeated hamt_insert. The old
-// cells_root is dropped on the floor (HAMT leaks per Track 6
-// follow-up; the active-scope root is what callers care about).
-// Day 6 swaps this for a single pointer assignment.
+// Day 6 (this commit): cells_root is restored by single pointer
+// assignment from saved_cells_root (O(1)). The HAMT root we're
+// switching away from is NOT freed (HAMT leak per Track 6 follow-up);
+// scope semantics require the previously-active root to remain
+// reachable in case scope_read is called later.
 fn load_globals_from(rec: *const ScopeData) void {
     var i: u32 = 0;
     while (i < MAX_CELLS) : (i += 1) {
@@ -920,12 +921,7 @@ fn load_globals_from(rec: *const ScopeData) void {
         }
     }
     num_cells = rec.saved_num_cells;
-    // Rebuild cells_root from the saved flat mirror.
-    cells_root = prologos_hamt_new();
-    i = 0;
-    while (i < num_cells) : (i += 1) {
-        cells_root = prologos_hamt_insert(cells_root, i, rec.saved_cells[i]);
-    }
+    cells_root = rec.saved_cells_root;
 
     i = 0;
     while (i < MAX_PROPS) : (i += 1) {
@@ -1064,7 +1060,13 @@ export fn prologos_scope_read(sid: u32, cell: u32) i64 {
         return cell_get(cell);
     }
     if (cell >= scope_records[sid].saved_num_cells) abort();
-    return scope_records[sid].saved_cells[cell];
+    // Look up cell value in the scope's saved HAMT root. Returns 0 if
+    // the cell-id is allocated but absent from the trie (no entry yet).
+    var v: i64 = 0;
+    if (prologos_hamt_lookup(scope_records[sid].saved_cells_root, cell, &v) == 1) {
+        return v;
+    }
+    return 0;
 }
 
 // Pop `sid` off the scope stack. Validates LIFO (sid must be the
