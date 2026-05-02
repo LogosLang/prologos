@@ -8868,6 +8868,8 @@
      (surf-fst (expand-expression e) loc)]
     [(surf-snd e loc)
      (surf-snd (expand-expression e) loc)]
+    [(surf-force e loc)
+     (surf-force (expand-expression e) loc)]
     [(surf-suc e loc)
      (surf-suc (expand-expression e) loc)]
     [(surf-pi binder body loc)

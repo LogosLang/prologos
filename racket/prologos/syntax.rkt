@@ -40,6 +40,7 @@
  (struct-out expr-pair)
  (struct-out expr-fst)
  (struct-out expr-snd)
+ (struct-out expr-force)
  (struct-out expr-refl)
  (struct-out expr-ann)
  (struct-out expr-natrec)
@@ -331,6 +332,14 @@
 (struct expr-pair (fst snd) #:transparent #:property prop:ctor-desc-tag '(type . pair))
 (struct expr-fst (expr) #:transparent)
 (struct expr-snd (expr) #:transparent)
+
+;; Force: [force e] — strict normalization combinator. Operationally,
+;; whnf(force(e)) = nf(e). Typing and QTT usage are identity (force is
+;; transparent for the type system; runtime is the only behavioral
+;; change). Useful for breaking lazy-argument chains in deep iteration
+;; whose intermediate terms differ bit-for-bit (e.g., a per-iterate
+;; Posit32 update).
+(struct expr-force (expr) #:transparent)
 
 ;; Equality introduction
 (struct expr-refl () #:transparent)
@@ -1048,7 +1057,7 @@
   (or (expr-bvar? x) (expr-fvar? x)
       (expr-zero? x) (expr-suc? x) (expr-nat-val? x)
       (expr-lam? x) (expr-app? x)
-      (expr-pair? x) (expr-fst? x) (expr-snd? x)
+      (expr-pair? x) (expr-fst? x) (expr-snd? x) (expr-force? x)
       (expr-refl? x) (expr-ann? x)
       (expr-natrec? x) (expr-J? x)
       (expr-Type? x) (expr-Nat? x)

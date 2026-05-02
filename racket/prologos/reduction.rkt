@@ -1422,6 +1422,13 @@
     [(expr-fst (expr-pair e1 _)) (whnf e1)]
     [(expr-snd (expr-pair _ e2)) (whnf e2)]
 
+    ;; Force: [force e] — fully normalize e (deep, not just WHNF) and return
+    ;; the NF as a WHNF term. The force wrapper itself is eliminated. Breaks
+    ;; lazy-argument chains in deep iteration whose intermediate terms differ
+    ;; bit-for-bit (e.g., a per-iterate Posit32 update), where re-reduction
+    ;; would otherwise be O(k^2) in the iteration count.
+    [(expr-force e1) (nf e1)]
+
     ;; Iota reduction for natrec — native nat-val (Idris 2 model)
     [(expr-natrec _ base _ (expr-nat-val n)) #:when (= n 0) (whnf base)]
     [(expr-natrec mot base step (expr-nat-val n)) #:when (> n 0)
@@ -3250,6 +3257,9 @@
     ;; Projection that didn't reduce (neutral)
     [(expr-fst e1) (expr-fst (nf e1))]
     [(expr-snd e1) (expr-snd (nf e1))]
+    ;; Force should normally be eliminated by whnf, but in stuck-NF
+    ;; positions we recurse into the argument to ensure NF.
+    [(expr-force e1) (nf e1)]
 
     ;; Annotation erasure (shouldn't usually appear in WHNF, but handle it)
     [(expr-ann e1 _) (nf e1)]

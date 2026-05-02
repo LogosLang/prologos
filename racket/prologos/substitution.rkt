@@ -66,6 +66,7 @@
      (expr-pair (shift delta cutoff e1) (shift delta cutoff e2))]
     [(expr-fst e1) (expr-fst (shift delta cutoff e1))]
     [(expr-snd e1) (expr-snd (shift delta cutoff e1))]
+    [(expr-force e1) (expr-force (shift delta cutoff e1))]
     [(expr-ann e1 e2)
      (expr-ann (shift delta cutoff e1) (shift delta cutoff e2))]
     [(expr-Eq t e1 e2)
@@ -525,6 +526,7 @@
      (expr-pair (subst k s e1) (subst k s e2))]
     [(expr-fst e1) (expr-fst (subst k s e1))]
     [(expr-snd e1) (expr-snd (subst k s e1))]
+    [(expr-force e1) (expr-force (subst k s e1))]
     [(expr-ann e1 e2)
      (expr-ann (subst k s e1) (subst k s e2))]
     [(expr-Eq t e1 e2)

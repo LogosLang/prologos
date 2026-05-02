@@ -944,6 +944,12 @@
             (let ([e (parse-datum (car args))])
               (if (prologos-error? e) e (surf-snd e loc))))]
 
+       ;; (force e) — strict normalization combinator
+       [(force)
+        (or (check-arity 'force args 1 loc)
+            (let ([e (parse-datum (car args))])
+              (if (prologos-error? e) e (surf-force e loc))))]
+
        ;; (boolrec motive true-case false-case target)
        ;; Constant motive shorthand: if motive is not (fn ...) or (the ...),
        ;; treat it as a constant return type and wrap:

@@ -95,6 +95,7 @@
     [(expr-pair e1 e2) (expr-pair (zonk e1) (zonk e2))]
     [(expr-fst e1) (expr-fst (zonk e1))]
     [(expr-snd e1) (expr-snd (zonk e1))]
+    [(expr-force e1) (expr-force (zonk e1))]
     [(expr-ann e1 e2) (expr-ann (zonk e1) (zonk e2))]
     [(expr-Eq t e1 e2) (expr-Eq (zonk t) (zonk e1) (zonk e2))]
 
@@ -536,6 +537,7 @@
     [(expr-pair e1 e2) (expr-pair (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
     [(expr-fst e1) (expr-fst (zonk-at-depth depth e1))]
     [(expr-snd e1) (expr-snd (zonk-at-depth depth e1))]
+    [(expr-force e1) (expr-force (zonk-at-depth depth e1))]
     [(expr-ann e1 e2) (expr-ann (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
     [(expr-Eq t e1 e2) (expr-Eq (zonk-at-depth depth t) (zonk-at-depth depth e1) (zonk-at-depth depth e2))]
 
@@ -998,6 +1000,7 @@
     [(expr-pair e1 e2) (expr-pair (default-metas e1) (default-metas e2))]
     [(expr-fst e1) (expr-fst (default-metas e1))]
     [(expr-snd e1) (expr-snd (default-metas e1))]
+    [(expr-force e1) (expr-force (default-metas e1))]
     [(expr-ann e1 e2) (expr-ann (default-metas e1) (default-metas e2))]
     [(expr-Eq t e1 e2) (expr-Eq (default-metas t) (default-metas e1) (default-metas e2))]
     [(expr-natrec mot base step target)
