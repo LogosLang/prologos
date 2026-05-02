@@ -21,15 +21,14 @@
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| 0 | Acceptance file: 6-8 small Prologos programs whose `nf` is known | ⬜ | gate before Phase 1 |
-| 1 | `preduce.rkt` skeleton: discrete value lattice + cell-allocator helpers | ⬜ | no AST cases yet |
-| 2 | `compile-expr` for literals + arithmetic + bvars + pairs | ⬜ | no β yet |
+| 0 | Acceptance file: 6-7 small Prologos programs whose `nf` is known | ⬜ | gate before Phase 1 |
+| 1 | `preduce.rkt` skeleton: discrete value lattice + cell-allocator helpers + opaque-value rule | ⬜ | no AST cases yet |
+| 2 | `compile-expr` for literals + arithmetic (with Nat→Int coercion) + bvars + pairs | ⬜ | no β yet |
 | 3 | Static β-reduction (compile-time expansion for non-recursive lambdas) | ⬜ | covers many simple programs |
 | 4 | Topology stratum for dynamic β (recursive lambdas) | ⬜ | covers factorial / fib |
 | 5 | Pattern-match: `expr-natrec`, `expr-boolrec`, `expr-J` | ⬜ | covers nat recursion |
-| 6 | `expr-foreign-fn` integration | ⬜ | covers I/O-free Racket FFI |
-| 7 | Differential testing: random Prologos programs, compare `preduce` vs `nf` | ⬜ | ~100 cases |
-| 8 | PIR + decision: ship as alternative path, or replace `nf` outright | ⬜ | |
+| 6 | Differential testing: random Prologos programs, compare `preduce` vs `nf` | ⬜ | ~100 cases |
+| 7 | PIR + decision: ship as alternative path, or replace `nf` outright | ⬜ | |
 
 Status legend: ⬜ not started, 🔄 in progress, ✅ done, ⏸️ blocked.
 
@@ -75,18 +74,18 @@ The MVP is the foundation, not a competitor, of the full Track 9 vision. Naming 
 
 ### In scope (MVP — Phase 1-7)
 
-**~20 AST node kinds** sufficient to execute the simple Prologos programs the existing acceptance suite exercises:
+**~19 AST node kinds** sufficient to execute the simple Prologos programs the existing acceptance suite exercises:
 
 | Group | Nodes |
 |---|---|
 | Literals | `expr-int`, `expr-true`, `expr-false`, `expr-nat-val`, `expr-zero`, `expr-suc`, `expr-unit`, `expr-nil` |
-| Arithmetic | `expr-int-add`, `-sub`, `-mul`, `-div`, `-eq`, `-lt`, `-le` |
+| Arithmetic | `expr-int-add`, `-sub`, `-mul`, `-div`, `-mod`, `-eq`, `-lt`, `-le` (with Nat→Int coercion baked into the fire-fn) |
 | Variables | `expr-bvar` (de Bruijn), `expr-fvar` (top-level) |
 | Functions | `expr-lam`, `expr-app` |
 | Pairs | `expr-pair`, `expr-fst`, `expr-snd` |
-| Eliminators | `expr-natrec`, `expr-boolrec`, `expr-J` |
+| Eliminators | `expr-natrec`, `expr-boolrec`, `expr-J` (refl-only iota rule) |
 | Annotation | `expr-ann` (erased) |
-| Foreign | `expr-foreign-fn` |
+| Type-formers as opaque values | `expr-Pi`, `expr-Sigma`, `expr-Type`, `expr-Vec`, `expr-Eq`, `expr-Nat`, `expr-Int`, `expr-Bool`, `expr-Unit` — held as cell-init values; no propagator needed (they're values) |
 
 ### Out of scope (deferred)
 
@@ -94,19 +93,18 @@ Each deferred case has a target follow-on phase or track:
 
 | Group | Target |
 |---|---|
-| Type formers (`expr-Pi`, `expr-Sigma`, `expr-Type`, `expr-Vec`, etc.) — held opaque | Phase 9 |
-| Vec eliminators (`expr-vhead`, `expr-vtail`, `expr-vcons`, `expr-vnil`) | Phase 9 |
-| Char/String/Keyword/Symbol/Path literals + ops | Phase 10 |
-| Posit / Rat / Quire arithmetic | Phase 11 |
-| `expr-reduce` (general pattern matching) | Phase 12 |
-| `expr-foreign-fn` with I/O effects | Phase 13 |
+| **`expr-foreign-fn`** (Racket FFI; partial-app + NF-on-args + marshal + side effects) | **Phase 9** — needs its own design doc; non-trivial under BSP because (a) NF on args requires PReduce to also run in NF mode before marshalling, (b) `(apply proc rkt-args)` may have side effects which under BSP must fire exactly once per logical call, (c) marshal-in/marshal-out per-type discipline. The "simple" version (pure-functional, total foreign procs) is ~150 LOC. The full version touches I/O semantics. Defer cleanly. |
+| Vec eliminators (`expr-vhead`, `expr-vtail`, `expr-vcons`, `expr-vnil`) | Phase 10 |
+| Char/String/Keyword/Symbol/Path literals + ops | Phase 11 |
+| Posit / Rat / Quire arithmetic | Phase 12 |
+| `expr-reduce` (general pattern matching) | Phase 13 |
 | Container types (`expr-PVec`, `expr-Map`, `expr-Set`, `expr-champ`) | Phase 14 |
 | Generic / trait dispatch (`expr-generic-*`) | Phase 15 (gates on PPN 4C completion) |
 | Logic engine surface (`expr-clause`, `expr-defr`, `expr-fact-block`, `expr-atms-*`) | Phase 16 |
 | `expr-meta` (no metas; post-elaboration assumption) | n/a — MVP runs only on fully-elaborated AST |
 | `expr-error` / `expr-hole` / `expr-typed-hole` | n/a — MVP errors on these (they shouldn't appear post-elaboration) |
 | `expr-Open` / `expr-cumulative` | Phase 17 |
-| `expr-Fin` / `expr-fsuc` / `expr-fzero` | Phase 9 |
+| `expr-Fin` / `expr-fsuc` / `expr-fzero` | Phase 10 |
 | Incremental recomputation / dependency tracking | Track 9 full |
 | Speculative reduction | Track 9 full + ATMS integration |
 | E-graph / equality saturation | Track 9 full |
@@ -233,13 +231,13 @@ The complete MVP translation rules. `B` denotes the network builder (mutable), `
 
 ### 5.3 Arithmetic
 
-For each binary op `op ∈ {add, sub, mul, div, eq, lt, le}`:
+For each binary op `op ∈ {add, sub, mul, div, mod, eq, lt, le}`:
 
 | Node | Translation |
 |---|---|
-| `(expr-int-op a b)` | Compile a → cid_a, b → cid_b. Allocate cid_out. Install fire-once propagator: when both inputs resolve to `(expr-int n_a)`, `(expr-int n_b)`, write `(expr-int (op n_a n_b))` (or `(expr-true)` / `(expr-false)` for comparisons) to cid_out. |
+| `(expr-int-op a b)` | Compile a → cid_a, b → cid_b. Allocate cid_out. Install fire-once propagator: when both inputs resolve to numeric values, **coerce Nat→Int** (`(expr-nat-val k)` → `(expr-int k)`; `(expr-zero)` → `(expr-int 0)`; `(expr-suc n)` → coerce inner + add 1), then write `(expr-int (op n_a n_b))` (or `(expr-true)` / `(expr-false)` for comparisons) to cid_out. |
 
-The propagator's fire function needs both inputs concretely; `prop-fire` reads cells via `net-cell-read`, returns `(net-cell-write net cid_out result)` if both inputs are concrete values, or stays pending if either is still ⊥.
+The propagator's fire function needs both inputs concretely; `prop-fire` reads cells via `net-cell-read`, returns `(net-cell-write net cid_out result)` if both inputs are concrete values, or stays pending if either is still ⊥. The Nat→Int coercion mirrors `try-coerce-to-int` in the existing reducer (line ~999); inlined into the propagator's fire-fn rather than a separate pass since the coercion is local.
 
 ### 5.4 Pairs
 
@@ -272,14 +270,23 @@ For built-in / opaque functions (lambdas already over the FFI surface), the β-p
 |---|---|
 | `(expr-ann inner _)` | Compile inner → cid_in. Return cid_in directly (annotation erasure; no new cell). |
 
-### 5.8 Foreign functions
+### 5.8 Foreign functions — deferred from MVP
 
-| Node | Translation |
-|---|---|
-| `(expr-foreign-fn name proc arity args marshal-in marshal-out src-mod rkt-name)` with `(length args) < arity` | Allocate cell with init the foreign-fn struct itself. Acts as a partial-application value. |
-| `(expr-app foreign-fn-cell arg)` | β-propagator special-cases foreign-fn: accumulates arg into `args`. If `(length new-args) = arity`, emit topology request to compile the application: read all arg cells, marshal-in, call `proc`, marshal-out, write to result cid. If still partial, write the new partial-application value to result cid. |
+`expr-foreign-fn` is **out of MVP scope** (Phase 9 follow-on, see § 3 deferral table).
 
-For MVP: foreign functions are pure (no I/O, no side effects). I/O-effecting foreign functions are deferred to Phase 13.
+**Rationale**: foreign-fn handling in the existing reducer (`reduction.rkt:1456`) requires:
+1. Per-arg accumulation across multiple β fires (each app adds one arg)
+2. **Full normalization** (`nf`, not `whnf`) of all args before marshalling — meaning PReduce would need an NF mode for arg cells, not just WHNF
+3. Marshalling Prologos values → Racket values per type (`marshal-in`)
+4. Invocation via `(apply proc rkt-args)` — which may have side effects
+5. Marshalling Racket result → Prologos value (`marshal-out`)
+6. The result re-enters reduction (`(whnf prologos-result)`)
+
+Items 1, 3, 5 are mechanically tractable. Items 2 and 4 are the real cost:
+- **(2) NF mode**: PReduce-MVP ships WHNF; foreign-fn's NF requirement would force the NF infrastructure into MVP scope. Better to defer NF to its own phase where the design can address recursive descent through binders cleanly.
+- **(4) Side effects**: `proc` may print, mutate, allocate. Under BSP, a propagator must fire exactly once per logical invocation (otherwise the side effect duplicates). Fire-once propagators handle this if the topology is right, but the design needs explicit treatment of "when does the side effect happen relative to the round" — and that interacts with future ATMS speculation (which might fire-then-retract a foreign call). Worth its own design.
+
+**Workaround for MVP**: any program using `expr-foreign-fn` falls back to `nf` via the graceful-degradation path (§ 3 closing paragraph). The acceptance file (§ 8.1) is chosen to NOT exercise foreign-fn, so MVP coverage isn't compromised. Programs that DO need foreign-fn (e.g., `[int->string 42]`) still work — just via the existing reducer.
 
 ---
 
@@ -395,7 +402,7 @@ Per the workflow rule "NTT model REQUIRED for propagator designs." Speculative N
 
 ### 8.1 Acceptance file (Phase 0)
 
-`racket/prologos/examples/2026-05-02-preduce-mvp.prologos` — 6-8 small programs whose `nf` is known:
+`racket/prologos/examples/2026-05-02-preduce-mvp.prologos` — 7 small programs whose `nf` is known and whose AST stays within the MVP subset (no foreign-fn):
 
 1. `def main := [int+ 2 3]` → `(expr-int 5)`
 2. `def main := [if true 1 2]` → `(expr-int 1)`
@@ -403,10 +410,9 @@ Per the workflow rule "NTT model REQUIRED for propagator designs." Speculative N
 4. `def main := [fst <1; 2>]` → `(expr-int 1)`
 5. `def main := fact 5` → `(expr-int 120)` (factorial via natrec)
 6. `def main := fib 10` → `(expr-int 55)` (Fibonacci via natrec)
-7. `def main := [sum-list '[1 2 3 4 5]]` → `(expr-int 15)` (foldr-like via natrec)
-8. A program that exercises foreign-fn (e.g. `[int->string 42]`) → `(expr-string "42")`
+7. `def main := [sum 5]` → `(expr-int 15)` where `sum n = n + (n-1) + ... + 0` via natrec (avoids list/foreign-fn dependency)
 
-Run `(preduce main-body)` and compare to `(nf main-body)`. Each phase unlocks specific entries.
+Run `(preduce main-body)` and compare to `(nf main-body)`. Each phase unlocks specific entries: Phase 2 unlocks #1-4; Phase 5 unlocks #5-7.
 
 ### 8.2 Differential testing (Phase 7)
 
@@ -483,7 +489,7 @@ No changes to AST, elaborator, or the existing reducer. PReduce-MVP is purely ad
 The user reviews this doc and answers:
 
 1. **Naming**: ship as "PReduce" (consistent with Track 9) or "preduce-MVP" (explicit MVP scope)? My lean: filename `preduce.rkt` with module-level comment naming it as the MVP precursor to full Track 9.
-2. **AST subset**: is the ~20-node core subset in § 3 the right target, or should it be smaller (just literals + arithmetic) or larger (includes `expr-reduce` general patterns)?
+2. **AST subset**: ~19-node core subset in § 3 (with `expr-foreign-fn` deferred to Phase 9; rationale in § 5.8) — confirm or override? Foreign-fn deferral is the principal scope cut: programs needing FFI (`int->string`, etc.) fall back to `nf` until Phase 9 lands.
 3. **Phase ordering**: 0-8 as listed, or different sequencing? E.g., Phase 7 differential testing could be moved earlier as a per-phase gate.
 4. **Validation strategy**: differential testing target — 100 random cases enough, or 1000? Property-based generator scope — closed terms only, or open terms with assumed-typed environments?
 5. **Out-of-scope handling**: graceful degradation (fall back to `nf`) or hard error? My lean: graceful degradation for the rollout period; remove the fallback once coverage is complete.
@@ -501,7 +507,7 @@ The user reviews this doc and answers:
 | ✓ Per-call fresh network | Is this scaffolding? — *Yes, named explicitly in Q1 + Q3 as deferred sharing optimization. Track 9 full will share across calls via subscription model.* |
 | ✓ Imperative fuel (Q8) | "Imperative" — is this rationalization for off-network? — *Imperative for v1, named scaffolding. Tropical-quantale fuel cell from PPN 4C M2 is the v2 retirement target. Specific replacement, not "we'll get to it eventually."* |
 | ✓ Graceful degradation to `nf` for out-of-scope nodes | Is this belt-and-suspenders? — *Yes — but bounded. Phase 8 PIR commits to removing fallback once coverage is complete. Not permanent dual-mechanism.* |
-| ✓ Foreign-fn handled | Pure foreign functions only? — *Yes; effectful FFI deferred. The MVP makes the simplifying assumption that `proc` is a pure Racket procedure called once when args are concrete. Effects are a real architectural question (when does I/O happen relative to BSP?), deferred to Phase 13 with its own design doc.* |
+| ✓ Foreign-fn deferred from MVP | Is this a real deferral or rationalization? — *Real, with named target (Phase 9) and specific rationale (§ 5.8): NF-on-args requires NF mode in PReduce; side-effect semantics under BSP need explicit treatment. Programs using FFI fall back to `nf` until Phase 9. Acceptance file chosen to not exercise FFI so MVP coverage isn't compromised.* |
 | ✓ Differential testing | Is the test methodology valid? — *Differential against `nf` is the strongest possible oracle (it's the existing implementation). The risk is `nf` having a bug that PReduce inherits — but that's a different class of bug (semantic, not architectural).* |
 
 ---
