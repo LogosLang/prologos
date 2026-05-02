@@ -314,6 +314,132 @@ int main(void) {
         return 1;
     }
 
+    /* ====================================================================
+     *  Day 4 scope test suite (per § 14.1 row 4 + § 5.9 + § 15.14)
+     * ==================================================================== */
+
+    /* -------- S1: fuel isolation (scope FUEL_EXHAUSTED on low fuel) -------- */
+    /* Build a depth-4 identity chain in root: c1→c2→c3→c4→c5. Run root
+     * to quiescence (settles in 4 rounds, c5 gets c1's value). Then write
+     * c1 = 99 in root (schedules c1→c2 prop) WITHOUT running root. Enter
+     * a scope and scope_run with fuel=2. The scope inherits the
+     * scheduled prop and the new c1 value; with fuel=2 it can fire only
+     * 2 rounds, propagating 99 through c2 then c3 but not c4/c5. */
+    {
+        prologos_reset_stats();
+        uint32_t c1 = prologos_cell_alloc();
+        uint32_t c2 = prologos_cell_alloc();
+        uint32_t c3 = prologos_cell_alloc();
+        uint32_t c4 = prologos_cell_alloc();
+        uint32_t c5 = prologos_cell_alloc();
+        prologos_propagator_install_1_1(0 /* identity */, c1, c2);
+        prologos_propagator_install_1_1(0, c2, c3);
+        prologos_propagator_install_1_1(0, c3, c4);
+        prologos_propagator_install_1_1(0, c4, c5);
+        prologos_cell_write(c1, 42);
+        prologos_run_to_quiescence();
+        ASSERT_EQ("S1.root_settled_c5", prologos_cell_read(c5), 42);
+
+        /* Stage a new value in c1; do NOT run root. The c1→c2 prop is
+         * scheduled by the cell_write change-notification path. */
+        prologos_cell_write(c1, 99);
+
+        /* Enter scope; scope inherits the schedule. Run with fuel=2. */
+        uint32_t s1 = prologos_scope_enter(0);
+        uint8_t r = prologos_scope_run(s1, 2);
+        ASSERT_EQ("S1.fuel_exhausted", r, RUN_RESULT_FUEL_EXHAUSTED);
+        ASSERT_EQ("S1.scope_c1", prologos_scope_read(s1, c1), 99);
+        ASSERT_EQ("S1.scope_c2", prologos_scope_read(s1, c2), 99); /* fired */
+        ASSERT_EQ("S1.scope_c3", prologos_scope_read(s1, c3), 99); /* fired */
+        ASSERT_EQ("S1.scope_c4", prologos_scope_read(s1, c4), 42); /* not fired */
+        ASSERT_EQ("S1.scope_c5", prologos_scope_read(s1, c5), 42); /* not fired */
+        prologos_scope_exit(s1);
+
+        /* -------- S2: write isolation (root unchanged after scope) -------- */
+        /* Root's c2..c5 should still be 42 (the scope's writes did not
+         * propagate back to root). c1 is 99 (set in root before scope). */
+        ASSERT_EQ("S2.root_c1_preserved", prologos_cell_read(c1), 99);
+        ASSERT_EQ("S2.root_c2_intact",   prologos_cell_read(c2), 42);
+        ASSERT_EQ("S2.root_c3_intact",   prologos_cell_read(c3), 42);
+        ASSERT_EQ("S2.root_c4_intact",   prologos_cell_read(c4), 42);
+        ASSERT_EQ("S2.root_c5_intact",   prologos_cell_read(c5), 42);
+
+        /* Now run root to confirm root's BSP loop still works after the
+         * scope_run round-trip; root quiesces with c5 = 99. */
+        prologos_run_to_quiescence();
+        ASSERT_EQ("S2.root_runs_after_scope", prologos_cell_read(c5), 99);
+
+        /* -------- S3: explicit publish (handler writes parent cell) -------- */
+        /* In a real handler, after scope_run returns the handler reads
+         * the inner result via scope_read and writes it to a parent
+         * cell via cell_write. Simulate with the test driver: scope
+         * reads the SCOPE'S inner result, writes a fresh root cell. */
+        uint32_t pub = prologos_cell_alloc();          /* parent publish target */
+        prologos_cell_write(c1, 7);                    /* re-stage scope input */
+        uint32_t s2 = prologos_scope_enter(0);
+        prologos_scope_run(s2, 1000);                  /* full run */
+        ASSERT_EQ("S3.scope_inner_settled", prologos_scope_read(s2, c5), 7);
+        int64_t inner = prologos_scope_read(s2, c5);
+        prologos_cell_write(pub, inner);               /* explicit publish */
+        prologos_scope_exit(s2);
+        ASSERT_EQ("S3.parent_published", prologos_cell_read(pub), 7);
+
+        /* -------- S4: trap-propagation placeholder (no false TRAP) -------- */
+        /* No fire-fn currently traps; scope_run on a clean network must
+         * return HALT, not TRAP. Real trap-propagation testing lands
+         * with Phase 5's contradiction-emitting handlers. */
+        uint32_t s3 = prologos_scope_enter(0);
+        uint8_t r3 = prologos_scope_run(s3, 100);
+        if (r3 == RUN_RESULT_TRAP) {
+            fprintf(stderr, "FAIL S4.no_false_trap: got TRAP on clean net\n");
+            return 1;
+        }
+        ASSERT_EQ("S4.last_result_recorded",
+                  prologos_scope_get_last_result(s3), r3);
+        prologos_scope_exit(s3);
+    }
+
+    /* -------- S5: nested-allocation (LIFO stack discipline) -------- */
+    /* Sibling-allocation pattern: enter A, enter B (with B's parent
+     * also = root, since A is allocated but not active). LIFO requires
+     * exit(B) before exit(A). Verifies stack discipline + counter
+     * accounting. (True scope_run-inside-scope_run nesting is exercised
+     * indirectly via the kernel's save/load of is_in_scope_run +
+     * scope_run_fuel_remaining; Phase 5's handler propagators will give
+     * us a proper end-to-end nested-run regression.) */
+    {
+        uint32_t depth0 = prologos_scope_depth();
+        uint32_t a = prologos_scope_enter(0);
+        ASSERT_EQ("S5.depth_a", prologos_scope_depth(), depth0 + 1);
+        uint32_t b = prologos_scope_enter(0);
+        ASSERT_EQ("S5.depth_ab", prologos_scope_depth(), depth0 + 2);
+        /* Independent scope_run on each */
+        uint8_t ra = prologos_scope_run(a, 100);
+        uint8_t rb = prologos_scope_run(b, 100);
+        ASSERT_EQ("S5.a_halt", ra, RUN_RESULT_HALT);
+        ASSERT_EQ("S5.b_halt", rb, RUN_RESULT_HALT);
+        /* LIFO exit: b before a */
+        prologos_scope_exit(b);
+        ASSERT_EQ("S5.depth_after_b", prologos_scope_depth(), depth0 + 1);
+        prologos_scope_exit(a);
+        ASSERT_EQ("S5.depth_after_a", prologos_scope_depth(), depth0);
+    }
+
+    /* -------- S6: stat counters increment correctly -------- */
+    {
+        uint64_t enters_before = prologos_get_stat(12);
+        uint64_t runs_before   = prologos_get_stat(13);
+        uint64_t exits_before  = prologos_get_stat(14);
+
+        uint32_t s = prologos_scope_enter(0);
+        prologos_scope_run(s, 100);
+        prologos_scope_exit(s);
+
+        ASSERT_EQ("S6.enters_inc", prologos_get_stat(12), enters_before + 1);
+        ASSERT_EQ("S6.runs_inc",   prologos_get_stat(13), runs_before + 1);
+        ASSERT_EQ("S6.exits_inc",  prologos_get_stat(14), exits_before + 1);
+    }
+
     fprintf(stderr, "test-substrate: ALL PASSED\n");
     return 0;
 }
