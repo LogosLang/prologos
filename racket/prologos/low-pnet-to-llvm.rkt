@@ -160,6 +160,19 @@
       (format "  call void @prologos_cell_write(i32 ~a, i64 ~a)"
               (cell-ssa-name id) v)))
 
+  ;; kernel-PU Phase 5 Day 11: dispatch on write-decl mode tag.
+  ;; - 'merge → @prologos_cell_write (apply domain merge fn; enqueue subscribers
+  ;;   on value change). The default; matches V1.0 IR's single behavior.
+  ;; - 'reset → @prologos_cell_reset (replace value, no merge, do NOT enqueue
+  ;;   subscribers). Substrate primitive added in Phase 1 Day 1
+  ;;   (runtime/prologos-runtime.zig:336).
+  ;; Both kernel APIs share signature `(i32, i64) → void`. The mode tag is
+  ;; emitted by ast-to-low-pnet.rkt / consumer elaborators; downstream
+  ;; verification: the round-trip-acceptance harness (Day 10) materializes
+  ;; the same IR through propagator.rkt's net-cell-write/net-cell-reset and
+  ;; confirms observational equivalence on every example.
+  (define have-reset-write? (for/or ([w (in-list write-decls)])
+                              (eq? (write-decl-mode w) 'reset)))
   (define write-lines
     (for/list ([w (in-list write-decls)])
       (define cid (write-decl-cell-id w))
@@ -168,19 +181,16 @@
       (unless (or (exact-integer? v) (eq? v #t) (eq? v #f))
         (unsupported! w
                       (format "write-decl value ~v is not i64-marshalable" v)))
-      ;; kernel-PU Phase 3 Day 8: V1.1 IR allows write-decl with mode='reset.
-      ;; Emission of prologos_cell_reset lands at Phase 5 Day 11 — until then,
-      ;; explicitly reject 'reset writes here so V1.1 IR using the new mode
-      ;; can't silently get lowered as a merging cell_write.
-      (unless (eq? mode 'merge)
-        (unsupported! w
-                      (format "write-decl mode ~v not yet supported by LLVM lowering (Phase 5 Day 11 wires up prologos_cell_reset)"
-                              mode)))
       (define vi64 (cond [(exact-integer? v) v]
                          [(eq? v #t) 1]
                          [(eq? v #f) 0]))
-      (format "  call void @prologos_cell_write(i32 ~a, i64 ~a)"
-              (cell-ssa-name cid) vi64)))
+      (define api-name
+        (case mode
+          [(merge) "@prologos_cell_write"]
+          [(reset) "@prologos_cell_reset"]
+          [else (unsupported! w (format "unknown write-decl mode ~v" mode))]))
+      (format "  call void ~a(i32 ~a, i64 ~a)"
+              api-name (cell-ssa-name cid) vi64)))
 
   ;; Phase 2.D: propagator-decl → prologos_propagator_install_{2_1,3_1} call.
   ;; Each install enqueues the propagator; the run_to_quiescence call
@@ -277,6 +287,35 @@
      "declare i64 @prologos_cell_read(i32)\n"
      "declare void @prologos_cell_write(i32, i64)\n"))
 
+  ;; kernel-PU Phase 5 Day 11: conditionally emit declarations for the
+  ;; new substrate primitives. Only emit if used so the LLVM module's
+  ;; declared-but-unused symbol set stays minimal (clang warns about
+  ;; unused declarations only at very-high diagnostic levels, but a
+  ;; clean module is easier to audit).
+  (define reset-decls-text
+    (if have-reset-write?
+        "declare void @prologos_cell_reset(i32, i64)\n"
+        ""))
+
+  ;; Scope APIs are declared whenever the IR contains a meta-decl
+  ;; signaling consumer code uses them. Today no compiler path emits
+  ;; scope-using IR (Day 12 will wire NAF / S(-1) Category-C migrations
+  ;; that introduce them); keeping the declarations gated on a meta-decl
+  ;; lets future emitters opt-in without changes here. Signal:
+  ;;   (meta-decl uses-scope-apis #t)
+  (define uses-scope?
+    (for/or ([m (in-list meta-decls)])
+      (and (eq? (meta-decl-key m) 'uses-scope-apis)
+           (eq? (meta-decl-value m) #t))))
+  (define scope-decls-text
+    (if uses-scope?
+        (string-append
+         "declare i32 @prologos_scope_enter(i64)\n"
+         "declare i8 @prologos_scope_run(i32, i64)\n"
+         "declare i64 @prologos_scope_read(i32, i32)\n"
+         "declare void @prologos_scope_exit(i32)\n")
+        ""))
+
   ;; Conditionally-emitted declarations for the propagator API.
   (define prop-decls-text
     (if propagator-decls-non-empty?
@@ -300,6 +339,8 @@
           (for/list ([l (in-list meta-comment-lines)]) (string-append l "\n")))
    "\n"
    base-decls
+   reset-decls-text
+   scope-decls-text
    prop-decls-text
    stats-decls
    "\n"

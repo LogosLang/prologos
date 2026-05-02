@@ -190,3 +190,97 @@
        (entry-decl 0))))
   (define ir (lower-low-pnet-to-llvm lp))
   (check-true (string-contains? ir "source-file")))
+
+;; ============================================================
+;; kernel-PU Phase 5 Day 11: write-decl mode dispatch
+;; ============================================================
+
+(test-case "Day 11: 'merge mode emits @prologos_cell_write (default)"
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (write-decl 0 99 0 merge)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 99)"))
+  ;; cell_reset declaration not emitted unless used
+  (check-false (string-contains? ir "@prologos_cell_reset")))
+
+(test-case "Day 11: 'reset mode emits @prologos_cell_reset (with declaration)"
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (write-decl 0 7 0 reset)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "declare void @prologos_cell_reset(i32, i64)"))
+  (check-true (string-contains? ir "call void @prologos_cell_reset(i32 %c0, i64 7)"))
+  ;; cell_write still emitted for the cell-decl init
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 0)")))
+
+(test-case "Day 11: V1.0 IR (no mode tag) round-trips with cell_write only"
+  ;; Pre-Day-8 IR shape: 3-arg write-decl. Parser defaults mode to 'merge,
+  ;; so emission is unchanged.
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 0)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (write-decl 0 11 0)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 11)"))
+  (check-false (string-contains? ir "@prologos_cell_reset")))
+
+(test-case "Day 11: mixed merge + reset writes coexist"
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (cell-decl 1 0 0)
+                (write-decl 0 1 0 merge)
+                (write-decl 1 2 0 reset)
+                (entry-decl 1))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "declare void @prologos_cell_reset(i32, i64)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 1)"))
+  (check-true (string-contains? ir "call void @prologos_cell_reset(i32 %c1, i64 2)")))
+
+;; ============================================================
+;; kernel-PU Phase 5 Day 11: scope-API declaration emission
+;; ============================================================
+
+(test-case "Day 11: scope APIs NOT declared by default"
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 7)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-false (string-contains? ir "@prologos_scope_enter"))
+  (check-false (string-contains? ir "@prologos_scope_run"))
+  (check-false (string-contains? ir "@prologos_scope_read"))
+  (check-false (string-contains? ir "@prologos_scope_exit")))
+
+(test-case "Day 11: meta-decl uses-scope-apis triggers scope-API declarations"
+  ;; Day 12 Category-C migrations (NAF + run-stratified-resolution-pure)
+  ;; will emit IR with this meta. Until then, the opt-in lets future
+  ;; passes turn on the declarations without touching low-pnet-to-llvm.
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl uses-scope-apis #t)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 7)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "declare i32 @prologos_scope_enter(i64)"))
+  (check-true (string-contains? ir "declare i8 @prologos_scope_run(i32, i64)"))
+  (check-true (string-contains? ir "declare i64 @prologos_scope_read(i32, i32)"))
+  (check-true (string-contains? ir "declare void @prologos_scope_exit(i32)")))
