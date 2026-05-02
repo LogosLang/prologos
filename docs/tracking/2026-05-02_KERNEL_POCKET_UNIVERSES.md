@@ -1002,6 +1002,24 @@ Two spec-completeness gaps with recommended defaults:
 
 `runtime/prologos-hamt.zig` (Issue #42 Path A) is **already built and tested** (442 LOC, 10 unit tests, persistence properties verified, C-ABI exports). Phase 2 uses it directly; no separate "v2 upgrade" needed. The HAMT GC constraint (`2026-05-02_HAMT_ZIG_TRACK6.md` § 2: "nodes leak on insert/remove") is inherited; acceptable for substrate scope; revisit when Track 6 GC lands.
 
+#### 15.12.1 HAMT GC leak — Phase 2 follow-up note (Day 7)
+
+Day 6 wires the kernel's `cells_root` directly to the persistent HAMT, with each `cell_write` / `cell_reset` producing a new root via path-copy CoW. The displaced root pointer is dropped on the floor (per the HAMT module's documented "nodes leak on insert/remove" semantic — `prologos-hamt.zig:8`).
+
+For the kernel's current scope, this leak is bounded:
+
+* **Steady-state programs** (no `scope_run` cycles, no recursive PReduce): the leak grows at the rate of one CoW path-copy per `cell_write` / `cell_reset`. At ~40 bytes per HAMT branch node and a typical path length of ~3-4 levels for `MAX_CELLS=1024`, that is ~120-160 bytes per write. A program performing 100K writes leaks ~16 MB — uncomfortable for long-running services but trivially bounded for batch compilation + run-and-exit.
+* **Scope-using programs** (NAF, ATMS, recursive PReduce after Phase 5 lands): each `scope_run` cycle generates a derived HAMT root that is referenced by the scope's record while alive, then becomes unreachable on `scope_exit` (along with all its CoW path nodes that diverged from the parent's root). Today these all leak.
+
+**Track-6 GC integration plan** (sketch; not on this track's critical path):
+1. **Reference counting** at the HAMT-node level — adds ~4 bytes per node + atomic inc/dec on every CoW, but enables prompt collection at `scope_exit`.
+2. **Periodic mark-and-sweep** rooted at `cells_root` + every live `scope_records[i].saved_cells_root` — runs during quiescence (between `run_to_quiescence` calls), bounded pause time.
+3. **Generational** — recycled small arenas for short-lived path-copy nodes during a single `run_to_quiescence`, freed wholesale at quiescence.
+
+Recommendation: ship (1) when Track 6 starts its GC sub-piece. The kernel exposes the saved-root set via `scope_records[i].saved_cells_root` for whichever GC strategy lands; this design intentionally does not encode a GC choice.
+
+The Day 7 microbench (`runtime/bench-scope-enter.c`) does NOT exercise the leak — `scope_enter`+`scope_exit` cycles don't allocate HAMT nodes (only pointer-share). The leak shows up in workloads with many `cell_write` calls. Future Phase 5 NAF migration tests will be the first to surface scope-cycle node leakage at scale; that is the appropriate moment to revisit Track 6 GC integration.
+
 ### 15.13 Naming canonicalization (one-source-of-truth check)
 
 After this rev (2.1), the kernel API names are normative across §§ 5-8 and § 14. Verify before Phase 1 starts:

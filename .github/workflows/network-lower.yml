@@ -136,6 +136,21 @@ jobs:
             -o /tmp/test-bsp-feedback
           /tmp/test-bsp-feedback
 
+      - name: Scope microbench (Phase 2 Day 7)
+        # 2026-05-02 kernel-pocket-universes track Phase 2 Day 7
+        # (§ 14.1 row 7). Times scope_enter + scope_exit cycles at 1000
+        # allocated cells; regression band is 100us/op (catches
+        # accidental O(N^2) reintroduction). The Day 6 HAMT root
+        # pointer-share is what makes the cells-values portion O(1);
+        # the remaining cost is the topology-mirror memcpy (cell_subs
+        # 64 KB at MAX_CELLS=1024). When the kernel grows MAX_CELLS or
+        # sparsifies cell_subs, extend the bench's regime table.
+        run: |
+          clang runtime/bench-scope-enter.c runtime/prologos-runtime.o \
+            runtime/prologos-hamt.o \
+            -o /tmp/bench-scope-enter
+          /tmp/bench-scope-enter
+
       - name: Substrate primitives smoke test (Phase 1 Day 1+)
         # 2026-05-02 kernel-pocket-universes track Phase 1 Day 1.
         # Validates cell_alloc_with_domain, the min-merge i64 domain,
