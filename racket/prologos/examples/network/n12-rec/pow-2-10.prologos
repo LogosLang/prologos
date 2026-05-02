@@ -1,0 +1,11 @@
+ns examples::n12-rec::pow-2-10
+
+spec pow Int -> Int -> Int
+defn pow
+  | _ 0 -> 1
+  | b n -> [int* b [pow b [int- n 1]]]
+
+def main : Int := [pow 2 10]
+
+;; 2^10 = 1024; mod 256 = 0
+;; :expect-exit 0

@@ -1,0 +1,12 @@
+ns examples::n12-rec::fib-15
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+def main : Int := [fib 15]
+
+;; fib(15) = 610; binary exit truncated to mod 256 = 610 mod 256 = 98
+;; :expect-exit 98

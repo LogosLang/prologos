@@ -1,0 +1,11 @@
+ns examples::n12-rec::fact-7
+
+spec fact Int -> Int
+defn fact
+  | 0 -> 1
+  | n -> [int* n [fact [int- n 1]]]
+
+def main : Int := [fact 7]
+
+;; fact(7) = 5040; binary exit truncated to mod 256 = 5040 mod 256 = 176
+;; :expect-exit 176

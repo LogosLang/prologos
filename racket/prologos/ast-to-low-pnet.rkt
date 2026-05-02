@@ -496,6 +496,198 @@ fst/snd projection or destructuring is required first."
 (define MAX-INLINING-DEPTH 64)
 (define current-inlining-depth (make-parameter 0))
 
+;; ============================================================
+;; Gate 2 rev 1.0: compile-time static evaluation
+;; ============================================================
+;;
+;; Many programs use general (non-tail) recursion, e.g. `[fact 5]`,
+;; `[fib 10]`, `[sum-to 15]`. These call sites have STATICALLY KNOWN
+;; integer arguments — there's no need for a runtime call stack;
+;; we can fold the entire call tree to its result at compile time.
+;;
+;; try-static-eval walks an expression. If it can reduce to a
+;; literal value (Int, #t, #f), it returns that value. If any
+;; sub-expression depends on a runtime cell (an `expr-bvar`
+;; marked 'unknown in the static env), it returns #f and the
+;; caller falls through to runtime lowering.
+;;
+;; The static env is a list of values parallel to `env` (the cell-id
+;; list). For each binder pushed onto `env`, the static env gets the
+;; binder's literal value (if known at compile time) or `'unknown`.
+;; Lookups via expr-bvar return the literal or fail.
+;;
+;; Recursion bound: MAX-STATIC-EVAL-STEPS (200000). For fib(15) ≈
+;; 1973 calls; fib(20) ≈ 21891; fib(25) ≈ 242785. Up to fib(20)-ish
+;; folds in well under a second. Beyond that we abort cleanly and
+;; fall through.
+
+(define MAX-STATIC-EVAL-STEPS 200000)
+
+;; truncated division — must match the runtime semantics (Zig
+;; @divTrunc / Racket quotient on same-sign args). For mixed-sign
+;; args, Racket's `quotient` truncates towards zero too.
+(define (static-int-div a b)
+  (cond [(zero? b) #f]   ; runtime would trap; refuse to fold
+        [else (quotient a b)]))
+
+(define (static-int-mod a b)
+  (cond [(zero? b) #f]
+        [else (modulo a b)]))
+
+;; A small mutable counter keeps us inside a step budget across the
+;; entire evaluation tree (depth alone is not a tight enough bound
+;; for fib-shaped expansion).
+(define current-static-steps (make-parameter #f))
+(define (bump-static-step!)
+  (define box (current-static-steps))
+  (cond [(not box) #t]
+        [(>= (unbox box) MAX-STATIC-EVAL-STEPS) #f]
+        [else (set-box! box (+ 1 (unbox box))) #t]))
+
+;; try-static-eval-impl : expr × literal-env → value | 'unfoldable
+;;   value is an Int (exact integer) or Racket #t / #f.
+;;   'unfoldable means we couldn't (or chose not to) fold this expr.
+;;   The literal-env is a list of (literal-value | 'unknown), one
+;;   slot per outer bvar binder.
+(define UNFOLDABLE 'unfoldable)
+(define (foldable? v) (not (eq? v UNFOLDABLE)))
+
+(define (try-static-eval-impl e lit-env)
+  (cond
+    [(not (bump-static-step!)) UNFOLDABLE]
+    [else
+     (match e
+       [(expr-ann inner _) (try-static-eval-impl inner lit-env)]
+       [(expr-int n)       n]
+       [(expr-true)        #t]
+       [(expr-false)       #f]
+       [(expr-zero)        0]
+       [(expr-nat-val n)   n]
+       [(expr-suc inner)
+        (define v (try-static-eval-impl inner lit-env))
+        (cond [(exact-integer? v) (+ v 1)] [else UNFOLDABLE])]
+
+       [(expr-bvar i)
+        (cond [(>= i (length lit-env)) UNFOLDABLE]
+              [else (let ([v (list-ref lit-env i)])
+                      (cond [(eq? v 'unknown) UNFOLDABLE] [else v]))])]
+
+       [(expr-int-add a b) (static-bin + a b lit-env)]
+       [(expr-int-sub a b) (static-bin - a b lit-env)]
+       [(expr-int-mul a b) (static-bin * a b lit-env)]
+       [(expr-int-div a b) (static-bin static-int-div a b lit-env)]
+       [(expr-int-mod a b) (static-bin static-int-mod a b lit-env)]
+       [(expr-int-eq a b)  (static-bin = a b lit-env)]
+       [(expr-int-lt a b)  (static-bin < a b lit-env)]
+       [(expr-int-le a b)  (static-bin <= a b lit-env)]
+       [(expr-int-neg a)
+        (define av (try-static-eval-impl a lit-env))
+        (cond [(exact-integer? av) (- av)] [else UNFOLDABLE])]
+       [(expr-int-abs a)
+        (define av (try-static-eval-impl a lit-env))
+        (cond [(exact-integer? av) (abs av)] [else UNFOLDABLE])]
+
+       [(expr-boolrec _motive tc fc cnd)
+        (define cv (try-static-eval-impl cnd lit-env))
+        (cond [(eq? cv #t) (try-static-eval-impl tc lit-env)]
+              [(eq? cv #f) (try-static-eval-impl fc lit-env)]
+              [else UNFOLDABLE])]
+
+       ;; expr-reduce: support Bool / Nat 2-arm matches when scrutinee
+       ;; folds to a literal. Multi-arm ctor matches not folded
+       ;; (no literal ctor representation in static-eval).
+       [(expr-reduce s
+                     (list (expr-reduce-arm tag-a count-a body-a)
+                           (expr-reduce-arm tag-b count-b body-b))
+                     _)
+        (define sv (try-static-eval-impl s lit-env))
+        (cond
+          ;; Bool match
+          [(and (boolean? sv) (eq? tag-a 'true) (eq? tag-b 'false)
+                (= count-a 0) (= count-b 0))
+           (try-static-eval-impl (if sv body-a body-b) lit-env)]
+          [(and (boolean? sv) (eq? tag-a 'false) (eq? tag-b 'true)
+                (= count-a 0) (= count-b 0))
+           (try-static-eval-impl (if sv body-b body-a) lit-env)]
+          ;; Nat match: zero arm has count 0; suc arm has count 1
+          ;; (binder for predecessor).
+          [(and (exact-integer? sv) (>= sv 0)
+                (eq? tag-a 'zero) (eq? tag-b 'suc)
+                (= count-a 0) (= count-b 1))
+           (cond [(zero? sv) (try-static-eval-impl body-a lit-env)]
+                 [else (try-static-eval-impl body-b
+                                             (cons (- sv 1) lit-env))])]
+          [(and (exact-integer? sv) (>= sv 0)
+                (eq? tag-a 'suc) (eq? tag-b 'zero)
+                (= count-a 1) (= count-b 0))
+           (cond [(zero? sv) (try-static-eval-impl body-b lit-env)]
+                 [else (try-static-eval-impl body-a
+                                             (cons (- sv 1) lit-env))])]
+          [else UNFOLDABLE])]
+
+       ;; Beta-redex: (expr-app (expr-lam …) arg)
+       [(expr-app (expr-lam _ _ body) arg)
+        (define av (try-static-eval-impl arg lit-env))
+        (cond [(foldable? av) (try-static-eval-impl body (cons av lit-env))]
+              [else UNFOLDABLE])]
+
+       [(expr-app _ _)
+        (let-values ([(head args) (peel-fvar-app-chain e)])
+          (cond
+            [(and head (not (is-ctor-name? head)))
+             (define v (global-env-lookup-value head))
+             (cond
+               [(not (expr-lam? v)) UNFOLDABLE]
+               [else (apply-static-lam v args lit-env)])]
+            [else UNFOLDABLE]))]
+
+       [_ UNFOLDABLE])]))
+
+;; static-bin : binop × expr × expr × lit-env → result | 'unfoldable
+(define (static-bin op a b lit-env)
+  (define av (try-static-eval-impl a lit-env))
+  (cond
+    [(not (or (exact-integer? av) (boolean? av))) UNFOLDABLE]
+    [else
+     (define bv (try-static-eval-impl b lit-env))
+     (cond
+       [(not (or (exact-integer? bv) (boolean? bv))) UNFOLDABLE]
+       [else
+        (with-handlers ([exn:fail? (lambda _ UNFOLDABLE)])
+          (op av bv))])]))
+
+;; apply-static-lam : expr-lam × (Listof expr) × lit-env → value | 'unfoldable
+(define (apply-static-lam lam args lit-env)
+  (let loop ([body lam] [args args] [acc-env lit-env])
+    (cond
+      [(null? args) (try-static-eval-impl body acc-env)]
+      [(expr-lam? body)
+       (define av (try-static-eval-impl (car args) lit-env))
+       (cond [(foldable? av)
+              (loop (expr-lam-body body) (cdr args) (cons av acc-env))]
+             [else UNFOLDABLE])]
+      [(expr-ann? body) (loop (expr-ann-term body) args acc-env)]
+      [else UNFOLDABLE])))
+
+;; try-static-eval : expr × lit-env → value | 'unfoldable
+;; Sets up a fresh step-budget box per top-level call.
+(define (try-static-eval e lit-env)
+  (parameterize ([current-static-steps (box 0)])
+    (with-handlers ([exn:fail? (lambda _ UNFOLDABLE)])
+      (try-static-eval-impl e lit-env))))
+
+;; ============================================================
+;; Static env tracking (parallel to cell-id env)
+;; ============================================================
+;;
+;; The build pipeline passes `env` (a list of cell-ids) through
+;; recursive build calls. We mirror it with a `static-env`
+;; (a list of literal-values-or-'unknown) using a parameter, so
+;; every push to `env` also pushes to `static-env`.
+(define current-static-env (make-parameter '()))
+(define-syntax-rule (with-static-extension new-env body ...)
+  (parameterize ([current-static-env new-env]) body ...))
+
 ;; Construct (expr-app^k (expr-lam-chain) arg1 ... argk) from a value V
 ;; and the original application expression. Replaces the (expr-fvar f)
 ;; head with V; the rest of the application chain is preserved.
@@ -796,6 +988,59 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
   (build (tail-rec-shape-base-result shape) b dom-id state-env))
 
 (define (build expr b dom-id env)
+  ;; Gate 2 rev 1.0: try compile-time static evaluation as a fallback
+  ;; for expressions that contain a function call (`expr-fvar` head in
+  ;; an `expr-app`). This handles the concrete-argument case for
+  ;; general (non-tail) recursion (`fact 5`, `fib 10`, `sum-to 15`,
+  ;; etc.) without needing a runtime call stack.
+  ;;
+  ;; The heuristic "only fold when expression contains a function
+  ;; call" preserves the existing low-pnet shape for pure arithmetic
+  ;; expressions (`[int+ 1 2]` still emits 3 cells + 1 propagator),
+  ;; which the unit tests assert. Recursive call sites get folded.
+  (cond
+    [(expr-mentions-fvar-app? expr)
+     (define sv (try-static-eval expr (current-static-env)))
+     (cond
+       [(exact-integer? sv) (emit-cell! b INT-DOMAIN-ID sv)]
+       [(eq? sv #t) (emit-cell! b BOOL-DOMAIN-ID #t)]
+       [(eq? sv #f) (emit-cell! b BOOL-DOMAIN-ID #f)]
+       [else (build-uncached expr b dom-id env)])]
+    [else (build-uncached expr b dom-id env)]))
+
+;; expr-mentions-fvar-app? : expr → Bool
+;; True iff any sub-expression has the shape `(expr-app head ...)`
+;; where head peels to an `expr-fvar`. This is the syntactic
+;; precondition for static-eval to be useful (function inlining +
+;; partial evaluation). Pure literal arithmetic without any function
+;; call short-circuits to the existing build path.
+(define (expr-mentions-fvar-app? e)
+  (define (yes? x) (expr-mentions-fvar-app? x))
+  (match e
+    [(? expr-app?)
+     (let-values ([(head _) (peel-fvar-app-chain e)])
+       (cond [head #t]
+             [else (or (yes? (expr-app-func e)) (yes? (expr-app-arg e)))]))]
+    [(expr-ann inner _) (yes? inner)]
+    [(expr-int-add a b) (or (yes? a) (yes? b))]
+    [(expr-int-sub a b) (or (yes? a) (yes? b))]
+    [(expr-int-mul a b) (or (yes? a) (yes? b))]
+    [(expr-int-div a b) (or (yes? a) (yes? b))]
+    [(expr-int-mod a b) (or (yes? a) (yes? b))]
+    [(expr-int-eq a b) (or (yes? a) (yes? b))]
+    [(expr-int-lt a b) (or (yes? a) (yes? b))]
+    [(expr-int-le a b) (or (yes? a) (yes? b))]
+    [(expr-int-neg a) (yes? a)]
+    [(expr-int-abs a) (yes? a)]
+    [(expr-suc a) (yes? a)]
+    [(expr-boolrec _ tc fc cnd) (or (yes? tc) (yes? fc) (yes? cnd))]
+    [(expr-reduce s arms _)
+     (or (yes? s) (for/or ([a (in-list arms)])
+                    (yes? (expr-reduce-arm-body a))))]
+    [(expr-lam _ _ body) (yes? body)]
+    [_ #f]))
+
+(define (build-uncached expr b dom-id env)
   (match expr
     ;; Strip annotations
     [(expr-ann inner _) (build inner b dom-id env)]

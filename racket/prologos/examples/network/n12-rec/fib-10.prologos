@@ -1,0 +1,12 @@
+ns examples::n12-rec::fib-10
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+def main : Int := [fib 10]
+
+;; fib(10) = 55
+;; :expect-exit 55
