@@ -197,18 +197,21 @@
   (check-exn low-pnet-materialize-error?
     (lambda () (low-pnet-to-prop-network lp))))
 
-(test-case "Day 10 reject: iter-block-decl (Sprint G scaffolding)"
-  (define lp (parse-low-pnet
-              '(low-pnet
-                :version (1 1)
-                (domain-decl 0 int kernel-merge-int 0 never)
-                (cell-decl 0 0 0)
-                (cell-decl 1 0 0)
-                (cell-decl 2 0 0)
-                (iter-block-decl (0) (1) 2 #t)
-                (entry-decl 0))))
-  (check-exn low-pnet-materialize-error?
-    (lambda () (low-pnet-to-prop-network lp))))
+(test-case "Day 13 reject: iter-block-decl IR node retired (now parse error)"
+  ;; iter-block-decl was retired 2026-05-02 (kernel-PU Phase 6 Day 13,
+  ;; § 9.1 Category B). The IR node itself is gone; programs that
+  ;; declare it now fail at parse-low-pnet with "unknown decl head".
+  (check-exn low-pnet-parse-error?
+    (lambda ()
+      (parse-low-pnet
+       '(low-pnet
+         :version (1 1)
+         (domain-decl 0 int kernel-merge-int 0 never)
+         (cell-decl 0 0 0)
+         (cell-decl 1 0 0)
+         (cell-decl 2 0 0)
+         (iter-block-decl (0) (1) 2 #t)
+         (entry-decl 0))))))
 
 (test-case "Day 10 reject: stratum-decl"
   (define lp (parse-low-pnet

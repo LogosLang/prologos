@@ -37,8 +37,10 @@
 ;;   - meta-decl       → ignored at materialization time (informational only)
 ;;   - stratum-decl    → unsupported (multi-stratum scheduling deferred;
 ;;                       same as low-pnet-to-llvm.rkt)
-;;   - iter-block-decl → unsupported (Sprint G scaffolding; never wired by
-;;                       lower-tail-rec; scheduled for Phase 6 deletion).
+;;   - iter-block-decl → IR node retired 2026-05-02 (kernel-PU Phase 6
+;;                       Day 13). lower-tail-rec emits the substrate
+;;                       iteration pattern (Variant B; § 5.5) instead;
+;;                       any leftover IR will fail to parse.
 ;;
 ;; Out of scope:
 ;;   - The reverse direction (prop-network → Low-PNet) — that's
@@ -179,14 +181,14 @@
   (validate-low-pnet lp)  ; raises if malformed
   (define nodes (low-pnet-nodes lp))
 
-  ;; Phase 4 Day 10: refuse stratum-decl (multi-stratum deferred) and
-  ;; iter-block-decl (Sprint G scaffolding, never used by lower-tail-rec).
+  ;; Phase 4 Day 10: refuse stratum-decl (multi-stratum deferred).
+  ;; iter-block-decl handler RETIRED 2026-05-02 (Phase 6 Day 13) — the
+  ;; IR node itself is gone; any program containing it now fails at
+  ;; parse-low-pnet (unknown decl head).
   (for ([n (in-list nodes)])
     (cond
       [(stratum-decl? n)
-       (materialize-error! n "stratum-decl materialization deferred")]
-      [(iter-block-decl? n)
-       (materialize-error! n "iter-block-decl is not materialized — lower-tail-rec emits the substrate iteration pattern (cells + identity-feedback) instead. See § 5.5 Variant B.")]))
+       (materialize-error! n "stratum-decl materialization deferred")]))
 
   ;; Index domain-decls by id so cell-decl can resolve its merge fn.
   (define domains-by-id

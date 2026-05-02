@@ -26,7 +26,7 @@
  (struct-out dep-decl)
  (struct-out stratum-decl)
  (struct-out entry-decl)
- (struct-out iter-block-decl)
+ ;; iter-block-decl RETIRED 2026-05-02 (Phase 6 Day 13, § 9.1 Cat B)
  (struct-out meta-decl)
 
  ;; Errors
@@ -118,31 +118,21 @@
 ;;   main-cell-id : exact-nonnegative-integer
 (struct entry-decl (main-cell-id) #:transparent)
 
-;; iter-block-decl (Sprint G, 2026-05-02): declares an iteration loop in
-;; the generated @main. The LLVM lowering wraps the program's
-;; run_to_quiescence + cell_read sequence in a loop:
-;;
-;;   loop:
-;;     run_to_quiescence
-;;     cond_val = cell_read(cond-cell)
-;;     if halt-when=#t and cond_val != 0: break
-;;     if halt-when=#f and cond_val == 0: break
-;;     for each (state, next) in zip(state-cells, next-cells):
-;;       cell_write(state, cell_read(next))
-;;     goto loop
-;;   <after loop: read entry-decl's result cell>
-;;
-;; This realizes "iteration as its own stratum" (per CALM): the body's
-;; S0 (one iteration's run_to_quiescence) is fully monotone; the
-;; non-monotone state advance lives in the loop control flow.
-;;
-;;   state-cells : (Listof cell-id)  — the recurrence's state binders
-;;   next-cells  : (Listof cell-id)  — parallel: step expressions' result cells
-;;   cond-cell   : cell-id           — Bool cell controlling iteration
-;;   halt-when   : Bool              — #t halts when cond=1; #f halts when cond=0
-;;
-;; Length(state-cells) = Length(next-cells) (one next-cell per state slot).
-(struct iter-block-decl (state-cells next-cells cond-cell halt-when) #:transparent)
+;; iter-block-decl: RETIRED 2026-05-02 (kernel-PU Phase 6 Day 13,
+;; § 9.1 Category B). Sprint G (2026-05-02) declared an iteration-loop
+;; IR node intended to drive an @main-side LLVM loop wrapping
+;; run_to_quiescence + cell-write state advancement. The lowering pass
+;; that was supposed to consume it never landed in lower-tail-rec; the
+;; struct was wired through parse, pp, and validate but ZERO producers
+;; exist. Sprint G is superseded by the dissolved + minimal-scope
+;; design (KERNEL_POCKET_UNIVERSES rev 2.1 § 5.5): tail recursion now
+;; lowers to the substrate iteration pattern Variant B (LWW state
+;; cells + identity-feedback propagators), shipped via lower-tail-rec
+;; in racket/prologos/ast-to-low-pnet.rkt and verified by the Day 9
+;; meta-decl signature `(meta-decl tail-rec-pattern lww-feedback-v1)`.
+;; The IR node, its parser branch, pp branch, validator V11 rule, and
+;; export are all removed by this commit. Round-trip acceptance gate
+;; (37/37) and full IR test suite continue to pass.
 
 ;; meta-decl : (meta-decl key value)
 ;;   key   : symbol
@@ -276,24 +266,16 @@
        (parse-error! form "entry-decl main-cell-id must be non-negative integer"))
      (entry-decl mid)]
 
-    [(list 'iter-block-decl state-cells next-cells cond-cell halt-when)
-     (unless (and (list? state-cells) (andmap exact-nonnegative-integer? state-cells))
-       (parse-error! form "iter-block-decl state-cells must be a list of non-negative integers"))
-     (unless (and (list? next-cells) (andmap exact-nonnegative-integer? next-cells))
-       (parse-error! form "iter-block-decl next-cells must be a list of non-negative integers"))
-     (unless (= (length state-cells) (length next-cells))
-       (parse-error! form "iter-block-decl state-cells and next-cells must have same length"))
-     (unless (exact-nonnegative-integer? cond-cell)
-       (parse-error! form "iter-block-decl cond-cell must be non-negative integer"))
-     (unless (boolean? halt-when)
-       (parse-error! form "iter-block-decl halt-when must be a boolean"))
-     (iter-block-decl state-cells next-cells cond-cell halt-when)]
+    ;; iter-block-decl parser branch RETIRED 2026-05-02 (Phase 6 Day 13).
+    ;; Reading a Low-PNet IR with iter-block-decl will now hit the
+    ;; "unknown decl head" error below — the IR was never produced by
+    ;; lower-tail-rec, and parsers used in the wild don't emit it.
 
     [(list 'meta-decl key value)
      (unless (symbol? key) (parse-error! form "meta-decl key must be a symbol"))
      (meta-decl key value)]
 
-    [_ (parse-error! form "unknown decl head; expected one of: cell-decl, propagator-decl, domain-decl, write-decl, dep-decl, stratum-decl, entry-decl, iter-block-decl, meta-decl")]))
+    [_ (parse-error! form "unknown decl head; expected one of: cell-decl, propagator-decl, domain-decl, write-decl, dep-decl, stratum-decl, entry-decl, meta-decl")]))
 
 ;; ============================================================
 ;; Pretty-printer: low-pnet structure → sexp-form (round-trips with parse-low-pnet)
@@ -319,7 +301,7 @@
      (if (eq? mode 'merge)
          (list 'write-decl cid value tag)
          (list 'write-decl cid value tag mode))]
-    [(iter-block-decl scs ncs cc hw)     (list 'iter-block-decl scs ncs cc hw)]
+    ;; iter-block-decl pp branch RETIRED 2026-05-02 (Phase 6 Day 13).
     [(dep-decl pid cid paths)            (list 'dep-decl pid cid paths)]
     [(stratum-decl id name htag)         (list 'stratum-decl id name htag)]
     [(entry-decl mid)                    (list 'entry-decl mid)]
@@ -343,8 +325,10 @@
 ;;       (since lowering instantiates domains first). Same for: cell-decls
 ;;       precede write-decls / propagator-decls / dep-decls / entry-decls
 ;;       that reference them.
-;;  V11. iter-block-decl references existing state/next/cond cells
-;;       (Sprint G; retired by kernel-PU Phase 6).
+;;  V11. RETIRED 2026-05-02 (Phase 6 Day 13). Was: iter-block-decl
+;;       references existing state/next/cond cells (Sprint G). The
+;;       iter-block-decl IR node itself is now retired; V11 has no
+;;       remaining nodes to validate. Slot kept for traceability.
 ;;  V12. write-decl mode tag is 'merge or 'reset (kernel-PU Phase 3 Day 8).
 ;;       Defensive: parse-decl already enforces this, but a separate validator
 ;;       pass catches programmatically-constructed write-decls with bad modes.
@@ -414,17 +398,9 @@
         (unless (set-member? cell-ids mid)
           (validate-error! (format "entry-decl references unknown cell-id ~a" mid)))])
 
-     ;; V11: iter-block-decl references (Sprint G)
-     (for ([ib (in-list (filter iter-block-decl? nodes))])
-       (for ([cid (in-list (iter-block-decl-state-cells ib))])
-         (unless (set-member? cell-ids cid)
-           (validate-error! (format "iter-block-decl references unknown state-cell ~a" cid))))
-       (for ([cid (in-list (iter-block-decl-next-cells ib))])
-         (unless (set-member? cell-ids cid)
-           (validate-error! (format "iter-block-decl references unknown next-cell ~a" cid))))
-       (unless (set-member? cell-ids (iter-block-decl-cond-cell ib))
-         (validate-error! (format "iter-block-decl references unknown cond-cell ~a"
-                                  (iter-block-decl-cond-cell ib)))))
+     ;; V11 RETIRED 2026-05-02 (Phase 6 Day 13): iter-block-decl
+     ;; references check is gone with the IR node itself. Slot kept
+     ;; for traceability — see header comment block.
 
      ;; V10: declaration order — for each declaration that references something,
      ;; check that the referenced node appeared earlier in the list.
