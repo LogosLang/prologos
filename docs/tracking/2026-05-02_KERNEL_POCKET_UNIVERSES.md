@@ -1,9 +1,19 @@
 # Pocket Universes & Stratification — Kernel Substrate Design
 
 **Date**: 2026-05-02
-**Status**: Stage 3 design proposal (rev 2.1 — dissolved + minimal scope)
-**Track**: SH (Self-Hosting) — kernel substrate (sequencing TBD per option chosen)
-**Branch**: `claude/prologos-layering-architecture-Pn8M9`
+**Status**: ✅ **IMPLEMENTED** (rev 2.1 — dissolved + minimal scope)
+**Track**: SH (Self-Hosting) — kernel substrate
+**Branch**: `claude/prologos-layering-architecture-Pn8M9` (commits `368b4e64` … `74d1b2e1`, 17 commits across 14 days)
+**PIR**: [2026-05-02_KERNEL_PU_PIR.md](2026-05-02_KERNEL_PU_PIR.md)
+**PReduce consumer validation**: [2026-05-02_PREDUCE_USES_DISSOLVED_SUBSTRATE.md](2026-05-02_PREDUCE_USES_DISSOLVED_SUBSTRATE.md)
+**Implementation gates met**:
+- 220+ Racket unit tests (14 test files) ✓
+- 37/37 round-trip acceptance examples ✓
+- 13 substrate C smoke tests ✓
+- 1 microbench under threshold (`runtime/bench-scope-enter.c`) ✓
+- § 9.1 Cat-B grep-check criterion met ✓
+- NAF isolation gate (Day 12, 2 explicit gates) ✓
+- E2E `cell_reset` LLVM emission verified (Day 11) ✓
 
 **Architectural shift from rev 1**: An earlier draft of this doc proposed kernel-level PU and stratum-handler primitives (a `prologos_pu_*` API family of ~12 functions, 5 new IR node kinds, etc.). Review feedback challenged the architecture: *if PReduce comprehends PUs and strata at compile time, they can dissolve into propagator-network topology, and the kernel can stay simple.* That challenge holds for almost everything except a small, well-bounded set of irreducible kernel additions. This rev adopts the dissolved architecture; rev 1 is summarized as Appendix A and recoverable from git history (commit prior to this rev).
 

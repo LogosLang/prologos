@@ -174,3 +174,68 @@ This is the seed of Track 1 — landing it first means future Track 1 work is in
 - WASM (Track 8) — parallel to LLVM, distant
 - Bootstrap verification (Track 10) — depends on Track 9 (compiler-in-Prologos) which is multi-year
 - The super-optimizing-compiler architectural claims — covered in companion research doc, not implementation-scope
+
+## 9. Update — Kernel Pocket Universes track shipped (2026-05-02)
+
+Following this alignment doc, the **Kernel Pocket Universes** track
+shipped on the same branch (commits `368b4e64` … `74d1b2e1`,
+14 days, 17 commits). It addresses one of the architectural gaps
+implied by the formal SH track structure: the kernel substrate's
+support for non-monotone computations (NAF, ATMS branches,
+recursive PReduce) and per-invocation fuel isolation.
+
+**Design doc**: [`2026-05-02_KERNEL_POCKET_UNIVERSES.md`](2026-05-02_KERNEL_POCKET_UNIVERSES.md) (Status: ✅ IMPLEMENTED, rev 2.1)
+**PIR**: [`2026-05-02_KERNEL_PU_PIR.md`](2026-05-02_KERNEL_PU_PIR.md)
+**Consumer validation**: [`2026-05-02_PREDUCE_USES_DISSOLVED_SUBSTRATE.md`](2026-05-02_PREDUCE_USES_DISSOLVED_SUBSTRATE.md)
+
+### What the kernel-PU track adds to the SH picture
+
+Three additions to `runtime/prologos-runtime.zig` (and the matching
+Racket-side mirror in `propagator.rkt`):
+
+1. **`prologos_cell_reset`** — non-merging replace; the irreducible
+   kernel primitive for non-monotone state advance.
+2. **2-tier outer loop + topology-mutation deferral** — mid-fire
+   `cell_alloc` and `prop_install` calls are buffered and applied
+   between value-tier rounds. Ports BSP-LE 2B from Racket.
+3. **Scope APIs** (`scope_enter` / `scope_run` / `scope_read` /
+   `scope_exit`) — per-scope fuel + per-scope worklist + per-scope
+   HAMT root pointer-share. Used for NAF inner-goal isolation and
+   any future per-invocation-bounded computation.
+
+Kernel API surface goes from 5 functions (Phase-0 `cell_alloc`,
+`cell_read`, `cell_write`, `prop_install`, `run_to_quiescence`)
+to 10 functions. **No PU type. No new IR node kinds.** PUs and
+strata are compile-time abstractions; they elaborate to substrate.
+
+### Mapping into the SH track structure
+
+| Kernel-PU artifact | SH track relation | Status |
+|---|---|---|
+| 4 new kernel APIs in `runtime/prologos-runtime.zig` | Track 4 ("production LLVM substrate") — kernel feature surface for non-monotone state | Shipped pre-Track-4; informs Track 4's API contract |
+| HAMT-rooted cell storage + scope HAMT pointer-share | Track 6 (Runtime services) — persistent map sub-concern | Uses existing `runtime/prologos-hamt.zig`; HAMT GC follow-up flagged in § 15.12.1 |
+| Low-PNet IR mode tag (V1.0 → V1.1) | Track 2 (Low-PNet IR) — IR surface evolution | First non-trivial IR change since N0; sets precedent for additive evolution (mode tag is backward-compatible, V1.0 IR re-parses unchanged) |
+| `low-pnet-to-prop-network` adapter (Day 10) | Track 2 + Track 3 (LLVM substrate PoC) — round-trip validation | New adapter validates IR → Racket interpreter independently of LLVM emission. 37/37 acceptance examples round-trip. |
+| `process-naf-request` refactored to scope-cycle pattern | PM Track 8E+ (NAF migration) — substrate consumer | Racket-side refactor uses scope-API mirror; native NAF-handler emission is a future compiler pass |
+| `run-stratified-resolution-pure` data-driven stratum walk | PM Track 7+ (stratified resolution) — incremental migration to BSP-driven stratum-handler propagators | Day 12's structural shift is the prerequisite; full BSP migration is a separable follow-up |
+| Category-B retirements (iter-block-decl, run-stratified-resolution!, etc.) | Quarantine cleanup — ordering-enforcement scaffolding | All grep-checks pass; tombstone comments at deletion sites |
+
+### Substrate-sufficiency for downstream consumers
+
+Phase 7's PReduce walkthrough doc validates that PM Track 9
+("Reduction as Propagators") can be expressed against the shipped
+substrate **without further kernel work**. The same applies to the
+NAF migration (validated by Day 12's NAF isolation gate) and is
+expected to apply to ATMS migration and future NTT consumers.
+
+This closes the rev-2.1 design's "substrate suffices" claim for
+the consumers in scope. The next downstream tracks will re-verify
+against their own surfaces.
+
+### Where this leaves the SH alignment
+
+The kernel-PU track ships substrate features that PPN Track 4 will
+need but doesn't depend on Track 4 (or any other not-yet-open SH
+track). It can be cited by future tracks as a stable kernel surface.
+The design doc + PIR + consumer-walkthrough + PReduce doc form the
+complete substrate-validation corpus.

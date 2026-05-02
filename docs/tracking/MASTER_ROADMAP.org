@@ -255,7 +255,7 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - SRE Track PUnify: Systemic parity investigation
 
 *Future (blocked on PPN Track 4+):*
-- *SH (Self-Hosting) Series*: Racket prototype → propagator compiler → LLVM lowering → Logos self-hosting. Prerequisites: PPN Track 4 (compiler IS the network), LLVM lowering infrastructure, runtime design (GC per [[file:../research/RESEARCH_GC.md][RESEARCH_GC.md]], scheduling, I/O). Series not yet created — placeholder. See [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] for trajectory analysis.
+- *SH (Self-Hosting) Series*: Racket prototype → propagator compiler → LLVM lowering → Logos self-hosting. Prerequisites: PPN Track 4 (compiler IS the network), LLVM lowering infrastructure, runtime design (GC per [[file:../research/RESEARCH_GC.md][RESEARCH_GC.md]], scheduling, I/O). Series not yet created — placeholder. See [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] for trajectory analysis. *Substrate update (2026-05-02)*: the [[file:2026-05-02_KERNEL_POCKET_UNIVERSES.md][Kernel Pocket Universes]] track shipped 4 new kernel APIs (cell_reset + 3 scope APIs) + 2-tier outer loop + topology-mutation deferral. The kernel surface is now stable for the SH Series's runtime needs around non-monotone state and per-invocation fuel isolation. See [[file:2026-05-02_SH_SERIES_ALIGNMENT.md][SH Series Alignment §9]] for the mapping.
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
 
 *Theory (ongoing, fed by application tracks):*
@@ -573,6 +573,7 @@ any Series.
 | PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. Breakout from Track 8 first half. |
 | BSP-LE Track 0 | 2026-03-21 | [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] | [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | hot/warm/cold struct split, mutable worklist, batch API. GC eliminated on hot path; wall-time neutral. |
 | CHAMP Performance | 2026-03-21 | [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][Design]] | [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][PIR]] | Owner-ID transients (16× faster at N=2), eq?-first, value-only fast path. Track 0 Phase 5 rehabilitated. |
+| Kernel Pocket Universes | 2026-05-02 | [[file:2026-05-02_KERNEL_POCKET_UNIVERSES.md][Design]] (rev 2.1, dissolved + minimal scope) | [[file:2026-05-02_KERNEL_PU_PIR.md][PIR]] | 4 new kernel APIs (cell_reset + 3 scope APIs) + 2-tier outer loop + topology-mutation deferral. PUs/strata dissolved into substrate; per-PU fuel via scope APIs. 17 commits across 14 days. PReduce-substrate-sufficiency validated by [[file:2026-05-02_PREDUCE_USES_DISSOLVED_SUBSTRATE.md][walkthrough]]. |
 
 * Standalone Design Documents (Not Yet Implemented / Future Scope)
 
