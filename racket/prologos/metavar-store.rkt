@@ -2128,45 +2128,82 @@
 ;;   S1: read ready-queue (verification: bridges should have handled most)
 ;;   S2: execute remaining actions (mostly no-ops; only ambiguous cases need S2)
 ;;   progress? → loop or done
+;;
+;; Phase 5 Day 12 (2026-05-02 KERNEL_POCKET_UNIVERSES rev 2.1, § 9.1):
+;; the explicit S(-1)/S0/S1/S2 sequence is now expressed as a
+;; data-driven walk over `resolution-strata` — a list of named handler
+;; procedures (each (enet executor → enet*)) — instead of a hard-coded
+;; inline pipeline. Behavior is unchanged (same procedures called in
+;; the same order); the structural shift exposes the migration path to
+;; BSP-driven stratum-handler propagators (the next step folds each
+;; handler into a request-cell + handler-propagator subscribed to it,
+;; driven by the kernel's 2-tier outer loop).
+
+;; S(-1): Retraction stratum — clean scoped cells of retracted entries.
+;; Reads/writes current-prop-net-box (TODO: purify in Phase 8).
+(define (stratum/retraction enet _executor)
+  (define nb (current-prop-net-box))
+  (when nb (set-box! nb enet))
+  (run-retraction-stratum!)
+  (if nb (unbox nb) enet))
+
+;; S0: Type propagation quiescence — fires the BSP scheduler over the
+;; prop-net. Bridges resolve traits/hasmethods/constraints during this.
+(define (stratum/quiesce enet _executor)
+  (let* ([pnet  (elab-network-prop-net enet)]
+         [pnet* ((current-quiescence-scheduler) pnet)])
+    (elab-network-rewrap enet pnet*)))
+
+;; S1+S2: Read the ready-queue and execute its actions. (Combined here
+;; because S1 is a pure read of a cell whose value is the input to
+;; S2's for/fold; splitting would require carrying the queue across
+;; strata.) Box-sync before the read keeps cell-read bridges in sync.
+(define (stratum/ready-queue+actions enet executor)
+  (define nb (current-prop-net-box))
+  (when nb (set-box! nb enet))
+  (define queue-actions (read-ready-queue-actions enet))
+  (for/fold ([e enet])
+            ([action (in-list queue-actions)])
+    (executor e action)))
+
+;; The stratum table — order is the canonical S(-1) → S0 → S1+S2
+;; sequence. Each entry: (name . handler). Adding a stratum is a cons;
+;; reordering is a list permutation. This is the data-driven
+;; replacement for the previous inline pipeline.
+;;
+;; When the kernel migration completes (next phase of § 9.1), each
+;; stratum here will become a (request-cell + handler-propagator) pair
+;; registered via register-stratum-handler!, and the kernel's 2-tier
+;; outer loop will drive the same sequence with no Racket-side loop.
+(define resolution-strata
+  (list (cons 'retraction          stratum/retraction)
+        (cons 'quiesce             stratum/quiesce)
+        (cons 'ready-queue+actions stratum/ready-queue+actions)))
+
 (define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
-  (define has-network? #t)
   (let loop ([fuel stratified-resolution-fuel]
              [meta-id trigger-meta-id]
              [current-enet enet])
-    (if (<= fuel 0)
-        current-enet
-        (let* (;; S(-1): Retraction — run imperatively for now (reads/writes box)
-               ;; TODO: purify retraction stratum in Phase 8
-               [_ (let ([nb (current-prop-net-box)])
-                    (when nb (set-box! nb current-enet))
-                    (run-retraction-stratum!)
-                    (void))]
-               [enet-post-retract (let ([nb (current-prop-net-box)])
-                                    (if nb (unbox nb) current-enet))]
-               ;; S0: Type propagation (quiescence) — pure on prop-net
-               ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net.
-               ;; Track 8 B2: direct elab-network-rewrap instead of rewrap callback.
-               [enet-s0 (if has-network?
-                             (let* ([pnet (elab-network-prop-net enet-post-retract)]
-                                    [pnet* ((current-quiescence-scheduler) pnet)])
-                               (elab-network-rewrap enet-post-retract pnet*))
-                             enet-post-retract)]
-               ;; S1/L1: After S0 quiescence, readiness propagators have fired
-               ;; and populated the ready-queue. Read queue actions.
-               ;; Track 7 Phase 8c: Scanners REMOVED — ready-queue is sole action source.
-               ;; Sync enet to box for ready-queue read (cell reads use box bridge).
-               [_ (let ([nb (current-prop-net-box)])
-                    (when nb (set-box! nb enet-s0)))]
-               [queue-actions (read-ready-queue-actions enet-s0)]
-               ;; S2: Resolution commitment — pure (for/fold over queue actions)
-               [enet-s2 (for/fold ([e enet-s0])
-                                  ([action (in-list queue-actions)])
-                           (resolution-executor e action))])
-          (perf-inc-resolution-cycle!)
-          ;; Detect progress: enet changed?
-          (if (eq? enet-s2 enet-s0)
-              enet-s2  ;; No progress — done
-              (loop (sub1 fuel) meta-id enet-s2))))))
+    (cond
+      [(<= fuel 0) current-enet]
+      [else
+       ;; Walk the stratum table in order, threading enet through.
+       ;; Capture the post-S0 (post-quiesce) snapshot for the historical
+       ;; termination criterion: "did S2 produce new state vs S0
+       ;; quiescence?" — preserves observable behavior of the previous
+       ;; inline pipeline that compared enet-s2 to enet-s0.
+       (define-values (enet-after enet-post-quiesce)
+         (for/fold ([e current-enet]
+                    [post-quiesce #f])
+                   ([entry (in-list resolution-strata)])
+           (define name    (car entry))
+           (define handler (cdr entry))
+           (define e* (handler e resolution-executor))
+           (values e* (if (eq? name 'quiesce) e* post-quiesce))))
+       (perf-inc-resolution-cycle!)
+       (if (eq? enet-after (or enet-post-quiesce current-enet))
+           enet-after
+           (loop (sub1 fuel) meta-id enet-after))])))
 
 ;; Track 7 Phase 8b: Read action descriptors from the ready-queue cell.
 ;; Returns a list of unwrapped action descriptors (tagged-entry values).

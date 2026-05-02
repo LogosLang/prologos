@@ -82,6 +82,18 @@
  ;; Network construction
  make-prop-network
  fork-prop-network
+ ;; Scope APIs — Racket-side mirror of kernel scope_enter/run/read/exit
+ ;; (docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.9). These are
+ ;; the canonical pattern for per-invocation fuel isolation; in Racket they
+ ;; wrap fork-prop-network + run-to-quiescence, in the native kernel they
+ ;; map 1:1 to prologos_scope_enter/_run/_read/_exit.
+ scope-enter
+ scope-run
+ scope-read
+ scope-exit
+ scope-fuel-remaining
+ scope-parent-fuel-charge
+ (struct-out scope-result)
  ;; Cell operations
  net-new-cell
  net-new-cells-batch  ;; Phase 4: batch cell registration
@@ -717,6 +729,114 @@
    (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
    (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
    (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
+
+;; ========================================
+;; Scope APIs — Racket-side mirror of kernel scope APIs
+;; (Phase 5 Day 12; design § 5.9)
+;; ========================================
+;;
+;; A "scope" is the kernel's runtime fuel-attribution unit: a snapshot of
+;; the current cells (via fork) + a fresh fuel counter + a fresh worklist.
+;; Used by stratum handlers that need per-invocation isolation
+;; (NAF inner-goal eval, ATMS branch run, recursive PReduce).
+;;
+;; In Racket these wrap fork-prop-network + run-to-quiescence; in the
+;; native kernel they map 1:1 to:
+;;   prologos_scope_enter(parent_fuel_charge)  → ScopeRef
+;;   prologos_scope_run(scope, fuel)           → RunResult
+;;   prologos_scope_read(scope, cell)          → i64
+;;   prologos_scope_exit(scope)                → void
+;;
+;; Naming the operations (instead of inlining fork+run+read) makes the
+;; per-invocation isolation pattern syntactically explicit, matching the
+;; § 5.9 worked example, and pins the lowering target for the future
+;; PReduce + scope-aware elaborator track (§ 7.5).
+;;
+;; The 'scope' value here IS a forked prop-network (CHAMP-shared with
+;; the parent until the scope writes); scope-enter returns it, scope-run
+;; threads it, scope-read inspects it, scope-exit drops the reference.
+;;
+;; A scope-result captures (parent-net, scope-net, run-result):
+;;   parent-net : prop-network — the parent (charged parent_fuel_charge
+;;                if non-zero; otherwise == input parent)
+;;   scope-net  : prop-network — the scope after the run (for read)
+;;   run-result : 'halt | 'fuel-exhausted | 'trap
+;;
+;; Stack discipline (kernel: enforced by scope_exit; here: by lexical
+;; convention) — every scope-enter must be matched by exactly one
+;; scope-exit before the parent's outer execution proceeds.
+
+(struct scope-result (parent-net scope-net run-result) #:transparent)
+
+;; Default fuel charged against parent on scope_enter. Q10 in the design
+;; doc (§ 15.16) — small fixed value so scope creation is bounded but
+;; never free; revisit if profiling shows scope-creation pressure.
+(define DEFAULT-PARENT-FUEL-CHARGE 10)
+
+;; scope-enter: push a new scope.
+;; - Snapshots parent's HAMT root via fork-prop-network (O(1) CHAMP share).
+;; - Allocates fresh worklist + fresh fuel (set on scope-run).
+;; - Charges parent_fuel_charge against the parent's fuel counter.
+;; Returns (values scope parent') — parent' is the parent with fuel
+;; debited. Use parent' for all subsequent parent operations.
+;;
+;; In the native kernel: prologos_scope_enter(parent_fuel_charge)
+;; returns ScopeRef; the parent fuel charge happens implicitly inside.
+;; Here we return the charged parent because Racket networks are
+;; immutable (CHAMP) — callers must thread it.
+(define (scope-enter parent-net
+                     #:parent-fuel-charge [parent-fuel-charge DEFAULT-PARENT-FUEL-CHARGE])
+  (define charged-parent
+    (if (and parent-fuel-charge (positive? parent-fuel-charge))
+        (struct-copy prop-network parent-net
+          [hot (struct-copy prop-net-hot (prop-network-hot parent-net)
+                 [fuel (max 0 (- (prop-network-fuel parent-net) parent-fuel-charge))])])
+        parent-net))
+  (values (fork-prop-network parent-net) charged-parent))
+
+;; scope-run: run the BSP outer loop on `scope` with its own fuel budget.
+;; Writes go to the scope's HAMT (CoW); parent unaffected.
+;; Returns (values scope-net' run-result).
+;;   run-result = 'halt | 'fuel-exhausted | 'trap
+;;     - 'halt           — quiesced naturally (worklist drained)
+;;     - 'fuel-exhausted — fuel hit zero before quiescence (divergence guard)
+;;     - 'trap           — contradiction encountered
+;; The 'trap result mirrors the kernel's RunResult.trap; in Racket it
+;; corresponds to (prop-network-contradiction net) becoming non-#f.
+(define (scope-run scope-net fuel)
+  (define provisioned-scope
+    (struct-copy prop-network scope-net
+      [hot (struct-copy prop-net-hot (prop-network-hot scope-net)
+             [fuel fuel])]))
+  (define result-net (run-to-quiescence provisioned-scope))
+  (define run-result
+    (cond
+      [(prop-network-contradiction result-net) 'trap]
+      ;; Fuel hit zero AND worklist still has propagators → fuel-exhausted.
+      ;; Fuel hit zero with empty worklist → halt (we just barely finished).
+      [(and (zero? (prop-network-fuel result-net))
+            (pair? (prop-network-worklist result-net)))
+       'fuel-exhausted]
+      [else 'halt]))
+  (values result-net run-result))
+
+;; scope-read: read a cell value from the scope's HAMT.
+;; Used after scope-run to extract a result before scope-exit.
+;; Currently a thin wrapper around net-cell-read on the scope; named
+;; explicitly so that the scope-cycle pattern is readable and to pin the
+;; lowering target.
+(define (scope-read scope-net cid)
+  (net-cell-read scope-net cid))
+
+;; scope-exit: drop the scope. In Racket this is a no-op (CHAMP GC
+;; handles the rest); the call exists so the lexical scope-cycle is
+;; explicit and matches the kernel API. In the native kernel this
+;; releases the HAMT root reference and pops the scope stack.
+(define (scope-exit _scope-net) (void))
+
+;; Inspection helpers (mostly for tests).
+(define (scope-fuel-remaining scope-net) (prop-network-fuel scope-net))
+(define (scope-parent-fuel-charge) DEFAULT-PARENT-FUEL-CHARGE)
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;

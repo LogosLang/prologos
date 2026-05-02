@@ -109,10 +109,34 @@
 (define current-is-eval-fn (make-parameter #f))
 
 ;; Phase R4: NAF S1 handler — processes pending NAF evaluations at S0 fixpoint.
-;; For each pending NAF: fork network, install inner goal, quiesce fork,
-;; check provability (inner scope cell non-bot → provable), write nogood.
-;; Registered as a stratum handler for naf-pending-cell-id.
-;; Replaces: current-naf-completions parameter, imperative S1 evaluation.
+;; Phase 5 Day 12 (2026-05-02): re-expressed using the explicit scope-cycle
+;; pattern (scope-enter / scope-run / scope-read / scope-exit) — Racket-side
+;; mirror of the kernel scope APIs from
+;; docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.9.
+;;
+;; Per-NAF-aid lifecycle:
+;;   scope-enter  — fork-prop-network (O(1) CHAMP share) + charge parent
+;;                  parent_fuel_charge (= 10 by default; isolates per-NAF
+;;                  cost from accidental parent-fuel exhaustion).
+;;   cell_reset   — clear NAF-pending on the scope to prevent infinite
+;;                  recursion (the scope inherits the parent's pending
+;;                  entries; without clearing the BSP would re-fire NAF
+;;                  on every fork).
+;;   install      — standard install-goal-propagator path; runs as a
+;;                  topology mutation that gets deferred and applied
+;;                  inside the scope's BSP outer loop.
+;;   scope-run    — BSP to quiescence with the scope's own fuel; on
+;;                  divergence we get 'fuel-exhausted (per-scope!) while
+;;                  parent fuel stays intact (modulo parent_fuel_charge).
+;;   scope-read   — extract the inner-goal result (scope-cell binding
+;;                  or DFS-solve fallback for ground args).
+;;   scope-exit   — drop the scope; CHAMP GC reclaims its sub-tree.
+;;
+;; The handler ITSELF is a propagator subscribed to naf-pending-cell-id
+;; via register-stratum-handler! at the bottom of this section. From the
+;; kernel's view (when this code lowers): handler IS a propagator;
+;; fork = HAMT-root pointer-share; reset = cell_reset; per-invocation
+;; isolation = scope APIs.
 (define (process-naf-request net pending-hash)
   ;; pending-hash: hasheq naf-aid → (hasheq 'inner-goal ... 'env ... 'naf-bit-pos ...)
   (for/fold ([main-net net])
@@ -120,13 +144,18 @@
     (define inner-goal (hash-ref info 'inner-goal))
     (define naf-env (hash-ref info 'env))
     (define naf-bit-pos (hash-ref info 'naf-bit-pos))
-    ;; Fork: O(1) CHAMP structural sharing. Inner goal runs in isolation.
-    ;; CRITICAL: clear NAF-pending cell on the fork to prevent infinite recursion.
-    ;; The fork inherits the main network's NAF-pending entries. Without clearing,
-    ;; the fork's BSP would process the S1 stratum, calling process-naf-request
-    ;; again on the fork's copy, forking again, ad infinitum.
-    (define forked (net-cell-reset (fork-prop-network main-net)
-                                   naf-pending-cell-id (hasheq)))
+    ;; ─── scope-enter ────────────────────────────────────────────────
+    ;; Fork the parent (O(1) CHAMP structural sharing) and charge the
+    ;; parent's fuel by parent_fuel_charge (default 10). main-net' is
+    ;; the parent threaded forward — must be used for downstream
+    ;; parent-cell reads/writes.
+    (define-values (scope0 main-net*) (scope-enter main-net))
+    ;; ─── cell_reset on scope ────────────────────────────────────────
+    ;; Clear NAF-pending entries on the scope BEFORE installing the
+    ;; inner goal. Otherwise the scope's BSP would re-trigger this
+    ;; handler on its inherited copy of the pending-hash → infinite
+    ;; recursion. Uses net-cell-reset (Racket-side cell_reset).
+    (define forked (net-cell-reset scope0 naf-pending-cell-id (hasheq)))
     ;; Resolve inner goal args using S0 fixpoint values (on fork).
     ;; Install inner goal on fork — standard code path, fresh scope.
     (define inner-goal-kind (goal-desc-kind inner-goal))
@@ -168,9 +197,14 @@
          ;; Install inner goal with resolved + fresh-var args
          (define inner-top (goal-desc 'app (list goal-name inner-goal-args)))
          (define fork2 (install-goal-propagator fork1 inner-top inner-env (cell-id 0)))
-         ;; Quiesce fork: inner goal converges
-         (define fork3 (run-to-quiescence fork2))
-         ;; Check provability: any inner scope variable bound = inner goal succeeded.
+         ;; ─── scope-run ──────────────────────────────────────────────
+         ;; Run the scope's BSP outer loop with its own fuel budget.
+         ;; A divergent inner goal returns 'fuel-exhausted WITHOUT
+         ;; depleting parent's fuel beyond parent_fuel_charge.
+         ;; (We treat fuel-exhausted as "not provable" — the inner goal
+         ;;  never reached a binding, so NAF stays satisfied and the
+         ;;  worldview bit is not cleared.)
+         (define-values (fork3 _scope-result) (scope-run fork2 (prop-network-fuel fork2)))
          ;; If no inner vars (all args ground): check if the goal produced any output.
          ;; For ground args, discrimination narrows to viable facts — if any survive,
          ;; the inner goal is provable.
@@ -188,8 +222,8 @@
              ;; the DFS solver's unification uses equal? which requires matching types.
              ;; resolved-args normalizes AST→raw (PPN boundary), but DFS expects AST.
              (let ()
-               (define the-store (net-cell-read main-net relation-store-cell-id))
-               (define the-config (net-cell-read main-net config-cell-id))
+               (define the-store (net-cell-read main-net* relation-store-cell-id))
+               (define the-config (net-cell-read main-net* config-cell-id))
                ;; Resolve args in AST format: scope-refs → S0 fixpoint values,
                ;; literals → keep as AST nodes (no normalization).
                (define resolved-args-ast
@@ -204,14 +238,15 @@
                  (solve-goal (or the-config (make-solver-config))
                              the-store goal-name resolved-args-ast '()))
                (pair? inner-results))
-             ;; Has inner vars: check if any got bound
+             ;; Has inner vars: check if any got bound — scope-read
+             ;; on the scope's inner-scope cell.
              (let ()
                (define inner-scope-ref
                  (and (pair? inner-vars-final) (hash-ref inner-env (car inner-vars-final) #f)))
                (define inner-scope-cid
                  (and (scope-ref? inner-scope-ref) (scope-ref-cid inner-scope-ref)))
                (if inner-scope-cid
-                   (let ([sc (net-cell-read fork3 inner-scope-cid)])
+                   (let ([sc (scope-read fork3 inner-scope-cid)])
                      (if (scope-cell? sc)
                          (for/or ([v (in-hash-values (scope-cell-bindings sc))])
                            (not (eq? v scope-cell-bot)))
@@ -232,15 +267,26 @@
          (define rv-n (norm rv))
          (or (eq? lv-n scope-cell-bot) (eq? rv-n scope-cell-bot) (equal? lv-n rv-n))]
         [else #t]))
-    ;; If provable: h_naf is invalid → write nogood on main network.
-    ;; Worldview narrowing makes h_naf-tagged writes invisible.
+    ;; ─── scope-exit ─────────────────────────────────────────────────
+    ;; Drop the scope. In Racket this is a no-op (CHAMP GC handles
+    ;; the rest); the call exists so the lexical scope-cycle is
+    ;; explicit and matches the kernel API. The scope's writes do NOT
+    ;; propagate to main-net* — the only data flowing back is the
+    ;; provability boolean we've already extracted via scope-read.
+    ;; (Note: scope0 is the post-enter, pre-reset scope; sufficient
+    ;;  for the no-op exit since scope-exit doesn't inspect it.)
+    (scope-exit scope0)
+    ;; If provable: h_naf is invalid → write nogood on main network
+    ;; (use main-net* — the parent threaded forward from scope-enter
+    ;; with parent_fuel_charge debited). Worldview narrowing makes
+    ;; h_naf-tagged writes invisible.
     (if inner-provable?
         (let ()
           (define invalid-mask (arithmetic-shift 1 naf-bit-pos))
-          (define current-wv (net-cell-read main-net worldview-cache-cell-id))
+          (define current-wv (net-cell-read main-net* worldview-cache-cell-id))
           (define cleared-wv (bitwise-and current-wv (bitwise-not invalid-mask)))
-          (net-cell-write main-net worldview-cache-cell-id cleared-wv))
-        main-net)))
+          (net-cell-write main-net* worldview-cache-cell-id cleared-wv))
+        main-net*)))
 
 ;; Register the S1 NAF handler for the NAF-pending cell.
 (register-stratum-handler! naf-pending-cell-id process-naf-request)
