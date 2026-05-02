@@ -4,7 +4,41 @@
 // Provides:
 //
 //   prologos_cell_alloc()                    -> u32 cell-id
+//                                              shorthand for (DOMAIN_LWW_I64,
+//                                              init=0); preserved for
+//                                              backward compatibility.
+//   prologos_cell_alloc_with_domain(domain, init) -> u32 cell-id
+//                                              domain selects per-cell merge
+//                                              function. domains:
+//                                                0=DOMAIN_LWW_I64
+//                                                  (last-write-wins;
+//                                                  init typically 0)
+//                                                1=DOMAIN_MIN_I64
+//                                                  (commutative min-merge;
+//                                                  init typically I64_MAX
+//                                                  so any later write
+//                                                  reduces it)
+//                                              See § 5.5 + § 14 Phase 1
+//                                              of 2026-05-02_KERNEL_POCKET_UNIVERSES.md.
 //   prologos_cell_write(id, val)             -> void
+//                                              merging write: dispatches on
+//                                              cell domain, applies merge fn
+//                                              (val_new = merge(old, val));
+//                                              if val_new != old, schedules
+//                                              subscribers. Monotone.
+//   prologos_cell_reset(id, val)             -> void
+//                                              non-merging replacement
+//                                              write: bypasses the merge fn,
+//                                              replaces cell value, does NOT
+//                                              schedule subscribers. Mirrors
+//                                              Racket's net-cell-reset (see
+//                                              § 5.5 + § 15.9 + design
+//                                              Appendix A.2 of
+//                                              2026-05-02_KERNEL_POCKET_UNIVERSES.md).
+//                                              Conventionally privileged:
+//                                              elaborator + scope handlers
+//                                              only (enforced by convention,
+//                                              matching Racket).
 //   prologos_cell_read(id)                   -> i64
 //
 //   prologos_propagator_install_1_1(tag, in0, out0) -> u32 prop-id
@@ -93,28 +127,93 @@ const N_TAGS: u32 = 16;          // big enough for current 2-1 + 3-1 tags
 const DEFAULT_MAX_ROUNDS: u64 = 100000;
 
 // =====================================================================
-// Cells
+// Cells + per-cell merge domain
 // =====================================================================
+//
+// Domain dispatch (Sprint 2026-05-02 Phase 1 Day 1; see
+// 2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.5 + § 14):
+//
+//   DOMAIN_LWW_I64 (0): merge(old, new) = new      (last-write-wins)
+//   DOMAIN_MIN_I64 (1): merge(old, new) = min(old, new)
+//                                                  (commutative; bottom = I64_MAX)
+//
+// Adding a domain = (a) reserve a tag value here, (b) extend
+// merge_value(), (c) document the conventional bottom-init in the
+// header. cell_reset() bypasses merge for any domain.
+
+pub const DOMAIN_LWW_I64: u8 = 0;
+pub const DOMAIN_MIN_I64: u8 = 1;
+
+const I64_MAX: i64 = 0x7fffffffffffffff;
 
 var cells: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
 var snapshot: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
+var cell_domain: [MAX_CELLS]u8 = [_]u8{0} ** MAX_CELLS;
 var num_cells: u32 = 0;
 
+// merge_value: pure binary merge dispatch. Must be commutative,
+// associative, and idempotent for every non-LWW domain (CALM).
+// LWW is non-monotone but is the kernel's default for back-compat
+// and for the elaborator's explicit-update pattern (replace via
+// cell_reset is preferred; LWW cell_write exists for legacy callers
+// and the BSP merge phase, where convergence is guaranteed by the
+// network's acyclic-or-fuel-bounded shape).
+fn merge_value(domain: u8, old: i64, new: i64) i64 {
+    return switch (domain) {
+        DOMAIN_LWW_I64 => new,
+        DOMAIN_MIN_I64 => if (new < old) new else old,
+        else => abort(),
+    };
+}
+
+// Default-bottom init for a domain. Used by prologos_cell_alloc()
+// (the no-arg legacy API) and as a documented convention for callers
+// of prologos_cell_alloc_with_domain that pass init=0 expecting the
+// "natural bottom" (we do NOT silently substitute; callers pass init
+// explicitly so the convention is visible at the call site).
+fn domain_bottom(domain: u8) i64 {
+    return switch (domain) {
+        DOMAIN_LWW_I64 => 0,
+        DOMAIN_MIN_I64 => I64_MAX,
+        else => abort(),
+    };
+}
+
+// Legacy API: no-arg alloc, returns cell with DOMAIN_LWW_I64 + init=0.
+// Equivalent to prologos_cell_alloc_with_domain(DOMAIN_LWW_I64, 0).
+// Preserved so existing IR emitters (network-emit.rkt at the time of
+// the Phase 1 patch) keep linking unchanged.
 export fn prologos_cell_alloc() u32 {
+    return prologos_cell_alloc_with_domain(DOMAIN_LWW_I64, 0);
+}
+
+// Domain-aware alloc. Caller picks the merge function and the initial
+// value. For DOMAIN_MIN_I64 the conventional init is I64_MAX
+// (= domain_bottom(DOMAIN_MIN_I64)) so the first write reduces.
+export fn prologos_cell_alloc_with_domain(domain: u8, init: i64) u32 {
     if (num_cells >= MAX_CELLS) abort();
+    if (domain != DOMAIN_LWW_I64 and domain != DOMAIN_MIN_I64) abort();
     const id = num_cells;
+    cells[id] = init;
+    cell_domain[id] = domain;
     num_cells += 1;
     return id;
 }
 
-// Direct cell write — bypasses the BSP barrier. Used by generated IR
-// at module init time (before any propagator runs) and by the BSP
+// Merging write — bypasses the BSP barrier. Used by generated IR at
+// module init time (before any propagator runs) and by the BSP
 // merge phase. NOT safe to call from inside a fire() — fire() must
 // only emit to pending_writes.
+//
+// Applies the cell's domain merge function: cells[id] := merge(old,
+// value). If the merged result differs from the old value, schedules
+// subscribers (next round's worklist).
 export fn prologos_cell_write(id: u32, value: i64) void {
     if (id >= num_cells) abort();
-    if (cells[id] != value) {
-        cells[id] = value;
+    const old = cells[id];
+    const merged = merge_value(cell_domain[id], old, value);
+    if (merged != old) {
+        cells[id] = merged;
         stat_writes_committed += 1;
         // Schedule subscribers (the propagators that depend on this cell)
         var i: u32 = 0;
@@ -126,9 +225,41 @@ export fn prologos_cell_write(id: u32, value: i64) void {
     }
 }
 
+// Non-merging replacement write. Replaces cells[id] with `value`
+// outright (bypasses the merge function for the cell's domain) and
+// does NOT schedule subscribers. Mirrors Racket's net-cell-reset
+// (racket/prologos/propagator.rkt). Conventionally restricted to
+// elaborator-emitted IR + scope handlers (enforced by convention,
+// matching Racket — see 2026-05-02_KERNEL_POCKET_UNIVERSES.md
+// § 15.9 + Appendix A.2).
+//
+// Statistics: counted under stat_resets, not under
+// stat_writes_committed/dropped, so analyses can distinguish
+// monotone-merge traffic from explicit-replace traffic.
+//
+// Calling discipline: like cell_write, NOT safe to call from inside
+// a fire() body (a fire() must emit only into pending_writes via the
+// scheduler's barrier). Reset is intended for module-init code, scope
+// handler bodies (e.g. NAF's publish), and the iteration pattern's
+// state-cell rotation between BSP rounds.
+export fn prologos_cell_reset(id: u32, value: i64) void {
+    if (id >= num_cells) abort();
+    cells[id] = value;
+    stat_resets += 1;
+}
+
 export fn prologos_cell_read(id: u32) i64 {
     if (id >= num_cells) abort();
     return cells[id];
+}
+
+// Domain inspection (read-only). Returns the merge-domain tag the
+// cell was allocated with. Useful for debug/stat tools and for
+// the future Low-PNet → prop-network adapter to assert that
+// reset-mode writes target valid domains.
+export fn prologos_cell_get_domain(id: u32) u8 {
+    if (id >= num_cells) abort();
+    return cell_domain[id];
 }
 
 // =====================================================================
@@ -416,6 +547,7 @@ var stat_writes_dropped: u64 = 0;
 var stat_max_worklist: u64 = 0;
 var stat_fuel_exhausted: u64 = 0;
 var stat_run_ns: u64 = 0;
+var stat_resets: u64 = 0; // explicit-replace traffic (cell_reset)
 var stat_ns_by_tag: [N_TAGS]u64 = [_]u64{0} ** N_TAGS;
 var profile_per_tag: bool = false;
 
@@ -433,6 +565,7 @@ export fn prologos_set_profile_per_tag(enabled: u32) void {
 //   6  num_cells (allocated)
 //   7  num_props (installed)
 //   8  run_ns (CLOCK_MONOTONIC ns spent in run_to_quiescence)
+//   9  resets (explicit-replace traffic; cell_reset count)
 //   100..(100+N_TAGS)  fires for tag (key-100)
 //   200..(200+N_TAGS)  ns for tag (key-200) — only populated when
 //                      profile_per_tag=true
@@ -448,6 +581,7 @@ export fn prologos_get_stat(key: u32) u64 {
         6 => @intCast(num_cells),
         7 => @intCast(num_props),
         8 => stat_run_ns,
+        9 => stat_resets,
         else => blk: {
             if (key >= 100 and key < 100 + N_TAGS) {
                 break :blk stat_fires_by_tag[key - 100];
@@ -468,6 +602,7 @@ export fn prologos_reset_stats() void {
     stat_max_worklist = 0;
     stat_fuel_exhausted = 0;
     stat_run_ns = 0;
+    stat_resets = 0;
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
         stat_fires_by_tag[i] = 0;
@@ -527,6 +662,7 @@ export fn prologos_print_stats() void {
     buf_puts(",\"cells\":");       buf_putu64(@intCast(num_cells));
     buf_puts(",\"props\":");       buf_putu64(@intCast(num_props));
     buf_puts(",\"run_ns\":");      buf_putu64(stat_run_ns);
+    buf_puts(",\"resets\":");      buf_putu64(stat_resets);
     buf_puts(",\"by_tag\":[");
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {

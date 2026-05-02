@@ -131,6 +131,17 @@ jobs:
             -o /tmp/test-bsp-feedback
           /tmp/test-bsp-feedback
 
+      - name: Substrate primitives smoke test (Phase 1 Day 1)
+        # 2026-05-02 kernel-pocket-universes track Phase 1 Day 1.
+        # Validates cell_alloc_with_domain, the min-merge i64 domain,
+        # cell_reset's bypass-and-no-enqueue semantics, and the new
+        # stat_resets counter (key 9). Gate test for § 15.9
+        # (merge-vs-reset distinguishability).
+        run: |
+          clang runtime/test-substrate.c runtime/prologos-runtime.o \
+            -o /tmp/test-substrate
+          /tmp/test-substrate
+
       - name: N0 end-to-end (lower + clang + run)
         env:
           PROLOGOS_NETWORK_TIER: "0"

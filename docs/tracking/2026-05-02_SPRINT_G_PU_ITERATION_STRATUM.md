@@ -1,8 +1,8 @@
 # Sprint G — Tail-Recursion as Pocket Universe + Iteration Stratum
 
 **Date**: 2026-05-02
-**Status**: Stage 3 design proposal
-**Track**: SH Sprint G (architectural correctness for tail-rec lowering)
+**Status**: 🚫 **SUPERSEDED 2026-05-02 by [`2026-05-02_KERNEL_POCKET_UNIVERSES.md`](2026-05-02_KERNEL_POCKET_UNIVERSES.md) (rev 2.1, dissolved + minimal scope architecture).** The iteration case is migrated as Phase 4 (Day 9) of the new track: `lower-tail-rec` is rewritten to emit a substrate iteration pattern (state cells + iter-step propagator + `cell_reset` writes + monotone `tick` cell + halt-guard) directly into Low-PNet IR, with NO `iter-block-decl` IR node and NO `@main` LLVM-loop emission path. Sprint G's Phase 1 (already-shipped `iter-block-decl`) is retired by Phase 6 (Day 13) of the new track. **Do not start Sprint G Phases 2-6** — they are superseded; the work would be wasted because the LLVM `@main`-loop output is the off-network surface the new track is specifically designed to retire (workflow rule § "Ban 'pragmatic'…" + "scaffolding without a retirement plan"). See § 12.4 of the new doc for the architectural rationale, and § 14.1 for the day-by-day sequencing.
+**Track**: SH Sprint G (architectural correctness for tail-rec lowering) — **superseded; iteration-case ownership transferred to kernel-pocket-universes track Phase 4**
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
 **Cross-references**:
 - [Depth Alignment Research (rev 2)](2026-05-02_DEPTH_ALIGNMENT_RESEARCH.md) — origin of the redesign; collaborator critique that F.5/F.6 violate CALM
@@ -21,14 +21,14 @@
 
 | Phase | Description | Status | Notes |
 |---|---|---|---|
-| 1 | Extend Low-PNet IR with `iter-block-decl` | ✅ | landed in same series of edits as the design write-up; struct + parse + pp + V11 validator |
-| 2 | Refactor `lower-tail-rec` to emit `iter-block-decl`; drop bridges + feedback edges | ⬜ | in progress |
-| 3 | Extend `low-pnet-to-llvm` to generate `@main` loop from iter-block | ⬜ | |
-| 4 | Quarantine F.5/F.6 bridge code (lift-cell-to-depth, emit-aligned-propagator!, bridge-cache, depth-balance invariant) | ⬜ | |
-| 5 | Regression: 34 acceptance examples + benchmarks | ⬜ | |
-| 6 | Commit + push + dailies + Master Roadmap update | ⬜ | |
+| 1 | Extend Low-PNet IR with `iter-block-decl` | ✅ → 🚫 retired by superseding track Phase 6 | landed in same series of edits as the design write-up; struct + parse + pp + V11 validator. **To be deleted at kernel-pocket-universes Phase 6 (Day 13) per § 9.1 Category B.** |
+| 2 | Refactor `lower-tail-rec` to emit `iter-block-decl`; drop bridges + feedback edges | 🚫 SUPERSEDED | superseding track Phase 4 (Day 9) rewrites `lower-tail-rec` to emit substrate iteration pattern directly (NO `iter-block-decl`) |
+| 3 | Extend `low-pnet-to-llvm` to generate `@main` loop from iter-block | 🚫 SUPERSEDED | superseding track Phase 5 (Day 11) emits `prologos_cell_reset` + `prologos_cell_write` calls (no `@main` loop) |
+| 4 | Quarantine F.5/F.6 bridge code (lift-cell-to-depth, emit-aligned-propagator!, bridge-cache, depth-balance invariant) | 🚫 SUPERSEDED | superseding track Phase 6 (Day 13) Category B includes Sprint-G depth-alignment / bridge-cell helpers in `lower-tail-rec`'s rewrite obsolescence |
+| 5 | Regression: 34 acceptance examples + benchmarks | 🚫 SUPERSEDED | covered by superseding track Phases 5 + 8 (Days 11-12, 14) |
+| 6 | Commit + push + dailies + Master Roadmap update | 🚫 SUPERSEDED | covered by superseding track Phase 9 (Day 14) |
 
-Status legend: ⬜ not started, 🔄 in progress, ✅ done, ⏸️ blocked.
+Status legend: ⬜ not started, 🔄 in progress, ✅ done, ⏸️ blocked, 🚫 SUPERSEDED.
 
 ---
 
