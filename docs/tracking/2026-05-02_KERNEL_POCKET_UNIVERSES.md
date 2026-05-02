@@ -1,16 +1,18 @@
 # Native Kernel Pocket Universes — Design Doc
 
-**Date**: 2026-05-02
+**Date**: 2026-05-02 (revised 2026-05-02 to incorporate concurrency-substrate findings)
 **Status**: Stage 3 design proposal — **awaiting option selection**
 **Track**: SH (Self-Hosting) — kernel infrastructure track (sequencing TBD per option chosen)
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
 
 **Cross-references**:
+- [Concurrency Primitives for the `.pnet` → LLVM Substrate (2026-05-02)](../research/2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md) — **load-bearing** sibling research that refines the kernel API + cell layout for parallel BSP. Specifically: §4 per-(worker, PU) write logs + cell-partitioned merge; §5 cache-line-aligned `CellSlot`; §6 worker-PU binding contract + `pu_run_parallel`; §7.3 LOC breakdown of PU-specific original work
 - [Sprint G — Tail-Rec as PU + Iteration Stratum](2026-05-02_SPRINT_G_PU_ITERATION_STRATUM.md) — narrow case; this doc supersedes its kernel section
 - [Depth Alignment Research rev 2](2026-05-02_DEPTH_ALIGNMENT_RESEARCH.md) — origin (CALM critique)
 - [BSP-LE Track 2 Design (2026-04-07)](2026-04-07_BSP_LE_TRACK2_DESIGN.md) §2.5a — "decisions are primary, worldview is derived"
 - [SRE Track 2G Design (2026-03-30)](2026-03-30_SRE_TRACK2G_DESIGN.md) §3.1 — Phase 6 PU scaffolding lesson
 - [Low-PNet IR Track 2 (2026-05-02)](2026-05-02_LOW_PNET_IR_TRACK2.md) — IR substrate
+- [BSP-Native Scheduler (2026-05-01)](2026-05-01_BSP_NATIVE_SCHEDULER.md) — Sprint D parent track; PU primitive is its substrate
 - `.claude/rules/stratification.md` — canonical taxonomy (S0, Topology, S1 NAF, S0 Guard, S(-1), L1, L2, Stratum 3)
 - `.claude/rules/on-network.md` — design mantra
 - `runtime/prologos-runtime.zig` — current Zig kernel (`MAX_CELLS`/`MAX_PROPS` flat arrays, single S0 BSP loop)
@@ -177,15 +179,29 @@ caller (parent stratum handler)                  kernel
 
 ### 5.3 Cell + propagator scoping
 
-Each PU owns two arenas:
-- `cells[]`: per-PU cell array (i64 values, like the current global flat array)
+Each PU owns three arenas:
+- `cells[]`: per-PU cell array of `CellSlot` (cache-line-aligned slot, not flat i64 — see below)
 - `props[]`: per-PU propagator array
+- `write_logs[W]`: per-(worker, PU) write logs — one log per worker assigned to this PU during a round
 
-Cell-ids are **PU-relative**, not global. A cell-id `(pu-handle, 5)` is distinct from `(other-pu, 5)`. The kernel tracks the `(pu, idx)` pair internally; the public API uses an opaque `cell_ref` type that carries both.
+**Cell representation** (per concurrency-substrate §5):
+```zig
+const CellSlot = extern struct {
+    value: i64,
+    write_pending: u32,
+    subscriber_head: u32,
+    _pad: [64 - 16]u8 = undefined,  // 64B aligned; 128B on aarch64
+};
+```
+One cell per cache line. 8× memory inflation (8B → 64B) but the working set is small in absolute terms (10K cells × 64B ≈ 640KB) and the false-sharing tax disappears entirely. False sharing was measured at 3.1× collapse on a lock-free queue with adjacent i64 cells; not optional.
+
+**Per-(worker, PU) write logs** (per concurrency-substrate §4): during the fire phase of a round, each worker accumulates `(cid, value)` writes in its thread-local log for the PU it's bound to. No atomics. No contention. After fire phase ends, cells are partitioned across workers by `cid mod P`; each worker walks all peers' logs to merge writes destined for its assigned cells. This sidesteps the lock-free atomic merge contention that killed BSP-LE 2B's Racket-side parallelism.
+
+Cell-ids are **PU-relative**, not global. A cell-id `(pu-handle, 5)` is distinct from `(other-pu, 5)`. The kernel tracks the `(pu, idx)` pair internally; the public API uses an opaque `CellRef` packed struct that carries both.
 
 Entry mappings are dictionaries `parent-cell-ref → pu-cell-ref`. On `pu_run` start, the kernel copies parent values into the entry-mapped child cells. On `pu_run` exit, the kernel copies exit-mapped child values back to the parent.
 
-This is **physical isolation**: child cells live in a separate memory arena. Reads/writes on child cells inside the PU don't touch parent cells. This is the simplest model that gives R1, R2, R8 simultaneously.
+This is **physical isolation**: child cells live in a separate memory arena. Reads/writes on child cells inside the PU don't touch parent cells. This is the simplest model that gives R1, R2, R8 simultaneously, and it composes cleanly with the per-(worker, PU) write log architecture (each PU's writes are accumulated in logs scoped to that PU).
 
 ### 5.4 Stratum stack
 
@@ -203,7 +219,11 @@ Three cell-write modes:
 | **overwrite** | `cell_overwrite(pu, cid, value)` | strata handlers only | replace value, bypass merge |
 | **reset** | `cell_reset(pu, cid)` | strata handlers only | set value to domain bot, clear flags |
 
-The kernel enforces that S0 propagators cannot call overwrite/reset (compile-time check via Low-PNet IR + runtime check via PU mode flag). This satisfies R4, R5 and resolves Sprint G § 7.4's open question.
+The kernel enforces that S0 propagators cannot call overwrite/reset, with **defense in depth**:
+- **Structural** (Low-PNet IR): propagator-decl gains a `:privileged` flag (default `#f`). Stratum handlers emit propagators with `:privileged #t`; regular fire-fns emit with `#f`. The lowering stage statically guarantees regular propagators don't reference the privileged kernel APIs.
+- **Runtime** (Zig kernel): a thread-local "current handler" flag, set when a worker enters a stratum handler invocation, cleared at exit. `cell_overwrite` / `cell_reset` check the flag and trap if false. Cheap (~1ns thread-local read).
+
+This satisfies R4, R5 and resolves Sprint G § 7.4's open question. Per the concurrency-substrate doc § 6 (last subsection): "the structurally cleaner answer is Low-PNet IR distinguishing privileged-emit vs regular propagators, with the kernel check as defense-in-depth" — both layers, not either.
 
 ### 5.6 Worldview integration
 
@@ -213,11 +233,19 @@ For ATMS branches: parent allocates child PU with bit `b`. The child's cells inh
 
 For non-speculative PUs (NAF, iteration): the worldview bit is "inherited" from the parent (no new bit allocated). The PU's cells live in the parent's worldview.
 
-### 5.7 Nesting
+### 5.7 Nesting + worker-PU binding contract
 
 A stratum handler in PU `P` may call `pu_alloc(P, ...)` to spawn a child PU. The kernel chains the parent pointer: child's `parent_pu` is `P`. Recursion is allowed; depth-first by construction.
 
 Termination of nested PUs: each PU has its own fuel; total fuel for the tree is the parent's. Child fuel deducted from parent's bucket on `pu_run` entry; refunded on early exit.
+
+**Worker-PU binding contract** (per concurrency-substrate §6 — load-bearing for the per-(worker, PU) write log architecture):
+
+> A worker is bound to one PU for the duration of one BSP round. Within a round it can steal *within that PU* (Chase-Lev across same-PU workers) but **not across PUs**. At round boundary it can re-bind to a sibling PU if the parent is in `pu_run_parallel` mode (§ 6 below).
+
+This constraint keeps the per-(worker, PU) write log clean. A worker that fires propagators in PU A and then steals from PU B mid-round would commingle writes in a shared log; the merger of B's cells wouldn't see them. Per-round binding sidesteps the issue at no measurable cost — load imbalance within a round is bounded by round wall time (microseconds at most) and corrects at the next round boundary.
+
+**Sibling-PU concurrency**: when a parent stratum spawns multiple child PUs that don't depend on each other (ATMS branches with disjoint worldview bits, fork-on-union per-alternative branches, parallel speculation), they execute concurrently via `pu_run_parallel` rather than sequentially. Single scheduler, dynamically partitioned across siblings; not "scheduler-per-PU."
 
 ### 5.8 Communication contract
 
@@ -239,6 +267,16 @@ pub const HandlerTag = u32;   // dispatched via static table
 
 pub const PUResult = enum(u8) { halt, fuel_exhausted, trap, child_trap };
 
+// Cache-line-aligned cell representation (per concurrency-substrate §5).
+// Required for any future multi-thread BSP — false sharing on adjacent i64
+// cells caused 3.1× collapse in the cited reference benchmark.
+pub const CellSlot = extern struct {
+    value: i64,
+    write_pending: u32,
+    subscriber_head: u32,
+    _pad: [64 - 16]u8 = undefined,  // 64B aligned (128B on aarch64)
+};
+
 // ---- Lifecycle
 pub extern fn prologos_pu_alloc(
     parent: PUHandle,         // 0 = root
@@ -252,6 +290,7 @@ pub extern fn prologos_pu_dealloc(pu: PUHandle) void;
 // ---- Topology (within a PU)
 pub extern fn prologos_pu_cell_alloc(
     pu: PUHandle, domain: u8, init_value: i64,
+    numa_hint: i8,            // -1 = no preference; 0..N = preferred NUMA node
 ) CellRef;
 
 pub extern fn prologos_pu_prop_install(
@@ -280,16 +319,29 @@ pub extern fn prologos_cell_write(pu: PUHandle, cell: CellRef, value: i64) void;
 pub extern fn prologos_cell_overwrite(pu: PUHandle, cell: CellRef, value: i64) void;
 pub extern fn prologos_cell_reset(pu: PUHandle, cell: CellRef) void;
 
-// ---- Run
+// ---- Run (single PU)
 pub extern fn prologos_pu_run(pu: PUHandle, fuel: u64) PUResult;
+
+// ---- Run (sibling PUs concurrently — per concurrency-substrate §6)
+// Workers dynamically partition across the N child PUs; each worker bound to
+// one PU per round, may re-bind to a sibling at round boundary. All children
+// barrier together at fuel-exhaust or all-halt. Covers ATMS branches,
+// fork-on-union, parallel speculation, future parallel compiler-pass dispatch.
+pub extern fn prologos_pu_run_parallel(
+    pus: [*]const PUHandle,
+    count: u32,
+    fuel_total: u64,
+) PUResult;
 ```
 
 Notes:
 - `worldview_bit = -1` means "inherit parent's bit." For ATMS branches, parent passes a fresh bit allocated from a per-tree free list.
-- `cell_overwrite` / `cell_reset` validate at runtime that the caller is a stratum handler invoked by `prologos_pu_run`. Direct calls from S0 propagators trap.
+- `numa_hint` on `pu_cell_alloc` is a **forward-compatible interface** — pass-through today; cell affinity from the dataflow graph is a future static-analysis pass. The point is the API surface exists so we don't have to break it later.
+- `cell_overwrite` / `cell_reset` validate via the structural Low-PNet IR `:privileged` flag (compile-time) AND the thread-local handler flag (runtime). Direct calls from non-privileged propagators trap.
 - `pu_run` consumes fuel. Returns `halt` if the halt-when cell matches, `fuel_exhausted` otherwise. Strata-handler traps propagate as `trap`.
+- `pu_run_parallel` is the sibling-concurrency primitive. Each child has its own halt predicate; the call returns when all children halt or fuel is exhausted in aggregate.
 
-This API surface is **~12 functions**, comparable to the existing kernel surface (~10 functions).
+This API surface is **~13 functions + 1 struct type**, comparable to the existing kernel surface (~10 functions).
 
 ---
 
@@ -429,6 +481,11 @@ The Sprint G **iteration stratum** lands FIRST (smallest, validates the IR subst
 | Q6 | Does the kernel store PU handles statically (compile-time-known set) or dynamically? | Dynamic — ATMS spawns at runtime. Kernel maintains a free-list of PU handles. |
 | Q7 | Trap recovery: what happens if a stratum handler traps? | `pu_run` returns `trap`; parent handler decides (likely: deallocate this PU, propagate as nogood). |
 | Q8 | Self-hosting: how does the bootstrap kernel implement PUs? | Open. The bootstrap Racket runtime can implement PU APIs directly; the Zig runtime implements them natively; the self-hosted Prologos runtime is an open question — likely deferred to later self-hosting work. |
+| Q9 | **Calibration measurements before committing to primitives** (per concurrency-substrate §9) | Run three measurements on the current sequential prototype before any kernel work begins: (1) per-round wall time on existing benchmarks (anchors parallelism crossover); (2) tag distribution (anchors comptime fire-batch payoff); (3) false-sharing microbench (anchors `CellSlot` priority). ~2 hours; gates which primitives matter at our actual scale. |
+| Q10 | `pu_run_parallel` semantics under nested concurrent siblings | Each child has its own halt predicate + fuel; aggregate fuel passed at top level. When one child halts before others, its workers re-bind to siblings at next round boundary. Deadlock: a sibling that depends on another sibling's exit cell would deadlock — declare such mappings illegal at lowering time (siblings have disjoint exit-cell sets). |
+| Q11 | NUMA policy (beyond preserving the API hook) | Defer until multi-socket deployment is on the immediate horizon. Static-analysis pass over the `.pnet` dataflow graph at lowering time would compute per-cell affinity hints. Today: pass-through, no policy. |
+| Q12 | EBR vs alternatives at deep ATMS recursion | Per concurrency-substrate §10.2: EBR is the right starting point because BSP's phase boundaries make its blocking pathology unreachable. At ATMS depth >100, per-PU EBR state may itself become memory-heavy; alternatives (interval-based reclamation, HP-RCU) are deferred until depth measurements show pressure. |
+| Q13 | Sequencing relative to Sprint D (parallel BSP substrate) | Two paths: (a) PU primitive lands first on top of sequential kernel; Sprint D adds parallelism on top; (b) PU primitive + Sprint D land together (parallel-from-day-one). Path (a) reduces risk; path (b) avoids retrofitting per-(worker, PU) write logs onto a sequential kernel. Resolved with the option-selection decision points (§13). |
 
 ---
 
@@ -458,13 +515,37 @@ This is the section the user asked for. Five options, ordered by ambition:
 
 ### Option C — **Full kernel-level PU primitive** (the architecture in §§ 5-8)
 
-- Zig kernel adds the 12-function API in § 6.
-- Per-PU arenas; strata stack; privileged cell ops; worldview integration.
+- Zig kernel adds the ~13-function API in § 6.
+- Per-PU arenas; strata stack; privileged cell ops; worldview integration; per-(worker, PU) write logs (when paired with parallel BSP); `pu_run_parallel` for sibling concurrency.
 - Runtime-allocated PUs (R10) supported natively → ATMS branches become first-class.
-- Low-PNet IR adds the 5 PU node kinds.
+- Low-PNet IR adds the 5 PU node kinds + privileged-emit flag.
 
-**Cost**: ~15-25 days (kernel ~10, IR/lowering ~5, Sprint G migration ~3, NAF migration ~3, regression suite ~2).
-**Unlocks**: every entry in § 9's migration table. Self-hosted compiler can express each pass as a PU. ATMS branch lifecycle becomes scheduler-agnostic.
+**Cost decomposition** (per concurrency-substrate §7.3 LOC table — the prior "~15-25 days" estimate conflated two separable layers):
+
+| Component | LOC (Zig) | Days | Required by |
+|---|---|---|---|
+| PU-binding-per-round scheduler logic | ~300 | ~3 | PU primitive only |
+| `pu_run_parallel` batched-run primitive | ~200 | ~2 | PU primitive only |
+| Worldview-bit allocator (per-tree free list) | ~150 | ~1.5 | PU primitive only |
+| Privileged cell-op runtime check | ~50 | ~0.5 | PU primitive only |
+| **PU-specific original work** | **~700** | **~7** | **this track** |
+| Per-(worker, PU) write log + cell-partitioned merge | ~400 | ~4 | parallel BSP (Sprint D) |
+| Cache-line-aligned `CellSlot` + NUMA hooks | ~120 | ~1 | parallel BSP (Sprint D) |
+| Chase-Lev deque + barrier + futex pool | ~400 | ~4 | parallel BSP (Sprint D) |
+| **Concurrency substrate** | **~920** | **~9** | **Sprint D — separable** |
+| Low-PNet IR (5 node kinds, privileged flag) | n/a | ~3 | this track |
+| Sprint G migration (iter-block-decl → pu-decl) | n/a | ~3 | this track |
+| NAF migration (`fork-prop-network` → child PU) | n/a | ~3 | this track |
+| Regression suite + benchmarks | n/a | ~2 | this track |
+| **PU integration work** | n/a | **~11** | **this track** |
+| **Track total (PU primitive only)** | **~700** | **~18** | sequential kernel |
+| **Track total (PU + concurrency)** | **~1620** | **~27** | parallel kernel |
+
+**Sequencing options** (per Q13):
+- **(a) PU-primitive-first** (~18 days): land Option C on the existing single-threaded kernel; Sprint D adds parallelism on top later. Lower risk; single-thread regression suite easier to stabilize.
+- **(b) PU + Sprint D concurrent** (~27 days): land both together, parallel-from-day-one. Higher risk but avoids retrofitting per-(worker, PU) write logs onto a sequential kernel — those logs are built around the PU lifecycle, so adding them after the PU primitive is harder than adding them with it.
+
+**Unlocks**: every entry in § 9's migration table. Self-hosted compiler can express each pass as a PU. ATMS branch lifecycle becomes scheduler-agnostic. With (b), parallel BSP across sibling PUs.
 **Limits**: large; touches the kernel; need careful staged migration.
 
 ### Option D — **Tagged-subset PUs** (cheaper than C)
@@ -490,15 +571,18 @@ This is the section the user asked for. Five options, ordered by ambition:
 
 ### Recommendation summary
 
-| Option | Cost | Unlocks Sprint G correctly | Unlocks runtime-allocated PUs (ATMS) | Replaces save/restore boxes | Self-hosting alignment |
-|---|---|---|---|---|---|
-| A | 0d | ✗ (LLVM hack stays) | ✗ | ✗ | ✗ |
-| B | ~10d | ✓ | partial | partial | partial |
-| C | ~20d | ✓ | ✓ | ✓ | ✓ |
-| D | ~13d | ✓ | ✓ | ✓ | ✓ (with caveats) |
-| E | ~11d | ✓ | partial | partial | partial |
+| Option | Cost | Unlocks Sprint G correctly | Unlocks runtime-allocated PUs (ATMS) | Replaces save/restore boxes | Self-hosting alignment | Composes with Sprint D parallel BSP |
+|---|---|---|---|---|---|---|
+| A | 0d | ✗ (LLVM hack stays) | ✗ | ✗ | ✗ | n/a |
+| B | ~10d | ✓ | partial | partial | partial | partial (lowering-time scope, not runtime PUs) |
+| C(a) | ~18d | ✓ | ✓ | ✓ | ✓ | ✓ (Sprint D adds on top, ~9d more) |
+| C(b) | ~27d | ✓ | ✓ | ✓ | ✓ | ✓ (parallel-from-day-one) |
+| D | ~13d | ✓ | ✓ | ✓ | ✓ (with caveats) | weak (tag-filter cost under contention) |
+| E | ~11d | ✓ | partial | partial | partial | partial |
 
-My recommendation is **Option C**, but the user should pick. Option D is a viable cheaper alternative if the cost of C is too high. Options B and E are reasonable stepping stones if we want to land Sprint G first and defer ATMS migration.
+My recommendation is **Option C(a)** — the PU primitive on the existing sequential kernel, with Sprint D's parallel substrate as a separable follow-on. The two layers are architecturally distinct (PU = scope/strata/lifecycle; parallel BSP = scheduler + write logs); separating them reduces risk and lets each be measured independently. Option C(b) is justified only if we have strong evidence that retrofitting concurrency onto a sequential PU primitive will be costly — which we don't yet have. Option D is a viable cheaper alternative if even ~18d is too high. Options B and E are reasonable stepping stones if we want to land Sprint G first and defer ATMS migration.
+
+Note: under C(a), the API surface (§ 6) is finalized day-one with all parallel-BSP-friendly fields (`numa_hint`, `CellSlot` shape, `pu_run_parallel`). The implementation is sequential; the interface preserves the future. This is the cheaper-than-c(b) path that avoids API churn when Sprint D lands.
 
 ---
 
@@ -522,13 +606,36 @@ Per workflow rule on adversarial VAG:
 
 The user reviews this doc and answers:
 
-1. **Which option (A-E)?** — determines the implementation track scope.
+1. **Which option (A-E)?** — determines the implementation track scope. If C, also choose between C(a) sequential-first and C(b) parallel-from-day-one.
 2. **Sprint G interaction**: do we (a) finish Sprint G's LLVM-loop hack as committed scaffolding and migrate to PU-based later, or (b) pause Sprint G and land the PU primitive first, with iteration as the first migrated case?
-3. **Track sequencing**: where does this land relative to other in-flight tracks (PPN 4C, the SH series N0/N1/N2)?
-4. **Effort budget**: 10 days vs 15 vs 25 — which is acceptable?
+3. **Track sequencing**: where does this land relative to other in-flight tracks (PPN 4C, the SH series N0/N1/N2, Sprint D parallel BSP)?
+4. **Effort budget**: ~18 days (C(a)) vs ~27 days (C(b)) vs ~13 days (D) — which is acceptable?
 5. **Bootstrap-vs-Zig**: do we implement the PU primitive in (a) Racket runtime first, then port to Zig; (b) Zig first, then Racket follows; (c) both in lockstep?
+6. **Calibration measurements**: do we run the three measurements from concurrency-substrate §9 (per-round wall, tag distribution, false-sharing impact) BEFORE committing to specific primitives? ~2 hours of work; would inform whether `CellSlot` cache-line padding and per-(worker, PU) write logs are essential at our actual scale or premature optimization.
 
 When these are answered, the next step is producing the staged implementation plan (analogous to Sprint G's progress tracker) and beginning Phase 1.
+
+---
+
+## 14. References (added by 2026-05-02 revision)
+
+### Concurrency substrate sources (per concurrency-substrate doc § 12)
+- Lê et al. 2013, *Correct and Efficient Work-Stealing for Weak Memory Models* (PPOPP) — Chase-Lev deque memory orderings
+- Mellor-Crummey & Scott 1991, *Algorithms for scalable synchronization* (TOCS) — sense-reversing barrier
+- Brown 2017, *Reclaiming Memory for Lock-Free Data Structures* (arXiv 1712.01044) — EBR vs HP comparison
+- Steindorfer & Vinju 2015, *Optimizing Hash-Array Mapped Tries* (OOPSLA) — CHAMP for cell representation
+- Puente 2017, *Persistence for the Masses* (ICFP) — Immer; persistent data structures in C++
+
+### Bench peers (measurement anchors, not implementation choices)
+- [Soufflé](https://souffle-lang.github.io/) — Datalog → C++; EQREL parallel union-find for future on-network SRE unification
+- [Differential Dataflow](https://github.com/TimelyDataflow/differential-dataflow) — closest *model* match; per-worker arrangement is direct precedent for our per-(worker, PU) write log
+- [Galois](https://iss.oden.utexas.edu/?p=projects/galois), [Ligra](https://github.com/jshun/ligra) — pure-graph BSP gold standards
+- [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) — engineering discipline (determinism, Power-of-Ten, static memory, no GC). Architectural conclusion differs (their workload is single-threaded; ours is BSP) but discipline transfers.
+
+### Reference implementations to port
+- [crossbeam-deque](https://github.com/crossbeam-rs/crossbeam) — Rust Chase-Lev (handles the Lê et al. integer-overflow bug correctly)
+- [libqsbr](https://github.com/rmind/libqsbr) — C reference EBR + QSBR
+- [microsoft/mimalloc](https://github.com/microsoft/mimalloc) — production allocator (FFI target)
 
 ---
 
