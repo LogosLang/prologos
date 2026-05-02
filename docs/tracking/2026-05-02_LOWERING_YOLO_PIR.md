@@ -9,10 +9,13 @@
 - [Lowering Inventory (Day 0)](2026-05-02_LOWERING_INVENTORY.md)
 - [Kernel PU PIR](2026-05-02_KERNEL_PU_PIR.md) — substrate this builds on
 
-**Suite health at end of track**:
+**Suite health at end of track** (post-Gate-1-rev-1.5 + inventory honesty fix):
 - 220+ Racket unit tests across 14 test files: all green
-- 63/65 round-trip-acceptance examples PASS, 0 fail/error, 2 unsupported
+- 65/65 round-trip-acceptance examples PASS, 0 fail/error, **0 unsupported**
 - All 6 native-binary acceptance suites (n8/n9/n10/n11/n12) end-to-end PASS
+- Inventory: 89/141 PASS, 47 NO_MAIN, 4 ELAB_FAIL, 1 GATE4_NAF.
+  **Lowering subsystem now handles 100 % of corpus programs that
+  successfully elaborate AND define a scalar `main`.**
 - Zero kernel changes (all gates implemented in `ast-to-low-pnet.rkt`)
 
 ---
@@ -52,7 +55,9 @@ inventory's lowering buckets, 9 are now resolved; 2 remain
 | Gate 3 | `6a448300` | compile-time foreign-fn folding |
 | Gate 4 | `950a5451` | closeout + n11-naf acceptance |
 | Gate 2 | `af0879aa` | static-eval for non-tail recursion |
-| Wrap | _this commit_ | PIR + post-gates inventory |
+| Wrap | `0a4c4c2c` | PIR + post-gates inventory |
+| Gate 1 rev 1.5 | `c362be54` | static-eval over ctor values (closes 2 deferred n9-sums) |
+| Inventory honesty | `e2a5b1b9` | categorize elab-failures by error message, not source content |
 
 Each commit was self-contained: design doc + acceptance suite +
 implementation + test + integration. The acceptance-first pattern
@@ -210,8 +215,17 @@ build-ctor-application + build-ctor-match + dispatch updates).
 **What rev 1.0 enables**: any user-defined ADT with non-recursive
 ctors (`Maybe`, `Either`, finite-depth `Result`s, `Pair`s).
 
-**Deferred to rev 2**: recursive ctors (`cons : A → List A → List A`).
-Needs heap-allocated representation or unfolding-up-to-bound.
+**Rev 1.5 (`c362be54`) enables, atop rev 1.0**:
+  - Recursive ctors (`cons`, `Tree`) when the entire program is
+    statically known and reduces to a scalar — `list-sum-3`,
+    `nested-maybe`, etc. Folds at compile time.
+  - Latent binding-order bug fix in `build-ctor-match`: 2+-field
+    arms now bind LAST-listed at de Bruijn 0 (matching the
+    elaborator's convention). Single-field arms (Maybe / Either) are
+    insensitive to this and were unaffected.
+
+**Deferred to rev 2**: runtime construction of recursive ctors.
+Needs heap-allocated representation or larger bounded-unfolding.
 
 ### 6.2 Gate 3 (strings)
 
@@ -277,31 +291,49 @@ Pre-session (from `2026-05-02_LOWERING_INVENTORY.md`):
   - OTHER_LOWERING: 3
   - NO_MAIN: 44, TIMEOUT: 3, ELAB_FAIL: 0
 
-Post-session (from `2026-05-02_LOWERING_INVENTORY_POST_GATES.md`):
+Post-Phase-A + Gates 1, 2, 3, 4 (from
+`2026-05-02_LOWERING_INVENTORY_POST_GATES.md`):
 
   - PASS: 87 (141 files probed; +24 new acceptance examples added
     across n8-n12)
   - GATE1_TAGGED_UNION: 2 (the 2 recursive-ctor n9-sums files
     deferred to rev 2)
-  - GATE3_STRING: 5 (unchanged — these are elab failures
-    heuristically bucketed by source match, not real lowering
-    failures)
+  - GATE3_STRING: 5 (mis-categorized — really elab failures, see
+    next snapshot)
   - GATE2_RECURSION: 0 (eliminated)
   - OTHER_LOWERING: 0 (eliminated by Phase A)
   - NO_MAIN: 44, TIMEOUT: 3, ELAB_FAIL: 0
 
-**Net lowering coverage**: 55 → 87 PASS. Of the genuinely-failing
-lowering buckets, 9/11 closed; 2 remain (recursive ADT ctors,
-explicitly deferred).
+Final snapshot (from `2026-05-02_LOWERING_INVENTORY_POST_G1R1_5.md`,
+post-Gate-1-rev-1.5 + inventory honesty fix):
+
+  - PASS: 89 (Gate 1 rev 1.5 closed `list-sum-3` + `nested-maybe`)
+  - GATE1_TAGGED_UNION: 0 (cleared)
+  - GATE3_STRING: 0 (reclassified — they were elab failures whose
+    source contained string literals, not lowering gaps)
+  - ELAB_FAIL: 4 (reclassified parse / mixfix / module / surface-
+    syntax errors)
+  - GATE4_NAF: 1 (reclassified — relational name-resolution issue
+    in `2026-03-14-wfle-acceptance.prologos`; elaborator-side fix)
+  - NO_MAIN: 47 (4 files moved here as well — net stable)
+  - TIMEOUT: 0 (transient on this run)
+
+**Net lowering coverage**: 55 → 89 PASS. Of the originally-failing
+lowering buckets, **all are closed**. Remaining inventory entries
+are not lowering-track work (elaborator bugs, library files,
+relational subsystem).
 
 ---
 
 ## 8. Open follow-ups
 
-1. **Gate 1 rev 2**: heap-allocated recursive ctors. Needs either
-   a kernel `prop_payload_alloc` API (with GC story) or a
-   bounded-unfolding scheme. Consumer demand: list-sum, fold,
-   tree traversals. Estimated 1-2 weeks.
+1. **Gate 1 rev 2**: heap-allocated recursive ctors **for runtime-
+   built lists/trees**. Rev 1.5 closed the static-fold path; rev 2
+   still needs either a kernel `prop_payload_alloc` API (with GC
+   story) or a bounded-unfolding scheme. Consumer demand: programs
+   that build lists/trees from runtime input. **No corpus example
+   currently exercises this** — defer until a consumer surfaces.
+   Estimated 1-2 weeks when needed.
 
 2. **Gate 2 rev 2 (PReduce)**: runtime call stack via topology
    mutation. Per kernel-PU PIR open-followup #5. Consumer demand:
@@ -318,12 +350,31 @@ explicitly deferred).
    `expr-not-goal` / `expr-goal-app` to Low-PNet, emit kernel
    scope APIs. Multi-week (3-5w). Per Gate 4 design doc § 6.
 
-5. **TIMEOUT inventory entries (3 files)**: `examples/2026-03-16-track5-acceptance.prologos`,
+5. **TIMEOUT inventory entries (transient, 0-3 files)**: e.g.,
+   `examples/2026-03-16-track5-acceptance.prologos`,
    `examples/2026-03-16-track6-acceptance.prologos`,
    `examples/audit/audit-09-numerics.prologos` — all elab-time
    infinite loops. Out of scope for lowering (these never reach
    `ast-to-low-pnet`); should be triaged in the appropriate
    elab/typing track.
+
+6. **Reclassified ELAB_FAIL entries (4 files, post-G1R1.5)**:
+   - `2026-03-20-first-class-paths.prologos`: mixfix parser conflict
+     (`Unexpected token after expression: version`).
+   - `map-tutorial-demo.prologos`: missing module
+     (`Cannot find module: prologos::core::map-ops`).
+   - `numerics-tutorial-demo.prologos`: surface-syntax `if` requires
+     specific arity.
+   - `lib/examples/foreign.prologos`: missing module
+     (`Cannot find module: prologos::core::abs-trait`).
+   Each is an independent elaborator-side bug, not a lowering gap.
+
+7. **GATE4_NAF reclassified entry (1 file)**:
+   `2026-03-14-wfle-acceptance.prologos`: `Unknown relation: parent`
+   from the relational scope. Elaborator name-resolution issue
+   (the relation is defined later in-file but isn't in scope when
+   referenced); separate from the runtime relational-NAF (Gate 4
+   rev 2) work.
 
 ---
 
@@ -358,6 +409,22 @@ explicitly deferred).
     continue to hold. This is a small concession; a future track
     that replaces shape-asserting tests with semantics-asserting
     tests would unlock more aggressive constant folding.
+  - **Static-eval folds many benchmark workloads to literals**: a
+    side-effect of Gate 2 + Gate 1 rev 1.5 is that many of the
+    `tools/bench-native.rkt` algorithms (`fib`, `sum`, `factorial`,
+    `sumsq`, `pell`, `pow2`) now compile to a single literal cell
+    when invoked with concrete N — fires=0, cells=1, sched-time=0.
+    Wall time is just LLVM startup (~6ms). The `pair-fib`,
+    `helpered-fib`, `dual-acc` algorithms that use pair-typed state
+    still run through the propagator network (static-eval doesn't
+    fold pair construction). Programs with runtime input (currently
+    none in the bench suite) would also be unaffected.
+
+    The benchmarks that DO still exercise the propagator network
+    are now the canonical performance tests; the folded ones serve
+    as a static-eval smoke test rather than a runtime measurement.
+    A future bench addition could use a sentinel "external-input"
+    primitive to defeat folding for genuinely-runtime workloads.
 
 ---
 
