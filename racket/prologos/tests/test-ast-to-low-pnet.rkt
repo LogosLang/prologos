@@ -501,3 +501,102 @@
 ;; with global env populated), so the gate runs in the network-lower
 ;; integration sweep. The negative tests above confirm the signature is
 ;; not spuriously emitted.
+
+;; ============================================================
+;; Gate 1 (rev 1.0): tagged-union ctor lowering
+;; ============================================================
+;;
+;; These tests construct synthetic ctor-meta entries (no elaborator)
+;; and verify ast-to-low-pnet's ctor-application + N-arm match logic.
+
+(require (only-in "../macros.rkt" register-ctor! ctor-meta))
+
+;; Register a synthetic Color = red | green | blue ADT for tests.
+(register-ctor! 'tst:red   (ctor-meta 'tst:Color '() '() '() 0))
+(register-ctor! 'tst:green (ctor-meta 'tst:Color '() '() '() 1))
+(register-ctor! 'tst:blue  (ctor-meta 'tst:Color '() '() '() 2))
+(require (only-in racket/base hash-set))
+(require (only-in "../macros.rkt" current-type-meta))
+(current-type-meta (hash-set (current-type-meta) 'tst:Color '(tst:red tst:green tst:blue)))
+
+;; Register a synthetic Pair-Int-Int = mkPair Int Int ADT (1 ctor, 2 fields).
+(register-ctor! 'tst:mkPair (ctor-meta 'tst:Pair '() (list 'Int 'Int) '(#f #f) 0))
+(current-type-meta (hash-set (current-type-meta) 'tst:Pair '(tst:mkPair)))
+
+(test-case "Gate 1: nullary ctor in a 1-arm match position works"
+  ;; A ctor-vt at the program entry would fail assert-scalar!; that's
+  ;; fine — `main` always has a scalar type. We exercise nullary ctor
+  ;; construction inside a match (which IS the realistic use site).
+  (define body
+    (expr-reduce (expr-fvar 'tst:red)
+                 (list (expr-reduce-arm 'tst:red   0 (expr-int 1))
+                       (expr-reduce-arm 'tst:green 0 (expr-int 2))
+                       (expr-reduce-arm 'tst:blue  0 (expr-int 3)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Int) body "test.prologos"))
+  (check-true (validate-low-pnet lp)))
+
+(test-case "Gate 1: 3-arm match dispatches via select cascade"
+  (define body
+    (expr-reduce (expr-fvar 'tst:green)
+                 (list (expr-reduce-arm 'tst:red   0 (expr-int 100))
+                       (expr-reduce-arm 'tst:green 0 (expr-int 200))
+                       (expr-reduce-arm 'tst:blue  0 (expr-int 300)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Int) body "test.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; 3-arm match needs 2 tag-eq propagators (for arms 0 and 1; the last
+  ;; is the fallthrough) + 2 select propagators (one per cond) per
+  ;; result leaf (1 leaf for Int).
+  ;; tag-eq count = arms-1 = 2; select count = arms-1 = 2.
+  (define n-eq
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-int-eq)))))
+  (define n-sel
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-select)))))
+  (check-equal? n-eq 2)
+  (check-equal? n-sel 2))
+
+(test-case "Gate 1: 2-arm match (non-Bool/Nat) goes through ctor path"
+  ;; Synthesize a 2-ctor type (Choice = yes | no), use it in a match.
+  (register-ctor! 'tst:yes (ctor-meta 'tst:Choice '() '() '() 0))
+  (register-ctor! 'tst:no  (ctor-meta 'tst:Choice '() '() '() 1))
+  (current-type-meta (hash-set (current-type-meta) 'tst:Choice '(tst:yes tst:no)))
+  (define body
+    (expr-reduce (expr-fvar 'tst:yes)
+                 (list (expr-reduce-arm 'tst:yes 0 (expr-int 1))
+                       (expr-reduce-arm 'tst:no  0 (expr-int 0)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Int) body "test.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; 2-arm match: 1 tag-eq + 1 select.
+  (define n-eq
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-int-eq)))))
+  (define n-sel
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-select)))))
+  (check-equal? n-eq 1)
+  (check-equal? n-sel 1))
+
+(test-case "Gate 1: ctor with scalar field flows the value through identity prop"
+  ;; (mkPair 7 9) — 1 ctor with 2 Int fields.
+  (define body
+    (expr-app (expr-app (expr-fvar 'tst:mkPair) (expr-int 7)) (expr-int 9)))
+  ;; Match it with a 1-arm match to extract field 0.
+  (define m
+    (expr-reduce body
+                 (list (expr-reduce-arm 'tst:mkPair 2 (expr-bvar 1)))
+                 #t))
+  ;; bvar 1 refers to the FIRST-bound field (field 0 = 7) — see
+  ;; build-ctor-match: fields are pushed in REVERSE so bvar 0 is the
+  ;; LAST field.
+  (define lp (ast-to-low-pnet (expr-Int) m "test.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Should have at least 2 kernel-identity propagators (one per field
+  ;; flowed into a slot cell at construction time).
+  (define n-id
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-identity)))))
+  (check >= n-id 2))

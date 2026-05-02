@@ -44,7 +44,15 @@
          racket/list
          "syntax.rkt"
          "low-pnet-ir.rkt"
-         "global-env.rkt")
+         "global-env.rkt"
+         (only-in "macros.rkt"
+                  lookup-ctor
+                  lookup-type-ctors
+                  ctor-meta
+                  ctor-meta-type-name
+                  ctor-meta-field-types
+                  ctor-meta-is-recursive
+                  ctor-meta-branch-index))
 
 (provide ast-to-low-pnet
          (struct-out ast-translation-error))
@@ -289,13 +297,37 @@ the lowering; please file an issue with the source program."
 
 (define (vtree-scalar? vt) (exact-integer? vt))
 
+;; ============================================================
+;; Gate 1 (rev 1.0): tagged-union vtree — defunctionalized ADT
+;; ============================================================
+;;
+;; A `ctor-vt` represents a value of an algebraic data type (ADT).
+;; Layout: one tag cell + a flat list of slot cells (the type's
+;; total slot count = sum of all ctor arities). Every value of a
+;; given ADT type shares the same shape, regardless of which ctor
+;; it was constructed with — slots a ctor doesn't use stay at the
+;; default value (0).
+;;
+;; This shape uniformity is what lets `select` combine two vtrees
+;; of the same type from then/else branches without runtime tag
+;; reshape.
+;;
+;; type-name : symbol — the ADT type (e.g. 'Maybe, 'Either)
+;; tag-cid   : i64 cell holding the runtime branch index (0..n-1)
+;; slot-cids : list of i64 cells, length = type-flat-slot-count(type)
+(struct ctor-vt (type-name tag-cid slot-cids) #:transparent)
+
 (define (assert-scalar! vt expr context)
   (unless (vtree-scalar? vt)
     (translate-error!
      expr
-     (format "~a expected a scalar (Int or Bool) but got a pair-typed value. \
+     (format "~a expected a scalar (Int or Bool) but got a ~a value. \
 fst/snd projection or destructuring is required first."
-             context)))
+             context
+             (cond
+               [(ctor-vt? vt) (format "tagged-union (~a)" (ctor-vt-type-name vt))]
+               [(list? vt)    "pair-typed"]
+               [else          "unknown"]))))
   vt)
 
 (define (assert-pair! vt expr context)
@@ -531,6 +563,9 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
 (define (vtree-leaves vt)
   (cond [(or (exact-integer? vt) (boolean? vt)) (list vt)]
         [(list? vt) (apply append (map vtree-leaves vt))]
+        [(ctor-vt? vt)
+         (cons (ctor-vt-tag-cid vt)
+               (apply append (map vtree-leaves (ctor-vt-slot-cids vt))))]
         [else '()]))
 
 ;; vtree-shapes-match? : vtree × vtree → Bool
@@ -539,6 +574,12 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
   (cond [(and (vtree-scalar? a) (vtree-scalar? b)) #t]
         [(and (list? a) (list? b) (= (length a) (length b)))
          (andmap vtree-shapes-match? a b)]
+        [(and (ctor-vt? a) (ctor-vt? b))
+         (and (eq? (ctor-vt-type-name a) (ctor-vt-type-name b))
+              (= (length (ctor-vt-slot-cids a))
+                 (length (ctor-vt-slot-cids b)))
+              (andmap vtree-shapes-match?
+                      (ctor-vt-slot-cids a) (ctor-vt-slot-cids b)))]
         [else #f]))
 
 ;; init-of-state-leaf : leaf-cid × state-vts × init-vts → init-leaf | #f
@@ -946,23 +987,20 @@ arity mismatch in lowering")]))]))]
         (build-nat-match b dom-id env scrutinee body-b body-a expr)]
 
        [else
-        (translate-error!
-         expr
-         (format "expr-reduce two-arm match supports {true,false} (Bool) or \
-{zero,suc} (Nat); got ~a (count ~a), ~a (count ~a). Other sum types are not \
-yet lowered."
-                 tag-a count-a tag-b count-b))])]
+        ;; Gate 1: fall through to the general N-arm ctor match for any
+        ;; other 2-arm shape (Maybe, Either, user 2-ctor ADTs).
+        (build-ctor-match b dom-id env scrutinee
+                          (list (expr-reduce-arm tag-a count-a body-a)
+                                (expr-reduce-arm tag-b count-b body-b))
+                          expr)])]
 
-    ;; Multi-arm match with N != 2 not yet lowered.
-    [(expr-reduce _ arms _)
-     (translate-error!
-      expr
-      (format "expr-reduce with ~a arms not supported yet (only 2-arm Bool/Nat \
-match is lowered). Other sum types (Maybe, Either, List, user-defined) require \
-tagged-union runtime representation, not yet built."
-              (length arms)))]
+    ;; Multi-arm match (N ≥ 1, including N != 2) — Gate 1.
+    [(expr-reduce scrutinee arms _)
+     (build-ctor-match b dom-id env scrutinee arms expr)]
 
-    ;; expr-app of an expr-fvar to k arguments — three-way dispatch:
+    ;; expr-app of an expr-fvar to k arguments — four-way dispatch:
+    ;;   0. (Gate 1) If the head fvar is a registered ctor, lower as a
+    ;;      tagged-union construction.
     ;;   1. If the fvar's body matches the tail-rec shape, lower as a
     ;;      feedback network.
     ;;   2. Else if the fvar's body is a non-recursive lambda chain,
@@ -976,29 +1014,40 @@ tagged-union runtime representation, not yet built."
     ;; already in the set, that's mutual recursion (or single-fn self-
     ;; recursion that's not tail-recursive) — error.
     [(expr-app f-expr _arg-expr)
-     (let ([result (try-lower-tail-rec-call expr b dom-id env)])
+     (let-values ([(head-name args) (peel-fvar-app-chain expr)])
        (cond
-         [result result]
+         ;; (0) Ctor application — Gate 1 rev 1.0
+         [(and head-name (is-ctor-name? head-name))
+          (build-ctor-application b expr head-name args env)]
          [else
-          (let ([inlined (try-inline-fvar-call expr b dom-id env)])
+          (let ([result (try-lower-tail-rec-call expr b dom-id env)])
             (cond
-              [inlined inlined]
+              [result result]
               [else
-               (translate-error!
-                expr
-                "function call not supported. The function is either \
+               (let ([inlined (try-inline-fvar-call expr b dom-id env)])
+                 (cond
+                   [inlined inlined]
+                   [else
+                    (translate-error!
+                     expr
+                     "function call not supported. The function is either \
 non-tail-recursive (would need runtime call stack), self-referential in \
 a non-tail position, mutually recursive, or undefined. Tail-recursive \
 functions (recognized by `match-tail-rec`) and non-recursive helpers \
-(inlined at lowering time) ARE supported.")]))]))]
+(inlined at lowering time) ARE supported.")]))]))]))]
 
-    ;; Bare expr-fvar (no application) — currently unsupported.
+    ;; Bare expr-fvar (no application) — supported only for nullary ctors;
+    ;; everything else is unsupported.
     [(expr-fvar name)
-     (translate-error! expr
-                       (format "bare reference to top-level definition '~a' not supported. \
+     (cond
+       [(is-ctor-name? name)
+        (build-ctor-application b expr name '() env)]
+       [else
+        (translate-error! expr
+                          (format "bare reference to top-level definition '~a' not supported. \
 Only saturated calls to tail-recursive functions and non-recursive \
 helpers are lowered."
-                               name))]
+                                  name))])]
 
     [_
      (translate-error!
@@ -1016,6 +1065,235 @@ are not yet supported.")]))
   ;; tracks depth bookkeeping consistently regardless of arity.
   (emit-aligned-propagator! b (list a-cid) r-cid tag)
   r-cid)
+
+;; ============================================================
+;; Gate 1 (rev 1.0) — tagged-union ctor application & match
+;; ============================================================
+;;
+;; Strategy: defunctionalize per type. Every ADT value uses a flat
+;; cell layout: 1 tag cell + sum-of-ctor-arities slot cells. All
+;; values of the type share the same layout (some slots may be
+;; unused for a given ctor; their default value is 0).
+;;
+;; This rev (1.0) supports:
+;;   - Non-recursive ADTs only (no field whose type is the ADT itself).
+;;   - Field types must lower to scalar (Int / Bool / Nat) cells.
+;;   - Type args are erased and skipped during arg peeling.
+;;
+;; Recursive ADTs (List, Tree) and ADT-typed fields (Maybe (Maybe Int))
+;; require nested vtree slot-types and are deferred to rev 1.1+ /
+;; rev 2 (heap).
+
+(define (is-ctor-name? sym) (and sym (lookup-ctor sym) #t))
+
+;; type-flat-slot-count : symbol → nat
+;; Sum the field arities of all ctors of the named ADT type. Errors
+;; if the type isn't registered.
+(define (type-flat-slot-count type-name)
+  (define ctors (lookup-type-ctors type-name))
+  (unless ctors
+    (error 'type-flat-slot-count "unknown ADT type: ~a" type-name))
+  (for/sum ([c (in-list ctors)])
+    (define meta (lookup-ctor c))
+    (length (ctor-meta-field-types meta))))
+
+;; ctor-flat-field-offset : symbol → nat
+;; Offset of this ctor's first field within the type's flat slot list.
+;; (Sum of arities of ctors with smaller branch indices.)
+(define (ctor-flat-field-offset ctor-name)
+  (define meta (lookup-ctor ctor-name))
+  (define type-name (ctor-meta-type-name meta))
+  (define this-branch (ctor-meta-branch-index meta))
+  (define ctors (lookup-type-ctors type-name))
+  (for/sum ([c (in-list ctors)] [i (in-naturals)] #:when (< i this-branch))
+    (length (ctor-meta-field-types (lookup-ctor c)))))
+
+;; type-arg? : expr → bool
+;; Heuristic for distinguishing erased type args from value args in
+;; an elaborated expr-app chain. Type args appear leftmost (curried
+;; first) thanks to the Pi (A : Type) binders.
+(define (type-arg? e)
+  (match e
+    [(expr-Int) #t]
+    [(expr-Bool) #t]
+    [(expr-Nat) #t]
+    [(expr-Type _) #t]
+    [(expr-Pi _ _ _) #t]
+    [(expr-app (expr-fvar T) _) (and (lookup-type-ctors T) #t)]
+    [(expr-fvar T) (and (lookup-type-ctors T) #t)]
+    [_ #f]))
+
+;; peel-fvar-app-chain : expr → (values fvar-name|#f arg-list)
+;; Walk a left-associated app chain. Returns the head fvar's name (or
+;; #f if the head isn't an fvar) and the args in left-to-right order.
+(define (peel-fvar-app-chain e)
+  (let loop ([e e] [args '()])
+    (match e
+      [(expr-app f a) (loop f (cons a args))]
+      [(expr-fvar name) (values name args)]
+      [_ (values #f args)])))
+
+;; split-type-and-value-args : (Listof expr) → (values type-args value-args)
+;; The leading prefix of args matching `type-arg?` are type args; the
+;; rest are value args.
+(define (split-type-and-value-args args)
+  (define-values (types vals) (splitf-at args type-arg?))
+  (values types vals))
+
+;; build-ctor-application : builder × expr × symbol × (Listof expr) × env → ctor-vt
+;; Lower (C type-args… value-args…) to a ctor-vt.
+(define (build-ctor-application b expr ctor-name args env)
+  (define meta (lookup-ctor ctor-name))
+  (unless meta
+    (translate-error! expr
+                      (format "internal: '~a' not in ctor registry" ctor-name)))
+  ;; Rev 1.0: refuse recursive ctors (any field whose is-recursive flag is #t).
+  (when (ormap values (ctor-meta-is-recursive meta))
+    (translate-error!
+     expr
+     (format "ctor '~a' of type ~a has recursive field(s); recursive ADTs \
+need a heap-backed runtime (Gate 1 rev 2 — not yet implemented). Maybe / \
+Either / non-recursive user ADTs work in rev 1."
+             ctor-name (ctor-meta-type-name meta))))
+  (define type-name (ctor-meta-type-name meta))
+  (define-values (_type-args value-args) (split-type-and-value-args args))
+  (define expected-arity (length (ctor-meta-field-types meta)))
+  (unless (= (length value-args) expected-arity)
+    (translate-error!
+     expr
+     (format "ctor '~a' expects ~a value field(s), got ~a"
+             ctor-name expected-arity (length value-args))))
+  ;; Build each value arg first (in caller env). Rev 1.0: each value
+  ;; arg must lower to a SCALAR (Int/Bool cell).
+  (define value-cids
+    (for/list ([va (in-list value-args)] [i (in-naturals)])
+      (define vt (build va b INT-DOMAIN-ID env))
+      (assert-scalar! vt va
+                      (format "ctor '~a' field ~a (rev 1.0 supports scalar fields only; \
+nested ADT fields are rev 1.1+)" ctor-name i))))
+  ;; Tag cell: i64 holding the branch index. Static literal value.
+  (define branch-idx (ctor-meta-branch-index meta))
+  (define tag-cid (emit-cell! b INT-DOMAIN-ID branch-idx))
+  ;; Slot cells: allocate the type's full flat slot count, default 0.
+  ;; For each value field of this ctor, plug in the value-arg cell at
+  ;; the correct offset. Other ctors' slots stay at default 0 — the
+  ;; match never reads them when the tag selects another arm.
+  ;;
+  ;; Subtlety: we want the slot cell to hold the value-arg's value,
+  ;; not just be a separate cell. Use a kernel-identity propagator to
+  ;; copy. (Allocating the slot cell with the value-arg's cell-id
+  ;; directly would break shape uniformity — different constructions
+  ;; would land in different cells.)
+  (define n-slots (type-flat-slot-count type-name))
+  (define this-offset (ctor-flat-field-offset ctor-name))
+  (define slot-cids
+    (for/list ([slot-i (in-range n-slots)])
+      (emit-cell! b INT-DOMAIN-ID 0)))
+  (for ([value-cid (in-list value-cids)] [i (in-naturals)])
+    (define slot-cid (list-ref slot-cids (+ this-offset i)))
+    (emit-aligned-propagator! b (list value-cid) slot-cid 'kernel-identity))
+  (ctor-vt type-name tag-cid slot-cids))
+
+;; build-ctor-match : builder × dom-id × env × expr × (Listof expr-reduce-arm) × expr → vtree
+;; Lower an N-arm match against an ADT scrutinee.
+;;
+;; Strategy: build the scrutinee as a ctor-vt; for each arm compute
+;; the body's vtree (with field cells pushed onto env per the arm's
+;; binding-count and the ctor's flat offset); then build a left-
+;; leaning select cascade dispatching on the tag cell.
+(define (build-ctor-match b dom-id env scrut-expr arms err-expr)
+  (when (null? arms)
+    (translate-error! err-expr "match has no arms"))
+  ;; Look up type info from any arm's ctor. All arms must be ctors of
+  ;; the same type.
+  (define first-ctor (expr-reduce-arm-ctor-name (car arms)))
+  (define first-meta (lookup-ctor first-ctor))
+  (unless first-meta
+    (translate-error! err-expr
+                      (format "match arm ctor '~a' is not a registered ctor; \
+this match shape is not (yet) lowered." first-ctor)))
+  (define type-name (ctor-meta-type-name first-meta))
+  (define type-ctors (lookup-type-ctors type-name))
+  (unless type-ctors
+    (translate-error! err-expr
+                      (format "ctor '~a' references unknown type ~a"
+                              first-ctor type-name)))
+  ;; Verify all arms are ctors of this type and arities match.
+  (for ([arm (in-list arms)])
+    (define c (expr-reduce-arm-ctor-name arm))
+    (define m (lookup-ctor c))
+    (unless m
+      (translate-error! err-expr
+                        (format "match arm ctor '~a' is not a registered ctor"
+                                c)))
+    (unless (eq? (ctor-meta-type-name m) type-name)
+      (translate-error! err-expr
+                        (format "match arms span multiple types (~a vs ~a); \
+all arms of a single match must belong to the same ADT."
+                                type-name (ctor-meta-type-name m))))
+    (unless (= (expr-reduce-arm-binding-count arm)
+               (length (ctor-meta-field-types m)))
+      (translate-error! err-expr
+                        (format "ctor '~a' expects ~a field-binders, arm has ~a"
+                                c (length (ctor-meta-field-types m))
+                                (expr-reduce-arm-binding-count arm)))))
+  ;; Build scrutinee. Must be a ctor-vt of `type-name`.
+  (define scrut-vt (build scrut-expr b INT-DOMAIN-ID env))
+  (unless (ctor-vt? scrut-vt)
+    (translate-error! scrut-expr
+                      (format "match scrutinee was expected to be a ~a value, \
+but lowered to a non-ctor vtree (~v)." type-name scrut-vt)))
+  (unless (eq? (ctor-vt-type-name scrut-vt) type-name)
+    (translate-error! scrut-expr
+                      (format "match scrutinee type ~a doesn't match arm ctor type ~a"
+                              (ctor-vt-type-name scrut-vt) type-name)))
+  (define tag-cid (ctor-vt-tag-cid scrut-vt))
+  (define slot-cids (ctor-vt-slot-cids scrut-vt))
+  ;; Build each arm's body in env extended with the arm's field cells.
+  ;; Arms can appear in any order; index by the arm's ctor branch-idx.
+  ;; Build up a list (sorted by arm appearance order) of (branch-idx . body-vtree).
+  (define arm-results
+    (for/list ([arm (in-list arms)])
+      (define c (expr-reduce-arm-ctor-name arm))
+      (define m (lookup-ctor c))
+      (define b-idx (ctor-meta-branch-index m))
+      (define offset (ctor-flat-field-offset c))
+      (define n-fields (length (ctor-meta-field-types m)))
+      (define field-cids
+        (for/list ([i (in-range n-fields)]) (list-ref slot-cids (+ offset i))))
+      ;; Field binders are pushed onto env in REVERSE so that bvar 0 in
+      ;; the body refers to the LAST-bound field. Convention check: in
+      ;; build-nat-match, suc's predecessor is `(cons pred-cid env)`,
+      ;; making bvar 0 the predecessor. For an arm with k field
+      ;; binders, the LAST-listed field gets bvar 0. So we reverse
+      ;; field-cids when consing onto env.
+      (define new-env
+        (for/fold ([e env]) ([f (in-list (reverse field-cids))])
+          (cons f e)))
+      (define body-vt (build (expr-reduce-arm-body arm) b dom-id new-env))
+      (cons b-idx body-vt)))
+  ;; Build a left-leaning select cascade keyed on tag-cid.
+  ;;   For arms with branch indices i₀, i₁, …, i_{n-1} (in arm order):
+  ;;     dispatch = if (tag == i₀) then body₀
+  ;;                else if (tag == i₁) then body₁
+  ;;                ...
+  ;;                else body_{n-1}
+  ;;
+  ;; The last arm becomes the fallthrough (its tag-eq isn't tested). For
+  ;; total coverage of all ctors of the type, callers should provide an
+  ;; arm per ctor; if not, the fallthrough arm "absorbs" the missing
+  ;; ones (which is the standard match-fallthrough semantics).
+  (define rev-arms (reverse arm-results))
+  (define final-vt (cdr (car rev-arms)))
+  (define remaining (cdr rev-arms))
+  (for/fold ([acc-vt final-vt]) ([entry (in-list remaining)])
+    (define b-idx (car entry))
+    (define body-vt (cdr entry))
+    ;; cond = (tag == b-idx)
+    (define const-cid (emit-cell! b INT-DOMAIN-ID b-idx))
+    (define cond-cid (emit-cell! b BOOL-DOMAIN-ID #f))
+    (emit-aligned-propagator! b (list tag-cid const-cid) cond-cid 'kernel-int-eq)
+    (build-select-vtree b cond-cid body-vt acc-vt err-expr dom-id)))
 
 (define (build-binary b a-expr b-expr tag env [out-dom INT-DOMAIN-ID]
                       [out-init 0])
@@ -1078,6 +1356,22 @@ are not yet supported.")]))
     [(and (list? t-vt) (list? e-vt) (= (length t-vt) (length e-vt)))
      (for/list ([t (in-list t-vt)] [e (in-list e-vt)])
        (build-select-vtree b c-cid t e err-expr out-dom))]
+    [(and (ctor-vt? t-vt) (ctor-vt? e-vt)
+          (eq? (ctor-vt-type-name t-vt) (ctor-vt-type-name e-vt))
+          (= (length (ctor-vt-slot-cids t-vt))
+             (length (ctor-vt-slot-cids e-vt))))
+     ;; Gate 1: per-cell select on tag + each slot. Result is a fresh
+     ;; ctor-vt with the same type-name. All slot domains are INT.
+     (define new-tag-cid
+       (build-select-vtree b c-cid
+                           (ctor-vt-tag-cid t-vt)
+                           (ctor-vt-tag-cid e-vt)
+                           err-expr INT-DOMAIN-ID))
+     (define new-slot-cids
+       (for/list ([t-slot (in-list (ctor-vt-slot-cids t-vt))]
+                  [e-slot (in-list (ctor-vt-slot-cids e-vt))])
+         (build-select-vtree b c-cid t-slot e-slot err-expr INT-DOMAIN-ID)))
+     (ctor-vt (ctor-vt-type-name t-vt) new-tag-cid new-slot-cids)]
     [else
      (translate-error!
       err-expr

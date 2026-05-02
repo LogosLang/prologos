@@ -1,8 +1,65 @@
 # Gate 1 — Tagged-Union Runtime Representation
 **Date**: 2026-05-02
-**Status**: Design (rev 1, defunctionalize-first variant)
+**Status**: rev 1.0 SHIPPED (4/6 acceptance examples PASS); rev 1.1 (nested non-recursive ADTs) and rev 2.0 (heap-backed for recursive ADTs) deferred.
 **Branch**: `lowering-yolo`
 **Predecessor**: [`2026-05-02_LOWERING_INVENTORY.md`](2026-05-02_LOWERING_INVENTORY.md)
+
+## Status snapshot
+
+  Acceptance suite: `racket/prologos/examples/network/n9-sums/`
+
+  | example              | rev 1.0 | reason if not |
+  |----------------------|---------|---------------|
+  | maybe-some           | PASS    | — |
+  | maybe-none           | PASS    | — |
+  | either-left          | PASS    | — |
+  | either-right         | PASS    | — |
+  | nested-maybe         | unsup   | non-scalar field type — rev 1.1 |
+  | list-sum-3           | unsup   | recursive ctor — rev 2.0 (heap) |
+
+  Round-trip acceptance: 45 PASS / 2 unsupported / 47 total
+  All 4 binaries also pass end-to-end (./binary returns expected exit).
+  Unit-test gate: 220+ rackunit tests still green; 4 new Gate-1 tests added.
+
+## Implementation summary (rev 1.0)
+
+  No kernel changes. No IR shape changes. Entirely in
+  `racket/prologos/ast-to-low-pnet.rkt`:
+
+    - New struct `ctor-vt(type-name, tag-cid, slot-cids)` — the vtree
+      shape for tagged-union values. Plays alongside the existing
+      scalar (i64) and list (pair-tree) vtree shapes.
+
+    - `vtree-leaves` and `vtree-shapes-match?` extended to recurse
+      into ctor-vt. `build-select-vtree` now handles ctor-vt branches
+      by per-cell select on tag + each slot.
+
+    - New `build-ctor-application` — peels type args, allocates
+      tag + flat slot cells per the type's flat slot layout, flows
+      each value-arg into its slot via `kernel-identity`. Refuses
+      recursive ctors with an explicit message pointing at rev 2.
+
+    - New `build-ctor-match` — extracts field cells from the
+      scrutinee's slot list at the offset given by the matched ctor's
+      branch, builds each arm body with the field cells pushed onto
+      env (in reverse so bvar 0 is the last-bound), then assembles a
+      left-leaning select cascade keyed on the tag cell.
+
+    - `expr-app` of fvar dispatch now checks `is-ctor-name?` BEFORE
+      the tail-rec / inline path.
+
+    - Bare `expr-fvar` to a registered ctor is also lowered (nullary
+      ctor reference outside of an `app` chain).
+
+    - `expr-reduce` 2-arm "else" branch and the N-arm clause both
+      fall through to `build-ctor-match`. The Bool/Nat fast-paths
+      stay first to preserve their tighter dispatch (no tag cell).
+
+  Round-trip acceptance harness's regex extended to recognize the
+  `ast-to-low-pnet cannot translate` error message and bucket those
+  files as `unsupported` rather than `error`.
+
+## Original design — kept below for reference
 
 ## 1. Motivation
 

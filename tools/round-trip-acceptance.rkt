@@ -74,7 +74,7 @@
        ([exn:fail?
          (lambda (e)
            (define msg (exn-message e))
-           (cond [(regexp-match? #px"materialize|unsupported|ast-translation" msg)
+           (cond [(regexp-match? #px"materialize|unsupported|ast-translation|ast-to-low-pnet cannot translate" msg)
                   (set! unsupported (+ 1 unsupported))]
                  [else (set! errors (+ 1 errors))
                   (set! fail-detail
