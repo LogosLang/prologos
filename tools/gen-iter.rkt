@@ -27,22 +27,16 @@
 (command-line
  #:program "gen-iter"
  #:once-each
- [("--algorithm") a "Algorithm: fib, sum, factorial, pair-fib, helpered-fib, sumsq, dual-acc, pow2 (default fib)"
+ [("--algorithm") a "Algorithm: fib, sum, factorial, pair-fib, helpered-fib, sumsq, dual-acc, pell, pow2 (default fib)"
   (define sym (string->symbol a))
-  (unless (memq sym '(fib sum factorial pair-fib helpered-fib sumsq dual-acc pow2))
+  (unless (memq sym '(fib sum factorial pair-fib helpered-fib sumsq dual-acc pell pow2))
     (error 'gen-iter "unknown algorithm '~a'" a))
   (algorithm sym)]
-;; NOTE: `pell` was attempted but exposes a known lowering limitation.
-;; Pell's step is `[int+ [int* 2 b] a]` — a depth-2 chain. Combined
-;; with the depth-1 step for `n-1`, this produces mismatched BSP lags
-;; between step cells (depth-1 commits in 1 round; depth-2 takes 2
-;; rounds). The select reads stale step values and propagates wrong
-;; results via feedback. Programs whose step expressions are all
-;; depth-1 (fib, sumsq, dual-acc, factorial) work correctly because
-;; either lags match or mismatches are benign for the desired
-;; semantics. A future "F.5: lag-matching bridges" sprint would fix
-;; this by inserting identity propagators to align all step cells to
-;; the maximum depth.
+;; Sprint F.5 (2026-05-01): pell re-enabled. Its depth-2 step expression
+;; (`[int+ [int* 2 b] a]`) used to fail because of mismatched BSP lags
+;; between step cells. emit-aligned-propagator! and the pre-select
+;; uniform lift in lower-tail-rec now insert identity bridges to align
+;; all step values at the same iteration boundary.
  [("--n") k "Iteration count (default 10)"
   (define v (string->number k))
   (unless (and (exact-integer? v) (>= v 0))
@@ -72,6 +66,10 @@
   (let loop ([s 0] [p 1] [i k])
     (if (<= i 0) (+ s p) (loop (+ s i) (* p i) (- i 1)))))
 
+(define (pell-iter k)
+  (let loop ([a 0] [b 1] [i k])
+    (if (<= i 0) a (loop b (+ (* 2 b) a) (- i 1)))))
+
 (define (pow2-iter k)
   (let loop ([acc 1] [i k])
     (if (<= i 0) acc (loop (* acc 2) (- i 1)))))
@@ -83,6 +81,7 @@
     [(factorial)                 (factorial-iter (n))]
     [(sumsq)                     (sumsq-iter (n))]
     [(dual-acc)                  (dual-acc-iter (n))]
+    [(pell)                      (pell-iter (n))]
     [(pow2)                      (pow2-iter (n))]))
 
 ;; i64 wrap then mod 256 for exit code. Two-step because Racket integers
@@ -215,6 +214,22 @@
    (printf "    | false -> [dual-acc [pair [int+ [fst sp] i] [int* [snd sp] i]] [int- i 1]]~n")
    (newline)
    (printf "def main : Int := [dual-acc [pair 0 1] ~a]~n" (n))]
+
+  [(pell)
+   ;; Pell numbers: P(n) = 2*P(n-1) + P(n-2). Depth-2 step expression
+   ;; `[int+ [int* 2 b] a]` requires F.5's lag-matching bridges.
+   (printf ";; Pell P(~a) — auto-generated~n" (n))
+   (printf ";; expected = ~a; exit code (mod 256) = ~a~n"
+           expected-result expected-exit)
+   (printf ";; :expect-exit ~a~n" expected-exit)
+   (newline)
+   (printf "spec pell-iter Int -> Int -> Int -> Int~n")
+   (printf "defn pell-iter [a b n]~n")
+   (printf "  match [int-lt n 1]~n")
+   (printf "    | true  -> a~n")
+   (printf "    | false -> [pell-iter b [int+ [int* 2 b] a] [int- n 1]]~n")
+   (newline)
+   (printf "def main : Int := [pell-iter 0 1 ~a]~n" (n))]
 
   [(pow2)
    ;; 2^N via repeated doubling. Single accumulator; tests int-mul

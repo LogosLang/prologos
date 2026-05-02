@@ -29,7 +29,8 @@
          racket/list
          racket/runtime-path
          racket/file
-         racket/format)
+         racket/format
+         racket/string)
 
 (define-runtime-path here ".")
 
@@ -65,6 +66,7 @@
     (factorial    iterative)
     (sumsq        iterative)
     (dual-acc     iterative)
+    (pell         iterative)
     (pow2         iterative)))
 
 ;; ============================================================
@@ -221,47 +223,82 @@
 (define (or-? v) (or v "?"))
 (define (round-ms x) (round x))
 (define (μs ns) (if ns (real->decimal-string (/ ns 1000.0) 1) "?"))
+(define (fmt-ns ns)
+  (cond [(not ns) "?"]
+        [(integer? ns) (number->string ns)]
+        [else (number->string (inexact->exact (round ns)))]))
+(define (fmt-ratio reduce-ms sched-ns)
+  (cond [(and sched-ns (> sched-ns 0))
+         (define x (/ (* reduce-ms 1000000) sched-ns))
+         (cond [(>= x 1000) (format "~a,~ax"
+                                    (quotient (inexact->exact (round x)) 1000)
+                                    (~a (modulo (inexact->exact (round x)) 1000)
+                                        #:min-width 3 #:pad-string "0" #:align 'right))]
+               [else (format "~ax" (inexact->exact (round x)))])]
+        [else "?"]))
+(define (fmt-fire-ns total-ns fires)
+  (cond [(and total-ns fires (> fires 0))
+         (real->decimal-string (/ total-ns fires) 1)]
+        [else "?"]))
 
-;; --- Table 1: per-config detail ---
-(printf "~n## Per-config detail~n~n")
-(printf "| algorithm | form | N | Racket reduce ms | Native run ms | Scheduler μs | Rounds | Fires | Cells | Props |~n")
-(printf "|---|---|---|---|---|---|---|---|---|---|~n")
-(for ([r (in-list all-results)])
-  (printf "| ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a |~n"
-          (config-result-algorithm r)
-          (config-result-form r)
-          (config-result-n r)
-          (round-ms (config-result-reduce-ms-avg r))
-          (round-ms (config-result-native-run-ms-avg r))
-          (μs (config-result-scheduler-ns r))
-          (or-? (config-result-rounds r))
-          (or-? (config-result-fires r))
-          (or-? (config-result-cells r))
-          (or-? (config-result-props r))))
+;; ============================================================
+;; Table 1: WALL-TIME COMPARISON — the headline view.
+;; ============================================================
 
-;; --- Table 2: speedup (Racket reduce / scheduler) ---
-(printf "~n## Apples-to-apples speedup (Racket reduce vs native scheduler only)~n~n")
-(printf "| algorithm | form | N | Racket ms | Scheduler μs | Speedup |~n")
-(printf "|---|---|---|---|---|---|~n")
+(printf "~n## Wall-time comparison: Racket interpreter vs native scheduler~n~n")
+(printf "Each row: same Prologos source, two evaluation paths.~n")
+(printf "  - Racket reduce ms: process-file (parser+elaborator+typecheck+reducer) in a~n")
+(printf "    fresh subprocess per run. Includes ~~600ms of fixed startup overhead.~n")
+(printf "  - Native scheduler μs: just the BSP propagator scheduler (run_to_quiescence).~n")
+(printf "    Excludes binary startup. Apples-to-apples for the reduction work itself.~n")
+(printf "  - ns/fire: scheduler ns ÷ propagator fires; the per-fire throughput.~n~n")
+(printf "| algorithm | form | N | Racket ms | Native μs | Speedup | ns/fire | Rounds | Fires |~n")
+(printf "|---|---|---|---|---|---|---|---|---|~n")
 (for ([r (in-list all-results)])
   (define reduce-ms (config-result-reduce-ms-avg r))
   (define sched-ns  (config-result-scheduler-ns r))
-  (define speedup
-    (if (and sched-ns (> sched-ns 0))
-        (/ (* reduce-ms 1000000) sched-ns)
-        #f))
-  (printf "| ~a | ~a | ~a | ~a | ~a | ~a |~n"
+  (define fires     (config-result-fires r))
+  (printf "| ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a |~n"
           (config-result-algorithm r)
           (config-result-form r)
           (config-result-n r)
           (round-ms reduce-ms)
           (μs sched-ns)
-          (if speedup (format "~ax" (round speedup)) "?")))
+          (fmt-ratio reduce-ms sched-ns)
+          (fmt-fire-ns sched-ns fires)
+          (or-? (config-result-rounds r))
+          (or-? fires)))
 
-;; --- Table 3: unrolled vs iterative comparison (fib) ---
-(printf "~n## Unrolled vs iterative form (fib)~n~n")
-(printf "| N | u-cells | u-rounds | u-fires | u-ns | i-cells | i-rounds | i-fires | i-ns |~n")
-(printf "|---|---|---|---|---|---|---|---|---|~n")
+;; ============================================================
+;; Table 2: structural metrics — independent of timing noise.
+;; ============================================================
+
+(printf "~n## Structural metrics (deterministic across runs)~n~n")
+(printf "| algorithm | form | N | Cells | Props | Rounds | Fires | Committed/Dropped writes |~n")
+(printf "|---|---|---|---|---|---|---|---|~n")
+(for ([r (in-list all-results)])
+  (printf "| ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a/~a |~n"
+          (config-result-algorithm r)
+          (config-result-form r)
+          (config-result-n r)
+          (or-? (config-result-cells r))
+          (or-? (config-result-props r))
+          (or-? (config-result-rounds r))
+          (or-? (config-result-fires r))
+          (or-? (config-result-committed r))
+          (or-? (config-result-dropped r))))
+
+;; ============================================================
+;; Table 3: unrolled vs iterative side-by-side for fib.
+;; ============================================================
+
+(printf "~n## Unrolled vs iterative form (fib only)~n~n")
+(printf "Demonstrates the cell-budget tradeoff: unrolled scales with N,~n")
+(printf "iterative is constant. Per-N scheduler ns figures show that for~n")
+(printf "small N unrolled is faster (fewer rounds), but iterative wins at large~n")
+(printf "N because of fewer total fires (BSP fan-in stale-fire pattern in unrolled).~n~n")
+(printf "| N | u-cells | u-rounds | u-fires | u-ns | u-ms | i-cells | i-rounds | i-fires | i-ns | i-ms |~n")
+(printf "|---|---|---|---|---|---|---|---|---|---|---|~n")
 (for ([n (in-list n-values)])
   (define u (findf (lambda (r) (and (eq? (config-result-algorithm r) 'fib)
                                     (eq? (config-result-form r) 'unrolled)
@@ -271,18 +308,49 @@
                                     (eq? (config-result-form r) 'iterative)
                                     (= (config-result-n r) n)))
                    all-results))
-  (define (fmt-ns ns)
-    (cond [(not ns) "?"]
-          [(integer? ns) (number->string ns)]
-          [else (number->string (inexact->exact (round ns)))]))
   (when (and u i)
-    (printf "| ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a |~n"
+    (printf "| ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a | ~a |~n"
             n
             (or-? (config-result-cells u))
             (or-? (config-result-rounds u))
             (or-? (config-result-fires u))
             (fmt-ns (config-result-scheduler-ns u))
+            (round-ms (config-result-reduce-ms-avg u))
             (or-? (config-result-cells i))
             (or-? (config-result-rounds i))
             (or-? (config-result-fires i))
-            (fmt-ns (config-result-scheduler-ns i)))))
+            (fmt-ns (config-result-scheduler-ns i))
+            (round-ms (config-result-reduce-ms-avg i)))))
+
+;; ============================================================
+;; Table 4: per-N wall time for all iterative algorithms.
+;; ============================================================
+
+(printf "~n## Per-N wall time across iterative algorithms (Racket reduce ms)~n~n")
+(printf "Shows how Racket reduce time scales per algorithm.~n~n")
+(define iter-algs (remove-duplicates
+                   (for/list ([r (in-list all-results)]
+                              #:when (eq? (config-result-form r) 'iterative))
+                     (config-result-algorithm r))))
+(printf "| algorithm | ~a |~n" (string-join (map (lambda (n) (format "N=~a" n)) n-values) " | "))
+(printf "|---~a|~n" (string-join (build-list (length n-values) (lambda (_) "|---")) ""))
+(for ([alg (in-list iter-algs)])
+  (define cells (for/list ([n (in-list n-values)])
+                  (define r (findf (lambda (rr) (and (eq? (config-result-algorithm rr) alg)
+                                                     (eq? (config-result-form rr) 'iterative)
+                                                     (= (config-result-n rr) n)))
+                                   all-results))
+                  (if r (round-ms (config-result-reduce-ms-avg r)) "?")))
+  (printf "| ~a | ~a |~n" alg (string-join (map (lambda (c) (format "~a" c)) cells) " | ")))
+
+(printf "~n## Per-N scheduler μs across iterative algorithms~n~n")
+(printf "| algorithm | ~a |~n" (string-join (map (lambda (n) (format "N=~a" n)) n-values) " | "))
+(printf "|---~a|~n" (string-join (build-list (length n-values) (lambda (_) "|---")) ""))
+(for ([alg (in-list iter-algs)])
+  (define cells (for/list ([n (in-list n-values)])
+                  (define r (findf (lambda (rr) (and (eq? (config-result-algorithm rr) alg)
+                                                     (eq? (config-result-form rr) 'iterative)
+                                                     (= (config-result-n rr) n)))
+                                   all-results))
+                  (if r (μs (config-result-scheduler-ns r)) "?")))
+  (printf "| ~a | ~a |~n" alg (string-join cells " | ")))
