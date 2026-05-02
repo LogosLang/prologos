@@ -49,7 +49,6 @@ current-hasmethod-constraint-cell-id
 current-hasmethod-resolution-bridge-fn
 current-hasmethod-wakeup-cell-id
 current-impl-registry-cell-id
-current-in-stratified-resolution?
 current-infer-constraints-mode?
 current-infra-assumption
 current-is-eval-fn

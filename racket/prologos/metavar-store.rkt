@@ -246,7 +246,10 @@
  read-error-descriptors
  write-error-descriptor!
  ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
- current-in-stratified-resolution?
+ ;; current-in-stratified-resolution? RETIRED 2026-05-02
+ ;; (kernel-PU Phase 6 Day 13, § 9.1 Cat B). Was the re-entrancy
+ ;; guard set only by run-stratified-resolution! (also retired);
+ ;; pure variant's eq? identity check is the structural replacement.
  ;; Track 8 A5: current-stratified-progress-box removed (dead code)
  ;; Track 2 Phase 4: Action descriptors
  (struct-out action-retry-constraint)
@@ -1854,11 +1857,15 @@
 ;; definition is `(define type-bot 'type-bot)` — the value IS the symbol.
 (define (expr-meta-bot-placeholder) 'type-bot)
 
-;; Track 2 Phase 3: Stratified resolution flag.
-;; When #t, solve-meta! only writes the solution (core) and defers retries
-;; to the outer stratified loop. Prevents recursive re-entrancy.
-(define current-in-stratified-resolution? (make-parameter #f))
-
+;; current-in-stratified-resolution? RETIRED 2026-05-02 (kernel-PU
+;; Phase 6 Day 13, § 9.1 Category B). Set ONLY by the imperative
+;; run-stratified-resolution! (also retired this commit), so reading
+;; it always returned #f after retirement of its sole writer. The
+;; re-entrancy semantics are now provided structurally by
+;; run-stratified-resolution-pure's eq? identity termination check
+;; (recursive solve-meta! cycles converge when no further state
+;; changes). solve-meta! below was simplified to drop the guard.
+;;
 ;; Track 8 Phase A5: current-stratified-progress-box REMOVED.
 ;; The pure variant (run-stratified-resolution-pure) uses eq? identity
 ;; detection instead. The imperative variant that used this box is dead code.
@@ -1882,14 +1889,22 @@
   (define net-box (current-prop-net-box))
   (define executor (current-resolution-executor-pure))
   (cond
-    [(and net-box executor (not (current-in-stratified-resolution?)))
-     ;; Full pure chain: solve + stratified resolution
+    [(and net-box executor)
+     ;; Full pure chain: solve + stratified resolution.
+     ;; Phase 6 Day 13 (kernel-PU rev 2.1, § 9.1 Cat B): the
+     ;; current-in-stratified-resolution? re-entrancy guard was
+     ;; retired alongside run-stratified-resolution! (its sole
+     ;; writer). Recursive solve-meta! invocations during S2
+     ;; executor actions terminate via the pure variant's eq?
+     ;; identity fixpoint check — when no further state changes,
+     ;; the recursive call returns its input enet unchanged.
      (define enet (unbox net-box))
      (define-values (enet* _) (solve-meta-core-pure enet id solution))
      (define enet** (run-stratified-resolution-pure enet* id executor))
      (set-box! net-box enet**)]
     [net-box
-     ;; Inside stratified resolution — just solve core (pure), rebox
+     ;; No executor wired (test paths without driver.rkt) — just
+     ;; core-solve and rebox, no stratified loop.
      (define enet (unbox net-box))
      (define-values (enet* _) (solve-meta-core-pure enet id solution))
      (set-box! net-box enet*)]
@@ -2072,46 +2087,24 @@
         (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
-;; Imperative variant of the stratified resolution loop.
-;; Track 8 A5: Mostly dead code — superseded by run-stratified-resolution-pure.
-;; Track 8 C4: S0 now includes bridge propagator resolution (C1-C3).
-;; Retained as fallback for test paths that use the imperative executor.
-(define (run-stratified-resolution! trigger-meta-id)
-  (define progress-box (box #f))
-  (parameterize ([current-in-stratified-resolution? #t])
-    (define net-box (current-prop-net-box))
-    ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-    ;; Track 8 B2: direct elab-network-rewrap; removed current-prop-rewrap-net guard.
-    (define has-network? net-box)
-    (let loop ([fuel stratified-resolution-fuel]
-               [meta-id trigger-meta-id])
-      (when (> fuel 0)
-        ;; ── S(-1): Retraction stratum (Track 7 Phase 5) ──
-        ;; Clean scoped cells of entries tagged with retracted assumptions.
-        ;; Depth-0 fast path: no-op when no assumptions have been retracted.
-        (run-retraction-stratum!)
-        ;; ── Stratum 0: Type propagation (quiescence) ──
-        ;; Run the propagator network so type information flows between
-        ;; connected meta cells. This can transitively solve metas.
-        ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-        ;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
-        (when has-network?
-          (define enet (unbox net-box))
-          (define pnet (elab-network-prop-net enet))
-          (define pnet* ((current-quiescence-scheduler) pnet))
-          (set-box! net-box (elab-network-rewrap enet pnet*)))
-        ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
-        ;; After S0 quiescence, readiness propagators have populated the ready-queue.
-        (define actions (read-ready-queue-actions (unbox net-box)))
-        ;; ── Stratum 2: Resolution commitment (execute actions) ──
-        ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
-        (set-box! progress-box #f)
-        (execute-resolution-actions! actions)
-        ;; ── Check for progress ──
-        ;; If any new metas were solved during S2, loop for another round.
-        (perf-inc-resolution-cycle!)  ;; Track 7 Phase 0b
-        (when (unbox progress-box)
-          (loop (sub1 fuel) meta-id))))))
+;; run-stratified-resolution! (imperative variant) RETIRED 2026-05-02
+;; (kernel-PU Phase 6 Day 13, § 9.1 Category B). This was the
+;; pre-Track-7-Phase-7b imperative loop; superseded by
+;; run-stratified-resolution-pure (below) when solve-meta! migrated to
+;; the pure-chain dispatch in Track 8 A5. The "fallback for test paths"
+;; rationale at the old definition site no longer applies — every
+;; test-bearing path either (a) goes through driver.rkt which installs
+;; current-resolution-executor-pure (so solve-meta! takes the pure
+;; branch), or (b) uses the (and net-box) fallback in solve-meta! that
+;; just core-solves without entering any stratified loop. Grep across
+;; racket/ confirms zero callers existed at retirement time.
+;;
+;; Goes with: current-in-stratified-resolution? parameter (was the
+;; re-entrancy guard set ONLY by this function via parameterize). The
+;; pure chain doesn't need an explicit guard: its eq? identity check on
+;; the threaded enet (run-stratified-resolution-pure's termination
+;; criterion) provides structural re-entrancy bounding — recursive
+;; solve-meta! cycles converge naturally when no further state changes.
 
 ;; Track 7 Phase 7b: Pure variant of the stratified resolution loop.
 ;; Takes enet, returns enet*. No box reads/writes — all state threaded.
