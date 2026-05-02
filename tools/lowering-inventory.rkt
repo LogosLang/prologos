@@ -119,15 +119,16 @@
      'OTHER_LOWERING]
     [else 'OTHER_LOWERING]))
 
-(define (categorize-source-content path)
-  ;; For elaboration-failed files, peek at source to bucket by FEATURE
-  ;; (string heavy → GATE3, relation heavy → GATE4, etc.).
-  (define content
-    (with-handlers ([exn:fail? (lambda _ "")])
-      (file->string path)))
+(define (categorize-source-content path msg)
+  ;; For elaboration-failed files, classify by the elab error message
+  ;; first (most reliable). Source-level peek is only a fallback for
+  ;; clearly-feature-tagged failures. Returns #f to fall through to
+  ;; ELAB_FAIL — the failure is in elab, not lowering.
   (cond
-    [(regexp-match? #rx"\"|str::|str-ops::|char-at|str-len" content) 'GATE3_STRING]
-    [(regexp-match? #rx"naf|relate|relation|<-" content) 'GATE4_NAF]
+    ;; If the elab error explicitly cites strings/chars, it's GATE3.
+    [(regexp-match? #rx"string|char-at|str::" msg) 'GATE3_STRING]
+    ;; If the elab error cites relations / NAF, it's GATE4.
+    [(regexp-match? #rx"relation|relate|negation as failure" msg) 'GATE4_NAF]
     [else #f]))
 
 ;; ============================================================
@@ -146,7 +147,7 @@
     ([exn:fail?
       (lambda (e)
         (define msg (exn-message e))
-        (define src-bucket (categorize-source-content path))
+        (define src-bucket (categorize-source-content path msg))
         (probe-r path
                  (or src-bucket 'ELAB_FAIL)
                  (truncate-msg msg)))])
@@ -241,8 +242,8 @@
       (TIMEOUT              "Probe exceeded per-file timeout (likely infinite loop in elab/lowering)" "—")
       (GATE1_TAGGED_UNION   "Multi-arm match, sum types beyond Bool/Nat (List, Maybe, Either, ADTs)" "Gate 1")
       (GATE2_RECURSION      "Non-tail / mutual recursion, bare fvar, undefined symbols" "Gate 2 (PReduce)")
-      (GATE3_STRING         "Strings, bytes, chars (heuristic: source matches str:: / char-at / etc.)" "Gate 3")
-      (GATE4_NAF            "NAF / relations (heuristic: source matches naf / <- / relation)" "Gate 4")
+      (GATE3_STRING         "Strings, bytes, chars (elab error mentions string/char/str::)" "Gate 3")
+      (GATE4_NAF            "NAF / relations (elab error mentions relation/naf)" "Gate 4")
       (OTHER_LOWERING       "Closures, records, partial app, effects, other unsupported AST" "Future")))
   (for ([row (in-list labels)])
     (define b (car row))
