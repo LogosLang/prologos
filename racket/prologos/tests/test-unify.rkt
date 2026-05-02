@@ -285,13 +285,31 @@
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty (expr-suc (expr-zero)) (expr-zero))))))
 
-(test-case "unify: Pi multiplicity mismatch"
+(test-case "unify: Pi multiplicity mismatch (m0 vs m1)"
+  ;; Eigentrust pitfalls doc #2 (2026-04-25): unify-mult was relaxed to
+  ;; treat {m0, mw} as compatible (both express "non-binding" usage). The
+  ;; {m0, m1} pair remains incompatible — m1 (linear, exactly-one) IS a real
+  ;; usage
+  ;; constraint that m0 (zero) violates.
   (with-fresh-meta-env
    (parameterize ([current-prelude-env (hasheq)]
                  [current-module-definitions-content (hasheq)])
     (check-false (unify ctx-empty
                         (expr-Pi 'm0 (expr-Nat) (expr-Nat))
-                        (expr-Pi 'mw (expr-Nat) (expr-Nat)))))))
+                        (expr-Pi 'm1 (expr-Nat) (expr-Nat)))))))
+
+(test-case "unify: Pi multiplicity m0/mw lenience"
+  ;; Eigentrust pitfalls doc #2 (2026-04-25): {m0, mw} mult pairs unify
+  ;; successfully. m0 = zero runtime uses; mw = any number ≥ 0. Zero
+  ;; satisfies "any." This unblocks the case where a type constructor
+  ;; (kind Pi(m0, Type, Type)) flows into a polymorphic combinator's HKT
+  ;; slot (kind Pi(mw, Type, Type) — `->` defaults to mw via surf-arrow).
+  (with-fresh-meta-env
+   (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)])
+    (check-true (unify ctx-empty
+                       (expr-Pi 'm0 (expr-Nat) (expr-Nat))
+                       (expr-Pi 'mw (expr-Nat) (expr-Nat)))))))
 
 ;; ========================================
 ;; Nested meta solving
