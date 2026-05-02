@@ -580,23 +580,40 @@
   (check-equal? n-eq 1)
   (check-equal? n-sel 1))
 
-(test-case "Gate 1: ctor with scalar field flows the value through identity prop"
-  ;; (mkPair 7 9) — 1 ctor with 2 Int fields.
+(test-case "Gate 1 rev 1.5: (mkPair 7 9) match → bvar 0 folds to field-1 (= 9)"
+  ;; (mkPair 7 9) — 1 ctor with 2 Int fields. Match extracts the LAST-
+  ;; listed binder via `(expr-bvar 0)`. With Gate 1 rev 1.5 static-
+  ;; eval, the entire expression folds at compile time to a literal
+  ;; cell holding 9 (no runtime ctor allocation needed).
+  ;;
+  ;; Convention check (the rev 1.5 fix): bvar 0 = LAST-listed binder.
+  ;; For arm `(mkPair a b) → bvar 0`, bvar 0 = b = field 1 = 9.
   (define body
     (expr-app (expr-app (expr-fvar 'tst:mkPair) (expr-int 7)) (expr-int 9)))
-  ;; Match it with a 1-arm match to extract field 0.
+  (define m
+    (expr-reduce body
+                 (list (expr-reduce-arm 'tst:mkPair 2 (expr-bvar 0)))
+                 #t))
+  (define lp (ast-to-low-pnet (expr-Int) m "test.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Static-eval folds the whole expression; resulting low-pnet has a
+  ;; single Int-domain cell with init value 9.
+  (define int-cells-with-9
+    (count-by lp (lambda (n) (and (cell-decl? n)
+                                  (eqv? (cell-decl-init-value n) 9)))))
+  (check-equal? int-cells-with-9 1))
+
+(test-case "Gate 1 rev 1.5: same shape, bvar 1 folds to field-0 (= 7)"
+  ;; Same as above but extracting bvar 1 (= a = field 0 = 7).
+  (define body
+    (expr-app (expr-app (expr-fvar 'tst:mkPair) (expr-int 7)) (expr-int 9)))
   (define m
     (expr-reduce body
                  (list (expr-reduce-arm 'tst:mkPair 2 (expr-bvar 1)))
                  #t))
-  ;; bvar 1 refers to the FIRST-bound field (field 0 = 7) — see
-  ;; build-ctor-match: fields are pushed in REVERSE so bvar 0 is the
-  ;; LAST field.
   (define lp (ast-to-low-pnet (expr-Int) m "test.prologos"))
   (check-true (validate-low-pnet lp))
-  ;; Should have at least 2 kernel-identity propagators (one per field
-  ;; flowed into a slot cell at construction time).
-  (define n-id
-    (count-by lp (lambda (n) (and (propagator-decl? n)
-                                   (eq? (propagator-decl-fire-fn-tag n) 'kernel-identity)))))
-  (check >= n-id 2))
+  (define int-cells-with-7
+    (count-by lp (lambda (n) (and (cell-decl? n)
+                                  (eqv? (cell-decl-init-value n) 7)))))
+  (check-equal? int-cells-with-7 1))

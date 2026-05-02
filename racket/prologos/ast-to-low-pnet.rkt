@@ -545,12 +545,26 @@ fst/snd projection or destructuring is required first."
         [else (set-box! box (+ 1 (unbox box))) #t]))
 
 ;; try-static-eval-impl : expr × literal-env → value | 'unfoldable
-;;   value is an Int (exact integer) or Racket #t / #f.
+;;   value is an Int (exact integer), Racket #t / #f, or sctor.
 ;;   'unfoldable means we couldn't (or chose not to) fold this expr.
 ;;   The literal-env is a list of (literal-value | 'unknown), one
 ;;   slot per outer bvar binder.
 (define UNFOLDABLE 'unfoldable)
 (define (foldable? v) (not (eq? v UNFOLDABLE)))
+
+;; sctor: a static-eval ctor value. `name` is the ctor symbol (the
+;; namespaced fvar name), `branch` is its branch index in the type's
+;; ctor list, `fields` is a list of statically-evaluated field values
+;; (Int / Bool / sctor — recursively static).
+;;
+;; Distinct from `ctor-vt` (which is the runtime-cell representation
+;; allocated by build-ctor-application). sctor never reaches the
+;; low-pnet — it lives only inside try-static-eval and gets pattern-
+;; matched away by surrounding expr-reduce. If a program's main
+;; result folds to an sctor (rather than a scalar), we conservatively
+;; fall through to the normal build pipeline (which will then emit
+;; the runtime ctor-vt or hard-error on recursive ctors).
+(struct sctor (name branch fields) #:transparent)
 
 (define (try-static-eval-impl e lit-env)
   (cond
@@ -571,6 +585,16 @@ fst/snd projection or destructuring is required first."
         (cond [(>= i (length lit-env)) UNFOLDABLE]
               [else (let ([v (list-ref lit-env i)])
                       (cond [(eq? v 'unknown) UNFOLDABLE] [else v]))])]
+
+       ;; Bare expr-fvar: nullary ctor. Examples: `nil`, `none`,
+       ;; standalone `zero` (although latter is usually expr-zero).
+       [(expr-fvar n)
+        (cond [(is-ctor-name? n)
+               (define meta (lookup-ctor* n))
+               (cond [(zero? (length (ctor-meta-field-types meta)))
+                      (sctor n (ctor-meta-branch-index meta) '())]
+                     [else UNFOLDABLE])]
+              [else UNFOLDABLE])]
 
        [(expr-int-add a b) (static-bin + a b lit-env)]
        [(expr-int-sub a b) (static-bin - a b lit-env)]
@@ -593,9 +617,8 @@ fst/snd projection or destructuring is required first."
               [(eq? cv #f) (try-static-eval-impl fc lit-env)]
               [else UNFOLDABLE])]
 
-       ;; expr-reduce: support Bool / Nat 2-arm matches when scrutinee
-       ;; folds to a literal. Multi-arm ctor matches not folded
-       ;; (no literal ctor representation in static-eval).
+       ;; 2-arm reduce: Bool / Nat fast-paths, then general sctor
+       ;; dispatch (covers Maybe, Either, and other 2-ctor ADTs).
        [(expr-reduce s
                      (list (expr-reduce-arm tag-a count-a body-a)
                            (expr-reduce-arm tag-b count-b body-b))
@@ -623,7 +646,19 @@ fst/snd projection or destructuring is required first."
            (cond [(zero? sv) (try-static-eval-impl body-b lit-env)]
                  [else (try-static-eval-impl body-a
                                              (cons (- sv 1) lit-env))])]
+          ;; Gate 1 rev 1.5: sctor scrutinee — match by branch index.
+          [(sctor? sv)
+           (try-eval-sctor-arm sv (list (expr-reduce-arm tag-a count-a body-a)
+                                        (expr-reduce-arm tag-b count-b body-b))
+                               lit-env)]
           [else UNFOLDABLE])]
+
+       ;; N-arm reduce (N >= 1): only fires when scrutinee is an sctor
+       ;; (Bool/Nat fast-paths only handle 2-arm above).
+       [(expr-reduce s arms _)
+        (define sv (try-static-eval-impl s lit-env))
+        (cond [(sctor? sv) (try-eval-sctor-arm sv arms lit-env)]
+              [else UNFOLDABLE])]
 
        ;; Beta-redex: (expr-app (expr-lam …) arg)
        [(expr-app (expr-lam _ _ body) arg)
@@ -634,7 +669,10 @@ fst/snd projection or destructuring is required first."
        [(expr-app _ _)
         (let-values ([(head args) (peel-fvar-app-chain e)])
           (cond
-            [(and head (not (is-ctor-name? head)))
+            ;; Gate 1 rev 1.5: ctor application — build sctor.
+            [(and head (is-ctor-name? head))
+             (try-eval-ctor-app head args lit-env)]
+            [head
              (define v (global-env-lookup-value head))
              (cond
                [(not (expr-lam? v)) UNFOLDABLE]
@@ -642,6 +680,57 @@ fst/snd projection or destructuring is required first."
             [else UNFOLDABLE]))]
 
        [_ UNFOLDABLE])]))
+
+;; try-eval-ctor-app : ctor-name × (Listof expr) × lit-env → sctor | 'unfoldable
+;; Build an sctor from a ctor application. Filters out leading type
+;; args (Int / Bool / Nat / Type / Pi / type-var fvar).
+(define (try-eval-ctor-app head args lit-env)
+  (define meta (lookup-ctor* head))
+  (cond
+    [(not meta) UNFOLDABLE]
+    [else
+     (define-values (_type-args value-args) (split-type-and-value-args args))
+     (define expected-arity (length (ctor-meta-field-types meta)))
+     (cond
+       [(not (= (length value-args) expected-arity)) UNFOLDABLE]
+       [else
+        (let loop ([args value-args] [acc '()])
+          (cond
+            [(null? args)
+             (sctor head (ctor-meta-branch-index meta) (reverse acc))]
+            [else
+             (define v (try-static-eval-impl (car args) lit-env))
+             (cond [(foldable? v) (loop (cdr args) (cons v acc))]
+                   [else UNFOLDABLE])]))])]))
+
+;; try-eval-sctor-arm : sctor × (Listof expr-reduce-arm) × lit-env → value | 'unfoldable
+;; Find the arm whose ctor-name matches the sctor, then push field
+;; values onto lit-env (mirroring build-ctor-match's reverse-cons so
+;; bvar 0 is the first-declared field), then evaluate the body.
+;; Tolerate namespace-qualified arm tags by delegating to lookup-ctor*.
+(define (try-eval-sctor-arm sv arms lit-env)
+  (define sv-branch (sctor-branch sv))
+  (define sv-fields (sctor-fields sv))
+  (define matched
+    (for/or ([arm (in-list arms)])
+      (define arm-name (expr-reduce-arm-ctor-name arm))
+      (define meta (lookup-ctor* arm-name))
+      (cond [(and meta (= (ctor-meta-branch-index meta) sv-branch)
+                  (= (expr-reduce-arm-binding-count arm) (length sv-fields)))
+             arm]
+            [else #f])))
+  (cond
+    [(not matched) UNFOLDABLE]
+    [else
+     ;; Elaborator binds fields LAST-LISTED-FIRST: e.g., for `cons a r`,
+     ;; the body's `(expr-bvar 0)` refers to `r` (the last binder),
+     ;; `(expr-bvar 1)` to `a`. Cons fields onto lit-env in declaration
+     ;; order so the last field ends up at the head (de Bruijn 0).
+     (define new-env
+       (for/fold ([env lit-env])
+                 ([f (in-list sv-fields)])
+         (cons f env)))
+     (try-static-eval-impl (expr-reduce-arm-body matched) new-env)]))
 
 ;; static-bin : binop × expr × expr × lit-env → result | 'unfoldable
 (define (static-bin op a b lit-env)
@@ -1005,6 +1094,12 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
        [(exact-integer? sv) (emit-cell! b INT-DOMAIN-ID sv)]
        [(eq? sv #t) (emit-cell! b BOOL-DOMAIN-ID #t)]
        [(eq? sv #f) (emit-cell! b BOOL-DOMAIN-ID #f)]
+       ;; Gate 1 rev 1.5: sctor result — caller expects a runtime cell,
+       ;; so we don't emit the sctor directly. Fall through to the
+       ;; existing build pipeline. (If the program's main result is a
+       ;; ctor, build-ctor-application will hard-error on recursive
+       ;; ctors as before; the static-eval value is consumed only when
+       ;; surrounded by an expr-reduce that resolves it to a scalar.)
        [else (build-uncached expr b dom-id env)])]
     [else (build-uncached expr b dom-id env)]))
 
@@ -1717,14 +1812,17 @@ but lowered to a non-ctor vtree (~v)." type-name scrut-vt)))
       (define n-fields (length (ctor-meta-field-types m)))
       (define field-cids
         (for/list ([i (in-range n-fields)]) (list-ref slot-cids (+ offset i))))
-      ;; Field binders are pushed onto env in REVERSE so that bvar 0 in
-      ;; the body refers to the LAST-bound field. Convention check: in
-      ;; build-nat-match, suc's predecessor is `(cons pred-cid env)`,
-      ;; making bvar 0 the predecessor. For an arm with k field
-      ;; binders, the LAST-listed field gets bvar 0. So we reverse
-      ;; field-cids when consing onto env.
+      ;; Field binders are pushed onto env in declaration order so
+      ;; that the LAST-listed binder ends up at the head of env (de
+      ;; Bruijn 0). The elaborator uses this convention: for `cons a
+      ;; r → match r ...`, the body's `(expr-bvar 0)` refers to `r`,
+      ;; `(expr-bvar 1)` refers to `a`. (Single-field arms are
+      ;; insensitive to this order, which is why Maybe / Either
+      ;; worked before this fix.) Cross-checked against build-nat-
+      ;; match, where suc's single predecessor binder is consed
+      ;; directly onto env (bvar 0 = predecessor).
       (define new-env
-        (for/fold ([e env]) ([f (in-list (reverse field-cids))])
+        (for/fold ([e env]) ([f (in-list field-cids)])
           (cons f e)))
       (define body-vt (build (expr-reduce-arm-body arm) b dom-id new-env))
       (cons b-idx body-vt)))
