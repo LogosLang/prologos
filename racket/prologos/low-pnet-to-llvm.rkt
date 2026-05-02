@@ -82,7 +82,8 @@
            (kernel-int-div . 3)
            (kernel-int-eq  . 4)
            (kernel-int-lt  . 5)
-           (kernel-int-le  . 6)))
+           (kernel-int-le  . 6)
+           (kernel-int-mod . 7)))
 
 (define FIRE-FN-TAG-REGISTRY-3-1
   '#hasheq((kernel-select . 0)))
@@ -104,7 +105,7 @@
       [else (unsupported! d (format "no tag table for shape ~a" shape))]))
   (or (hash-ref table sym #f)
       (unsupported! d
-                    (format "fire-fn-tag '~a' not in shape-~a registry. Supported (1,1): kernel-{identity,int-neg,int-abs}. Supported (2,1): kernel-int-{add,sub,mul,div,eq,lt,le}. Supported (3,1): kernel-select."
+                    (format "fire-fn-tag '~a' not in shape-~a registry. Supported (1,1): kernel-{identity,int-neg,int-abs}. Supported (2,1): kernel-int-{add,sub,mul,div,mod,eq,lt,le}. Supported (3,1): kernel-select."
                             sym shape))))
 
 ;; lower-low-pnet-to-llvm : low-pnet → String

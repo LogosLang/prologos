@@ -165,6 +165,7 @@
    'kernel-int-sub  (cons 2 (fire-2-1 -))
    'kernel-int-mul  (cons 2 (fire-2-1 *))
    'kernel-int-div  (cons 2 (fire-2-1 int-div-trunc))
+   'kernel-int-mod  (cons 2 (fire-2-1 modulo))
    'kernel-int-eq   (cons 2 (fire-2-1 (lambda (a b) (bool->i64 (= a b)))))
    'kernel-int-lt   (cons 2 (fire-2-1 (lambda (a b) (bool->i64 (< a b)))))
    'kernel-int-le   (cons 2 (fire-2-1 (lambda (a b) (bool->i64 (<= a b)))))
@@ -242,7 +243,7 @@
       (unless entry-fac
         (materialize-error!
          p
-         (format "fire-fn-tag '~a' has no Racket fire-fn implementation. Supported (1,1): kernel-{identity,int-neg,int-abs}. Supported (2,1): kernel-int-{add,sub,mul,div,eq,lt,le}. Supported (3,1): kernel-select."
+         (format "fire-fn-tag '~a' has no Racket fire-fn implementation. Supported (1,1): kernel-{identity,int-neg,int-abs}. Supported (2,1): kernel-int-{add,sub,mul,div,mod,eq,lt,le}. Supported (3,1): kernel-select."
                  tag)))
       (define expected-arity (car entry-fac))
       (define factory (cdr entry-fac))

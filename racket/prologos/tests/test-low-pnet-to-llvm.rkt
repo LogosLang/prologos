@@ -103,9 +103,9 @@
                "%p0 = call i32 @prologos_propagator_install_2_1(i32 0, i32 %c0, i32 %c1, i32 %c2)"))
   (check-true (string-contains? ir "call void @prologos_run_to_quiescence()")))
 
-(test-case "kernel-int-sub/mul/div have distinct tag ids"
-  (for ([sym (in-list '(kernel-int-sub kernel-int-mul kernel-int-div))]
-        [expected-id (in-list '(1 2 3))])
+(test-case "kernel-int-sub/mul/div/mod have distinct tag ids"
+  (for ([sym (in-list '(kernel-int-sub kernel-int-mul kernel-int-div kernel-int-mod))]
+        [expected-id (in-list '(1 2 3 7))])
     (define lp
       (parse-low-pnet
        `(low-pnet
@@ -119,6 +119,23 @@
     (check-true (string-contains?
                  ir
                  (format "install_2_1(i32 ~a," expected-id)))))
+
+(test-case "(1,1) unary kernel-int-neg/abs lower to install_1_1 with tag 1/2"
+  (for ([sym (in-list '(kernel-identity kernel-int-neg kernel-int-abs))]
+        [expected-id (in-list '(0 1 2))])
+    (define lp
+      (parse-low-pnet
+       `(low-pnet
+         (domain-decl 0 int kernel-merge-int 0 never)
+         (cell-decl 0 0 0)
+         (cell-decl 1 0 0)
+         (propagator-decl 0 (0) (1) ,sym 0)
+         (entry-decl 1))))
+    (define ir (lower-low-pnet-to-llvm lp))
+    (check-true (string-contains?
+                 ir
+                 (format "install_1_1(i32 ~a," expected-id))
+                (format "tag id for ~a should be ~a" sym expected-id))))
 
 (test-case "propagator-decl with unknown tag raises unsupported"
   (define lp

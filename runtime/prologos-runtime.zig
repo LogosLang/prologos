@@ -565,6 +565,7 @@ fn fire_against_snapshot(pid: u32) void {
                 4 => result = if (a == b) 1 else 0,    // kernel-int-eq
                 5 => result = if (a < b) 1 else 0,     // kernel-int-lt
                 6 => result = if (a <= b) 1 else 0,    // kernel-int-le
+                7 => result = @mod(a, b),              // kernel-int-mod
                 else => abort(),
             }
         },

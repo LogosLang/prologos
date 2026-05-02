@@ -1,0 +1,4 @@
+def main : Int := [int-neg [int-neg 42]]
+
+;; double-negation gives back 42
+;; :expect-exit 42

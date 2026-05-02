@@ -1,0 +1,4 @@
+def main : Int := [int-mod 100 7]
+
+;; 100 = 14 * 7 + 2
+;; :expect-exit 2

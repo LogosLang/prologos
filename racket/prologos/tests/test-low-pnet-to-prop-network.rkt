@@ -55,6 +55,28 @@
   (check-equal? (round-trip (expr-Int) (expr-int-div (expr-int 17) (expr-int 5))) 3)
   (check-equal? (round-trip (expr-Int) (expr-int-div (expr-int -17) (expr-int 5))) -3))
 
+(test-case "lowering-yolo Phase A: int-mod (floored, sign-of-divisor)"
+  ;; 100 mod 7 = 2 (positive)
+  (check-equal? (round-trip (expr-Int) (expr-int-mod (expr-int 100) (expr-int 7))) 2)
+  ;; 5040 mod 256 = 176 (used in fact-7 acceptance)
+  (check-equal? (round-trip (expr-Int) (expr-int-mod (expr-int 5040) (expr-int 256))) 176)
+  ;; -7 mod 3 = 2 with floored / sign-of-divisor semantics (matches Zig @mod
+  ;; and Racket's `modulo`); contrast remainder which would give -1.
+  (check-equal? (round-trip (expr-Int) (expr-int-mod (expr-int -7) (expr-int 3))) 2))
+
+(test-case "lowering-yolo Phase A: int-neg (1,1) propagator"
+  (check-equal? (round-trip (expr-Int) (expr-int-neg (expr-int 5))) -5)
+  (check-equal? (round-trip (expr-Int) (expr-int-neg (expr-int -42))) 42)
+  (check-equal? (round-trip (expr-Int) (expr-int-neg (expr-int 0))) 0))
+
+(test-case "lowering-yolo Phase A: int-abs (1,1) propagator"
+  (check-equal? (round-trip (expr-Int) (expr-int-abs (expr-int 99))) 99)
+  (check-equal? (round-trip (expr-Int) (expr-int-abs (expr-int -99))) 99)
+  ;; abs.prologos shape: [int-abs [int-neg 99]] = abs(-99) = 99
+  (check-equal? (round-trip (expr-Int)
+                            (expr-int-abs (expr-int-neg (expr-int 99))))
+                99))
+
 (test-case "Day 10 round-trip: nested arithmetic [int+ [int* 2 3] 4]"
   (define ast (expr-int-add (expr-int-mul (expr-int 2) (expr-int 3))
                             (expr-int 4)))

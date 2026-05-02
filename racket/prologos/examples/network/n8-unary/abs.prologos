@@ -1,0 +1,4 @@
+def main : Int := [int-abs [int-neg 99]]
+
+;; abs(-99) = 99
+;; :expect-exit 99

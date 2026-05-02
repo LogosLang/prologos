@@ -885,12 +885,17 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
                                  "beta-redex chain has more args than lambda binders; \
 arity mismatch in lowering")]))]))]
 
+    ;; Unary arithmetic: (1,1) propagators.
+    [(expr-int-neg a) (build-unary b a 'kernel-int-neg env)]
+    [(expr-int-abs a) (build-unary b a 'kernel-int-abs env)]
+
     ;; Binary arithmetic: recursively translate each operand to a cell,
     ;; then allocate a result cell + install the corresponding propagator.
     [(expr-int-add a b-expr) (build-binary b a b-expr 'kernel-int-add env)]
     [(expr-int-sub a b-expr) (build-binary b a b-expr 'kernel-int-sub env)]
     [(expr-int-mul a b-expr) (build-binary b a b-expr 'kernel-int-mul env)]
     [(expr-int-div a b-expr) (build-binary b a b-expr 'kernel-int-div env)]
+    [(expr-int-mod a b-expr) (build-binary b a b-expr 'kernel-int-mod env)]
 
     ;; Integer comparisons → Bool result cell. Kernel encodes Bool as i64
     ;; 0/1; we model the cell domain as Bool with init #f. cell-decl-init
@@ -1002,6 +1007,15 @@ helpers are lowered."
 boolrec, expr-bvar, let-binding, and saturated tail-recursive function calls. \
 Other forms (non-tail recursion, named-function references, complex match) \
 are not yet supported.")]))
+
+(define (build-unary b a-expr tag env [out-dom INT-DOMAIN-ID] [out-init 0])
+  (define a-vt (build a-expr b INT-DOMAIN-ID env))
+  (define a-cid (assert-scalar! a-vt a-expr (format "unary op '~a' operand" tag)))
+  (define r-cid (emit-cell! b out-dom out-init))
+  ;; F.5: single-input alignment is identity, but emit-aligned-propagator!
+  ;; tracks depth bookkeeping consistently regardless of arity.
+  (emit-aligned-propagator! b (list a-cid) r-cid tag)
+  r-cid)
 
 (define (build-binary b a-expr b-expr tag env [out-dom INT-DOMAIN-ID]
                       [out-init 0])
