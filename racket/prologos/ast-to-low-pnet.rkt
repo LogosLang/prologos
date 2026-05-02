@@ -83,7 +83,16 @@
                  ;; that source. When multiple consumers lift the same
                  ;; source to (possibly different) target depths, they
                  ;; share the bridge chain instead of duplicating it.
-                 [bridge-cache #:auto #:mutable])
+                 ;;
+                 ;; Sprint G note: bridge-cache is unused by the current
+                 ;; lower-tail-rec design (which emits iter-block-decls
+                 ;; instead of feedback bridges). Kept for any future
+                 ;; lowering pass that needs depth alignment within S0.
+                 [bridge-cache #:auto #:mutable]
+                 ;; Sprint G: pending iter-block declarations. lower-tail-rec
+                 ;; appends an iter-block-decl here; ast-to-low-pnet emits
+                 ;; them in the final low-pnet structure.
+                 [iter-blocks #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -93,6 +102,7 @@
   (set-builder-next-pid! b 0)
   (set-builder-depths! b (hasheq))
   (set-builder-bridge-cache! b (hasheq))
+  (set-builder-iter-blocks! b '())
   b)
 
 (define (cell-depth b cid)
