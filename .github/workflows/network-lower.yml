@@ -343,3 +343,88 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: pnet-compile unary int ops (n8-unary)
+        # Phase A (lowering-yolo, 2026-05-02). int-neg / int-abs /
+        # int-mod lowered through the kernel-{int_neg,int_abs,int_mod}
+        # fire-fns. Closes the OTHER_LOWERING bucket on the lowering
+        # inventory.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n8-unary/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n8-unary-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile tagged unions (n9-sums)
+        # Gate 1 (lowering-yolo, 2026-05-02). Defunctionalized tagged-
+        # union ctor lowering: ctor-vt as flat tag-cell + slot-cells,
+        # per-cell select cascade for N-arm match. Maybe / Either /
+        # Choice work natively. Recursive ctors (cons / nested some)
+        # close via Gate 1 rev 1.5 static-eval folding.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n9-sums/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n9-sums-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile string foreign-fold (n10-strings)
+        # Gate 3 (lowering-yolo, 2026-05-02). Compile-time foreign-fn
+        # folding: literal-args foreign call → applied at compile time
+        # → result lowers as scalar literal. No runtime string heap.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n10-strings/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n10-strings-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile functional Bool ops (n11-naf)
+        # Gate 4 functional sub-gate (lowering-yolo, 2026-05-02).
+        # Standard library Bool ops (not / and / or / xor / implies)
+        # lowered through existing match paths. Relational NAF is a
+        # separate multi-week track (rev 2).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n11-naf/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n11-naf-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile non-tail recursion (n12-rec)
+        # Gate 2 (lowering-yolo, 2026-05-02). Compile-time static
+        # evaluation: concrete-arg recursive calls fold to literals at
+        # compile time. fact / fib / sum-to / pow-2 etc. all return
+        # the right exit code.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n12-rec/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n12-rec-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
