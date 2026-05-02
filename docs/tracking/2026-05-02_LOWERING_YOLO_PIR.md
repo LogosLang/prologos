@@ -459,7 +459,9 @@ combination of:
 It does NOT yet support:
 
   - User-supplied (runtime) string arguments.
-  - Recursive ADT ctors (`List`, `Tree`, …) until rev 2.
+  - Recursive ADT ctors (`List`, `Tree`, …) built at runtime — Gate 1
+    rev 1.5 closed the static-fold path, runtime construction defers
+    to rev 2.
   - Symbolic-argument non-tail recursion until rev 2 (PReduce).
   - Relational `def-rel` / NAF in native binaries until Phase R.
 
@@ -468,3 +470,47 @@ just needs to stay within the supported subset. The lowering pipeline
 is not "complete" — but it is now **self-explaining** about what's
 unsupported (each error message names the deferred gate), and the
 inventory tool quantifies the gap precisely.
+
+---
+
+## 12. Session-complete marker (2026-05-02)
+
+This PIR is now closed for the lowering-yolo session. The bounded
+follow-ups identified during the session have been completed:
+
+  - Gate 1 rev 1.5 (static-eval ctor extension): shipped.
+  - Inventory honesty fix (categorize by elab-message, not source
+    content): shipped.
+  - CI gates for n8-n12 native binary execution: shipped.
+  - PIR addendum + final inventory snapshot: shipped.
+
+All four "rev 2" follow-ups (Gate 1/2/3/4 rev 2) are multi-week
+tracks, each requiring kernel-level work or research-stage design
+(PReduce). None has a current corpus consumer that requires it
+immediately:
+
+  - Gate 1 rev 2: 0 corpus programs blocked (rev 1.5 closed the
+    static-fold path; runtime ctor construction has no current
+    demand).
+  - Gate 2 rev 2: 0 corpus programs blocked (Gate 2 rev 1.0 +
+    Gate 1 rev 1.5 fold all current recursive demand).
+  - Gate 3 rev 2: 0 corpus programs blocked (literal-arg foreign
+    folding covers all current demand).
+  - Gate 4 rev 2: 1 corpus program nominally affected
+    (`2026-03-14-wfle-acceptance.prologos`), but it fails at
+    elaboration before lowering would matter.
+
+The 4 ELAB_FAIL inventory entries are elaborator-side bugs (mixfix
+parser conflict, missing modules, surface-syntax `if` arity). Each
+is an independent fix in the elaborator subsystem, outside the
+lowering track.
+
+Pick-up criteria for the next track:
+
+  - Choose a rev 2 only when a downstream consumer surfaces (e.g.,
+    a real program that needs runtime list construction → start
+    Gate 1 rev 2).
+  - Or pick up the elaborator bugs as a separate "elab-cleanup"
+    track (4 bounded fixes, ~1 day total).
+  - Or start the relational subsystem migration (kernel-PU PIR
+    follow-up #4) if relational programs become a priority.
