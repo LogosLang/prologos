@@ -1,3 +1,5 @@
+ns examples::n9-sums::maybe-none
+
 data Maybe {A}
   none
   some : A

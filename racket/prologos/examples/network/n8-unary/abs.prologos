@@ -1,3 +1,5 @@
+ns examples::n8-unary::abs
+
 def main : Int := [int-abs [int-neg 99]]
 
 ;; abs(-99) = 99

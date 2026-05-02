@@ -1,0 +1,8 @@
+ns examples::n10-strings::eq-yes
+
+require [prologos::data::string :as str]
+
+def main : Bool := str::eq "abc" "abc"
+
+;; equal strings → true → exit 1.
+;; :expect-exit 1

@@ -1,0 +1,8 @@
+ns examples::n10-strings::length-hello
+
+require [prologos::data::string :refer [length]]
+
+def main : Int := length "hello"
+
+;; "hello" has 5 characters → length returns 5.
+;; :expect-exit 5

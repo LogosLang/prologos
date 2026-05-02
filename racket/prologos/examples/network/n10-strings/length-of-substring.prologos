@@ -1,0 +1,8 @@
+ns examples::n10-strings::length-of-substring
+
+require [prologos::data::string :refer [length slice]]
+
+def main : Int := length (slice "hello" 1 4)
+
+;; "hello"[1..4] = "ell" → length 3.
+;; :expect-exit 3

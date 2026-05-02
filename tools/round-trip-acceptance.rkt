@@ -75,7 +75,9 @@
          (lambda (e)
            (define msg (exn-message e))
            (cond [(regexp-match? #px"materialize|unsupported|ast-translation|ast-to-low-pnet cannot translate" msg)
-                  (set! unsupported (+ 1 unsupported))]
+                  (set! unsupported (+ 1 unsupported))
+                  (set! fail-detail
+                        (cons (list 'unsup (path->string path) msg) fail-detail))]
                  [else (set! errors (+ 1 errors))
                   (set! fail-detail
                         (cons (list 'error (path->string path) msg) fail-detail))]))])
@@ -97,6 +99,9 @@
              (cadr d) (caddr d) (binary-exit-code (caddr d)) (cadddr d))]
     [(error)
      (printf "  ERROR ~a: ~a\n" (cadr d)
+             (substring (caddr d) 0 (min 120 (string-length (caddr d)))))]
+    [(unsup)
+     (printf "  unsup ~a: ~a\n" (cadr d)
              (substring (caddr d) 0 (min 120 (string-length (caddr d)))))]))
 
 (printf "=== passes=~a fails=~a errors=~a unsupported=~a skipped=~a / ~a total ===\n"

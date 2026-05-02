@@ -1019,6 +1019,9 @@ arity mismatch in lowering")]))]))]
          ;; (0) Ctor application — Gate 1 rev 1.0
          [(and head-name (is-ctor-name? head-name))
           (build-ctor-application b expr head-name args env)]
+         ;; (0.5) Foreign-call constant fold — Gate 3 rev 1.0
+         [(let ([folded (try-fold-foreign-call b expr env)]) folded)
+          => values]
          [else
           (let ([result (try-lower-tail-rec-call expr b dom-id env)])
             (cond
@@ -1084,29 +1087,237 @@ are not yet supported.")]))
 ;; require nested vtree slot-types and are deferred to rev 1.1+ /
 ;; rev 2 (heap).
 
-(define (is-ctor-name? sym) (and sym (lookup-ctor sym) #t))
+;; lookup-ctor handles bare ctor names (e.g. 'some). When the
+;; elaborator qualifies them (e.g. 'examples::n9-sums::maybe-some::some)
+;; we strip the namespace prefix and retry. The name format uses '::'
+;; separators per `qualify-name` in macros.rkt.
+(define (lookup-ctor* name)
+  (cond
+    [(lookup-ctor name)]
+    [else
+     (define s (symbol->string name))
+     (define m (regexp-match #px"::([^:]+)$" s))
+     (cond
+       [m (lookup-ctor (string->symbol (cadr m)))]
+       [else #f])]))
+
+(define (lookup-type-ctors* name)
+  (cond
+    [(lookup-type-ctors name)]
+    [else
+     (define s (symbol->string name))
+     (define m (regexp-match #px"::([^:]+)$" s))
+     (cond
+       [m (lookup-type-ctors (string->symbol (cadr m)))]
+       [else #f])]))
+
+(define (is-ctor-name? sym) (and sym (lookup-ctor* sym) #t))
+
+;; ============================================================
+;; Gate 3 (rev 1.0) — foreign-call constant folding
+;; ============================================================
+;;
+;; Prologos's string ops are foreign Racket procedures (see
+;; lib/prologos/data/string.prologos). At native runtime there is no
+;; Racket VM, so we cannot lower foreign calls to native code. We CAN
+;; constant-fold a foreign call when all its value args are literals,
+;; emitting just the result as a literal cell.
+;;
+;; This makes simple compile-time string programs lower (e.g.
+;; `length "hello"` → 5), but does NOT add any runtime string support.
+;; See docs/tracking/2026-05-02_GATE3_STRINGS_DESIGN.md § 8 for rev 2.
+
+;; lookup-foreign-fn : symbol → expr-foreign-fn-or-#f
+(define (lookup-foreign-fn name)
+  (define v
+    (with-handlers ([exn:fail? (lambda _ #f)])
+      (global-env-lookup-value name)))
+  (and (expr-foreign-fn? v) v))
+
+;; expr-to-literal-value : expr → (or scalar #f)
+;; If `e` is a literal, return its Racket value; else #f.
+;; Strings are returned as Racket strings; chars as Racket chars.
+(define (expr-to-literal-value e)
+  (match e
+    [(expr-int n) n]
+    [(expr-true) #t]
+    [(expr-false) #f]
+    [(expr-string s) s]
+    [(expr-char c) c]
+    [_ #f]))
+
+;; literal-value-to-vtree : builder × any × expr → vtree
+;; Embed a Racket value as a fresh i64/Bool cell. Strings cannot be
+;; embedded in rev 1.0 (no runtime string representation).
+(define (literal-value-to-vtree b val err-expr)
+  (cond
+    [(exact-integer? val) (emit-cell! b INT-DOMAIN-ID val)]
+    [(boolean? val) (emit-cell! b BOOL-DOMAIN-ID val)]
+    [(char? val) (emit-cell! b INT-DOMAIN-ID (char->integer val))]
+    [(string? val)
+     (translate-error!
+      err-expr
+      (format "constant-folded foreign call returned a string ~v; \
+strings have no runtime representation in rev 1.0. Wrap with a foreign \
+op that reduces to Int/Bool (e.g. length, eq) instead."
+              val))]
+    [else
+     (translate-error!
+      err-expr
+      (format "constant-folded foreign call returned ~v of unsupported type \
+(only Int/Bool/Char results lower in rev 1.0)" val))]))
+
+;; expr-is-literal? : expr → bool
+(define (expr-is-literal? e)
+  (or (expr-int? e) (expr-true? e) (expr-false? e)
+      (expr-string? e) (expr-char? e)))
+
+;; value-to-literal-expr : Racket value → expr-or-#f
+;; Re-wrap a Racket value into a Prologos literal expr (so the
+;; marshal-in functions, which expect literal exprs, can run
+;; recursively on constant-folded subresults).
+(define (value-to-literal-expr v)
+  (cond
+    [(exact-integer? v) (expr-int v)]
+    [(eq? v #t) (expr-true)]
+    [(eq? v #f) (expr-false)]
+    [(string? v) (expr-string v)]
+    [(char? v) (expr-char v)]
+    [else #f]))
+
+;; try-fold-foreign-call : expr × env → vtree-or-#f
+;; If the head fvar of `expr` is an `expr-foreign-fn` and ALL value
+;; args are (after recursive folding) literal exprs, evaluate the
+;; foreign procedure at compile time and return its result as a vtree.
+;; Else return #f and the caller falls through.
+;;
+;; Recursively folds nested foreign calls: `(length (append "ab" "cd"))`
+;; first folds the inner `append` call to `(expr-string "abcd")`, then
+;; folds the outer `length` call to `4`.
+(define (try-fold-foreign-call b expr env)
+  (let-values ([(head-name args) (peel-fvar-app-chain expr)])
+    (define ff (and head-name (lookup-foreign-fn head-name)))
+    (cond
+      [(not ff) #f]
+      [else
+       (define-values (_t-args v-args) (split-type-and-value-args args))
+       (cond
+         [(not (= (length v-args) (expr-foreign-fn-arity ff))) #f]
+         [else
+          ;; Recursively try to fold each arg to a literal expr.
+          (define lit-arg-exprs
+            (for/list ([va (in-list v-args)])
+              (cond
+                [(expr-is-literal? va) va]
+                [else (try-recursive-fold va env)])))
+          (cond
+            [(memq #f lit-arg-exprs) #f]                  ; some arg not foldable → bail
+            [else
+             (define marshalled
+               (for/list ([m (in-list (expr-foreign-fn-marshal-in ff))]
+                          [v (in-list lit-arg-exprs)])
+                 (m v)))
+             (define proc (expr-foreign-fn-proc ff))
+             (define raw-result
+               (with-handlers
+                 ([exn:fail?
+                   (lambda (e)
+                     (translate-error!
+                      expr
+                      (format "constant-folding foreign call '~a' raised: ~a"
+                              head-name (exn-message e))))])
+                 (apply proc marshalled)))
+             ;; The marshal-out expects the raw Racket result and returns a
+             ;; Prologos expr (e.g. expr-int for an i64 result).
+             (define unmarshal (expr-foreign-fn-marshal-out ff))
+             (define unmarshalled (unmarshal raw-result))
+             (cond
+               [(and unmarshalled
+                     (or (exact-integer? (expr-to-literal-value unmarshalled))
+                         (boolean? (expr-to-literal-value unmarshalled))
+                         (char? (expr-to-literal-value unmarshalled))))
+                (literal-value-to-vtree
+                 b (expr-to-literal-value unmarshalled) expr)]
+               [(expr-string? unmarshalled)
+                ;; Result is a string — no scalar lowering, but the value
+                ;; may be useful as a sub-fold for an enclosing foreign call.
+                ;; In that case the enclosing call's try-recursive-fold
+                ;; consumes the string-literal expr; here as a top-level
+                ;; result we error.
+                (translate-error!
+                 expr
+                 (format "foreign call '~a' constant-folded to a string \
+~v; strings have no runtime cell representation in rev 1.0. Wrap with \
+length / eq / etc. to produce an Int / Bool result."
+                         head-name (expr-string-val unmarshalled)))]
+               [else #f])])])])))
+
+;; try-recursive-fold : expr × env → expr-or-#f
+;; Fold a nested expr to a literal expr (string / int / bool / char) if
+;; possible. Used by try-fold-foreign-call to handle nested foreign
+;; calls like (length (append "ab" "cd")) — the inner `append` is folded
+;; to expr-string "abcd", then the outer length is foldable.
+(define (try-recursive-fold expr env)
+  (let-values ([(head-name args) (peel-fvar-app-chain expr)])
+    (define ff (and head-name (lookup-foreign-fn head-name)))
+    (cond
+      [(not ff) #f]
+      [else
+       (define-values (_t-args v-args) (split-type-and-value-args args))
+       (cond
+         [(not (= (length v-args) (expr-foreign-fn-arity ff))) #f]
+         [else
+          (define lit-arg-exprs
+            (for/list ([va (in-list v-args)])
+              (cond
+                [(expr-is-literal? va) va]
+                [else (try-recursive-fold va env)])))
+          (cond
+            [(memq #f lit-arg-exprs) #f]
+            [else
+             (define marshalled
+               (for/list ([m (in-list (expr-foreign-fn-marshal-in ff))]
+                          [v (in-list lit-arg-exprs)])
+                 (m v)))
+             (define proc (expr-foreign-fn-proc ff))
+             (define raw-result
+               (with-handlers ([exn:fail? (lambda _ #f)])
+                 (apply proc marshalled)))
+             (cond
+               [(not raw-result) #f]
+               [else
+                (define unmarshal (expr-foreign-fn-marshal-out ff))
+                (define unmarshalled (unmarshal raw-result))
+                (cond
+                  [(and unmarshalled (expr-is-literal? unmarshalled))
+                   unmarshalled]
+                  [(value-to-literal-expr raw-result)
+                   ;; Fallback: marshal-out couldn't unmarshal but the
+                   ;; raw result IS a Racket primitive we can wrap.
+                   => values]
+                  [else #f])])])])])))
 
 ;; type-flat-slot-count : symbol → nat
 ;; Sum the field arities of all ctors of the named ADT type. Errors
 ;; if the type isn't registered.
 (define (type-flat-slot-count type-name)
-  (define ctors (lookup-type-ctors type-name))
+  (define ctors (lookup-type-ctors* type-name))
   (unless ctors
     (error 'type-flat-slot-count "unknown ADT type: ~a" type-name))
   (for/sum ([c (in-list ctors)])
-    (define meta (lookup-ctor c))
+    (define meta (lookup-ctor* c))
     (length (ctor-meta-field-types meta))))
 
 ;; ctor-flat-field-offset : symbol → nat
 ;; Offset of this ctor's first field within the type's flat slot list.
 ;; (Sum of arities of ctors with smaller branch indices.)
 (define (ctor-flat-field-offset ctor-name)
-  (define meta (lookup-ctor ctor-name))
+  (define meta (lookup-ctor* ctor-name))
   (define type-name (ctor-meta-type-name meta))
   (define this-branch (ctor-meta-branch-index meta))
-  (define ctors (lookup-type-ctors type-name))
+  (define ctors (lookup-type-ctors* type-name))
   (for/sum ([c (in-list ctors)] [i (in-naturals)] #:when (< i this-branch))
-    (length (ctor-meta-field-types (lookup-ctor c)))))
+    (length (ctor-meta-field-types (lookup-ctor* c)))))
 
 ;; type-arg? : expr → bool
 ;; Heuristic for distinguishing erased type args from value args in
@@ -1119,8 +1330,8 @@ are not yet supported.")]))
     [(expr-Nat) #t]
     [(expr-Type _) #t]
     [(expr-Pi _ _ _) #t]
-    [(expr-app (expr-fvar T) _) (and (lookup-type-ctors T) #t)]
-    [(expr-fvar T) (and (lookup-type-ctors T) #t)]
+    [(expr-app (expr-fvar T) _) (and (lookup-type-ctors* T) #t)]
+    [(expr-fvar T) (and (lookup-type-ctors* T) #t)]
     [_ #f]))
 
 ;; peel-fvar-app-chain : expr → (values fvar-name|#f arg-list)
@@ -1143,7 +1354,7 @@ are not yet supported.")]))
 ;; build-ctor-application : builder × expr × symbol × (Listof expr) × env → ctor-vt
 ;; Lower (C type-args… value-args…) to a ctor-vt.
 (define (build-ctor-application b expr ctor-name args env)
-  (define meta (lookup-ctor ctor-name))
+  (define meta (lookup-ctor* ctor-name))
   (unless meta
     (translate-error! expr
                       (format "internal: '~a' not in ctor registry" ctor-name)))
@@ -1207,13 +1418,13 @@ nested ADT fields are rev 1.1+)" ctor-name i))))
   ;; Look up type info from any arm's ctor. All arms must be ctors of
   ;; the same type.
   (define first-ctor (expr-reduce-arm-ctor-name (car arms)))
-  (define first-meta (lookup-ctor first-ctor))
+  (define first-meta (lookup-ctor* first-ctor))
   (unless first-meta
     (translate-error! err-expr
                       (format "match arm ctor '~a' is not a registered ctor; \
 this match shape is not (yet) lowered." first-ctor)))
   (define type-name (ctor-meta-type-name first-meta))
-  (define type-ctors (lookup-type-ctors type-name))
+  (define type-ctors (lookup-type-ctors* type-name))
   (unless type-ctors
     (translate-error! err-expr
                       (format "ctor '~a' references unknown type ~a"
@@ -1221,7 +1432,7 @@ this match shape is not (yet) lowered." first-ctor)))
   ;; Verify all arms are ctors of this type and arities match.
   (for ([arm (in-list arms)])
     (define c (expr-reduce-arm-ctor-name arm))
-    (define m (lookup-ctor c))
+    (define m (lookup-ctor* c))
     (unless m
       (translate-error! err-expr
                         (format "match arm ctor '~a' is not a registered ctor"
@@ -1255,7 +1466,7 @@ but lowered to a non-ctor vtree (~v)." type-name scrut-vt)))
   (define arm-results
     (for/list ([arm (in-list arms)])
       (define c (expr-reduce-arm-ctor-name arm))
-      (define m (lookup-ctor c))
+      (define m (lookup-ctor* c))
       (define b-idx (ctor-meta-branch-index m))
       (define offset (ctor-flat-field-offset c))
       (define n-fields (length (ctor-meta-field-types m)))

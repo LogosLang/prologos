@@ -1,3 +1,5 @@
+ns examples::n9-sums::either-left
+
 data Either {A B}
   left  : A
   right : B

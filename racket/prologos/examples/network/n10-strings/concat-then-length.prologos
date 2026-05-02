@@ -1,0 +1,8 @@
+ns examples::n10-strings::concat-then-length
+
+require [prologos::data::string :refer [length append]]
+
+def main : Int := length (append "ab" "cd")
+
+;; "abcd" has 4 chars.
+;; :expect-exit 4

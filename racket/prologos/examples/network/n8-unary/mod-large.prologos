@@ -1,3 +1,5 @@
+ns examples::n8-unary::mod-large
+
 def main : Int := [int-mod 5040 256]
 
 ;; fact(7) mod 256 = 5040 mod 256 = 176

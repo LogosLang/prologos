@@ -1,0 +1,8 @@
+ns examples::n10-strings::length-empty
+
+require [prologos::data::string :refer [length]]
+
+def main : Int := length ""
+
+;; Empty string → 0.
+;; :expect-exit 0

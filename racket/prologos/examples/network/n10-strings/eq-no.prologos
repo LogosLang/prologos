@@ -1,0 +1,8 @@
+ns examples::n10-strings::eq-no
+
+require [prologos::data::string :as str]
+
+def main : Bool := str::eq "abc" "abd"
+
+;; unequal strings → false → exit 0.
+;; :expect-exit 0
