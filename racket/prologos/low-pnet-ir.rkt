@@ -47,8 +47,15 @@
 ;;
 ;; Mirrors the .pnet format-2 wrapper (commit 65312be): a (major minor) pair.
 ;; Major bump = breaking; minor bump = additive. Phase 2.A starts at 1.0.
+;;
+;; Version history:
+;;   1.0 — initial Phase 2.A IR (8 node kinds, no mode tag on write-decl)
+;;   1.1 — kernel-pocket-universes Phase 3 Day 8: write-decl gains optional
+;;         mode tag (`'merge` default, `'reset` for non-merging replacement
+;;         writes that map to prologos_cell_reset). Back-compat: 3-arg
+;;         (write-decl cid value tag) parses as (write-decl cid value tag 'merge).
 
-(define LOW_PNET_FORMAT_VERSION '(1 0))
+(define LOW_PNET_FORMAT_VERSION '(1 1))
 
 ;; ============================================================
 ;; Node kinds (per design doc § 3)
@@ -77,11 +84,23 @@
 ;;   contradiction-pred-tag : symbol (use 'never if not applicable)
 (struct domain-decl (id name merge-fn-tag bot contradiction-pred-tag) #:transparent)
 
-;; write-decl : (write-decl cell-id value tag)
+;; write-decl : (write-decl cell-id value tag mode)
 ;;   cell-id : exact-nonnegative-integer (references a cell-decl)
 ;;   value   : Any
 ;;   tag     : exact-nonnegative-integer (worldview bitmask; 0 = default)
-(struct write-decl (cell-id value tag) #:transparent)
+;;   mode    : 'merge | 'reset
+;;             - 'merge (default): apply the cell's domain merge function and
+;;               schedule subscribers if the value changes. Maps to
+;;               prologos_cell_write at LLVM lowering.
+;;             - 'reset: privileged non-merging replacement; bypasses merge,
+;;               does NOT enqueue subscribers (caller is responsible for
+;;               re-enqueuing). Maps to prologos_cell_reset at LLVM lowering.
+;;               Used for substrate iteration (state-cell advance), NAF, and
+;;               other non-monotone operations. Rev 2.1 of
+;;               docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md § 5.5.
+;;
+;; Back-compat: V1.0 IR (3-arg sexp form) parses as mode='merge.
+(struct write-decl (cell-id value tag mode) #:transparent)
 
 ;; dep-decl : (dep-decl prop-id cell-id paths)
 ;;   prop-id : exact-nonnegative-integer (references a propagator-decl)
@@ -226,9 +245,18 @@
      (domain-decl id name merge-tag bot contra-tag)]
 
     [(list 'write-decl cid value tag)
+     ;; V1.0 back-compat shape: 3-arg form defaults mode to 'merge.
      (unless (exact-nonnegative-integer? cid) (parse-error! form "write-decl cell-id must be non-negative integer"))
      (unless (exact-nonnegative-integer? tag) (parse-error! form "write-decl tag must be non-negative integer"))
-     (write-decl cid value tag)]
+     (write-decl cid value tag 'merge)]
+
+    [(list 'write-decl cid value tag mode)
+     ;; V1.1 shape: explicit mode tag.
+     (unless (exact-nonnegative-integer? cid) (parse-error! form "write-decl cell-id must be non-negative integer"))
+     (unless (exact-nonnegative-integer? tag) (parse-error! form "write-decl tag must be non-negative integer"))
+     (unless (or (eq? mode 'merge) (eq? mode 'reset))
+       (parse-error! form "write-decl mode must be 'merge or 'reset"))
+     (write-decl cid value tag mode)]
 
     [(list 'dep-decl pid cid paths)
      (unless (exact-nonnegative-integer? pid) (parse-error! form "dep-decl prop-id must be non-negative integer"))
@@ -284,7 +312,13 @@
     [(cell-decl id dom init)             (list 'cell-decl id dom init)]
     [(propagator-decl id ins outs tag fl) (list 'propagator-decl id ins outs tag fl)]
     [(domain-decl id name mtag bot ctag) (list 'domain-decl id name mtag bot ctag)]
-    [(write-decl cid value tag)          (list 'write-decl cid value tag)]
+    [(write-decl cid value tag mode)
+     ;; Round-trip: emit the V1.0 3-arg shape when mode is the default
+     ;; ('merge); emit the V1.1 4-arg shape only when mode is non-default
+     ;; ('reset). Keeps existing IR fixtures (n0, one-prop, etc.) byte-stable.
+     (if (eq? mode 'merge)
+         (list 'write-decl cid value tag)
+         (list 'write-decl cid value tag mode))]
     [(iter-block-decl scs ncs cc hw)     (list 'iter-block-decl scs ncs cc hw)]
     [(dep-decl pid cid paths)            (list 'dep-decl pid cid paths)]
     [(stratum-decl id name htag)         (list 'stratum-decl id name htag)]
@@ -309,6 +343,11 @@
 ;;       (since lowering instantiates domains first). Same for: cell-decls
 ;;       precede write-decls / propagator-decls / dep-decls / entry-decls
 ;;       that reference them.
+;;  V11. iter-block-decl references existing state/next/cond cells
+;;       (Sprint G; retired by kernel-PU Phase 6).
+;;  V12. write-decl mode tag is 'merge or 'reset (kernel-PU Phase 3 Day 8).
+;;       Defensive: parse-decl already enforces this, but a separate validator
+;;       pass catches programmatically-constructed write-decls with bad modes.
 
 (define (validate-low-pnet p)
   (match p
@@ -347,10 +386,15 @@
                                     (propagator-decl-id p) cid)))))
 
      ;; V7: write-decl cell references
+     ;; V12: write-decl mode well-formedness (defensive; parser also checks)
      (for ([w (in-list (filter write-decl? nodes))])
        (unless (set-member? cell-ids (write-decl-cell-id w))
          (validate-error! (format "write-decl references unknown cell-id ~a"
-                                  (write-decl-cell-id w)))))
+                                  (write-decl-cell-id w))))
+       (define m (write-decl-mode w))
+       (unless (or (eq? m 'merge) (eq? m 'reset))
+         (validate-error! (format "write-decl on cell-id ~a has invalid mode ~v (must be 'merge or 'reset)"
+                                  (write-decl-cell-id w) m))))
 
      ;; V8: dep-decl references
      (for ([d (in-list (filter dep-decl? nodes))])
@@ -414,7 +458,7 @@
          (unless (hash-ref seen-cells c #f)
            (validate-error! (format "propagator-decl ~a references cell-id ~a declared later" id c))))
        (hash-set! seen-props id #t)]
-      [(write-decl cid _ _)
+      [(write-decl cid _ _ _)
        (unless (hash-ref seen-cells cid #f)
          (validate-error! (format "write-decl references cell-id ~a declared later" cid)))]
       [(dep-decl pid cid _)

@@ -164,9 +164,18 @@
     (for/list ([w (in-list write-decls)])
       (define cid (write-decl-cell-id w))
       (define v (write-decl-value w))
+      (define mode (write-decl-mode w))
       (unless (or (exact-integer? v) (eq? v #t) (eq? v #f))
         (unsupported! w
                       (format "write-decl value ~v is not i64-marshalable" v)))
+      ;; kernel-PU Phase 3 Day 8: V1.1 IR allows write-decl with mode='reset.
+      ;; Emission of prologos_cell_reset lands at Phase 5 Day 11 — until then,
+      ;; explicitly reject 'reset writes here so V1.1 IR using the new mode
+      ;; can't silently get lowered as a merging cell_write.
+      (unless (eq? mode 'merge)
+        (unsupported! w
+                      (format "write-decl mode ~v not yet supported by LLVM lowering (Phase 5 Day 11 wires up prologos_cell_reset)"
+                              mode)))
       (define vi64 (cond [(exact-integer? v) v]
                          [(eq? v #t) 1]
                          [(eq? v #f) 0]))

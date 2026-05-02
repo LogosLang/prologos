@@ -178,8 +178,102 @@
 ;; Misc
 ;; ============================================================
 
-(test-case "LOW_PNET_FORMAT_VERSION is (1 0)"
-  (check-equal? LOW_PNET_FORMAT_VERSION '(1 0)))
+(test-case "LOW_PNET_FORMAT_VERSION is (1 1) — kernel-PU Day 8 added write-decl mode tag"
+  (check-equal? LOW_PNET_FORMAT_VERSION '(1 1)))
+
+;; ============================================================
+;; write-decl :mode tag (kernel-pocket-universes Phase 3 Day 8, V1.1)
+;; ============================================================
+
+(test-case "parse-low-pnet: 3-arg write-decl defaults mode to 'merge (V1.0 back-compat)"
+  (define p (parse-low-pnet '(low-pnet
+                              (domain-decl 0 int f 0 never)
+                              (cell-decl 0 0 0)
+                              (write-decl 0 42 0)
+                              (entry-decl 0))))
+  (define w (caddr (low-pnet-nodes p)))
+  (check-true (write-decl? w))
+  (check-equal? (write-decl-mode w) 'merge))
+
+(test-case "parse-low-pnet: 4-arg write-decl with explicit 'merge mode"
+  (define p (parse-low-pnet '(low-pnet
+                              (domain-decl 0 int f 0 never)
+                              (cell-decl 0 0 0)
+                              (write-decl 0 42 0 merge)
+                              (entry-decl 0))))
+  (define w (caddr (low-pnet-nodes p)))
+  (check-equal? (write-decl-mode w) 'merge))
+
+(test-case "parse-low-pnet: 4-arg write-decl with 'reset mode"
+  (define p (parse-low-pnet '(low-pnet
+                              (domain-decl 0 int f 0 never)
+                              (cell-decl 0 0 0)
+                              (write-decl 0 42 0 reset)
+                              (entry-decl 0))))
+  (define w (caddr (low-pnet-nodes p)))
+  (check-equal? (write-decl-mode w) 'reset))
+
+(test-case "parse-low-pnet: rejects unknown write-decl mode"
+  (check-exn low-pnet-parse-error?
+    (lambda () (parse-low-pnet '(low-pnet (write-decl 0 42 0 not-a-mode))))))
+
+(test-case "parse-low-pnet: rejects too-many-arg write-decl"
+  (check-exn low-pnet-parse-error?
+    (lambda () (parse-low-pnet '(low-pnet (write-decl 0 42 0 merge bogus))))))
+
+(test-case "pp-low-pnet: 'merge mode round-trips as the 3-arg V1.0 shape"
+  ;; Programs that never use 'reset should emit byte-identical IR to V1.0.
+  (define p (parse-low-pnet n0-sexp))
+  (define out (pp-low-pnet p))
+  ;; Look up the write-decl in the output.
+  (define wforms (filter (lambda (x) (and (pair? x) (eq? (car x) 'write-decl)))
+                         (cdddr out)))  ; skip 'low-pnet :version (1 1)
+  (check-equal? (length wforms) 1)
+  (check-equal? (car wforms) '(write-decl 0 42 0)))  ; 3-arg, no mode
+
+(test-case "pp-low-pnet: 'reset mode round-trips as the 4-arg V1.1 shape"
+  (define p (parse-low-pnet '(low-pnet
+                              (domain-decl 0 int f 0 never)
+                              (cell-decl 0 0 0)
+                              (write-decl 0 7 0 reset)
+                              (entry-decl 0))))
+  (define out (pp-low-pnet p))
+  (define wforms (filter (lambda (x) (and (pair? x) (eq? (car x) 'write-decl)))
+                         (cdddr out)))
+  (check-equal? (car wforms) '(write-decl 0 7 0 reset)))
+
+(test-case "round-trip: parse ∘ pp ∘ parse on a program with a 'reset write"
+  (define src '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int f 0 never)
+                (cell-decl 0 0 0)
+                (write-decl 0 11 0 reset)
+                (write-decl 0 22 0)
+                (entry-decl 0)))
+  (define p1 (parse-low-pnet src))
+  (define s1 (pp-low-pnet p1))
+  (define p2 (parse-low-pnet s1))
+  (check-equal? p1 p2))
+
+(test-case "validate-low-pnet: accepts both 'merge and 'reset write-decls"
+  (define p (parse-low-pnet '(low-pnet
+                              (domain-decl 0 int f 0 never)
+                              (cell-decl 0 0 0)
+                              (write-decl 0 1 0)
+                              (write-decl 0 2 0 merge)
+                              (write-decl 0 3 0 reset)
+                              (entry-decl 0))))
+  (check-true (validate-low-pnet p)))
+
+(test-case "validate-low-pnet: V12 rejects programmatically-built write-decl with bad mode"
+  ;; Build the struct directly so the parser's mode-check is bypassed.
+  (define p (low-pnet '(1 1)
+                      (list (domain-decl 0 'int 'f 0 'never)
+                            (cell-decl 0 0 0)
+                            (write-decl 0 42 0 'bogus-mode)
+                            (entry-decl 0))))
+  (check-exn low-pnet-validate-error?
+    (lambda () (validate-low-pnet p))))
 
 (test-case "structures are introspectable"
   (define p (parse-low-pnet n0-sexp))
