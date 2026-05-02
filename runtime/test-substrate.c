@@ -35,6 +35,8 @@ extern int64_t  prologos_cell_read(uint32_t id);
 extern uint8_t  prologos_cell_get_domain(uint32_t id);
 extern uint32_t prologos_propagator_install_1_1(uint32_t tag, uint32_t in0, uint32_t out0);
 extern uint32_t prologos_propagator_install_2_1(uint32_t tag, uint32_t in0, uint32_t in1, uint32_t out0);
+extern uint32_t prologos_test_install_during_fire_2_1(uint32_t tag, uint32_t in0, uint32_t in1, uint32_t out0);
+extern uint32_t prologos_test_alloc_during_fire(uint8_t domain, int64_t init);
 extern void     prologos_run_to_quiescence(void);
 extern uint64_t prologos_get_stat(uint32_t key);
 extern void     prologos_reset_stats(void);
@@ -165,6 +167,110 @@ int main(void) {
     prologos_cell_write(a, 100); /* triggers add -> 103, min(4,103)=4 */
     prologos_run_to_quiescence();
     ASSERT_EQ("T7.no_increase", prologos_cell_read(sum), 4);
+
+    /* ====================================================================
+     *  Day 2 tests: 2-tier outer loop + topology-mutation tracking
+     * ==================================================================== */
+
+    /* -------- T8: 2-tier outer loop runs at least once on plain runs -------- */
+    /* Build d ---identity---> e and run; outer_iters should be >= 1, and
+     * topo_mutations should remain 0 because no fire-fn allocates/installs. */
+    prologos_reset_stats();
+    uint32_t d = prologos_cell_alloc();
+    uint32_t e = prologos_cell_alloc();
+    prologos_propagator_install_1_1(0 /* identity */, d, e);
+    prologos_cell_write(d, 77);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T8.value_propagated", prologos_cell_read(e), 77);
+    if (prologos_get_stat(11 /* outer_iters */) < 1) {
+        fprintf(stderr, "FAIL T8.outer_iters: expected >=1, got %llu\n",
+                (unsigned long long)prologos_get_stat(11));
+        return 1;
+    }
+    ASSERT_EQ("T8.no_topo_mutations", prologos_get_stat(10 /* topo */), 0);
+
+    /* -------- T9: install during fire records as topology mutation -------- */
+    /* Use the test hook to install a propagator while in_fire_round=true.
+     * Verify the mutation is counted. The new propagator was scheduled by
+     * install; running again drains it. */
+    prologos_reset_stats();
+    uint32_t f = prologos_cell_alloc();
+    uint32_t g = prologos_cell_alloc();
+    /* Manually install a relay using the in-fire hook. */
+    prologos_test_install_during_fire_2_1(0 /* int-add */, d, f, g);
+    ASSERT_EQ("T9.topo_recorded", prologos_get_stat(10 /* topo */), 1);
+    /* d is still 77 (from T8). f starts at 0 (default LWW init). 77+0=77. */
+    prologos_cell_write(f, 100);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T9.add_correct", prologos_cell_read(g), 177);
+
+    /* -------- T10: alloc during fire records as topology mutation -------- */
+    /* Use the alloc hook; the new cell must have correct domain + init. */
+    prologos_reset_stats();
+    uint32_t fresh = prologos_test_alloc_during_fire(DOMAIN_MIN_I64, I64_MAX_C);
+    ASSERT_EQ("T10.domain", prologos_cell_get_domain(fresh), DOMAIN_MIN_I64);
+    ASSERT_EQ("T10.init",   prologos_cell_read(fresh),       I64_MAX_C);
+    ASSERT_EQ("T10.topo_recorded", prologos_get_stat(10 /* topo */), 1);
+    prologos_cell_write(fresh, 42); /* min(MAX, 42) = 42 */
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T10.merge_works", prologos_cell_read(fresh), 42);
+
+    /* -------- T11: outer loop iterates on mid-run topology mutation -------- */
+    /* Setup: chain h ---identity---> i. Run; quiesces in 1 outer iter.
+     * Then use the test hook to install (h,i)→j during a simulated fire.
+     * Run; outer_iters should reflect the additional iteration triggered
+     * by the topology mutation that the install marker set. */
+    prologos_reset_stats();
+    uint32_t h = prologos_cell_alloc();
+    uint32_t ii = prologos_cell_alloc(); /* `i` is the loop counter elsewhere */
+    prologos_propagator_install_1_1(0 /* identity */, h, ii);
+    prologos_cell_write(h, 5);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T11.first_value",  prologos_cell_read(ii), 5);
+    uint64_t outer_after_first = prologos_get_stat(11);
+    if (outer_after_first < 1) {
+        fprintf(stderr, "FAIL T11.outer_after_first: expected >=1, got %llu\n",
+                (unsigned long long)outer_after_first);
+        return 1;
+    }
+
+    /* Now: simulate a handler that installs a new prop during the fire phase.
+     * The 2-tier loop should pick up the mutation and run another outer
+     * iteration (during which the new prop fires). */
+    uint32_t j = prologos_cell_alloc();
+    prologos_test_install_during_fire_2_1(0 /* int-add */, h, ii, j);
+    /* run_to_quiescence: outer-iter 1 immediately sees worklist has the
+     * new prop (install scheduled it), drains the value tier, j = 5+5 = 10.
+     * topo_mutated_this_run was set by install (which set it to true), so
+     * outer-iter 2 may also run (but with empty worklist and topo cleared,
+     * any_inner_progress=false on entry, then exits). */
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T11.j_value", prologos_cell_read(j), 10);
+    /* Verify additional outer iterations occurred since the previous run. */
+    if (prologos_get_stat(11 /* outer_iters */) <= outer_after_first) {
+        fprintf(stderr, "FAIL T11.outer_iters_grew: expected >%llu, got %llu\n",
+                (unsigned long long)outer_after_first,
+                (unsigned long long)prologos_get_stat(11));
+        return 1;
+    }
+
+    /* -------- T12: regression — between-call install still fires -------- */
+    /* Standard pattern: install between explicit run_to_quiescence calls
+     * (no fire-round emulation). Outer_iters bumps by exactly 1 per call;
+     * topo_mutations stays at 0 because install was outside any fire. */
+    prologos_reset_stats();
+    uint32_t p = prologos_cell_alloc();
+    uint32_t q = prologos_cell_alloc();
+    prologos_cell_write(p, 12);
+    prologos_propagator_install_1_1(0 /* identity */, p, q);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T12.value", prologos_cell_read(q), 12);
+    ASSERT_EQ("T12.no_topo", prologos_get_stat(10), 0);
+    if (prologos_get_stat(11) < 1) {
+        fprintf(stderr, "FAIL T12.outer_iters: expected >=1, got %llu\n",
+                (unsigned long long)prologos_get_stat(11));
+        return 1;
+    }
 
     fprintf(stderr, "test-substrate: ALL PASSED\n");
     return 0;

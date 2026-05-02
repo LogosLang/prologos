@@ -190,6 +190,11 @@ export fn prologos_cell_alloc() u32 {
 // Domain-aware alloc. Caller picks the merge function and the initial
 // value. For DOMAIN_MIN_I64 the conventional init is I64_MAX
 // (= domain_bottom(DOMAIN_MIN_I64)) so the first write reduces.
+//
+// Safe to call mid-fire (in_fire_round=true): the new cell-id is
+// returned to the caller immediately (no propagator subscribes to it
+// yet, so there is no snapshot/race issue), and topo_mutated_this_run
+// is asserted so the 2-tier outer loop iterates again.
 export fn prologos_cell_alloc_with_domain(domain: u8, init: i64) u32 {
     if (num_cells >= MAX_CELLS) abort();
     if (domain != DOMAIN_LWW_I64 and domain != DOMAIN_MIN_I64) abort();
@@ -197,6 +202,10 @@ export fn prologos_cell_alloc_with_domain(domain: u8, init: i64) u32 {
     cells[id] = init;
     cell_domain[id] = domain;
     num_cells += 1;
+    if (in_fire_round) {
+        topo_mutated_this_run = true;
+        stat_topo_mutations += 1;
+    }
     return id;
 }
 
@@ -295,6 +304,15 @@ fn subscribe(cid: u32, pid: u32) void {
     cell_num_subs[cid] = n + 1;
 }
 
+// note_topo_mutation(): record an in-fire topology mutation so the
+// 2-tier outer loop iterates again. No-op outside a fire round.
+fn note_topo_mutation() void {
+    if (in_fire_round) {
+        topo_mutated_this_run = true;
+        stat_topo_mutations += 1;
+    }
+}
+
 export fn prologos_propagator_install_1_1(
     tag: u32,
     in0: u32,
@@ -311,6 +329,7 @@ export fn prologos_propagator_install_1_1(
     num_props += 1;
     subscribe(in0, pid);
     schedule(pid);
+    note_topo_mutation();
     return pid;
 }
 
@@ -332,6 +351,7 @@ export fn prologos_propagator_install_2_1(
     subscribe(in0, pid);
     subscribe(in1, pid);
     schedule(pid);
+    note_topo_mutation();
     return pid;
 }
 
@@ -355,17 +375,47 @@ export fn prologos_propagator_install_3_1(
     subscribe(in1, pid);
     subscribe(in2, pid);
     schedule(pid);
+    note_topo_mutation();
     return pid;
 }
 
 // =====================================================================
-// Scheduler — BSP worklist with snapshot/diff/merge
+// Scheduler — BSP worklist with snapshot/diff/merge + 2-tier outer loop
 // =====================================================================
+//
+// 2-tier outer loop (§ 5.2 + § 5.7 of 2026-05-02_KERNEL_POCKET_UNIVERSES.md):
+//
+//   outer-while (until both tiers quiescent):
+//     tier 1 — TOPOLOGY: any cell_alloc / prop_install calls deferred from
+//              the previous tier-2 fire round are applied here.
+//              Newly-installed props were already scheduled (via schedule())
+//              when their install ran; we just need to swap_worklists()
+//              so they enter the next inner-while iteration.
+//     tier 2 — VALUE: BSP value rounds until quiescent (worklist drained).
+//
+// In-fire-round flag (`in_fire_round`):
+//   - Set to true around the fire phase of an inner BSP round.
+//   - When true, prop_install / cell_alloc set `topo_mutated_this_run`
+//     so the outer loop knows to iterate again even after value
+//     quiescence. Reads (cell_read) consult the snapshot, not cells[].
+//   - Currently no fire-fn dispatched by this kernel calls alloc/install
+//     (fire-fns are pure compute). The flag is structural — Phase 5's
+//     handler propagators will rely on it.
 
 var worklist:      [MAX_PROPS]u32 = undefined;  // current round's pending pids
 var worklist_len:  u32 = 0;
 var next_worklist: [MAX_PROPS]u32 = undefined;  // built during merge phase
 var next_worklist_len: u32 = 0;
+
+// True while the kernel is executing a fire-fn body (between
+// take_snapshot() and merge_pending_writes()). Used to detect
+// mid-fire topology mutations and to discriminate immediate-mode
+// vs within-round operations.
+var in_fire_round: bool = false;
+// Set to true any time an alloc or install runs while in_fire_round is
+// true. Sampled (and cleared) by the outer loop after value quiescence
+// to decide whether to do another outer iteration.
+var topo_mutated_this_run: bool = false;
 
 // in_worklist[pid] = 1 iff pid is in worklist OR next_worklist OR has
 // already been claimed for the current round. Used for dedup.
@@ -484,43 +534,128 @@ export fn prologos_set_max_rounds(m: u64) void {
     max_rounds = m;
 }
 
+// 2-tier outer loop driver. See § 5.2 + § 5.7 of
+// 2026-05-02_KERNEL_POCKET_UNIVERSES.md.
+//
+// Each outer iteration:
+//   tier 1 (topology) — apply pending topology mutations (currently a
+//                       single swap_worklists() to move install-time
+//                       schedule() additions onto the active worklist)
+//   tier 2 (value)    — drain BSP value rounds until worklist empty
+//
+// After tier 2 quiesces, if topo_mutated_this_run was asserted by an
+// install/alloc that ran inside a fire (in_fire_round=true), we loop
+// for another outer iteration. Otherwise we terminate.
+//
+// Termination: outer loop exits when value-quiescent (worklist + next
+// both empty) AND no fire-time topology mutations occurred during
+// the just-completed value tier. Bounded by the global fuel counter
+// (max_rounds), counted in inner-round granularity.
 export fn prologos_run_to_quiescence() void {
     const start_ns = now_ns();
-    // Move any pending installs from next_worklist into worklist for
-    // the first round. (After install, schedule() puts pids into
-    // next_worklist; we transfer once before round 1 starts.)
+
+    // Outer iteration 0's tier 1: drain install-time schedule() additions
+    // into the active worklist so the first inner round has work.
     swap_worklists();
 
+    var any_inner_progress: bool = true;
+    while (any_inner_progress or topo_mutated_this_run) {
+        // Outer tier 1 — TOPOLOGY (between-round application).
+        // Newly-installed propagators were scheduled into next_worklist
+        // at install time; promote them so this outer iter's value tier
+        // can fire them.
+        if (worklist_len == 0 and next_worklist_len > 0) {
+            swap_worklists();
+        }
+        // Reset the "topology mutated during fire" sticky bit before the
+        // value tier so we sample only mutations from this iteration.
+        topo_mutated_this_run = false;
+        stat_outer_iters += 1;
+
+        // Outer tier 2 — VALUE (BSP rounds until worklist drained).
+        any_inner_progress = run_value_tier();
+
+        // If max_rounds is set and was hit inside the value tier,
+        // run_value_tier returns false and stat_fuel_exhausted is set;
+        // we exit here.
+        if (stat_fuel_exhausted != 0) break;
+
+        // If the value tier did topology mutations (Phase 5 handlers),
+        // we need another outer iteration to apply them.
+        if (topo_mutated_this_run) {
+            any_inner_progress = true; // force re-entry
+        }
+    }
+
+    stat_run_ns += now_ns() - start_ns;
+}
+
+// run_value_tier: drain BSP value rounds until worklist is empty or
+// fuel is exhausted. Returns true if any round fired (i.e. there was
+// at least one progress event), false if the worklist was already
+// empty at entry or fuel was exhausted on entry.
+fn run_value_tier() bool {
+    var fired_any: bool = false;
     while (worklist_len > 0) {
         if (max_rounds != 0 and stat_rounds >= max_rounds) {
-            // Fuel exhausted. Stop without abort so the caller can
-            // still read whatever cell value has been computed.
             stat_fuel_exhausted = 1;
-            break;
+            return fired_any;
         }
         stat_rounds += 1;
         take_snapshot();
 
-        // Phase 1: fire all pids in current round against snapshot.
-        // Clear in_worklist[pid] as we consume it so that fires in
-        // *this* round can re-schedule the same pid for the *next*
-        // round if a downstream cell change demands it.
+        // Mark the fire phase. fire-fns dispatched here are pure compute
+        // for the kernel's current tag set, but Phase 5's handler
+        // propagators will use this flag to call alloc/install and have
+        // them recorded as mid-fire topology mutations.
+        in_fire_round = true;
         var i: u32 = 0;
         while (i < worklist_len) : (i += 1) {
             const pid = worklist[i];
             in_worklist[pid] = 0;
             fire_against_snapshot(pid);
         }
+        in_fire_round = false;
         worklist_len = 0;
 
-        // Phase 2 (barrier): merge pending writes; subscribers of
-        // changed cells land in next_worklist.
+        // Barrier: merge pending writes; subscribers of changed cells
+        // land in next_worklist via prologos_cell_write's schedule path.
         merge_pending_writes();
-
-        // Swap for next round.
         swap_worklists();
+        fired_any = true;
     }
-    stat_run_ns += now_ns() - start_ns;
+    return fired_any;
+}
+
+// Test-only hook: simulate a propagator install happening from inside
+// a fire-fn body. Mirrors prologos_propagator_install_2_1 but flips
+// in_fire_round around the call so the install records as a mid-fire
+// topology mutation. Used by test-substrate.c to exercise the 2-tier
+// outer loop's topology-tracking path.
+//
+// (Phase 5 will replace this with a real handler-propagator fire-fn
+// that calls install during its own dispatch. For Phase 1 we expose
+// this hook so the gate test can prove the structure works without
+// requiring fire-fn function pointers.)
+export fn prologos_test_install_during_fire_2_1(
+    tag: u32,
+    in0: u32,
+    in1: u32,
+    out0: u32,
+) u32 {
+    in_fire_round = true;
+    const pid = prologos_propagator_install_2_1(tag, in0, in1, out0);
+    in_fire_round = false;
+    return pid;
+}
+
+// Test-only hook: simulate a cell allocation from inside a fire-fn body.
+// Same shape as prologos_test_install_during_fire_2_1 but for cells.
+export fn prologos_test_alloc_during_fire(domain: u8, init: i64) u32 {
+    in_fire_round = true;
+    const id = prologos_cell_alloc_with_domain(domain, init);
+    in_fire_round = false;
+    return id;
 }
 
 fn swap_worklists() void {
@@ -547,7 +682,9 @@ var stat_writes_dropped: u64 = 0;
 var stat_max_worklist: u64 = 0;
 var stat_fuel_exhausted: u64 = 0;
 var stat_run_ns: u64 = 0;
-var stat_resets: u64 = 0; // explicit-replace traffic (cell_reset)
+var stat_resets: u64 = 0;          // explicit-replace traffic (cell_reset)
+var stat_topo_mutations: u64 = 0;  // alloc/install calls inside a fire round
+var stat_outer_iters: u64 = 0;     // 2-tier outer-loop iterations
 var stat_ns_by_tag: [N_TAGS]u64 = [_]u64{0} ** N_TAGS;
 var profile_per_tag: bool = false;
 
@@ -566,6 +703,9 @@ export fn prologos_set_profile_per_tag(enabled: u32) void {
 //   7  num_props (installed)
 //   8  run_ns (CLOCK_MONOTONIC ns spent in run_to_quiescence)
 //   9  resets (explicit-replace traffic; cell_reset count)
+//   10 topo_mutations (mid-fire cell_alloc + prop_install count)
+//   11 outer_iters   (2-tier outer-loop iteration count for the
+//                     last + cumulative run_to_quiescence calls)
 //   100..(100+N_TAGS)  fires for tag (key-100)
 //   200..(200+N_TAGS)  ns for tag (key-200) — only populated when
 //                      profile_per_tag=true
@@ -582,6 +722,8 @@ export fn prologos_get_stat(key: u32) u64 {
         7 => @intCast(num_props),
         8 => stat_run_ns,
         9 => stat_resets,
+        10 => stat_topo_mutations,
+        11 => stat_outer_iters,
         else => blk: {
             if (key >= 100 and key < 100 + N_TAGS) {
                 break :blk stat_fires_by_tag[key - 100];
@@ -603,6 +745,8 @@ export fn prologos_reset_stats() void {
     stat_fuel_exhausted = 0;
     stat_run_ns = 0;
     stat_resets = 0;
+    stat_topo_mutations = 0;
+    stat_outer_iters = 0;
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
         stat_fires_by_tag[i] = 0;
@@ -663,6 +807,8 @@ export fn prologos_print_stats() void {
     buf_puts(",\"props\":");       buf_putu64(@intCast(num_props));
     buf_puts(",\"run_ns\":");      buf_putu64(stat_run_ns);
     buf_puts(",\"resets\":");      buf_putu64(stat_resets);
+    buf_puts(",\"topo_muts\":");   buf_putu64(stat_topo_mutations);
+    buf_puts(",\"outer_iters\":"); buf_putu64(stat_outer_iters);
     buf_puts(",\"by_tag\":[");
     var i: u32 = 0;
     while (i < N_TAGS) : (i += 1) {
