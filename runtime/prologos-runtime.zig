@@ -105,6 +105,33 @@
 extern fn abort() noreturn;
 extern fn write(fd: c_int, buf: [*]const u8, count: usize) isize;
 
+// =====================================================================
+// HAMT cell-storage backend (Phase 2 Day 5)
+// =====================================================================
+//
+// The cell-value store is a persistent HAMT (Bagwell-style, 32-way
+// branching, path-copy CoW) imported from runtime/prologos-hamt.zig
+// via its stable C ABI. Persistent semantics give us O(1) snapshot
+// (copy the root pointer) and O(log32 n) reads/writes.
+//
+// Day 5 (this commit): cells_root + snapshot_root are HAMT-backed;
+//   per-scope state still saves/loads flat [MAX_CELLS]i64 mirrors
+//   (re-materialized via hamt_lookup at save time and rebuilt via
+//   hamt_insert at load time). Acceptance gate: existing tests pass.
+// Day 6 (next commit): ScopeData saved_cells flat mirror is replaced
+//   with saved_cells_root: HamtRoot (true O(1) save/restore); the
+//   100K-cell scope_enter microbench becomes O(1).
+//
+// HamtRoot is opaque (?*Node in HAMT-internal terms). The kernel
+// treats it as a pointer-sized handle.
+
+const HamtRoot = ?*anyopaque;
+extern fn prologos_hamt_new() HamtRoot;
+extern fn prologos_hamt_lookup(h: HamtRoot, key: u32, out_value: *i64) c_int;
+extern fn prologos_hamt_insert(h: HamtRoot, key: u32, value: i64) HamtRoot;
+extern fn prologos_hamt_remove(h: HamtRoot, key: u32) HamtRoot;
+extern fn prologos_hamt_size(h: HamtRoot) u32;
+
 // CLOCK_MONOTONIC nanoseconds via libc clock_gettime. On Linux x86_64
 // this resolves through the vDSO (~30ns per call).
 const timespec = extern struct {
@@ -162,10 +189,49 @@ pub const DOMAIN_MIN_I64: u8 = 1;
 
 const I64_MAX: i64 = 0x7fffffffffffffff;
 
-var cells: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
-var snapshot: [MAX_CELLS]i64 = [_]i64{0} ** MAX_CELLS;
+// HAMT-rooted cell value storage (Phase 2 Day 5). cells_root holds the
+// canonical "current" cell-value map; snapshot_root is captured at the
+// start of each BSP fire round (O(1) — just a pointer copy) and
+// consulted by fire-fns during the round. Cell-id namespace is a
+// linear u32 counter (num_cells) — only the *values* live in the HAMT.
+//
+// Per-cell domain stays as a flat array; domains are immutable after
+// alloc and don't benefit from persistent storage.
+var cells_root: HamtRoot = null;
+var snapshot_root: HamtRoot = null;
 var cell_domain: [MAX_CELLS]u8 = [_]u8{0} ** MAX_CELLS;
 var num_cells: u32 = 0;
+
+// cell_get(id): HAMT lookup. Returns 0 if the cell-id is allocated but
+// has no entry in the trie (e.g. a freshly-alloc'd cell whose init was
+// the lattice bottom for its domain — domain_bottom() is the canonical
+// "no entry" value; we cache it via hamt_insert at alloc time so
+// subsequent lookups are deterministic and O(log n)).
+fn cell_get(id: u32) i64 {
+    if (id >= num_cells) abort();
+    var v: i64 = 0;
+    if (prologos_hamt_lookup(cells_root, id, &v) == 1) return v;
+    return 0;
+}
+
+// cell_put(id, value): HAMT insert. Returns the new root and replaces
+// cells_root atomically (single-threaded; the swap is just a pointer
+// assignment). Old root pointer is leaked under the HAMT's documented
+// leak semantics (Track 6 follow-up); for in-scope-run mutations the
+// scope's record retains its own root pointer.
+fn cell_put(id: u32, value: i64) void {
+    cells_root = prologos_hamt_insert(cells_root, id, value);
+}
+
+// snapshot_get(id): HAMT lookup against snapshot_root. Used by
+// fire_against_snapshot. Same shape as cell_get but reads from the
+// at-round-start snapshot.
+fn snapshot_get(id: u32) i64 {
+    if (id >= num_cells) abort();
+    var v: i64 = 0;
+    if (prologos_hamt_lookup(snapshot_root, id, &v) == 1) return v;
+    return 0;
+}
 
 // merge_value: pure binary merge dispatch. Must be commutative,
 // associative, and idempotent for every non-LWW domain (CALM).
@@ -215,9 +281,9 @@ export fn prologos_cell_alloc_with_domain(domain: u8, init: i64) u32 {
     if (num_cells >= MAX_CELLS) abort();
     if (domain != DOMAIN_LWW_I64 and domain != DOMAIN_MIN_I64) abort();
     const id = num_cells;
-    cells[id] = init;
     cell_domain[id] = domain;
     num_cells += 1;
+    cell_put(id, init);
     if (in_fire_round) {
         topo_mutated_this_run = true;
         stat_topo_mutations += 1;
@@ -235,10 +301,10 @@ export fn prologos_cell_alloc_with_domain(domain: u8, init: i64) u32 {
 // subscribers (next round's worklist).
 export fn prologos_cell_write(id: u32, value: i64) void {
     if (id >= num_cells) abort();
-    const old = cells[id];
+    const old = cell_get(id);
     const merged = merge_value(cell_domain[id], old, value);
     if (merged != old) {
-        cells[id] = merged;
+        cell_put(id, merged);
         stat_writes_committed += 1;
         // Schedule subscribers (the propagators that depend on this cell)
         var i: u32 = 0;
@@ -269,13 +335,13 @@ export fn prologos_cell_write(id: u32, value: i64) void {
 // state-cell rotation between BSP rounds.
 export fn prologos_cell_reset(id: u32, value: i64) void {
     if (id >= num_cells) abort();
-    cells[id] = value;
+    cell_put(id, value);
     stat_resets += 1;
 }
 
 export fn prologos_cell_read(id: u32) i64 {
     if (id >= num_cells) abort();
-    return cells[id];
+    return cell_get(id);
 }
 
 // Domain inspection (read-only). Returns the merge-domain tag the
@@ -470,7 +536,7 @@ fn fire_against_snapshot(pid: u32) void {
     var result: i64 = 0;
     switch (shape) {
         SHAPE_1_1 => {
-            const a = snapshot[prop_in0[pid]];
+            const a = snapshot_get(prop_in0[pid]);
             switch (tag) {
                 0 => result = a,                       // kernel-identity
                 1 => result = -a,                      // kernel-int-neg
@@ -479,8 +545,8 @@ fn fire_against_snapshot(pid: u32) void {
             }
         },
         SHAPE_2_1 => {
-            const a = snapshot[prop_in0[pid]];
-            const b = snapshot[prop_in1[pid]];
+            const a = snapshot_get(prop_in0[pid]);
+            const b = snapshot_get(prop_in1[pid]);
             switch (tag) {
                 0 => result = a + b,                   // kernel-int-add
                 1 => result = a - b,                   // kernel-int-sub
@@ -493,9 +559,9 @@ fn fire_against_snapshot(pid: u32) void {
             }
         },
         SHAPE_3_1 => {
-            const c = snapshot[prop_in0[pid]];   // condition (0/1)
-            const t = snapshot[prop_in1[pid]];   // then-value
-            const e = snapshot[prop_in2[pid]];   // else-value
+            const c = snapshot_get(prop_in0[pid]);   // condition (0/1)
+            const t = snapshot_get(prop_in1[pid]);   // then-value
+            const e = snapshot_get(prop_in2[pid]);   // else-value
             switch (tag) {
                 0 => result = if (c != 0) t else e,    // kernel-select
                 else => abort(),
@@ -517,12 +583,12 @@ fn fire_against_snapshot(pid: u32) void {
     }
 }
 
-// take_snapshot(): copy live cell values into snapshot[].
+// take_snapshot(): persistent O(1) snapshot. Just copy the HAMT root
+// pointer; reads-during-fire go through snapshot_get(id) which honors
+// the captured root. Subsequent cell_put on cells_root creates a new
+// version via path-copy CoW; the snapshot's root is unaffected.
 fn take_snapshot() void {
-    var i: u32 = 0;
-    while (i < num_cells) : (i += 1) {
-        snapshot[i] = cells[i];
-    }
+    snapshot_root = cells_root;
 }
 
 // merge_pending_writes(): apply each pending write; for each write
@@ -791,10 +857,21 @@ fn ensure_scopes_initialized() void {
 // Save the current globals into the given scope record. Used by
 // scope_run on entry (to preserve the parent) and on exit (to commit
 // the just-finished scope's resulting state into its record).
+//
+// Day 5 interim: cell *values* are materialized from cells_root into
+// the flat saved_cells mirror via hamt_lookup over [0, num_cells).
+// O(num_cells * log32 num_cells). Day 6 swaps this for a single
+// HAMT-root pointer copy (true O(1)).
 fn save_globals_to(rec: *ScopeData) void {
     var i: u32 = 0;
+    while (i < num_cells) : (i += 1) {
+        rec.saved_cells[i] = cell_get(i);
+    }
     while (i < MAX_CELLS) : (i += 1) {
-        rec.saved_cells[i] = cells[i];
+        rec.saved_cells[i] = 0;
+    }
+    i = 0;
+    while (i < MAX_CELLS) : (i += 1) {
         rec.saved_cell_domain[i] = cell_domain[i];
         rec.saved_cell_num_subs[i] = cell_num_subs[i];
         var j: u32 = 0;
@@ -826,10 +903,15 @@ fn save_globals_to(rec: *ScopeData) void {
 
 // Load the given scope record into the globals. Used by scope_run
 // on entry (to activate sid) and on exit (to restore the parent).
+//
+// Day 5 interim: cell *values* are rebuilt from the flat saved_cells
+// mirror into a fresh cells_root via repeated hamt_insert. The old
+// cells_root is dropped on the floor (HAMT leaks per Track 6
+// follow-up; the active-scope root is what callers care about).
+// Day 6 swaps this for a single pointer assignment.
 fn load_globals_from(rec: *const ScopeData) void {
     var i: u32 = 0;
     while (i < MAX_CELLS) : (i += 1) {
-        cells[i] = rec.saved_cells[i];
         cell_domain[i] = rec.saved_cell_domain[i];
         cell_num_subs[i] = rec.saved_cell_num_subs[i];
         var j: u32 = 0;
@@ -838,6 +920,12 @@ fn load_globals_from(rec: *const ScopeData) void {
         }
     }
     num_cells = rec.saved_num_cells;
+    // Rebuild cells_root from the saved flat mirror.
+    cells_root = prologos_hamt_new();
+    i = 0;
+    while (i < num_cells) : (i += 1) {
+        cells_root = prologos_hamt_insert(cells_root, i, rec.saved_cells[i]);
+    }
 
     i = 0;
     while (i < MAX_PROPS) : (i += 1) {
@@ -973,7 +1061,7 @@ export fn prologos_scope_read(sid: u32, cell: u32) i64 {
     if (!scope_records[sid].is_allocated) abort();
     if (scope_records[sid].is_currently_active) {
         if (cell >= num_cells) abort();
-        return cells[cell];
+        return cell_get(cell);
     }
     if (cell >= scope_records[sid].saved_num_cells) abort();
     return scope_records[sid].saved_cells[cell];

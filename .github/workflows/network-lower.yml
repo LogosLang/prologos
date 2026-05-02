@@ -97,7 +97,7 @@ jobs:
             ret i64 %v
           }
           EOF
-          clang /tmp/smoke.ll runtime/prologos-runtime.o -o /tmp/smoke
+          clang /tmp/smoke.ll runtime/prologos-runtime.o runtime/prologos-hamt.o -o /tmp/smoke
           # GitHub Actions runs `bash -eo pipefail`. /tmp/smoke is *expected*
           # to return non-zero (the cell value as exit code). Without disabling
           # -e around the call, set -e treats the expected return as a failure
@@ -115,8 +115,12 @@ jobs:
         # BSP rounds (snapshot/diff/merge), the (3,1) select propagator
         # works, and the prologos_get_stat / prologos_reset_stats /
         # prologos_set_max_rounds interfaces match the kernel's exports.
+        # As of Phase 2 Day 5 (2026-05-02 kernel-pocket-universes track),
+        # the runtime depends on prologos-hamt.o for HAMT-rooted cell
+        # storage; both .o files must be linked.
         run: |
           clang runtime/test-bsp-stats.c runtime/prologos-runtime.o \
+            runtime/prologos-hamt.o \
             -o /tmp/test-bsp-stats
           /tmp/test-bsp-stats
 
@@ -128,17 +132,22 @@ jobs:
         # source-level expr-iterate would lower to.
         run: |
           clang runtime/test-bsp-feedback.c runtime/prologos-runtime.o \
+            runtime/prologos-hamt.o \
             -o /tmp/test-bsp-feedback
           /tmp/test-bsp-feedback
 
-      - name: Substrate primitives smoke test (Phase 1 Day 1)
+      - name: Substrate primitives smoke test (Phase 1 Day 1+)
         # 2026-05-02 kernel-pocket-universes track Phase 1 Day 1.
         # Validates cell_alloc_with_domain, the min-merge i64 domain,
         # cell_reset's bypass-and-no-enqueue semantics, and the new
         # stat_resets counter (key 9). Gate test for § 15.9
-        # (merge-vs-reset distinguishability).
+        # (merge-vs-reset distinguishability). Includes Day 2's 2-tier
+        # outer loop tests, Day 3's scope smoke, and Day 4's full scope
+        # test suite (fuel/write isolation, explicit publish, trap
+        # placeholder, nested allocation, stat counters).
         run: |
           clang runtime/test-substrate.c runtime/prologos-runtime.o \
+            runtime/prologos-hamt.o \
             -o /tmp/test-substrate
           /tmp/test-substrate
 

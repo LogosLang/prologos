@@ -80,10 +80,15 @@
    (define clang (or (getenv "PROLOGOS_CLANG") "clang"))
    (define runtime-obj
      (or (getenv "PROLOGOS_RUNTIME_OBJ") "runtime/prologos-runtime.o"))
-   (printf "Linking ~a + ~a -> ~a~n" ll-path runtime-obj (out-path))
+   ;; Phase 2 Day 5 (2026-05-02 kernel-pocket-universes track): the
+   ;; runtime depends on prologos-hamt.o for HAMT-rooted cell storage.
+   ;; Link both objects.
+   (define hamt-obj
+     (or (getenv "PROLOGOS_HAMT_OBJ") "runtime/prologos-hamt.o"))
+   (printf "Linking ~a + ~a + ~a -> ~a~n" ll-path runtime-obj hamt-obj (out-path))
    (define link-ok?
      (system* (find-executable-path clang)
-              ll-path runtime-obj "-o" (out-path)))
+              ll-path runtime-obj hamt-obj "-o" (out-path)))
    (unless link-ok?
      (error 'network-compile "clang link failed"))
    (when (run?)
