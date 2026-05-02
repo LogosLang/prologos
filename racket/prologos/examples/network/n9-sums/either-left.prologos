@@ -1,0 +1,10 @@
+data Either {A B}
+  left  : A
+  right : B
+
+def main : Int := match (left Int Int 42)
+  | left  x -> x
+  | right y -> y
+
+;; Tag = 0 (left), field-0 = 42. Match returns x = 42.
+;; :expect-exit 42

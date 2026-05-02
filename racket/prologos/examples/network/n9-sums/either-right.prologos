@@ -1,0 +1,11 @@
+data Either {A B}
+  left  : A
+  right : B
+
+def main : Int := match (right Int Int 7)
+  | left  x -> x
+  | right y -> y
+
+;; Tag = 1 (right), field-1 = 7. Match returns y = 7.
+;; Tests that match correctly skips field-0 (which is undefined for right).
+;; :expect-exit 7

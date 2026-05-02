@@ -1,0 +1,14 @@
+data Maybe {A}
+  none
+  some : A
+
+def main : Int := match (some (Maybe Int) (some Int 5))
+  | none -> 100
+  | some inner -> match inner
+                    | none -> 1
+                    | some x -> x
+
+;; Outer (some Maybe-Int), inner (some Int 5).
+;; Outer-tag = 1, outer-field = inner-handle (a nested vtree).
+;; Inner-tag = 1, inner-field = 5. Result = 5.
+;; :expect-exit 5

@@ -1,0 +1,10 @@
+data Maybe {A}
+  none
+  some : A
+
+def main : Int := match (none Int)
+  | none -> 99
+  | some x -> x
+
+;; Construct (none), match returns 99. Tag = 0 (none), no field used.
+;; :expect-exit 99

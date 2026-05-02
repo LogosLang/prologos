@@ -1,0 +1,16 @@
+data List {A}
+  nil
+  cons : A -> List A
+
+def main : Int := match (cons Int 1 (cons Int 2 (cons Int 3 (nil Int))))
+  | nil       -> 0
+  | cons a r -> match r
+                  | nil       -> a
+                  | cons b s -> match s
+                                  | nil       -> int+ a b
+                                  | cons c _ -> int+ a (int+ b c)
+
+;; Defunctionalize the list literal [1,2,3] into 4 nested cons-cells
+;; and walk it with nested match, summing manually.
+;; 1 + (2 + 3) = 6
+;; :expect-exit 6

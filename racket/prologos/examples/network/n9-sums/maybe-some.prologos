@@ -1,0 +1,11 @@
+data Maybe {A}
+  none
+  some : A
+
+def main : Int := match (some Int 7)
+  | none -> 0
+  | some x -> x
+
+;; Construct (some 7), match returns the field. Tag = 1 (some), field
+;; cell holds 7. Match dispatches to the some-arm and returns x = 7.
+;; :expect-exit 7
