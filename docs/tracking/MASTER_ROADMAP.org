@@ -485,6 +485,7 @@ trajectory.
 | *Thesis*         | Correctness (join-semilattice) and optimization (min-plus tropical semiring) are two enrichments on the same network. Cells carry both a value and a cost. The tropical merge keeps cheapest derivations. Cost-bounded exploration replaces flat fuel limits with problem-aware thresholds. |
 | *Status*         | Stage 0 research. |
 | *Origin*         | [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research §5]] |
+| *Scaffolding caveat* | This addendum lands the OE primitive (tropical quantale) under HYBRID PIVOT scaffolding pattern (cell substrate co-exists with off-network fast-path; per [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][D.3 §10.1.A]] + [[https://github.com/LogosLang/prologos/issues/55][Issue #55]] + [[file:DEFERRED.md][DEFERRED.md]]). **Future OE tracks design TO TARGET full cell-substrate (per D.1 original framing), NOT the scaffolding pattern.** Per-track empirical justification + retirement plan with specific blocker required if hybrid pattern is needed; otherwise default to full-cell architecture. The hybrid is bounded scaffolding for THIS addendum's runtime constraints, NOT the architectural template OE Series should propagate. |
 
 *** Research Tracks (Proposed)
 
