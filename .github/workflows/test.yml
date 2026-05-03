@@ -21,6 +21,13 @@ jobs:
       - name: Install dependencies
         run: cd racket/prologos && raco pkg install --auto --skip-installed
 
+      - name: Install rackcheck (for property-based tests)
+        # rackcheck is declared as build-deps (not deps) in info.rkt, so
+        # the previous `raco pkg install --auto` step skips it. Tests
+        # `test-generators.rkt` and `test-properties.rkt` (require rackcheck)
+        # at module load time. Install explicitly so they run on CI.
+        run: raco pkg install --auto --skip-installed rackcheck
+
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 

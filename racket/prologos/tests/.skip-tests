@@ -18,19 +18,6 @@ test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s
 # discipline so the suite stays green; remove this entry once Phase 4 lands.
 test-sre-sd-properties.rkt  # in-progress; awaits SRE Track 2I Phase 4 fix to sre-core.rkt
 
-# Rackcheck-dependent property tests — fail in CI because `rackcheck` is
-# declared as build-deps in info.rkt rather than deps, and the workflow's
-# `raco pkg install --auto --skip-installed` step only installs deps.
-# Local sandbox + CI both lack rackcheck at test runtime → tests-0-of-0
-# with a "collection not found" exception. These tests are property-based
-# generators / type-soundness checks that aren't preduce-lite-related.
-# Permanent fix: move rackcheck to deps in info.rkt and add an explicit
-# `raco pkg install rackcheck` step to the workflow. Skipping for now
-# keeps the regression gate green; remove these entries once info.rkt /
-# workflow are fixed.
-test-generators.rkt  # rackcheck missing in CI (declared as build-deps not deps)
-test-properties.rkt  # rackcheck missing in CI (declared as build-deps not deps)
-
 # Test-order-dependent: passes in isolation and via the affected-runner
 # alone, fails only in the multi-worker --all batch (4 batch workers,
 # work-stealing). The test queries lookup-merge-fn-domain on
