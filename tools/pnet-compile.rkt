@@ -62,16 +62,24 @@
 (define emit-only?   (make-parameter #f))
 (define run?         (make-parameter #t))
 
-(define input-path-str
-  (command-line
-   #:program "pnet-compile"
-   #:once-each
-   [("-o") path "Output binary path (default: out)" (out-bin-arg path)]
-   [("--emit-pnet") "Emit only the .pnet file; do not lower or link" (emit-pnet? #t) (run? #f)]
-   [("--emit-only") "Emit only LLVM IR (.ll) to stdout; do not link" (emit-only? #t) (run? #f)]
-   [("--no-run") "Lower and link but do not run" (run? #f)]
-   #:args (file)
-   file))
+;; lowering-yolo M5 (2026-05-02): trailing positional arguments after
+;; the .prologos file are forwarded to the lowered binary's argv.
+;; Required for parameterised main (`def main : Int -> ... := ...`).
+;; For closed main these are silently ignored by the binary.
+(define-values (input-path-str prog-args)
+  (let ([raw (command-line
+              #:program "pnet-compile"
+              #:once-each
+              [("-o") path "Output binary path (default: out)" (out-bin-arg path)]
+              [("--emit-pnet") "Emit only the .pnet file; do not lower or link" (emit-pnet? #t) (run? #f)]
+              [("--emit-only") "Emit only LLVM IR (.ll) to stdout; do not link" (emit-only? #t) (run? #f)]
+              [("--no-run") "Lower and link but do not run" (run? #f)]
+              #:args args
+              args)])
+    (cond
+      [(null? raw)
+       (error 'pnet-compile "missing input file argument; usage: pnet-compile [options] FILE.prologos [arg1 arg2 ...]")]
+      [else (values (car raw) (cdr raw))])))
 
 (define input-path (string->path input-path-str))
 
@@ -145,9 +153,22 @@
   (error 'pnet-compile "clang link failed"))
 
 ;; -------- Step 6: run --------------------------------------------------
+;;
+;; M5 (lowering-yolo, 2026-05-02): forward any trailing positional
+;; arguments to the binary's argv. The binary itself decides whether
+;; they are needed: parameterised main calls prologos_argv_i64 to read
+;; them; closed main ignores them.
+;;
+;; The binary's stdout is intentionally inherited (not captured) so
+;; the user sees the printed result interleaved with the driver's
+;; bookkeeping lines. The benchmark harness (M7) wraps this differently
+;; — it bypasses the driver and invokes the binary directly so it can
+;; capture and validate stdout.
 (when (run?)
   (define abs-out (path->complete-path out-bin))
-  (printf "Running ~a~n" abs-out)
-  (define exit-code (system*/exit-code abs-out))
+  (printf "Running ~a~a~n"
+          abs-out
+          (if (null? prog-args) "" (format " with args: ~a" prog-args)))
+  (define exit-code (apply system*/exit-code abs-out prog-args))
   (printf "exit=~a~n" exit-code)
   (exit exit-code))
