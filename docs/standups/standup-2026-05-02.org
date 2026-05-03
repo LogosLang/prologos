@@ -1,0 +1,69 @@
+#+TITLE: Standup — 2026-05-02
+#+DATE: 2026-05-02
+
+* Yesterday (since 2026-04-30 standup)
+
+A multi-day arc spanning 2026-04-30 (continuation) through 2026-05-02. Active
+threads: SH-substrate concurrency research + collaborator branch review,
+capability-as-Datalog correction, PReduce series founding, Master Roadmap
+staleness sweep (in flight).
+
+** Concurrency primitives for LLVM substrate — research note landed
+
+Commit =9dc3e7eb=. Long research dialogue on what concurrency primitives the
+Zig kernel needs for competitive parallel BSP given the architectural
+commitments (=.pnet= → LLVM directly, propagator network IS IR, thin scheduler,
+PUs as unifying sub-network primitive). Reviewed collaborator's in-flight
+branch =claude/prologos-layering-architecture-Pn8M9= (sequential Zig BSP
+prototype, ~544 LOC). Resolved PU vs scheduler interplay (PU = state
+namespace; one worker pool process-wide; per-(worker, PU) write logs).
+=docs/research/2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md=.
+
+Sprint D MVP recommendation: Chase-Lev deque + persistent worker pool +
+futex park + per-(worker, PU=root) write logs + cell-partitioned merge +
+sense-reversing barrier. ~800 LOC of new Zig.
+
+** Capability-as-Datalog research note — vocabulary conflation correction
+
+=docs/research/2026-04-23_CAPABILITY_SAFETY_DATALOG_HYPERGRAPHS.md= §1, §3.1, §8
+updated to disambiguate Spera's "capability" (agentic-AI / tool-use sense)
+from OCap from Prologos effect-capability types. Math unchanged.
+
+** PReduce (Reductions on Propagators) Series — opened
+
+Commit =2103b11f=. Promotes Track 9 (Reduction as Propagators) from
+Stage-1 research to a named series. Three-layer architecture: per-AST-PU
+compound regions + shared e-class cells (refinement-poset) + unified rule
+registry. Two orthogonal axes: rule-property (IN-fragment / DPO /
+non-monotone / opaque) + persistence-regime (ground / contextual /
+retraction-eligible / open / opaque). Track 0 research synthesis 🔄 with
+3 sub-deliverables (architectural sketch, rule-property taxonomy, =.pnet= +
+LLVM lowering interface). Tracks 1-9 placeholder rows. PReduce is SH's
+critical cross-series dependency. Pre-conversation included 5-pillar
+literature survey + adversarial round on three-layer decomposition + Path
+C scoping decision.
+
+=docs/tracking/2026-05-02_PREDUCE_MASTER.md= (~261 lines). MASTER_ROADMAP
+updated: Track 9 row + PReductions section renamed PReduce.
+
+** Master Roadmap staleness sweep — in flight
+
+Audit identified series-header status lines that don't match track tables;
+missing tracks (BSP-LE 2/2B; SRE 2D/2G/2H/2I; PPN 2/2B/3/4A/4B should be ✅);
+missing top-level series (SH, UCS); naming consistency PReductions → PReduce;
+stale narrative sections (priority ordering, current implementation order);
+8 newer research docs not in active research table; NTT Doc 1 status. Three
+commits proposed: header staleness, missing series, naming + research
+sweep.
+
+* Today
+
+(See =docs/tracking/standups/2026-05-02_dailies.md= for the live log.)
+
+Plan: complete 3-commit Master Roadmap sweep. Then either pick up SRE
+Track 2I Phase 4 (sweep semantic correction) or PPN 4C Phase 1C
+implementation, depending on context budget.
+
+* Blockers
+
+None.
