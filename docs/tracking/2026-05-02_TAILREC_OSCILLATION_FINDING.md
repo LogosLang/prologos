@@ -4,9 +4,17 @@ Status: investigated 2026-05-02 (lowering-yolo session).
 Author: lowering-yolo session.
 Branch: `lowering-yolo`.
 
+**Update 2026-05-03 — fixed in compiler:** `lower-tail-rec`
+(`racket/prologos/ast-to-low-pnet.rkt`) now follows **Solution 2** from
+§ Solution proposals below: `cond` / `step` read a lagged **`prev`**
+copy of state (`kernel-identity`), while **`kernel-select` writes
+directly back into each state cell** (freeze branch reads raw state at
+logical depth 0). Parameterised tail-rec nets quiesce in \(O(n)\) BSP
+rounds instead of entering a perpetual 2–3 cycle at fuel exhaustion.
+
 ## TL;DR
 
-The current tail-rec lowering produces a propagator network that
+The historical tail-rec lowering (pre-2026-05-03) produced a propagator network that
 **never quiesces** when the iteration counter is opaque at compile
 time. After the iteration "finishes" (cond becomes true), the cells
 in the feedback loop enter a **2- or 3-cycle oscillation** indefinitely.
@@ -24,7 +32,9 @@ the correct value. Bumping fuel reveals the bug:
 | 200 000 | **0** ✗ |
 | 300 000 | **55** ✓ |
 
-This is a real bug, not a substrate quirk. It was masked previously
+(Table: behaviour of the **pre-2026-05-03** next-cell feedback lowering.)
+
+This was a real bug, not a substrate quirk. It was masked previously
 because every closed-form benchmark in the lowering perf suite folded
 to a literal at compile time via Gate 2 — the BSP scheduler never
 ran the iteration. Once M3 made inputs opaque (forcing real BSP

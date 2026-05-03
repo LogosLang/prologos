@@ -131,17 +131,14 @@
                  ;; and consumed by low-pnet-to-llvm to inject one extra
                  ;; cell_write(dst, argv_value) per pair, immediately
                  ;; after the canonical cell_write(src, argv_value). One
-                 ;; src can map to many dsts (state-cell + next-cell at
-                 ;; minimum, and across multiple iteration sites).
+                 ;; src can map to many dsts (state-cell + lagged prev-cell
+                 ;; at minimum, and across multiple iteration sites).
                  [input-cell-mirrors #:auto #:mutable]
                  ;; lowering-yolo M6 (2026-05-02): map from state-cell-id
-                 ;; to the input-cell-id that seeded it. Lower-tail-rec's
-                 ;; emit-feedback uses this to know whether to mirror
-                 ;; the corresponding next-cell from the same input.
-                 ;; Without this hop, the round-1 feedback would read
-                 ;; the next-cell's placeholder init (0) and overwrite
-                 ;; the state-cell's freshly-mirrored argv value before
-                 ;; the iteration starts.
+                 ;; to the input-cell-id that seeded it. Lower-tail-rec
+                 ;; mirrors the same argv write onto each lagged prev cell
+                 ;; when the state slot came from a parameter, so BSP
+                 ;; round 1 reads the runtime counter (not placeholder 0).
                  [state-cell-input-source #:auto #:mutable])
   #:auto-value '()
   #:transparent)
@@ -240,13 +237,26 @@
 ;; If this assertion fires, F.5's lifting missed a case — the program
 ;; would silently produce wrong values via stale-snapshot reads. The
 ;; assertion catches the bug at compile time rather than at run time.
+;;
+;; Exemption: tail-rec self-loop selects (`kernel-select` writing back
+;; into one of its input cells). The freeze operand stays at logical
+;; depth 0 while cond/step are lifted — intentional; see lower-tail-rec.
+(define (kernel-select-self-loop? p)
+  (and (propagator-decl? p)
+       (eq? (propagator-decl-fire-fn-tag p) 'kernel-select)
+       (let ([ins (propagator-decl-input-cells p)]
+             [outs (propagator-decl-output-cells p)])
+         (and (= (length ins) 3)
+              (= (length outs) 1)
+              (memv (car outs) ins)))))
+
 (define (assert-depth-balance-invariant! b)
   (for ([p (in-list (builder-props b))]
         #:when (propagator-decl? p))
     (define ins (propagator-decl-input-cells p))
     (when (>= (length ins) 2)
       (define depths (map (lambda (c) (cell-depth b c)) ins))
-      (unless (apply = depths)
+      (unless (or (apply = depths) (kernel-select-self-loop? p))
         (translate-error!
          p
          (format "F.6 depth-balance invariant violated: propagator ~a (~a) \
@@ -1116,10 +1126,48 @@ parameterised main). Other non-literal initializers are deferred."))
   ;; first, so reverse.
   (define state-env (reverse state-vts))
 
+  ;; --- Tail-rec convergence (Solution 2,
+  ;; docs/tracking/2026-05-02_TAILREC_OSCILLATION_FINDING.md) ---
+  ;;
+  ;; Cond/step read a lagged copy of state (`prev`) via kernel-identity.
+  ;; Each select writes **directly** into the state cell (the freeze
+  ;; operand reads raw state at logical depth 0). This replaces the
+  ;; historical next-cell feedback loop, which failed to reach a BSP
+  ;; fixed point under opaque iteration counters (limit-cycle oscillation
+  ;; after the base case became true).
+  ;;
+  ;; Prev cells reuse state's decl init and argv mirrors (when present)
+  ;; so round 1 does not see counter=0 in prev while state holds argv(n).
+  (define (emit-prev-vtree state-vt)
+    (cond
+      [(exact-integer? state-vt)
+       (define decl (find-cell-decl b state-vt))
+       (define prev
+         (emit-cell! b (cell-decl-domain-id decl) (cell-decl-init-value decl)))
+       (emit-propagator! b (list state-vt) prev 'kernel-identity)
+       (define src (state-input-source b state-vt))
+       (when src (record-input-mirror! b src prev))
+       prev]
+      [(list? state-vt)
+       (map emit-prev-vtree state-vt)]
+      [(ctor-vt? state-vt)
+       (ctor-vt (ctor-vt-type-name state-vt)
+                (emit-prev-vtree (ctor-vt-tag-cid state-vt))
+                (map emit-prev-vtree (ctor-vt-slot-cids state-vt)))]
+      [else
+       (translate-error!
+        #f
+        (format "tail-rec: unsupported state vtree shape ~v for prev-chain"
+                state-vt))]))
+
+  (define prev-vts (map emit-prev-vtree state-vts))
+  ;; Innermost-first env for cond + step binders (lagged cells).
+  (define state-env-prev (reverse prev-vts))
+
   ;; 3. cond-expr → bool cell. With base-on-true? we mutate cond's
   ;; cell-decl init from #f to #t to force round-1 freeze.
   (define base-on-true? (eq? (tail-rec-shape-base-arm-tag shape) 'true))
-  (define cond-vt (build (tail-rec-shape-cond-expr shape) b BOOL-DOMAIN-ID state-env))
+  (define cond-vt (build (tail-rec-shape-cond-expr shape) b BOOL-DOMAIN-ID state-env-prev))
   (define cond-cid (assert-scalar! cond-vt (tail-rec-shape-cond-expr shape)
                                    "tail-rec cond-expr"))
   (when base-on-true?
@@ -1137,29 +1185,21 @@ parameterised main). Other non-literal initializers are deferred."))
   (define raw-step-vts
     (for/list ([step-arg (in-list (tail-rec-shape-step-args shape))]
                [state-vt  (in-list state-vts)])
-      (define raw-vt (build step-arg b INT-DOMAIN-ID state-env))
+      (define raw-vt (build step-arg b INT-DOMAIN-ID state-env-prev))
       (unless (vtree-shapes-match? state-vt raw-vt)
         (translate-error! step-arg
                           (format "tail-rec step-arg shape ~v doesn't match state shape ~v"
                                   raw-vt state-vt)))
       raw-vt))
 
-  ;; F.5: lag-matching has TWO layers:
+  ;; F.5 (tail-rec slice): lift cond + step leaves to a common depth so
+  ;; every slot's select observes the same cond timing across pair slots.
+  ;; Arithmetic/compare subgraphs still use emit-aligned-propagator!
+  ;; internally during `build`.
   ;;
-  ;; (a) Per-propagator alignment via emit-aligned-propagator! —
-  ;;     fixes mismatched depths of inputs to each arithmetic /
-  ;;     comparison propagator (e.g., Pell's `int-add(int-mul(2,b), a)`
-  ;;     inputs are aligned before int-add fires).
-  ;;
-  ;; (b) Pre-select uniform lift — each per-state-slot select reads
-  ;;     (cond, state, step). If step depths vary across slots, the
-  ;;     selects produce next-state cells at different depths, which
-  ;;     means state cells update at different rounds (creating an
-  ;;     inconsistent snapshot mid-iteration). Lifting cond AND each
-  ;;     step-leaf to a common max-depth before the selects ensures
-  ;;     all selects fire at the same depth, all next-state cells
-  ;;     are at the same depth, all feedbacks fire uniformly, and
-  ;;     state updates atomically per iteration.
+  ;; The select's freeze operand is raw `state-vt` (not lifted): bridging
+  ;; it to max-step-depth would phase-shift the freeze snapshot and break
+  ;; quiescence (oscillation finding doc § Solution 2).
   (define max-step-depth
     (apply max (cell-depth b cond-cid)
            (map (lambda (vt) (max-vtree-depth b vt)) raw-step-vts)))
@@ -1170,37 +1210,24 @@ parameterised main). Other non-literal initializers are deferred."))
     (for/list ([raw-vt (in-list raw-step-vts)])
       (lift-vtree-to-depth b raw-vt max-step-depth)))
 
-  ;; 5. Per-leaf: alloc next-cell + select + feedback. Walk the vtrees
-  ;; in lockstep across (state, step, init). Uses the lifted cond cell
-  ;; (F.5) so all selects fire on a cond at the same depth as their
-  ;; step inputs.
+  ;; 5. Per-leaf: kernel-select writes directly into the state cell
+  ;; (self-loop). Assert-depth-balance exempts this kernel-select shape.
   (define (emit-feedback state-vt step-vt init-vt)
     (cond
       [(exact-integer? state-vt)
-       (define next-cid (emit-cell! b INT-DOMAIN-ID init-vt))
-       ;; F.5: aligned-emit so cond + state + step are read at the
-       ;; same depth in the select. cond may be at depth 1 (from
-       ;; int-lt) while step may be at depth 2+ (nested arithmetic);
-       ;; the alignment inserts bridges as needed.
        (cond
          [base-on-true?
-          (emit-aligned-propagator! b (list cond-cid-lifted state-vt step-vt) next-cid 'kernel-select)]
+          (emit-propagator! b
+                            (list cond-cid-lifted state-vt step-vt)
+                            state-vt
+                            'kernel-select
+                            #:skip-depth-update? #t)]
          [else
-          (emit-aligned-propagator! b (list cond-cid-lifted step-vt state-vt) next-cid 'kernel-select)])
-       ;; Feedback identity is intentionally NOT aligned — it's a
-       ;; lag-1 bridge by design (the canonical "next-state → state"
-       ;; edge of the iteration loop). Also skip depth update: state
-       ;; cells stay at logical depth 0 for future references.
-       (emit-propagator! b (list next-cid) state-vt 'kernel-identity
-                         #:skip-depth-update? #t)
-       ;; lowering-yolo M6: if state-vt was seeded from a main
-       ;; parameter (recorded in state-cell-input-source), mirror the
-       ;; same argv value to next-cid as well. Without this, the
-       ;; round-1 feedback would read next-cid's placeholder init (0)
-       ;; and overwrite state-vt's freshly-mirrored argv value before
-       ;; the iteration starts.
-       (let ([src (state-input-source b state-vt)])
-         (when src (record-input-mirror! b src next-cid)))]
+          (emit-propagator! b
+                            (list cond-cid-lifted step-vt state-vt)
+                            state-vt
+                            'kernel-select
+                            #:skip-depth-update? #t)])]
       [else
        (for ([s (in-list state-vt)]
              [t (in-list step-vt)]
