@@ -260,6 +260,29 @@
     ;; type-former opaque rule in Phase 1; the rest land here.
     [(? expr-Open?) (alloc-value-cell net e)]
 
+    ;; ----- Phase 12: generic / trait-dispatched arithmetic -----
+    ;;
+    ;; ARCHITECTURAL HURDLE (postponed per user direction): full
+    ;; expr-generic-* reduction requires trait dispatch via
+    ;; resolve-generic-narrowing (reduction.rkt:996+), which depends on
+    ;; the PPN 4C trait-resolution machinery (current-trait-registry,
+    ;; current-impl-registry, etc.). The PPN 4C work is in-flight; until
+    ;; it stabilizes, PReduce-lite holds expr-generic-* nodes opaque.
+    ;;
+    ;; In well-typed Prologos programs the elaborator rewrites generic
+    ;; ops to their concrete monomorphic counterpart (e.g. (generic-add
+    ;; (int 2) (int 3)) → (int-add (int 2) (int 3))), so expr-generic-*
+    ;; rarely survives elaboration. Programs that DO leave generic ops
+    ;; in their elaborated AST will see preduce return the unreduced
+    ;; expr-generic-* term where nf would resolve it — a known
+    ;; differential gap, deferred to Phase 12b.
+    [(or (? expr-generic-add?) (? expr-generic-sub?) (? expr-generic-mul?)
+         (? expr-generic-div?) (? expr-generic-mod?) (? expr-generic-eq?)
+         (? expr-generic-lt?)  (? expr-generic-le?)  (? expr-generic-gt?)
+         (? expr-generic-ge?)  (? expr-generic-negate?) (? expr-generic-abs?)
+         (? expr-generic-from-int?) (? expr-generic-from-rat?))
+     (alloc-value-cell net e)]
+
     ;; ----- Phase 2: annotation erasure -----
     ;; (expr-ann e _) reduces by erasing the type annotation.
     [(expr-ann inner _)
