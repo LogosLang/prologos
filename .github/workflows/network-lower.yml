@@ -428,3 +428,19 @@ jobs:
             echo "$(basename $f) → exit=$ec (expected $expected)"
             test "$ec" -eq "$expected"
           done
+
+      - name: Lowering perf suite — argv input + stdout output (M3-M7)
+        # lowering-yolo M3-M7 (2026-05-02). Full-suite gate over the
+        # 12 .prologos benchmarks under racket/prologos/benchmarks/lowering/.
+        # Sweeps each parameterised program across its declared :inputs
+        # and verifies stdout matches :expect-stdout-for entries; closed-
+        # form programs check exit code against :expect-exit.
+        # --runs 1 keeps wall under ~90s in CI (the 4 parameterised
+        # tail-rec benchmarks each spend ~3s in BSP iteration per run).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          racket tools/bench-lowering.rkt --runs 1 --run-timeout 30 \
+            --out /tmp/bench-lowering.md
+          echo "--- bench-lowering.md ---"
+          cat /tmp/bench-lowering.md

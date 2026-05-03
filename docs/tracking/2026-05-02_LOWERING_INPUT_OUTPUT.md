@@ -1,6 +1,7 @@
 # Lowering: argv input + stdout output (Designs A + C)
 
-Status: design accepted; implementation in progress.
+Status: M1–M8 SHIPPED (2026-05-02). All 21 (program, input)
+measurements PASS in the lowering perf suite.
 Branch: `lowering-yolo`.
 Author: lowering-yolo session, 2026-05-02.
 
@@ -150,10 +151,68 @@ the "single argument only" scope decision.
 ## Acceptance
 
 - `racket tools/bench-lowering.rkt` shows non-zero `Rounds` for the
-  argv-driven benchmarks at non-trivial input sizes.
+  argv-driven benchmarks at non-trivial input sizes. ✅
 - The static-fold benchmarks still report `Cells=1, Props=0, Rounds=0`
-  — they're a regression gate for the optimiser.
-- All 65 round-trip-acceptance examples continue to pass.
+  — they're a regression gate for the optimiser. ✅
+- All 65 round-trip-acceptance examples continue to pass. ✅
 - All Gate 1/2/3/4 native-binary CI checks (n8 through n12) continue
-  to pass.
-- New Zig runtime tests pass (`zig test runtime/prologos-runtime.zig`).
+  to pass. ✅
+- New Zig runtime tests pass (`zig test runtime/prologos-runtime.zig`). ✅
+- 72 lowering unit tests pass (47 ast-to-low-pnet + 25 low-pnet-to-llvm). ✅
+
+## Shipped suite
+
+`racket tools/bench-lowering.rkt --runs 2` (2026-05-02):
+
+```
+PASS: 21 / 21
+  - Static-folded:      7 measurements (Rounds=0, exit-code check)
+  - Propagator-network: 14 measurements (Rounds>0, stdout check)
+```
+
+Parameterised benchmarks now exercising real BSP work:
+
+| Program | Inputs | Verified outputs |
+|---|---|---|
+| `01-tailrec-pair-fib` | n ∈ {10, 30, 50} | fib(50) = 12586269025 |
+| `02-tailrec-helpered-fib` | n ∈ {10, 30, 50} | (same) |
+| `03-tailrec-pell` | n ∈ {5, 10, 15, 20} | pell(20) = 15994428 |
+| `04-tailrec-dual-acc` | n ∈ {4, 8, 12} | dual-acc(12) = 479001678 |
+
+## Findings carried forward
+
+### Tail-rec lowering oscillates to fuel exhaustion under opaque inputs
+
+Every parameterised tail-rec benchmark in the suite hits
+`rounds=100000, fuel_out=1`. The entry cell still ends at the correct
+value (so correctness is preserved and the tests pass), but the BSP
+iteration never actually quiesces. Pre-existing closed-form variants
+of the same programs static-folded and so never exercised this path.
+
+The pattern is: state-cell ← identity(next-cell), where next-cell is
+fed by `select(cond, state-on-true, body-on-false)`. After the
+substrate computation completes, the feedback identity continues
+firing per round even though no value changes. By inspection
+`by_tag[0]=466K` (identity fires) ≫ `by_tag[5]=40` (int-lt fires),
+indicating identity propagators dominate the wasted work.
+
+This is a substrate-level bug, not an M3-M7 regression. Tracked
+separately for follow-up. Open question: does the kernel need a
+"value-equal commit drops the next_worklist scheduling" optimization,
+or is the lowering issuing a redundant feedback identity that should
+be elided when state == next?
+
+### `kernel-select` composed with non-quiescent tail-rec returns the
+### wrong arm
+
+When the result of an oscillating tail-rec subgraph feeds the cond
+input of an outer `kernel-select`, the select latches the WRONG arm
+even when the cond input has stabilized to the correct boolean.
+Stub-reproduced for `fib(20) > 1000 ? fib(20) - 6700 : 0`: cond cell
+correctly reaches `1`, but the select's output cell is still the
+false-arm value at fuel exhaustion.
+
+This blocked converting `12-showcase-tailrec-and-bool` to parameterised
+form. The closed-form version still passes (static-folds to literal
+65). Will revisit once the oscillation root cause is fixed: a quiescent
+tail-rec output should propagate to outer select cleanly.
