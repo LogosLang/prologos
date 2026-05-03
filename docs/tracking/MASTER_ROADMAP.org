@@ -23,7 +23,7 @@ Audits) are defined.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-13_PROPAGATOR_MIGRATION_MASTER.md][2026-03-13_PROPAGATOR_MIGRATION_MASTER.md]] |
 | *Thesis*         | Every piece of mutable state that participates in type-checking flows through one unified propagator network. |
-| *Status*         | Tracks 1–8D complete. Tracks 8E–11 pending. Track 8 delivered: TMS-tagged state, worldview-aware reads, restore-meta-state! retirement, 14/23 callbacks eliminated, HKT impl/resolution, bridge propagators (trait/hasmethod/constraint-retry), pure α/γ fire functions. |
+| *Status*         | Tracks 1–8D, 8F, 10, 10B complete. Tracks 8E, 10C, 11 pending. Track 9 promoted to PReduce series 2026-05-02. Track 8 delivered: TMS-tagged state, worldview-aware reads, restore-meta-state! retirement, 14/23 callbacks eliminated, HKT impl/resolution, bridge propagators (trait/hasmethod/constraint-retry), pure α/γ fire functions. |
 
 *** Completed Tracks
 
@@ -71,7 +71,7 @@ Solver) and is the foundation for the SRE Series.
 |------------------+------|
 | *Master Roadmap* | [[file:2026-03-21_BSP_LE_MASTER.md][2026-03-21_BSP_LE_MASTER.md]] |
 | *Thesis*         | Choice points are ATMS assumptions, conjunction is worklist scheduling, backtracking is nogood accumulation, tabling is cell quiescence, parallel exploration is BSP. |
-| *Status*         | Track 0 complete. Tracks 1–5 pending. See PAR Series for parallel scheduling (supersedes BSP-LE Track 4). |
+| *Status*         | Tracks 0, 2, 2B complete. Track 1.5 (Cell-Based TMS) folded into Track 2. Tracks 1, 3, 5 pending. Track 4 superseded by PAR Series. |
 | *Origin*         | [[file:2026-02-24_LOGIC_ENGINE_DESIGN.org][Logic Engine Design (Phases 4–7)]], [[file:2026-03-19_PUNIFY_PART3_ATMS_SOLVER_ARCHITECTURE.md][PUnify Part 3 (Multiverse Multiplexer)]] |
 
 *** Tracks
@@ -80,11 +80,13 @@ Solver) and is the foundation for the SRE Series.
 |-------+-------------+--------+------------|
 | 0 | Allocation Efficiency | ✅ [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] + [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][CHAMP]] [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][CHAMP PIR]] | — ([[file:2026-03-20_CELL_PROPAGATOR_ALLOCATION_AUDIT.md][Audit]], [[file:2026-03-21_CHAMP_PERFORMANCE_AUDIT.md][CHAMP Audit]]) |
 | 1 | UnionFind (persistent disjoint sets) | ⬜ | Track 0 |
-| 1.5 | Cell-Based TMS (Truth Maintenance on Network) | ⬜ | Track 0. [[file:../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md][Design Note]]. Blocks PPN 4B Phase 8 + Track 2. |
-| 2 | ATMS Solver (Multiverse Multiplexer) | ⬜ | Track 0, Track 1.5 |
+| 1.5 | Cell-Based TMS — folded into Track 2 | (folded) | [[file:../research/2026-04-06_CELL_BASED_TMS_DESIGN_NOTE.md][Design Note]]. Absorbed into Track 2 scope. |
+| 2 | ATMS Solver + Cell-Based TMS (Multiverse Multiplexer) | ✅ [[file:2026-04-07_BSP_LE_TRACK2_DESIGN.md][Design]] [[file:2026-04-10_BSP_LE_TRACK2_PIR.md][PIR]] | LE Phase 5 + Part 3 §6 + Cell-Based TMS folded. ~95 commits. |
+| 2B | Parity Deployment + Parallel + On-Network | ✅ [[file:2026-04-10_BSP_LE_TRACK2B_DESIGN.md][Design]] [[file:2026-04-16_BSP_LE_TRACK2B_PIR.md][PIR]] | 43 commits, 7529→7765 tests, 62× ATMS single-fact speedup, parallel tree-reduce, design mantra codified. |
 | 3 | Tabling (SLG memoization) | ⬜ | Track 2 |
 | 4 | BSP Pipeline (Kan extension architecture) | ⬜ → *PAR Series* | Track 3; SUPERSEDED by PAR Series (parallel scheduling across all propagator architectures) |
 | 5 | Solver Language | ⬜ | All previous |
+| 6-future | General Residual Solver (lattice-parameterized) | ⬜ | Cross-application insight from PPN 4C design dialogue. See [[file:2026-03-21_BSP_LE_MASTER.md][BSP-LE Master]] §Track 6-future. |
 
 *** Prerequisites
 
@@ -157,8 +159,8 @@ value strata. Topology strata are sequential. See =DEVELOPMENT_LESSONS.org=
 | | |
 |------------------+------|
 | *Thesis*         | PUnify is not "the unification algorithm on propagators" — it is the universal structural reasoning engine. Every system that analyzes, decomposes, or matches structure (elaboration, trait resolution, pattern compilation, reduction) uses the same SRE primitives. |
-| *Status*         | Track 0 ✅, Track 1 (relations) ✅ + 1B (fixes) ✅. Track 2 next. |
-| *Master*         | [[file:2026-03-22_SRE_MASTER.md][SRE Series Master Tracking]] |
+| *Status*         | Tracks 0, 1, 1B, 2, 2D, 2F, 2G, 2H complete. Track 2I 🔄 (Phases 1, 2, 2a, 3c ✅; Phase 4 corrective + Phase 3 close in flight). Tracks 2B (polarity), 2C (cell refs — IS PPN 4), 2E (span-based), 3-7 pending. Track 6 = PReduce series. |
+| *Master Roadmap* | [[file:2026-03-22_SRE_MASTER.md][2026-03-22_SRE_MASTER.md]] |
 | *Origin*         | [[../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][SRE Research (2026-03-22)]], Track 8D principles audit |
 
 *** Key Insight
@@ -175,15 +177,23 @@ partially dissolves (the SRE propagates both directions).
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
 | [[file:2026-03-22_SRE_TRACK0_FORM_REGISTRY_DESIGN.md][0]] | SRE Form Registry — domain-parameterized structural decomposition | ✅ [[file:2026-03-22_SRE_TRACK0_PIR.md][PIR]] | sre-core.rkt: 6 functions, 23 type ctor-descs, term-value validated |
-| [[file:2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md][1]] | Structural Relation Engine — equality, subtyping (variance), duality (constructor pairing) | ✅ [[file:2026-03-23_SRE_TRACK1_PIR.md][PIR]] | 5 relations, 28 ctor-descs, session duality on SRE, 110× failure speedup |
+| [[file:2026-03-23_SRE_TRACK1_RELATION_PARAMETERIZED_DECOMPOSITION_DESIGN.md][1]] | Structural Relation Engine — equality, subtyping (variance), duality (constructor pairing) | ✅ [[file:2026-03-23_SRE_TRACK1_PIR.md][PIR]] | 3 relations, variance, polarity utils, session duality, 110× failure speedup |
 | [[file:2026-03-23_SRE_TRACK1B_POST_IMPLEMENTATION_FIXES_DESIGN.md][1B]] | Post-impl fixes — merge-registry, decomp guard, dependent duality, benchmarks | ✅ | 7401 tests, 244.8s |
 | [[file:2026-03-23_SRE_TRACK2_ELABORATOR_ON_SRE_DESIGN.md][2]] | Elaborator-on-SRE — classifier → SRE dispatch | ✅ [[file:2026-03-23_SRE_TRACK2_PIR.md][PIR]] | O(1) prop:ctor-desc-tag, 10/10 structural cases |
-| 2F | *Algebraic Foundation* — endomorphism ring decomposition as data | ⬜ | Track 1. [[file:2026-03-28_PTF_TRACK1_DESIGN.md][PTF Track 1 §Phase 3]]. [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory §3]]. *FOUNDATIONAL — should precede Tracks 3-7.* |
-| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 1, *ideally 2F* |
-| 4 | Session Types-on-SRE — duality integration complete | ⬜ | Track 1 (duality) — basic integration done in 1/1B |
-| 4 | Pattern Compilation-on-SRE — scrutinee decomposition via SRE | ⬜ | Track 0 |
-| 5 | Reduction-on-SRE — interaction nets, e-graph, GoI | ⬜ | Track 1, PM 8F; IS PM Track 9 |
-| 6 | Module Loading-on-SRE — exports/imports as structural matching | ⬜ | Track 1; IS PM Track 10 (partial) |
+| 2B | Polarity Inference — user-defined structural subtyping | ⬜ | Track 1. Small scope (utilities exist). |
+| 2C | Cell References in Expressions — IS PPN Track 4 | ⬜ | enables zonk elimination (~1300 lines); subsumes V(2) spec injection |
+| [[file:2026-04-03_SRE_TRACK2D_DESIGN.md][2D]] | *Rewrite Relation* — 4th SRE relation, DPO spans on network | ✅ [[file:2026-04-03_SRE_TRACK2D_PIR.md][PIR]] | 13/13 rules on SRE (100%); 0 critical pairs (strongly confluent); adhesive category confirmed via [[file:../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md][research note]] |
+| 2E | Span-Based Decomposition — recognizer reads span of embedded lattice | ⬜ | From PPN Track 3: grammar productions match spans, not single cells |
+| [[file:2026-03-28_SRE_TRACK2F_DESIGN.md][2F]] | *Algebraic Foundation* — endomorphism ring decomposition as data | ✅ (PIR outstanding) | 8/8 phases. Kind-variance table, table-driven dispatch, legacy field removal. 383/383 GREEN. PIR gap noted in master. |
+| [[file:2026-03-30_SRE_TRACK2G_DESIGN.md][2G]] | *Algebraic Domain Awareness* — property-based dispatch | ✅ [[file:2026-03-30_SRE_TRACK2G_PIR.md][PIR]] | Property cells, domain registry, meet ops, ring action. *FINDING*: type lattice not distributive → Track 2H. |
+| [[file:2026-04-02_SRE_TRACK2H_DESIGN.md][2H]] | *Type Lattice Redesign* — full quantale | ✅ [[file:2026-04-03_SRE_TRACK2H_PIR.md][PIR]] | Union join + absorption, complete meet (11 ctors), tensor, per-relation properties, pseudo-complement scaffolding. *Heyting achieved* (ground sublattice). 26 commits. PREREQUISITE MET for PPN Track 4. |
+| [[file:2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md][2I]] | *SD∨/SD∧ Algebraic-Property Checks* | 🔄 | Phases 1, 2, 2a, 3c ✅. Phase 3 sweep landed but surfaced semantic bug; Phase 4 corrective in flight (refactor 5 fns + ~25 callsites for explicit join-fn). Source: [[file:../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md][lattice variety research §5.4]]. |
+| 3 | Trait Resolution-on-SRE — impl lookup via structural matching | ⬜ | Track 1, *ideally 2F*. Subsumes PM 8E resolution state. |
+| 4 | Session Types-on-SRE — duality via involution relation | ⬜ | Track 1 (duality) — basic integration done in 1/1B |
+| 5 | Pattern Compilation-on-SRE — scrutinee decomposition + NF-Narrowing | ⬜ | Track 0; GADT path via unified narrowing |
+| 6 | Reduction-on-SRE — interaction nets, e-graph, GoI | ⬜ → *PReduce Series* | OWNED BY PReduce Series ([[file:2026-05-02_PREDUCE_MASTER.md][master]]). SRE contributes rule-registry pattern as substrate. |
+| 7 | Module Loading-on-SRE — exports/imports as structural matching | ⬜ | Track 1; PM Track 10 partial |
+| PUnify | PUnify Parity Track — systemic regression investigation | ⬜ | Track 10B Phase A5: systemic failures with toggle ON. Needs dedicated design cycle. |
 
 *** SRE ↔ PM Cross-Dependencies
 
@@ -395,24 +405,29 @@ PRN (theory — what ARE the universal rewriting primitives?)
 |------------------+------|
 | *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase 14-file pipeline collapses to registered rewrite rules on the network. User-defined grammar extensions as typed hyperedge replacement rules — more powerful than Lisp macros. |
 | *Master Roadmap* | [[file:2026-03-26_PPN_MASTER.md][2026-03-26_PPN_MASTER.md]] |
-| *Status*         | Tracks 0–1 ✅. Track 2 next. PRIORITY: prerequisite to future syntax/language design work. |
+| *Status*         | Tracks 0, 1, 2, 2B, 3, 4A, 4B complete. Track 4C 🔄 (D.2 hybrid pivot committed; Pre-0 100% complete; Phase 1C ready). Tracks 3.5, 4D, 5-9 pending. PRIORITY: prerequisite to future syntax/language design work. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
 | *Contributes to PRN* | Parse lattice design, ambiguity resolution, bidirectional type↔parse flow |
 
-*** Tracks (Proposed)
+*** Tracks
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
 | 0 | Lattice design (parse, token, surface, core) | ✅ [[file:2026-03-26_PPN_TRACK0_DESIGN.md][Design]] [[file:2026-03-26_PPN_TRACK0_PIR.md][PIR]] | 4 lattices, 6 bridges, 57 tests |
-| 1 | Lexer + structure as propagators | ✅ [[file:2026-03-26_PPN_TRACK1_DESIGN.md][Design]] [[file:2026-03-26_PPN_TRACK1_PIR.md][PIR]] | 5-cell reader, 31 patterns, 380/380 green, rrb-diff |
-| 2 | Surface normalization as rewriting | ⬜ | Track 1. HIGHEST VALUE. |
-| 3 | Parser as propagators (chart/Earley, HR productions) | ⬜ | Track 2 |
-| 4 | Elaboration as attribute evaluation | ⬜ | Track 3. IS SRE Track 2C. |
-| 5 | Type-directed disambiguation | ⬜ | Track 4 |
-| 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3 |
-| 7 | User-defined grammar extensions (CAPSTONE) | ⬜ | Track 5, NTT |
-| 8 | Incremental editing (IS PM Track 11) | ⬜ | Track 5 |
-| 9 | Self-describing serialization | ⬜ | Track 3 |
+| 1 | Lexer + structure as propagators | ✅ [[file:2026-03-26_PPN_TRACK1_DESIGN.md][Design]] [[file:2026-03-26_PPN_TRACK1_PIR.md][PIR]] | 5-cell reader, 31 patterns, 380/380 green |
+| 2 | Surface normalization as rewriting | ✅ [[file:2026-03-28_PPN_TRACK2_DESIGN.md][Design]] [[file:2026-03-29_PPN_TRACK2_PIR.md][PIR]] | reader.rkt deleted, tree parser switchover, spec-aware merge |
+| 2B | Production deployment + mixfix Pocket Universe | ✅ [[file:2026-03-30_PPN_TRACK2B_DESIGN.md][Design]] [[file:2026-03-30_PPN_TRACK2B_PIR.md][PIR]] | source-line-keyed merge, mixfix claim lattice, pipe/compose rewrites |
+| 3 | Parser as propagators (chart/Earley, HR productions) | ✅ [[file:2026-04-01_PPN_TRACK3_DESIGN.md][Design]] [[file:2026-04-02_PPN_TRACK3_PIR.md][PIR]] | All forms ON-NETWORK, per-form cells, SRE FormCell + SpecCell domains, 383/383 GREEN |
+| 3.5 | Grammar Form research + speculative design | ⬜ | [[file:../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md][Grammar form research]]. Multi-view spec, DPO structural preservation. Can interleave with Track 4. |
+| 4A | Elaboration as attribute evaluation — typing on-network | ✅ [[file:2026-04-04_PPN_TRACK4_DESIGN.md][Design D.4]] [[file:2026-04-04_PPN_TRACK4_PIR.md][PIR]] | 46% on-network typing, ephemeral PU, SRE typing domain (~150 entries) |
+| 4B | Full attribute evaluation — typing + constraints + mult + warnings | ✅ [[file:2026-04-05_PPN_TRACK4B_DESIGN.md][Design D.2]] [[file:2026-04-07_PPN_TRACK4B_PIR.md][PIR]] | All 5 attribute domains on-network, 7578 tests GREEN, 6 imperative bridges as scaffolding |
+| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.2]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. Tropical fuel cell + multi-quantale composition. Pre-0 100% complete; Phase 1C hybrid pivot ready. |
+| 4D | *Attribute Grammar Substrate Unification* | ⬜ | [[file:../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md][Vision Research]]. Collapse fragmented typing/elaboration/reduction subsystems. Prereq: 4C complete + T-3 landed + PM Track 12. Multi-month scope. |
+| 5 | Type-directed disambiguation | ⬜ | Track 4. Backward type→parse via Galois bridges. Bilattice (gfp/elimination). |
+| 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3. Tropical semiring optimization. |
+| 7 | User-defined grammar extensions (CAPSTONE) | ⬜ | Track 5, NTT. Token pattern registry migration; DPO framework. |
+| 8 | Incremental editing (IS PM Track 11) | ⬜ | Track 5. RRB structural diff = incremental change tracking. |
+| 9 | Self-describing serialization | ⬜ | Track 3. Grammar-based .pnet format. Self-hosting capstone. |
 
 *** Key Connections
 
