@@ -19,9 +19,14 @@
 | 0 | [Propagator Network Taxonomy](../research/2026-03-21_PROPAGATOR_NETWORK_TAXONOMY.md) | 03-21 | Complete | Foundations survey: Radul, Kmett, Kuper LVars, category theory, lattice taxonomy, diagrammatic formalisms |
 | 1 | [Propagator Taxonomy — Parallel Profiles](../research/2026-03-28_PROPAGATOR_TAXONOMY.md) | 03-28 | Draft | 5 propagator kinds (Map, Reduce, Broadcast, Scatter, Gather), 3 compound patterns, array programming connection |
 | 2 | [Lattice Hierarchy and Distributivity for Propagators](../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md) | 04-30 | Stage 0/1 | The hierarchy free → SD → modular → distributive → Heyting → Boolean (+ quantale, residuated). What each level unlocks per propagator-kind. Worked example: SRE Track 2I Phase 3c distributivity-status flip. Connection to UCS dispatch + NTT type-level encoding. Refines and extends [Algebraic Embeddings](../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md). |
+| 3 | [Parallel Decomposition and Hasse Adjacency for Propagators](../research/2026-05-02_PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS.md) | 05-02 | Stage 0/1 | **Foundational synthesis**: integrates parallel-algorithm theory with lattice canonical-form theory + architecture lineage. The two-mind-space framing (algorithmic-thinking ↔ information-flow). Hyperlattice Conjecture graded by variety. Per-variety algorithmic-anchor table. Four-lens integration (element/variety/module/adjacency). Novelty staking with falsifiability questions for external review. Strongest single precedent identified: Garg's LLP framework (SPAA 2020+, distributive case). Universal-form C1 + algorithmic ↔ information-flow duality (C2) tagged APPARENT NOVELTY. |
+| 3a | [Parallel Algorithms Survey](../research/2026-05-02_PARALLEL_ALGORITHMS_SURVEY.md) | 05-02 | Stage 0/1 | **Companion deep survey** (782 lines): BSP/PRAM/NC; hypercube algorithms; parallel prefix-scan; communication-avoiding; MPC; lower bounds; cellular automata; Kahn process networks. 10 topics, ~75 references. The algorithmic-thinking mind-space, fully developed. |
+| 3b | [Lattice Canonical Forms Survey](../research/2026-05-02_LATTICE_CANONICAL_FORMS_SURVEY.md) | 05-02 | Stage 0/1 | **Companion deep survey** (697 lines): Whitman / Freese-Nation; Reading-Speyer-Thomas FTFSDL; Birkhoff representation; Stone/Priestley/Esakia dualities; Krull-Schmidt; lattice variety theory; modular; algebraic/continuous; convex geometries; Hasse graph properties per variety. 10 topics with cross-references. |
+| 3c | [Architecture Novelty Survey](../research/2026-05-02_ARCHITECTURE_NOVELTY_SURVEY.md) | 05-02 | Stage 0/1 | **Companion deep survey** (582 lines): propagator lineage (Sussman-Radul, Steele); CALM extensions; GoI; interaction nets + HVM2; e-graphs; Datalog/differential dataflow; categorical parallelism; Hasse-adjacency precedents (Garg LLP); algorithmic ↔ information-flow duality precedents (Kowalski); production self-hosting compilers. Per-topic novelty tags (GROUNDED / PARTIAL / APPARENT NOVELTY). |
 
 ## Related Work (cross-linked)
 
+- **[S-Lens Reference](../research/2026-05-02_S_LENS_REFERENCE.md)** — Operational supplement to the foundational synthesis (Doc 3). Extended SRE lattice lens (Q1-Q6 + candidate Q7); per-variety algorithmic-anchor lookup table; design-review checklist additions; code-review sniff tests. Pulled up alongside `structural-thinking.md` during reviews.
 - **[NTT Syntax Design](2026-03-22_NTT_SYNTAX_DESIGN.md)** — `:lattice`, `:propagator`, `:cell` declarations. PTF adds `:kind` annotations.
 - **[Lattice Foundations / Hyperlattice Conjecture](../research/2026-03-26_LATTICE_FOUNDATIONS.md)** — "Any computation as fixpoint over interconnected lattice structures." PTF describes the morphology (shapes of interconnections).
 - **[Parallel Propagator Scheduling](../research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md)** — Racket 9 landscape, Soufflé, Timely Dataflow. PTF kinds inform scheduling decisions.
@@ -42,7 +47,7 @@
 | 2 | Pipeline Detection at Construction Time | Not started | Track 1 |
 | 3 | Kind-Aware `:auto` Scheduling Heuristic | Not started | Track 2, PAR Track 2 |
 | 4 | Array Programming Sublanguage Design | Not started | Tracks 0-3, NTT |
-| 5 | Lattice Morphology Formalization | Not started | Hyperlattice Conjecture |
+| 5 | Lattice Morphology Formalization | Not started | Hyperlattice Conjecture; foundational research now landed in Doc 3 (synthesis) + 3a/3b/3c (deep surveys). Stage 3 design track gated on external review of falsifiability questions per Doc 3 §4.4. |
 
 ---
 

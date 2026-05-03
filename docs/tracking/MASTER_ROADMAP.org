@@ -348,6 +348,12 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 | Document | Date | Contribution |
 |----------+------+-------------|
 | [[file:../research/2026-03-28_PROPAGATOR_TAXONOMY.md][Propagator Taxonomy]] | 03-28 | 5 kinds, 3 compound patterns, array programming primitives map, Hyperlattice morphology |
+| [[file:../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md][Lattice Hierarchy and Distributivity]] | 04-30 | Free → SD → modular → distributive → Heyting → Boolean (+ quantale, residuated). Per-variety operational catalog. |
+| [[file:../research/2026-05-02_PARALLEL_DECOMPOSITION_AND_HASSE_ADJACENCY_FOR_PROPAGATORS.md][Parallel Decomposition and Hasse Adjacency]] | 05-02 | **Foundational synthesis**: two-mind-space framing (algorithmic ↔ information-flow). Hyperlattice Conjecture graded by variety. Per-variety algorithmic-anchor table. Four-lens integration. Novelty staking with falsifiability questions. Garg's LLP framework as strongest single precedent. |
+| [[file:../research/2026-05-02_PARALLEL_ALGORITHMS_SURVEY.md][Parallel Algorithms Survey]] | 05-02 | Companion deep survey (782 lines): BSP/PRAM/NC, hypercube, prefix-scan, communication-avoiding, MPC, lower bounds, cellular automata, dataflow networks. |
+| [[file:../research/2026-05-02_LATTICE_CANONICAL_FORMS_SURVEY.md][Lattice Canonical Forms Survey]] | 05-02 | Companion deep survey (697 lines): Whitman/FJN, Reading-Speyer-Thomas, Birkhoff, Stone/Priestley/Esakia dualities, Krull-Schmidt, varieties, modular, continuous, convex geometries, Hasse graph properties. |
+| [[file:../research/2026-05-02_ARCHITECTURE_NOVELTY_SURVEY.md][Architecture Novelty Survey]] | 05-02 | Companion deep survey (582 lines): propagator lineage, CALM, GoI, interaction nets, e-graphs, Datalog, categorical parallelism, Hasse-adjacency precedents, duality precedents, self-hosting compilers. Per-topic novelty tags. |
+| [[file:../research/2026-05-02_S_LENS_REFERENCE.md][S-Lens Reference (operational supplement)]] | 05-02 | Distillation for active design-review use: extended SRE lattice lens (Q1-Q6 + candidate Q7), per-variety algorithmic-anchor lookup table, design-review checklist, code-review sniff tests. |
 
 *** Planned Tracks
 
