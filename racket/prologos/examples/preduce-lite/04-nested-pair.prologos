@@ -1,0 +1,11 @@
+spec inner-fst <<Int * Int> * Int> -> Int
+defn inner-fst [p] [fst [fst p]]
+
+def main : Int := [inner-fst [pair [pair 100 200] 300]]
+
+;; PReduce-lite Phase 3 (uses static β): nested pair projection.
+;; Outer pair = ((100, 200), 300); fst of outer = (100, 200); fst again = 100.
+;; Validates pair-value vtree nests correctly + helper function applies
+;; via static β-expansion (helper is non-recursive so no topology stratum).
+;; nf-equivalent: (expr-int 100)
+;; :expect-exit 100

@@ -1,0 +1,13 @@
+spec pair-sum <Int * Int> -> Int
+defn pair-sum [p] [int+ [fst p] [snd p]]
+
+def main : Int := [pair-sum [pair 3 4]]
+
+;; PReduce-lite Phase 2 + Phase 3 (static β): pair construction +
+;; projection through a non-recursive helper. 3 + 4 = 7.
+;; Pair value carries the cell-ids of its two components. fst/snd
+;; propagators forward the appropriate component cell to the projection
+;; result. The helper applies via static β-expansion (no topology
+;; stratum needed since pair-sum is non-recursive).
+;; nf-equivalent: (expr-int 7)
+;; :expect-exit 7

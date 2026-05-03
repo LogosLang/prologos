@@ -1,0 +1,12 @@
+spec add-five Int -> Int
+defn add-five [n] [int+ n 5]
+
+def main : Int := [add-five 10]
+
+;; PReduce-lite Phase 3 (static β): non-recursive function call.
+;; β-reduction substitutes 10 for n in (int+ n 5); the resulting
+;; (int+ 10 5) reduces via the int-add propagator to 15.
+;; This is compile-time expansion: the body subnetwork is allocated
+;; at compile-expr time, not via a topology request.
+;; nf-equivalent: (expr-int 15)
+;; :expect-exit 15

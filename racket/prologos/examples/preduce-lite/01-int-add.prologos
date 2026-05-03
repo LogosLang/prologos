@@ -1,0 +1,7 @@
+def main : Int := [int+ 2 3]
+
+;; PReduce-lite Phase 2 acceptance: simplest int arithmetic. Network shape:
+;; cell-a := 2, cell-b := 3, cell-r := bot; propagator (cell-a, cell-b) → cell-r
+;; fires once both inputs are concrete and writes (expr-int 5).
+;; nf-equivalent: (expr-int 5)
+;; :expect-exit 5

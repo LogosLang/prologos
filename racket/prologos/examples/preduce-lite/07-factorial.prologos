@@ -1,0 +1,16 @@
+spec factorial-iter Int -> Int -> Int
+defn factorial-iter [acc n]
+  match [int-le n 1]
+    | true  -> acc
+    | false -> [factorial-iter [int* acc n] [int- n 1]]
+
+def main : Int := [factorial-iter 1 5]
+
+;; PReduce-lite Phase 4 + 5 + 10 (this is the deepest acceptance test):
+;; iterative factorial. Each call β-reduces in the topology stratum;
+;; match-on-Bool dispatches to the recursive case until n <= 1.
+;; 5! = 120. After elaboration, match becomes either expr-boolrec (Phase 5)
+;; or expr-reduce (Phase 10) depending on elaborator pattern recognition;
+;; the harness handles whatever the elaborator produces.
+;; nf-equivalent: (expr-int 120)
+;; :expect-exit 120

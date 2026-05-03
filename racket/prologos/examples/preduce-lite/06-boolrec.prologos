@@ -1,0 +1,9 @@
+def main : Int := [boolrec Int 100 200 [int-lt 3 5]]
+
+;; PReduce-lite Phase 5 (Bool eliminator): boolrec dispatches on the
+;; scrutinee. (int-lt 3 5) reduces to true; boolrec then returns the
+;; true-case (100). Validates iota-rule firing: when scrutinee resolves
+;; to a known constructor, the matching arm's compiled body is bridged
+;; to the result via identity propagator.
+;; nf-equivalent: (expr-int 100)
+;; :expect-exit 100
