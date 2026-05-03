@@ -1743,6 +1743,10 @@ helpers are lowered."
     [(expr-char _)            (lowering-deferred-substrate! expr "Char")]
     [(expr-string _)         (lowering-deferred-substrate! expr "String")]
     [(expr-hole)             (translate-error! expr "lowering: unsolved metavar (hole)")]
+    [(expr-typed-hole _)
+     (translate-error! expr "lowering: typed editor hole (??) — incomplete program")]
+    [(expr-Open)
+     (translate-error! expr "lowering: Open placeholder — incomplete program")]
     [(expr-meta _ _)         (translate-error! expr "lowering: expr-meta should not reach codegen")]
     [(expr-tycon _)          (lowering-type-only! expr "type constructor")]
 

@@ -691,6 +691,12 @@
   (check-exn ast-translation-error?
     (lambda () (ast-to-low-pnet main-type main-body "t.prologos"))))
 
+(test-case "lowering rejects typed hole and Open placeholders"
+  (check-exn ast-translation-error?
+    (lambda () (ast-to-low-pnet (expr-Int) (expr-typed-hole 'h) "t.prologos")))
+  (check-exn ast-translation-error?
+    (lambda () (ast-to-low-pnet (expr-Int) (expr-Open) "t.prologos"))))
+
 ;; ============================================================
 ;; Unit / Nil / Eq proofs (2026-05-03)
 ;; ============================================================
