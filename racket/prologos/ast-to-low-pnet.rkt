@@ -1338,6 +1338,22 @@ parameterised main). Other non-literal initializers are deferred."))
          expr
          "J elimination requires a refl proof at lowering time")])]
 
+    ;; Nil predicate — sound when scrutinee is lowered Nil (sentinel 0).
+    ;; Typed surface guarantees disjointness from arbitrary Int programs.
+    [(expr-nil-check arg-expr)
+     (build-binary b arg-expr (expr-int 0) 'kernel-int-eq env BOOL-DOMAIN-ID #f)]
+
+    ;; Fin indices as plain i64 (bound type argument ignored at runtime).
+    [(expr-fzero _bound)
+     (emit-cell! b INT-DOMAIN-ID 0)]
+    [(expr-fsuc _bound inner)
+     (define inner-vt (build inner b INT-DOMAIN-ID env))
+     (define inner-cid (assert-scalar! inner-vt inner "expr-fsuc inner"))
+     (define one-cid (emit-cell! b INT-DOMAIN-ID 1))
+     (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
+     (emit-aligned-propagator! b (list inner-cid one-cid) r-cid 'kernel-int-add)
+     r-cid]
+
     ;; Nat literals (Sprint F.4). expr-nat-val holds an O(1) i64 nat;
     ;; same runtime representation as Int. expr-zero is just literal 0.
     [(expr-nat-val n)

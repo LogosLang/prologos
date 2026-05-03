@@ -738,3 +738,27 @@
                (expr-int 2)
                (expr-int 0))
        "t.prologos"))))
+
+;; ============================================================
+;; Nil-check / Fin indices (2026-05-03)
+;; ============================================================
+
+(test-case "nil-check: nil matches sentinel 0 → Bool eq propagator"
+  (define body (expr-nil-check (expr-nil)))
+  (define lp (ast-to-low-pnet (expr-Bool) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (define p (for/first ([n (in-list (low-pnet-nodes lp))]
+                        #:when (propagator-decl? n)) n))
+  (check-equal? (propagator-decl-fire-fn-tag p) 'kernel-int-eq))
+
+(test-case "expr-fzero → literal 0; expr-fsuc increments inner Fin index"
+  (define lp0 (ast-to-low-pnet (expr-Int) (expr-fzero (expr-nat-val 4)) "t.prologos"))
+  (check-true (validate-low-pnet lp0))
+  (define c0 (for/first ([n (in-list (low-pnet-nodes lp0))]
+                         #:when (cell-decl? n)) n))
+  (check-equal? (cell-decl-init-value c0) 0)
+  ;; fsuc 4 (fzero 3) ~ 1 as i64
+  (define body-fs (expr-fsuc (expr-nat-val 4) (expr-fzero (expr-nat-val 3))))
+  (define lp1 (ast-to-low-pnet (expr-Int) body-fs "t.prologos"))
+  (check-true (validate-low-pnet lp1))
+  (check-equal? (count-by lp1 propagator-decl?) 1))
