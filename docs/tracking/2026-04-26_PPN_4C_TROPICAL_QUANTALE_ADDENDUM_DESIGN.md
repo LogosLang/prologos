@@ -29,9 +29,10 @@
 | **P6** "First production landing establishes pattern" risks templating hybrid scaffolding | REFINEMENT | ACCEPT (with MASTER_ROADMAP.org variation) | UPDATE §6.6 PReduce + OE Series rows: hybrid-as-scaffolding-NOT-template caveat; future consumers design TO TARGET full cell-substrate; per-track empirical justification + four-surface tracking discipline if hybrid needed. NEW MASTER_ROADMAP.org § OE Series "Scaffolding caveat" row at the roadmap level (where future-track designers go FIRST when planning new tracks, not buried in D.3). |
 | **P5** γ-bundle scope precision (sub-phase count) | ACKNOWLEDGE | ACCEPT | UPDATE §1.2 — add sub-phase count estimate under γ-bundle-wide (~12-15 implementation sub-phases: 1A-iii-b ~5; 1A-iii-c ~8; 1B ~3; 1C ~5 under hybrid; 1V atomic close); name the bundle-vs-sub-phase scope distinction (DESIGN scope vs IMPLEMENTATION scope); also note Phase 1C estimate reframed under D.2 hybrid pivot (~45-90 LoC, was ~250-400 in D.1) per R1 REFINEMENT acceptance forward-pointer. |
 | **R1** Phase 1C estimate stale (~45-90 LoC under hybrid; was ~250-400 D.1) | REFINEMENT | ACCEPT | UPDATE §1.2 Phase 1C estimate to ~45-90 LoC with explicit hybrid-vs-D.1 reframing (zero-migration list of preserved sites + actual migration list); §10.1 NEW R1 commentary subsection: small footprint is intentional NOT "easy migration"; future PReduce/OE consumers should not misread small footprint as evidence of easy migration (work was DEFERRED via scaffolding per §10.1.A + Issue #55, not eliminated). |
+| **R2** Q-Audit-1 17-refs framing carried forward without rescoping | REFINEMENT | ACCEPT | UPDATE §10.2 — add R2 commentary at audit-grounding location; categorize 17 refs under hybrid (15 PRESERVED + 2-3 SELECTIVELY MIGRATED); name "17 production refs" as REFERENCE for completeness (full architectural scope) vs actual hybrid migration scope ~3-5 sites; future SH Series migration recovers full 17-ref scope per Issue #55 + DEFERRED.md. |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING + 5 REFINEMENTs (P1+P4 consolidated; P2; P6; R1) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 1/4 complete.
+**3 BLOCKING + 6 REFINEMENTs (P1+P4 consolidated; P2; P6; R1; R2) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 2/4 complete.
 
 ---
 
@@ -1093,6 +1094,17 @@ Under hybrid pivot, the fuel-cost cell's value LAGS the struct-field's live stat
 - **pretty-print** (1): UPDATE to display both struct-field cost and cell-budget for debugging
 - **Test sites** (13): MINIMAL migration — preserve existing struct-field assertions; ADD new tests for cell-mediated APIs where Phase 3C-relevant
 - **Bench sites** (2): NO migration (bench-alloc.rkt measures decrement cost, which stays struct-copy)
+
+**D.3 R2 commentary — Q-Audit-1 17-refs framing under hybrid**:
+
+D.1 §2.2 Q-Audit-1 enumerated 17 production refs to `prop-network-fuel`. Under D.2/D.3 hybrid pivot, the categorization is:
+- **15 PRESERVED** (no migration; per the production scope list above): 4 decrement sites + 11 check sites
+- **2-3 SELECTIVELY MIGRATED** (per §10.3 selective-migration patterns): 1-2 read-as-value sites at semantic-transition paths + typing-propagators saved-fuel cell sync
+- **Plus**: 1 pretty-print update (dual display); 13 test refs MOSTLY PRESERVED (struct-field assertions); 2 bench refs PRESERVED
+
+The "17 production refs" count from Q-Audit-1 is **REFERENCE for completeness** (architectural visibility into the full migration scope D.1 envisioned); the actual MIGRATION scope under hybrid is ~3-5 sites (per R1 §1.2 reframing). Future SH Series migration will recover the full 17-ref scope (per [Issue #55](https://github.com/LogosLang/prologos/issues/55) + [DEFERRED.md](DEFERRED.md) "PPN 4C tropical addendum: hybrid pivot scaffolding retirement" entry).
+
+This rescoping note bridges the audit grounding (17-refs framing useful for full architectural visibility) with the actual hybrid migration scope (~3-5 sites) so future readers don't misread the audit count as the implementation count.
 
 ### §10.3 Per-site patterns under hybrid (REVISED)
 
