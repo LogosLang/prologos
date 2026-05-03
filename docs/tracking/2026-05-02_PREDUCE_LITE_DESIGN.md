@@ -53,11 +53,30 @@ Status legend: ⬜ not started, 🔄 in progress, ✅ done, ⏸️ blocked.
 
 PReduce-lite is a propagator-network-based reducer for the elaborated Prologos AST. It produces, for an input expression `e`, a network of cells + propagators whose run-to-quiescence yields the WHNF of `e`.
 
+**Design priority order** (load-bearing):
+
+1. **Correctness** — PReduce-lite must produce results equal to `nf` for every supported node. Not "approximately right," not "right modulo edge cases" — exactly equal under `equal?`. Differential-test against `nf` at every phase.
+2. **Simplicity** — every design choice that trades simplicity for performance is wrong for this track. Discrete value lattice (not e-graph), per-call fresh networks (not sharing), one cell per sub-expression (not granularity tuning), imperative fuel (not tropical-lattice fuel). The simplest realization that produces correct results.
+3. **Performance** — *not a goal of PReduce-lite.* Expected to be slower than `nf` because we're paying network overhead for what `nf` does as direct recursion. The full Track 9 vision (e-graph sharing, dependency-tracked invalidation, tropical-quantale fuel) closes the perf gap; PReduce-lite establishes the architectural shape on which those layers compose.
+
+If at any point we find ourselves making a design choice for performance that compromises simplicity or correctness, we are violating the priority order. **Eager optimization is explicitly out of scope.**
+
 **Scope: full AST coverage, phased implementation.** PReduce-lite eventually covers every AST node kind handled by the existing `reduction.rkt` (~80 distinct match arms). Implementation lands in 16 phases; each phase extends the supported set and gates on a differential-test pass against `nf`. The final phase (15) is a 1000-case property-based differential gate over the full surface; phase 16 flips the default (per workflow rule "Validated ≠ Deployed").
 
 **"Lite" means**: no incrementality, no e-graph merges, no equality saturation, no speculative reduction, no tropical-quantale fuel. The cell-value lattice is the simplest possible (discrete with bot); each cell is written once. PReduce-lite is the architectural scaffolding on which full Track 9 (incremental reduction with dependency-tracked invalidation) is later built — same shape, more lattice structure.
 
 **Output**: `(preduce expr) → expr` — drop-in replacement for `(nf expr)` over the supported subset. **Out-of-scope nodes raise a structured error** (no silent fallback during development). For incremental rollout: opt-in via `current-use-preduce?` parameter; default `#f` until Phase 16 flips it after full-coverage gate. This favors correctness over rollout convenience: bugs surface fast rather than hide behind fallback paths. (See § 8 for the validation strategy + parameter contract.)
+
+### 1.1 Per-phase implementation protocol
+
+For each phase 0-16, the following workflow is mandatory (per workflow rule on conversational implementation cadence):
+
+1. **Plan**: re-read the relevant sections of the original PReduce research doc (`2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md`) and this design doc; write a phase mini-plan inline at the phase's progress-tracker row + as a comment block at the top of the phase's implementation file. The mini-plan lists: nodes added this phase, fire-fn shape per node, test cases to add, success criteria.
+2. **Implement**: the code per the mini-plan.
+3. **Validate**: per-phase test set passes (acceptance file entries unlocked + new test cases + ~50-case differential against `nf` over current subset). For Phase 5+: at least one Prologos program exercising the new feature runs end-to-end via `(preduce e)` and produces the same value as `(nf e)`.
+4. **Commit + push**: phase isn't done until pushed; tracker updated to ✅ with commit hash.
+5. **If failure**: diagnose; if local fix, apply and re-validate; **if sticky** (3+ failed attempts), redesign the phase — write a delta in this doc + a new mini-plan; user-checkpoint before continuing.
+6. **Next phase** starts only after current phase is ✅.
 
 ---
 
@@ -575,6 +594,7 @@ All decision points resolved. Ready for Phase 0 (acceptance file).
 | ✓ Foreign-fn deferred to Phase 9 | Is this a real deferral or rationalization? — *Real, with named target (Phase 9) and specific rationale (§ 5.8): NF-on-args requires NF mode in PReduce; side-effect semantics under BSP need explicit treatment. Programs using FFI raise `preduce-unsupported-node-error` until Phase 9 lands; the existing `nf` continues to handle them via `current-use-preduce? = #f`. Acceptance file chosen to not exercise FFI.* |
 | ✓ Per-phase gate + final 1000-case differential | Is this redundant? — *No. Per-phase gate validates the just-added subset; final gate validates interactions across the full surface. Phase 15 catches interaction bugs that per-phase gates can't (since per-phase gates only see partial coverage).* |
 | ✓ Validated ≠ Deployed (Phase 15 vs 16) | Real separation, or theatre? — *Real. Phase 15 is "PReduce-lite is correct" (1000-case differential); Phase 16 is "PReduce-lite is the default" (full suite passes with `current-use-preduce? = #t`). Per workflow rule, validation phase must be followed by an explicit deployment phase, not implicitly conflated.* |
+| ✓ No eager optimization (priority order: correctness > simplicity > performance) | Will perf shortcuts creep in during implementation? — *Tracked at every phase commit: each commit message lists the design choices made and confirms none traded simplicity or correctness for performance. If a perf-driven choice is made, it must be (a) named as a deviation in the commit message, (b) justified, (c) accompanied by an entry in the design-doc deltas section. The bar for accepting a perf-driven choice is high; the default is "no, simpler is better, perf is for full Track 9."* |
 | ✓ Differential testing | Is the test methodology valid? — *Differential against `nf` is the strongest possible oracle (it's the existing implementation). The risk is `nf` having a bug that PReduce inherits — but that's a different class of bug (semantic, not architectural).* |
 
 ---
