@@ -107,7 +107,16 @@
                  ;; rather than the never-shipped Sprint G iter-block-decl
                  ;; pattern. See docs/tracking/2026-05-02_KERNEL_POCKET_UNIVERSES.md
                  ;; § 5.5 and § 14.1 Day 9.
-                 [tail-rec-count #:auto #:mutable])
+                 [tail-rec-count #:auto #:mutable]
+                 ;; lowering-yolo M3 (2026-05-02): cell-ids allocated for
+                 ;; main's parameters, in OUTERMOST-FIRST declaration
+                 ;; order. Empty list for closed main (the historical
+                 ;; case). Read by ast-to-low-pnet to emit the
+                 ;; (meta-decl input-cells (cid0 cid1 ...)) +
+                 ;; (meta-decl main-prints-result #t) signature consumed
+                 ;; by low-pnet-to-llvm. See
+                 ;; docs/tracking/2026-05-02_LOWERING_INPUT_OUTPUT.md.
+                 [input-cells #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -123,6 +132,7 @@
   ;; identity-feedback propagators) directly into builder-cells /
   ;; builder-props; no separate iter-block accumulator is needed.
   (set-builder-tail-rec-count! b 0)
+  (set-builder-input-cells! b '())
   b)
 
 (define (cell-depth b cid)
@@ -1941,19 +1951,129 @@ but lowered to a non-ctor vtree (~v)." type-name scrut-vt)))
 ;; after process-file. source-file is the .prologos path, used for the
 ;; meta-decl.
 
+;; build-parameterised-main : (Listof type) × main-body × builder × dom-id → vtree
+;;
+;; Entry-point variant for `def main : T1 -> T2 -> ... -> R := \x.\y...body`.
+;;
+;;   1. Peel matching lambda binders from main-body. Reject mismatched arity.
+;;   2. Validate each parameter type is Int (extending later).
+;;   3. Allocate one INT-DOMAIN cell per parameter (init=0; will be
+;;      overwritten at runtime by the LLVM lowering pass via
+;;      prologos_argv_i64 + prologos_cell_write before quiescence).
+;;   4. Build the env in DE BRUIJN order: innermost binder at the
+;;      head, outermost at the tail. For `\x.\y.body`:
+;;        - x is bvar 1 → at index 1 → tail of env
+;;        - y is bvar 0 → at index 0 → head of env
+;;      So we cons input cells onto env outermost-first (left-fold),
+;;      which puts the LAST-LISTED parameter (innermost) at the head.
+;;   5. Mirror the same shape into current-static-env with 'unknown
+;;      values, so try-static-eval treats every reference to these
+;;      bvars as UNFOLDABLE — the body's expression cannot collapse
+;;      to a literal at compile time.
+;;   6. Build the body in the seeded env. Subsequent (expr-bvar i)
+;;      lookups resolve to the input cell ids; subsequent static-eval
+;;      attempts return UNFOLDABLE.
+;;   7. Stash the input cell ids on the builder for the final meta-decl
+;;      emission in ast-to-low-pnet.
+(define (build-parameterised-main param-types main-body b result-domain)
+  (define n (length param-types))
+  (define-values (lam-arg-types body-after-lams) (peel-lambdas main-body))
+  (unless (= n (length lam-arg-types))
+    (translate-error!
+     main-body
+     (format
+      "main has type with ~a parameter(s) but body has ~a lambda binder(s); \
+explicit lambdas are required for parameterised main (eta-expansion / \
+fvar-only bodies are not yet supported)"
+      n (length lam-arg-types))))
+  (for ([t (in-list param-types)] [i (in-naturals)])
+    (unless (or (expr-Int? t) (expr-Nat? t))
+      (translate-error!
+       t
+       (format
+        "parameter ~a of main has type ~v; only Int / Nat parameters \
+are supported (Bool / String / ADT input deferred to a later milestone)"
+        i t))))
+
+  ;; Allocate input cells (one per parameter), in declaration order.
+  ;; emit-cell! returns cell-ids in increasing order; for a 2-arg main
+  ;; this gives input-cells = (0 1) where 0 is the OUTER param.
+  (define input-cells
+    (for/list ([_t (in-list param-types)])
+      (emit-cell! b INT-DOMAIN-ID 0)))
+
+  ;; Build env in de Bruijn order: innermost (last-listed) at head.
+  ;; Cons in declaration order so the last parameter ends up at the
+  ;; head and is reached by (expr-bvar 0).
+  (define env
+    (for/fold ([env '()])
+              ([cid (in-list input-cells)])
+      (cons cid env)))
+  (define lit-env
+    (for/fold ([le '()])
+              ([_t (in-list param-types)])
+      (cons 'unknown le)))
+
+  ;; Stash the input-cell ids on the builder so ast-to-low-pnet can
+  ;; emit the meta-decl signature after the build pass completes.
+  (set-builder-input-cells! b input-cells)
+
+  (with-static-extension lit-env
+    (build body-after-lams b result-domain env)))
+
+;; Peel an arrow chain from a type expression. Returns (values
+;; param-types codomain). param-types is OUTERMOST-FIRST; codomain
+;; is the final non-Pi type. For a non-Pi type, returns ('() T).
+;;
+;; Examples:
+;;   Int                      → '()              , Int
+;;   Int -> Int               → '(Int)           , Int
+;;   Int -> Bool -> Int       → '(Int Bool)      , Int
+;;
+;; lowering-yolo M3 (2026-05-02): used by ast-to-low-pnet's
+;; parameterised-main entry path. Today we only support `Int -> Int`
+;; (one Int parameter); the function returns the full chain so the
+;; caller can give targeted error messages.
+(define (peel-pi t)
+  (let loop ([t t] [acc '()])
+    (match t
+      [(expr-Pi 'mw dom cod) (loop cod (cons dom acc))]
+      [_ (values (reverse acc) t)])))
+
 (define (ast-to-low-pnet main-type main-body source-file)
   (define b (make-builder))
-  ;; Pick an outermost domain based on main's type (for the meta only;
-  ;; the result cell's domain is set during build). main has no enclosing
-  ;; lambdas, so the initial env is empty.
+  (define-values (param-types codomain-type) (peel-pi main-type))
+  (define n-params (length param-types))
+
+  ;; Choose the result-domain (from codomain) and walk the body. The
+  ;; closed-main path matches the historical behavior; the
+  ;; parameterised-main path (n-params > 0) allocates one input cell
+  ;; per parameter, seeds the body's env / static-env, and emits
+  ;; meta-decls describing the input plumbing for the LLVM lowering
+  ;; pass to consume.
+  (define result-domain
+    (cond
+      [(expr-Int? codomain-type) INT-DOMAIN-ID]
+      [(expr-Nat? codomain-type) INT-DOMAIN-ID]
+      [(expr-Bool? codomain-type) BOOL-DOMAIN-ID]
+      [else
+       (translate-error! codomain-type
+                         "main must ultimately return Int, Nat, or Bool")]))
+
   (define result-vt
     (cond
-      [(expr-Int? main-type)  (build main-body b INT-DOMAIN-ID '())]
-      [(expr-Nat? main-type)  (build main-body b INT-DOMAIN-ID '())]
-      [(expr-Bool? main-type) (build main-body b BOOL-DOMAIN-ID '())]
+      [(zero? n-params)
+       ;; Closed main — original entry path. main-body is the value
+       ;; expression directly; no lambda peeling, empty env.
+       (build main-body b result-domain '())]
       [else
-       (translate-error! main-type
-                         "main must currently have type Int, Nat, or Bool")]))
+       ;; Parameterised main (lowering-yolo M3, 2026-05-02). Today we
+       ;; only support Int / Nat parameters and a Pi-typed main with
+       ;; an explicit lambda for each binder. Multi-parameter is
+       ;; allowed but the actual argv plumbing in low-pnet-to-llvm
+       ;; only wires up the first one for now (the meta-decls list
+       ;; them all so the gating is honest).
+       (build-parameterised-main param-types main-body b result-domain)]))
   ;; The top-level entry-decl points at ONE cell. main must produce a
   ;; scalar; pair-typed `def main` is rejected (the binary's exit code
   ;; is single-valued). Helpers and intermediate expressions can be
@@ -2008,12 +2128,37 @@ but lowered to a non-ctor vtree (~v)." type-name scrut-vt)))
               (meta-decl 'tail-rec-count (builder-tail-rec-count b)))
         '()))
 
+  ;; lowering-yolo M3 (2026-05-02): parameterised-main meta-decls.
+  ;; Two signatures:
+  ;;   (meta-decl input-cells (cid0 cid1 ...))   ; outermost-first
+  ;;   (meta-decl main-prints-result #t)         ; signal stdout printing
+  ;;
+  ;; Both are emitted iff main has at least one parameter. The
+  ;; low-pnet-to-llvm pass scans for these and:
+  ;;   - reshapes @main from `i64 @main()` to `i32 @main(i32, i8**)`
+  ;;   - emits one prologos_argv_i64 + prologos_cell_write per input
+  ;;     cell, before prologos_run_to_quiescence
+  ;;   - emits one prologos_print_i64 of the entry-cell value before ret 0
+  ;;
+  ;; Both meta-decls are absent for closed main; the LLVM emitter
+  ;; preserves the historical exit-code-only @main signature in that
+  ;; case for backward compatibility with all existing benchmarks
+  ;; and golden fixtures.
+  (define input-cells (builder-input-cells b))
+  (define input-meta
+    (cond
+      [(null? input-cells) '()]
+      [else
+       (list (meta-decl 'input-cells input-cells)
+             (meta-decl 'main-prints-result #t))]))
+
   ;; Validation order requires domains before cells, cells before props,
   ;; props before deps, all before entry.
   (low-pnet
    '(1 1)
    (append (list meta)
            tail-rec-meta
+           input-meta
            domain-decls
            cells-emitted
            props-emitted

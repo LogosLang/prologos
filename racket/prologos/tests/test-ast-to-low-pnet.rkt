@@ -617,3 +617,76 @@
     (count-by lp (lambda (n) (and (cell-decl? n)
                                   (eqv? (cell-decl-init-value n) 7)))))
   (check-equal? int-cells-with-7 1))
+
+;; ============================================================
+;; M3 — parameterised main (lowering-yolo, 2026-05-02)
+;; ============================================================
+;;
+;; `def main : Int -> Int := \x. body` should:
+;;  1. allocate one input cell with init=0 (overwritten at runtime via argv)
+;;  2. seed (expr-bvar 0) to that cell-id during the body's build pass
+;;  3. seed the static-eval lit-env with 'unknown so the body is NOT folded
+;;  4. emit (meta-decl input-cells (cid)) and (meta-decl main-prints-result #t)
+
+(define (find-meta lp key)
+  (for/or ([n (in-list (low-pnet-nodes lp))])
+    (and (meta-decl? n) (eq? (meta-decl-key n) key) n)))
+
+(test-case "M3: parameterised main emits input-cells + main-prints-result meta"
+  ;; def main : Int -> Int := \x. x
+  ;; body = (expr-bvar 0); should resolve to the input cell, no propagators.
+  (define main-type (expr-Pi 'mw (expr-Int) (expr-Int)))
+  (define main-body (expr-lam 'mw (expr-Int) (expr-bvar 0)))
+  (define lp (ast-to-low-pnet main-type main-body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (define input-meta (find-meta lp 'input-cells))
+  (check-not-false input-meta)
+  (check-equal? (meta-decl-value input-meta) (list 0))
+  (define print-meta (find-meta lp 'main-prints-result))
+  (check-not-false print-meta)
+  (check-equal? (meta-decl-value print-meta) #t)
+  ;; Entry cell is the input cell itself for the identity body.
+  (define entry (for/first ([n (in-list (low-pnet-nodes lp))]
+                            #:when (entry-decl? n)) n))
+  (check-equal? (entry-decl-main-cell-id entry) 0))
+
+(test-case "M3: closed main does NOT emit input-cells / main-prints-result meta"
+  ;; Backward-compat regression gate: existing closed-main programs
+  ;; must not start carrying parameterised-main metadata.
+  (define lp (ast-to-low-pnet (expr-Int) (expr-int 42) "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (check-false (find-meta lp 'input-cells))
+  (check-false (find-meta lp 'main-prints-result)))
+
+(test-case "M3: parameterised main inhibits static-eval (would otherwise fold)"
+  ;; def main : Int -> Int := \x. [int+ x 1]
+  ;; If static-eval saw a literal x, the body would collapse to a single
+  ;; cell (x+1 = constant). Because x is bound to an opaque input cell
+  ;; and lit-env carries 'unknown for it, the body retains the int-add
+  ;; propagator + per-arg cells.
+  (define main-type (expr-Pi 'mw (expr-Int) (expr-Int)))
+  (define main-body
+    (expr-lam 'mw (expr-Int)
+              (expr-int-add (expr-bvar 0) (expr-int 1))))
+  (define lp (ast-to-low-pnet main-type main-body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Should have at least one int-add propagator (proof that static-eval
+  ;; did NOT fold the body to a literal).
+  (define n-add
+    (count-by lp (lambda (n) (and (propagator-decl? n)
+                                  (eq? (propagator-decl-fire-fn-tag n) 'kernel-int-add)))))
+  (check-true (>= n-add 1) "expected at least one int-add propagator (body not folded)"))
+
+(test-case "M3: parameterised main with type/body arity mismatch raises"
+  ;; main type says Int -> Int but body is just an int literal (no lambda).
+  (define main-type (expr-Pi 'mw (expr-Int) (expr-Int)))
+  (define main-body (expr-int 42))
+  (check-exn ast-translation-error?
+    (lambda () (ast-to-low-pnet main-type main-body "t.prologos"))))
+
+(test-case "M3: parameterised main with non-Int parameter raises"
+  ;; def main : Bool -> Int := \b. <body> — Bool input not supported yet.
+  (define main-type (expr-Pi 'mw (expr-Bool) (expr-Int)))
+  (define main-body (expr-lam 'mw (expr-Bool) (expr-int 1)))
+  (check-exn ast-translation-error?
+    (lambda () (ast-to-low-pnet main-type main-body "t.prologos"))))
