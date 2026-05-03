@@ -11,11 +11,14 @@
 ;;; no expr-meta).
 
 (require rackunit
+         racket/runtime-path
          "../syntax.rkt"
          "../preduce.rkt"
          "../global-env.rkt"
          "../driver.rkt"
          (only-in "../reduction.rkt" nf))
+
+(define-runtime-path FACTORIAL-PATH "../examples/preduce-lite/07-factorial.prologos")
 
 (define (check-preduce/nf e expected)
   (define got-preduce (preduce e))
@@ -83,7 +86,9 @@
 ;; ====================================================================
 
 (test-case "factorial-iter 1 5 = 120 via acceptance file"
-  (process-file "../examples/preduce-lite/07-factorial.prologos")
+  ;; FACTORIAL-PATH is resolved relative to THIS source file via
+  ;; define-runtime-path, so the test runs identically from any cwd.
+  (process-file (path->string FACTORIAL-PATH))
   (define main-body (global-env-lookup-value 'main))
   (check-equal? (preduce main-body) (expr-int 120))
   (check-equal? (nf main-body) (expr-int 120)))

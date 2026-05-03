@@ -228,6 +228,38 @@
     [(? expr-quire32-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
     [(? expr-quire64-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
 
+    ;; ----- Phase 11: container value-tokens (held opaque) -----
+    ;; expr-champ wraps a Racket CHAMP map; it's a value-token from
+    ;; reduction's perspective. Container OPS (map-get/set-insert/etc.)
+    ;; have real reduction logic and remain unsupported in PReduce-lite
+    ;; (deferred to Phase 11b sub-phase).
+    [(? expr-champ?) (alloc-value-cell net e)]
+
+    ;; ----- Phase 13: logic-engine value-tokens (held opaque) -----
+    ;; Post-elaboration, these appear as value tokens (cell-ids, prop-ids,
+    ;; ATMS handles, etc.) — reducer treats as values that don't unfold.
+    [(? expr-cell-id?)            (alloc-value-cell net e)]
+    [(? expr-cell-id-type?)       (alloc-value-cell net e)]
+    [(? expr-prop-id-type?)       (alloc-value-cell net e)]
+    [(? expr-uf-type?)            (alloc-value-cell net e)]
+    [(? expr-atms-type?)          (alloc-value-cell net e)]
+    [(? expr-assumption-id-type?) (alloc-value-cell net e)]
+    [(? expr-assumption-id-val?)  (alloc-value-cell net e)]
+    [(? expr-table-store-type?)   (alloc-value-cell net e)]
+    [(? expr-solver-type?)        (alloc-value-cell net e)]
+    [(? expr-goal-type?)          (alloc-value-cell net e)]
+    [(? expr-derivation-type?)    (alloc-value-cell net e)]
+    [(? expr-schema-type?)        (alloc-value-cell net e)]
+    [(? expr-answer-type?)        (alloc-value-cell net e)]
+    [(? expr-relation-type?)      (alloc-value-cell net e)]
+    [(? expr-net-type?)           (alloc-value-cell net e)]
+
+    ;; ----- Phase 14: tail edges (held opaque) -----
+    ;; Open/cumulative/Fin family + miscellaneous edge-case nodes that
+    ;; appear post-elaboration as value tokens. Most are handled by the
+    ;; type-former opaque rule in Phase 1; the rest land here.
+    [(? expr-Open?) (alloc-value-cell net e)]
+
     ;; ----- Phase 2: annotation erasure -----
     ;; (expr-ann e _) reduces by erasing the type annotation.
     [(expr-ann inner _)
