@@ -50,7 +50,14 @@
          (only-in "sre-core.rkt" make-sre-domain register-domain!)
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)
          (only-in "reduction.rkt" nf)  ;; for preduce-or-nf diagnostic helper
-         (only-in "global-env.rkt" global-env-lookup-value))
+         (only-in "global-env.rkt" global-env-lookup-value)
+         ;; Phase 11b: container ops
+         (only-in "champ.rkt"
+                  champ-empty champ-lookup champ-insert champ-delete
+                  champ-size champ-has-key? champ-keys champ-vals)
+         (only-in "rrb.rkt"
+                  rrb-empty rrb-size rrb-get rrb-set rrb-push rrb-pop
+                  rrb-concat rrb-slice rrb-to-list rrb-from-list))
 
 (provide
  ;; Entry points
@@ -229,11 +236,57 @@
     [(? expr-quire64-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
 
     ;; ----- Phase 11: container value-tokens (held opaque) -----
-    ;; expr-champ wraps a Racket CHAMP map; it's a value-token from
-    ;; reduction's perspective. Container OPS (map-get/set-insert/etc.)
-    ;; have real reduction logic and remain unsupported in PReduce-lite
-    ;; (deferred to Phase 11b sub-phase).
+    ;; expr-champ wraps a Racket CHAMP map; expr-hset wraps a CHAMP-backed
+    ;; set; expr-rrb wraps a Racket RRB-tree pvec. Container OPS
+    ;; (Phase 11b) operate on these wrappers.
     [(? expr-champ?) (alloc-value-cell net e)]
+    [(? expr-hset?)  (alloc-value-cell net e)]
+    [(? expr-rrb?)   (alloc-value-cell net e)]
+
+    ;; ----- Phase 11b: Map ops -----
+    [(expr-map-empty _ _) (alloc-value-cell net (expr-champ champ-empty))]
+    [(expr-map-assoc m k v) (compile-map-assoc net env m k v)]
+    [(expr-map-get m k)     (compile-map-get net env m k)]
+    [(expr-map-dissoc m k)  (compile-map-dissoc net env m k)]
+    [(expr-map-size m)      (compile-map-1arg net env m
+                              (lambda (c) (expr-nat-val (champ-size c))))]
+    [(expr-map-has-key m k) (compile-map-2arg-bool net env m k
+                              (lambda (c k*) (if (champ-has-key? c (equal-hash-code k*) k*)
+                                                 (expr-true) (expr-false))))]
+    [(expr-map-keys m) (compile-map-1arg net env m
+                         (lambda (c) (racket-list->prologos-list (champ-keys c))))]
+    [(expr-map-vals m) (compile-map-1arg net env m
+                         (lambda (c) (racket-list->prologos-list (champ-vals c))))]
+
+    ;; ----- Phase 11b: Set ops -----
+    [(expr-set-empty _) (alloc-value-cell net (expr-hset champ-empty))]
+    [(expr-set-insert s a) (compile-set-insert net env s a)]
+    [(expr-set-member s a) (compile-set-2arg-bool net env s a
+                             (lambda (c a*) (if (champ-has-key? c (equal-hash-code a*) a*)
+                                                (expr-true) (expr-false))))]
+    [(expr-set-delete s a) (compile-set-delete net env s a)]
+    [(expr-set-size s)     (compile-set-1arg net env s
+                             (lambda (c) (expr-nat-val (champ-size c))))]
+    [(expr-set-union s1 s2)     (compile-set-binop net env s1 s2 set-op-union)]
+    [(expr-set-intersect s1 s2) (compile-set-binop net env s1 s2 set-op-intersect)]
+    [(expr-set-diff s1 s2)      (compile-set-binop net env s1 s2 set-op-diff)]
+    [(expr-set-to-list s) (compile-set-1arg net env s
+                            (lambda (c) (racket-list->prologos-list (champ-keys c))))]
+
+    ;; ----- Phase 11b: PVec ops -----
+    [(expr-pvec-empty _) (alloc-value-cell net (expr-rrb rrb-empty))]
+    [(expr-pvec-push v x)     (compile-pvec-push net env v x)]
+    [(expr-pvec-nth v i)      (compile-pvec-nth net env v i)]
+    [(expr-pvec-update v i x) (compile-pvec-update net env v i x)]
+    [(expr-pvec-length v)     (compile-pvec-1arg net env v
+                                (lambda (r) (expr-nat-val (rrb-size r))))]
+    [(expr-pvec-pop v)        (compile-pvec-1arg net env v
+                                (lambda (r) (expr-rrb (rrb-pop r))))]
+    [(expr-pvec-concat v1 v2) (compile-pvec-binop net env v1 v2
+                                (lambda (r1 r2) (expr-rrb (rrb-concat r1 r2))))]
+    [(expr-pvec-slice v lo hi) (compile-pvec-slice net env v lo hi)]
+    [(expr-pvec-to-list v) (compile-pvec-1arg net env v
+                             (lambda (r) (racket-list->prologos-list (rrb-to-list r))))]
 
     ;; ----- Phase 13: logic-engine value-tokens (held opaque) -----
     ;; Post-elaboration, these appear as value tokens (cell-ids, prop-ids,
@@ -828,6 +881,324 @@ the relevant phase lands."
              ;; a as bvar 1 (innermost-first).
              (define new-env (append (reverse field-cids) env))
              (compile-and-bridge body new-env net* cid-out)])])])))
+
+;; ============================================================
+;; Phase 11b helpers — container ops
+;; ============================================================
+;;
+;; All container ops follow the same shape: compile each input expr to
+;; a cell, install fire-once propagator on the inputs, fire-fn reads,
+;; checks the input is the expected wrapped value (expr-champ /
+;; expr-hset / expr-rrb), invokes the underlying Racket op, writes the
+;; output. Mirrors reduction.rkt's iota-rule semantics.
+
+(define (racket-list->prologos-list elems)
+  ;; Mirror of reduction.rkt's racket-list->prologos-list.
+  (foldr (lambda (e acc)
+           (expr-app (expr-app (expr-fvar 'cons) e) acc))
+         (expr-nil)
+         elems))
+
+;; --- Map ops ---
+
+(define (compile-map-1arg net env m apply-fn)
+  ;; Generic 1-arg op on a map. apply-fn takes the unwrapped CHAMP and
+  ;; returns the result expr.
+  (define-values (cid-m net1) (compile-expr m env net))
+  (define-values (net2 cid-out)
+    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net3 _)
+    (net-add-fire-once-propagator net2 (list cid-m) (list cid-out)
+      (lambda (n)
+        (define mv (net-cell-read n cid-m))
+        (cond
+          [(preduce-bot? mv) n]
+          [(expr-champ? mv) (net-cell-write n cid-out (apply-fn (expr-champ-racket-champ mv)))]
+          [else (error 'preduce "expected expr-champ for map op, got: ~v" mv)]))))
+  (values cid-out net3))
+
+(define (compile-map-2arg-bool net env m k apply-fn)
+  ;; 2-arg op (map, key) → Bool. Doesn't allocate fresh map.
+  (define-values (cid-m net1) (compile-expr m env net))
+  (define-values (cid-k net2) (compile-expr k env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+      (lambda (n)
+        (define mv (net-cell-read n cid-m))
+        (define kv (net-cell-read n cid-k))
+        (cond
+          [(or (preduce-bot? mv) (preduce-bot? kv)) n]
+          [(expr-champ? mv) (net-cell-write n cid-out
+                                            (apply-fn (expr-champ-racket-champ mv) kv))]
+          [else (error 'preduce "expected expr-champ, got: ~v" mv)]))))
+  (values cid-out net4))
+
+(define (compile-map-assoc net env m k v)
+  (define-values (cid-m net1) (compile-expr m env net))
+  (define-values (cid-k net2) (compile-expr k env net1))
+  (define-values (cid-v net3) (compile-expr v env net2))
+  (define-values (net4 cid-out)
+    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net5 _)
+    (net-add-fire-once-propagator net4 (list cid-m cid-k cid-v) (list cid-out)
+      (lambda (n)
+        (define mv (net-cell-read n cid-m))
+        (define kv (net-cell-read n cid-k))
+        (define vv (net-cell-read n cid-v))
+        (cond
+          [(or (preduce-bot? mv) (preduce-bot? kv) (preduce-bot? vv)) n]
+          [(expr-champ? mv)
+           (net-cell-write n cid-out
+             (expr-champ (champ-insert (expr-champ-racket-champ mv)
+                                       (equal-hash-code kv) kv vv)))]
+          [else (error 'preduce "expected expr-champ for map-assoc, got: ~v" mv)]))))
+  (values cid-out net5))
+
+(define (compile-map-get net env m k)
+  (define-values (cid-m net1) (compile-expr m env net))
+  (define-values (cid-k net2) (compile-expr k env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+      (lambda (n)
+        (define mv (net-cell-read n cid-m))
+        (define kv (net-cell-read n cid-k))
+        (cond
+          [(or (preduce-bot? mv) (preduce-bot? kv)) n]
+          [(expr-champ? mv)
+           (define result (champ-lookup (expr-champ-racket-champ mv)
+                                        (equal-hash-code kv) kv))
+           (cond
+             [(eq? result 'none) (net-cell-write n cid-out (expr-error))]
+             [else (net-cell-write n cid-out result)])]
+          [else (error 'preduce "expected expr-champ for map-get, got: ~v" mv)]))))
+  (values cid-out net4))
+
+(define (compile-map-dissoc net env m k)
+  (define-values (cid-m net1) (compile-expr m env net))
+  (define-values (cid-k net2) (compile-expr k env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+      (lambda (n)
+        (define mv (net-cell-read n cid-m))
+        (define kv (net-cell-read n cid-k))
+        (cond
+          [(or (preduce-bot? mv) (preduce-bot? kv)) n]
+          [(expr-champ? mv)
+           (net-cell-write n cid-out
+             (expr-champ (champ-delete (expr-champ-racket-champ mv)
+                                       (equal-hash-code kv) kv)))]
+          [else (error 'preduce "expected expr-champ for map-dissoc, got: ~v" mv)]))))
+  (values cid-out net4))
+
+;; --- Set ops ---
+
+(define (compile-set-1arg net env s apply-fn)
+  (define-values (cid-s net1) (compile-expr s env net))
+  (define-values (net2 cid-out)
+    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net3 _)
+    (net-add-fire-once-propagator net2 (list cid-s) (list cid-out)
+      (lambda (n)
+        (define sv (net-cell-read n cid-s))
+        (cond
+          [(preduce-bot? sv) n]
+          [(expr-hset? sv) (net-cell-write n cid-out (apply-fn (expr-hset-racket-champ sv)))]
+          [else (error 'preduce "expected expr-hset for set op, got: ~v" sv)]))))
+  (values cid-out net3))
+
+(define (compile-set-2arg-bool net env s a apply-fn)
+  (define-values (cid-s net1) (compile-expr s env net))
+  (define-values (cid-a net2) (compile-expr a env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-s cid-a) (list cid-out)
+      (lambda (n)
+        (define sv (net-cell-read n cid-s))
+        (define av (net-cell-read n cid-a))
+        (cond
+          [(or (preduce-bot? sv) (preduce-bot? av)) n]
+          [(expr-hset? sv) (net-cell-write n cid-out
+                                           (apply-fn (expr-hset-racket-champ sv) av))]
+          [else (error 'preduce "expected expr-hset, got: ~v" sv)]))))
+  (values cid-out net4))
+
+(define (compile-set-insert net env s a)
+  (compile-set-2arg-bool net env s a
+    (lambda (c av) (expr-hset (champ-insert c (equal-hash-code av) av #t)))))
+
+(define (compile-set-delete net env s a)
+  (compile-set-2arg-bool net env s a
+    (lambda (c av) (expr-hset (champ-delete c (equal-hash-code av) av)))))
+
+(define (compile-set-binop net env s1 s2 op)
+  (define-values (cid-1 net1) (compile-expr s1 env net))
+  (define-values (cid-2 net2) (compile-expr s2 env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-1 cid-2) (list cid-out)
+      (lambda (n)
+        (define v1 (net-cell-read n cid-1))
+        (define v2 (net-cell-read n cid-2))
+        (cond
+          [(or (preduce-bot? v1) (preduce-bot? v2)) n]
+          [(and (expr-hset? v1) (expr-hset? v2))
+           (net-cell-write n cid-out (expr-hset (op (expr-hset-racket-champ v1)
+                                                    (expr-hset-racket-champ v2))))]
+          [else (error 'preduce "expected expr-hset operands, got: ~v ~v" v1 v2)]))))
+  (values cid-out net4))
+
+;; CHAMP-set ops via fold (CHAMP doesn't have native union/intersect/diff).
+(define (set-op-union c1 c2)
+  ;; insert all keys from c2 into c1
+  (for/fold ([acc c1]) ([k (in-list (champ-keys c2))])
+    (champ-insert acc (equal-hash-code k) k #t)))
+
+(define (set-op-intersect c1 c2)
+  ;; keep keys of c1 that are also in c2
+  (for/fold ([acc champ-empty]) ([k (in-list (champ-keys c1))]
+                                  #:when (champ-has-key? c2 (equal-hash-code k) k))
+    (champ-insert acc (equal-hash-code k) k #t)))
+
+(define (set-op-diff c1 c2)
+  ;; keep keys of c1 that are NOT in c2
+  (for/fold ([acc champ-empty]) ([k (in-list (champ-keys c1))]
+                                  #:unless (champ-has-key? c2 (equal-hash-code k) k))
+    (champ-insert acc (equal-hash-code k) k #t)))
+
+;; --- PVec ops ---
+
+(define (compile-pvec-1arg net env v apply-fn)
+  (define-values (cid-v net1) (compile-expr v env net))
+  (define-values (net2 cid-out)
+    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net3 _)
+    (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+      (lambda (n)
+        (define vv (net-cell-read n cid-v))
+        (cond
+          [(preduce-bot? vv) n]
+          [(expr-rrb? vv) (net-cell-write n cid-out (apply-fn (expr-rrb-racket-rrb vv)))]
+          [else (error 'preduce "expected expr-rrb for pvec op, got: ~v" vv)]))))
+  (values cid-out net3))
+
+(define (compile-pvec-binop net env v1 v2 apply-fn)
+  (define-values (cid-1 net1) (compile-expr v1 env net))
+  (define-values (cid-2 net2) (compile-expr v2 env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-1 cid-2) (list cid-out)
+      (lambda (n)
+        (define u1 (net-cell-read n cid-1))
+        (define u2 (net-cell-read n cid-2))
+        (cond
+          [(or (preduce-bot? u1) (preduce-bot? u2)) n]
+          [(and (expr-rrb? u1) (expr-rrb? u2))
+           (net-cell-write n cid-out (apply-fn (expr-rrb-racket-rrb u1)
+                                                (expr-rrb-racket-rrb u2)))]
+          [else (error 'preduce "expected expr-rrb operands, got: ~v ~v" u1 u2)]))))
+  (values cid-out net4))
+
+(define (compile-pvec-push net env v x)
+  (define-values (cid-v net1) (compile-expr v env net))
+  (define-values (cid-x net2) (compile-expr x env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-v cid-x) (list cid-out)
+      (lambda (n)
+        (define vv (net-cell-read n cid-v))
+        (define xv (net-cell-read n cid-x))
+        (cond
+          [(or (preduce-bot? vv) (preduce-bot? xv)) n]
+          [(expr-rrb? vv) (net-cell-write n cid-out
+                                          (expr-rrb (rrb-push (expr-rrb-racket-rrb vv) xv)))]
+          [else (error 'preduce "expected expr-rrb for pvec-push, got: ~v" vv)]))))
+  (values cid-out net4))
+
+(define (nat-or-int-to-fixnum v)
+  (cond
+    [(expr-nat-val? v) (expr-nat-val-n v)]
+    [(expr-int? v) (expr-int-val v)]
+    [(expr-zero? v) 0]
+    [else #f]))
+
+(define (compile-pvec-nth net env v i)
+  (define-values (cid-v net1) (compile-expr v env net))
+  (define-values (cid-i net2) (compile-expr i env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-v cid-i) (list cid-out)
+      (lambda (n)
+        (define vv (net-cell-read n cid-v))
+        (define iv (net-cell-read n cid-i))
+        (cond
+          [(or (preduce-bot? vv) (preduce-bot? iv)) n]
+          [(expr-rrb? vv)
+           (define idx (nat-or-int-to-fixnum iv))
+           (cond
+             [(not idx) (error 'preduce "pvec-nth index not numeric: ~v" iv)]
+             [else
+              (with-handlers ([exn:fail? (lambda (_) (net-cell-write n cid-out (expr-error)))])
+                (net-cell-write n cid-out (rrb-get (expr-rrb-racket-rrb vv) idx)))])]
+          [else (error 'preduce "expected expr-rrb for pvec-nth, got: ~v" vv)]))))
+  (values cid-out net4))
+
+(define (compile-pvec-update net env v i x)
+  (define-values (cid-v net1) (compile-expr v env net))
+  (define-values (cid-i net2) (compile-expr i env net1))
+  (define-values (cid-x net3) (compile-expr x env net2))
+  (define-values (net4 cid-out)
+    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net5 _)
+    (net-add-fire-once-propagator net4 (list cid-v cid-i cid-x) (list cid-out)
+      (lambda (n)
+        (define vv (net-cell-read n cid-v))
+        (define iv (net-cell-read n cid-i))
+        (define xv (net-cell-read n cid-x))
+        (cond
+          [(or (preduce-bot? vv) (preduce-bot? iv) (preduce-bot? xv)) n]
+          [(expr-rrb? vv)
+           (define idx (nat-or-int-to-fixnum iv))
+           (cond
+             [(not idx) (error 'preduce "pvec-update index not numeric: ~v" iv)]
+             [else
+              (net-cell-write n cid-out (expr-rrb (rrb-set (expr-rrb-racket-rrb vv) idx xv)))])]
+          [else (error 'preduce "expected expr-rrb for pvec-update, got: ~v" vv)]))))
+  (values cid-out net5))
+
+(define (compile-pvec-slice net env v lo hi)
+  (define-values (cid-v net1) (compile-expr v env net))
+  (define-values (cid-lo net2) (compile-expr lo env net1))
+  (define-values (cid-hi net3) (compile-expr hi env net2))
+  (define-values (net4 cid-out)
+    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net5 _)
+    (net-add-fire-once-propagator net4 (list cid-v cid-lo cid-hi) (list cid-out)
+      (lambda (n)
+        (define vv (net-cell-read n cid-v))
+        (define lov (net-cell-read n cid-lo))
+        (define hiv (net-cell-read n cid-hi))
+        (cond
+          [(or (preduce-bot? vv) (preduce-bot? lov) (preduce-bot? hiv)) n]
+          [(expr-rrb? vv)
+           (define lo-i (nat-or-int-to-fixnum lov))
+           (define hi-i (nat-or-int-to-fixnum hiv))
+           (cond
+             [(or (not lo-i) (not hi-i)) (error 'preduce "pvec-slice indices not numeric")]
+             [else
+              (net-cell-write n cid-out (expr-rrb (rrb-slice (expr-rrb-racket-rrb vv) lo-i hi-i)))])]
+          [else (error 'preduce "expected expr-rrb for pvec-slice, got: ~v" vv)]))))
+  (values cid-out net5))
 
 ;; ============================================================
 ;; Phase 6 helpers — Vec
