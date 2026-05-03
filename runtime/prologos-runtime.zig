@@ -1292,3 +1292,181 @@ export fn prologos_print_stats() void {
     buf_puts("]}\n");
     _ = write(2, &print_buf, print_len);
 }
+
+// =====================================================================
+// I/O for parameterised main (lowering-yolo, 2026-05-02)
+// =====================================================================
+//
+// Two helpers used by the LLVM lowering pass when `def main` takes one
+// or more parameters:
+//
+//   prologos_argv_i64(argv, idx) -> i64
+//     Parse one decimal integer (optional leading '-') from argv[idx].
+//     Tolerates leading ASCII whitespace; trailing garbage aborts.
+//     Out-of-range / unparseable input aborts. Caller is expected to
+//     have already validated argc.
+//
+//   prologos_print_i64(value) -> void
+//     Write `<value>\n` (decimal, with leading '-' for negative) to
+//     stdout (fd 1). One write() syscall.
+//
+// Both use a small fixed buffer (no allocations) and the same `write`
+// extern as prologos_print_stats. The signed printer mirrors buf_putu64
+// but emits a leading '-' and converts the absolute value, taking care
+// to handle i64 minimum (whose negation overflows).
+//
+// Design rationale and contract: see
+//   docs/tracking/2026-05-02_LOWERING_INPUT_OUTPUT.md
+
+var io_buf: [32]u8 = undefined;
+
+fn io_buf_putu64(out: *usize, n0: u64) void {
+    if (n0 == 0) {
+        io_buf[out.*] = '0';
+        out.* += 1;
+        return;
+    }
+    var tmp: [20]u8 = undefined;
+    var tlen: usize = 0;
+    var n = n0;
+    while (n > 0) : (n /= 10) {
+        tmp[tlen] = @intCast('0' + (n % 10));
+        tlen += 1;
+    }
+    while (tlen > 0) {
+        tlen -= 1;
+        io_buf[out.*] = tmp[tlen];
+        out.* += 1;
+    }
+}
+
+export fn prologos_print_i64(value: i64) void {
+    var len: usize = 0;
+    var u: u64 = undefined;
+    if (value < 0) {
+        io_buf[len] = '-';
+        len += 1;
+        // Two's-complement abs of i64 minimum (which would overflow
+        // a signed negation): cast through u64 first, then unary-negate
+        // in u64 space.
+        const uv: u64 = @bitCast(value);
+        u = (~uv) +% 1;
+    } else {
+        u = @intCast(value);
+    }
+    io_buf_putu64(&len, u);
+    io_buf[len] = '\n';
+    len += 1;
+    _ = write(1, &io_buf, len);
+}
+
+// Walk a NUL-terminated C string at argv[idx] and parse a signed
+// decimal integer. Calls abort() on garbage input. The expected caller
+// is the lowered @main, which has just unpacked argc/argv from the OS;
+// no allocations are needed and there is no recovery path that would
+// benefit from an error return.
+export fn prologos_argv_i64(argv: [*]const [*:0]const u8, idx: u32) i64 {
+    const s: [*:0]const u8 = argv[idx];
+    var i: usize = 0;
+
+    // Skip leading ASCII whitespace.
+    while (s[i] != 0 and (s[i] == ' ' or s[i] == '\t' or s[i] == '\n' or s[i] == '\r')) : (i += 1) {}
+
+    var negative: bool = false;
+    if (s[i] == '-') {
+        negative = true;
+        i += 1;
+    } else if (s[i] == '+') {
+        i += 1;
+    }
+
+    // Require at least one digit.
+    if (s[i] < '0' or s[i] > '9') abort();
+
+    var acc: u64 = 0;
+    while (s[i] >= '0' and s[i] <= '9') : (i += 1) {
+        const digit: u64 = @intCast(s[i] - '0');
+        // Overflow check before multiply: limit acc to (i64 max + 1) / 10
+        // (the +1 accounts for negative range; final cast catches overflow).
+        if (acc > (0x7FFFFFFFFFFFFFFF / 10)) abort();
+        acc = acc * 10 + digit;
+    }
+
+    // Tolerate trailing whitespace; reject any other trailing character.
+    while (s[i] == ' ' or s[i] == '\t' or s[i] == '\n' or s[i] == '\r') : (i += 1) {}
+    if (s[i] != 0) abort();
+
+    if (negative) {
+        // Allow exactly i64-minimum (acc == 0x8000000000000000).
+        if (acc > 0x8000000000000000) abort();
+        // Negate in u64 space then bitcast: handles min without overflow.
+        const neg_u: u64 = (~acc) +% 1;
+        return @bitCast(neg_u);
+    } else {
+        if (acc > 0x7FFFFFFFFFFFFFFF) abort();
+        return @intCast(acc);
+    }
+}
+
+// =====================================================================
+// Zig unit tests (lowering-yolo, 2026-05-02)
+// =====================================================================
+//
+// Exercises prologos_argv_i64 only — prologos_print_i64 is harder to
+// unit-test in-process (it writes to fd 1) and is covered end-to-end
+// by the lowering benchmarks. The argv parser is the only piece with
+// non-trivial branching; covering it here catches off-by-one and
+// overflow regressions before they reach the slow benchmark loop.
+
+const std = @import("std");
+
+test "argv parser: positive decimal" {
+    const a: [*:0]const u8 = "42";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, 42), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: zero" {
+    const a: [*:0]const u8 = "0";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, 0), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: negative decimal" {
+    const a: [*:0]const u8 = "-12345";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, -12345), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: explicit positive sign" {
+    const a: [*:0]const u8 = "+7";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, 7), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: large value within i64 range" {
+    const a: [*:0]const u8 = "9223372036854775807"; // i64 max
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, 0x7FFFFFFFFFFFFFFF), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: i64 minimum" {
+    const a: [*:0]const u8 = "-9223372036854775808";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, -0x7FFFFFFFFFFFFFFF - 1), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: leading + trailing whitespace" {
+    const a: [*:0]const u8 = "  100\n";
+    var argv = [_][*:0]const u8{a};
+    try std.testing.expectEqual(@as(i64, 100), prologos_argv_i64(@ptrCast(&argv), 0));
+}
+
+test "argv parser: indexes beyond 0" {
+    const a0: [*:0]const u8 = "first";
+    const a1: [*:0]const u8 = "200";
+    const a2: [*:0]const u8 = "300";
+    var argv = [_][*:0]const u8{ a0, a1, a2 };
+    try std.testing.expectEqual(@as(i64, 200), prologos_argv_i64(@ptrCast(&argv), 1));
+    try std.testing.expectEqual(@as(i64, 300), prologos_argv_i64(@ptrCast(&argv), 2));
+}
