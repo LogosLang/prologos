@@ -36,6 +36,7 @@
 ;;;
 
 (require racket/match
+         racket/list  ;; for findf
          "syntax.rkt"
          (only-in "propagator.rkt"
                   make-prop-network
@@ -487,6 +488,26 @@ the topology stratum (Phase 4)" name)))
             (make-vproj-fire cid-v cid-out 'tail)))
         (values cid-out net3)])]
 
+    ;; ----- Phase 10: expr-reduce — general constructor pattern match -----
+    ;;
+    ;; Compile scrutinee → cid; install fire-once that, when scrutinee
+    ;; resolves to a known constructor value, finds the matching arm by
+    ;; ctor-name, compiles the arm body with the constructor's field
+    ;; values bound as bvars, and identity-bridges the result to cid-out.
+    ;;
+    ;; Phase 10 minimal scope: built-in constructors (true, false, zero,
+    ;; suc, nat-val, refl, nil, vnil, vcons, fzero, fsuc, pair). User-
+    ;; defined constructors (registered via `data` or `defr`) require
+    ;; ctor-meta lookup and are deferred to Phase 10b if needed.
+    [(expr-reduce scrutinee arms _structural?)
+     (define-values (cid-target net1) (compile-expr scrutinee env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+         (make-reduce-fire cid-target cid-out arms env)))
+     (values cid-out net3)]
+
     ;; ----- Phase 6: Fin family (held opaque as values) -----
     ;; Fin n is a type; fzero / fsuc are values. No eliminator in Phase 6
     ;; (the elaborator turns Fin pattern matching into expr-reduce, Phase 10).
@@ -668,6 +689,90 @@ the relevant phase lands."
        net1 (list cid-e) (list cid-out)
        (make-identity-fire cid-e cid-out))))
   net2)
+
+;; ============================================================
+;; Phase 10 helpers — expr-reduce general constructor pattern match
+;; ============================================================
+
+;; classify-builtin-ctor : preduce-value → (values ctor-name field-cids) | #f
+;;   For built-in constructors, returns the short ctor name + a list of
+;;   cell-ids for the constructor's field values (already alloc'd in net).
+;;   The fields list is empty for nullary constructors (true, false,
+;;   zero, refl, nil, vnil) and one element for unary (suc, nat-val,
+;;   fzero, fsuc, pair, vcons).
+;;
+;;   For nat-val k > 0: classify as 'suc with field cid pointing to a
+;;   newly-allocated cell holding (nat-val (k-1)) — mirrors the
+;;   nat-val unfold pattern in make-natrec-fire.
+;;
+;;   Returns #f if the value isn't a recognized constructor.
+(define (classify-builtin-ctor v net)
+  (cond
+    [(expr-true? v)        (values 'true '() net)]
+    [(expr-false? v)       (values 'false '() net)]
+    [(expr-zero? v)        (values 'zero '() net)]
+    [(expr-refl? v)        (values 'refl '() net)]
+    [(expr-nil? v)         (values 'nil '() net)]
+    [(expr-vnil? v)        (values 'vnil '() net)]
+    [(expr-fzero? v)       (values 'fzero '() net)]
+    [(expr-suc? v)
+     ;; (suc n) — n is the field. Allocate a cell for it.
+     (define-values (cid-n net*) (alloc-value-cell net (expr-suc-pred v)))
+     (values 'suc (list cid-n) net*)]
+    [(expr-nat-val? v)
+     (define n (expr-nat-val-n v))
+     (cond
+       [(= n 0) (values 'zero '() net)]
+       [else
+        ;; (nat-val k) with k>0 acts as (suc (nat-val k-1))
+        (define-values (cid-pred net*) (alloc-value-cell net (expr-nat-val (- n 1))))
+        (values 'suc (list cid-pred) net*)])]
+    [(preduce-pair? v)
+     (values 'pair (list (preduce-pair-fst-cid v) (preduce-pair-snd-cid v)) net)]
+    [(preduce-vcons? v)
+     (values 'vcons (list (preduce-vcons-head-cid v) (preduce-vcons-tail-cid v)) net)]
+    [(expr-fsuc? v)
+     (define-values (cid-inner net*) (alloc-value-cell net (expr-fsuc-inner v)))
+     (values 'fsuc (list cid-inner) net*)]
+    [else (values #f '() net)]))
+
+;; make-reduce-fire — fires when the scrutinee cell resolves; matches
+;; the value against arms by short ctor-name; compiles the matching
+;; arm's body with the field cell-ids prepended to env.
+(define (make-reduce-fire cid-target cid-out arms env)
+  (lambda (net)
+    (define v (net-cell-read net cid-target))
+    (cond
+      [(preduce-bot? v) net]
+      [else
+       (define-values (ctor field-cids net*) (classify-builtin-ctor v net))
+       (cond
+         [(not ctor)
+          (error 'preduce
+                 "expr-reduce: scrutinee not a recognized constructor: ~v" v)]
+         [else
+          (define matching-arm
+            (findf (lambda (arm)
+                     (eq? (expr-reduce-arm-ctor-name arm) ctor))
+                   arms))
+          (cond
+            [(not matching-arm)
+             (error 'preduce
+                    "expr-reduce: no arm for constructor ~a (arms: ~v)"
+                    ctor (map expr-reduce-arm-ctor-name arms))]
+            [else
+             (define bc (expr-reduce-arm-binding-count matching-arm))
+             (unless (= bc (length field-cids))
+               (error 'preduce
+                      "expr-reduce: arm ~a expects ~a binders, ctor has ~a fields"
+                      ctor bc (length field-cids)))
+             (define body (expr-reduce-arm-body matching-arm))
+             ;; Bind fields as bvars: arm body's bvar 0 = first field, bvar 1 = second, etc.
+             ;; Bvars are de-Bruijn from innermost; the first binder introduced is bvar 0.
+             ;; Field order convention: (suc n) has n as bvar 0; (pair a b) has b as bvar 0,
+             ;; a as bvar 1 (innermost-first).
+             (define new-env (append (reverse field-cids) env))
+             (compile-and-bridge body new-env net* cid-out)])])])))
 
 ;; ============================================================
 ;; Phase 6 helpers — Vec
