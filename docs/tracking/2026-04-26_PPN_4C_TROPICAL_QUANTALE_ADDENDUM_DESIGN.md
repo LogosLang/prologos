@@ -2,14 +2,31 @@
 
 **Date**: 2026-04-26
 **Stage**: 3 — Design per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3
-**Version**: D.2 — Pre-0 findings incorporated; hybrid pivot committed
+**Version**: D.3 — D.2.SC self-critique findings incorporated (in progress; per-finding resolution review with user)
 **Scope**: PPN 4C Phase 1A-iii-b + 1A-iii-c + 1B + 1C + 1V (γ-bundle-wide; closes Phase 1 entirely)
-**Status**: Stage 3 design cycle — D.2 ready for D.3+ critique rounds (P/R/M/S; especially S for algebra)
+**Status**: Stage 3 design cycle — D.3 incorporating critique findings; further critique rounds (external) pending
 
 **Prior stages** (this track):
 - Stage 1 research: [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (commit `de357aa1`) — depth-first formal grounding; 12 sections, ~1000 lines
 - Stage 2 audit: this session 2026-04-26 (audit findings persist into this design at §6, §7, §8, §9, §10)
 - **Pre-0 phase**: [`docs/tracking/2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md`](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) ✅ 100% COMPLETE (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f6576479`, `bef1f518`, `4be5e875`, `d270769b`, `d0934329`, `76129725`, `8a29f6af`)
+
+---
+
+## D.3 Revision Summary (2026-04-26 — in progress)
+
+**Version bump**: D.2 → D.3 incorporates accepted findings from [D.2.SC self-critique](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md) (P/R/M/S; 18 findings; 3 BLOCKING + 10 REFINEMENT + 5 ACKNOWLEDGE + 0 PUSHBACK).
+
+**Per-finding resolution review with user — applied incrementally per ACCEPT (no queue)**:
+
+| Finding | Severity | Decision | D.3 changes |
+|---|---|---|---|
+| **P3** Cell Staleness Contract | BLOCKING | ACCEPT | NEW §10.B "Cell Staleness Contract" — typed dual-API discipline (`net-fuel-cost-read` vs `net-fuel-cost-read/synced`) |
+| **M1** Threshold propagator role under hybrid | BLOCKING | ACCEPT | NEW §10.A "The threshold propagator's role under hybrid" — three load-bearing roles (Phase 3C consumer paths + on-exhaustion + speculation rollback); per-decrement acknowledged as scaffolding pending SH Series |
+| **S1** §14.4 SRE lattice lens Q5 PRIMARY/DERIVED inconsistency | BLOCKING | ACCEPT | UPDATE §14.4 Q3+Q4+Q5+Q6 with hybrid-aware classification |
+| (REFINEMENTs + ACKNOWLEDGEs) | various | TBD | Walking through with user; will be added to this table as accepted |
+
+**3 BLOCKING findings closed.** D.3 ready for Stage 4 once REFINEMENTs + ACKNOWLEDGEs walked.
 
 ---
 
@@ -908,6 +925,71 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 - Cell + threshold propagator: Phase 3C consumer paths (rare; semantic-phase granularity; few ops per file)
 - The mechanisms are NOT redundant; they decomplect fast-path optimization from architectural substrate
 
+### §10.A The threshold propagator's role under hybrid (D.3 from M1 BLOCKING)
+
+Per Network Reality Check (`workflow.md`): apply the three concrete questions to the threshold propagator under hybrid:
+
+1. **Which `net-add-propagator` calls?** — 1 (at make-prop-network setup; per §10.2)
+2. **Which `net-cell-write` calls produce the result?** — Cell-write-mutating call sites (per §10.B Cell Staleness Contract); decrement sites use struct-copy (NOT cell-write)
+3. **Trace cell creation → propagator installation → cell write → cell read = result?** — YES for non-decrement-site paths; NO for the per-decrement hot path
+
+**Honest reframing**: under hybrid, the threshold propagator does NOT carry per-decrement information flow. Decrement sites use inline check + struct-copy; the cell isn't written per-decrement. The propagator's load-bearing role is for **non-decrement-site cell-write paths**, of which there are exactly THREE under D.3 design:
+
+1. **Phase 3C consumer paths** that update fuel cost. Examples:
+   - UC1 walks accumulating cost across propagator dependency chains (residuation walk for fuel-exhaustion blame attribution per §9.7)
+   - UC2 budget projection writes (cost-bounded elaboration via Galois bridge γ direction per §9.7)
+   - UC3 per-branch cost updates under union-type ATMS branching (per §9.7)
+2. **On-exhaustion path** — decrement site detects exhaustion via inline check; writes final cost to fuel-cost-cell; propagator fires (rare event); writes contradiction. This routes contradiction through propagator network for architectural correctness on the rare exhaustion event.
+3. **Speculation rollback** — cell-restore via worldview narrow under tagged-cell-value semantics; threshold propagator may re-fire if rollback restores a different cost level relative to budget.
+
+**For per-decrement information flow on the hot path**: NOT propagator-mediated under hybrid. This is acknowledged scaffolding pending SH Series runtime infrastructure that makes per-decrement cell-write GC-friendly (per Pre-0 Finding 19; current Racket runtime triggers major GC under per-decrement cell-write at 100k+ ops/sec).
+
+**Why this matters**: this honest framing prevents the "propagator-as-decoration" failure mode (per CRITIQUE_METHODOLOGY § Lens M; PPN Track 4 retrospective). The propagator IS load-bearing — for the three named roles above, NOT for every decrement. Future maintainers reading "threshold propagator installed for Phase 1C" should understand:
+- Phase 3C consumers MUST trigger the propagator via cell-write to get contradiction-on-exhaustion semantics for their consumer paths
+- The propagator does NOT serve as a per-decrement "watch the cost cell, fire on every change" — that pattern is structurally avoided under hybrid for performance + GC reasons
+
+**Cross-reference**: per §10.B Cell Staleness Contract, the propagator's three roles all involve EXPLICIT cell-write operations (not implicit per-decrement updates); this is consistent with the staleness contract's "cell value lags struct-field by at most one semantic transition" framing.
+
+### §10.B Cell Staleness Contract (D.3 from P3 BLOCKING)
+
+Under hybrid pivot, the fuel-cost cell's value LAGS the struct-field's live state. This subsection makes the staleness explicit at the API surface so consumers can reason correctly.
+
+**Staleness bound**: at most one semantic transition. The cell value reflects the cost-state as-of the last semantic-transition cell-write (per Q-1C-3 enumeration, deferred to Phase 1C-iii mini-design).
+
+**Two API surfaces** (typed read APIs):
+
+```racket
+;; net-fuel-cost-read net :: Net -> TropicalFuel
+;;   Returns the cell value (POSSIBLY STALE — caller accepts staleness).
+;;   Use when: cost-as-of-last-transition is sufficient for the consumer's purpose.
+;;   Examples: Phase 3C UC1 walk accumulating cost from prior dependency chain
+;;             snapshots; UC3 branch-local cost reads at branch-fork boundaries.
+(define (net-fuel-cost-read net)
+  (net-cell-read net fuel-cost-cell-id))
+
+;; net-fuel-cost-read/synced net :: Net -> (Values Net TropicalFuel)
+;;   Triggers sync from struct-field BEFORE reading. Returns updated net + live cost.
+;;   Use when: caller needs LIVE cost-state at the read point.
+;;   Examples: Phase 3C UC2 budget projection at semantic-phase boundary;
+;;             on-exhaustion reads triggered from non-decrement-site contexts.
+(define (net-fuel-cost-read/synced net)
+  (define current-fuel (prop-network-fuel net))         ; struct-field live state
+  (define budget (net-cell-read net fuel-budget-cell-id))
+  (define current-cost (- budget current-fuel))         ; derive cost from struct-field
+  (define synced-net (net-cell-write net fuel-cost-cell-id current-cost))
+  (values synced-net current-cost))
+```
+
+**Discipline at the API surface**: Phase 3C consumer authors choose explicitly which API to use based on staleness tolerance. The naming convention (`/synced` suffix) makes the choice visible at the call site:
+- `(net-fuel-cost-read net)` reads possibly-stale data — fine for many consumer purposes, FAST
+- `(net-fuel-cost-read/synced net)` triggers sync — guaranteed live, costs one struct-field read + one cell-write
+
+**Why this matters (Correct-by-Construction enforcement)**: per DESIGN_PRINCIPLES.org § Correct by Construction, the wrong thing should be hard to express. Without the typed API discipline, consumer code writes `(net-cell-read net fuel-cost-cell-id)` and silently accepts whatever the cell value happens to be — the staleness gap is invisible until it produces incorrect results in a Phase 3C UC. With the discipline, the consumer's read API choice IS their staleness contract; the design surface enforces the contract structurally.
+
+**Documentation requirement**: the dual-API discipline + staleness bound MUST be documented INLINE at the API definitions in `tropical-fuel.rkt` (Phase 1B implementation), not just in this design doc. The inline documentation is the load-bearing artifact for consumer authors; the design doc is reference.
+
+**Open question (deferred to Phase 1C-iii)**: Q-1C-3 cell-update cadence enumeration is BLOCKING for this contract — see §10.7. Without exhaustive enumeration of "what counts as a semantic transition," the staleness bound is ambiguous in practice.
+
 ### §10.2 Audit-grounded substrate plan (Q-Audit-1 findings — UNCHANGED)
 
 **Allocation in `make-prop-network`** (per D.3 §10.3 — substrate setup is the same):
@@ -1259,16 +1341,16 @@ No "scan" / "walk" / "iterate" in design. The "fuel exhaustion" check IS a thres
 
 ### §14.4 S — SRE Structural Thinking (load-bearing)
 
-**SRE lattice lens (mandatory)** per CRITIQUE_METHODOLOGY:
+**SRE lattice lens (mandatory)** per CRITIQUE_METHODOLOGY. **D.3 update from S1 BLOCKING**: §14.4 Q5 was inconsistent with D.2 §10's hybrid pivot (Q5 declared cell PRIMARY under D.1's full-migration; hybrid inverts to struct-field PRIMARY, cell DERIVED). Q5 + dependent Qs (Q3, Q4, Q6) updated below to acknowledge dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot).
 
 | Aspect | Tropical fuel quantale (this addendum) |
 |---|---|
-| **Q1 Classification** | VALUE lattice (atomic extended-real) |
-| **Q2 Algebraic properties** | Quantale + Commutative + Unital + Integral + Residuated; Heyting-like (residuation provides pseudo-complement-like structure); join-semilattice (idempotent min); CALM-safe |
-| **Q3 Bridges** | Future Galois bridge to TypeFacetQ (§4.2 type-cost-bridge); future bridges to MemoryCostQ, MessageCountQ (out of scope); composition via quantale-of-bridges |
-| **Q4 Composition** | Two quantales co-exist as Q-modules; CALM-safe under monotone joins; Tarski-fixpoint per Q-module |
-| **Q5 Primary/Derived** | PRIMARY for fuel-cost tracking; cells over the quantale are PRIMARY storage |
-| **Q6 Hasse diagram** | Linear chain `0 ≤_rev 1 ≤_rev 2 ≤_rev ... ≤_rev +∞` (totally ordered); compute topology: trivially parallel (no decomposition needed for atomic values) |
+| **Q1 Classification** | VALUE lattice (atomic extended-real) — UNCHANGED across D.1/D.2/D.3 |
+| **Q2 Algebraic properties** | Quantale + Commutative + Unital + Integral + Residuated; Heyting-like (residuation provides pseudo-complement-like structure); join-semilattice (idempotent min); CALM-safe — UNCHANGED across D.1/D.2/D.3 |
+| **Q3 Bridges** | Future Galois bridge to TypeFacetQ (§4.2 type-cost-bridge); future bridges to MemoryCostQ, MessageCountQ (out of scope); composition via quantale-of-bridges. **D.3 hybrid clarification**: under hybrid, the cell value at projection time is POSSIBLY-STALE relative to live struct-field state (per §10.B Cell Staleness Contract). The α projection must accept the staleness OR trigger sync first via `net-fuel-cost-read/synced`. The bridge's Galois property HOLDS under the staleness contract since the cell value at any sync point IS a valid lattice element of TropicalFuelQ — staleness is "behind in time," not "wrong in lattice." |
+| **Q4 Composition** | Two quantales co-exist as Q-modules; CALM-safe under monotone joins; Tarski-fixpoint per Q-module. **D.3 hybrid clarification**: TropicalFuelQ Q-module's cell receives infrequent writes (only at semantic transitions per §10.B); the tagged-cell-value semantics under speculation worldviews still composes correctly (each worldview tag holds a single TropicalFuel value; min-merge is the lattice join). Tarski-fixpoint per Q-module preserved; reduced write rate doesn't change the algebraic correctness. |
+| **Q5 Primary/Derived** | **Under D.1's full-migration design**: PRIMARY for fuel-cost tracking; cell is PRIMARY storage. **Under D.2/D.3 hybrid pivot**: struct-field `prop-net-cold-fuel` is PRIMARY (live state); cell is DERIVED (lazy sync at semantic transitions per §10.B Cell Staleness Contract + Q-1C-3 cadence enumeration). The classification inversion is empirically forced by Pre-0 Finding 19 (full-cell-migration triggers major GC under R3 baseline); under SH Series runtime, primary inverts back to cell. **This dual-classification IS the scaffolding-with-retirement-plan pattern at the structural-analysis level** (per workflow.md "Validated ≠ Deployed" + DEVELOPMENT_LESSONS.org "Pragmatic Is a Rationalization for Incomplete" — the deferral is principled when the blocker is named: Racket runtime GC behavior at per-decrement cell-write rate). |
+| **Q6 Hasse diagram** | Linear chain `0 ≤_rev 1 ≤_rev 2 ≤_rev ... ≤_rev +∞` (totally ordered); compute topology: trivially parallel (no decomposition needed for atomic values). **D.3 hybrid clarification**: under hybrid, the cell visits a SUBSET of the linear chain (only semantic-transition values; per-decrement values are in the struct field, not the cell). The lattice ordering is preserved (subset of values still totally-ordered); the Hasse-based optimality argument unchanged (linear chain is trivially parallel regardless of which subset is visited). |
 
 **PUnify**: tropical fuel is atomic; PUnify-style structural unification doesn't apply at the value level. PUnify within propagator computation (e.g., when residuation is wrapped in a Phase 3C propagator) follows the same patterns as type unification.
 
