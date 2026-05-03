@@ -28,9 +28,10 @@
 | **P2** Belt-and-suspenders red flag; empirical-validation gate | REFINEMENT | ACCEPT (with Phase 1B mini-design opening spike) | NEW Q-1B-6 at §9.9 — empirical-validation spike at Phase 1B mini-design opening (cheap; ~30 min; pre-implementation falsification test); §11.3 Phase 1V exit criteria adds final-verification gate (post-implementation). Two-gate discipline: spike challenges hybrid pre-build; Phase 1V verifies post-build. "Learning is valuable either way" per user direction. |
 | **P6** "First production landing establishes pattern" risks templating hybrid scaffolding | REFINEMENT | ACCEPT (with MASTER_ROADMAP.org variation) | UPDATE §6.6 PReduce + OE Series rows: hybrid-as-scaffolding-NOT-template caveat; future consumers design TO TARGET full cell-substrate; per-track empirical justification + four-surface tracking discipline if hybrid needed. NEW MASTER_ROADMAP.org § OE Series "Scaffolding caveat" row at the roadmap level (where future-track designers go FIRST when planning new tracks, not buried in D.3). |
 | **P5** γ-bundle scope precision (sub-phase count) | ACKNOWLEDGE | ACCEPT | UPDATE §1.2 — add sub-phase count estimate under γ-bundle-wide (~12-15 implementation sub-phases: 1A-iii-b ~5; 1A-iii-c ~8; 1B ~3; 1C ~5 under hybrid; 1V atomic close); name the bundle-vs-sub-phase scope distinction (DESIGN scope vs IMPLEMENTATION scope); also note Phase 1C estimate reframed under D.2 hybrid pivot (~45-90 LoC, was ~250-400 in D.1) per R1 REFINEMENT acceptance forward-pointer. |
+| **R1** Phase 1C estimate stale (~45-90 LoC under hybrid; was ~250-400 D.1) | REFINEMENT | ACCEPT | UPDATE §1.2 Phase 1C estimate to ~45-90 LoC with explicit hybrid-vs-D.1 reframing (zero-migration list of preserved sites + actual migration list); §10.1 NEW R1 commentary subsection: small footprint is intentional NOT "easy migration"; future PReduce/OE consumers should not misread small footprint as evidence of easy migration (work was DEFERRED via scaffolding per §10.1.A + Issue #55, not eliminated). |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING + 4 REFINEMENTs (P1+P4 consolidated; P2; P6) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6 findings: P1+P4+P2+P3+P5+P6). Walking R-lens next.
+**3 BLOCKING + 5 REFINEMENTs (P1+P4 consolidated; P2; P6; R1) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 1/4 complete.
 
 ---
 
@@ -140,14 +141,22 @@ This addendum ships:
 - Tier 2 linkage: `register-merge-fn!/lattice tropical-fuel-merge #:for-domain 'tropical-fuel`
 - Tests `tests/test-tropical-fuel.rkt`: merge semantics, cell allocation, threshold firing, residuation operator, per-consumer independence, cross-consumer cost composition
 
-**Phase 1C — Canonical BSP fuel migration** (~250-400 LoC across propagator.rkt + scattered)
-- Allocate canonical fuel-cost cell at `cell-id 11` + budget cell at `cell-id 12` in `make-prop-network` (per D.3 §10.3)
-- Install threshold propagator at network setup
-- Retire `prop-network-fuel` syntax-rule + `prop-net-cold-fuel` field
-- Migrate 17 production `propagator.rkt` references (lines per audit Q-Audit-1: 65, 399, 1817, 1824, 1872, 2329, 2366, 2373, 2384, 2875, 2992, 3000, 3045, 3053, 3132, 3135, 3142)
-- Migrate 1 typing-propagators.rkt:2269 reference + 1 pretty-print.rkt:463 reference
-- Migrate 13 test references across 7 files (mechanical, read-only checks)
-- Migrate 2 bench-alloc.rkt references
+**Phase 1C — Canonical BSP fuel substrate** (~45-90 LoC under D.2 hybrid pivot; was ~250-400 LoC under D.1 full-migration design — see §10 + D.3 R1 REFINEMENT)
+
+Under D.2 hybrid pivot (per §10), Phase 1C scope dramatically reduces:
+- Allocate canonical fuel-cost cell at `cell-id 11` + budget cell at `cell-id 12` in `make-prop-network` + install threshold propagator: ~10-20 LoC NEW
+- On-exhaustion cell-write at decrement sites + saved-fuel sync at semantic-transition boundaries (typing-propagators.rkt:2269) + pretty-print.rkt:463 dual display: ~15-30 LoC modified
+- Selective read-as-value migration (3 sites; only those at semantic-transition paths) + new Phase 3C UC tests for cell-mediated APIs: ~20-40 LoC modified + new tests
+
+**PRESERVED under hybrid (zero migration; was migration target under D.1):**
+- 4 decrement sites (struct-copy + inline check)
+- 11 check sites (inline `(<= fuel 0)`)
+- `prop-network-fuel` macro (propagator.rkt:399)
+- `prop-net-cold-fuel` struct field (propagator.rkt:337)
+- 13 test references (most preserve struct-field assertions)
+- 2 bench-alloc.rkt references (measure decrement cost; struct-copy preserved)
+
+**D.1's original audit scope (Q-Audit-1 17 production refs)** carried forward as REFERENCE for completeness but actual migration is much smaller per hybrid scope (per D.3 R2 REFINEMENT acceptance; see also §10.2).
 
 **Phase 1V — Vision Alignment Gate Phase 1** (closes 1A + 1B + 1C atomically)
 - Adversarial TWO-COLUMN VAG (per `9f7c0b82` codification) on all four sub-phases
@@ -942,6 +951,12 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 - Inline check: per-decrement HOT PATH (common case; ~30-40 ns; 100k+ ops/sec in deep type inference)
 - Cell + threshold propagator: Phase 3C consumer paths (rare; semantic-phase granularity; few ops per file)
 - The mechanisms are NOT redundant; they decomplect fast-path optimization from architectural substrate
+
+**D.3 R1 commentary — small code-change footprint is intentional, not "easy migration"**:
+
+Phase 1C's small code-change footprint under hybrid (~45-90 LoC vs D.1's ~250-400) is the empirical consequence of preserving the per-decrement hot path. The design weight is in the architectural framing (cell substrate + threshold propagator + cell staleness contract per §10.B + Phase 3C consumer API + four-surface scaffolding tracking per §10.1.A), NOT in code volume.
+
+Future PReduce / OE consumers (per §6.6 hybrid-as-scaffolding-NOT-template caveat) should NOT use Phase 1C's small footprint as evidence of "easy migration" — under hybrid, the work was DEFERRED via scaffolding (per §10.1.A retirement plan + Issue #55), NOT eliminated. The full-migration footprint (~250-400 LoC per D.1 §10.4) is recoverable as the future SH Series migration scope (per DEFERRED.md "PPN 4C tropical addendum: hybrid pivot scaffolding retirement" entry).
 
 ### §10.1.A Honest framing & retirement plan (D.3 consolidating P1 + P4 REFINEMENTs)
 
