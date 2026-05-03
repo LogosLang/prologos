@@ -24,11 +24,11 @@
 | **P3** Cell Staleness Contract | BLOCKING | ACCEPT | NEW §10.B "Cell Staleness Contract" — typed dual-API discipline (`net-fuel-cost-read` vs `net-fuel-cost-read/synced`) |
 | **M1** Threshold propagator role under hybrid | BLOCKING | ACCEPT | NEW §10.A "The threshold propagator's role under hybrid" — three load-bearing roles (Phase 3C consumer paths + on-exhaustion + speculation rollback); per-decrement acknowledged as scaffolding pending SH Series |
 | **S1** §14.4 SRE lattice lens Q5 PRIMARY/DERIVED inconsistency | BLOCKING | ACCEPT | UPDATE §14.4 Q3+Q4+Q5+Q6 with hybrid-aware classification |
-| **P1** Hybrid inverts Cell-as-Single-Source-of-Truth principle | REFINEMENT | ACCEPT (with GitHub-issue extension) | APPEND §10.1 acknowledgment of principle inversion as scaffolding-with-retirement-plan; dual-surface tracking via [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) (operational visibility) + [DEFERRED.md entry](DEFERRED.md) (design-doc-adjacent visibility) |
+| **P1+P4** Hybrid inverts Cell-as-Single-Source-of-Truth principle (P1) + reframe "decomplection" as "incomplete migration" honestly (P4) | REFINEMENT | ACCEPT (CONSOLIDATED) | NEW §10.1.A "Honest framing & retirement plan" consolidates P1 + P4 into a single tighter section (per user direction "cleaner design document"). Two framings (decomplection + incomplete-migration) both true; principle inversion acknowledged; retirement plan named; four-surface tracking (design-doc + DEFERRED.md + [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) + Q-1B-6 + §11.3 gates). |
 | **P2** Belt-and-suspenders red flag; empirical-validation gate | REFINEMENT | ACCEPT (with Phase 1B mini-design opening spike) | NEW Q-1B-6 at §9.9 — empirical-validation spike at Phase 1B mini-design opening (cheap; ~30 min; pre-implementation falsification test); §11.3 Phase 1V exit criteria adds final-verification gate (post-implementation). Two-gate discipline: spike challenges hybrid pre-build; Phase 1V verifies post-build. "Learning is valuable either way" per user direction. |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING findings closed + 2 REFINEMENTs (P1 + P2) accepted.** D.3 incrementally ready for Stage 4 as remaining REFINEMENTs + ACKNOWLEDGEs are walked.
+**3 BLOCKING findings closed + 3 REFINEMENTs accepted (P1 + P4 consolidated; P2).** D.3 incrementally ready for Stage 4 as remaining REFINEMENTs + ACKNOWLEDGEs are walked.
 
 ---
 
@@ -939,22 +939,39 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 - Cell + threshold propagator: Phase 3C consumer paths (rare; semantic-phase granularity; few ops per file)
 - The mechanisms are NOT redundant; they decomplect fast-path optimization from architectural substrate
 
-**Acknowledgment: hybrid INVERTS the Cell-as-Single-Source-of-Truth principle at the per-decrement timescale (D.3 from P1 REFINEMENT)**:
+### §10.1.A Honest framing & retirement plan (D.3 consolidating P1 + P4 REFINEMENTs)
 
-[`DESIGN_PRINCIPLES.org § Propagator-First Infrastructure`](principles/DESIGN_PRINCIPLES.org) defaults to cells over off-network state. Under hybrid, the struct-field `prop-net-cold-fuel` is the LIVE STATE for fuel-cost; the cell is DERIVED via lazy sync at semantic transitions (per §10.B Cell Staleness Contract). **This inversion is empirically forced, not a stylistic choice** — per [Pre-0 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) (R3 ZERO major GC during 100k decrements under struct-copy), ANY architecture making the cell PRIMARY at per-decrement granularity triggers major GC pressure (architectural failure under R3 baseline).
+The "decomplection" framing in §10.1 describes WHAT the hybrid does at the architectural level. This subsection adds the WHY (specific blocker), the principle-level acknowledgment (Cell-as-Single-Source-of-Truth inversion), and the retirement plan with dual-surface tracking. Both framings are simultaneously true and intentional — design intent + honest accountability.
 
-**Scaffolding with retirement plan**: the inversion is SCAFFOLDING pending SH Series runtime infrastructure that makes per-decrement cell-write GC-friendly. Under SH Series:
+**Two framings, both true**:
+
+1. **Decomplection** (positive description; what the design does): hybrid separates fast-path optimization (struct-copy + inline check at per-decrement) from architectural substrate (cell + threshold propagator at semantic-phase granularity). The mechanisms address different code paths with different performance profiles.
+
+2. **Incomplete migration deferred to SH Series** (honest acknowledgment; why the design does it): apply the [`workflow.md` § "'Pragmatic' Is a Rationalization for Incomplete"](../../.claude/rules/workflow.md) test — replace "decomplection" with "incomplete migration" and verify the rephrased framing is acceptable:
+   > "The hybrid pivot is INCOMPLETE migration — decrement sites preserve struct field because cell-write at per-decrement rate triggers major GC under current Racket runtime (per Pre-0 Finding 19 R3 baseline)."
+   
+   The rephrasing IS acceptable because it names the **specific blocker**: Racket runtime GC behavior at per-decrement cell-write rate. Per the codified pattern, "deferred to Track N because [specific dependency]" is the principled deferral form; "decomplection" alone (without specific blocker) would be rationalization.
+
+**Principle inversion (acknowledged explicitly)**:
+
+[`DESIGN_PRINCIPLES.org § Propagator-First Infrastructure`](principles/DESIGN_PRINCIPLES.org) defaults to cells over off-network state — Cell-as-Single-Source-of-Truth. Under hybrid, this principle is **INVERTED at the per-decrement timescale**: the struct-field `prop-net-cold-fuel` is the LIVE STATE for fuel-cost; the cell is DERIVED via lazy sync at semantic transitions (per §10.B Cell Staleness Contract). The inversion is empirically forced (not stylistic) per [Pre-0 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md): R3 measured ZERO major GC during 100k decrements under struct-copy; ANY architecture making the cell PRIMARY at per-decrement granularity triggers major GC pressure (architectural failure under R3 baseline).
+
+**Retirement plan**:
+
+The inversion is SCAFFOLDING pending SH Series runtime infrastructure that makes per-decrement cell-write GC-friendly. Under SH Series:
 - Per-decrement cell-write becomes feasible (cheaper GC characteristics, lighter cell representation, OR object pooling for tagged-cell-value entries)
 - The cell becomes PRIMARY storage; the struct-field `prop-net-cold-fuel` is retired
 - The hybrid pivot retires; full migration lands as the original D.1 design intended (see D.1 §10.3 patterns)
+- §14.4 SRE lattice lens Q5 dual-classification reverts to single (cell PRIMARY)
 
-**Tracking** (visibility at TWO surfaces — design-time and operational):
-- [GitHub issue #55](https://github.com/LogosLang/prologos/issues/55) — "PPN 4C tropical addendum: retire hybrid pivot scaffolding (per-decrement fuel-cost cell migration) under SH Series runtime"
-- [`DEFERRED.md`](DEFERRED.md) entry under Future SH Series scope
+**Dual-surface tracking** (operational + design-time visibility):
+- [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — "PPN 4C tropical addendum: retire hybrid pivot scaffolding (per-decrement fuel-cost cell migration) under SH Series runtime" (queryable, linkable from PRs, surfaces in repo dashboards)
+- [`DEFERRED.md`](DEFERRED.md) entry under "PPN 4C tropical addendum: hybrid pivot scaffolding retirement" (in-repo single-source-of-truth for deferred work)
+- [`Q-1B-6` empirical-validation spike at Phase 1B mini-design opening](#§99-open-questions-deferred-to-per-phase-mini-designaudit-per-users-workflow) (PRE-implementation falsification test) + [§11.3 Hybrid pivot reconsideration gate at Phase 1V close](#§113-phase-1v-exit-criteria) (POST-implementation final verification)
 
-The dual-surface tracking is intentional: GitHub issues are queryable, linkable from PRs, and surface in repo dashboards (operational visibility); DEFERRED.md is the in-repo single-source-of-truth for deferred work (design-doc-adjacent visibility). When SH Series runtime work begins, both surfaces flag this scaffolding for retirement.
+The four-surface tracking (design-doc + DEFERRED.md + GitHub Issue + bracketed implementation gates) ensures the scaffolding is impossible to forget when SH Series runtime work begins.
 
-**The inversion is honest deferral, not principle violation** — per `workflow.md` § "Validated ≠ Deployed" + `DEVELOPMENT_LESSONS.org` § "'Pragmatic' Is a Rationalization for Incomplete," naming the specific blocker (Racket runtime GC at per-decrement cell-write rate) is the honest framing per the codified pattern: "deferred to Track N because [specific dependency]" not "pragmatic."
+**This is honest deferral, not principle violation** per `workflow.md` § "Validated ≠ Deployed" + `DEVELOPMENT_LESSONS.org` § "'Pragmatic' Is a Rationalization for Incomplete." The principled discipline: name the specific blocker (✓ Racket runtime GC at per-decrement cell-write rate); name the retirement trigger (✓ SH Series runtime infrastructure); track at multiple surfaces (✓ four surfaces above); verify the deferral remains valid (✓ Q-1B-6 + §11.3 falsification gates).
 
 ### §10.A The threshold propagator's role under hybrid (D.3 from M1 BLOCKING)
 
