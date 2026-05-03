@@ -27,10 +27,11 @@ Fire functions that call `net-new-cell` or `net-add-propagator` change the latti
 
 | Track | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| 0 | CALM topology audit + stratified topology design | ⬜ | Audit all dynamic topology sites. Design decomposition-request protocol. Research: multi-strata towers, LKan/RKan under CALM. |
-| 1 | BSP-as-default | ⬜ | After Track 0 resolves all CALM violations. Sequential BSP first (correct), then parallel. |
-| 2 | True parallelism mechanism (Stage 0/1 research) | ⬜ | Racket futures insufficient. Research: STM, WAL cells, FFI to external parallelism. Write contention without constant re-firing. |
-| 3 | `:auto` heuristic + production deployment | ⬜ | Network size threshold, propagator count. Like solver's `:auto` setting. |
+| 0 | CALM topology audit + stratified topology design | ✅ | [Audit](2026-03-27_PAR_TRACK0_CALM_AUDIT.md). 2 violators (SRE, narrowing), 7+ safe. LKan/RKan CALM-safe. |
+| 1 | BSP-as-default + stratified topology | ✅ | [Design](2026-03-27_PAR_TRACK1_DESIGN.md), [PIR](2026-03-28_PAR_TRACK1_PIR.md). 380/380 GREEN. 10 bugs via diagnostic protocol. Structural propagator capture. BSP 2.3% faster than DFS. |
+| 2 (R1-R2) | True parallel execution proof-of-concept | ✅ | Racket 9 parallel threads. 13/13 stress tests PASS. 4.45× speedup (synthetic). 1.42× on graph coloring/constraint grids. |
+| 2 (R3-R5) | Contention analysis + literature survey + design doc | ⬜ | Stage 0/1 research. Racket futures + STM/WAL/FFI. Write contention without constant re-firing. |
+| 3 | `:auto` heuristic + production deployment | ⬜ | Network size threshold, propagator count. Kind-aware (PTF Track 3). Like solver's `:auto` setting. |
 
 ---
 
@@ -62,7 +63,7 @@ What if multiple topology rewrites want to happen on different parts of the same
 
 **The question**: Can we parallelize topology strata if the rewrites touch disjoint subgraphs? This would be "parallel topology exploration" — multiple topology strata running concurrently on partitioned regions.
 
-**Connection to hypergraph rewriting**: E-graph saturation (PReductions) and grammar production application (PPN) are both topology rewrites. If two rewrite rules touch disjoint hyperedges, they can apply in parallel. This is the same question as parallel graph rewriting in DPO/SPO frameworks — and the answer depends on whether the rewrites have "critical pairs" (conflicting overlaps).
+**Connection to hypergraph rewriting**: E-graph saturation (PReduce) and grammar production application (PPN) are both topology rewrites. If two rewrite rules touch disjoint hyperedges, they can apply in parallel. This is the same question as parallel graph rewriting in DPO/SPO frameworks — and the answer depends on whether the rewrites have "critical pairs" (conflicting overlaps).
 
 **Design Stage 0/1 research**: This connects to the PRN theory series. The CALCO 2025 result (e-graphs are adhesive categories) may provide the theoretical foundation — adhesive categories have well-defined parallel rewriting via independence conditions.
 
@@ -123,7 +124,7 @@ PAR is cross-cutting — it affects the scheduling substrate that ALL series run
 
 - **PPN**: Hypergraph rewriting rules that add parse tree nodes are topology changes → need topology strata
 - **SRE**: Structural decomposition is the primary source of dynamic topology → Track 0's main refactoring target
-- **PReductions**: E-graph saturation adds equality nodes → topology change
+- **PReduce**: E-graph saturation adds equality nodes → topology change
 - **BSP-LE**: ATMS hypothesis creation → topology change
 - **PM**: Network construction during elaboration → topology audit scope
 

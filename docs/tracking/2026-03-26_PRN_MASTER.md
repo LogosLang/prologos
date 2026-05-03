@@ -8,12 +8,12 @@ application track discoveries. Tracks emerge; they are not pre-planned.
 **Thesis**: Parsing, structural reasoning, reduction, logical inference,
 and serialization are all instances of typed hyperlattice rewriting on
 propagator networks. PRN formalizes the shared primitives that application
-series (PPN, SRE, PReductions, BSP-LE) instantiate and contribute back to.
+series (PPN, SRE, PReduce, BSP-LE) instantiate and contribute back to.
 
 **Analogy**: PRN is to its application series as NTT is to the propagator
 infrastructure tracks. NTT crystallized from PM Tracks 1-8 — we built
 the infrastructure, observed the recurring structures, and NTT named them.
-PRN will crystallize from PPN, SRE, PReductions, and BSP-LE as we build
+PRN will crystallize from PPN, SRE, PReduce, and BSP-LE as we build
 applications and observe what rewriting primitives they share.
 
 **Source Documents**:
@@ -54,15 +54,15 @@ confirmation track.
 
 | Conjecture | Reasoning | Predicted confirmation |
 |-----------|-----------|----------------------|
-| β/δ/ι reduction as DPO rewrite rules | `(λx.body) arg → body[x:=arg]` is pattern match + structural substitution = DPO rewrite. Interaction nets (Lafont) provide strong confluence. | PReductions Track 1 |
+| β/δ/ι reduction as DPO rewrite rules | `(λx.body) arg → body[x:=arg]` is pattern match + structural substitution = DPO rewrite. Interaction nets (Lafont) provide strong confluence. | PReduce Track 1 |
 | NAF as non-monotone rewrite rule | "If no derivation for P after lfp, assert ¬P" is a rewrite that fires on ABSENCE of a value — non-monotone, stratified. | BSP-LE Track 3 |
 | Tabling as memoized rewriting | Tabled predicates cache rewrite results. The cell holds all known derivations; new derivations merge monotonically. Suspension = waiting for cell to accumulate more values. | BSP-LE Track 4 |
 | Session duality as involutive rewriting | `dual(Send(A, S)) → Recv(A, dual(S))` is a rewrite rule with involution structure. SRE Track 1 confirmed the structural dispatch; full session protocol rewriting awaits SRE Track 3. | SRE Track 3 |
 | Surface normalization as rewriting | `(let [x := val] body) → ((fn [x] body) val)` and all preparse expansions are DPO rewrite rules on the surface syntax lattice. | PPN Track 2 |
 | Type inference as attribute evaluation | Each typing rule (`infer-app`, `check-lam`, etc.) is an attribute computation on the parse tree. The elaborator IS an attribute evaluator. | PPN Track 4 / SRE Track 2C |
 | Grammar extension as rule registration | Adding new syntax = adding new rewrite rules to the grammar. The `defmacro` system is an ad-hoc version; PPN Track 7 makes it first-class and typed. | PPN Track 7 |
-| Optimization as cost-weighted rewriting | Each rewrite rule has a cost (tropical semiring). Optimal program = cheapest rewrite sequence to normal form. | PReductions Track 3, OE |
-| NF-Narrowing as DT-guided rewriting | Definitional trees ARE rewrite strategies — they determine which rule to apply at which position. Narrowing IS rewriting with unification (binding variables, not just matching ground). Residuation IS propagator waiting (input cell at bot → suspend). "Needed" narrowing = optimal strategy (provably minimal steps for inductively sequential systems). | PPN (strategy layer), PReductions, BSP-LE |
+| Optimization as cost-weighted rewriting | Each rewrite rule has a cost (tropical semiring). Optimal program = cheapest rewrite sequence to normal form. | PReduce Track 3, OE |
+| NF-Narrowing as DT-guided rewriting | Definitional trees ARE rewrite strategies — they determine which rule to apply at which position. Narrowing IS rewriting with unification (binding variables, not just matching ground). Residuation IS propagator waiting (input cell at bot → suspend). "Needed" narrowing = optimal strategy (provably minimal steps for inductively sequential systems). | PPN (strategy layer), PReduce, BSP-LE |
 | Needed narrowing optimality transfers to grammar rules | If grammar rules are inductively sequential (each matches a specific token/form at a specific position — which CFGs guarantee), then DT-guided rule selection is PROVABLY OPTIMAL. This means: the optimal parsing strategy may be derivable from the grammar's definitional tree. | PPN Track 3, PRN foundational |
 
 ## 3. Universal Primitives
@@ -75,21 +75,21 @@ after multiple applications confirm the need.
 
 | Primitive | Instances | Description |
 |-----------|-----------|-------------|
-| Rewrite rule registration | SRE (ctor-desc), PPN (grammar production), PReductions (β-rule) | Register a pattern → replacement rule with the network |
+| Rewrite rule registration | SRE (ctor-desc), PPN (grammar production), PReduce (β-rule) | Register a pattern → replacement rule with the network |
 | Fixpoint computation | All systems | Apply rules until quiescence (no more applicable rules) |
 | Lattice merge | All systems | Monotonic information accumulation in cells |
 | Stratified recovery | PM (S0-S2), BSP-LE (NAF strata), PPN (parse→elaborate→check) | Non-monotone operations staged across barrier strata |
 | ATMS-guided search | PM (speculation), BSP-LE (choice points), PPN (ambiguity) | Assumption-based exploration with nogood learning |
-| Structural decomposition | SRE (type constructors), PPN (grammar constituents), PReductions (redex matching) | Match a pattern in the graph, decompose into sub-parts |
+| Structural decomposition | SRE (type constructors), PPN (grammar constituents), PReduce (redex matching) | Match a pattern in the graph, decompose into sub-parts |
 
 ### Emerging (2 instances, watching)
 
 | Primitive | Instances | Description |
 |-----------|-----------|-------------|
 | Bidirectional rule application | PPN (serialize/deserialize), SRE (composition/decomposition) | Same rule, opposite information flow direction |
-| Cost-weighted rule selection | PPN (optimal parse), PReductions (optimal reduction) | Tropical semiring selects cheapest rewrite |
+| Cost-weighted rule selection | PPN (optimal parse), PReduce (optimal reduction) | Tropical semiring selects cheapest rewrite |
 | Invariant-typed rules | PPN (grammar invariant levels), NTT (monotonicity proofs) | Rules carry type annotations that constrain their applicability |
-| Rule confluence guarantee | SRE (prop:ctor-desc-tag), PReductions (interaction nets) | Structural guarantee that rule application order doesn't matter |
+| Rule confluence guarantee | SRE (prop:ctor-desc-tag), PReduce (interaction nets) | Structural guarantee that rule application order doesn't matter |
 
 ### Speculative (1 instance, need more data)
 
@@ -172,11 +172,11 @@ as application tracks complete PIRs.
 |------|-------------|---------|-----------------|-------------|
 | 2026-03-22 | SRE Track 0 | Form registry = rewrite rule registration | Confirmed: rule registration is a universal primitive | SRE, PPN |
 | 2026-03-23 | SRE Track 1 | Relation-parameterized dispatch | Same rule infrastructure, different lattice orderings | PPN (Track 5 disambiguation) |
-| 2026-03-24 | SRE Track 2 | prop:ctor-desc-tag = confluence by construction | Confirmed: structural confluence guarantee is universal | PReductions (interaction nets) |
+| 2026-03-24 | SRE Track 2 | prop:ctor-desc-tag = confluence by construction | Confirmed: structural confluence guarantee is universal | PReduce (interaction nets) |
 | 2026-03-24 | PM Track 10 | .pnet serialization = rewriting in opposite directions | Bidirectional rules (DCG insight) | PPN (Track 9 self-describing) |
 | 2026-03-25 | PM Track 10B | Zonk = rewrite rule (expr-meta → solution) | Rewrite elimination by making rules matchless | SRE Track 2C |
 | 2026-03-26 | Conversation | Invariant-typed grammars (identity/structural/behavioral/value) | Rules carry type annotations constraining applicability | PPN (Track 9), NTT |
-| 2026-03-26 | Conversation | NF-Narrowing as strategy layer for rewriting | DTs = optimal rule selection; residuation = propagator waiting; needed narrowing = provably minimal | PPN, PReductions, BSP-LE |
+| 2026-03-26 | Conversation | NF-Narrowing as strategy layer for rewriting | DTs = optimal rule selection; residuation = propagator waiting; needed narrowing = provably minimal | PPN, PReduce, BSP-LE |
 | 2026-03-26 | Conversation | ATMS + type network = proof-based disambiguation | Parse ambiguity → branches → type contradiction → retraction. Strictly more powerful than all existing parsers. | PPN Track 5 |
 | 2026-03-26 | Conversation | Cross-network information for parsing | Session protocols, QTT multiplicities, effect positions, module exports, trait constraints — ALL are disambiguation sources | PPN Tracks 3-5 |
 | 2026-03-26 | Research | Lattice Foundations for PPN | 6-domain reduced product, semiring parsing, Datalog stratification, ATMS-guided parsing, concrete lattice design | PPN Track 0 foundational |
@@ -204,17 +204,17 @@ more data points before promotion to §3 (Universal Primitives).
 
 | Pattern | Instances so far | What would confirm it |
 |---------|-----------------|----------------------|
-| "Lattice merge IS a rewrite rule" | SRE (type merge), PM (cell write) | If PPN's parse lattice merge and PReductions' e-graph merge follow the same pattern, merge is rewriting |
-| "All rewriting is monotone + stratified non-monotone" | PM (S0 monotone + S2 commit), BSP-LE (lfp + NAF) | If PPN and PReductions follow the same monotone/barrier pattern |
+| "Lattice merge IS a rewrite rule" | SRE (type merge), PM (cell write) | If PPN's parse lattice merge and PReduce' e-graph merge follow the same pattern, merge is rewriting |
+| "All rewriting is monotone + stratified non-monotone" | PM (S0 monotone + S2 commit), BSP-LE (lfp + NAF) | If PPN and PReduce follow the same monotone/barrier pattern |
 | "Rule matchlessness eliminates entire subsystems" | Zonk (matchless = deleted), SRE (matchless = no decomposition needed) | If PPN has examples of rules that become matchless after optimization |
-| "DTs are the universal strategy layer" | NF-Narrowing (DTs guide narrowing), SRE (ctor-desc dispatch = 1-level DT) | If PPN parsing uses DT-like strategy, and PReductions uses DTs for optimization rule selection — DTs are the STRATEGY primitive across all applications |
+| "DTs are the universal strategy layer" | NF-Narrowing (DTs guide narrowing), SRE (ctor-desc dispatch = 1-level DT) | If PPN parsing uses DT-like strategy, and PReduce uses DTs for optimization rule selection — DTs are the STRATEGY primitive across all applications |
 | "Needed optimality transfers across domains" | NF-Narrowing (needed narrowing = minimal steps) | If "needed parsing" (DT-guided rule selection) is provably optimal for CFGs, the optimality result generalizes beyond logic programming |
 | "ATMS + type network = proof-based disambiguation" | Conversation insight (2026-03-26): parse ambiguity → ATMS branches → type contradiction → nogood → retraction. Strictly more powerful than PEG/GLR/GLL/Earley. | PPN Track 5 implementation |
 | "Parse bilattice (derivation × elimination)" | Combine lfp (what's derived) with gfp (what's impossible) into bilattice — parallels WF-LE well-founded semantics. Novel for parsing: no existing framework does this. | PPN Track 0 lattice design |
 | "4-level search optimization (branch → prune → focus → select)" | ATMS (branch) + Left Kan (prune via partial type info) + Right Kan (demand-driven focus) + tropical (cost-optimal selection). Compose on one network. | PPN + OE + PRN foundational |
 | "Residuation = propagator waiting (identity, not analogy)" | NF-Narrowing residuation IS the standard cell-at-bot behavior. No special mechanism needed. | PPN (grammar rule residuation), SRE |
 | "GFP for grammar extension validation" | gfp of parses with old grammar vs new grammar — growth = ambiguity. Static check, no test strings. | PPN Track 7 |
-| "The grammar IS the type" | PPN (grammar = parse type), SRE (form = structural type) | If PReductions' rewrite rules are typed by their input/output pattern types |
+| "The grammar IS the type" | PPN (grammar = parse type), SRE (form = structural type) | If PReduce' rewrite rules are typed by their input/output pattern types |
 | "Self-describing formats = meta-grammars" | PPN Track 9 (grammar-as-Part-1) | Need implementation evidence |
 
 ---

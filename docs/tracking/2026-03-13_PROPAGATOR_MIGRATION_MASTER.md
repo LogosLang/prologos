@@ -391,17 +391,17 @@ See `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org` §5.2 
 
 **Design document**: TBD — full design required given risk level. Imperative state audit as Phase 0. Audit complete: `docs/tracking/2026-03-18_TRACK8_PROPAGATOR_INFRASTRUCTURE_AUDIT.org`.
 
-### Track 9: Reduction as Propagators
+### Track 9: Reduction as Propagators → Promoted to PReduce Series (2026-05-02)
 
-**Goal**: Reduction results as propagator cells with dependency-tracked invalidation. Memo caches become cells — when a meta that a reduction depends on is solved, the reduction cell automatically recomputes. Eliminates the class of stale-cache bugs that Track 8 Part C's interleaved resolution could expose.
+**Status**: PROMOTED. PM Track 9 retained as cross-reference: "PM Track 9 = PReduce Series."
 
-**Risk**: Medium-High — pervasive change to `reduction.rkt` (~4000 lines, ~50 cases), plus adaptation of ~30 call sites across 6 files.
+**See**: [PReduce Master](2026-05-02_PREDUCE_MASTER.md) for the full series scope.
 
-**Depends on**: Track 8 Part C (propagator-driven constraint resolution provides the foundation).
+PM Track 9 was originally framed as "reduction results as propagator cells with dependency-tracked invalidation" — see [Stage 1 Research Note](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md). The vision since enlarged dramatically (DPO + tropical-quantale + e-graph + GoI + BSP-LE speculation) and was promoted to a named series with its own master doc, NTT model, and 10-track partitioning. The original incremental-reduction-cells framing is now subsumed by PReduce Track 1 (e-class cell substrate) + Track 4 (cost-guided extraction) + Track 5 (persistence).
 
-**Design document**: [Stage 1 Research Note](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md)
+**PM-side residual**: When PReduce Track 1 lands the e-class cell substrate, PM's reduction call sites (~30 across 6 files) migrate to read from PReduce cells. That migration may be PM Track 9-revival or absorbed into PReduce Track 8 (`reduction.rkt` parity + retirement). Sequencing TBD when PReduce implementation tracks open.
 
-**Enables**: Incremental re-reduction for LSP (Track 11). Correct memo caching under interleaved resolution. Solver-level incremental reduction for BSP-LE.
+**Enables (via PReduce)**: Incremental re-reduction for LSP (Track 11). Correct memo caching under interleaved resolution. Solver-level incremental reduction for BSP-LE. Plus: e-graph equality saturation + tropical-quantale cost extraction + interaction-net-style parallelism + GoI-machine semantics + cross-session persistence + super-optimization.
 
 ### Track 10: General Diagnostic Engine (GDE)
 

@@ -1,7 +1,7 @@
 # Collection Interface Unification (CIU) Series
 
 **Created**: 2026-03-21
-**Status**: Series inception — Track 0 (design space investigation) next
+**Status**: Track 0 ✅ (Trait Hierarchy Audit). Tracks 1-2 ⬜ pre-Track-8. Tracks 3-5 ⬜ post-Track-8 (now unblocked by Track 8 completion + BSP-LE Track 2/2B).
 **Thesis**: All collection access — indexing, iteration, broadcast, mapping, path navigation — dispatches through traits resolved on the propagator network. Syntactic sugar generates trait constraints, not constructor-specific AST nodes. User-defined collections participate in all syntax automatically.
 
 ---
@@ -43,7 +43,7 @@ This thesis addresses 5 principle violations identified in the Collection Interf
 
 | # | Track | Description | Status | Design Doc | Pre/Post Track 8 |
 |---|-------|-------------|--------|------------|-------------------|
-| 0 | Trait Hierarchy Design | Deep Stage 2: Seq as trait, Functor vs Seq+Buildable, Keyed semantics, mixed paths, selective disclosure | ⬜ | Pending | Pre (design only) |
+| 0 | Trait Hierarchy Design | Deep Stage 2: Seq as trait, Functor vs Seq+Buildable, Keyed semantics, mixed paths, selective disclosure | ✅ | [Audit](2026-03-21_CIU_TRACK0_TRAIT_HIERARCHY_AUDIT.md) | Pre (design only) |
 | 1 | Seq Protocol | Seq-as-trait migration, native instances, LSeq demotion, gmap/gfilter rerouting | ⬜ | Pending | Pre |
 | 2 | Syntactic Sugar Normalization | dot-brace `.{...}`, ground-expr? fix, comprehensive sugar audit | ⬜ | Pending | Pre |
 | 3 | Trait-Dispatched Access | `surf-get` generates Indexed/Keyed constraints; propagator resolves; `expr-get` vestigial | ⬜ | Pending | Post Track 8 |
