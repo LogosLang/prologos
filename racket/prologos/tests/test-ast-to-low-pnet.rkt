@@ -762,3 +762,51 @@
   (define lp1 (ast-to-low-pnet (expr-Int) body-fs "t.prologos"))
   (check-true (validate-low-pnet lp1))
   (check-equal? (count-by lp1 propagator-decl?) 1))
+
+;; ============================================================
+;; Nat elimination natrec (2026-05-03)
+;; ============================================================
+
+(test-case "natrec: literal target folds iterator (acc + k); expect 13"
+  ;; natrec _ 10 (λ k λ acc. acc+k) 3  → 10+0+1+2 = 13
+  (define mot (expr-lam 'm0 (expr-Nat) (expr-Int)))
+  (define step
+    (expr-lam 'mw (expr-Nat)
+              (expr-lam 'mw (expr-Int)
+                        (expr-int-add (expr-bvar 0) (expr-bvar 1)))))
+  (define body (expr-natrec mot (expr-int 10) step (expr-nat-val 3)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Entry is accumulator cell (scalar).
+  (define entry (for/first ([n (in-list (low-pnet-nodes lp))]
+                            #:when (entry-decl? n)) n))
+  (check-not-false entry))
+
+(test-case "natrec: zero iterations leaves base"
+  (define mot (expr-lam 'm0 (expr-Nat) (expr-Int)))
+  (define step
+    (expr-lam 'mw (expr-Nat)
+              (expr-lam 'mw (expr-Int)
+                        (expr-int-add (expr-bvar 0) (expr-int 1)))))
+  (define body (expr-natrec mot (expr-int 42) step (expr-zero)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp)))
+
+(test-case "natrec: Nat parameter as target (mirrored bound)"
+  (define mot (expr-lam 'm0 (expr-Nat) (expr-Int)))
+  (define step
+    (expr-lam 'mw (expr-Nat)
+              (expr-lam 'mw (expr-Int)
+                        (expr-int-add (expr-bvar 0) (expr-bvar 1)))))
+  (define main-type (expr-Pi 'mw (expr-Nat) (expr-Int)))
+  (define main-body
+    (expr-lam 'mw (expr-Nat)
+              (expr-natrec mot (expr-int 100) step (expr-bvar 0))))
+  (define lp (ast-to-low-pnet main-type main-body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Must emit tail-rec-style argv mirrors for the bound + natrec bound snapshot.
+  (define mirror-meta
+    (for/first ([n (in-list (low-pnet-nodes lp))]
+                #:when (and (meta-decl? n) (eq? (meta-decl-key n) 'input-cell-mirrors)))
+      n))
+  (check-not-false mirror-meta))

@@ -1306,7 +1306,107 @@ parameterised main). Other non-literal initializers are deferred."))
      (or (yes? s) (for/or ([a (in-list arms)])
                     (yes? (expr-reduce-arm-body a))))]
     [(expr-lam _ _ body) (yes? body)]
+    [(expr-natrec _ b s t) (or (yes? b) (yes? s) (yes? t))]
     [_ #f]))
+
+;; lower-natrec — dependent Nat eliminator for executable lowering.
+;;
+;; Restrictions (narrow slice sufficient for stdlib-style folds):
+;;   - `target` must be `nat-val`, `zero`, or a single Nat **parameter**
+;;     cell (`expr-bvar` resolving to an `input-cell?`).
+;;   - `base` must compile-time literal Int (via `literal-init-value`).
+;;   - `step` must be `(λ (_ : Nat). (λ (_ : T). body))` with runtime mult m1/mw;
+;;     body uses `bvar 0` = accumulator, `bvar 1` = predecessor index k.
+;;   - Accumulator must translate to a scalar Int cell (assert-scalar!).
+;;
+;; Iterator invariant: state `(k, acc)` holds partial computation after `k`
+;; outer reductions (`acc = elim(_,base)` at partial depth `k`). Loop continues
+;; while `k < n` using lagged prev copies like tail-rec (BSP convergence).
+(define (lower-natrec b dom-id outer-env mot base step target err-expr)
+  (void mot)
+  (define base-lit (literal-init-value base))
+  (unless (exact-integer? base-lit)
+    (translate-error!
+     err-expr
+     "natrec: base must be a compile-time Int literal for lowering"))
+
+  (define tgt* (peel-expr-ann target))
+  (define-values (orig-init mirror-src)
+    (match tgt*
+      [(expr-nat-val n)
+       (unless (and (exact-integer? n) (>= n 0))
+         (translate-error! err-expr "natrec: invalid expr-nat-val"))
+       (values n #f)]
+      [(expr-zero) (values 0 #f)]
+      [(expr-bvar i)
+       (when (or (< i 0) (>= i (length outer-env)))
+         (translate-error! err-expr "natrec: target bvar out of scope"))
+       (define cid (list-ref outer-env i))
+       (unless (input-cell? b cid)
+         (translate-error!
+          err-expr
+          "natrec: opaque Nat target must be a parameter cell"))
+       (values 0 cid)]
+      [_ (translate-error!
+          err-expr
+          "natrec: target must be nat-val, zero, or Nat main parameter")]))
+
+  (define step* (peel-expr-ann step))
+  (define inner-body
+    (match step*
+      [(expr-lam mult1 ty1 (expr-lam mult2 _ty2 ib))
+       (unless (memq mult1 '(m1 mw))
+         (translate-error! err-expr "natrec step outer λ multiplicity unsupported"))
+       (unless (memq mult2 '(m1 mw))
+         (translate-error! err-expr "natrec step inner λ multiplicity unsupported"))
+       (unless (expr-Nat? (peel-expr-ann ty1))
+         (translate-error! err-expr "natrec step first binder must be Nat"))
+       ib]
+      [_ (translate-error!
+          err-expr
+          "natrec step must be (λ (_ : Nat). (λ (_ : _). body))")]))
+
+  ;; Constant bound n (mirrored from argv when needed).
+  (define orig-cid (emit-cell! b INT-DOMAIN-ID orig-init))
+  (when mirror-src (record-input-mirror! b mirror-src orig-cid))
+
+  ;; Iterator cells.
+  (define k-cid (emit-cell! b INT-DOMAIN-ID 0))
+  (define acc-cid (emit-cell! b INT-DOMAIN-ID base-lit))
+
+  ;; Lagged copies for cond + step (same pattern as lower-tail-rec).
+  (define prev-k-cid (emit-cell! b INT-DOMAIN-ID 0))
+  (emit-propagator! b (list k-cid) prev-k-cid 'kernel-identity)
+  (define prev-acc-cid (emit-cell! b INT-DOMAIN-ID base-lit))
+  (emit-propagator! b (list acc-cid) prev-acc-cid 'kernel-identity)
+
+  ;; cond := (prev_k < n)
+  (define cond-cid (emit-cell! b BOOL-DOMAIN-ID #f))
+  (emit-aligned-propagator! b (list prev-k-cid orig-cid) cond-cid 'kernel-int-lt)
+
+  (define one-cid (emit-cell! b INT-DOMAIN-ID 1))
+  ;; Step index uses predecessor counter value `prev_k`.
+  (define step-env (cons prev-acc-cid (cons prev-k-cid outer-env)))
+  (define new-acc-vt (build inner-body b dom-id step-env))
+  (define new-acc-cid (assert-scalar! new-acc-vt inner-body "natrec step body"))
+  (define new-k-cid (emit-cell! b INT-DOMAIN-ID 0))
+  (emit-aligned-propagator! b (list prev-k-cid one-cid) new-k-cid 'kernel-int-add)
+
+  ;; Lift cond + step operands to a common depth (freeze operands stay raw).
+  (define max-d (max (cell-depth b cond-cid)
+                     (cell-depth b new-k-cid)
+                     (cell-depth b new-acc-cid)))
+  (define cond-lifted (lift-cell-to-depth b cond-cid max-d))
+  (define new-k-lifted (lift-cell-to-depth b new-k-cid max-d))
+  (define new-acc-lifted (lift-cell-to-depth b new-acc-cid max-d))
+
+  ;; base-on-false kernel-select: cond≠0 → then-branch (step); cond=0 → freeze.
+  (emit-propagator! b (list cond-lifted new-k-lifted k-cid) k-cid 'kernel-select
+                    #:skip-depth-update? #t)
+  (emit-propagator! b (list cond-lifted new-acc-lifted acc-cid) acc-cid 'kernel-select
+                    #:skip-depth-update? #t)
+
+  acc-cid)
 
 (define (build-uncached expr b dom-id env)
   (match expr
@@ -1353,6 +1453,10 @@ parameterised main). Other non-literal initializers are deferred."))
      (define r-cid (emit-cell! b INT-DOMAIN-ID 0))
      (emit-aligned-propagator! b (list inner-cid one-cid) r-cid 'kernel-int-add)
      r-cid]
+
+    ;; Nat elimination — narrow executable slice (see `lower-natrec` docstring).
+    [(expr-natrec mot base step target)
+     (lower-natrec b dom-id env mot base step target expr)]
 
     ;; Nat literals (Sprint F.4). expr-nat-val holds an O(1) i64 nat;
     ;; same runtime representation as Int. expr-zero is just literal 0.
