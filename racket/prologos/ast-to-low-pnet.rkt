@@ -119,17 +119,30 @@
                  [input-cells #:auto #:mutable]
                  ;; lowering-yolo M6 (2026-05-02): list of
                  ;; (input-cell-id . target-cell-id) pairs. When tail-rec
-                 ;; lowering uses an input cell as an iteration state
-                 ;; cell, it must also seed the corresponding next-cell
-                 ;; with the same runtime argv value. Otherwise the
-                 ;; feedback identity at round 1 would read the next-
-                 ;; cell's placeholder init (0) and overwrite the input
-                 ;; cell's argv value before the iteration even starts.
-                 ;; Emitted as (meta-decl input-cell-mirrors ((src . dst) ...))
+                 ;; lowering needs to seed a state cell with the runtime
+                 ;; argv value, it allocates a FRESH state cell (rather
+                 ;; than reusing the input cell directly — that breaks
+                 ;; if the same input is consumed by multiple iteration
+                 ;; sites, which all race to write back to it via their
+                 ;; feedback identities). The mirror entry says "after
+                 ;; argv-write to src-input, also write the same value
+                 ;; to dst". Emitted as
+                 ;;   (meta-decl input-cell-mirrors ((src . dst) ...))
                  ;; and consumed by low-pnet-to-llvm to inject one extra
                  ;; cell_write(dst, argv_value) per pair, immediately
-                 ;; after the canonical cell_write(src, argv_value).
-                 [input-cell-mirrors #:auto #:mutable])
+                 ;; after the canonical cell_write(src, argv_value). One
+                 ;; src can map to many dsts (state-cell + next-cell at
+                 ;; minimum, and across multiple iteration sites).
+                 [input-cell-mirrors #:auto #:mutable]
+                 ;; lowering-yolo M6 (2026-05-02): map from state-cell-id
+                 ;; to the input-cell-id that seeded it. Lower-tail-rec's
+                 ;; emit-feedback uses this to know whether to mirror
+                 ;; the corresponding next-cell from the same input.
+                 ;; Without this hop, the round-1 feedback would read
+                 ;; the next-cell's placeholder init (0) and overwrite
+                 ;; the state-cell's freshly-mirrored argv value before
+                 ;; the iteration starts.
+                 [state-cell-input-source #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -147,6 +160,7 @@
   (set-builder-tail-rec-count! b 0)
   (set-builder-input-cells! b '())
   (set-builder-input-cell-mirrors! b '())
+  (set-builder-state-cell-input-source! b (hasheqv))
   b)
 
 ;; lowering-yolo M6 helper: record a (src . dst) mirror pair on the
@@ -157,6 +171,17 @@
   (set-builder-input-cell-mirrors!
    b (cons (cons src-cid dst-cid)
            (builder-input-cell-mirrors b))))
+
+;; lowering-yolo M6 helper: record that state-cid was seeded from
+;; input-cid. Used by emit-feedback to also mirror the corresponding
+;; next-cell from the same input, preventing a round-1 feedback from
+;; overwriting state-cid's argv value with the next-cell's placeholder.
+(define (record-state-input-source! b state-cid input-cid)
+  (set-builder-state-cell-input-source!
+   b (hash-set (builder-state-cell-input-source b) state-cid input-cid)))
+
+(define (state-input-source b state-cid)
+  (hash-ref (builder-state-cell-input-source b) state-cid #f))
 
 ;; True iff `cid` is one of main's input cells (i.e., its runtime
 ;; value comes from argv at @main entry).
@@ -1060,13 +1085,29 @@ Bool state slots not yet supported).")]))
             ;; of cell-ids (typically a single cell-id for an
             ;; (expr-bvar i) — the corresponding env slot).
             (define vt (build arg b INT-DOMAIN-ID env))
-            ;; Mirror vt's shape with placeholder zeros for init-vt
-            ;; (used downstream to seed the next-cell). Per-leaf init
-            ;; for cells we DON'T own can't be touched safely; the
-            ;; next-cell init is 0, which is overwritten on the first
-            ;; select fire.
+            ;; Today we only support the case where vt is a single
+            ;; input cell — i.e., the init-arg is a main parameter
+            ;; like `n`. More general non-literal initializers
+            ;; (intermediate computations) are deferred — they would
+            ;; need careful BSP race analysis since the iteration's
+            ;; feedback would compete with the upstream propagator's
+            ;; output for the state cell value.
+            (unless (and (exact-integer? vt) (input-cell? b vt))
+              (translate-error!
+               arg
+               "tail-rec: non-literal init-args must currently \
+resolve to a single main parameter (an opaque bvar from \
+parameterised main). Other non-literal initializers are deferred."))
+            (define input-cid vt)
+            ;; Allocate a FRESH state cell (not the input cell — see
+            ;; builder-input-cell-mirrors docstring for why sharing
+            ;; breaks under multi-site iteration). Mirror argv to the
+            ;; state cell so it starts at the runtime input value.
+            (define state-cid (emit-cell! b INT-DOMAIN-ID 0))
+            (record-input-mirror! b input-cid state-cid)
+            (record-state-input-source! b state-cid input-cid)
             (define iv (vtree-zeros-like vt))
-            (loop (cdr args) (cons iv iv-acc) (cons vt sv-acc))])])))
+            (loop (cdr args) (cons iv iv-acc) (cons state-cid sv-acc))])])))
 
   (define (alloc-state-vt init-vt) (alloc-state-vt-from-literal b init-vt))
 
@@ -1152,14 +1193,14 @@ Bool state slots not yet supported).")]))
        ;; cells stay at logical depth 0 for future references.
        (emit-propagator! b (list next-cid) state-vt 'kernel-identity
                          #:skip-depth-update? #t)
-       ;; lowering-yolo M6: if state-vt is an input cell (shared via
-       ;; the non-literal-init path), record a mirror so the next-cell
-       ;; receives the same argv value at @main entry. Without this,
-       ;; the round-1 feedback would read next-cid's placeholder init
-       ;; (0) and overwrite the input cell's argv value before the
-       ;; iteration starts.
-       (when (input-cell? b state-vt)
-         (record-input-mirror! b state-vt next-cid))]
+       ;; lowering-yolo M6: if state-vt was seeded from a main
+       ;; parameter (recorded in state-cell-input-source), mirror the
+       ;; same argv value to next-cid as well. Without this, the
+       ;; round-1 feedback would read next-cid's placeholder init (0)
+       ;; and overwrite state-vt's freshly-mirrored argv value before
+       ;; the iteration starts.
+       (let ([src (state-input-source b state-vt)])
+         (when src (record-input-mirror! b src next-cid)))]
       [else
        (for ([s (in-list state-vt)]
              [t (in-list step-vt)]

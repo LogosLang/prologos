@@ -1,0 +1,22 @@
+ns benchmarks::lowering::01-tailrec-pair-fib
+
+;; Iterative fib(n) via pair-state tail-rec.
+;; Exercises: tail-rec lowering (Sprint E.3) + pair construction (F.2)
+;;            + pair-state iteration (F.3) + parameterised main (M3-M6).
+;;
+;; Does NOT static-fold (the iteration counter `n` is opaque, set
+;; from argv[1] at runtime). RUNS the BSP scheduler for ~n iterations.
+;; Canonical "real runtime" benchmark for the kernel.
+;;
+;; :inputs 10 30 50
+;; :expect-stdout-for 10 = 55
+;; :expect-stdout-for 30 = 832040
+;; :expect-stdout-for 50 = 12586269025
+
+spec fib-pair <Int * Int> -> Int -> Int
+defn fib-pair [p n]
+  match [int-lt n 1]
+    | true  -> [fst p]
+    | false -> [fib-pair [pair [snd p] [int+ [fst p] [snd p]]] [int- n 1]]
+
+def main : Int -> Int := (fn [n : Int] [fib-pair [pair 0 1] n])

@@ -1,4 +1,4 @@
-ns benchmarks::lowering::04-tailrec-dual-acc-8
+ns benchmarks::lowering::04-tailrec-dual-acc
 
 ;; Dual accumulator: pair-state tail-rec computing (sum 1..N + product 1..N).
 ;; State: <s * p> where s accumulates the sum, p accumulates the product.
@@ -8,11 +8,17 @@ ns benchmarks::lowering::04-tailrec-dual-acc-8
 ;;
 ;; Exercises: pair-state tail-rec, multi-cell update per iteration
 ;; (both s and p cells transition each round), independent leaf
-;; lowering of pair components.
+;; lowering of pair components, parameterised main with M6 mirror.
 ;;
-;; For N=8: sum = 36, product = 40320. Total = 40356.
-;; exit code (mod 256) = 164.
-;; :expect-exit 164
+;; sum 1..N = N(N+1)/2;  product 1..N = N!
+;;   N=4:  sum=10,    product=24,        total=34
+;;   N=8:  sum=36,    product=40320,     total=40356
+;;   N=12: sum=78,    product=479001600, total=479001678
+;;
+;; :inputs 4 8 12
+;; :expect-stdout-for 4 = 34
+;; :expect-stdout-for 8 = 40356
+;; :expect-stdout-for 12 = 479001678
 
 spec dual-acc <Int * Int> -> Int -> Int
 defn dual-acc [p i]
@@ -20,4 +26,4 @@ defn dual-acc [p i]
     | true  -> [int+ [fst p] [snd p]]
     | false -> [dual-acc [pair [int+ [fst p] i] [int* [snd p] i]] [int- i 1]]
 
-def main : Int := [dual-acc [pair 0 1] 8]
+def main : Int -> Int := (fn [n : Int] [dual-acc [pair 0 1] n])

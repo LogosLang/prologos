@@ -1,0 +1,26 @@
+ns benchmarks::lowering::03-tailrec-pell
+
+;; Iterative Pell(n) via pair-state tail-rec.
+;; Pell recurrence: P(0) = 0, P(1) = 1, P(n) = 2*P(n-1) + P(n-2).
+;;
+;; Exercises a depth-2 step expression `[int+ [int* 2 b] a]`. Sprint
+;; F.5's `emit-aligned-propagator!` and the pre-select uniform lift
+;; insert identity bridges to keep the multi-depth step inputs
+;; aligned at each iteration boundary. Combined with M6's input-cell
+;; mirror plumbing, runs from argv input.
+;;
+;; Does NOT static-fold. Runs the BSP scheduler.
+;;
+;; :inputs 5 10 15 20
+;; :expect-stdout-for 5 = 29
+;; :expect-stdout-for 10 = 2378
+;; :expect-stdout-for 15 = 195025
+;; :expect-stdout-for 20 = 15994428
+
+spec pell <Int * Int> -> Int -> Int
+defn pell [p n]
+  match [int-lt n 1]
+    | true  -> [fst p]
+    | false -> [pell [pair [snd p] [int+ [int* 2 [snd p]] [fst p]]] [int- n 1]]
+
+def main : Int -> Int := (fn [n : Int] [pell [pair 0 1] n])

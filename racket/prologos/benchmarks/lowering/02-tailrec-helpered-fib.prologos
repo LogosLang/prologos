@@ -1,0 +1,31 @@
+ns benchmarks::lowering::02-tailrec-helpered-fib
+
+;; Iterative fib(n) via tail-rec with TWO levels of helper inlining.
+;; Exercises: tail-rec (E.3) + non-recursive helper inlining (F.1) +
+;;            pair construction + pair-state iteration + parameterised
+;;            main (M3-M6).
+;;
+;; Same network shape as 01-tailrec-pair-fib (helpers inline at
+;; lowering time), but tests that the inlining pass composes cleanly
+;; with both pair-state lowering AND the M6 input-cell-mirror plumbing.
+;; Runs the BSP scheduler.
+;;
+;; :inputs 10 30 50
+;; :expect-stdout-for 10 = 55
+;; :expect-stdout-for 30 = 832040
+;; :expect-stdout-for 50 = 12586269025
+
+spec is-pos Int -> Bool
+defn is-pos [x] [int-lt 0 x]
+
+spec next-step <Int * Int> -> <Int * Int>
+defn next-step [p]
+  pair [snd p] [int+ [fst p] [snd p]]
+
+spec fib-helpered <Int * Int> -> Int -> Int
+defn fib-helpered [p k]
+  match [is-pos k]
+    | true  -> [fib-helpered [next-step p] [int- k 1]]
+    | false -> [fst p]
+
+def main : Int -> Int := (fn [n : Int] [fib-helpered [pair 0 1] n])
