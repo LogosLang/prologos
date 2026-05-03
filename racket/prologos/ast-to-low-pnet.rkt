@@ -1325,7 +1325,8 @@ parameterised main). Other non-literal initializers are deferred."))
 ;; Restrictions (narrow slice sufficient for stdlib-style folds):
 ;;   - `target` must be `nat-val`, `zero`, or a single Nat **parameter**
 ;;     cell (`expr-bvar` resolving to an `input-cell?`).
-;;   - `base` must compile-time literal Int (via `literal-init-value`).
+;;   - `base` must fold to a compile-time Int (`literal-init-value` or
+;;     `try-static-eval` under `current-static-env`).
 ;;   - `step` must be `(λ (_ : Nat). (λ (_ : T). body))` with runtime mult m1/mw;
 ;;     body uses `bvar 0` = accumulator, `bvar 1` = predecessor index k.
 ;;   - Accumulator must translate to a scalar Int cell (assert-scalar!).
@@ -1335,11 +1336,17 @@ parameterised main). Other non-literal initializers are deferred."))
 ;; while `k < n` using lagged prev copies like tail-rec (BSP convergence).
 (define (lower-natrec b dom-id outer-env mot base step target err-expr)
   (void mot)
-  (define base-lit (literal-init-value base))
+  (define base-lit
+    (let ([lit (literal-init-value base)])
+      (cond [(exact-integer? lit) lit]
+            [else
+             (define sv (try-static-eval base (current-static-env)))
+             (cond [(exact-integer? sv) sv]
+                   [else #f])])))
   (unless (exact-integer? base-lit)
     (translate-error!
      err-expr
-     "natrec: base must be a compile-time Int literal for lowering"))
+     "natrec: base must fold to a compile-time Int for lowering"))
 
   (define tgt* (peel-expr-ann target))
   (define-values (orig-init mirror-src)

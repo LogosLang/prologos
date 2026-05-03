@@ -782,6 +782,24 @@
                             #:when (entry-decl? n)) n))
   (check-not-false entry))
 
+(test-case "natrec: static-eval Int base seeds acc cells (not only literals)"
+  ;; Same as prior case but base is folded from [int+ 100 23] → 123.
+  (define mot (expr-lam 'm0 (expr-Nat) (expr-Int)))
+  (define step
+    (expr-lam 'mw (expr-Nat)
+              (expr-lam 'mw (expr-Int)
+                        (expr-int-add (expr-bvar 0) (expr-bvar 1)))))
+  (define base-folded (expr-int-add (expr-int 100) (expr-int 23)))
+  (define body (expr-natrec mot base-folded step (expr-nat-val 3)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Iterator seeds acc + lagged prev-acc with the folded constant.
+  (check-equal?
+   (count-by lp (lambda (n)
+                  (and (cell-decl? n)
+                       (equal? (cell-decl-init-value n) 123))))
+   2))
+
 (test-case "natrec: zero iterations leaves base"
   (define mot (expr-lam 'm0 (expr-Nat) (expr-Int)))
   (define step
