@@ -203,15 +203,215 @@
          (? expr-Unit?) (? expr-Nil?))
      (alloc-value-cell net e)]
 
+    ;; ----- Phase 2 literals -----
+    [(? expr-int?)     (alloc-value-cell net e)]
+    [(? expr-true?)    (alloc-value-cell net e)]
+    [(? expr-false?)   (alloc-value-cell net e)]
+    [(? expr-nat-val?) (alloc-value-cell net e)]
+    [(? expr-zero?)    (alloc-value-cell net e)]
+
+    ;; ----- Phase 2: annotation erasure -----
+    ;; (expr-ann e _) reduces by erasing the type annotation.
+    [(expr-ann inner _)
+     (compile-expr inner env net)]
+
+    ;; ----- Phase 2: bound variable -----
+    ;; bvars resolve to their binder's cell-id. The binder will be
+    ;; introduced by Phase 3+ (lambdas); in Phase 2 a bvar in a
+    ;; well-formed program never appears at the top level, but the
+    ;; case is here so future phases compose without re-touching this
+    ;; dispatch. Out-of-range bvars indicate either an ill-formed
+    ;; AST or a phase-coverage gap.
+    [(expr-bvar i)
+     (when (or (< i 0) (>= i (length env)))
+       (error 'preduce
+              "expr-bvar ~a out of range (env depth ~a) — likely a free variable in a top-level expression"
+              i (length env)))
+     (values (list-ref env i) net)]
+
+    ;; ----- Phase 2: int arithmetic -----
+    ;;
+    ;; Each binary int op compiles its two operands, allocates a result
+    ;; cell, and installs a fire-once propagator. The propagator reads
+    ;; both inputs, performs Nat→Int coercion if needed (mirrors
+    ;; reduction.rkt's reduce-int-binary at line ~999), and writes
+    ;; the result. Comparisons produce Bool; arithmetic produces Int.
+    [(expr-int-add a b) (compile-int-binary net env e a b int-add-fire)]
+    [(expr-int-sub a b) (compile-int-binary net env e a b int-sub-fire)]
+    [(expr-int-mul a b) (compile-int-binary net env e a b int-mul-fire)]
+    [(expr-int-div a b) (compile-int-binary net env e a b int-div-fire)]
+    [(expr-int-mod a b) (compile-int-binary net env e a b int-mod-fire)]
+    [(expr-int-eq  a b) (compile-int-binary net env e a b int-eq-fire)]
+    [(expr-int-lt  a b) (compile-int-binary net env e a b int-lt-fire)]
+    [(expr-int-le  a b) (compile-int-binary net env e a b int-le-fire)]
+
+    ;; ----- Phase 2: expr-suc — successor on Nat -----
+    ;;
+    ;; Reduces to the next nat-val if the inner is concrete; otherwise
+    ;; stays as (expr-suc inner-value). Native nat-val collapse mirrors
+    ;; reduction.rkt:1436.
+    [(expr-suc inner)
+     (define-values (cid-in net1) (compile-expr inner env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define fire-fn (make-suc-fire cid-in cid-out))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out) fire-fn))
+     (values cid-out net3)]
+
+    ;; ----- Phase 2: pair construction + projections -----
+    ;;
+    ;; Pair construction allocates a cell whose value is a tagged
+    ;; tuple carrying the cell-ids of the two components. The pair
+    ;; "value" never needs further reduction; its components are at
+    ;; cells fst-cid / snd-cid which reduce independently.
+    ;;
+    ;; Projection at compile-expr time KNOWS the component cell-ids
+    ;; (we just compiled them), so fst returns fst-cid directly and
+    ;; snd returns snd-cid. No propagator needed — the data flow is
+    ;; resolved structurally at compile time. (Pairs read through
+    ;; bvars / dynamic dispatch are deferred to Phase 3+ when β
+    ;; lands and bvars can carry pair-typed values.)
+    [(expr-pair a b)
+     (define-values (cid-a net1) (compile-expr a env net))
+     (define-values (cid-b net2) (compile-expr b env net1))
+     (alloc-value-cell net2 (preduce-pair cid-a cid-b))]
+
+    [(expr-fst inner)
+     ;; If inner is statically a pair construction, return fst directly.
+     (cond
+       [(expr-pair? inner)
+        (compile-expr (expr-pair-fst inner) env net)]
+       [(expr-ann? inner)
+        ;; Erase ann and retry.
+        (compile-expr (expr-fst (expr-ann-term inner)) env net)]
+       [else
+        ;; Compile inner; install fire-once propagator that reads the
+        ;; pair-value from cid-in and forwards the fst component's
+        ;; current value to cid-out. Required for pairs that come
+        ;; through bvars / dynamic dispatch (Phase 3+).
+        (define-values (cid-in net1) (compile-expr inner env net))
+        (define-values (net2 cid-out)
+          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+        (define-values (net3 _)
+          (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+                                        (make-projection-fire cid-in cid-out 'fst)))
+        (values cid-out net3)])]
+
+    [(expr-snd inner)
+     (cond
+       [(expr-pair? inner)
+        (compile-expr (expr-pair-snd inner) env net)]
+       [(expr-ann? inner)
+        (compile-expr (expr-snd (expr-ann-term inner)) env net)]
+       [else
+        (define-values (cid-in net1) (compile-expr inner env net))
+        (define-values (net2 cid-out)
+          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+        (define-values (net3 _)
+          (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+                                        (make-projection-fire cid-in cid-out 'snd)))
+        (values cid-out net3)])]
+
     ;; ----- All other nodes: deferred to later phases -----
     [_
      (raise-unsupported!
       (expr-kind e)
-      'phase-2-or-later
-      (format "PReduce-lite Phase 1: AST node ~a is not yet supported. \
+      'phase-3-or-later
+      (format "PReduce-lite Phase 2: AST node ~a is not yet supported. \
 Programs using this node should run via the existing nf reducer until \
 the relevant phase lands."
               (expr-kind e)))]))
+
+;; ============================================================
+;; Phase 2 helpers
+;; ============================================================
+
+;; preduce-pair carries the cell-ids of its components. Stored as the
+;; cell value for a pair construction; recognized by fst/snd projection
+;; propagators.
+(struct preduce-pair (fst-cid snd-cid) #:transparent)
+
+;; --- Int arithmetic helpers ---
+
+;; Nat→Int coercion. Mirrors try-coerce-to-int from reduction.rkt.
+(define (coerce-to-int v)
+  (cond
+    [(expr-int? v) v]
+    [(expr-nat-val? v) (expr-int (expr-nat-val-n v))]
+    [(expr-zero? v) (expr-int 0)]
+    [else #f]))  ;; not coercible
+
+(define (compile-int-binary net env _orig a b make-fire)
+  (define-values (cid-a net1) (compile-expr a env net))
+  (define-values (cid-b net2) (compile-expr b env net1))
+  (define-values (net3 cid-out)
+    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+  (define-values (net4 _)
+    (net-add-fire-once-propagator net3 (list cid-a cid-b) (list cid-out)
+                                  (make-fire cid-a cid-b cid-out)))
+  (values cid-out net4))
+
+;; Build a fire function for a binary int op. The op is given as a
+;; closed Racket procedure on two integers, returning the result expr.
+(define (make-int-binary-fire op-name op cid-a cid-b cid-out)
+  (lambda (net)
+    (define va (net-cell-read net cid-a))
+    (define vb (net-cell-read net cid-b))
+    (cond
+      [(or (preduce-bot? va) (preduce-bot? vb)) net]
+      [else
+       (define ca (coerce-to-int va))
+       (define cb (coerce-to-int vb))
+       (cond
+         [(and ca cb)
+          (net-cell-write net cid-out (op (expr-int-val ca) (expr-int-val cb)))]
+         [else
+          (error 'preduce
+                 "int-~a operands not numeric: ~v + ~v" op-name va vb)])])))
+
+(define (int-add-fire ca cb co) (make-int-binary-fire 'add (lambda (x y) (expr-int (+ x y))) ca cb co))
+(define (int-sub-fire ca cb co) (make-int-binary-fire 'sub (lambda (x y) (expr-int (- x y))) ca cb co))
+(define (int-mul-fire ca cb co) (make-int-binary-fire 'mul (lambda (x y) (expr-int (* x y))) ca cb co))
+(define (int-div-fire ca cb co) (make-int-binary-fire 'div (lambda (x y) (expr-int (quotient x y))) ca cb co))
+(define (int-mod-fire ca cb co) (make-int-binary-fire 'mod (lambda (x y) (expr-int (remainder x y))) ca cb co))
+(define (int-eq-fire  ca cb co) (make-int-binary-fire 'eq  (lambda (x y) (if (= x y) (expr-true) (expr-false))) ca cb co))
+(define (int-lt-fire  ca cb co) (make-int-binary-fire 'lt  (lambda (x y) (if (< x y) (expr-true) (expr-false))) ca cb co))
+(define (int-le-fire  ca cb co) (make-int-binary-fire 'le  (lambda (x y) (if (<= x y) (expr-true) (expr-false))) ca cb co))
+
+;; --- Suc fire-fn ---
+
+(define (make-suc-fire cid-in cid-out)
+  (lambda (net)
+    (define v (net-cell-read net cid-in))
+    (cond
+      [(preduce-bot? v) net]
+      [(expr-nat-val? v)
+       (net-cell-write net cid-out (expr-nat-val (+ (expr-nat-val-n v) 1)))]
+      [(expr-zero? v)
+       (net-cell-write net cid-out (expr-nat-val 1))]
+      [else
+       ;; Stuck — write (expr-suc v) as the result.
+       (net-cell-write net cid-out (expr-suc v))])))
+
+;; --- Pair projection fire-fn (for non-static cases) ---
+
+(define (make-projection-fire cid-in cid-out which)
+  (lambda (net)
+    (define v (net-cell-read net cid-in))
+    (cond
+      [(preduce-bot? v) net]
+      [(preduce-pair? v)
+       (define component-cid
+         (case which
+           [(fst) (preduce-pair-fst-cid v)]
+           [(snd) (preduce-pair-snd-cid v)]))
+       (define component-val (net-cell-read net component-cid))
+       (cond
+         [(preduce-bot? component-val) net]  ;; component not ready; wait
+         [else (net-cell-write net cid-out component-val)])]
+      [else
+       (error 'preduce "expected pair value for ~a projection, got: ~v" which v)])))
 
 ;; Allocate a fresh cell with the given value as its initial state.
 ;; Returns (values cid net'). Used by Phase 1's opaque-value rule and

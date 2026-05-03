@@ -27,7 +27,7 @@ PReduce-lite covers the full reducer surface (~80 distinct AST node kinds in `re
 |---|---|---|---|
 | 0 | Acceptance file: 7 small Prologos programs covering Phases 2-5+10 nodes | ✅ | landed in `examples/preduce-lite/`; all 7 elaborate cleanly. Programs: 01-int-add (5), 02-int-nested (9), 03-pair-sum (7), 04-nested-pair (100), 05-add-five (15), 06-boolrec (100), 07-factorial (120) |
 | 1 | `preduce.rkt` skeleton: discrete value lattice + cell-allocator helpers + opaque-value rule (covers all type-formers as values) + parameters + error type + entry points | ✅ | landed; 13/13 tests pass in `tests/test-preduce-phase1.rkt`; topology stratum scaffold deferred to Phase 4 (when first request type lands) |
-| 2 | Literals (Int/Bool/Nat-val/zero/suc/Unit/Nil) + Int arithmetic (8 ops, with Nat→Int coercion) + `bvar` / `fvar` + `ann` (erase) + pairs (`pair`/`fst`/`snd`) | ⬜ | first compile-expr cases |
+| 2 | Literals (Int/Bool/Nat-val/zero) + `expr-suc` + Int arithmetic (8 ops with Nat→Int coercion) + `ann` (erase) + `bvar` (out-of-range error) + statically-resolvable pairs (`pair`/`fst`/`snd`) | ✅ | 18/18 tests pass in `tests/test-preduce-phase2.rkt`; differential against `nf` green; `fvar` deferred to Phase 3 (gates on lambda) |
 | 3 | Static β-reduction (compile-time expansion for non-recursive lambdas) — `lam` + `app` for the closed case | ⬜ | covers programs without recursion |
 | 4 | Topology stratum for dynamic β (recursive lambdas via `app` in topology mode) | ⬜ | covers factorial / fib |
 | 5 | Eliminators: `natrec`, `boolrec`, `J` (refl-only iota) | ⬜ | covers nat recursion |
