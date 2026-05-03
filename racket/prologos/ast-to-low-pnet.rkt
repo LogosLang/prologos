@@ -66,6 +66,14 @@
           node
           hint)))
 
+(define (peel-expr-ann e)
+  (match e
+    [(expr-ann inner _) (peel-expr-ann inner)]
+    [_ e]))
+
+(define (expr-proof-refl? p)
+  (expr-refl? (peel-expr-ann p)))
+
 ;; ============================================================
 ;; Builder state
 ;; ============================================================
@@ -1313,6 +1321,23 @@ parameterised main). Other non-literal initializers are deferred."))
     [(expr-true)  (emit-cell! b BOOL-DOMAIN-ID #t)]
     [(expr-false) (emit-cell! b BOOL-DOMAIN-ID #f)]
 
+    ;; Unit / Nil singletons — represented as i64 0 at runtime (witness only).
+    [(expr-unit) (emit-cell! b INT-DOMAIN-ID 0)]
+    [(expr-nil) (emit-cell! b INT-DOMAIN-ID 0)]
+
+    ;; Eq introduction — proof irrelevant for executable lowering.
+    [(expr-refl) (emit-cell! b INT-DOMAIN-ID 0)]
+
+    ;; J elimination — only the definitional refl case (β rule).
+    [(expr-J _mot base left _right proof)
+     (cond
+       [(expr-proof-refl? proof)
+        (build (expr-app base left) b dom-id env)]
+       [else
+        (translate-error!
+         expr
+         "J elimination requires a refl proof at lowering time")])]
+
     ;; Nat literals (Sprint F.4). expr-nat-val holds an O(1) i64 nat;
     ;; same runtime representation as Int. expr-zero is just literal 0.
     [(expr-nat-val n)
@@ -1560,10 +1585,10 @@ helpers are lowered."
     [_
      (translate-error!
       expr
-      "Phase 2.D supports Int/Bool literals, int+/-/*//, int-eq/lt/le, \
-boolrec, expr-bvar, let-binding, and saturated tail-recursive function calls. \
-Other forms (non-tail recursion, named-function references, complex match) \
-are not yet supported.")]))
+      "Lowering does not implement this expression form yet (see \
+docs/tracking/2026-05-01_SH_LOWERING_FEATURE_MAP.md). Examples of unsupported \
+families: Vec/String/Posit/Rat, first-class lambdas, non-tail recursion, \
+runtime foreign calls, logic/session forms.")]))
 
 (define (build-unary b a-expr tag env [out-dom INT-DOMAIN-ID] [out-init 0])
   (define a-vt (build a-expr b INT-DOMAIN-ID env))

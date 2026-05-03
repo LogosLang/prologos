@@ -690,3 +690,51 @@
   (define main-body (expr-lam 'mw (expr-Bool) (expr-int 1)))
   (check-exn ast-translation-error?
     (lambda () (ast-to-low-pnet main-type main-body "t.prologos"))))
+
+;; ============================================================
+;; Unit / Nil / Eq proofs (2026-05-03)
+;; ============================================================
+
+(test-case "expr-unit / expr-nil lower as Int-domain sentinel cell 0"
+  (define lp-u (ast-to-low-pnet (expr-Int) (expr-unit) "t.prologos"))
+  (define lp-n (ast-to-low-pnet (expr-Int) (expr-nil) "t.prologos"))
+  (check-true (validate-low-pnet lp-u))
+  (check-true (validate-low-pnet lp-n))
+  (for ([lp (in-list (list lp-u lp-n))])
+    (define c (for/first ([n (in-list (low-pnet-nodes lp))]
+                         #:when (cell-decl? n)) n))
+    (check-equal? (cell-decl-domain-id c) 0)
+    (check-equal? (cell-decl-init-value c) 0)))
+
+(test-case "expr-refl lowers as Int 0 proof witness"
+  (define lp (ast-to-low-pnet (expr-Int) (expr-refl) "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  (define c (for/first ([n (in-list (low-pnet-nodes lp))]
+                       #:when (cell-decl? n)) n))
+  (check-equal? (cell-decl-init-value c) 0))
+
+(test-case "J mot base left right refl lowers as (base left)"
+  (define base (expr-lam 'mw (expr-Int)
+                         (expr-int-add (expr-bvar 0) (expr-int 2))))
+  (define left (expr-int 7))
+  (define body (expr-J (expr-lam 'm0 (expr-Int) (expr-Int)) ;; motive erased
+                       base left left (expr-refl)))
+  (define lp (ast-to-low-pnet (expr-Int) body "t.prologos"))
+  (check-true (validate-low-pnet lp))
+  ;; Same shape as [int+ 7 2]: adds via kernel-int-add
+  (check-equal? (count-by lp propagator-decl?) 1)
+  (define p (for/first ([n (in-list (low-pnet-nodes lp))]
+                        #:when (propagator-decl? n)) n))
+  (check-equal? (propagator-decl-fire-fn-tag p) 'kernel-int-add))
+
+(test-case "J with non-refl proof raises"
+  (check-exn ast-translation-error?
+    (lambda ()
+      (ast-to-low-pnet
+       (expr-Int)
+       (expr-J (expr-lam 'm0 (expr-Int) (expr-Int))
+               (expr-lam 'mw (expr-Int) (expr-bvar 0))
+               (expr-int 1)
+               (expr-int 2)
+               (expr-int 0))
+       "t.prologos"))))
