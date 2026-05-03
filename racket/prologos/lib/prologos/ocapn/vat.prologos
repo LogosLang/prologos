@@ -1,0 +1,429 @@
+ns prologos::ocapn::vat
+
+;; ========================================
+;; Local Vat (event loop, no threads, no IO)
+;; ========================================
+;;
+;; A vat is the "world" inside which a population of actors live and
+;; messages are processed atomically one turn at a time. In Goblins
+;; the vat is mutable, owned by a thread; here it's a pure data
+;; structure that you `step` to advance one turn.
+;;
+;; Architecture:
+;;
+;;   Vat = (next-id, actors, promises, queue)
+;;     next-id   — Nat counter for fresh refr/promise ids
+;;     actors    — list of ActorEntry  (id × Actor)
+;;     promises  — list of PromiseEntry (id × PromiseState)
+;;     queue     — list of pending VatMessage (FIFO; we cons on the
+;;                 right by appending; small constant; no perf claim)
+;;
+;; The "turn" boundary is `step-vat`: pop one message, deliver it,
+;; integrate effects (and possibly resolve queued pipelined messages
+;; on freshly-fulfilled promises). `run-vat` repeats until the queue
+;; is empty or fuel runs out.
+;;
+;; Note: this vat does NOT do I/O, threads, or actual networking. It
+;; is the abstract semantic core. A future captp-session module
+;; bridges this to a session-typed wire transport.
+
+require [prologos::ocapn::syrup
+         :refer [SyrupValue
+                 syrup-null syrup-bool syrup-nat syrup-int syrup-string
+                 syrup-symbol syrup-list syrup-tagged
+                 syrup-refr syrup-promise]]
+        [prologos::ocapn::promise
+         :refer [PromiseState
+                 pst-unresolved pst-fulfilled pst-broken
+                 unresolved? fulfilled? broken? resolved?
+                 fulfill break enqueue take-queue
+                 resolution-value fresh]]
+        [prologos::ocapn::behavior
+         :refer [BehaviorTag
+                 beh-cell beh-counter beh-greeter beh-echo
+                 beh-adder beh-forwarder beh-fulfiller
+                 Effect eff-send-only eff-resolve eff-break
+                 ActStep act-step
+                 step-state step-return step-effects
+                 step-behavior]]
+        [prologos::data::list   :refer [List nil cons append]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::nat    :refer [add nat-eq?]]
+
+;; ========================================
+;; Actor records
+;; ========================================
+;;
+;; An Actor packs a behaviour tag and its current state. The state is a
+;; single SyrupValue (use syrup-list for multi-field state).
+
+data Actor
+  actor : BehaviorTag -> SyrupValue
+
+spec actor-tag Actor -> BehaviorTag
+defn actor-tag
+  | actor t _ -> t
+
+spec actor-state Actor -> SyrupValue
+defn actor-state
+  | actor _ s -> s
+
+;; ========================================
+;; Table entries (concrete, monomorphic)
+;; ========================================
+;;
+;; We could use [List [Sigma [_ <Nat>] T]] but concrete entry types
+;; avoid potential issues with parametric Sigma in constructor
+;; positions and read more clearly.
+
+data ActorEntry
+  actor-entry : Nat -> Actor
+
+spec ae-id ActorEntry -> Nat
+defn ae-id
+  | actor-entry i _ -> i
+
+spec ae-actor ActorEntry -> Actor
+defn ae-actor
+  | actor-entry _ a -> a
+
+data PromiseEntry
+  promise-entry : Nat -> PromiseState
+
+spec pe-id PromiseEntry -> Nat
+defn pe-id
+  | promise-entry i _ -> i
+
+spec pe-state PromiseEntry -> PromiseState
+defn pe-state
+  | promise-entry _ s -> s
+
+;; ========================================
+;; Vat messages (in-memory; not on the wire)
+;; ========================================
+;;
+;; A vat-internal message: target actor id, args, optional answer-pos
+;; (the promise id to settle with the return value).
+
+data VatMsg
+  ;; vmsg-deliver target args answer-pos
+  ;;   when answer-pos = some pid, the actor's return value resolves pid.
+  ;;   when answer-pos = none,     the result is discarded (deliver-only).
+  vmsg-deliver : Nat -> SyrupValue -> [Option Nat]
+
+spec vmsg-target VatMsg -> Nat
+defn vmsg-target
+  | vmsg-deliver t _ _ -> t
+
+spec vmsg-args VatMsg -> SyrupValue
+defn vmsg-args
+  | vmsg-deliver _ a _ -> a
+
+spec vmsg-answer-pos VatMsg -> Option Nat
+defn vmsg-answer-pos
+  | vmsg-deliver _ _ ap -> ap
+
+;; Convenience.
+
+spec mk-deliver Nat SyrupValue Nat -> VatMsg
+defn mk-deliver [t a p]
+  vmsg-deliver t a [some p]
+
+spec mk-deliver-only Nat SyrupValue -> VatMsg
+defn mk-deliver-only [t a]
+  vmsg-deliver t a none
+
+;; ========================================
+;; Assoc-list utilities (over our concrete entry types)
+;; ========================================
+
+spec actor-table-get Nat [List ActorEntry] -> Option Actor
+defn actor-table-get [k entries]
+  match entries
+    | nil -> none
+    | cons e rest ->
+        match [nat-eq? k [ae-id e]]
+          | true  -> some [ae-actor e]
+          | false -> actor-table-get k rest
+
+;; cons-at-head, latest write wins on subsequent get. Earlier
+;; revisions used a recursive replace-in-place to avoid the
+;; unbounded-growth concern Copilot review #28#discussion_r3150426596
+;; raised — but that change made `run-vat` time-out on Racket 8.14
+;; under the run-affected-tests.rkt runner (3 OCapN test files,
+;; 120s per-file). The recursive form costs O(N) per delivery in
+;; the reducer's symbolic eval and dominated.
+;;
+;; Phase 1 will swap the assoc list for a hash/CHAMP map; the cons
+;; form is acceptable for Phase 0 because each test scenario uses
+;; fewer than ~5 actors. Tracked as a known follow-up.
+spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
+defn actor-table-set [k a entries]
+  cons [actor-entry k a] entries
+
+spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
+defn promise-table-get [k entries]
+  match entries
+    | nil -> none
+    | cons e rest ->
+        match [nat-eq? k [pe-id e]]
+          | true  -> some [pe-state e]
+          | false -> promise-table-get k rest
+
+;; Same trade-off as actor-table-set above (Copilot review
+;; #28#discussion_r3150426729). Cons-at-head; defer hash-backed
+;; storage to Phase 1.
+spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
+defn promise-table-set [k s entries]
+  cons [promise-entry k s] entries
+
+;; ========================================
+;; Vat
+;; ========================================
+
+data Vat
+  ;; vat next-id actors promises queue
+  vat : Nat -> [List ActorEntry] -> [List PromiseEntry] -> [List VatMsg]
+
+;; Selectors.
+
+spec vat-next-id Vat -> Nat
+defn vat-next-id
+  | vat n _ _ _ -> n
+
+spec vat-actors Vat -> List ActorEntry
+defn vat-actors
+  | vat _ a _ _ -> a
+
+spec vat-promises Vat -> List PromiseEntry
+defn vat-promises
+  | vat _ _ p _ -> p
+
+spec vat-queue Vat -> List VatMsg
+defn vat-queue
+  | vat _ _ _ q -> q
+
+;; ========================================
+;; Construction
+;; ========================================
+
+;; Empty vat: no actors, no promises, no queue, next-id = 0.
+def empty-vat : Vat := [vat zero nil nil nil]
+
+;; ========================================
+;; Allocation result — concrete struct
+;; ========================================
+;;
+;; vat-spawn / fresh-promise / send all need to return BOTH a new vat AND
+;; a freshly-allocated id. We use a concrete `Allocated` struct rather
+;; than `Sigma Vat Nat`. Concrete structs avoid two ergonomics issues
+;; observed here: (1) `match | pair a b ->` destructuring a `Sigma`
+;; result ran into "could not infer" elaborator errors when re-
+;; constructing a Sigma in the body; (2) `[fst p]`/`[snd p]` used
+;; twice on the same `p` triggers a QTT multiplicity violation in
+;; some elaboration paths. A concrete struct bypasses both.
+
+data Allocated
+  allocated : Vat -> Nat
+
+spec alloc-vat Allocated -> Vat
+defn alloc-vat
+  | allocated v _ -> v
+
+spec alloc-id Allocated -> Nat
+defn alloc-id
+  | allocated _ n -> n
+
+;; ========================================
+;; Spawn / fresh-promise
+;; ========================================
+
+spec vat-spawn BehaviorTag SyrupValue Vat -> Allocated
+defn vat-spawn
+  | tag init-state [vat n acts proms q] ->
+      allocated [vat [suc n] [actor-table-set n [actor tag init-state] acts] proms q] n
+
+spec fresh-promise Vat -> Allocated
+defn fresh-promise
+  | vat n acts proms q ->
+      allocated [vat [suc n] acts [promise-table-set n fresh proms] q] n
+
+;; enqueue-msg: append a VatMsg at the END of the queue (FIFO).
+
+spec enqueue-msg VatMsg Vat -> Vat
+defn enqueue-msg
+  | m [vat n acts proms q] ->
+      vat n acts proms [append q [cons m nil]]
+
+;; ========================================
+;; Sending
+;; ========================================
+;;
+;; send: target args -> (vat', promise-id)
+;; Allocates a result promise, enqueues a deliver, returns the promise.
+
+;; send-only: target args -> vat'  (fire-and-forget)
+
+spec send-only Nat SyrupValue Vat -> Vat
+defn send-only [target args v]
+  enqueue-msg [vmsg-deliver target args none] v
+
+;; ========================================
+;; Promise resolution
+;; ========================================
+;;
+;; resolve-promise: settle pid := fulfilled val.
+;;
+;; Phase 0 design note: we DROP the flush-queued-messages step. The
+;; PromiseState's `pst-unresolved` carries `List SyrupValue` which is
+;; the WIRE-LEVEL message representation; the vat's main queue holds
+;; `List VatMsg` (target+args+answer-pos). Flushing across the
+;; representational boundary requires rewriting each queued
+;; SyrupValue into a VatMsg with the resolved target's refr, which
+;; is non-trivial (decoded args etc.). Deferred to Phase 1; the
+;; pipeline tests cover the PromiseState-level algebra, and vat-level
+;; pipelining works for the FullFiller pattern (actor sends
+;; eff-resolve directly, no transit through the promise queue).
+;; See goblin-pitfalls #11.
+
+spec resolve-promise Nat SyrupValue Vat -> Vat
+defn resolve-promise
+  | pid val [vat n acts proms q] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q]   ;; unknown promise, no-op
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q]   ;; already settled, monotone no-op
+              | false ->
+                  [vat n acts [promise-table-set pid [fulfill val s] proms] q]
+
+spec break-promise Nat SyrupValue Vat -> Vat
+defn break-promise
+  | pid reason [vat n acts proms q] ->
+      match [promise-table-get pid proms]
+        | none -> [vat n acts proms q]
+        | some s ->
+            match [resolved? s]
+              | true  -> [vat n acts proms q]
+              | false ->
+                  [vat n acts [promise-table-set pid [break reason s] proms] q]
+
+;; ========================================
+;; Effect interpretation
+;; ========================================
+;;
+;; Apply one Effect to the vat: a send-only enqueues; resolve/break
+;; settle the corresponding promise.
+
+spec apply-effect Effect Vat -> Vat
+defn apply-effect
+  | [eff-send-only t a]    v -> send-only t a v
+  | [eff-resolve pid val]  v -> resolve-promise pid val v
+  | [eff-break   pid val]  v -> break-promise   pid val v
+
+spec apply-effects [List Effect] Vat -> Vat
+defn apply-effects
+  | nil           v -> v
+  | [cons e rest] v -> apply-effects rest [apply-effect e v]
+
+;; ========================================
+;; send (uses send-only via the vat queue)
+;; ========================================
+
+spec send Nat SyrupValue Vat -> Allocated
+defn send [target args v]
+  match [fresh-promise v]
+    | allocated v1 pid ->
+        allocated [enqueue-msg [vmsg-deliver target args [some Nat pid]] v1] pid
+
+;; ========================================
+;; The Turn
+;; ========================================
+;;
+;; Apply the result of a single act-step to the vat: store new actor
+;; state, run effects, settle answer promise.
+
+spec step-after-act Nat Actor SyrupValue SyrupValue [List Effect] [Option Nat] Vat -> Vat
+defn step-after-act [target old-act new-state rv effects ap v]
+  let acts1 := [actor-table-set target [actor [actor-tag old-act] new-state] [vat-actors v]]
+    let v1 := [vat [vat-next-id v] acts1 [vat-promises v] [vat-queue v]]
+      let v2 := [apply-effects effects v1]
+        match ap
+          | none -> v2
+          | some pid -> resolve-promise pid rv v2
+
+;; deliver: look up the target actor, run its behaviour, integrate
+;; effects, settle the answer-promise (if any) with the return value.
+;;
+;; Missing-target handling (Copilot review #28#discussion_r3150426741):
+;; if the target id has no actor in the table, we BREAK any answer
+;; promise rather than dropping the message — otherwise an `ask`
+;; against a non-existent actor would hang on its result-promise
+;; forever. The break-reason carries the original args so callers
+;; can debug what couldn't be delivered.
+
+spec deliver-msg VatMsg Vat -> Vat
+defn deliver-msg [m v]
+  let target := [vmsg-target m]
+    let args := [vmsg-args m]
+      let ap := [vmsg-answer-pos m]
+        match [actor-table-get target [vat-actors v]]
+          | none ->
+              match ap
+                | none     -> v
+                | some pid -> break-promise pid args v
+          | some a ->
+              let s := [step-behavior [actor-tag a] [actor-state a] args]
+                step-after-act target a [step-state s] [step-return s] [step-effects s] ap v
+
+;; ========================================
+;; step-vat: process one queued message
+;; ========================================
+;;
+;; If the queue is non-empty, process the head message and return
+;; (some new-vat). If the queue is empty, return none — the vat has
+;; reached quiescence.
+
+spec step-vat Vat -> Option Vat
+defn step-vat [v]
+  match [vat-queue v]
+    | nil -> none
+    | cons m rest ->
+        let v1 := [vat [vat-next-id v] [vat-actors v] [vat-promises v] rest]
+          some [deliver-msg m v1]
+
+;; ========================================
+;; run-vat: run-to-quiescence with fuel
+;; ========================================
+
+spec run-vat Nat Vat -> Vat
+defn run-vat [fuel v]
+  match fuel
+    | zero -> v
+    | suc f ->
+        match [step-vat v]
+          | none -> v
+          | some v1 -> run-vat f v1
+
+;; ========================================
+;; Inspection helpers
+;; ========================================
+
+spec lookup-promise Nat Vat -> Option PromiseState
+defn lookup-promise [pid v]
+  promise-table-get pid [vat-promises v]
+
+spec lookup-actor Nat Vat -> Option Actor
+defn lookup-actor [aid v]
+  actor-table-get aid [vat-actors v]
+
+spec list-length-helper [List VatMsg] Nat -> Nat
+defn list-length-helper [xs n]
+  match xs
+    | nil -> n
+    | cons _ rest -> list-length-helper rest [suc n]
+
+;; queue length — for tests asserting forward progress
+spec queue-length Vat -> Nat
+defn queue-length [v]
+  list-length-helper [vat-queue v] zero

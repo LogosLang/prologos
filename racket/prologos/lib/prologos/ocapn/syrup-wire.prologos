@@ -1,0 +1,391 @@
+ns prologos::ocapn::syrup-wire
+
+;; ===========================================================
+;; Syrup wire codec — Phase 1 of OCapN interop
+;; ===========================================================
+;;
+;; Maps `SyrupValue` to/from the canonical OCapN Syrup byte
+;; encoding. See OCapN spec `Syrup.md` and Endo `@endo/syrup`
+;; for the reference. Design doc:
+;; `docs/tracking/2026-04-29_OCAPN_INTEROP_DESIGN.md`.
+;;
+;; Wire grammar (subset we cover here):
+;;
+;;   null    := "n"
+;;   bool    := "t" | "f"
+;;   int     := digits "+" | digits "-"
+;;   string  := digits "\"" utf8-bytes
+;;   symbol  := digits "'" utf8-bytes
+;;   list    := "[" syrup-value* "]"
+;;   record  := "<" syrup-value+ ">"      ;; first element = label
+;;
+;; Floats / dicts / sets / bytes are deferred (see design doc).
+;;
+;; Limitations:
+;;   - String length prefix is BYTE length per spec. We use
+;;     `str::length` (code-point count). For ASCII-only payloads
+;;     these agree; UTF-8 with multi-byte characters is a
+;;     Phase-1.5 follow-up.
+;;   - `syrup-refr` / `syrup-promise` are NOT encodable on the
+;;     pure Syrup wire — descriptor translation is the CapTP
+;;     layer's job (Phase 2). `encode-safe` returns `none` for
+;;     them; raw `encode` returns "" as a sentinel.
+
+require [prologos::ocapn::syrup     :refer-all]
+        [prologos::data::string     :as str :refer []]
+        [prologos::data::char       :as char :refer []]
+        [prologos::data::list       :refer [List nil cons]]
+        [prologos::data::option     :refer [Option some none]]
+        [prologos::data::bool       :refer []]
+
+;; ===========================================================
+;; Integer / Nat to decimal string
+;; ===========================================================
+
+;; Nat -> decimal digits (no sign suffix).
+spec nat-digits Nat -> String
+defn nat-digits [n]
+  str::from-int [from-nat n]
+
+;; abs i, returned as a non-negative Int, encoded as decimal
+;; without sign. For i = 0 this is "0".
+spec int-abs-digits Int -> String
+defn int-abs-digits [i]
+  if [int-lt i 0] [str::from-int [int-neg i]] [str::from-int i]
+
+;; Int -> sign character: "-" if negative, "+" otherwise.
+spec int-sign-char Int -> String
+defn int-sign-char [i]
+  if [int-lt i 0] "-" "+"
+
+;; ===========================================================
+;; Encoder
+;; ===========================================================
+;;
+;; `encode-many` uses higher-order injection of `encode` to
+;; sidestep mutual-recursion / forward-reference limitations:
+;; the list walker takes the per-element encoder as an argument,
+;; so the file orders helpers BEFORE the main entry.
+
+spec encode-many [SyrupValue -> String] [List SyrupValue] -> String
+  :doc "Concatenate (enc x) over xs."
+defn encode-many [enc xs]
+  match xs
+    | nil      -> ""
+    | cons h t -> str::append [enc h] [encode-many enc t]
+
+;; Encode a single SyrupValue. Total over the constructors we
+;; CAN serialise; refr/promise produce an empty-string sentinel
+;; — callers should pre-validate via `encode-safe`.
+spec encode SyrupValue -> String
+defn encode [v]
+  match v
+    | syrup-null         -> "n"
+    | syrup-bool b       -> match b | true -> "t" | false -> "f"
+    | syrup-nat n        -> str::append [nat-digits n] "+"
+    | syrup-int i        -> str::append [int-abs-digits i] [int-sign-char i]
+    | syrup-string s     -> str::append [str::from-int [str::length s]] [str::append "\"" s]
+    | syrup-symbol s     -> str::append [str::from-int [str::length s]] [str::append "'" s]
+    | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
+    | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode p] ">"]]
+    | syrup-refr _       -> ""
+    | syrup-promise _    -> ""
+
+;; ===========================================================
+;; Encodability check
+;; ===========================================================
+;;
+;; `encode-safe v` returns `some bytes` if v is wire-encodable,
+;; `none` if it transitively contains a syrup-refr or
+;; syrup-promise (which require descriptor translation at the
+;; CapTP layer first).
+
+spec all-encodable [SyrupValue -> Bool] [List SyrupValue] -> Bool
+  :doc "Conjunction of (enc-ok? x) over xs."
+defn all-encodable [pred xs]
+  match xs
+    | nil      -> true
+    | cons h t ->
+        match [pred h]
+          | false -> false
+          | true  -> all-encodable pred t
+
+spec encodable? SyrupValue -> Bool
+  :doc "True iff v's transitive contents contain no refr/promise."
+defn encodable?
+  | syrup-null        -> true
+  | syrup-bool _      -> true
+  | syrup-nat _       -> true
+  | syrup-int _       -> true
+  | syrup-string _    -> true
+  | syrup-symbol _    -> true
+  | syrup-list xs     -> all-encodable encodable? xs
+  | syrup-tagged _ p  -> encodable? p
+  | syrup-refr _      -> false
+  | syrup-promise _   -> false
+
+spec encode-safe SyrupValue -> Option String
+  :doc "Encode if v contains no naked refr/promise; else `none`."
+defn encode-safe [v]
+  match [encodable? v]
+    | true  -> some [encode v]
+    | false -> none
+
+;; ===========================================================
+;; Multi-arity record encoder
+;; ===========================================================
+;;
+;; Our `syrup-tagged` carries exactly ONE payload, so a value
+;; like `(syrup-tagged "op:start-session" (syrup-list [ver loc]))`
+;; serialises to `<op:start-session [ver loc]>` — wrong: the
+;; canonical OCapN form is `<op:start-session ver loc>` (the
+;; args are direct children of the record, not wrapped in a
+;; list). The decoder already handles arity ≥ 2 records correctly
+;; (it returns `(syrup-tagged label (syrup-list rest))` so all
+;; downstream dispatch already round-trips); the encoder needs
+;; an explicit multi-arity helper.
+;;
+;; `encode-record label [args]` produces the canonical bytes:
+;;   "<" + encode(syrup-symbol label) + concat(encode each arg) + ">"
+
+spec encode-record String [List SyrupValue] -> String
+  :doc "Encode `<label arg1 arg2 ... argN>` directly."
+defn encode-record [label args]
+  str::append "<"
+    [str::append [encode [syrup-symbol label]]
+      [str::append [encode-many encode args] ">"]]
+
+;; ===========================================================
+;; Decoder
+;; ===========================================================
+;;
+;; Returns `(some [decoded-value bytes-consumed])` on success,
+;; `none` on parse failure. Bytes-consumed lets callers parse
+;; multiple back-to-back Syrup values (lists, records).
+;;
+;; Implementation strategy: dispatch on the leading byte (or
+;; on a digit prefix for length-prefixed atoms). To avoid
+;; mutual-recursion forward-reference issues, the recursive
+;; helpers (`decode-many-loop`, `decode-record-with`) take the
+;; per-element decoder as an argument; `decode-at` then passes
+;; itself.
+
+;; --- Result type ---
+
+data Decoded
+  decoded : SyrupValue -> Int
+
+spec d-value Decoded -> SyrupValue
+defn d-value
+  | decoded v _ -> v
+
+spec d-consumed Decoded -> Int
+defn d-consumed
+  | decoded _ n -> n
+
+;; --- Helpers: char predicates ---
+
+;; ASCII '0' = 48, '9' = 57.
+spec digit? Char -> Bool
+defn digit? [c]
+  match [int-lt [char::code c] 48]
+    | true  -> false
+    | false ->
+        match [int-lt 57 [char::code c]]
+          | true  -> false
+          | false -> true
+
+;; --- Reading a decimal prefix ---
+;;
+;; Read consecutive digits starting at offset `i` of `s`. Returns
+;; `(prefix-as-int, end-offset)`.
+
+data ReadInt
+  read-int : Int -> Int
+
+spec ri-value ReadInt -> Int
+defn ri-value
+  | read-int v _ -> v
+
+spec ri-end ReadInt -> Int
+defn ri-end
+  | read-int _ e -> e
+
+spec read-digits-loop String Int Int Int -> ReadInt
+defn read-digits-loop [s len acc i]
+  match [int-eq i len]
+    | true  -> read-int acc i
+    | false ->
+        match [digit? [str::ref s i]]
+          | false -> read-int acc i
+          | true  ->
+              let dv := [int- [char::code [str::ref s i]] 48]
+                let acc2 := [int+ [int* acc 10] dv]
+                  read-digits-loop s len acc2 [int+ i 1]
+
+spec read-digits String Int -> ReadInt
+defn read-digits [s i]
+  read-digits-loop s [str::length s] 0 i
+
+;; --- Length-prefixed string / symbol payload ---
+;;
+;; Already parsed the digit prefix; `pos` is the marker char
+;; (`"` / `'`) offset; `len` is the byte length of the payload.
+
+spec decode-string-tail String Int Int -> Option Decoded
+defn decode-string-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-string payload] payload-end]
+
+spec decode-symbol-tail String Int Int -> Option Decoded
+defn decode-symbol-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-symbol payload] payload-end]
+
+;; --- Numeric / string dispatcher (no recursion into decode-at) ---
+;;
+;; digits, then one of `+`, `-`, `"`, `'`.
+
+spec decode-numeric-or-string String Int -> Option Decoded
+defn decode-numeric-or-string [s i]
+  let ri := [read-digits s i]
+    let mag := [ri-value ri]
+      let end := [ri-end ri]
+        match [int-lt [str::length s] [int+ end 1]]
+          | true  -> none
+          | false ->
+              let mark := [str::ref s end]
+                let mc := [char::code mark]
+                  match [int-eq mc 43]
+                    | true  -> some [decoded [syrup-int mag] [int+ end 1]]
+                    | false ->
+                        match [int-eq mc 45]
+                          | true  -> some [decoded [syrup-int [int-neg mag]] [int+ end 1]]
+                          | false ->
+                              match [int-eq mc 34]
+                                | true  -> decode-string-tail s end mag
+                                | false ->
+                                    match [int-eq mc 39]
+                                      | true  -> decode-symbol-tail s end mag
+                                      | false -> none
+
+;; --- Decode-many: parse 0+ values until terminator byte ---
+
+data DecodedMany
+  decoded-many : [List SyrupValue] -> Int
+
+spec dm-list DecodedMany -> List SyrupValue
+defn dm-list
+  | decoded-many xs _ -> xs
+
+spec dm-end DecodedMany -> Int
+defn dm-end
+  | decoded-many _ e -> e
+
+spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> Option DecodedMany
+defn decode-many-loop [dec s i terminator]
+  match [int-lt [str::length s] [int+ i 1]]
+    | true  -> none
+    | false ->
+        match [int-eq [char::code [str::ref s i]] terminator]
+          | true  -> some [decoded-many nil [int+ i 1]]
+          | false ->
+              match [dec s i]
+                | none -> none
+                | some d ->
+                    let v := [d-value d]
+                      let rest-start := [d-consumed d]
+                        match [decode-many-loop dec s rest-start terminator]
+                          | none -> none
+                          | some dm ->
+                              let xs := [dm-list dm]
+                                let e := [dm-end dm]
+                                  some [decoded-many [cons v xs] e]
+
+;; --- Record decoder, parameterized on the element decoder ---
+
+spec decode-record-with [String -> Int -> Option Decoded] String Int -> Option Decoded
+defn decode-record-with [dec s i]
+  match [decode-many-loop dec s i 62]
+    | none -> none
+    | some dm ->
+        let xs := [dm-list dm]
+          let e  := [dm-end dm]
+            match xs
+              | nil -> none
+              | cons head tail ->
+                  match head
+                    | syrup-symbol tag ->
+                        match tail
+                          | nil          -> some [decoded [syrup-tagged tag syrup-null] e]
+                          | cons p1 rest ->
+                              match rest
+                                | nil       -> some [decoded [syrup-tagged tag p1] e]
+                                | cons _ _  ->
+                                    some [decoded [syrup-tagged tag [syrup-list tail]] e]
+                    | syrup-null      -> none
+                    | syrup-bool _    -> none
+                    | syrup-nat _     -> none
+                    | syrup-int _     -> none
+                    | syrup-string _  -> none
+                    | syrup-list _    -> none
+                    | syrup-tagged _ _ -> none
+                    | syrup-refr _    -> none
+                    | syrup-promise _ -> none
+
+;; --- Top-level decoder: parse one syrup-value at offset i ---
+;;
+;; ASCII codes used:
+;;   'n' = 110, 't' = 116, 'f' = 102
+;;   '+' = 43,  '-' = 45,  '"' = 34, '\'' = 39
+;;   '[' = 91,  ']' = 93
+;;   '<' = 60,  '>' = 62
+
+spec decode-at String Int -> Option Decoded
+defn decode-at [s i]
+  match [int-lt [str::length s] [int+ i 1]]
+    | true  -> none
+    | false ->
+        let c := [str::ref s i]
+          let cc := [char::code c]
+            match [int-eq cc 110]
+              | true  -> some [decoded syrup-null [int+ i 1]]
+              | false ->
+                  match [int-eq cc 116]
+                    | true  -> some [decoded [syrup-bool true] [int+ i 1]]
+                    | false ->
+                        match [int-eq cc 102]
+                          | true  -> some [decoded [syrup-bool false] [int+ i 1]]
+                          | false ->
+                              match [int-eq cc 91]
+                                | true  ->
+                                    match [decode-many-loop decode-at s [int+ i 1] 93]
+                                      | none -> none
+                                      | some dm ->
+                                          some [decoded [syrup-list [dm-list dm]] [dm-end dm]]
+                                | false ->
+                                    match [int-eq cc 60]
+                                      | true  -> decode-record-with decode-at s [int+ i 1]
+                                      | false ->
+                                          match [digit? c]
+                                            | true  -> decode-numeric-or-string s i
+                                            | false -> none
+
+;; --- Public top-level decode ---
+
+spec decode-value String -> Option SyrupValue
+  :doc "Parse a single Syrup value from the start of `s`."
+defn decode-value [s]
+  match [decode-at s 0]
+    | none -> none
+    | some d -> some [d-value d]

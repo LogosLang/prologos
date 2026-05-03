@@ -1,0 +1,153 @@
+ns prologos::ocapn::tcp-testing :no-prelude
+
+;; ========================================
+;; tcp-testing-only netlayer — TCP without crypto/auth
+;; ========================================
+;;
+;; Concrete TCP implementation of the OCapN netlayer interface.
+;; Mirrors Endo's `packages/ocapn/src/netlayers/tcp-test-only.js`:
+;; both peers MUST be on a trusted network because there is no
+;; encryption, no authentication, no signed locators.
+;;
+;; The transport name in OCapN locators is "tcp-testing-only" — the
+;; same string Endo uses, deliberately, so that locators emitted by
+;; this implementation are recognisable to any other OCapN peer that
+;; supports the same testing transport.
+;;
+;; ============================================================
+;; CAPABILITY DISCIPLINE
+;; ============================================================
+;;
+;; Every primitive that touches a real socket is FFI-bound and
+;; carries a `:requires (NetCap)` annotation. A function that wants
+;; to use them must be in scope of NetCap (see
+;; prologos::core::capabilities). Listening on a port also needs
+;; NetCap; we DON'T model "listen" as a separate capability for
+;; Phase 0 — testing-only doesn't need that distinction.
+;;
+;; ============================================================
+;; WIRE FORMAT (testing-only — see goblin-pitfalls #19)
+;; ============================================================
+;;
+;;   one CapTP message  ::=  one line of UTF-8 text  + "\n"
+;;
+;; The line is a textual encoding of a SyrupValue. Endo uses
+;; bytewise Syrup; we use a textual approximation since the
+;; pretty-printer is the only encoder we have right now. Phase 1
+;; should swap in a real Syrup byte codec.
+;;
+;; Single-line framing keeps the FFI surface minimal — just
+;; line-oriented read/write — and avoids length-prefix code on the
+;; reader side. Production transports MUST upgrade to length-
+;; prefixed framing.
+
+require [prologos::core::capabilities :refer (NetCap)]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::ocapn::locator :refer-all]
+
+;; ========================================
+;; FFI primitives
+;; ========================================
+;;
+;; All of these are tagged :requires (NetCap). A function or actor
+;; that uses them must satisfy that capability requirement at the
+;; type level (see prologos::core::capabilities).
+
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-listen        :as tcp-listen-raw       : Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-accept        :as tcp-accept-raw       : Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-accept-ready? :as tcp-accept-ready-raw : Nat -> Bool]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-connect       :as tcp-connect-raw      : String -> Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-send-line     :as tcp-send-line-raw    : Nat -> String -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-recv-line-ret :as tcp-recv-line-ret-raw : Nat -> Nat]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-recv-cached   :as tcp-recv-cached-raw  : Nat -> String]
+foreign racket "tcp-ffi.rkt" :requires (NetCap) [tcp-close         :as tcp-close-raw        : Nat -> Unit]
+
+;; ========================================
+;; Typed handle wrappers
+;; ========================================
+;;
+;; The FFI returns Nat handles. We wrap them in named types so the
+;; type checker can distinguish a server-handle from a connection-
+;; handle and reject misuse at compile time.
+
+data ServerHandle
+  server-handle : Nat
+
+data ConnHandle
+  conn-handle : Nat
+
+spec server-handle-id ServerHandle -> Nat
+defn server-handle-id
+  | server-handle n -> n
+
+spec conn-handle-id ConnHandle -> Nat
+defn conn-handle-id
+  | conn-handle n -> n
+
+;; ========================================
+;; Operations (typed wrappers around FFI)
+;; ========================================
+;;
+;; Each operation is :requires (NetCap) — propagated from the FFI
+;; bindings. Callers are forced to thread NetCap through their type.
+
+spec listen Nat -> ServerHandle
+  :doc "Bind a listener on 127.0.0.1:port. Returns a server handle."
+defn listen [port]
+  server-handle [tcp-listen-raw port]
+
+spec accept ServerHandle -> ConnHandle
+  :doc "Block until an incoming connection arrives; return the conn handle."
+defn accept
+  | server-handle sid -> conn-handle [tcp-accept-raw sid]
+
+spec accept-ready? ServerHandle -> Bool
+  :doc "True iff `accept` would not block."
+defn accept-ready?
+  | server-handle sid -> tcp-accept-ready-raw sid
+
+spec connect-tcp String Nat -> ConnHandle
+  :doc "Dial host:port; return the conn handle. Blocks during connect."
+defn connect-tcp [host port]
+  conn-handle [tcp-connect-raw host port]
+
+spec send-line ConnHandle String -> ConnHandle
+  :doc "Write line + LF on the connection. Returns the same handle (data-flow)."
+defn send-line
+  | [conn-handle cid] line ->
+      let _r : Nat := [tcp-send-line-raw cid line]
+        conn-handle cid
+
+;; recv-line: read ONE line, return the line as a String. Internally
+;; uses the read-then-cache trick from io-ffi.
+spec recv-line ConnHandle -> String
+  :doc "Read one line (no LF). Empty string on EOF. Blocks."
+defn recv-line
+  | conn-handle cid ->
+      let _r : Nat := [tcp-recv-line-ret-raw cid]
+        tcp-recv-cached-raw cid
+
+spec close-conn ConnHandle -> Unit
+  :doc "Close a connection. The handle becomes invalid."
+defn close-conn
+  | conn-handle cid -> tcp-close-raw cid
+
+spec close-server ServerHandle -> Unit
+  :doc "Close a server handle. Subsequent accepts are invalid."
+defn close-server
+  | server-handle sid -> tcp-close-raw sid
+
+;; ========================================
+;; Locator-driven dial
+;; ========================================
+;;
+;; Dial a peer via its Locator. Only locators with transport
+;; `tr-tcp-testing-only` are valid here; calling with a loopback
+;; locator returns... well, an invalid handle. (Phase 1 should add
+;; a Result type and fail cleanly.)
+
+spec dial Locator -> ConnHandle
+  :doc "Dial a tcp-testing-only Locator. Caller must verify transport."
+defn dial [loc]
+  connect-tcp [loc-host loc] [loc-port loc]

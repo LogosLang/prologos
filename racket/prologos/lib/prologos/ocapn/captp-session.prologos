@@ -1,0 +1,131 @@
+ns prologos::ocapn::captp-session
+
+;; ========================================
+;; Session-typed CapTP wire protocol
+;; ========================================
+;;
+;; This module models the CapTP wire protocol between two OCapN peers
+;; using Prologos session types.
+;;
+;; CapTP in production is a multiplexed full-duplex stream of `op:*`
+;; messages — that requires recursive session types and concurrent
+;; (non-deterministic) protocol branches, which our session-types
+;; layer can't yet express. So we capture the *sub-protocols* for
+;; specific exchange shapes:
+;;
+;;   1. CapTPHandshake   — initial start-session + ack
+;;   2. CapTPDeliver     — single op:deliver with answer (request/reply)
+;;   3. CapTPListen      — register listener and receive resolution
+;;   4. CapTPDeliverOnly — fire-and-forget op:deliver-only
+;;   5. CapTPGc          — GC notification, no reply
+;;
+;; Each is a `session` declaration. `dual` flips client/server roles.
+;; A future generalisation would compose these into a recursive
+;; session that loops over messages until abort. (See goblin-pitfalls
+;; #4 — "no recursive sessions yet, so the wire protocol is
+;; sub-fragmented".)
+
+require [prologos::ocapn::syrup
+         :refer [SyrupValue syrup-null]]
+        [prologos::ocapn::message
+         :refer [CapTPOp op-deliver-only]]
+        [prologos::data::option :refer [Option]]
+        [prologos::data::list   :refer [List]]
+
+;; ========================================
+;; 1. Handshake — establish the session
+;; ========================================
+;;
+;; The initiator sends a locator (their identity) and a randomly chosen
+;; nonce; the responder replies with their locator. Both must
+;; cryptographically verify the locator before continuing — that
+;; verification is out of scope for Phase 0.
+
+session CapTPHandshake
+  ! String       ;; my-locator
+  ! Nat          ;; my-nonce
+  ?? String      ;; their-locator
+  ?? Nat         ;; their-nonce-ack
+  end
+
+;; The opposite end. dual swaps every ! for ? and vice versa, !! for
+;; ?? — exactly what the "responder" sees.
+dual CapTPHandshake
+
+;; ========================================
+;; 2. Deliver — request/reply
+;; ========================================
+;;
+;; A single op:deliver-with-answer exchange. The CLIENT sends the
+;; full CapTPOp value (which includes target, args, answer-pos,
+;; resolve-me) and waits asynchronously for an op:listen-style
+;; resolution carrying a SyrupValue.
+
+session CapTPDeliver
+  ! CapTPOp
+  ?? SyrupValue
+  end
+
+dual CapTPDeliver
+
+;; ========================================
+;; 3. Listen — register a listener and await resolution
+;; ========================================
+;;
+;; The CLIENT names a target promise and a resolver (their own); the
+;; SERVER reports the resolution value when the promise settles.
+
+session CapTPListen
+  ! Nat        ;; target promise id
+  ! Nat        ;; my resolver id
+  ?? SyrupValue ;; resolution payload
+  end
+
+dual CapTPListen
+
+;; ========================================
+;; 4. DeliverOnly — fire-and-forget
+;; ========================================
+
+session CapTPDeliverOnly
+  ! CapTPOp
+  end
+
+dual CapTPDeliverOnly
+
+;; ========================================
+;; 5. Gc — peer GC notification
+;; ========================================
+
+session CapTPGc
+  ! CapTPOp     ;; op:gc-export OR op:gc-answer
+  end
+
+dual CapTPGc
+
+;; ========================================
+;; Example client-side processes (sketches)
+;; ========================================
+;;
+;; These are illustrative `defproc` declarations exercising the
+;; sessions above. They don't actually move bytes — they show the
+;; SHAPE of a peer process and check the protocol with the type
+;; system. A full implementation would route the read/write actions
+;; into a real socket via the IO bridge.
+;;
+;; Note: defproc bodies must terminate with `stop` (per
+;; ws-session-e2e tests). The client below is a textbook pattern.
+
+defproc handshake-client : CapTPHandshake
+  self ! "ocapn://example.com/peer-A"
+  self ! 42N
+  their-loc := self ??
+  their-nonce := self ??
+  stop
+
+defproc deliver-only-client : CapTPDeliverOnly
+  ;; the CapTPOp to send is provided by the surrounding scope; here
+  ;; we use a placeholder built locally. (In the real client this
+  ;; would come from the local vat's outbound queue.)
+  self ! [op-deliver-only 0N syrup-null]
+  stop

@@ -1,0 +1,100 @@
+ns prologos::ocapn::core
+
+;; ========================================
+;; OCapN-in-Prologos — Public API
+;; ========================================
+;;
+;; This module re-exports the subset of the OCapN/Goblins API that we
+;; have implemented for Phase 0. Everything is built on the local
+;; (single-process, single-vat) actor model in `vat`. CapTP wire
+;; semantics live in `message` + `captp-session`.
+;;
+;; Key shape — high-level mapping from Goblins:
+;;
+;;   Goblins             Prologos OCapN
+;;   -----------------   ----------------------------------
+;;   vat-spawn ^bcom args    vat-spawn-actor : BehaviorTag → init → Vat
+;;   ($ refr msg)        — not modelled (Goblins-internal sync call)
+;;   (<- refr msg)       send : Nat → SyrupValue → Vat → (Vat, Nat)
+;;   (<-np refr msg)     send-only : Nat → SyrupValue → Vat → Vat
+;;   (on promise k)      — implicit via promise resolution + queued
+;;                       pipelined messages; `lookup-promise` lets
+;;                       callers poll. Future work to add a registered
+;;                       listener API.
+;;   (become! state)     — encoded as `act-step` returning new state
+;;
+;; LIMITATIONS for Phase 0
+;; - Closed-world actor behaviours (no user-defined closures yet, see
+;;   goblin-pitfalls #3).
+;; - No real concurrency; the vat is purely functional and single-
+;;   stepping.
+;; - No on-the-wire CapTP — captp-session.prologos models the protocol
+;;   shape via session types but isn't connected to a transport.
+;; - No GC of refrs/answers.
+;;
+;; What works
+;; - Full request/reply cycle through promises
+;; - Promise monotone resolution (fulfill / break)
+;; - In-actor pipelining via the FullFiller pattern: an actor can
+;;   emit an `eff-resolve` effect for a target promise as part of its
+;;   step output, and the vat applies it directly. This covers the
+;;   common case (an actor that receives a result and needs to settle
+;;   a promise in the same vat).
+;; - The seven built-in actor behaviours (cell, counter, greeter,
+;;   echo, adder, forwarder, fulfiller)
+;;
+;; What is NOT yet wired up
+;; - Full Goblins-style promise pipelining (send-to-an-unresolved-
+;;   promise that auto-flushes its queue on resolution) is deferred:
+;;   the PromiseState carries a queue (see `enqueue` / `take-queue`),
+;;   but `resolve-promise` / `break-promise` do NOT flush it back to
+;;   the vat queue, because the queue carries `SyrupValue` (wire
+;;   form) and the vat queue holds `VatMsg` (decoded form). Phase 1
+;;   should wire a re-encoder. See goblin-pitfalls #17 for the full
+;;   scope-cut rationale; updated per Copilot review
+;;   #28#discussion_r3150426694.
+
+;; --- Refr capabilities (typing-side authority lattice) ---
+require [prologos::ocapn::refr :refer-all]
+
+;; --- Syrup (abstract value model) ---
+require [prologos::ocapn::syrup :refer-all]
+
+;; --- Promise algebra ---
+require [prologos::ocapn::promise :refer-all]
+
+;; --- CapTP message types ---
+require [prologos::ocapn::message :refer-all]
+
+;; --- Behaviour tags + dispatcher ---
+require [prologos::ocapn::behavior :refer-all]
+
+;; --- Vat (event loop core) ---
+require [prologos::ocapn::vat :refer-all]
+
+;; ========================================
+;; Convenience aliases that read like Goblins
+;; ========================================
+
+spec vat-spawn-actor BehaviorTag SyrupValue Vat -> Allocated
+  :doc "Goblins-flavoured alias for `vat-spawn`. Returns Allocated(vat', refr-id)."
+defn vat-spawn-actor [tag init v]
+  vat-spawn tag init v
+
+;; "send-and-get-promise": the pure-functional analogue of `(<- refr msg)`.
+spec ask Nat SyrupValue Vat -> Allocated
+  :doc "Send to refr, returning Allocated(vat', promise-id). Goblins's `<-`."
+defn ask [target args v]
+  send target args v
+
+;; "tell": the pure-functional analogue of `(<-np refr msg)`.
+spec tell Nat SyrupValue Vat -> Vat
+  :doc "Send to refr without keeping a result handle. Goblins's `<-np`."
+defn tell [target args v]
+  send-only target args v
+
+;; "drain": Goblins's vat-loop. Bounded by fuel.
+spec drain Nat Vat -> Vat
+  :doc "Run the vat until quiescence or fuel exhaustion."
+defn drain [fuel v]
+  run-vat fuel v
