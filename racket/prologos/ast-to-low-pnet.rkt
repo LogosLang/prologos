@@ -116,7 +116,20 @@
                  ;; (meta-decl main-prints-result #t) signature consumed
                  ;; by low-pnet-to-llvm. See
                  ;; docs/tracking/2026-05-02_LOWERING_INPUT_OUTPUT.md.
-                 [input-cells #:auto #:mutable])
+                 [input-cells #:auto #:mutable]
+                 ;; lowering-yolo M6 (2026-05-02): list of
+                 ;; (input-cell-id . target-cell-id) pairs. When tail-rec
+                 ;; lowering uses an input cell as an iteration state
+                 ;; cell, it must also seed the corresponding next-cell
+                 ;; with the same runtime argv value. Otherwise the
+                 ;; feedback identity at round 1 would read the next-
+                 ;; cell's placeholder init (0) and overwrite the input
+                 ;; cell's argv value before the iteration even starts.
+                 ;; Emitted as (meta-decl input-cell-mirrors ((src . dst) ...))
+                 ;; and consumed by low-pnet-to-llvm to inject one extra
+                 ;; cell_write(dst, argv_value) per pair, immediately
+                 ;; after the canonical cell_write(src, argv_value).
+                 [input-cell-mirrors #:auto #:mutable])
   #:auto-value '()
   #:transparent)
 
@@ -133,7 +146,22 @@
   ;; builder-props; no separate iter-block accumulator is needed.
   (set-builder-tail-rec-count! b 0)
   (set-builder-input-cells! b '())
+  (set-builder-input-cell-mirrors! b '())
   b)
+
+;; lowering-yolo M6 helper: record a (src . dst) mirror pair on the
+;; builder. src is an input cell id (must be in builder-input-cells);
+;; dst is any cell id whose runtime initial value should match src's
+;; runtime argv value. See builder-input-cell-mirrors docstring.
+(define (record-input-mirror! b src-cid dst-cid)
+  (set-builder-input-cell-mirrors!
+   b (cons (cons src-cid dst-cid)
+           (builder-input-cell-mirrors b))))
+
+;; True iff `cid` is one of main's input cells (i.e., its runtime
+;; value comes from argv at @main entry).
+(define (input-cell? b cid)
+  (and (memv cid (builder-input-cells b)) #t))
 
 (define (cell-depth b cid)
   (hash-ref (builder-depths b) cid 0))
@@ -846,6 +874,28 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
     ;; Expr-ann with #f init becomes problematic; bail early.
     [_ #f]))
 
+;; alloc-state-vt-from-literal : builder × literal-vtree → state-vtree
+;; Allocate fresh state cells matching the shape of a literal init-vt
+;; and seed each leaf cell with its literal init-value. Used in
+;; lower-tail-rec's literal-init path. Lifted out of the original
+;; `alloc-state-vt` so the M6 non-literal path can share the helper.
+(define (alloc-state-vt-from-literal b init-vt)
+  (cond
+    [(exact-integer? init-vt) (emit-cell! b INT-DOMAIN-ID init-vt)]
+    [else (map (lambda (sub) (alloc-state-vt-from-literal b sub)) init-vt)]))
+
+;; vtree-zeros-like : vtree → vtree
+;; Return a vtree mirroring the SHAPE of `vt` with every leaf replaced
+;; by zero. Used by lower-tail-rec to derive a placeholder init-vt for
+;; a non-literal init-arg (where the underlying state cells are
+;; runtime-bound and the literal init is meaningless). The next-cell
+;; downstream uses these zeros as their cell-decl init-value; the
+;; first select fire overwrites before any reader observes the value.
+(define (vtree-zeros-like vt)
+  (cond
+    [(exact-integer? vt) 0]
+    [else (map vtree-zeros-like vt)]))
+
 ;; Sprint F.3: vtree-walking helpers for pair-typed tail-rec state.
 
 ;; vtree-leaves : vtree → (Listof scalar-leaf)
@@ -964,32 +1014,61 @@ instead — pattern: `match cond | true → base | false → [self ...]`."
   (set-builder-tail-rec-count! b (+ 1 (builder-tail-rec-count b)))
   (define k (length init-args))
 
-  ;; 1. Each init-arg → init-vt. Sprint F.3: pair-typed init-args (e.g.
-  ;; `[pair 0 1]`) supported as nested literal vtrees. Each leaf must
-  ;; be an Int.
-  (define init-vts
-    (for/list ([arg (in-list init-args)])
-      (define v (literal-init-value arg))
-      (unless v
-        (translate-error! arg
-                          "tail-rec init-arg must be a literal Int (or pair of literal Ints). \
-For non-literal initializers, lift the value to a separate def or pre-compute it."))
-      ;; Bool init-leaves not yet supported in tail-rec state.
-      (let walk ([leaf v])
-        (cond [(exact-integer? leaf) (void)]
-              [(list? leaf) (for-each walk leaf)]
-              [else
-               (translate-error! arg
-                                 "tail-rec init-leaves must be Int (Bool/scalar Bool state slots not yet supported).")]))
-      v))
+  ;; 1. Each init-arg → init-vt + state-vt. Two cases per arg:
+  ;;
+  ;;    (a) Literal init (the historical case, e.g. `[pair 0 1]`):
+  ;;        init-vt is a vtree of Int literals; allocate fresh state
+  ;;        cells with those as cell-decl init-values. Next-cell init
+  ;;        is the same literal so the per-leaf next-cell is born with
+  ;;        a sensible value before the first select fires.
+  ;;
+  ;;    (b) Non-literal init (lowering-yolo M6, 2026-05-02), e.g.
+  ;;        `[fib-pair [pair 0 1] n]` where `n` is a parameter:
+  ;;        `build` the expression to get a vtree of cell-ids and
+  ;;        REUSE those cells as the state cells. No copy propagator
+  ;;        needed — the cells whose values are set at runtime (via
+  ;;        argv-write before quiescence, for input cells) ARE the
+  ;;        iteration state. The feedback identity then writes the
+  ;;        new state into them each round, naturally consuming the
+  ;;        input value over the iteration. For the next-cell init we
+  ;;        substitute 0 (the eventual select write will overwrite
+  ;;        before any reader sees it). Sprint F.3's vtree shape
+  ;;        invariant is preserved: the nested structure of init-vts
+  ;;        and state-vts matches; only the leaf values differ.
+  (define-values (init-vts state-vts)
+    (let loop ([args init-args] [iv-acc '()] [sv-acc '()])
+      (cond
+        [(null? args) (values (reverse iv-acc) (reverse sv-acc))]
+        [else
+         (define arg (car args))
+         (define lit (literal-init-value arg))
+         (cond
+           [lit
+            (let walk ([leaf lit])
+              (cond [(exact-integer? leaf) (void)]
+                    [(list? leaf) (for-each walk leaf)]
+                    [else
+                     (translate-error!
+                      arg
+                      "tail-rec init-leaves must be Int (Bool/scalar \
+Bool state slots not yet supported).")]))
+            (define sv (alloc-state-vt-from-literal b lit))
+            (loop (cdr args) (cons lit iv-acc) (cons sv sv-acc))]
+           [else
+            ;; Build the non-literal init-arg in the OUTER env (not
+            ;; state-env, which doesn't exist yet). Returns a vtree
+            ;; of cell-ids (typically a single cell-id for an
+            ;; (expr-bvar i) — the corresponding env slot).
+            (define vt (build arg b INT-DOMAIN-ID env))
+            ;; Mirror vt's shape with placeholder zeros for init-vt
+            ;; (used downstream to seed the next-cell). Per-leaf init
+            ;; for cells we DON'T own can't be touched safely; the
+            ;; next-cell init is 0, which is overwritten on the first
+            ;; select fire.
+            (define iv (vtree-zeros-like vt))
+            (loop (cdr args) (cons iv iv-acc) (cons vt sv-acc))])])))
 
-  ;; 2. Allocate state cells matching each init-vt's shape (recursive).
-  (define (alloc-state-vt init-vt)
-    (cond [(exact-integer? init-vt)
-           (emit-cell! b INT-DOMAIN-ID init-vt)]
-          [else
-           (map alloc-state-vt init-vt)]))
-  (define state-vts (map alloc-state-vt init-vts))
+  (define (alloc-state-vt init-vt) (alloc-state-vt-from-literal b init-vt))
 
   ;; State env: outermost lambda's binder has highest bvar index. The
   ;; init-args/state-vts are in outermost-first order; env is innermost-
@@ -1072,7 +1151,15 @@ For non-literal initializers, lift the value to a separate def or pre-compute it
        ;; edge of the iteration loop). Also skip depth update: state
        ;; cells stay at logical depth 0 for future references.
        (emit-propagator! b (list next-cid) state-vt 'kernel-identity
-                         #:skip-depth-update? #t)]
+                         #:skip-depth-update? #t)
+       ;; lowering-yolo M6: if state-vt is an input cell (shared via
+       ;; the non-literal-init path), record a mirror so the next-cell
+       ;; receives the same argv value at @main entry. Without this,
+       ;; the round-1 feedback would read next-cid's placeholder init
+       ;; (0) and overwrite the input cell's argv value before the
+       ;; iteration starts.
+       (when (input-cell? b state-vt)
+         (record-input-mirror! b state-vt next-cid))]
       [else
        (for ([s (in-list state-vt)]
              [t (in-list step-vt)]
@@ -2145,12 +2232,20 @@ are supported (Bool / String / ADT input deferred to a later milestone)"
   ;; case for backward compatibility with all existing benchmarks
   ;; and golden fixtures.
   (define input-cells (builder-input-cells b))
+  (define input-cell-mirrors (reverse (builder-input-cell-mirrors b)))
   (define input-meta
     (cond
       [(null? input-cells) '()]
       [else
-       (list (meta-decl 'input-cells input-cells)
-             (meta-decl 'main-prints-result #t))]))
+       (append
+        (list (meta-decl 'input-cells input-cells)
+              (meta-decl 'main-prints-result #t))
+        ;; lowering-yolo M6: emit the mirror map only when non-empty.
+        ;; Each entry says "after writing argv to src, also write the
+        ;; same value to dst". See builder-input-cell-mirrors docstring.
+        (cond
+          [(null? input-cell-mirrors) '()]
+          [else (list (meta-decl 'input-cell-mirrors input-cell-mirrors))]))]))
 
   ;; Validation order requires domains before cells, cells before props,
   ;; props before deps, all before entry.

@@ -387,3 +387,46 @@
   (check-true (string-contains? ir "call void @prologos_print_i64(i64 %r)"))
   (check-true (string-contains? ir "ret i32 0"))
   (check-false (string-contains? ir "@prologos_argv_i64")))
+
+(test-case "M6: input-cell-mirrors emits an extra cell_write per (src . dst) pair"
+  ;; (input-cell-mirrors ((0 . 1))) should produce TWO cell_write calls
+  ;; using the same %argv_0 SSA value: one to %c0 (the canonical input
+  ;; cell, per input-cells meta), and one to %c1 (the mirror).
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl input-cells (0))
+                (meta-decl main-prints-result #t)
+                (meta-decl input-cell-mirrors ((0 . 1)))
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (cell-decl 1 0 0)
+                (entry-decl 1))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  ;; Both writes use the same %argv_0 SSA value.
+  (check-true (string-contains? ir "%argv_0 = call i64 @prologos_argv_i64(i8** %argv, i32 1)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 %argv_0)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c1, i64 %argv_0)")))
+
+(test-case "M6: multiple mirrors for the same source share one argv parse"
+  ;; All three writes use the same %argv_0 — single parse, fan-out copies.
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl input-cells (0))
+                (meta-decl main-prints-result #t)
+                (meta-decl input-cell-mirrors ((0 . 1) (0 . 2)))
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (cell-decl 1 0 0)
+                (cell-decl 2 0 0)
+                (entry-decl 2))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  ;; Exactly one prologos_argv_i64 call (shared across all writes).
+  (define argv-calls
+    (length (regexp-match* #rx"call i64 @prologos_argv_i64" ir)))
+  (check-equal? argv-calls 1)
+  ;; Three cell-write calls referencing %argv_0.
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 %argv_0)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c1, i64 %argv_0)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c2, i64 %argv_0)")))

@@ -297,14 +297,33 @@
   (define input-cell-ids (or (find-meta 'input-cells) '()))
   (define parameterised-main? (not (null? input-cell-ids)))
   (define main-prints-result? (eq? (find-meta 'main-prints-result) #t))
+  ;; lowering-yolo M6 (2026-05-02): list of (src-cid . dst-cid) pairs
+  ;; that must receive a copy of src's argv-derived value at @main
+  ;; entry. Used by tail-rec lowering when an input cell doubles as an
+  ;; iteration state cell — without mirroring, the iteration's round-1
+  ;; feedback would overwrite the argv value with a placeholder 0 read
+  ;; from the un-initialized next-cell snapshot.
+  (define input-cell-mirrors (or (find-meta 'input-cell-mirrors) '()))
 
   (define argv-write-lines
     (for/list ([cid (in-list input-cell-ids)] [i (in-naturals)])
-      (format
-       (string-append
-        "  %argv_~a = call i64 @prologos_argv_i64(i8** %argv, i32 ~a)\n"
-        "  call void @prologos_cell_write(i32 ~a, i64 %argv_~a)")
-       i (+ i 1) (cell-ssa-name cid) i)))
+      (define mirrors-for-this-input
+        (for/list ([pair (in-list input-cell-mirrors)]
+                   #:when (eqv? (car pair) cid))
+          (cdr pair)))
+      (apply string-append
+             (format
+              (string-append
+               "  %argv_~a = call i64 @prologos_argv_i64(i8** %argv, i32 ~a)\n"
+               "  call void @prologos_cell_write(i32 ~a, i64 %argv_~a)")
+              i (+ i 1) (cell-ssa-name cid) i)
+             ;; Mirror writes use the same %argv_i SSA value; the
+             ;; cells were allocated earlier (alloc-lines) and init-
+             ;; written to 0 (init-lines), so this overwrites the
+             ;; placeholder cleanly under LWW.
+             (for/list ([dst-cid (in-list mirrors-for-this-input)])
+               (format "\n  call void @prologos_cell_write(i32 ~a, i64 %argv_~a)"
+                       (cell-ssa-name dst-cid) i)))))
 
   ;; Always-present declarations.
   (define base-decls
