@@ -424,6 +424,75 @@ the topology stratum (Phase 4)" name)))
          (make-j-fire cid-proof cid-out base left env)))
      (values cid-out net3)]
 
+    ;; ----- Phase 6: Vec eliminators + constructors -----
+    ;;
+    ;; vnil(A) and vcons(A,n,h,t) are values (held opaque). vhead/vtail
+    ;; are eliminators with iota:
+    ;;   vhead _ _ (vcons _ _ h _) → h
+    ;;   vtail _ _ (vcons _ _ _ t) → t
+    ;; Static fast-path: when the vec arg is literally vcons, project
+    ;; directly. Otherwise fire-once on the vec cell.
+    [(expr-vnil _)  (alloc-value-cell net e)]
+    [(expr-vcons _ _ _ _)
+     ;; vcons holds sub-exprs that may need reduction. Compile the
+     ;; head + tail; the cons cell carries a preduce-vcons value with
+     ;; component cell-ids (so vhead/vtail can project).
+     (match e
+       [(expr-vcons type len head tail)
+        (define-values (cid-h net1) (compile-expr head env net))
+        (define-values (cid-t net2) (compile-expr tail env net1))
+        (alloc-value-cell net2 (preduce-vcons type len cid-h cid-t))])]
+
+    [(expr-vhead _ _ vec)
+     (cond
+       [(expr-vcons? vec)
+        (compile-expr (expr-vcons-head vec) env net)]
+       [(expr-ann? vec)
+        (compile-expr (expr-vhead #f #f (expr-ann-term vec)) env net)]
+       [else
+        (define-values (cid-v net1) (compile-expr vec env net))
+        (define-values (net2 cid-out)
+          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+        (define-values (net3 _)
+          (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+            (make-vproj-fire cid-v cid-out 'head)))
+        (values cid-out net3)])]
+
+    [(expr-vtail _ _ vec)
+     (cond
+       [(expr-vcons? vec)
+        (compile-expr (expr-vcons-tail vec) env net)]
+       [(expr-ann? vec)
+        (compile-expr (expr-vtail #f #f (expr-ann-term vec)) env net)]
+       [else
+        (define-values (cid-v net1) (compile-expr vec env net))
+        (define-values (net2 cid-out)
+          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+        (define-values (net3 _)
+          (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+            (make-vproj-fire cid-v cid-out 'tail)))
+        (values cid-out net3)])]
+
+    ;; ----- Phase 6: Fin family (held opaque as values) -----
+    ;; Fin n is a type; fzero / fsuc are values. No eliminator in Phase 6
+    ;; (the elaborator turns Fin pattern matching into expr-reduce, Phase 10).
+    [(expr-fzero _) (alloc-value-cell net e)]
+    [(expr-fsuc _ inner)
+     (define-values (cid-in net1) (compile-expr inner env net))
+     ;; The fsuc value is opaque; we don't unfold inner inline. We just
+     ;; allocate a cell with the original fsuc shape + the compiled
+     ;; inner cell-id to allow downstream usage to recurse via cell.
+     ;; Simplest: hold opaque (fsuc inner) where inner is the value.
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+         (lambda (n)
+           (define iv (net-cell-read n cid-in))
+           (if (preduce-bot? iv) n
+               (net-cell-write n cid-out (expr-fsuc #f iv))))))
+     (values cid-out net3)]
+
     ;; ----- All other nodes: deferred to later phases -----
     [_
      (raise-unsupported!
@@ -585,6 +654,32 @@ the relevant phase lands."
        net1 (list cid-e) (list cid-out)
        (make-identity-fire cid-e cid-out))))
   net2)
+
+;; ============================================================
+;; Phase 6 helpers — Vec
+;; ============================================================
+
+;; preduce-vcons — Vec cons value, carries component cell-ids for
+;; head/tail projection (parallel to preduce-pair for pair projection).
+(struct preduce-vcons (type len head-cid tail-cid) #:transparent)
+
+;; make-vproj-fire — vhead/vtail projection on a non-static vec cell.
+(define (make-vproj-fire cid-in cid-out which)
+  (lambda (net)
+    (define v (net-cell-read net cid-in))
+    (cond
+      [(preduce-bot? v) net]
+      [(preduce-vcons? v)
+       (define component-cid
+         (case which
+           [(head) (preduce-vcons-head-cid v)]
+           [(tail) (preduce-vcons-tail-cid v)]))
+       (define cv (net-cell-read net component-cid))
+       (cond
+         [(preduce-bot? cv) net]
+         [else (net-cell-write net cid-out cv)])]
+      [else
+       (error 'preduce "expected vcons value for v~a, got: ~v" which v)])))
 
 ;; ============================================================
 ;; Phase 2 helpers
