@@ -30,9 +30,10 @@
 | **P5** γ-bundle scope precision (sub-phase count) | ACKNOWLEDGE | ACCEPT | UPDATE §1.2 — add sub-phase count estimate under γ-bundle-wide (~12-15 implementation sub-phases: 1A-iii-b ~5; 1A-iii-c ~8; 1B ~3; 1C ~5 under hybrid; 1V atomic close); name the bundle-vs-sub-phase scope distinction (DESIGN scope vs IMPLEMENTATION scope); also note Phase 1C estimate reframed under D.2 hybrid pivot (~45-90 LoC, was ~250-400 in D.1) per R1 REFINEMENT acceptance forward-pointer. |
 | **R1** Phase 1C estimate stale (~45-90 LoC under hybrid; was ~250-400 D.1) | REFINEMENT | ACCEPT | UPDATE §1.2 Phase 1C estimate to ~45-90 LoC with explicit hybrid-vs-D.1 reframing (zero-migration list of preserved sites + actual migration list); §10.1 NEW R1 commentary subsection: small footprint is intentional NOT "easy migration"; future PReduce/OE consumers should not misread small footprint as evidence of easy migration (work was DEFERRED via scaffolding per §10.1.A + Issue #55, not eliminated). |
 | **R2** Q-Audit-1 17-refs framing carried forward without rescoping | REFINEMENT | ACCEPT | UPDATE §10.2 — add R2 commentary at audit-grounding location; categorize 17 refs under hybrid (15 PRESERVED + 2-3 SELECTIVELY MIGRATED); name "17 production refs" as REFERENCE for completeness (full architectural scope) vs actual hybrid migration scope ~3-5 sites; future SH Series migration recovers full 17-ref scope per Issue #55 + DEFERRED.md. |
+| **R4** Phase 1V microbench list incomplete | REFINEMENT | ACCEPT | EXPAND §11.3 Phase 1V exit criteria microbench list to 11 re-runs: M7+M8+M13 (per-decrement cycle) + M10+M11+M12+R4 (Phase 1B substrate; per §9.10) + A7+A9 (high-frequency decrement + speculation rollback; NEW per R4) + E7+E8 (full-pipeline regression; NEW per R4). Each with concrete target values per Pre-0 baseline Findings (7, 8, 13, 16, 17). Comprehensive falsification discipline per microbench-claim verification rule. |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING + 6 REFINEMENTs (P1+P4 consolidated; P2; P6; R1; R2) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 2/4 complete.
+**3 BLOCKING + 7 REFINEMENTs (P1+P4 consolidated; P2; P6; R1; R2; R4) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 3/4 complete.
 
 ---
 
@@ -1298,11 +1299,25 @@ Four questions × TWO-COLUMN catalogue vs challenge:
 - All 4 VAG questions pass under adversarial framing
 - Probe diff = 0 semantically vs pre-Phase-1 baseline (S4 reference: 28 commands; Pre-0 plan §12.5 + S-tier baseline file)
 - Full suite GREEN within 118-127s variance band (S1 reference: 119.288s)
-- Pre-0 microbench claims verified (re-microbench M7+M8+M13 to confirm per-decrement cycle preserved; M10+M11+M12+R4 from Phase 1B implementation checklist at §9.10)
 - Parity tests GREEN (tropical-fuel-counter-parity reframed for hybrid per §10.6 + 1A-iii-b parity + 1A-iii-c parity)
 - 1+ codifications graduated to DEVELOPMENT_LESSONS.org if patterns surfaced (capture-gap discipline at 5 data points already graduation-ready)
 - Cross-reference capture in D.3 Phase 3 design verified (Form C scheduled)
-- **Hybrid pivot performance gate** (NEW per D.2): per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns)
+
+**Pre-0 microbench claims verified at Phase 1V close — comprehensive list (D.3 R4 REFINEMENT)**:
+
+Per microbench-claim verification rule ([`DEVELOPMENT_LESSONS.org § Microbench-Claim Verification Pays Off Across Sub-Phase Arcs`](principles/DEVELOPMENT_LESSONS.org)): every load-bearing Pre-0 finding requires re-microbench at Phase 1V close. **Total: 11 microbench re-runs**.
+
+- **Per-decrement cycle preserved (3 re-runs)**: re-microbench M7 (struct-copy decrement) + M8 (inline check) + M13 (prop-network-fuel access). **Target**: per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns).
+- **Phase 1B substrate baselines (4 re-runs; per §9.10 Phase 1B implementation checklist)**: M10 (residuation operator) + M11 (tropical tensor) + M12 (SRE registration overhead) + R4 (cell layout). **Target**: per Pre-0 plan §3 + §8 hypotheses at Phase 1B close.
+- **High-frequency decrement at scale (3 re-runs; NEW per R4)**: re-microbench A7.1/A7.2/A7.3 (1k/10k/100k decrements). **Target**: 62.5 bytes/dec linear scaling preserved (per Pre-0 Finding 7); ZERO major-GC at 100k (per Pre-0 Finding 16 R3 baseline).
+- **Speculation rollback no-leak (1 re-run; NEW per R4)**: re-microbench A9 (100 spec cycles save+write+restore). **Target**: ≤ 0 KB retention at 100 cycles (per Pre-0 Finding 8 baseline) + ≤ 30 KB at 1000 cycles (per Pre-0 Finding 17 R5 long-term residual bound).
+- **Full-pipeline regression (2 re-runs; NEW per R4)**: re-microbench E7 (probe full file 28 expressions) + E8 (50-deep id composition; hybrid pivot CRITICAL scenario per Pre-0 Finding 13). **Target**: E7 wall ≤ +5% (≤ 351 ms) + memory ≤ +10% (≤ 894 MB); E8 wall ≤ +25% (per Pre-0 plan §7).
+
+The list is comprehensive for the "did the perf claims land" verification. ~30-60 min total at Phase 1V close.
+
+**Architectural + reconsideration gates** (D.2 + D.3 from P2 REFINEMENT):
+
+- **Hybrid pivot performance gate** (NEW per D.2): per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns) — overlaps with R4 microbench list above
 - **Hybrid pivot architectural gate** (NEW per D.2): aggregate `prop_firings` post-impl ≤ 1× per file BSP-barrier-equivalent (S-20 baseline = 0; under hybrid, threshold propagator should fire only on rare exhaustion + semantic-transition-cell-writes, NOT per-decrement)
 - **Hybrid pivot reconsideration gate** (NEW per D.3 from P2 REFINEMENT): post-implementation re-microbench M7 (cell-write cost vs struct-copy) + R3 (GC profile under sustained cell-write at 100k+ ops/sec); IF cell-write ≤ 50% of struct-copy AND R3 GC stays at zero major-GC, escalate to user — "the hybrid pivot's empirical motivation does NOT hold under Phase 1B reality; reconsider hybrid retirement timing?" Cross-reference: Q-1B-6 (Phase 1B mini-design opening spike) is the EARLY signal; this Phase 1V gate is the FINAL verification. The two gates differ in timing (pre-build vs post-build) and granularity (spike vs full microbench suite); both serve the falsification-test discipline per workflow.md "Belt-and-Suspenders Masks Bugs."
 
