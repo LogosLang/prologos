@@ -25,9 +25,10 @@
 | **M1** Threshold propagator role under hybrid | BLOCKING | ACCEPT | NEW §10.A "The threshold propagator's role under hybrid" — three load-bearing roles (Phase 3C consumer paths + on-exhaustion + speculation rollback); per-decrement acknowledged as scaffolding pending SH Series |
 | **S1** §14.4 SRE lattice lens Q5 PRIMARY/DERIVED inconsistency | BLOCKING | ACCEPT | UPDATE §14.4 Q3+Q4+Q5+Q6 with hybrid-aware classification |
 | **P1** Hybrid inverts Cell-as-Single-Source-of-Truth principle | REFINEMENT | ACCEPT (with GitHub-issue extension) | APPEND §10.1 acknowledgment of principle inversion as scaffolding-with-retirement-plan; dual-surface tracking via [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) (operational visibility) + [DEFERRED.md entry](DEFERRED.md) (design-doc-adjacent visibility) |
+| **P2** Belt-and-suspenders red flag; empirical-validation gate | REFINEMENT | ACCEPT (with Phase 1B mini-design opening spike) | NEW Q-1B-6 at §9.9 — empirical-validation spike at Phase 1B mini-design opening (cheap; ~30 min; pre-implementation falsification test); §11.3 Phase 1V exit criteria adds final-verification gate (post-implementation). Two-gate discipline: spike challenges hybrid pre-build; Phase 1V verifies post-build. "Learning is valuable either way" per user direction. |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING findings closed + 1 REFINEMENT (P1) accepted.** D.3 incrementally ready for Stage 4 as remaining REFINEMENTs + ACKNOWLEDGEs are walked.
+**3 BLOCKING findings closed + 2 REFINEMENTs (P1 + P2) accepted.** D.3 incrementally ready for Stage 4 as remaining REFINEMENTs + ACKNOWLEDGEs are walked.
 
 ---
 
@@ -838,6 +839,18 @@ These three use cases ground the Form B anticipated-use enumeration. Phase 3C's 
 - **Q-1B-1**: API naming. Lean: `tropical-fuel-merge`, `tropical-fuel-tensor`, `tropical-left-residual`. Alternative: `min-merge`, `quantale-join`, etc. Decide at 1B mini-design with code in hand.
 - **Q-1B-2**: `+inf.0` (Racket float-infinity) vs sentinel `'tropical-top`. Lean: `+inf.0` — Racket-native; arithmetic well-defined (`+inf.0 + a = +inf.0`); easier interop. Alternative: sentinel for type clarity; might be more SRE-aligned. Decide at 1B mini-design.
 - **Q-1B-4**: Residuation operator as read-time helper vs propagator. Lean: read-time helper (per §9.5 + §6.5). Decide at 1B mini-design with Phase 3C UC1/UC2/UC3 anticipated use cases in hand.
+- **Q-1B-6 (NEW from D.2.SC P2 REFINEMENT)**: Hybrid pivot empirical-validation spike at Phase 1B mini-design opening (BEFORE substrate ships). The hybrid pivot's defense (§10 acknowledgment + Issue #55 + DEFERRED.md) extrapolates from Pre-0 R-19 (struct-copy GC-friendly) to "full cell-migration would NOT be GC-friendly." The extrapolation is reasonable but UNTESTED — Pre-0 measured struct-copy at the inline-check rate; it didn't directly compare cell-write at the inline-check rate (substrate didn't exist pre-Phase-1B).
+  - **Spike (cheap; ~30 min at Phase 1B mini-design opening)**:
+    - Implement minimal cell + threshold propagator scaffold (or use existing infra-cell test fixture)
+    - Measure bare cell-write at inline-check rate (single quick test mirroring M7+M8 + R3-style sustained 100k-rate GC profile)
+    - Compare: cell-write cost vs struct-copy cost (target: ≤ 50% overhead); R3-style GC behavior under sustained cell-write at 100k+ ops/sec (target: zero major-GC, matching struct-copy baseline)
+  - **If spike PASSES (cell-write fast + GC-friendly)**:
+    - **Escalate to user**: "the hybrid pivot's empirical motivation does NOT hold under Phase 1B reality; reconsider Phase 1C scope BEFORE Phase 1B ships substrate?" Discussion: do we ship Phase 1B substrate AND retire the hybrid (Phase 1C reverts to D.1 full-migration design)? Or ship Phase 1B substrate + Phase 1C hybrid as designed + Phase 4 (post-addendum) full-migration retirement?
+    - **The learning is valuable either way**: even if we proceed with hybrid for scheduling reasons, the spike confirms Phase 1B substrate's cell-write characteristics for Phase 3C consumer design AND informs SH Series planning (Issue #55 retirement criteria)
+  - **If spike FAILS (cell-write slow OR GC-pressured)**:
+    - Confirms hybrid pivot's empirical motivation; proceed with §10 design as committed
+    - Document the spike result as Pre-0 §12.6 Finding 23 (extending the 22-finding catalog); strengthens hybrid pivot's empirical grounding
+  - **Cross-references**: §11.3 Phase 1V exit criteria includes a final-verification gate (post-implementation check at Phase 1V close); Q-1B-6 is the PRE-implementation spike (cheap, early signal). Both gates serve different purposes — Q-1B-6 challenges the hybrid pre-build; §11.3 verifies the hybrid's claims post-build.
 
 ### §9.10 Post-Phase-1B benchmark capture — forward-pointer for Pre-0 deferred items (NEW 2026-04-26)
 
@@ -1243,6 +1256,7 @@ Four questions × TWO-COLUMN catalogue vs challenge:
 - Cross-reference capture in D.3 Phase 3 design verified (Form C scheduled)
 - **Hybrid pivot performance gate** (NEW per D.2): per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns)
 - **Hybrid pivot architectural gate** (NEW per D.2): aggregate `prop_firings` post-impl ≤ 1× per file BSP-barrier-equivalent (S-20 baseline = 0; under hybrid, threshold propagator should fire only on rare exhaustion + semantic-transition-cell-writes, NOT per-decrement)
+- **Hybrid pivot reconsideration gate** (NEW per D.3 from P2 REFINEMENT): post-implementation re-microbench M7 (cell-write cost vs struct-copy) + R3 (GC profile under sustained cell-write at 100k+ ops/sec); IF cell-write ≤ 50% of struct-copy AND R3 GC stays at zero major-GC, escalate to user — "the hybrid pivot's empirical motivation does NOT hold under Phase 1B reality; reconsider hybrid retirement timing?" Cross-reference: Q-1B-6 (Phase 1B mini-design opening spike) is the EARLY signal; this Phase 1V gate is the FINAL verification. The two gates differ in timing (pre-build vs post-build) and granularity (spike vs full microbench suite); both serve the falsification-test discipline per workflow.md "Belt-and-Suspenders Masks Bugs."
 
 ---
 
