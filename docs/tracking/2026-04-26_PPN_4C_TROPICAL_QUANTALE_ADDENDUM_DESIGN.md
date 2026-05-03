@@ -31,9 +31,15 @@
 | **R1** Phase 1C estimate stale (~45-90 LoC under hybrid; was ~250-400 D.1) | REFINEMENT | ACCEPT | UPDATE §1.2 Phase 1C estimate to ~45-90 LoC with explicit hybrid-vs-D.1 reframing (zero-migration list of preserved sites + actual migration list); §10.1 NEW R1 commentary subsection: small footprint is intentional NOT "easy migration"; future PReduce/OE consumers should not misread small footprint as evidence of easy migration (work was DEFERRED via scaffolding per §10.1.A + Issue #55, not eliminated). |
 | **R2** Q-Audit-1 17-refs framing carried forward without rescoping | REFINEMENT | ACCEPT | UPDATE §10.2 — add R2 commentary at audit-grounding location; categorize 17 refs under hybrid (15 PRESERVED + 2-3 SELECTIVELY MIGRATED); name "17 production refs" as REFERENCE for completeness (full architectural scope) vs actual hybrid migration scope ~3-5 sites; future SH Series migration recovers full 17-ref scope per Issue #55 + DEFERRED.md. |
 | **R4** Phase 1V microbench list incomplete | REFINEMENT | ACCEPT | EXPAND §11.3 Phase 1V exit criteria microbench list to 11 re-runs: M7+M8+M13 (per-decrement cycle) + M10+M11+M12+R4 (Phase 1B substrate; per §9.10) + A7+A9 (high-frequency decrement + speculation rollback; NEW per R4) + E7+E8 (full-pipeline regression; NEW per R4). Each with concrete target values per Pre-0 baseline Findings (7, 8, 13, 16, 17). Comprehensive falsification discipline per microbench-claim verification rule. |
-| (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
+| **R3** Q-1C-3 enumeration BLOCKING for 1C-iv | ACKNOWLEDGE | ACCEPT | STRENGTHEN §10.7 Q-1C-3 with BLOCKING-for-1C-iv gate annotation + expanded candidate transition list (BSP round boundaries, topology-stratum transitions, sub-phase boundaries, speculative-rollback boundaries, inter-test boundaries — 5 NEW candidates). Pre-enumeration serves as CHECKLIST for 1C-iii mini-design; without it, easy-to-miss transitions (BSP rounds + topology stratum) would surface as Phase 3C consumer-correctness bugs post-implementation. |
+| **M2** On-exhaustion pattern is imperative dispatch | REFINEMENT | ACCEPT (BATCH) | APPEND §10.3 acknowledgment: `(<= new-fuel 0)` IS imperative dispatch per `propagator-design.md` "Information vs. instruction"; propagator-mindspace ideal (unconditional cell-write + emergent exhaustion) infeasible under hybrid per R-19; trade-off explicit; SH Series retirement restores propagator-emergent target. |
+| **M3** Cell-update cadence is imposed ordering | ACKNOWLEDGE (BATCH) | ACCEPT (BATCH) | APPEND §10.1 acknowledgment: cell-update cadence (semantic-transition-only) IS imposed ordering, not emergent dataflow per `propagator-design.md` "Emergent vs. imposed ordering"; consequence of M2 + R-19 trade-off; SH Series retirement restores emergent ordering. |
+| **S2** `:fires-when` NTT extension not load-bearing under hybrid | REFINEMENT (BATCH) | ACCEPT (BATCH) | UPDATE §4.1 extension-note: under hybrid (rare cell-writes), threshold propagator can use existing `:fires-once-on-threshold` semantics OR unconditional fire with predicate body in fire-fn; `:fires-when` NTT extension no longer load-bearing for THIS addendum; remains future refinement candidate for tracks with per-event scheduler-level filtering needs (likely post-SH-Series). |
+| **S3** Multi-quantale composition NTT bridge declared-but-not-implemented | REFINEMENT (BATCH) | ACCEPT (BATCH) | APPEND §4.2 explicit completeness statement: ✓ Q-module co-existence (this addendum); ⬜ bridge α/γ implementation (Phase 3C UC2 consumer); ⬜ quantale-of-bridges (future PReduce/OE Track 1). NTT model is LOAD-BEARING for downstream design; NOT a runtime-realized composition until Phase 3C lands. Honest framing. |
+| **S4** Quantaloid forward-compatibility check | REFINEMENT (BATCH) | ACCEPT (BATCH) | APPEND §4.2 forward-compatibility verification: multi-quantale primitives (Q-module + Galois bridge) are quantaloid-natural; quantaloid extension is additive (not substitutive); when 3+ quantale instances ship, composition extends WITHOUT breaking type-cost-bridge interface. Quantaloid out-of-scope is implementation-complexity, NOT forward-incompatibility risk. |
+| **S5** C-series quantale axiom verification at Phase 1B close | ACKNOWLEDGE (BATCH) | ACCEPT (BATCH) | STRENGTHEN §9.4 C-series gate: Phase 1B close MUST run C-series (Pre-0 plan §5) post-registration; particular attention to `+inf.0` edge cases (distributivity, residuation, tensor identity, min identity); SRE Track 2H precedent for axiom-level surfacings (F7 disproof); C-series failure = critical correctness bug; halt before Phase 1C. |
 
-**3 BLOCKING + 7 REFINEMENTs (P1+P4 consolidated; P2; P6; R1; R2; R4) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6/6); R-lens 3/4 complete.
+**3 BLOCKING + 10 REFINEMENTs (P1+P4 consolidated; P2; P6; R1; R2; R4; M2; S2; S3; S4) + 5 ACKNOWLEDGEs (P5; R3; M3; S5) accepted.** **D.2.SC RESOLUTION COMPLETE — 18/18 findings closed (3 BLOCKING + 10 REFINEMENT + 5 ACKNOWLEDGE; 0 PUSHBACK).** D.3 ready for Stage 4 implementation per per-phase mini-design+audit.
 
 ---
 
@@ -351,6 +357,10 @@ propagator tropical-fuel-threshold  :extension-note
   fire-fn: write-contradiction
 ```
 
+**D.3 S2 commentary — `:fires-when` extension scope under hybrid (REFINEMENT)**:
+
+Under D.1's full-migration design, `:fires-when` would prevent per-decrement threshold checks at the scheduler level (every decrement-site cell-write would otherwise trigger a propagator-fire-then-condition-check; `:fires-when` lets the scheduler short-circuit). Under D.2/D.3 hybrid pivot, cell-writes are RARE (only at semantic transitions per §10.1.A + §10.B); the threshold propagator can use existing `:fires-once-on-threshold` semantics OR unconditional fire with predicate body in fire-fn. The `:fires-when` NTT extension is **no longer load-bearing for THIS addendum**; it remains a future NTT refinement candidate for tracks where per-event filtering at scheduler level is performance-critical (e.g., a future track that does ship per-decrement cell-write and needs scheduler-level filtering — possibly post-SH-Series migration per Issue #55).
+
 ### §4.2 Multi-quantale composition (NEW — addresses Q-1B-3 + Q-1B-5)
 
 Two quantales co-exist in the network post-Phase-1B:
@@ -396,6 +406,27 @@ bridge type-cost-bridge
 - Per research §6.7: monotone Q-module endomorphisms have Tarski fixpoints; CALM theorem applies; multi-quantale composition is coordination-free under monotone joins
 
 **Mantra-aligned**: cells are Q-modules (on-network); quantale actions are propagators (info flow through cells); bridges are Galois-connection propagators (structurally emergent); composition via quantale-of-bridges (all-at-once + parallel).
+
+**D.3 S3 commentary — multi-quantale composition NTT computational completeness (REFINEMENT)**:
+
+The multi-quantale composition NTT model declares the composition pattern + bridge interface. **Computational realization is partial**:
+- ✓ **Q-module co-existence** (this addendum) — TypeFacetQ (SRE 2H, shipped) + TropicalFuelQ (Phase 1B target) co-exist as independent Q-modules in the same `prop-network` substrate; computable today
+- ⬜ **Bridge α/γ implementation** — type-cost-bridge is DECLARED here; α/γ implementation deferred to Phase 3C UC2 consumer (per §6.5 Form B + §9.7 UC2 enumeration); not computable until Phase 3C lands
+- ⬜ **Quantale-of-bridges composition** — per research §5.4; not computable until 3rd+ quantale instance ships (future PReduce / OE Track 1 multi-cost-currency tracking)
+
+The NTT model is **LOAD-BEARING for downstream design** (gives Phase 3C UC2 the type-level interface to implement against; ensures the tropical fuel substrate is forward-compatible with future bridge implementations); it is **NOT a runtime-realized composition until Phase 3C lands**. Honest framing: this addendum SHIPS the NTT model + Q-module co-existence; it DECLARES (without implementing) the bridge.
+
+**D.3 S4 commentary — quantaloid forward-compatibility verification (REFINEMENT)**:
+
+D.1 §1.3 + §4.4 marked quantaloids out-of-scope ("when multi-domain cost currencies emerge — memory + messages + time — the quantale-of-quantales pattern (Stubbe 2013) becomes load-bearing"). **Forward-compatibility check**: are the multi-quantale primitives we ship today FORWARD-COMPATIBLE with quantaloids?
+
+**Answer: yes**. The composition pattern shipped here (`bridge :alpha :gamma :preserves [Galois]` + Q-module co-existence) is forward-compatible with quantaloids:
+- A quantaloid extends the bridge composition with an extra layer (quantale-of-quantale-of-bridges; many-object generalization per Stubbe 2013)
+- The primitives we ship today (Q-module + Galois bridge) are **quantaloid-natural** — Q-modules are objects in a quantaloid; bridges are morphisms; composition extends per the quantaloid's enrichment structure
+- When future tracks add 3rd+ quantale instances (MemoryCostQ, MessageCountQ), the composition pattern extends WITHOUT breaking the type-cost-bridge interface (additive, not substitutive)
+- The "out of scope" marker on quantaloids is about IMPLEMENTATION COMPLEXITY (quantale-of-quantales requires quantale-enriched-categories machinery), NOT about a forward-incompatibility risk
+
+This forward-compatibility verification ensures the multi-quantale composition NTT we ship today doesn't lock us out of quantaloid extensions — when those become load-bearing (3+ cost currencies), we extend without rewriting.
 
 ### §4.3 Architecture — where tropical fuel cells live alongside type universe cells
 
@@ -750,6 +781,17 @@ Ship the foundational tropical fuel primitive: a new `tropical-fuel.rkt` module 
 
 **Property inference** (per Phase 2 of PPN 4C tradition): runs explicitly at registration to verify quantale laws (commutativity, associativity, idempotence, distributivity, residuation laws). Per Track 3 §12 + SRE 2G precedent, expect ≥1 lattice-law verification finding (possibly 0 since quantale axioms are well-grounded).
 
+**D.3 S5 strengthening — C-series quantale axiom verification at Phase 1B close (ACKNOWLEDGE)**:
+
+Phase 1B implementation **MUST run C-series** ([Pre-0 plan §5](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md)) post-registration to verify quantale axioms hold for the actual `+` / `min` / `+inf.0` representation. **Particular attention to edge cases at `+inf.0`**:
+
+- **Distributivity at infinity**: does `(+ +inf.0 (min b c)) = (min (+ +inf.0 b) (+ +inf.0 c))` hold? Both sides should equal `+inf.0` by absorbing-element semantics, but verify via assertion (Racket's `+inf.0` arithmetic is well-defined per IEEE 754; the assertion is for our semantics, not for IEEE).
+- **Residuation at infinity**: `(tropical-left-residual +inf.0 b)` for finite `b` → 0 (overspend; vacuous); `(tropical-left-residual a +inf.0)` for finite `a` → `+inf.0` (infinite remaining).
+- **Tensor identity at infinity**: `(+ +inf.0 0) = +inf.0` (absorbing × identity).
+- **Min identity at zero**: `(min 0 a) = a` for `a >= 0` (zero is bot in Lawvere convention).
+
+**Precedent for axiom-level surfacings**: SRE Track 2H's property inference DID find lattice-law disproofs (F7 distributivity disproof per `mempalace.md` watching list; Track 2H PIR §7). Tropical quantale's distributivity may have similar edge cases at `+inf.0`. **C-series failure → critical correctness bug; halt before Phase 1C** (per Pre-0 plan §13 "Decision rules summary table" C1-C5 row).
+
 ### §9.5 Primitive API (refined from D.3 §10.2)
 
 ```racket
@@ -960,6 +1002,10 @@ Phase 1C's small code-change footprint under hybrid (~45-90 LoC vs D.1's ~250-40
 
 Future PReduce / OE consumers (per §6.6 hybrid-as-scaffolding-NOT-template caveat) should NOT use Phase 1C's small footprint as evidence of "easy migration" — under hybrid, the work was DEFERRED via scaffolding (per §10.1.A retirement plan + Issue #55), NOT eliminated. The full-migration footprint (~250-400 LoC per D.1 §10.4) is recoverable as the future SH Series migration scope (per DEFERRED.md "PPN 4C tropical addendum: hybrid pivot scaffolding retirement" entry).
 
+**D.3 M3 acknowledgment — cell-update cadence is IMPOSED ORDERING (ACKNOWLEDGE)**:
+
+Cell-update cadence (semantic-transition-only per §10.B + Q-1C-3) is IMPOSED ORDERING, not emergent from dataflow per [`propagator-design.md` § "Emergent vs. imposed ordering"](../../.claude/rules/propagator-design.md). This is the consequence of preserving struct-field as live state (per M2 + R-19): without per-decrement cell-write, the cell's update points must be imperatively chosen ("update at start of phase" / "update on save/restore" / "update on exhaustion"). **Trade-off explicit**: imposed ordering (lose mantra alignment at hot-path) vs major-GC-risk (lose runtime feasibility). The hybrid chooses the former for the per-decrement timescale; SH Series retirement (per Issue #55) restores emergent ordering when runtime supports per-decrement cell-write.
+
 ### §10.1.A Honest framing & retirement plan (D.3 consolidating P1 + P4 REFINEMENTs)
 
 The "decomplection" framing in §10.1 describes WHAT the hybrid does at the architectural level. This subsection adds the WHY (specific blocker), the principle-level acknowledgment (Cell-as-Single-Source-of-Truth inversion), and the retirement plan with dual-surface tracking. Both framings are simultaneously true and intentional — design intent + honest accountability.
@@ -1143,6 +1189,10 @@ This rescoping note bridges the audit grounding (17-refs framing useful for full
 
 The exhaustion path is RARE (per Pre-0 finding 5: a typical run completes within budget; exhaustion is the failure case). The cost of cell-write + propagator fire is amortized over the entire run.
 
+**D.3 M2 acknowledgment — on-exhaustion pattern IS imperative dispatch (REFINEMENT)**:
+
+The decrement site's `(<= new-fuel 0)` check IS imperative dispatch (the site decides which path to take), per [`propagator-design.md` § "Information vs. instruction"](../../.claude/rules/propagator-design.md). The propagator-mindspace ideal would be unconditional cell-write with propagator-emergent exhaustion (cell value crosses budget threshold → propagator fires emergently → writes contradiction); this is INFEASIBLE under hybrid per Pre-0 R-19 (per-decrement cell-write triggers major GC). The hybrid CHOOSES imperative dispatch for the hot-path; the cell + propagator handle rare-event consumer paths (Phase 3C UC1/UC2/UC3 + speculation rollback) emergently per §10.A. This trade-off is the consequence of the per-decrement timescale's runtime constraint; under SH Series (per Issue #55 retirement), the imperative-dispatch hot-path retires alongside the struct-field, restoring propagator-emergent exhaustion as the architectural target.
+
 **Read-as-value sites** (3 sites — selective migration):
 
 ```racket
@@ -1257,12 +1307,22 @@ Under hybrid, Phase 1C is dominated by SUBSTRATE setup, not migration. Sub-phase
 
 - **Q-1C-1** (CARRIED): typing-propagators saved-fuel rollback semantics — verify at 1C-iii mini-design
 - **Q-1C-2** (CARRIED, REFRAMED): Test cell-mediated API additions — which Phase 3C UC forward-capture tests belong in Phase 1C? (The cost-accumulation semantic shift in D.1 §10.7 is moot under hybrid since struct-field assertions are preserved.)
-- **Q-1C-3** (NEW under hybrid): Cell-update cadence — exhaustively enumerate semantic transitions where cell sync occurs:
-  - Start of phase (initial budget allocation)?
-  - End of phase (final cost capture)?
-  - Save/restore boundaries (snapshot-mediated)?
-  - Phase 3C UC1/UC2/UC3 explicit query sites (sync-on-read)?
-  - On-exhaustion path (decrement site detects exhaustion)?
+- **Q-1C-3** (NEW under hybrid; **BLOCKING for Phase 1C-iv per D.3 R3 ACKNOWLEDGE**): Cell-update cadence — exhaustively enumerate ALL semantic transitions where cell sync occurs. **BLOCKING for Phase 1C-iv**: this enumeration must be COMPLETE at Phase 1C-iii mini-design BEFORE selective-migration code lands at Phase 1C-iv (otherwise Phase 3C consumers may discover "semantic transition" doesn't cover their use case post-implementation).
+
+  **Candidate transition list** (D.3-time enumeration; refine at 1C-iii with code):
+  - Start of phase (initial budget allocation in `make-prop-network`)
+  - End of phase (final cost capture; pretty-print display)
+  - Save/restore boundaries (snapshot-mediated; typing-propagators saved-fuel sync per Q-1C-1)
+  - On-exhaustion path (decrement site detects exhaustion; writes final cost to cell)
+  - Phase 3C UC explicit query sites (sync-on-read via `net-fuel-cost-read/synced` per §10.B Cell Staleness Contract)
+  - **NEW per D.3 R3 (consider at 1C-iii mini-design)**:
+    - **BSP round boundaries** within a single elaboration? (yes if Phase 3C UC1 walks dependency chains across rounds; verify at 1C-iii)
+    - **Topology-stratum transitions** when new cells/propagators are added? (likely yes; topology stratum runs between BSP rounds; cell sync at topology boundary preserves consistency for any propagator the topology stratum installs)
+    - **Sub-phase boundaries** within a single command processing? (probably no; sub-phases are internal to a command; semantic-transition granularity is at command level)
+    - **Speculative-rollback boundaries** per `with-speculative-rollback` retirement scope? (yes; rollback IS a save/restore boundary)
+    - **Inter-test boundaries** per-test fuel reset semantics? (yes; per-test fixture pattern resets fuel; cell sync at test boundary = fuel reset captured)
+
+  For each candidate transition: decide YES (synced) or NO (not a transition); document the staleness bound; update §10.B cell-staleness-contract API documentation.
   
   Lean: enumerate at 1C-iii mini-design with code in hand; the answer informs whether cell-staleness is bounded and predictable.
 
@@ -1571,12 +1631,14 @@ Per user's workflow:
 
 ## Document status
 
-**Stage 3 Design D.2** — Pre-0 findings incorporated; hybrid pivot committed. Per user's workflow direction:
+**Stage 3 Design D.3** — D.2.SC self-critique findings incorporated (18/18 closed: 3 BLOCKING + 10 REFINEMENT + 5 ACKNOWLEDGE + 0 PUSHBACK). Per user's workflow direction:
 1. ✅ D.1 drafted (commit `fc4b9d3e`)
 2. ✅ Pre-0 microbenchmark plan + execution (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f79650fa`, `f6576479`, `bef1f518`, `4be5e875`, `d270769b`, `d0934329`, `76129725`, `8a29f6af`)
-3. ✅ **D.2 revise** (this commit) — hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
-4. ⬜ D.3+ critique rounds (P/R/M/S; especially S for algebra; possibly external critique). §17 enumerates 5 forward-captured adversarial questions for D.3 opening.
-5. ⬜ Stage 4 implementation per per-phase mini-design+audit. Phase 1B implementation checklist captured at §9.10 (M10 + M12 + R4 + A12 verification).
+3. ✅ D.2 revise (commit `2a4d938c`) — hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
+4. ✅ D.2.SC self-critique drafted (commit `219d8eb9`) — 18 findings via P/R/M/S TWO-COLUMN adversarial framing
+5. ✅ **D.3 revisions** (commits `0538582f` BLOCKINGs + `934b2ba3` P1+Issue#55 + `db15bece` P2 + `a4cbbbfc` P4-consolidated + `9c014389` P6 + `c1a1e5c8` P5 + `072eea14` R1 + `00fe67cc` R2 + `9cf19ce7` R4 + this commit batch) — all 18 D.2.SC findings closed; design ready for Stage 4
+6. ⬜ Optional: external critique round (P/R/M/S/external) before Stage 4
+7. ⬜ Stage 4 implementation per per-phase mini-design+audit. Phase 1B implementation checklist captured at §9.10 (M10 + M12 + R4 + A12 verification); Q-1B-6 spike at §9.9 (hybrid pivot empirical-validation pre-build); Q-1C-3 BLOCKING for 1C-iv at §10.7 (semantic-transition enumeration); §11.3 Phase 1V exit criteria with 11 microbench re-runs.
 
 **Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.** Phase-specific open questions (§16) resolved at that time with code in hand.
 
