@@ -2,6 +2,9 @@
 #+SUBTITLE: Single Source of Truth for All Planned, Active, and Completed Work
 #+AUTHOR: The Prologos Project
 #+DATE: 2026-03-21
+#+OPTIONS: toc:nil
+
+*Last updated*: 2026-05-02 (staleness sweep — series-header lines, missing tracks, SH + UCS top-level promotion, naming consistency)
 
 * Purpose
 
@@ -261,11 +264,13 @@ PM Track 10                      =   SRE Track 6 (module loading)
 
 *Lower priority:*
 - PM Track 8E: 17 registries as cells (architectural cleanup)
-- BSP-LE Tracks 1-2: UnionFind + ATMS Solver
+- BSP-LE Track 1: UnionFind (Tracks 2 + 2B ✅ done)
+- BSP-LE Tracks 3-5: Tabling, BSP Pipeline (→ PAR), Solver Language
 - SRE Track PUnify: Systemic parity investigation
 
 *Future (blocked on PPN Track 4+):*
-- *SH (Self-Hosting) Series*: Racket prototype → propagator compiler → LLVM lowering → Logos self-hosting. Prerequisites: PPN Track 4 (compiler IS the network), LLVM lowering infrastructure, runtime design (GC per [[file:../research/RESEARCH_GC.md][RESEARCH_GC.md]], scheduling, I/O). Series not yet created — placeholder. See [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] for trajectory analysis.
+- *SH (Self-Hosting) Series* ✅ opened 2026-04-30 — see [[file:2026-04-30_SH_MASTER.md][SH Master]]. Stage 0/1 founding done; implementation tracks 1-10 ⬜ gate on PReduce delivery (Track 4) + PPN Track 4 completion.
+- *PReduce Series* ✅ opened 2026-05-02 — see [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]]. Cross-series dependency for SH; gates implementation tracks on PPN 4C Phase 1B.
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
 
 *Theory (ongoing, fed by application tracks):*
@@ -398,6 +403,32 @@ PRN (theory — what ARE the universal rewriting primitives?)
 - Does the CALCO 2025 result (e-graphs are adhesive) extend to our propagator networks?
 - Can rewrite rules be NTT-typed? (Rule type = input pattern type → output pattern type)
 - What is the right cost model for rewrite selection? (Tropical semiring? Interaction net optimal reduction?)
+
+** UCS (Universal Constraint Solving)  — /Domain-polymorphic ~#=~ operator selecting solving strategy by algebraic class/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-03-28_UCS_MASTER.md][2026-03-28_UCS_MASTER.md]] |
+| *Thesis*         | Any domain with sufficient algebraic structure supports automatic constraint solving via propagators. A domain-polymorphic ~#=~ operator selects solving strategy based on the domain's algebraic class. The propagator network IS the universal constraint solver — each algebraic embedding (Boolean, Heyting, residuated, quantale, distributive, free) brings its own solving toolkit. |
+| *Status*         | Stage 0/1 — research phase. R0-R2 research tracks ⬜; implementation tracks 1-4 ⬜. Depends on SRE Track 2F (algebraic foundation) ✅ + 2G (domain awareness) ✅. |
+| *Origin*         | [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]] + [[file:../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md][Algebraic Embeddings]] + PTF Track 1 residuation finding + NF-Narrowing vision |
+| *Contributes to PRN* | Algebraic class taxonomy, residuation patterns, CDCL integration with Boolean ATMS, quantale-based resource constraints |
+
+*** Tracks
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| R0 | Research: Universal Constraint Solving Foundations | ⬜ | Bulatov-Zhuk dichotomy, DPLL(T), residuated solving |
+| R1 | Research: NF-Narrowing as Residuation | ⬜ | PTF Track 1 confirmed first-order; extend to general case |
+| R2 | Research: ~#=~ Operator Design | ⬜ | Domain-polymorphic unification; type-level dispatch via algebraic class |
+| 1 | ~#=~ Prototype — structural unification across domains | ⬜ | SRE Track 2F ✅ + 2G ✅ |
+| 2 | Residuation Engine — automatic backward propagators | ⬜ | R1 |
+| 3 | CDCL Integration — SAT optimization for Boolean domains | ⬜ | BSP-LE Track 2 ✅ |
+| 4 | Resource Constraints — quantale-based solving | ⬜ | For QTT multiplicities, session linearity, effect resource tracking |
+
+*** Cross-Cutting Nature
+
+UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infrastructure). It adds the ~#=~ surface form and the algebraic-class dispatch that selects the right solver for each domain. Where OE adds cost enrichment, UCS adds constraint expressivity — both consume the same propagator substrate.
 
 ** PPN (Propagator-Parsing-Network)  — /Application: grammar and parsing on the network/
 
@@ -586,6 +617,40 @@ Track 9 (founded 2026-03-21) was the first Stage-1 research; the vision since en
 
 Future tracks (not yet scheduled): reverse-direction lambda passing, compound type marshaling (PVec/Map/Set/Sigma/custom data), effect-typed FFI (capabilities), additional language backends (JS/Python/Wasm/C ABI), module system polyglot, cost-aware FFI (tropical-quantale fuel for foreign call cost). See [[file:2026-04-28_FFI_MASTER.md][FFI Master]] for full vision and discipline.
 
+** SH (Self-Hosting)  — /Architectural endpoint: Prologos compiler as a propagator-network value, native via LLVM/
+
+| | |
+|------------------+------|
+| *Master Roadmap* | [[file:2026-04-30_SH_MASTER.md][2026-04-30_SH_MASTER.md]] |
+| *Thesis*         | Prologos self-hosts in stages, not all at once. Substrate retirement (runtime Racket → native via LLVM) and compiler retirement (Racket-hosted compiler → Prologos-hosted compiler) are distinct retirement timelines that can be pursued independently. The architectural endpoint is a Prologos compiler running as a propagator-network value, compiled to native code via LLVM, with no host-language dependency at runtime or build time. |
+| *Status*         | Stage 0/1 — series founded 2026-04-30. Track 0 founding artifacts ✅ (master + path note + super-optimization research). Tracks 1-10 ⬜ pending. Implementation gates on PReduce delivery (cross-series dependency) and PPN Track 4 (compiler-IS-network architectural prerequisite). |
+| *Origin*         | [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] (trajectory analysis); series formally opened 2026-04-30. Companion notes: [[file:../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md][Self-Hosting Path and Bootstrap Stages]], [[file:../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md][Propagator Network as Super-Optimizing Compiler]]. |
+| *Critical cross-series dependency* | PReduce ([[file:2026-05-02_PREDUCE_MASTER.md][master]]) — delivers algorithmic perf foundation that makes self-hosted Prologos competitive at runtime. SH Track 4 (production LLVM substrate) gates on PReduce delivery for the super-optimization claim. |
+
+*** Tracks
+
+| Track | Description | Status | Depends On |
+|-------+-------------+--------+------------|
+| 0 | Series founding research synthesis (master + path note + super-optimization note) | ✅ | — |
+| 1 | ~.pnet~ network-as-value — extend serialization to round-trip propagator structure | ⬜ | PPN Track 4 + NTT progress |
+| 2 | Low-PNet IR design — lowering layer between propagator network and LLVM IR | ⬜ | Track 1 |
+| 3 | LLVM substrate PoC — minimal native loader for tight Prologos slice | ⬜ | Tracks 1-2 |
+| 4 | Production LLVM substrate — full implementation of cells/propagators/BSP/CHAMP/ATMS | ⬜ | Tracks 1-3, 5-6, *PReduce delivery* |
+| 5 | Type erasure boundary — what survives runtime (QTT m0, capabilities, sessions) | ⬜ | Cross-cutting prerequisite for Track 4 |
+| 6 | Runtime services — GC + concurrency + I/O for native substrate | ⬜ | Track 3 PoC informs choices |
+| 7 | FFI direction inversion — Prologos calls native libs (substrate-call boundary) | ⬜ | FFI Series + Track 4 |
+| 8 | WASM target alongside LLVM | ⬜ | Track 2 (decoupled IR) + Track 4 |
+| 9 | Compiler-in-Prologos (stage B) — port elaborator to Prologos | ⬜ | Track 4 (substrate native) + language expressivity |
+| 10 | Bootstrap verification (stage C) — Diverse Double Compilation + reproducible builds | ⬜ | Track 9 |
+
+*** Two-Axis Retirement Picture
+
+- *Axis 1 (Runtime Racket retirement)*: Tracks 1-8 — substrate primitives implemented natively. Stage A → A.5: deployed Prologos programs run as native binaries, no Racket at user runtime.
+- *Axis 2 (Compile-time Racket retirement)*: Track 9 (with Track 5 as cross-cutting prerequisite). Stage A.5 → B: compiler ported to Prologos, running on already-native substrate.
+- *Track 10 (bootstrap verification)*: Stage B → C — Diverse Double Compilation, reproducible builds, trust-trusting-trust closure.
+
+The two axes can run in parallel after Track 4 lands. Stage A.5 alone (axis 1 complete) produces a Prologos that's deployable without Racket while still being developed in Racket.
+
 * Completed Standalone Tracks (not part of a Series)
 
 These are Tracks that were independently scoped and completed outside of
@@ -665,13 +730,6 @@ See =docs/research/= for the full set.
 | [[file:../research/2026-03-28_MODULE_THEORY_LATTICES.md][Module Theory on Lattices]] | 2026-03-28 | Foundational algebraic framework: endomorphism rings, quotient modules (e-graphs), residuation. Cross-cuts PRN (rewriting formalism), SRE (relations as sub-rings), BSP-LE (e-graphs, ATMS), CIU (trait morphisms), PM (submodule decomposition), PAR (independence = parallelizability), PTF (propagator kind algebra), PPN (filtration, parse ambiguity). |
 | [[file:../research/2026-03-28_ALGEBRAIC_EMBEDDINGS_LATTICES.md][Algebraic Embeddings on Lattices]] | 2026-03-28 | Heyting (errors), Boolean (ATMS/SAT), residuated (backward propagation), quantale (resources), matroid (constraints), topology (domains). Universal engine vision: one propagator engine, many algebraic theories. |
 | [[file:../research/2026-03-28_UNIVERSAL_CONSTRAINT_SOLVING.md][Universal Constraint Solving]] | 2026-03-28 | Bulatov-Zhuk dichotomy, DPLL(T), lattice-based solving, residuated constraints. Domain-polymorphic ~#=~ operator. Connects SRE algebraic foundation to UCS series. |
-
-** UCS Series: Universal Constraint Solving
-
-| Track | Description | Status | Master |
-|-------+-------------+--------+--------|
-| R0-R2 | Research: foundations, NF-Narrowing, ~#=~ design | ⬜ | [[file:2026-03-28_UCS_MASTER.md][UCS Master]] |
-| 1-4 | Implementation: ~#=~ prototype, residuation, CDCL, quantale | ⬜ | |
 
 ** Completed/Background Research
 
