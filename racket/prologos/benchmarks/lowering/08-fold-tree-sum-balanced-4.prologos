@@ -1,0 +1,24 @@
+ns benchmarks::lowering::08-fold-tree-sum-balanced-4
+
+;; Balanced binary tree with 4 leaves carrying values 1, 2, 3, 4.
+;; Exercises Gate 1 rev 1.5 with a TWO-recursive-field constructor
+;; (`branch : Tree A -> Tree A`), exercising the binding-order fix
+;; (bvar 0 = LAST-listed binder) under both static-eval and the
+;; runtime build-ctor-match path.
+;;
+;; Tree: branch (branch leaf-1 leaf-2) (branch leaf-3 leaf-4).
+;; sum = 1+2+3+4 = 10. exit code = 10.
+;; :expect-exit 10
+
+data Tree {A}
+  leaf   : A
+  branch : Tree A -> Tree A
+
+spec sum-tree (Tree Int) -> Int
+defn sum-tree
+  | leaf v     -> v
+  | branch l r -> [int+ [sum-tree l] [sum-tree r]]
+
+def main : Int :=
+  [sum-tree (branch Int (branch Int (leaf Int 1) (leaf Int 2))
+                        (branch Int (leaf Int 3) (leaf Int 4)))]

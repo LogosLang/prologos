@@ -410,21 +410,23 @@ relational subsystem).
     that replaces shape-asserting tests with semantics-asserting
     tests would unlock more aggressive constant folding.
   - **Static-eval folds many benchmark workloads to literals**: a
-    side-effect of Gate 2 + Gate 1 rev 1.5 is that many of the
-    `tools/bench-native.rkt` algorithms (`fib`, `sum`, `factorial`,
-    `sumsq`, `pell`, `pow2`) now compile to a single literal cell
-    when invoked with concrete N — fires=0, cells=1, sched-time=0.
-    Wall time is just LLVM startup (~6ms). The `pair-fib`,
-    `helpered-fib`, `dual-acc` algorithms that use pair-typed state
-    still run through the propagator network (static-eval doesn't
-    fold pair construction). Programs with runtime input (currently
-    none in the bench suite) would also be unaffected.
+    side-effect of Gate 2 + Gate 1 rev 1.5 is that many algorithms
+    (`fib`, `sum`, `factorial`, `sumsq`, `pell`, `pow2`) now compile
+    to a single literal cell when invoked with concrete N — fires=0,
+    cells=1, sched-time=0. Wall time is just LLVM startup (~6ms).
+    The pair-state variants (`pair-fib`, `helpered-fib`, `dual-acc`)
+    still run through the propagator network because static-eval
+    doesn't fold pair construction.
 
-    The benchmarks that DO still exercise the propagator network
-    are now the canonical performance tests; the folded ones serve
-    as a static-eval smoke test rather than a runtime measurement.
-    A future bench addition could use a sentinel "external-input"
-    primitive to defeat folding for genuinely-runtime workloads.
+    This insight motivated rebuilding the perf suite as
+    `tools/bench-lowering.rkt` — see
+    `2026-05-02_LOWERING_PERF_SUITE.md`. The new suite drops the
+    previous N-sweep and hand-rolled propagator networks and instead
+    exercises a curated set of .prologos source files that span
+    every lowering gate, distinguishing programs that fold from
+    those that exercise the BSP scheduler. Both are valid; the
+    folded ones now serve as compile-pipeline smoke tests, the
+    propagator-network ones as runtime perf measurements.
 
 ---
 

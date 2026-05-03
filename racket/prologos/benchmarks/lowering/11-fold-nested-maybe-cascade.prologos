@@ -1,0 +1,23 @@
+ns benchmarks::lowering::11-fold-nested-maybe-cascade
+
+;; Nested Maybe match cascade. Tests Gate 1 rev 1.5 with single-field
+;; ctors nested THREE levels deep — `some (some (some 7))` matched by
+;; a triple-nested match cascade that unwraps each Maybe layer and
+;; returns the inner Int.
+;;
+;; This is the maximum-fanout single-field static-fold test: 3 ctor
+;; layers + 6 match arms + 1 final scalar.
+;; exit code = 7.
+;; :expect-exit 7
+
+data Maybe {A}
+  none
+  some : A
+
+def main : Int := match (some (Maybe (Maybe Int)) (some (Maybe Int) (some Int 7)))
+  | none           -> 100
+  | some level1 -> match level1
+                     | none           -> 50
+                     | some level2 -> match level2
+                                        | none   -> 25
+                                        | some x -> x

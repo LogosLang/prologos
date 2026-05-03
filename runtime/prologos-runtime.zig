@@ -139,7 +139,7 @@ extern fn prologos_hamt_size(h: HamtRoot) u32;
 // CRITICAL: the CLOCK_MONOTONIC integer is OS-specific. Linux uses 1,
 // macOS uses 6. Hard-coding 1 on macOS makes clock_gettime return -1
 // silently and now_ns() return 0 — which blinds every PNET-STATS
-// run_ns measurement on macOS. Found 2026-05-02 when the bench-suite
+// run_ns measurement on macOS. Found 2026-05-02 when the lowering bench harness
 // reported 0 ns for every config.
 const timespec = extern struct {
     sec: i64,

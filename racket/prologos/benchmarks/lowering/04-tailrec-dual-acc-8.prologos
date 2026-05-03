@@ -1,0 +1,23 @@
+ns benchmarks::lowering::04-tailrec-dual-acc-8
+
+;; Dual accumulator: pair-state tail-rec computing (sum 1..N + product 1..N).
+;; State: <s * p> where s accumulates the sum, p accumulates the product.
+;;
+;; Step from (s, p, i) → (s+i, p*i, i-1). Loop exits when i ≤ 0,
+;; returning s + p.
+;;
+;; Exercises: pair-state tail-rec, multi-cell update per iteration
+;; (both s and p cells transition each round), independent leaf
+;; lowering of pair components.
+;;
+;; For N=8: sum = 36, product = 40320. Total = 40356.
+;; exit code (mod 256) = 164.
+;; :expect-exit 164
+
+spec dual-acc <Int * Int> -> Int -> Int
+defn dual-acc [p i]
+  match [int-le i 0]
+    | true  -> [int+ [fst p] [snd p]]
+    | false -> [dual-acc [pair [int+ [fst p] i] [int* [snd p] i]] [int- i 1]]
+
+def main : Int := [dual-acc [pair 0 1] 8]

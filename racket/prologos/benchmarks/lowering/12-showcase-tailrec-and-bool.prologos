@@ -1,0 +1,28 @@
+ns benchmarks::lowering::12-showcase-tailrec-and-bool
+
+;; Combined showcase: a tail-rec pair-state computation feeds its
+;; result into a Bool comparison + match dispatch. Exercises:
+;;
+;;   - Tail-rec with pair-state (runs the BSP scheduler)
+;;   - Comparison ops (int-lt) on the tail-rec result
+;;   - Match dispatch on the comparison Bool
+;;   - Final arithmetic on the matched arm
+;;
+;; The tail-rec subgraph and the Bool/match subgraph are wired
+;; together at lowering time — the full program is one composite
+;; propagator network.
+;;
+;; Computes fib(20) (= 6765), then checks if > 1000; since true,
+;; returns fib(20) - 6700 = 65. exit code = 65.
+;; :expect-exit 65
+
+spec fib-pair <Int * Int> -> Int -> Int
+defn fib-pair [p n]
+  match [int-lt n 1]
+    | true  -> [fst p]
+    | false -> [fib-pair [pair [snd p] [int+ [fst p] [snd p]]] [int- n 1]]
+
+def main : Int :=
+  match [int-lt 1000 [fib-pair [pair 0 1] 20]]
+    | true  -> [int- [fib-pair [pair 0 1] 20] 6700]
+    | false -> 0

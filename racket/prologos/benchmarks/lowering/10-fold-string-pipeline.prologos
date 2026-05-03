@@ -1,0 +1,14 @@
+ns benchmarks::lowering::10-fold-string-pipeline
+
+;; String pipeline: concatenate three string literals, then take
+;; length. Tests Gate 3 (compile-time foreign-call folding) over a
+;; chain of foreign function calls, demonstrating that the result
+;; lowers as a literal scalar even though strings have no native
+;; runtime representation in rev 1.0.
+;;
+;; "ab" ++ "cde" ++ "fg" = "abcdefg" → length = 7. exit code = 7.
+;; :expect-exit 7
+
+require [prologos::data::string :refer [length append]]
+
+def main : Int := length (append (append "ab" "cde") "fg")

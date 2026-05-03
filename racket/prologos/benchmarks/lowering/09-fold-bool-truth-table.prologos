@@ -1,0 +1,17 @@
+ns benchmarks::lowering::09-fold-bool-truth-table
+
+;; Boolean ops compound: tests that the standard library Bool ops
+;; (`and`, `or`, `xor`, `not`, `implies`) compose cleanly through
+;; the Gate 4 functional sub-gate. Folds at compile time.
+;;
+;; Expression: (true and (false or (not false))) xor (true implies false).
+;;           = (true and (false or true))         xor (false)
+;;           = (true and true)                    xor false
+;;           = true                               xor false
+;;           = true.
+;; exit code = 1.
+;; :expect-exit 1
+
+require [prologos::data::bool :refer [and or xor not implies]]
+
+def main : Bool := xor (and true (or false (not false))) (implies true false)

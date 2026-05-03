@@ -1,0 +1,20 @@
+ns benchmarks::lowering::05-fold-fib-non-tail-15
+
+;; Non-tail-recursive fib(15). Without Gate 2 (lowering-yolo), this
+;; would error because the recursive call sits inside `int+`. With
+;; Gate 2's static-eval pass, the entire fib(15) call tree folds at
+;; compile time to the literal 610.
+;;
+;; Exercises: Gate 2 (PReduce-as-static-eval) over a non-tail tree
+;; recursion of branching factor 2.
+;;
+;; fib(15) = 610; exit code (mod 256) = 98.
+;; :expect-exit 98
+
+spec fib Int -> Int
+defn fib
+  | 0 -> 0
+  | 1 -> 1
+  | n -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+def main : Int := [fib 15]
