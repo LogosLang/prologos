@@ -44,7 +44,8 @@
                   net-cell-write
                   net-add-propagator
                   net-add-fire-once-propagator
-                  run-to-quiescence)
+                  run-to-quiescence
+                  current-bsp-fire-round?)
          (only-in "sre-core.rkt" make-sre-domain register-domain!)
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)
          (only-in "reduction.rkt" nf)  ;; for preduce-or-nf diagnostic helper
@@ -362,15 +363,35 @@ the topology stratum (Phase 4)" name)))
      (define f-static (statically-reducible-lam f))
      (cond
        [f-static
-        ;; Static β: compile arg, then body in extended env.
+        ;; Static β (Phase 3): compile arg, then body in extended env.
         (define-values (cid-arg net1) (compile-expr arg env net))
         (compile-expr (expr-lam-body f-static) (cons cid-arg env) net1)]
        [else
-        (raise-unsupported!
-         'expr-app 'phase-4-dynamic-beta
-         (format "PReduce-lite Phase 3: application function position \
-is not statically a lambda — needs Phase 4 (dynamic β via topology). \
-Function form: ~v" f))])]
+        ;; ----- Phase 4: dynamic β -----
+        ;; The function position is not statically a lambda. Compile both
+        ;; sides; install a fire-once propagator on the function-position
+        ;; cell. When the function value is concrete (a preduce-lam), the
+        ;; propagator compiles the body in the appropriate env (captured
+        ;; env extended with arg-cid) and threads the result via an
+        ;; identity propagator to cid-out.
+        ;;
+        ;; The body compilation happens INSIDE the fire-fn but is wrapped
+        ;; in (parameterize ([current-bsp-fire-round? #f]) ...) so the
+        ;; new propagators auto-schedule on the worklist for next round
+        ;; (otherwise net-add-propagator's scheduling logic skips during
+        ;; fire — see propagator.rkt:1513-1515). This sidesteps needing
+        ;; a separate preduce-topology cell + handler at the cost of
+        ;; brief BSP-discipline circumvention; the new propagators ARE
+        ;; only fired in the NEXT round (after this round's writes
+        ;; merge), so the discipline is preserved at the BSP level.
+        (define-values (cid-f net1) (compile-expr f env net))
+        (define-values (cid-arg net2) (compile-expr arg env net1))
+        (define-values (net3 cid-out)
+          (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
+        (define-values (net4 _)
+          (net-add-fire-once-propagator net3 (list cid-f) (list cid-out)
+                                        (make-app-fire cid-f cid-arg cid-out)))
+        (values cid-out net4)])]
 
     ;; ----- All other nodes: deferred to later phases -----
     [_
@@ -420,6 +441,55 @@ the relevant phase lands."
 (define (statically-reducible-lam-no-fvar-cycle v name)
   (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
     (statically-reducible-lam v)))
+
+;; ============================================================
+;; Phase 4 helpers — dynamic β
+;; ============================================================
+
+;; make-app-fire — fire-once propagator for dynamic β.
+;;
+;; Triggers when cid-f resolves. Reads the function value; if it's a
+;; preduce-lam, compiles the body in (cons cid-arg captured-env) and
+;; installs an identity propagator from body-result-cid to cid-out.
+;;
+;; The body compilation is wrapped to disable the BSP-fire-round flag,
+;; allowing newly-installed propagators to auto-schedule (see comment
+;; in expr-app dispatch above). This is correctness-preserving: the
+;; new propagators don't fire in the CURRENT round (the network update
+;; is returned as the fire-fn result and merged at round end), they
+;; fire in the NEXT round once their input cells have values.
+(define (make-app-fire cid-f cid-arg cid-out)
+  (lambda (net)
+    (define f-val (net-cell-read net cid-f))
+    (cond
+      [(preduce-bot? f-val) net]
+      [(preduce-lam? f-val)
+       (define body (preduce-lam-body f-val))
+       (define captured-env (preduce-lam-captured-env f-val))
+       (define new-env (cons cid-arg captured-env))
+       (define-values (cid-body net1)
+         (parameterize ([current-bsp-fire-round? #f])
+           (compile-expr body new-env net)))
+       ;; Bridge the body's result cell to the application's result cell
+       ;; via an identity propagator.
+       (define-values (net2 _)
+         (parameterize ([current-bsp-fire-round? #f])
+           (net-add-fire-once-propagator
+            net1 (list cid-body) (list cid-out)
+            (make-identity-fire cid-body cid-out))))
+       net2]
+      [else
+       (error 'preduce
+              "expected lambda value at app function position, got: ~v" f-val)])))
+
+;; make-identity-fire — forwards a value from cid-in to cid-out when
+;; cid-in resolves. Used to bridge body-result cells to application-
+;; result cells in dynamic β.
+(define (make-identity-fire cid-in cid-out)
+  (lambda (net)
+    (define v (net-cell-read net cid-in))
+    (if (preduce-bot? v) net
+        (net-cell-write net cid-out v))))
 
 ;; ============================================================
 ;; Phase 2 helpers
