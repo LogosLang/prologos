@@ -211,7 +211,7 @@ PM 8E (17 registries as cells)   ↔   SRE Track 2 (elaborator-on-SRE)
                                       SRE Track 3 (sessions)
                                       SRE Track 4 (pattern compilation)
 PM 8F (meta-info as cells)       ↔   SRE Track 5 (reduction-on-SRE)
-PM Track 9 = SRE Track 5
+PM Track 9 → PReduce Series ✅ (2026-05-02); SRE Track 6 = PReduce
 PM Track 10                      =   SRE Track 6 (module loading)
 #+END_SRC
 
@@ -274,7 +274,7 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
 
 *Theory (ongoing, fed by application tracks):*
-- PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReductions)
+- PRN: Hyperlattice rewriting formalism (grows from PPN + SRE + PReduce)
 - NTT: Network type theory (implementation deferred until PPN matures)
 
 *** Two-Layer Architecture
@@ -364,7 +364,7 @@ When elaboration, resolution, matching, and reduction all use the SRE:
 
 | | |
 |------------------+------|
-| *Thesis*         | Parsing, structural reasoning, reduction, and logical inference are all instances of typed hyperlattice rewriting on propagator networks. PRN is the theoretical foundation that the application series (PPN, SRE, PReductions, BSP-LE) instantiate and contribute insights back to. |
+| *Thesis*         | Parsing, structural reasoning, reduction, and logical inference are all instances of typed hyperlattice rewriting on propagator networks. PRN is the theoretical foundation that the application series (PPN, SRE, PReduce, BSP-LE) instantiate and contribute insights back to. |
 | *Master Roadmap* | [[file:2026-03-26_PRN_MASTER.md][2026-03-26_PRN_MASTER.md]] |
 | *Status*         | Stage 0 research. Emerges from application track discoveries. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], SRE Track 0 PIR (SRE = DPO hyperedge replacement) |
@@ -379,7 +379,7 @@ PRN (theory — what ARE the universal rewriting primitives?)
   │
   ├── fed by PPN: parse lattice design, ambiguity patterns, bidirectional flow
   ├── fed by SRE: form registry = rewrite rules, relation-parameterized dispatch
-  ├── fed by PReductions: e-graph saturation, tropical cost extraction, confluence
+  ├── fed by PReduce: e-graph saturation, tropical cost extraction, confluence
   ├── fed by BSP-LE: bilattice rewriting, NAF as non-monotone rewrite, tabling
   │
   └── feeds back: when two applications discover the same primitive,
@@ -466,7 +466,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 - SRE form registry IS a hypergraph grammar
 - ATMS provides search strategy for ambiguous parses / conflicting rewrites
 - NTT types grammar rules (type-safe grammar extensions)
-- PReductions shares DPO rewriting infrastructure (PRN convergence point)
+- PReduce shares DPO rewriting infrastructure (PRN convergence point)
 - Goodman's semiring parsing: same parser parameterized by semiring (Boolean→recognition, tropical→optimization, forest→all parses)
 
 *** Priority Rationale
@@ -492,7 +492,7 @@ trajectory.
 |-------+-------------+--------+---------|
 | 0 | Tropical semiring lattice design + cell product enrichment | ⬜ | All series (cross-cutting) |
 | 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2 |
-| 2 | Cost-weighted rewriting (tropical extraction on e-graphs) | ⬜ | PM Track 9, SRE Track 5 |
+| 2 | Cost-weighted rewriting (tropical extraction on e-graphs) | ⬜ → consumed by PReduce Series | First instantiation in PPN 4C tropical addendum (Phase 1B); PReduce Track 4 inherits |
 | 3 | Cost-bounded exploration (replace fuel limits with tropical thresholds) | ⬜ | BSP-LE, NTT stratification |
 | 4 | Weighted constraint solving (tropical enrichment on LE/NF-Narrowing) | ⬜ | BSP-LE, FL-Narrowing |
 
@@ -559,7 +559,7 @@ Track 9 (founded 2026-03-21) was the first Stage-1 research; the vision since en
               ┌────────────┴──────┐   ┌───┴───────────────┐
               │                   │   │                   │
     ┌─────────┴────┐  ┌──────────┴───┴─┐  ┌─────────────┴──┐
-    │ PPN          │  │ SRE            │  │ PReductions    │
+    │ PPN          │  │ SRE            │  │ PReduce    │
     │ (parsing)    │  │ (structural)   │  │ (reduction)    │
     │              │  │                │  │                │
     │ PRIORITY:    │  │ Track 2C:      │  │ E-graphs,      │
@@ -593,7 +593,7 @@ Track 9 (founded 2026-03-21) was the first Stage-1 research; the vision since en
                                   Track 4 → PAR Series.
 
     NTT (type theory) ←──── types everything; crystallized from PM,
-                             extended by PPN/SRE/PReductions discoveries
+                             extended by PPN/SRE/PReduce discoveries
 
     CIU (collections) ←──── blocked on SRE Track 2C (trait dispatch)
 #+END_SRC
@@ -710,18 +710,30 @@ See =docs/research/= for the full set.
 
 | Document | Date | Stage | Feeds Into |
 |----------+------+-------+------------|
+| [[file:../research/2026-03-22_CATEGORICAL_FOUNDATIONS_TYPED_PROPAGATOR_NETWORKS.md][Categorical Foundations of Typed Propagator Networks]] | 2026-03-22 | 0-1 ✅ | NTT Research Doc 1; foundational citation in PRN, PReduce, SH masters |
+| [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][Structural Reasoning Engine]] | 2026-03-22 | 0-1 | SRE Series scoping |
+| [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting + Propagator Parsing]] | 2026-03-24 | 0-1 | PPN, PReduce; landscape survey of DPO + e-graphs + interaction nets + GoI |
+| [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization + Network Architecture]] | 2026-03-24 | 0 | PReduce, OE Series; cost-weighted rewriting + ATMS-guided search |
+| [[file:../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md][Lattice Foundations for PPN]] | 2026-03-26 | 0-1 | PPN Track 0 (lattice design) |
+| [[file:../research/2026-03-26_KAN_EXTENSIONS_ATMS_GFP_PARSING.md][Kan/ATMS/GFP for PPN]] | 2026-03-26 | 0-1 | PPN, BSP-LE; 4-level optimization strategy (ATMS + Left/Right Kan + tropical) |
+| [[file:../research/2026-03-26_TREE_REWRITING_AS_STRUCTURAL_UNIFICATION.md][Tree Rewriting = Structural Unification]] | 2026-03-26 | 0 | SRE Track 2D (rewrite relation) |
 | [[file:../research/2026-03-28_PROPAGATOR_TAXONOMY.md][Propagator Taxonomy — Parallel Profiles]] | 2026-03-28 | 0 | PTF Series Track 0 |
 | [[file:../research/2026-03-28_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Propagator Scheduling]] | 2026-03-28 | 0-1 | PAR Track 2 |
-| [[file:../research/2026-03-22_STRUCTURAL_REASONING_ENGINE.md][Structural Reasoning Engine]] | 2026-03-22 | 0-1 | SRE Series scoping |
-| Categorical Foundations of Typed Propagator Networks | 2026-03-22 | 0-1 🔄 | NTT Research Doc 1 |
-| Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 |
-| Language Design: Network Type Ergonomics | — | 2 ⬜ | NTT Research Doc 3 |
-| Engineering: Self-Hosting via Network Types | — | 1-2 ⬜ | NTT Research Doc 4 |
-
-| [[file:../research/2026-03-26_LATTICE_FOUNDATIONS_PPN.md][Lattice Foundations for PPN]] | 2026-03-26 | 0-1 | PPN Track 0 (lattice design) |
-| [[file:../research/2026-03-26_KAN_ATMS_GFP_PPN.md][Kan/ATMS/GFP for PPN]] | 2026-03-26 | 0-1 | PPN, BSP-LE (demand lattice, residuation) |
-| [[file:../research/2026-03-26_TREE_REWRITING_STRUCTURAL_UNIFICATION.md][Tree Rewriting = Structural Unification]] | 2026-03-26 | 0 | SRE Track 2D (rewrite relation) |
-| [[file:../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][Parallel Propagator Scheduling]] | 2026-03-26 | 0-1 | PAR Series, BSP-LE Track 4 |
+| [[file:../research/2026-03-30_SEXP_IR_TO_PROPAGATOR_COMPILER.md][S-Expression IR to Propagator Compiler]] | 2026-03-30 | 0-1 | SH Series founding (trajectory analysis) |
+| [[file:../research/2026-04-03_ADHESIVE_CATEGORIES_PARSE_TREES.md][Adhesive Categories and Parse Trees]] | 2026-04-03 | 0-1 | SRE Track 2D, PReduce; adhesive-DPO formal foundations (Biondo et al. CALCO 2025) |
+| [[file:../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md][Hypercube BSP-LE Design Addendum]] | 2026-04-08 | Stage 1 | BSP-LE Track 2B; Q_n hypercube + Gray code + bitmask subcube |
+| [[file:../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md][Tropical Quantale Research]] | 2026-04-21 | 1 | PPN 4C Phase 1B + PReduce Track 4; ~1000-line deep formal grounding |
+| [[file:../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md][Attribute Grammar Substrate Unification Vision]] | 2026-04-22 | 0-1 | PPN Track 4D (proposed) |
+| [[file:../research/2026-04-23_CAPABILITY_SAFETY_DATALOG_HYPERGRAPHS.md][Capability Safety as Datalog Hypergraphs]] | 2026-04-23 | 0-1 | Multi-agent vision, IPVM-style mobility; Spera papers + OCap disambiguation |
+| [[file:../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md][Lattice Variety + Canonical Form for SRE]] | 2026-04-30 | 0-1 | SRE Track 2I source; per-domain canonical-form work |
+| [[file:../research/2026-04-30_WIDENING_NARROWING_INFINITE_DOMAINS_FOR_UCS.md][Widening + Narrowing Infinite Domains for UCS]] | 2026-04-30 | 0-1 | UCS Series; widening/narrowing primitives |
+| [[file:../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md][Lattice Hierarchy + Distributivity for Propagators]] | 2026-04-30 | 0-1 | PTF Track 2 (added); §4 Phase 3c distributivity-flip worked example |
+| [[file:../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md][Self-Hosting Path + Bootstrap Stages]] | 2026-04-30 | 0-1 | SH Series companion (path note); A → A.5 → B → C trajectory |
+| [[file:../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md][Propagator Network as Super-Optimizing Compiler]] | 2026-04-30 | 0-1 | SH Series companion (deep research); 12-dim comparison |
+| [[file:../research/2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md][Concurrency Primitives for LLVM Substrate]] | 2026-05-02 | 1 | SH Track 6 (runtime services); collaborator's Zig-kernel branch |
+| Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 (pending) |
+| Language Design: Network Type Ergonomics | — | 2 ⬜ | NTT Research Doc 3 (pending) |
+| Engineering: Self-Hosting via Network Types | — | 1-2 ⬜ | NTT Research Doc 4 (pending) |
 
 ** Cross-Cutting Theory
 
@@ -770,67 +782,76 @@ Key high-priority deferred items now absorbed into Series:
 
 * Current Implementation Order
 
-The following sequence reflects the current prioritization, informed by
-dependency analysis and leverage:
+The following sequence reflects the current prioritization (updated 2026-05-02).
+For per-series detail see the priority ordering inside the SRE section above.
 
 #+begin_example
-  1. PUnify Cleanup          (pre-Series: 5 parity bugs + bridge retirement)  BLOCKED (Option hang)
-  2. BSP-LE Track 0          (Allocation Efficiency)                          ✅ (PIR 00a873f)
-  2b. CHAMP Performance       (Owner-ID transients — standalone)              ✅ (PIR b748e5d)
-  3. CIU Track 0             (Trait Hierarchy Audit)                          ✅ (commit f62fc06)
-  4. PM Track 8              (Parts A/B/C/D — all complete)                   ✅ (PIR fe2673e)
-  5. NTT Research Doc 1      (Categorical Foundations)                        ← ACTIVE
-  6. NTT Research Doc 2      (Network Type Theory — discussion)              ← NEXT
-  7. SRE Series scoping      (Tracks 0–4, informed by NTT research)
-  8. PM Track 8E             (17 remaining registries as cells)
-  9. CIU Tracks 1–5          (implementation on Track 8 infrastructure)
- 10. BSP-LE Tracks 1–5       (logic engine on Track 8 infrastructure)
- 11. PM Track 8F → 9 → 10    (meta-info cells, reduction, box elimination)
+  Active (in flight):
+   - SRE Track 2I             (SD∨/SD∧ checks; Phase 4 corrective + Phase 3 close)
+   - PPN 4C addendum Phase 1C (tropical fuel substrate; Pre-0 100% complete; hybrid pivot ready)
+   - PReduce Track 0          (series founding research synthesis; sub-deliverables 0.1, 0.2, 0.3)
+
+  Recently completed (since 2026-04-15):
+   - BSP-LE Track 2 + 2B      ✅ (ATMS solver + parallel + on-network, 2026-04-10/16)
+   - SRE Track 2D / 2G / 2H   ✅ (rewrite relation + algebraic property dispatch + type lattice quantale)
+   - PPN Track 3 / 4A / 4B    ✅ (parser on network + typing on network + 5 attribute domains)
+   - SH Series founded        ✅ (master + path note + super-optimization research, 2026-04-30)
+   - PReduce Series founded   ✅ (master + roadmap update, 2026-05-02)
+
+  Queued (gates known):
+   - PPN 4C remaining phases  (after Phase 1C lands — Phase 1E, Phase 2, Phase 3 union types via ATMS)
+   - PReduce Track 0.1        (architectural sketch — six NTT sub-models)
+   - PReduce Track 0.3        (.pnet extension + LLVM lowering interface — collaborator-relevant)
+   - PReduce Track 1+         (gates on PPN 4C Phase 1B + Track 0.1)
+   - SRE Track 3              (Trait Resolution-on-SRE; gates on Track 2F PIR + ideally 2G properties)
+   - PM Track 8E              (17 registries as cells; architectural cleanup)
+   - PM Track 12              (parameters → cells for module loading; longitudinal pattern 7 architectural response)
+
+  Future (gated on PPN 4 + PReduce + others):
+   - SH implementation tracks 1-10 (`.pnet` network-as-value first; LLVM substrate after PReduce)
+   - PPN Track 4D            (Attribute Grammar Substrate Unification; gates on 4C + T-3 + PM 12)
+   - CIU Tracks 3-5          (collection trait dispatch; gates on SRE Track 3)
+   - UCS implementation       (gates on R0-R2 research + SRE Track 2F PIR)
 #+end_example
 
-*Rationale* (updated post-Track 8):
+*Sequencing principles* (post-Track-8 thinking, post-PPN-4 affirmation, post-PReduce-founding):
 
-- *NTT research before further infrastructure*: The SRE + NTT insights
-  fundamentally reframe how we approach PM Tracks 8E–10, BSP-LE, and
-  CIU. Building infrastructure without the type-informed data model means
-  retrofitting later. Research Docs 1–2 establish the categorical
-  foundations and type tower that inform the SRE form registry design.
+- *PReduce-first ordering for SH*: PReduce delivers the algorithmic foundation that lifts SH's architectural endpoint from "competitive" to "super-optimizing." SH master Track 4 (production LLVM substrate) gates on PReduce delivery. Within PReduce, Track 1 (e-class cell substrate) gates on PPN 4C Phase 1B (tropical-fuel substrate) — so PPN 4C remains highest leverage near-term.
 
-- *SRE Series scoping depends on NTT*: The SRE form registry's data model
-  should carry typing information from day one (lattice types, monotonicity
-  class, component types). This "types-ready" approach means the transition
-  from annotated-but-unchecked to checked is a toggle, not a rewrite.
+- *Active Tracks have right-of-way*: SRE 2I Phase 4 closes, then PPN 4C Phase 1C lands the tropical-fuel substrate, then PReduce Track 0 sub-deliverables can proceed in parallel with PPN 4C remaining phases.
 
-- *PM 8E before CIU/BSP-LE*: The 17 remaining registries (warnings,
-  debug, parsing state) becoming cells further reduces the imperative
-  surface area. CIU Track 3 (=surf-get= constraint generation) benefits
-  from registry cells being propagation-visible.
+- *PM 8E and 12 stay queued*: 8E (17 registries) is architectural cleanup with deferred urgency; 12 (parameters → cells) is the architectural response to longitudinal pattern 7 but gates other work that can advance without it.
 
-- *PM Tracks 8F–10 may become Track Series* given scope: meta-info as
-  cells (8F), reduction as propagators (9), and network-first init (10)
-  each have enough internal structure for multiple sub-tracks.
-
-Steps 9 and 10 are not strictly sequential — CIU and BSP-LE Tracks can
-interleave based on priority and what's unblocked.
+- *SRE Track 2F PIR is a known gap*: PIR outstanding for completed work. Backfill when context permits.
 
 * Cross-Series Dependencies
 
 #+begin_example
-  PM Track 8 ✅ ─────────────────┬──→ CIU Tracks 3–5 (UNBLOCKED)
-                                 ├──→ BSP-LE Tracks 1–5 (UNBLOCKED)
-                                 ├──→ PM Track 8E → 8F → 9 → 10
+  PM Track 8 ✅ ─────────────────┬──→ CIU Tracks 3–5 (UNBLOCKED, queued)
+                                 ├──→ BSP-LE Tracks 2 + 2B ✅ (2026-04-10/16)
+                                 ├──→ PM Track 8E → 8F ✅ → 10 ✅ → 10B ✅
                                  │
-  NTT Research Docs 1–4 ────────┼──→ SRE Series scoping
-                                 │     ├──→ SRE Track 0 (Form Registry) ✅
-                                 │     ├──→ SRE Track 1 (Subtyping Relations)
-                                 │     ├──→ SRE Track 2 (Elaborator-on-SRE)
-                                 │     └──→ SRE Tracks 3–4
+  NTT Research Doc 1 ✅ ────────┼──→ SRE Series scoping
+                                 │     ├──→ SRE Track 0 ✅
+                                 │     ├──→ SRE Track 1 + 1B ✅
+                                 │     ├──→ SRE Track 2 ✅
+                                 │     ├──→ SRE Track 2D / 2F / 2G / 2H ✅
+                                 │     ├──→ SRE Track 2I 🔄
+                                 │     └──→ SRE Tracks 2B, 2C, 2E, 3-7 ⬜
                                  │
-  SRE Track 0 ✅ ───────────────┴──→ PM Track 9 (Reduction-on-SRE)
-                                     PM Track 10 (Network-first init)
+  SRE Track 2H ✅ (Heyting) ───┴──→ PPN Track 4A / 4B ✅
+                                     PPN Track 4C 🔄 (tropical addendum D.2)
+                                     │
+                                     ├──→ PReduce Series ✅ (founded 2026-05-02)
+                                     │     ├──→ Track 0 sub-deliverables (architectural sketch / rule taxonomy / .pnet+LLVM interface)
+                                     │     ├──→ Track 1 (e-class cell substrate; gates on PPN 4C Phase 1B)
+                                     │     └──→ Tracks 2-9 (rewrite kinds, extraction, persistence, retirement)
+                                     │
+                                     └──→ SH Series ✅ (founded 2026-04-30)
+                                           ├──→ Track 1 (.pnet network-as-value; gates on NTT + PPN 4)
+                                           ├──→ Tracks 2-3 (Low-PNet IR + LLVM PoC)
+                                           ├──→ Track 4 (production LLVM substrate; gates on PReduce delivery)
+                                           └──→ Tracks 5-10 (erasure, runtime, FFI, WASM, compiler-in-Prologos, bootstrap)
 #+end_example
 
-The SRE Series is the new architectural foundation. NTT research informs
-its design. PM Tracks 8E–10 and SRE Tracks can interleave — each
-delivers standalone value. The convergence point (PM Track 10 + SRE
-Track 1) is where the box disappears and the elaborator runs on the SRE.
+*Architectural narrative*: SRE is the structural-reasoning foundation; PPN brings parsing + elaboration onto the network using SRE; PReduce brings reduction onto the network using SRE + tropical-quantale (first instantiated in PPN 4C Phase 1B); SH compiles the resulting propagator-network compiler to native code via LLVM. Each series delivers standalone value; the cross-series convergence is what makes the architectural endpoint shippable.
