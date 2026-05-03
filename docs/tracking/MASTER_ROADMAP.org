@@ -46,14 +46,14 @@ Audits) are defined.
 |-------+-------------+--------+--------------|
 | Track 8E | Remaining registries + warnings as cells (17 registries) | Scoped in [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Roadmap]] | Depends on Track 8D |
 | [[file:2026-03-24_PM_8F_METAS_AS_CELLS_DESIGN.md][Track 8F]] | Meta-info as cells (cell-id in expr-meta, cell-id zonk paths) | [[file:2026-03-24_PM_8F_PIR.md][PIR]] ✅ | 6/8 phases; 3.5% suite improvement; Phase 5+7 deferred to Track 10 |
-| Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Stage 1 research | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Research note]]; may become Track Series |
+| Track 9 | Reduction as Propagators — interaction nets, GoI, e-graph rewriting | Promoted to PReduce series 2026-05-02 | See [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]]; founding research [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][2026-03-21_TRACK9]] |
 | [[file:2026-03-24_PM_TRACK10_DESIGN.md][Track 10]] | Module loading on network + .pnet cache + fork isolation | ✅ [[file:2026-03-24_PM_TRACK10_PIR.md][PIR]] | Phases 0-5 complete. 240→134s (44%). .pnet cache, fork model, #lang dropped. 1315 lines deleted. |
 | [[file:2026-03-25_PM_TRACK10B_DESIGN.md][Track 10B]] | Foundation cleanup + session meta cells | ✅ [[file:2026-03-26_PM_TRACK10B_PIR.md][PIR]] | WS-A ✅: network-always, freeze, id-map, PUnify attempted. WS-B: session metas→cells ✅. Zonk elimination DEFERRED to SRE 2C, per-test DEFERRED to 10C. |
 | Track 10C | Per-test scheduling via Places | ⬜ | Depends on Track 10B. Largest file tail is 20.8s — file splitting gives ~3-5s marginal. Places needed for real per-test scheduling. Own design cycle. |
 | Track 11 | LSP Integration — incremental re-elaboration, live diagnostics | Not started | [[file:2026-03-19_TRACK10_DESIGN_NOTES.org][Early notes]]; depends on Track 9 + Track 10 |
 
 Track 8 (complete) unblocked CIU Series Tracks 3–5 and BSP-LE.
-Track 9 enables interaction-net reduction, GoI-style fixpoint computation, e-graph equality saturation.
+Track 9 promoted to PReduce series 2026-05-02 — enables interaction-net reduction, GoI-style fixpoint computation, e-graph equality saturation, tropical-quantale cost extraction. See [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]].
 Track 10 is the convergence point: .pnet cache (240s→144s), fork-based isolation, #lang prologos dropped.
 Track 10B completes the convergence: zonk elimination (~1300 lines), id-map removal, test-granular scheduling (<150s).
 See [[./2026-03-22_UNIFIED_PROPAGATOR_NETWORK_ROADMAP.md][Unified Propagator Network Infrastructure Roadmap]] for the comprehensive on-network/off-network boundary analysis.
@@ -457,31 +457,49 @@ and enrichment patterns that OTHER series consume. Each OE track delivers
 infrastructure (a tropical lattice, a cell product type, a cost-merge
 function) that plugs into PPN, PM, SRE, or BSP-LE.
 
-** PReductions  — /Application: reduction and optimization as rewriting on the network/
+** PReduce (Reductions on Propagators)  — /Application: reduction and optimization as rewriting on the network/
 
 | | |
 |------------------+------|
-| *Thesis*         | β/δ/ι reduction, equality saturation, and optimization are DPO rewrite rules on the propagator network. E-graphs provide the equality-aware substrate. Tropical semirings provide cost-optimal extraction. Interaction nets provide strong confluence. |
-| *Status*         | Stage 1 research. Currently scoped as PM Track 9. |
-| *Origin*         | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Track 9 Research Note]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
-| *Contributes to PRN* | E-graph saturation patterns, confluence analysis, tropical cost extraction, interaction net reduction strategies |
+| *Master Roadmap* | [[file:2026-05-02_PREDUCE_MASTER.md][2026-05-02_PREDUCE_MASTER.md]] |
+| *Thesis*         | Reduction lifts entirely onto the propagator network as e-graph + DPO + tropical-quantale + GoI on the same substrate that hosts parsing, typing, and elaboration. The imperative ~reduction.rkt~ is retired. The substrate IS the IR; rule application IS propagator firing; cost extraction IS quantale residuation; equivalence classes ARE shared cells. |
+| *Status*         | Stage 0/1 — series founded 2026-05-02. Track 0 research synthesis 🔄. Implementation tracks gate on PPN 4C Phase 1B (tropical-fuel substrate) + Track 0.1 closure. |
+| *Origin*         | [[file:2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md][Track 9 Research Note]] (founding, 2026-03-21); [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]]; [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]]; [[file:../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md][Tropical Quantale Research]]; series formally opened from research-conversation arc on PReduce scoping (2026-05-02). Spurred operationally by collaborator running independent LLVM lowering prototypes. |
+| *Contributes to PRN* | E-graph saturation patterns, confluence analysis (IN-fragment vs adhesive-DPO), tropical cost extraction, interaction-net-as-property declaration, retraction-bit persistence discipline |
+| *Consumed by SH* | Critical cross-series dependency — PReduce delivers the algorithmic perf foundation that lifts SH's architectural endpoint from "competitive" to "super-optimizing." SH Track 4 (production LLVM substrate) gates on PReduce delivery. |
 
-*** Tracks (Proposed)
+*** Tracks
 
 | Track | Description | Status | Depends On |
 |-------+-------------+--------+------------|
-| 0 | E-graph lattice + equality saturation as fixpoint | ⬜ | SRE Track 0 (form registry) |
-| 1 | β/δ/ι reduction rules as DPO rewrite rules | ⬜ | Track 0 |
-| 2 | Interaction net reduction (strong confluence) | ⬜ | Track 1 |
-| 3 | Tropical extraction (cost-optimal program selection) | ⬜ | Track 1, OE Track 2 |
-| 4 | Integration with elaborator (compile-time reduction on network) | ⬜ | Track 1, SRE Track 2C |
+| 0 | Series founding research synthesis (master + sub-deliverables) | 🔄 | — |
+| 0.1 | Architectural sketch — three-layer decomposition + NTT model + six sub-models | ⬜ | Track 0 master |
+| 0.2 | Rule-property taxonomy — rule kinds → strata + property tags | ⬜ | Track 0 master |
+| 0.3 | ~.pnet~ extension + LLVM lowering interface (our canonical format) | ⬜ | Track 0 master + SH Track 1 |
+| 1 | E-class cell substrate — cell type + hashcons + union-find on cells | ⬜ | PPN 4C Phase 1B + Track 0.1 |
+| 2 | First IN-fragment rewrite-rule kind (β-reduction) | ⬜ | Track 1 |
+| 3 | First adhesive-DPO rewrite-rule kind (ι/case-selection, structural) | ⬜ | Track 1 |
+| 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | Track 1 + PPN 4C Phase 1B residuation operator |
+| 5 | Persistence — content-addressed e-class storage + ~.pnet~ round-trip | ⬜ | Track 1 + Track 0.3 |
+| 6 | Speculative reduction — cost-bounded ATMS branching | ⬜ | Track 1 + BSP-LE 2B |
+| 7 | Effect-stratum boundary protocol — opaque cells for FFI + effects | ⬜ | Track 1 + Architecture AD |
+| 8 | ~reduction.rkt~ parity + retirement (multi-track endgame) | ⬜ | Tracks 1-7 + parity validation + soak |
+| 9 | User-facility forward-compatibility validation (design only, not shipped) | ⬜ | Tracks 1-8 |
+
+*** Architecture (per master doc)
+
+Three-layer decomposition:
+- *Layer 1*: per-AST-PU compound regions (occurrence-state by node-position; NOT per-node PUs — preserves Lévy-optimal sharing)
+- *Layer 2*: shared e-class cells (refinement-poset structure; hashcons + union-find on cells)
+- *Layer 3*: unified rule registry (CHAMP cell from rule-id → rule-data; property-tagged rules; one rewriting stratum + one retraction stratum)
+
+Two orthogonal axes:
+- *Rule-property axis*: IN-fragment / adhesive-DPO / confluence-by-construction / non-monotone / opaque
+- *Persistence-regime axis*: ground / contextual / retraction-eligible / open / opaque
 
 *** Relationship to PM Track 9
 
-PReductions IS PM Track 9, elevated to a named series. PM Track 9 stays in
-the PM roadmap as a cross-reference: "PM Track 9 = PReductions (see series)."
-The reduction infrastructure is shared with the SRE (structural decomposition
-is a rewrite rule) and PPN (grammar productions are rewrite rules).
+Track 9 (founded 2026-03-21) was the first Stage-1 research; the vision since enlarged dramatically (DPO + tropical-quantale + e-graph + GoI + BSP-LE speculation). PReduce IS the realization of that vision as a named series, with its own master doc, NTT model, and track partitioning. PM Track 9 retains its row in the PM roadmap as a cross-reference: "PM Track 9 = PReduce (see series)." The reduction infrastructure is shared with SRE (structural decomposition is a rewrite rule, generalized into the unified rule registry) and PPN (grammar productions are rewrite rules — Track 7 future).
 
 * Cross-Series Dependency Map
 
