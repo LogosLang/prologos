@@ -144,9 +144,9 @@
              (lambda () (preduce (expr-bvar 0)))))
 
 ;; ====================================================================
-;; Hard-error policy: lambda still raises (Phase 3 feature)
+;; Hard-error policy: permanently-unsupported nodes raise
 ;; ====================================================================
 
-(test-case "expr-lam still raises preduce-unsupported (Phase 3 feature)"
+(test-case "expr-error always raises preduce-unsupported"
   (check-exn preduce-unsupported-node-error?
-             (lambda () (preduce (expr-lam 'mw (expr-Int) (expr-bvar 0))))))
+             (lambda () (preduce (expr-error)))))

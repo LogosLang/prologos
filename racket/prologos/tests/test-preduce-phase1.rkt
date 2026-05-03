@@ -63,21 +63,26 @@
 ;; Hard-error policy: unsupported nodes raise structured error
 ;; ====================================================================
 
-(test-case "expr-int raises preduce-unsupported (Phase 2 feature)"
-  (check-exn preduce-unsupported-node-error?
-             (lambda () (preduce (expr-int 42)))))
+;; Phase-pinned negative tests use nodes that are PERMANENTLY out of
+;; scope for PReduce-lite (per design doc § 3): expr-error, expr-hole,
+;; expr-meta. These should never become supported, so the assertions
+;; stay valid as later phases land.
 
-(test-case "expr-true raises preduce-unsupported (Phase 2 feature)"
+(test-case "expr-error always raises preduce-unsupported"
   (check-exn preduce-unsupported-node-error?
-             (lambda () (preduce (expr-true)))))
+             (lambda () (preduce (expr-error)))))
+
+(test-case "expr-hole always raises preduce-unsupported"
+  (check-exn preduce-unsupported-node-error?
+             (lambda () (preduce (expr-hole)))))
 
 (test-case "exn carries node-kind and phase fields"
   (define e
     (with-handlers ([preduce-unsupported-node-error? values])
-      (preduce (expr-int 42))))
+      (preduce (expr-error))))
   (check-true  (preduce-unsupported-node-error? e))
-  (check-equal? (exn:fail:preduce-unsupported-node-kind e) 'expr-int)
-  (check-equal? (exn:fail:preduce-unsupported-phase e) 'phase-2-or-later))
+  (check-equal? (exn:fail:preduce-unsupported-node-kind e) 'expr-error)
+  (check-true  (symbol? (exn:fail:preduce-unsupported-phase e))))
 
 ;; ====================================================================
 ;; preduce-or-nf diagnostic helper
@@ -88,10 +93,10 @@
 ;; once nf can produce the expected value.
 
 (test-case "preduce-or-nf falls back to nf on unsupported node"
-  ;; expr-int 42 is unsupported in PReduce-lite Phase 1; nf returns it
-  ;; as-is (an integer literal IS its own normal form).
-  (define result (preduce-or-nf (expr-int 42)))
-  (check-equal? result (expr-int 42)))
+  ;; expr-error is permanently out of scope; preduce raises; nf returns
+  ;; it as-is (an error literal IS its own normal form per nf-whnf).
+  (define result (preduce-or-nf (expr-error)))
+  (check-equal? result (expr-error)))
 
 ;; ====================================================================
 ;; Parameters exist with sensible defaults

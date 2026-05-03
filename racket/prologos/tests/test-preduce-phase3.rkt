@@ -81,17 +81,12 @@
   (check-preduce/nf (expr-app outer-lam (expr-int 10)) (expr-int 13)))
 
 ;; ====================================================================
-;; Out-of-scope: dynamic β raises (Phase 4 feature)
+;; Permanently-unsupported nodes
 ;; ====================================================================
 
-(test-case "non-static function position raises preduce-unsupported"
-  ;; (λf. f 10) (λx. x+5) — the function position is bvar 0, not statically a lam
-  (define apply-lam
-    (expr-lam 'mw (expr-Pi 'mw (expr-Int) (expr-Int))
-              (expr-app (expr-bvar 0) (expr-int 10))))
+(test-case "expr-error always raises preduce-unsupported"
   (check-exn preduce-unsupported-node-error?
-             (lambda ()
-               (preduce (expr-app apply-lam add5-lam)))))
+             (lambda () (preduce (expr-error)))))
 
 ;; ====================================================================
 ;; Phase 3+ acceptance files (when loaded through global-env)

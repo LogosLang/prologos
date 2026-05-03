@@ -205,12 +205,13 @@
          (? expr-Unit?) (? expr-Nil?))
      (alloc-value-cell net e)]
 
-    ;; ----- Phase 2 literals -----
+    ;; ----- Phase 2 literals + Phase 5 refl -----
     [(? expr-int?)     (alloc-value-cell net e)]
     [(? expr-true?)    (alloc-value-cell net e)]
     [(? expr-false?)   (alloc-value-cell net e)]
     [(? expr-nat-val?) (alloc-value-cell net e)]
     [(? expr-zero?)    (alloc-value-cell net e)]
+    [(? expr-refl?)    (alloc-value-cell net e)]  ;; Phase 5: refl is a value
 
     ;; ----- Phase 2: annotation erasure -----
     ;; (expr-ann e _) reduces by erasing the type annotation.
@@ -393,12 +394,42 @@ the topology stratum (Phase 4)" name)))
                                         (make-app-fire cid-f cid-arg cid-out)))
         (values cid-out net4)])]
 
+    ;; ----- Phase 5: Bool eliminator (boolrec) -----
+    [(expr-boolrec _motive tc fc target)
+     (define-values (cid-target net1) (compile-expr target env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+         (make-boolrec-fire cid-target cid-out tc fc env)))
+     (values cid-out net3)]
+
+    ;; ----- Phase 5: Nat eliminator (natrec) -----
+    [(expr-natrec _motive base step target)
+     (define-values (cid-target net1) (compile-expr target env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+         (make-natrec-fire cid-target cid-out _motive base step env)))
+     (values cid-out net3)]
+
+    ;; ----- Phase 5: J (Eq eliminator, refl-only iota) -----
+    [(expr-J _motive base left _right proof)
+     (define-values (cid-proof net1) (compile-expr proof env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-proof) (list cid-out)
+         (make-j-fire cid-proof cid-out base left env)))
+     (values cid-out net3)]
+
     ;; ----- All other nodes: deferred to later phases -----
     [_
      (raise-unsupported!
       (expr-kind e)
-      'phase-4-or-later
-      (format "PReduce-lite Phase 3: AST node ~a is not yet supported. \
+      'phase-6-or-later
+      (format "PReduce-lite Phase 5: AST node ~a is not yet supported. \
 Programs using this node should run via the existing nf reducer until \
 the relevant phase lands."
               (expr-kind e)))]))
@@ -490,6 +521,70 @@ the relevant phase lands."
     (define v (net-cell-read net cid-in))
     (if (preduce-bot? v) net
         (net-cell-write net cid-out v))))
+
+;; ============================================================
+;; Phase 5 helpers — eliminators
+;; ============================================================
+
+;; make-boolrec-fire — Bool eliminator iota: dispatches on target.
+(define (make-boolrec-fire cid-target cid-out tc fc env)
+  (lambda (net)
+    (define v (net-cell-read net cid-target))
+    (cond
+      [(preduce-bot? v) net]
+      [(expr-true? v)  (compile-and-bridge tc env net cid-out)]
+      [(expr-false? v) (compile-and-bridge fc env net cid-out)]
+      [else
+       (error 'preduce "boolrec target reduced to non-Bool value: ~v" v)])))
+
+;; make-natrec-fire — Nat eliminator iota:
+;;   zero / nat-val 0 → base
+;;   suc n / nat-val k>0 → (step (k-1) (natrec _ base step (k-1)))
+(define (make-natrec-fire cid-target cid-out motive base step env)
+  (lambda (net)
+    (define v (net-cell-read net cid-target))
+    (cond
+      [(preduce-bot? v) net]
+      [(or (expr-zero? v) (and (expr-nat-val? v) (= (expr-nat-val-n v) 0)))
+       (compile-and-bridge base env net cid-out)]
+      [(expr-nat-val? v)
+       (define k-1 (expr-nat-val (- (expr-nat-val-n v) 1)))
+       (define recursive-call (expr-natrec motive base step k-1))
+       (define unfolded (expr-app (expr-app step k-1) recursive-call))
+       (compile-and-bridge unfolded env net cid-out)]
+      [(expr-suc? v)
+       (define n (expr-suc-pred v))
+       (define recursive-call (expr-natrec motive base step n))
+       (define unfolded (expr-app (expr-app step n) recursive-call))
+       (compile-and-bridge unfolded env net cid-out)]
+      [else
+       (error 'preduce "natrec target reduced to non-Nat value: ~v" v)])))
+
+;; make-j-fire — Eq eliminator iota: when proof = refl, result = (app base left).
+(define (make-j-fire cid-proof cid-out base left env)
+  (lambda (net)
+    (define v (net-cell-read net cid-proof))
+    (cond
+      [(preduce-bot? v) net]
+      [(expr-refl? v)
+       (compile-and-bridge (expr-app base left) env net cid-out)]
+      [else
+       (error 'preduce "J proof reduced to non-refl value: ~v" v)])))
+
+;; compile-and-bridge — shared helper for eliminators. Compiles `e` in
+;; env, then installs an identity propagator from its result cell to
+;; cid-out. Done under (parameterize ([current-bsp-fire-round? #f]) …)
+;; so the new propagators auto-schedule (mirrors the dynamic-β discipline).
+(define (compile-and-bridge e env net cid-out)
+  (define-values (cid-e net1)
+    (parameterize ([current-bsp-fire-round? #f])
+      (compile-expr e env net)))
+  (define-values (net2 _)
+    (parameterize ([current-bsp-fire-round? #f])
+      (net-add-fire-once-propagator
+       net1 (list cid-e) (list cid-out)
+       (make-identity-fire cid-e cid-out))))
+  net2)
 
 ;; ============================================================
 ;; Phase 2 helpers
