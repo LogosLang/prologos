@@ -47,7 +47,8 @@
                   run-to-quiescence)
          (only-in "sre-core.rkt" make-sre-domain register-domain!)
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)
-         (only-in "reduction.rkt" nf))  ;; for preduce-or-nf diagnostic helper
+         (only-in "reduction.rkt" nf)  ;; for preduce-or-nf diagnostic helper
+         (only-in "global-env.rkt" global-env-lookup-value))
 
 (provide
  ;; Entry points
@@ -313,15 +314,112 @@
                                         (make-projection-fire cid-in cid-out 'snd)))
         (values cid-out net3)])]
 
+    ;; ----- Phase 3: lambda as value -----
+    ;;
+    ;; The lambda allocates a cell whose value is a preduce-lam tagged
+    ;; struct carrying the body AST and the captured env (the cid list
+    ;; at compilation point — the lambda closes over surrounding scope).
+    ;; The body is NOT compiled here; it's compiled when the lambda is
+    ;; applied (β-reduction). For first-class lambda values that are
+    ;; never applied (passed as args, stored, etc.), the cell holds
+    ;; the lambda value as-is.
+    [(expr-lam mw type body)
+     (alloc-value-cell net (preduce-lam mw type body env))]
+
+    ;; ----- Phase 3: free variable (fvar) — inline the def -----
+    ;;
+    ;; Look up name in the global env. The def's value AST is compiled
+    ;; in EMPTY env (top-level definitions don't see surrounding bvars).
+    ;; Recursion detection via current-fvar-stack: if name is already
+    ;; being compiled, raise unsupported (recursion is Phase 4 — needs
+    ;; topology stratum to break the compile-time loop).
+    [(expr-fvar name)
+     (when (memq name (current-fvar-stack))
+       (raise-unsupported!
+        'expr-fvar 'phase-4-recursive-fvar
+        (format "PReduce-lite Phase 3: recursive fvar ~a — recursion needs \
+the topology stratum (Phase 4)" name)))
+     (define value-ast (global-env-lookup-value name))
+     (unless value-ast
+       (error 'preduce "expr-fvar ~a not found in global env" name))
+     (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
+       (compile-expr value-ast '() net))]
+
+    ;; ----- Phase 3: application — static β only -----
+    ;;
+    ;; Three patterns for the function position, all resolved STATICALLY
+    ;; at compile-expr time:
+    ;;   (a) (expr-app (expr-lam _ _ body) arg) → static β: compile arg,
+    ;;       compile body in env extended with arg's cid.
+    ;;   (b) (expr-app (expr-fvar name) arg) → unfold fvar to its value
+    ;;       AST, then dispatch as (a) if it's a lambda. (Recursion is
+    ;;       guarded; mutual / self recursion → Phase 4.)
+    ;;   (c) (expr-app (expr-ann inner _) arg) → erase ann, retry.
+    ;; All other shapes (e.g., the function position is itself an
+    ;; application chain that doesn't statically reduce to a lambda)
+    ;; raise unsupported and route to Phase 4 (dynamic β via topology).
+    [(expr-app f arg)
+     (define f-static (statically-reducible-lam f))
+     (cond
+       [f-static
+        ;; Static β: compile arg, then body in extended env.
+        (define-values (cid-arg net1) (compile-expr arg env net))
+        (compile-expr (expr-lam-body f-static) (cons cid-arg env) net1)]
+       [else
+        (raise-unsupported!
+         'expr-app 'phase-4-dynamic-beta
+         (format "PReduce-lite Phase 3: application function position \
+is not statically a lambda — needs Phase 4 (dynamic β via topology). \
+Function form: ~v" f))])]
+
     ;; ----- All other nodes: deferred to later phases -----
     [_
      (raise-unsupported!
       (expr-kind e)
-      'phase-3-or-later
-      (format "PReduce-lite Phase 2: AST node ~a is not yet supported. \
+      'phase-4-or-later
+      (format "PReduce-lite Phase 3: AST node ~a is not yet supported. \
 Programs using this node should run via the existing nf reducer until \
 the relevant phase lands."
               (expr-kind e)))]))
+
+;; ============================================================
+;; Phase 3 helpers
+;; ============================================================
+
+;; preduce-lam — first-class lambda value carried in cells.
+(struct preduce-lam (mult type body captured-env) #:transparent)
+
+;; current-fvar-stack — names of fvars currently being compiled.
+;; Used to detect recursive fvar references and route them to Phase 4.
+(define current-fvar-stack (make-parameter '()))
+
+;; statically-reducible-lam : expr → expr-lam | #f
+;;   Returns the underlying lambda AST if `f` is statically a lambda
+;;   (literal lam, ann-wrapped lam, fvar to a lam-bodied def). Otherwise
+;;   #f. Used by static-β dispatch in expr-app.
+;;
+;;   Recursion guard: an fvar whose name is already on the fvar stack
+;;   returns #f (cannot statically inline; routes to Phase 4).
+(define (statically-reducible-lam f)
+  (cond
+    [(expr-lam? f) f]
+    [(expr-ann? f) (statically-reducible-lam (expr-ann-term f))]
+    [(expr-fvar? f)
+     (define name (expr-fvar-name f))
+     (cond
+       [(memq name (current-fvar-stack)) #f]  ;; recursion — Phase 4
+       [else
+        (define v (global-env-lookup-value name))
+        (cond
+          [(and v (statically-reducible-lam-no-fvar-cycle v name)) => values]
+          [else #f])])]
+    [else #f]))
+
+;; Helper: like statically-reducible-lam but pushes name onto the stack
+;; for cycle detection during recursive descent.
+(define (statically-reducible-lam-no-fvar-cycle v name)
+  (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
+    (statically-reducible-lam v)))
 
 ;; ============================================================
 ;; Phase 2 helpers
