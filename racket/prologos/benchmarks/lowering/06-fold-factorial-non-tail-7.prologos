@@ -1,14 +1,15 @@
 ns benchmarks::lowering::06-fold-factorial-non-tail-7
 
-;; Non-tail-recursive factorial(7). The recursive call sits inside
-;; `int*`, so this is non-tail. Folds at compile time via Gate 2.
+;; Non-tail fact(7) folds via Gate 2; argv seed shifts stdout.
 ;;
-;; 7! = 5040; exit code (mod 256) = 5040 mod 256 = 176.
-;; :expect-exit 176
+;; :inputs 0 10 100
+;; :expect-stdout-for 0 = 5040
+;; :expect-stdout-for 10 = 5050
+;; :expect-stdout-for 100 = 5140
 
 spec fact Int -> Int
 defn fact
   | 0 -> 1
   | n -> [int* n [fact [int- n 1]]]
 
-def main : Int := [fact 7]
+def main : Int -> Int := (fn [seed : Int] [int+ seed [fact 7]])

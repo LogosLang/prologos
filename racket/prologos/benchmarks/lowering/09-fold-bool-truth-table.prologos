@@ -1,17 +1,16 @@
 ns benchmarks::lowering::09-fold-bool-truth-table
 
-;; Boolean ops compound: tests that the standard library Bool ops
-;; (`and`, `or`, `xor`, `not`, `implies`) compose cleanly through
-;; the Gate 4 functional sub-gate. Folds at compile time.
+;; Gate 4 Bool ops fold at compile time. Runtime adds opaque seed from argv
+;; so every bench reads input and prints an Int (truth table result is 1).
 ;;
-;; Expression: (true and (false or (not false))) xor (true implies false).
-;;           = (true and (false or true))         xor (false)
-;;           = (true and true)                    xor false
-;;           = true                               xor false
-;;           = true.
-;; exit code = 1.
-;; :expect-exit 1
+;; :inputs 0 5 100
+;; :expect-stdout-for 0 = 1
+;; :expect-stdout-for 5 = 6
+;; :expect-stdout-for 100 = 101
 
 require [prologos::data::bool :refer [and or xor not implies]]
 
-def main : Bool := xor (and true (or false (not false))) (implies true false)
+def main : Int -> Int := (fn [seed : Int]
+  [match [xor (and true (or false (not false))) (implies true false)]
+    | true  -> [int+ seed 1]
+    | false -> seed])

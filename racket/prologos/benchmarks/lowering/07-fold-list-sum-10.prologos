@@ -1,13 +1,12 @@
 ns benchmarks::lowering::07-fold-list-sum-10
 
-;; Recursive cons-list of [1..10] folded by a non-tail recursive
-;; sum-list. Exercises both Gate 1 rev 1.5 (sctor + match folding for
-;; recursive ctor `cons : A -> List A`) and Gate 2 (non-tail
-;; recursion in `sum-list`). Combined, the entire program folds to
-;; the literal 55 at compile time.
+;; Fixed cons-list [1..10] + non-tail sum-list folds via Gate 1 + 2.
+;; argv seed shifts stdout (opaque input still flows through main).
 ;;
-;; sum 1..10 = 55. exit code = 55.
-;; :expect-exit 55
+;; :inputs 0 5 100
+;; :expect-stdout-for 0 = 55
+;; :expect-stdout-for 5 = 60
+;; :expect-stdout-for 100 = 155
 
 data List {A}
   nil
@@ -18,13 +17,14 @@ defn sum-list
   | nil       -> 0
   | cons a r  -> [int+ a [sum-list r]]
 
-def main : Int := [sum-list (cons Int 1
-                            (cons Int 2
-                            (cons Int 3
-                            (cons Int 4
-                            (cons Int 5
-                            (cons Int 6
-                            (cons Int 7
-                            (cons Int 8
-                            (cons Int 9
-                            (cons Int 10 (nil Int))))))))))) ]
+def main : Int -> Int := (fn [seed : Int]
+  [int+ seed [sum-list (cons Int 1
+                       (cons Int 2
+                       (cons Int 3
+                       (cons Int 4
+                       (cons Int 5
+                       (cons Int 6
+                       (cons Int 7
+                       (cons Int 8
+                       (cons Int 9
+                       (cons Int 10 (nil Int))))))))))]])
