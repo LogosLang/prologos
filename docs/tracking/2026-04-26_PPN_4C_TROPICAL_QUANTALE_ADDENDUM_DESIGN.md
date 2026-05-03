@@ -27,9 +27,10 @@
 | **P1+P4** Hybrid inverts Cell-as-Single-Source-of-Truth principle (P1) + reframe "decomplection" as "incomplete migration" honestly (P4) | REFINEMENT | ACCEPT (CONSOLIDATED) | NEW §10.1.A "Honest framing & retirement plan" consolidates P1 + P4 into a single tighter section (per user direction "cleaner design document"). Two framings (decomplection + incomplete-migration) both true; principle inversion acknowledged; retirement plan named; four-surface tracking (design-doc + DEFERRED.md + [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) + Q-1B-6 + §11.3 gates). |
 | **P2** Belt-and-suspenders red flag; empirical-validation gate | REFINEMENT | ACCEPT (with Phase 1B mini-design opening spike) | NEW Q-1B-6 at §9.9 — empirical-validation spike at Phase 1B mini-design opening (cheap; ~30 min; pre-implementation falsification test); §11.3 Phase 1V exit criteria adds final-verification gate (post-implementation). Two-gate discipline: spike challenges hybrid pre-build; Phase 1V verifies post-build. "Learning is valuable either way" per user direction. |
 | **P6** "First production landing establishes pattern" risks templating hybrid scaffolding | REFINEMENT | ACCEPT (with MASTER_ROADMAP.org variation) | UPDATE §6.6 PReduce + OE Series rows: hybrid-as-scaffolding-NOT-template caveat; future consumers design TO TARGET full cell-substrate; per-track empirical justification + four-surface tracking discipline if hybrid needed. NEW MASTER_ROADMAP.org § OE Series "Scaffolding caveat" row at the roadmap level (where future-track designers go FIRST when planning new tracks, not buried in D.3). |
+| **P5** γ-bundle scope precision (sub-phase count) | ACKNOWLEDGE | ACCEPT | UPDATE §1.2 — add sub-phase count estimate under γ-bundle-wide (~12-15 implementation sub-phases: 1A-iii-b ~5; 1A-iii-c ~8; 1B ~3; 1C ~5 under hybrid; 1V atomic close); name the bundle-vs-sub-phase scope distinction (DESIGN scope vs IMPLEMENTATION scope); also note Phase 1C estimate reframed under D.2 hybrid pivot (~45-90 LoC, was ~250-400 in D.1) per R1 REFINEMENT acceptance forward-pointer. |
 | (REFINEMENTs + ACKNOWLEDGEs continuing) | various | TBD | Walking through with user; added to this table as accepted |
 
-**3 BLOCKING findings closed + 4 REFINEMENTs accepted (P1+P4 consolidated; P2; P6).** D.3 incrementally ready for Stage 4 as remaining REFINEMENTs + ACKNOWLEDGEs are walked.
+**3 BLOCKING + 4 REFINEMENTs (P1+P4 consolidated; P2; P6) + 1 ACKNOWLEDGE (P5) accepted.** P-lens complete (6 findings: P1+P4+P2+P3+P5+P6). Walking R-lens next.
 
 ---
 
@@ -153,7 +154,9 @@ This addendum ships:
 - Covers 1A-iii-b + 1A-iii-c + 1B + 1C completion
 - Closes Phase 1 entirely
 
-**Total estimate**: ~1250-2050 LoC (mix of deletion and new code; net likely deletion-dominant).
+**Total estimate**: ~1250-2050 LoC (mix of deletion and new code; net likely deletion-dominant). **Note: Phase 1C estimate was reframed under D.2 hybrid pivot to ~45-90 LoC (was ~250-400 in D.1) — see §10 + D.3 R1 REFINEMENT acceptance for the rescoped breakdown; the upper-bound total is conservative pre-1B-mini-design refinement.**
+
+**Sub-phase count under γ-bundle-wide** (D.3 from P5 ACKNOWLEDGE): ~12-15 implementation sub-phases (1A-iii-b ~5; 1A-iii-c ~8; 1B ~3; 1C ~5 under hybrid; 1V atomic close). Each sub-phase respects conversational cadence (max ~1h per `workflow.md` "Conversational implementation cadence" rule); the bundle is at the DESIGN scope, sub-phasing is at the IMPLEMENTATION scope. The "γ-bundle-wide" framing names the design-scope coherence (1V closes Phase 1 atomically); it does NOT compress the implementation into a single autonomous stretch.
 
 ### §1.3 Out of scope (explicit deferrals)
 
