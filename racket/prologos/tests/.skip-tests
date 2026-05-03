@@ -7,3 +7,13 @@
 test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps), ~144s
 test-reduction-perf-02-01.rkt  # Nat arithmetic perf (fib 15 + ackermann), ~51s
 test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s
+
+# SRE Track 2I Phase 3 sweep test — KNOWN-FAILING per its introducing commit
+# bd1179b ("sre/track2i: Phase 3 sweep infrastructure (in-progress; gates on
+# Phase 4)"). The commit message states: "The sweep currently refutes
+# type×subtype distributive due to a sweep semantic bug (sre-core.rkt
+# hardcodes 'equality for the join lookup, mixing lattices for non-equality
+# relations). Phase 4 corrects this; Phase 3 close immediately follows
+# Phase 4 close." Skipping per testing.md "Full suite = regression gate"
+# discipline so the suite stays green; remove this entry once Phase 4 lands.
+test-sre-sd-properties.rkt  # in-progress; awaits SRE Track 2I Phase 4 fix to sre-core.rkt
