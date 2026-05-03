@@ -281,6 +281,31 @@
     (for/list ([m (in-list meta-decls)])
       (format "; meta: ~a = ~v" (meta-decl-key m) (meta-decl-value m))))
 
+  ;; lowering-yolo M4 (2026-05-02): parameterised-main signal pickup.
+  ;; ast-to-low-pnet emits two meta-decls when main has parameters:
+  ;;   (meta-decl input-cells (cid0 cid1 ...))   ; outermost-first
+  ;;   (meta-decl main-prints-result #t)
+  ;; The lowerer reshapes @main from `i64 @main()` to
+  ;; `i32 @main(i32 %argc, i8** %argv)` when input-cells is present;
+  ;; emits prologos_argv_i64 + prologos_cell_write per input cell; and
+  ;; emits prologos_print_i64(entry-cell) before `ret i32 0` when
+  ;; main-prints-result is true. See
+  ;;   docs/tracking/2026-05-02_LOWERING_INPUT_OUTPUT.md
+  (define (find-meta key)
+    (for/or ([m (in-list meta-decls)])
+      (and (eq? (meta-decl-key m) key) (meta-decl-value m))))
+  (define input-cell-ids (or (find-meta 'input-cells) '()))
+  (define parameterised-main? (not (null? input-cell-ids)))
+  (define main-prints-result? (eq? (find-meta 'main-prints-result) #t))
+
+  (define argv-write-lines
+    (for/list ([cid (in-list input-cell-ids)] [i (in-naturals)])
+      (format
+       (string-append
+        "  %argv_~a = call i64 @prologos_argv_i64(i8** %argv, i32 ~a)\n"
+        "  call void @prologos_cell_write(i32 ~a, i64 %argv_~a)")
+       i (+ i 1) (cell-ssa-name cid) i)))
+
   ;; Always-present declarations.
   (define base-decls
     (string-append
@@ -331,6 +356,45 @@
          "declare void @prologos_run_to_quiescence()\n")
         ""))
 
+  ;; lowering-yolo M4 (2026-05-02): parameterised-main I/O declarations.
+  (define io-decls-text
+    (string-append
+     (if parameterised-main?
+         "declare i64 @prologos_argv_i64(i8**, i32)\n"
+         "")
+     (if main-prints-result?
+         "declare void @prologos_print_i64(i64)\n"
+         "")))
+
+  ;; @main signature + return shape.
+  ;;
+  ;; Closed main (historical): `define i64 @main()` returning the
+  ;; entry-cell value as the process exit code (masked to u8 by the
+  ;; OS). All existing benchmarks rely on this shape.
+  ;;
+  ;; Parameterised main (M4): `define i32 @main(i32 %argc, i8** %argv)`
+  ;; receiving argv from the OS, parsing one i64 per input cell from
+  ;; argv[1..N], printing the entry-cell value to stdout, and exiting
+  ;; with status 0. The exit-code path is reserved as a back-channel
+  ;; for "did the program crash?" — actual results go to stdout.
+  (define main-signature
+    (cond
+      [parameterised-main? "define i32 @main(i32 %argc, i8** %argv) {\n"]
+      [else "define i64 @main() {\n"]))
+  (define main-return-block
+    (cond
+      [main-prints-result?
+       (string-append
+        (format "  %r = call i64 @prologos_cell_read(i32 ~a)\n"
+                (cell-ssa-name entry-cell-id))
+        "  call void @prologos_print_i64(i64 %r)\n"
+        "  ret i32 0\n")]
+      [else
+       (string-append
+        (format "  %r = call i64 @prologos_cell_read(i32 ~a)\n"
+                (cell-ssa-name entry-cell-id))
+        "  ret i64 %r\n")]))
+
   ;; Assemble.
   (string-append
    "; ModuleID = 'prologos-low-pnet'\n"
@@ -344,8 +408,9 @@
    scope-decls-text
    prop-decls-text
    stats-decls
+   io-decls-text
    "\n"
-   "define i64 @main() {\n"
+   main-signature
    "entry:\n"
    profile-init-line
    (apply string-append
@@ -354,11 +419,15 @@
           (for/list ([l (in-list init-lines)]) (string-append l "\n")))
    (apply string-append
           (for/list ([l (in-list write-lines)]) (string-append l "\n")))
+   ;; argv writes go AFTER init (input cells were initialised to 0;
+   ;; LWW domain semantics let the argv value overwrite cleanly) but
+   ;; BEFORE prop installs (the propagator network's initial firing
+   ;; round must see the runtime input, not the placeholder).
+   (apply string-append
+          (for/list ([l (in-list argv-write-lines)]) (string-append l "\n")))
    (apply string-append
           (for/list ([l (in-list prop-lines)]) (string-append l "\n")))
    quiescence-line
    stats-line
-   (format "  %r = call i64 @prologos_cell_read(i32 ~a)\n"
-           (cell-ssa-name entry-cell-id))
-   "  ret i64 %r\n"
+   main-return-block
    "}\n"))

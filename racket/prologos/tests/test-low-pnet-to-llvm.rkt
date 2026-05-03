@@ -301,3 +301,89 @@
   (check-true (string-contains? ir "declare i8 @prologos_scope_run(i32, i64)"))
   (check-true (string-contains? ir "declare i64 @prologos_scope_read(i32, i32)"))
   (check-true (string-contains? ir "declare void @prologos_scope_exit(i32)")))
+
+;; ============================================================
+;; M4 — parameterised main + stdout printing (lowering-yolo, 2026-05-02)
+;; ============================================================
+;;
+;; The two new meta-decls emitted by ast-to-low-pnet:
+;;   (meta-decl input-cells (cid0 cid1 ...))
+;;   (meta-decl main-prints-result #t)
+;; reshape @main from `i64 @main()` into
+;; `i32 @main(i32 %argc, i8** %argv)` and add argv → cell-write +
+;; cell-read → print plumbing.
+
+(test-case "M4: closed main (no input-cells meta) keeps i64 @main() signature"
+  ;; Backward-compat regression gate: every existing benchmark relies
+  ;; on this shape. The argv/print declarations must NOT appear.
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 42)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "define i64 @main()"))
+  (check-true (string-contains? ir "ret i64 %r"))
+  (check-false (string-contains? ir "@prologos_argv_i64"))
+  (check-false (string-contains? ir "@prologos_print_i64")))
+
+(test-case "M4: input-cells meta reshapes @main signature + emits argv writes"
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl input-cells (0))
+                (meta-decl main-prints-result #t)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  ;; Signature reshape.
+  (check-true (string-contains? ir "define i32 @main(i32 %argc, i8** %argv)"))
+  ;; argv parser declaration + call + cell write.
+  (check-true (string-contains? ir "declare i64 @prologos_argv_i64(i8**, i32)"))
+  (check-true (string-contains? ir "%argv_0 = call i64 @prologos_argv_i64(i8** %argv, i32 1)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 %argv_0)"))
+  ;; Print declaration + call + new return shape.
+  (check-true (string-contains? ir "declare void @prologos_print_i64(i64)"))
+  (check-true (string-contains? ir "call void @prologos_print_i64(i64 %r)"))
+  (check-true (string-contains? ir "ret i32 0"))
+  ;; The historical `ret i64 %r` shape must be GONE.
+  (check-false (string-contains? ir "ret i64 %r")))
+
+(test-case "M4: multiple input cells map to argv[1], argv[2], ..."
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl input-cells (0 1 2))
+                (meta-decl main-prints-result #t)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 0)
+                (cell-decl 1 0 0)
+                (cell-decl 2 0 0)
+                (entry-decl 2))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "%argv_0 = call i64 @prologos_argv_i64(i8** %argv, i32 1)"))
+  (check-true (string-contains? ir "%argv_1 = call i64 @prologos_argv_i64(i8** %argv, i32 2)"))
+  (check-true (string-contains? ir "%argv_2 = call i64 @prologos_argv_i64(i8** %argv, i32 3)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c0, i64 %argv_0)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c1, i64 %argv_1)"))
+  (check-true (string-contains? ir "call void @prologos_cell_write(i32 %c2, i64 %argv_2)")))
+
+(test-case "M4: main-prints-result without input-cells (theoretical) still prints + ret 0"
+  ;; Defensive: an IR that signals printing without parameters should
+  ;; still get the print path; signature stays at `i64 @main()` since
+  ;; argv plumbing is absent.
+  (define lp (parse-low-pnet
+              '(low-pnet
+                :version (1 1)
+                (meta-decl main-prints-result #t)
+                (domain-decl 0 int merge-int 0 never)
+                (cell-decl 0 0 99)
+                (entry-decl 0))))
+  (define ir (lower-low-pnet-to-llvm lp))
+  (check-true (string-contains? ir "define i64 @main()"))
+  (check-true (string-contains? ir "declare void @prologos_print_i64(i64)"))
+  (check-true (string-contains? ir "call void @prologos_print_i64(i64 %r)"))
+  (check-true (string-contains? ir "ret i32 0"))
+  (check-false (string-contains? ir "@prologos_argv_i64")))
