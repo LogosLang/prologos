@@ -1,0 +1,16 @@
+ns benchmarks::lowering::13-natrec-sum-index
+
+;; Sum_{k=0}^{n-1} k via natrec + Nat argv (opaque bound).
+;; Expected: n=4 → 0+1+2+3 = 6; n=10 → 45.
+;;
+;; :inputs 4 10 100
+;; :expect-stdout-for 4 = 6
+;; :expect-stdout-for 10 = 45
+;; :expect-stdout-for 100 = 4950
+
+def main : Nat -> Int :=
+  (fn [n : Nat]
+    (natrec (fn [_ : Nat] Int)
+            0
+            (fn [k : Nat] (fn [acc : Int] [int+ acc k]))
+            n))

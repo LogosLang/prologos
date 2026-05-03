@@ -74,6 +74,17 @@
 (define (expr-proof-refl? p)
   (expr-refl? (peel-expr-ann p)))
 
+(define (lowering-type-only! expr what)
+  (translate-error!
+   expr
+   (format "lowering: ~a — type-level only (cannot compile as runtime value)" what)))
+
+(define (lowering-deferred-substrate! expr what)
+  (translate-error!
+   expr
+   (format "lowering deferred (~a): requires substrate beyond current kernel \
+(heap/GC, trait monomorphization, or extra Zig primitives)" what)))
+
 ;; ============================================================
 ;; Builder state
 ;; ============================================================
@@ -1702,13 +1713,53 @@ Only saturated calls to tail-recursive functions and non-recursive \
 helpers are lowered."
                                   name))])]
 
+    ;; ---- Explicit buckets (clear errors vs generic fall-through) ----
+
+    [(expr-Type _)            (lowering-type-only! expr "Type(n)")]
+    [(expr-Pi _ _ _)          (lowering-type-only! expr "Pi")]
+    [(expr-Sigma _ _)         (lowering-type-only! expr "Sigma")]
+    [(expr-Eq _ _ _)          (lowering-type-only! expr "Eq")]
+    [(expr-union _ _)         (lowering-type-only! expr "union")]
+    [(expr-Vec _ _)           (lowering-deferred-substrate! expr "Vec")]
+    [(expr-Fin _)             (lowering-type-only! expr "Fin type")]
+    [(expr-Nat)               (lowering-type-only! expr "Nat type")]
+    [(expr-Bool)              (lowering-type-only! expr "Bool type")]
+    [(expr-Unit)              (lowering-type-only! expr "Unit type")]
+    [(expr-Nil)               (lowering-type-only! expr "Nil type")]
+
+    [(expr-vnil _)            (lowering-deferred-substrate! expr "vnil")]
+    [(expr-vcons _ _ _ _)     (lowering-deferred-substrate! expr "vcons")]
+    [(expr-vhead _ _ _)       (lowering-deferred-substrate! expr "vhead")]
+    [(expr-vtail _ _ _)       (lowering-deferred-substrate! expr "vtail")]
+    [(expr-vindex _ _ _ _)    (lowering-deferred-substrate! expr "vindex")]
+
+    [(expr-char _)            (lowering-deferred-substrate! expr "Char")]
+    [(expr-string _)         (lowering-deferred-substrate! expr "String")]
+    [(expr-hole)             (translate-error! expr "lowering: unsolved metavar (hole)")]
+    [(expr-meta _ _)         (translate-error! expr "lowering: expr-meta should not reach codegen")]
+    [(expr-tycon _)          (lowering-type-only! expr "type constructor")]
+
+    [(expr-generic-add _ _)  (lowering-deferred-substrate! expr "generic arithmetic (+)")]
+    [(expr-generic-sub _ _)  (lowering-deferred-substrate! expr "generic arithmetic (-)")]
+    [(expr-generic-mul _ _)  (lowering-deferred-substrate! expr "generic arithmetic (*)")]
+    [(expr-generic-div _ _)  (lowering-deferred-substrate! expr "generic arithmetic (/)")]
+    [(expr-generic-mod _ _)  (lowering-deferred-substrate! expr "generic arithmetic (mod)")]
+    [(expr-generic-lt _ _)   (lowering-deferred-substrate! expr "generic comparison (<)")]
+    [(expr-generic-le _ _)   (lowering-deferred-substrate! expr "generic comparison (<=)")]
+    [(expr-generic-gt _ _)   (lowering-deferred-substrate! expr "generic comparison (>)")]
+    [(expr-generic-ge _ _)   (lowering-deferred-substrate! expr "generic comparison (>=)")]
+    [(expr-generic-eq _ _)   (lowering-deferred-substrate! expr "generic comparison (=)")]
+    [(expr-generic-negate _) (lowering-deferred-substrate! expr "generic negate")]
+    [(expr-generic-abs _)    (lowering-deferred-substrate! expr "generic abs")]
+    [(expr-generic-from-int _ _)
+     (lowering-deferred-substrate! expr "generic-from-int")]
+    [(expr-generic-from-rat _ _)
+     (lowering-deferred-substrate! expr "generic-from-rat")]
+
     [_
      (translate-error!
       expr
-      "Lowering does not implement this expression form yet (see \
-docs/tracking/2026-05-01_SH_LOWERING_FEATURE_MAP.md). Examples of unsupported \
-families: Vec/String/Posit/Rat, first-class lambdas, non-tail recursion, \
-runtime foreign calls, logic/session forms.")]))
+      "Lowering does not implement this expression yet — likely Posit/Rational/collections/FFI/FIRST CLASS FUNCTIONS/session-logic (see docs/tracking/2026-05-01_SH_LOWERING_FEATURE_MAP.md).")]))
 
 (define (build-unary b a-expr tag env [out-dom INT-DOMAIN-ID] [out-init 0])
   (define a-vt (build a-expr b INT-DOMAIN-ID env))
