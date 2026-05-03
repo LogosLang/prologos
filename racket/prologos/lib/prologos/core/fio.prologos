@@ -73,7 +73,7 @@ defn fio-close [h]
 ;;
 ;; Not linear (-1>) because it doesn't take a linear param — it creates
 ;; and manages the handle internally.
-spec fio-with-file {A : Type} String -> String -> <Handle -> <Handle * A>> -> A
+spec fio-with-file String -> String -> <Handle -> <Handle * A>> -> A
 defn fio-with-file [path mode body]
   let p := [body [fio-open path mode]]
     match [fio-close [fst p]] (unit -> [snd p])

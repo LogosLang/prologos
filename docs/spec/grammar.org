@@ -811,16 +811,60 @@ def- internal-state : Nat zero
 ;; Simple function type
 spec factorial Nat -> Nat
 
-;; With implicit type parameters
-spec map {A B : Type} [A -> B] [List A] -> List B
+;; Bare type variables — auto-introduced
+;; (kind-`Type` vars and higher-kinded vars constrained by `:where`)
+spec map [A -> B] [List A] -> List B
 
-;; With trait constraints
-spec elem {A : Type} [Eq A] A [List A] -> Bool
+;; With trait constraints — the implicit binder is also auto-introduced
+spec elem [Eq A] A [List A] -> Bool
+
+;; Higher-kinded — `C` is inferred to have kind `Type -> Type`
+;; from the `Seqable C` / `Buildable C` constraints.
+spec gmap [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
 
 ;; With varargs
 spec sum-all Nat ... -> Nat
+#+end_src
 
-;; With multiple implicits and constraints
+*** Auto-Introduced Implicit Binders
+
+A capitalized identifier that appears free in a =spec= signature (and is not a
+known type or trait name) is auto-introduced as an implicit binder.  Two
+directions of inference cooperate:
+
+- *Direction 1.* Free type variables are auto-introduced with kind =Type=.
+  ={A : Type}= almost never needs to be written.
+- *Direction 2.* Higher-kinded variables (e.g. =C : Type -> Type=) are
+  inferred from =:where= clauses and from inline trait constraints.  When
+  =Seqable= is declared over ={C : Type -> Type}=, a free =C= used at
+  =[Seqable C]= or =:where (Seqable C)= is auto-introduced with the trait's
+  declared kind.
+
+#+begin_src prologos
+;; Equivalent — the bare form is the canonical style:
+spec gmap {A B : Type} {C : Type -> Type} [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+
+spec gmap [A -> B] -> [C A] -> [C B]
+  :where (Seqable C) (Buildable C)
+#+end_src
+
+Auto-detected binders are placed after explicit binders and sorted by kind
+(=Type= first, then higher-kinded), matching the convention users have
+written by hand.
+
+Explicit binders remain useful for:
+
+- *Pedagogic clarity* — when documenting a teaching example.
+- *Disambiguation* — when no constraining position pins the kind, e.g.
+  =spec empty {A : Type} [List A]=.
+- *Order-sensitive call sites* — when a body explicitly passes type
+  arguments in a particular order, declaring the binders explicitly fixes
+  the order against the source-walk-order auto-introduction would produce.
+
+#+begin_src prologos
+;; Multiple implicits and constraints (still works):
 spec sort-on {A B : Type} [B -> B -> Bool] [A -> B] [List A] -> List A
 #+end_src
 

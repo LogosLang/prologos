@@ -365,13 +365,13 @@ defn pad-end [n c s]
 ;; ── Folding ──────────────────────────────────────
 
 ;; str-foldl : (A -> Char -> A) -> A -> String -> A
-spec str-foldl-loop {A : Type} [-> A [-> Char A]] -> A -> String -> Int -> Int -> A
+spec str-foldl-loop [-> A [-> Char A]] -> A -> String -> Int -> Int -> A
 defn str-foldl-loop [f acc s len i]
   if [int-eq i len]
     acc
     [str-foldl-loop f [f acc [str::ref s i]] s len [int+ i 1]]
 
-spec str-foldl {A : Type} [-> A [-> Char A]] -> A -> String -> A
+spec str-foldl [-> A [-> Char A]] -> A -> String -> A
 defn str-foldl [f z s]
   str-foldl-loop f z s [str::length s] 0
 

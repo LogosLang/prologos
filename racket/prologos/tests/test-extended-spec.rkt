@@ -645,6 +645,78 @@
     (check-true (pair? b-binder))))
 
 ;; ========================================
+;; 9b. Issue #20: Direction 1 + Direction 2 combined
+;; ========================================
+;; Validates the issue's target form — bare `A`, `B`, `C` with `:where`
+;; pinning the higher-kinded `C`'s kind. The bare-form spec-entry must equal
+;; the explicit-form spec-entry's implicit-binders.
+
+(test-case "spec: D1+D2 combined — kind-Type and HKT both auto-introduced"
+  (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(trait (MySeq (C : (-> (Type 0) (Type 0)))) (to-seq : (C A) -> (C A)))")
+    ;; Bare form — A, B, C all auto-detected; C kind inferred from :where
+    (process-string
+      "(spec gmap (A -> B) -> (C A) -> (C B) where (MySeq C))")
+    (define se (lookup-spec 'gmap))
+    (define binders (spec-entry-implicit-binders se))
+    (check-equal? (cdr (assq 'A binders)) '(Type 0))
+    (check-equal? (cdr (assq 'B binders)) '(Type 0))
+    (check-equal? (cdr (assq 'C binders)) '(-> (Type 0) (Type 0)))))
+
+(test-case "spec: bare form equals explicit form (D1+D2 idempotence)"
+  (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(trait (MySeq (C : (-> (Type 0) (Type 0)))) (to-seq : (C A) -> (C A)))")
+    (process-string
+      "(spec g-bare (A -> B) -> (C A) -> (C B) where (MySeq C))")
+    (process-string
+      (string-append
+        "(spec g-explicit ($brace-params A B : (Type 0))"
+        "                ($brace-params C : (-> (Type 0) (Type 0)))"
+        "                (A -> B) -> (C A) -> (C B) where (MySeq C))"))
+    (define bare (spec-entry-implicit-binders (lookup-spec 'g-bare)))
+    (define expl (spec-entry-implicit-binders (lookup-spec 'g-explicit)))
+    (check-equal? bare expl)))
+
+(test-case "spec: D2 single-constraint metadata :where preserves list shape"
+  ;; Regression: inline (:where (Foo A)) (a single constraint in metadata
+  ;; child form, not the trailing block form) used to be flattened from
+  ;; ((Foo A)) to (Foo A), which then crashed expand-bundle-constraints.
+  (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
+                 [current-spec-store (hasheq)]
+                 [current-property-store (hasheq)]
+                 [current-functor-store (hasheq)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry (hasheq)]
+                 [current-trait-laws (hasheq)])
+    (process-string
+      "(trait (MySeq (C : (-> (Type 0) (Type 0)))) (to-seq : (C A) -> (C A)))")
+    ;; The (:where (MySeq C)) inline child shape is what the WS reader
+    ;; produces for a single-constraint :where keyword line.
+    (process-string
+      "(spec gmap2 (A -> B) -> (C A) -> (C B) (:where (MySeq C)))")
+    (define se (lookup-spec 'gmap2))
+    (check-true (spec-entry? se))
+    (define binders (spec-entry-implicit-binders se))
+    (check-equal? (cdr (assq 'C binders)) '(-> (Type 0) (Type 0)))))
+
+;; ========================================
 ;; 10. flatten-property: :includes resolution
 ;; ========================================
 
