@@ -307,11 +307,43 @@
     [(? expr-relation-type?)      (alloc-value-cell net e)]
     [(? expr-net-type?)           (alloc-value-cell net e)]
 
-    ;; ----- Phase 14: tail edges (held opaque) -----
-    ;; Open/cumulative/Fin family + miscellaneous edge-case nodes that
-    ;; appear post-elaboration as value tokens. Most are handled by the
-    ;; type-former opaque rule in Phase 1; the rest land here.
+    ;; ----- Phase 14: tail edges -----
+    ;; Open + cut held opaque. Numeric coercion ops (from-int, from-nat)
+    ;; implemented per reduction.rkt iota rules. expr-panic (and other
+    ;; complex tail nodes — broadcast-get, explain, all-different) raise
+    ;; preduce-unsupported (deferred to Phase 14c — they touch logic-
+    ;; engine effects or runtime exception machinery).
     [(? expr-Open?) (alloc-value-cell net e)]
+    [(? expr-cut?)  (alloc-value-cell net e)]
+
+    [(expr-from-int n)
+     (define-values (cid-in net1) (compile-expr n env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+         (lambda (nn)
+           (define v (net-cell-read nn cid-in))
+           (cond
+             [(preduce-bot? v) nn]
+             [(expr-int? v) (net-cell-write nn cid-out (expr-rat (expr-int-val v)))]
+             [else (error 'preduce "from-int operand not Int: ~v" v)]))))
+     (values cid-out net3)]
+
+    [(expr-from-nat n)
+     (define-values (cid-in net1) (compile-expr n env net))
+     (define-values (net2 cid-out)
+       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (net3 _)
+       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+         (lambda (nn)
+           (define v (net-cell-read nn cid-in))
+           (cond
+             [(preduce-bot? v) nn]
+             [(expr-nat-val? v) (net-cell-write nn cid-out (expr-int (expr-nat-val-n v)))]
+             [(expr-zero? v)    (net-cell-write nn cid-out (expr-int 0))]
+             [else (error 'preduce "from-nat operand not Nat: ~v" v)]))))
+     (values cid-out net3)]
 
     ;; ----- Phase 12: generic / trait-dispatched arithmetic -----
     ;;
