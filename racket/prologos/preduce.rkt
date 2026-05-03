@@ -205,13 +205,27 @@
          (? expr-Unit?) (? expr-Nil?))
      (alloc-value-cell net e)]
 
-    ;; ----- Phase 2 literals + Phase 5 refl -----
+    ;; ----- Phase 2 literals + Phase 5 refl + Phase 7 atomic literals -----
     [(? expr-int?)     (alloc-value-cell net e)]
     [(? expr-true?)    (alloc-value-cell net e)]
     [(? expr-false?)   (alloc-value-cell net e)]
     [(? expr-nat-val?) (alloc-value-cell net e)]
     [(? expr-zero?)    (alloc-value-cell net e)]
     [(? expr-refl?)    (alloc-value-cell net e)]  ;; Phase 5: refl is a value
+    [(? expr-string?)  (alloc-value-cell net e)]  ;; Phase 7
+    [(? expr-char?)    (alloc-value-cell net e)]  ;; Phase 7
+    [(? expr-keyword?) (alloc-value-cell net e)]  ;; Phase 7
+    [(? expr-symbol?)  (alloc-value-cell net e)]  ;; Phase 7
+    [(? expr-path?)    (alloc-value-cell net e)]  ;; Phase 7
+    [(? expr-rat?)     (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-posit8?)  (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-posit16?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-posit32?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-posit64?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-quire8-val?)  (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-quire16-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-quire32-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
+    [(? expr-quire64-val?) (alloc-value-cell net e)]  ;; Phase 8 (literal)
 
     ;; ----- Phase 2: annotation erasure -----
     ;; (expr-ann e _) reduces by erasing the type annotation.
