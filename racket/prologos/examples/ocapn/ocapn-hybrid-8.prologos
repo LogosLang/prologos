@@ -1,0 +1,31 @@
+ns ocapn-on-hybrid-8
+
+;; Eighth OCapN program — mixes int-arith (NATIVE kernel dispatch
+;; tags 0-7 via the #:native-op hint) with user-ctor pattern matching
+;; (Racket-callback tags 8+). Demonstrates the per-tag KIND mix on
+;; a single program: profile output should show BOTH native and
+;; callback fires.
+;;
+;; The program builds two syrup-int values from int-arith expressions,
+;; pulls them apart with selectors, then does more int-arith on the
+;; results. A program-level mix.
+
+require [prologos::ocapn::syrup :refer-all]
+        [prologos::data::option :refer [Option some none]]
+
+;; Build syrup-int values from arithmetic.
+def a := [syrup-int [int+ 10 20]]    ;; syrup-int 30 — int+ should be NATIVE
+def b := [syrup-int [int* 7 6]]      ;; syrup-int 42 — int* should be NATIVE
+
+;; NOTE: prologos::ocapn::syrup does NOT define `int?` (only `null?`,
+;; `bool?`, `refr?`, `promise?`, `tagged?`). Naming `int?` would
+;; resolve to `prologos::data::datum::int?` (a Datum predicate) which
+;; type-errors against SyrupValue. Pitfall #3.
+
+;; Use predicates that actually exist on SyrupValue.
+def isa-bool? := [bool? a]             ;; false — a is syrup-int
+def isb-bool? := [bool? b]             ;; false — b is syrup-int
+def isa-tagged? := [tagged? a]         ;; false — a is not tagged
+
+;; main returns a triple of bools packed in nested pair.
+def main := [pair isa-bool? [pair isb-bool? isa-tagged?]]

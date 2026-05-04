@@ -123,6 +123,9 @@ kernel BSP scheduler.
 | `examples/ocapn/ocapn-hybrid-3.prologos` | ✅ kernel | 11-arm `defn` + 3 dispatched calls | `(true, false, true)` packed in nested pair | ~28 µs | 6 fires (0 native, 6 cb) |
 | `examples/ocapn/ocapn-hybrid-4.prologos` | ✅ kernel | `[is-some? [get-tag [syrup-tagged "op:deliver" syrup-null]]]` (chained Option) | `(expr-true)` | ~36 µs | 5 fires (0 native, 5 cb) |
 | `examples/ocapn/ocapn-hybrid-5.prologos` | ✅ kernel | predicate sweep across 9 SyrupValue ctors | nested-pair of 9 booleans | ~52 µs | 18 fires (0 native, 18 cb) |
+| `examples/ocapn/ocapn-hybrid-6.prologos` | ✅ kernel | multi-arg `defn pick` matching on 2 args + tagged?/bool? on results | nested-pair (false, true) | ~117 µs | 16 fires (0 native, 16 cb) |
+| `examples/ocapn/ocapn-hybrid-7.prologos` | ✅ kernel | uses `prologos::ocapn::promise` directly: pst-fulfilled + pst-broken predicates | 5-tuple of bools | ~103 µs | 10 fires (0 native, 10 cb) |
+| `examples/ocapn/ocapn-hybrid-8.prologos` | ✅ kernel | **mixed**: int+/int* (NATIVE tags 0/2) + bool?/tagged? (callback) | nested-pair (false, false, false) | ~99 µs | 9 fires (**3 native**, 6 cb) |
 
 All measurements: single run, on this Linux x86_64 host, post-build at
 `tools/build-hybrid-binary.sh` against branch
@@ -147,17 +150,28 @@ All measurements: single run, on this Linux x86_64 host, post-build at
 
 ### Known issues surfaced during testing
 
-- **FQN-qualified prelude symbols not resolved by preduce.rkt's
-  `expr-fvar` lookup**. Surfaced when ocapn-hybrid-5 tried to use
-  `[syrup-list nil]` — the elaborator emitted `prologos::data::list::nil`
-  but `global-env-lookup-value` only finds short names in some
-  contexts. Affects both backends; not hybrid-specific. Worked around
-  in ocapn-hybrid-5 by dropping the syrup-list arm. Tracked as a
-  follow-up.
-- **Kernel `FormatBuffer` was 1024 bytes** — silently truncated the
-  full per-tag profile JSON when `N_TAGS=256` produced output > 1 KB.
-  Fixed 2026-05-04 by raising to 8192 bytes; profile output now
-  parses cleanly.
+Tracked in [`docs/tracking/2026-05-04_PROLOGOS_LANGUAGE_PITFALLS.md`](../../../../docs/tracking/2026-05-04_PROLOGOS_LANGUAGE_PITFALLS.md)
+(language/elaboration/kernel pitfalls discovered while running real
+programs through the hybrid kernel — distinct from the upstream OCapN
+goblin-pitfalls.md). Active items as of 2026-05-04:
+
+- **Pitfall #1** (🟡 worked-around): FQN-qualified prelude symbols
+  (e.g., `prologos::data::list::nil`) not resolved by `preduce.rkt`'s
+  `expr-fvar` lookup. Surfaced by ocapn-hybrid-5; affects both backends.
+- **Pitfall #2** (🟢 fixed in `0ae1230`): Kernel `FormatBuffer`
+  truncated profile JSON > 1 KB. Was silently giving partial JSON
+  output; raised buffer to 8192 bytes.
+- **Pitfall #3** (🔴 open): silent prelude shadowing under
+  `:refer-all` — calling a function name that isn't in the named
+  module silently falls back to the prelude, surfacing later as
+  a confusing "could not infer type" error rather than a clear
+  "function not found in module X." Surfaced in ocapn-hybrid-8
+  via `[int? a]` resolving to `prologos::data::datum::int?`.
+- **Pitfall #4** (🟡 worked-around): identity-bridge install sites
+  in `compile-and-bridge` + dynamic-β don't yet pass
+  `#:native-op 'identity`, so they fall into the callback path
+  even though the kernel has a native identity at tag 0. Easy
+  ~5-LOC fix; deferred.
 
 ## References
 
