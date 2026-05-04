@@ -26,6 +26,16 @@
          "../runtime-bridge.rkt"
          (only-in "../reduction.rkt" nf))
 
+;; Gate: skip the whole file if libprologos-runtime-hybrid.so isn't
+;; built (e.g., CI environment without Zig). Local development with
+;; the kernel built proceeds normally.
+(unless (hybrid-runtime-available?)
+  (printf "[skip] test-preduce-hybrid-differential.rkt: \
+libprologos-runtime-hybrid.so not built; build via \
+'cd runtime && zig build-lib -dynamic prologos-runtime-hybrid.zig -O ReleaseFast' \
+to enable.~n")
+  (exit 0))
+
 ;; ====================================================================
 ;; Three-way differential helper
 ;; ====================================================================

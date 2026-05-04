@@ -28,6 +28,18 @@ jobs:
         # at module load time. Install explicitly so they run on CI.
         run: raco pkg install --auto --skip-installed rackcheck
 
+      - name: Install Zig (for hybrid runtime kernel)
+        # Zig 0.13 builds runtime/libprologos-runtime-hybrid.so used by
+        # tests/test-preduce-hybrid-differential.rkt. The test gracefully
+        # skips if the .so isn't built; this step ensures CI exercises
+        # the hybrid path.
+        uses: mlugg/setup-zig@v1
+        with:
+          version: '0.13.0'
+
+      - name: Build hybrid runtime kernel
+        run: cd runtime && zig build-lib -dynamic prologos-runtime-hybrid.zig -O ReleaseFast
+
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 

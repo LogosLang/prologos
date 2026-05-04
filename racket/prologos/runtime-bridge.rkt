@@ -21,10 +21,30 @@
 
 (define-runtime-path RUNTIME-DIR "../../runtime")
 
+;; Fail-soft: if libprologos-runtime-hybrid.so isn't built (e.g., CI
+;; environment without Zig), ffi-lib returns #f. Consumers should
+;; check `hybrid-runtime-available?` before invoking any FFI binding.
+;; If unavailable, all FFI bindings are #f and calling them raises a
+;; clear error rather than segfaulting. The test suite skips the
+;; differential gate when the runtime isn't available.
 (define libprologos-runtime-hybrid
-  (ffi-lib (build-path RUNTIME-DIR "libprologos-runtime-hybrid")))
+  (ffi-lib (build-path RUNTIME-DIR "libprologos-runtime-hybrid")
+           #:fail (lambda () #f)))
 
-(define-ffi-definer define-rt libprologos-runtime-hybrid)
+(define (hybrid-runtime-available?)
+  (and libprologos-runtime-hybrid #t))
+
+;; When lib is #f (unavailable), use a stub-installing definer so module
+;; loads cleanly. Each FFI binding is a procedure that errors loudly
+;; when called. Tests gate via `hybrid-runtime-available?` to skip
+;; entirely when unavailable.
+(define-syntax-rule (define-rt name ftype)
+  (define name
+    (if libprologos-runtime-hybrid
+        (get-ffi-obj 'name libprologos-runtime-hybrid ftype)
+        (lambda args
+          (error 'name
+                 "libprologos-runtime-hybrid.so not loaded; build the kernel via zig build-lib first")))))
 
 ;; ====================================================================
 ;; Cell + propagator API
@@ -235,6 +255,9 @@
     [else (error 'unbox-prologos-value "unknown tag ~a" kind)]))
 
 (provide
+ ;; Availability
+ hybrid-runtime-available?
+
  ;; Cell + propagator API
  prologos_cell_alloc
  prologos_cell_write
