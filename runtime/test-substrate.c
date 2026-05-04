@@ -17,6 +17,8 @@
  *      not fire even though the cell value changed)
  *   - prologos_cell_write DOES enqueue subscribers when the merged
  *     value differs from old (round-trip via the BSP scheduler)
+ *   - kernel-int-mod (2→1 tag 7): truncating division mate uses Zig @mod,
+ *     aligned with low-pnet-to-llvm.rkt and Racket's modulo propagator
  *   - stat_resets (key 9) tracks reset traffic; stat_writes_committed
  *     (key 2) tracks merging-write traffic
  *
@@ -178,6 +180,22 @@ int main(void) {
     prologos_cell_write(a, 100); /* triggers add -> 103, min(4,103)=4 */
     prologos_run_to_quiescence();
     ASSERT_EQ("T7.no_increase", prologos_cell_read(sum), 4);
+
+    /* -------- T7b: kernel-int-mod tag 7 (LLVM / Racket parity) -------- */
+    /* Mirrors low-pnet-to-llvm kernel-int-mod = 7 and Racket modulo. */
+    prologos_reset_stats();
+    uint32_t ma = prologos_cell_alloc();
+    uint32_t mb = prologos_cell_alloc();
+    uint32_t mr = prologos_cell_alloc();
+    prologos_cell_write(ma, 17);
+    prologos_cell_write(mb, 5);
+    prologos_propagator_install_2_1(7 /* int-mod */, ma, mb, mr);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T7b.mod_positive", prologos_cell_read(mr), 2); /* 17 mod 5 */
+
+    prologos_cell_write(ma, -17);
+    prologos_run_to_quiescence();
+    ASSERT_EQ("T7b.mod_negative_dividend", prologos_cell_read(mr), 3); /* modulo(-17,5)=3 */
 
     /* ====================================================================
      *  Day 2 tests: 2-tier outer loop + topology-mutation tracking

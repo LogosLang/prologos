@@ -53,8 +53,10 @@
 //                                              tags: 0=int-add, 1=int-sub,
 //                                                    2=int-mul, 3=int-div,
 //                                                    4=int-eq,  5=int-lt,
-//                                                    6=int-le
+//                                                    6=int-le, 7=int-mod
 //                                              comparison results: 0/1 i64
+//                                              int-mod uses @mod (sign of divisor);
+//                                              matches Racket fire-2-1 modulo.
 //   prologos_propagator_install_3_1(tag, in0, in1, in2, out0) -> u32 prop-id
 //                                              ternary fire-fn dispatch
 //                                              tags: 0=select(cond,then,else)
