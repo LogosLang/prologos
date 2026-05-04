@@ -34,7 +34,7 @@ ns prologos::ocapn::syrup-wire
 require [prologos::ocapn::syrup     :refer-all]
         [prologos::data::string     :as str :refer []]
         [prologos::data::char       :as char :refer []]
-        [prologos::data::list       :refer [List nil cons]]
+        [prologos::data::list       :refer [List nil cons reverse]]
         [prologos::data::option     :refer [Option some none]]
         [prologos::data::bool       :refer []]
 
@@ -292,25 +292,34 @@ spec dm-end DecodedMany -> Int
 defn dm-end
   | decoded-many _ e -> e
 
-spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> Option DecodedMany
-defn decode-many-loop [dec s i terminator]
+;; Tail-recursive accumulator helper. Walks the input collecting
+;; decoded values into `acc` (in reverse order) until either the
+;; terminator byte or input-exhausted. Returns the accumulator
+;; (reversed) plus the offset past the terminator.
+;;
+;; The previous implementation was non-tail-recursive — it built
+;; the result list head-first via `cons v (recurse ...)`, which
+;; combined with the recursive `let v := ...` / `let xs := ...`
+;; bindings forced the Prologos reducer to retain a deep
+;; substitution chain per element. Profiling (pitfall #27)
+;; showed ~52ms-354ms per reduction step on multi-arity records;
+;; this rewrite eliminates the chain.
+spec decode-many-acc [String -> Int -> Option Decoded] String Int Int [List SyrupValue] -> Option DecodedMany
+defn decode-many-acc [dec s i terminator acc]
   match [int-lt [str::length s] [int+ i 1]]
     | true  -> none
     | false ->
         match [int-eq [char::code [str::ref s i]] terminator]
-          | true  -> some [decoded-many nil [int+ i 1]]
+          | true  -> some [decoded-many [reverse acc] [int+ i 1]]
           | false ->
               match [dec s i]
                 | none -> none
-                | some d ->
-                    let v := [d-value d]
-                      let rest-start := [d-consumed d]
-                        match [decode-many-loop dec s rest-start terminator]
-                          | none -> none
-                          | some dm ->
-                              let xs := [dm-list dm]
-                                let e := [dm-end dm]
-                                  some [decoded-many [cons v xs] e]
+                | some [decoded v end] ->
+                    decode-many-acc dec s end terminator [cons v acc]
+
+spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> Option DecodedMany
+defn decode-many-loop [dec s i terminator]
+  decode-many-acc dec s i terminator nil
 
 ;; --- Record decoder, parameterized on the element decoder ---
 
@@ -318,30 +327,28 @@ spec decode-record-with [String -> Int -> Option Decoded] String Int -> Option D
 defn decode-record-with [dec s i]
   match [decode-many-loop dec s i 62]
     | none -> none
-    | some dm ->
-        let xs := [dm-list dm]
-          let e  := [dm-end dm]
-            match xs
-              | nil -> none
-              | cons head tail ->
-                  match head
-                    | syrup-symbol tag ->
-                        match tail
-                          | nil          -> some [decoded [syrup-tagged tag syrup-null] e]
-                          | cons p1 rest ->
-                              match rest
-                                | nil       -> some [decoded [syrup-tagged tag p1] e]
-                                | cons _ _  ->
-                                    some [decoded [syrup-tagged tag [syrup-list tail]] e]
-                    | syrup-null      -> none
-                    | syrup-bool _    -> none
-                    | syrup-nat _     -> none
-                    | syrup-int _     -> none
-                    | syrup-string _  -> none
-                    | syrup-list _    -> none
-                    | syrup-tagged _ _ -> none
-                    | syrup-refr _    -> none
-                    | syrup-promise _ -> none
+    | some [decoded-many xs e] ->
+        match xs
+          | nil -> none
+          | cons head tail ->
+              match head
+                | syrup-symbol tag ->
+                    match tail
+                      | nil          -> some [decoded [syrup-tagged tag syrup-null] e]
+                      | cons p1 rest ->
+                          match rest
+                            | nil       -> some [decoded [syrup-tagged tag p1] e]
+                            | cons _ _  ->
+                                some [decoded [syrup-tagged tag [syrup-list tail]] e]
+                | syrup-null      -> none
+                | syrup-bool _    -> none
+                | syrup-nat _     -> none
+                | syrup-int _     -> none
+                | syrup-string _  -> none
+                | syrup-list _    -> none
+                | syrup-tagged _ _ -> none
+                | syrup-refr _    -> none
+                | syrup-promise _ -> none
 
 ;; --- Top-level decoder: parse one syrup-value at offset i ---
 ;;
@@ -371,8 +378,8 @@ defn decode-at [s i]
                                 | true  ->
                                     match [decode-many-loop decode-at s [int+ i 1] 93]
                                       | none -> none
-                                      | some dm ->
-                                          some [decoded [syrup-list [dm-list dm]] [dm-end dm]]
+                                      | some [decoded-many xs e] ->
+                                          some [decoded [syrup-list xs] e]
                                 | false ->
                                     match [int-eq cc 60]
                                       | true  -> decode-record-with decode-at s [int+ i 1]

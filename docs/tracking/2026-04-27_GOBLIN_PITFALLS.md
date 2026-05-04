@@ -887,7 +887,7 @@ in the Prologos reducer compounds across recursive calls.
 Combined with the 10-constructor pattern-match per
 SyrupValue match, each step is doing ~52-354ms of work.
 
-**Three lines of attack** (deferred):
+**Three lines of attack** (option 4 SHIPPED 2026-05-01):
 1. Inline `decode-many-loop` into `decode-at` (eliminate HOF
    passing). Smallest scope; tests Prologos's HOF-substitution
    cost specifically.
@@ -895,9 +895,30 @@ SyrupValue match, each step is doing ~52-354ms of work.
    Loses self-hosting purity.
 3. Fix the reducer's closure-substitution hot path.
    Most principled but largest scope.
+4. **(SHIPPED Phase 13)** Combine two pure-Prologos rewrites
+   in syrup-wire.prologos:
+   - Tail-recursive accumulator + `reverse` for `decode-many-loop`
+     (was non-tail-rec head-cons recursion holding deep substitution
+     chains).
+   - Inline destructure of `Decoded` / `DecodedMany` structs at
+     match position (`some [decoded v end] ->`) instead of
+     accessor calls (`d-value` / `d-consumed`), which were each
+     a separate pattern match per access.
 
-The 1-arity round-trip Phase-5 tests still tolerate the cost
-(<10s per decode); Phase 6+ tests sidestep via byte equality.
+   Measured speedup vs the baseline above:
+   - 1-arity record:  28s → **4.5s** (6.2× faster)
+   - 3-arity record: 270s → **10.8s** (25× faster)
+   - decoder-using round-trip tests now run in <1 min instead
+     of timing out the runner.
+
+The remaining cost is still substantial (4.5s per 1-arity decode
+is far slower than a function call should be) but the decoder is
+now usable for bridge tests. Options 1/2/3 are still candidates
+for further work if production loads emerge.
+
+The 1-arity round-trip Phase-5 tests already tolerated the cost
+(<10s per decode); Phase 6+ tests originally sidestepped via byte
+equality but could now use decode-and-compare if desired.
 
 ---
 
