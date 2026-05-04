@@ -28,6 +28,7 @@ require [prologos::ocapn::message :refer-all]
         [prologos::ocapn::vat     :refer-all]
         [prologos::ocapn::syrup   :refer-all]
         [prologos::data::option   :refer [Option some none]]
+        [prologos::data::nat      :refer [nat-eq?]]
 
 spec incoming-captp-op CapTPOp Vat -> Vat
   :doc "Apply an inbound CapTPOp to the vat. Phase 11."
@@ -121,40 +122,73 @@ data GcExportReq
   gc-export-req : Nat -> Nat
   ;; (export-pos, count)
 
-data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat]
-  ;; (listeners, gc-export-requests, gc-answer-positions)
+data QEntry
+  q-entry : Nat -> Nat
+  ;; (remote-question-pos, local-promise-id)
+  ;;
+  ;; The peer's op:deliver carries an answer-pos N — a position in
+  ;; the peer's question table. We allocate a local promise and
+  ;; record (N → local-id) so subsequent ops referring to the same
+  ;; answer-pos route to the same local promise.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil]
+data BridgeState
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry]
+  ;; (listeners, gc-export-requests, gc-answer-positions, question-table)
+
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil]
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ -> ls
+  | bridge-state ls _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ -> es
+  | bridge-state _ es _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as -> as
+  | bridge-state _ _ as _ -> as
+
+spec bs-questions BridgeState -> List QEntry
+defn bs-questions
+  | bridge-state _ _ _ qs -> qs
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as] ->
-      bridge-state [cons [listener tgt res] ls] es as
+  | tgt res [bridge-state ls es as qs] ->
+      bridge-state [cons [listener tgt res] ls] es as qs
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as
+  | pos cnt [bridge-state ls es as qs] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as] ->
-      bridge-state ls es [cons pos as]
+  | pos [bridge-state ls es as qs] ->
+      bridge-state ls es [cons pos as] qs
+
+spec bs-add-question Nat Nat BridgeState -> BridgeState
+defn bs-add-question
+  | remote local [bridge-state ls es as qs] ->
+      bridge-state ls es as [cons [q-entry remote local] qs]
+
+;; Look up the local-id for a given remote-question-pos.
+;; First (most-recent) match wins per cons-at-head insertion.
+
+spec bs-lookup-question-loop [List QEntry] Nat -> [Option Nat]
+defn bs-lookup-question-loop
+  | nil _ -> none
+  | [cons [q-entry r l] rest] target ->
+      match [nat-eq? r target]
+        | true  -> some l
+        | false -> bs-lookup-question-loop rest target
+
+spec bs-lookup-question Nat BridgeState -> [Option Nat]
+defn bs-lookup-question [remote st]
+  bs-lookup-question-loop [bs-questions st] remote
 
 ;; ===========================================================
 ;; State-aware dispatcher
@@ -175,11 +209,66 @@ spec bridge-step-state BridgeStep -> BridgeState
 defn bridge-step-state
   | bridge-step _ st -> st
 
+;; Phase 15 helper: handle op:deliver with answer-pos =
+;; some <remote-pos>. Look up an existing question-table entry
+;; for `remote`; if found, use the local-id directly. Else
+;; allocate a fresh local promise, record (remote → local), and
+;; use the new local-id.
+
+spec deliver-with-ap Nat SyrupValue Nat Vat BridgeState -> BridgeStep
+defn deliver-with-ap [tgt args remote v st]
+  match [bs-lookup-question remote st]
+    | some local ->
+        bridge-step [enqueue-msg [vmsg-deliver tgt args [some Nat local]] v] st
+    | none ->
+        let alloc := [fresh-promise v]
+          let v' := [alloc-vat alloc]
+            let local := [alloc-id alloc]
+              let st' := [bs-add-question remote local st]
+                bridge-step
+                  [enqueue-msg [vmsg-deliver tgt args [some Nat local]] v']
+                  st'
+
+;; Phase 15 helper: handle op:deliver. If answer-pos is `some <remote>`,
+;; map to a fresh local promise via the question table; if `none`,
+;; pass through.
+
+;; deliver-with-fresh-pid: build the bridge-step using a known
+;; local promise id (no allocation needed).
+spec deliver-with-fresh-pid Nat SyrupValue Nat Vat BridgeState -> BridgeStep
+defn deliver-with-fresh-pid [tgt args local v st]
+  bridge-step [enqueue-msg [vmsg-deliver tgt args [some Nat local]] v] st
+
+;; deliver-allocate: allocate a fresh local promise and record
+;; (remote → local) in the question table; then deliver.
+spec deliver-allocate Nat SyrupValue Nat Vat BridgeState -> BridgeStep
+defn deliver-allocate [tgt args remote v st]
+  let alloc := [fresh-promise v]
+    deliver-with-fresh-pid tgt args
+      [alloc-id alloc]
+      [alloc-vat alloc]
+      [bs-add-question remote [alloc-id alloc] st]
+
+;; dispatch-deliver: route an op:deliver based on whether the
+;; answer-pos is `some <remote>` or `none`.
+;;   none  → pass-through (no promise needed)
+;;   some  → if remote is in question table, reuse local;
+;;           else allocate fresh local + record mapping
+spec dispatch-deliver Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-deliver [tgt args ap v st]
+  match ap
+    | none ->
+        bridge-step [enqueue-msg [vmsg-deliver tgt args [none Nat]] v] st
+    | some remote ->
+        match [bs-lookup-question remote st]
+          | some local -> deliver-with-fresh-pid tgt args local v st
+          | none       -> deliver-allocate tgt args remote v st
+
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
-  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14."
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15."
 defn captp-incoming-with-state
   | [op-deliver tgt args ap _rm] v st ->
-      bridge-step [enqueue-msg [vmsg-deliver tgt args ap] v] st
+      dispatch-deliver tgt args ap v st
   | [op-deliver-only tgt args] v st ->
       bridge-step [send-only tgt args v] st
   | [op-abort _reason] v st ->

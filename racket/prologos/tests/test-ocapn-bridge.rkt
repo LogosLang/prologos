@@ -282,3 +282,66 @@
                           bridge-state-empty))
               (queue-length (bridge-step-vat step))))")
    "1N"))
+
+;; ========================================
+;; Phase 15 — session question-table mapping
+;; ========================================
+
+(test-case "bridge/dispatch-deliver allocates fresh local promise and records mapping"
+  ;; Wire side specifies answer-pos=42 (a position in the peer's
+  ;; question table). Locally we have an empty vat — no promise
+  ;; at id 42. The bridge should allocate a local promise (will
+  ;; be id 0 in the empty vat) and record (42→0) in the question
+  ;; table.
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))) ;; remote=9 (chosen by peer)
+                                      (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty)
+                  qs (bs-questions (bridge-step-state step)))
+              (length qs)))")
+   "1N"))
+
+(test-case "bridge/dispatch-deliver re-uses existing question-table entry"
+  ;; Same op:deliver with remote=9 sent twice — second one
+  ;; should reuse the local promise; question table size stays 1.
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step1 (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi-1\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  step2 (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi-2\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (bridge-step-vat step1)
+                            (bridge-step-state step1))
+                  qs (bs-questions (bridge-step-state step2)))
+              (length qs)))")
+   "1N"))
+
+(test-case "bridge/dispatch-deliver with answer-pos=none doesn't touch question table"
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (none Nat)
+                                      (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty)
+                  qs (bs-questions (bridge-step-state step)))
+              (length qs)))")
+   "0N"))
