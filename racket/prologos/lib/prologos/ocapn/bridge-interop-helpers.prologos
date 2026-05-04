@@ -1,0 +1,42 @@
+ns prologos::ocapn::bridge-interop-helpers
+
+;; ========================================
+;; Helpers for Phase 24 bridge-driven interop tests.
+;; ========================================
+;;
+;; Pre-compiled wrappers around captp-incoming-with-state +
+;; drain + pump-outbound, exposed as single-call functions so
+;; test fixtures driving them via process-string don't pay the
+;; elaboration cost of an inline 7-binding let-chain.
+;;
+;; Background: Phase 24's first cut hit goblin pitfalls #30
+;; (match in deep let triggers inference failure) and #31
+;; (decode-op + bridge chain through process-string takes
+;; >90s). This module sidesteps both by exposing the chain as
+;; named top-level functions that raco make compiles once and
+;; the test fixture invokes via a single function call.
+
+require [prologos::ocapn::core   :refer-all]
+        [prologos::ocapn::message :refer-all]
+        [prologos::ocapn::captp-bridge :refer-all]
+        [prologos::data::list  :refer [List nil cons]]
+        [prologos::data::option :refer [Option some none]]
+
+;; Eight-deep suc-tower; keeps `drive-echo-bridge-once` flat.
+def drain-fuel-8 : Nat := [suc [suc [suc [suc [suc [suc [suc [suc zero]]]]]]]]
+
+spec first-bytes [List String] -> Option String
+defn first-bytes
+  | nil       -> [none String]
+  | cons hd _ -> [some String hd]
+
+;; Drive the bridge end-to-end with a fresh echo-actor vat for one
+;; inbound op. Returns Some <bytes> if the bridge produced an
+;; outbound deliver; None otherwise.
+spec drive-echo-bridge-once CapTPOp -> Option String
+defn drive-echo-bridge-once [op]
+  let sa   := [vat-spawn-actor beh-echo syrup-null empty-vat]
+    let step := [captp-incoming-with-state op [alloc-vat sa] bridge-state-empty]
+      let v2   := [drain drain-fuel-8 [bridge-step-vat step]]
+        let pr   := [pump-outbound v2 [bridge-step-state step] nil]
+          [first-bytes [pump-result-bytes pr]]

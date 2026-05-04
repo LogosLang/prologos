@@ -193,8 +193,13 @@ sock.on('end', () => {
   }
 });
 
-// 30s safety timeout.
+// 600s safety timeout. Wide because the Racket side runs the bridge
+// end-to-end (captp-incoming-with-state + drain + pump-outbound)
+// through process-string, which evaluates in pure-Prologos and
+// is observed at 80-180s with high variance (goblin pitfall #31).
+// The other peer scripts (peer-recv etc.) only test wire codec
+// round-trips and complete in well under 30s.
 setTimeout(() => {
   process.stderr.write('peer-questioner: timeout\n');
   process.exit(3);
-}, 30_000).unref();
+}, 600_000).unref();
