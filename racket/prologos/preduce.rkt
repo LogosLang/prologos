@@ -68,6 +68,10 @@
  preduce
  preduce-or-nf
 
+ ;; Phase 4 refactor: expose compile-expr so other backends
+ ;; (e.g. preduce-hybrid) can re-use the shared compile logic.
+ compile-expr
+
  ;; Parameters
  current-use-preduce?
  current-preduce-fuel
