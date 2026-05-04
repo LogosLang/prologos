@@ -57,11 +57,25 @@
                      (expr-reduce-arm 'bench-tag 1 (expr-bvar 0)))
                #t))
 
+;; W5: int arithmetic — exercises the kernel's tags 0-7 (native int-add
+;; etc.) — pre-refactor preduce-hybrid routed expr-int-add to
+;; KERNEL-INT-ADD-TAG directly. New backend-hybrid wraps as callback
+;; (regression). Use this workload to surface the regression: native ns
+;; should be > 0 if int-arith were going through native dispatch.
+(define W5-int-arith
+  ;; (((10 + 20) - 5) * 3) + (40 / 2)
+  (expr-int-add
+   (expr-int-mul (expr-int-sub (expr-int-add (expr-int 10) (expr-int 20))
+                               (expr-int 5))
+                 (expr-int 3))
+   (expr-int-div (expr-int 40) (expr-int 2))))
+
 (define WORKLOADS
   (list (cons "W1 bare-null" W1-bare-null)
         (cons "W2 unary-app" W2-unary-app)
         (cons "W3 match-nullary" W3-match-nullary)
-        (cons "W4 match-unary-extract" W4-match-unary-extract)))
+        (cons "W4 match-unary-extract" W4-match-unary-extract)
+        (cons "W5 int-arith (5 ops)" W5-int-arith)))
 
 ;; ====================================================================
 ;; Measurement
