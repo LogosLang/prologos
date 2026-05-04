@@ -578,3 +578,47 @@ Three lines of attack (deferred — none implemented in this round):
 3. Fix the reducer's closure-substitution hot path — most principled, largest scope.
 
 The 1-arity round-trip path (Phase 5: op:abort, op:gc-answer) tolerates the cost (<10s per decode); Phases 6-10 sidestep via byte equality; Phase 11 sidesteps by operating on CapTPOp values directly.
+
+## Phase 22 — Open-world actor behaviors (DEFERRED — language blocker)
+
+Currently `BehaviorTag` is a closed enum (cell, counter, greeter,
+echo, adder, forwarder, fulfiller). Real Goblins-style actors
+need user-defined behaviors as first-class values stored in the
+actor table — a heterogeneous closure registry.
+
+**Why deferred.** Prologos's closed-world `data` declaration
+plus the lack of first-class storage of typed closures in a
+heterogeneous registry (pitfall #3 family) makes this a
+language-architecture problem, not an OCapN-track feature.
+The proper fix needs:
+
+  - First-class closures of shape `SyrupValue -> SyrupValue -> ActStep`
+  - A way to store them heterogeneously in `[List ActorEntry]`
+  - Or trait-based dispatch with per-actor existential types
+
+None of these exist in Prologos today. Workarounds (e.g., a
+SyrupValue-encoded mini-DSL the dispatcher interprets) are
+expressively weaker than what users would expect.
+
+**Scope of follow-up.** A Prologos language phase that introduces
+either (a) heterogeneous existential containers or (b) first-class
+trait-method values would unblock this. Track it under the
+language workstream, not OCapN.
+
+## Phase 23 — Stream-level session typing (DEFERRED — language blocker)
+
+The CapTP wire is a multiplexed full-duplex stream of `op:*`
+messages. The natural session type is recursive:
+`μX. &> {deliver:X, listen:X, abort:end}`. Without `Mu`/`rec`,
+a single `session CapTPConn` can't capture stream-level
+well-typedness; we settle for per-exchange sub-protocols
+(captp-session.prologos has 5 finite ones).
+
+**Why deferred.** Pitfall #4: the grammar admits `Mu`/`rec` but
+the elaborator rejects them with `prologos-error "Unknown session
+type: rec"`. This is a Prologos language bug. Until it's fixed,
+session typing for CapTP streams is unprovable at the type level.
+
+**Scope of follow-up.** Implement `Mu`/`rec` in the session-type
+elaborator (likely surface-syntax.rkt + the session-type
+elaborator). Track it under the language workstream.
