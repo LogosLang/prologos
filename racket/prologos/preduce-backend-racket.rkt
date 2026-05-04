@@ -57,16 +57,16 @@
    ;; write-cell : net × cid × value → net'
    net-cell-write
 
-   ;; install-fire-once : net × inputs × outputs × fire-fn → net'
+   ;; install-fire-once : net × inputs × outputs × fire-fn × #:native-op → net'
    ;;   net-add-fire-once-propagator returns (values net pid); we discard pid.
-   (lambda (net inputs outputs fire-fn)
+   ;;   #:native-op hint is ignored: Racket-side has no kernel-native tags.
+   (lambda (net inputs outputs fire-fn #:native-op [_op #f])
      (define-values (net* _pid)
        (net-add-fire-once-propagator net inputs outputs fire-fn))
      net*)
 
-   ;; install-propagator : net × inputs × outputs × fire-fn → net'
-   ;;   Same shape as above; uses re-fireable variant.
-   (lambda (net inputs outputs fire-fn)
+   ;; install-propagator : same shape; #:native-op ignored.
+   (lambda (net inputs outputs fire-fn #:native-op [_op #f])
      (define-values (net* _pid)
        (net-add-propagator net inputs outputs fire-fn))
      net*)
@@ -93,8 +93,8 @@
    (lambda (net v) (error 'backend-racket "lattice not bound; use backend-racket-with-lattice"))
    (lambda (net cid) (error 'backend-racket "lattice not bound"))
    (lambda (net cid v) (error 'backend-racket "lattice not bound"))
-   (lambda (net inputs outputs fire-fn) (error 'backend-racket "lattice not bound"))
-   (lambda (net inputs outputs fire-fn) (error 'backend-racket "lattice not bound"))
+   (lambda (net inputs outputs fire-fn #:native-op [_ #f]) (error 'backend-racket "lattice not bound"))
+   (lambda (net inputs outputs fire-fn #:native-op [_ #f]) (error 'backend-racket "lattice not bound"))
    (lambda (net) (error 'backend-racket "lattice not bound"))
    (lambda () (error 'backend-racket "lattice not bound"))))
 

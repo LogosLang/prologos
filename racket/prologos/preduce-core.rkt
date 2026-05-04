@@ -140,11 +140,23 @@
 (define (b-write net cid v)
   ((preduce-backend-write-cell (current-backend)) net cid v))
 
-(define (b-install-fire-once net inputs outputs fire-fn)
-  ((preduce-backend-install-fire-once (current-backend)) net inputs outputs fire-fn))
+(define (b-install-fire-once net inputs outputs fire-fn
+                             #:native-op [native-op #f])
+  ;; #:native-op (optional symbol) is a hint for backends that have a
+  ;; corresponding kernel-native fire-fn (e.g. backend-hybrid maps
+  ;; 'int-add → KERNEL-INT-ADD-TAG). When the hint matches, the backend
+  ;; can install at the native dispatch tag instead of registering
+  ;; another callback. backend-racket ignores the hint (no native tags
+  ;; on the Racket side). Symbol values: 'int-add, 'int-sub, 'int-mul,
+  ;; 'int-div, 'int-eq, 'int-lt, 'int-le, 'identity (matches the kernel's
+  ;; 8 built-in fire-fns at tags 0-7).
+  ((preduce-backend-install-fire-once (current-backend))
+   net inputs outputs fire-fn #:native-op native-op))
 
-(define (b-install-propagator net inputs outputs fire-fn)
-  ((preduce-backend-install-propagator (current-backend)) net inputs outputs fire-fn))
+(define (b-install-propagator net inputs outputs fire-fn
+                              #:native-op [native-op #f])
+  ((preduce-backend-install-propagator (current-backend))
+   net inputs outputs fire-fn #:native-op native-op))
 
 (define (b-run-to-quiescence net)
   ((preduce-backend-run-to-quiescence (current-backend)) net))

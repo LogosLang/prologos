@@ -47,6 +47,30 @@
 (define MAX-N-TAGS 256)
 (define next-callback-tag (box KERNEL-NATIVE-TAG-COUNT))
 
+;; Symbolic native-op names → kernel dispatch tags. The kernel reserves
+;; tags 0-7 for built-in native fire-fns (compiled into the .so). When
+;; preduce.rkt installs a fire-fn with #:native-op set to one of these
+;; symbols, we install at the native tag instead of allocating a fresh
+;; callback tag — restoring the pre-refactor native dispatch for int
+;; arithmetic + the identity-bridge.
+;;
+;; Note: tag 0 serves DOUBLE duty in the kernel — KERNEL-INT-ADD-TAG
+;; and KERNEL-IDENTITY-TAG both alias to 0. The kernel's native fire-fn
+;; at tag 0 is the int-add implementation; the identity-bridge migration
+;; (Phase 10 of the original hybrid track) reused it because identity
+;; happens to be expressible as "fire-fn returns its first input" which
+;; is what int-add-with-zero-rhs does. See runtime/prologos-runtime-
+;; hybrid.zig for the actual native fire-fn definitions.
+(define NATIVE-OP-TAGS
+  (hasheq 'int-add  0    ;; KERNEL-INT-ADD-TAG (also KERNEL-IDENTITY-TAG)
+          'identity 0    ;; same kernel tag — see note above
+          'int-sub  1
+          'int-mul  2
+          'int-div  3
+          'int-eq   4
+          'int-lt   5
+          'int-le   6))
+
 (define (next-tag!)
   (define tag (unbox next-callback-tag))
   (when (>= tag MAX-N-TAGS)
@@ -101,16 +125,32 @@
      (prologos_cell_write cid (box-prologos-value v))
      'hybrid)
 
-   ;; install-fire-once : net × inputs × outputs × fire-fn → net'
-   (lambda (net inputs outputs fire-fn)
+   ;; install-fire-once : net × inputs × outputs × fire-fn × #:native-op → net'
+   ;;   #:native-op (symbol) — when set to a name in NATIVE-OP-TAGS,
+   ;;   install at the kernel's built-in native tag (tags 0-7) instead
+   ;;   of allocating a fresh callback tag. This skips register-fire-fn!
+   ;;   entirely; the kernel uses its compiled-in native fire-fn for
+   ;;   the dispatch. Restores the int-arith + identity-bridge native
+   ;;   path that the swappable-backend refactor lost.
+   (lambda (net inputs outputs fire-fn #:native-op [native-op #f])
      (define n-inputs (length inputs))
      (when (> n-inputs 3)
        (error 'backend-hybrid
               "N-1 propagator install (n=~a) not yet supported" n-inputs))
      (define shape n-inputs)
-     (define wrapper (make-callback-wrapper outputs fire-fn))
-     (define tag (next-tag!))
-     (register-fire-fn! tag shape wrapper)
+     (define native-tag (and native-op (hash-ref NATIVE-OP-TAGS native-op #f)))
+     (define tag
+       (cond
+         [native-tag
+          ;; Native path: skip register-fire-fn!; use the kernel's
+          ;; built-in fire-fn at the native tag. fire-fn is unused.
+          native-tag]
+         [else
+          ;; Callback path: allocate fresh tag, register Racket wrapper.
+          (define wrapper (make-callback-wrapper outputs fire-fn))
+          (define t (next-tag!))
+          (register-fire-fn! t shape wrapper)
+          t]))
      (cond
        [(= shape 1)
         (prologos_propagator_install_1_1 tag (car inputs) (car outputs))]
@@ -123,9 +163,9 @@
 
    ;; install-propagator : same as install-fire-once today (kernel only
    ;; has fire-once; preduce.rkt's compile-expr never installs re-fireable)
-   (lambda (net inputs outputs fire-fn)
+   (lambda (net inputs outputs fire-fn #:native-op [native-op #f])
      (((preduce-backend-install-fire-once backend-hybrid))
-      net inputs outputs fire-fn))
+      net inputs outputs fire-fn #:native-op native-op))
 
    ;; run-to-quiescence : net → net'
    (lambda (net)

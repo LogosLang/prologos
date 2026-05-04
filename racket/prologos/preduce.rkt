@@ -405,14 +405,19 @@
     ;; both inputs, performs Nat→Int coercion if needed (mirrors
     ;; reduction.rkt's reduce-int-binary at line ~999), and writes
     ;; the result. Comparisons produce Bool; arithmetic produces Int.
-    [(expr-int-add a b) (compile-int-binary net env e a b int-add-fire)]
-    [(expr-int-sub a b) (compile-int-binary net env e a b int-sub-fire)]
-    [(expr-int-mul a b) (compile-int-binary net env e a b int-mul-fire)]
-    [(expr-int-div a b) (compile-int-binary net env e a b int-div-fire)]
+    ;; Phase 4b refactor follow-up: pass #:native-op so backend-hybrid
+    ;; can route to the kernel's built-in native fire-fn (tags 0-7)
+    ;; instead of registering a Racket callback. backend-racket ignores
+    ;; the hint. expr-int-mod has no kernel-native equivalent today, so
+    ;; it stays callback-only.
+    [(expr-int-add a b) (compile-int-binary net env e a b int-add-fire #:native-op 'int-add)]
+    [(expr-int-sub a b) (compile-int-binary net env e a b int-sub-fire #:native-op 'int-sub)]
+    [(expr-int-mul a b) (compile-int-binary net env e a b int-mul-fire #:native-op 'int-mul)]
+    [(expr-int-div a b) (compile-int-binary net env e a b int-div-fire #:native-op 'int-div)]
     [(expr-int-mod a b) (compile-int-binary net env e a b int-mod-fire)]
-    [(expr-int-eq  a b) (compile-int-binary net env e a b int-eq-fire)]
-    [(expr-int-lt  a b) (compile-int-binary net env e a b int-lt-fire)]
-    [(expr-int-le  a b) (compile-int-binary net env e a b int-le-fire)]
+    [(expr-int-eq  a b) (compile-int-binary net env e a b int-eq-fire  #:native-op 'int-eq)]
+    [(expr-int-lt  a b) (compile-int-binary net env e a b int-lt-fire  #:native-op 'int-lt)]
+    [(expr-int-le  a b) (compile-int-binary net env e a b int-le-fire  #:native-op 'int-le)]
 
     ;; ----- Phase 2: expr-suc — successor on Nat -----
     ;;
@@ -1398,14 +1403,15 @@ the relevant phase lands."
     [(expr-zero? v) (expr-int 0)]
     [else #f]))  ;; not coercible
 
-(define (compile-int-binary net env _orig a b make-fire)
+(define (compile-int-binary net env _orig a b make-fire #:native-op [native-op #f])
   (define-values (cid-a net1) (compile-expr a env net))
   (define-values (cid-b net2) (compile-expr b env net1))
   (define-values (cid-out net3)
        (b-alloc net2 preduce-bot))
   (define net4
        (b-install-fire-once net3 (list cid-a cid-b) (list cid-out)
-                                  (make-fire cid-a cid-b cid-out)))
+                            (make-fire cid-a cid-b cid-out)
+                            #:native-op native-op))
   (values cid-out net4))
 
 ;; Build a fire function for a binary int op. The op is given as a
