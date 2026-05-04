@@ -45,7 +45,10 @@
 ;; we register on first use. (N_TAGS=16 in the kernel; if we exceed
 ;; this we'd need to bump the kernel limit.)
 
-;; Built-in tags (must match prologos-runtime-hybrid.zig):
+;; Built-in tags (must match prologos-runtime-hybrid.zig:register_built_ins).
+;; Shape 1-1 tag 0 is kernel-native identity — used as a zero-overhead
+;; bridge for app/boolrec/projection result-forwarding (Phase 10).
+(define KERNEL-IDENTITY-TAG 0)
 (define KERNEL-INT-ADD-TAG  0)
 (define KERNEL-INT-SUB-TAG  1)
 (define KERNEL-INT-MUL-TAG  2)
@@ -248,8 +251,8 @@ in runtime/core/profile.zig + rebuild the kernel."
                     (define captured-env (preduce-hybrid-lam-env f-val))
                     (define new-env (cons cid-arg captured-env))
                     (define cid-body (compile-expr-hybrid body new-env))
-                    (define id-tag
-                      (intern-callback-tag! 'app-bridge 1 (lambda (v) v)))
+                    ;; Phase 10 migration: was 'app-bridge Racket cb (~242 ns/fire); now native (~3 ns).
+                    (define id-tag KERNEL-IDENTITY-TAG)
                     (prologos_propagator_install_1_1 id-tag cid-body cid-out)
                     boxed-f]
                    [else (error 'preduce-hybrid "app function position not a lambda: ~v" f-val)])]))))
@@ -277,7 +280,8 @@ in runtime/core/profile.zig + rebuild the kernel."
               (unless arm (error 'preduce-hybrid "boolrec target not Bool: ~v" v))
               (set-box! fired? #t)
               (define cid-arm (compile-expr-hybrid arm env))
-              (define id-tag (intern-callback-tag! 'boolrec-bridge 1 (lambda (v) v)))
+              ;; Phase 10 migration: native identity (no callback).
+              (define id-tag KERNEL-IDENTITY-TAG)
               (prologos_propagator_install_1_1 id-tag cid-arm cid-out)
               boxed-target]))))
      (prologos_propagator_install_1_1 tag cid-target cid-out)
@@ -359,8 +363,8 @@ in runtime/core/profile.zig + rebuild the kernel."
                 (case which
                   [(fst) (preduce-hybrid-pair-fst-cid v)]
                   [(snd) (preduce-hybrid-pair-snd-cid v)]))
-              (define id-tag (intern-callback-tag! (string->symbol (format "proj-~a-bridge" which)) 1
-                               (lambda (v) v)))
+              ;; Phase 10 migration: native identity.
+              (define id-tag KERNEL-IDENTITY-TAG)
               (prologos_propagator_install_1_1 id-tag component-cid cid-out)
               boxed-pair]
              [else (error 'preduce-hybrid "expected pair for ~a projection, got ~v" which v)])]))))
