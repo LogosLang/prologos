@@ -21,15 +21,17 @@
 
 (define-runtime-path RUNTIME-DIR "../../runtime")
 
-;; Fail-soft: if libprologos-runtime-hybrid.so isn't built (e.g., CI
-;; environment without Zig), ffi-lib returns #f. Consumers should
-;; check `hybrid-runtime-available?` before invoking any FFI binding.
-;; If unavailable, all FFI bindings are #f and calling them raises a
-;; clear error rather than segfaulting. The test suite skips the
-;; differential gate when the runtime isn't available.
+;; Lib resolution: try LD_LIBRARY_PATH-resolved lookup FIRST (so the
+;; raco-distribute bundle finds lib/libprologos-runtime-hybrid.so via
+;; the launcher's LD_LIBRARY_PATH). Fall back to the in-tree runtime/
+;; directory for development. Both paths are #:fail-soft so module
+;; loads cleanly even with no .so built — consumers gate on
+;; `hybrid-runtime-available?`.
 (define libprologos-runtime-hybrid
-  (ffi-lib (build-path RUNTIME-DIR "libprologos-runtime-hybrid")
-           #:fail (lambda () #f)))
+  (or (ffi-lib "libprologos-runtime-hybrid" #:fail (lambda () #f))
+      (with-handlers ([exn:fail? (lambda _ #f)])
+        (ffi-lib (build-path RUNTIME-DIR "libprologos-runtime-hybrid")
+                 #:fail (lambda () #f)))))
 
 (define (hybrid-runtime-available?)
   (and libprologos-runtime-hybrid #t))
