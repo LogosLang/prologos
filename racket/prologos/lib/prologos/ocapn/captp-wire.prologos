@@ -165,6 +165,7 @@ defn wire-nat
   | syrup-list _     -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _     -> none
+  | syrup-bytes _  -> none
   | syrup-promise _  -> none
 
 spec list-fst [List SyrupValue] -> Option SyrupValue
@@ -205,6 +206,7 @@ defn unwrap-desc
   | syrup-symbol _   -> none
   | syrup-list _     -> none
   | syrup-refr _     -> none
+  | syrup-bytes _  -> none
   | syrup-promise _  -> none
 
 ;; Same shape but for an Option-wrapped descriptor:
@@ -224,6 +226,7 @@ defn unwrap-opt-desc
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-refr _       -> none
+  | syrup-bytes _    -> none
   | syrup-promise _    -> none
 
 ;; ===========================================================
@@ -268,6 +271,7 @@ defn dispatch-gc-export
   | syrup-symbol _ -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _   -> none
+  | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
 spec dispatch-deliver-only-args [List SyrupValue] -> [Option CapTPOp]
@@ -293,6 +297,7 @@ defn dispatch-deliver-only
   | syrup-symbol _ -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _   -> none
+  | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
 spec dispatch-listen-args [List SyrupValue] -> [Option CapTPOp]
@@ -321,6 +326,7 @@ defn dispatch-listen
   | syrup-symbol _ -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _   -> none
+  | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
 spec dispatch-deliver-args [List SyrupValue] -> [Option CapTPOp]
@@ -352,6 +358,7 @@ defn dispatch-deliver
   | syrup-symbol _ -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _   -> none
+  | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
 spec dispatch-start-session-args [List SyrupValue] -> [Option CapTPOp]
@@ -377,6 +384,7 @@ defn dispatch-start-session
   | syrup-symbol _ -> none
   | syrup-tagged _ _ -> none
   | syrup-refr _   -> none
+  | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
 ;; ===========================================================
@@ -418,6 +426,7 @@ defn syrup-to-op
   | syrup-symbol _           -> none
   | syrup-list _             -> none
   | syrup-refr _             -> none
+  | syrup-bytes _          -> none
   | syrup-promise _          -> none
 
 ;; ===========================================================

@@ -86,6 +86,7 @@ defn encode [v]
     | syrup-int i        -> str::append [int-abs-digits i] [int-sign-char i]
     | syrup-string s     -> str::append [str::from-int [str::length s]] [str::append "\"" s]
     | syrup-symbol s     -> str::append [str::from-int [str::length s]] [str::append "'" s]
+    | syrup-bytes b      -> str::append [str::from-int [str::length b]] [str::append ":" b]
     | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
     | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode p] ">"]]
     | syrup-refr _       -> ""
@@ -119,6 +120,7 @@ defn encodable?
   | syrup-int _       -> true
   | syrup-string _    -> true
   | syrup-symbol _    -> true
+  | syrup-bytes _     -> true
   | syrup-list xs     -> all-encodable encodable? xs
   | syrup-tagged _ p  -> encodable? p
   | syrup-refr _      -> false
@@ -252,6 +254,18 @@ defn decode-symbol-tail [s pos len]
             let payload := [str::slice s payload-start payload-end]
               some [decoded [syrup-symbol payload] payload-end]
 
+;; Phase 19: bytestring tail. Wire form `<len>:<bytes>`.
+;; pos is the offset of `:`; len is the byte length of payload.
+spec decode-bytes-tail String Int Int -> Option Decoded
+defn decode-bytes-tail [s pos len]
+  let payload-start := [int+ pos 1]
+    let payload-end := [int+ payload-start len]
+      match [int-lt [str::length s] payload-end]
+        | true  -> none
+        | false ->
+            let payload := [str::slice s payload-start payload-end]
+              some [decoded [syrup-bytes payload] payload-end]
+
 ;; --- Numeric / string dispatcher (no recursion into decode-at) ---
 ;;
 ;; digits, then one of `+`, `-`, `"`, `'`.
@@ -277,7 +291,10 @@ defn decode-numeric-or-string [s i]
                                 | false ->
                                     match [int-eq mc 39]
                                       | true  -> decode-symbol-tail s end mag
-                                      | false -> none
+                                      | false ->
+                                          match [int-eq mc 58]   ;; ':'
+                                            | true  -> decode-bytes-tail s end mag
+                                            | false -> none
 
 ;; --- Decode-many: parse 0+ values until terminator byte ---
 
@@ -345,6 +362,7 @@ defn decode-record-with [dec s i]
                 | syrup-nat _     -> none
                 | syrup-int _     -> none
                 | syrup-string _  -> none
+                | syrup-bytes _   -> none
                 | syrup-list _    -> none
                 | syrup-tagged _ _ -> none
                 | syrup-refr _    -> none

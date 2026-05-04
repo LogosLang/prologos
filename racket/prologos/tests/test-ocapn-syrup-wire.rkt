@@ -157,3 +157,24 @@
 (test-case "syrup-wire/roundtrip int 42"
   (check-contains
    (run-last "(eval (decode-value (encode (syrup-int 42))))") "syrup-int"))
+
+;; ========================================
+;; Phase 19 — syrup-bytes (opaque bytestring)
+;; ========================================
+
+(test-case "syrup-wire/encode bytes \"abc\" = `3:abc`"
+  (check-contains
+   (run-last "(eval (encode (syrup-bytes \"abc\")))") "\"3:abc\""))
+
+(test-case "syrup-wire/encode empty bytes = `0:`"
+  (check-contains
+   (run-last "(eval (encode (syrup-bytes \"\")))") "\"0:\""))
+
+(test-case "syrup-wire/decode `3:abc` -> some syrup-bytes"
+  (check-contains
+   (run-last "(eval (decode-value \"3:abc\"))") "syrup-bytes"))
+
+(test-case "syrup-wire/roundtrip bytes \"hi\""
+  (check-contains
+   (run-last "(eval (decode-value (encode (syrup-bytes \"hi\"))))")
+   "syrup-bytes"))
