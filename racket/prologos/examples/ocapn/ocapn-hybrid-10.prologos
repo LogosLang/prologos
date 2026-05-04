@@ -1,0 +1,41 @@
+ns ocapn-on-hybrid-10
+
+;; Tenth OCapN program — CapTP message construction + selector
+;; matrix using the upstream message.prologos.
+;;
+;; Builds an op-deliver (the arity-4 CapTP op) via the smart
+;; constructor, then runs the predicate suite (deliver?,
+;; deliver-only?, listen?, abort?) + the selector suite
+;; (deliver-target, deliver-args, deliver-answer-pos,
+;; deliver-resolver) on it. This is the closest we can get to
+;; "real CapTP message handling on the kernel" without the wire
+;; codec (Tier C, gated on Phase 9).
+;;
+;; The arity-4 op-deliver tests:
+;;   - 4-field user-ctor stuck-value (Phase 10b's hardest case)
+;;   - 4 selectors that each match against op-deliver and pull a
+;;     different field
+;;   - 4 predicates each dispatching across all 7 CapTP ops
+
+require [prologos::ocapn::syrup   :refer-all]
+        [prologos::ocapn::message :refer-all]
+        [prologos::data::option   :refer [Option some none]]
+
+;; Build a deliver message via mk-deliver:
+;;   target=42, args=(syrup-tagged "echo" syrup-null), answer-pos=7, resolver=99
+def msg := [mk-deliver 42N [syrup-tagged "echo" syrup-null] 7N 99N]
+
+;; Predicate matrix.
+def is-deliver?      := [deliver? msg]        ;; true
+def is-deliver-only? := [deliver-only? msg]   ;; false
+def is-listen?       := [listen? msg]         ;; false
+def is-abort?        := [abort? msg]          ;; false
+
+;; Selector matrix.
+def tgt              := [deliver-target msg]      ;; some 42
+def the-args         := [deliver-args msg]        ;; some <syrup-tagged "echo" syrup-null>
+def ans              := [deliver-answer-pos msg]  ;; some (some 7)
+def res              := [deliver-resolver msg]    ;; some (some 99)
+
+;; main: pack predicates + a witness that selectors returned `some`.
+def main := [pair is-deliver? [pair is-deliver-only? [pair is-listen? is-abort?]]]

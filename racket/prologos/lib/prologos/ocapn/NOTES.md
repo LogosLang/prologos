@@ -126,6 +126,8 @@ kernel BSP scheduler.
 | `examples/ocapn/ocapn-hybrid-6.prologos` | ✅ kernel | multi-arg `defn pick` matching on 2 args + tagged?/bool? on results | nested-pair (false, true) | ~117 µs | 16 fires (0 native, 16 cb) |
 | `examples/ocapn/ocapn-hybrid-7.prologos` | ✅ kernel | uses `prologos::ocapn::promise` directly: pst-fulfilled + pst-broken predicates | 5-tuple of bools | ~103 µs | 10 fires (0 native, 10 cb) |
 | `examples/ocapn/ocapn-hybrid-8.prologos` | ✅ kernel | **mixed**: int+/int* (NATIVE tags 0/2) + bool?/tagged? (callback) | nested-pair (false, false, false) | ~99 µs | 9 fires (**3 native**, 6 cb) |
+| `examples/ocapn/ocapn-hybrid-9.prologos` | ✅ kernel | **recursive** sum-to-n (Nat → Int via natrec); wraps result as syrup-int | `[syrup-int 15]` | ~153 µs | 62 fires (**20 native** int+ + identity, 42 cb) |
+| `examples/ocapn/ocapn-hybrid-10.prologos` | ✅ kernel | full CapTP **op-deliver** message build (mk-deliver) + 4-predicate sweep on 7-arm match (deliver?, deliver-only?, listen?, abort?) | nested-pair (true, false, false, false) | ~201 µs | 44 fires (0 native, 44 cb) |
 
 All measurements: single run, on this Linux x86_64 host, post-build at
 `tools/build-hybrid-binary.sh` against branch
