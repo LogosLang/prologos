@@ -1,0 +1,49 @@
+ns prologos::ocapn::pipelining
+
+require [prologos::ocapn::vat     :refer-all]
+        [prologos::ocapn::promise :refer-all]
+        [prologos::ocapn::syrup   :refer-all]
+        [prologos::data::option   :refer [Option some none]]
+        [prologos::data::list     :refer [List nil cons]]
+
+spec list-length [List SyrupValue] -> Nat
+defn list-length [xs]
+  match xs
+    | nil          -> zero
+    | cons _ rest  -> [suc [list-length rest]]
+
+spec set-promise-state Nat PromiseState Vat -> Vat
+defn set-promise-state [pid pst v]
+  match v
+    | vat n acts proms q ->
+        [vat n acts [promise-table-set pid pst proms] q]
+
+spec deliver-to-promise Nat SyrupValue PromiseState Vat -> Vat
+defn deliver-to-promise [pid args pst v]
+  match pst
+    | pst-unresolved msgs ->
+        set-promise-state pid [pst-unresolved [cons args msgs]] v
+    | pst-fulfilled _ -> v
+    | pst-broken     _ -> v
+
+spec deliver-to-promise-or-drop Nat SyrupValue Vat -> Vat
+defn deliver-to-promise-or-drop [target args v]
+  match [lookup-promise target v]
+    | none     -> v
+    | some pst -> deliver-to-promise target args pst v
+
+spec pipeline-deliver Nat SyrupValue Vat -> Vat
+defn pipeline-deliver [target args v]
+  match [lookup-actor target v]
+    | some _ -> send-only target args v
+    | none   -> deliver-to-promise-or-drop target args v
+
+spec promise-queue-length Nat Vat -> Nat
+defn promise-queue-length [pid v]
+  match [lookup-promise pid v]
+    | none     -> zero
+    | some pst ->
+        match pst
+          | pst-unresolved msgs -> list-length msgs
+          | pst-fulfilled _     -> zero
+          | pst-broken     _    -> zero
