@@ -93,3 +93,103 @@ defn outbound-from-resolution
   | _   [pst-broken     _] -> none
   | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
 
+;; ===========================================================
+;; Bridge state — Phase 14
+;; ===========================================================
+;;
+;; The vat alone doesn't capture session-level concerns:
+;;
+;;   - op:listen registers a remote listener for a local promise.
+;;     When the promise resolves, we should send an op:deliver
+;;     to the remote resolver.
+;;   - op:gc-export tells us a peer dropped references to one of
+;;     our exports — we'd decrement a refcount.
+;;   - op:gc-answer tells us a peer is done with one of our
+;;     answer-table entries.
+;;
+;; Phase 14 introduces `BridgeState`, which carries the parts of
+;; session state that don't fit in the Vat. The state-aware
+;; dispatcher `captp-incoming-with-state` updates Vat AND
+;; BridgeState as appropriate per op. Phase 15+ will wire
+;; listeners to outbound resolution.
+
+data Listener
+  listener : Nat -> Nat
+  ;; (target-promise-id, resolver-position-on-peer)
+
+data GcExportReq
+  gc-export-req : Nat -> Nat
+  ;; (export-pos, count)
+
+data BridgeState
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat]
+  ;; (listeners, gc-export-requests, gc-answer-positions)
+
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil]
+
+spec bs-listeners BridgeState -> List Listener
+defn bs-listeners
+  | bridge-state ls _ _ -> ls
+
+spec bs-gc-exports BridgeState -> List GcExportReq
+defn bs-gc-exports
+  | bridge-state _ es _ -> es
+
+spec bs-gc-answers BridgeState -> List Nat
+defn bs-gc-answers
+  | bridge-state _ _ as -> as
+
+;; Pure updates.
+
+spec bs-add-listener Nat Nat BridgeState -> BridgeState
+defn bs-add-listener
+  | tgt res [bridge-state ls es as] ->
+      bridge-state [cons [listener tgt res] ls] es as
+
+spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
+defn bs-add-gc-export
+  | pos cnt [bridge-state ls es as] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as
+
+spec bs-add-gc-answer Nat BridgeState -> BridgeState
+defn bs-add-gc-answer
+  | pos [bridge-state ls es as] ->
+      bridge-state ls es [cons pos as]
+
+;; ===========================================================
+;; State-aware dispatcher
+;; ===========================================================
+;;
+;; Returns a `BridgeStep` carrying both the updated Vat and the
+;; updated BridgeState. We use a concrete struct rather than a
+;; Sigma to avoid the Sigma-pattern-match issue (#14).
+
+data BridgeStep
+  bridge-step : Vat -> BridgeState
+
+spec bridge-step-vat BridgeStep -> Vat
+defn bridge-step-vat
+  | bridge-step v _ -> v
+
+spec bridge-step-state BridgeStep -> BridgeState
+defn bridge-step-state
+  | bridge-step _ st -> st
+
+spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14."
+defn captp-incoming-with-state
+  | [op-deliver tgt args ap _rm] v st ->
+      bridge-step [enqueue-msg [vmsg-deliver tgt args ap] v] st
+  | [op-deliver-only tgt args] v st ->
+      bridge-step [send-only tgt args v] st
+  | [op-abort _reason] v st ->
+      bridge-step v st
+  | [op-start-session _ver _loc] v st ->
+      bridge-step v st
+  | [op-listen tgt resolver] v st ->
+      bridge-step v [bs-add-listener tgt resolver st]
+  | [op-gc-export pos cnt] v st ->
+      bridge-step v [bs-add-gc-export pos cnt st]
+  | [op-gc-answer pos] v st ->
+      bridge-step v [bs-add-gc-answer pos st]
+

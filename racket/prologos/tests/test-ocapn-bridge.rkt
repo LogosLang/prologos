@@ -225,3 +225,60 @@
      (run-last
       "(eval (outbound-deliver-bytes (suc zero) (syrup-string \"hi\")))")))
   (check-equal? got expected))
+
+;; ========================================
+;; Phase 14 — state-aware dispatcher (op:listen, op:gc-*)
+;; ========================================
+;;
+;; The simple `incoming-captp-op` was no-op for op:listen and
+;; op:gc-*. The state-aware variant `captp-incoming-with-state`
+;; carries a `BridgeState` and updates it for each of these.
+
+(test-case "bridge/captp-incoming-with-state op:listen registers listener"
+  ;; After an op:listen 7 13, the bridge state should contain a
+  ;; listener for target=7 resolver=13. The vat is unchanged.
+  ;; List `length` returns Nat (1N for a single listener).
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-listen (suc (suc (suc (suc (suc (suc (suc zero))))))) ;; 7
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))))))) ;; 13
+                          empty-vat
+                          bridge-state-empty)
+                    listeners (bs-listeners (bridge-step-state step)))
+              (length listeners)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:gc-export records request"
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-gc-export (suc (suc zero)) (suc zero))
+                          empty-vat
+                          bridge-state-empty)
+                    es (bs-gc-exports (bridge-step-state step)))
+              (length es)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:gc-answer records request"
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                          (op-gc-answer (suc zero))
+                          empty-vat
+                          bridge-state-empty)
+                    as (bs-gc-answers (bridge-step-state step)))
+              (length as)))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op:deliver routes to vat queue"
+  ;; Vat queue should grow; bridge state unchanged.
+  (check-contains
+   (run-last
+    "(eval (let (sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step (captp-incoming-with-state
+                          (op-deliver (alloc-id sa) (syrup-string \"hi\") (none Nat) (none Nat))
+                          (alloc-vat sa)
+                          bridge-state-empty))
+              (queue-length (bridge-step-vat step))))")
+   "1N"))
