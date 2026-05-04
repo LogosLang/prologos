@@ -8,14 +8,12 @@
 ;;; *** OCapN compatibility target — Tier B ***
 ;;; Brought in from PR #28 (LogosLang/prologos branch
 ;;; claude/ocapn-prologos-implementation-auLxZ) on 2026-05-04.
-;;; Currently SKIPPED via .skip-tests pending PReduce-lite Phase 10b
-;;; (user-defined-constructor expr-reduce). syrup.prologos uses `data
-;;; SyrupValue` with 10 constructors and per-ctor `match` clauses;
-;;; PReduce-lite Phase 10's expr-reduce handler currently dispatches
-;;; only over BUILT-IN constructors (true/false/zero/suc/refl/nil/
-;;; vnil/vcons/fzero/fsuc/pair). Phase 10b extends to user-defined
-;;; constructors via the ctor-registry; once that lands, remove this
-;;; file from .skip-tests.
+;;; Validates against the production `nf` reducer (reduction.rkt),
+;;; which has handled user-defined ctors since day one via
+;;; try-structural-reduce. PReduce-lite Phase 10b (2026-05-04) added
+;;; the matching dispatch on the propagator-network reducer; see
+;;; tests/test-preduce-phase10b.rkt for direct PReduce-lite coverage
+;;; of the data-type subset that syrup.prologos stresses.
 ;;;
 
 (require rackunit

@@ -24,24 +24,24 @@ reduction; pure registry population during elaboration.
 **Status**: ✅ Elaborates cleanly on this branch. `tests/test-ocapn-refr.rkt`
 passes (6 test cases).
 
-### Tier B — needs PReduce-lite Phase 10b (user-defined-ctor expr-reduce)
+### Tier B — landed under PReduce-lite Phase 10b (and `nf` from day one)
 
 **Files**: `syrup.prologos`, `promise.prologos`, `message.prologos`
 
 **What they use**: `data` declarations with multiple constructors and
 per-constructor `match` clauses (predicates, selectors, smart constructors,
-state transitions). The `match` reduction needs to dispatch over USER-DEFINED
+state transitions). The `match` reduction dispatches over USER-DEFINED
 constructors (e.g., `pst-unresolved`, `syrup-tagged`, `op-deliver`).
 
-**Status**: ⏸ Library files elaborate (declarations only); the test files
-fail at `eval` time because `expr-reduce` in PReduce-lite Phase 10 only
-dispatches over BUILT-IN constructors (`true`/`false`/`zero`/`suc`/`refl`/
-`nil`/`cons`/`vnil`/`vcons`/`fzero`/`fsuc`/`pair`). User-defined constructors
-go through the `ctor-registry` and need a Phase 10b extension to that handler.
-
-**Tests checked in but skipped**: `tests/test-ocapn-syrup.rkt` (listed in
-`tests/.skip-tests`). Once Phase 10b lands, drop the skip-tests entry to
-unblock.
+**Status**: ✅ Both reducers handle these.
+  - The production reducer `nf` (reduction.rkt) has supported user-defined
+    ctors since day one via `try-structural-reduce` — `tests/test-ocapn-syrup.rkt`
+    has been green from the moment it was checked in.
+  - PReduce-lite Phase 10b (preduce.rkt, 2026-05-04) added the matching
+    dispatch for `eval` paths that opt into PReduce-lite via
+    `current-use-preduce?`. Validated by `tests/test-preduce-phase10b.rkt`
+    (12 tests covering nullary/unary/binary/ternary user ctors + arm
+    dispatch + field extraction + nf differential).
 
 **Stress shapes** for Phase 10b implementation:
 - `syrup.prologos` — 10 constructors with mixed arities (0, 1, 2). Predicates
@@ -81,12 +81,12 @@ These files are NOT part of the standard library on this branch. They are
 support, parameterized by what it stresses. As PReduce-lite phases land,
 we re-evaluate which tier moves from skipped → green:
 
-| Phase | Unblocks |
-|-------|----------|
-| 10 (current — built-in ctor reduce) | Tier A (already done) |
-| 10b (user-defined-ctor reduce via ctor-registry) | Tier B (syrup, promise, message) |
-| 11+ (closure capture / HOF) | larger Tier B if any rely on closures |
-| Phase 9 (FFI, deferred) | Tier C (TCP, wire codecs) |
+| Phase | Unblocks | Status |
+|-------|----------|--------|
+| 10 (built-in ctor reduce) | Tier A | ✅ landed |
+| 10b (user-defined-ctor reduce via ctor-registry) | Tier B (syrup, promise, message) | ✅ landed 2026-05-04 |
+| 11+ (closure capture / HOF) | larger Tier B if any rely on closures | open |
+| Phase 9 (FFI, deferred) | Tier C (TCP, wire codecs) | deferred |
 
 When a phase lands, drop the corresponding entries from `tests/.skip-tests`.
 

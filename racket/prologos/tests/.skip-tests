@@ -29,13 +29,3 @@ test-sre-sd-properties.rkt  # in-progress; awaits SRE Track 2I Phase 4 fix to sr
 # gate green. Permanent fix is to make the registrations lazy-or-eager-
 # at-test-load (would touch typing-propagators / facet modules).
 test-facet-sre-registration.rkt  # batch-order-dependent flake
-
-# OCapN compatibility targets brought in from upstream PR #28
-# (LogosLang/prologos branch claude/ocapn-prologos-implementation-auLxZ)
-# on 2026-05-04. These exercise the Tier B subset of the OCapN port:
-# user-defined `data` types with multi-arg constructors + per-ctor `match`
-# clauses. PReduce-lite's expr-reduce currently only dispatches over
-# BUILT-IN constructors (Phase 10); user-defined-ctor reduce is Phase 10b.
-# Once Phase 10b lands, drop these entries to unskip.
-# See racket/prologos/lib/prologos/ocapn/NOTES.md for tier rationale.
-test-ocapn-syrup.rkt  # awaits PReduce-lite Phase 10b (user-defined-ctor expr-reduce)

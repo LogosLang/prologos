@@ -37,6 +37,7 @@
 
 (require racket/match
          racket/list  ;; for findf
+         racket/string  ;; Phase 10b: for ctor-short-name
          "syntax.rkt"
          (only-in "propagator.rkt"
                   make-prop-network
@@ -51,6 +52,11 @@
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)
          (only-in "reduction.rkt" nf)  ;; for preduce-or-nf diagnostic helper
          (only-in "global-env.rkt" global-env-lookup-value)
+         ;; Phase 10b: user-defined ctor lookup
+         (only-in "macros.rkt"
+                  lookup-ctor
+                  ctor-meta-field-types
+                  ctor-meta-params)
          ;; Phase 11b: container ops
          (only-in "champ.rkt"
                   champ-empty champ-lookup champ-insert champ-delete
@@ -80,7 +86,10 @@
  preduce-merge
 
  ;; Domain (for cross-module references in tests)
- preduce-value-domain)
+ preduce-value-domain
+
+ ;; Phase 10b: user-defined-ctor stuck-value tag
+ (struct-out preduce-user-ctor))
 
 ;; ============================================================
 ;; Discrete value lattice
@@ -485,22 +494,38 @@
 
     ;; ----- Phase 3: free variable (fvar) — inline the def -----
     ;;
-    ;; Look up name in the global env. The def's value AST is compiled
-    ;; in EMPTY env (top-level definitions don't see surrounding bvars).
-    ;; Recursion detection via current-fvar-stack: if name is already
-    ;; being compiled, raise unsupported (recursion is Phase 4 — needs
-    ;; topology stratum to break the compile-time loop).
+    ;; Phase 10b first: if `name` is a registered user-defined constructor
+    ;; with arity 0 and no type params, treat the bare fvar as a stuck
+    ;; nullary ctor value (e.g. `syrup-null`, `nil-of-T-instantiated`).
+    ;; The data-declaration machinery stores ctor defs with placeholder
+    ;; body `(Type 0)`, which would erroneously inline through the
+    ;; global-env path below; the ctor-registry check pre-empts that.
+    ;;
+    ;; Look up name in the global env (default path). The def's value
+    ;; AST is compiled in EMPTY env (top-level definitions don't see
+    ;; surrounding bvars). Recursion detection via current-fvar-stack:
+    ;; if name is already being compiled, raise unsupported (recursion
+    ;; is Phase 4 — needs the topology stratum to break the compile-
+    ;; time loop).
     [(expr-fvar name)
-     (when (memq name (current-fvar-stack))
-       (raise-unsupported!
-        'expr-fvar 'phase-4-recursive-fvar
-        (format "PReduce-lite Phase 3: recursive fvar ~a — recursion needs \
+     (cond
+       ;; Phase 10b: nullary user-defined ctor → stuck value
+       [(let ([meta (lookup-ctor-meta name)])
+          (and meta
+               (= 0 (length (ctor-meta-field-types meta)))
+               (= 0 (length (ctor-meta-params meta)))))
+        (alloc-value-cell net (preduce-user-ctor (ctor-short-name name) '()))]
+       [else
+        (when (memq name (current-fvar-stack))
+          (raise-unsupported!
+           'expr-fvar 'phase-4-recursive-fvar
+           (format "PReduce-lite Phase 3: recursive fvar ~a — recursion needs \
 the topology stratum (Phase 4)" name)))
-     (define value-ast (global-env-lookup-value name))
-     (unless value-ast
-       (error 'preduce "expr-fvar ~a not found in global env" name))
-     (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
-       (compile-expr value-ast '() net))]
+        (define value-ast (global-env-lookup-value name))
+        (unless value-ast
+          (error 'preduce "expr-fvar ~a not found in global env" name))
+        (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
+          (compile-expr value-ast '() net))])]
 
     ;; ----- Phase 3: application — static β only -----
     ;;
@@ -516,8 +541,22 @@ the topology stratum (Phase 4)" name)))
     ;; application chain that doesn't statically reduce to a lambda)
     ;; raise unsupported and route to Phase 4 (dynamic β via topology).
     [(expr-app f arg)
-     (define f-static (statically-reducible-lam f))
+     (define ctor-decomp (try-decompose-user-ctor-app e))
+     (define f-static (and (not ctor-decomp) (statically-reducible-lam f)))
      (cond
+       ;; Phase 10b: fully-applied user-defined constructor → stuck value.
+       ;; Compile each field arg to a cell-id; wrap as preduce-user-ctor.
+       ;; classify-ctor (in make-reduce-fire) recognizes it and dispatches.
+       [ctor-decomp
+        (define short-name (car ctor-decomp))
+        (define field-args (cdr ctor-decomp))
+        (define-values (rev-field-cids net*)
+          (for/fold ([acc-cids '()] [n net])
+                    ([fa (in-list field-args)])
+            (define-values (cid-fa n*) (compile-expr fa env n))
+            (values (cons cid-fa acc-cids) n*)))
+        (alloc-value-cell net*
+          (preduce-user-ctor short-name (reverse rev-field-cids)))]
        [f-static
         ;; Static β (Phase 3): compile arg, then body in extended env.
         (define-values (cid-arg net1) (compile-expr arg env net))
@@ -874,6 +913,12 @@ the relevant phase lands."
     [(expr-fsuc? v)
      (define-values (cid-inner net*) (alloc-value-cell net (expr-fsuc-inner v)))
      (values 'fsuc (list cid-inner) net*)]
+    ;; Phase 10b: user-defined ctor value carries its short name + field cids
+    ;; directly; no further allocation needed.
+    [(preduce-user-ctor? v)
+     (values (preduce-user-ctor-short-name v)
+             (preduce-user-ctor-field-cids v)
+             net)]
     [else (values #f '() net)]))
 
 ;; make-reduce-fire — fires when the scrutinee cell resolves; matches
@@ -1266,6 +1311,80 @@ the relevant phase lands."
 ;; cell value for a pair construction; recognized by fst/snd projection
 ;; propagators.
 (struct preduce-pair (fst-cid snd-cid) #:transparent)
+
+;; ============================================================
+;; Phase 10b — user-defined constructor values
+;; ============================================================
+;;
+;; A fully-applied user-defined data constructor (registered via `data`
+;; declarations in macros.rkt) is represented as a stuck value carrying
+;; the constructor's SHORT name + the cell-ids of its field arguments.
+;; This is the user-ctor analogue of preduce-pair / preduce-vcons:
+;; opaque to further reduction, but recognized by classify-ctor so
+;; expr-reduce can dispatch on it.
+;;
+;; short-name : symbol (e.g. 'syrup-tagged, 'pst-unresolved)
+;; field-cids : (listof cell-id) — same order as the data declaration's
+;;   field-types list. Type-arg cells (for parameterized types) are NOT
+;;   included; only value fields.
+(struct preduce-user-ctor (short-name field-cids) #:transparent)
+
+;; Strip an FQN qualifier from a constructor name. Mirrors
+;; reduction.rkt's ctor-short-name. Examples:
+;;   'prologos::ocapn::syrup::syrup-tagged → 'syrup-tagged
+;;   'syrup-tagged                          → 'syrup-tagged
+(define (ctor-short-name fqn)
+  (define parts (string-split (symbol->string fqn) "::"))
+  (string->symbol (last parts)))
+
+;; Look up a ctor's meta by name, trying FQN then short-name fallback.
+;; Returns ctor-meta or #f.
+(define (lookup-ctor-meta name)
+  (or (lookup-ctor name)
+      (lookup-ctor (ctor-short-name name))))
+
+;; Decompose a user-defined-ctor application into
+;; (cons short-name field-arg-exprs) iff the expression IS a fully-
+;; applied registered user constructor. Returns #f otherwise.
+;;
+;; Handles curried expr-app chains; for parametrized types the chain
+;; may include type args at the front, which are stripped when the
+;; total arg count matches arity + n-type-params.
+;;
+;; Examples (elaborator output):
+;;   (expr-app (expr-app (expr-fvar 'syrup-tagged) "set") syrup-null-arg)
+;;     → '(syrup-tagged "set"-arg syrup-null-arg)
+;;   (expr-app (expr-app (expr-fvar 'cons) Int) (expr-app ... 1 nil))
+;;     → '(cons 1-arg nil-arg)   ;; type arg Int dropped
+;;
+;; Bare nullary ctor references (just expr-fvar) are handled in the
+;; expr-fvar case directly, not here.
+(define (try-decompose-user-ctor-app e)
+  (define-values (head all-args)
+    (let loop ([e e] [acc '()])
+      (match e
+        [(expr-app f a) (loop f (cons a acc))]
+        [_              (values e acc)])))
+  (cond
+    [(not (expr-fvar? head)) #f]
+    [else
+     (define name (expr-fvar-name head))
+     (define meta (lookup-ctor-meta name))
+     (cond
+       [(not meta) #f]
+       [else
+        (define n-fields (length (ctor-meta-field-types meta)))
+        (define n-params (length (ctor-meta-params meta)))
+        (define n-args   (length all-args))
+        (cond
+          ;; Full application without type args (typical at-the-source form)
+          [(and (> n-fields 0) (= n-args n-fields))
+           (cons (ctor-short-name name) all-args)]
+          ;; Full application with explicit type args prepended
+          [(and (> n-fields 0) (= n-args (+ n-fields n-params)))
+           (cons (ctor-short-name name) (drop all-args n-params))]
+          ;; Partial application, over-application, or 0-field ctor: not here
+          [else #f])])]))
 
 ;; --- Int arithmetic helpers ---
 
