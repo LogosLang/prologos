@@ -370,3 +370,105 @@ defn first-bytes-or-default
   | default nil          -> default
   | _       [cons h _]   -> h
 
+;; ===========================================================
+;; Connection lifecycle composer — Phase 18
+;; ===========================================================
+;;
+;; A `ConnectionState` carries everything needed to model one
+;; CapTP connection's local side:
+;;   - The Vat (actors + promises + queue).
+;;   - The BridgeState (listeners, gc requests, question table).
+;;   - Emitted-pids list (for the wire-OUT pump's idempotence).
+;;   - Aborted? flag — set after seeing op:abort; further ops
+;;     are ignored.
+;;
+;; `connection-step` is the single entry point: take one inbound
+;; CapTPOp, apply it through the bridge, drain the vat, pump
+;; outbound bytes for newly-resolved promises, return updated
+;; state + new bytes to send.
+;;
+;; A real netlayer loop is just:
+;;   while (not aborted)
+;;     read op  ←  decode bytes from socket
+;;     step = connection-step op cs
+;;     write each byte-string in (conn-step-outbound step)  →  socket
+;;     cs = conn-step-state step
+
+data ConnectionState
+  conn-state : Vat -> BridgeState -> [List Nat] -> Bool
+
+def empty-connection : ConnectionState :=
+  [conn-state empty-vat bridge-state-empty nil false]
+
+spec conn-vat ConnectionState -> Vat
+defn conn-vat
+  | conn-state v _ _ _ -> v
+
+spec conn-bridge-state ConnectionState -> BridgeState
+defn conn-bridge-state
+  | conn-state _ st _ _ -> st
+
+spec conn-emitted ConnectionState -> List Nat
+defn conn-emitted
+  | conn-state _ _ es _ -> es
+
+spec conn-aborted? ConnectionState -> Bool
+defn conn-aborted?
+  | conn-state _ _ _ a -> a
+
+;; Result of one step: updated state + outbound bytes.
+data ConnStep
+  conn-step : ConnectionState -> [List String]
+
+spec conn-step-state ConnStep -> ConnectionState
+defn conn-step-state
+  | conn-step cs _ -> cs
+
+spec conn-step-outbound ConnStep -> List String
+defn conn-step-outbound
+  | conn-step _ bs -> bs
+
+;; The per-op aborted check. We use a Bool predicate via match
+;; rather than a boolean op (Prologos doesn't expose a generic
+;; `||`). Once aborted, every subsequent step is a no-op
+;; returning the same state with no outbound bytes.
+
+;; Determine whether this op is itself an abort.
+spec op-is-abort? CapTPOp -> Bool
+defn op-is-abort?
+  | op-abort _         -> true
+  | op-start-session _ _ -> false
+  | op-deliver _ _ _ _ -> false
+  | op-deliver-only _ _ -> false
+  | op-listen _ _      -> false
+  | op-gc-export _ _   -> false
+  | op-gc-answer _     -> false
+
+;; Once-aborted bool: was-aborted OR op-is-abort.
+spec or-bool Bool Bool -> Bool
+defn or-bool
+  | true  _     -> true
+  | false other -> other
+
+;; Drain fuel: 5 successive turns is plenty for our test cases.
+def drain-fuel : Nat := [suc [suc [suc [suc [suc zero]]]]]
+
+;; The single entry point.
+;; Step:
+;;   1. If already aborted, return state unchanged with no bytes.
+;;   2. Apply the inbound op via captp-incoming-with-state.
+;;   3. Drain the vat with bounded fuel.
+;;   4. Pump outbound bytes for newly-resolved questions.
+;;   5. Update emitted-pids and aborted? flag.
+spec connection-step CapTPOp ConnectionState -> ConnStep
+defn connection-step [op cs]
+  match [conn-aborted? cs]
+    | true  -> conn-step cs nil
+    | false ->
+        let bs    := [captp-incoming-with-state op [conn-vat cs] [conn-bridge-state cs]]
+          let v'    := [run-vat drain-fuel [bridge-step-vat bs]]
+            let st'   := [bridge-step-state bs]
+              let pump  := [pump-outbound v' st' [conn-emitted cs]]
+                let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
+                  conn-step cs' [pump-result-bytes pump]
+

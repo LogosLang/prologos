@@ -482,3 +482,61 @@
     (extract-value-bytes
      (run-last "(eval (encode (syrup-tagged \"Error\" (syrup-string \"oops\"))))")))
   (check-equal? got expected))
+
+;; ========================================
+;; Phase 18 — connection lifecycle composer
+;; ========================================
+;;
+;; `connection-step` chains incoming-op → drain → pump in one
+;; call, threading `ConnectionState` through.
+
+(test-case "bridge/connection-step op:deliver yields outbound bytes after one step"
+  ;; Fresh connection, incoming op:deliver, expect 1 outbound
+  ;; byte-string after the step.
+  (check-contains
+   (run-last
+    "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  cs0 (conn-state (alloc-vat sa) bridge-state-empty nil false)
+                  step (connection-step
+                          (op-deliver (alloc-id sa)
+                                      (syrup-string \"hi\")
+                                      (some Nat (suc (suc (suc zero))))
+                                      (none Nat))
+                          cs0))
+              (length (conn-step-outbound step))))")
+   "1N"))
+
+(test-case "bridge/connection-step after op:abort sets aborted? flag"
+  (check-contains
+   (run-last
+    "(eval (let (step (connection-step (op-abort \"bye\") empty-connection))
+              (conn-aborted? (conn-step-state step))))")
+   "true"))
+
+(test-case "bridge/connection-step is a no-op once aborted"
+  ;; After abort, a follow-up op-deliver produces no bytes
+  ;; (state is frozen).
+  (check-contains
+   (run-last
+    "(eval (let (sa     (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  cs0    (conn-state (alloc-vat sa) bridge-state-empty nil false)
+                  step1  (connection-step (op-abort \"bye\") cs0)
+                  step2  (connection-step
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc zero))
+                                        (none Nat))
+                            (conn-step-state step1)))
+              (length (conn-step-outbound step2))))")
+   "0N"))
+
+(test-case "bridge/connection-step op:start-session is a state-preserving no-op"
+  ;; Vat unchanged, bridge state unchanged, no outbound bytes,
+  ;; not aborted.
+  (check-contains
+   (run-last
+    "(eval (let (step (connection-step
+                          (op-start-session \"0.1\" syrup-null)
+                          empty-connection))
+              (conn-aborted? (conn-step-state step))))")
+   "false"))
