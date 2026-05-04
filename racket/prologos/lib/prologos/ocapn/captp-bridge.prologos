@@ -46,3 +46,50 @@ defn incoming-captp-op
       v
   | [op-gc-answer _pos] v ->
       v
+
+;; ===========================================================
+;; Wire-OUT bridge — Phase 12
+;; ===========================================================
+;;
+;; Convert a (locally-resolved) promise into the SyrupValue
+;; representation of the outbound CapTP message that delivers
+;; the answer to the remote peer:
+;;
+;;   pid resolved to v       →  <op:deliver <desc:answer pid> v false false>
+;;   pid broken with reason  →  <op:abort reason>          ;; no per-promise abort form;
+;;                                                          ;; promise-level breaks need
+;;                                                          ;; <op:deliver desc:answer
+;;                                                          ;; <Error reason>>; deferred
+;;                                                          ;; until Error type lands
+;;
+;; The result is a `SyrupValue` ready for `wire::encode` to bytes.
+;; Caller is responsible for tracking which promises have already
+;; been emitted (the bridge is stateless).
+
+require [prologos::ocapn::promise :refer-all]
+        [prologos::ocapn::syrup-wire :as wire :refer []]
+
+;; Build the bytes for an outbound op:deliver targeting an
+;; answer-pos:
+;;   <op:deliver <desc:answer pid> args false false>
+;; This is the canonical OCapN shape for "the result of
+;; question pid is args" — sent by the answering peer after a
+;; deliver completes locally.
+spec outbound-deliver-bytes Nat SyrupValue -> String
+defn outbound-deliver-bytes [pid args]
+  wire::encode-record "op:deliver"
+    [cons [syrup-tagged "desc:answer" [syrup-nat pid]]
+      [cons args
+        [cons [syrup-bool false]
+          [cons [syrup-bool false] nil]]]]
+
+;; If a promise is fulfilled, return the bytes of the outbound
+;; op:deliver. If it's broken or unresolved, return none.
+;; (Broken promises need <op:deliver desc:answer pid <Error r>>
+;; — Error encoding deferred until the Error type lands.)
+spec outbound-from-resolution Nat PromiseState -> [Option String]
+defn outbound-from-resolution
+  | _   [pst-unresolved _] -> none
+  | _   [pst-broken     _] -> none
+  | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
+

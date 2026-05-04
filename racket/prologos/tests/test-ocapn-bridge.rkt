@@ -154,3 +154,74 @@
                   v1  (incoming-captp-op (op-start-session \"0.1\" syrup-null) v0))
               (queue-length v1)))")
    "0N"))
+
+;; ========================================
+;; Phase 12 — outbound resolution → wire bytes
+;; ========================================
+
+(define (extract-value-bytes s)
+  (define m (regexp-match #px"^(\".*\") : String$" s))
+  (unless m
+    (error 'extract-value-bytes "couldn't extract bytes from: ~s" s))
+  (read (open-input-string (cadr m))))
+
+(test-case "bridge/outbound-deliver-bytes builds canonical op:deliver record"
+  ;; pid=0, args="hi" should produce <op:deliver <desc:answer 0> "hi" false false>
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes zero (syrup-string \"hi\")))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
+                                (cons (syrup-string \"hi\")
+                                  (cons (syrup-bool false)
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/outbound-from-resolution unresolved -> none"
+  (check-contains
+   (run-last "(eval (outbound-from-resolution zero fresh))")
+   "none"))
+
+(test-case "bridge/outbound-from-resolution fulfilled -> some bytes"
+  (check-contains
+   (run-last
+    "(eval (outbound-from-resolution
+              zero
+              (fulfill (syrup-string \"hi\") fresh)))")
+   "some"))
+
+(test-case "bridge/full round-trip — incoming deliver, drain, extract outbound bytes"
+  ;; Apply Phase 11's incoming op-deliver → vat resolves promise →
+  ;; Phase 12's outbound-from-resolution → bytes.
+  ;;
+  ;; Setup: actor at id 0, promise at id 1. Send op-deliver target=0
+  ;; args="hi" ap=Some 1. After drain, lookup-promise 1 returns
+  ;; some pst-fulfilled (syrup-string "hi"). Then outbound-from-
+  ;; resolution returns the wire bytes.
+  ;;
+  ;; Asserts: bytes equal what `outbound-deliver-bytes 1 (syrup-string "hi")`
+  ;; would produce.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (sa  (vat-spawn-actor beh-echo syrup-null empty-vat)
+                    pa  (fresh-promise (alloc-vat sa))
+                    v1  (incoming-captp-op (op-deliver (alloc-id sa)
+                                                       (syrup-string \"hi\")
+                                                       (some Nat (alloc-id pa))
+                                                       (none Nat))
+                                            (alloc-vat pa))
+                    v2  (drain (suc (suc (suc (suc (suc zero))))) v1)
+                    pst (unwrap-or fresh
+                                    (lookup-promise (alloc-id pa) v2)))
+                (unwrap-or \"NO-OUTBOUND\"
+                            (outbound-from-resolution (alloc-id pa) pst))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc zero) (syrup-string \"hi\")))")))
+  (check-equal? got expected))
