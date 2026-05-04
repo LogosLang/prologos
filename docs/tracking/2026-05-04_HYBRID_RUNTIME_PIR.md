@@ -12,11 +12,15 @@
 
 ---
 
+> **Errata (2026-05-04, post-publication revision)**: the original PIR text claimed `runtime/core/` contains the BSP scheduler. That was wrong — the actual `runtime/core/` has only data structures (cell store, profile counters, format buffer), and the BSP scheduler stayed in each kernel file. The Stage 3 design called for `core/bsp.zig` (~150 LOC) + `core/worklist.zig` (~60 LOC); Phase 1 silently narrowed scope to data structures only. Drift surfaced when the user asked "what's in the hybrid core zig side?" during PIR review. §1, §2, §3, §4, §5, §8, §9, §11, §12, §13, §14, §15, §17, §18, §21, §24 corrected. The §17 #9 wrong-assumption entry, §15 debt entry, and §21 lessons entry codify the underlying "phase-close should compare delivered scope against design plan" lesson.
+
+---
+
 <!-- 16-question PIR template — sections to be filled iteratively -->
 
 ## 1. What Was Built
 
-The hybrid Racket-Zig runtime is a **second Zig kernel implementation** (`runtime/prologos-runtime-hybrid.zig`, 639 LOC) sitting alongside the existing `runtime/prologos-runtime.zig` (544 LOC, the LLVM-lowering target kernel). Both kernels share a factored core (`runtime/core/`, 264 LOC) hosting the BSP scheduler, cell store primitives, profiling counters, and format helpers. The two kernels diverge on cell value type, dispatch strategy, propagator arity, and consumer:
+The hybrid Racket-Zig runtime is a **second Zig kernel implementation** (`runtime/prologos-runtime-hybrid.zig`, 639 LOC) sitting alongside the existing `runtime/prologos-runtime.zig` (544 LOC, the LLVM-lowering target kernel). Both kernels share a factored core (`runtime/core/`, 264 LOC across 3 files) hosting **data structures only**: a comptime-parameterized cell store (`cells.zig`), profile + callback-profile counters (`profile.zig`), and a buffered string-output helper (`format.zig`). **The BSP scheduler did NOT get extracted into core** as the design doc had projected — it lives in each kernel file (the hybrid kernel's worklist + `fire_against_snapshot` + `merge_pending_writes` + `swap_worklists` are all in `prologos-runtime-hybrid.zig` itself). See §17 wrong-assumption #9 for the design-vs-reality drift on the factoring scope. The two kernels diverge on cell value type, dispatch strategy, propagator arity, and consumer:
 
 | Aspect | Original kernel | Hybrid kernel |
 |---|---|---|
@@ -33,13 +37,15 @@ The headline acceptance test is the **three-way differential gate**: 13 cases ea
 
 The runtime ships behind a `raco distribute`-compatible packaging strategy with a launcher script (`tools/build-hybrid-binary.sh`) that bundles the `.so` + sets `LD_LIBRARY_PATH` + `PROLOGOS_LIB_DIR` for production use. Phase 10 demonstrated the **profile-driven migration path** by promoting the identity bridge (the most-fired Racket callback after Phase 8 instrumentation) from Racket-callback fire-fn to a Zig-native fire-fn — a 96% reduction in callback firings on the test workload, with zero functional regression.
 
-The runtime is **complementary, not competing** with the original LLVM-target kernel. Both consume the same shared core; both will eventually expose the same logical operations; the original is the long-term LLVM lowering target while the hybrid is the bring-up vehicle that lets us ship a Racket-Zig binary without waiting for full LLVM lowering.
+The runtime is **complementary, not competing** with the original LLVM-target kernel. The hybrid kernel consumes the shared core (`cells.zig` + `profile.zig` + `format.zig`); the original kernel does not yet — Phase 2 (refactor original to use core) was deferred per user direction. Both kernels will eventually expose the same logical operations; the original is the long-term LLVM lowering target while the hybrid is the bring-up vehicle that lets us ship a Racket-Zig binary without waiting for full LLVM lowering.
 
 ## 2. Stated Objectives
 
 From the Stage 3 design doc (`2026-05-03_HYBRID_RUNTIME_DESIGN.md`) §1:
 
 > The hybrid runtime is a second Zig kernel implementation sitting alongside the existing `runtime/prologos-runtime.zig`. Both kernels share a factored core that owns the BSP scheduler, cell store primitives, worklist management, and profiling counters. The two implementations diverge on cell value type, dispatch strategy, propagator arity, callback support, and consumer.
+
+**Reality check on the design quote**: the actual factored core (`runtime/core/`) contains data structures only — `cells.zig` (cell store), `profile.zig` (counters), `format.zig` (output buffer). The BSP scheduler, worklist, and dispatch logic stayed in each kernel file. This is a design-vs-reality drift recorded in §17 #9 — the factoring landed at the data-structure layer rather than the scheduler layer; tracked as debt in §15.
 
 User direction during Stage 1/2/3 sprint and execution:
 - *"build this as a second implementation of the zig kernel. they can share core factored dependencies."* (Stage 1)
@@ -89,7 +95,7 @@ The design doc's Phase 11 was "PIR" — this document.
 | Phase | Description | Status |
 |---|---|---|
 | 0 | FFI calibration on this host (Racket-CS 9.0 + Zig 0.13) | ✅ — forward 14-42 ns/call; callback 170-180 ns/call; R1 (FFI dominates) tractable |
-| 1 | Extract shared core: `runtime/core/` | ✅ — 264 LOC across cells.zig + profile.zig + format.zig |
+| 1 | Extract shared core: `runtime/core/` | ✅ partial — 264 LOC across cells.zig + profile.zig + format.zig. The design's planned `core/bsp.zig` + `core/worklist.zig` were NOT extracted; scheduler stayed in each kernel file. See §15 debt + §17 #9. |
 | 2 | Refactor original kernel to use core | ⏭️ — **skipped per user direction** ("keep separate") |
 | 3 | Build hybrid kernel | ✅ — 639 LOC; tagged-i64 + dynamic dispatch + N-1 + callback profiling |
 | 4 | Build system: `libprologos-runtime-hybrid.so` | ✅ — `tools/build-hybrid-binary.sh` |
@@ -112,7 +118,7 @@ Single extended session, ~8h wall-clock from Stage 1 research synthesis through 
 |---|---|---|---|
 | Stage 1 — sprint synthesis | `b5261e4` | ~1h | Four seam options analyzed; recommended Option C (Racket-Zig hybrid with shared kernel) |
 | Stage 2 — FFI calibration + Stage 3 design doc | `52fc5cf` | ~1.5h | 604-line design doc with progress tracker; calibrated forward 14-42 ns/call, callback 170-180 ns/call on this host (Racket-CS 9.0 + Zig 0.13) |
-| Phase 1 + 3 + 4 — shared core + hybrid kernel + C smoke tests | `e12c63d` | ~1.5h | 264 LOC core extracted; 593 LOC hybrid kernel built; 175 LOC C smoke harness; 4/4 C tests pass (compounded across pre-existing test-hamt + test-bsp-stats + test-bsp-feedback + new test-hybrid-smoke) |
+| Phase 1 + 3 + 4 — shared core + hybrid kernel + C smoke tests | `e12c63d` | ~1.5h | 264 LOC core extracted (data structures only — cells / profile / format; scheduler NOT extracted, contrary to design plan); 593 LOC hybrid kernel built (includes its own scheduler + worklist); 175 LOC C smoke harness; 4/4 C tests pass (compounded across pre-existing test-hamt + test-bsp-stats + test-bsp-feedback + new test-hybrid-smoke) |
 | Phase 6 + 7 + 8 — Racket bridge + handle table + three-way differential | `ff5cb86` | ~1.5h | Bridge 284 LOC initial; handle table per-call lifetime; differential 13/13 green |
 | CI gating: gitignore .so + smoke-test binary | `f7b8420` | ~10min | Prevent `.so` artifacts in commits |
 | CI gating: fail-soft bridge + skip gate + Zig build step | `92655b5` | ~30min | CI skips hybrid tests when `.so` not built (e.g. on platforms without Zig) instead of erroring |
@@ -132,6 +138,7 @@ The design's estimated calendar was "~10-12 days single-developer track." Actual
 | Deferred | Why | Tracking |
 |---|---|---|
 | **Phase 2 — refactor `prologos-runtime.zig` to use core** | User direction: *"skip phase 2, keep separate"*. Refactoring the original LLVM-target kernel to use `runtime/core/` would have improved code reuse but risked destabilizing the LLVM lowering work. Two parallel kernels keep blast radius small. | Refactor when SH Track 1 (LLVM lowering) stabilizes and the risk/reward inverts. The shared core was *factored* during Phase 1 but only the hybrid kernel currently uses it — the original kernel still has the inlined versions. |
+| **BSP scheduler factoring (`core/bsp.zig` + `core/worklist.zig`)** | The Stage 3 design called for the scheduler to land in core (~150 + 60 LOC); actual Phase 1 extracted only data structures (cell store / profile / format). The scheduler stayed in each kernel file (hybrid kernel has its own worklist + `fire_against_snapshot` + `merge_pending_writes` + `swap_worklists`; original kernel has its own analogous code). Drift surfaced in this PIR. | Extract when a third kernel needs to reuse the scheduler, OR when Phase 2 (original-kernel refactor) reopens — whichever comes first. ~210 LOC across two files per the design's estimate. |
 | **Phase 11+ migrations beyond identity bridge** | Phase 10 demonstrated the migration pattern with one fire-fn. Each subsequent migration is straightforward (read profile, port hot fire-fn from Racket to Zig, re-test) but requires both implementation effort AND profile data from real workloads. | Profile-driven; do as workload demand surfaces. |
 | **Cell capacity dynamic growth** | Hybrid kernel ships with `MAX_CELLS=1024` start; the design called for "growable (start 1024, expand as needed)" but the actual realloc + re-pointer-fixup machinery wasn't implemented. Workloads that exceed 1024 cells will hit a hard ceiling. | Add when a workload triggers it; ~50 LOC + reset-arena pattern. |
 | **Higher-arity (4-1, 5-1) propagator install APIs** | Hybrid ships 1-1, 2-1, 3-1, N-1. The N-1 path covers everything; specialized 4-1/5-1 would be perf optimizations only. | Profile-driven if the N-1 indirection shows up in benchmarks. |
@@ -227,7 +234,7 @@ The 89 pre-existing `test-preduce-phase{1..6,10,11b,14b}.rkt` unit tests + 2000-
 ## 8. Design Decisions and Rationale
 
 **Decision 1: Two parallel kernels (original + hybrid), shared core.**
-- *Rationale*: The original kernel is the LLVM-target lowering vehicle; touching it risks destabilizing SH Track 1. Building a SECOND kernel for the Racket-Zig hybrid path lets both ship without coupling. Shared core via `runtime/core/` factors what's truly common (BSP scheduler, cell store ops, profiling) without forcing the original kernel through a refactor on the hybrid's schedule.
+- *Rationale*: The original kernel is the LLVM-target lowering vehicle; touching it risks destabilizing SH Track 1. Building a SECOND kernel for the Racket-Zig hybrid path lets both ship without coupling. Shared core via `runtime/core/` factors what's actually common between the kernels (cell store data structure, profile counters, format helpers — what the hybrid kernel needed first) without forcing the original kernel through a refactor on the hybrid's schedule. **Caveat**: the design also called for the BSP scheduler to live in core; in practice Phase 1 stopped at data structures, leaving each kernel with its own scheduler. Acceptable for two-kernel scope; will need extraction when a third kernel surfaces. See §15 debt + §17 #9.
 
 **Decision 2: Tagged-i64 cells (8-bit tag + 56-bit payload).**
 - *Rationale*: PReduce-lite needs many cell value types (Int, Bool, Nat, Bot, Top, Handle for non-tagged values, eventually pointers to compound structures). Embedding a tag in the cell value avoids needing a per-cell indirection or a parallel `tags[]` array. 8 bits = 256 tags is plenty for the foreseeable future. 56 bits of payload covers Int (always less than 2^53 in practice for Racket-bridged numerics) + handle indices.
@@ -270,13 +277,13 @@ The 89 pre-existing `test-preduce-phase{1..6,10,11b,14b}.rkt` unit tests + 2000-
 
 **Anti-decision (rejected)**: Full Zig reducer (Option B from Stage 1 research). FFI calibration showed forward calls cheap enough that running the reducer Racket-side + kernel Zig-side is economic. Going full-Zig would require porting all of PReduce-lite into Zig — months of work for marginal speedup.
 
-**Anti-decision (rejected)**: Skip the shared-core factorization, just rebuild from scratch in `prologos-runtime-hybrid.zig`. Tempting because the original kernel was 544 LOC of working code — but factoring uncovered the BSP scheduler abstraction (cell-value-type as comptime parameter) that future kernels (third? fourth?) will use. The 264-LOC factorization cost paid for itself the moment the second kernel started consuming it.
+**Anti-decision (rejected)**: Skip the shared-core factorization, just rebuild from scratch in `prologos-runtime-hybrid.zig`. Tempting because the original kernel was 544 LOC of working code — but factoring uncovered the cell-store comptime-parameterization abstraction (`CellStore(comptime Value, comptime CAPACITY)`) that future kernels (third? fourth?) will use, and gave both kernels a single profile-counter struct so the migration triage tooling has one place to look. The 264-LOC factorization cost paid for itself the moment the second kernel started consuming it. (The design imagined factoring the BSP scheduler too — that didn't land; see §15 debt.)
 
 ## 9. What Went Well
 
 1. **Stage 2 FFI calibration before Stage 3 design.** Knowing the actual numbers (forward 14-42 ns/call; callback 170-180 ns/call) on this host before writing the design doc anchored the entire architecture. R1 (FFI dominates) was the load-bearing risk in Stage 1; calibration confirmed it tractable. Without those numbers, the design would have hedged on Option C vs Option B; with them, Option C was decisive.
 
-2. **Factoring the shared core BEFORE writing the second kernel.** Phase 1 extracted `runtime/core/` (264 LOC) before Phase 3 built the hybrid kernel against it. The alternative — copy-paste the original kernel and refactor later — would have produced two divergent codebases that drift. The Zig generic-functions + comptime story made factoring clean: cell-value-type as a comptime parameter; both kernels instantiate the same scheduler with different types.
+2. **Factoring the shared core BEFORE writing the second kernel.** Phase 1 extracted `runtime/core/` (264 LOC, data structures only) before Phase 3 built the hybrid kernel against it. The alternative — copy-paste the original kernel and refactor later — would have produced two divergent codebases that drift. The Zig generic-functions + comptime story made factoring clean: cell-value-type as a comptime parameter; both kernels can instantiate the same `CellStore(Value, CAPACITY)` with different value types. (The factoring scope shrank from the design's plan — scheduler stayed per-kernel — but what landed is correct and reusable.)
 
 3. **C smoke tests caught most kernel bugs before Racket FFI loaded.** 4/4 C tests pass on first complete run (`runtime/test-{hamt,bsp-stats,bsp-feedback,hybrid-smoke}.c`). The dispatch table, ABI, stat-counter ranges, and BSP feedback loop were all validated in C without Racket overhead. Bugs that escaped to the Racket layer (Bugs 1, 2, 8 above) were either GC-related (Racket-specific) or scale-sensitive (only surfaced with full reducer-driven workloads).
 
@@ -312,7 +319,7 @@ The 89 pre-existing `test-preduce-phase{1..6,10,11b,14b}.rkt` unit tests + 2000-
 
 2. **PReduce-lite was already complete and tested.** Hosting PReduce-lite on the hybrid kernel took ~1.5 hours (Phases 6+7+8 in one commit) because PReduce-lite's compile-expr was already structured against propagator.rkt's API. Mirroring that API in the hybrid bridge let Phase 8 be a near-mechanical translation.
 
-3. **The original kernel was a near-perfect template.** `runtime/prologos-runtime.zig` (544 LOC) had everything the hybrid needed — BSP scheduler, cell store, profiling counters, propagator install — minus the diverging features (tagged cells, dynamic dispatch, variable arity, callback support). Building the hybrid from this template was much faster than building from scratch. The factoring step (Phase 1) made the inheritance explicit.
+3. **The original kernel was a near-perfect template.** `runtime/prologos-runtime.zig` (544 LOC) had everything the hybrid needed — BSP scheduler, cell store, profiling counters, propagator install — minus the diverging features (tagged cells, dynamic dispatch, variable arity, callback support). Building the hybrid from this template was much faster than building from scratch. The factoring step (Phase 1) made the inheritance explicit at the data-structure layer (cell store, profile, format) — the scheduler stayed per-kernel and got hand-ported into the hybrid file with the kernel-specific divergences inlined.
 
 4. **Zig's comptime story matched the abstraction we needed.** Cell-value-type as a comptime parameter let both kernels instantiate the same `cell_alloc` / `cell_read` / `cell_write` from `core/cells.zig` with different value types. No code duplication; type-safe at compile time. Had the kernels been in C, the abstraction would have required either macros or void* + casts.
 
@@ -328,7 +335,7 @@ The 89 pre-existing `test-preduce-phase{1..6,10,11b,14b}.rkt` unit tests + 2000-
 
 1. **Stage 1+2+3 → Phase 10 in 8 hours, not 10-12 days.** Design doc estimated calendar weeks; actual was a single afternoon. The 30× compression is striking. Drivers: existing template (the original kernel), existing reducer (PReduce-lite), confirmed-economics calibration (Stage 2), and the absence of architectural surprises during implementation (the design held).
 
-2. **The Zig-side kernel was simpler than expected once factoring landed.** The hybrid kernel is 639 LOC after Phase 1 factoring; pre-factoring it would have been ~900 LOC of duplication. The shared core (264 LOC) absorbed 30% of what would have been duplicated.
+2. **The Zig-side kernel landed at 639 LOC even with the scheduler kept inline.** Pre-factoring it would have been ~900 LOC of duplication for the data-structure parts that did get extracted. The shared core (264 LOC of data structures) absorbed roughly that delta. The scheduler that *didn't* get extracted still exists in 639-LOC hybrid (about ~150 LOC of worklist + fire loop + merge + swap), so the original kernel's analogous ~150 LOC is duplicated — a real "would-have-been-shared" gap that the design predicted but didn't land. See §15 debt.
 
 3. **Three-way differential gate found zero divergences across all three diagonals.** Going in, expectation was: pure-Racket `nf` ≡ `preduce` already validated by PReduce-lite's 2000-case differential, but `preduce-hybrid` adding the FFI + tagged-i64 + dispatch-table layers might introduce subtle bugs. Reality: 13/13 across all three diagonals. The FFI boundary preserved semantics cleanly. Striking.
 
@@ -340,13 +347,13 @@ The 89 pre-existing `test-preduce-phase{1..6,10,11b,14b}.rkt` unit tests + 2000-
 
 7. **CI fail-soft skip exposed a category of "graceful degradation" that previous tracks didn't need.** Most Prologos infrastructure assumes Racket-only; the hybrid kernel introduces a platform dependency (Zig 0.13). Treating "kernel not built" as a skip-tests condition rather than an error is a new pattern. Likely to recur with future native-runtime work (LLVM lowering, GPU offload) — codify the pattern.
 
-8. **The factored core's LOC was bigger than expected.** Stage 3 design estimated `runtime/core/` at ~460 LOC; actual is 264. The remaining ~200 LOC stayed in the kernel-specific files because they didn't generalize cleanly across the two kernels (e.g., growable-vs-fixed cell array allocator). Acceptable but worth flagging as design-vs-reality drift.
+8. **The factored core's LOC was *smaller* than expected, not larger — and the gap is the BSP scheduler.** Stage 3 design estimated `runtime/core/` at ~460 LOC across 5 files: `bsp.zig` (~150) + `cells.zig` (~80) + `worklist.zig` (~60) + `profile.zig` (~120) + `format.zig` (~50). Actual is 264 LOC across 3 files (cells + profile + format). The two missing files — `bsp.zig` and `worklist.zig` — total ~210 LOC of design estimate; the scheduler stayed in each kernel file instead. Design-vs-reality drift on the factoring scope; recorded as debt in §15 and as wrong-assumption #9 in §17. The "factoring saved duplication at the data-structure layer but not the scheduler layer" framing is accurate; the original framing in this section overstated what landed.
 
 ## 13. Architecture Assessment
 
 **Did the hybrid runtime integrate cleanly?**
 
-Yes — purely additive at the Racket layer (PReduce-lite untouched; `preduce-hybrid.rkt` is a new opt-in shim) and additive at the Zig layer (the original kernel untouched; `prologos-runtime-hybrid.zig` is a new file consuming `runtime/core/`). The only original-kernel change was Phase 1's factoring extraction, which moved code into `runtime/core/` without behavior change — the original kernel's tests still pass.
+Yes — purely additive at the Racket layer (PReduce-lite untouched; `preduce-hybrid.rkt` is a new opt-in shim) and additive at the Zig layer (the original kernel untouched; `prologos-runtime-hybrid.zig` is a new file that consumes `runtime/core/` for cell store + profile + format helpers; the BSP scheduler is inlined into the hybrid kernel rather than shared). The original kernel was unchanged by this work — Phase 1's factoring extracted *new* `runtime/core/` files without modifying `prologos-runtime.zig` (the original kernel's tests still pass without a recompile because nothing the original references moved).
 
 **Were extension points sufficient?**
 
@@ -376,7 +383,7 @@ Yes — purely additive at the Racket layer (PReduce-lite untouched; `preduce-hy
 
 2. **Profile-driven migration as a deployment pattern.** Phase 10 demonstrated the loop: read profile → identify hot fire-fn → port from Racket-callback to Zig-native → re-test → measure. The loop is ~20 minutes per fire-fn. Subsequent migrations follow this pattern; the kernel doesn't need rebuild — the dispatch table entry is overwritten.
 
-3. **The shared core (`runtime/core/`) as substrate for future kernels.** A third kernel (e.g., GPU-targeted, distributed, persistent) can instantiate the same scheduler with a different cell-value type and dispatch strategy. The Phase 1 factoring is a permanent architectural asset.
+3. **The shared core (`runtime/core/`) as substrate for future kernels.** A third kernel (e.g., GPU-targeted, distributed, persistent) can instantiate the same `CellStore(Value, CAPACITY)` with a different cell-value type and reuse the profile-counter machinery. **Caveat**: each kernel still has to write its own scheduler — Phase 1 extracted the data-structure layer but not the scheduler layer. A third kernel will need to either copy the hybrid's scheduler or finally extract `core/bsp.zig` + `core/worklist.zig` (the scheduler-extraction debt). The Phase 1 factoring as it stands is a partial architectural asset — load-bearing for cell store + profile counters, neutral on scheduling.
 
 4. **The three-way differential gate as a regression substrate.** Any future change to PReduce-lite, the hybrid bridge, or the Zig kernel that breaks `nf ≡ preduce ≡ preduce-hybrid` will fail the gate immediately. Provides high-confidence cross-implementation regression coverage.
 
@@ -384,15 +391,16 @@ Yes — purely additive at the Racket layer (PReduce-lite untouched; `preduce-hy
 
 6. **The OCapN compatibility-target Tier B port specifically benefits.** OCapN's `syrup-wire.prologos` carries pitfall #27 (270s decode pathology) — a strategic benchmark target for the hybrid kernel's HOF substitution speedup. Once Phase 9 (FFI + byte-strings) lands in PReduce-lite, the syrup-wire workload becomes the headline perf demonstrator for hybrid migration.
 
-7. **The kernel-PU primitive design (separate track) consumes this runtime.** Pocket Universes are a kernel-level construct; the hybrid kernel is the substrate they will be implemented on. The `runtime/core/` factoring is the right shape for the PU primitive's stratification — internal scheduler, quiescence, profiling all reuse from core.
+7. **The kernel-PU primitive design (separate track) consumes this runtime.** Pocket Universes are a kernel-level construct; the hybrid kernel is the substrate they will be implemented on. The current `runtime/core/` (cell store + profile + format) covers PU's data-structure needs cleanly. PU's internal scheduler + quiescence will need to either reuse the hybrid kernel's scheduler in-place (since `core/bsp.zig` doesn't exist yet) or trigger the scheduler extraction at that point — a forcing function.
 
-8. **A working substrate for the LLVM-target convergence story.** Long-term, the original kernel and the hybrid kernel converge as the original gains tagged-i64 + dynamic dispatch (when LLVM-lowering needs them). The shared core makes this convergence cheaper — only the kernel-specific parts diverge today.
+8. **A working substrate for the LLVM-target convergence story.** Long-term, the original kernel and the hybrid kernel converge as the original gains tagged-i64 + dynamic dispatch (when LLVM-lowering needs them). The shared core makes this convergence cheaper at the data-structure layer (cell store + profile + format). The scheduler layer remains unfactored — both kernels carry their own — so the convergence still has duplicate scheduler logic to reconcile until `core/bsp.zig` lands.
 
 ## 15. Technical Debt
 
 | Debt | Rationale | Path to retire |
 |---|---|---|
 | Original kernel (`prologos-runtime.zig`) doesn't yet use `runtime/core/` | Phase 2 deferred per user direction | Phase 2 reopen when SH Track 1 stabilizes |
+| BSP scheduler not factored into core (design called for `core/bsp.zig` + `core/worklist.zig`, ~210 LOC; actual core has only data structures) | Phase 1 stopped at the data-structure layer; design-vs-reality drift surfaced in this PIR | Extract when a third kernel surfaces OR when Phase 2 (original-kernel refactor) reopens — whichever comes first. Each kernel currently has ~150 LOC of duplicated scheduler logic. |
 | `MAX_CELLS=1024` hard ceiling | Workloads tested don't approach it; growable design exists in spec but realloc + pointer-fixup not implemented | ~50 LOC + reset-arena pattern when a workload triggers |
 | Racket-callback fire-fns dominate the dispatch table for non-identity AST nodes | Phase 10 migrated only the identity bridge | Profile-driven; per-fire-fn ~20-min migration loop |
 | Phase 10 "96% callback reduction" not codified as a regression test | Number is in commit message; nothing prevents regression | ~30 min to extract metric + add CI gate |
@@ -440,7 +448,9 @@ Otherwise the design held. Phased plan + per-phase regression + Stage 2 calibrat
 
 7. **"Module-load FFI bindings can hard-error if `.so` is missing."** Wrong for cross-platform CI. Hard-error blocks the entire test runner; CI on Zig-less platforms can't even start. Soft-stub on missing is the right pattern; should have been the default.
 
-8. **"The factoring step (Phase 1) is overhead."** Wrong. Phase 1 looked like extraction work (264 LOC moved, no new behavior); felt like overhead. In retrospect, it's the load-bearing decision — without factoring, the second kernel would have been ~900 LOC of duplication and the third kernel (future) would have been impossible. The "overhead" is permanent architectural value.
+8. **"The factoring step (Phase 1) is overhead."** Wrong. Phase 1 looked like extraction work (264 LOC moved, no new behavior); felt like overhead. In retrospect, it's the load-bearing decision for the data-structure layer — without factoring, the second kernel would have re-implemented the cell store + profile counters and the migration triage tooling would have had two places to read. The "overhead" is permanent architectural value at the layer that landed.
+
+9. **"Phase 1 will factor the BSP scheduler into core."** Wrong. The Stage 3 design explicitly listed `core/bsp.zig` (~150 LOC) and `core/worklist.zig` (~60 LOC) as Phase 1 deliverables. In practice Phase 1 stopped at the data-structure layer (cells + profile + format) and the scheduler stayed in each kernel file. The hybrid kernel's worklist + `fire_against_snapshot` + `merge_pending_writes` + `swap_worklists` are inlined in `prologos-runtime-hybrid.zig`; the original kernel has its own analogous code. **The factoring scope shrank silently** — neither the implementing commit (`e12c63d`) nor any subsequent commit acknowledged the gap. Surfaced only when the user asked "what's in the hybrid core zig side?" during PIR review. **Lesson**: when a phase deliberately narrows scope from the design, the narrowing belongs in the commit message AND the next PIR pass, not as a silent change.
 
 ## 18. What We Learned About the Problem Itself
 
@@ -450,7 +460,7 @@ Otherwise the design held. Phased plan + per-phase regression + Stage 2 calibrat
 
 3. **Two parallel implementations are stable when the divergence is principled.** Original (LLVM target) vs hybrid (Racket-Zig target) diverge on cell-value type, dispatch, arity, callback support — each divergence has a clear reason. Not "we made two for redundancy" but "we made two because they serve different consumers." When divergence is principled, parallel implementations are stable. When divergence is accidental, they drift.
 
-4. **The factored core is the first concrete instance of "kernel substrate as Prologos asset."** Future work (kernel PUs, distributed kernels, GPU kernels) will all instantiate `runtime/core/` with different cell-value types. The substrate is now first-class — versioned, tested, documented. **Pattern**: factoring at the second-instance is the right time (premature at first; debt at third).
+4. **The factored core is the first concrete instance of "kernel substrate as Prologos asset"** — at the data-structure layer. Future work (kernel PUs, distributed kernels, GPU kernels) can instantiate `runtime/core/`'s `CellStore(Value, CAPACITY)` with different cell-value types and reuse the profile counters. **Pattern**: factoring at the second-instance is the right time (premature at first; debt at third). **Caveat learned in this PIR**: when factoring across two consumers, the *complete* shared surface is harder to land than the *minimum-viable* shared surface. Phase 1 landed the minimum viable (cell store + profile + format) without challenge; the design's scheduler-in-core plan quietly slipped. Catching the gap requires either a checklist against the design plan at phase-close, or external review (which is how this drift surfaced).
 
 5. **CI fail-soft is the right default for native dependencies.** Most prior tracks assumed pure-Racket; CI errored cleanly when the codebase was wrong. Hybrid introduces "the codebase is right but the toolchain is missing" as a new failure mode. Soft-stub the missing layer; let the rest of CI run. **Pattern**: any native dep should ship with a "kernel not available" stub path.
 
@@ -525,6 +535,7 @@ None of these require revisiting whether the hybrid runtime was the right thing 
 | Existing-template multiplier in estimates (when a near-perfect template exists, halve the estimate at minimum) | `DESIGN_METHODOLOGY.org` candidate | Pending |
 | Skipping a phase by user direction is a first-class architectural decision; mark distinctly from "deferred" | `DESIGN_METHODOLOGY.org` candidate | Pending |
 | Phase 10 measurement (96% reduction) should be locked as a regression test in the same commit | Self — apply to future quantitative phases | Pending |
+| Phase-close checklist must compare delivered scope against design plan, not just "did the tests pass" | `DESIGN_METHODOLOGY.org` candidate — surfaced when this PIR's BSP-scheduler-in-core claim was challenged externally; the scope-shrinkage was silent at Phase 1 close | Pending — codify after a second instance |
 
 ## 22. Metrics
 
@@ -623,7 +634,7 @@ None of these require revisiting whether the hybrid runtime was the right thing 
 
 3. **Should we lock Phase 10's "96% callback reduction" as a regression test?** Number is in the commit message; nothing prevents regression. ~30 min to extract and gate. Worth scheduling soon.
 
-4. **How does the kernel-PU primitive (separate track) consume the hybrid substrate?** Pocket Universes are kernel-level; they need internal scheduler + quiescence + profiling — exactly what `runtime/core/` provides. Design subquestion: do PUs ride on the hybrid kernel only, or do both kernels gain PU support? Likely hybrid-first then back-port to original when stabilized.
+4. **How does the kernel-PU primitive (separate track) consume the hybrid substrate?** Pocket Universes are kernel-level; they need internal scheduler + quiescence + profiling. The current `runtime/core/` provides cell store + profile counters cleanly; the PU's internal scheduler needs to either reuse the hybrid kernel's scheduler in-place or finally trigger the `core/bsp.zig` extraction (see §15 debt). Design subquestion: do PUs ride on the hybrid kernel only, or do both kernels gain PU support? Likely hybrid-first then back-port to original when stabilized — and that back-port may be the natural moment for the scheduler-extraction work.
 
 5. **What's the strategy for cross-platform packaging?** Linux works today; macOS needs `DYLD_LIBRARY_PATH`; Windows needs `PATH`. Three small shims; not done because no cross-platform user has surfaced. Worth pre-empting if Prologos targets cross-platform distribution.
 
