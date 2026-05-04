@@ -192,10 +192,12 @@ int main(void) {
     prologos_propagator_install_2_1(7 /* int-mod */, ma, mb, mr);
     prologos_run_to_quiescence();
     ASSERT_EQ("T7b.mod_positive", prologos_cell_read(mr), 2); /* 17 mod 5 */
+    ASSERT_EQ("T7b.fires_tag7_round1", prologos_get_stat(100 + 7), 1);
 
     prologos_cell_write(ma, -17);
     prologos_run_to_quiescence();
     ASSERT_EQ("T7b.mod_negative_dividend", prologos_cell_read(mr), 3); /* modulo(-17,5)=3 */
+    ASSERT_EQ("T7b.fires_tag7_total", prologos_get_stat(100 + 7), 2);
 
     /* ====================================================================
      *  Day 2 tests: 2-tier outer loop + topology-mutation tracking
