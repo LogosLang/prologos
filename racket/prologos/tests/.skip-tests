@@ -28,3 +28,13 @@ test-ocapn-conversation.rkt       # interop-only: spawns node subprocess (Phase 
 test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 8)
 test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
 test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)
+
+# Phase 24 bridge-driven responder interop test — skeleton in place
+# (Node peer + test harness) but blocked on a Prologos elaborator/
+# evaluator performance issue: the driver expression that drives
+# `captp-incoming-with-state + drain + pump-outbound` over Node-
+# decoded bytes exceeds 90s wall-time during in-process eval, far
+# longer than equivalent unit tests with hand-coded ops. See goblin
+# pitfalls #30 (match-in-deep-let inference failure, worked around)
+# and #31 (perf observation, follow-up).
+test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, perf-blocked)

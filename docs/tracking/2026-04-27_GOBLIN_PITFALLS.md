@@ -996,3 +996,134 @@ prefer the most-recently-required module.
 
 **Discovered.** Phase 17 of OCapN interop — first time we
 exercised broken-promise bytes encoding.
+
+---
+
+### #30 — `match` inside a 7+ binding `let`-chain triggers elaborator inference failure (2026-05-04, real bug)
+
+**Symptom.** A driver expression in a test fixture that chains
+~7 `let` bindings ending in a `match` expression fails to elaborate
+with "Could not infer type" — every let-binding's parameter type
+is held as an unsolved metavariable. Replacing the `match` with a
+direct call (e.g., `unwrap-or default (nth zero list)`) makes
+inference succeed; replacing with `length list` succeeds; replacing
+the same shape with a top-level `defn` helper that wraps the
+`match` succeeds. So the bug is specifically about an inline
+`match` form sitting at the END of a deep let-chain, where the
+outer binding types lack a forcing context.
+
+**Repro.** This shape fails:
+
+```
+(eval (let (op1 (unwrap-or (op-abort \"d1\") (decode-op \"<10\\\"op:abort3\\\"bye>\")))
+        (let (op2 (unwrap-or (op-abort \"d2\") (decode-op \"<10\\\"op:abort3\\\"bye>\")))
+          (let (sa (vat-spawn-actor beh-echo syrup-null empty-vat))
+            (let (cs0 (conn-state (alloc-vat sa) bridge-state-empty nil false))
+              (let (step1 (connection-step op1 cs0))
+                (let (step2 (connection-step op2 (conn-step-state step1)))
+                  (let (all (append (conn-step-outbound step1) (conn-step-outbound step2)))
+                    (match all                  ;; <-- elaborator can't solve metas
+                      | nil       -> "NO-OUT"
+                      | cons hd _ -> hd)))))))))
+```
+
+This same shape with `(length all)` instead of `match` succeeds.
+This same shape with `(unwrap-or "NO" (nth zero all))` succeeds.
+
+**Hypothesis.** The match form's type-checking goes through a
+different inference path than ordinary function application. When
+the surrounding context is a deep nested `let` (each binding
+introduces a fresh metavariable), the match's type-driven
+inference can't propagate downward to the outer let-bindings.
+Function applications can — perhaps because they have a clearer
+arg→result type relationship — so `unwrap-or` and `nth` succeed
+where match fails.
+
+**Workaround.** Two options:
+1. Replace the `match` with a function call that has the same
+   semantics — e.g., `unwrap-or default (nth zero list)` for
+   "head with default."
+2. Define a top-level `defn` that wraps the `match` and call it
+   instead. The function's spec gives the type-checker an anchor
+   it doesn't have for the inline match.
+
+**Discovered.** Phase 24 of OCapN interop (bridge-driven responder
+interop test). The driver expression initially used `match all |
+nil -> default | cons hd _ -> hd` to extract the first outbound
+byte string from a list of two `connection-step` calls. Replaced
+with `unwrap-or default (nth zero ...)` and elaboration succeeded.
+
+**Verdict.** Real Prologos elaborator bug. Workaround is cheap
+(use a function instead of inline match in deep let-chains), but
+the inference engine should handle this — match is supposed to be
+a fundamental form. Worth filing a Prologos issue with this
+specific repro. The shape generalizes beyond OCapN — any test
+fixture using `process-string` to drive multi-step workflows could
+hit this.
+
+---
+
+### #31 — `captp-incoming-with-state + drain + pump-outbound` over Node-decoded bytes is >90s in `process-string`-driven eval (2026-05-04, perf observation)
+
+**Symptom.** Phase 24's bridge-driven responder interop test
+(`test-ocapn-bridge-interop.rkt`) drives the full bridge pipeline
+on a Node-emitted `op:deliver` frame:
+
+```
+(let (op   (unwrap-or (op-abort "decode-failed") (decode-op <node-bytes>))
+      sa   (vat-spawn-actor beh-echo syrup-null empty-vat)
+      step (captp-incoming-with-state op (alloc-vat sa) bridge-state-empty)
+      v2   (drain (suc^8 zero) (bridge-step-vat step))
+      pr   (pump-outbound v2 (bridge-step-state step) nil))
+  (unwrap-or "NO-OUTBOUND" (nth zero (pump-result-bytes pr))))
+```
+
+This expression evaluated via `process-string` exceeds **90s** of
+Racket CPU time in the full elaboration + reduction loop. Existing
+unit tests in `test-ocapn-bridge.rkt` that exercise the same chain
+(e.g., "bridge/pump-outbound emits bytes when a question's promise
+is fulfilled") with **hand-constructed** ops (not `decode-op`-
+produced) complete in ~1s.
+
+**Hypothesis.** The difference is in the SyrupValue payload. Node's
+encoded `<op:deliver <desc:export 0> "hello" <desc:answer 7> #f>`
+decodes into a `CapTPOp` whose `args` field is `syrup-string "hello"`
+and whose `ap` field is `some 7` — same shapes the unit tests use.
+But the path through `decode-op` and `unwrap-or` introduces metas
+or partial-application closures that the elaborator carries through
+into `captp-incoming-with-state` and `drain`'s reduction. Reduction
+of those nested closures may be where the time goes.
+
+A second possibility: `pump-outbound` walks the question table; with
+Node's deliver triggering allocation of a new question-table entry
+(remote=7 → fresh local pid), the table entry's terms include
+metas that took multiple reduction rounds to settle.
+
+**Investigation paths**:
+1. Profile `process-string` of just the `decode-op + unwrap-or`
+   form vs the full chain — isolate where time goes.
+2. Try a freshly-`raco make`'d run vs an interpreted run; the
+   compiled .zo of the test FILE doesn't help with elaboration of
+   the `process-string` expression at runtime.
+3. Try replacing `(unwrap-or (op-abort "...") (decode-op ...))` with
+   a direct sexp constructor of an equivalent `CapTPOp` in the test
+   — does that avoid the slowdown? If so, the slowdown is decoder-
+   specific.
+4. Reduce the test's `drain` fuel from 8 to something smaller and
+   see if it bottoms out faster.
+
+**Workaround for now.** Skip the test from the interop CI workflow.
+Add to `.skip-tests` with reason. Phase 24 ships as scaffolding
+(Node peer + test skeleton + pitfall doc), with the live end-to-end
+gate deferred to a Prologos perf or evaluator improvement.
+
+**Discovered.** Phase 24 of OCapN interop. The perf gap between
+unit tests with hand-coded ops and a real interop test that decodes
+Node-emitted bytes blocks the live bridge-driven test from being
+the regression gate it could be.
+
+**Verdict.** Real perf gap. Worth investigating because: (a) it
+limits the interop test matrix; (b) once fixed, every protocol port
+that uses `process-string`-driven test fixtures benefits; (c) the
+gap signals something about how Prologos's reduction handles
+decoder-produced expression trees that may matter for self-hosting.
