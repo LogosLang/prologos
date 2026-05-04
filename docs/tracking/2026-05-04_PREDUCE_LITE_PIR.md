@@ -14,6 +14,8 @@
 
 > **Errata (2026-05-04, post-publication audit)**: a code-vs-claim audit found four numeric inaccuracies that have been corrected: (a) Phases 1–15 unit-test count was 89, actually 88 (claim added the 2 differential gates by mistake); (b) OCapN test-case count was 16, actually 15 (test-ocapn-refr 6 + test-ocapn-syrup 9); (c) total test count was 117, actually 115 (the off-by-ones cancelled in the original); (d) "21 files" was an undercount — actual is 31 files in the preduce/ocapn paths; (e) "~80+ propagator install sites" claimed in §13 + §20 was significantly inflated — actual is **33 static install sites** in `preduce.rkt` (31 `net-add-fire-once-propagator` + 2 `net-add-propagator`), plus dynamic-β can install more during fire (the `current-bsp-fire-round? #f` trick auto-schedules compile-during-fire propagators). All numeric claims in the header, §3, §13, §20, §22 corrected. The structural claims (phased plan, hard-error policy, three-way differential, design priority order) were verified accurate against the implementation.
 
+> **Addendum (2026-05-04, swappable-backend refactor)**: a second 2026-05-04 session landed the swappable-backend refactor (commits `0d80dfa` … `6ea73cc`). PReduce-lite's compile-expr now drives both the Racket-side `prop-network` AND the Zig hybrid kernel via a uniform backend interface — same compile-expr, different backend instance. New files: `preduce-core.rkt` (153 LOC, backend struct + `b-*` accessor shorthands + `current-backend` parameter), `preduce-backend-racket.rkt` (~100 LOC, wraps `propagator.rkt` primitives), `preduce-backend-hybrid.rkt` (~140 LOC, wraps the Zig kernel FFI). `preduce.rkt` was rewritten through `b-*` shorthands (~133 mechanical edits across ~80 call sites) and now provides `compile-expr` for backend reuse. Threading model: **functional throughout** (the `net` value is threaded through every primitive), per the design plan §2.3 — the SH endpoint requires this for native execution where `net` becomes a real cell-id flowing through cells. Validated: all 115 unit tests + 2 differential gates + 15 OCapN tests stay green; 4-case probe + 4-case `test-preduce-hybrid-phase10b.rkt` confirm Phase-10b user-ctor matches run end-to-end on the kernel. Subsequent commit `6ea73cc` added a `#:native-op` hint to the backend interface that restored the kernel's built-in native dispatch for int-arith (tags 0-7) — see Hybrid Runtime PIR addendum for the regression-and-fix narrative. See [`2026-05-04_PREDUCE_BACKEND_REFACTOR_DESIGN.md`](2026-05-04_PREDUCE_BACKEND_REFACTOR_DESIGN.md) for the design plan; the refactor closes the "two parallel reducers" debt called out in §15. **§3, §13, §15, §22, §23 updated to reflect the post-refactor layout.**
+
 ---
 
 <!-- 16-question PIR template — sections to be filled iteratively -->
@@ -61,7 +63,9 @@ The 2026-05-04 directives extended the original phase plan with two follow-up ob
 
 | File | LOC | Purpose |
 |---|---|---|
-| `racket/prologos/preduce.rkt` | 1509 | The PReduce-lite reducer (lattice + compile-expr + topology dispatch + ~120 AST node cases, including Phase 10b user-defined-ctor dispatch) |
+| `racket/prologos/preduce.rkt` | 1509 → ~1480 (post-backend-refactor) | The PReduce-lite reducer — lattice + compile-expr + ~120 AST node cases. Post-refactor (2026-05-04 PM): all primitive calls go through `b-*` accessor shorthands; entry-point parameterizes `current-backend` to `backend-racket`; provides `compile-expr` for cross-backend reuse |
+| `racket/prologos/preduce-core.rkt` (NEW post-refactor) | 153 | `preduce-backend` struct (7 fields, all functionally threading `net`) + accessor shorthands (`b-alloc`, `b-read`, `b-write`, `b-install-fire-once`, `b-install-propagator`, `b-run-to-quiescence`, `b-fresh-net`) + `current-backend` parameter + `with-backend` macro. The shared substrate that lets one compile-expr drive multiple backends. |
+| `racket/prologos/preduce-backend-racket.rkt` (NEW post-refactor) | ~100 | `backend-racket-with-lattice` constructor that wraps `propagator.rkt` primitives (`net-new-cell`, `net-add-fire-once-propagator`, etc.) as a `preduce-backend` instance. Threads the actual `prop-network` struct as `net`. |
 | `racket/prologos/tests/test-preduce-phase{1..6,10,10b,11b,14b}.rkt` | ~1063 | Per-phase unit tests with differential against `nf` |
 | `racket/prologos/tests/test-preduce-phase15{,b}-differential.rkt` | 288 | Property-based 2000-case differential gates |
 | `racket/prologos/examples/preduce-lite/0{1..7}-*.prologos` | ~70 | Phase 0 acceptance file (7 programs with `:expect-exit` + commentary) |
@@ -549,12 +553,15 @@ A meta-question: *was Phase 10b worth doing, given the OCapN tests work today un
 
 ## 23. Key Files
 
-### PReduce-lite engine
+### PReduce-lite engine (post-2026-05-04 backend refactor)
 
 | Path | Role |
 |---|---|
-| `racket/prologos/preduce.rkt` | The reducer (lattice + compile-expr + ~120 AST cases) |
-| `racket/prologos/preduce-hybrid.rkt` | Companion hybrid Racket-Zig kernel reducer (different track; consumes preduce-lite output) |
+| `racket/prologos/preduce-core.rkt` | Backend interface — `preduce-backend` struct + `b-*` accessor shorthands + `current-backend` parameter. The shared substrate. |
+| `racket/prologos/preduce-backend-racket.rkt` | Racket backend instance (`backend-racket-with-lattice`); wraps `propagator.rkt` primitives. |
+| `racket/prologos/preduce-backend-hybrid.rkt` | Hybrid backend instance (`backend-hybrid`); wraps the Zig kernel FFI + handles the kernel callback ABI. Owns the `NATIVE-OP-TAGS` map for kernel-native dispatch. |
+| `racket/prologos/preduce.rkt` | Lattice + compile-expr + ~120 AST cases + entry-point `preduce`. compile-expr is now backend-agnostic (uses `b-*` shorthands); the entry point parameterizes `current-backend = backend-racket-with-lattice ...`. Provides `compile-expr` for cross-backend reuse. |
+| `racket/prologos/preduce-hybrid.rkt` | Hybrid-kernel entry-point (`preduce-hybrid`) — thin wrapper that parameterizes `current-backend = backend-hybrid` and calls `preduce.rkt`'s shared `compile-expr`. ~66 LOC after refactor (was 407 LOC pre-refactor). |
 
 ### Tests
 
