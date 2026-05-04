@@ -678,6 +678,7 @@ any Series.
 | PUnify Parts 1–2 | 2026-03-19 | [[file:2026-03-19_PUNIFY_STRUCTURAL_UNIFICATION_PROPAGATORS.org][P1 Design]], [[file:2026-03-19_PUNIFY_PART2_CELL_TREE_ARCHITECTURE.md][P2 Design]] | [[file:2026-03-19_PUNIFY_PARTS1_2_PIR.md][PIR]] | Cell-tree unification, descriptor registry, polymorphic solver dispatch. Breakout from Track 8 first half. |
 | BSP-LE Track 0 | 2026-03-21 | [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] | [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | hot/warm/cold struct split, mutable worklist, batch API. GC eliminated on hot path; wall-time neutral. |
 | CHAMP Performance | 2026-03-21 | [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][Design]] | [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][PIR]] | Owner-ID transients (16× faster at N=2), eq?-first, value-only fast path. Track 0 Phase 5 rehabilitated. |
+| OCapN Interop | 2026-05-04 | [[file:2026-04-29_OCAPN_INTEROP_DESIGN.md][Design]], [[file:2026-04-27_GOBLIN_PITFALLS.md][Pitfalls]] | [[file:2026-05-04_OCAPN_INTEROP_PIR.md][PIR]] | Phase 0 port + Phases 1–21 wire interop & vat bridge. 25 test files / 225 cases. Cross-impl CI gate against ~@endo/ocapn~ (JS). Phases 22+23 DEFERRED (language blockers). [[https://github.com/LogosLang/prologos/pull/28][PR #28]]. |
 
 * Standalone Design Documents (Not Yet Implemented / Future Scope)
 
