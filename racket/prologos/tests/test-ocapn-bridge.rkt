@@ -436,3 +436,49 @@
      (run-last
       "(eval (outbound-deliver-bytes (suc (suc (suc (suc (suc (suc zero)))))) (syrup-string \"hi\")))")))
   (check-equal? got expected))
+
+;; ========================================
+;; Phase 17 — Error type for broken promises
+;; ========================================
+
+(test-case "bridge/outbound-from-resolution broken -> some <Error r>-bytes"
+  ;; Broken promise should now yield bytes (was `none` in Phase 12).
+  ;; Bytes target the local pid as <op:deliver <desc:answer N> <Error r> false false>.
+  ;; (Construct broken state via `pst-broken` directly; `break` from
+  ;; promise.prologos collides with `data::list::break-helper` in the
+  ;; sexp-mode resolver.)
+  (check-contains
+   (run-last
+    "(eval (outbound-from-resolution
+              zero
+              (pst-broken (syrup-string \"oops\"))))")
+   "some"))
+
+(test-case "bridge/outbound-from-resolution broken bytes contain <Error wrapper"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (unwrap-or \"NO-BYTES\"
+                          (outbound-from-resolution
+                            zero
+                            (pst-broken (syrup-string \"oops\")))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:answer\" (syrup-nat zero))
+                                (cons (syrup-tagged \"Error\" (syrup-string \"oops\"))
+                                  (cons (syrup-bool false)
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/wrap-error wraps a SyrupValue in <Error _> tagged record"
+  ;; (wrap-error "oops") should equal (syrup-tagged "Error" "oops").
+  ;; Verify by encoding both and comparing bytes.
+  (define got
+    (extract-value-bytes
+     (run-last "(eval (encode (wrap-error (syrup-string \"oops\"))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last "(eval (encode (syrup-tagged \"Error\" (syrup-string \"oops\"))))")))
+  (check-equal? got expected))

@@ -84,14 +84,21 @@ defn outbound-deliver-bytes [pid args]
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
-;; If a promise is fulfilled, return the bytes of the outbound
-;; op:deliver. If it's broken or unresolved, return none.
-;; (Broken promises need <op:deliver desc:answer pid <Error r>>
-;; — Error encoding deferred until the Error type lands.)
+;; Wrap a SyrupValue in the canonical "broken-promise reason"
+;; record `<Error r>`. Phase 17.
+spec wrap-error SyrupValue -> SyrupValue
+defn wrap-error [reason]
+  syrup-tagged "Error" reason
+
+;; If a promise has settled (fulfilled OR broken), return the
+;; bytes of the corresponding outbound op:deliver:
+;;   pst-fulfilled v  →  <op:deliver <desc:answer pid> v false false>
+;;   pst-broken    r  →  <op:deliver <desc:answer pid> <Error r> false false>
+;; Unresolved promises return `none`.
 spec outbound-from-resolution Nat PromiseState -> [Option String]
 defn outbound-from-resolution
   | _   [pst-unresolved _] -> none
-  | _   [pst-broken     _] -> none
+  | pid [pst-broken     r] -> some [outbound-deliver-bytes pid [wrap-error r]]
   | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
 
 ;; ===========================================================
@@ -318,9 +325,11 @@ spec pump-result-emitted PumpResult -> List Nat
 defn pump-result-emitted
   | pump-result _ es -> es
 
-;; Per-question: if the local promise is now fulfilled AND the
-;; pid hasn't been emitted yet, prepend bytes targeting the
-;; REMOTE answer-pos and add local to the emitted list.
+;; Per-question: if the local promise has settled (fulfilled OR
+;; broken) AND the pid hasn't been emitted yet, prepend bytes
+;; targeting the REMOTE answer-pos and add local to the emitted
+;; list. Phase 17 extends Phase 16 to broken promises via
+;; `outbound-from-resolution`.
 spec pump-one Nat Nat Vat [List Nat] [List String] -> PumpResult
 defn pump-one [remote local v emitted accum]
   match [member-nat? local emitted]
@@ -329,12 +338,11 @@ defn pump-one [remote local v emitted accum]
         match [lookup-promise local v]
           | none -> pump-result accum emitted
           | some pst ->
-              match pst
-                | pst-unresolved _ -> pump-result accum emitted
-                | pst-broken     _ -> pump-result accum emitted
-                | pst-fulfilled  val ->
+              match [outbound-from-resolution remote pst]
+                | none       -> pump-result accum emitted
+                | some bytes ->
                     pump-result
-                      [cons [outbound-deliver-bytes remote val] accum]
+                      [cons bytes accum]
                       [cons local emitted]
 
 ;; Walk the question-table list once.

@@ -965,3 +965,34 @@ absence in a record sent TO `@endo/ocapn`. Phase 8 (RPC)
 hit it on the very first deliver.
 
 **Discovered.** Phase 8 of OCapN interop.
+
+---
+
+### #29 — `break` from `prologos::ocapn::promise` collides with `prologos::data::list::break-helper` in sexp-mode resolution (2026-05-01, ergonomics)
+
+**Symptom.** Calling `(break (syrup-string "oops") fresh)` in
+sexp-mode (a test fixture context) inside a function that
+expects a `PromiseState` — the resulting expression doesn't
+reduce. The pretty-print shows
+`[prologos::data::list::break-helper ?meta ...]` instead of
+`[prologos::ocapn::promise::pst-broken ...]`. The wrong `break`
+got picked up.
+
+**Cause.** `prologos::data::list` (transitively imported via
+`prologos::ocapn::core`) provides a `break-helper` and exposes
+`break` as well. The sexp-mode test imports `core :refer-all`
+which surfaces both. Symbol resolution preferentially picks the
+list one.
+
+**Workaround.** Use the constructor directly when constructing
+test data: `(pst-broken reason)` instead of `(break reason fresh)`.
+The constructor is unambiguous; only the convenience wrapper
+`break` collides.
+
+**Verdict.** Real ergonomics issue. Renaming `break` in
+`promise.prologos` to `mark-broken` would resolve it. Or
+namespace-qualified imports. Or making sexp-mode resolution
+prefer the most-recently-required module.
+
+**Discovered.** Phase 17 of OCapN interop — first time we
+exercised broken-promise bytes encoding.
