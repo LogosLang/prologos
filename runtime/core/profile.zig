@@ -6,7 +6,7 @@
 
 const format = @import("format.zig");
 
-pub const N_TAGS: u32 = 16;
+pub const N_TAGS: u32 = 256;
 
 const timespec = extern struct { sec: i64, nsec: i64 };
 extern fn clock_gettime(clk_id: c_int, tp: *timespec) c_int;

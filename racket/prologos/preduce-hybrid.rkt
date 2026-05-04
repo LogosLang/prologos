@@ -55,32 +55,67 @@
 (define KERNEL-INT-LE-TAG   6)
 
 ;; Tags 8+ allocated dynamically for Racket callbacks.
-;; CRITICAL: we must keep Racket-side references to wrapped fn-ptrs to
-;; prevent GC. The hash stores BOTH the tag (so we don't re-register)
-;; AND the wrapped procedure (so Racket's GC doesn't collect it while
-;; the kernel still holds the fn-ptr). See ffi/unsafe `function-ptr`
-;; docs: callbacks must be kept reachable from Racket-side roots for
-;; their entire callable lifetime.
-(define next-callback-tag (box 8))
-(define registered-callbacks (make-hash))  ;; (cons name shape) -> (cons tag closure-keeper)
+;; Two allocation strategies:
+;;
+;; (a) Cached/idempotent: `intern-callback-tag!` for fire-fns with NO
+;;     captured state — like 'identity or 'bridge. Same tag returned
+;;     for the same (name . shape) key.
+;;
+;; (b) Fresh per call site: `allocate-fresh-callback!` for closure-
+;;     capturing fire-fns (app-dispatch, boolrec, projection — each
+;;     captures cid-arg / body / env). Each call gets a brand new tag.
+;;
+;; The kernel's N_TAGS=256 supports up to 256-7 = ~249 fresh callback
+;; allocations per program. Plenty for typical preduce-hybrid networks
+;; (factorial-iter 1 5 needs ~30; full PReduce-lite test suite ~few hundred).
+(define KERNEL-NATIVE-TAG-COUNT 8)  ;; Tags 0-7 are kernel-native (built-in)
+(define MAX-N-TAGS 256)
+(define next-callback-tag (box KERNEL-NATIVE-TAG-COUNT))
+(define interned-callbacks (make-hash))  ;; (cons name shape) -> (cons tag closure-keeper)
 
-(define (allocate-callback-tag! name shape rkt-fire-fn)
+(define (next-tag!)
+  (define tag (unbox next-callback-tag))
+  (when (>= tag MAX-N-TAGS)
+    (error 'preduce-hybrid
+           "kernel callback tag space exhausted (~a allocated, max ~a). \
+Either reset between programs (via reset-handle-table!) or raise N_TAGS \
+in runtime/core/profile.zig + rebuild the kernel."
+           tag MAX-N-TAGS))
+  (set-box! next-callback-tag (+ tag 1))
+  tag)
+
+;; Idempotent: same (name . shape) returns the same tag.
+;; Use for stateless fire-fns (e.g., bridge identity).
+(define (intern-callback-tag! name shape rkt-fire-fn)
   (define key (cons name shape))
   (cond
-    [(hash-ref registered-callbacks key #f)
-     => (lambda (entry) (car entry))]
+    [(hash-ref interned-callbacks key #f) => (lambda (entry) (car entry))]
     [else
-     (define tag (unbox next-callback-tag))
-     (set-box! next-callback-tag (+ tag 1))
-     (when (>= tag 16)
-       (error 'preduce-hybrid
-              "callback tag space exhausted (>16); raise N_TAGS in kernel"))
-     ;; Keep Racket-side reference to rkt-fire-fn (and the wrapped fn-ptr)
-     ;; via the hash so GC doesn't free them while the kernel holds the
-     ;; fn-ptr in its dispatch table.
+     (define tag (next-tag!))
      (register-fire-fn! tag shape rkt-fire-fn)
-     (hash-set! registered-callbacks key (cons tag rkt-fire-fn))
+     (hash-set! interned-callbacks key (cons tag rkt-fire-fn))
      tag]))
+
+;; Fresh per call: every invocation registers a new fn-ptr at a new tag.
+;; Use for closure-capturing fire-fns (app-dispatch, boolrec arms,
+;; projection, ...).
+(define (allocate-fresh-callback! shape rkt-fire-fn)
+  (define tag (next-tag!))
+  (register-fire-fn! tag shape rkt-fire-fn)
+  tag)
+
+;; Reset the per-program tag counter. Called from preduce-hybrid at
+;; the start of each (preduce-hybrid e) so successive programs don't
+;; exhaust tag space. Note: we DON'T un-register old tags from the
+;; kernel (the dispatch table entries persist), but the tag indices
+;; restart from 8 — the kernel just overwrites the dispatch entry with
+;; the new fn-ptr. Old fn-ptrs remain in `registered-fire-fns` keepalive
+;; (in runtime-bridge.rkt) until that hash is cleared. We DO clear that
+;; here too (via reset-fire-fn-keepalive!) to avoid unbounded growth
+;; across many (preduce-hybrid e) calls.
+(define (reset-callback-tags!)
+  (set-box! next-callback-tag KERNEL-NATIVE-TAG-COUNT)
+  (hash-clear! interned-callbacks))
 
 ;; ====================================================================
 ;; Per-program cell-allocator (always via kernel)
@@ -135,21 +170,140 @@
      (define cid-out (prologos_cell_alloc))
      (prologos_cell_write cid-out (prologos_cell_box_bot))
      (define tag
-       (allocate-callback-tag! 'suc 1
+       (allocate-fresh-callback! 1
          (lambda (boxed-in)
-           ;; Decode to Prologos value; run the suc rule; re-encode.
-           (define v (unbox-prologos-value boxed-in))
-           (define result
-             (cond
-               [(expr-nat-val? v) (expr-nat-val (+ (expr-nat-val-n v) 1))]
-               [(expr-zero? v) (expr-nat-val 1)]
-               [else (expr-suc v)]))
-           (box-prologos-value result))))
+           (cond
+             [(= (prologos_cell_value_kind boxed-in) TAG-BOT) boxed-in]
+             [else
+              (define v (unbox-prologos-value boxed-in))
+              (define result
+                (cond
+                  [(expr-nat-val? v) (expr-nat-val (+ (expr-nat-val-n v) 1))]
+                  [(expr-zero? v) (expr-nat-val 1)]
+                  [else (expr-suc v)]))
+              (box-prologos-value result)]))))
      (prologos_propagator_install_1_1 tag cid-in cid-out)
      cid-out]
 
+    ;; ====================================================================
+    ;; Phase 8b expansion: lambdas, application, eliminators, pairs
+    ;; ====================================================================
+    ;;
+    ;; Each compiles to a propagator network using kernel cells; the
+    ;; non-trivial logic lives in Racket-callback fire-fns. The kernel
+    ;; sees them as opaque function pointers; profiling distinguishes
+    ;; built-in (kernel-native) tags 0-7 from registered callback tags 8+.
+
+    ;; expr-lam — alloc a cell with a HANDLE pointing to the closure.
+    ;; The closure is a Racket struct (preduce-hybrid-lam) so handle-
+    ;; table marshaling routes through TAG-HANDLE.
+    [(expr-lam mw type body)
+     (alloc-cell-with-value
+      (box-racket-value (preduce-hybrid-lam mw type body env)))]
+
+    ;; expr-fvar — inline the global definition (same approach as PReduce-lite).
+    ;; Static recursion guard via current-fvar-stack.
+    [(expr-fvar name)
+     (when (memq name (current-fvar-stack))
+       (error 'preduce-hybrid "recursive fvar ~a (Phase 8b doesn't support self-recursive defs)" name))
+     (define value-ast ((dynamic-require 'prologos/global-env 'global-env-lookup-value) name))
+     (unless value-ast (error 'preduce-hybrid "expr-fvar ~a not in global env" name))
+     (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
+       (compile-expr-hybrid value-ast '()))]
+
+    ;; expr-app — dynamic β. Compile f and arg; install a fire-once
+    ;; callback on f's cell. When f resolves to a HANDLE pointing to a
+    ;; preduce-hybrid-lam, the fire-fn compiles the body in (cons cid-arg
+    ;; captured-env) and forwards the result cell via an identity bridge.
+    [(expr-app f arg)
+     ;; Static β fast-path: if f is statically a lambda, compile body inline.
+     (define f-static (statically-reducible-lam f))
+     (cond
+       [f-static
+        (define cid-arg (compile-expr-hybrid arg env))
+        (compile-expr-hybrid (expr-lam-body f-static) (cons cid-arg env))]
+       [else
+        (define cid-f (compile-expr-hybrid f env))
+        (define cid-arg (compile-expr-hybrid arg env))
+        (define cid-out (prologos_cell_alloc))
+        (prologos_cell_write cid-out (prologos_cell_box_bot))
+        ;; Track whether the dispatch has fired — propagator fires per
+        ;; BSP round on input changes; we must only do the topology
+        ;; mutation once (else we'd install duplicate body subnetworks
+        ;; on every round). Racket-side flag closes that fire-once gap
+        ;; without needing a kernel-level fire-once flag.
+        (define fired? (box #f))
+        (define tag
+          (allocate-fresh-callback! 1
+            (lambda (boxed-f)
+              (cond
+                [(unbox fired?) boxed-f]
+                [(= (prologos_cell_value_kind boxed-f) TAG-BOT) boxed-f]
+                [else
+                 (define f-val (unbox-prologos-value boxed-f))
+                 (cond
+                   [(preduce-hybrid-lam? f-val)
+                    (set-box! fired? #t)
+                    (define body (preduce-hybrid-lam-body f-val))
+                    (define captured-env (preduce-hybrid-lam-env f-val))
+                    (define new-env (cons cid-arg captured-env))
+                    (define cid-body (compile-expr-hybrid body new-env))
+                    (define id-tag
+                      (intern-callback-tag! 'app-bridge 1 (lambda (v) v)))
+                    (prologos_propagator_install_1_1 id-tag cid-body cid-out)
+                    boxed-f]
+                   [else (error 'preduce-hybrid "app function position not a lambda: ~v" f-val)])]))))
+        (prologos_propagator_install_1_1 tag cid-f cid-out)
+        cid-out])]
+
+    ;; expr-boolrec — Bool eliminator. Install fire-once-style on target;
+    ;; when target resolves to true/false, compile the matching arm and
+    ;; forward via identity bridge. Racket-side fired? flag avoids
+    ;; double-installing the arm subnetwork on subsequent fires.
+    [(expr-boolrec _motive tc fc target)
+     (define cid-target (compile-expr-hybrid target env))
+     (define cid-out (prologos_cell_alloc))
+     (prologos_cell_write cid-out (prologos_cell_box_bot))
+     (define fired? (box #f))
+     (define tag
+       (allocate-fresh-callback! 1
+         (lambda (boxed-target)
+           (cond
+             [(unbox fired?) boxed-target]
+             [(= (prologos_cell_value_kind boxed-target) TAG-BOT) boxed-target]
+             [else
+              (define v (unbox-prologos-value boxed-target))
+              (define arm (cond [(expr-true? v) tc] [(expr-false? v) fc] [else #f]))
+              (unless arm (error 'preduce-hybrid "boolrec target not Bool: ~v" v))
+              (set-box! fired? #t)
+              (define cid-arm (compile-expr-hybrid arm env))
+              (define id-tag (intern-callback-tag! 'boolrec-bridge 1 (lambda (v) v)))
+              (prologos_propagator_install_1_1 id-tag cid-arm cid-out)
+              boxed-target]))))
+     (prologos_propagator_install_1_1 tag cid-target cid-out)
+     cid-out]
+
+    ;; expr-pair — pack fst-cid + snd-cid into a Racket struct, store via handle.
+    [(expr-pair a b)
+     (define cid-a (compile-expr-hybrid a env))
+     (define cid-b (compile-expr-hybrid b env))
+     (alloc-cell-with-value
+      (box-racket-value (preduce-hybrid-pair cid-a cid-b)))]
+
+    ;; expr-fst / expr-snd — static fast-path when inner is literal pair.
+    [(expr-fst inner)
+     (cond
+       [(expr-pair? inner) (compile-expr-hybrid (expr-pair-fst inner) env)]
+       [(expr-ann? inner) (compile-expr-hybrid (expr-fst (expr-ann-term inner)) env)]
+       [else (compile-projection inner env 'fst)])]
+    [(expr-snd inner)
+     (cond
+       [(expr-pair? inner) (compile-expr-hybrid (expr-pair-snd inner) env)]
+       [(expr-ann? inner) (compile-expr-hybrid (expr-snd (expr-ann-term inner)) env)]
+       [else (compile-projection inner env 'snd)])]
+
     [_ (error 'preduce-hybrid
-              "unsupported AST node ~v (Phase 8 minimum scope: int arithmetic + literals)"
+              "unsupported AST node ~v (Phase 8b scope: literals, int arith, ann, suc, lam, app, fvar, boolrec, pair, fst/snd)"
               e)]))
 
 (define (compile-int-binary a b env tag)
@@ -160,12 +314,66 @@
   (prologos_propagator_install_2_1 tag cid-a cid-b cid-out)
   cid-out)
 
+;; Phase 8b — closure value carried in cells via handle table.
+(struct preduce-hybrid-lam (mw type body env) #:transparent)
+(struct preduce-hybrid-pair (fst-cid snd-cid) #:transparent)
+
+;; Recursion guard for fvar inlining (mirrors preduce.rkt's pattern).
+(define current-fvar-stack (make-parameter '()))
+
+;; Static fast-path for app: returns the underlying expr-lam if f is
+;; statically known to be a lambda (literal, ann-wrapped, or fvar→lam).
+(define (statically-reducible-lam f)
+  (cond
+    [(expr-lam? f) f]
+    [(expr-ann? f) (statically-reducible-lam (expr-ann-term f))]
+    [(expr-fvar? f)
+     (define name (expr-fvar-name f))
+     (cond
+       [(memq name (current-fvar-stack)) #f]
+       [else
+        (define v ((dynamic-require 'prologos/global-env 'global-env-lookup-value) name))
+        (and v
+             (parameterize ([current-fvar-stack (cons name (current-fvar-stack))])
+               (statically-reducible-lam v)))])]
+    [else #f]))
+
+;; expr-fst/snd projection on a non-static pair value.
+(define (compile-projection inner env which)
+  (define cid-in (compile-expr-hybrid inner env))
+  (define cid-out (prologos_cell_alloc))
+  (prologos_cell_write cid-out (prologos_cell_box_bot))
+  (define fired? (box #f))
+  (define tag
+    (allocate-fresh-callback! 1
+      (lambda (boxed-pair)
+        (cond
+          [(unbox fired?) boxed-pair]
+          [(= (prologos_cell_value_kind boxed-pair) TAG-BOT) boxed-pair]
+          [else
+           (define v (unbox-prologos-value boxed-pair))
+           (cond
+             [(preduce-hybrid-pair? v)
+              (set-box! fired? #t)
+              (define component-cid
+                (case which
+                  [(fst) (preduce-hybrid-pair-fst-cid v)]
+                  [(snd) (preduce-hybrid-pair-snd-cid v)]))
+              (define id-tag (intern-callback-tag! (string->symbol (format "proj-~a-bridge" which)) 1
+                               (lambda (v) v)))
+              (prologos_propagator_install_1_1 id-tag component-cid cid-out)
+              boxed-pair]
+             [else (error 'preduce-hybrid "expected pair for ~a projection, got ~v" which v)])]))))
+  (prologos_propagator_install_1_1 tag cid-in cid-out)
+  cid-out)
+
 ;; ====================================================================
 ;; Top-level entry point
 ;; ====================================================================
 
 (define (preduce-hybrid e)
   (reset-handle-table!)
+  (reset-callback-tags!)
   (define result-cid (compile-expr-hybrid e '()))
   (prologos_run_to_quiescence)
   (define result-boxed (prologos_cell_read result-cid))

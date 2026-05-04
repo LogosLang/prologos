@@ -398,46 +398,49 @@ fn fire_against_snapshot(pid: u32) void {
     const tag = prop_tags[pid];
     const out_cid = prop_out[pid];
     const t0: u64 = if (prof.profile_per_tag) profile.now_ns() else 0;
-    var result: i64 = 0;
-    var kind: u8 = KIND_KERNEL;
-    switch (shape) {
-        SHAPE_1_1 => {
+    // Read kind from the per-shape table BEFORE the switch dispatch so
+    // its value is unambiguously visible after the switch (avoids any
+    // Zig 0.13 switch-arm scoping confusion with var captures).
+    const kind: u8 = switch (shape) {
+        SHAPE_1_1 => fire_kind_1_1[tag],
+        SHAPE_2_1 => fire_kind_2_1[tag],
+        SHAPE_3_1 => fire_kind_3_1[tag],
+        SHAPE_N_1 => fire_kind_n_1[tag],
+        else => KIND_KERNEL,
+    };
+    const result: i64 = switch (shape) {
+        SHAPE_1_1 => blk: {
             const fn_ptr = fire_fn_1_1[tag] orelse abort();
-            kind = fire_kind_1_1[tag];
-            result = fn_ptr(store.read_snapshot(prop_in0[pid]));
+            break :blk fn_ptr(store.read_snapshot(prop_in0[pid]));
         },
-        SHAPE_2_1 => {
+        SHAPE_2_1 => blk: {
             const fn_ptr = fire_fn_2_1[tag] orelse abort();
-            kind = fire_kind_2_1[tag];
-            result = fn_ptr(
+            break :blk fn_ptr(
                 store.read_snapshot(prop_in0[pid]),
                 store.read_snapshot(prop_in1[pid]),
             );
         },
-        SHAPE_3_1 => {
+        SHAPE_3_1 => blk: {
             const fn_ptr = fire_fn_3_1[tag] orelse abort();
-            kind = fire_kind_3_1[tag];
-            result = fn_ptr(
+            break :blk fn_ptr(
                 store.read_snapshot(prop_in0[pid]),
                 store.read_snapshot(prop_in1[pid]),
                 store.read_snapshot(prop_in2[pid]),
             );
         },
-        SHAPE_N_1 => {
+        SHAPE_N_1 => blk: {
             const fn_ptr = fire_fn_n_1[tag] orelse abort();
-            kind = fire_kind_n_1[tag];
             const off = prop_in_arena_off[pid];
             const len = prop_in_arena_len[pid];
-            // Read inputs from snapshot into a small buffer.
             var buf: [MAX_INPUTS]i64 = undefined;
             var i: u32 = 0;
             while (i < len) : (i += 1) {
                 buf[i] = store.read_snapshot(prop_in_arena[off + i]);
             }
-            result = fn_ptr(len, &buf);
+            break :blk fn_ptr(len, &buf);
         },
         else => abort(),
-    }
+    };
     if (pending_len >= MAX_PROPS) abort();
     pending_cid[pending_len] = out_cid;
     pending_val[pending_len] = result;
@@ -445,6 +448,9 @@ fn fire_against_snapshot(pid: u32) void {
     prof.fires_total += 1;
     if (tag < N_TAGS) {
         prof.fires_by_tag[tag] += 1;
+        debug_pp_seen += if (prof.profile_per_tag) @as(u64, 1) else @as(u64, 0);
+        debug_kind_at_fire = kind;
+        debug_kind_eq_callback += if (kind == KIND_RACKET_CALLBACK) @as(u64, 1) else @as(u64, 0);
         if (prof.profile_per_tag) {
             const t1 = profile.now_ns();
             const dt = t1 - t0;
@@ -452,12 +458,33 @@ fn fire_against_snapshot(pid: u32) void {
             if (kind == KIND_RACKET_CALLBACK) {
                 cb_prof.callbacks_by_tag[tag] += 1;
                 cb_prof.callback_ns_by_tag[tag] += dt;
+                debug_inner_branch_taken += 1;
             }
         } else if (kind == KIND_RACKET_CALLBACK) {
             cb_prof.callbacks_by_tag[tag] += 1;
         }
     }
 }
+var debug_kind_eq_callback: u64 = 0;
+var debug_inner_branch_taken: u64 = 0;
+export fn prologos_debug_kind_eq_callback() u64 { return debug_kind_eq_callback; }
+export fn prologos_debug_inner_branch_taken() u64 { return debug_inner_branch_taken; }
+
+// Write 7 to cb_prof.callbacks_by_tag[idx]; read back; return read value.
+// If write+read are consistent, returns 7. If something's broken, returns 0.
+export fn prologos_debug_write_read_cb(idx: u32) u64 {
+    cb_prof.callbacks_by_tag[idx] = 7;
+    return cb_prof.callbacks_by_tag[idx];
+}
+
+export fn prologos_debug_n_tags() u32 { return N_TAGS; }
+export fn prologos_debug_size_profile() u32 { return @sizeOf(profile.Profile); }
+export fn prologos_debug_size_cb_profile() u32 { return @sizeOf(profile.CallbackProfile); }
+
+var debug_pp_seen: u64 = 0;
+var debug_kind_at_fire: u8 = 99;
+export fn prologos_debug_pp_seen() u64 { return debug_pp_seen; }
+export fn prologos_debug_kind_at_fire() u8 { return debug_kind_at_fire; }
 
 fn merge_pending_writes() void {
     var i: u32 = 0;
@@ -525,12 +552,14 @@ export fn prologos_set_profile_per_tag(enabled: u32) void {
     prof.profile_per_tag = enabled != 0;
 }
 
-// stat keys (compatible with original kernel + hybrid additions):
-//   0..8: as in original
-//   100..(100+N_TAGS): fires_by_tag
-//   200..(200+N_TAGS): ns_by_tag
-//   300..(300+N_TAGS): callbacks_by_tag (NEW)
-//   400..(400+N_TAGS): callback_ns_by_tag (NEW)
+// stat keys: per-tag arrays use 1024-wide non-overlapping ranges so
+// they don't collide when N_TAGS is large. Format: (1024 * domain) +
+// tag for domain ∈ {1=fires, 2=ns, 3=callbacks, 4=callback_ns}.
+//   0..8: scalar counters as in original
+//   1024..(1024+N_TAGS): fires_by_tag
+//   2048..(2048+N_TAGS): ns_by_tag
+//   3072..(3072+N_TAGS): callbacks_by_tag
+//   4096..(4096+N_TAGS): callback_ns_by_tag
 export fn prologos_get_stat(key: u32) u64 {
     return switch (key) {
         0 => prof.rounds,
@@ -543,17 +572,17 @@ export fn prologos_get_stat(key: u32) u64 {
         7 => @intCast(num_props),
         8 => prof.run_ns,
         else => blk: {
-            if (key >= 100 and key < 100 + N_TAGS) {
-                break :blk prof.fires_by_tag[key - 100];
+            if (key >= 1024 and key < 1024 + N_TAGS) {
+                break :blk prof.fires_by_tag[key - 1024];
             }
-            if (key >= 200 and key < 200 + N_TAGS) {
-                break :blk prof.ns_by_tag[key - 200];
+            if (key >= 2048 and key < 2048 + N_TAGS) {
+                break :blk prof.ns_by_tag[key - 2048];
             }
-            if (key >= 300 and key < 300 + N_TAGS) {
-                break :blk cb_prof.callbacks_by_tag[key - 300];
+            if (key >= 3072 and key < 3072 + N_TAGS) {
+                break :blk cb_prof.callbacks_by_tag[key - 3072];
             }
-            if (key >= 400 and key < 400 + N_TAGS) {
-                break :blk cb_prof.callback_ns_by_tag[key - 400];
+            if (key >= 4096 and key < 4096 + N_TAGS) {
+                break :blk cb_prof.callback_ns_by_tag[key - 4096];
             }
             break :blk 0;
         },
@@ -571,6 +600,23 @@ export fn prologos_print_stats() void {
 
 export fn prologos_print_callback_summary() void {
     cb_prof.print_summary();
+}
+
+// Debug: read prof.profile_per_tag flag.
+export fn prologos_debug_profile_per_tag() u32 {
+    return if (prof.profile_per_tag) 1 else 0;
+}
+
+// Debug: read fire_kind for a given tag/shape. Returns 255 for invalid.
+export fn prologos_debug_fire_kind(tag: u32, shape: u32) u8 {
+    if (tag >= N_TAGS) return 255;
+    return switch (shape) {
+        SHAPE_1_1 => fire_kind_1_1[tag],
+        SHAPE_2_1 => fire_kind_2_1[tag],
+        SHAPE_3_1 => fire_kind_3_1[tag],
+        SHAPE_N_1 => fire_kind_n_1[tag],
+        else => 255,
+    };
 }
 
 // Reset the entire kernel state (cells + props + dispatch). Used between

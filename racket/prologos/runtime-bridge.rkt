@@ -163,10 +163,12 @@
 (define STAT-NUM-CELLS           6)
 (define STAT-NUM-PROPS           7)
 (define STAT-RUN-NS              8)
-(define (stat-fires-by-tag tag)        (+ 100 tag))
-(define (stat-ns-by-tag tag)           (+ 200 tag))
-(define (stat-callbacks-by-tag tag)    (+ 300 tag))
-(define (stat-callback-ns-by-tag tag)  (+ 400 tag))
+;; Wider non-overlapping ranges for per-tag stats (must match the
+;; offsets in prologos-runtime-hybrid.zig:prologos_get_stat).
+(define (stat-fires-by-tag tag)        (+ 1024 tag))
+(define (stat-ns-by-tag tag)           (+ 2048 tag))
+(define (stat-callbacks-by-tag tag)    (+ 3072 tag))
+(define (stat-callback-ns-by-tag tag)  (+ 4096 tag))
 
 ;; ====================================================================
 ;; Racket-side handle table for boxing Racket values
