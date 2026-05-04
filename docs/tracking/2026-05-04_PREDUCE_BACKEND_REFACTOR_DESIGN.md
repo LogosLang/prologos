@@ -69,13 +69,28 @@ These are mechanically the same in both files; only the primitive calls differ:
 
 **preduce-hybrid.rkt is side-effecting** on the kernel's implicit state. compile-expr-hybrid returns just `cid`; the kernel state mutates underneath.
 
-**Reconciliation**: the backend interface should be **side-effecting under the hood** (uniform across both backends), with preduce.rkt's network state held in a parameter. This unifies both reducers under the simpler signature `compile-expr e env → cid`. preduce.rkt's existing functional threading becomes "Racket backend installs side-effecting wrappers that read/write `(current-prop-net)`."
+**Reconciliation**: keep functional threading throughout. preduce.rkt's existing `(values cid net)` shape is correct as-is; the hybrid backend wraps the kernel's implicit state in a unit/sentinel `net` value to preserve the threading discipline. The cost is one extra value passed and returned per primitive call (negligible at the Racket layer; multi-value return is fast in Racket-CS).
 
-This is the load-bearing design decision. Alternatives:
-- (A) Both backends threaded — adds scaffolding to hybrid (fake threading); preserves preduce.rkt purity.
-- (B) Both backends side-effecting via a `current-prop-net` parameter on the Racket side — minor surgery to preduce.rkt; clean unified shape downstream.
+**Why functional, in-and-out-of-native**: the SH Track 1 deliverable is "`.pnet` network-as-value" — networks become first-class values that round-trip through cells. When compile-expr eventually runs natively (SH Track 9: compiler-in-Prologos), it IS a propagator program over network-valued cells:
 
-Option B is cleaner. The "purity" preduce.rkt enjoys is mostly internal — callers already see `(preduce e) → expr` which is referentially transparent. Pushing the network into a parameter is a local change to preduce.rkt's compile-expr; everything outside compile-expr is unaffected.
+- AST is a cell value (input)
+- The compiled propagator network is a cell value (output)
+- compile-expr is a propagator: reads AST cell, writes network cell
+- A fire-fn that "installs another propagator" needs the network as input/output — it can't side-effect a network it doesn't hold a reference to
+
+That target world demands functional threading. Side-effecting is a convenience for the bring-up vehicle but a dead-end for self-hosting:
+
+| | Functional (chosen) | Side-effecting |
+|---|---|---|
+| preduce.rkt surgery | none (unchanged) | ~80 call-site flip |
+| preduce-hybrid.rkt surgery | wrap with fake-threaded sentinel (~50 LOC) | minor (already side-effecting) |
+| Native target fit (SH Track 9) | ✅ matches network-as-value | ❌ ambient state has no analogue |
+| `current-bsp-fire-round?` hack retirement path | retires when native (the parameter becomes the threaded net itself) | persists |
+| `.pnet` round-trip (SH Track 1) | natural | needs retrofit |
+
+The threading IS the dataflow edge in native execution. Preserving it today is "for free" in the architectural sense — it's already preduce.rkt's shape.
+
+**Implication for the backend interface**: every primitive accepts and returns the net. For `backend-racket`, net is the actual `prop-network` struct (today's threading). For `backend-hybrid`, net is a sentinel value (e.g., `'hybrid-kernel-state`) — formal threading; the kernel state mutates underneath. For a future `backend-native`, net is a cell-id pointing to the network value being built — threading IS real dataflow.
 
 ### 2.4 Coverage gap — preduce-hybrid is at Phase 8b only
 
@@ -93,85 +108,87 @@ Two strategies for the gap:
 
 ### 3.1 Interface shape
 
-A "backend" is a struct (or set of bound parameters) exposing these operations:
+A "backend" is a struct exposing these operations, all threading `net`:
 
 ```racket
 (struct preduce-backend
-  (alloc-cell           ;; value → cell-id
-   read-cell            ;; cell-id → value (or 'bot)
-   write-cell           ;; cell-id × value → void
-   install-fire-once    ;; (listof cell-id) × (listof cell-id) × fire-fn → void
-   install-propagator   ;; (listof cell-id) × (listof cell-id) × fire-fn → void
-   run-to-quiescence    ;; → void
-   reset                ;; → void   (call before each (preduce e))
+  (alloc-cell           ;; net × value → (values cid net')
+   read-cell            ;; net × cell-id → value
+   write-cell           ;; net × cell-id × value → net'
+   install-fire-once    ;; net × inputs × outputs × fire-fn → net'
+   install-propagator   ;; net × inputs × outputs × fire-fn → net'
+   run-to-quiescence    ;; net → net'
+   fresh-net            ;; → net   (constructs a starting net for each (preduce e))
    ))
 ```
 
-Where `fire-fn : (listof value) → (listof value)` — takes input values, returns output values. The backend is responsible for:
-- Reading the input cells (via `read-cell`) before invoking
-- Calling fire-fn with concrete (non-bot) input values
-- Writing fire-fn's outputs to the output cells (via `write-cell`)
-- Handling bot-input semantics (skip fire if any input is bot, until all become concrete)
+Where `fire-fn : net × (listof cell-id) × (listof cell-id) → net'` — the original preduce.rkt shape. The fire-fn reads its inputs, computes, writes its outputs, returns the threaded net. Same signature today; no inversion needed.
 
-The fire-fn signature is intentionally backend-agnostic — it operates on plain Racket values. The hybrid backend wraps it in box/unbox to bridge to tagged-i64 + handle table; the Racket backend invokes it directly.
+This means **preduce.rkt's existing fire-fns (`make-reduce-fire`, `make-natrec-fire`, etc.) work unchanged** when wrapped in the abstract backend interface — they already take net and do their own cell IO. The shared core just calls `((preduce-backend-install-fire-once b) net inputs outputs fire-fn)` and the fire-fn invocation discipline is preserved.
 
-**Caveat**: preduce.rkt's fire-fns today take `net` and call `net-cell-read` / `net-cell-write` themselves (line 882 onward in `make-reduce-fire`). The refactor inverts this: fire-fns take **already-read input values**, return **outputs to be written**. The backend handles cell IO.
+For the hybrid backend, `install-fire-once` allocates a kernel callback tag and wraps the fire-fn into a callback that bridges between kernel cells (tagged-i64 + handle table) and the Racket fire-fn's value model. The fire-fn itself is unchanged; the bridging is the backend's job.
 
-This inversion is a moderate change to preduce.rkt's internals but improves clarity — fire-fns are pure functions over values, not mutators of the network.
+This is a strictly weaker change than the original plan's "fire-fns become pure value-in/value-out": fire-fns stay net-threaded, which means `make-reduce-fire`'s `compile-and-bridge` recursive compilation (which itself installs more propagators) just works through the abstract backend.
 
 ### 3.2 Two concrete backend instances
 
 **`backend-racket`** (`preduce-backend-racket.rkt`):
-- Holds a `current-prop-net` parameter
-- `alloc-cell` calls `net-new-cell` and updates the parameter
-- `install-fire-once` wraps fire-fn into a `net`-threaded closure that does `net-cell-read` → invoke fire-fn → `net-cell-write`
-- `run-to-quiescence` calls Racket's `run-to-quiescence` on the current net
+- `net` is the actual `prop-network` struct (today's threading)
+- `alloc-cell` is `net-new-cell net v preduce-merge #:domain 'preduce-value` (just reorders existing call)
+- `install-fire-once` is `net-add-fire-once-propagator` (one-line wrapper)
+- `run-to-quiescence` is the existing Racket-side run-to-quiescence
+- `fresh-net` constructs a fresh `prop-network`
+- Read/write are `net-cell-read` / `net-cell-write`
 
 **`backend-hybrid`** (`preduce-backend-hybrid.rkt`):
-- Holds the kernel state (implicit FFI)
-- `alloc-cell` calls `prologos_cell_alloc` + `prologos_cell_write` with the boxed initial value
-- `install-fire-once` calls `allocate-fresh-callback!` with a thunk that reads cells, invokes fire-fn, writes results — same pattern as Racket but using kernel APIs
-- `run-to-quiescence` calls `prologos_run_to_quiescence`
-- `reset` calls `reset-handle-table!`
+- `net` is a sentinel value (e.g., the symbol `'hybrid`) — purely formal threading; the kernel state mutates underneath
+- `alloc-cell net v` → `(define cid (prologos_cell_alloc)) (prologos_cell_write cid (box-prologos-value v)) (values cid 'hybrid)`
+- `install-fire-once net inputs outputs fire-fn` allocates a fresh callback tag via `allocate-fresh-callback!`, wraps fire-fn into a kernel callback that bridges box/unbox + threading-sentinel; calls `prologos_propagator_install_n_1`; returns `'hybrid`
+- `run-to-quiescence net` → `(prologos_run_to_quiescence) 'hybrid`
+- `fresh-net` calls `reset-handle-table!` and returns `'hybrid`
+- Read/write box/unbox values through the handle table
+
+**Future `backend-native`** (sketch only; not in this refactor):
+- `net` is a cell-id pointing to the network value being built
+- Each primitive becomes a propagator that reads the net cell, produces an updated network value, writes back
+- compile-expr itself becomes a propagator program — the SH Track 9 endpoint
 
 ### 3.3 The shared compile-expr (`preduce-core.rkt`)
 
-`compile-expr e env → cid` — backend-agnostic, parameterized by `(current-backend)`:
+`compile-expr e env net → (values cid net')` — net-threaded, parameterized by `(current-backend)`:
 
 ```racket
-;; Pseudo-code sketch:
-(define (compile-expr e env)
-  (define b (current-backend))
+;; Pseudo-code sketch (b-alloc / b-install-fire-once are accessor shorthands):
+(define (compile-expr e env net)
   (match e
-    [(expr-int n) ((preduce-backend-alloc-cell b) (expr-int n))]
+    [(expr-int n)
+     (b-alloc (current-backend) net (expr-int n))]      ;; → (values cid net')
     [(expr-pair a b)
-     (define cid-a (compile-expr a env))
-     (define cid-b (compile-expr b env))
-     ((preduce-backend-alloc-cell (current-backend))
-      (preduce-pair cid-a cid-b))]
+     (define-values (cid-a net1) (compile-expr a env net))
+     (define-values (cid-b net2) (compile-expr b env net1))
+     (b-alloc (current-backend) net2 (preduce-pair cid-a cid-b))]
     [(expr-fst inner)
      (cond
-       [(expr-pair? inner) (compile-expr (expr-pair-fst inner) env)]
+       [(expr-pair? inner) (compile-expr (expr-pair-fst inner) env net)]
        [else
-        (define cid-in (compile-expr inner env))
-        (define cid-out ((preduce-backend-alloc-cell (current-backend)) preduce-bot))
-        ((preduce-backend-install-fire-once (current-backend))
-         (list cid-in) (list cid-out)
-         (lambda (vs)
-           (define v (car vs))
-           (cond
-             [(preduce-pair? v)
-              (list ((preduce-backend-read-cell (current-backend))
-                     (preduce-pair-fst-cid v)))]
-             [else (error 'preduce "expected pair, got: ~v" v)])))
-        cid-out])]
+        (define-values (cid-in net1) (compile-expr inner env net))
+        (define-values (cid-out net2) (b-alloc (current-backend) net1 preduce-bot))
+        (define net3
+          (b-install-fire-once (current-backend) net2
+                               (list cid-in) (list cid-out)
+                               (make-projection-fire cid-in cid-out 'fst)))
+        (values cid-out net3)])]
     ...
     ))
 ```
 
-(Real implementation will use a small accessor `(b-alloc v)` etc. to avoid the `((preduce-backend-... b) args)` verbosity.)
+This is **structurally identical to today's preduce.rkt** — the threading shape (`(values cid net')` everywhere), the make-X-fire patterns, the static fast-paths. The only change is the abstraction layer:
+- `(net-new-cell net v ...)` → `(b-alloc (current-backend) net v)`
+- `(net-add-fire-once-propagator net ins outs fire-fn)` → `(b-install-fire-once (current-backend) net ins outs fire-fn)`
+- `(net-cell-read net cid)` → `(b-read (current-backend) net cid)`
+- `(net-cell-write net cid v)` → `(b-write (current-backend) net cid v)`
 
-The key idea: every compile-expr case allocates cells via the backend, installs propagators via the backend, and writes pure-value fire-fns. Both backends transparently handle the cell-IO and kernel-bridging.
+Mechanical rewrite. fire-fn closures pass through unchanged because they still take `net` and use `b-read` / `b-write` internally.
 
 ### 3.4 Stuck-value structs unify
 
@@ -188,34 +205,36 @@ Each backend declares its supported AST cases as a (mutable) set. The shared cor
 | Phase | Description | LOC | Time | Risk |
 |---|---|---|---|---|
 | **0** | Audit + this design doc | — | done | — |
-| **1** | Define `preduce-backend` struct + interface signature in `preduce-core.rkt`. Empty placeholder; no implementations yet. | ~50 | 30min | low |
-| **2** | Build `backend-racket` (Racket-side using net-* primitives). Migrate preduce.rkt's fire-fn signature to take pre-read values + return values. **Self-test**: run all 88+12+15 test cases under the new backend. | ~200 | 2h | medium — internal preduce.rkt surgery; touches `make-reduce-fire`, eliminator fire-fns, container ops |
-| **3** | Move compile-expr (and helpers `current-fvar-stack`, `statically-reducible-lam`, `try-decompose-user-ctor-app`, eliminator dispatch, container compilers) from preduce.rkt to `preduce-core.rkt`. preduce.rkt becomes a thin wrapper: parameterize `current-backend = backend-racket`, call core's `compile-expr`, run to quiescence, read result cell, unbox. **Self-test**: same 115 test cases pass. | ~1300 LOC moved | 2h | medium — large mechanical move; differential gate validates |
-| **4** | Build `backend-hybrid` (Zig-kernel-bridging). Wraps `prologos_cell_*` + `prologos_propagator_install_*` + handle table. Discard preduce-hybrid.rkt's compile-expr-hybrid; replace with thin wrapper that parameterizes `current-backend = backend-hybrid`. **Self-test**: existing 13/13 three-way differential green. | ~250 | 1.5h | medium — bot-handling semantics + tag-allocation timing |
-| **5** | Verify hybrid now supports the FULL preduce-lite surface via callback fire-fns. Run all 100 preduce-lite unit tests under `preduce-hybrid`. Expect: most pass on first run; any failures localize to backend-hybrid bugs (since the compile logic is shared). Adjust backend-hybrid until green. **Self-test**: 100/100 preduce-lite tests + 13/13 three-way + 15 OCapN tests all green under hybrid. | ~50 (test wiring) | 1.5h | high — most tests have not exercised hybrid before; will likely surface 2-5 backend bugs |
-| **6** | Run OCapN-syrup tests through the hybrid kernel. **First non-trivial program on the kernel.** With `--profile` enabled, capture the per-tag callback profile. Identify the top-3 callbacks by `callback_ns_by_tag`. | — | 30min | low — observation only |
-| **7** | Migrate top-1 callback to a Zig-native fire-fn (Phase 10's migration loop, applied to a real workload). Re-run OCapN-syrup with `--profile`; measure callback reduction. | ~30 (Zig) + ~10 (Racket-side stub remove) | 1h | low — proven loop |
+| **1** | Define `preduce-backend` struct + accessor shorthands (`b-alloc`, `b-read`, `b-write`, `b-install-fire-once`, `b-install-propagator`, `b-run-to-quiescence`, `b-fresh-net`) in `preduce-core.rkt`. Define `current-backend` parameter. No backend instances yet. | ~80 | 30min | low |
+| **2** | **Extract** compile-expr + all helpers (`current-fvar-stack`, `statically-reducible-lam`, `try-decompose-user-ctor-app`, `make-X-fire` factories, eliminator dispatch, container compilers, all stuck-value structs) from preduce.rkt to `preduce-core.rkt`. Mechanical rewrite: `net-new-cell` → `b-alloc`, `net-add-fire-once-propagator` → `b-install-fire-once`, `net-cell-read/write` → `b-read/b-write`. fire-fn signatures unchanged (still `net → net'`). **Self-test**: not yet — needs backend instance. | ~1300 LOC moved + ~200 LOC of `b-*` substitutions | 2h | medium — large mechanical move; risk concentrated in getting all `net`-threading sites converted consistently |
+| **3** | Build `backend-racket` (`preduce-backend-racket.rkt`). One-line wrappers around `net-new-cell` / `net-add-fire-once-propagator` / etc. preduce.rkt becomes a thin wrapper: imports core + Racket backend, parameterizes `current-backend`, exposes the same public API (`preduce`, `preduce-or-nf`, etc.) for backward compat. **Self-test**: all 88+12+15 = 115 unit tests + 2 differential gates green. | ~80 (backend) + ~80 (preduce.rkt thin wrapper) | 1h | medium — backward-compat surface must be preserved (re-export `preduce-user-ctor`, `preduce-bot`, `current-use-preduce?`, etc.) |
+| **4** | Build `backend-hybrid` (`preduce-backend-hybrid.rkt`). Wraps `prologos_cell_*` + `prologos_propagator_install_*` + `allocate-fresh-callback!` + handle table; uses `'hybrid` sentinel as `net`. preduce-hybrid.rkt becomes thin wrapper: imports core + hybrid backend, parameterizes `current-backend`. Discard the old `compile-expr-hybrid` + duplicated helpers. **Self-test**: existing 13/13 three-way differential green. | ~150 (backend) + ~80 (thin wrapper) − ~400 (deleted from old preduce-hybrid.rkt) | 1.5h | medium — fire-fn-as-callback must marshal value boxing correctly; `current-bsp-fire-round? #f` discipline must compose through the FFI |
+| **5** | **Bug-shake**: run all 100 preduce-lite unit tests + 15 OCapN tests through the hybrid backend. Most should pass on first run since compile-expr is now shared; any failures localize to backend-hybrid (handle-table fragmentation, bot-propagation, value-box edge cases). Iterate until green. | ~50 (test wiring + backend fixes) | 1.5h | high — first time hybrid sees ~100 new test cases; expect 2-5 backend bugs |
+| **6** | Run OCapN-syrup tests through the hybrid kernel with `--profile`. **First non-trivial program on the kernel.** Capture per-tag callback profile; identify top-3 callbacks by `callback_ns_by_tag`. | — | 30min | low — observation only |
+| **7** | Migrate top-1 callback to Zig-native (Phase 10's migration loop, applied to a real workload). Re-run with `--profile`; measure callback reduction. | ~30 (Zig) + ~10 (Racket stub remove) | 1h | low — proven loop |
 | **8** | PIR for the refactor track. | — | 30min | — |
 
-**Total**: roughly 9-11h of work. Half a day to land Phases 1–4 (architectural refactor); another half day for Phases 5–8 (validation + first migration on real workload).
+**Total**: roughly 8-10h. Phase 1+2+3 (~3.5h) lands the Racket refactor with no behavior change. Phase 4+5 (~3h) lands the hybrid backend + shakes out bugs. Phase 6+7 (~1.5h) is the user's stated goal — first OCapN program through the kernel + profile-driven migration on a real workload.
 
-**Dependency on PReduce-lite Phase 10/10b**: ✅ already done — Phase 10b on the Racket side landed 2026-05-04. After this refactor lands, it propagates to hybrid for free (callback-mode).
+**Dependency on PReduce-lite Phase 10/10b**: ✅ already done — Phase 10b on the Racket side landed 2026-05-04. After Phase 4 lands, hybrid gets Phase 10/10b for free via Racket-callback fire-fns. Phase 7's migration is the first chance to natively replace one of those callbacks.
 
 ---
 
 ## 5. Risks
 
-1. **Threading-style flip in preduce.rkt is more invasive than it looks.** ~80 sites in preduce.rkt do `(define-values (cid net*) (alloc-value-cell net ...))` then thread `net*` forward. Each becomes `(define cid (b-alloc ...))`. Mostly mechanical, but easy to introduce subtle bugs (e.g., missing a `net` reset, dropping a write). Mitigation: keep the same per-phase test files green at each phase boundary; differential gate against `nf` is the regression gate.
+1. **Mechanical primitive-rename across ~80 sites in preduce.rkt.** Every `(net-new-cell net ...)` becomes `(b-alloc (current-backend) net ...)`; every `net-add-fire-once-propagator` similarly. Mostly find-and-replace, but easy to miss an occurrence or fat-finger an arg order. Mitigation: keep the per-phase test files green at each phase boundary; the existing 2000-case differential against `nf` is the regression net.
 
-2. **Bot-handling semantics differ between backends.** preduce.rkt's `preduce-merge` returns the new value if old was bot; preduce-hybrid checks `prologos_cell_value_kind == TAG-BOT` explicitly in the callback. The shared core needs a uniform contract: "fire-fn called only when all inputs are concrete; backend handles bot-skip." Mitigation: extract the bot-check into the backend's `install-fire-once`; fire-fns become pure.
+2. **Bot-handling semantics differ between backends.** preduce.rkt's `preduce-merge` returns the new value if old was bot; preduce-hybrid checks `prologos_cell_value_kind == TAG-BOT` explicitly in the callback. The fire-fn signature is unchanged (still `net → net'`), so each backend's `b-read` returns the value in whatever form (Racket-side `preduce-bot` sentinel vs hybrid-side TAG-BOT-tagged). Fire-fns continue to check `(preduce-bot? v)` exactly as today; the hybrid `b-read` unboxes TAG-BOT to `preduce-bot` on the way out. Mitigation: backend interface fixes the value model — `b-read` always returns Racket-side values (so `(preduce-bot? v)` works on both backends).
 
-3. **Tag allocation timing** in the hybrid backend. preduce-hybrid currently allocates a fresh tag per fire-fn install via `allocate-fresh-callback!`. Hot-loop installs (e.g., compile-expr inside dynamic-β) will allocate many tags — risk of `N_TAGS=256` exhaustion. Mitigation: tag-pooling (reuse tags for structurally-identical fire-fns) is a deferred optimization; for now, monitor tag count via `prologos_debug_n_tags` after a real workload.
+3. **Tag allocation timing in the hybrid backend.** preduce-hybrid currently allocates a fresh tag per fire-fn install via `allocate-fresh-callback!`. Hot-loop installs (e.g., compile-expr inside dynamic-β) will allocate many tags — risk of `N_TAGS=256` exhaustion. Mitigation: tag-pooling (reuse tags for structurally-identical fire-fns) is a deferred optimization; monitor via `prologos_debug_n_tags` after a real workload.
 
-4. **Test-suite churn during Phase 3 (the big move).** Moving 1300 LOC of preduce.rkt into preduce-core.rkt risks breaking imports across `tests/test-preduce-phase*.rkt` (which require preduce.rkt for things like `preduce-user-ctor`, `preduce-merge`, `current-use-preduce?`). Mitigation: preduce.rkt re-exports everything for backward compat; tests don't change.
+4. **Test-suite imports during Phase 3.** Tests `require` preduce.rkt for `preduce-user-ctor`, `preduce-bot`, `current-use-preduce?`, etc. preduce.rkt becoming a thin wrapper must preserve those exports via re-export from `preduce-core.rkt`. Mitigation: explicit `(provide (all-from-out "preduce-core.rkt"))` after the require. Audit each test file's required identifiers.
 
-5. **Hybrid-backend Phase 5 expansion will surface bugs.** Today the hybrid covers 13 differential-tested cases; after Phase 5, it'll need to handle the full Phase 1-15 surface. Bugs are likely (e.g., handle-table fragmentation under deep nesting, bot-propagation edge cases in eliminators, FQN ctor-name handling in user-ctor dispatch). Mitigation: per-test-file iteration, use the affected-test runner for fast feedback.
+5. **Hybrid-backend Phase 5 expansion will surface bugs.** Today the hybrid covers ~13 differential-tested cases; after Phase 5, it sees the full Phase 1-15 surface. Likely bug classes: handle-table fragmentation under deep nesting, bot-propagation edge cases in eliminators (`expr-natrec` recursive call structure), FQN ctor-name handling in Phase 10b's `lookup-ctor-meta`, callback-fire-fn re-entrancy when a fire-fn installs more propagators (`current-bsp-fire-round? #f` must compose through the FFI). Mitigation: per-test-file iteration; affected-test runner for fast feedback; the existing 13/13 three-way differential as a baseline.
 
-6. **Performance regression risk in preduce.rkt.** The interface inversion (fire-fn takes values instead of net) adds an extra function-call layer per fire. For tight loops (factorial, etc.), this could add 5-10% wall time. Mitigation: measure on the existing `--report` benchmark suite before+after; inline if measurable.
+6. **Performance regression risk in preduce.rkt.** The new layer of indirection (`(b-alloc (current-backend) net ...)` vs `(net-new-cell net ...)`) adds 2 lookups per primitive call. For tight loops, this could add 1-3% wall time. Mitigation: define `b-alloc` etc. as inlinable accessors (Racket-CS inlines record-accessor calls on `(current-backend)` if the parameter value is fixed across the call site); benchmark before/after on the existing 7 acceptance files.
+
+7. **`current-bsp-fire-round? #f` discipline through the FFI** (specific to hybrid). The hybrid kernel's BSP scheduling is in Zig; the parameter is a Racket-side construct that controls Racket's `net-add-propagator` behavior. When a Racket-callback fire-fn installs a new propagator into the kernel via `b-install-fire-once`, the kernel-side scheduling does NOT consult the Racket parameter — it auto-schedules per kernel rules. This is *probably* fine (kernel auto-scheduling matches what we want), but needs explicit verification. Mitigation: Phase 4 includes a test that exercises a fire-fn installing another propagator (e.g., dynamic-β → fire-fn → install body propagators), running through the hybrid kernel.
 
 ---
 
@@ -264,13 +283,13 @@ After this lands, the analogous refactor at the **Zig layer** (extract `core/bsp
 
 | Phase | Description | Status | Commits | Notes |
 |---|---|---|---|---|
-| 0 | Audit + this design doc | 🔄 | (this commit) | Pending user review |
-| 1 | Define `preduce-backend` struct in `preduce-core.rkt` | ⬜ | — | Empty interface |
-| 2 | Build `backend-racket` + migrate fire-fn signatures in preduce.rkt | ⬜ | — | 88+12+15 tests must stay green |
-| 3 | Move compile-expr to `preduce-core.rkt`; preduce.rkt → thin wrapper | ⬜ | — | Largest move; differential gate validates |
-| 4 | Build `backend-hybrid`; preduce-hybrid.rkt → thin wrapper | ⬜ | — | 13/13 three-way differential validates |
+| 0 | Audit + this design doc (Option A revision) | ✅ | (this commit) | — |
+| 1 | Define `preduce-backend` struct + accessor shorthands + `current-backend` parameter | ⬜ | — | ~80 LOC; foundation |
+| 2 | Extract compile-expr + helpers to `preduce-core.rkt`; primitive-rename to `b-*` | ⬜ | — | ~1300 LOC moved + ~200 LOC primitive renames |
+| 3 | Build `backend-racket`; preduce.rkt → thin wrapper | ⬜ | — | All 115 unit tests + 2 differential green |
+| 4 | Build `backend-hybrid`; preduce-hybrid.rkt → thin wrapper | ⬜ | — | 13/13 three-way differential green |
 | 5 | Run all 115 preduce-lite tests under hybrid backend | ⬜ | — | Bug-shake phase |
-| 6 | Run OCapN-syrup through hybrid + capture profile | ⬜ | — | First non-trivial program on the kernel |
+| 6 | Run OCapN-syrup through hybrid + capture profile | ⬜ | — | **First non-trivial program on the kernel** |
 | 7 | Migrate top-1 hot callback to Zig-native | ⬜ | — | Profile-driven migration on a real workload |
 | 8 | PIR | ⬜ | — | 16-question template |
 
