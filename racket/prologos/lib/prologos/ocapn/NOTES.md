@@ -8,6 +8,24 @@ and ~16 test files; what's checked in here is the slice that exercises
 specific compatibility targets for the current branch's PReduce-lite +
 hybrid Zig kernel work.
 
+## Parallel-branch coordination
+
+Branch `claude/ocapn-prologos-implementation-auLxZ` is iterating in
+parallel, building out more of the OCapN implementation upstream. **This
+branch's role is different**: we use OCapN as a stress-testing ground for
+the reducer + kernel, pulling files in to validate Phase 10b coverage and
+to drive OCapN-shape workloads through the hybrid kernel.
+
+When the upstream branch lands a new module:
+- If it's Tier A (type-only) or Tier B (data + match), consider pulling
+  it as a compatibility target — it will exercise more of preduce.rkt's
+  AST surface on the kernel.
+- If it's Tier C (FFI / wire codecs) or Tier D (trait dispatch), defer
+  until the relevant reducer phase lands.
+
+Periodic re-sync: when a meaningful upstream batch lands, copy the
+new lib + test files here under the existing tier classification.
+
 ## Tier classification
 
 The upstream OCapN port stresses different language features at different
