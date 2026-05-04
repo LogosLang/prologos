@@ -345,3 +345,94 @@
                   qs (bs-questions (bridge-step-state step)))
               (length qs)))")
    "0N"))
+
+;; ========================================
+;; Phase 16 — wire-OUT pump (auto-emit bytes on resolution)
+;; ========================================
+
+(test-case "bridge/pump-outbound emits bytes when a question's promise is fulfilled"
+  ;; End-to-end: incoming op-deliver allocates local promise via
+  ;; question table. Drain the vat → echo actor resolves it.
+  ;; pump-outbound walks the question table and produces bytes
+  ;; targeting the REMOTE answer-pos.
+  ;;
+  ;; Asserts: result bytes list has length 1.
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step  (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc (suc (suc (suc (suc (suc zero))))))) ;; remote=6
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  v2    (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                  pr    (pump-outbound v2 (bridge-step-state step) nil))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound is idempotent — second call after re-pump emits nothing new"
+  ;; Same setup; first pump emits the bytes and returns
+  ;; emitted=[local]. Second pump with that emitted list returns
+  ;; bytes=nil.
+  (check-contains
+   (run-last
+    "(eval (let (sa     (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step   (captp-incoming-with-state
+                             (op-deliver (alloc-id sa)
+                                         (syrup-string \"hi\")
+                                         (some Nat (suc (suc (suc zero))))
+                                         (none Nat))
+                             (alloc-vat sa)
+                             bridge-state-empty)
+                  v2     (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                  pr1    (pump-outbound v2 (bridge-step-state step) nil)
+                  pr2    (pump-outbound v2 (bridge-step-state step)
+                                         (pump-result-emitted pr1)))
+              (length (pump-result-bytes pr2))))")
+   "0N"))
+
+(test-case "bridge/pump-outbound returns empty if no promises resolved"
+  ;; Question table has an entry but the promise is still
+  ;; unresolved (we DIDN'T drain).
+  (check-contains
+   (run-last
+    "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  step  (captp-incoming-with-state
+                            (op-deliver (alloc-id sa)
+                                        (syrup-string \"hi\")
+                                        (some Nat (suc (suc (suc zero))))
+                                        (none Nat))
+                            (alloc-vat sa)
+                            bridge-state-empty)
+                  pr    (pump-outbound (bridge-step-vat step)
+                                        (bridge-step-state step)
+                                        nil))
+              (length (pump-result-bytes pr))))")
+   "0N"))
+
+(test-case "bridge/pump-outbound bytes target the REMOTE answer-pos, not local pid"
+  ;; Remote=6 in our test. The local promise gets allocated at
+  ;; whatever fresh-promise gives (id 1 in this vat with one
+  ;; spawned actor). The OUTBOUND bytes should target REMOTE=6
+  ;; in `<op:deliver <desc:answer 6> ...>`, NOT local=1.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (sa    (vat-spawn-actor beh-echo syrup-null empty-vat)
+                    step  (captp-incoming-with-state
+                              (op-deliver (alloc-id sa)
+                                          (syrup-string \"hi\")
+                                          (some Nat (suc (suc (suc (suc (suc (suc zero))))))) ;; remote=6
+                                          (none Nat))
+                              (alloc-vat sa)
+                              bridge-state-empty)
+                    v2    (drain (suc (suc (suc (suc (suc zero))))) (bridge-step-vat step))
+                    pr    (pump-outbound v2 (bridge-step-state step) nil))
+                (first-bytes-or-default \"NO-BYTES\" (pump-result-bytes pr))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc (suc (suc (suc (suc (suc zero)))))) (syrup-string \"hi\")))")))
+  (check-equal? got expected))

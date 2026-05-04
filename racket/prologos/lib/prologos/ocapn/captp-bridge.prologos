@@ -282,3 +282,83 @@ defn captp-incoming-with-state
   | [op-gc-answer pos] v st ->
       bridge-step v [bs-add-gc-answer pos st]
 
+;; ===========================================================
+;; Wire-OUT pump — Phase 16
+;; ===========================================================
+;;
+;; After draining the vat, walk the question table. For each
+;; (remote, local) entry whose local promise has been fulfilled
+;; AND hasn't been emitted yet, produce outbound bytes:
+;;   <op:deliver <desc:answer remote> resolved-value false false>
+;;
+;; The "emitted" list prevents duplicate sends across turns.
+;;
+;; This closes the bridge loop: any incoming op:deliver that
+;; specifies an answer-pos round-trips to outbound bytes once
+;; the local promise resolves, no manual orchestration required.
+
+;; Membership check on a Nat list. Returns true iff `n` is in `xs`.
+spec member-nat? Nat [List Nat] -> Bool
+defn member-nat?
+  | _ nil -> false
+  | n [cons h t] ->
+      match [nat-eq? n h]
+        | true  -> true
+        | false -> member-nat? n t
+
+;; Result of the pump: bytes emitted this turn + updated emitted-pids.
+data PumpResult
+  pump-result : [List String] -> [List Nat]
+
+spec pump-result-bytes PumpResult -> List String
+defn pump-result-bytes
+  | pump-result bs _ -> bs
+
+spec pump-result-emitted PumpResult -> List Nat
+defn pump-result-emitted
+  | pump-result _ es -> es
+
+;; Per-question: if the local promise is now fulfilled AND the
+;; pid hasn't been emitted yet, prepend bytes targeting the
+;; REMOTE answer-pos and add local to the emitted list.
+spec pump-one Nat Nat Vat [List Nat] [List String] -> PumpResult
+defn pump-one [remote local v emitted accum]
+  match [member-nat? local emitted]
+    | true  -> pump-result accum emitted
+    | false ->
+        match [lookup-promise local v]
+          | none -> pump-result accum emitted
+          | some pst ->
+              match pst
+                | pst-unresolved _ -> pump-result accum emitted
+                | pst-broken     _ -> pump-result accum emitted
+                | pst-fulfilled  val ->
+                    pump-result
+                      [cons [outbound-deliver-bytes remote val] accum]
+                      [cons local emitted]
+
+;; Walk the question-table list once.
+spec pump-loop [List QEntry] Vat [List Nat] [List String] -> PumpResult
+defn pump-loop
+  | nil _ emitted accum -> pump-result accum emitted
+  | [cons [q-entry remote local] rest] v emitted accum ->
+      let r := [pump-one remote local v emitted accum]
+        pump-loop rest v
+          [pump-result-emitted r]
+          [pump-result-bytes r]
+
+;; Public top-level pump.
+spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
+  :doc "Walk the question table; emit bytes for newly-resolved promises."
+defn pump-outbound [v st emitted]
+  pump-loop [bs-questions st] v emitted nil
+
+;; Convenience helper for tests / callers that want the first
+;; emitted byte-string (or a default if nothing was emitted).
+;; Avoids the polymorphic `head` resolution issues across
+;; namespaces.
+spec first-bytes-or-default String [List String] -> String
+defn first-bytes-or-default
+  | default nil          -> default
+  | _       [cons h _]   -> h
+
