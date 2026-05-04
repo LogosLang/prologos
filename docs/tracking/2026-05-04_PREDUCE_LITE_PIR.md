@@ -4,11 +4,15 @@
 **Supersedes**: [2026-05-03_PREDUCE_LITE_PIR.md](2026-05-03_PREDUCE_LITE_PIR.md) (kept in tree as historical reference; this doc consolidates that PIR's Phases 1–15 with the 2026-05-04 Phase 10b + OCapN-compat addendum)
 **Duration**: ~9 hours wall-clock across two sessions (~6h on 2026-05-02/03 for Phases 1–15; ~3h on 2026-05-04 for Phase 10b + OCapN-compat)
 **Commits**: 20 (from `e2e0215` design draft through `d296870` Phase 10b)
-**Test delta**: +117 unit tests (89 from Phases 1–15 + 12 from Phase 10b + 16 from OCapN compat-target imports) + 2 property-based gates (1000 cases each — 2000 random terms differential)
-**Code delta**: ~+3855 lines across 21 files (1509 LOC `preduce.rkt`, ~1377 LOC across 12 test files, ~574 LOC across 4 `.prologos` lib files + NOTES.md, plus `.skip-tests` + `test.yml` ancillary)
+**Test delta**: +115 unit tests (88 from Phases 1–15 + 12 from Phase 10b + 15 from OCapN compat-target imports) + 2 property-based gates (1000 cases each — 2000 random terms differential)
+**Code delta**: ~+3855 lines across 31 files in the preduce/ocapn paths (1509 LOC `preduce.rkt`, 1377 LOC across 12 test files [1089 unit + 288 differential], 574 LOC across 4 `.prologos` lib files + 102 LOC NOTES.md, 277 LOC across 2 OCapN test files, ~70 LOC across 7 acceptance files, 658 LOC design doc, plus `.skip-tests` + `test.yml` ancillary)
 **Suite health**: 8293 tests in 477s across 433 files all pass (post-Phase-15, parent PIR baseline); 34/34 affected-file run for Phase 10b (5 files, 6.4s) green; full-suite regression gate not re-run for the Phase 10b addendum (purely additive opt-in change).
 **Design docs**: [PReduce-lite Design Doc](2026-05-02_PREDUCE_LITE_DESIGN.md), [PM Track 9 origin](2026-03-21_TRACK9_REDUCTION_AS_PROPAGATORS.md)
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
+
+---
+
+> **Errata (2026-05-04, post-publication audit)**: a code-vs-claim audit found four numeric inaccuracies that have been corrected: (a) Phases 1–15 unit-test count was 89, actually 88 (claim added the 2 differential gates by mistake); (b) OCapN test-case count was 16, actually 15 (test-ocapn-refr 6 + test-ocapn-syrup 9); (c) total test count was 117, actually 115 (the off-by-ones cancelled in the original); (d) "21 files" was an undercount — actual is 31 files in the preduce/ocapn paths; (e) "~80+ propagator install sites" claimed in §13 + §20 was significantly inflated — actual is **33 static install sites** in `preduce.rkt` (31 `net-add-fire-once-propagator` + 2 `net-add-propagator`), plus dynamic-β can install more during fire (the `current-bsp-fire-round? #f` trick auto-schedules compile-during-fire propagators). All numeric claims in the header, §3, §13, §20, §22 corrected. The structural claims (phased plan, hard-error policy, three-way differential, design priority order) were verified accurate against the implementation.
 
 ---
 
@@ -99,7 +103,7 @@ The 2026-05-04 directives extended the original phase plan with two follow-up ob
 
 ### Tests
 
-- 101 unit tests (test-preduce-phase{1,2,3,4,5,6,10,10b,11b,14b}.rkt) + 16 OCapN compat-target tests (test-ocapn-{refr,syrup}.rkt) = 117 total
+- 100 unit tests (test-preduce-phase{1,2,3,4,5,6,10,10b,11b,14b}.rkt: 13+18+7+6+8+6+6+12+19+5) + 15 OCapN compat-target tests (test-ocapn-refr.rkt: 6 + test-ocapn-syrup.rkt: 9) = 115 total + 2 property-based differential gates
 - 1 + 1 property-based differential gates (1000 + 1000 random cases) — total 2000 random closed Prologos terms tested against `nf` with 0 mismatches
 - 5/7 acceptance files run end-to-end through `(preduce e)`; files 03 + 04 unblocked by Phase 10b (re-validation pending)
 - Headline: **factorial-iter 1 5 = 120** end-to-end through the propagator network via Phases 1+3+4+5+10 composing
@@ -363,7 +367,7 @@ The only touched-non-additively production files are `racket/prologos/tests/.ski
 - Two ctor registries (`macros.rkt`'s data-decl-time vs `ctor-registry.rkt`'s structural) coexist with overlapping purposes. Not a blocker; merging is a known follow-up.
 
 **Network reality check** (per `workflow.md`'s mandatory gate for propagator tracks):
-1. **`net-add-propagator` calls added?** Yes — fire-once propagators per `expr-reduce`, `expr-boolrec`, `expr-natrec`, `expr-J`, dynamic-β `expr-app`, `expr-fst`/`expr-snd`, container ops, etc. ~80+ propagator install sites across the AST surface.
+1. **`net-add-propagator` calls added?** Yes — 33 propagator install sites in `preduce.rkt` (31 `net-add-fire-once-propagator` + 2 `net-add-propagator`), spanning `expr-reduce`, `expr-boolrec`, `expr-natrec`, `expr-J`, dynamic-β `expr-app`, `expr-fst`/`expr-snd`, `expr-vhead`/`expr-vtail`, container ops, Int arithmetic. Plus dynamic-β can install more propagators *during* fire (the `current-bsp-fire-round? #f` trick lets compile-during-fire auto-schedule), so the runtime install count is unbounded by static AST shape.
 2. **`net-cell-write` calls produce results?** Yes — every fire-fn writes its output to the destination cell-id. No function-call-wrapper imposters; `compile-and-bridge` + `make-identity-fire` thread results via cells throughout.
 3. **Cell creation → propagator installation → cell write → cell read = result traceable?** Yes — top-level `(preduce e)` allocates the input cell, calls `compile-expr` to install the network, runs `run-to-quiescence`, reads the output cell. Phase 10b adds: ctor-app cells → expr-reduce fire-fn → arm-body-cell → identity-bridge propagator → cid-out. Genuine on-network computation.
 
@@ -481,13 +485,13 @@ A meta-question: *was Phase 10b worth doing, given the OCapN tests work today un
 
 | PIR | Date | Duration | Test delta | Pattern observed in PReduce-lite |
 |-----|------|----------|-----------|----------------------------------|
-| **PReduce-lite (this; consolidated)** | **2026-05-04** | **~9h across 2 sessions** | **+117 + 2 differential** | (self) |
-| PReduce-lite (Phases 1-15) | 2026-05-03 | ~6h | +90 + 2 differential | **Direct predecessor** — superseded by this consolidated PIR. Same design priority order, opt-in deployment, phased plan. |
+| **PReduce-lite (this; consolidated)** | **2026-05-04** | **~9h across 2 sessions** | **+115 + 2 differential** | (self) |
+| PReduce-lite (Phases 1-15) | 2026-05-03 | ~6h | +88 + 2 differential | **Direct predecessor** — superseded by this consolidated PIR. Same design priority order, opt-in deployment, phased plan. |
 | BSP-LE Track 2B | 2026-04-16 | multi-session | substantial | Stratification + fire-once + topology infrastructure — PReduce-lite reuses fire-once + cell allocation; the `current-bsp-fire-round? #f` trick avoids needing a new stratum. |
 | BSP-LE Track 2 | 2026-04-10 | multi-session | substantial | Worldview cells + ATMS branching — *not* used by PReduce-lite (lite skips speculation). |
 | PPN Track 4B | 2026-04-07 | multi-session | substantial | Component-paths on cells — *not* needed; PReduce-lite cells are scalar. |
-| PPN Track 4 | 2026-04-04 | multi-session | substantial | **Network-reality-check pattern** (`net-add-propagator` count, `net-cell-write` for results, traceable cell-flow) — PReduce-lite passes. ~80+ propagators, all results via `net-cell-write`, full trace from input cell through fire-once chains to output cell. |
-| SRE Track 2D | 2026-04-03 | multi-session | +0 retrospective concern | **Test-delta-zero anti-pattern** — *not* repeated. PReduce-lite added +117 tests + 2 differential gates. Per-phase test files were a design-doc obligation from day one. |
+| PPN Track 4 | 2026-04-04 | multi-session | substantial | **Network-reality-check pattern** (`net-add-propagator` count, `net-cell-write` for results, traceable cell-flow) — PReduce-lite passes. 33 static install sites + dynamic-β-installed propagators during fire; all results via `net-cell-write` (28 call sites); full trace from input cell through fire-once chains to output cell. |
+| SRE Track 2D | 2026-04-03 | multi-session | +0 retrospective concern | **Test-delta-zero anti-pattern** — *not* repeated. PReduce-lite added +115 tests + 2 differential gates. Per-phase test files were a design-doc obligation from day one. |
 | SRE Track 2H | 2026-04-03 | multi-session | substantial | F7 distributivity disproof — irrelevant to PReduce-lite. |
 | SRE Track 2G | 2026-03-30 | multi-session | substantial | Pocket Universe scaffolding lesson — informed kernel PU design discussions earlier in session 1. |
 | PPN Track 3 | 2026-04-02 | multi-session | substantial | "Datum-canonical" vs on-network drift — *avoided* here; preduce-lite is on-network throughout. |
@@ -496,7 +500,7 @@ A meta-question: *was Phase 10b worth doing, given the OCapN tests work today un
 
 **Recurring pattern PReduce-lite participates in**: "Phased plan with per-phase regression gates produces clean retrospectives." 4+ recent PIRs (BSP-LE Track 2B, PPN Track 4, PPN Track 4B, this) followed this pattern; all have low rework + high architectural clarity. Confirmed pattern; ready to codify in `PATTERNS_AND_CONVENTIONS.org` if not already there.
 
-**Recurring pattern PReduce-lite breaks**: "Test delta = 0 retrospective concern" (SRE Track 2D). Per-phase test files were a design-doc obligation; landed +117 unit tests as natural per-phase gates plus 2 random-term differential gates. Recommended: future tracks adopt per-phase test files as a default obligation.
+**Recurring pattern PReduce-lite breaks**: "Test delta = 0 retrospective concern" (SRE Track 2D). Per-phase test files were a design-doc obligation; landed +115 unit tests as natural per-phase gates plus 2 random-term differential gates. Recommended: future tracks adopt per-phase test files as a default obligation.
 
 **Anti-pattern PReduce-lite exhibits (Session 1)**: "Subagent git operations destroyed uncommitted work." First instance in recent PIRs; not a pattern yet but worth watching. Mitigation: commit before launching subagents.
 
@@ -532,7 +536,7 @@ A meta-question: *was Phase 10b worth doing, given the OCapN tests work today un
 | Files modified | ~3 (`.skip-tests`, `test.yml`, etc.) | 4 (`preduce.rkt`, `.skip-tests`, `test-ocapn-syrup.rkt`, NOTES.md update) | net additive |
 | Code delta | +2591 lines | +1264 / −16 lines | ~+3855 lines |
 | `preduce.rkt` LOC | 0 → 1390 | 1390 → 1509 (+119, +8.6%) | 1509 |
-| Tests added | +89 + 2 differential | +28 (12 phase10b + 16 ocapn) | +117 + 2 differential |
+| Tests added | +88 + 2 differential | +27 (12 phase10b + 15 ocapn) | +115 + 2 differential |
 | Suite tests passing | 8293/8293 (full suite, 477s) | 34/34 (5-file affected run, 6.4s) | — |
 | Differential failures vs `nf` | 0 / 2000 | 0 / 2 (added cases) | 0 / 2002 |
 | AST node cases handled | ~100 | +1 sub-case (user-defined ctor in expr-reduce) | ~120 explicit + ~50 deferred |
@@ -612,7 +616,7 @@ Per `workflow.md`'s mandatory gate for propagator tracks:
 
 **Q1: Which `net-add-propagator` calls were added?**
 
-PReduce-lite installs fire-once propagators across the AST surface — ~80+ propagator install sites. Every reduction-active node (`expr-app` dynamic-β, `expr-boolrec`, `expr-natrec`, `expr-J`, `expr-fst`/`expr-snd` non-static, `expr-vhead`/`expr-vtail` non-static, `expr-reduce`, `expr-int-{add,sub,mul,...}`, ~25 container ops, etc.) installs at least one fire-once propagator. Phase 10b adds zero NEW install call sites — it reuses the existing `expr-reduce` site in `make-reduce-fire`, only changing what the fire-fn dispatches over (now also `preduce-user-ctor` values via the extended `classify-ctor`).
+PReduce-lite installs fire-once propagators across the AST surface — 33 static install sites in `preduce.rkt` (31 `net-add-fire-once-propagator` + 2 `net-add-propagator`). Every reduction-active node (`expr-app` dynamic-β, `expr-boolrec`, `expr-natrec`, `expr-J`, `expr-fst`/`expr-snd` non-static, `expr-vhead`/`expr-vtail` non-static, `expr-reduce`, `expr-int-{add,sub,mul,...}`, ~25 container ops) installs at least one fire-once propagator. Plus 86 cell-allocation sites (`alloc-value-cell` + `net-new-cell`) covering the literal + container + opaque-value paths. Phase 10b adds zero NEW install call sites — it reuses the existing `expr-reduce` site in `make-reduce-fire`, only changing what the fire-fn dispatches over (now also `preduce-user-ctor` values via the extended `classify-ctor`).
 
 ✅ — propagators are present at the architecturally-natural sites; Phase 10b extends behavior without adding install-site count.
 
