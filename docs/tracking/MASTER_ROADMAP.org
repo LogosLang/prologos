@@ -269,7 +269,7 @@ PM Track 10                      =   SRE Track 6 (module loading)
 - SRE Track PUnify: Systemic parity investigation
 
 *Future (blocked on PPN Track 4+):*
-- *SH (Self-Hosting) Series* ✅ opened 2026-04-30 — see [[file:2026-04-30_SH_MASTER.md][SH Master]]. Stage 0/1 founding done; implementation tracks 1-10 ⬜ gate on PReduce delivery (Track 4) + PPN Track 4 completion.
+- *SH (Self-Hosting) Series* ✅ opened 2026-04-30 — see [[file:2026-04-30_SH_MASTER.md][SH Master]]. Stage 0/1 founding done; implementation tracks 1-10 ⬜ gate on PReduce delivery (Track 4) + PPN Track 4 completion. Alternate-path *Hybrid Runtime* ✅ delivered 2026-05-04 — see [[file:2026-05-03_HYBRID_RUNTIME_DESIGN.md][Hybrid Design]] + [[file:2026-05-04_HYBRID_RUNTIME_PIR.md][Hybrid PIR]] — second Zig kernel + Racket bridge + PReduce-lite hosted; ships shippable Racket-Zig binary today as bring-up vehicle while LLVM-target tracks gestate.
 - *PReduce Series* ✅ opened 2026-05-02 — see [[file:2026-05-02_PREDUCE_MASTER.md][PReduce Master]]. Cross-series dependency for SH; gates implementation tracks on PPN 4C Phase 1B.
 - *PM Track 12+*: Module-load-time infrastructure on network (domain/ctor/property registrations as cell writes). See PM Master Track 8 audit section.
 
