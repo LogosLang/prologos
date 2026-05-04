@@ -1,0 +1,27 @@
+ns ocapn-on-hybrid-12
+
+;; Twelfth OCapN program — exercises behavior.prologos's enums + Effect.
+;;
+;; Avoids `nil` (Pitfall #1) by NOT building any list values; just
+;; constructs Effect values + builds a tagged comparison.
+
+require [prologos::ocapn::behavior :refer [Effect eff-send-only
+                                           eff-resolve eff-break]]
+        [prologos::ocapn::syrup    :refer-all]
+
+;; Build three Effect values (one of each ctor).
+def e1 := [eff-send-only 42N syrup-null]                         ;; eff-send-only
+def e2 := [eff-resolve   17N [syrup-bool true]]                  ;; eff-resolve
+def e3 := [eff-break     99N [syrup-tagged "fault" syrup-null]]  ;; eff-break
+
+;; Wrap each Effect's data into a syrup-tagged with its name.
+;; Doesn't actually do anything semantic — just builds a hierarchy
+;; of OCapN values + exercises ctor-app composition through the
+;; kernel.
+def w1 := [syrup-tagged "send-only" syrup-null]
+def w2 := [syrup-tagged "resolve"   syrup-null]
+def w3 := [syrup-tagged "break"     syrup-null]
+
+;; main: pair-of-pairs witnessing all three Effect ctors built + all
+;; three syrup-tagged wrappers.
+def main := [pair [tagged? w1] [pair [tagged? w2] [tagged? w3]]]

@@ -4,9 +4,18 @@ Tracks bugs discovered in the **Prologos compiler stack itself**
 (parser, elaborator, typing-core, reducer, kernel) as they surface
 during downstream work — particularly while running real `.prologos`
 programs through the hybrid kernel via the swappable-backend
-infrastructure. Distinct from the upstream OCapN/Goblins
-`goblin-pitfalls.md`, which catalogs OCapN-specific design pitfalls
-(capability subtype, syrup-wire, etc.).
+infrastructure.
+
+**Distinct from** [`docs/tracking/2026-04-27_GOBLIN_PITFALLS.md`](2026-04-27_GOBLIN_PITFALLS.md)
+(pulled from upstream `claude/ocapn-prologos-implementation-auLxZ` on
+2026-05-04 PM). That doc catalogs OCapN-specific *design* pitfalls
+discovered while porting Spritely Goblins to Prologos — capability
+subtype, syrup-wire codec gotchas, the closed-world-data limitation
+on heterogeneous actor closures, etc. **This** doc catalogs *compiler-
+stack bugs* — the implementation seam that downstream OCapN work
+revealed. The two complement each other: upstream's pitfalls describe
+"what's hard about the OCapN model in Prologos"; ours describe "what's
+broken in Prologos itself, surfaced by stress-testing it on OCapN."
 
 ## Format
 

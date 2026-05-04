@@ -44,7 +44,10 @@ passes (6 test cases).
 
 ### Tier B — landed under PReduce-lite Phase 10b (and `nf` from day one)
 
-**Files**: `syrup.prologos`, `promise.prologos`, `message.prologos`
+**Files**: `syrup.prologos`, `promise.prologos`, `message.prologos`,
+`locator.prologos` (upstream-pulled 2026-05-04 PM), `behavior.prologos`
+(upstream-pulled 2026-05-04 PM), `core.prologos` (upstream-pulled
+2026-05-04 PM, re-exports only)
 
 **What they use**: `data` declarations with multiple constructors and
 per-constructor `match` clauses (predicates, selectors, smart constructors,
@@ -128,6 +131,8 @@ kernel BSP scheduler.
 | `examples/ocapn/ocapn-hybrid-8.prologos` | ✅ kernel | **mixed**: int+/int* (NATIVE tags 0/2) + bool?/tagged? (callback) | nested-pair (false, false, false) | ~99 µs | 9 fires (**3 native**, 6 cb) |
 | `examples/ocapn/ocapn-hybrid-9.prologos` | ✅ kernel | **recursive** sum-to-n (Nat → Int via natrec); wraps result as syrup-int | `[syrup-int 15]` | ~153 µs | 62 fires (**20 native** int+ + identity, 42 cb) |
 | `examples/ocapn/ocapn-hybrid-10.prologos` | ✅ kernel | full CapTP **op-deliver** message build (mk-deliver) + 4-predicate sweep on 7-arm match (deliver?, deliver-only?, listen?, abort?) | nested-pair (true, false, false, false) | ~201 µs | 44 fires (0 native, 44 cb) |
+| `examples/ocapn/ocapn-hybrid-11.prologos` | ✅ kernel | `transport-name` defn from upstream `locator.prologos` called on both Transport ctors | pair ("loopback", "tcp-testing-only") | ~71 µs | 4 fires (0 native, 4 cb) |
+| `examples/ocapn/ocapn-hybrid-12.prologos` | ✅ kernel | upstream `behavior.prologos` Effect enum + 3 ctors (eff-send-only, eff-resolve, eff-break) + 3 syrup-tagged wrappers + 3 tagged? predicate dispatches | pair (true, true, true) | ~32 µs | 6 fires (0 native, 6 cb) |
 
 All measurements: single run, on this Linux x86_64 host, post-build at
 `tools/build-hybrid-binary.sh` against branch

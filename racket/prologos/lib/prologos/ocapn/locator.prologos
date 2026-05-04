@@ -1,0 +1,128 @@
+ns prologos::ocapn::locator
+
+;; ========================================
+;; OCapN Locator
+;; ========================================
+;;
+;; A Locator names a peer machine + an object on it. It's the address
+;; you dial when you want to talk to someone over an OCapN netlayer.
+;;
+;; This is a Phase-0 model of the OCapN locator described in
+;; draft-specifications/Locators.md. We only carry the fields needed
+;; for the tcp-testing-only netlayer:
+;;
+;;   { type: 'ocapn-peer'
+;;     transport: <transport-name>      ;; e.g. "tcp-testing-only"
+;;     designator: <peer-id>            ;; opaque peer identifier
+;;     hints: { host, port }            ;; for tcp: where to dial
+;;   }
+;;
+;; The Endo `tcp-test-only.js` netlayer encodes this as a JS object;
+;; we encode it as a small data type. Real OCapN production locators
+;; carry a public-key designator, location signature, and crypto
+;; certificates — explicitly out of scope here (see goblin-pitfalls
+;; #18: "we model `tcp-testing-only` exactly because it's the
+;; transport without auth/crypto").
+
+require [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; Transport tag
+;; ========================================
+;;
+;; Closed enum of supported transports. New transports extend this.
+
+data Transport
+  ;; In-process loopback — no actual sockets; used for unit testing.
+  ;; This is the "simulated" netlayer; see netlayer.prologos.
+  tr-loopback
+  ;; tcp-testing-only — TCP without crypto/auth. NEVER use in
+  ;; production; the name is per OCapN convention.
+  tr-tcp-testing-only
+
+spec transport-name Transport -> String
+defn transport-name
+  | tr-loopback         -> "loopback"
+  | tr-tcp-testing-only -> "tcp-testing-only"
+
+;; ========================================
+;; Locator
+;; ========================================
+;;
+;; designator is a string opaque to the netlayer (the peer's chosen
+;; name); host and port are populated for tcp transports, ignored for
+;; loopback.
+
+data Locator
+  ;; locator transport designator host port
+  ;; (host as string, port as Nat — empty string + zero for non-tcp)
+  locator : Transport -> String -> String -> Nat
+
+;; Selectors
+
+spec loc-transport Locator -> Transport
+defn loc-transport
+  | locator t _ _ _ -> t
+
+spec loc-designator Locator -> String
+defn loc-designator
+  | locator _ d _ _ -> d
+
+spec loc-host Locator -> String
+defn loc-host
+  | locator _ _ h _ -> h
+
+spec loc-port Locator -> Nat
+defn loc-port
+  | locator _ _ _ p -> p
+
+;; ========================================
+;; Convenience constructors
+;; ========================================
+
+spec mk-loopback-locator String -> Locator
+  :doc "Locator for an in-process loopback peer (testing only)."
+defn mk-loopback-locator [designator]
+  locator tr-loopback designator "" zero
+
+spec mk-tcp-locator String String Nat -> Locator
+  :doc "Locator for a tcp-testing-only peer at host:port."
+defn mk-tcp-locator [designator host port]
+  locator tr-tcp-testing-only designator host port
+
+;; ========================================
+;; Equality (structural)
+;; ========================================
+;;
+;; Two locators are equal if every field matches. We only need this
+;; to deduplicate in the connection-cache; not lifted as a typeclass
+;; for Phase 0.
+
+require [prologos::data::string :as str :refer []]
+        [prologos::data::nat :refer [nat-eq?]]
+
+spec transport-eq? Transport Transport -> Bool
+defn transport-eq? [a b]
+  match a
+    | tr-loopback ->
+        match b
+          | tr-loopback         -> true
+          | tr-tcp-testing-only -> false
+    | tr-tcp-testing-only ->
+        match b
+          | tr-loopback         -> false
+          | tr-tcp-testing-only -> true
+
+spec locator-eq? Locator Locator -> Bool
+defn locator-eq?
+  | [locator ta da ha pa] [locator tb db hb pb] ->
+      match [transport-eq? ta tb]
+        | false -> false
+        | true  ->
+            match [str::eq da db]
+              | false -> false
+              | true  ->
+                  match [str::eq ha hb]
+                    | false -> false
+                    | true  -> nat-eq? pa pb
