@@ -84,9 +84,9 @@ defn encode [v]
     | syrup-bool b       -> match b | true -> "t" | false -> "f"
     | syrup-nat n        -> str::append [nat-digits n] "+"
     | syrup-int i        -> str::append [int-abs-digits i] [int-sign-char i]
-    | syrup-string s     -> str::append [str::from-int [str::length s]] [str::append "\"" s]
-    | syrup-symbol s     -> str::append [str::from-int [str::length s]] [str::append "'" s]
-    | syrup-bytes b      -> str::append [str::from-int [str::length b]] [str::append ":" b]
+    | syrup-string s     -> str::append [str::from-int [str::bytes-length s]] [str::append "\"" s]
+    | syrup-symbol s     -> str::append [str::from-int [str::bytes-length s]] [str::append "'" s]
+    | syrup-bytes b      -> str::append [str::from-int [str::bytes-length b]] [str::append ":" b]
     | syrup-list xs      -> str::append "[" [str::append [encode-many encode xs] "]"]
     | syrup-tagged tag p -> str::append "<" [str::append [encode [syrup-symbol tag]] [str::append [encode p] ">"]]
     | syrup-refr _       -> ""

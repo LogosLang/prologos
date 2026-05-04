@@ -178,3 +178,19 @@
   (check-contains
    (run-last "(eval (decode-value (encode (syrup-bytes \"hi\"))))")
    "syrup-bytes"))
+
+;; ========================================
+;; Phase 20 — UTF-8 byte-length aware encoding
+;; ========================================
+
+(test-case "syrup-wire/encode UTF-8 string \"é\" uses byte length 2 not char length 1"
+  ;; "é" is 1 char, 2 bytes in UTF-8 (0xC3 0xA9). Wire form: 2"é
+  (check-contains
+   (run-last "(eval (encode (syrup-string \"é\")))")
+   "2\\\""))
+
+(test-case "syrup-wire/encode UTF-8 string \"αβγ\" uses byte length 6 not char length 3"
+  ;; Each Greek letter is 2 bytes in UTF-8. 3 chars × 2 = 6 bytes.
+  (check-contains
+   (run-last "(eval (encode (syrup-string \"αβγ\")))")
+   "6\\\""))
