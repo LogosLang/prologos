@@ -39,14 +39,12 @@
          racket/list  ;; for findf
          racket/string  ;; Phase 10b: for ctor-short-name
          "syntax.rkt"
+         ;; Phase 2b refactor: backend-agnostic primitives via preduce-core.
+         ;; The b-* accessors dispatch through (current-backend); the entry
+         ;; point `preduce` parameterizes it to backend-racket.
+         "preduce-core.rkt"
+         "preduce-backend-racket.rkt"
          (only-in "propagator.rkt"
-                  make-prop-network
-                  net-new-cell
-                  net-cell-read
-                  net-cell-write
-                  net-add-propagator
-                  net-add-fire-once-propagator
-                  run-to-quiescence
                   current-bsp-fire-round?)
          (only-in "sre-core.rkt" make-sre-domain register-domain!)
          (only-in "merge-fn-registry.rkt" register-merge-fn!/lattice)
@@ -327,30 +325,30 @@
 
     [(expr-from-int n)
      (define-values (cid-in net1) (compile-expr n env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out)
          (lambda (nn)
-           (define v (net-cell-read nn cid-in))
+           (define v (b-read nn cid-in))
            (cond
              [(preduce-bot? v) nn]
-             [(expr-int? v) (net-cell-write nn cid-out (expr-rat (expr-int-val v)))]
+             [(expr-int? v) (b-write nn cid-out (expr-rat (expr-int-val v)))]
              [else (error 'preduce "from-int operand not Int: ~v" v)]))))
      (values cid-out net3)]
 
     [(expr-from-nat n)
      (define-values (cid-in net1) (compile-expr n env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out)
          (lambda (nn)
-           (define v (net-cell-read nn cid-in))
+           (define v (b-read nn cid-in))
            (cond
              [(preduce-bot? v) nn]
-             [(expr-nat-val? v) (net-cell-write nn cid-out (expr-int (expr-nat-val-n v)))]
-             [(expr-zero? v)    (net-cell-write nn cid-out (expr-int 0))]
+             [(expr-nat-val? v) (b-write nn cid-out (expr-int (expr-nat-val-n v)))]
+             [(expr-zero? v)    (b-write nn cid-out (expr-int 0))]
              [else (error 'preduce "from-nat operand not Nat: ~v" v)]))))
      (values cid-out net3)]
 
@@ -419,11 +417,11 @@
     ;; reduction.rkt:1436.
     [(expr-suc inner)
      (define-values (cid-in net1) (compile-expr inner env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
      (define fire-fn (make-suc-fire cid-in cid-out))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out) fire-fn))
+     (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out) fire-fn))
      (values cid-out net3)]
 
     ;; ----- Phase 2: pair construction + projections -----
@@ -458,10 +456,10 @@
         ;; current value to cid-out. Required for pairs that come
         ;; through bvars / dynamic dispatch (Phase 3+).
         (define-values (cid-in net1) (compile-expr inner env net))
-        (define-values (net2 cid-out)
-          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-        (define-values (net3 _)
-          (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+        (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+        (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out)
                                         (make-projection-fire cid-in cid-out 'fst)))
         (values cid-out net3)])]
 
@@ -473,10 +471,10 @@
         (compile-expr (expr-snd (expr-ann-term inner)) env net)]
        [else
         (define-values (cid-in net1) (compile-expr inner env net))
-        (define-values (net2 cid-out)
-          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-        (define-values (net3 _)
-          (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+        (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+        (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out)
                                         (make-projection-fire cid-in cid-out 'snd)))
         (values cid-out net3)])]
 
@@ -581,40 +579,40 @@ the topology stratum (Phase 4)" name)))
         ;; merge), so the discipline is preserved at the BSP level.
         (define-values (cid-f net1) (compile-expr f env net))
         (define-values (cid-arg net2) (compile-expr arg env net1))
-        (define-values (net3 cid-out)
-          (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-        (define-values (net4 _)
-          (net-add-fire-once-propagator net3 (list cid-f) (list cid-out)
+        (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+        (define net4
+       (b-install-fire-once net3 (list cid-f) (list cid-out)
                                         (make-app-fire cid-f cid-arg cid-out)))
         (values cid-out net4)])]
 
     ;; ----- Phase 5: Bool eliminator (boolrec) -----
     [(expr-boolrec _motive tc fc target)
      (define-values (cid-target net1) (compile-expr target env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-target) (list cid-out)
          (make-boolrec-fire cid-target cid-out tc fc env)))
      (values cid-out net3)]
 
     ;; ----- Phase 5: Nat eliminator (natrec) -----
     [(expr-natrec _motive base step target)
      (define-values (cid-target net1) (compile-expr target env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-target) (list cid-out)
          (make-natrec-fire cid-target cid-out _motive base step env)))
      (values cid-out net3)]
 
     ;; ----- Phase 5: J (Eq eliminator, refl-only iota) -----
     [(expr-J _motive base left _right proof)
      (define-values (cid-proof net1) (compile-expr proof env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-proof) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-proof) (list cid-out)
          (make-j-fire cid-proof cid-out base left env)))
      (values cid-out net3)]
 
@@ -645,10 +643,10 @@ the topology stratum (Phase 4)" name)))
         (compile-expr (expr-vhead #f #f (expr-ann-term vec)) env net)]
        [else
         (define-values (cid-v net1) (compile-expr vec env net))
-        (define-values (net2 cid-out)
-          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-        (define-values (net3 _)
-          (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+        (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+        (define net3
+       (b-install-fire-once net2 (list cid-v) (list cid-out)
             (make-vproj-fire cid-v cid-out 'head)))
         (values cid-out net3)])]
 
@@ -660,10 +658,10 @@ the topology stratum (Phase 4)" name)))
         (compile-expr (expr-vtail #f #f (expr-ann-term vec)) env net)]
        [else
         (define-values (cid-v net1) (compile-expr vec env net))
-        (define-values (net2 cid-out)
-          (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-        (define-values (net3 _)
-          (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+        (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+        (define net3
+       (b-install-fire-once net2 (list cid-v) (list cid-out)
             (make-vproj-fire cid-v cid-out 'tail)))
         (values cid-out net3)])]
 
@@ -680,10 +678,10 @@ the topology stratum (Phase 4)" name)))
     ;; ctor-meta lookup and are deferred to Phase 10b if needed.
     [(expr-reduce scrutinee arms _structural?)
      (define-values (cid-target net1) (compile-expr scrutinee env net))
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-target) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-target) (list cid-out)
          (make-reduce-fire cid-target cid-out arms env)))
      (values cid-out net3)]
 
@@ -697,14 +695,14 @@ the topology stratum (Phase 4)" name)))
      ;; allocate a cell with the original fsuc shape + the compiled
      ;; inner cell-id to allow downstream usage to recurse via cell.
      ;; Simplest: hold opaque (fsuc inner) where inner is the value.
-     (define-values (net2 cid-out)
-       (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-     (define-values (net3 _)
-       (net-add-fire-once-propagator net2 (list cid-in) (list cid-out)
+     (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+     (define net3
+       (b-install-fire-once net2 (list cid-in) (list cid-out)
          (lambda (n)
-           (define iv (net-cell-read n cid-in))
+           (define iv (b-read n cid-in))
            (if (preduce-bot? iv) n
-               (net-cell-write n cid-out (expr-fsuc #f iv))))))
+               (b-write n cid-out (expr-fsuc #f iv))))))
      (values cid-out net3)]
 
     ;; ----- All other nodes: deferred to later phases -----
@@ -774,7 +772,7 @@ the relevant phase lands."
 ;; fire in the NEXT round once their input cells have values.
 (define (make-app-fire cid-f cid-arg cid-out)
   (lambda (net)
-    (define f-val (net-cell-read net cid-f))
+    (define f-val (b-read net cid-f))
     (cond
       [(preduce-bot? f-val) net]
       [(preduce-lam? f-val)
@@ -786,9 +784,9 @@ the relevant phase lands."
            (compile-expr body new-env net)))
        ;; Bridge the body's result cell to the application's result cell
        ;; via an identity propagator.
-       (define-values (net2 _)
+       (define net2
          (parameterize ([current-bsp-fire-round? #f])
-           (net-add-fire-once-propagator
+           (b-install-fire-once
             net1 (list cid-body) (list cid-out)
             (make-identity-fire cid-body cid-out))))
        net2]
@@ -801,9 +799,9 @@ the relevant phase lands."
 ;; result cells in dynamic β.
 (define (make-identity-fire cid-in cid-out)
   (lambda (net)
-    (define v (net-cell-read net cid-in))
+    (define v (b-read net cid-in))
     (if (preduce-bot? v) net
-        (net-cell-write net cid-out v))))
+        (b-write net cid-out v))))
 
 ;; ============================================================
 ;; Phase 5 helpers — eliminators
@@ -812,7 +810,7 @@ the relevant phase lands."
 ;; make-boolrec-fire — Bool eliminator iota: dispatches on target.
 (define (make-boolrec-fire cid-target cid-out tc fc env)
   (lambda (net)
-    (define v (net-cell-read net cid-target))
+    (define v (b-read net cid-target))
     (cond
       [(preduce-bot? v) net]
       [(expr-true? v)  (compile-and-bridge tc env net cid-out)]
@@ -825,7 +823,7 @@ the relevant phase lands."
 ;;   suc n / nat-val k>0 → (step (k-1) (natrec _ base step (k-1)))
 (define (make-natrec-fire cid-target cid-out motive base step env)
   (lambda (net)
-    (define v (net-cell-read net cid-target))
+    (define v (b-read net cid-target))
     (cond
       [(preduce-bot? v) net]
       [(or (expr-zero? v) (and (expr-nat-val? v) (= (expr-nat-val-n v) 0)))
@@ -846,7 +844,7 @@ the relevant phase lands."
 ;; make-j-fire — Eq eliminator iota: when proof = refl, result = (app base left).
 (define (make-j-fire cid-proof cid-out base left env)
   (lambda (net)
-    (define v (net-cell-read net cid-proof))
+    (define v (b-read net cid-proof))
     (cond
       [(preduce-bot? v) net]
       [(expr-refl? v)
@@ -862,9 +860,9 @@ the relevant phase lands."
   (define-values (cid-e net1)
     (parameterize ([current-bsp-fire-round? #f])
       (compile-expr e env net)))
-  (define-values (net2 _)
+  (define net2
     (parameterize ([current-bsp-fire-round? #f])
-      (net-add-fire-once-propagator
+      (b-install-fire-once
        net1 (list cid-e) (list cid-out)
        (make-identity-fire cid-e cid-out))))
   net2)
@@ -926,7 +924,7 @@ the relevant phase lands."
 ;; arm's body with the field cell-ids prepended to env.
 (define (make-reduce-fire cid-target cid-out arms env)
   (lambda (net)
-    (define v (net-cell-read net cid-target))
+    (define v (b-read net cid-target))
     (cond
       [(preduce-bot? v) net]
       [else
@@ -982,15 +980,15 @@ the relevant phase lands."
   ;; Generic 1-arg op on a map. apply-fn takes the unwrapped CHAMP and
   ;; returns the result expr.
   (define-values (cid-m net1) (compile-expr m env net))
-  (define-values (net2 cid-out)
-    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net3 _)
-    (net-add-fire-once-propagator net2 (list cid-m) (list cid-out)
+  (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+  (define net3
+       (b-install-fire-once net2 (list cid-m) (list cid-out)
       (lambda (n)
-        (define mv (net-cell-read n cid-m))
+        (define mv (b-read n cid-m))
         (cond
           [(preduce-bot? mv) n]
-          [(expr-champ? mv) (net-cell-write n cid-out (apply-fn (expr-champ-racket-champ mv)))]
+          [(expr-champ? mv) (b-write n cid-out (apply-fn (expr-champ-racket-champ mv)))]
           [else (error 'preduce "expected expr-champ for map op, got: ~v" mv)]))))
   (values cid-out net3))
 
@@ -998,16 +996,16 @@ the relevant phase lands."
   ;; 2-arg op (map, key) → Bool. Doesn't allocate fresh map.
   (define-values (cid-m net1) (compile-expr m env net))
   (define-values (cid-k net2) (compile-expr k env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-m cid-k) (list cid-out)
       (lambda (n)
-        (define mv (net-cell-read n cid-m))
-        (define kv (net-cell-read n cid-k))
+        (define mv (b-read n cid-m))
+        (define kv (b-read n cid-k))
         (cond
           [(or (preduce-bot? mv) (preduce-bot? kv)) n]
-          [(expr-champ? mv) (net-cell-write n cid-out
+          [(expr-champ? mv) (b-write n cid-out
                                             (apply-fn (expr-champ-racket-champ mv) kv))]
           [else (error 'preduce "expected expr-champ, got: ~v" mv)]))))
   (values cid-out net4))
@@ -1016,18 +1014,18 @@ the relevant phase lands."
   (define-values (cid-m net1) (compile-expr m env net))
   (define-values (cid-k net2) (compile-expr k env net1))
   (define-values (cid-v net3) (compile-expr v env net2))
-  (define-values (net4 cid-out)
-    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net5 _)
-    (net-add-fire-once-propagator net4 (list cid-m cid-k cid-v) (list cid-out)
+  (define-values (cid-out net4)
+       (b-alloc net3 preduce-bot))
+  (define net5
+       (b-install-fire-once net4 (list cid-m cid-k cid-v) (list cid-out)
       (lambda (n)
-        (define mv (net-cell-read n cid-m))
-        (define kv (net-cell-read n cid-k))
-        (define vv (net-cell-read n cid-v))
+        (define mv (b-read n cid-m))
+        (define kv (b-read n cid-k))
+        (define vv (b-read n cid-v))
         (cond
           [(or (preduce-bot? mv) (preduce-bot? kv) (preduce-bot? vv)) n]
           [(expr-champ? mv)
-           (net-cell-write n cid-out
+           (b-write n cid-out
              (expr-champ (champ-insert (expr-champ-racket-champ mv)
                                        (equal-hash-code kv) kv vv)))]
           [else (error 'preduce "expected expr-champ for map-assoc, got: ~v" mv)]))))
@@ -1036,38 +1034,38 @@ the relevant phase lands."
 (define (compile-map-get net env m k)
   (define-values (cid-m net1) (compile-expr m env net))
   (define-values (cid-k net2) (compile-expr k env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-m cid-k) (list cid-out)
       (lambda (n)
-        (define mv (net-cell-read n cid-m))
-        (define kv (net-cell-read n cid-k))
+        (define mv (b-read n cid-m))
+        (define kv (b-read n cid-k))
         (cond
           [(or (preduce-bot? mv) (preduce-bot? kv)) n]
           [(expr-champ? mv)
            (define result (champ-lookup (expr-champ-racket-champ mv)
                                         (equal-hash-code kv) kv))
            (cond
-             [(eq? result 'none) (net-cell-write n cid-out (expr-error))]
-             [else (net-cell-write n cid-out result)])]
+             [(eq? result 'none) (b-write n cid-out (expr-error))]
+             [else (b-write n cid-out result)])]
           [else (error 'preduce "expected expr-champ for map-get, got: ~v" mv)]))))
   (values cid-out net4))
 
 (define (compile-map-dissoc net env m k)
   (define-values (cid-m net1) (compile-expr m env net))
   (define-values (cid-k net2) (compile-expr k env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-m cid-k) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-m cid-k) (list cid-out)
       (lambda (n)
-        (define mv (net-cell-read n cid-m))
-        (define kv (net-cell-read n cid-k))
+        (define mv (b-read n cid-m))
+        (define kv (b-read n cid-k))
         (cond
           [(or (preduce-bot? mv) (preduce-bot? kv)) n]
           [(expr-champ? mv)
-           (net-cell-write n cid-out
+           (b-write n cid-out
              (expr-champ (champ-delete (expr-champ-racket-champ mv)
                                        (equal-hash-code kv) kv)))]
           [else (error 'preduce "expected expr-champ for map-dissoc, got: ~v" mv)]))))
@@ -1077,31 +1075,31 @@ the relevant phase lands."
 
 (define (compile-set-1arg net env s apply-fn)
   (define-values (cid-s net1) (compile-expr s env net))
-  (define-values (net2 cid-out)
-    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net3 _)
-    (net-add-fire-once-propagator net2 (list cid-s) (list cid-out)
+  (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+  (define net3
+       (b-install-fire-once net2 (list cid-s) (list cid-out)
       (lambda (n)
-        (define sv (net-cell-read n cid-s))
+        (define sv (b-read n cid-s))
         (cond
           [(preduce-bot? sv) n]
-          [(expr-hset? sv) (net-cell-write n cid-out (apply-fn (expr-hset-racket-champ sv)))]
+          [(expr-hset? sv) (b-write n cid-out (apply-fn (expr-hset-racket-champ sv)))]
           [else (error 'preduce "expected expr-hset for set op, got: ~v" sv)]))))
   (values cid-out net3))
 
 (define (compile-set-2arg-bool net env s a apply-fn)
   (define-values (cid-s net1) (compile-expr s env net))
   (define-values (cid-a net2) (compile-expr a env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-s cid-a) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-s cid-a) (list cid-out)
       (lambda (n)
-        (define sv (net-cell-read n cid-s))
-        (define av (net-cell-read n cid-a))
+        (define sv (b-read n cid-s))
+        (define av (b-read n cid-a))
         (cond
           [(or (preduce-bot? sv) (preduce-bot? av)) n]
-          [(expr-hset? sv) (net-cell-write n cid-out
+          [(expr-hset? sv) (b-write n cid-out
                                            (apply-fn (expr-hset-racket-champ sv) av))]
           [else (error 'preduce "expected expr-hset, got: ~v" sv)]))))
   (values cid-out net4))
@@ -1117,17 +1115,17 @@ the relevant phase lands."
 (define (compile-set-binop net env s1 s2 op)
   (define-values (cid-1 net1) (compile-expr s1 env net))
   (define-values (cid-2 net2) (compile-expr s2 env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-1 cid-2) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-1 cid-2) (list cid-out)
       (lambda (n)
-        (define v1 (net-cell-read n cid-1))
-        (define v2 (net-cell-read n cid-2))
+        (define v1 (b-read n cid-1))
+        (define v2 (b-read n cid-2))
         (cond
           [(or (preduce-bot? v1) (preduce-bot? v2)) n]
           [(and (expr-hset? v1) (expr-hset? v2))
-           (net-cell-write n cid-out (expr-hset (op (expr-hset-racket-champ v1)
+           (b-write n cid-out (expr-hset (op (expr-hset-racket-champ v1)
                                                     (expr-hset-racket-champ v2))))]
           [else (error 'preduce "expected expr-hset operands, got: ~v ~v" v1 v2)]))))
   (values cid-out net4))
@@ -1154,32 +1152,32 @@ the relevant phase lands."
 
 (define (compile-pvec-1arg net env v apply-fn)
   (define-values (cid-v net1) (compile-expr v env net))
-  (define-values (net2 cid-out)
-    (net-new-cell net1 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net3 _)
-    (net-add-fire-once-propagator net2 (list cid-v) (list cid-out)
+  (define-values (cid-out net2)
+       (b-alloc net1 preduce-bot))
+  (define net3
+       (b-install-fire-once net2 (list cid-v) (list cid-out)
       (lambda (n)
-        (define vv (net-cell-read n cid-v))
+        (define vv (b-read n cid-v))
         (cond
           [(preduce-bot? vv) n]
-          [(expr-rrb? vv) (net-cell-write n cid-out (apply-fn (expr-rrb-racket-rrb vv)))]
+          [(expr-rrb? vv) (b-write n cid-out (apply-fn (expr-rrb-racket-rrb vv)))]
           [else (error 'preduce "expected expr-rrb for pvec op, got: ~v" vv)]))))
   (values cid-out net3))
 
 (define (compile-pvec-binop net env v1 v2 apply-fn)
   (define-values (cid-1 net1) (compile-expr v1 env net))
   (define-values (cid-2 net2) (compile-expr v2 env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-1 cid-2) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-1 cid-2) (list cid-out)
       (lambda (n)
-        (define u1 (net-cell-read n cid-1))
-        (define u2 (net-cell-read n cid-2))
+        (define u1 (b-read n cid-1))
+        (define u2 (b-read n cid-2))
         (cond
           [(or (preduce-bot? u1) (preduce-bot? u2)) n]
           [(and (expr-rrb? u1) (expr-rrb? u2))
-           (net-cell-write n cid-out (apply-fn (expr-rrb-racket-rrb u1)
+           (b-write n cid-out (apply-fn (expr-rrb-racket-rrb u1)
                                                 (expr-rrb-racket-rrb u2)))]
           [else (error 'preduce "expected expr-rrb operands, got: ~v ~v" u1 u2)]))))
   (values cid-out net4))
@@ -1187,16 +1185,16 @@ the relevant phase lands."
 (define (compile-pvec-push net env v x)
   (define-values (cid-v net1) (compile-expr v env net))
   (define-values (cid-x net2) (compile-expr x env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-v cid-x) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-v cid-x) (list cid-out)
       (lambda (n)
-        (define vv (net-cell-read n cid-v))
-        (define xv (net-cell-read n cid-x))
+        (define vv (b-read n cid-v))
+        (define xv (b-read n cid-x))
         (cond
           [(or (preduce-bot? vv) (preduce-bot? xv)) n]
-          [(expr-rrb? vv) (net-cell-write n cid-out
+          [(expr-rrb? vv) (b-write n cid-out
                                           (expr-rrb (rrb-push (expr-rrb-racket-rrb vv) xv)))]
           [else (error 'preduce "expected expr-rrb for pvec-push, got: ~v" vv)]))))
   (values cid-out net4))
@@ -1211,13 +1209,13 @@ the relevant phase lands."
 (define (compile-pvec-nth net env v i)
   (define-values (cid-v net1) (compile-expr v env net))
   (define-values (cid-i net2) (compile-expr i env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-v cid-i) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-v cid-i) (list cid-out)
       (lambda (n)
-        (define vv (net-cell-read n cid-v))
-        (define iv (net-cell-read n cid-i))
+        (define vv (b-read n cid-v))
+        (define iv (b-read n cid-i))
         (cond
           [(or (preduce-bot? vv) (preduce-bot? iv)) n]
           [(expr-rrb? vv)
@@ -1225,8 +1223,8 @@ the relevant phase lands."
            (cond
              [(not idx) (error 'preduce "pvec-nth index not numeric: ~v" iv)]
              [else
-              (with-handlers ([exn:fail? (lambda (_) (net-cell-write n cid-out (expr-error)))])
-                (net-cell-write n cid-out (rrb-get (expr-rrb-racket-rrb vv) idx)))])]
+              (with-handlers ([exn:fail? (lambda (_) (b-write n cid-out (expr-error)))])
+                (b-write n cid-out (rrb-get (expr-rrb-racket-rrb vv) idx)))])]
           [else (error 'preduce "expected expr-rrb for pvec-nth, got: ~v" vv)]))))
   (values cid-out net4))
 
@@ -1234,14 +1232,14 @@ the relevant phase lands."
   (define-values (cid-v net1) (compile-expr v env net))
   (define-values (cid-i net2) (compile-expr i env net1))
   (define-values (cid-x net3) (compile-expr x env net2))
-  (define-values (net4 cid-out)
-    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net5 _)
-    (net-add-fire-once-propagator net4 (list cid-v cid-i cid-x) (list cid-out)
+  (define-values (cid-out net4)
+       (b-alloc net3 preduce-bot))
+  (define net5
+       (b-install-fire-once net4 (list cid-v cid-i cid-x) (list cid-out)
       (lambda (n)
-        (define vv (net-cell-read n cid-v))
-        (define iv (net-cell-read n cid-i))
-        (define xv (net-cell-read n cid-x))
+        (define vv (b-read n cid-v))
+        (define iv (b-read n cid-i))
+        (define xv (b-read n cid-x))
         (cond
           [(or (preduce-bot? vv) (preduce-bot? iv) (preduce-bot? xv)) n]
           [(expr-rrb? vv)
@@ -1249,7 +1247,7 @@ the relevant phase lands."
            (cond
              [(not idx) (error 'preduce "pvec-update index not numeric: ~v" iv)]
              [else
-              (net-cell-write n cid-out (expr-rrb (rrb-set (expr-rrb-racket-rrb vv) idx xv)))])]
+              (b-write n cid-out (expr-rrb (rrb-set (expr-rrb-racket-rrb vv) idx xv)))])]
           [else (error 'preduce "expected expr-rrb for pvec-update, got: ~v" vv)]))))
   (values cid-out net5))
 
@@ -1257,14 +1255,14 @@ the relevant phase lands."
   (define-values (cid-v net1) (compile-expr v env net))
   (define-values (cid-lo net2) (compile-expr lo env net1))
   (define-values (cid-hi net3) (compile-expr hi env net2))
-  (define-values (net4 cid-out)
-    (net-new-cell net3 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net5 _)
-    (net-add-fire-once-propagator net4 (list cid-v cid-lo cid-hi) (list cid-out)
+  (define-values (cid-out net4)
+       (b-alloc net3 preduce-bot))
+  (define net5
+       (b-install-fire-once net4 (list cid-v cid-lo cid-hi) (list cid-out)
       (lambda (n)
-        (define vv (net-cell-read n cid-v))
-        (define lov (net-cell-read n cid-lo))
-        (define hiv (net-cell-read n cid-hi))
+        (define vv (b-read n cid-v))
+        (define lov (b-read n cid-lo))
+        (define hiv (b-read n cid-hi))
         (cond
           [(or (preduce-bot? vv) (preduce-bot? lov) (preduce-bot? hiv)) n]
           [(expr-rrb? vv)
@@ -1273,7 +1271,7 @@ the relevant phase lands."
            (cond
              [(or (not lo-i) (not hi-i)) (error 'preduce "pvec-slice indices not numeric")]
              [else
-              (net-cell-write n cid-out (expr-rrb (rrb-slice (expr-rrb-racket-rrb vv) lo-i hi-i)))])]
+              (b-write n cid-out (expr-rrb (rrb-slice (expr-rrb-racket-rrb vv) lo-i hi-i)))])]
           [else (error 'preduce "expected expr-rrb for pvec-slice, got: ~v" vv)]))))
   (values cid-out net5))
 
@@ -1288,7 +1286,7 @@ the relevant phase lands."
 ;; make-vproj-fire — vhead/vtail projection on a non-static vec cell.
 (define (make-vproj-fire cid-in cid-out which)
   (lambda (net)
-    (define v (net-cell-read net cid-in))
+    (define v (b-read net cid-in))
     (cond
       [(preduce-bot? v) net]
       [(preduce-vcons? v)
@@ -1296,10 +1294,10 @@ the relevant phase lands."
          (case which
            [(head) (preduce-vcons-head-cid v)]
            [(tail) (preduce-vcons-tail-cid v)]))
-       (define cv (net-cell-read net component-cid))
+       (define cv (b-read net component-cid))
        (cond
          [(preduce-bot? cv) net]
-         [else (net-cell-write net cid-out cv)])]
+         [else (b-write net cid-out cv)])]
       [else
        (error 'preduce "expected vcons value for v~a, got: ~v" which v)])))
 
@@ -1399,10 +1397,10 @@ the relevant phase lands."
 (define (compile-int-binary net env _orig a b make-fire)
   (define-values (cid-a net1) (compile-expr a env net))
   (define-values (cid-b net2) (compile-expr b env net1))
-  (define-values (net3 cid-out)
-    (net-new-cell net2 preduce-bot preduce-merge #:domain 'preduce-value))
-  (define-values (net4 _)
-    (net-add-fire-once-propagator net3 (list cid-a cid-b) (list cid-out)
+  (define-values (cid-out net3)
+       (b-alloc net2 preduce-bot))
+  (define net4
+       (b-install-fire-once net3 (list cid-a cid-b) (list cid-out)
                                   (make-fire cid-a cid-b cid-out)))
   (values cid-out net4))
 
@@ -1410,8 +1408,8 @@ the relevant phase lands."
 ;; closed Racket procedure on two integers, returning the result expr.
 (define (make-int-binary-fire op-name op cid-a cid-b cid-out)
   (lambda (net)
-    (define va (net-cell-read net cid-a))
-    (define vb (net-cell-read net cid-b))
+    (define va (b-read net cid-a))
+    (define vb (b-read net cid-b))
     (cond
       [(or (preduce-bot? va) (preduce-bot? vb)) net]
       [else
@@ -1419,7 +1417,7 @@ the relevant phase lands."
        (define cb (coerce-to-int vb))
        (cond
          [(and ca cb)
-          (net-cell-write net cid-out (op (expr-int-val ca) (expr-int-val cb)))]
+          (b-write net cid-out (op (expr-int-val ca) (expr-int-val cb)))]
          [else
           (error 'preduce
                  "int-~a operands not numeric: ~v + ~v" op-name va vb)])])))
@@ -1437,22 +1435,22 @@ the relevant phase lands."
 
 (define (make-suc-fire cid-in cid-out)
   (lambda (net)
-    (define v (net-cell-read net cid-in))
+    (define v (b-read net cid-in))
     (cond
       [(preduce-bot? v) net]
       [(expr-nat-val? v)
-       (net-cell-write net cid-out (expr-nat-val (+ (expr-nat-val-n v) 1)))]
+       (b-write net cid-out (expr-nat-val (+ (expr-nat-val-n v) 1)))]
       [(expr-zero? v)
-       (net-cell-write net cid-out (expr-nat-val 1))]
+       (b-write net cid-out (expr-nat-val 1))]
       [else
        ;; Stuck — write (expr-suc v) as the result.
-       (net-cell-write net cid-out (expr-suc v))])))
+       (b-write net cid-out (expr-suc v))])))
 
 ;; --- Pair projection fire-fn (for non-static cases) ---
 
 (define (make-projection-fire cid-in cid-out which)
   (lambda (net)
-    (define v (net-cell-read net cid-in))
+    (define v (b-read net cid-in))
     (cond
       [(preduce-bot? v) net]
       [(preduce-pair? v)
@@ -1460,20 +1458,21 @@ the relevant phase lands."
          (case which
            [(fst) (preduce-pair-fst-cid v)]
            [(snd) (preduce-pair-snd-cid v)]))
-       (define component-val (net-cell-read net component-cid))
+       (define component-val (b-read net component-cid))
        (cond
          [(preduce-bot? component-val) net]  ;; component not ready; wait
-         [else (net-cell-write net cid-out component-val)])]
+         [else (b-write net cid-out component-val)])]
       [else
        (error 'preduce "expected pair value for ~a projection, got: ~v" which v)])))
 
 ;; Allocate a fresh cell with the given value as its initial state.
 ;; Returns (values cid net'). Used by Phase 1's opaque-value rule and
 ;; by Phase 2's literal cases.
+;;
+;; Phase 2b: now delegates to (b-alloc) which dispatches via the
+;; current-backend parameter. Same return shape — (values cid net').
 (define (alloc-value-cell net value)
-  (define-values (net* cid)
-    (net-new-cell net value preduce-merge #:domain 'preduce-value))
-  (values cid net*))
+  (b-alloc net value))
 
 ;; ============================================================
 ;; Top-level entry points
@@ -1484,18 +1483,22 @@ the relevant phase lands."
 ;;   Raises exn:fail:preduce-unsupported if expr contains nodes not
 ;;   yet covered by the current phase.
 (define (preduce expr)
-  (define net0 (make-prop-network (current-preduce-fuel)))
-  (define-values (result-cid net1) (compile-expr expr '() net0))
-  (define net-final (run-to-quiescence net1))
-  (define result-value (net-cell-read net-final result-cid))
-  (cond
-    [(preduce-bot? result-value)
-     (error 'preduce
-            "result cell unfilled — fire functions did not produce a value")]
-    [(preduce-top? result-value)
-     (error 'preduce
-            "contradiction in result cell — non-deterministic input or bug")]
-    [else result-value]))
+  (parameterize ([current-backend
+                  (backend-racket-with-lattice preduce-merge
+                                               preduce-bot
+                                               (current-preduce-fuel))])
+    (define net0 (b-fresh-net))
+    (define-values (result-cid net1) (compile-expr expr '() net0))
+    (define net-final (b-run-to-quiescence net1))
+    (define result-value (b-read net-final result-cid))
+    (cond
+      [(preduce-bot? result-value)
+       (error 'preduce
+              "result cell unfilled — fire functions did not produce a value")]
+      [(preduce-top? result-value)
+       (error 'preduce
+              "contradiction in result cell — non-deterministic input or bug")]
+      [else result-value])))
 
 ;; preduce-or-nf : expr → expr
 ;;   Diagnostic helper for exploratory REPL use ONLY. Catches the
