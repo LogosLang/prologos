@@ -30,6 +30,38 @@
   ```
   Body at the **same** indent as `|` is a layout violation (currently produces a hard parser error; tracked in issue #27 for diagnostic improvement). Body indent must be **strictly greater than** the `|` column.
 
+- **Never write three-deep nested `match` as a single function body.** Three-deep nested `match` inside a single function body fails to elaborate at *import time* with "Unbound variable" errors in Prologos's current elaborator. The fix is mechanical: factor into a chain of single-match helpers. Each helper does one `match`, returns to the caller, the caller does the next `match`. Same semantics for the user, no elaborator failure. OCapN Phases 15 and 21 both shipped this workaround; codified after the second occurrence. Until the underlying elaborator bug is fixed, this is the safe pattern.
+  ```
+  ;; WRONG — fails at import time
+  defn pipeline-deliver [target args v]
+    match [lookup-actor target v]
+      | some _ -> send-only target args v
+      | none ->
+          match [lookup-promise target v]
+            | none -> v
+            | some pst ->
+                match pst
+                  | pst-unresolved msgs -> ...
+                  | _ -> v
+
+  ;; RIGHT — helper chain
+  spec deliver-to-promise Nat SyrupValue PromiseState Vat -> Vat
+  defn deliver-to-promise [pid args pst v]
+    match pst | pst-unresolved msgs -> ... | _ -> v
+
+  spec deliver-to-promise-or-drop Nat SyrupValue Vat -> Vat
+  defn deliver-to-promise-or-drop [target args v]
+    match [lookup-promise target v]
+      | none -> v
+      | some pst -> deliver-to-promise target args pst v
+
+  spec pipeline-deliver Nat SyrupValue Vat -> Vat
+  defn pipeline-deliver [target args v]
+    match [lookup-actor target v]
+      | some _ -> send-only target args v
+      | none -> deliver-to-promise-or-drop target args v
+  ```
+
 ## Application style
 
 - **Uncurried** -- `defn foo [x y z] body`, `spec f A B -> C`. Multiple arguments in one bracket group.

@@ -1784,3 +1784,39 @@ These completed efforts illustrate the methodology in practice:
   with ATMS branching (choice branches → per-branch orderings).
   Architecture selection composes with existing ~rt-execute-process~
   (additive, not replacing).
+
+** OCapN Interop (Application Port Against Foreign Counterparty)
+- *Research*: Spritely Goblins reference implementation +
+  ~@endo/ocapn~ wire spec. No in-house design — the foreign spec
+  IS the design.
+- *Phase 0 simplification*: closed-world ~BehaviorTag~ enumerated 7
+  behaviors (cell, counter, greeter, echo, adder, forwarder,
+  fulfiller) explicitly named as scaffolding with retirement plan
+  (Phase 22). Lesson: when a port faces a language gap, ship the
+  closed version with a retirement criterion; do not block the port.
+- *Wire-codec scaffolding*: design doc's Mantra Audit explicitly
+  named the Syrup/CapTP codec as "honest scaffolding, not a fit
+  for the propagator mantra." Below the elaborator, runs as a
+  primitive on the FFI boundary. Naming scaffolding > rationalizing
+  it.
+- *External cross-impl gate as primary test substrate*: foreign
+  ~@endo/ocapn~ generates 22 wire vectors via
+  ~tools/interop/gen-syrup-vectors.mjs~; CI runs ~git diff --exit-code~
+  on the committed fixture before running the Racket cross-impl test.
+  4 of 5 interop bugs caught by this gate, NONE by hand-written
+  vectors. **The pattern generalizes to any future protocol port**.
+- *D:I ratio relaxation*: track shipped at ~0.17:1 vs longitudinal
+  target 1.5:1 — succeeded because external spec + drift gate
+  substituted for design rounds. **D:I target is conditional on
+  external validation existence.**
+- *Deferral discipline*: Phase 22 (open-world behaviors) and Phase 23
+  (~Mu~/~rec~ session typing) DEFERRED with explicit language-blocker
+  rationale, not silently dropped. Forbidden phrasing "we'll come back
+  to it" replaced by required phrasing "DEFERRED to language phase X
+  because Prologos lacks Y, retirement criterion is Z."
+- *PIR*: ~docs/tracking/2026-05-04_OCAPN_INTEROP_PIR.md~ — 11 lessons,
+  6 cross-PIR patterns, 25 test files, 225 cases, ~12k lines added.
+- *Composition*: validates Prologos as a target for non-on-network
+  applications (the codec lives below the elaborator). Bridges to
+  future capability-types-meet-OCapN track and to self-hosted
+  compiler vat coordination.

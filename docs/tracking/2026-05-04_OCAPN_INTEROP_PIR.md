@@ -433,21 +433,19 @@ Per workflow rule, every lesson must record where it was promoted to a principle
 
 | Lesson | Distilled To | Status |
 |---|---|---|
-| L1: Foreign-generated goldens for protocol ports | `DEVELOPMENT_LESSONS.org` § "External Cross-Impl Gates"; `DESIGN_METHODOLOGY.org` § "When to Use Foreign Goldens" | Pending — needs entry added in a follow-up commit |
-| L2: Read your own pitfalls log before each phase | `workflow.md` § "Track-start checklist" | Pending — minor addition |
-| L3: Codify a 2-occurrence pattern (intra-track) | `workflow.md` § "Lessons distillation check" — extend to "2-occurrence within a single track is sufficient" | Pending — workflow.md edit |
-| L4: Microbench from Phase 1 in protocol stacks | `testing.md` § "Benchmark after infrastructure phases" — extend to protocol stacks | Pending — testing.md edit |
-| L5: Helper chain pattern around nested-match elaboration | `prologos-syntax.md` § new entry "Nested match: factor into helper chains" | Pending — syntax.md edit |
-| L6: Skip-tests partition for batch-worker-incompatible tests | `testing.md` § "Skip list" + workflow.md § "Two-tier CI" | Pending — both files |
-| L7: Second-pass scrutiny on pitfalls logs | `workflow.md` § "Pitfalls log methodology" | Pending — minor addition |
-| L8: Name scaffolding instead of rationalizing it | Already codified in `workflow.md` § "Ban 'pragmatic' as justification for dual paths" | Done — pre-existing rule honored |
-| L9: Two-context audit for test infrastructure | Already codified in `pipeline.md` § "Two-Context Audit" | Done — pre-existing rule extended in scope |
-| L10: Closed-world `data` as Phase-0 simplification | `DESIGN_METHODOLOGY.org` § "Acceptance file as Phase 0" — extend for application ports | Pending — methodology edit |
-| Pattern P6: External cross-impl gates substitute for self-validation | `DESIGN_METHODOLOGY.org` § "When external spec exists, D:I ratio target relaxes" | Pending — methodology edit |
+| L1: Foreign-generated goldens for protocol ports | `DEVELOPMENT_LESSONS.org` § "External Cross-Impl Gates Substitute for Self-Validation" + `workflow.md` § "External cross-impl gates are mandatory test infrastructure" | ✅ Done |
+| L2: Read your own pitfalls log before each phase | `workflow.md` § "Read your own pitfalls log before each phase" | ✅ Done |
+| L3: Codify a 2-occurrence pattern (intra-track) | `workflow.md` § "Codify a 2-occurrence pattern within a track immediately" | ✅ Done |
+| L4: Microbench from Phase 1 in protocol stacks | `testing.md` § "Microbench from Phase 1 in protocol stacks" | ✅ Done |
+| L5: Helper chain pattern around nested-match elaboration | `prologos-syntax.md` § "Never write three-deep nested `match`" + `DEVELOPMENT_LESSONS.org` § "Helper Chains Around Nested-Match Elaboration" | ✅ Done |
+| L6: Skip-tests partition for batch-worker-incompatible tests | `testing.md` § "Skip list" extended | ✅ Done |
+| L7: Second-pass scrutiny on pitfalls logs | `workflow.md` § "Pitfalls-log second-pass scrutiny before merge" | ✅ Done |
+| L8: Name scaffolding instead of rationalizing it | Already codified in `workflow.md` § "Ban 'pragmatic' as justification for dual paths" | ✅ Done — pre-existing rule honored |
+| L9: Two-context audit for test infrastructure | Already codified in `pipeline.md` § "Two-Context Audit" | ✅ Done — pre-existing rule extended in scope |
+| L10: Closed-world `data` as Phase-0 simplification | `DEVELOPMENT_LESSONS.org` § "Closed-World `data` Is a Phase-0 Simplification" + `DESIGN_METHODOLOGY.org` § "OCapN Interop" | ✅ Done |
+| Pattern P6: External cross-impl gates substitute for self-validation | `DESIGN_METHODOLOGY.org` § "OCapN Interop" (D:I ratio relaxation rule) + `DEVELOPMENT_LESSONS.org` § "External Cross-Impl Gates" | ✅ Done |
 
-**Distillation followup**: a single commit after this PIR lands should propagate the "Pending" rows above into the named principles documents. That commit is the PIR-to-principles bridge that workflow rule "PIR is source, principles are destination" demands.
-
-If no distillation commit happens within one working day of this PIR, this section becomes evidence of the "Filed and Forgotten" anti-pattern (POST_IMPLEMENTATION_REVIEW.org § Anti-Patterns #1) and the next PIR will need to address why.
+**Distillation followup**: completed in commit landing alongside this PIR update — every Pending row above was propagated to its target principles document (see commit message for file list). The PIR-to-principles bridge is closed.
 
 ---
 
