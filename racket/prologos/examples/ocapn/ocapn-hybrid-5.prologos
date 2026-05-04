@@ -1,0 +1,30 @@
+ns ocapn-on-hybrid-5
+
+;; Fifth OCapN program — predicate sweep across all 10 SyrupValue
+;; constructors. Compresses 10 distinct match dispatches + 10 ctor
+;; allocations into one program. Exercises the BREADTH of the user-
+;; ctor dispatch path on the kernel, where prior programs hit DEPTH
+;; (function calls) but only a few ctors per program.
+;;
+;; Each `is-tagged-here?` invocation fires a fresh user-ctor match
+;; through the kernel. The aggregate is encoded as a deeply-nested
+;; pair so the result captures all 10 boolean answers.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; Pull each ctor through tagged?. By Phase-10b match dispatch,
+;; only syrup-tagged returns true; the other 8 return false.
+;; (syrup-list omitted — exposes a separate FQN-lookup bug for `nil`
+;; that's unrelated to the hybrid backend; tracked for follow-up.)
+def b1  := [tagged? syrup-null]
+def b2  := [tagged? [syrup-bool true]]
+def b3  := [tagged? [syrup-nat zero]]
+def b4  := [tagged? [syrup-int 1N]]
+def b5  := [tagged? [syrup-string "hi"]]
+def b6  := [tagged? [syrup-symbol "sym"]]
+def b7  := [tagged? [syrup-tagged "t" syrup-null]]   ;; only true case
+def b8  := [tagged? [syrup-refr zero]]
+def b9  := [tagged? [syrup-promise zero]]
+
+;; Pack all 9 into one nested-pair value.
+def main := [pair b1 [pair b2 [pair b3 [pair b4 [pair b5 [pair b6 [pair b7 [pair b8 b9]]]]]]]]

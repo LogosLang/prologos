@@ -7,7 +7,13 @@
 extern fn write(fd: c_int, buf: [*]const u8, count: usize) isize;
 
 pub const FormatBuffer = struct {
-    buf: [1024]u8,
+    // Buffer must accommodate the full PNET-STATS / CALLBACK-PROFILE
+    // JSON dumps, which include N_TAGS=256 per-tag entries. Worst case:
+    // each entry is ~20 chars (",18446744073709551615" for u64::MAX) +
+    // a few hundred chars of JSON keys + the run_ns/cells/props framing.
+    // 8192 gives ~4× headroom; 1024 silently truncated and corrupted
+    // the JSON output for any program with more than ~80 active tags.
+    buf: [8192]u8,
     len: usize,
 
     pub fn init() FormatBuffer {

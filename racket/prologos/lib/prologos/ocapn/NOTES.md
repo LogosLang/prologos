@@ -108,6 +108,57 @@ we re-evaluate which tier moves from skipped → green:
 
 When a phase lands, drop the corresponding entries from `tests/.skip-tests`.
 
+## Hybrid kernel test status
+
+Track of OCapN-shape programs validated against the Zig hybrid kernel
+(`dist/prologos-hybrid-bundle/bin/prologos --profile <FILE>`). Each
+runs end-to-end through the swappable-backend → backend-hybrid →
+kernel BSP scheduler.
+
+| File | Status | Workload | Result | Kernel ns | Fires (native + cb) |
+|---|---|---|---|---|---|
+| `examples/preduce-lite/07-factorial.prologos` (baseline) | ✅ kernel | factorial-iter 1 5 = 120 | `(expr-int 120)` | ~143 µs | 47 fires (13 native int-arith, 34 callback) |
+| `examples/ocapn/ocapn-hybrid-1.prologos` | ✅ kernel | `[get-nat [syrup-nat (suc (suc zero))]]` | `[some <2>]` | ~29 µs | 2 fires (0 native, 2 cb) |
+| `examples/ocapn/ocapn-hybrid-2.prologos` | ✅ kernel | `[get-tag [mk-tagged "op:listen" syrup-null]]` | `[some "op:listen"]` | ~126 µs | 5 fires (0 native, 5 cb) |
+| `examples/ocapn/ocapn-hybrid-3.prologos` | ✅ kernel | 11-arm `defn` + 3 dispatched calls | `(true, false, true)` packed in nested pair | ~28 µs | 6 fires (0 native, 6 cb) |
+| `examples/ocapn/ocapn-hybrid-4.prologos` | ✅ kernel | `[is-some? [get-tag [syrup-tagged "op:deliver" syrup-null]]]` (chained Option) | `(expr-true)` | ~36 µs | 5 fires (0 native, 5 cb) |
+| `examples/ocapn/ocapn-hybrid-5.prologos` | ✅ kernel | predicate sweep across 9 SyrupValue ctors | nested-pair of 9 booleans | ~52 µs | 18 fires (0 native, 18 cb) |
+
+All measurements: single run, on this Linux x86_64 host, post-build at
+`tools/build-hybrid-binary.sh` against branch
+`claude/prologos-layering-architecture-Pn8M9`.
+
+### Reading the numbers
+
+- **Kernel ns** is the time spent inside the kernel's BSP fire loop
+  (`prof.run_ns`). Doesn't include the Racket-side compile-expr cost,
+  the FFI roundtrip envelope, or elaboration time.
+- **Native fires** are ones that hit the kernel's built-in fire-fns
+  at tags 0-7 (int-arith + identity). They run in ~50-65 ns each.
+- **Callback fires** are ones that wrap a Racket fire-fn at fresh
+  tags 8+. They run in ~1-5 µs each (FFI overhead + Racket execution).
+- The **5×–70× per-fire gap** between native and callback is the
+  Phase-7 migration target: each callback that becomes native saves
+  most of its current ns.
+- **OCapN-shape workloads have zero native fires today**. They use
+  user-defined-ctor pattern matching, which has no kernel-native
+  equivalent. Phase 7 work would add native fire-fns for `expr-reduce`
+  arm dispatch + the ctor-app stuck-value construction.
+
+### Known issues surfaced during testing
+
+- **FQN-qualified prelude symbols not resolved by preduce.rkt's
+  `expr-fvar` lookup**. Surfaced when ocapn-hybrid-5 tried to use
+  `[syrup-list nil]` — the elaborator emitted `prologos::data::list::nil`
+  but `global-env-lookup-value` only finds short names in some
+  contexts. Affects both backends; not hybrid-specific. Worked around
+  in ocapn-hybrid-5 by dropping the syrup-list arm. Tracked as a
+  follow-up.
+- **Kernel `FormatBuffer` was 1024 bytes** — silently truncated the
+  full per-tag profile JSON when `N_TAGS=256` produced output > 1 KB.
+  Fixed 2026-05-04 by raising to 8192 bytes; profile output now
+  parses cleanly.
+
 ## References
 
 - Upstream PR: https://github.com/LogosLang/prologos/pull/28

@@ -1,0 +1,30 @@
+ns ocapn-on-hybrid-4
+
+;; Fourth OCapN program — exercises function composition + nested
+;; selectors + Option dispatch.
+;;
+;; Builds a deeper computation: extract the tag from a tagged value,
+;; then test whether the resulting Option is `some`. The chain
+;; (get-tag → some?) goes through TWO match dispatches on different
+;; user-defined types (SyrupValue then Option). Crosses module
+;; boundaries: get-tag is defined in prologos::ocapn::syrup, some?
+;; would come from prologos::data::option (we open-code it here as
+;; an `is-some?` defn for self-containment).
+
+require [prologos::ocapn::syrup :refer-all]
+        [prologos::data::option :refer [Option some none]]
+
+;; Local: is-some? — pattern-match the Option ctor.
+spec is-some? [Option String] -> Bool
+defn is-some?
+  | none   -> false
+  | some _ -> true
+
+;; Compose: extract a string-tag from a syrup-tagged value; check
+;; whether we got something back.
+def the-msg := [syrup-tagged "op:deliver" syrup-null]
+def tag-opt := [get-tag the-msg]
+def tag-found? := [is-some? tag-opt]
+
+;; main: returns Bool. Should evaluate to true.
+def main := tag-found?
