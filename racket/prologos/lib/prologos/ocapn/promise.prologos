@@ -1,0 +1,123 @@
+ns prologos::ocapn::promise
+
+;; ========================================
+;; OCapN Promises
+;; ========================================
+;;
+;; A Promise represents the eventual return value (fulfillment) or
+;; thrown error (rejection) of a message delivery. Per Model.md:
+;;
+;;   "OCapN queues messages delivered to a Promise."
+;;
+;; Concretely we model a promise as one of three states. The vat owns
+;; a table mapping PromiseId (Nat) -> PromiseState; this module is
+;; just the algebra over those states.
+
+require [prologos::ocapn::syrup :refer [SyrupValue]]
+        [prologos::data::list   :refer [List nil cons]]
+        [prologos::data::option :refer [Option none some]]
+
+;; ========================================
+;; Promise state
+;; ========================================
+
+data PromiseState
+  ;; No resolution yet. The list of pending messages may be non-empty
+  ;; (those got pipelined here by an earlier <-).
+  pst-unresolved : List SyrupValue
+  ;; Fulfilled with a value.
+  pst-fulfilled  : SyrupValue
+  ;; Rejected with a reason.
+  pst-broken     : SyrupValue
+
+;; ========================================
+;; Predicates
+;; ========================================
+
+spec unresolved? PromiseState -> Bool
+defn unresolved?
+  | pst-unresolved _ -> true
+  | pst-fulfilled  _ -> false
+  | pst-broken     _ -> false
+
+spec fulfilled? PromiseState -> Bool
+defn fulfilled?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> true
+  | pst-broken     _ -> false
+
+spec broken? PromiseState -> Bool
+defn broken?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> false
+  | pst-broken     _ -> true
+
+spec resolved? PromiseState -> Bool
+  :doc "True iff the promise has been settled (fulfilled OR broken)"
+defn resolved?
+  | pst-unresolved _ -> false
+  | pst-fulfilled  _ -> true
+  | pst-broken     _ -> true
+
+;; ========================================
+;; State transitions
+;; ========================================
+;;
+;; Resolution is monotone: once a promise is fulfilled or broken,
+;; subsequent attempts to re-resolve are no-ops. (Goblins enforces this
+;; via the resolver-actor pattern; we enforce it structurally here.)
+
+spec fulfill SyrupValue PromiseState -> PromiseState
+  :doc "Fulfill an unresolved promise. No-op if already settled."
+defn fulfill
+  | v [pst-unresolved _] -> pst-fulfilled v
+  | _ [pst-fulfilled  x] -> pst-fulfilled x
+  | _ [pst-broken     x] -> pst-broken x
+
+spec break SyrupValue PromiseState -> PromiseState
+  :doc "Break (reject) an unresolved promise. No-op if already settled."
+defn break
+  | reason [pst-unresolved _] -> pst-broken reason
+  | _      [pst-fulfilled  x] -> pst-fulfilled x
+  | _      [pst-broken     x] -> pst-broken x
+
+;; Push a queued message onto an unresolved promise. The newest
+;; message ends up at the HEAD of the list (LIFO storage). Callers
+;; that want FIFO semantics can `reverse` the result of `take-queue`
+;; — Phase 0's only consumer of the queue is the test suite, which
+;; checks length and emptiness, not order. Goblins's wire-protocol
+;; layer would impose FIFO at the deliver site, not here.
+;; Once resolved the message has nowhere to queue and is dropped.
+;; (See Copilot review #28#discussion_r3150426657 for the LIFO-vs-
+;; "append" wording call-out that prompted this clarification.)
+spec enqueue SyrupValue PromiseState -> PromiseState
+defn enqueue
+  | m [pst-unresolved msgs] -> pst-unresolved [cons m msgs]
+  | _ [pst-fulfilled  v]    -> pst-fulfilled v
+  | _ [pst-broken     r]    -> pst-broken r
+
+;; Inspect the queued messages on an unresolved promise (LIFO order
+;; — head is newest). Settled states return nil. The PromiseState
+;; itself is NOT updated; callers wanting "drain + clear" should
+;; pair this with the resolve/break transitions which discard the
+;; queue. (See Copilot review #28#discussion_r3150426758 for the
+;; doc-vs-impl note that prompted this clarification.)
+spec take-queue PromiseState -> List SyrupValue
+defn take-queue
+  | pst-unresolved msgs -> msgs
+  | pst-fulfilled  _    -> nil
+  | pst-broken     _    -> nil
+
+;; Inspect the resolution value (some on settled, none on unresolved).
+spec resolution-value PromiseState -> Option SyrupValue
+defn resolution-value
+  | pst-unresolved _ -> none
+  | pst-fulfilled  v -> some v
+  | pst-broken     r -> some r
+
+;; ========================================
+;; Constructors
+;; ========================================
+
+;; A fresh unresolved promise with an empty queue.
+def fresh : PromiseState := [pst-unresolved nil]
