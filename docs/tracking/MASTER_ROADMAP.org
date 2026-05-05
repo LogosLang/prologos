@@ -738,6 +738,7 @@ See =docs/research/= for the full set.
 | [[file:../research/2026-04-30_SELF_HOSTING_PATH_AND_BOOTSTRAP.md][Self-Hosting Path + Bootstrap Stages]] | 2026-04-30 | 0-1 | SH Series companion (path note); A → A.5 → B → C trajectory |
 | [[file:../research/2026-04-30_PROPAGATOR_NETWORK_AS_SUPEROPTIMIZING_COMPILER.md][Propagator Network as Super-Optimizing Compiler]] | 2026-04-30 | 0-1 | SH Series companion (deep research); 12-dim comparison |
 | [[file:../research/2026-05-02_CONCURRENCY_PRIMITIVES_LLVM_SUBSTRATE.md][Concurrency Primitives for LLVM Substrate]] | 2026-05-02 | 1 | SH Track 6 (runtime services); collaborator's Zig-kernel branch |
+| [[file:../research/2026-05-05_ASYNCHRONOUS_PROGRAMMING_QUANTALE_RESEARCH_PROGRAM.md][Asynchronous Programming on a Quantale-Enriched Propagator Substrate]] | 2026-05-05 | 0-1 | Foundational research synthesis (~75K words / 110 pages, 8 era surveys + synthesis chapter); informs L2 multi-network runtime, S8b deferred async runtime, quantale-enriched cc(D) realisation; argues propagator networks instantiate Saraswat's cc(D) family with quantale extension as frontier hypothesis |
 | Network Type Theory for Prologos | — | 1-2 ⬜ | NTT Research Doc 2 (pending) |
 | Language Design: Network Type Ergonomics | — | 2 ⬜ | NTT Research Doc 3 (pending) |
 | Engineering: Self-Hosting via Network Types | — | 1-2 ⬜ | NTT Research Doc 4 (pending) |
