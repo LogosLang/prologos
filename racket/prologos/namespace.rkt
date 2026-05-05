@@ -511,9 +511,12 @@
     ;; Note: pvec-map, pvec-filter, pvec-fold, set-fold, set-filter,
     ;; map-fold-entries, map-filter-entries, map-map-vals are now native
     ;; parser keywords — no need to import from ops modules.
-    ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn
+    ;; pvec: pvec-any?, pvec-all?, pvec-from-list-fn, pvec-to-list-fn,
+    ;;       pvec-nth-int, pvec-length-int, pvec-take-int, pvec-drop-int
     (imports [prologos::core::pvec :refer [pvec-any? pvec-all?
-                                           pvec-from-list-fn pvec-to-list-fn]])
+                                           pvec-from-list-fn pvec-to-list-fn
+                                           pvec-nth-int pvec-length-int
+                                           pvec-take-int pvec-drop-int]])
     ;; map: map-filter-vals, map-keys-list, map-vals-list, map-merge,
     ;;      map-to-entry-list, map-seq, map-from-seq
     (imports [prologos::core::map  :refer [map-filter-vals map-keys-list
