@@ -569,7 +569,7 @@
     (tpl tag-expr (tpl-const "boolrec") (tpl-const "_")
          (make-hole 'then) (make-hole 'else) (make-hole 'cond))
     #f 'one-way 0 'strongly-confluent 'V0-2))
-(verify-rewrite-rule expand-if-3-span)
+(void (verify-rewrite-rule expand-if-3-span))
 (register-sre-rewrite-rule! expand-if-3-span)
 
 ;; --- expand-if-4: (if ResultType cond then else) → (boolrec ResultType then else cond) ---
@@ -588,7 +588,7 @@
     (tpl tag-expr (tpl-const "boolrec") (make-hole 'result-type)
          (make-hole 'then) (make-hole 'else) (make-hole 'cond))
     #f 'one-way 0 'strongly-confluent 'V0-2))
-(verify-rewrite-rule expand-if-4-span)
+(void (verify-rewrite-rule expand-if-4-span))
 (register-sre-rewrite-rule! expand-if-4-span)
 
 ;; --- expand-when: (when cond body) → (if cond body unit) ---
@@ -604,7 +604,7 @@
     '(cond body)
     (tpl tag-if (tpl-const "if") (make-hole 'cond) (make-hole 'body) (tpl-const "unit"))
     #f 'one-way 0 'strongly-confluent 'V0-2))
-(verify-rewrite-rule expand-when-span)
+(void (verify-rewrite-rule expand-when-span))
 (register-sre-rewrite-rule! expand-when-span)
 
 ;; --- expand-let-assign: (let name := val body...) → ((fn [name] body...) val) ---
@@ -626,7 +626,7 @@
            (make-splice 'body))
       (make-hole 'value))
     #f 'one-way 0 'strongly-confluent 'V0-2))
-(verify-rewrite-rule expand-let-assign-span)
+(void (verify-rewrite-rule expand-let-assign-span))
 (register-sre-rewrite-rule! expand-let-assign-span)
 
 ;; --- expand-let-bracket: (let [bindings] body...) → nested fn ---
@@ -644,7 +644,7 @@
          (make-hole 'bindings)
          (make-splice 'body))
     #f 'one-way 0 'strongly-confluent 'V0-2))
-(verify-rewrite-rule expand-let-bracket-span)
+(void (verify-rewrite-rule expand-let-bracket-span))
 (register-sre-rewrite-rule! expand-let-bracket-span)
 
 ;; --- expand-dot-access: (dot-access obj key) → (map-get obj :key) ---
