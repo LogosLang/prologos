@@ -15,27 +15,20 @@
 ;;;   - Hand-coded byte-equality interop tests (test-ocapn-rpc.rkt etc.)
 ;;; This file is the seam where they meet.
 ;;;
-;;; Implementation choices, both forced by goblin pitfalls #30 + #31:
-;;;
-;;; 1. The bridge driver chain (captp-incoming-with-state + drain +
-;;;    pump-outbound + first-bytes) lives in a *.prologos library
-;;;    (`prologos::ocapn::bridge-interop-helpers`) that raco make
-;;;    compiles once. The test invokes it via a single function call
-;;;    in process-string. This sidesteps pitfall #31 (the inline
-;;;    expression form was >90s; the library form is fast).
-;;;
-;;; 2. We do NOT call `decode-op` on Node's bytes in Prologos. The
-;;;    test reads Node's two frames from the wire (start-session +
-;;;    deliver) to confirm the connection is live and Node sent
-;;;    what we asked, then constructs the equivalent CapTPOp in
-;;;    Prologos with hand-coded values matching peer-questioner.mjs.
-;;;    This sidesteps the decoder-cost portion of pitfall #31 while
-;;;    still exercising the bridge end-to-end.
+;;; Implementation choice: the bridge chain (decode-op +
+;;; captp-incoming-with-state + drain + pump-outbound + first-bytes)
+;;; lives in a *.prologos library (`prologos::ocapn::bridge-interop-helpers`)
+;;; that raco make compiles to .pnet once. The test invokes
+;;; `drive-echo-bridge-from-bytes` via a single function call in
+;;; process-string, sidestepping the deep let-chain inference issue
+;;; (goblin pitfall #30) by keeping the function body inside a
+;;; top-level `defn` where Prologos elaboration handles it correctly.
 ;;;
 ;;; The test thus proves: Node connects, sends 2 frames, our bridge
-;;; produces wire bytes from a hand-constructed op, those bytes
-;;; arrive at Node, and Node's @endo/ocapn decoder accepts them with
-;;; the correct shape (answer-pos=7, args="hello").
+;;; DECODES the deliver, processes it through the vat (echo behavior
+;;; resolves the local promise tied to Node's question pos), and
+;;; emits the encoded reply. Node's @endo/ocapn decoder accepts our
+;;; bytes and verifies the reply shape (answer-pos=7, args="hello").
 ;;;
 ;;; Wire flow:
 ;;;   Node →  Racket: op:start-session
@@ -177,31 +170,24 @@
   (check-pred string? f1-bytes "expected start-session frame from Node")
   (check-pred string? f2-bytes "expected deliver frame from Node")
 
-  ;; 5. Verify Node sent two frames; we don't decode them in Prologos
-  ;;    (pitfall #31) but their byte length should be sane. The
-  ;;    op:start-session frame is implicit (a state-preserving no-op
-  ;;    on the bridge anyway); our bridge only needs to process the
-  ;;    op:deliver to produce the reply.
+  ;; 5. Verify Node sent two frames; the first is op:start-session
+  ;;    (a state-preserving no-op for the bridge in this test) and
+  ;;    the second is op:deliver. We feed the SECOND, raw bytes and
+  ;;    all, into a Prologos library helper that calls decode-op +
+  ;;    captp-incoming-with-state + drain + pump-outbound. The
+  ;;    helper lives in prologos::ocapn::bridge-interop-helpers
+  ;;    (raco make compiles it once) so process-string only has
+  ;;    to elaborate a single function call (sidesteps pitfall #30).
   (check-true (> (string-length f1-bytes) 10) "Node start-session frame too short")
   (check-true (> (string-length f2-bytes) 10) "Node deliver frame too short")
 
-  ;; Construct the equivalent CapTPOp in Prologos with hand-coded
-  ;; values that match what peer-questioner.mjs sends:
-  ;;   target=desc:export 0  → tgt=0
-  ;;   args="hello"          → syrup-string "hello"
-  ;;   answer-pos=desc:answer 7 → some 7
-  ;;   resolver=false        → none
-  ;; Then call drive-echo-bridge-once (a pre-compiled Prologos
-  ;; library helper) to run the full bridge chain in one call.
-  ;;
-  ;; The 7 in (suc^7 zero) matches ANSWER_POS in peer-questioner.mjs.
+  ;; 6. Drive the bridge with Node's actual deliver bytes. The
+  ;;    helper returns Option String; unwrap-or yields the bytes
+  ;;    or a sentinel.
   (define driver-expr
-    "(eval (unwrap-or \"NO-OUTBOUND\"
-                       (drive-echo-bridge-once
-                          (op-deliver zero
-                                      (syrup-string \"hello\")
-                                      (some Nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
-                                      (none Nat)))))")
+    (format "(eval (unwrap-or \"NO-OUTBOUND\"
+                                (drive-echo-bridge-from-bytes ~s)))"
+            f2-bytes))
   (define reply-bytes (extract-value-bytes (run-last driver-expr)))
   (printf "bridge-interop: reply-bytes from Prologos = ~s~n" reply-bytes)
 

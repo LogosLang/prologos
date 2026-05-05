@@ -18,6 +18,7 @@ ns prologos::ocapn::bridge-interop-helpers
 
 require [prologos::ocapn::core   :refer-all]
         [prologos::ocapn::message :refer-all]
+        [prologos::ocapn::captp-wire :refer-all]
         [prologos::ocapn::captp-bridge :refer-all]
         [prologos::data::list  :refer [List nil cons]]
         [prologos::data::option :refer [Option some none]]
@@ -40,3 +41,15 @@ defn drive-echo-bridge-once [op]
       let v2   := [drain drain-fuel-8 [bridge-step-vat step]]
         let pr   := [pump-outbound v2 [bridge-step-state step] nil]
           [first-bytes [pump-result-bytes pr]]
+
+;; End-to-end: decode raw inbound bytes from a peer (e.g.,
+;; `@endo/ocapn`-emitted Syrup) and drive the bridge through them.
+;; Returns Some <reply-bytes> on success, None on either a decode
+;; failure or a bridge that produced no outbound. This is the
+;; entry point for live bridge-driven interop tests.
+spec drive-echo-bridge-from-bytes String -> Option String
+defn drive-echo-bridge-from-bytes [bytes]
+  match [decode-op bytes]
+    | none    -> [none String]
+    | some op -> [drive-echo-bridge-once op]
+
