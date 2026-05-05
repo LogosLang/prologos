@@ -168,8 +168,21 @@
       net inputs outputs fire-fn #:native-op native-op))
 
    ;; run-to-quiescence : net → net'
+   ;; Hard-fails when the kernel exhausts fuel (max_rounds). The
+   ;; kernel sets prof.fuel_exhausted=1 and breaks; without this
+   ;; check, Racket would silently return whatever value the result
+   ;; cell happened to have at that point — a silent correctness
+   ;; violation. Stat key 5 = fuel_exhausted (see prologos_get_stat
+   ;; in runtime/prologos-runtime-hybrid.zig).
    (lambda (net)
      (prologos_run_to_quiescence)
+     (when (= (prologos_get_stat 5) 1)
+       (error 'backend-hybrid
+              (string-append
+               "kernel fuel exhausted (max_rounds reached); "
+               "result cells may be incomplete. "
+               "raise the round budget via prologos_set_max_rounds "
+               "or reduce the program's recursion depth.")))
      'hybrid)
 
    ;; fresh-net : () → net

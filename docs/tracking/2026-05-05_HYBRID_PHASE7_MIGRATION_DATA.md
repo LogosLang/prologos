@@ -46,16 +46,20 @@ contains 15 small (~20-50 LOC) real algorithms:
 All 15 programs ran to completion. W14 produced an arithmetically
 incorrect result — 1 instead of 4 primes ≤ 10. **Investigated
 2026-05-05 evening: this is NOT a fuel-out, it's a load-bearing
-correctness bug in the kernel.** See
-`2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md` for the full root-
-cause writeup. Brief version: the callback wrapper's b-write
-calls `prologos_cell_write` immediately, which tries to schedule
-subscribers; `schedule` early-returns because the subscriber is
-still in the current worklist. Native consumers (int-eq, int-lt,
-etc.) then read snapshot values (still bot) and treat them as 0.
-**Any program that chains a callback fire-fn into a native consumer
-silently miscomputes.** This elevates int-mod migration from #6
-"trivial cleanup" to a CORRECTNESS fix.
+correctness bug in the kernel — a BSP-violation in the callback
+wrapper.** See `2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md`
+for the root-cause and `2026-05-05_HYBRID_KERNEL_BSP_FIX_PLAN.md`
+for the fix plan. **The fix landed the same day** (Fix A':
+deferred subscriber scheduling during firing-loop). All 5 R*
+regression tests, all 7 preduce-lite, all 12 OCapN, all 42 shape
+battery + 15 workload programs continue to pass. W14 now returns
+3 (correct) at N=5 — its scaling above N=7 is bounded by a
+separate, pre-existing 256-callback-tag pool, not the BSP bug.
+
+The fix subsumes the correctness need that briefly elevated
+int-mod migration from #6 "trivial cleanup". int-mod is now
+back at #6 — a small performance optimization, not a correctness
+fix. The migration ranking otherwise stands.
 
 ### Per-program profile
 

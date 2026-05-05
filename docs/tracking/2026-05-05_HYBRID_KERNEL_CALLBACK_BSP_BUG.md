@@ -1,6 +1,12 @@
 # Hybrid Kernel Bug — Callback Wrappers Violate BSP Semantics
 
-**Status**: ROOT-CAUSED, not yet fixed.
+**Status**: **FIXED** 2026-05-05 evening (commit pending). See
+`2026-05-05_HYBRID_KERNEL_BSP_FIX_PLAN.md` for the implementation
+plan; the patch landed largely as proposed (Fix A'). All 5 R*
+regression tests pass; W14 prime-count is now arithmetically
+correct (with a separate constraint on N due to the
+256-callback-tag pool, not the BSP bug). All 7 preduce-lite + 12
+OCapN + 42 shape battery + 15 workload programs continue to pass.
 **Discovered**: 2026-05-05 evening, while investigating why W14
 prime-count returned 1 instead of 4.
 **Severity**: HIGH — affects every program that chains a callback

@@ -275,9 +275,23 @@ export fn prologos_cell_alloc() u32 {
 export fn prologos_cell_write(id: u32, value: i64) void {
     if (store.write_unchecked(id, value)) {
         prof.writes_committed += 1;
-        var i: u32 = 0;
-        while (i < store.num_subs(id)) : (i += 1) {
-            schedule(store.sub_at(id, i));
+        if (firing) {
+            // Defer subscriber scheduling to post-firing-loop walk.
+            // (See `firing` block-comment above for rationale.)
+            if (dirtied_len >= MAX_CELLS) {
+                // Hard fail rather than silently degrade.
+                // MAX_CELLS=4096 is generous; if hit, the design
+                // assumption is violated and silent fall-through
+                // would re-introduce the bug the firing flag fixes.
+                @panic("hybrid kernel: dirtied buffer overflow (>= MAX_CELLS callback writes in one round)");
+            }
+            dirtied_cid[dirtied_len] = id;
+            dirtied_len += 1;
+        } else {
+            var i: u32 = 0;
+            while (i < store.num_subs(id)) : (i += 1) {
+                schedule(store.sub_at(id, i));
+            }
         }
     } else {
         prof.writes_dropped += 1;
@@ -381,6 +395,34 @@ var in_worklist: [MAX_PROPS]u8 = [_]u8{0} ** MAX_PROPS;
 var pending_cid: [MAX_PROPS]u32 = undefined;
 var pending_val: [MAX_PROPS]i64 = undefined;
 var pending_len: u32 = 0;
+
+// =====================================================================
+// BSP correction for callback fire-fns (2026-05-05).
+//
+// Callback wrappers (preduce-backend-hybrid.rkt) call
+// prologos_cell_write IMMEDIATELY from inside their fire-fn (via
+// b-write -> backend.write-cell). Doing so during the firing loop
+// must NOT trigger immediate subscriber scheduling — the subscriber
+// may already be in the current worklist (in_worklist[pid] == 1)
+// and schedule() early-returns on that, causing the subscriber to
+// fire same-round against an outdated snapshot and never re-fire
+// (write_unchecked returns false on the redundant pending write
+// because the value already landed live).
+//
+// Fix: while `firing` is true, prologos_cell_write performs the
+// store update normally but APPENDS the cell-id to `dirtied_cid`
+// instead of scheduling subscribers. After the firing loop ends,
+// run_to_quiescence walks dirtied_cid and schedules subscribers —
+// at that point all current-round propagators have been processed,
+// their in_worklist flags are cleared, and schedule() succeeds,
+// queuing them for the next round.
+//
+// See docs/tracking/2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md
+// + 2026-05-05_HYBRID_KERNEL_BSP_FIX_PLAN.md.
+// =====================================================================
+var firing: bool = false;
+var dirtied_cid: [MAX_CELLS]u32 = undefined;
+var dirtied_len: u32 = 0;
 
 fn schedule(pid: u32) void {
     if (in_worklist[pid] != 0) return;
@@ -520,6 +562,11 @@ export fn prologos_run_to_quiescence() void {
         }
         prof.rounds += 1;
         store.take_snapshot();
+
+        // Begin firing phase: prologos_cell_write defers subscriber
+        // scheduling while `firing == true`. (See `firing`
+        // block-comment.)
+        firing = true;
         var i: u32 = 0;
         while (i < worklist_len) : (i += 1) {
             const pid = worklist[i];
@@ -527,6 +574,23 @@ export fn prologos_run_to_quiescence() void {
             fire_against_snapshot(pid);
         }
         worklist_len = 0;
+        firing = false;
+
+        // Drain dirtied buffer: schedule subscribers for each cell
+        // that was immediately-written by a callback fire-fn during
+        // this round. At this point all firing pids have been
+        // processed and their in_worklist flags are 0, so
+        // schedule() succeeds and queues for the next round.
+        i = 0;
+        while (i < dirtied_len) : (i += 1) {
+            const cid = dirtied_cid[i];
+            var j: u32 = 0;
+            while (j < store.num_subs(cid)) : (j += 1) {
+                schedule(store.sub_at(cid, j));
+            }
+        }
+        dirtied_len = 0;
+
         merge_pending_writes();
         swap_worklists();
     }
@@ -628,6 +692,8 @@ export fn prologos_kernel_reset() void {
     worklist_len = 0;
     next_worklist_len = 0;
     pending_len = 0;
+    firing = false;
+    dirtied_len = 0;
     var i: u32 = 0;
     while (i < MAX_PROPS) : (i += 1) {
         in_worklist[i] = 0;

@@ -1,0 +1,4 @@
+;; Regression: callback (int-mod) feeds native (int*).
+;; Pre-fix: 0 (wrong); post-fix: 100.
+;; int-mod 7 3 = 1; int* 1 100 = 100.
+def main : Int := [int* [int-mod 7 3] 100]

@@ -2,7 +2,12 @@
 
 **Companion to**: `2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md` (root-cause).
 **Date**: 2026-05-05 evening.
-**Status**: PLAN ONLY — no code changes in this commit.
+**Status**: **IMPLEMENTED** 2026-05-05 evening (same-day). Plan
+landed as proposed (Fix A') with one addition: per user request,
+silent fall-throughs were converted to hard-fail. The dirtied
+buffer overflow now `@panic`s rather than degrading. Fuel
+exhaustion now raises a Racket error rather than returning a
+silent partial result.
 
 ## Goal
 

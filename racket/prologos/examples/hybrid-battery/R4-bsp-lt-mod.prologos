@@ -1,0 +1,3 @@
+;; Regression: callback feeds int-lt.
+;; Pre-fix: true (sees mod as 0; 0 < 1); post-fix: false (1 < 1 is false).
+def main : Bool := [int-lt [int-mod 7 3] 1]
