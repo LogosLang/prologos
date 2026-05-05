@@ -39,4 +39,3 @@ test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 
 # and #31 (perf observation, follow-up).
 test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, perf-blocked)
 test-bridge-perf.rkt              # Pitfall #31 perf diagnostic — decode-op alone is ~150s; not a regression test, kept as the baseline measurement for future perf work
-test-bridge-profile.rkt           # Pitfall #31 profiler harness — needs profile-lib installed; not a regression test, run manually when investigating perf
