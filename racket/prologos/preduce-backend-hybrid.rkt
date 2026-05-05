@@ -72,7 +72,8 @@
           'int-div  3
           'int-eq   4
           'int-lt   5
-          'int-le   6))
+          'int-le   6
+          'int-mod  7))  ;; added 2026-05-05; closes the int-binary cluster
 
 (define (next-tag!)
   (define tag (unbox next-callback-tag))

@@ -408,13 +408,13 @@
     ;; Phase 4b refactor follow-up: pass #:native-op so backend-hybrid
     ;; can route to the kernel's built-in native fire-fn (tags 0-7)
     ;; instead of registering a Racket callback. backend-racket ignores
-    ;; the hint. expr-int-mod has no kernel-native equivalent today, so
-    ;; it stays callback-only.
+    ;; the hint. expr-int-mod is now native at tag 7 (added 2026-05-05);
+    ;; the int-binary cluster is complete.
     [(expr-int-add a b) (compile-int-binary net env e a b int-add-fire #:native-op 'int-add)]
     [(expr-int-sub a b) (compile-int-binary net env e a b int-sub-fire #:native-op 'int-sub)]
     [(expr-int-mul a b) (compile-int-binary net env e a b int-mul-fire #:native-op 'int-mul)]
     [(expr-int-div a b) (compile-int-binary net env e a b int-div-fire #:native-op 'int-div)]
-    [(expr-int-mod a b) (compile-int-binary net env e a b int-mod-fire)]
+    [(expr-int-mod a b) (compile-int-binary net env e a b int-mod-fire #:native-op 'int-mod)]
     [(expr-int-eq  a b) (compile-int-binary net env e a b int-eq-fire  #:native-op 'int-eq)]
     [(expr-int-lt  a b) (compile-int-binary net env e a b int-lt-fire  #:native-op 'int-lt)]
     [(expr-int-le  a b) (compile-int-binary net env e a b int-le-fire  #:native-op 'int-le)]

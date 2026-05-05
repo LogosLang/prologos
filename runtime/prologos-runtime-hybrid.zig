@@ -230,6 +230,11 @@ fn kernel_int_lt(a: i64, b: i64) callconv(.C) i64 {
 fn kernel_int_le(a: i64, b: i64) callconv(.C) i64 {
     return box(TAG_BOOL, if (payload_of(a) <= payload_of(b)) 1 else 0);
 }
+fn kernel_int_mod(a: i64, b: i64) callconv(.C) i64 {
+    // C-style truncated remainder (sign matches dividend), to match
+    // Racket's `remainder`. Pairs with kernel_int_div's @divTrunc.
+    return box(TAG_INT, @rem(payload_of(a), payload_of(b)));
+}
 
 fn kernel_select(c: i64, t: i64, e: i64) callconv(.C) i64 {
     return if (payload_of(c) != 0) t else e;
@@ -249,6 +254,7 @@ fn register_built_ins() void {
     fire_fn_2_1[4] = kernel_int_eq;
     fire_fn_2_1[5] = kernel_int_lt;
     fire_fn_2_1[6] = kernel_int_le;
+    fire_fn_2_1[7] = kernel_int_mod;
     fire_fn_3_1[0] = kernel_select;
 }
 
