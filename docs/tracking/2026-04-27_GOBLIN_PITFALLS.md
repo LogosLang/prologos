@@ -1063,7 +1063,18 @@ hit this.
 
 ---
 
-### #31 — `captp-incoming-with-state + drain + pump-outbound` over Node-decoded bytes is >90s in `process-string`-driven eval (2026-05-04, perf observation)
+### #31 — `decode-op` on a 50-byte op:deliver takes ~150 SECONDS in `process-string` eval (2026-05-04, perf bug, MEASURED)
+
+**MEASURED 2026-05-04**: `(eval (decode-op "<10'op:deliver<11'desc:export0+>5\"hello<11'desc:answer7+>f>"))`
+in a `process-string` call took **150,321 ms (150 seconds)** for a
+50-byte input. That's ~3ms per byte. A sane decoder for bytes-this-shaped
+should complete in <10ms total. This is the underlying cause of all
+"Phase 24 takes 8+ minutes" symptoms.
+
+The result was correct:
+~[some [op-deliver 0N "hello" [some Nat 7N] [none Nat]]]~ — i.e. the
+decoder produces the right answer, just 1000x to 10000x slower than
+expected. Diagnostic test: `tests/test-bridge-perf.rkt`.
 
 **Symptom.** Phase 24's bridge-driven responder interop test
 (`test-ocapn-bridge-interop.rkt`) drives the full bridge pipeline
@@ -1085,37 +1096,47 @@ unit tests in `test-ocapn-bridge.rkt` that exercise the same chain
 is fulfilled") with **hand-constructed** ops (not `decode-op`-
 produced) complete in ~1s.
 
-**Hypothesis.** The difference is in the SyrupValue payload. Node's
-encoded `<op:deliver <desc:export 0> "hello" <desc:answer 7> #f>`
-decodes into a `CapTPOp` whose `args` field is `syrup-string "hello"`
-and whose `ap` field is `some 7` — same shapes the unit tests use.
-But the path through `decode-op` and `unwrap-or` introduces metas
-or partial-application closures that the elaborator carries through
-into `captp-incoming-with-state` and `drain`'s reduction. Reduction
-of those nested closures may be where the time goes.
+**Where the time goes** (now measured): the bottleneck is `decode-op`
+itself, not the bridge. Confirmed by isolating each layer:
+- `(eval (decode-op BYTES))` alone: ~150 seconds.
+- `(eval (drive-echo-bridge-once <hand-coded-CapTPOp>))` (no decode):
+  ~80 seconds in the first run with hand-coded ops.
+- The combined chain `decode-op + bridge`: ≥ 8 minutes (killed at
+  that point; never observed completing).
 
-A second possibility: `pump-outbound` walks the question table; with
-Node's deliver triggering allocation of a new question-table entry
-(remote=7 → fresh local pid), the table entry's terms include
-metas that took multiple reduction rounds to settle.
+So decode-op contributes the lion's share of the cost. The bridge
+itself (which involves comparable amounts of structural work — vat
+event loop, question table, pump-outbound encoding) runs ~2× faster.
+
+**Hypothesis on root cause** (unverified). `decode-op` is a
+recursive parser in `lib/prologos/ocapn/captp-wire.prologos` that
+calls `wire::decode-value` (defined in `syrup-wire.prologos`).
+The parser uses position-threading via tuples, deep `match` chains,
+and each parsed sub-value allocates a fresh `SyrupValue` ctor and
+a position pair. Combined with the elaborator's reduction strategy
+in `process-string`, that may produce O(n²) or worse reduction
+behavior on the input string. The decoder's *output* is correct
+(verified — produces the expected `op-deliver` shape); only its
+*throughput* is broken.
 
 **Investigation paths**:
-1. Profile `process-string` of just the `decode-op + unwrap-or`
-   form vs the full chain — isolate where time goes.
-2. Try a freshly-`raco make`'d run vs an interpreted run; the
-   compiled .zo of the test FILE doesn't help with elaboration of
-   the `process-string` expression at runtime.
-3. Try replacing `(unwrap-or (op-abort "...") (decode-op ...))` with
-   a direct sexp constructor of an equivalent `CapTPOp` in the test
-   — does that avoid the slowdown? If so, the slowdown is decoder-
-   specific.
-4. Reduce the test's `drain` fuel from 8 to something smaller and
-   see if it bottoms out faster.
+1. Profile reduction inside `wire::decode-value` for inputs of
+   length 10, 50, 100. If timing is super-linear in length, that
+   confirms an algorithmic issue in the decoder's structural
+   recursion under Prologos reduction.
+2. Compare against `(eval (encode-op <hand-coded-op>))` timing.
+   If encode is fast and decode is slow, the asymmetry is in how
+   the elaborator handles parser combinators vs constructor
+   applications.
+3. Try a *flat* alternative decoder (e.g., a foreign Racket call
+   that returns a `SyrupValue` directly), keeping `syrup-to-op`
+   on the Prologos side. If that's fast, the problem is isolated
+   to the byte-level parser, not the SyrupValue→CapTPOp conversion.
 
-**Workaround for now.** Skip the test from the interop CI workflow.
-Add to `.skip-tests` with reason. Phase 24 ships as scaffolding
-(Node peer + test skeleton + pitfall doc), with the live end-to-end
-gate deferred to a Prologos perf or evaluator improvement.
+**Workaround for now.** Test stays in `.skip-tests`. Phase 24 ships
+as scaffolding (Node peer + test skeleton + library helper +
+diagnostic test + this pitfall). Live end-to-end gate deferred
+to a Prologos decoder perf fix.
 
 **Discovered.** Phase 24 of OCapN interop. The perf gap between
 unit tests with hand-coded ops and a real interop test that decodes

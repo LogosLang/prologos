@@ -38,3 +38,4 @@ test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 
 # pitfalls #30 (match-in-deep-let inference failure, worked around)
 # and #31 (perf observation, follow-up).
 test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, perf-blocked)
+test-bridge-perf.rkt              # Pitfall #31 perf diagnostic — decode-op alone is ~150s; not a regression test, kept as the baseline measurement for future perf work
