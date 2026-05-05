@@ -712,4 +712,198 @@ For Phase 10's identity bridge specifically: install registers the fire-fn-ptr i
 
 ---
 
-**End of PIR.**
+## Appendix C: BSP-Violation Bug + Fix C (Postscript, 2026-05-05)
+
+A latent BSP-correctness bug in the callback wrapper surfaced
+2026-05-05 evening while running the new hybrid-workloads battery
+(15 broad non-trivial programs, see
+`2026-05-05_HYBRID_PHASE7_MIGRATION_DATA.md`). W14 prime-count
+returned 1 instead of 4. Root-cause writeup is in
+`2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md`. This appendix
+captures the methodology lessons.
+
+### What was wrong
+
+Callback wrappers in `preduce-backend-hybrid.rkt` had fire-fns:
+- `b-read` → `prologos_cell_read` (LIVE state, not snapshot)
+- `b-write` → `prologos_cell_write` (IMMEDIATE live write)
+
+Native fire-fns (in Zig) read snapshot, return their value, and the
+kernel pends + schedules subscribers at the barrier. The two
+protocols were silently inconsistent. The PIR's Appendix B § "fire
+loop reads table entry by tag → invokes the … fire-fn → fire-fn
+calls `cell_write` directly → downstream propagators see the new
+value via `cell_read`" describes the LIVE flow that callbacks
+were doing, but the BSP scheduler's correctness contract requires
+snapshot reads + pended writes (per
+`2026-05-01_BSP_NATIVE_SCHEDULER.md`).
+
+The bug was invisible to:
+- The shape battery (each program tests one shape; no chain of
+  callback → native).
+- Single-callback chains: `[int-mod 7 3]` returns the right
+  number standalone because the immediate write IS the result.
+- The OCapN battery: data-construction-heavy, doesn't chain
+  int-mod.
+- Tests that lean on static β to fully reduce: the elaborator
+  collapsed simple defns to literals before installing
+  propagators.
+
+It was visible to:
+- Any program chaining a callback fire-fn into a native fire-fn
+  in the same round (R1: `[int-eq [int-mod 7 3] 0]`).
+- Recursive programs with nested matches over callback Bools
+  (W14 prime-count, count-evens).
+
+### Why the original "Fix A'" was wrong
+
+The first attempt (commit `9cea3d2`) introduced a kernel-side
+`firing` flag + `dirtied_cid` buffer that deferred subscriber
+scheduling to post-firing-loop. This addressed ONE half of the
+violation: the schedule-skip case where `schedule(subscriber)`
+early-returned because `in_worklist[subscriber] == 1`.
+
+It left the OTHER half intact: callbacks still read LIVE cells via
+`b-read`, so within-round read coherence was still broken.
+Callback A's mid-round live write became visible to callback B's
+b-read in the same round. R1-R5 passed (only one callback in the
+chain) but count-evens / count-primes still over-counted.
+
+Lesson: **a partial fix that handles the first observable
+manifestation of an architectural-protocol violation can mask
+the deeper instances**. The schedule-skip was conspicuous
+(R1-R5 reproduce); the within-round read incoherence was
+quieter (only nested-match recursive programs surface it). Fix
+A' was tested only against R1-R5, which passed — but the deeper
+shape was untested. The user's external check
+("BSP correctness is paramount and the recent dirty change is a
+likely culprit. stop and research") forced the re-think.
+
+### Fix C (the BSP-correct one, commit `99703e9`)
+
+Restored protocol parity between callback and native fire-fns:
+- Added `prologos_cell_read_snapshot` export in the kernel.
+- Added `current-fire-fn-pending` parameter Racket-side.
+- `backend-hybrid.read-cell` reads snapshot when inside a fire-fn
+  (parameter set), live otherwise.
+- `backend-hybrid.write-cell` captures `(cid, boxed-value)` when
+  inside a fire-fn, live otherwise.
+- `make-callback-wrapper` parameterizes the capture box, runs
+  fire-fn, returns the captured value to the kernel; the kernel
+  pends + schedules at the barrier.
+- Reverted the dirtied-buffer hack.
+
+Verification: R1-R5 + W14 N=10 all correct. Full battery 81/81 OK
+(plus 4 known-fail Vec/Fin pre-existing). Fix C uses the
+already-existing snapshot-read path that native fire-fns use.
+
+A SEPARATE bug (Bool-boxing / match-dispatch interaction with
+native fire-fn outputs) was discovered while validating Fix C —
+count-evens still over-counts when the scrutinee is a Bool from
+native int-eq, but works when wrapped through a literal-returning
+match. Filed as a follow-up; not addressed by Fix C.
+
+### What this PIR (the original 2026-05-04 PIR) missed
+
+§ 13 Architecture Assessment claimed "the kernel implements
+genuine on-network propagator computation." That's true at the
+kernel layer but the **hosting protocol** between kernel and
+callback fire-fns was inconsistent — a layering issue that
+the original test surface didn't expose.
+
+§ Appendix B (Network Reality Check) stated:
+> fire loop reads table entry by tag → invokes the (now Zig-native)
+> fire-fn → fire-fn calls `cell_write` directly → downstream
+> propagators see the new value via `cell_read`.
+
+This describes the LIVE-write flow that was wrong for callbacks.
+The correct description (per BSP-LE Track 2 PIR § Bug 2 +
+2026-05-01_BSP_NATIVE_SCHEDULER.md):
+> fire loop reads SNAPSHOT (taken at start of round) → invokes the
+> fire-fn → fire-fn returns value → kernel pends → barrier merges
+> pending + schedules subscribers via `cell_write`.
+
+The PIR conflated "what native fire-fns do" with "what callbacks
+do" because the test surface didn't distinguish them.
+
+### Methodology lessons
+
+1. **The shape battery is necessary but not sufficient**. It
+   gives shape-frequency distribution but not within-round
+   inconsistency. Broad workloads (W*-prologos) caught the bug
+   that micro-probes missed. Phase 7 migration data refresh
+   bumped from "shape battery only (12 programs)" to "shape +
+   workload (61 programs)" precisely because the latter exposed
+   real-program callback chains.
+
+2. **"Belt-and-suspenders" was the smell**. Fix A's dirtied
+   buffer kept the immediate b-write AND added scheduling
+   bookkeeping. That was a layering smell — masking rather than
+   correcting the violation. The architectural fix (Fix C)
+   removed the immediate b-write entirely and aligned callbacks
+   with the native protocol. (See `workflow.md` §
+   "Belt-and-Suspenders Masks Bugs.")
+
+3. **Existing docs had the answer**. Both
+   `2026-05-01_BSP_NATIVE_SCHEDULER.md` and BSP-LE Track 2 PIR §
+   Bug 2 documented the snapshot-read + pended-write protocol.
+   The original BSP fix attempt didn't re-read these docs first;
+   the user's "stop and research" forced it. Lesson: when fixing
+   a bug whose fix is architectural, re-read the architecture
+   docs BEFORE implementing.
+
+4. **One-callback-in-chain tests are insufficient**. R1-R5 was a
+   targeted test for the shape my Fix A' was solving. They
+   passed. But they had only ONE callback in the chain, so
+   within-round read inconsistency couldn't surface. A
+   regression-test suite that covers REPRESENTATIVE shape
+   COMBINATIONS (callback → callback → native, etc.) would have
+   caught the gap before commit. count-evens (5 LOC) is now
+   that combination test.
+
+5. **Hard-fail caps were the right ask**. The user's "fail hard
+   if we exhaust fuel or limited spaces like tags or callbacks"
+   directive (between Fix A' and Fix C) converted bare `abort()`
+   to `@panic` with descriptive messages and added a Racket-side
+   fuel-out check. Both improvements were independent of which
+   Fix landed; both stayed through the revert. Pure win.
+
+### Stat-key follow-up (commit `3ba749a`)
+
+After the N_TAGS bump (256 → 4096) that landed alongside Fix C,
+CI surfaced a stat-key aliasing bug: per-tag stat-key spacing
+had been hardcoded at 1024 (`fires_by_tag` at offset 1024,
+`ns_by_tag` at 2048, etc.). With N_TAGS=4096 the four ranges
+overlap (1024..5120 swallows 2048..6144 etc.), and the first
+sequential dispatch check wins. `stat-callbacks-by-tag(0)` was
+returning `fires_by_tag[2048]` = 0, making the test
+"expr-suc fires as Racket callback" report no callbacks fired.
+
+Fix: bump per-tag stat-key spacing 1024 → 8192 (≥ N_TAGS) so the
+ranges no longer overlap. Mirrored in both Zig kernel and Racket
+bridge. 29 hybrid tests pass.
+
+Methodology lesson: **constants that scale together must be
+documented or factored**. The 1024 spacing was hidden in two
+places (`runtime-bridge.rkt:stat-*` helpers + `prologos_get_stat`
+dispatch in Zig). The original 256-tag value happened to fit the
+1024 spacing; bumping N_TAGS without touching the spacing was a
+silent error mode that only CI surfaced. A factored
+`STAT_KEY_SPACING = max(1024, N_TAGS)` would have been
+self-correcting.
+
+### Outcome
+
+| metric | before Fix A' | after Fix A' | after Fix C + spacing |
+|---|---|---|---|
+| R1-R5 BSP-chain regression | all wrong | all correct | all correct |
+| W14 prime-count N=10 | wrong (1) | wrong | correct (4) |
+| count-evens | wrong (over) | wrong | wrong (Bool-boxing) |
+| BSP-LE Track 2 hybrid tests | passing | passing | passing |
+| stat-key dispatch | OK at N_TAGS=256 | OK | OK at N_TAGS=4096 |
+| within-round read coherence | violated | violated | restored |
+| schedule-skip on immediate write | bug | masked | structural fix |
+
+---
+
+**End of PIR (postscript appended 2026-05-05).**
