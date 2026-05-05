@@ -27,13 +27,14 @@
     [(expr-bvar k)
      (if (>= k cutoff)
          (expr-bvar (+ k delta))
-         (expr-bvar k))]
+         e)]                       ; pitfall #31 fix: was (expr-bvar k) — eq-preserve
     [(expr-fvar _) e]
 
     ;; Constants (no bound variables inside)
     [(expr-zero) e]
     [(expr-nat-val _) e]
-    [(expr-suc e1) (expr-suc (shift delta cutoff e1))]
+    [(expr-suc e1)
+     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-suc e1*)))]
     [(expr-refl) e]
     [(expr-Nat) e]
     [(expr-Bool) e]
@@ -52,22 +53,31 @@
     [(? ns-context?) e]  ;; namespace metadata — pass-through
 
     ;; Binding forms: cutoff increases under binders
+    ;; pitfall #31 fix: eq-preserving — if children unchanged, return e.
     [(expr-lam m t body)
-     (expr-lam m (shift delta cutoff t) (shift delta (add1 cutoff) body))]
+     (let ([t* (shift delta cutoff t)] [body* (shift delta (add1 cutoff) body)])
+       (if (and (eq? t t*) (eq? body body*)) e (expr-lam m t* body*)))]
     [(expr-Pi m dom cod)
-     (expr-Pi m (shift delta cutoff dom) (shift delta (add1 cutoff) cod))]
+     (let ([dom* (shift delta cutoff dom)] [cod* (shift delta (add1 cutoff) cod)])
+       (if (and (eq? dom dom*) (eq? cod cod*)) e (expr-Pi m dom* cod*)))]
     [(expr-Sigma t1 t2)
-     (expr-Sigma (shift delta cutoff t1) (shift delta (add1 cutoff) t2))]
+     (let ([t1* (shift delta cutoff t1)] [t2* (shift delta (add1 cutoff) t2)])
+       (if (and (eq? t1 t1*) (eq? t2 t2*)) e (expr-Sigma t1* t2*)))]
 
     ;; Non-binding forms
     [(expr-app e1 e2)
-     (expr-app (shift delta cutoff e1) (shift delta cutoff e2))]
+     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
+       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-app e1* e2*)))]
     [(expr-pair e1 e2)
-     (expr-pair (shift delta cutoff e1) (shift delta cutoff e2))]
-    [(expr-fst e1) (expr-fst (shift delta cutoff e1))]
-    [(expr-snd e1) (expr-snd (shift delta cutoff e1))]
+     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
+       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-pair e1* e2*)))]
+    [(expr-fst e1)
+     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-fst e1*)))]
+    [(expr-snd e1)
+     (let ([e1* (shift delta cutoff e1)]) (if (eq? e1 e1*) e (expr-snd e1*)))]
     [(expr-ann e1 e2)
-     (expr-ann (shift delta cutoff e1) (shift delta cutoff e2))]
+     (let ([e1* (shift delta cutoff e1)] [e2* (shift delta cutoff e2)])
+       (if (and (eq? e1 e1*) (eq? e2 e2*)) e (expr-ann e1* e2*)))]
     [(expr-Eq t e1 e2)
      (expr-Eq (shift delta cutoff t) (shift delta cutoff e1) (shift delta cutoff e2))]
 
@@ -474,6 +484,7 @@
                                 (expr-reduce-arm-body arm))))
                        arms)
                   structural?)]))
+
 
 ;; ========================================
 ;; Substitution: replace bvar(k) with s in e

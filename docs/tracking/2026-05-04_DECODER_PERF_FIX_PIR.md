@@ -3,7 +3,27 @@
 **Date**: 2026-05-04
 **Track**: pitfall #31 fix attempt (follow-up to `2026-05-04_DECODER_PERF_INVESTIGATION.md`)
 **Author**: Claude
-**Status**: **NEGATIVE RESULT** — three localized fixes attempted, none reduced the O(N²) scaling. The investigation refines the root-cause model and clarifies what the real fix has to look like.
+**Status**: **CULPRIT IDENTIFIED — fix not yet applied.** Three localized fixes attempted before profiling; all NEGATIVE. Then added instrumentation, located the actual hot path: `shift` (called from `subst` at every binder traversal). Eq-preserving short-circuit in shift made for safety but cannot help this case (substitution args have free bvars). Real fix requires deeper architectural change.
+
+## TL;DR — the bottleneck is `shift`, not the cache
+
+Instrumented counters at N=1 vs N=5 (input grew 5x, time grew 27x):
+
+| Counter | N=1 | N=5 | Ratio |
+|---|---|---|---|
+| wall time | 1750 ms | 47495 ms | **27.1x** (≈ N²) |
+| `subst-nodes` | 4243 | 83887 | **19.8x** (≈ N²) |
+| **`shift-nodes`** | **4116** | **206472** | **50.2x** (≥ N²) |
+| `whnf-calls` | 463 | 1480 | 3.2x (sub-linear due to memo) |
+| `cache-time` | 3 ms | 17 ms | 5.7x (linear, **0.04% of total**) |
+
+`shift-nodes` grew **50x** for 5x input. The cache (which my first three fix attempts targeted) is 0.04% of wall time — not the bottleneck.
+
+**Root cause**: each call to `subst` that crosses a binder calls `(shift 1 (add1 cutoff) s)` on the substitution argument. `shift` recursively walks the argument tree. As the accumulator in `decode-many-acc` grows linearly, shift's per-call cost grows linearly. Per-iteration `shift` work × N iterations = **O(N²)**.
+
+## Methodology lesson
+
+**I should have profiled first.** Three reasoned interventions (cache-key fix #1, eq-preserving subst #2, eq-cache #3) all targeted the wrong layer because I hypothesized the cache was the bottleneck without measuring. After 4 hours of failed fixes, I added five-minute instrumentation and found the real culprit immediately. Lesson for future perf work: instrumentation FIRST, hypothesis SECOND.
 
 ## What was tried
 
@@ -65,6 +85,26 @@ The investigation document's recommendation (content-hash on all 327 expr struct
 
 4. **Profile the actual hot path.** Use Racket's `errortrace` or a sampling profiler to find where the per-step time actually goes. Without this, further interpreter changes are guesses.
 
+## Attempt 4 — Eq-preserving shift (kept as a small safety improvement)
+
+After three failed cache-targeted fixes, I added eq-preservation to `shift` — when no bvars need shifting in a subtree, return `e` unchanged instead of allocating a new struct. Edited the major cases (`expr-bvar`, `expr-app`, `expr-pair`, `expr-fst`, `expr-snd`, `expr-ann`, `expr-suc`, `expr-lam`, `expr-Pi`, `expr-Sigma`).
+
+**Result**: N=5 still 47s. `shift-noops` counter showed **0 short-circuits triggered** for the decoder workload. Why: the substitution argument `(cons v acc)` contains the bvars `v` and `acc` from the surrounding `let`-binding context, so they're free bvars >= cutoff and shift genuinely has to rebuild them. Eq-preservation can't kick in.
+
+The change is harmless and still correct (and may benefit other code paths where args ARE closed at substitution time), so I kept it as a small safety improvement. But it does NOT fix the decoder.
+
+## Real fix requires architectural change
+
+To make `shift` cheap on this workload, one of:
+
+1. **Max-free-bvar annotation per struct** — precompute `max-free-bvar` at struct construction. Shift short-circuits when `cutoff > max-free-bvar`. Touches all 327 expr structs (one new field + guard). Doesn't help when cutoff < max-free-bvar (which is the case here), but reduces shift's amortized cost on closed expressions across the whole codebase.
+
+2. **Explicit substitutions / environment-based reduction** — don't materialize substitutions; keep `(closure body env)` with deferred lookup at leaves. Standard solution in lambda-calculus implementations (de Bruijn-indexed environments are O(1) per lookup, no shifting needed). Big architectural change to the reducer.
+
+3. **Hash-cons / structural sharing on shift output** — memoize `(shift delta cutoff e)` results. Multiple shifts with the same args return the same struct. Helps because each iteration's shift sees the SAME `s` arg passed down through nested binders — the result of `(shift 1 0 s)` should be cached across the multiple shifts within one beta-reduction. Single counter + memo table; doesn't touch struct definitions.
+
+Option 3 is the smallest scope. Option 2 is the architecturally correct but largest change. Option 1 is in between but doesn't address THIS workload's pattern.
+
 ## Honest accounting
 
 This was a failed fix. The hypothesis (cache hashing) sounded right and the data initially looked like it confirmed it (per-step cost growing with N is exactly what O(N) hash would produce). But three interventions targeting that hypothesis didn't move the needle, which means the model was wrong.
@@ -82,14 +122,15 @@ Profile before fixing. Use `errortrace` / `racket/profile` to identify the actua
 
 Estimated profile + fix cycle: 2-4 hours for profile, then variable for fix depending on what shows up.
 
-## Files touched and reverted
+## Files touched
 
-All experimental changes were reverted; the repo is clean except for the test-bridge-perf.rkt scaling test (already committed as the perf baseline).
+Most experimental changes were reverted; the repo is clean except for one small safety improvement:
 
-- `racket/prologos/driver.rkt` — temporarily added `(require "expr-hash.rkt")` and changed cache initializers; reverted.
-- `racket/prologos/reduction.rkt` — temporarily added `racket/dict` require and changed `hash-ref`/`hash-set!` to `dict-ref`/`dict-set!`; reverted.
-- `racket/prologos/substitution.rkt` — temporarily added eq-preserving short-circuits to 5 subst cases; reverted.
-- `racket/prologos/expr-hash.rkt` — created and deleted.
+- `racket/prologos/substitution.rkt` — **kept**: `shift` now eq-preserves on common compound forms (`expr-app`, `expr-pair`, `expr-fst`, `expr-snd`, `expr-ann`, `expr-suc`, `expr-lam`, `expr-Pi`, `expr-Sigma`) and the `expr-bvar` leaf case. Doesn't fix this workload (substitution args have free bvars) but is correct and may help in other contexts. Verified 26/26 bridge unit tests still pass.
+- `racket/prologos/driver.rkt` — temporarily added `(require "expr-hash.rkt")` and changed cache initializers; **reverted**.
+- `racket/prologos/reduction.rkt` — temporarily added `racket/dict` require and changed `hash-ref`/`hash-set!` to `dict-ref`/`dict-set!`; **reverted**.
+- `racket/prologos/expr-hash.rkt` — created and **deleted**.
+- `racket/prologos/tests/test-bridge-perf.rkt` — instrumentation added during investigation; **reverted to original**.
 
 ## Cross-reference
 
