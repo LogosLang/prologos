@@ -166,10 +166,13 @@
 (define STAT-RUN-NS              8)
 ;; Wider non-overlapping ranges for per-tag stats (must match the
 ;; offsets in prologos-runtime-hybrid.zig:prologos_get_stat).
-(define (stat-fires-by-tag tag)        (+ 1024 tag))
-(define (stat-ns-by-tag tag)           (+ 2048 tag))
-(define (stat-callbacks-by-tag tag)    (+ 3072 tag))
-(define (stat-callback-ns-by-tag tag)  (+ 4096 tag))
+;; Spacing is 8192 because N_TAGS was bumped to 4096 (2026-05-05);
+;; old 1024 spacing would alias adjacent stat ranges into the
+;; same key space.
+(define (stat-fires-by-tag tag)        (+ 8192  tag))
+(define (stat-ns-by-tag tag)           (+ 16384 tag))
+(define (stat-callbacks-by-tag tag)    (+ 24576 tag))
+(define (stat-callback-ns-by-tag tag)  (+ 32768 tag))
 
 ;; ====================================================================
 ;; Racket-side handle table for boxing Racket values

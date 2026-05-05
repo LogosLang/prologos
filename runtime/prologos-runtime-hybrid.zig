@@ -562,14 +562,19 @@ export fn prologos_set_profile_per_tag(enabled: u32) void {
     prof.profile_per_tag = enabled != 0;
 }
 
-// stat keys: per-tag arrays use 1024-wide non-overlapping ranges so
-// they don't collide when N_TAGS is large. Format: (1024 * domain) +
-// tag for domain ∈ {1=fires, 2=ns, 3=callbacks, 4=callback_ns}.
-//   0..8: scalar counters as in original
-//   1024..(1024+N_TAGS): fires_by_tag
-//   2048..(2048+N_TAGS): ns_by_tag
-//   3072..(3072+N_TAGS): callbacks_by_tag
-//   4096..(4096+N_TAGS): callback_ns_by_tag
+// stat keys: per-tag arrays use 8192-wide non-overlapping ranges
+// so they don't collide when N_TAGS is large. Format: (8192 *
+// domain) + tag for domain ∈ {1=fires, 2=ns, 3=callbacks,
+// 4=callback_ns}. Mirrored in
+// racket/prologos/runtime-bridge.rkt:stat-* helpers.
+//   0..8:                          scalar counters
+//   8192..(8192+N_TAGS):           fires_by_tag
+//   16384..(16384+N_TAGS):         ns_by_tag
+//   24576..(24576+N_TAGS):         callbacks_by_tag
+//   32768..(32768+N_TAGS):         callback_ns_by_tag
+//
+// Bumped from 1024 to 8192 spacing on 2026-05-05 when N_TAGS went
+// 256 -> 4096 — old spacing aliased adjacent ranges.
 export fn prologos_get_stat(key: u32) u64 {
     return switch (key) {
         0 => prof.rounds,
@@ -582,17 +587,21 @@ export fn prologos_get_stat(key: u32) u64 {
         7 => @intCast(num_props),
         8 => prof.run_ns,
         else => blk: {
-            if (key >= 1024 and key < 1024 + N_TAGS) {
-                break :blk prof.fires_by_tag[key - 1024];
+            // Per-tag stat ranges. Spacing is 8192 (>= N_TAGS=4096)
+            // so adjacent ranges don't alias. Old 1024 spacing
+            // worked when N_TAGS=256. Mirrored in
+            // racket/prologos/runtime-bridge.rkt:stat-* helpers.
+            if (key >= 8192  and key < 8192  + N_TAGS) {
+                break :blk prof.fires_by_tag[key - 8192];
             }
-            if (key >= 2048 and key < 2048 + N_TAGS) {
-                break :blk prof.ns_by_tag[key - 2048];
+            if (key >= 16384 and key < 16384 + N_TAGS) {
+                break :blk prof.ns_by_tag[key - 16384];
             }
-            if (key >= 3072 and key < 3072 + N_TAGS) {
-                break :blk cb_prof.callbacks_by_tag[key - 3072];
+            if (key >= 24576 and key < 24576 + N_TAGS) {
+                break :blk cb_prof.callbacks_by_tag[key - 24576];
             }
-            if (key >= 4096 and key < 4096 + N_TAGS) {
-                break :blk cb_prof.callback_ns_by_tag[key - 4096];
+            if (key >= 32768 and key < 32768 + N_TAGS) {
+                break :blk cb_prof.callback_ns_by_tag[key - 32768];
             }
             break :blk 0;
         },
