@@ -1,0 +1,2 @@
+;; from-int lifts Int to Rat (not Int).
+def main : Rat := [from-int 0]

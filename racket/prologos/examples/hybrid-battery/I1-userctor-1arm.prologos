@@ -1,0 +1,7 @@
+data Wrap
+  mk-wrap : Int
+
+spec unwrap Wrap -> Int
+defn unwrap | mk-wrap n -> n
+
+def main : Int := [unwrap [mk-wrap 99]]

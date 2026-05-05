@@ -1,0 +1,1 @@
+def main : Bool := [int-le 5 5]

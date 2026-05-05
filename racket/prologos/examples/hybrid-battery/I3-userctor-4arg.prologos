@@ -1,0 +1,7 @@
+data Quad
+  mk-quad : Int -> Int -> Int -> Int
+
+spec sum-quad Quad -> Int
+defn sum-quad | mk-quad a b c d -> [int+ [int+ a b] [int+ c d]]
+
+def main : Int := [sum-quad [mk-quad 1 2 3 4]]

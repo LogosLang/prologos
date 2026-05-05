@@ -1,0 +1,3 @@
+def s : [Set Int] := [set-empty Int]
+def s2 : [Set Int] := [set-insert s 7]
+def main : Bool := [set-member? s2 7]

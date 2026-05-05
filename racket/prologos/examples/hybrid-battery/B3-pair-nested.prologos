@@ -1,0 +1,1 @@
+def main : Int := [fst [fst [the <<Int * Int> * Int> [pair [the <Int * Int> [pair 5 6]] 7]]]]

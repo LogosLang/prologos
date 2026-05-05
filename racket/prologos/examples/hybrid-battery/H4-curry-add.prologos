@@ -1,0 +1,4 @@
+spec curry-add Int -> Int -> Int
+defn curry-add [x y] [int+ x y]
+
+def main : Int := [curry-add 3 4]

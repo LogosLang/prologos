@@ -1,0 +1,1 @@
+def main : [Vec Int 0N] := [the [Vec Int 0N] vnil]

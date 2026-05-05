@@ -1,0 +1,1 @@
+def main : Int := [int- 100 42]

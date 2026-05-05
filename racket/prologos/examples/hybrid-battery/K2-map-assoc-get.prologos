@@ -1,0 +1,3 @@
+def m : [Map Int Int] := [map-empty Int Int]
+def m2 : [Map Int Int] := [map-assoc m 1 100]
+def main : Nat := [map-size m2]

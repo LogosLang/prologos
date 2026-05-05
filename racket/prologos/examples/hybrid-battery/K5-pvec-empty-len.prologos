@@ -1,0 +1,2 @@
+def v : [PVec Int] := [pvec-empty Int]
+def main : Nat := [pvec-length v]

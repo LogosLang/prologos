@@ -1,0 +1,2 @@
+;; Just construct a refl proof — no use.
+def main : [Eq Int 5 5] := [the [Eq Int 5 5] refl]

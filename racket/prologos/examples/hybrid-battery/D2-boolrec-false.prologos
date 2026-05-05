@@ -1,0 +1,1 @@
+def main : Int := [boolrec Int 100 200 [int-lt 5 1]]

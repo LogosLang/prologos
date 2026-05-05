@@ -1,0 +1,10 @@
+data Tree
+  leaf
+  node : Int -> Tree -> Tree
+
+spec count-leaves Tree -> Int
+defn count-leaves
+  | leaf       -> 1
+  | node _ l r -> [int+ [count-leaves l] [count-leaves r]]
+
+def main : Int := [count-leaves [node 1 [node 2 leaf leaf] [node 3 leaf leaf]]]

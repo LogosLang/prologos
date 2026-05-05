@@ -1,0 +1,5 @@
+;; Const via defn (was: multi-arg fn application — multiplicity).
+spec const-int Int -> Int -> Int
+defn const-int [x y] x
+
+def main : Int := [const-int 7 99]
