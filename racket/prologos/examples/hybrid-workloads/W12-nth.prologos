@@ -1,0 +1,18 @@
+;; Nth element of a list. Exercises unwrapping + recursion + Bool dispatch.
+
+data IntList
+  lnil
+  lcons : Int -> IntList
+
+spec lnth Int -> IntList -> Int
+defn lnth [i xs]
+  match xs
+    | lnil       -> 0          ;; out-of-bounds default
+    | lcons x rs -> match [int-eq i 0]
+                      | true  -> x
+                      | false -> [lnth [int- i 1] rs]
+
+;; Element at position 4 in [10, 20, 30, 40, 50, 60] = 50
+def xs : IntList := [lcons 10 [lcons 20 [lcons 30 [lcons 40 [lcons 50 [lcons 60 lnil]]]]]]
+
+def main : Int := [lnth 4 xs]

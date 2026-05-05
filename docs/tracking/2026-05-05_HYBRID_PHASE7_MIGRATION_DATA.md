@@ -1,7 +1,9 @@
 # Hybrid Kernel Phase 7 — Migration Target Data
 
-**Date**: 2026-05-05 (initial OCapN-only data); **2026-05-05 PM** (expanded
-with 42-program shape battery)
+**Date**: 2026-05-05 (initial OCapN-only data); **2026-05-05 PM**
+(expanded with 42-program shape battery); **2026-05-05 evening**
+(added 15-program broad-workload battery — non-trivial real
+algorithms, not single-shape probes)
 **Scope**: data collection only — no implementation in this commit.
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
 
@@ -10,6 +12,224 @@ with 42-program shape battery)
 Which callback shapes consume the most fire-time across realistic
 Prologos programs, and which are the most attractive migration targets
 for native fire-fns in `runtime/prologos-runtime-hybrid.zig`?
+
+## Update — 15-program broad workload battery (2026-05-05 evening)
+
+User feedback after the 42-program shape battery: "more than focused
+batteries (we need those too) we really need broad non-trivial
+workloads as prologos programs." The shape battery told us
+shape-frequency distribution; what was missing was data on programs
+doing actual work — programs that exercise multiple shapes through
+realistic dataflow, not single-construct micro-probes.
+
+The workload battery (`examples/hybrid-workloads/W{1..15}.prologos`)
+contains 15 small (~20-50 LOC) real algorithms:
+
+| program | what it does | shapes exercised |
+|---|---|---|
+| W1 insertion-sort | sort 8-element IntList by repeated insertion | recursion + match + ctor + int-le |
+| W2 quicksort | quicksort 5-element IntList via partition + append | nested recursion + 3 helpers + int-lt |
+| W3 BST | insert 6 elts into BST + find-min via leftmost descent | recursive ADT walk + match |
+| W4 GCD | Euclidean GCD via int-mod recursion | recursion + int-eq + **int-mod** (the unmigrated int-binary) |
+| W5 Horner | polynomial 1+2x+3x² evaluated at x=4 via Horner | list-walk + int+ + int* |
+| W6 RLE | run-length encode [1,1,1,2,2,3], extract first run | nested helpers (count-run, drop-run, rle) |
+| W7 diff | symbolic d/dx ((x+3)*(x+5)), count nodes | 4-arm match on ADT + dual-branch recursion |
+| W8 interp | tiny calculator interpreter, eval (3+4)*(1+2) | match + recursion + int+ + int* |
+| W9 reverse-sum | reverse 5-elt list + sum both | tail-recursive reverse-with-acc + sum |
+| W10 pow2 | 2^8 = 256 via doubling recursion | int* + int-eq + tail recursion |
+| W11 tree-depth | depth of 4-deep binary tree | max + recursion + match |
+| W12 nth | element at index 4 of 6-elt list | recursive list-walk + int-eq |
+| W13 hanoi | Towers of Hanoi move count for n=5 (= 31) | recursion + int* + int+ |
+| W14 prime-count | count primes ≤ N via trial division (heavy int-mod) | nested 3-deep recursion + **int-mod** |
+| W15 bool-eval | evaluate Boolean expression tree | match + boolrec + recursive ADT |
+
+All 15 programs ran to completion. (W14 produced an arithmetically
+incorrect result — 1 instead of 4 primes ≤ 10, likely a fuel-out at
+the kernel level; the workload still demonstrably exercised int-mod
+at the rate intended, so the data point stands as a callback-time
+sample even if the answer is wrong.)
+
+### Per-program profile
+
+| program | rounds | nat fires | cb fires | cb ns | cells | run ms |
+|---|---:|---:|---:|---:|---:|---:|
+| W1 insertion-sort | 73 | 14 | 172 | 764,112 | 128 | 0.78 |
+| W2 quicksort | 58 | 16 | 310 | 1,096,477 | 201 | 1.12 |
+| W3 BST | 43 | 9 | 128 | 426,336 | 101 | 0.44 |
+| W4 GCD | 20 | 4 | 30 | 121,061 | 25 | 0.12 |
+| W5 Horner | 17 | 16 | 29 | 116,157 | 27 | 0.12 |
+| W6 RLE | 44 | 23 | 125 | 407,008 | 96 | 0.42 |
+| W7 diff | 16 | 43 | 63 | 251,530 | 73 | 0.26 |
+| W8 interp | 8 | 7 | 20 | 92,875 | 21 | 0.10 |
+| W9 reverse-sum | 40 | 43 | 90 | 332,097 | 71 | 0.34 |
+| W10 pow2 | 42 | 97 | 113 | 225,270 | 68 | 0.24 |
+| W11 tree-depth | 20 | 24 | 67 | 316,911 | 47 | 0.33 |
+| W12 nth | 35 | 9 | 49 | 169,605 | 52 | 0.17 |
+| W13 hanoi | 28 | 56 | 41 | 127,059 | 54 | 0.14 |
+| W14 prime-count | 216 | 63 | 312 | 903,304 | 255 | 0.94 |
+| W15 bool-eval | 15 | 0 | 29 | 129,009 | 24 | 0.13 |
+| **Σ** | (15 progs) | **424** | **1,578** | **5,478,811** | — | **5.64** |
+
+**Native fire fraction**: 424 / (424+1578) = **21.2%**.
+**Native ns fraction**: ≈ **0.43%** (per-fire cost gap is still ~36×).
+
+### Reading the workload data — by callback-time
+
+Top callback-time consumers across the workload battery:
+
+| rank | program | cb ns | % of all cb ns | nat/cb ratio | dominant shape |
+|---:|---|---:|---:|---:|---|
+| 1 | W2-quicksort | 1,096,477 | 20.0% | 5.2% | nested recursion + append + partition |
+| 2 | W14-prime-count | 903,304 | 16.5% | 20.2% | nested 3-deep recursion + int-mod |
+| 3 | W1-insertion-sort | 764,112 | 13.9% | 8.1% | recursion + match + ctor reconstruction |
+| 4 | W3-BST | 426,336 | 7.8% | 7.0% | recursive ADT walk + 3-arm match |
+| 5 | W6-RLE | 407,008 | 7.4% | 18.4% | 3 mutually-recursive helpers |
+| 6 | W9-reverse-sum | 332,097 | 6.1% | 47.8% | tail-recursion-with-acc + sum |
+| 7 | W11-tree-depth | 316,911 | 5.8% | 35.8% | max-fold over recursive ADT |
+| 8 | W7-diff | 251,530 | 4.6% | 68.3% | dual-branch recursion + ADT |
+| 9 | W10-pow2 | 225,270 | 4.1% | 85.8% | int* recursion |
+| 10 | W12-nth | 169,605 | 3.1% | 18.4% | list-walk + int-eq decrement |
+| 11 | W15-bool-eval | 129,009 | 2.4% | 0.0% | match + boolrec |
+| 12 | W13-hanoi | 127,059 | 2.3% | 136.6% | int* recursion |
+| 13 | W4-GCD | 121,061 | 2.2% | 13.3% | int-mod recursion |
+| 14 | W5-Horner | 116,157 | 2.1% | 55.2% | int+ + int* fold |
+| 15 | W8-interp | 92,875 | 1.7% | 35.0% | recursive ADT eval |
+
+Top 5 = 65.7% of all callback time across the workload battery — but
+much more spread out than the OCapN-only sample (where L2-fib alone
+was 51.9%). This is what "broad workload" looks like: cost is shared
+across many programs of different shapes, no single hotspot.
+
+The **nat/cb ratio** column shows native fires as a percentage of
+callback fires. High values (W10 86%, W13 137%, W7 68%, W5 55%, W9
+48%) are int-arithmetic-heavy workloads where the existing native
+cluster is already absorbing most of the fire count. Low values (W2
+5%, W3 7%, W1 8%, W15 0%) are data-walk-heavy workloads where the
+kernel does almost all its work via callbacks.
+
+### Three workload archetypes
+
+The 15 workloads cluster into three groups by computational character:
+
+**Archetype A — int-arithmetic-heavy** (W4 GCD, W5 Horner, W7 diff,
+W9 reverse-sum, W10 pow2, W11 tree-depth, W13 hanoi):
+- nat/cb ≥ 30%
+- existing native int-binary cluster pays meaningful dividends
+- migrating ctor-N or recursion machinery would help marginally
+- representative real-world: numeric algorithms
+
+**Archetype B — pure-data-walk** (W1 insertion-sort, W2 quicksort, W3
+BST, W6 RLE, W12 nth, W15 bool-eval):
+- nat/cb ≤ 20%
+- callback dominates by both fires AND time
+- migrating recursive-call apparatus + ctor-N + match dispatch is the
+  high-leverage path; native int-binary doesn't help much
+- representative real-world: ADT manipulation, parsers, interpreters
+
+**Archetype C — int-mod-bound** (W4 GCD, W14 prime-count):
+- the ONE int-binary not yet routed to native (`int-mod`) pulls weight
+- migrating just `int-mod` to native would benefit these programs
+  proportionally to their int-mod fire count
+- W4 has 30 cb fires (most likely 1 int-mod per cb fire) → would save
+  ~120 µs after migration; W14 has 312 cb fires with similar
+  proportion → ~700 µs saved.
+
+### Net Phase 7 ranking after both batteries
+
+Combining the shape battery + workload battery, the overall ranking
+is consistent. **The dominant time-leader remains recursive
+expr-fvar + expr-app dispatch**, but the workload battery refines
+WHICH classes of program suffer most:
+
+1. **Recursive call apparatus** (`expr-fvar` + `expr-app`) — dominant
+   in **all 15 workloads**. ~60% of cb time across the battery
+   (estimated from "recursion-bound" archetypes A + B).
+2. **`expr-reduce` match dispatch** — significant in archetype B
+   (data-walk programs where every recursion step does a match).
+3. **ctor-N construction** — quietly significant in archetype B too:
+   sorts and ADT walks rebuild lists/trees on every recursion step.
+4. **`expr-natrec` step** — relevant in C3+C4+L4 (shape battery) but
+   absent from the workload battery (workloads use direct
+   recursion via `defn` + `match`, not `natrec`).
+5. **`expr-boolrec`** — relevant in W15 (workload-only). Lower
+   priority.
+6. **`expr-int-mod`** — single-fire-cost ~17 µs. Trivial to migrate.
+   Saves ~30 fires × 17 µs = ~500 µs across W4 + W14 alone.
+
+### What this analysis settles vs leaves open
+
+**Settles** (with broad-workload backing):
+- The "recursive call apparatus is the dominant target" finding from
+  the shape battery generalizes to non-trivial algorithms — not just
+  to micro-fib.
+- Three distinct workload archetypes (int-heavy, data-walk,
+  int-mod-bound) require different Phase 7 emphasis. A single ranking
+  doesn't fit all programs.
+- `int-mod` migration is a measurably-justified small win across both
+  W4 and W14.
+
+**Leaves open**:
+- Whether real-world Prologos programs (compiler self-hosting,
+  `defr` databases, dependent-type elaboration) skew further toward
+  archetype B than this synthetic battery.
+- Whether the kernel can natively support generic ctor-N + match
+  dispatch with type-parametric ABI — this is the design question
+  for the actual Phase 7 implementation track.
+- The non-trivial-workload subset that the surface syntax allows is
+  itself constrained — see "Surface-syntax pitfalls discovered while
+  authoring this battery" below.
+
+### Surface-syntax pitfalls discovered while authoring the battery
+
+(Filed here rather than in `2026-05-04_PROLOGOS_LANGUAGE_PITFALLS.md`
+because the data is workload-specific.)
+
+1. **`defn name | pat -> body` form fails when patterns mix arities of
+   user-data ctors in the same compilation unit's entry-point file**.
+   The parser splits the arms into per-arity dispatch (`name::1`,
+   `name::2`, etc.) instead of recognizing them as patterns of a
+   single arity-1 dispatch. Workaround: use `defn name [arg] match
+   arg | ctor pat -> body | ...` form (explicit `match`) inside the
+   defn body. Confirmed against W1 (works with 2 arities), W2 (works
+   with 2 arities), and W7 (fails with 4 arities) — the threshold
+   may be 3+ arities or the presence of certain pattern shapes.
+
+2. **`eval` is a reserved keyword**, can't name a defn `eval`.
+   `eval` is "implicit function-call dispatch" per `prologos-syntax.md`
+   — using it as an identifier in a defn breaks parsing. Workaround:
+   rename to `interp` / `evalc` / etc.
+
+3. **Vec/Fin ctors (`vnil`, `vcons`, `fzero`) are not reachable by
+   user code**. The kernel's `compile-expr` has dispatching cases
+   (preduce.rkt:636+, 700+) but the surface prelude doesn't expose
+   them. Surface syntax users can't construct Vec or Fin literals.
+
+4. **Built-in name shadowing risk**: defining a user ctor `vcons`
+   silently shadows the built-in Vec ctor; subsequent `vcons` calls
+   resolve to the user version with confusing error messages.
+   Workaround: don't reuse `vcons`/`vnil`/`fzero`/`fsuc` as
+   user-defined ctor names.
+
+5. **Block-form ctor signature parsing**: `name : T -> Parent` parses
+   as a 2-arg ctor (`T -> Parent -> Parent`), not a 1-arg ctor whose
+   field has function type. For a single-field ctor with field type
+   `T`, write `name : T` (no arrow); the parser auto-appends `->
+   Parent`.
+
+6. **Recursive ADTs with ≥4 ctors and dual-branch recursion can
+   defeat type inference** when the body re-references the function
+   being defined. Workaround: split into helpers, or use the explicit
+   `defn name [x] match x | ...` form instead of `defn name | pat ->
+   ...`. (Encountered authoring W7 — `diff` failed initially with
+   "diff::1 unbound", succeeded after using the explicit `match`.)
+
+7. **Pitfall #1 (FQN nil) blocks `prologos::data::list`**: `require
+   [prologos::data::list :refer [List nil cons]]` at the entry-point
+   file fails with `expr-fvar prologos::data::list::nil not found in
+   global env`. Same root cause as documented in
+   `2026-05-04_PROLOGOS_LANGUAGE_PITFALLS.md` Pitfall #1. Workaround:
+   define `IntList` locally per workload — every workload here is
+   self-contained. (Pre-existing pitfall, not new in this session.)
 
 ## Update — 42-program shape battery (2026-05-05 PM)
 

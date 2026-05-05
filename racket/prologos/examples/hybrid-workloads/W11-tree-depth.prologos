@@ -1,0 +1,29 @@
+;; Compute depth of a binary tree. Exercises max + recursion.
+
+data Tree
+  tleaf
+  tnode : Tree -> Tree
+
+spec max Int -> Int -> Int
+defn max [a b]
+  match [int-le a b]
+    | true  -> b
+    | false -> a
+
+spec depth Tree -> Int
+defn depth [t]
+  match t
+    | tleaf       -> 0
+    | tnode l r   -> [int+ 1 [max [depth l] [depth r]]]
+
+;; Build a tree of depth 4: a deeper-left-than-right shape.
+;;     n
+;;    / \
+;;   n   l
+;;  / \
+;; n   l
+;; ...
+def t : Tree :=
+  [tnode [tnode [tnode [tnode tleaf tleaf] tleaf] tleaf] tleaf]
+
+def main : Int := [depth t]

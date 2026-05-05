@@ -1,0 +1,31 @@
+;; Boolean expression evaluator. Eval: NOT (a AND b) OR c, with a=true, b=false, c=false
+;; = NOT (true AND false) OR false = NOT false OR false = true OR false = true.
+
+data BoolExpr
+  blit : Bool
+  band : BoolExpr -> BoolExpr
+  bor  : BoolExpr -> BoolExpr
+  bnot : BoolExpr
+
+;; Bool ops via boolrec.
+spec band-fn Bool -> Bool -> Bool
+defn band-fn [a b] [boolrec Bool b false a]
+
+spec bor-fn Bool -> Bool -> Bool
+defn bor-fn [a b] [boolrec Bool true b a]
+
+spec bnot-fn Bool -> Bool
+defn bnot-fn [a] [boolrec Bool false true a]
+
+spec beval BoolExpr -> Bool
+defn beval [e]
+  match e
+    | blit b      -> b
+    | band a b    -> [band-fn [beval a] [beval b]]
+    | bor a b     -> [bor-fn  [beval a] [beval b]]
+    | bnot a      -> [bnot-fn [beval a]]
+
+def expr : BoolExpr :=
+  [bor [bnot [band [blit true] [blit false]]] [blit false]]
+
+def main : Bool := [beval expr]

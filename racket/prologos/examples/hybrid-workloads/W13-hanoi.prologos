@@ -1,0 +1,10 @@
+;; Count number of moves to solve Towers of Hanoi with n disks. = 2^n - 1.
+;; n=5 => 31. Recursive count = 2 * count(n-1) + 1.
+
+spec hanoi-moves Int -> Int
+defn hanoi-moves [n]
+  match [int-eq n 0]
+    | true  -> 0
+    | false -> [int+ 1 [int* 2 [hanoi-moves [int- n 1]]]]
+
+def main : Int := [hanoi-moves 5]

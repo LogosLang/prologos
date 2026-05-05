@@ -1,0 +1,10 @@
+;; Euclidean GCD via int-mod recursion. Heavy use of the ONE int-binary
+;; not yet routed to native (int-mod). Computes gcd(48, 18) = 6.
+
+spec gcd Int -> Int -> Int
+defn gcd [a b]
+  match [int-eq b 0]
+    | true  -> a
+    | false -> [gcd b [int-mod a b]]
+
+def main : Int := [gcd 48 18]

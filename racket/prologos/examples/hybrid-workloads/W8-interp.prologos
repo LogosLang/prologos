@@ -1,0 +1,19 @@
+;; Tiny calculator interpreter. (3+4)*(1+2) = 21.
+
+data Calc
+  cconst : Int
+  cadd   : Calc -> Calc
+  cmul   : Calc -> Calc
+
+spec interp Calc -> Int
+defn interp [c]
+  match c
+    | cconst n   -> n
+    | cadd a b   -> [int+ [interp a] [interp b]]
+    | cmul a b   -> [int* [interp a] [interp b]]
+
+def expr : Calc :=
+  [cmul [cadd [cconst 3] [cconst 4]]
+        [cadd [cconst 1] [cconst 2]]]
+
+def main : Int := [interp expr]
