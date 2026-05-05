@@ -44,7 +44,10 @@
 ;; ====================================================================
 
 (define KERNEL-NATIVE-TAG-COUNT 8)
-(define MAX-N-TAGS 256)
+;; Must match runtime/core/profile.zig:N_TAGS. Bumped 2026-05-05
+;; from 256 -> 4096 to unblock realistic recursive workloads
+;; (W14 prime-count at N>=7 was hitting the old 256-tag limit).
+(define MAX-N-TAGS 4096)
 (define next-callback-tag (box KERNEL-NATIVE-TAG-COUNT))
 
 ;; Symbolic native-op names → kernel dispatch tags. The kernel reserves
@@ -84,25 +87,56 @@
   (set-box! next-callback-tag KERNEL-NATIVE-TAG-COUNT))
 
 ;; ====================================================================
-;; Callback wrapping
+;; Callback wrapping (Fix C, 2026-05-05)
 ;; ====================================================================
 ;;
-;; Wrap a Racket fire-fn (signature: net → net') as a kernel-side
-;; C callback (signature: boxed-inputs → boxed-output). The wrapper
-;; ignores the boxed inputs (the fire-fn fetches them via b-read);
-;; invokes fire-fn under (current-backend = backend-hybrid); reads
-;; back the output cell to satisfy the kernel ABI.
+;; BSP correctness contract: native fire-fns read inputs from the
+;; round's snapshot (store.read_snapshot) and return their result;
+;; the kernel pends (cid, value) and merge_pending_writes commits +
+;; schedules subscribers at the barrier. Callback fire-fns must
+;; honor the same contract — otherwise reads/writes within a round
+;; are non-coherent (callback A's mid-round live write becomes
+;; visible to callback B's b-read in the same round).
+;;
+;; The original 2026-05-04 wrapper had fire-fn read LIVE state
+;; (b-read -> prologos_cell_read) and write LIVE (b-write ->
+;; prologos_cell_write). That violated BSP. Fix A' (the dirtied-
+;; buffer hack) addressed only the schedule-skip half; reads
+;; remained inconsistent. Fix C (this) makes b-read snapshot-read
+;; AND b-write capture (per-fire-fn pending), so within-round
+;; coherence is restored.
+;;
+;; Per-fire-fn pending: while inside a callback wrapper, b-write
+;; appends to current-fire-fn-pending; the wrapper extracts the
+;; final captured (cid, value) and returns it boxed. The kernel's
+;; pending machinery then commits and schedules at the barrier.
+;; Multi-output callbacks panic — preduce.rkt's fire-fns are all
+;; single-output (per fire-once).
+
+;; Per-fire-fn write-capture box. Set by make-callback-wrapper to
+;; a fresh mutable box during fire-fn execution; #f outside any
+;; fire-fn (initialization, allocation, post-run reads).
+(define current-fire-fn-pending (make-parameter #f))
 
 (define (make-callback-wrapper outputs fire-fn)
+  (when (or (null? outputs) (not (null? (cdr outputs))))
+    (error 'make-callback-wrapper
+           "BSP-correct callback supports exactly 1 output cell, got ~a" (length outputs)))
+  (define cid-out (car outputs))
   (lambda boxed-inputs
-    ;; Ignore boxed-inputs: fire-fn fetches via b-read.
-    (parameterize ([current-backend backend-hybrid])
+    (define captured (box #f))
+    (parameterize ([current-backend backend-hybrid]
+                   [current-fire-fn-pending captured])
       (fire-fn 'hybrid))
-    ;; Return the first output cell's current boxed value. The kernel
-    ;; auto-writes this; cells.zig:write_unchecked sees no change.
+    ;; Wrapper returns the captured value (already boxed). Kernel
+    ;; pends it and schedules subscribers at the barrier.
     (cond
-      [(null? outputs) (prologos_cell_box_bot)]   ;; defensive
-      [else (prologos_cell_read (car outputs))])))
+      [(unbox captured) => cdr]
+      [else
+       ;; fire-fn returned without writing. Read the live cell as a
+       ;; fallback (preserves prior behavior for any fire-fn that
+       ;; doesn't actually write — defensive).
+       (prologos_cell_read cid-out)])))
 
 ;; ====================================================================
 ;; Backend instance
@@ -117,13 +151,29 @@
      (values cid 'hybrid))
 
    ;; read-cell : net × cid → value
+   ;; Inside a fire-fn (current-fire-fn-pending set), reads from
+   ;; the round's snapshot for BSP coherence. Outside, reads live.
    (lambda (net cid)
-     (unbox-prologos-value (prologos_cell_read cid)))
+     (cond
+       [(current-fire-fn-pending)
+        (unbox-prologos-value (prologos_cell_read_snapshot cid))]
+       [else
+        (unbox-prologos-value (prologos_cell_read cid))]))
 
    ;; write-cell : net × cid × value → net'
+   ;; Inside a fire-fn (current-fire-fn-pending set), captures the
+   ;; (cid, boxed-value) pair instead of writing live. The wrapper
+   ;; extracts and returns it; the kernel pends and merges at the
+   ;; barrier. Outside any fire-fn, writes live (init/setup path).
    (lambda (net cid v)
-     (prologos_cell_write cid (box-prologos-value v))
-     'hybrid)
+     (define pend (current-fire-fn-pending))
+     (cond
+       [pend
+        (set-box! pend (cons cid (box-prologos-value v)))
+        'hybrid]
+       [else
+        (prologos_cell_write cid (box-prologos-value v))
+        'hybrid]))
 
    ;; install-fire-once : net × inputs × outputs × fire-fn × #:native-op → net'
    ;;   #:native-op (symbol) — when set to a name in NATIVE-OP-TAGS,

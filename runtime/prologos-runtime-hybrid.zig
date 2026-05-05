@@ -275,23 +275,9 @@ export fn prologos_cell_alloc() u32 {
 export fn prologos_cell_write(id: u32, value: i64) void {
     if (store.write_unchecked(id, value)) {
         prof.writes_committed += 1;
-        if (firing) {
-            // Defer subscriber scheduling to post-firing-loop walk.
-            // (See `firing` block-comment above for rationale.)
-            if (dirtied_len >= MAX_CELLS) {
-                // Hard fail rather than silently degrade.
-                // MAX_CELLS=4096 is generous; if hit, the design
-                // assumption is violated and silent fall-through
-                // would re-introduce the bug the firing flag fixes.
-                @panic("hybrid kernel: dirtied buffer overflow (>= MAX_CELLS callback writes in one round)");
-            }
-            dirtied_cid[dirtied_len] = id;
-            dirtied_len += 1;
-        } else {
-            var i: u32 = 0;
-            while (i < store.num_subs(id)) : (i += 1) {
-                schedule(store.sub_at(id, i));
-            }
+        var i: u32 = 0;
+        while (i < store.num_subs(id)) : (i += 1) {
+            schedule(store.sub_at(id, i));
         }
     } else {
         prof.writes_dropped += 1;
@@ -302,13 +288,23 @@ export fn prologos_cell_read(id: u32) i64 {
     return store.read(id);
 }
 
+// Snapshot-read: returns the cell value from the current round's
+// snapshot (taken at the start of the BSP round). Native fire-fns
+// already read from snapshot via store.read_snapshot; this export
+// gives the same view to Racket-side callback fire-fns. Required
+// for BSP correctness — see 2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md
+// § REMAINING.
+export fn prologos_cell_read_snapshot(id: u32) i64 {
+    return store.read_snapshot(id);
+}
+
 fn subscribe(cid: u32, pid: u32) void {
     store.subscribe(cid, pid);
 }
 
 export fn prologos_propagator_install_1_1(tag: u32, in0: u32, out0: u32) u32 {
     ensure_init();
-    if (num_props >= MAX_PROPS) abort();
+    if (num_props >= MAX_PROPS) @panic("hybrid kernel: MAX_PROPS exceeded in install_1_1 (raise MAX_PROPS in prologos-runtime-hybrid.zig)");
     const pid = num_props;
     prop_shape[pid] = SHAPE_1_1;
     prop_tags[pid]  = tag;
@@ -322,7 +318,7 @@ export fn prologos_propagator_install_1_1(tag: u32, in0: u32, out0: u32) u32 {
 
 export fn prologos_propagator_install_2_1(tag: u32, in0: u32, in1: u32, out0: u32) u32 {
     ensure_init();
-    if (num_props >= MAX_PROPS) abort();
+    if (num_props >= MAX_PROPS) @panic("hybrid kernel: MAX_PROPS exceeded in install_2_1");
     const pid = num_props;
     prop_shape[pid] = SHAPE_2_1;
     prop_tags[pid]  = tag;
@@ -338,7 +334,7 @@ export fn prologos_propagator_install_2_1(tag: u32, in0: u32, in1: u32, out0: u3
 
 export fn prologos_propagator_install_3_1(tag: u32, in0: u32, in1: u32, in2: u32, out0: u32) u32 {
     ensure_init();
-    if (num_props >= MAX_PROPS) abort();
+    if (num_props >= MAX_PROPS) @panic("hybrid kernel: MAX_PROPS exceeded in install_3_1");
     const pid = num_props;
     prop_shape[pid] = SHAPE_3_1;
     prop_tags[pid]  = tag;
@@ -358,9 +354,9 @@ export fn prologos_propagator_install_n_1(
     tag: u32, inputs: [*]const u32, num_inputs: u32, out0: u32,
 ) u32 {
     ensure_init();
-    if (num_props >= MAX_PROPS) abort();
-    if (num_inputs > MAX_INPUTS) abort();
-    if (prop_in_arena_used + num_inputs > prop_in_arena.len) abort();
+    if (num_props >= MAX_PROPS) @panic("hybrid kernel: MAX_PROPS exceeded in install_n_1");
+    if (num_inputs > MAX_INPUTS) @panic("hybrid kernel: MAX_INPUTS exceeded in install_n_1 (raise MAX_INPUTS)");
+    if (prop_in_arena_used + num_inputs > prop_in_arena.len) @panic("hybrid kernel: prop_in_arena exhausted in install_n_1");
     const pid = num_props;
     prop_shape[pid] = SHAPE_N_1;
     prop_tags[pid]  = tag;
@@ -396,38 +392,10 @@ var pending_cid: [MAX_PROPS]u32 = undefined;
 var pending_val: [MAX_PROPS]i64 = undefined;
 var pending_len: u32 = 0;
 
-// =====================================================================
-// BSP correction for callback fire-fns (2026-05-05).
-//
-// Callback wrappers (preduce-backend-hybrid.rkt) call
-// prologos_cell_write IMMEDIATELY from inside their fire-fn (via
-// b-write -> backend.write-cell). Doing so during the firing loop
-// must NOT trigger immediate subscriber scheduling — the subscriber
-// may already be in the current worklist (in_worklist[pid] == 1)
-// and schedule() early-returns on that, causing the subscriber to
-// fire same-round against an outdated snapshot and never re-fire
-// (write_unchecked returns false on the redundant pending write
-// because the value already landed live).
-//
-// Fix: while `firing` is true, prologos_cell_write performs the
-// store update normally but APPENDS the cell-id to `dirtied_cid`
-// instead of scheduling subscribers. After the firing loop ends,
-// run_to_quiescence walks dirtied_cid and schedules subscribers —
-// at that point all current-round propagators have been processed,
-// their in_worklist flags are cleared, and schedule() succeeds,
-// queuing them for the next round.
-//
-// See docs/tracking/2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md
-// + 2026-05-05_HYBRID_KERNEL_BSP_FIX_PLAN.md.
-// =====================================================================
-var firing: bool = false;
-var dirtied_cid: [MAX_CELLS]u32 = undefined;
-var dirtied_len: u32 = 0;
-
 fn schedule(pid: u32) void {
     if (in_worklist[pid] != 0) return;
     in_worklist[pid] = 1;
-    if (next_worklist_len >= MAX_PROPS) abort();
+    if (next_worklist_len >= MAX_PROPS) @panic("hybrid kernel: next_worklist overflow (>= MAX_PROPS scheduled in one round)");
     next_worklist[next_worklist_len] = pid;
     next_worklist_len += 1;
     if (next_worklist_len > prof.max_worklist) {
@@ -452,7 +420,7 @@ fn fire_against_snapshot(pid: u32) void {
     };
     const result: i64 = switch (shape) {
         SHAPE_1_1 => blk: {
-            const fn_ptr = fire_fn_1_1[tag] orelse abort();
+            const fn_ptr = fire_fn_1_1[tag] orelse @panic("hybrid kernel: fire_fn_1_1 dispatch on uninstalled tag");
             break :blk fn_ptr(store.read_snapshot(prop_in0[pid]));
         },
         SHAPE_2_1 => blk: {
@@ -562,11 +530,6 @@ export fn prologos_run_to_quiescence() void {
         }
         prof.rounds += 1;
         store.take_snapshot();
-
-        // Begin firing phase: prologos_cell_write defers subscriber
-        // scheduling while `firing == true`. (See `firing`
-        // block-comment.)
-        firing = true;
         var i: u32 = 0;
         while (i < worklist_len) : (i += 1) {
             const pid = worklist[i];
@@ -574,23 +537,6 @@ export fn prologos_run_to_quiescence() void {
             fire_against_snapshot(pid);
         }
         worklist_len = 0;
-        firing = false;
-
-        // Drain dirtied buffer: schedule subscribers for each cell
-        // that was immediately-written by a callback fire-fn during
-        // this round. At this point all firing pids have been
-        // processed and their in_worklist flags are 0, so
-        // schedule() succeeds and queues for the next round.
-        i = 0;
-        while (i < dirtied_len) : (i += 1) {
-            const cid = dirtied_cid[i];
-            var j: u32 = 0;
-            while (j < store.num_subs(cid)) : (j += 1) {
-                schedule(store.sub_at(cid, j));
-            }
-        }
-        dirtied_len = 0;
-
         merge_pending_writes();
         swap_worklists();
     }
@@ -692,8 +638,6 @@ export fn prologos_kernel_reset() void {
     worklist_len = 0;
     next_worklist_len = 0;
     pending_len = 0;
-    firing = false;
-    dirtied_len = 0;
     var i: u32 = 0;
     while (i < MAX_PROPS) : (i += 1) {
         in_worklist[i] = 0;

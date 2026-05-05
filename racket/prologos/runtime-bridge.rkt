@@ -55,6 +55,7 @@
 (define-rt prologos_cell_alloc            (_fun -> _uint32))
 (define-rt prologos_cell_write            (_fun _uint32 _int64 -> _void))
 (define-rt prologos_cell_read             (_fun _uint32 -> _int64))
+(define-rt prologos_cell_read_snapshot    (_fun _uint32 -> _int64))
 
 (define-rt prologos_propagator_install_1_1 (_fun _uint32 _uint32 _uint32 -> _uint32))
 (define-rt prologos_propagator_install_2_1 (_fun _uint32 _uint32 _uint32 _uint32 -> _uint32))
@@ -266,6 +267,7 @@
  prologos_cell_alloc
  prologos_cell_write
  prologos_cell_read
+ prologos_cell_read_snapshot
  prologos_propagator_install_1_1
  prologos_propagator_install_2_1
  prologos_propagator_install_3_1

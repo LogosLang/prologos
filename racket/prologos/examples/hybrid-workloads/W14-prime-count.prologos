@@ -1,12 +1,13 @@
 ;; Count primes <= N via trial division. Uses int-mod heavily.
-;; Reference: at N=20 there are 8 primes (2,3,5,7,11,13,17,19);
-;; at N=10 there are 4 (2,3,5,7); at N=5 there are 3 (2,3,5).
-;; This benchmark uses N=5 because the recursive defn structure
-;; allocates a fresh callback tag per recursive call site, and
-;; the current kernel's 256-tag pool is exhausted around N>=7.
-;; That limit is unrelated to the BSP-violation bug fixed
-;; 2026-05-05; expanding the tag pool or memoizing fire-fns by
-;; structure are independent future improvements.
+;; Reference: at N=20 there are 8 primes; at N=10 there are 4
+;; (2,3,5,7). Benchmark uses N=10. Fix C (BSP-correct callback
+;; reads/writes, 2026-05-05) made the int-mod-heavy recursion
+;; produce the correct count. A separate Bool-boxing /
+;; match-dispatch bug surfaces in count-evens (filed in
+;; 2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md as a follow-up);
+;; count-primes sidesteps it because is-prime wraps Bool returns
+;; through literal arms (true/false), not through native int-eq
+;; results directly.
 
 spec divides Int -> Int -> Bool
 defn divides [k n] [int-eq [int-mod n k] 0]
@@ -39,4 +40,4 @@ defn count-primes [lo hi]
                  | true  -> [int+ 1 [count-primes [int+ lo 1] hi]]
                  | false -> [count-primes [int+ lo 1] hi]
 
-def main : Int := [count-primes 2 5]
+def main : Int := [count-primes 2 10]

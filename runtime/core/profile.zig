@@ -6,7 +6,14 @@
 
 const format = @import("format.zig");
 
-pub const N_TAGS: u32 = 256;
+// Tag pool size. Each propagator install in callback mode allocates
+// a fresh tag here; kernel-native ops occupy the first 0..N_NATIVE
+// slots. Bumped from 256 to 4096 on 2026-05-05 — W14 prime-count
+// at N>=7 was hitting the old limit. Memory cost: ~384 KB across
+// the dispatch + profile arrays. Real fix is fire-fn memoization
+// (share tags across structurally-identical installs); this bump
+// is the cheap unblock so realistic recursive workloads run.
+pub const N_TAGS: u32 = 4096;
 
 const timespec = extern struct { sec: i64, nsec: i64 };
 extern fn clock_gettime(clk_id: c_int, tp: *timespec) c_int;

@@ -1,12 +1,122 @@
 # Hybrid Kernel Bug — Callback Wrappers Violate BSP Semantics
 
-**Status**: **FIXED** 2026-05-05 evening (commit pending). See
-`2026-05-05_HYBRID_KERNEL_BSP_FIX_PLAN.md` for the implementation
-plan; the patch landed largely as proposed (Fix A'). All 5 R*
-regression tests pass; W14 prime-count is now arithmetically
-correct (with a separate constraint on N due to the
-256-callback-tag pool, not the BSP bug). All 7 preduce-lite + 12
-OCapN + 42 shape battery + 15 workload programs continue to pass.
+**Status**: **FIXED** 2026-05-05 evening via Fix C (commit pending).
+Fix A' (commit `9cea3d2`) was reverted; it addressed only the
+schedule-skip half of the BSP violation, leaving callback fire-fns
+reading LIVE state via `b-read`. Fix C makes callback fire-fns
+read SNAPSHOT (matching native fire-fns) and capture their output
+write for the kernel to pend at the barrier — same protocol as
+native fire-fns. R1-R5 regression tests pass; W14 prime-count
+returns the correct count for all tested N (5 through 15).
+
+**Note**: a separate **Bool boxing / match-dispatch bug** was
+discovered while validating Fix C. When a Bool is returned
+directly from a native fire-fn (e.g., `int-eq`) and fed as a
+scrutinee to a match, both arms can fire incorrectly. Reproducer:
+
+```
+spec is-even Int -> Bool
+defn is-even [n] [int-eq [int-mod n 2] 0]   ;; Bool directly from native int-eq
+
+spec count-evens Int -> Int -> Int
+defn count-evens [lo hi]
+  match [int-lt hi lo]
+    | true  -> 0
+    | false -> match [is-even lo]
+                 | true  -> [int+ 1 [count-evens [int+ lo 1] hi]]
+                 | false -> [count-evens [int+ lo 1] hi]
+
+def main : Int := [count-evens 5 6]   ;; expected 1, actual 2
+```
+
+Wrapping is-even's result so it returns a literal `true`/`false`
+(via an inner match) makes count-evens return the correct count.
+This indicates the bug is in the boxing/unboxing path for native
+Bools flowing into match scrutinees, NOT in the BSP fix. Filed
+as a follow-up; not addressed by Fix C. count-primes works
+because is-prime's recursion already wraps the Bool through
+literal returns at the leaves.
+
+**REMAINING**: A DEEPER manifestation of the same root cause
+remains. Discovered 2026-05-05 evening while bumping the tag pool
+and re-testing W14 prime-count at higher N. The minimal repro is
+**count-evens** with 2 args (lo, hi):
+
+```
+spec is-even Int -> Bool
+defn is-even [n] [int-eq [int-mod n 2] 0]
+
+spec count-evens Int -> Int -> Int
+defn count-evens [lo hi]
+  match [int-lt hi lo]
+    | true  -> 0
+    | false -> match [is-even lo]
+                 | true  -> [int+ 1 [count-evens [int+ lo 1] hi]]
+                 | false -> [count-evens [int+ lo 1] hi]
+```
+
+| input | expected | actual | error |
+|---|---|---|---|
+| `count-evens 5 6` | 1 | 2 | over by 1 |
+| `count-evens 5 7` | 1 | 2 | over by 1 |
+| `count-evens 2 5` | 2 | 3 | over by 1 |
+| `count-evens 2 6` | 3 | 5 | over by 2 |
+
+Pattern: over-counts roughly by recursion depth of false-arm
+branches. Looks like BOTH arms of the inner match are
+contributing their `+1`, then both flow through subsequent rounds
+to the result cell.
+
+**Root cause analysis** (2026-05-05 evening, after researching
+`2026-05-01_BSP_NATIVE_SCHEDULER.md` and BSP-LE Track 2 PIR § Bug
+2): the callback wrapper's fire-fn does `b-read` which goes
+through `prologos_cell_read` (LIVE state, not snapshot). My Fix A'
+addressed the SCHEDULING half of the BSP violation but left the
+READ half intact:
+
+> Per `2026-05-01_BSP_NATIVE_SCHEDULER.md`: native fire-fns read
+> from `snapshot[]`, NOT live `cells[]`. All propagators in a round
+> see the same state. Their writes are commutatively merged at the
+> barrier.
+
+Callback fire-fns reading via `b-read 'hybrid` see LIVE state
+mutated by EARLIER callbacks in the same round. This violates
+within-round coherence:
+- callback A fires, b-writes 1 to cell X (immediate live write)
+- callback B fires same round, b-reads cell X → sees 1 (not snapshot bot)
+- B's computation uses A's mid-round value — non-deterministic
+  depending on worklist order
+
+The R1-R5 tests don't expose this because they have only ONE
+callback in the chain (no within-round inconsistency possible).
+count-evens has TWO callbacks per recursion level (is-even +
+recursive count-evens) feeding the same outer match's arms; their
+in-round read inconsistency is what produces the over-count.
+
+**Also relevant** — BSP-LE Track 2 PIR § Bug 2 (2026-04-10) hit the
+same shape: `fire-and-collect-writes` used `net-cell-read` (which
+applied worldview filtering and hid tagged entries), causing
+silent write drops. Fix: use `net-cell-read-raw` for diffing. My
+case is the same architectural pattern at a different layer:
+callbacks must read SNAPSHOT, not LIVE.
+
+**Full fix scope**: this requires the originally-proposed Fix C —
+restructure callback fire-fns to read SNAPSHOT (not LIVE) AND
+return values via the kernel ABI (not write via b-write). Or a
+kernel-side equivalent: route Racket's `b-read 'hybrid` and
+`b-write 'hybrid` through snapshot/pending instead of live
+`prologos_cell_read`/`prologos_cell_write`. Either way it's
+invasive (~50 fire-fn sites in preduce.rkt OR a careful
+kernel-Racket bridge change).
+
+**For now**: W14 set to N=5 where count-primes returns 3 (works
+because the recursion is shallow enough that the within-round read
+inconsistency doesn't matter — only one callback per inner-match
+arm). Higher N exhibits the same over-count bug.
+
+The BSP-correctness contract: callbacks should match native
+fire-fns' protocol — read snapshot, return value, kernel pends +
+schedules at the barrier.
 **Discovered**: 2026-05-05 evening, while investigating why W14
 prime-count returned 1 instead of 4.
 **Severity**: HIGH — affects every program that chains a callback
