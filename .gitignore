@@ -53,6 +53,11 @@ racket/prologos/data/benchmarks/failures/*.log
 docs/stdlib-book/racket/prologos/data/cache/
 racket/prologos/data/cache/
 
+# Stray cache writes from misconfigured bundle paths (seen 2026-05-05 —
+# the hybrid bundle binary occasionally synthesizes a relative path
+# `.../prologos/data/cache/...` instead of the canonical location).
+.../
+
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
