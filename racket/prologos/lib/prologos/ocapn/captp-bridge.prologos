@@ -101,6 +101,23 @@ defn our-session-bytes [ver loc]
     [cons [syrup-string ver]
       [cons [syrup-string loc] nil]]
 
+;; Phase 25: build the bytes for an OUTBOUND question — Prologos
+;; asking peer to deliver to one of peer's exports.
+;;   <op:deliver <desc:export tgt-export> args <desc:answer our-q-pos> false>
+;; `tgt-export` is the peer's export-id we're targeting.
+;; `args` is the question payload (a SyrupValue, often a record).
+;; `our-q-pos` is OUR question position; peer will reply with
+;; <op:deliver <desc:answer our-q-pos> answer false false>.
+;; Caller is responsible for tracking `our-q-pos -> local-promise`
+;; via `bs-add-outbound-question` so the inbound dispatch can resolve.
+spec outbound-question-bytes Nat SyrupValue Nat -> String
+defn outbound-question-bytes [tgt-export args our-q-pos]
+  wire::encode-record "op:deliver"
+    [cons [syrup-tagged "desc:export" [syrup-nat tgt-export]]
+      [cons args
+        [cons [syrup-tagged "desc:answer" [syrup-nat our-q-pos]]
+          [cons [syrup-bool false] nil]]]]
+
 ;; Wrap a SyrupValue in the canonical "broken-promise reason"
 ;; record `<Error r>`. Phase 17.
 spec wrap-error SyrupValue -> SyrupValue
@@ -156,20 +173,30 @@ data QEntry
   ;; answer-pos route to the same local promise.
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String]
-  ;; (listeners, gc-export-requests, gc-answer-positions, question-table,
-  ;;  pending-out)
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry]
+  ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
+  ;;  pending-out, outbound-questions)
   ;;
-  ;; The 5th field `pending-out : List String` carries byte-strings
-  ;; the bridge wants to emit on the next pump call but doesn't fit
-  ;; the question-table walk pattern (e.g. our op:start-session reply
-  ;; for the CapTP handshake).
-  ;;   nil             — no pending bytes (default for non-handshake use).
-  ;;   [cons ...]     — these bytes will be flushed by the next pump call.
-  ;; Use `bridge-state-with-our-session ver loc` to create a state
-  ;; that has our session bytes pre-queued for handshake emission.
+  ;; 4th field `inbound-questions` (responder-side): peer's op:deliver
+  ;; with answer-pos N → we allocate a local promise; entry tracks
+  ;; (peer-question-pos N → local-promise-id).
+  ;;
+  ;; 5th field `pending-out`: byte-strings the bridge wants to emit
+  ;; on next pump call but don't fit the question-table walk pattern
+  ;; (e.g. our op:start-session handshake reply).
+  ;;
+  ;; 6th field `outbound-questions` (questioner-side, Phase 25):
+  ;; questions WE asked. Wire form is `op:deliver <desc:export tgt>
+  ;; args <desc:answer our-q-pos> false`. Entry tracks
+  ;; (our-q-pos → local-promise-id-awaiting-answer). When peer replies
+  ;; with `op:deliver <desc:answer our-q-pos> args ...` (decoded as
+  ;; op-deliver-to-answer), the bridge looks up our-q-pos here and
+  ;; resolves the corresponding local promise.
+  ;;
+  ;; Reusing QEntry for both because the shape (Nat → Nat) is
+  ;; identical; entry semantics depends on which list it's in.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil]
 
 ;; Construct a BridgeState pre-loaded with our op:start-session bytes
 ;; queued for flush on the next pump-outbound. CapTP handshake
@@ -178,54 +205,68 @@ def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil]
 ;; pump emit them alongside any vat-resolution outbound.
 spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
-  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil]
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ _ -> ls
+  | bridge-state ls _ _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ _ -> es
+  | bridge-state _ es _ _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ _ -> as
+  | bridge-state _ _ as _ _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs _ -> qs
+  | bridge-state _ _ _ qs _ _ -> qs
 
 spec bs-pending-out BridgeState -> List String
 defn bs-pending-out
-  | bridge-state _ _ _ _ p -> p
+  | bridge-state _ _ _ _ p _ -> p
+
+spec bs-outbound-questions BridgeState -> List QEntry
+defn bs-outbound-questions
+  | bridge-state _ _ _ _ _ oqs -> oqs
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs p] ->
-      bridge-state [cons [listener tgt res] ls] es as qs p
+  | tgt res [bridge-state ls es as qs p oqs] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p oqs
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs p] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p
+  | pos cnt [bridge-state ls es as qs p oqs] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs p] ->
-      bridge-state ls es [cons pos as] qs p
+  | pos [bridge-state ls es as qs p oqs] ->
+      bridge-state ls es [cons pos as] qs p oqs
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs p] ->
-      bridge-state ls es as [cons [q-entry remote local] qs] p
+  | remote local [bridge-state ls es as qs p oqs] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p oqs
 
 spec bs-clear-pending-out BridgeState -> BridgeState
 defn bs-clear-pending-out
-  | bridge-state ls es as qs _ ->
-      bridge-state ls es as qs nil
+  | bridge-state ls es as qs _ oqs ->
+      bridge-state ls es as qs nil oqs
+
+;; Phase 25: track an outbound question we asked. `our-q-pos` is the
+;; position we used in the desc:answer of our outbound op:deliver;
+;; `local-promise-id` is the vat-side promise that will be resolved
+;; when peer replies. See `bridge-send-question` (Phase 25.3) for
+;; the helper that allocates and registers in one step.
+spec bs-add-outbound-question Nat Nat BridgeState -> BridgeState
+defn bs-add-outbound-question
+  | qpos local [bridge-state ls es as qs p oqs] ->
+      bridge-state ls es as qs p [cons [q-entry qpos local] oqs]
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -241,6 +282,13 @@ defn bs-lookup-question-loop
 spec bs-lookup-question Nat BridgeState -> [Option Nat]
 defn bs-lookup-question [remote st]
   bs-lookup-question-loop [bs-questions st] remote
+
+;; Phase 25: look up the local promise awaiting an answer for a
+;; given outbound question-pos. Reuses bs-lookup-question-loop on
+;; the outbound-questions list.
+spec bs-lookup-outbound-question Nat BridgeState -> [Option Nat]
+defn bs-lookup-outbound-question [qpos st]
+  bs-lookup-question-loop [bs-outbound-questions st] qpos
 
 ;; ===========================================================
 ;; State-aware dispatcher

@@ -181,6 +181,43 @@
                                     (cons (syrup-bool false) nil))))))")))
   (check-equal? got expected))
 
+;; Phase 25: outbound question encoder. Prologos questions an export
+;; on the peer side, embedding our q-pos in a desc:answer for routing.
+(test-case "bridge/outbound-question-bytes builds canonical questioner op:deliver"
+  ;; tgt-export=2, args="ping", our-q-pos=7 should produce
+  ;; <op:deliver <desc:export 2> "ping" <desc:answer 7> false>
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") (suc (suc (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                              (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                                (cons (syrup-string \"ping\")
+                                  (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                                    (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+;; Phase 25: outbound question table in BridgeState. Track that we
+;; sent question q=2 and are awaiting it via local-promise=1; lookup
+;; should return `some 1N` (Prologos pretty-prints small Nats as `Nn`).
+(test-case "bridge/bs-outbound-questions: add then lookup roundtrip"
+  (define got
+    (run-last
+     "(eval (let ((st0 bridge-state-empty))
+              (let ((st1 (bs-add-outbound-question (suc (suc zero)) (suc zero) st0)))
+                (bs-lookup-outbound-question (suc (suc zero)) st1))))"))
+  (check-contains got "some")
+  (check-contains got "1N"))
+
+(test-case "bridge/bs-outbound-questions: lookup of unrecorded q-pos returns none"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
+   "none"))
+
 (test-case "bridge/outbound-from-resolution unresolved -> none"
   (check-contains
    (run-last "(eval (outbound-from-resolution zero fresh))")
