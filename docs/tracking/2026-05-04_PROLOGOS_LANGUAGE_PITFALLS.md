@@ -215,3 +215,56 @@ the next benchmark run.
   ctors), `lookup-trait`, `lookup-impl`, `lookup-bundle`.
 - **#2**: silent truncation in kernel-side I/O. Audit other fixed-
   buffer print sites if they exist.
+
+---
+
+## Decoder perf — connection to Phase 7+ recursive call apparatus
+
+**Date**: 2026-05-06
+**Status**: investigated; root cause identified; structural fix
+deferred to Phase 7 #1.
+
+While verifying the OCapN-FFI test fixes (pitfall #22 + missing
+`bytes-length`), the bridge-interop test still fails with
+~256s reduce time + 9.8s GC + Node-side `peer-questioner.mjs`
+exit code 3. This is the manifestation of upstream's
+GOBLIN_PITFALLS § #31 ("decode-op on a 50-byte op:deliver takes
+~150 seconds in process-string eval").
+
+Measured here on this branch (after upstream Phase 13's 25×
+decoder fix already applied):
+
+| input | wall ms |
+|---|---:|
+| `[]` empty list | 424 |
+| `[3+5+7+9+1+]` 5-elem int list | 6256 |
+| `<3'foo>` record-0 | 1836 |
+| `<3'foo3+5+7+9+>` record-4 | 10,371 |
+
+Per-element cost grows 1.25-1.5× per added element (super-linear).
+
+**Root cause connection to this branch's hybrid-kernel work**:
+the syrup-wire decoder uses recursive `defn` calls with deep
+match cascades. Each recursive call:
+- Allocates a fresh callback tag in the kernel.
+- Installs propagators for the match dispatch.
+- Adds BSP rounds.
+
+This is exactly what `2026-05-05_HYBRID_PHASE7_MIGRATION_DATA.md`
+§ "Potential Future Work" #1 ("recursive `expr-fvar` + `expr-app`")
+identified as the dominant cb-time absorber across the workload
+battery. Decoder perf is one observable manifestation. Without
+native call apparatus, deeply-recursive programs that work over
+non-trivial inputs are bounded by per-call propagator-install
+overhead.
+
+**Status**: bridge-interop stays in tests/.skip-tests with
+documentation. Both upstream (in pitfall #31) and this branch
+defer the structural fix to "make recursion native".
+
+**What this DOESN'T affect**: the 6 OCapN-FFI tests that pass
+(abort, conversation, handshake, live-interop, pipelined, rpc)
+exercise the decoder on smaller / hand-coded inputs that fit
+within the 60s individual-test budget. Only bridge-interop's
+"node sends arbitrary deliver, decode + bridge + pump-outbound"
+path crosses the threshold.
