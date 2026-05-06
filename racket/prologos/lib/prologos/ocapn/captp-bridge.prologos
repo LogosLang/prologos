@@ -201,10 +201,15 @@ data Refr
   refr : Nat -> Nat            ;; (kind-tag, id) — return type Refr is implicit
 
 ;; Kind tags. Encoded as Nat for issue #60 avoidance (no enum sum).
-def refr-kind-local-export  : Nat := zero
-def refr-kind-remote-export : Nat := [suc zero]
-def refr-kind-local-answer  : Nat := [suc [suc zero]]
-def refr-kind-remote-answer : Nat := [suc [suc [suc zero]]]
+def refr-kind-local-export         : Nat := zero
+def refr-kind-remote-export        : Nat := [suc zero]
+def refr-kind-local-answer         : Nat := [suc [suc zero]]
+def refr-kind-remote-answer        : Nat := [suc [suc [suc zero]]]
+;; Phase 37: a 5th kind for the OCapN three-vat handoff form.
+;; `<desc:import-object N>` introduces a capability via the connecting
+;; peer; the receiver treats it as a refr but resolution to the actual
+;; provider requires netlayer machinery deferred beyond Phase 0.
+def refr-kind-remote-import-object : Nat := [suc [suc [suc [suc zero]]]]
 
 ;; Smart constructors. Use these — never construct `refr` directly.
 
@@ -223,6 +228,10 @@ defn refr-local-answer [n]
 spec refr-remote-answer Nat -> Refr
 defn refr-remote-answer [n]
   refr refr-kind-remote-answer n
+
+spec refr-remote-import-object Nat -> Refr
+defn refr-remote-import-object [n]
+  refr refr-kind-remote-import-object n
 
 ;; Accessors.
 
@@ -251,6 +260,10 @@ defn refr-local-answer?
 spec refr-remote-answer? Refr -> Bool
 defn refr-remote-answer?
   | refr k _ -> nat-eq? k refr-kind-remote-answer
+
+spec refr-remote-import-object? Refr -> Bool
+defn refr-remote-import-object?
+  | refr k _ -> nat-eq? k refr-kind-remote-import-object
 
 ;; Brand-check: two refrs are the same brand iff same (kind, id).
 ;; Implements OCapN brand-check semantics within a single connection.
@@ -287,11 +300,21 @@ defn refr-export-kind? [r]
     | true  -> true
     | false -> refr-remote-export? r
 
+;; Pick the desc:* tag name for a given Refr's wire encoding. Phase 37
+;; extends Phase 34d to a third tag. Two-deep match (NOT three-deep)
+;; sidesteps pitfall #18 / #33.
+spec refr-syrup-tag Refr -> String
+defn refr-syrup-tag [r]
+  match [refr-export-kind? r]
+    | true  -> "desc:export"
+    | false ->
+        match [refr-remote-import-object? r]
+          | true  -> "desc:import-object"
+          | false -> "desc:answer"
+
 spec refr-to-syrup Refr -> SyrupValue
 defn refr-to-syrup [r]
-  match [refr-export-kind? r]
-    | true  -> [syrup-tagged "desc:export" [syrup-nat [refr-id r]]]
-    | false -> [syrup-tagged "desc:answer" [syrup-nat [refr-id r]]]
+  syrup-tagged [refr-syrup-tag r] [syrup-nat [refr-id r]]
 
 data BridgeState
   bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry]
@@ -727,17 +750,48 @@ defn match-payload-as-answer
   | syrup-bytes _    -> [nil Refr]
   | syrup-promise _  -> [nil Refr]
 
-;; Tag dispatch: recognize "desc:export" and "desc:answer" tags.
-;; Anything else returns empty list (could be other tagged shapes
-;; like Error, syrup records, etc — none carry refrs at this level).
+;; Phase 37: same for desc:import-object payloads. The OCapN
+;; three-vat handoff form. Decoded as refr-remote-import-object;
+;; carries the same (kind, id) shape as other refrs but currently no
+;; netlayer plumbing actually invokes through it. Receiving one means
+;; "peer is introducing some capability; we'll preserve its identity
+;; and round-trip it on the wire" — full handoff semantics deferred.
+spec match-payload-as-import-object SyrupValue -> List Refr
+defn match-payload-as-import-object
+  | syrup-nat n      -> [cons [refr-remote-import-object n] [nil Refr]]
+  | syrup-null       -> [nil Refr]
+  | syrup-bool _     -> [nil Refr]
+  | syrup-int _      -> [nil Refr]
+  | syrup-string _   -> [nil Refr]
+  | syrup-symbol _   -> [nil Refr]
+  | syrup-list _     -> [nil Refr]
+  | syrup-tagged _ _ -> [nil Refr]
+  | syrup-refr _     -> [nil Refr]
+  | syrup-bytes _    -> [nil Refr]
+  | syrup-promise _  -> [nil Refr]
+
+;; Phase 37: handle the desc:answer / desc:import-object branch of
+;; tag-dispatch. Pulled out as a 2-deep helper so the top-level
+;; extract-refrs-from-tagged stays at depth 2 (no 3-deep nest;
+;; pitfall #18 / #33).
+spec dispatch-non-export-tag String SyrupValue -> List Refr
+defn dispatch-non-export-tag [tag p]
+  match [str::eq tag "desc:answer"]
+    | true  -> match-payload-as-answer p
+    | false ->
+        match [str::eq tag "desc:import-object"]
+          | true  -> match-payload-as-import-object p
+          | false -> [nil Refr]
+
+;; Tag dispatch: recognize "desc:export", "desc:answer", and
+;; "desc:import-object" tags. Anything else returns empty list (could
+;; be other tagged shapes like Error, syrup records, etc — none carry
+;; refrs at this level).
 spec extract-refrs-from-tagged String SyrupValue -> List Refr
 defn extract-refrs-from-tagged [tag p]
   match [str::eq tag "desc:export"]
     | true  -> match-payload-as-export p
-    | false ->
-        match [str::eq tag "desc:answer"]
-          | true  -> match-payload-as-answer p
-          | false -> [nil Refr]
+    | false -> dispatch-non-export-tag tag p
 
 ;; Single-element check: refrs reachable directly from a SyrupValue
 ;; (top-level desc:export / desc:answer tag). Does NOT recurse into

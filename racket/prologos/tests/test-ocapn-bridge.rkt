@@ -354,6 +354,92 @@
                      (syrup-tagged \"desc:answer\" (syrup-nat (suc zero))))))")
    "1N"))
 
+;; Phase 37: desc:import-object decode + encode.
+(test-case "refr/refr-remote-import-object? predicate"
+  (check-contains
+   (run-last
+    "(eval (refr-remote-import-object? (refr-remote-import-object (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-import-object? (refr-remote-export (suc zero))))")
+   "false"))
+
+(test-case "refr/refr-remote-import-object accessors"
+  (check-contains
+   (run-last
+    "(eval (refr-id (refr-remote-import-object (suc (suc zero)))))")
+   "2N")
+  (check-contains
+   (run-last
+    "(eval (refr-kind (refr-remote-import-object zero)))")
+   "4N"))
+
+(test-case "refr/refr-to-syrup encodes refr-remote-import-object as desc:import-object tag"
+  ;; Round-trip via the wire encoder: refr-remote-import-object 9
+  ;; should produce <desc:import-object 9> on the wire.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-remote-import-object (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) ))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/extract-refrs-from-args extracts top-level desc:import-object"
+  ;; args = <desc:import-object 3> should yield 1 refr.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc zero))))))))")
+   "1N"))
+
+(test-case "bridge/extract-refrs-from-args walks one-level: mixed tags"
+  ;; args = (syrup-list [<desc:export 1>, <desc:import-object 2>, <desc:answer 3>])
+  ;; → 3 refrs.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-list (cons
+                       (syrup-tagged \"desc:export\" (syrup-nat (suc zero)))
+                       (cons
+                         (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc zero))))
+                         (cons
+                           (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero)))))
+                           nil)))))))")
+   "3N"))
+
+(test-case "refr/refr-to-syrup + extract-refrs-from-args round-trip preserves desc:import-object"
+  ;; Encode refr-remote-import-object 5 → wire-shape via refr-to-syrup
+  ;; → decode back via extract-refrs-from-args → 1 refr that round-trips
+  ;; through refr-to-syrup encoding to the same bytes.
+  (define enc-direct
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-remote-import-object (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define enc-tagged
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")))
+  (check-equal? enc-direct enc-tagged))
+
+(test-case "bridge/desc:import-object does NOT auto-increment imports-refcount"
+  ;; Phase 0 design: import-object refrs are recognized + round-tripped
+  ;; but don't trigger imports-refcount tracking (that's the OCapN
+  ;; three-vat handoff GC story, deferred). Inbound op:deliver carrying
+  ;; <desc:import-object 4> should leave imports-refcount[4] absent.
+  (check-contains
+   (run-last
+    "(eval (let (op   (op-deliver zero
+                                   (syrup-tagged \"desc:import-object\" (syrup-nat (suc (suc (suc (suc zero))))) )
+                                   (none Nat)
+                                   (none Nat))
+                  step (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc zero)))) (bridge-step-state step))))")
+   "none"))
+
 (test-case "bridge/captp-incoming-with-state op-deliver auto-increments imports-refcount"
   ;; Inbound op:deliver with args containing <desc:export 7>:
   ;; bridge should increment imports-refcount[7] to 1.
