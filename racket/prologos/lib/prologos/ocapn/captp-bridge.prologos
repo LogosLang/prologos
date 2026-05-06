@@ -602,6 +602,137 @@ defn deliver-allocate [tgt args remote v st]
       [alloc-vat alloc]
       [bs-add-question remote [alloc-id alloc] st]
 
+;; ===========================================================
+;; Phase 34b: refr extraction from inbound args
+;; ===========================================================
+;;
+;; When peer sends `op:deliver tgt args ...`, the args may contain
+;; nested `desc:export N` (or `desc:answer N`) tags representing
+;; refrs peer is sharing with us. Each occurrence is an "import" —
+;; we now hold a reference. The bridge tracks these in
+;; `imports-refcount` so that release-import (Phase 34e) can later
+;; emit op:gc-export to peer.
+;;
+;; Phase 34b handles the COMMON case: desc:export in args. The
+;; less-common case (desc:answer in args, peer sharing a promise)
+;; is acknowledged but deferred to a future phase.
+
+;; Extract refrs from a desc:export payload. Payload should be a
+;; syrup-nat N; if shape is unexpected, returns empty list (peer bug).
+spec match-payload-as-export SyrupValue -> List Refr
+defn match-payload-as-export
+  | syrup-nat n      -> [cons [refr-remote-export n] [nil Refr]]
+  | syrup-null       -> [nil Refr]
+  | syrup-bool _     -> [nil Refr]
+  | syrup-int _      -> [nil Refr]
+  | syrup-string _   -> [nil Refr]
+  | syrup-symbol _   -> [nil Refr]
+  | syrup-list _     -> [nil Refr]
+  | syrup-tagged _ _ -> [nil Refr]
+  | syrup-refr _     -> [nil Refr]
+  | syrup-bytes _    -> [nil Refr]
+  | syrup-promise _  -> [nil Refr]
+
+;; Same for desc:answer payloads.
+spec match-payload-as-answer SyrupValue -> List Refr
+defn match-payload-as-answer
+  | syrup-nat n      -> [cons [refr-remote-answer n] [nil Refr]]
+  | syrup-null       -> [nil Refr]
+  | syrup-bool _     -> [nil Refr]
+  | syrup-int _      -> [nil Refr]
+  | syrup-string _   -> [nil Refr]
+  | syrup-symbol _   -> [nil Refr]
+  | syrup-list _     -> [nil Refr]
+  | syrup-tagged _ _ -> [nil Refr]
+  | syrup-refr _     -> [nil Refr]
+  | syrup-bytes _    -> [nil Refr]
+  | syrup-promise _  -> [nil Refr]
+
+;; Tag dispatch: recognize "desc:export" and "desc:answer" tags.
+;; Anything else returns empty list (could be other tagged shapes
+;; like Error, syrup records, etc — none carry refrs at this level).
+spec extract-refrs-from-tagged String SyrupValue -> List Refr
+defn extract-refrs-from-tagged [tag p]
+  match [str::eq tag "desc:export"]
+    | true  -> match-payload-as-export p
+    | false ->
+        match [str::eq tag "desc:answer"]
+          | true  -> match-payload-as-answer p
+          | false -> [nil Refr]
+
+;; Single-element check: refrs reachable directly from a SyrupValue
+;; (top-level desc:export / desc:answer tag). Does NOT recurse into
+;; syrup-list children — see extract-refrs-from-args's wrapper for
+;; the one-level-deep list walk. Mutual recursion with a list walker
+;; isn't supported in Prologos (pitfall #16: no forward references),
+;; so the design is "outer one-layer list walk + inner shallow check
+;; per element."
+;;
+;; Limitation: refrs nested inside records or deeper than one list
+;; level aren't found. For the OCapN common case (args = list of
+;; refrs and primitives, OR args = a single refr), this is enough.
+;; A future phase that wants full recursion can add it via foldr +
+;; type-erased generic walker.
+spec shallow-refr SyrupValue -> List Refr
+defn shallow-refr
+  | syrup-null         -> [nil Refr]
+  | syrup-bool _       -> [nil Refr]
+  | syrup-nat _        -> [nil Refr]
+  | syrup-int _        -> [nil Refr]
+  | syrup-string _     -> [nil Refr]
+  | syrup-symbol _     -> [nil Refr]
+  | syrup-refr _       -> [nil Refr]
+  | syrup-promise _    -> [nil Refr]
+  | syrup-bytes _      -> [nil Refr]
+  | syrup-list _       -> [nil Refr]    ;; SHALLOW: nested lists not walked
+  | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
+
+;; Walk a list of SyrupValue once, calling shallow-refr on each
+;; element. NOT mutually recursive (only calls shallow-refr).
+;; Uses bracketed-arg + inline `match` form (same shape as data/list's
+;; concat) — works around the multi-arity-with-cons-pattern issue
+;; that `defn name | nil -> ... | [cons hd tl] -> ...` triggers.
+spec walk-toplevel-list [List SyrupValue] -> List Refr
+defn walk-toplevel-list [xs]
+  match xs
+    | nil          -> [nil Refr]
+    | cons hd tl   -> [append Refr [shallow-refr hd] [walk-toplevel-list tl]]
+
+;; Top-level walk: collect refrs from a SyrupValue. If args itself
+;; is a desc:* tag, extract directly. If args is a syrup-list, walk
+;; one level into the list. Other shapes (atomic) yield no refrs.
+spec extract-refrs-from-args SyrupValue -> List Refr
+defn extract-refrs-from-args
+  | syrup-null         -> [nil Refr]
+  | syrup-bool _       -> [nil Refr]
+  | syrup-nat _        -> [nil Refr]
+  | syrup-int _        -> [nil Refr]
+  | syrup-string _     -> [nil Refr]
+  | syrup-symbol _     -> [nil Refr]
+  | syrup-refr _       -> [nil Refr]
+  | syrup-promise _    -> [nil Refr]
+  | syrup-bytes _      -> [nil Refr]
+  | syrup-list xs      -> [walk-toplevel-list xs]
+  | syrup-tagged tag p -> [extract-refrs-from-tagged tag p]
+
+;; Increment imports-refcount for one Refr value. Only
+;; remote-export refrs increment imports-refcount; other kinds
+;; (local-*, remote-answer) are no-ops here (remote-answer would
+;; need a separate imports-promise table — deferred).
+spec bs-incr-import-by-refr Refr BridgeState -> BridgeState
+defn bs-incr-import-by-refr [r st]
+  match [refr-remote-export? r]
+    | true  -> [bs-incr-import [refr-id r] st]
+    | false -> st
+
+;; Bulk-increment imports-refcount for a list of Refrs (the result
+;; of extract-refrs-from-args). Used by captp-incoming-with-state
+;; to register all imports before dispatching.
+spec bs-incr-imports [List Refr] BridgeState -> BridgeState
+defn bs-incr-imports
+  | nil           st -> st
+  | [cons r rest] st -> [bs-incr-imports rest [bs-incr-import-by-refr r st]]
+
 ;; dispatch-deliver: route an op:deliver based on whether the
 ;; answer-pos is `some <remote>` or `none`.
 ;;   none  → pass-through (no promise needed)
@@ -628,12 +759,19 @@ defn dispatch-incoming-answer [qpos args v st]
     | some pid  -> bridge-step [resolve-promise pid args v] st
 
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
-  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25."
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 + 34b."
 defn captp-incoming-with-state
   | [op-deliver tgt args ap _rm] v st ->
-      dispatch-deliver tgt args ap v st
+      ;; Phase 34b: inbound args may contain refrs peer is sharing
+      ;; with us (desc:export / desc:answer in nested positions).
+      ;; Each occurrence increments imports-refcount so release-import
+      ;; can later emit op:gc-export.
+      dispatch-deliver tgt args ap v
+        [bs-incr-imports [extract-refrs-from-args args] st]
   | [op-deliver-only tgt args] v st ->
-      bridge-step [send-only tgt args v] st
+      ;; Phase 34b: same import-bookkeeping for fire-and-forget deliveries.
+      bridge-step [send-only tgt args v]
+        [bs-incr-imports [extract-refrs-from-args args] st]
   | [op-abort _reason] v st ->
       bridge-step v st
   | [op-start-session _ver _loc] v st ->
@@ -665,7 +803,10 @@ defn captp-incoming-with-state
       ;; local promise with the answer payload. Unknown qpos = drop
       ;; (peer answered a question we don't know about — could be
       ;; protocol error or stale connection; conservative no-op).
-      dispatch-incoming-answer qpos args v st
+      ;; Phase 34b: the answer args may contain refrs (peer sharing
+      ;; refrs with us in their reply); increment imports-refcount.
+      dispatch-incoming-answer qpos args v
+        [bs-incr-imports [extract-refrs-from-args args] st]
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16

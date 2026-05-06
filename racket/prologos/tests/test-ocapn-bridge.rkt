@@ -273,6 +273,59 @@
     "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-local-export (suc zero))))")
    "false"))
 
+;; Phase 34b: decoder hook extract-refrs-from-args.
+(test-case "bridge/extract-refrs-from-args returns nil for atomic args"
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args (syrup-string \"hello\"))))")
+   "0N"))
+
+(test-case "bridge/extract-refrs-from-args extracts a top-level desc:export"
+  ;; args = <desc:export 5> (a single tagged value, not in a list)
+  ;; should yield 1 refr with kind=remote-export, id=5.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc zero)))))) ))))")
+   "1N"))
+
+(test-case "bridge/extract-refrs-from-args walks one-level into syrup-list"
+  ;; args = (syrup-list [<desc:export 1>, <desc:export 2>, "hello"])
+  ;; → 2 refrs.
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-list (cons
+                       (syrup-tagged \"desc:export\" (syrup-nat (suc zero)))
+                       (cons
+                         (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                         (cons (syrup-string \"hello\") nil)))))))")
+   "2N"))
+
+(test-case "bridge/extract-refrs-from-args extracts top-level desc:answer"
+  ;; args = <desc:answer 1> should yield exactly 1 refr.
+  ;; (We test it produced something refr-shaped via length; the
+  ;; per-kind discrimination is exercised in the captp-incoming
+  ;; integration test below — auto-increment on imports-refcount.)
+  (check-contains
+   (run-last
+    "(eval (length (extract-refrs-from-args
+                     (syrup-tagged \"desc:answer\" (syrup-nat (suc zero))))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming-with-state op-deliver auto-increments imports-refcount"
+  ;; Inbound op:deliver with args containing <desc:export 7>:
+  ;; bridge should increment imports-refcount[7] to 1.
+  (check-contains
+   (run-last
+    "(eval (let (op   (op-deliver zero
+                                   (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))) ))
+                                   (none Nat)
+                                   (none Nat))
+                  step (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc (suc (suc (suc zero))))))) (bridge-step-state step))))")
+   "1N"))
+
 ;; Phase 34c: imports-refcount field + updaters.
 (test-case "bridge/bs-incr-import on empty state creates entry with count=1"
   (check-contains
