@@ -95,6 +95,53 @@ defn drive-handshake-and-deliver [our-ver our-loc f2-bytes]
     | none    -> ""
     | some op -> [drive-handshake-with-deliver our-ver our-loc op]
 
+;; Phase 34f helpers — defined bottom-up (callees first).
+
+;; Take a ConnectionState, pump's already-emitted bytes, plus a
+;; release target. Apply release-import; return framed concat of
+;; pump bytes + release bytes.
+spec combine-pump-and-release ConnectionState Nat Nat [List String] -> String
+defn combine-pump-and-release [cs release-id release-cnt pump-bytes]
+  [framed-concat
+    [append String pump-bytes
+      [conn-release-bytes [release-import release-id release-cnt cs]]]]
+
+;; Take the BridgeStep from a dispatched op, drain + pump, and then
+;; layer the release-import bytes on top. 3-arg shape (BridgeStep,
+;; Nat, Nat) keeps the cross-module call surface narrow.
+spec post-step-with-release BridgeStep Nat Nat -> String
+defn post-step-with-release [step release-id release-cnt]
+  let v2 := [drain drain-fuel-8 [bridge-step-vat step]]
+    let pr := [pump-outbound v2 [bridge-step-state step] [nil Nat]]
+      [combine-pump-and-release [conn-state v2 [bridge-step-state step] [nil Nat] false]
+                                 release-id release-cnt
+                                 [pump-result-bytes pr]]
+
+;; Inner: assumes op already decoded. Builds vat + handshake-pre-queued
+;; state, dispatches inbound, then delegates to post-step-with-release.
+spec drive-with-release String String CapTPOp Nat Nat -> String
+defn drive-with-release [our-ver our-loc op release-id release-cnt]
+  let sa := [vat-spawn-actor beh-echo syrup-null empty-vat]
+    let step := [captp-incoming-with-state op [alloc-vat sa] [bridge-state-with-our-session our-ver our-loc]]
+      [post-step-with-release step release-id release-cnt]
+
+;; Phase 34f: drive handshake + deliver, then release the named
+;; imported refr. Returns concat of: our-session + reply-to-Q +
+;; op:gc-export N k. Demonstrates the full GC loop end-to-end:
+;;
+;;   1. Peer sends op:deliver with desc:export N in args.
+;;   2. Bridge auto-increments imports-refcount[N] (Phase 34b).
+;;   3. Bridge replies via echo (Phase 24).
+;;   4. We release the import — bytes for op:gc-export N k emitted.
+;;
+;; The state thread is internal to this helper; the test fixture
+;; sees only the final framed bytes.
+spec drive-handshake-deliver-and-release String String String Nat Nat -> String
+defn drive-handshake-deliver-and-release [our-ver our-loc f2-bytes release-id release-cnt]
+  match [decode-op f2-bytes]
+    | none    -> ""
+    | some op -> [drive-with-release our-ver our-loc op release-id release-cnt]
+
 ;; ===========================================================
 ;; Phase 25.4: questioner-side interop helpers
 ;; ===========================================================
