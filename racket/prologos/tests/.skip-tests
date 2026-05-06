@@ -8,21 +8,14 @@
 # `test-reduction-perf-02-01.rkt` (fib 15 + ackermann, was ~51s) was
 # brought back into the main suite at 7.9s after the looseBVarRange
 # fix landed (commits 4f6b3f0 + 6f2e077). The two remaining ones
-# below regressed instead of improving — investigation pending.
-test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps); was ~144s, now ~580s — REGRESSED
-test-reduction-perf-02-02.rkt  # fib 20 exponential recursion; was ~48s, now ~122s — REGRESSED
+# below regressed instead of improving — root cause is the 449-arm
+# match in whnf-impl/match (see profiler hot spot
+# racket/match/compiler.rkt:559:40 = 44.5% CPU on fib 16).
+# Investigation deferred; not OCapN.
+test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps); now ~580s
+test-reduction-perf-02-02.rkt  # fib 20 exponential recursion; now ~122s
 
-# OCapN interop tests — run via .github/workflows/interop.yml using
-# `raco test` directly. The batch-worker harness in
-# run-affected-tests.rkt crashes with DEAD WORKERS on these because
-# the (exit 0) skip-guard exits the worker process before any test
-# reports. Skipped here so the main `test` workflow stays green;
-# covered by the dedicated interop job.
-# See docs/tracking/2026-04-29_OCAPN_INTEROP_DESIGN.md.
-test-ocapn-syrup-cross-impl.rkt   # interop-only: needs @endo/ocapn-generated fixture (Phase 4)
-test-ocapn-live-interop.rkt       # interop-only: spawns node subprocess (Phase 5)
-test-ocapn-handshake.rkt          # interop-only: spawns node subprocess (Phase 6)
-test-ocapn-conversation.rkt       # interop-only: spawns node subprocess (Phase 7)
-test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 8)
-test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
-test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)
+# (No more OCapN tests skipped — the 7 interop tests previously
+# listed here now hard-fail if Node deps are missing rather than
+# silently exiting and crashing the batch-worker. Both test.yml
+# and interop.yml install Node + npm interop deps.)

@@ -59,10 +59,10 @@
         (build-path INTEROP-DIR "node_modules" "@endo" "ocapn"
                     "src" "syrup" "js-representation.js"))))
 
+;; Hard-fail rather than silently skipping — see test-ocapn-abort.rkt.
 (unless (interop-deps-present?)
-  (printf "handshake: SKIPPED — node + tools/interop/node_modules missing.~n")
-  (printf "handshake: to enable, run `cd tools/interop && npm install`.~n")
-  (exit 0))
+  (error 'test-ocapn-handshake
+         "Node + tools/interop/node_modules required.~n  Run: cd tools/interop && npm install"))
 
 (printf "handshake: deps present, running bidirectional test~n")
 

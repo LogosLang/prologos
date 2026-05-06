@@ -63,10 +63,12 @@
         (build-path INTEROP-DIR "node_modules" "@endo" "ocapn"
                     "src" "syrup" "js-representation.js"))))
 
+;; Hard-fail rather than silently skipping — Node + @endo/ocapn are
+;; required for all OCapN interop tests in CI and locally. See
+;; test-ocapn-abort.rkt for the rationale.
 (unless (interop-deps-present?)
-  (printf "live-interop: SKIPPED — node + tools/interop/node_modules missing.~n")
-  (printf "live-interop: to enable, run `cd tools/interop && npm install`.~n")
-  (exit 0))
+  (error 'test-ocapn-live-interop
+         "Node + tools/interop/node_modules required.~n  Run: cd tools/interop && npm install"))
 
 (printf "live-interop: deps present, running cross-runtime tests~n")
 

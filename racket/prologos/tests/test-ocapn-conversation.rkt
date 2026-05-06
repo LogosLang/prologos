@@ -53,9 +53,10 @@
         (build-path INTEROP-DIR "node_modules" "@endo" "ocapn"
                     "src" "syrup" "js-representation.js"))))
 
+;; Hard-fail rather than silently skipping — see test-ocapn-abort.rkt.
 (unless (interop-deps-present?)
-  (printf "conversation: SKIPPED — node + tools/interop/node_modules missing.~n")
-  (exit 0))
+  (error 'test-ocapn-conversation
+         "Node + tools/interop/node_modules required.~n  Run: cd tools/interop && npm install"))
 
 (printf "conversation: deps present, running 3-frame conversation~n")
 

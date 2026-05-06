@@ -40,9 +40,14 @@
         (build-path INTEROP-DIR "node_modules" "@endo" "ocapn"
                     "src" "syrup" "js-representation.js"))))
 
+;; Hard-fail rather than silently skipping — Node + @endo/ocapn are
+;; required for all OCapN interop tests in CI (test.yml + interop.yml)
+;; and locally. Silent skip via (exit 0) crashes the batch-worker
+;; harness's subprocess; raising an error here surfaces as a normal
+;; test-file failure that raco test + the batch-worker both handle.
 (unless (interop-deps-present?)
-  (printf "abort: SKIPPED — node + tools/interop/node_modules missing.~n")
-  (exit 0))
+  (error 'test-ocapn-abort
+         "Node + tools/interop/node_modules required.~n  Run: cd tools/interop && npm install"))
 
 (printf "abort: deps present, running graceful-abort test~n")
 
