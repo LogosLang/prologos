@@ -407,6 +407,51 @@
     "(eval (length (bs-imports-refcount bridge-state-empty)))")
    "0N"))
 
+;; Phase 36: exports-refcount + bs-incr-export / bs-decr-export.
+(test-case "bridge/bs-incr-export creates entry with count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc (suc zero))
+              (bs-incr-export (suc (suc zero)) bridge-state-empty)))")
+   "1N"))
+
+(test-case "bridge/bs-incr-export twice on same key increments to 2"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc zero)
+              (bs-incr-export (suc zero) (bs-incr-export (suc zero) bridge-state-empty))))")
+   "2N"))
+
+(test-case "bridge/bs-decr-export saturates at zero"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-export-refcount (suc zero)
+              (bs-decr-export (suc zero) (suc (suc (suc zero)))
+                (bs-incr-export (suc zero) bridge-state-empty))))")
+   "0N"))
+
+(test-case "bridge/captp-incoming op:gc-export decrements exports-refcount"
+  ;; Set exports-refcount[3] = 2; dispatch op:gc-export 3 1; expect 1.
+  (check-contains
+   (run-last
+    "(eval (let (st0  (bs-incr-export (suc (suc (suc zero)))
+                       (bs-incr-export (suc (suc (suc zero))) bridge-state-empty))
+                  step (captp-incoming-with-state
+                          (op-gc-export (suc (suc (suc zero))) (suc zero))
+                          empty-vat st0))
+              (bs-lookup-export-refcount (suc (suc (suc zero))) (bridge-step-state step))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming op:gc-export still appends to audit log"
+  ;; Audit log preserved alongside refcount decrement.
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state
+                        (op-gc-export (suc zero) (suc zero))
+                        empty-vat bridge-state-empty))
+              (length (bs-gc-exports (bridge-step-state step)))))")
+   "1N"))
+
 ;; Phase 31: removal of question-table entries for GC.
 (test-case "bridge/bs-remove-question removes inbound question entry"
   ;; Add q-pos=2 → pid=1, then remove q-pos=2; lookup should return none.

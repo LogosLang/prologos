@@ -294,9 +294,21 @@ defn refr-to-syrup [r]
     | false -> [syrup-tagged "desc:answer" [syrup-nat [refr-id r]]]
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry]
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
-  ;;  pending-out, outbound-questions, imports-refcount)
+  ;;  pending-out, outbound-questions, imports-refcount, exports-refcount)
+  ;;
+  ;; 8th field `exports-refcount` (responder-side, Phase 36):
+  ;; references peer holds to OUR exports. Entry tracks
+  ;; (our-export-id → peer's-refcount). Symmetric to imports-refcount;
+  ;; decremented when peer sends op:gc-export. The increment side is
+  ;; manual: the caller invokes `bs-incr-export N` whenever it shares
+  ;; a refr-local-export N with peer (e.g., before encoding it in
+  ;; outbound args). Initial inbound op:deliver targeting an export
+  ;; doesn't auto-increment in our model — peer asks export 0 cold
+  ;; without prior introduction; the convention is "peer assumes
+  ;; export 0 exists." Future protocol enhancements (handshake-time
+  ;; export announcement) could change this.
   ;;
   ;; 4th field `inbound-questions` (responder-side): peer's op:deliver
   ;; with answer-pos N → we allocate a local promise; entry tracks
@@ -323,7 +335,7 @@ data BridgeState
   ;; Reusing QEntry for the (Nat → Nat) lists; entry semantics
   ;; depends on which list it's in.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil]
 
 ;; Construct a BridgeState pre-loaded with our op:start-session bytes
 ;; queued for flush on the next pump-outbound. CapTP handshake
@@ -332,62 +344,66 @@ def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil ni
 ;; pump emit them alongside any vat-resolution outbound.
 spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
-  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ _ _ _ -> ls
+  | bridge-state ls _ _ _ _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ _ _ _ -> es
+  | bridge-state _ es _ _ _ _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ _ _ _ -> as
+  | bridge-state _ _ as _ _ _ _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs _ _ _ -> qs
+  | bridge-state _ _ _ qs _ _ _ _ -> qs
 
 spec bs-pending-out BridgeState -> List String
 defn bs-pending-out
-  | bridge-state _ _ _ _ p _ _ -> p
+  | bridge-state _ _ _ _ p _ _ _ -> p
 
 spec bs-outbound-questions BridgeState -> List QEntry
 defn bs-outbound-questions
-  | bridge-state _ _ _ _ _ oqs _ -> oqs
+  | bridge-state _ _ _ _ _ oqs _ _ -> oqs
 
 spec bs-imports-refcount BridgeState -> List QEntry
 defn bs-imports-refcount
-  | bridge-state _ _ _ _ _ _ ir -> ir
+  | bridge-state _ _ _ _ _ _ ir _ -> ir
+
+spec bs-exports-refcount BridgeState -> List QEntry
+defn bs-exports-refcount
+  | bridge-state _ _ _ _ _ _ _ er -> er
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs p oqs ir] ->
-      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir
+  | tgt res [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir
+  | pos cnt [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls es [cons pos as] qs p oqs ir
+  | pos [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es [cons pos as] qs p oqs ir er
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir
+  | remote local [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er
 
 spec bs-clear-pending-out BridgeState -> BridgeState
 defn bs-clear-pending-out
-  | bridge-state ls es as qs _ oqs ir ->
-      bridge-state ls es as qs nil oqs ir
+  | bridge-state ls es as qs _ oqs ir er ->
+      bridge-state ls es as qs nil oqs ir er
 
 ;; Phase 25: track an outbound question we asked. `our-q-pos` is the
 ;; position we used in the desc:answer of our outbound op:deliver;
@@ -396,8 +412,8 @@ defn bs-clear-pending-out
 ;; the helper that allocates and registers in one step.
 spec bs-add-outbound-question Nat Nat BridgeState -> BridgeState
 defn bs-add-outbound-question
-  | qpos local [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir
+  | qpos local [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -442,16 +458,16 @@ defn list-remove-q-by-key
 ;; promise we allocated for it.
 spec bs-remove-question Nat BridgeState -> BridgeState
 defn bs-remove-question
-  | qpos [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir
+  | qpos [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er
 
 ;; Phase 31: remove the outbound-question entry for `our-q-pos`.
 ;; Used when WE've consumed peer's reply and want to send op:gc-answer
 ;; — the local-promise/q-pos mapping is no longer needed.
 spec bs-remove-outbound-question Nat BridgeState -> BridgeState
 defn bs-remove-outbound-question
-  | qpos [bridge-state ls es as qs p oqs ir] ->
-      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir
+  | qpos [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er
 
 ;; ===========================================================
 ;; Phase 34c: imports-refcount accessors + updaters
@@ -505,10 +521,11 @@ defn bs-lookup-import-refcount [export-id st]
 ;; args (Phase 34b).
 spec bs-incr-import Nat BridgeState -> BridgeState
 defn bs-incr-import
-  | export-id [bridge-state ls es as qs p oqs ir] ->
+  | export-id [bridge-state ls es as qs p oqs ir er] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [add [unwrap-or zero [bs-lookup-question-loop ir export-id]] [suc zero]]]
+        er
 
 ;; Decrement imports-refcount[export-id] by k. Used by
 ;; release-import after sending op:gc-export. If decremented past 0
@@ -519,10 +536,40 @@ defn bs-incr-import
 ;; zeroed entries; for now the entry persists harmlessly.
 spec bs-decr-import Nat Nat BridgeState -> BridgeState
 defn bs-decr-import
-  | export-id k [bridge-state ls es as qs p oqs ir] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop ir export-id]] k]]
+        er
+
+;; ===========================================================
+;; Phase 36: exports-refcount — symmetric to imports-refcount
+;; ===========================================================
+;;
+;; Tracks references peer holds to OUR exports. Decremented by
+;; inbound op:gc-export. The increment side is manual: the caller
+;; (or a future export-introduction protocol) invokes
+;; `bs-incr-export` whenever an export is made known to peer.
+
+spec bs-lookup-export-refcount Nat BridgeState -> [Option Nat]
+defn bs-lookup-export-refcount [export-id st]
+  bs-lookup-question-loop [bs-exports-refcount st] export-id
+
+spec bs-incr-export Nat BridgeState -> BridgeState
+defn bs-incr-export
+  | export-id [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as qs p oqs ir
+        [list-set-q-by-key er export-id
+          [add [unwrap-or zero [bs-lookup-question-loop er export-id]] [suc zero]]]
+
+;; Decrement exports-refcount[export-id] by k. Saturates at 0 if
+;; peer's count exceeds ours (peer bug or pre-existing race).
+spec bs-decr-export Nat Nat BridgeState -> BridgeState
+defn bs-decr-export
+  | export-id k [bridge-state ls es as qs p oqs ir er] ->
+      bridge-state ls es as qs p oqs ir
+        [list-set-q-by-key er export-id
+          [sat-sub [unwrap-or zero [bs-lookup-question-loop er export-id]] k]]
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -815,12 +862,11 @@ defn captp-incoming-with-state
   | [op-listen tgt resolver] v st ->
       bridge-step v [bs-add-listener tgt resolver st]
   | [op-gc-export pos cnt] v st ->
-      ;; Phase 33: peer dropped k references to our export N.
-      ;; Currently we don't track exports-refcount (deferred until
-      ;; refr-import lands), so retain the audit-log behavior — the
-      ;; gc-exports list records peer's claim. When exports-refcount
-      ;; is added (future), this arm will also decrement that count.
-      bridge-step v [bs-add-gc-export pos cnt st]
+      ;; Phase 36: peer dropped k references to our export N.
+      ;; Decrement exports-refcount[N] by k (saturating at 0) AND
+      ;; append to gc-exports audit log (preserves diagnostic
+      ;; visibility into peer's claims).
+      bridge-step v [bs-decr-export pos cnt [bs-add-gc-export pos cnt st]]
   | [op-gc-answer pos] v st ->
       ;; Phase 33: peer is done with our inbound-question at q-pos N
       ;; (one of OUR answer-table entries). Remove it from
