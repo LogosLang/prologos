@@ -658,6 +658,28 @@
                                             (conn-bridge-state (conn-ask-state ask)))))")
    "some"))
 
+;; Phase 30: captp-ask (in core) is the user-facing alias for
+;; connection-ask. Bytes match.
+(test-case "core/captp-ask is byte-equivalent to connection-ask"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (captp-ask zero (syrup-string \"ping\") empty-connection)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (connection-ask zero (syrup-string \"ping\") empty-connection)))")))
+  (check-equal? got expected))
+
+(test-case "core/captp-ask returns same pid as connection-ask"
+  (define got-via-captp-ask
+    (run-last
+     "(eval (conn-ask-pid (captp-ask zero (syrup-string \"ping\") empty-connection)))"))
+  (define got-via-connection-ask
+    (run-last
+     "(eval (conn-ask-pid (connection-ask zero (syrup-string \"ping\") empty-connection)))"))
+  (check-equal? got-via-captp-ask got-via-connection-ask))
+
 (test-case "bridge/connection-ask is a no-op once aborted"
   ;; After abort, ask returns the same state with empty bytes.
   (check-contains

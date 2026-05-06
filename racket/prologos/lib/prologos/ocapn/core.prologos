@@ -72,6 +72,9 @@ require [prologos::ocapn::behavior :refer-all]
 ;; --- Vat (event loop core) ---
 require [prologos::ocapn::vat :refer-all]
 
+;; --- CapTP bridge (networked questioner + responder) ---
+require [prologos::ocapn::captp-bridge :refer-all]
+
 ;; ========================================
 ;; Convenience aliases that read like Goblins
 ;; ========================================
@@ -92,6 +95,32 @@ spec tell Nat SyrupValue Vat -> Vat
   :doc "Send to refr without keeping a result handle. Goblins's `<-np`."
 defn tell [target args v]
   send-only target args v
+
+;; ========================================
+;; Networked ask (Phase 30): captp-ask
+;; ========================================
+;;
+;; The CapTP companion to vat-internal `ask`. Where `ask` operates
+;; on a local Vat (no wire bytes), `captp-ask` operates on a
+;; ConnectionState — the standard packaging for one CapTP session
+;; with a remote peer. Returns a `ConnAsk` carrying:
+;;   - updated ConnectionState (with the question registered in
+;;     bs-outbound-questions and the local promise allocated)
+;;   - the local promise-id to await
+;;   - the wire bytes to send to peer
+;;
+;; Pair with connection-step on the inbound path: when peer sends
+;; back op:deliver-to-answer for our q-pos, dispatch resolves the
+;; promise we got back from captp-ask.
+;;
+;; This is a thin re-export of captp-bridge's connection-ask so user
+;; .prologos code can write `captp-ask` next to `ask`/`tell` rather
+;; than reaching into the bridge module's namespace explicitly.
+
+spec captp-ask Nat SyrupValue ConnectionState -> ConnAsk
+  :doc "CapTP-aware ask. Returns ConnAsk(state', pid, bytes-to-send). Goblins-on-the-wire equivalent of `(<- refr msg)`."
+defn captp-ask [target args cs]
+  connection-ask target args cs
 
 ;; "drain": Goblins's vat-loop. Bounded by fuel.
 spec drain Nat Vat -> Vat
