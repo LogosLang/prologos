@@ -91,8 +91,8 @@
   (for ([f (in-list phase3-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'type)
-    (check-true (memq (sd-finding-relation f) '(equality subtype)))
-    (check-true (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-not-false (memq (sd-finding-relation f) '(equality subtype)))
+    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
     (check-true (positive? (sd-finding-sample-count f)))))
 
 (test-case "Phase 3: distributive findings carry axiom-*; SD findings carry sd-evidence"
