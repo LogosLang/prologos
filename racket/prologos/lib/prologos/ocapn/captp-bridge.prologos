@@ -84,6 +84,17 @@ defn outbound-deliver-bytes [pid args]
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
+;; Build the bytes for our outbound op:start-session, given our
+;; protocol version and locator string. CapTP requires both peers
+;; to send their op:start-session; this is the canonical encoding
+;; the bridge emits in response to a peer's inbound session.
+;;   <op:start-session ver loc>
+spec our-session-bytes String String -> String
+defn our-session-bytes [ver loc]
+  wire::encode-record "op:start-session"
+    [cons [syrup-string ver]
+      [cons [syrup-string loc] nil]]
+
 ;; Wrap a SyrupValue in the canonical "broken-promise reason"
 ;; record `<Error r>`. Phase 17.
 spec wrap-error SyrupValue -> SyrupValue

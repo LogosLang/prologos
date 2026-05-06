@@ -165,13 +165,15 @@ sock.on('connect', () => {
 sock.on('data', d => {
   inBuf = Buffer.concat([inBuf, d]);
   while (tryConsumeFrame()) { /* keep going */ }
-  // Summarize once we have the bridge's deliver reply. Racket's
-  // bridge treats inbound op:start-session as a state-preserving
-  // no-op (0 outbound) — see test-ocapn-bridge-interop.rkt wire
-  // flow — so we don't gate on a session frame from Racket. The
-  // session frame, if any, is captured in summarize() for diagnostics.
-  const haveReply = receivedFrames.some(f => f && f.label === 'op:deliver');
-  if (haveReply) summarize();
+  // CapTP requires both peers to exchange op:start-session as part
+  // of the handshake. Racket's bridge synthesizes its own session
+  // reply via prologos::ocapn::captp-bridge#our-session-bytes, then
+  // dispatches the deliver via drive-echo-bridge-from-bytes. We
+  // gate summarize() on having received BOTH frames to fully
+  // verify the handshake + deliver round-trip.
+  const haveSession = receivedFrames.some(f => f && f.label === 'op:start-session');
+  const haveReply   = receivedFrames.some(f => f && f.label === 'op:deliver');
+  if (haveSession && haveReply) summarize();
 });
 
 sock.on('error', err => {
