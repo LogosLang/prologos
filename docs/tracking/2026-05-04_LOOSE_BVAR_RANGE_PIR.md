@@ -111,11 +111,48 @@ Plus this PIR.
 1. **Investigate residual N^1.6 scaling.** Probably in NF/zonk on the result tree, or in some pattern that still allocates non-closed substitution args. Profile + targeted fix.
 2. **Combine with hash-consing** (option #4 in the survey). Constant-factor wins on `equal?` and cache lookups across the whole codebase. ~1-2 days of work.
 3. **Migrate from memo to struct field** if profiling shows the hashtable lookup as hot. Mechanical 327-struct change.
-4. **Re-enable `test-ocapn-bridge-interop.rkt`** in the interop CI gate. With shift's per-call cost amortized to O(1) for closed arguments, the bridge-driven test should now run in seconds instead of minutes. Track 24's blocker is largely resolved.
+4. ~~Re-enable `test-ocapn-bridge-interop.rkt`~~ **Attempted; not yet sufficient.** Local re-run with the looseBVarRange fix in place still exceeded 5 minutes wall-time before kill. The fix gives 2.4× on the synthetic `decode-value` scaling test, but the bridge-interop test does substantially more total work (decode + `captp-incoming-with-state` dispatch + vat `drain` + `pump-outbound` encode). With residual N^1.6 scaling, that work multiplies. The test stays in `.skip-tests`; revisit after the residual super-linearity is investigated and/or hash-consing lands.
+
+## Verifying the fix on bridge-interop (post-mortem)
+
+After committing the looseBVarRange fix, attempted to re-enable `test-ocapn-bridge-interop.rkt`. Local run timed out at 5+ minutes (compared to baseline >8 minutes; not strictly worse, possibly slightly better, but no clear "fast and green" signal).
+
+Interpretation: the bridge-interop test's full driver expression invokes substantially more reductions than the synthetic perf test:
+
+- Synthetic test (`tests/test-bridge-perf.rkt` N=5): ~949 reduce_steps for one decode-value call
+- Bridge-interop test: one decode-op + `captp-incoming-with-state` dispatch + `drain` (vat event loop, multiple beta-reductions on actor + behavior + effect interpreter) + `pump-outbound` (record encoder) — probably 3-10× the reduce count
+
+With residual N^1.6 scaling, even a 2.4× improvement at the decode step doesn't translate to a 2.4× improvement on the full pipeline. The bridge test's slowness was end-to-end, not concentrated in any one phase, so the fix's localized win doesn't add up to a green-CI-gate win.
+
+**This is not a regression.** It just means closing pitfall #31 fully needs more than just looseBVarRange; the survey's option #4 (hash-consing) is the natural next step, and investigating where the residual N^1.6 lives will identify additional targets.
+
+## Relationship to issue #45 (EigenTrust O(k²))
+
+Issue [#45 (`Reducer scales as O(k²) for non-fixed-point iteration`)](https://github.com/LogosLang/prologos/issues/45) shares the *symptom* with #58 (super-linear scaling on iterative computations) but has an **orthogonal root cause**. This fix does NOT close #45.
+
+Comparison:
+
+| | #58 (this fix) | #45 (EigenTrust) |
+|---|---|---|
+| Workload | `decode-many-acc` building a cons-list | `eigentrust-iterate` passing unreduced step result |
+| Accumulator at point of beta-reduction | **Closed and reduced** value tree (`(cons "hello" (cons "hello" …))`) | **Unreduced** redex chain (`(step c p α (step c p α (step c p α t₀)))`) |
+| Why it grows | One cons cell per iteration; each cell is a value | Each iteration prepends another `step` redex; chain depth = iteration count |
+| What walks it super-linearly | `shift` (called from `subst` at every binder traversal) | `whnf` (re-reducing the chain to find the head normal form) |
+| Cache helps? | Memoization shrinks reduce_steps 14× but per-step cost still grew | Posit32 rounding makes each iteration's bit pattern different → cache misses → no help |
+| This fix's effect | **2.4× at N=5; speedup grows with N** | **Negligible** — the lazy redex chain has no free bvars but is large because it's *unreduced*, not because it's a long value tree. Shift was never the hot path for #45 |
+
+In words: the looseBVarRange fix makes shift O(1) on closed substitution arguments. Issue #45's accumulator IS closed (no free bvars in `(step c p α v_{k-1})`) — so shift was already cheap there. The dominant cost in #45 is repeated reduction of the redex chain, which isn't a shift-level issue. It's a strict-vs-lazy evaluation strategy issue.
+
+Issue #45's recommended fix paths (force/seq, demand analysis, aggressive primitive normalization, thunk sharing) are all about **changing when reduction happens**, not about making individual shift calls faster. Different lever entirely.
+
+**The two issues should remain separate.** Closing #45 requires its own track (probably "force-on-recursive-call" annotation or a small strictness analyzer).
+
+A small follow-up that might be worth measuring: does the looseBVarRange short-circuit accidentally help #45 by a constant factor, since each beta-reduction in the iterator still does some shifting? Possibly, but unlikely to be load-bearing. The reproducer at `racket/prologos/benchmarks/comparative/eigentrust-list-posit-w3only.prologos` would be the way to check.
 
 ## Cross-references
 
 - Issue: [#58 — O(N²) substitution blow-up](https://github.com/LogosLang/prologos/issues/58)
+- **Related (orthogonal) issue**: [#45 — Reducer scales as O(k²) for non-fixed-point iteration](https://github.com/LogosLang/prologos/issues/45) — NOT closed by this fix; see "Relationship to issue #45" above.
 - Survey of solutions: [`docs/tracking/2026-05-04_SUBSTITUTION_PERF_SURVEY.md`](2026-05-04_SUBSTITUTION_PERF_SURVEY.md)
 - Earlier failed-fix PIR: [`docs/tracking/2026-05-04_DECODER_PERF_FIX_PIR.md`](2026-05-04_DECODER_PERF_FIX_PIR.md)
 - Pitfall: [`docs/tracking/2026-04-27_GOBLIN_PITFALLS.md`](2026-04-27_GOBLIN_PITFALLS.md) #31

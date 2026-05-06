@@ -29,13 +29,13 @@ test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 
 test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
 test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)
 
-# Phase 24 bridge-driven responder interop test — skeleton in place
-# (Node peer + test harness) but blocked on a Prologos elaborator/
-# evaluator performance issue: the driver expression that drives
-# `captp-incoming-with-state + drain + pump-outbound` over Node-
-# decoded bytes exceeds 90s wall-time during in-process eval, far
-# longer than equivalent unit tests with hand-coded ops. See goblin
-# pitfalls #30 (match-in-deep-let inference failure, worked around)
-# and #31 (perf observation, follow-up).
-test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, perf-blocked)
+# Phase 24 bridge-driven responder interop test — partial perf relief
+# from looseBVarRange fix (commit 4f6b3f0): the underlying decoder
+# scaling improved 2.4× at N=5, but bridge-interop's full workload
+# (decode + dispatch + drain + pump + encode) still exceeded 5 min in
+# local testing post-fix. Further wins available from hash-consing
+# (option #4 in 2026-05-04_SUBSTITUTION_PERF_SURVEY.md) and from
+# investigating the residual N^1.6 scaling. Goblin pitfalls #30 + #31
+# remain the references.
+test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, perf-improved-but-still-slow)
 test-bridge-perf.rkt              # Pitfall #31 perf diagnostic — decode-op alone is ~150s; not a regression test, kept as the baseline measurement for future perf work

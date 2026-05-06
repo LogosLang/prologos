@@ -2,7 +2,7 @@
 
 **Date**: 2026-05-04
 **Topic**: O(N²) blow-up in Prologos's `subst` / `shift` and how the literature handles this class of bug.
-**Status**: Research note; informs a future PM-series or new dedicated track.
+**Status**: Research note. **Update 2026-05-04**: option #1 (`looseBVarRange`) was implemented and shipped in commit `4f6b3f0`. 2.4× speedup at N=5 on the OCapN decoder workload. See [`2026-05-04_LOOSE_BVAR_RANGE_PIR.md`](2026-05-04_LOOSE_BVAR_RANGE_PIR.md). Not yet a complete linearization; further wins from hash-consing (option #4) and from addressing related issue #45 (a separate, orthogonal lazy-evaluation problem).
 
 ## 1. The bug
 
