@@ -1258,3 +1258,84 @@ definition in a DIFFERENT module) that it's hard to diagnose;
 expressivity gap until fixed; (c) the workaround works but adds
 field plumbing to every accessor and update function.
 
+---
+
+### #33 — `:refer-all` chains don't establish type identity for spec-level type-name resolution (2026-05-06, real bug)
+
+**Symptom.** Module `M3` imports `M2` with `:refer-all`; `M2`
+imports `M1` with `:refer-all`; `M1` defines a type `T`. When `M3`
+writes a function spec mentioning `T`, then calls a function from
+`M1` (or `M2`) whose return type is also `T`, the elaborator
+reports a `Type mismatch [Pi … T]` against `[Pi … M1::T]` — same
+type, different name resolution.
+
+**Repro.** In OCapN Phase 25.4 (commit
+[`f633e5a`](https://github.com/LogosLang/prologos/commit/f633e5a)).
+`promise.prologos` defines `PromiseState`. `captp-bridge.prologos`
+does `require [prologos::ocapn::promise :refer-all]` (so it can
+use `PromiseState` and the `pst-*` constructors internally).
+`bridge-interop-helpers.prologos` does `require
+[prologos::ocapn::captp-bridge :refer-all]` (transitive).
+
+```
+spec lookup-after-step BridgeStep Nat -> [Option PromiseState]
+defn lookup-after-step [step pid]
+  lookup-promise pid [bridge-step-vat step]
+```
+
+`lookup-promise`'s spec is `Nat Vat -> Option PromiseState`. The
+return-type annotation in the spec resolves `PromiseState`
+(unqualified) via the `:refer-all` chain. The body's actual return
+type comes from `lookup-promise` (defined in `vat.prologos`, also
+`:refer-all`'d via captp-bridge), and its `PromiseState` resolves
+to the fully-qualified `prologos::ocapn::promise::PromiseState`.
+
+The elaborator says:
+
+```
+Type mismatch
+  expected: [Pi [x BridgeStep] [Pi [y Nat] [Option PromiseState]]]
+  got:      [Pi [x BridgeStep] [Pi [y Nat]
+              [Option prologos::ocapn::promise::PromiseState]]]
+```
+
+Same type. Different name. Treated as distinct.
+
+**Workaround.** Add an explicit re-import in the using module:
+
+```
+require [prologos::ocapn::promise
+         :refer [PromiseState pst-unresolved pst-fulfilled pst-broken]]
+```
+
+With the explicit `:refer [PromiseState …]`, the spec's `PromiseState`
+resolves to the same fully-qualified name as the body's, and the
+type-equality check passes. The transitive `:refer-all` chain
+doesn't establish this binding for the spec-level resolver.
+
+**Hypothesis.** The `:refer-all` import re-exports terms but doesn't
+re-establish bindings in the new module's "type-name resolution
+table" for spec parsing. Specs are processed earlier than function
+bodies and may use a different name-lookup scope. The transitive
+case (`M1 :refer-all` chained through `M2 :refer-all`) compounds
+the issue: `M3`'s spec parser doesn't see `T` until an explicit
+`:refer [T]` is added.
+
+**Discovered.** Phase 25.4, while wiring `verify-questioner-reply`
+in bridge-interop-helpers.prologos. The original report was issue
+[#60](https://github.com/LogosLang/prologos/issues/60) (multi-
+constructor inference); this is a separate symptom that surfaced
+during the workaround. Adding the explicit `:refer [PromiseState …]`
+unblocked the function definition in <1 minute once diagnosed.
+
+**Verdict.** Real, but lower-impact than #60 because the workaround
+is a 1-line import addition. Worth filing because: (a) the error
+message ("Type mismatch [Pi T] vs [Pi qualified::T]") is confusing
+— the names look identical at first glance; (b) `:refer-all` chains
+are a common shortcut in Prologos library modules, and any
+downstream user pattern-matching or returning a parametric type
+from a chained module will hit this; (c) fixing it would let
+`:refer-all` Just Work as expected.
+
+
+
