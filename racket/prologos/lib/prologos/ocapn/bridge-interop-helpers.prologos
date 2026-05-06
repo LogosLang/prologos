@@ -20,8 +20,9 @@ require [prologos::ocapn::core   :refer-all]
         [prologos::ocapn::message :refer-all]
         [prologos::ocapn::captp-wire :refer-all]
         [prologos::ocapn::captp-bridge :refer-all]
-        [prologos::data::list  :refer [List nil cons]]
+        [prologos::data::list  :refer [List nil cons append]]
         [prologos::data::option :refer [Option some none]]
+        [prologos::data::string :as str :refer []]
 
 ;; Eight-deep suc-tower; keeps `drive-echo-bridge-once` flat.
 def drain-fuel-8 : Nat := [suc [suc [suc [suc [suc [suc [suc [suc zero]]]]]]]]
@@ -52,4 +53,44 @@ defn drive-echo-bridge-from-bytes [bytes]
   match [decode-op bytes]
     | none    -> [none String]
     | some op -> [drive-echo-bridge-once op]
+
+;; ===========================================================
+;; Phase 25: handshake-aware bridge driver
+;; ===========================================================
+
+;; Concatenate a list of byte-strings with newline framing between
+;; them. Each frame ends with "\n" so the receiver's line-oriented
+;; framing (read-line) extracts each cleanly.
+spec framed-concat [List String] -> String
+defn framed-concat
+  | nil           -> ""
+  | cons hd tl    -> [str::append hd [str::append "
+" [framed-concat tl]]]
+
+;; Drive the bridge with a handshake-configured initial state and
+;; one inbound deliver op. The bridge's pump-outbound emits our
+;; session bytes (queued in pending-out by `bridge-state-with-our-session`)
+;; alongside the deliver reply. Returns the framed concatenation of
+;; all outbound bytes: `[our-session, deliver-reply, ...]`.
+;;
+;; This is the entry point that exercises the in-bridge handshake
+;; modelling: the test passes our (ver, loc) once at construction,
+;; the bridge produces both reply frames from a single dispatch.
+spec drive-handshake-with-deliver String String CapTPOp -> String
+defn drive-handshake-with-deliver [our-ver our-loc op]
+  let sa := [vat-spawn-actor beh-echo syrup-null empty-vat]
+    let step := [captp-incoming-with-state op [alloc-vat sa] [bridge-state-with-our-session our-ver our-loc]]
+      let v2 := [drain drain-fuel-8 [bridge-step-vat step]]
+        let pr := [pump-outbound v2 [bridge-step-state step] [nil Nat]]
+          [framed-concat [pump-result-bytes pr]]
+
+;; End-to-end handshake-aware driver from raw bytes. Decodes the
+;; deliver bytes, drives the bridge with our session pre-queued,
+;; returns framed concatenation of all outbound. Returns empty
+;; string if decode fails.
+spec drive-handshake-and-deliver String String String -> String
+defn drive-handshake-and-deliver [our-ver our-loc f2-bytes]
+  match [decode-op f2-bytes]
+    | none    -> ""
+    | some op -> [drive-handshake-with-deliver our-ver our-loc op]
 

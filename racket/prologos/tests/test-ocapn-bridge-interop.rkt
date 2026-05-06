@@ -170,54 +170,36 @@
   (check-pred string? f1-bytes "expected start-session frame from Node")
   (check-pred string? f2-bytes "expected deliver frame from Node")
 
-  ;; 5. Verify Node sent two frames; the first is op:start-session
-  ;;    and the second is op:deliver. CapTP requires both sides to
-  ;;    exchange op:start-session as part of the handshake, so we
-  ;;    synthesize our reply via `our-session-bytes` and dispatch
-  ;;    the deliver via `drive-echo-bridge-from-bytes`. Both helpers
-  ;;    live in prologos::ocapn::bridge-interop-helpers (raco make
-  ;;    compiles it once) so process-string only has to elaborate a
-  ;;    single function call per round (sidesteps pitfall #30).
-  ;;
-  ;;    The peer's f1-bytes are not currently dispatched through
-  ;;    the bridge — the bridge's session handler is a no-op (see
-  ;;    captp-bridge.prologos § handshake-state) — so we synthesize
-  ;;    our outbound session reply directly. A follow-up track
-  ;;    will move session state into the bridge itself; at that
-  ;;    point this test collapses to a single drive call that
-  ;;    accumulates all outbound bytes from both inbound frames.
+  ;; 5. Verify Node sent two frames; the first is op:start-session,
+  ;;    the second is op:deliver. CapTP requires both sides to
+  ;;    exchange op:start-session as part of the handshake. The
+  ;;    bridge models this as state: `bridge-state-with-our-session
+  ;;    ver loc` pre-queues our session bytes in the BridgeState's
+  ;;    `pending-out` field, and the next `pump-outbound` flushes
+  ;;    them alongside any vat-resolution bytes. So driving the
+  ;;    bridge once with the deliver op yields BOTH our session
+  ;;    reply AND the deliver reply, framed and concatenated, in a
+  ;;    single `drive-handshake-and-deliver` call.
   (check-true (> (string-length f1-bytes) 10) "Node start-session frame too short")
   (check-true (> (string-length f2-bytes) 10) "Node deliver frame too short")
 
-  ;; 6a. Build our outbound op:start-session reply.
+  ;; 6. Drive the bridge end-to-end: handshake config + deliver dispatch.
+  ;;    Returns a single String of newline-framed wire bytes covering
+  ;;    both our session reply and the deliver reply.
   (define our-ver "0.1")
   (define our-loc "tcp-testing-only:peer-racket")
-  (define session-expr
-    (format "(eval (our-session-bytes ~s ~s))" our-ver our-loc))
-  (define session-bytes (extract-value-bytes (run-last session-expr)))
-  (printf "bridge-interop: our-session-bytes = ~s~n" session-bytes)
-  (check-true (> (string-length session-bytes) 10)
-              (format "session-bytes suspiciously short: ~s" session-bytes))
-
-  ;; 6b. Drive the bridge with the deliver bytes; get the reply.
   (define driver-expr
-    (format "(eval (unwrap-or \"NO-OUTBOUND\"
-                                (drive-echo-bridge-from-bytes ~s)))"
-            f2-bytes))
-  (define reply-bytes (extract-value-bytes (run-last driver-expr)))
-  (printf "bridge-interop: reply-bytes from Prologos = ~s~n" reply-bytes)
-  (check-true (> (string-length reply-bytes) 10)
-              (format "bridge produced suspiciously short reply: ~s" reply-bytes))
-  (check-false (equal? reply-bytes "NO-OUTBOUND")
-               "bridge emitted no outbound bytes — pump did not fire")
+    (format "(eval (drive-handshake-and-deliver ~s ~s ~s))"
+            our-ver our-loc f2-bytes))
+  (define reply-blob (extract-value-bytes (run-last driver-expr)))
+  (printf "bridge-interop: framed reply blob = ~s~n" reply-blob)
+  (check-true (> (string-length reply-blob) 20)
+              (format "framed reply blob suspiciously short: ~s" reply-blob))
 
-  ;; 7. Write both frames back to Node: our session, then the deliver
-  ;;    reply. Each frame on its own line per the test's framing
-  ;;    convention (newline-terminated Syrup byte-strings).
-  (write-string session-bytes cout)
-  (write-string "\n" cout)
-  (write-string reply-bytes cout)
-  (write-string "\n" cout)
+  ;; 7. Write the framed blob back to Node. The blob already contains
+  ;;    both frames terminated with newlines (per `framed-concat`),
+  ;;    so a single write-string sends both frames at once.
+  (write-string reply-blob cout)
   (flush-output cout)
 
   ;; 8. Wait for Node to verify and exit. Read its summary line.

@@ -69,6 +69,7 @@ defn incoming-captp-op
 
 require [prologos::ocapn::promise :refer-all]
         [prologos::ocapn::syrup-wire :as wire :refer []]
+        [prologos::data::list :refer [append cons nil]]
 
 ;; Build the bytes for an outbound op:deliver targeting an
 ;; answer-pos:
@@ -150,48 +151,76 @@ data QEntry
   ;; answer-pos route to the same local promise.
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry]
-  ;; (listeners, gc-export-requests, gc-answer-positions, question-table)
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String]
+  ;; (listeners, gc-export-requests, gc-answer-positions, question-table,
+  ;;  pending-out)
+  ;;
+  ;; The 5th field `pending-out : List String` carries byte-strings
+  ;; the bridge wants to emit on the next pump call but doesn't fit
+  ;; the question-table walk pattern (e.g. our op:start-session reply
+  ;; for the CapTP handshake).
+  ;;   nil             — no pending bytes (default for non-handshake use).
+  ;;   [cons ...]     — these bytes will be flushed by the next pump call.
+  ;; Use `bridge-state-with-our-session ver loc` to create a state
+  ;; that has our session bytes pre-queued for handshake emission.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil]
+
+;; Construct a BridgeState pre-loaded with our op:start-session bytes
+;; queued for flush on the next pump-outbound. CapTP handshake
+;; protocol: when peer connects + sends their op:start-session, we
+;; reciprocate by sending ours. Pre-queueing in BridgeState lets the
+;; pump emit them alongside any vat-resolution outbound.
+spec bridge-state-with-our-session String String -> BridgeState
+defn bridge-state-with-our-session [ver loc]
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil]
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ -> ls
+  | bridge-state ls _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ -> es
+  | bridge-state _ es _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ -> as
+  | bridge-state _ _ as _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs -> qs
+  | bridge-state _ _ _ qs _ -> qs
+
+spec bs-pending-out BridgeState -> List String
+defn bs-pending-out
+  | bridge-state _ _ _ _ p -> p
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs] ->
-      bridge-state [cons [listener tgt res] ls] es as qs
+  | tgt res [bridge-state ls es as qs p] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs
+  | pos cnt [bridge-state ls es as qs p] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs] ->
-      bridge-state ls es [cons pos as] qs
+  | pos [bridge-state ls es as qs p] ->
+      bridge-state ls es [cons pos as] qs p
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs] ->
-      bridge-state ls es as [cons [q-entry remote local] qs]
+  | remote local [bridge-state ls es as qs p] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p
+
+spec bs-clear-pending-out BridgeState -> BridgeState
+defn bs-clear-pending-out
+  | bridge-state ls es as qs _ ->
+      bridge-state ls es as qs nil
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -283,7 +312,7 @@ defn dispatch-deliver [tgt args ap v st]
           | none       -> deliver-allocate tgt args remote v st
 
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
-  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15."
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 (handshake)."
 defn captp-incoming-with-state
   | [op-deliver tgt args ap _rm] v st ->
       dispatch-deliver tgt args ap v st
@@ -292,6 +321,10 @@ defn captp-incoming-with-state
   | [op-abort _reason] v st ->
       bridge-step v st
   | [op-start-session _ver _loc] v st ->
+      ;; Phase 25 handshake: peer's session arrived — state already
+      ;; carries our session bytes in pending-out (set up via
+      ;; bridge-state-with-our-session); the next pump-outbound call
+      ;; will flush them. State-preserving here, emission deferred.
       bridge-step v st
   | [op-listen tgt resolver] v st ->
       bridge-step v [bs-add-listener tgt resolver st]
@@ -366,11 +399,17 @@ defn pump-loop
           [pump-result-emitted r]
           [pump-result-bytes r]
 
+;; Prepend the pending-out bytes to the pump-loop's result.
+;; Defined BEFORE pump-outbound so the call site below can resolve.
+spec prepend-pending-out [List String] PumpResult -> PumpResult
+defn prepend-pending-out [pending pr]
+  pump-result [append String pending [pump-result-bytes pr]] [pump-result-emitted pr]
+
 ;; Public top-level pump.
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
-  :doc "Walk the question table; emit bytes for newly-resolved promises."
+  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply)."
 defn pump-outbound [v st emitted]
-  pump-loop [bs-questions st] v emitted nil
+  prepend-pending-out [bs-pending-out st] [pump-loop [bs-questions st] v emitted nil]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).
@@ -469,8 +508,11 @@ def drain-fuel : Nat := [suc [suc [suc [suc [suc zero]]]]]
 ;;   1. If already aborted, return state unchanged with no bytes.
 ;;   2. Apply the inbound op via captp-incoming-with-state.
 ;;   3. Drain the vat with bounded fuel.
-;;   4. Pump outbound bytes for newly-resolved questions.
-;;   5. Update emitted-pids and aborted? flag.
+;;   4. Pump outbound bytes — emits pending-out (e.g. our handshake
+;;      reply pre-queued via bridge-state-with-our-session) plus
+;;      bytes for newly-resolved questions.
+;;   5. Clear pending-out so subsequent pumps don't re-emit.
+;;   6. Update emitted-pids and aborted? flag.
 spec connection-step CapTPOp ConnectionState -> ConnStep
 defn connection-step [op cs]
   match [conn-aborted? cs]
@@ -478,8 +520,8 @@ defn connection-step [op cs]
     | false ->
         let bs    := [captp-incoming-with-state op [conn-vat cs] [conn-bridge-state cs]]
           let v'    := [run-vat drain-fuel [bridge-step-vat bs]]
-            let st'   := [bridge-step-state bs]
-              let pump  := [pump-outbound v' st' [conn-emitted cs]]
+            let st'   := [bs-clear-pending-out [bridge-step-state bs]]
+              let pump  := [pump-outbound v' [bridge-step-state bs] [conn-emitted cs]]
                 let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
                   conn-step cs' [pump-result-bytes pump]
 
