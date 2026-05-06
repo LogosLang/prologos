@@ -91,6 +91,11 @@
 - Trait methods: short names (`eq?`, `from`, `add`)
 - Module paths use `::` not `.` -- `str::length`, `prologos::data::nat`
 - Dot access is for map keys -- `user.name` -> `[map-get user :name]`
+- **NEVER use `->` in identifiers** (silently fails to compile per pitfall #35). Use `-to-` for converters: `refr-to-syrup`, `op-to-syrup`, `syrup-to-op`. The Common Lisp / Scheme convention `refr->syrup` is incompatible with Prologos's WS-mode reader, which parses `->` as the function-arrow type operator inside any identifier.
+
+## Data type definitions
+
+- **Constructor signatures have IMPLICIT return type** (per pitfall #34). Write `data X { ctor : T1 -> T2 }` to mean "ctor takes 2 args of types T1 and T2 and returns X." Do NOT write `ctor : T1 -> T2 -> X` — that means "takes 3 args (T1, T2, X) and returns X." Existing examples: `data Listener { listener : Nat -> Nat }`, `data QEntry { q-entry : Nat -> Nat }`. Symptom of getting it wrong: smart constructors fail with `Type mismatch [Pi T -> Result -> Result]`.
 
 ## Nat vs Int
 

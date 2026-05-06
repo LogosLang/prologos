@@ -1338,5 +1338,188 @@ modules, and any downstream user pattern-matching or returning a
 parametric type from a chained module will hit this; (c) fixing it
 would let `:refer-all` Just Work as expected.
 
+---
+
+### #34 — `data` constructor signatures have IMPLICIT return type (2026-05-06, real ergonomics bug)
+
+**Symptom.** A user writes the natural-looking `data` declaration:
+
+```
+data Refr
+  refr : Nat -> Nat -> Refr        ;; "takes 2 Nats, returns Refr"
+```
+
+…intending the type signature to be the FULL function type. The
+elaborator silently treats this as a 3-ARGUMENT constructor:
+`(Nat, Nat, Refr) -> Refr`. Smart constructors that try to apply
+`refr` to two Nats then fail with a confusing error message.
+
+**Repro.** From OCapN Phase 34a (commit `3d8c069`'s pre-fix state).
+With the over-specified `refr : Nat -> Nat -> Refr`, this smart
+constructor:
+
+```
+spec refr-local-export Nat -> Refr
+defn refr-local-export [n]
+  refr refr-kind-local-export n
+```
+
+Failed with:
+
+```
+Type mismatch
+  expected: [Pi [x <Nat>] Refr]
+  got:      [Pi [x <Nat>] Refr -> Refr]
+```
+
+The "got" type reveals the elaborator inferred the body's return
+type as `Refr -> Refr` — i.e., applying `refr` to two Nats returned
+something that needs ANOTHER Refr argument.
+
+**Root cause.** Prologos's `data` constructor signatures use the
+syntax `ctor : T1 -> T2 -> ... -> Tn`, where the FINAL return type
+(the data type itself) is **implicit**. The Tn slot is always the
+LAST ARGUMENT, not the return type. Existing examples in the
+codebase follow this convention:
+
+```
+;; Listener carries (target, resolver-pos), 2 Nat args:
+data Listener
+  listener : Nat -> Nat               ;; takes 2 Nats, returns Listener
+
+;; QEntry carries (key, value), 2 Nat args:
+data QEntry
+  q-entry : Nat -> Nat                ;; takes 2 Nats, returns QEntry
+```
+
+If you want `refr` to take 2 Nats, write `refr : Nat -> Nat`. The
+return type `Refr` is implicit.
+
+**Fix.** Drop the trailing `-> ResultType`:
+
+```
+data Refr
+  refr : Nat -> Nat                   ;; CORRECT: 2 Nat args, returns Refr
+```
+
+**Workaround value.** A single-line edit fixes the data def. The
+hard part is recognizing the symptom — the "Pi … -> Refr -> Refr"
+error doesn't say "you over-specified the return type."
+
+**Discovered.** OCapN Phase 34a (2026-05-06). Cost ~15 minutes
+of debugging when the smart constructors all failed with the
+"Type mismatch" error. Diagnosed by comparing my data def to
+existing data types in the same file (`Listener`, `QEntry`) which
+follow the implicit-return convention.
+
+**Verdict.** Real ergonomic bug — the syntax is misleading. In
+many ML/Haskell-family languages, `ctor : T1 -> T2 -> Result` IS
+the full type. Prologos diverges. Either (a) accept the explicit
+form (e.g., parse `refr : Nat -> Nat -> Refr` correctly); or
+(b) better error message ("data constructor signature should not
+include the data type as the last argument; the return type is
+implicit"). For now, document the convention and follow existing
+code patterns.
+
+---
+
+### #35 — Function names containing `->` silently fail to compile (2026-05-06, real bug)
+
+**Symptom.** A function definition with `->` in its name (e.g.
+`refr->syrup`, mimicking common ML/Lisp naming convention) is
+silently **dropped** by the elaborator. No error message, no
+"defined" message in the elaboration output — the binding just
+doesn't exist. Callers get an "Unbound variable" error.
+
+**Repro.** From OCapN Phase 34d (commit `7c797e6`'s pre-fix state):
+
+```
+spec refr->syrup Refr -> SyrupValue
+defn refr->syrup [r]
+  match [refr-export-kind? r]
+    | true  -> [syrup-tagged "desc:export" [syrup-nat [refr-id r]]]
+    | false -> [syrup-tagged "desc:answer" [syrup-nat [refr-id r]]]
+```
+
+Looks fine. Compile-and-list-defs output shows `refr-export-kind?`
+defined right before, then jumps to `bridge-state-empty` after.
+`refr->syrup` is silently absent. Callers in test code get:
+
+```
+Unbound variable: 'refr->syrup
+```
+
+**Root cause.** Prologos's WS-mode reader parses `->` as the
+function-arrow type operator. When `->` appears INSIDE an
+identifier, the reader splits the identifier at the arrow.
+`refr->syrup` is read as `refr -> syrup` — a malformed type
+expression in identifier position. The `spec` and `defn` forms
+then can't bind anything sensible and silently drop.
+
+**Fix.** Don't use `->` in identifiers. Use `to`, `_to_`, or just
+a hyphen:
+
+```
+spec refr-to-syrup Refr -> SyrupValue       ;; CORRECT
+spec refr-to-bytes Refr -> String
+spec refr-from-syrup SyrupValue -> Option Refr
+```
+
+The `to` convention is what the rest of this codebase uses (e.g.
+`syrup-to-op`, `op-to-syrup`).
+
+**Workaround value.** Trivial rename. Hard part is diagnosis: no
+error message, just "Unbound variable" downstream.
+
+**Discovered.** OCapN Phase 34d (2026-05-06). Cost ~15 minutes —
+diagnosed by:
+1. Verifying spec/defn syntax was correct (it was).
+2. Verifying the function name didn't collide with an existing
+   binding (it didn't).
+3. Wondering if special characters in names were the issue.
+4. Renaming to `refr-to-syrup` — Just Worked.
+
+**Verdict.** Real Prologos reader/elaborator bug. The silent-drop
+behavior is the worst part — even a generic "syntax error in
+identifier" warning would have caught this in 30 seconds. Reader
+should either: (a) accept `->` in identifiers (treat `refr->syrup`
+as one symbol); or (b) raise a syntax error pointing at the
+offending identifier.
+
+For now: codebase convention is to never use `->` in identifiers.
+Use `-to-` or similar. The Common Lisp / Scheme convention of
+`x->y` for converters is incompatible with Prologos's reader.
+
+---
+
+### Recurrences during Phase 34 (2026-05-06, no new pitfall — confirms existing entries)
+
+For the record, Phase 34 hit several PRE-EXISTING pitfalls multiple
+times. Each occurrence confirmed the entry is still correct and
+the workaround still works:
+
+- **Pitfall #18** (multi-arity defn with constructor patterns).
+  Hit again on `defn add | zero b -> b | suc a b -> ...`. The
+  `suc a b` parses ambiguously; brackets fix it: `[suc a] b -> ...`.
+  Codified the bracket convention more strongly in commit messages.
+
+- **Pitfall #21** (multi-line clause body silently produces
+  `??__match-fail`). Hit on `defn extract-refrs-from-list |
+  [cons hd tl] ->\n      [append ...]`. Worked around with the
+  bracketed-arg + inline `match` form (`defn name [xs] (match xs
+  | nil -> ... | cons hd tl -> body)`), which is the same shape
+  as `data/list`'s `concat`.
+
+- **Pitfall #16** (forward references / mutual recursion). Hit on
+  `extract-refrs-from-args ↔ extract-refrs-from-list`. Worked
+  around by making the inner walker call only `shallow-refr`
+  (non-recursive) so the recursion is one-way. Trade-off: one
+  level of list walking instead of full tree.
+
+- **Issue #60** (multi-constructor cross-module inference). Hit
+  on multi-arg helpers calling `captp-incoming-with-state`. Worked
+  around by pulling helpers down to 2-3 args via `BridgeStep`.
+
+
 
 
