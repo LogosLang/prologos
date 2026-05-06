@@ -220,6 +220,59 @@
     "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
    "none"))
 
+;; Phase 34a: Refr ADT.
+(test-case "refr/refr-remote-export round-trips through accessors"
+  (check-contains
+   (run-last
+    "(eval (refr-id (refr-remote-export (suc (suc (suc zero))))))")
+   "3N")
+  (check-contains
+   (run-last
+    "(eval (refr-kind (refr-remote-export (suc (suc (suc zero))))))")
+   "1N"))
+
+(test-case "refr/refr-remote-export? predicate"
+  (check-contains
+   (run-last
+    "(eval (refr-remote-export? (refr-remote-export (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-export? (refr-local-export (suc zero))))")
+   "false"))
+
+(test-case "refr/refr-local-answer? + refr-remote-answer? + refr-local-export?"
+  (check-contains
+   (run-last
+    "(eval (refr-local-answer? (refr-local-answer (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-remote-answer? (refr-remote-answer (suc zero))))")
+   "true")
+  (check-contains
+   (run-last
+    "(eval (refr-local-export? (refr-local-export zero)))")
+   "true"))
+
+(test-case "refr/refr-eq? same kind same id => true"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc (suc zero))) (refr-remote-export (suc (suc zero)))))")
+   "true"))
+
+(test-case "refr/refr-eq? different ids => false"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-remote-export (suc (suc zero)))))")
+   "false"))
+
+(test-case "refr/refr-eq? different kinds => false even with same id"
+  (check-contains
+   (run-last
+    "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-local-export (suc zero))))")
+   "false"))
+
 ;; Phase 31: removal of question-table entries for GC.
 (test-case "bridge/bs-remove-question removes inbound question entry"
   ;; Add q-pos=2 → pid=1, then remove q-pos=2; lookup should return none.

@@ -172,6 +172,95 @@ data QEntry
   ;; record (N → local-id) so subsequent ops referring to the same
   ;; answer-pos route to the same local promise.
 
+;; ===========================================================
+;; Refr — runtime CapTP capability value (Phase 34a)
+;; ===========================================================
+;;
+;; A Refr is a runtime reference to a capability: either one of OUR
+;; exports/answer-table-entries (local kind) or one of PEER's
+;; (remote kind, "imported" from peer's wire).
+;;
+;; Single-constructor with a numeric `kind` tag avoids issue #60
+;; (multi-constructor cross-module inference failure). The four
+;; smart constructors are the public API; user code never matches
+;; on `refr` directly.
+;;
+;; Brand-check semantics (OCapN): two refrs are the same brand iff
+;; same (kind, id). Within ONE connection (one BridgeState), this
+;; is sufficient — connection identity is implicit. Cross-connection
+;; comparison would need a connection-id field; deferred until
+;; multi-connection scenarios.
+;;
+;; Reference-equality (Racket eq?) is NOT guaranteed across calls
+;; — two `[refr-remote-export 5]` constructions produce equal? but
+;; not necessarily eq? values. True hash-consed eq? would require
+;; a per-BridgeState intern table; deferred until a use case
+;; demands it. For OCapN brand-check (the spec's notion), structural
+;; equality is the operational equivalent.
+data Refr
+  refr : Nat -> Nat            ;; (kind-tag, id) — return type Refr is implicit
+
+;; Kind tags. Encoded as Nat for issue #60 avoidance (no enum sum).
+def refr-kind-local-export  : Nat := zero
+def refr-kind-remote-export : Nat := [suc zero]
+def refr-kind-local-answer  : Nat := [suc [suc zero]]
+def refr-kind-remote-answer : Nat := [suc [suc [suc zero]]]
+
+;; Smart constructors. Use these — never construct `refr` directly.
+
+spec refr-local-export Nat -> Refr
+defn refr-local-export [n]
+  refr refr-kind-local-export n
+
+spec refr-remote-export Nat -> Refr
+defn refr-remote-export [n]
+  refr refr-kind-remote-export n
+
+spec refr-local-answer Nat -> Refr
+defn refr-local-answer [n]
+  refr refr-kind-local-answer n
+
+spec refr-remote-answer Nat -> Refr
+defn refr-remote-answer [n]
+  refr refr-kind-remote-answer n
+
+;; Accessors.
+
+spec refr-kind Refr -> Nat
+defn refr-kind
+  | refr k _ -> k
+
+spec refr-id Refr -> Nat
+defn refr-id
+  | refr _ n -> n
+
+;; Predicates.
+
+spec refr-local-export? Refr -> Bool
+defn refr-local-export?
+  | refr k _ -> nat-eq? k refr-kind-local-export
+
+spec refr-remote-export? Refr -> Bool
+defn refr-remote-export?
+  | refr k _ -> nat-eq? k refr-kind-remote-export
+
+spec refr-local-answer? Refr -> Bool
+defn refr-local-answer?
+  | refr k _ -> nat-eq? k refr-kind-local-answer
+
+spec refr-remote-answer? Refr -> Bool
+defn refr-remote-answer?
+  | refr k _ -> nat-eq? k refr-kind-remote-answer
+
+;; Brand-check: two refrs are the same brand iff same (kind, id).
+;; Implements OCapN brand-check semantics within a single connection.
+spec refr-eq? Refr Refr -> Bool
+defn refr-eq?
+  | [refr k1 n1] [refr k2 n2] ->
+      match [nat-eq? k1 k2]
+        | true  -> nat-eq? n1 n2
+        | false -> false
+
 data BridgeState
   bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
