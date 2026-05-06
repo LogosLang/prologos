@@ -91,11 +91,11 @@
            (define meet-fn (sre-domain-meet domain rel))
            (list
              (sd-finding domain-name rel 'distributive sample-count
-                         (test-distributive domain samples meet-fn))
+                         (test-distributive domain samples meet-fn #:relation rel))
              (sd-finding domain-name rel 'sd-vee sample-count
-                         (test-sd-vee/detailed domain samples meet-fn))
+                         (test-sd-vee/detailed domain samples meet-fn #:relation rel))
              (sd-finding domain-name rel 'sd-wedge sample-count
-                         (test-sd-wedge/detailed domain samples meet-fn))))))
+                         (test-sd-wedge/detailed domain samples meet-fn #:relation rel))))))
 
 ;; ========================================================================
 ;; format-sd-findings
