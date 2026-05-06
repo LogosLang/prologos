@@ -1,20 +1,41 @@
 # `loose-bvar-range` Fix — Post-Implementation Review
 
-**Date**: 2026-05-04
+**Date**: 2026-05-04 (initial fix on `shift`); 2026-05-06 (extended to `subst`)
 **Track**: pitfall #31 fix (issue [#58](https://github.com/LogosLang/prologos/issues/58))
 **Author**: Claude
-**Status**: **SHIPPED** — 2.4× speedup at N=5; 91/91 tests pass across reduction, substitution, and OCapN bridge.
+**Status**: **SHIPPED + COMPLETE** — 40.8× speedup at N=5, linear scaling restored; 91/91 tests pass across reduction, substitution, and OCapN bridge.
 
 ## TL;DR
 
-Implemented option #1 from the [substitution perf survey](2026-05-04_SUBSTITUTION_PERF_SURVEY.md): a Lean 4-style `looseBVarRange` short-circuit on `shift`. Doesn't touch any `expr-*` struct definition; uses a weak-eq memo table to amortize the per-expression range computation.
+Implemented option #1 from the [substitution perf survey](2026-05-04_SUBSTITUTION_PERF_SURVEY.md): a Lean 4-style `looseBVarRange` short-circuit applied to BOTH `shift` and `subst`. Doesn't touch any `expr-*` struct definition; uses a weak-eq memo table to amortize the per-expression range computation.
 
-| N | Baseline | After fix | Speedup |
+| N | input bytes | Baseline | After fix | Speedup |
+|---|---|---|---|---|
+| 1 | 9   | 1 670 ms  | 618 ms   | 2.7× |
+| 5 | 37  | 47 036 ms | 1 153 ms | **40.8×** |
+| 10 | 72  | (would be ~3 min) | 1 901 ms | — |
+| 20 | 142 | (would be ~12 min) | 3 487 ms | — |
+
+Scaling is now linear in input size:
+
+| N | bytes | wall ms | ms/byte |
 |---|---|---|---|
-| 1 | 1670 ms | 1451 ms | 1.15× |
-| 5 | 47 036 ms | 19 455 ms | **2.42×** |
+| 1 | 9 | 618 | 68.7 |
+| 5 | 37 | 1 153 | 31.2 |
+| 10 | 72 | 1 901 | 26.4 |
+| 20 | 142 | 3 487 | **24.6** |
 
-Speedup grows with N — signature of an asymptotic improvement. Pre-fix: shape was N^2.0 (27.1× for 5× input). Post-fix: shape is roughly N^1.6 (13.4× for 5× input). The bug isn't fully eliminated at the asymptotic level, but the constant got dramatically better and the worst-case slope flattened. Further wins available from the same lever applied more broadly (see § "What's left").
+ms/byte stabilizes around 25 — overhead amortizes as inputs grow. Pre-fix shape was **N^2.0** (`time = c · n²`). Post-fix shape is **N^1.0** with mild constant-factor decay as overhead amortizes. Pitfall #31 is closed at the asymptotic level.
+
+## History (two-step fix)
+
+This fix landed in two steps as the two-stage diagnosis unfolded:
+
+**Step 1 (2026-05-04)**: looseBVarRange short-circuit on `shift` only. 2.4× at N=5. Residual scaling N^1.6.
+
+**Step 2 (2026-05-06)**: Same device extended to `subst`. The residual super-linearity was traced to `subst` itself — when shift is fixed but subst still walks an O(K)-sized accumulator at every iteration, total work is still O(K²) with shift no longer dominating. Applying the same `loose-bvar-range` short-circuit to `subst`'s entry eliminates the residual.
+
+Step 2 is a one-line addition that mirrors step 1. The methodology lesson is the same: instrument first, fix the measured bottleneck.
 
 ## What was built
 
@@ -32,18 +53,23 @@ Special-cased binders: `expr-lam`, `expr-Pi`, `expr-Sigma` (1 binder), `expr-red
 
 ### `racket/prologos/substitution.rkt` (modified)
 
-`shift`'s entry now short-circuits:
+Both `shift` and `subst` now short-circuit at their entry points:
 
 ```racket
 (define (shift delta cutoff e)
   (cond
     [(<= (loose-bvar-range e) cutoff) e]   ; <-- O(1) when no free bvars need shifting
     [else (shift-impl delta cutoff e)]))
+
+(define (subst k s e)
+  (cond
+    [(<= (loose-bvar-range e) k) e]        ; <-- O(1) when no free bvars need substituting
+    [else (subst-impl k s e)]))
 ```
 
-For closed substitution arguments (the common case in tail-recursive accumulators — decoders, folds, parsers), shift returns `e` unchanged in O(1). Per-iteration shift cost in `decode-many-acc` drops from O(|acc|) to O(1).
+For closed substitution arguments (the common case in tail-recursive accumulators — decoders, folds, parsers), both shift and subst return `e` unchanged in O(1). Per-iteration shift+subst cost in `decode-many-acc` drops from O(|acc|) to O(1).
 
-The pre-existing `shift` body was renamed to `shift-impl` and retains the eq-preserving compound-form short-circuits added in the previous failed-fix-PIR work (which are still correct and may help in cases where the top-level range check doesn't trigger).
+The pre-existing bodies were renamed to `shift-impl` and `subst-impl` and retain the eq-preserving compound-form short-circuits added in the previous failed-fix-PIR work (which are still correct and may help in cases where the top-level range check doesn't trigger).
 
 ## Empirical scaling
 
@@ -56,25 +82,38 @@ Diagnostic test: `racket/prologos/tests/test-bridge-perf.rkt` — decodes a Syru
 | 1 | 1670 ms | 360 | 4 116 | — |
 | 5 | 47 036 ms | 949 | **206 472** | **27.1× / 50.2× shifts** |
 
-### With looseBVarRange fix
+### With looseBVarRange on shift only (Step 1)
 
-| N | wall time | reduce_steps | scaling |
-|---|---|---|---|
-| 1 | 1451 ms | 360 | — |
-| 5 | 19 455 ms | 949 | **13.4×** |
+| N | wall time | scaling |
+|---|---|---|
+| 1 | 1451 ms | — |
+| 5 | 19 455 ms | **13.4×** |
 
-Reduce_steps unchanged at both sizes (semantics preserved exactly). Wall time grows slower:
+Improvement from 27× to 13× at N=5; shape went N^2.0 → N^1.6. Bug not fully eliminated.
+
+### With looseBVarRange on shift AND subst (Step 2 — final)
+
+| N | wall time | scaling |
+|---|---|---|
+| 1 | 618 ms | — |
+| 5 | 1 153 ms | 1.87× |
+| 10 | 1 901 ms | 3.08× |
+| 20 | 3 487 ms | 5.64× |
+
+Reduce_steps unchanged at all sizes (semantics preserved exactly). Wall time now scales linearly:
 
 - Baseline: time scales as N^2.0 (5× input → 27× time)
-- After fix: time scales as N^1.6 (5× input → 13× time)
-- Theoretical linear: N^1.0 (5× input → 5× time)
+- After step 1: time scales as N^1.6 (5× input → 13× time)
+- After step 2: time scales as N^1.0 (5× input → ≈2× time, including fixed overhead)
+- Theoretical linear: N^1.0 (5× input → 5× time, when overhead is amortized away)
 
-The remaining super-linearity (N^1.6) means there's still a workload that scales worse-than-linearly somewhere. Likely candidates:
-- The generic-range walker's first-time cost is O(struct-size); for the function body itself this is paid once per `process-string` call but might not memoize correctly across repeated reductions if the body re-allocates.
-- NF (full normalization) on the result tree at the end of `process-string` walks O(N).
-- Other shifts on non-closed arguments still pay full cost.
+Per-byte cost stabilizes at ~25 ms/byte at N=20 — confirming linear with constant amortization.
 
-For pitfall #31's specific OCapN unblock, this is sufficient: 2.4× at N=5 with growing speedup at higher N. Further investigation worth its own track.
+### Diagnosing the residual (step 1 → step 2)
+
+Step 1 left N^1.6. Adding a `subst-nodes` counter showed that subst calls grew 19.8× when the input grew 5× — close to the observed 13.4× wall time scaling. The same diagnosis loop (instrument → measure → fix the measured hot path) that found shift in the first place found subst as the residual. The fix shape (looseBVarRange short-circuit at the entry) was identical.
+
+This is the natural shape of "tail-recursive accumulator with binders": each iteration shifts the accumulator under one new binder, then substitutes into a body that contains the accumulator. Both shift and subst have to walk the entire accumulator if naive. Both become O(1) on closed accumulators with the range short-circuit.
 
 ## Correctness verification
 
@@ -102,29 +141,41 @@ Trade-off: hashtable lookup has higher constant overhead than a direct struct-fi
 | File | Change | Lines |
 |---|---|---|
 | `racket/prologos/loose-bvar.rkt` (new) | Memoized range computation + generic walker | +98 |
-| `racket/prologos/substitution.rkt` | Wire range check at shift entry; require new module | +15 |
+| `racket/prologos/substitution.rkt` | Wire range check at shift AND subst entry; require new module | +20 |
 
 Plus this PIR.
 
 ## What's left (deferred)
 
-1. **Investigate residual N^1.6 scaling.** Probably in NF/zonk on the result tree, or in some pattern that still allocates non-closed substitution args. Profile + targeted fix.
-2. **Combine with hash-consing** (option #4 in the survey). Constant-factor wins on `equal?` and cache lookups across the whole codebase. ~1-2 days of work.
-3. **Migrate from memo to struct field** if profiling shows the hashtable lookup as hot. Mechanical 327-struct change.
-4. ~~Re-enable `test-ocapn-bridge-interop.rkt`~~ **Attempted; not yet sufficient.** Local re-run with the looseBVarRange fix in place still exceeded 5 minutes wall-time before kill. The fix gives 2.4× on the synthetic `decode-value` scaling test, but the bridge-interop test does substantially more total work (decode + `captp-incoming-with-state` dispatch + vat `drain` + `pump-outbound` encode). With residual N^1.6 scaling, that work multiplies. The test stays in `.skip-tests`; revisit after the residual super-linearity is investigated and/or hash-consing lands.
+1. ~~**Investigate residual N^1.6 scaling.**~~ **DONE (step 2)** — was in `subst`. Same fix.
+2. **Combine with hash-consing** (option #4 in the survey). Constant-factor wins on `equal?` and cache lookups across the whole codebase. Now nice-to-have rather than load-bearing — pitfall #31 is closed without it. ~1-2 days of work if pursued.
+3. **Migrate from memo to struct field** if profiling shows the hashtable lookup as hot. Mechanical 327-struct change. Not needed at current performance; revisit if a future workload dominates on memo lookup.
+4. **Re-enable `test-ocapn-bridge-interop.rkt`** — re-attempted post step 2 (2026-05-06): the bridge now produces the correct reply bytes, but at 10 min wall time vs 13 s CPU. The remaining slowness is wait/scheduling, not CPU-bound, so it's a different problem class from pitfall #31. Test stays skipped; needs its own track to localize the wait. Skip-reason updated in `.skip-tests`.
 
 ## Verifying the fix on bridge-interop (post-mortem)
 
-After committing the looseBVarRange fix, attempted to re-enable `test-ocapn-bridge-interop.rkt`. Local run timed out at 5+ minutes (compared to baseline >8 minutes; not strictly worse, possibly slightly better, but no clear "fast and green" signal).
+**Step 1 attempt (2026-05-04)**: After committing the shift-only looseBVarRange fix, attempted to re-enable `test-ocapn-bridge-interop.rkt`. Local run timed out at 5+ minutes (compared to baseline >8 minutes; not strictly worse, possibly slightly better, but no clear "fast and green" signal).
 
-Interpretation: the bridge-interop test's full driver expression invokes substantially more reductions than the synthetic perf test:
+The interpretation at the time was correct in shape but optimistic in impact: the bridge-interop test's full driver expression invokes substantially more reductions than the synthetic perf test (decode-op + `captp-incoming-with-state` dispatch + `drain` + `pump-outbound`), so the synthetic test's 2.4× speedup didn't translate end-to-end. The diagnosis pointed at "residual N^1.6 scaling" — and that residual turned out to be specifically in `subst`.
 
-- Synthetic test (`tests/test-bridge-perf.rkt` N=5): ~949 reduce_steps for one decode-value call
-- Bridge-interop test: one decode-op + `captp-incoming-with-state` dispatch + `drain` (vat event loop, multiple beta-reductions on actor + behavior + effect interpreter) + `pump-outbound` (record encoder) — probably 3-10× the reduce count
+**Step 2 attempt (2026-05-06)**: With the subst short-circuit added, the synthetic test went from N^1.6 to N^1.0 (40.8× total at N=5; 5.64× at N=20 — i.e. nearly linear with overhead). The bridge-interop test was re-attempted under the complete fix.
 
-With residual N^1.6 scaling, even a 2.4× improvement at the decode step doesn't translate to a 2.4× improvement on the full pipeline. The bridge test's slowness was end-to-end, not concentrated in any one phase, so the fix's localized win doesn't add up to a green-CI-gate win.
+Result: the bridge-interop test now COMPLETES (where pre-step-2 it ran past 5 min without producing output). The Racket bridge produces the correct reply bytes:
 
-**This is not a regression.** It just means closing pitfall #31 fully needs more than just looseBVarRange; the survey's option #4 (hash-consing) is the natural next step, and investigating where the residual N^1.6 lives will identify additional targets.
+```
+<10'op:deliver<11'desc:answer7+>5"helloff>
+```
+
+— but at 10 min 11 s of wall time. The Node peer-questioner had already given up at exit code 3 with `summary=#<eof>` before Racket finished, so the test still fails as a CI gate.
+
+Critically, the wall-time breakdown is:
+- real: 10m 11s
+- user: 13s (CPU)
+- sys: 0.8s
+
+Only 13 s of CPU was used across both Racket and Node. The other 9+ minutes are wait time — process startup, TCP round-trip, vat-drain scheduling, or some other non-CPU-bound coordination cost. **This is a different problem class from pitfall #31** (which was CPU-bound asymptotic blow-up in `shift`/`subst`). The bridge-interop slowness now has a different root cause — likely a `sleep`/poll loop somewhere in the bridge plumbing, or an unbatched per-frame TCP/scheduler overhead that pitfall #31's CPU-bound diagnostic doesn't capture.
+
+**Status**: bridge-interop stays in `.skip-tests`, but the skip-reason is updated from "perf-improved-but-still-slow" (which was true for step 1) to "bridge-pipeline-wait-time-too-high" (the actual current bottleneck). The hash-consing recommendation for further wins is no longer load-bearing for this test — additional CPU optimization won't help if the wall time isn't CPU-bound. The next investigation should profile the Racket bridge under a `racket -t` instrumented run with `current-inexact-milliseconds` checkpoints between TCP read, decode, dispatch, drain, encode, TCP write — to localize where the wait is, not where the cycles are.
 
 ## Relationship to issue #45 (EigenTrust O(k²))
 

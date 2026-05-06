@@ -1340,8 +1340,7 @@
 (define (whnf e)
   (define cache (current-whnf-cache))
   (cond
-    [(and cache (hash-ref cache e #f))
-     => values]
+    [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (whnf-impl e))
      (when cache
@@ -3197,8 +3196,7 @@
 (define (nf e)
   (define cache (current-nf-cache))
   (cond
-    [(and cache (hash-ref cache e #f))
-     => values]
+    [(and cache (hash-ref cache e #f)) => values]
     [else
      (define result (nf-whnf (whnf e)))
      (when cache

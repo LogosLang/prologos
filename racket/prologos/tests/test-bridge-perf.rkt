@@ -71,7 +71,7 @@
 
 (define (decode-test n)
   (define bytes (mk-list-bytes n))
-  (printf "TEST N=~a (input ~a bytes): " n (string-length bytes))
+  (printf "TEST N=~a (input ~a bytes):~n" n (string-length bytes))
   (flush-output)
   (timeit (format "decode-value N=~a" n)
     (lambda () (last (run (format "(eval (decode-value ~s))" bytes))))))

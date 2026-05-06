@@ -502,6 +502,16 @@
 ;; When going under a binder, k increases and s is shifted up
 ;; ========================================
 (define (subst k s e)
+  ;; pitfall #31 fix step 2: if e has no free bvars >= k, no
+  ;; substitution is possible — return e unchanged in O(1).
+  ;; Same looseBVarRange device as shift's short-circuit; eliminates
+  ;; the O(K²) walk-embedded-accumulator cost in tail-recursive
+  ;; iteration (the residual signature after shift was fixed).
+  (cond
+    [(<= (loose-bvar-range e) k) e]
+    [else (subst-impl k s e)]))
+
+(define (subst-impl k s e)
   (match e
     ;; Variables
     [(expr-bvar n)
