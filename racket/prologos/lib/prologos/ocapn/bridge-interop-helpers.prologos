@@ -20,6 +20,7 @@ require [prologos::ocapn::core   :refer-all]
         [prologos::ocapn::message :refer-all]
         [prologos::ocapn::captp-wire :refer-all]
         [prologos::ocapn::captp-bridge :refer-all]
+        [prologos::ocapn::promise :refer [PromiseState pst-unresolved pst-fulfilled pst-broken]]
         [prologos::data::list  :refer [List nil cons append]]
         [prologos::data::option :refer [Option some none]]
         [prologos::data::string :as str :refer []]
@@ -93,4 +94,54 @@ defn drive-handshake-and-deliver [our-ver our-loc f2-bytes]
   match [decode-op f2-bytes]
     | none    -> ""
     | some op -> [drive-handshake-with-deliver our-ver our-loc op]
+
+;; ===========================================================
+;; Phase 25.4: questioner-side interop helpers
+;; ===========================================================
+
+;; Look up a promise by id in the vat carried by a BridgeStep.
+;; 2-arg shape — sidesteps issue #60 (cross-module inference failure
+;; on multi-arg helpers calling captp-incoming-with-state with
+;; bound vars).
+spec lookup-after-step BridgeStep Nat -> [Option PromiseState]
+defn lookup-after-step [step pid]
+  lookup-promise pid [bridge-step-vat step]
+
+;; Dispatch an inbound op for an outbound-question reply, then
+;; look up the local promise. Caller supplies pre-built (vat, state, pid).
+;; 2-arg form via curry-passing through lookup-after-step.
+spec drive-after-step1-and-lookup BridgeStep Nat -> [Option PromiseState]
+defn drive-after-step1-and-lookup [step pid]
+  lookup-after-step step pid
+
+;; Phase 25.4 entry point. Given a peer's reply bytes (which should
+;; be `op:deliver <desc:answer q-pos> args false false`), set up a
+;; fresh promise tied to `q-pos` in the bridge's outbound-questions
+;; table, decode the reply, dispatch through the bridge, and return
+;; the local promise's state.
+;;
+;; Expected reply bytes shape (from peer-responder.mjs):
+;;   <op:deliver <desc:answer q-pos> reply-args false false>
+;;
+;; Returns:
+;;   some <pst-fulfilled v>  — bridge correctly resolved
+;;   some <pst-unresolved _> — bridge dispatched but didn't resolve
+;;   none                    — decode failed
+;;
+;; Returning Option PromiseState rather than discriminating in-bridge
+;; sidesteps issue #60 (multi-constructor inference failure
+;; cross-module). The test fixture pretty-prints the result and
+;; greps for "pst-fulfilled" + the answer payload.
+spec verify-questioner-reply Nat String -> [Option PromiseState]
+defn verify-questioner-reply [q-pos reply-bytes]
+  let alloc := [fresh-promise empty-vat]
+    let pid := [alloc-id alloc]
+      let v0 := [alloc-vat alloc]
+        let st0 := [bs-add-outbound-question q-pos pid bridge-state-empty]
+          match [decode-op reply-bytes]
+            | none    -> [none PromiseState]
+            | some op ->
+                drive-after-step1-and-lookup
+                  [captp-incoming-with-state op v0 st0]
+                  pid
 
