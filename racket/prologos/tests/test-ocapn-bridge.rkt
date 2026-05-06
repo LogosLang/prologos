@@ -273,6 +273,46 @@
     "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-local-export (suc zero))))")
    "false"))
 
+;; Phase 34c: imports-refcount field + updaters.
+(test-case "bridge/bs-incr-import on empty state creates entry with count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc (suc zero)) (bs-incr-import (suc (suc zero)) bridge-state-empty)))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc (suc zero)) (bs-incr-import (suc (suc zero)) bridge-state-empty)))")
+   "1N"))
+
+(test-case "bridge/bs-incr-import twice on same key increments to 2"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-incr-import (suc zero) (bs-incr-import (suc zero) bridge-state-empty))))")
+   "2N"))
+
+(test-case "bridge/bs-decr-import after 2 incrs leaves count=1"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-decr-import (suc zero) (suc zero)
+                (bs-incr-import (suc zero) (bs-incr-import (suc zero) bridge-state-empty)))))")
+   "1N"))
+
+(test-case "bridge/bs-decr-import below zero saturates at zero"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-import-refcount (suc zero)
+              (bs-decr-import (suc zero) (suc (suc (suc zero)))
+                (bs-incr-import (suc zero) bridge-state-empty))))")
+   "0N"))
+
+(test-case "bridge/bs-imports-refcount of empty state is empty list"
+  (check-contains
+   (run-last
+    "(eval (length (bs-imports-refcount bridge-state-empty)))")
+   "0N"))
+
 ;; Phase 31: removal of question-table entries for GC.
 (test-case "bridge/bs-remove-question removes inbound question entry"
   ;; Add q-pos=2 → pid=1, then remove q-pos=2; lookup should return none.
