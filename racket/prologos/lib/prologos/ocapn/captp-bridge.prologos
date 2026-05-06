@@ -475,9 +475,19 @@ defn captp-incoming-with-state
   | [op-listen tgt resolver] v st ->
       bridge-step v [bs-add-listener tgt resolver st]
   | [op-gc-export pos cnt] v st ->
+      ;; Phase 33: peer dropped k references to our export N.
+      ;; Currently we don't track exports-refcount (deferred until
+      ;; refr-import lands), so retain the audit-log behavior — the
+      ;; gc-exports list records peer's claim. When exports-refcount
+      ;; is added (future), this arm will also decrement that count.
       bridge-step v [bs-add-gc-export pos cnt st]
   | [op-gc-answer pos] v st ->
-      bridge-step v [bs-add-gc-answer pos st]
+      ;; Phase 33: peer is done with our inbound-question at q-pos N
+      ;; (one of OUR answer-table entries). Remove it from
+      ;; bs-questions — we no longer need to remember the local
+      ;; promise tied to that q-pos. Also append to gc-answers audit
+      ;; log so callers can inspect what was released.
+      bridge-step v [bs-remove-question pos [bs-add-gc-answer pos st]]
   | [op-deliver-to-answer qpos args] v st ->
       ;; Phase 25 questioner-side: peer is replying to our question
       ;; with pos `qpos`. Look up `qpos` in BridgeState's

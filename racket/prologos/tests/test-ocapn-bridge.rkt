@@ -765,6 +765,35 @@
       "(eval (gc-export-bytes (suc (suc (suc zero))) (suc (suc zero))))")))
   (check-equal? got expected))
 
+;; Phase 33: inbound op:gc-answer dispatch removes the inbound-question entry.
+(test-case "bridge/captp-incoming op:gc-answer removes the inbound-question entry"
+  ;; Add q-pos=1 → pid=10 to inbound-questions, dispatch op:gc-answer 1,
+  ;; lookup q-pos=1 should now return none.
+  (check-contains
+   (run-last
+    "(eval (let (st0  (bs-add-question (suc zero) (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) ) bridge-state-empty)
+                  step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat st0))
+              (bs-lookup-question (suc zero) (bridge-step-state step))))")
+   "none"))
+
+(test-case "bridge/captp-incoming op:gc-answer also appends to audit log"
+  ;; The bs-gc-answers list grows by 1 (for diagnostics).
+  (check-contains
+   (run-last
+    "(eval (let (step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat bridge-state-empty))
+              (length (bs-gc-answers (bridge-step-state step)))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming op:gc-answer keeps non-matching entries"
+  ;; Two entries: (q=1 → pid=1) and (q=2 → pid=2). gc q=1; q=2 still there.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-question (suc (suc zero)) (suc (suc zero))
+                       (bs-add-question (suc zero) (suc zero) bridge-state-empty))
+                  step (captp-incoming-with-state (op-gc-answer (suc zero)) empty-vat st0))
+              (bs-lookup-question (suc (suc zero)) (bridge-step-state step))))")
+   "some"))
+
 (test-case "core/captp-release-answer is byte-equivalent to release-answer"
   (define got-via-core
     (extract-value-bytes
