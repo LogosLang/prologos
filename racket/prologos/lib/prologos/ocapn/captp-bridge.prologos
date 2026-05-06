@@ -700,6 +700,76 @@ defn connection-ask [tgt args cs]
           let cs' := [conn-state [bq-vat bq] [bq-state bq] [conn-emitted cs] [conn-aborted? cs]]
             conn-ask cs' [bq-pid bq] [bq-bytes bq]
 
+;; ===========================================================
+;; Phase 32: outbound GC release API
+;; ===========================================================
+;;
+;; Manual reference-count release. The user is the source of truth
+;; about "I'm done with this": calls release-answer (we no longer
+;; need an outbound-question entry) or release-import (we dropped
+;; k references to peer's export).
+;;
+;; Both return ConnRelease(cs', bytes-list) — the bytes to write
+;; to peer's socket plus the updated state.
+;;
+;; ConnRelease is the parallel of ConnAsk for the release path.
+;; Single-constructor — avoids issue #60.
+
+data ConnRelease
+  conn-release : ConnectionState -> [List String]
+
+spec conn-release-state ConnRelease -> ConnectionState
+defn conn-release-state
+  | conn-release cs _ -> cs
+
+spec conn-release-bytes ConnRelease -> List String
+defn conn-release-bytes
+  | conn-release _ bs -> bs
+
+;; Build the wire bytes for an op:gc-answer N message.
+spec gc-answer-bytes Nat -> String
+defn gc-answer-bytes [pos]
+  wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+
+;; Build the wire bytes for an op:gc-export N k message.
+spec gc-export-bytes Nat Nat -> String
+defn gc-export-bytes [pos cnt]
+  wire::encode-record "op:gc-export"
+    [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
+
+;; Release: we're done with our outbound-question at q-pos N. Emits
+;; op:gc-answer N bytes for peer (so they can free their answer-table
+;; entry) and removes the q-pos → promise mapping from our
+;; outbound-questions table. Aborted-aware (no-op if connection
+;; already aborted).
+;;
+;; Note: removing the outbound-questions entry means subsequent
+;; inbound op-deliver-to-answer for the same q-pos won't resolve any
+;; promise (they'd be dropped by dispatch-incoming-answer). That's
+;; correct: "done" means done.
+spec release-answer Nat ConnectionState -> ConnRelease
+defn release-answer [our-q-pos cs]
+  match [conn-aborted? cs]
+    | true  -> conn-release cs [nil String]
+    | false ->
+        let st'   := [bs-remove-outbound-question our-q-pos [conn-bridge-state cs]]
+          let cs' := [conn-state [conn-vat cs] st' [conn-emitted cs] [conn-aborted? cs]]
+            let bytes := [gc-answer-bytes our-q-pos]
+              conn-release cs' [cons bytes [nil String]]
+
+;; Release: we dropped k references to peer's export at export-pos N.
+;; Emits op:gc-export N k bytes for peer (so they can decrement their
+;; refcount). State is otherwise unchanged: this bridge model doesn't
+;; track imports-refcount yet (deferred — see GC plan), so the caller
+;; is the source of truth on the count.
+spec release-import Nat Nat ConnectionState -> ConnRelease
+defn release-import [export-pos cnt cs]
+  match [conn-aborted? cs]
+    | true  -> conn-release cs [nil String]
+    | false ->
+        let bytes := [gc-export-bytes export-pos cnt]
+          conn-release cs [cons bytes [nil String]]
+
 ;; The per-op aborted check. We use a Bool predicate via match
 ;; rather than a boolean op (Prologos doesn't expose a generic
 ;; `||`). Once aborted, every subsequent step is a no-op

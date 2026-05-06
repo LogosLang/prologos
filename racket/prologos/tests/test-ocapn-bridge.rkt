@@ -716,6 +716,68 @@
      "(eval (conn-ask-pid (connection-ask zero (syrup-string \"ping\") empty-connection)))"))
   (check-equal? got-via-captp-ask got-via-connection-ask))
 
+;; Phase 32: outbound GC release API.
+(test-case "bridge/release-answer emits op:gc-answer wire bytes"
+  ;; release-answer for q-pos=2 should emit canonical bytes.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-answer (suc (suc zero)) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (gc-answer-bytes (suc (suc zero))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/release-answer removes the outbound-question entry"
+  ;; Before release: q-pos=0 maps to a promise (via connection-ask).
+  ;; After release: lookup of q-pos=0 returns none.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  rel  (release-answer pid cs1))
+              (bs-lookup-outbound-question pid (conn-bridge-state (conn-release-state rel)))))")
+   "none"))
+
+(test-case "bridge/release-answer is a no-op once aborted"
+  ;; Aborted connection: bytes list should be empty.
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  rel   (release-answer zero (conn-step-state step1)))
+              (length (conn-release-bytes rel))))")
+   "0N"))
+
+(test-case "bridge/release-import emits op:gc-export wire bytes"
+  ;; release-import for export-pos=3, count=2 should emit canonical bytes.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-import (suc (suc (suc zero))) (suc (suc zero)) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (gc-export-bytes (suc (suc (suc zero))) (suc (suc zero))))")))
+  (check-equal? got expected))
+
+(test-case "core/captp-release-answer is byte-equivalent to release-answer"
+  (define got-via-core
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (captp-release-answer (suc zero) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (define got-via-bridge
+    (extract-value-bytes
+     (run-last
+      "(eval (let (rel (release-answer (suc zero) empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes rel))))")))
+  (check-equal? got-via-core got-via-bridge))
+
 (test-case "bridge/connection-ask is a no-op once aborted"
   ;; After abort, ask returns the same state with empty bytes.
   (check-contains

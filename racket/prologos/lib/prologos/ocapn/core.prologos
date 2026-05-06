@@ -122,6 +122,28 @@ spec captp-ask Nat SyrupValue ConnectionState -> ConnAsk
 defn captp-ask [target args cs]
   connection-ask target args cs
 
+;; ========================================
+;; Networked GC release (Phase 32)
+;; ========================================
+;;
+;; Manual reference-count release. Distributed reference counting
+;; in CapTP: peer-side counts decrement when we send op:gc-export
+;; (we dropped k refs to peer's export N) or op:gc-answer (we're
+;; done with our outbound-question N).
+;;
+;; Both return ConnRelease(cs', bytes-list) — write the bytes to
+;; peer's socket, update local state from cs'.
+
+spec captp-release-answer Nat ConnectionState -> ConnRelease
+  :doc "Mark our outbound-question N done. Sends op:gc-answer N to peer; removes our q-pos→promise mapping."
+defn captp-release-answer [our-q-pos cs]
+  release-answer our-q-pos cs
+
+spec captp-release-import Nat Nat ConnectionState -> ConnRelease
+  :doc "Drop k references to peer's export N. Sends op:gc-export N k."
+defn captp-release-import [export-pos cnt cs]
+  release-import export-pos cnt cs
+
 ;; "drain": Goblins's vat-loop. Bounded by fuel.
 spec drain Nat Vat -> Vat
   :doc "Run the vat until quiescence or fuel exhaustion."
