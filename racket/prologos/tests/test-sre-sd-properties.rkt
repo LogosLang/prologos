@@ -91,8 +91,8 @@
   (for ([f (in-list phase3-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'type)
-    (check-true (memq (sd-finding-relation f) '(equality subtype)))
-    (check-true (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-not-false (memq (sd-finding-relation f) '(equality subtype)))
+    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
     (check-true (positive? (sd-finding-sample-count f)))))
 
 (test-case "Phase 3: distributive findings carry axiom-*; SD findings carry sd-evidence"
@@ -168,3 +168,31 @@
       (check-true (positive? total))
       (check-true (<= 0 fired total))
       (check-true (<= 0 held fired)))))
+
+;; ============================================================================
+;; Phase 4 (2026-05-06): infer-domain-properties end-to-end under 'subtype
+;; ============================================================================
+;; Integration regression for the lattice-mixing bug PR #59 review surfaced.
+;; `infer-domain-properties` is parametrised on #:relation; after Phase 4 it
+;; threads that through to all six axiom tests. With #:relation 'subtype +
+;; the subtype-aware meet, every axiom should resolve to prop-confirmed for
+;; the type domain (Track 2H declared subtype distributive +
+;; has-pseudo-complement → distributive ⇒ SD∨ ∧ SD∧).
+;;
+;; If a future change reintroduces a hardcoded 'equality join lookup in any
+;; of the eight functions involved, this test will refute the corresponding
+;; property under subtype while leaving the equality-only suites green.
+
+(define subtype-meet-fn
+  (sre-domain-meet type-domain-for-sweep 'subtype))
+
+(test-case "Phase 4: infer-domain-properties under #:relation 'subtype confirms all axioms"
+  (define props
+    (infer-domain-properties type-domain-for-sweep
+                             realistic-type-atoms
+                             #:meet-fn subtype-meet-fn
+                             #:relation 'subtype))
+  (for ([axiom (in-list '(commutative-join associative-join idempotent-join
+                          distributive sd-vee sd-wedge))])
+    (check-eq? (hash-ref props axiom) prop-confirmed
+               (format "type domain × subtype: ~a should be prop-confirmed" axiom))))

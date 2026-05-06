@@ -285,9 +285,13 @@
 (define axiom-untested 'axiom-untested)
 
 ;; Test commutativity of join: a ⊔ b = b ⊔ a
-(define (test-commutative-join domain samples)
+;;
+;; SRE Track 2I Phase 4 (2026-05-06): #:relation selects the join from
+;; merge-registry so axioms inferred under a non-equality relation stay
+;; in that relation's lattice. Default 'equality preserves prior callers.
+(define (test-commutative-join domain samples #:relation [relation 'equality])
   (define merge-fn (sre-domain-merge-registry domain))
-  (define join (merge-fn 'equality))  ;; equality merge = lattice join
+  (define join (merge-fn relation))  ;; merge under the requested relation
   (for/fold ([status (axiom-confirmed 0)])
             ([i (in-range (length samples))]
              [a (in-list samples)]
@@ -300,8 +304,8 @@
           (axiom-refuted (list a b))))))
 
 ;; Test associativity of join: (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
-(define (test-associative-join domain samples)
-  (define join ((sre-domain-merge-registry domain) 'equality))
+(define (test-associative-join domain samples #:relation [relation 'equality])
+  (define join ((sre-domain-merge-registry domain) relation))
   (for/fold ([status (axiom-confirmed 0)])
             ([a (in-list samples)]
              #:break (axiom-refuted? status))
@@ -316,8 +320,8 @@
             (axiom-refuted (list a b c)))))))
 
 ;; Test idempotence of join: a ⊔ a = a
-(define (test-idempotent-join domain samples)
-  (define join ((sre-domain-merge-registry domain) 'equality))
+(define (test-idempotent-join domain samples #:relation [relation 'equality])
+  (define join ((sre-domain-merge-registry domain) relation))
   (for/fold ([status (axiom-confirmed 0)])
             ([a (in-list samples)]
              #:break (axiom-refuted? status))
@@ -327,10 +331,15 @@
 
 ;; Test distributivity: a ⊔ (b ⊓ c) = (a ⊔ b) ⊓ (a ⊔ c)
 ;; Requires meet-fn. Returns axiom-untested if no meet available.
-(define (test-distributive domain samples meet-fn)
+;;
+;; SRE Track 2I Phase 4 (2026-05-06): the relation keyword selects the
+;; matching join from the merge-registry so the check stays inside ONE
+;; lattice. Without it, a subtype-meet was paired with the equality-join,
+;; mixing lattices and refuting distributivity for purely structural reasons.
+(define (test-distributive domain samples meet-fn #:relation [relation 'equality])
   (if (not meet-fn)
       axiom-untested
-      (let ([join ((sre-domain-merge-registry domain) 'equality)])
+      (let ([join ((sre-domain-merge-registry domain) relation)])
         (for/fold ([status (axiom-confirmed 0)])
                   ([a (in-list samples)]
                    #:break (axiom-refuted? status))
@@ -391,11 +400,14 @@
   #:transparent)
 
 ;; Detailed SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee/detailed domain samples meet-fn)
+;;
+;; SRE Track 2I Phase 4 (2026-05-06): #:relation selects the matching join
+;; so the SD check stays inside one lattice. See test-distributive.
+(define (test-sd-vee/detailed domain samples meet-fn #:relation [relation 'equality])
   (cond
     [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
+     (define join ((sre-domain-merge-registry domain) relation))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -421,11 +433,14 @@
        (sd-evidence 'confirmed total fired held #f))]))
 
 ;; Detailed SD∧ (dual): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge/detailed domain samples meet-fn)
+;;
+;; SRE Track 2I Phase 4 (2026-05-06): #:relation selects the matching join,
+;; mirroring test-sd-vee/detailed.
+(define (test-sd-wedge/detailed domain samples meet-fn #:relation [relation 'equality])
   (cond
     [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
+     (define join ((sre-domain-merge-registry domain) relation))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -454,16 +469,16 @@
 ;; ------------------------------------------------------------------------
 
 ;; Test SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee domain samples meet-fn)
-  (define ev (test-sd-vee/detailed domain samples meet-fn))
+(define (test-sd-vee domain samples meet-fn #:relation [relation 'equality])
+  (define ev (test-sd-vee/detailed domain samples meet-fn #:relation relation))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
 ;; Test SD∧ (dual of SD∨): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge domain samples meet-fn)
-  (define ev (test-sd-wedge/detailed domain samples meet-fn))
+(define (test-sd-wedge domain samples meet-fn #:relation [relation 'equality])
+  (define ev (test-sd-wedge/detailed domain samples meet-fn #:relation relation))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
@@ -491,28 +506,34 @@
 
   (define props-0
     (update-property declared 'commutative-join
-                     (test-commutative-join domain samples)))
+                     (test-commutative-join domain samples
+                                            #:relation relation-name)))
   (define props-1
     (update-property props-0 'associative-join
-                     (test-associative-join domain samples)))
+                     (test-associative-join domain samples
+                                            #:relation relation-name)))
   (define props-2
     (update-property props-1 'idempotent-join
-                     (test-idempotent-join domain samples)))
+                     (test-idempotent-join domain samples
+                                           #:relation relation-name)))
   (define props-3
     (if meet-fn
         (update-property props-2 'distributive
-                         (test-distributive domain samples meet-fn))
+                         (test-distributive domain samples meet-fn
+                                            #:relation relation-name))
         props-2))
   ;; Track 2I: SD∨ and SD∧ (require meet-fn; otherwise untested)
   (define props-4
     (if meet-fn
         (update-property props-3 'sd-vee
-                         (test-sd-vee domain samples meet-fn))
+                         (test-sd-vee domain samples meet-fn
+                                      #:relation relation-name))
         props-3))
   (define props-5
     (if meet-fn
         (update-property props-4 'sd-wedge
-                         (test-sd-wedge domain samples meet-fn))
+                         (test-sd-wedge domain samples meet-fn
+                                        #:relation relation-name))
         props-4))
   props-5)
 
