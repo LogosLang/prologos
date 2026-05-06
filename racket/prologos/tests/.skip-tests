@@ -4,15 +4,13 @@
 # Tests listed here are skipped by run-affected-tests.rkt by default.
 # Use --no-skip to override, --skip-only to run only these tests.
 
-test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps), ~144s
-test-reduction-perf-02-01.rkt  # Nat arithmetic perf (fib 15 + ackermann), ~51s
-test-reduction-perf-02-02.rkt  # fib 20 exponential recursion, ~48s
-
-# OCapN heavy tests — exceed the batch-worker's 120s per-file timeout.
-# Run directly via `raco test` (no per-file limit) in a separate step
-# of the test workflow. Local: `raco test tests/test-ocapn-vat.rkt` etc.
-test-ocapn-vat.rkt              # 158s under raco test (vat event loop, 21 tests)
-test-ocapn-acceptance-l3.rkt    # >180s under raco test (process-file Level-3)
+# Reduction perf — still over the 120s batch-worker threshold.
+# `test-reduction-perf-02-01.rkt` (fib 15 + ackermann, was ~51s) was
+# brought back into the main suite at 7.9s after the looseBVarRange
+# fix landed (commits 4f6b3f0 + 6f2e077). The two remaining ones
+# below regressed instead of improving — investigation pending.
+test-reduction-perf-01-02.rkt  # fuel exhaustion (1M WHNF steps); was ~144s, now ~580s — REGRESSED
+test-reduction-perf-02-02.rkt  # fib 20 exponential recursion; was ~48s, now ~122s — REGRESSED
 
 # OCapN interop tests — run via .github/workflows/interop.yml using
 # `raco test` directly. The batch-worker harness in
@@ -28,5 +26,3 @@ test-ocapn-conversation.rkt       # interop-only: spawns node subprocess (Phase 
 test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 8)
 test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
 test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)
-
-test-bridge-perf.rkt              # Pitfall #31 perf diagnostic — decode-op alone is ~150s; not a regression test, kept as the baseline measurement for future perf work
