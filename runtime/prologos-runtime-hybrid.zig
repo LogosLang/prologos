@@ -200,43 +200,74 @@ export fn prologos_register_fire_fn(
 // These mirror the original kernel's hardcoded set so simple programs
 // (int arithmetic) run fast without Racket callbacks.
 
+// Identity passes through unchanged — bot in / bot out is fine.
 fn kernel_identity(a: i64) callconv(.C) i64 { return a; }
+
+// Unary int ops guard against TAG_BOT for the same reason as
+// int-binary above (else -payload_of(bot) = 0, an int-zero
+// prematurely committing).
 fn kernel_int_neg(a: i64) callconv(.C) i64 {
+    if (tag_of(a) == TAG_BOT) return box(TAG_BOT, 0);
     return box(TAG_INT, -payload_of(a));
 }
 fn kernel_int_abs(a: i64) callconv(.C) i64 {
+    if (tag_of(a) == TAG_BOT) return box(TAG_BOT, 0);
     const p = payload_of(a);
     return box(TAG_INT, if (p < 0) -p else p);
 }
 
+// Native int-binary fire-fns. Each guards against TAG_BOT inputs:
+// returning bot lets the propagator re-fire next round when its
+// inputs are concrete, matching the Racket-side convention
+// (make-int-binary-fire's `(or (preduce-bot? va) (preduce-bot? vb))`
+// guard). Without the guard, payload_of(bot) returns 0 — int-eq
+// then sees `0 == 0` and prematurely commits TRUE, which a
+// downstream reduce-fire dispatcher latches into the wrong arm.
+// Discovered 2026-05-05 via the count-evens / count-primes
+// over-count bug: see 2026-05-05_HYBRID_KERNEL_CALLBACK_BSP_BUG.md
+// § "Bool boxing / match-dispatch follow-up".
+inline fn either_bot(a: i64, b: i64) bool {
+    return tag_of(a) == TAG_BOT or tag_of(b) == TAG_BOT;
+}
+
 fn kernel_int_add(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_INT, payload_of(a) + payload_of(b));
 }
 fn kernel_int_sub(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_INT, payload_of(a) - payload_of(b));
 }
 fn kernel_int_mul(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_INT, payload_of(a) * payload_of(b));
 }
 fn kernel_int_div(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_INT, @divTrunc(payload_of(a), payload_of(b)));
 }
 fn kernel_int_eq(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_BOOL, if (payload_of(a) == payload_of(b)) 1 else 0);
 }
 fn kernel_int_lt(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_BOOL, if (payload_of(a) < payload_of(b)) 1 else 0);
 }
 fn kernel_int_le(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     return box(TAG_BOOL, if (payload_of(a) <= payload_of(b)) 1 else 0);
 }
 fn kernel_int_mod(a: i64, b: i64) callconv(.C) i64 {
+    if (either_bot(a, b)) return box(TAG_BOT, 0);
     // C-style truncated remainder (sign matches dividend), to match
     // Racket's `remainder`. Pairs with kernel_int_div's @divTrunc.
     return box(TAG_INT, @rem(payload_of(a), payload_of(b)));
 }
 
 fn kernel_select(c: i64, t: i64, e: i64) callconv(.C) i64 {
+    // bot selector can't decide yet; propagate bot.
+    if (tag_of(c) == TAG_BOT) return box(TAG_BOT, 0);
     return if (payload_of(c) != 0) t else e;
 }
 

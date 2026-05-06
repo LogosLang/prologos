@@ -10,32 +10,62 @@ native fire-fns. R1-R5 regression tests pass; W14 prime-count
 returns the correct count for all tested N (5 through 15).
 
 **Note**: a separate **Bool boxing / match-dispatch bug** was
-discovered while validating Fix C. When a Bool is returned
-directly from a native fire-fn (e.g., `int-eq`) and fed as a
-scrutinee to a match, both arms can fire incorrectly. Reproducer:
+discovered while validating Fix C, and **fixed 2026-05-06** in
+the same hybrid-kernel track. Root cause: native int-binary
+fire-fns (`kernel_int_add`, `kernel_int_eq`, etc. in
+`runtime/prologos-runtime-hybrid.zig`) didn't check input tags
+before extracting payloads via `payload_of`. When a native
+fire-fn was scheduled in round 1 against a still-bot input cell,
+it computed using `payload_of(bot) = 0` and committed a
+prematurely-wrong result (e.g. `int-eq` saw `0 == 0` and returned
+TRUE, even though the upstream `int-mod` would in round 2 produce
+a non-zero value). A downstream `reduce-fire` (the match
+dispatcher) latched the wrong-arm result.
 
+**Reproducer (R6 in the hybrid-battery)**:
 ```
-spec is-even Int -> Bool
-defn is-even [n] [int-eq [int-mod n 2] 0]   ;; Bool directly from native int-eq
-
-spec count-evens Int -> Int -> Int
-defn count-evens [lo hi]
-  match [int-lt hi lo]
-    | true  -> 0
-    | false -> match [is-even lo]
-                 | true  -> [int+ 1 [count-evens [int+ lo 1] hi]]
-                 | false -> [count-evens [int+ lo 1] hi]
-
-def main : Int := [count-evens 5 6]   ;; expected 1, actual 2
+def main : Int :=
+  match [int-eq [int-mod 1 2] 0]
+    | true  -> [int+ 0 1]
+    | false -> 0
 ```
+Pre-fix: 1 (true-arm). Post-fix: 0 (false-arm — correct, since
+`int-mod 1 2 = 1 ≠ 0`).
 
-Wrapping is-even's result so it returns a literal `true`/`false`
-(via an inner match) makes count-evens return the correct count.
-This indicates the bug is in the boxing/unboxing path for native
-Bools flowing into match scrutinees, NOT in the BSP fix. Filed
-as a follow-up; not addressed by Fix C. count-primes works
-because is-prime's recursion already wraps the Bool through
-literal returns at the leaves.
+**The fix**: each native int-binary / int-unary fire-fn now
+guards against `tag_of(input) == TAG_BOT` and returns
+`box(TAG_BOT, 0)` when any input is bot. The propagator's output
+cell stays bot, no subscriber scheduling fires, and the
+fire-fn re-fires next round when its inputs are concrete. This
+matches the Racket-side `make-int-binary-fire`'s
+`(or (preduce-bot? va) (preduce-bot? vb))` guard. `kernel_select`
+got the same guard for its condition input. `kernel_identity`
+(used by tag 0 for both `int-add` and identity-passthrough) is a
+no-op for bot — bot in / bot out is correct.
+
+**Why this didn't surface earlier**:
+- preduce-lite micro tests don't chain int-mod into int-eq.
+- OCapN battery is data-construction, not arithmetic.
+- count-primes works in spite of this bug because is-prime's
+  recursion wraps Bool returns through literal arms (which dodges
+  the dispatch path that latches premature TRUE).
+- count-evens (5 LOC) was the simplest combinatorial test that
+  exposed it.
+
+R6, R7, R8 added to `examples/hybrid-battery/` as regression
+tests:
+- R6: `[int-eq [int-mod 1 2] 0]` match — was 1, now 0.
+- R7: `[int-eq [int+ 1 2] 0]` match — was 100, now 200.
+- R8: minimal `count-evens 5 6` — was 2, now 1.
+
+**Lesson** (added to the methodology lessons in Appendix C of the
+hybrid-runtime PIR): *native fire-fns must implement the same bot-
+guard convention that callback fire-fns already enforce*. The
+Racket-side `make-int-binary-fire` was the de facto spec; the
+Zig translation skipped the guard because `payload_of(bot)`
+silently returns 0 instead of erroring. Reading both sides of
+the protocol when migrating fire-fns from one to the other
+catches this.
 
 **REMAINING**: A DEEPER manifestation of the same root cause
 remains. Discovered 2026-05-05 evening while bumping the tag pool
