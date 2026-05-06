@@ -13,6 +13,10 @@ foreign racket "racket/base" ["string<?" :as lt : String -> String -> Bool]
 
 ;; --- Length & access ---
 foreign racket "racket/base" [string-length :as length : String -> Int]
+;; UTF-8 byte length (== `length` for ASCII strings, but counts
+;; multi-byte chars by their byte count). Needed for wire formats
+;; that prefix data with byte counts (e.g. OCapN Syrup).
+foreign racket "racket/base" [string-utf-8-length :as bytes-length : String -> Int]
 foreign racket "racket/base" [string-ref :as ref : String -> Int -> Char]
 
 ;; --- Construction ---

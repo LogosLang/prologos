@@ -122,7 +122,7 @@ defn abort?
 ;; Selectors
 ;; ========================================
 
-spec deliver-target CapTPOp -> Option Nat
+spec deliver-target CapTPOp -> [Option Nat]
 defn deliver-target
   | op-start-session _ _   -> none
   | op-abort _             -> none
@@ -132,7 +132,7 @@ defn deliver-target
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
 
-spec deliver-args CapTPOp -> Option SyrupValue
+spec deliver-args CapTPOp -> [Option SyrupValue]
 defn deliver-args
   | op-start-session _ _   -> none
   | op-abort _             -> none
@@ -142,7 +142,7 @@ defn deliver-args
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
 
-spec deliver-answer-pos CapTPOp -> Option Nat
+spec deliver-answer-pos CapTPOp -> [Option Nat]
 defn deliver-answer-pos
   | op-start-session _ _   -> none
   | op-abort _             -> none
@@ -152,7 +152,7 @@ defn deliver-answer-pos
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
 
-spec deliver-resolver CapTPOp -> Option Nat
+spec deliver-resolver CapTPOp -> [Option Nat]
 defn deliver-resolver
   | op-start-session _ _   -> none
   | op-abort _             -> none

@@ -83,7 +83,7 @@ spec step-return ActStep -> SyrupValue
 defn step-return
   | act-step _ rv _ -> rv
 
-spec step-effects ActStep -> List Effect
+spec step-effects ActStep -> [List Effect]
 defn step-effects
   | act-step _ _ es -> es
 

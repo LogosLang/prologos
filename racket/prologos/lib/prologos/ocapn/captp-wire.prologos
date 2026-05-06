@@ -168,25 +168,25 @@ defn wire-nat
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
 
-spec list-fst [List SyrupValue] -> Option SyrupValue
+spec list-fst [List SyrupValue] -> [Option SyrupValue]
 defn list-fst [xs]
   match xs
     | nil      -> none
     | cons h _ -> some h
 
-spec list-2nd [List SyrupValue] -> Option SyrupValue
+spec list-2nd [List SyrupValue] -> [Option SyrupValue]
 defn list-2nd [xs]
   match xs
     | nil      -> none
     | cons _ t -> list-fst t
 
-spec list-3rd [List SyrupValue] -> Option SyrupValue
+spec list-3rd [List SyrupValue] -> [Option SyrupValue]
 defn list-3rd [xs]
   match xs
     | nil      -> none
     | cons _ t -> list-2nd t
 
-spec list-4th [List SyrupValue] -> Option SyrupValue
+spec list-4th [List SyrupValue] -> [Option SyrupValue]
 defn list-4th [xs]
   match xs
     | nil      -> none

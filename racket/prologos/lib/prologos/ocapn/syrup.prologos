@@ -137,7 +137,7 @@ defn tagged?
 ;; ========================================
 ;; Total functions returning Option (no partial pattern matches).
 
-spec get-nat SyrupValue -> Option Nat
+spec get-nat SyrupValue -> [Option Nat]
 defn get-nat
   | syrup-null         -> none
   | syrup-bool _       -> none
@@ -151,7 +151,7 @@ defn get-nat
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
-spec get-string SyrupValue -> Option String
+spec get-string SyrupValue -> [Option String]
 defn get-string
   | syrup-null         -> none
   | syrup-bool _       -> none
@@ -165,7 +165,7 @@ defn get-string
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
-spec get-refr SyrupValue -> Option Nat
+spec get-refr SyrupValue -> [Option Nat]
 defn get-refr
   | syrup-null         -> none
   | syrup-bool _       -> none
@@ -179,7 +179,7 @@ defn get-refr
   | syrup-refr id      -> some id
   | syrup-promise _    -> none
 
-spec get-promise SyrupValue -> Option Nat
+spec get-promise SyrupValue -> [Option Nat]
 defn get-promise
   | syrup-null         -> none
   | syrup-bool _       -> none
@@ -193,7 +193,7 @@ defn get-promise
   | syrup-refr _       -> none
   | syrup-promise id   -> some id
 
-spec get-tag SyrupValue -> Option String
+spec get-tag SyrupValue -> [Option String]
 defn get-tag
   | syrup-null         -> none
   | syrup-bool _       -> none
@@ -207,7 +207,7 @@ defn get-tag
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
-spec get-payload SyrupValue -> Option SyrupValue
+spec get-payload SyrupValue -> [Option SyrupValue]
 defn get-payload
   | syrup-null         -> none
   | syrup-bool _       -> none

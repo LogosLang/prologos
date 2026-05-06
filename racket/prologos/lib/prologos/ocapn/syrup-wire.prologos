@@ -126,7 +126,7 @@ defn encodable?
   | syrup-refr _      -> false
   | syrup-promise _   -> false
 
-spec encode-safe SyrupValue -> Option String
+spec encode-safe SyrupValue -> [Option String]
   :doc "Encode if v contains no naked refr/promise; else `none`."
 defn encode-safe [v]
   match [encodable? v]
@@ -234,7 +234,7 @@ defn read-digits [s i]
 ;; Already parsed the digit prefix; `pos` is the marker char
 ;; (`"` / `'`) offset; `len` is the byte length of the payload.
 
-spec decode-string-tail String Int Int -> Option Decoded
+spec decode-string-tail String Int Int -> [Option Decoded]
 defn decode-string-tail [s pos len]
   let payload-start := [int+ pos 1]
     let payload-end := [int+ payload-start len]
@@ -244,7 +244,7 @@ defn decode-string-tail [s pos len]
             let payload := [str::slice s payload-start payload-end]
               some [decoded [syrup-string payload] payload-end]
 
-spec decode-symbol-tail String Int Int -> Option Decoded
+spec decode-symbol-tail String Int Int -> [Option Decoded]
 defn decode-symbol-tail [s pos len]
   let payload-start := [int+ pos 1]
     let payload-end := [int+ payload-start len]
@@ -256,7 +256,7 @@ defn decode-symbol-tail [s pos len]
 
 ;; Phase 19: bytestring tail. Wire form `<len>:<bytes>`.
 ;; pos is the offset of `:`; len is the byte length of payload.
-spec decode-bytes-tail String Int Int -> Option Decoded
+spec decode-bytes-tail String Int Int -> [Option Decoded]
 defn decode-bytes-tail [s pos len]
   let payload-start := [int+ pos 1]
     let payload-end := [int+ payload-start len]
@@ -270,7 +270,7 @@ defn decode-bytes-tail [s pos len]
 ;;
 ;; digits, then one of `+`, `-`, `"`, `'`.
 
-spec decode-numeric-or-string String Int -> Option Decoded
+spec decode-numeric-or-string String Int -> [Option Decoded]
 defn decode-numeric-or-string [s i]
   let ri := [read-digits s i]
     let mag := [ri-value ri]
@@ -301,7 +301,7 @@ defn decode-numeric-or-string [s i]
 data DecodedMany
   decoded-many : [List SyrupValue] -> Int
 
-spec dm-list DecodedMany -> List SyrupValue
+spec dm-list DecodedMany -> [List SyrupValue]
 defn dm-list
   | decoded-many xs _ -> xs
 
@@ -321,7 +321,7 @@ defn dm-end
 ;; substitution chain per element. Profiling (pitfall #27)
 ;; showed ~52ms-354ms per reduction step on multi-arity records;
 ;; this rewrite eliminates the chain.
-spec decode-many-acc [String -> Int -> Option Decoded] String Int Int [List SyrupValue] -> Option DecodedMany
+spec decode-many-acc [String -> Int -> Option Decoded] String Int Int [List SyrupValue] -> [Option DecodedMany]
 defn decode-many-acc [dec s i terminator acc]
   match [int-lt [str::length s] [int+ i 1]]
     | true  -> none
@@ -334,13 +334,13 @@ defn decode-many-acc [dec s i terminator acc]
                 | some [decoded v end] ->
                     decode-many-acc dec s end terminator [cons v acc]
 
-spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> Option DecodedMany
+spec decode-many-loop [String -> Int -> Option Decoded] String Int Int -> [Option DecodedMany]
 defn decode-many-loop [dec s i terminator]
   decode-many-acc dec s i terminator nil
 
 ;; --- Record decoder, parameterized on the element decoder ---
 
-spec decode-record-with [String -> Int -> Option Decoded] String Int -> Option Decoded
+spec decode-record-with [String -> Int -> Option Decoded] String Int -> [Option Decoded]
 defn decode-record-with [dec s i]
   match [decode-many-loop dec s i 62]
     | none -> none
@@ -376,7 +376,7 @@ defn decode-record-with [dec s i]
 ;;   '[' = 91,  ']' = 93
 ;;   '<' = 60,  '>' = 62
 
-spec decode-at String Int -> Option Decoded
+spec decode-at String Int -> [Option Decoded]
 defn decode-at [s i]
   match [int-lt [str::length s] [int+ i 1]]
     | true  -> none
@@ -408,7 +408,7 @@ defn decode-at [s i]
 
 ;; --- Public top-level decode ---
 
-spec decode-value String -> Option SyrupValue
+spec decode-value String -> [Option SyrupValue]
   :doc "Parse a single Syrup value from the start of `s`."
 defn decode-value [s]
   match [decode-at s 0]

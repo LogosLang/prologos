@@ -119,7 +119,7 @@ spec vmsg-args VatMsg -> SyrupValue
 defn vmsg-args
   | vmsg-deliver _ a _ -> a
 
-spec vmsg-answer-pos VatMsg -> Option Nat
+spec vmsg-answer-pos VatMsg -> [Option Nat]
 defn vmsg-answer-pos
   | vmsg-deliver _ _ ap -> ap
 
@@ -137,7 +137,7 @@ defn mk-deliver-only [t a]
 ;; Assoc-list utilities (over our concrete entry types)
 ;; ========================================
 
-spec actor-table-get Nat [List ActorEntry] -> Option Actor
+spec actor-table-get Nat [List ActorEntry] -> [Option Actor]
 defn actor-table-get [k entries]
   match entries
     | nil -> none
@@ -157,11 +157,11 @@ defn actor-table-get [k entries]
 ;; Phase 1 will swap the assoc list for a hash/CHAMP map; the cons
 ;; form is acceptable for Phase 0 because each test scenario uses
 ;; fewer than ~5 actors. Tracked as a known follow-up.
-spec actor-table-set Nat Actor [List ActorEntry] -> List ActorEntry
+spec actor-table-set Nat Actor [List ActorEntry] -> [List ActorEntry]
 defn actor-table-set [k a entries]
   cons [actor-entry k a] entries
 
-spec promise-table-get Nat [List PromiseEntry] -> Option PromiseState
+spec promise-table-get Nat [List PromiseEntry] -> [Option PromiseState]
 defn promise-table-get [k entries]
   match entries
     | nil -> none
@@ -173,7 +173,7 @@ defn promise-table-get [k entries]
 ;; Same trade-off as actor-table-set above (Copilot review
 ;; #28#discussion_r3150426729). Cons-at-head; defer hash-backed
 ;; storage to Phase 1.
-spec promise-table-set Nat PromiseState [List PromiseEntry] -> List PromiseEntry
+spec promise-table-set Nat PromiseState [List PromiseEntry] -> [List PromiseEntry]
 defn promise-table-set [k s entries]
   cons [promise-entry k s] entries
 
@@ -191,15 +191,15 @@ spec vat-next-id Vat -> Nat
 defn vat-next-id
   | vat n _ _ _ -> n
 
-spec vat-actors Vat -> List ActorEntry
+spec vat-actors Vat -> [List ActorEntry]
 defn vat-actors
   | vat _ a _ _ -> a
 
-spec vat-promises Vat -> List PromiseEntry
+spec vat-promises Vat -> [List PromiseEntry]
 defn vat-promises
   | vat _ _ p _ -> p
 
-spec vat-queue Vat -> List VatMsg
+spec vat-queue Vat -> [List VatMsg]
 defn vat-queue
   | vat _ _ _ q -> q
 
@@ -384,7 +384,7 @@ defn deliver-msg [m v]
 ;; (some new-vat). If the queue is empty, return none — the vat has
 ;; reached quiescence.
 
-spec step-vat Vat -> Option Vat
+spec step-vat Vat -> [Option Vat]
 defn step-vat [v]
   match [vat-queue v]
     | nil -> none
@@ -409,11 +409,11 @@ defn run-vat [fuel v]
 ;; Inspection helpers
 ;; ========================================
 
-spec lookup-promise Nat Vat -> Option PromiseState
+spec lookup-promise Nat Vat -> [Option PromiseState]
 defn lookup-promise [pid v]
   promise-table-get pid [vat-promises v]
 
-spec lookup-actor Nat Vat -> Option Actor
+spec lookup-actor Nat Vat -> [Option Actor]
 defn lookup-actor [aid v]
   actor-table-get aid [vat-actors v]
 

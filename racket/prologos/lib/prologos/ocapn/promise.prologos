@@ -102,14 +102,14 @@ defn enqueue
 ;; pair this with the resolve/break transitions which discard the
 ;; queue. (See Copilot review #28#discussion_r3150426758 for the
 ;; doc-vs-impl note that prompted this clarification.)
-spec take-queue PromiseState -> List SyrupValue
+spec take-queue PromiseState -> [List SyrupValue]
 defn take-queue
   | pst-unresolved msgs -> msgs
   | pst-fulfilled  _    -> nil
   | pst-broken     _    -> nil
 
 ;; Inspect the resolution value (some on settled, none on unresolved).
-spec resolution-value PromiseState -> Option SyrupValue
+spec resolution-value PromiseState -> [Option SyrupValue]
 defn resolution-value
   | pst-unresolved _ -> none
   | pst-fulfilled  v -> some v

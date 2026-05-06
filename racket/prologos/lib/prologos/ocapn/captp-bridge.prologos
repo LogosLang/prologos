@@ -175,23 +175,23 @@ spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
   bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil]
 
-spec bs-listeners BridgeState -> List Listener
+spec bs-listeners BridgeState -> [List Listener]
 defn bs-listeners
   | bridge-state ls _ _ _ _ -> ls
 
-spec bs-gc-exports BridgeState -> List GcExportReq
+spec bs-gc-exports BridgeState -> [List GcExportReq]
 defn bs-gc-exports
   | bridge-state _ es _ _ _ -> es
 
-spec bs-gc-answers BridgeState -> List Nat
+spec bs-gc-answers BridgeState -> [List Nat]
 defn bs-gc-answers
   | bridge-state _ _ as _ _ -> as
 
-spec bs-questions BridgeState -> List QEntry
+spec bs-questions BridgeState -> [List QEntry]
 defn bs-questions
   | bridge-state _ _ _ qs _ -> qs
 
-spec bs-pending-out BridgeState -> List String
+spec bs-pending-out BridgeState -> [List String]
 defn bs-pending-out
   | bridge-state _ _ _ _ p -> p
 
@@ -361,11 +361,11 @@ defn member-nat?
 data PumpResult
   pump-result : [List String] -> [List Nat]
 
-spec pump-result-bytes PumpResult -> List String
+spec pump-result-bytes PumpResult -> [List String]
 defn pump-result-bytes
   | pump-result bs _ -> bs
 
-spec pump-result-emitted PumpResult -> List Nat
+spec pump-result-emitted PumpResult -> [List Nat]
 defn pump-result-emitted
   | pump-result _ es -> es
 
@@ -458,7 +458,7 @@ spec conn-bridge-state ConnectionState -> BridgeState
 defn conn-bridge-state
   | conn-state _ st _ _ -> st
 
-spec conn-emitted ConnectionState -> List Nat
+spec conn-emitted ConnectionState -> [List Nat]
 defn conn-emitted
   | conn-state _ _ es _ -> es
 
@@ -474,7 +474,7 @@ spec conn-step-state ConnStep -> ConnectionState
 defn conn-step-state
   | conn-step cs _ -> cs
 
-spec conn-step-outbound ConnStep -> List String
+spec conn-step-outbound ConnStep -> [List String]
 defn conn-step-outbound
   | conn-step _ bs -> bs
 

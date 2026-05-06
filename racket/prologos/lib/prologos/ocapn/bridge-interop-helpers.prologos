@@ -27,7 +27,7 @@ require [prologos::ocapn::core   :refer-all]
 ;; Eight-deep suc-tower; keeps `drive-echo-bridge-once` flat.
 def drain-fuel-8 : Nat := [suc [suc [suc [suc [suc [suc [suc [suc zero]]]]]]]]
 
-spec first-bytes [List String] -> Option String
+spec first-bytes [List String] -> [Option String]
 defn first-bytes
   | nil       -> [none String]
   | cons hd _ -> [some String hd]
@@ -35,7 +35,7 @@ defn first-bytes
 ;; Drive the bridge end-to-end with a fresh echo-actor vat for one
 ;; inbound op. Returns Some <bytes> if the bridge produced an
 ;; outbound deliver; None otherwise.
-spec drive-echo-bridge-once CapTPOp -> Option String
+spec drive-echo-bridge-once CapTPOp -> [Option String]
 defn drive-echo-bridge-once [op]
   let sa   := [vat-spawn-actor beh-echo syrup-null empty-vat]
     let step := [captp-incoming-with-state op [alloc-vat sa] bridge-state-empty]
@@ -48,7 +48,7 @@ defn drive-echo-bridge-once [op]
 ;; Returns Some <reply-bytes> on success, None on either a decode
 ;; failure or a bridge that produced no outbound. This is the
 ;; entry point for live bridge-driven interop tests.
-spec drive-echo-bridge-from-bytes String -> Option String
+spec drive-echo-bridge-from-bytes String -> [Option String]
 defn drive-echo-bridge-from-bytes [bytes]
   match [decode-op bytes]
     | none    -> [none String]

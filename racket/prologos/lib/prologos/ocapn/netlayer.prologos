@@ -56,7 +56,7 @@ defn mb-push [v mb]
 
 ;; reverse-tail returns the original list with the LAST element
 ;; removed. Used by mb-pop.
-spec reverse-tail-helper [List SyrupValue] [List SyrupValue] -> List SyrupValue
+spec reverse-tail-helper [List SyrupValue] [List SyrupValue] -> [List SyrupValue]
 defn reverse-tail-helper [acc xs]
   match xs
     | nil -> nil
@@ -65,13 +65,13 @@ defn reverse-tail-helper [acc xs]
           | nil -> acc
           | cons _ _ -> reverse-tail-helper [cons a acc] rest
 
-spec reverse-tail [List SyrupValue] -> List SyrupValue
+spec reverse-tail [List SyrupValue] -> [List SyrupValue]
   :doc "Drop the last element of a list; nil if input is empty."
 defn reverse-tail [xs]
   reverse-tail-helper nil xs
 
 ;; Pop the OLDEST message. Returns (Option (rest-mailbox)).
-spec mb-pop Mailbox -> Option Mailbox
+spec mb-pop Mailbox -> [Option Mailbox]
   :doc "Pop the oldest message; returns none if empty."
 defn mb-pop
   | mailbox xs ->
@@ -80,7 +80,7 @@ defn mb-pop
         | cons _ _rest -> some [mailbox [reverse-tail xs]]
 
 ;; Get the OLDEST message without removing.
-spec mb-peek Mailbox -> Option SyrupValue
+spec mb-peek Mailbox -> [Option SyrupValue]
 defn mb-peek
   | mailbox xs ->
       match [reverse xs]
@@ -174,13 +174,13 @@ spec sim-next-id SimNet -> Nat
 defn sim-next-id
   | sim-net n _ -> n
 
-spec sim-connections SimNet -> List ConnEntry
+spec sim-connections SimNet -> [List ConnEntry]
 defn sim-connections
   | sim-net _ es -> es
 
 ;; Lookup a connection by id.
 
-spec sim-find-conn Nat [List ConnEntry] -> Option Connection
+spec sim-find-conn Nat [List ConnEntry] -> [Option Connection]
 defn sim-find-conn
   | _ nil -> none
   | k [cons [conn-entry i c] rest] ->
@@ -190,7 +190,7 @@ defn sim-find-conn
 
 ;; Insert / replace a connection by id (cons-at-head; latest wins).
 
-spec sim-set-conn Nat Connection [List ConnEntry] -> List ConnEntry
+spec sim-set-conn Nat Connection [List ConnEntry] -> [List ConnEntry]
 defn sim-set-conn [k c entries]
   cons [conn-entry k c] entries
 
@@ -242,7 +242,7 @@ spec sim-read-net SimRead -> SimNet
 defn sim-read-net
   | sim-read s _ -> s
 
-spec sim-read-val SimRead -> Option SyrupValue
+spec sim-read-val SimRead -> [Option SyrupValue]
 defn sim-read-val
   | sim-read _ v -> v
 
@@ -287,7 +287,7 @@ defn sim-pair-b
   | sim-pair _ b -> b
 
 ;; Helper: extract the underlying list from a Mailbox (head-of-newest).
-spec mailbox-list Mailbox -> List SyrupValue
+spec mailbox-list Mailbox -> [List SyrupValue]
 defn mailbox-list
   | mailbox xs -> xs
 
