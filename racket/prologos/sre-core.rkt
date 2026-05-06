@@ -285,9 +285,13 @@
 (define axiom-untested 'axiom-untested)
 
 ;; Test commutativity of join: a ⊔ b = b ⊔ a
-(define (test-commutative-join domain samples)
+;;
+;; SRE Track 2I Phase 4 (2026-05-06): #:relation selects the join from
+;; merge-registry so axioms inferred under a non-equality relation stay
+;; in that relation's lattice. Default 'equality preserves prior callers.
+(define (test-commutative-join domain samples #:relation [relation 'equality])
   (define merge-fn (sre-domain-merge-registry domain))
-  (define join (merge-fn 'equality))  ;; equality merge = lattice join
+  (define join (merge-fn relation))  ;; merge under the requested relation
   (for/fold ([status (axiom-confirmed 0)])
             ([i (in-range (length samples))]
              [a (in-list samples)]
@@ -300,8 +304,8 @@
           (axiom-refuted (list a b))))))
 
 ;; Test associativity of join: (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
-(define (test-associative-join domain samples)
-  (define join ((sre-domain-merge-registry domain) 'equality))
+(define (test-associative-join domain samples #:relation [relation 'equality])
+  (define join ((sre-domain-merge-registry domain) relation))
   (for/fold ([status (axiom-confirmed 0)])
             ([a (in-list samples)]
              #:break (axiom-refuted? status))
@@ -316,8 +320,8 @@
             (axiom-refuted (list a b c)))))))
 
 ;; Test idempotence of join: a ⊔ a = a
-(define (test-idempotent-join domain samples)
-  (define join ((sre-domain-merge-registry domain) 'equality))
+(define (test-idempotent-join domain samples #:relation [relation 'equality])
+  (define join ((sre-domain-merge-registry domain) relation))
   (for/fold ([status (axiom-confirmed 0)])
             ([a (in-list samples)]
              #:break (axiom-refuted? status))
@@ -502,13 +506,16 @@
 
   (define props-0
     (update-property declared 'commutative-join
-                     (test-commutative-join domain samples)))
+                     (test-commutative-join domain samples
+                                            #:relation relation-name)))
   (define props-1
     (update-property props-0 'associative-join
-                     (test-associative-join domain samples)))
+                     (test-associative-join domain samples
+                                            #:relation relation-name)))
   (define props-2
     (update-property props-1 'idempotent-join
-                     (test-idempotent-join domain samples)))
+                     (test-idempotent-join domain samples
+                                           #:relation relation-name)))
   (define props-3
     (if meet-fn
         (update-property props-2 'distributive
