@@ -261,6 +261,38 @@ defn refr-eq?
         | true  -> nat-eq? n1 n2
         | false -> false
 
+;; Phase 34d: Refr → SyrupValue encoding (for outbound args).
+;;
+;; Converts a Refr to the canonical wire-shape `syrup-tagged
+;; "desc:*" (syrup-nat N)`. The receiver's extract-refrs-from-args
+;; (Phase 34b) inverts this back to a Refr.
+;;
+;; Perspective flip: a refr-local-export N encodes as
+;; `<desc:export N>` on the wire — when peer decodes it, they see
+;; refr-remote-export N (their import of our export). Same for
+;; refr-local-answer ↔ refr-remote-answer.
+;;
+;; Remote refrs in outbound args (peer-bounce / three-vat) are
+;; encoded as desc:export / desc:answer too — the receiver can
+;; figure out semantics from the desc-tag and our connection
+;; identity. Full three-vat handoff would use desc:import-object;
+;; deferred to a future phase.
+;; Is the refr's kind one of the export-shaped kinds (local-export or
+;; remote-export, vs. answer-shaped)? Used to choose the desc:* tag
+;; for outbound encoding. Avoids 3-deep nested match in refr-to-syrup
+;; (pitfall #18).
+spec refr-export-kind? Refr -> Bool
+defn refr-export-kind? [r]
+  match [refr-local-export? r]
+    | true  -> true
+    | false -> refr-remote-export? r
+
+spec refr-to-syrup Refr -> SyrupValue
+defn refr-to-syrup [r]
+  match [refr-export-kind? r]
+    | true  -> [syrup-tagged "desc:export" [syrup-nat [refr-id r]]]
+    | false -> [syrup-tagged "desc:answer" [syrup-nat [refr-id r]]]
+
 data BridgeState
   bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,

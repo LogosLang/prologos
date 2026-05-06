@@ -47,6 +47,7 @@
 (imports (prologos::ocapn::core :refer-all))
 (imports (prologos::ocapn::message :refer-all))
 (imports (prologos::ocapn::captp-wire :refer-all))
+(imports (prologos::ocapn::syrup-wire :refer-all))
 (imports (prologos::ocapn::captp-bridge :refer-all))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
@@ -272,6 +273,46 @@
    (run-last
     "(eval (refr-eq? (refr-remote-export (suc zero)) (refr-local-export (suc zero))))")
    "false"))
+
+;; Phase 34d: Refr → wire encoding (refr-to-syrup).
+(test-case "refr/refr-to-syrup encodes refr-local-export as desc:export tag"
+  ;; Round-trip via the wire encoder: refr-local-export 5 should
+  ;; produce <desc:export 5> on the wire.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-local-export (suc (suc (suc (suc (suc zero))))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc zero))))) ))))")))
+  (check-equal? got expected))
+
+(test-case "refr/refr-to-syrup encodes refr-local-answer as desc:answer tag"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (refr-to-syrup (refr-local-answer (suc (suc (suc zero))))) ))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero))))) ))")))
+  (check-equal? got expected))
+
+(test-case "refr/refr-to-syrup + extract-refrs-from-args round-trips with perspective flip"
+  ;; Encode refr-local-export 7 → wire → decode (via
+  ;; extract-refrs-from-args). Result should be refr-remote-export 7
+  ;; (perspective flips: our export is peer's import).
+  ;;
+  ;; Verified via auto-increment: feeding the encoded refr through
+  ;; the decoder + bridge dispatch should increment imports-refcount[7].
+  (check-contains
+   (run-last
+    "(eval (let (encoded (refr-to-syrup (refr-local-export (suc (suc (suc (suc (suc (suc (suc zero))))))) ))
+                  op      (op-deliver zero encoded (none Nat) (none Nat))
+                  step    (captp-incoming-with-state op empty-vat bridge-state-empty))
+              (bs-lookup-import-refcount (suc (suc (suc (suc (suc (suc (suc zero))))))) (bridge-step-state step))))")
+   "1N"))
 
 ;; Phase 34b: decoder hook extract-refrs-from-args.
 (test-case "bridge/extract-refrs-from-args returns nil for atomic args"
