@@ -127,6 +127,35 @@
   (define result (test-idempotent-join td type-samples))
   (check-true (axiom-confirmed? result)))
 
+;; ----------------------------------------------------------------------
+;; Phase 4 (2026-05-06): join-axiom tests under #:relation 'subtype.
+;;
+;; The three join-axiom tests gained a #:relation keyword so that a caller
+;; like `infer-domain-properties` can compute axioms in the relation's own
+;; lattice. These tests lock in the contract that the keyword routes to the
+;; subtype-merge from the domain's merge-registry; a regression that
+;; reintroduced hardcoded 'equality would still pass for these samples
+;; because the subtype merge happens to also be commutative/associative/
+;; idempotent on this set, but the explicit subtype assertion documents
+;; the behavior the review surfaced.
+;; ----------------------------------------------------------------------
+
+(test-case "inference: commutative-join confirmed for type domain under #:relation 'subtype"
+  (define td (lookup-domain 'type))
+  (define result (test-commutative-join td type-samples #:relation 'subtype))
+  (check-true (axiom-confirmed? result))
+  (check-true (> (axiom-confirmed-count result) 0)))
+
+(test-case "inference: associative-join confirmed for type domain under #:relation 'subtype"
+  (define td (lookup-domain 'type))
+  (define result (test-associative-join td type-samples #:relation 'subtype))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "inference: idempotent-join confirmed for type domain under #:relation 'subtype"
+  (define td (lookup-domain 'type))
+  (define result (test-idempotent-join td type-samples #:relation 'subtype))
+  (check-true (axiom-confirmed? result)))
+
 (test-case "inference: distributive CONFIRMED for type domain (post-Phase-3c)"
   ;; HISTORY: Pre-Phase-3c (Track 2I, 2026-04-30) this test asserted REFUTED.
   ;; That finding was an artifact of `current-lattice-subtype-fn` being installed
