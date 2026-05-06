@@ -1148,3 +1148,113 @@ limits the interop test matrix; (b) once fixed, every protocol port
 that uses `process-string`-driven test fixtures benefits; (c) the
 gap signals something about how Prologos's reduction handles
 decoder-produced expression trees that may matter for self-hosting.
+
+---
+
+### #32 — Multi-constructor `data` types break cross-module inference for callers using bound vars (2026-05-06, real bug)
+
+**Symptom.** A `data` type with TWO OR MORE constructors (e.g.
+`bridge-step` and `bridge-step-out`) compiles fine in its defining
+module, BUT a caller in a DIFFERENT module that takes 2+ bound
+arguments and passes them to a function returning that data type
+fails to elaborate with "Could not infer type" — function-arg
+types come back as `<_>` (uninferred metavars) even though the spec
+declares them concretely.
+
+**Repro skeleton.** Inside module `M1`:
+
+```
+data Step
+  step     : Vat -> State            ;; ctor 1
+  step-out : Vat -> State -> List String  ;; ctor 2
+
+spec do-step Op Vat State -> Step
+defn do-step | ... -> step v st       ;; or step-out v st bytes
+```
+
+Inside an importing module `M2`:
+
+```
+require [M1 :refer-all]
+
+;; FAILS — "Could not infer type"
+spec wrap Op Vat State -> Vat
+defn wrap [op v st]
+  let s := [do-step op v st]
+    [step-vat s]
+```
+
+The 2-bound-arg form `wrap` cannot elaborate. Adding a typed let
+(`let s : Step := ...`) doesn't help. Inlining doesn't help. Same
+function inside `M1` itself works fine.
+
+**Empirical evidence.** Discovered in OCapN Phase 25 (handshake
+modelling, commit `4b92416`). I extended `BridgeStep` with a
+second constructor `bridge-step-out` carrying immediate-outbound
+bytes. The defining module `captp-bridge.prologos` continued to
+compile cleanly — `connection-step` (which uses `bridge-step-vat`,
+`bridge-step-state`, `bridge-step-immediate`) was fine. But the
+importing module `bridge-interop-helpers.prologos` failed to define
+EVERY multi-arg helper that called `captp-incoming-with-state` and
+then unpacked the result — including 1-let-deep helpers, even with
+explicit `: BridgeStep` annotations on the binding.
+
+The probe matrix isolated it precisely:
+
+| function shape                                            | defines? |
+|-----------------------------------------------------------|----------|
+| 1-arg + let + captp-call (constants for other args)       | yes      |
+| 1-arg + let + captp-call (constant deps)                  | yes      |
+| 2-arg + let + captp-call (1 bound + 1 constant)           | NO       |
+| 3-arg + let + captp-call (3 bound)                        | NO       |
+| 2-arg + INLINE + captp-call (no let, all bound)           | yes      |
+| 2-arg + let + captp-call returning a SINGLE-ctor type     | yes (untested but consistent with reverting) |
+
+The single-ctor-type case was the workaround. Reverting the
+multi-constructor extension and putting the "immediate outbound"
+field on the SINGLE-CONSTRUCTOR `BridgeState` instead made every
+caller compile. So the multi-constructor return type, NOT the let
+or the call shape, is the trigger.
+
+**Hypothesis.** The elaborator's bidirectional inference for
+function applications can't pin down the return type of a function
+returning a multi-constructor data type when the call's arguments
+include 2+ unsolved metavariables (the function-arg vars whose
+types haven't been propagated from the spec yet). With a
+single-constructor return type, the constructor's signature
+uniquely determines the type, but with N constructors the
+elaborator may delay the choice in a way that fails to back-propagate
+through the let.
+
+**Workaround.** Avoid multi-constructor data types when the
+constructor's primary use is "value with optional extra payload."
+Two options:
+
+1. **Single constructor with all fields (some optional).** Add a
+   `[List X]` or `[Option X]` field that's `nil` / `none` for the
+   bare case. Trade-off: every caller now matches an extra field,
+   but it's a wildcard. This is what `BridgeState`'s `pending-out`
+   field does.
+
+2. **Wrap the optional payload in a separate function.** Instead of
+   "constructor with X" + "constructor without X," have a single
+   constructor + a separate accumulator (e.g. a list field or a
+   queue) that the producing function appends to.
+
+**Discovered.** OCapN Phase 25, commit `4b92416`. Initial design
+added `bridge-step-out v st [List String]` as a second constructor
+to BridgeStep so the dispatch could carry "immediate outbound bytes."
+Cost about 1 hour of probing the elaborator with shrinking test
+cases before realizing the multi-constructor extension was the root.
+
+**Verdict.** Real Prologos elaborator bug. The single-constructor
+workaround (move the optional payload into the existing
+single-constructor type as a list/option field) is uniformly
+applicable and clean. Worth filing as an issue because: (a) the
+catastrophic failure mode (cross-module callers can't compile)
+is far enough from the surface cause (data type definition in a
+DIFFERENT module) that it's hard to diagnose; (b) multi-constructor
+data types are fundamental — it's a real expressivity gap until
+fixed; (c) the workaround works but adds field plumbing to every
+accessor and update function.
+
