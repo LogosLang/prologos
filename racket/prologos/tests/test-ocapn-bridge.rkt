@@ -220,6 +220,42 @@
     "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
    "none"))
 
+;; Phase 31: removal of question-table entries for GC.
+(test-case "bridge/bs-remove-question removes inbound question entry"
+  ;; Add q-pos=2 → pid=1, then remove q-pos=2; lookup should return none.
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-question (suc (suc zero))
+              (bs-remove-question (suc (suc zero))
+                (bs-add-question (suc (suc zero)) (suc zero) bridge-state-empty))))")
+   "none"))
+
+(test-case "bridge/bs-remove-question on absent entry is a no-op"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-question (suc (suc zero))
+              (bs-remove-question (suc (suc zero)) bridge-state-empty)))")
+   "none"))
+
+(test-case "bridge/bs-remove-outbound-question removes outbound question entry"
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero))
+              (bs-remove-outbound-question (suc (suc zero))
+                (bs-add-outbound-question (suc (suc zero)) (suc zero) bridge-state-empty))))")
+   "none"))
+
+(test-case "bridge/bs-remove-outbound-question keeps non-matching entries"
+  ;; Add (q-pos=1 → pid=10) and (q-pos=2 → pid=20). Remove q-pos=1.
+  ;; q-pos=2 should still be there.
+  (check-contains
+   (run-last
+    "(eval (bs-lookup-outbound-question (suc (suc zero))
+              (bs-remove-outbound-question (suc zero)
+                (bs-add-outbound-question (suc (suc zero)) (suc (suc zero))
+                  (bs-add-outbound-question (suc zero) (suc zero) bridge-state-empty)))))")
+   "some"))
+
 ;; Phase 27: bridge-send-question allocates promise + registers q-pos +
 ;; encodes bytes in one shot. Atomic "ask" operation.
 (test-case "bridge/bridge-send-question allocates + registers + encodes"

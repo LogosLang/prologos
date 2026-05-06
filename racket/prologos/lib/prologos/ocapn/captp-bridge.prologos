@@ -290,6 +290,38 @@ spec bs-lookup-outbound-question Nat BridgeState -> [Option Nat]
 defn bs-lookup-outbound-question [qpos st]
   bs-lookup-question-loop [bs-outbound-questions st] qpos
 
+;; Phase 31: remove an entry from a List QEntry, matched by the
+;; first field (key). Used by both bs-remove-question (inbound) and
+;; bs-remove-outbound-question (outbound). Returns the list with the
+;; first matching entry filtered out; if no match, returns the list
+;; unchanged. Removes only ONE matching entry — duplicate keys
+;; (which shouldn't occur in our usage but might from peer bugs)
+;; have only the most-recently-added removed.
+spec list-remove-q-by-key [List QEntry] Nat -> [List QEntry]
+defn list-remove-q-by-key
+  | nil _ -> [nil QEntry]
+  | [cons [q-entry k v] rest] target ->
+      match [nat-eq? k target]
+        | true  -> rest
+        | false -> [cons [q-entry k v] [list-remove-q-by-key rest target]]
+
+;; Phase 31: remove the inbound-question entry for `peer-q-pos`.
+;; Used when peer sends op:gc-answer telling us they're done with
+;; that answer-pos — we no longer need to remember the local
+;; promise we allocated for it.
+spec bs-remove-question Nat BridgeState -> BridgeState
+defn bs-remove-question
+  | qpos [bridge-state ls es as qs p oqs] ->
+      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs
+
+;; Phase 31: remove the outbound-question entry for `our-q-pos`.
+;; Used when WE've consumed peer's reply and want to send op:gc-answer
+;; — the local-promise/q-pos mapping is no longer needed.
+spec bs-remove-outbound-question Nat BridgeState -> BridgeState
+defn bs-remove-outbound-question
+  | qpos [bridge-state ls es as qs p oqs] ->
+      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos]
+
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
 ;; ===========================================================
