@@ -54,6 +54,14 @@ data CapTPOp
   op-gc-export : Nat -> Nat                ;; export-pos refcount-delta
   ;; op:gc-answer — peer is done with an answer position.
   op-gc-answer : Nat
+  ;; op:deliver-to-answer — peer is REPLYING to a question we asked
+  ;; earlier. Wire form: <op:deliver <desc:answer N> args false false>
+  ;; where N is OUR question-pos. Distinguished from op-deliver
+  ;; (where target is a desc:export — peer is INITIATING a question).
+  ;; Phase 25: questioner-side. The bridge looks up our q-pos in
+  ;; outbound-questions and resolves the corresponding local promise.
+  ;;   our-question-pos args
+  op-deliver-to-answer : Nat -> SyrupValue
 
 ;; ========================================
 ;; Constructors (smart wrappers)
@@ -87,6 +95,7 @@ defn deliver?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
+  | op-deliver-to-answer _ _ -> true
 
 spec deliver-only? CapTPOp -> Bool
 defn deliver-only?
@@ -97,6 +106,7 @@ defn deliver-only?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
+  | op-deliver-to-answer _ _ -> false
 
 spec listen? CapTPOp -> Bool
 defn listen?
@@ -107,6 +117,7 @@ defn listen?
   | op-listen _ _          -> true
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
+  | op-deliver-to-answer _ _ -> false
 
 spec abort? CapTPOp -> Bool
 defn abort?
@@ -117,6 +128,7 @@ defn abort?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
+  | op-deliver-to-answer _ _ -> false
 
 ;; ========================================
 ;; Selectors
@@ -131,6 +143,7 @@ defn deliver-target
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
+  | op-deliver-to-answer t _ -> some t
 
 spec deliver-args CapTPOp -> Option SyrupValue
 defn deliver-args
@@ -141,6 +154,7 @@ defn deliver-args
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
+  | op-deliver-to-answer _ a -> some a
 
 spec deliver-answer-pos CapTPOp -> Option Nat
 defn deliver-answer-pos
@@ -151,6 +165,7 @@ defn deliver-answer-pos
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
+  | op-deliver-to-answer _ _ -> none
 
 spec deliver-resolver CapTPOp -> Option Nat
 defn deliver-resolver
@@ -161,3 +176,4 @@ defn deliver-resolver
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
+  | op-deliver-to-answer _ _ -> none

@@ -31,7 +31,7 @@ require [prologos::ocapn::message :refer-all]
         [prologos::data::nat      :refer [nat-eq?]]
 
 spec incoming-captp-op CapTPOp Vat -> Vat
-  :doc "Apply an inbound CapTPOp to the vat. Phase 11."
+  :doc "Apply an inbound CapTPOp to the vat. Phase 11. (Stateless wrt BridgeState; Phase 25 questioner-side answers are handled by captp-incoming-with-state.)"
 defn incoming-captp-op
   | [op-deliver tgt args ap _rm] v ->
       enqueue-msg [vmsg-deliver tgt args ap] v
@@ -46,6 +46,11 @@ defn incoming-captp-op
   | [op-gc-export _pos _cnt] v ->
       v
   | [op-gc-answer _pos] v ->
+      v
+  | [op-deliver-to-answer _qpos _args] v ->
+      ;; Resolving an outbound question requires BridgeState (the
+      ;; outbound-questions table). The stateless variant can't do it;
+      ;; no-op here, the state-aware dispatcher handles it. Phase 25.
       v
 
 ;; ===========================================================
@@ -312,7 +317,7 @@ defn dispatch-deliver [tgt args ap v st]
           | none       -> deliver-allocate tgt args remote v st
 
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
-  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 (handshake)."
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25."
 defn captp-incoming-with-state
   | [op-deliver tgt args ap _rm] v st ->
       dispatch-deliver tgt args ap v st
@@ -332,6 +337,15 @@ defn captp-incoming-with-state
       bridge-step v [bs-add-gc-export pos cnt st]
   | [op-gc-answer pos] v st ->
       bridge-step v [bs-add-gc-answer pos st]
+  | [op-deliver-to-answer qpos args] v st ->
+      ;; Phase 25 questioner-side: peer is replying to our question
+      ;; with pos `qpos`. The inbound-answer dispatch will look up
+      ;; `qpos` in BridgeState's outbound-questions table (added in
+      ;; Phase 25.2) and resolve the corresponding local promise.
+      ;; For Phase 25.1 (this commit), the table doesn't exist yet —
+      ;; state-preserving no-op. Phase 25.3 wires the lookup +
+      ;; promise resolution.
+      bridge-step v st
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16
@@ -493,6 +507,7 @@ defn op-is-abort?
   | op-listen _ _      -> false
   | op-gc-export _ _   -> false
   | op-gc-answer _     -> false
+  | op-deliver-to-answer _ _ -> false
 
 ;; Once-aborted bool: was-aborted OR op-is-abort.
 spec or-bool Bool Bool -> Bool

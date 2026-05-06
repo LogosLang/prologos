@@ -114,6 +114,15 @@ defn encode-op
   | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-export resolver] nil]]
   | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
   | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+  ;; Phase 25: peer's reply to our question. Wire form is op:deliver
+  ;; with target=desc:answer N (our question pos), and the trailing
+  ;; answer-pos / resolver-me both false (no further reply expected).
+  | op-deliver-to-answer qpos args ->
+      wire::encode-record "op:deliver"
+        [cons [desc-answer qpos]
+          [cons args
+            [cons [syrup-bool false]
+              [cons [syrup-bool false] nil]]]]
 
 ;; ===========================================================
 ;; Decoder
@@ -208,6 +217,25 @@ defn unwrap-desc
   | syrup-refr _     -> none
   | syrup-bytes _  -> none
   | syrup-promise _  -> none
+
+;; Phase 25: discriminate desc:export from desc:answer. Returns true
+;; iff `v` is a `syrup-tagged "desc:answer" ...` form. Used by the
+;; op:deliver decoder to route inbound replies to questions through
+;; the questioner-side dispatch (op-deliver-to-answer) rather than
+;; the responder-side (op-deliver).
+spec desc-is-answer? SyrupValue -> Bool
+defn desc-is-answer?
+  | syrup-tagged tag _ -> str::eq tag "desc:answer"
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-refr _       -> false
+  | syrup-bytes _      -> false
+  | syrup-promise _    -> false
 
 ;; Same shape but for an Option-wrapped descriptor:
 ;;   - `syrup-bool false` -> `none`  (canonical absent sentinel)
@@ -329,6 +357,15 @@ defn dispatch-listen
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
+;; If the deliver's target is a `desc:answer N`, build an
+;; op-deliver-to-answer (peer is replying to OUR question N).
+;; Otherwise build an op-deliver (peer is initiating).
+spec dispatch-deliver-from-tgt SyrupValue Nat SyrupValue [Option Nat] [Option Nat] -> CapTPOp
+defn dispatch-deliver-from-tgt [tgt-raw t args ap rm]
+  match [desc-is-answer? tgt-raw]
+    | true  -> op-deliver-to-answer t args
+    | false -> op-deliver t args ap rm
+
 spec dispatch-deliver-args [List SyrupValue] -> [Option CapTPOp]
 defn dispatch-deliver-args [xs]
   match [list-fst xs]
@@ -345,7 +382,7 @@ defn dispatch-deliver-args [xs]
                       | some ap ->
                           match [list-4th xs]
                             | none -> none
-                            | some rm -> some [op-deliver t args [unwrap-opt-desc ap] [unwrap-opt-desc rm]]
+                            | some rm -> some [dispatch-deliver-from-tgt tgt t args [unwrap-opt-desc ap] [unwrap-opt-desc rm]]
 
 spec dispatch-deliver SyrupValue -> [Option CapTPOp]
 defn dispatch-deliver
