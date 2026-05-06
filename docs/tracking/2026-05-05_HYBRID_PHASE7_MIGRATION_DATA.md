@@ -1,10 +1,13 @@
-# Hybrid Kernel Phase 7 — Migration Target Data
+# Hybrid Kernel Phase 7 — Migration Target Data + Future-Work Evaluation
 
 **Date**: 2026-05-05 (initial OCapN-only data); **2026-05-05 PM**
 (expanded with 42-program shape battery); **2026-05-05 evening**
-(added 15-program broad-workload battery — non-trivial real
-algorithms, not single-shape probes)
-**Scope**: data collection only — no implementation in this commit.
+(added 15-program broad-workload battery); **2026-05-06**
+(added per-track code-size contribution evaluation for the
+remaining migration targets — see § "Potential Future Work" near
+the end)
+**Scope**: data collection + future-work evaluation only — no
+implementation in this commit.
 **Branch**: `claude/prologos-layering-architecture-Pn8M9`
 
 ## Question
@@ -549,3 +552,299 @@ programs.
   12 programs profiled here.
 - `/tmp/all-profiles.txt` (this session) — raw per-program by_tag +
   ns_by_tag arrays. Not committed.
+
+---
+
+## Potential Future Work — Code-Size Contribution Evaluation (2026-05-06)
+
+This section evaluates how much each remaining migration target is
+expected to contribute to the codebase on each side of the
+Racket↔Zig boundary, with rationale, risk weighting, and
+prerequisite ordering. Captured 2026-05-06 after Fix C, int-mod
+migration, and the bot-guard fix landed (the hybrid kernel is now
+BSP-correct; int-binary cluster is complete).
+
+### Current code-size baselines
+
+| layer | file | LOC |
+|---|---|---:|
+| Zig kernel | `runtime/prologos-runtime-hybrid.zig` | 695 |
+| Zig core | `runtime/core/cells.zig` | 102 |
+| Zig profile | `runtime/core/profile.zig` | 116 |
+| **Zig total** | | **913** |
+| Racket reducer | `racket/prologos/preduce.rkt` | 1522 |
+| Racket backend (hybrid) | `preduce-backend-hybrid.rkt` | 243 |
+| Racket backend (racket) | `preduce-backend-racket.rkt` | 101 |
+| Racket core | `preduce-core.rkt` | 165 |
+| Racket FFI bridge | `runtime-bridge.rkt` | 316 |
+| **Racket total** | | **2347** |
+
+### Per-track summary
+
+Estimates are NET LOC delta — additions on each side minus what's
+retired. ROI is "callback-time fraction in the workload battery
+that this track expects to absorb to native". Risk weights the
+likelihood that the actual delta exceeds the estimate.
+
+| # | track | Zig Δ | Racket Δ | ROI (cb-time absorbed) | risk | prereq |
+|---|---|---:|---:|---:|---|---|
+| 5 | `expr-boolrec` → kernel_select | +0 | +30 | ~4% | low | none |
+| 4 | ctor-N native ABI | +400 | +200 / -100 | ~5% (workload), ~50% (OCapN-style) | medium-high | ABI design pass |
+| 3 | `expr-reduce` match dispatch | +200 | +200 / -150 | ~10% | medium | #4 (ctor tags) |
+| 2 | `expr-natrec` step | +150 | +50 / -30 | ~5% effective (~17% theoretical) | medium | #1 |
+| 1 | recursive `expr-fvar` + `expr-app` | +1000 | +400 / -200 | ~60% | high | design pass; closure ABI |
+| 7 | CHAMP collection ops | +5000+ | +500 / -200 | ~4% (synthetic; defer) | high | invasive new data structure |
+
+### Per-track rationale
+
+#### #5 — `expr-boolrec` → `kernel_select` (free win)
+
+- **Zig +0**. `kernel_select` already exists at shape-3 tag 0
+  (`runtime/prologos-runtime-hybrid.zig:235`); Phase 9b registered
+  it but `expr-boolrec` was never routed through it.
+- **Racket +30**. Add `'select` to NATIVE-OP-TAGS for shape-3
+  dispatch (or a parallel SHAPE_3_NATIVE_TAGS hash) and update the
+  `expr-boolrec` compile case (`preduce.rkt:599`) to install at
+  shape 3 + tag 0 with `#:native-op 'select`. Plus an
+  `eager-compile-arm` step to compile `tc` and `fc` to cells at
+  install time (currently lazy inside `make-boolrec-fire`'s
+  callback). Retires `make-boolrec-fire` (~20 LOC).
+
+**Why this size**: kernel already has the function; Racket gains
+~30 LOC eagerification glue and retires ~20 LOC of callback. Net
+small gain.
+
+#### #4 — ctor-N native ABI (load-bearing for #3)
+
+- **Zig +400**. Four sub-pieces:
+  - Tagged-tuple cell representation (~150 LOC). Two ABI options:
+    heap-allocated struct via TAG_HANDLE, or bit-packed
+    `(ctor-tag, 4-bit-arity, 4×12-bit field-cids)` for arity-≤4
+    fast path + heap fallback. Option B captures OCapN's common
+    arity-1..4 ctors without heap allocation; the largest OCapN
+    ctor (op-deliver) is exactly arity 4.
+  - Native ctor-build primitive (~100 LOC). 1/2/3/N-input variants.
+  - Native ctor-tag read primitive (~50 LOC). Used by #3.
+  - Allocator + lifecycle (~100 LOC). If heap-backed, kernel
+    needs a small bump-allocator for tagged tuples; reset on
+    `prologos_kernel_reset`.
+- **Racket +200, retire ~100**. Three pieces:
+  - ABI-side bridge (~80 LOC) in `box-prologos-value` /
+    `unbox-prologos-value` to recognize the new representation.
+  - `compile-expr` ctor-app dispatch (~80 LOC). Replaces
+    `alloc-value-cell` for ctor application with native
+    ctor-build install.
+  - `classify-builtin-ctor` adaptation (~40 LOC) for the
+    `preduce-user-ctor?` branch.
+  - Retire `preduce-user-ctor` struct (-100 LOC).
+
+**Why this size**: ctor representation IS an ABI; every consumer
+(compile-expr, match dispatch, profiling, debugging) needs to
+know about it. Heap-backed implementation is mechanically small
+(100-200 LOC); the boxed-i64 bit-twiddling fast path is what
+pushes the kernel side toward 400.
+
+**Why ROI is workload-dependent**: OCapN-style data-construction
+workloads are ~50% ctor-N by cb time (per the Phase 7 doc above);
+the broader workload battery (W1..W15) is ~5% — recursion +
+match dispatch dominate there. Migration ROI scales with workload
+mix.
+
+**Why "medium-high" risk**: ABI design is the load-bearing
+piece. Get it wrong and you re-architect twice. Heap-backed is
+safer (less constraining) but adds GC concerns; boxed-i64 is
+faster but constrains arity to ≤4.
+
+#### #3 — `expr-reduce` match dispatch (depends on #4)
+
+- **Zig +200**. Three sub-pieces:
+  - Native discriminator primitive (~80 LOC). Reads scrutinee
+    ctor-tag, writes the matching arm index to a "winner" cell.
+  - Per-arm gated identity-bridge (~80 LOC). Similar to
+    `kernel_identity` but reads winner + arm-cell + writes only
+    when winner matches arm-index.
+  - Arm-tag registration (~40 LOC).
+- **Racket +200, retire ~150**. Two pieces:
+  - Eager arm compilation (~120 LOC). `expr-reduce` compile case
+    (`preduce.rkt:688`) currently compiles arms lazily inside
+    `make-reduce-fire`'s callback (after the scrutinee resolves);
+    native dispatch requires arms compiled at install time.
+    Touches binder-environment threading.
+  - Discriminator + bridge install glue (~80 LOC).
+  - Retire `make-reduce-fire` (-150 LOC).
+
+**Why this size**: match dispatch is structurally
+"discrimination + N identity bridges". The discriminator is
+small once ctor-N is native (just reads the cell's ctor-tag).
+The Racket side gains eager arm compilation — a real semantic
+shift.
+
+**Why prereq #4**: the discriminator reads the scrutinee's
+ctor-tag from the kernel-side representation. Without #4, ctors
+are Racket structs and the kernel can't inspect them.
+
+#### #2 — `expr-natrec` step (effective ROI lower than theoretical)
+
+- **Zig +150**. Native natrec iterator (~150 LOC). 4-input
+  (motive, base, step, target), 1-output. Unrolls `target`
+  (a Nat) to call `step` repeatedly with the running accumulator.
+- **Racket +50, retire ~30**. Install-time glue + retires
+  `make-natrec-fire`'s callback.
+
+**Why effective ROI is ~5% not 17%**: the `step` closure is
+usually a defn-call, which is callback-bound. Each iteration
+does a kernel→Racket→kernel hop. FFI overhead per hop is ~115 ns
+(per the hybrid PIR's calibration). For 100-iteration natrecs,
+that's 11.5 µs of FFI overhead. If the loop driver itself
+currently costs ~5 µs/iter, native saves only ~30%. Full 17%
+requires #1 (native call apparatus) to retire the FFI hop per
+step.
+
+#### #1 — Recursive `expr-fvar` + `expr-app` (the big architectural piece)
+
+- **Zig +1000**. Five sub-pieces:
+  - Closure cell representation (~200 LOC). A closure value
+    carries `(function-pointer-or-tag, captured-env-cell-ids[])`.
+    Heap-allocated via TAG_HANDLE.
+  - `apply` primitive (~250 LOC). Reads closure cell, reads N arg
+    cells, builds new env frame, calls the function. Installs
+    fresh per-call cells dynamically — a key shift from current
+    static-unfolding.
+  - Stack/trampoline for recursion (~250 LOC). Kernel can't
+    recurse via real call frames (BSP scheduler doesn't support
+    that). Trampoline via a continuation-cell holding the next
+    call to execute; fired by the BSP scheduler like any other
+    propagator.
+  - Recursion-depth guard / fuel (~50 LOC). Without compile-time
+    termination, runtime recursion needs explicit fuel.
+  - Tail-call detection (~250 LOC). Without TCO, deep recursion
+    blows the trampoline.
+- **Racket +400, retire ~200**. Three pieces:
+  - `expr-lam` compile case (~150 LOC). Construct a closure cell
+    with captured free-vars.
+  - `expr-app` compile case (~150 LOC). Currently does
+    compile-time β; new flow installs an apply propagator.
+  - `expr-fvar` compile case (~100 LOC). Resolve to a closure
+    value cell instead of inlining the body.
+  - Retire static-β unfolding (-200 LOC) — `compile-expr inner
+    env net` for recursive defns + `statically-reducible-lam` at
+    `preduce.rkt:747+`.
+
+**Why this size**: closures + apply + recursion is the most
+fundamental construct. Currently static-unfolding takes the easy
+path (compile-time β-reduction terminates because of fixpoint),
+but it allocates fresh propagators per recursive call site —
+exhausting the tag pool at modest N (W14 prime-count at N≥7 was
+the trigger for the 256→4096 tag-pool bump). Native call
+apparatus removes this scaling problem — installs ONE propagator
+per defn, calls at runtime.
+
+**Why "high" risk**: re-architects how recursion compiles. B1,
+B2, H1, J1, J2 from the shape battery do ZERO runtime fires
+today because static β eats them; runtime apply costs them more
+rounds. If we keep BOTH paths (static-β when statically
+decidable, runtime apply otherwise), Racket-side complexity
+grows.
+
+**What it enables**: ~60% of cb time across the workload battery
+moves to native. Recursive defns scale with depth not total call
+count.
+
+**Prereq**: separate design doc — closure ABI, env representation,
+recursion bound semantics, tail-call rules.
+
+#### #7 — CHAMP collection ops (poor ROI; defer)
+
+- **Zig +5000+**. CHAMP (persistent hash array mapped trie) +
+  RRB-vector in Zig. Multi-week project.
+- **Racket +500 bridge, retire ~200** of compile-map-* /
+  compile-set-* / compile-pvec-* callbacks.
+
+**Why poor ROI**: ~4% of cb time across the workload battery.
+OCapN uses syrup-list (a user-defined List-like ctor), not
+CHAMP-Map. CHAMP is heavily used in the elaborator
+(immutable persistent structures across speculation) but not in
+user-facing programs through preduce. The kernel-native
+implementation pays huge fixed costs (CHAMP + RRB + hash-cons +
+…) for a small workload-time win. Defer until a real workload
+becomes collection-heavy.
+
+### Combined LOC delta if all of #1–#5 land
+
+- **Zig: +1750 LOC** (913 → ~2660). ~3× growth. Closures + ctors
+  + match dispatcher + natrec + boolrec.
+- **Racket: −50 LOC NET** (preduce.rkt: ~1520 → ~1470).
+  Static-unfolding code retires; eager-compilation glue replaces
+  it. Surface complexity migrates from Racket compile-expr to
+  Zig kernel.
+
+(#7 not included — defer.)
+
+### Suggested orderings
+
+#### Path A — biggest payoff first
+
+1. #5 boolrec (cheap warm-up).
+2. #4 ctor-N (load-bearing ABI).
+3. #3 match dispatch (depends on #4).
+4. #1 recursive call apparatus.
+5. #2 natrec.
+
+#### Path B — incremental ROI
+
+1. #5 boolrec.
+2. #4 ctor-N.
+3. #3 + #2 in parallel (with stub closures delegating to Racket).
+4. #1 last (replaces stubs).
+
+#### Path C — value-engineering minimum
+
+1. #5 boolrec.
+2. #4 ctor-N (heap-backed only; skip boxed-i64 fast path; saves
+   ~150 Zig LOC).
+3. #3 match dispatch with simplified ctor-N.
+4. STOP — re-measure and decide.
+
+### Open design questions
+
+Before starting any of #1–#4 a design pass is needed:
+
+1. **ctor-N ABI**: heap-allocated tagged tuple via TAG_HANDLE, or
+   bit-packed (TAG_USER + arity + 12-bit field cids)? The latter
+   limits arity ≤ 4 but avoids heap allocation. OCapN's largest
+   ctor is op-deliver at arity 4 — fits exactly. Phase 10+
+   user-defined ctors might exceed 4. Spec'ing both with a
+   selector at install time is feasible but doubles kernel
+   surface.
+2. **Closure representation**: flat-env vs De Bruijn stack vs
+   explicit env-cells? Static-unfolding doesn't need a runtime
+   env; native call does.
+3. **Tail-call semantics**: optional optimization or required
+   for correctness? Compiler self-hosting workloads could blow
+   any non-TCO budget.
+4. **Eager arm compilation** (for #3): does it break programs
+   that rely on per-call arm compilation? Recursive defns
+   currently compile fresh arm bodies per visit. Eager
+   compilation needs #1 done first OR a "stub closure" form for
+   recursive bodies in match arms.
+5. **Bot-guard convention**: now that native fire-fns guard
+   TAG_BOT (the 2026-05-06 fix), should the protocol be
+   formalized? E.g., a `kernel_fire_fn_protocol` doc enumerating
+   the contract (inputs may be bot, outputs must be bot if any
+   input is bot, etc.).
+
+### What this analysis does NOT settle
+
+- **Whether #1 is feasible without losing static-β benefits**.
+  B1, B2, H1, J1, J2 do ZERO runtime fires today; native apply
+  costs them more rounds.
+- **Per-fire cost of native call apparatus**. Hybrid PIR §
+  Appendix A measured ~115 ns/fire for native, ~4100 ns/fire for
+  callback. Native call apparatus is between — depends on
+  closure-allocation cost, env-frame setup, fuel-check overhead.
+  Until prototyped, the "60% of cb time" payoff is theoretical.
+- **Whether #1+#2+#3 land as one track or three**. They're
+  architecturally coupled: apply handles ctor-fields-as-args,
+  match dispatcher reads ctor tags, natrec's step is a closure.
+  Independently means a stub-laden middle state; together is a
+  multi-week project.
