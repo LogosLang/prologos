@@ -1080,16 +1080,19 @@ defn release-answer [our-q-pos cs]
 
 ;; Release: we dropped k references to peer's export at export-pos N.
 ;; Emits op:gc-export N k bytes for peer (so they can decrement their
-;; refcount). State is otherwise unchanged: this bridge model doesn't
-;; track imports-refcount yet (deferred — see GC plan), so the caller
-;; is the source of truth on the count.
+;; refcount) AND decrements our local imports-refcount[N] by k
+;; (saturating at 0). After Phase 34c, imports-refcount tracks how
+;; many references we hold; this is the symmetric decrement of the
+;; auto-increment-on-decode (Phase 34b).
 spec release-import Nat Nat ConnectionState -> ConnRelease
 defn release-import [export-pos cnt cs]
   match [conn-aborted? cs]
     | true  -> conn-release cs [nil String]
     | false ->
-        let bytes := [gc-export-bytes export-pos cnt]
-          conn-release cs [cons bytes [nil String]]
+        let st'   := [bs-decr-import export-pos cnt [conn-bridge-state cs]]
+          let cs' := [conn-state [conn-vat cs] st' [conn-emitted cs] [conn-aborted? cs]]
+            let bytes := [gc-export-bytes export-pos cnt]
+              conn-release cs' [cons bytes [nil String]]
 
 ;; The per-op aborted check. We use a Bool predicate via match
 ;; rather than a boolean op (Prologos doesn't expose a generic

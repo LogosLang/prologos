@@ -898,6 +898,31 @@
               (length (conn-release-bytes rel))))")
    "0N"))
 
+;; Phase 34e: release-import decrements imports-refcount.
+(test-case "bridge/release-import decrements imports-refcount by k"
+  ;; Increment refcount for export 3 to 2, then release-import 1.
+  ;; Final count should be 1.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc zero)))
+                       (bs-incr-import (suc (suc (suc zero))) bridge-state-empty))
+                  cs0 (conn-state empty-vat st0 nil false)
+                  rel (release-import (suc (suc (suc zero))) (suc zero) cs0))
+              (bs-lookup-import-refcount (suc (suc (suc zero)))
+                (conn-bridge-state (conn-release-state rel)))))")
+   "1N"))
+
+(test-case "bridge/release-import decrement saturates at zero"
+  ;; Refcount=1, release count=5. Final count should be 0.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc zero) bridge-state-empty)
+                  cs0 (conn-state empty-vat st0 nil false)
+                  rel (release-import (suc zero) (suc (suc (suc (suc (suc zero))))) cs0))
+              (bs-lookup-import-refcount (suc zero)
+                (conn-bridge-state (conn-release-state rel)))))")
+   "0N"))
+
 (test-case "bridge/release-import emits op:gc-export wire bytes"
   ;; release-import for export-pos=3, count=2 should emit canonical bytes.
   (define got
