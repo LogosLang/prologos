@@ -14,6 +14,7 @@
 (require racket/match
          "prelude.rkt"
          "syntax.rkt"
+         "loose-bvar.rkt"  ;; pitfall #31 fix: looseBVarRange short-circuit for shift
          (only-in "namespace.rkt" ns-context?))
 
 (provide shift subst open-expr)
@@ -22,6 +23,16 @@
 ;; Shift: increase bound indices >= cutoff by delta
 ;; ========================================
 (define (shift delta cutoff e)
+  ;; pitfall #31 fix (Lean 4 looseBVarRange-style): if e has no free
+  ;; bvars >= cutoff, shift is a no-op. Returns e unchanged in O(1).
+  ;; This makes shift cheap on closed substitution arguments — the
+  ;; common case in tail-recursive accumulators (decoders, folds).
+  ;; See docs/tracking/2026-05-04_SUBSTITUTION_PERF_SURVEY.md.
+  (cond
+    [(<= (loose-bvar-range e) cutoff) e]
+    [else (shift-impl delta cutoff e)]))
+
+(define (shift-impl delta cutoff e)
   (match e
     ;; Variables
     [(expr-bvar k)
