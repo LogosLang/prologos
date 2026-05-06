@@ -218,6 +218,41 @@
     "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
    "none"))
 
+;; Phase 27: bridge-send-question allocates promise + registers q-pos +
+;; encodes bytes in one shot. Atomic "ask" operation.
+(test-case "bridge/bridge-send-question allocates + registers + encodes"
+  ;; tgt-export=2, args="ping", empty state. Should allocate pid=0,
+  ;; register q-pos=0 in outbound-questions, return bytes targeting
+  ;; <desc:export 2> with answer-pos <desc:answer 0>.
+  (define got-pid
+    (run-last
+     "(eval (bq-pid (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))"))
+  ;; First allocation: pid = 0N
+  (check-contains got-pid "0N"))
+
+(test-case "bridge/bridge-send-question registers q-pos in outbound-questions"
+  ;; After bridge-send-question, looking up the freshly-assigned q-pos
+  ;; in the returned state should find the same pid.
+  (define got
+    (run-last
+     "(eval (let ((bq (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))
+              (bs-lookup-outbound-question (bq-pid bq) (bq-state bq))))"))
+  (check-contains got "some")
+  (check-contains got "0N"))
+
+(test-case "bridge/bridge-send-question encodes canonical question bytes"
+  ;; The bytes returned should match outbound-question-bytes called
+  ;; directly with the same args + the freshly-assigned q-pos (=0).
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (bq-bytes (bridge-send-question (suc (suc zero)) (syrup-string \"ping\") empty-vat bridge-state-empty)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") zero))")))
+  (check-equal? got expected))
+
 ;; Phase 25: dispatch incoming answer. With no entry in outbound-
 ;; questions for the qpos, dispatch is a no-op (vat unchanged).
 (test-case "bridge/dispatch-incoming-answer: unknown qpos is a no-op"

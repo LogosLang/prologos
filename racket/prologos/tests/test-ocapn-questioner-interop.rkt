@@ -167,17 +167,20 @@
      (run-last (format "(eval (our-session-bytes ~s ~s))" our-ver our-loc))))
   (printf "questioner-interop: our-session-bytes = ~s~n" session-bytes)
 
-  ;; 5. Build our outbound question:
-  ;;      <op:deliver <desc:export 0> "ping" <desc:answer 7> false>
-  ;;    Target export 0 (Node's whatever), args = "ping" (a string),
-  ;;    our q-pos = 7. Node will reply targeting <desc:answer 7>.
-  (define our-q-pos 7)
+  ;; 5. Build our outbound question via the atomic bridge-send-question
+  ;;    helper (Phase 27). This allocates a fresh local promise (pid=0
+  ;;    in a fresh vat), registers q-pos = pid in BridgeState's
+  ;;    outbound-questions table, and encodes the wire bytes — all
+  ;;    in one call. Q-pos is 0 by construction (first allocation
+  ;;    from empty-vat).
+  ;;
+  ;;      <op:deliver <desc:export 0> "ping" <desc:answer 0> false>
+  (define our-q-pos 0)
   (define question-bytes
     (extract-value-bytes
      (run-last (format
-                "(eval (outbound-question-bytes zero (syrup-string ~s) ~a))"
-                "ping"
-                (build-suc-tower-or-nat-literal our-q-pos)))))
+                "(eval (bq-bytes (bridge-send-question zero (syrup-string ~s) empty-vat bridge-state-empty)))"
+                "ping"))))
   (printf "questioner-interop: question-bytes = ~s~n" question-bytes)
 
   ;; 6. Send both frames to Node.

@@ -291,6 +291,57 @@ defn bs-lookup-outbound-question [qpos st]
   bs-lookup-question-loop [bs-outbound-questions st] qpos
 
 ;; ===========================================================
+;; Phase 27: vat-side `ask` wiring — bridge-send-question
+;; ===========================================================
+;;
+;; The atomic "send a question" operation: allocate a fresh local
+;; promise, register it as an outbound question in BridgeState
+;; (q-pos = pid for simplicity — single-connection model uses
+;; pid as the answer-pos identity), and encode the wire bytes.
+;; Returns all four values via the BridgeQuestion struct.
+;;
+;; Caller usage:
+;;   let bq := [bridge-send-question tgt-export args v st]
+;;   - send `[bq-bytes bq]` over the wire to peer
+;;   - hold `[bq-pid bq]` to await resolution
+;;   - thread `[bq-vat bq]` and `[bq-state bq]` into subsequent ops
+
+data BridgeQuestion
+  bridge-question : Vat -> BridgeState -> Nat -> String
+  ;; (vat-after-allocation, state-with-question-registered,
+  ;;  promise-id-awaiting-answer, wire-bytes-of-outbound-question)
+  ;; Single constructor — avoids issue #60 cross-module inference.
+
+spec bq-vat BridgeQuestion -> Vat
+defn bq-vat
+  | bridge-question v _ _ _ -> v
+
+spec bq-state BridgeQuestion -> BridgeState
+defn bq-state
+  | bridge-question _ st _ _ -> st
+
+spec bq-pid BridgeQuestion -> Nat
+defn bq-pid
+  | bridge-question _ _ p _ -> p
+
+spec bq-bytes BridgeQuestion -> String
+defn bq-bytes
+  | bridge-question _ _ _ b -> b
+
+;; Atomic ask: allocate promise, register in outbound-questions,
+;; encode wire bytes. Q-pos = pid (1:1 mapping in single-connection
+;; model). Returns BridgeQuestion carrying everything the caller
+;; needs.
+spec bridge-send-question Nat SyrupValue Vat BridgeState -> BridgeQuestion
+defn bridge-send-question [tgt-export args v st]
+  let alloc := [fresh-promise v]
+    let pid := [alloc-id alloc]
+      let v1 := [alloc-vat alloc]
+        let st1 := [bs-add-outbound-question pid pid st]
+          let bytes := [outbound-question-bytes tgt-export args pid]
+            bridge-question v1 st1 pid bytes
+
+;; ===========================================================
 ;; State-aware dispatcher
 ;; ===========================================================
 ;;
