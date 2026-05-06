@@ -1329,13 +1329,14 @@ during the workaround. Adding the explicit `:refer [PromiseState …]`
 unblocked the function definition in <1 minute once diagnosed.
 
 **Verdict.** Real, but lower-impact than #60 because the workaround
-is a 1-line import addition. Worth filing because: (a) the error
-message ("Type mismatch [Pi T] vs [Pi qualified::T]") is confusing
-— the names look identical at first glance; (b) `:refer-all` chains
-are a common shortcut in Prologos library modules, and any
-downstream user pattern-matching or returning a parametric type
-from a chained module will hit this; (c) fixing it would let
-`:refer-all` Just Work as expected.
+is a 1-line import addition. Filed as
+[issue #61](https://github.com/LogosLang/prologos/issues/61) because:
+(a) the error message ("Type mismatch [Pi T] vs [Pi qualified::T]")
+is confusing — the names look identical at first glance;
+(b) `:refer-all` chains are a common shortcut in Prologos library
+modules, and any downstream user pattern-matching or returning a
+parametric type from a chained module will hit this; (c) fixing it
+would let `:refer-all` Just Work as expected.
 
 
 
