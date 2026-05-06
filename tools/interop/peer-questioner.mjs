@@ -165,10 +165,13 @@ sock.on('connect', () => {
 sock.on('data', d => {
   inBuf = Buffer.concat([inBuf, d]);
   while (tryConsumeFrame()) { /* keep going */ }
-  // Once we have both expected frames, summarize and close.
-  const haveSession = receivedFrames.some(f => f && f.label === 'op:start-session');
-  const haveReply   = receivedFrames.some(f => f && f.label === 'op:deliver');
-  if (haveSession && haveReply) summarize();
+  // Summarize once we have the bridge's deliver reply. Racket's
+  // bridge treats inbound op:start-session as a state-preserving
+  // no-op (0 outbound) — see test-ocapn-bridge-interop.rkt wire
+  // flow — so we don't gate on a session frame from Racket. The
+  // session frame, if any, is captured in summarize() for diagnostics.
+  const haveReply = receivedFrames.some(f => f && f.label === 'op:deliver');
+  if (haveReply) summarize();
 });
 
 sock.on('error', err => {
@@ -193,13 +196,12 @@ sock.on('end', () => {
   }
 });
 
-// 600s safety timeout. Wide because the Racket side runs the bridge
-// end-to-end (captp-incoming-with-state + drain + pump-outbound)
-// through process-string, which evaluates in pure-Prologos and
-// is observed at 80-180s with high variance (goblin pitfall #31).
-// The other peer scripts (peer-recv etc.) only test wire codec
-// round-trips and complete in well under 30s.
+// 60 s safety timeout. With the looseBVarRange fix for pitfall #31
+// (commits 4f6b3f0 + 6f2e077), the Racket bridge end-to-end
+// (decode-op + captp-incoming-with-state + drain + pump-outbound)
+// completes in ~3 s in local testing. 60 s leaves a generous margin
+// for slower CI hardware while still catching genuine regressions.
 setTimeout(() => {
   process.stderr.write('peer-questioner: timeout\n');
   process.exit(3);
-}, 600_000).unref();
+}, 60_000).unref();

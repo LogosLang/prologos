@@ -29,20 +29,4 @@ test-ocapn-rpc.rkt                # interop-only: spawns node subprocess (Phase 
 test-ocapn-pipelined.rkt          # interop-only: spawns node subprocess (Phase 9)
 test-ocapn-abort.rkt              # interop-only: spawns node subprocess (Phase 10)
 
-# Phase 24 bridge-driven responder interop test — pitfall #31 closed
-# at the asymptotic level (linear scaling restored, 40.8× speedup at
-# N=5 on the synthetic decode-value test, see
-# 2026-05-04_LOOSE_BVAR_RANGE_PIR.md), but the bridge-interop test
-# still does not complete fast enough for Node's TCP timeout. Local
-# re-run 2026-05-06: Racket DID produce the correct reply bytes
-# (<10'op:deliver<11'desc:answer7+>5"helloff>) — but at 10 min wall
-# time, by which point Node's peer-questioner had already exited 3
-# with summary=#<eof>. user-CPU was 13 s, so most of the wall time is
-# wait/scheduling overhead in the bridge pipeline, not asymptotic
-# blow-up — likely a process startup / TCP round-trip / vat-drain
-# scheduling cost. Different problem class from #31; needs its own
-# investigation. Goblin pitfalls #30 + #31 remain the references for
-# the original perf bug; this skip line will be removed when the
-# bridge round-trip is cut to seconds.
-test-ocapn-bridge-interop.rkt     # interop-only: spawns node subprocess (Phase 24, bridge-pipeline-wait-time-too-high)
 test-bridge-perf.rkt              # Pitfall #31 perf diagnostic — decode-op alone is ~150s; not a regression test, kept as the baseline measurement for future perf work
