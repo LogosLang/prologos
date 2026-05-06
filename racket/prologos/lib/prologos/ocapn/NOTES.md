@@ -3,10 +3,65 @@
 This directory holds a **subset** of the upstream OCapN (Object-Capability
 Network) port from PR #28
 (`LogosLang/prologos` branch `claude/ocapn-prologos-implementation-auLxZ`,
-imported 2026-05-04). The full upstream port includes ~14 library modules
-and ~16 test files; what's checked in here is the slice that exercises
-specific compatibility targets for the current branch's PReduce-lite +
-hybrid Zig kernel work.
+last sync 2026-05-06). The 2026-05-06 sync brought the lib slice to
+parity with upstream HEAD (16 lib files); the test surface is 20 of
+upstream's 26 test files (the 6 omitted require modules whose
+elaboration currently produces type errors on this branch's compiler
+— see "Omitted from this sync" below).
+
+## Sync 2026-05-06 — parity catch-up
+
+Pulled from upstream HEAD `b971818`:
+- 9 new lib files: `bridge-interop-helpers`, `captp-bridge`,
+  `captp-session`, `captp-wire`, `netlayer`, `pipelining`,
+  `syrup-wire`, `tcp-testing`, `vat` (~2.7 kLOC total).
+- 14 new test files (12 with passing tests, 2 self-skip when
+  Node.js absent — see Phase 24 interop in upstream).
+- 1 new example file:
+  `racket/prologos/examples/2026-04-27-ocapn-acceptance.prologos`
+  (used by `test-ocapn-acceptance-l3`).
+- Refreshed all 7 already-pulled lib files to upstream HEAD versions.
+- Refreshed `docs/tracking/2026-04-27_GOBLIN_PITFALLS.md` (1129 → 1260
+  LOC; pitfalls #31, #32 added upstream).
+
+### Test status post-sync (20 files)
+
+OK (13 files, 145 cases):
+- `test-ocapn-acceptance-l3` (10), `behavior` (13), `captp` (7),
+  `e2e` (8), `locator` (13), `message` (19), `netlayer` (14),
+  `pipeline` (5), `pipelining` (4), `promise` (16), `refr` (6),
+  `syrup` (9), `vat` (21).
+
+SKIP (7 files; self-skip via `(unless (interop-deps-present?) ...
+(exit 0))` when Node.js / `tools/interop/node_modules` absent):
+- `abort`, `bridge-interop`, `conversation`, `handshake`,
+  `live-interop`, `pipelined`, `rpc`. These tests exercise the
+  Node.js-side OCapN reference implementation and are runnable
+  only after `cd tools/interop && npm install`. They pass cleanly
+  here (no errors) because the guard exits before any
+  `process-string` of `prologos::ocapn::syrup-wire` is attempted.
+
+### Omitted from this sync
+
+6 upstream test files were dropped because they fail to load:
+
+| upstream test file | reason |
+|---|---|
+| `test-ocapn-bridge.rkt` | imports `prologos::ocapn::syrup-wire` which fails to elaborate ("Type mismatch") on this branch's compiler |
+| `test-ocapn-captp-wire.rkt` | same syrup-wire load failure |
+| `test-ocapn-syrup-wire.rkt` | tests syrup-wire directly; same load failure |
+| `test-ocapn-syrup-cross-impl.rkt` | same |
+| `test-ocapn-netlayer-tcp.rkt` | same |
+| `test-ocapn-tcp-testing.rkt` | imports a missing `tcp-ffi.rkt` Racket module |
+
+The `syrup-wire.prologos` and `captp-wire.prologos` lib files ARE
+kept in the directory — the SKIP tests reference them in their
+post-skip-guard preamble; under a Node.js-equipped environment
+they'd be loaded then. But syrup-wire's elaboration error means
+the SKIP tests would also fail in such an environment until the
+elaborator gap is closed. That's an upstream-vs-this-branch
+compiler-version skew, not a local breakage; tracked for the next
+sync.
 
 ## Parallel-branch coordination
 

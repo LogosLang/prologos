@@ -1,0 +1,315 @@
+ns prologos::ocapn::netlayer
+
+;; ========================================
+;; NetLayer abstract interface + simulated (in-process) netlayer
+;; ========================================
+;;
+;; In Endo's `tcp-test-only.js` the netlayer surface is:
+;;   makeTcpNetLayer({ host, port, ... }) =>
+;;     { location, locationId, connect, shutdown, _debug }
+;; which is a record of operations. Real connect/listen invoke `net`
+;; (Node TCP); message bytes flow via `socket.write` / `socket.on
+;; 'data'`. The shape that matters for OCapN portability is the
+;; SUFACE (record of ops), not the implementation.
+;;
+;; This module gives us:
+;;   1. A pure-Prologos description of the surface (`NetLayerOps`,
+;;      `Connection`, `Mailbox`).
+;;   2. A simulated, in-memory netlayer (`sim-netlayer`) that two
+;;      vats can share inside a single Racket process. This is what
+;;      our test files use — no FFI, no sockets, just pair-of-queues.
+;;
+;; The actual TCP-testing-only implementation lives in
+;; `tcp-testing.prologos` and FFI's into Racket TCP primitives.
+;;
+;; The vat ↔ netlayer bridge is intentionally simple: each connection
+;; is a pair of queues (incoming, outgoing), each holding SyrupValues
+;; that the CapTP layer above will encode/decode. See the
+;; vat-bridge function below.
+
+require [prologos::ocapn::locator :refer-all]
+        [prologos::ocapn::syrup
+         :refer [SyrupValue
+                 syrup-null syrup-string syrup-tagged
+                 syrup-list]]
+        [prologos::data::list   :refer [List nil cons append reverse]]
+        [prologos::data::option :refer [Option none some]]
+        [prologos::data::nat    :refer [nat-eq?]]
+
+;; ========================================
+;; Mailbox
+;; ========================================
+;;
+;; A unidirectional FIFO of SyrupValues. Two of these (in/out)
+;; constitute a Connection.
+
+data Mailbox
+  ;; mailbox messages — newest at the head, reversed at receive time
+  mailbox : List SyrupValue
+
+def empty-mailbox : Mailbox := [mailbox nil]
+
+spec mb-push SyrupValue Mailbox -> Mailbox
+defn mb-push [v mb]
+  match mb
+    | mailbox xs -> mailbox [cons v xs]
+
+;; reverse-tail returns the original list with the LAST element
+;; removed. Used by mb-pop.
+spec reverse-tail-helper [List SyrupValue] [List SyrupValue] -> List SyrupValue
+defn reverse-tail-helper [acc xs]
+  match xs
+    | nil -> nil
+    | cons a rest ->
+        match rest
+          | nil -> acc
+          | cons _ _ -> reverse-tail-helper [cons a acc] rest
+
+spec reverse-tail [List SyrupValue] -> List SyrupValue
+  :doc "Drop the last element of a list; nil if input is empty."
+defn reverse-tail [xs]
+  reverse-tail-helper nil xs
+
+;; Pop the OLDEST message. Returns (Option (rest-mailbox)).
+spec mb-pop Mailbox -> Option Mailbox
+  :doc "Pop the oldest message; returns none if empty."
+defn mb-pop
+  | mailbox xs ->
+      match [reverse xs]
+        | nil -> none
+        | cons _ _rest -> some [mailbox [reverse-tail xs]]
+
+;; Get the OLDEST message without removing.
+spec mb-peek Mailbox -> Option SyrupValue
+defn mb-peek
+  | mailbox xs ->
+      match [reverse xs]
+        | nil -> none
+        | cons a _ -> some a
+
+spec mb-empty? Mailbox -> Bool
+defn mb-empty?
+  | mailbox xs ->
+      match xs
+        | nil -> true
+        | cons _ _ -> false
+
+;; ========================================
+;; Connection
+;; ========================================
+;;
+;; A connection has an integer id (allocated by the netlayer), the
+;; remote peer's locator, and two mailboxes:
+;;   inbound  — messages WE will read (the peer wrote them)
+;;   outbound — messages WE wrote (the peer will read them)
+;;
+;; A direction-flag distinguishes who initiated — Endo's
+;; `makeConnection(netlayer, isOutgoing, ops)` carries the same bit.
+
+data Connection
+  ;; connection id locator outbound inbound is-outgoing?
+  connection : Nat -> Locator -> Mailbox -> Mailbox -> Bool
+
+;; Selectors
+
+spec conn-id Connection -> Nat
+defn conn-id
+  | connection i _ _ _ _ -> i
+
+spec conn-peer Connection -> Locator
+defn conn-peer
+  | connection _ l _ _ _ -> l
+
+spec conn-outbound Connection -> Mailbox
+defn conn-outbound
+  | connection _ _ o _ _ -> o
+
+spec conn-inbound Connection -> Mailbox
+defn conn-inbound
+  | connection _ _ _ i _ -> i
+
+spec conn-is-outgoing? Connection -> Bool
+defn conn-is-outgoing?
+  | connection _ _ _ _ b -> b
+
+;; Functional updates
+
+spec conn-set-outbound Connection Mailbox -> Connection
+defn conn-set-outbound
+  | [connection i l _ ib io] mb -> connection i l mb ib io
+
+spec conn-set-inbound Connection Mailbox -> Connection
+defn conn-set-inbound
+  | [connection i l ob _ io] mb -> connection i l ob mb io
+
+;; ========================================
+;; Sim-NetLayer
+;; ========================================
+;;
+;; Simulated netlayer: two peers share one process; their connections
+;; are paired by reversing the mailboxes.
+;;
+;; The shape of `SimNet` is just a pair of connection-id-keyed
+;; tables. Connection N at peer A ↔ connection N at peer B, with
+;; outbound/inbound swapped. So when peer A's vat writes a
+;; SyrupValue to its outbound, peer B's inbound on the same
+;; connection-id receives it.
+;;
+;; The "tcp-testing-only" naming convention from Endo applies here
+;; too — neither side does crypto or auth.
+
+data ConnEntry
+  conn-entry : Nat -> Connection
+
+;; SimNet for ONE peer — a list of its open connections plus the
+;; next-id counter for fresh connection allocations on this peer.
+data SimNet
+  sim-net : Nat -> [List ConnEntry]
+
+def empty-sim-net : SimNet := [sim-net zero nil]
+
+;; Selectors
+
+spec sim-next-id SimNet -> Nat
+defn sim-next-id
+  | sim-net n _ -> n
+
+spec sim-connections SimNet -> List ConnEntry
+defn sim-connections
+  | sim-net _ es -> es
+
+;; Lookup a connection by id.
+
+spec sim-find-conn Nat [List ConnEntry] -> Option Connection
+defn sim-find-conn
+  | _ nil -> none
+  | k [cons [conn-entry i c] rest] ->
+      match [nat-eq? k i]
+        | true  -> some c
+        | false -> sim-find-conn k rest
+
+;; Insert / replace a connection by id (cons-at-head; latest wins).
+
+spec sim-set-conn Nat Connection [List ConnEntry] -> List ConnEntry
+defn sim-set-conn [k c entries]
+  cons [conn-entry k c] entries
+
+;; ========================================
+;; Operations
+;; ========================================
+;;
+;; Allocate a fresh connection on this peer to a remote `peer`.
+;; Returns (new-net, fresh-id).
+
+data SimAlloc
+  sim-alloc : SimNet -> Nat
+
+spec sim-alloc-net SimAlloc -> SimNet
+defn sim-alloc-net
+  | sim-alloc s _ -> s
+
+spec sim-alloc-id SimAlloc -> Nat
+defn sim-alloc-id
+  | sim-alloc _ n -> n
+
+spec sim-open Locator Bool SimNet -> SimAlloc
+  :doc "Open a fresh connection. Bool is is-outgoing? flag."
+defn sim-open
+  | peer is-outgoing? [sim-net n entries] ->
+      let c : Connection :=
+        [connection n peer empty-mailbox empty-mailbox is-outgoing?]
+        sim-alloc [sim-net [suc n] [sim-set-conn n c entries]] n
+
+;; Write to a connection's outbound mailbox.
+
+spec sim-write Nat SyrupValue SimNet -> SimNet
+defn sim-write
+  | cid v [sim-net n entries] ->
+      match [sim-find-conn cid entries]
+        | none -> [sim-net n entries]
+        | some c ->
+            let c2 : Connection := [conn-set-outbound c [mb-push v [conn-outbound c]]]
+              sim-net n [sim-set-conn cid c2 entries]
+
+;; Read a value from the inbound mailbox of a connection.
+;; Returns the netlayer with the message popped (or unchanged if
+;; nothing pending) AND the popped value (or none).
+
+data SimRead
+  sim-read : SimNet -> [Option SyrupValue]
+
+spec sim-read-net SimRead -> SimNet
+defn sim-read-net
+  | sim-read s _ -> s
+
+spec sim-read-val SimRead -> Option SyrupValue
+defn sim-read-val
+  | sim-read _ v -> v
+
+spec sim-recv Nat SimNet -> SimRead
+defn sim-recv
+  | cid [sim-net n entries] ->
+      match [sim-find-conn cid entries]
+        | none -> sim-read [sim-net n entries] none
+        | some c ->
+            match [mb-peek [conn-inbound c]]
+              | none -> sim-read [sim-net n entries] none
+              | some v ->
+                  match [mb-pop [conn-inbound c]]
+                    | none -> sim-read [sim-net n entries] [some v]
+                    | some mb2 ->
+                        let c2 : Connection := [conn-set-inbound c mb2]
+                          sim-read [sim-net n [sim-set-conn cid c2 entries]] [some v]
+
+;; ========================================
+;; Pairing two SimNets (testing-only — Endo does this in JS by
+;; sharing process memory).
+;; ========================================
+;;
+;; sim-pair-deliver: take one outbound message off peer-A's
+;; connection cid-A, push it onto peer-B's inbound on connection
+;; cid-B. Returns the (new-A, new-B) pair.
+;;
+;; The pairing is established by the test setup: the two peers each
+;; allocated a connection (different cid each, locators pointing at
+;; each other), and the test orchestration calls sim-pair-deliver
+;; back-and-forth.
+
+data SimPair
+  sim-pair : SimNet -> SimNet
+
+spec sim-pair-a SimPair -> SimNet
+defn sim-pair-a
+  | sim-pair a _ -> a
+
+spec sim-pair-b SimPair -> SimNet
+defn sim-pair-b
+  | sim-pair _ b -> b
+
+;; Helper: extract the underlying list from a Mailbox (head-of-newest).
+spec mailbox-list Mailbox -> List SyrupValue
+defn mailbox-list
+  | mailbox xs -> xs
+
+;; Helper: push every element of `vs` (oldest-first) onto a Mailbox.
+spec push-all [List SyrupValue] Mailbox -> Mailbox
+defn push-all [vs mb]
+  match vs
+    | nil -> mb
+    | cons v rest -> push-all rest [mb-push v mb]
+
+spec sim-pair-deliver Nat Nat SimNet SimNet -> SimPair
+  :doc "Move ALL outbound messages from peer-A.cid-A to peer-B.cid-B's inbound."
+defn sim-pair-deliver [cid-a cid-b net-a net-b]
+  match [sim-find-conn cid-a [sim-connections net-a]]
+    | none -> sim-pair net-a net-b
+    | some ca ->
+        match [sim-find-conn cid-b [sim-connections net-b]]
+          | none -> sim-pair net-a net-b
+          | some cb ->
+              ;; Drain ca's outbound, push each onto cb's inbound.
+              let a-msgs : List SyrupValue := [reverse [mailbox-list [conn-outbound ca]]]
+                let new-cb : Connection := [conn-set-inbound cb [push-all a-msgs [conn-inbound cb]]]
+                  let new-ca : Connection := [conn-set-outbound ca empty-mailbox]
+                    sim-pair [sim-net [sim-next-id net-a] [sim-set-conn cid-a new-ca [sim-connections net-a]]]
+                             [sim-net [sim-next-id net-b] [sim-set-conn cid-b new-cb [sim-connections net-b]]]

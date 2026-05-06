@@ -1063,7 +1063,18 @@ hit this.
 
 ---
 
-### #31 — `captp-incoming-with-state + drain + pump-outbound` over Node-decoded bytes is >90s in `process-string`-driven eval (2026-05-04, perf observation)
+### #31 — `decode-op` on a 50-byte op:deliver takes ~150 SECONDS in `process-string` eval (2026-05-04, perf bug, MEASURED)
+
+**MEASURED 2026-05-04**: `(eval (decode-op "<10'op:deliver<11'desc:export0+>5\"hello<11'desc:answer7+>f>"))`
+in a `process-string` call took **150,321 ms (150 seconds)** for a
+50-byte input. That's ~3ms per byte. A sane decoder for bytes-this-shaped
+should complete in <10ms total. This is the underlying cause of all
+"Phase 24 takes 8+ minutes" symptoms.
+
+The result was correct:
+~[some [op-deliver 0N "hello" [some Nat 7N] [none Nat]]]~ — i.e. the
+decoder produces the right answer, just 1000x to 10000x slower than
+expected. Diagnostic test: `tests/test-bridge-perf.rkt`.
 
 **Symptom.** Phase 24's bridge-driven responder interop test
 (`test-ocapn-bridge-interop.rkt`) drives the full bridge pipeline
@@ -1085,37 +1096,47 @@ unit tests in `test-ocapn-bridge.rkt` that exercise the same chain
 is fulfilled") with **hand-constructed** ops (not `decode-op`-
 produced) complete in ~1s.
 
-**Hypothesis.** The difference is in the SyrupValue payload. Node's
-encoded `<op:deliver <desc:export 0> "hello" <desc:answer 7> #f>`
-decodes into a `CapTPOp` whose `args` field is `syrup-string "hello"`
-and whose `ap` field is `some 7` — same shapes the unit tests use.
-But the path through `decode-op` and `unwrap-or` introduces metas
-or partial-application closures that the elaborator carries through
-into `captp-incoming-with-state` and `drain`'s reduction. Reduction
-of those nested closures may be where the time goes.
+**Where the time goes** (now measured): the bottleneck is `decode-op`
+itself, not the bridge. Confirmed by isolating each layer:
+- `(eval (decode-op BYTES))` alone: ~150 seconds.
+- `(eval (drive-echo-bridge-once <hand-coded-CapTPOp>))` (no decode):
+  ~80 seconds in the first run with hand-coded ops.
+- The combined chain `decode-op + bridge`: ≥ 8 minutes (killed at
+  that point; never observed completing).
 
-A second possibility: `pump-outbound` walks the question table; with
-Node's deliver triggering allocation of a new question-table entry
-(remote=7 → fresh local pid), the table entry's terms include
-metas that took multiple reduction rounds to settle.
+So decode-op contributes the lion's share of the cost. The bridge
+itself (which involves comparable amounts of structural work — vat
+event loop, question table, pump-outbound encoding) runs ~2× faster.
+
+**Hypothesis on root cause** (unverified). `decode-op` is a
+recursive parser in `lib/prologos/ocapn/captp-wire.prologos` that
+calls `wire::decode-value` (defined in `syrup-wire.prologos`).
+The parser uses position-threading via tuples, deep `match` chains,
+and each parsed sub-value allocates a fresh `SyrupValue` ctor and
+a position pair. Combined with the elaborator's reduction strategy
+in `process-string`, that may produce O(n²) or worse reduction
+behavior on the input string. The decoder's *output* is correct
+(verified — produces the expected `op-deliver` shape); only its
+*throughput* is broken.
 
 **Investigation paths**:
-1. Profile `process-string` of just the `decode-op + unwrap-or`
-   form vs the full chain — isolate where time goes.
-2. Try a freshly-`raco make`'d run vs an interpreted run; the
-   compiled .zo of the test FILE doesn't help with elaboration of
-   the `process-string` expression at runtime.
-3. Try replacing `(unwrap-or (op-abort "...") (decode-op ...))` with
-   a direct sexp constructor of an equivalent `CapTPOp` in the test
-   — does that avoid the slowdown? If so, the slowdown is decoder-
-   specific.
-4. Reduce the test's `drain` fuel from 8 to something smaller and
-   see if it bottoms out faster.
+1. Profile reduction inside `wire::decode-value` for inputs of
+   length 10, 50, 100. If timing is super-linear in length, that
+   confirms an algorithmic issue in the decoder's structural
+   recursion under Prologos reduction.
+2. Compare against `(eval (encode-op <hand-coded-op>))` timing.
+   If encode is fast and decode is slow, the asymmetry is in how
+   the elaborator handles parser combinators vs constructor
+   applications.
+3. Try a *flat* alternative decoder (e.g., a foreign Racket call
+   that returns a `SyrupValue` directly), keeping `syrup-to-op`
+   on the Prologos side. If that's fast, the problem is isolated
+   to the byte-level parser, not the SyrupValue→CapTPOp conversion.
 
-**Workaround for now.** Skip the test from the interop CI workflow.
-Add to `.skip-tests` with reason. Phase 24 ships as scaffolding
-(Node peer + test skeleton + pitfall doc), with the live end-to-end
-gate deferred to a Prologos perf or evaluator improvement.
+**Workaround for now.** Test stays in `.skip-tests`. Phase 24 ships
+as scaffolding (Node peer + test skeleton + library helper +
+diagnostic test + this pitfall). Live end-to-end gate deferred
+to a Prologos decoder perf fix.
 
 **Discovered.** Phase 24 of OCapN interop. The perf gap between
 unit tests with hand-coded ops and a real interop test that decodes
@@ -1127,3 +1148,113 @@ limits the interop test matrix; (b) once fixed, every protocol port
 that uses `process-string`-driven test fixtures benefits; (c) the
 gap signals something about how Prologos's reduction handles
 decoder-produced expression trees that may matter for self-hosting.
+
+---
+
+### #32 — Multi-constructor `data` types break cross-module inference for callers using bound vars (2026-05-06, real bug)
+
+**Symptom.** A `data` type with TWO OR MORE constructors (e.g.
+`bridge-step` and `bridge-step-out`) compiles fine in its defining
+module, BUT a caller in a DIFFERENT module that takes 2+ bound
+arguments and passes them to a function returning that data type
+fails to elaborate with "Could not infer type" — function-arg
+types come back as `<_>` (uninferred metavars) even though the spec
+declares them concretely.
+
+**Repro skeleton.** Inside module `M1`:
+
+```
+data Step
+  step     : Vat -> State            ;; ctor 1
+  step-out : Vat -> State -> List String  ;; ctor 2
+
+spec do-step Op Vat State -> Step
+defn do-step | ... -> step v st       ;; or step-out v st bytes
+```
+
+Inside an importing module `M2`:
+
+```
+require [M1 :refer-all]
+
+;; FAILS — "Could not infer type"
+spec wrap Op Vat State -> Vat
+defn wrap [op v st]
+  let s := [do-step op v st]
+    [step-vat s]
+```
+
+The 2-bound-arg form `wrap` cannot elaborate. Adding a typed let
+(`let s : Step := ...`) doesn't help. Inlining doesn't help. Same
+function inside `M1` itself works fine.
+
+**Empirical evidence.** Discovered in OCapN Phase 25 (handshake
+modelling, commit `4b92416`). I extended `BridgeStep` with a
+second constructor `bridge-step-out` carrying immediate-outbound
+bytes. The defining module `captp-bridge.prologos` continued to
+compile cleanly — `connection-step` (which uses `bridge-step-vat`,
+`bridge-step-state`, `bridge-step-immediate`) was fine. But the
+importing module `bridge-interop-helpers.prologos` failed to define
+EVERY multi-arg helper that called `captp-incoming-with-state` and
+then unpacked the result — including 1-let-deep helpers, even with
+explicit `: BridgeStep` annotations on the binding.
+
+The probe matrix isolated it precisely:
+
+| function shape                                            | defines? |
+|-----------------------------------------------------------|----------|
+| 1-arg + let + captp-call (constants for other args)       | yes      |
+| 1-arg + let + captp-call (constant deps)                  | yes      |
+| 2-arg + let + captp-call (1 bound + 1 constant)           | NO       |
+| 3-arg + let + captp-call (3 bound)                        | NO       |
+| 2-arg + INLINE + captp-call (no let, all bound)           | yes      |
+| 2-arg + let + captp-call returning a SINGLE-ctor type     | yes (untested but consistent with reverting) |
+
+The single-ctor-type case was the workaround. Reverting the
+multi-constructor extension and putting the "immediate outbound"
+field on the SINGLE-CONSTRUCTOR `BridgeState` instead made every
+caller compile. So the multi-constructor return type, NOT the let
+or the call shape, is the trigger.
+
+**Hypothesis.** The elaborator's bidirectional inference for
+function applications can't pin down the return type of a function
+returning a multi-constructor data type when the call's arguments
+include 2+ unsolved metavariables (the function-arg vars whose
+types haven't been propagated from the spec yet). With a
+single-constructor return type, the constructor's signature
+uniquely determines the type, but with N constructors the
+elaborator may delay the choice in a way that fails to back-propagate
+through the let.
+
+**Workaround.** Avoid multi-constructor data types when the
+constructor's primary use is "value with optional extra payload."
+Two options:
+
+1. **Single constructor with all fields (some optional).** Add a
+   `[List X]` or `[Option X]` field that's `nil` / `none` for the
+   bare case. Trade-off: every caller now matches an extra field,
+   but it's a wildcard. This is what `BridgeState`'s `pending-out`
+   field does.
+
+2. **Wrap the optional payload in a separate function.** Instead of
+   "constructor with X" + "constructor without X," have a single
+   constructor + a separate accumulator (e.g. a list field or a
+   queue) that the producing function appends to.
+
+**Discovered.** OCapN Phase 25, commit `4b92416`. Initial design
+added `bridge-step-out v st [List String]` as a second constructor
+to BridgeStep so the dispatch could carry "immediate outbound bytes."
+Cost about 1 hour of probing the elaborator with shrinking test
+cases before realizing the multi-constructor extension was the root.
+
+**Verdict.** Real Prologos elaborator bug. The single-constructor
+workaround (move the optional payload into the existing
+single-constructor type as a list/option field) is uniformly
+applicable and clean. Filed as [issue #60](https://github.com/LogosLang/prologos/issues/60)
+because: (a) the catastrophic failure mode (cross-module callers
+can't compile) is far enough from the surface cause (data type
+definition in a DIFFERENT module) that it's hard to diagnose;
+(b) multi-constructor data types are fundamental — it's a real
+expressivity gap until fixed; (c) the workaround works but adds
+field plumbing to every accessor and update function.
+

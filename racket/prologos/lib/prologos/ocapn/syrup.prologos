@@ -39,6 +39,12 @@ data SyrupValue
   syrup-int    : Int
   syrup-string : String
   syrup-symbol : String                  ;; symbol name as a string
+  ;; Phase 19: opaque bytestring — wire form `<len>:<bytes>`.
+  ;; Backed by Prologos String at the model level (the FFI layer
+  ;; treats String as a byte sequence). Distinct from syrup-string
+  ;; on the wire (different marker char) — used for cryptographic
+  ;; payloads, raw blobs, etc.
+  syrup-bytes  : String
   syrup-list   : List SyrupValue
   ;; tagged label + payload (payload can itself be a syrup-list)
   syrup-tagged : String -> SyrupValue
@@ -66,6 +72,7 @@ defn null?
   | syrup-symbol _     -> false
   | syrup-list _       -> false
   | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
 
@@ -79,6 +86,7 @@ defn bool?
   | syrup-symbol _     -> false
   | syrup-list _       -> false
   | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
 
@@ -92,6 +100,7 @@ defn refr?
   | syrup-symbol _     -> false
   | syrup-list _       -> false
   | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
   | syrup-refr _       -> true
   | syrup-promise _    -> false
 
@@ -105,6 +114,7 @@ defn promise?
   | syrup-symbol _     -> false
   | syrup-list _       -> false
   | syrup-tagged _ _   -> false
+  | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> true
 
@@ -118,6 +128,7 @@ defn tagged?
   | syrup-symbol _     -> false
   | syrup-list _       -> false
   | syrup-tagged _ _   -> true
+  | syrup-bytes _      -> false
   | syrup-refr _       -> false
   | syrup-promise _    -> false
 
@@ -136,6 +147,7 @@ defn get-nat
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
@@ -149,6 +161,7 @@ defn get-string
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
@@ -162,6 +175,7 @@ defn get-refr
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
   | syrup-refr id      -> some id
   | syrup-promise _    -> none
 
@@ -175,6 +189,7 @@ defn get-promise
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged _ _   -> none
+  | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise id   -> some id
 
@@ -188,6 +203,7 @@ defn get-tag
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged t _   -> some t
+  | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
@@ -201,6 +217,7 @@ defn get-payload
   | syrup-symbol _     -> none
   | syrup-list _       -> none
   | syrup-tagged _ p   -> some p
+  | syrup-bytes _      -> none
   | syrup-refr _       -> none
   | syrup-promise _    -> none
 
