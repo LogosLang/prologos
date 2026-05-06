@@ -600,6 +600,74 @@ spec conn-step-outbound ConnStep -> List String
 defn conn-step-outbound
   | conn-step _ bs -> bs
 
+;; ===========================================================
+;; Phase 28: high-level questioner-side ask on ConnectionState
+;; ===========================================================
+;;
+;; The user-facing companion to `connection-step` (which dispatches
+;; ONE inbound op). `connection-ask` is the OUTBOUND analog: the
+;; caller has a ConnectionState and wants to ask peer a question,
+;; tracking the resulting promise. Returns a `ConnAsk` carrying:
+;;   - updated ConnectionState (with the question registered)
+;;   - the local promise-id to await
+;;   - the wire bytes to send to peer
+;;
+;; Composes with connection-step: the caller writes bytes to the
+;; socket, eventually reads peer's reply, dispatches via
+;; connection-step (which routes the op-deliver-to-answer through
+;; dispatch-incoming-answer → resolves the promise).
+;;
+;; A real netlayer using BOTH:
+;;   ;; questioner side
+;;   ask = connection-ask refr args cs
+;;   write (conn-ask-bytes ask) → socket
+;;   cs = conn-ask-state ask
+;;
+;;   ;; responder side (handles peer-initiated ops + our incoming answers)
+;;   while not aborted:
+;;     read op  ← decode bytes from socket
+;;     step = connection-step op cs
+;;     write each (conn-step-outbound step) → socket
+;;     cs = conn-step-state step
+;;     if (lookup-promise (conn-ask-pid ask) (conn-vat cs)) is fulfilled:
+;;       … the peer answered our question
+
+data ConnAsk
+  conn-ask : ConnectionState -> Nat -> String
+  ;; (state-with-question-registered, promise-id-awaiting-answer,
+  ;;  wire-bytes-to-send)
+  ;; Single constructor — avoids issue #60.
+
+spec conn-ask-state ConnAsk -> ConnectionState
+defn conn-ask-state
+  | conn-ask cs _ _ -> cs
+
+spec conn-ask-pid ConnAsk -> Nat
+defn conn-ask-pid
+  | conn-ask _ p _ -> p
+
+spec conn-ask-bytes ConnAsk -> String
+defn conn-ask-bytes
+  | conn-ask _ _ b -> b
+
+;; High-level ask: take a ConnectionState, ask peer's export `tgt`
+;; with payload `args`, return ConnAsk. Internally calls
+;; bridge-send-question and packs the result + emitted-pids +
+;; aborted? back into a ConnectionState.
+;;
+;; Aborted-check: if the connection is already aborted, this is a
+;; no-op — returns the same state with pid=0 and empty bytes.
+;; Caller should check `conn-aborted?` before calling and decide
+;; whether to retry or surface an error.
+spec connection-ask Nat SyrupValue ConnectionState -> ConnAsk
+defn connection-ask [tgt args cs]
+  match [conn-aborted? cs]
+    | true  -> conn-ask cs zero ""
+    | false ->
+        let bq    := [bridge-send-question tgt args [conn-vat cs] [conn-bridge-state cs]]
+          let cs' := [conn-state [bq-vat bq] [bq-state bq] [conn-emitted cs] [conn-aborted? cs]]
+            conn-ask cs' [bq-pid bq] [bq-bytes bq]
+
 ;; The per-op aborted check. We use a Bool predicate via match
 ;; rather than a boolean op (Prologos doesn't expose a generic
 ;; `||`). Once aborted, every subsequent step is a no-op

@@ -46,9 +46,11 @@
   "(ns test-ocapn-bridge)
 (imports (prologos::ocapn::core :refer-all))
 (imports (prologos::ocapn::message :refer-all))
+(imports (prologos::ocapn::captp-wire :refer-all))
 (imports (prologos::ocapn::captp-bridge :refer-all))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::data::string :as str :refer ()))
 ")
 
 (define-values (shared-global-env
@@ -626,6 +628,64 @@
                             (conn-step-state step1)))
               (length (conn-step-outbound step2))))")
    "0N"))
+
+;; Phase 28: high-level connection-ask. Combines bridge-send-question
+;; with ConnectionState bookkeeping.
+(test-case "bridge/connection-ask returns wire bytes targeting peer's export"
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (conn-ask-bytes (connection-ask (suc (suc zero)) (syrup-string \"ping\") empty-connection)))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-question-bytes (suc (suc zero)) (syrup-string \"ping\") zero))")))
+  (check-equal? got expected))
+
+(test-case "bridge/connection-ask returns the freshly-allocated promise-id"
+  (check-contains
+   (run-last
+    "(eval (conn-ask-pid (connection-ask zero (syrup-string \"ping\") empty-connection)))")
+   "0N"))
+
+(test-case "bridge/connection-ask updates ConnectionState's outbound-questions"
+  ;; After ask, looking up q-pos in the returned state's bridge-state
+  ;; should find the local promise.
+  (check-contains
+   (run-last
+    "(eval (let (ask (connection-ask zero (syrup-string \"ping\") empty-connection))
+              (bs-lookup-outbound-question (conn-ask-pid ask)
+                                            (conn-bridge-state (conn-ask-state ask)))))")
+   "some"))
+
+(test-case "bridge/connection-ask is a no-op once aborted"
+  ;; After abort, ask returns the same state with empty bytes.
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  ask   (connection-ask zero (syrup-string \"ping\") (conn-step-state step1)))
+              (str::eq (conn-ask-bytes ask) \"\")))")
+   "true"))
+
+(test-case "bridge/connection-ask + connection-step round-trip resolves the promise"
+  ;; 1. Ask (get bytes + pid).
+  ;; 2. Build peer's reply directly as op-deliver-to-answer (skip
+  ;;    encode/decode round-trip, which is tested separately in
+  ;;    captp-wire tests; here the focus is on dispatch + resolve).
+  ;; 3. Dispatch via connection-step.
+  ;; 4. Look up the promise — should be pst-fulfilled.
+  ;;
+  ;; (Avoiding nested decode-op + match in the test driver sidesteps
+  ;; issue #60 in the deeply-nested expression elaboration.)
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"answer\")) cs1))
+              (lookup-promise pid (conn-vat (conn-step-state step)))))")
+   "pst-fulfilled"))
 
 (test-case "bridge/connection-step op:start-session is a state-preserving no-op"
   ;; Vat unchanged, bridge state unchanged, no outbound bytes,
