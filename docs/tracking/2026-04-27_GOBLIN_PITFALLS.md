@@ -1250,11 +1250,11 @@ cases before realizing the multi-constructor extension was the root.
 **Verdict.** Real Prologos elaborator bug. The single-constructor
 workaround (move the optional payload into the existing
 single-constructor type as a list/option field) is uniformly
-applicable and clean. Worth filing as an issue because: (a) the
-catastrophic failure mode (cross-module callers can't compile)
-is far enough from the surface cause (data type definition in a
-DIFFERENT module) that it's hard to diagnose; (b) multi-constructor
-data types are fundamental — it's a real expressivity gap until
-fixed; (c) the workaround works but adds field plumbing to every
-accessor and update function.
+applicable and clean. Filed as [issue #60](https://github.com/LogosLang/prologos/issues/60)
+because: (a) the catastrophic failure mode (cross-module callers
+can't compile) is far enough from the surface cause (data type
+definition in a DIFFERENT module) that it's hard to diagnose;
+(b) multi-constructor data types are fundamental — it's a real
+expressivity gap until fixed; (c) the workaround works but adds
+field plumbing to every accessor and update function.
 
