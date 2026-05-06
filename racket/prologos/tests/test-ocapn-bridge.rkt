@@ -218,6 +218,31 @@
     "(eval (bs-lookup-outbound-question (suc (suc zero)) bridge-state-empty))")
    "none"))
 
+;; Phase 25: dispatch incoming answer. With no entry in outbound-
+;; questions for the qpos, dispatch is a no-op (vat unchanged).
+(test-case "bridge/dispatch-incoming-answer: unknown qpos is a no-op"
+  (define got
+    (run-last
+     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null empty-vat bridge-state-empty)))
+              (queue-length (bridge-step-vat step))))"))
+  (check-contains got "0N"))
+
+;; With a fresh promise registered as outbound-question, the
+;; dispatch resolves it with the answer payload.
+(test-case "bridge/dispatch-incoming-answer: known qpos resolves the local promise"
+  (define got
+    (run-last
+     "(eval (let ((alloc (fresh-promise empty-vat)))
+              (let ((local-pid (alloc-id alloc)))
+                (let ((v0 (alloc-vat alloc)))
+                  (let ((st0 (bs-add-outbound-question (suc zero) local-pid bridge-state-empty)))
+                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") v0 st0)))
+                      (lookup-promise local-pid (bridge-step-vat step))))))))"))
+  ;; lookup-promise returns Option PromiseState; want some pst-fulfilled
+  (check-contains got "some")
+  (check-contains got "pst-fulfilled")
+  (check-contains got "hello-back"))
+
 (test-case "bridge/outbound-from-resolution unresolved -> none"
   (check-contains
    (run-last "(eval (outbound-from-resolution zero fresh))")

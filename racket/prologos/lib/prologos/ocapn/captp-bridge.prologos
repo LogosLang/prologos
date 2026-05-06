@@ -364,6 +364,16 @@ defn dispatch-deliver [tgt args ap v st]
           | some local -> deliver-with-fresh-pid tgt args local v st
           | none       -> deliver-allocate tgt args remote v st
 
+;; Phase 25 questioner-side: peer is replying to our outbound
+;; question. Look up the local promise tied to our question-pos
+;; in `bs-outbound-questions`; resolve it with the answer payload.
+;; Unknown qpos = no-op (drop the message).
+spec dispatch-incoming-answer Nat SyrupValue Vat BridgeState -> BridgeStep
+defn dispatch-incoming-answer [qpos args v st]
+  match [bs-lookup-outbound-question qpos st]
+    | none      -> bridge-step v st
+    | some pid  -> bridge-step [resolve-promise pid args v] st
+
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
   :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25."
 defn captp-incoming-with-state
@@ -387,13 +397,12 @@ defn captp-incoming-with-state
       bridge-step v [bs-add-gc-answer pos st]
   | [op-deliver-to-answer qpos args] v st ->
       ;; Phase 25 questioner-side: peer is replying to our question
-      ;; with pos `qpos`. The inbound-answer dispatch will look up
-      ;; `qpos` in BridgeState's outbound-questions table (added in
-      ;; Phase 25.2) and resolve the corresponding local promise.
-      ;; For Phase 25.1 (this commit), the table doesn't exist yet —
-      ;; state-preserving no-op. Phase 25.3 wires the lookup +
-      ;; promise resolution.
-      bridge-step v st
+      ;; with pos `qpos`. Look up `qpos` in BridgeState's
+      ;; outbound-questions; if found, resolve the corresponding
+      ;; local promise with the answer payload. Unknown qpos = drop
+      ;; (peer answered a question we don't know about — could be
+      ;; protocol error or stale connection; conservative no-op).
+      dispatch-incoming-answer qpos args v st
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16
