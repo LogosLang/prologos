@@ -88,3 +88,6 @@ jobs:
 
       - name: Run desc:import-object test (Phase 37 — 5th refr kind cross-impl round-trip)
         run: cd racket/prologos && raco test tests/test-ocapn-import-object-interop.rkt
+
+      - name: Run pipelining test (Phase 40 — promise-pipelining receiver cross-impl)
+        run: cd racket/prologos && raco test tests/test-ocapn-pipelining-interop.rkt
