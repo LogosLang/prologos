@@ -28,7 +28,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 2 | Programmatic sample generator from ctor-desc registry + sd-evidence struct + `/detailed` variants | ✅ | `f241e14e`. New file `sre-sample-generator.rkt` (~120 LoC) + sre-core.rkt enrichment (~80 LoC, sd-evidence struct + /detailed variants + backward-compat wrappers) + 11 new tests. 53 tests pass via targeted runner. VAG passed adversarially with two acknowledged Phase-3 gaps (sample-size verification, binder-ctor coverage). API note: `all-ctor-descs` takes `#:domain` keyword (not positional) — caught at compile time. |
 | 2a | Principled-fix corrective: per-component-spec generation (Option C), drop `with-handlers`, include binder ctors with closed-body limitation | ✅ | `1c0c012e`. Generator refactored: per-component-spec atom pools, sentinel filter, binders included. **Bonus discovery**: Phase 2's `with-handlers` was masking malformed compounds (bot/top in component slots → reconstruct produces invalid `(expr-Pi mw type-top type-top)`-shape values that merge can't handle). Two-pool model (lattice elements vs structural components) surfaces and fixes it. 58 tests pass. VAG passed adversarially with the masked-issue surfacing as the Move B+ pattern's intended payoff. Codebase-wide audit of remaining 72 `with-handlers` instances filed as [issue #40](https://github.com/LogosLang/prologos/issues/40). |
 | 3c | Per-relation `meet-registry` on sre-domain; retire `current-lattice-subtype-fn` callback; principled subtype-meet dispatch | ✅ | `d4e8c811`. User-flagged 2026-04-30 as principled cleanup. `meet-registry` field added to sre-domain; `type-meet-registry` registered in unify.rkt; `type-lattice-meet` refactored with `#:subtype-fn` keyword; callback retired; lint baseline updated; `type-pseudo-complement` updated to use explicit subtype-fn. **Bonus discovery**: Track 2G's "type lattice not distributive under equality merge" finding was an artifact of the always-installed callback mixing equality+subtype semantics. Post-3c with principled per-relation dispatch, equality lattice IS distributive (216/216 triples confirmed) — Track 2H (PPN 4C T-3 Commit B) had made it distributive via union-aware merge; the callback hid this. 4 stale test expectations updated in test-sre-algebraic.rkt + 4 cascading tests updated in test-sre-track2h.rkt + 5 new Phase-3c tests added. Sister callback `current-lattice-meta-solution-fn` deferred to PM Track 12 (cross-referenced in PM Master + DEFERRED.md). |
-| 3 | Empirical sweep across all registered domains × relations; record findings | 🔄 | Sweep + format infrastructure built; `sre-property-sweep.rkt` + `tests/test-sre-sd-properties.rkt` landed. Findings refuted for type×subtype distributive — surfaced as Scaffolding-Hides-Truth bonus discovery (Phase 4 corrective). Phase 3 close gated on Phase 4 landing first. |
+| 3 | Empirical sweep across all registered domains × relations; record findings | ✅ | Findings table populated in § Phase 3 Findings. Ground sublattice (depth-0, 6 atoms, 216 triples): both relations confirm distributive + SD. Wider sample (depth-1 with binders, 58 samples, 195112 triples): both refute distributive (Pi-typed witness), both confirm SD with asymmetric non-vacuity (3.5% vs 91.4%). Validates Track 2H's F7 scope conjecture. Discussion-phase considerations recorded; declaration updates deferred per locked scope. |
 | 4 | Sweep semantic correction — per-relation join dispatch (Scaffolding-Hides-Truth corrective) | ✅ | _Commit pending_. 5 function signatures refactored (test-distributive, test-sd-{vee,wedge}/detailed + wrappers) to take explicit `join-fn`; ~25 callsites updated atomically across sre-core.rkt + sre-property-sweep.rkt + tests/test-sre-algebraic.rkt + tests/test-sre-sd-properties.rkt. Targeted suite GREEN (106 tests / 4.3s). Wider-sample sweep produced honest data: depth-0 ground sublattice both relations confirm distributive (matches Track 2H decl + Phase 3c hand-picked-6); depth-1 with binders BOTH refute distributive — empirical confirmation of Track 2H F7 scope conjecture. Both SD-vee + SD-wedge confirm on wider sample with asymmetric non-vacuity (3.5% vs 91.4%). |
 | 3.5 | (deferred) Has-pseudo-complement empirical check; determines Heyting reach for non-Heyting-declared domains | ⬜ | New test function parallel to test-distributive et al. ~30-50 LoC. Decoupled from Phase 3 to keep that scope tight. Would inform Discussion phase decisions. |
 | 3b | (deferred) Generator extension for session/form domains; sweep extends to those | ⬜ | Requires per-domain ctor analysis + atom-pool extension in `build-atoms-by-spec`. session×equality is the OTHER empirically-interesting case (NOT declared distributive); form×equality is Heyting-via-implication. |
@@ -326,6 +326,47 @@ Mini-audit completed against actual code surfaces (`generate-domain-samples` at 
 **Two new drift risks** (added to design doc's existing 5):
 6. Q3 scope creep — including `test-distributive` was an explicit dialogue decision, NOT a mid-flight expansion. Documented here so future-self doesn't read "scope creep" into the choice.
 7. Q2 generic-vs-typed slippage — caller-supplied atoms keeps sweep generic; if a `default-atoms` parameter that hardcodes type atoms is later added, the decoupling is silently lost. Watch for this.
+
+#### Phase 3 Findings (captured 2026-04-30, post-Phase-4 corrective)
+
+**Sample parameters**: `realistic-type-atoms = (Int, Bool, Nat, String)`, `#:max-depth 1`, `#:per-ctor-count 2` → 58 samples after dedup (depth-0: 6 atoms = bot + top + 4 base; depth-1 adds compounds via `app, Eq, Vec, Fin, pair, PVec, Pi, Sigma, lam`). 195112 triples per check (58³). Generated via `racket sre-property-sweep.rkt` (`module+ main` invocation). Total runtime: 102s.
+
+| Domain | Relation | Property | Samples | Status | Triples | Hypothesis fired | Conclusion held | Non-vacuity % | Witness |
+|---|---|---|---|---|---|---|---|---|---|
+| type | equality | distributive | 58 | refuted | — | — | — | — | `(Pi(m1, Bool, Bool), Int, Pi(m1, Int, Bool))` |
+| type | equality | sd-vee | 58 | confirmed | 195112 | 6814 | 6814 | 3.5% | — |
+| type | equality | sd-wedge | 58 | confirmed | 195112 | 178382 | 178382 | 91.4% | — |
+| type | subtype | distributive | 58 | refuted | — | — | — | — | `(Pi(m1, Bool, Bool), Int, Pi(m1, Int, Bool))` |
+| type | subtype | sd-vee | 58 | confirmed | 195112 | 6786 | 6786 | 3.5% | — |
+| type | subtype | sd-wedge | 58 | confirmed | 195112 | 178166 | 178166 | 91.3% | — |
+
+**Ground-sublattice sweep** (depth-0, 6 atoms, 216 triples per check — captured in `test-sre-sd-properties.rkt` regression suite):
+
+| Domain | Relation | Property | Status |
+|---|---|---|---|
+| type | equality | distributive | confirmed (216/216) |
+| type | equality | sd-vee | confirmed |
+| type | equality | sd-wedge | confirmed |
+| type | subtype | distributive | confirmed (216/216) |
+| type | subtype | sd-vee | confirmed |
+| type | subtype | sd-wedge | confirmed |
+
+**Interpretation** (per [PTF Lattice Hierarchy note §5.1+§5.2](../research/2026-04-30_LATTICE_HIERARCHY_AND_DISTRIBUTIVITY_FOR_PROPAGATORS.md)):
+
+- The type lattice **is distributive on the ground sublattice** (atoms only — no binders, no metas) for both equality and subtype relations. This validates Phase 3c's hand-picked-6 finding (216/216 confirmed) and Track 2H's design-intent declaration. UCS dispatch could safely route ground-sublattice operations to distributive-level optimizations (DNF canonicalization, Birkhoff representation, Heyting pseudo-complement on subtype contexts).
+
+- The type lattice **is SD but not distributive on the binder-included sublattice** for both relations. The witness shows distributivity fails when one operand is atomic and the others are Pi-typed — the function-type substructure is non-distributive. This empirically confirms Track 2H's F7 scope conjecture (design body line 107: *"distributivity is conjectured but not yet verified — substitution under binders does not obviously distribute over union-join"*).
+
+- **SD-vee and SD-wedge both confirm on the wider sample**, with asymmetric non-vacuity: 3.5% vs 91.4%. The asymmetry is informative — the lattice's join is "spreadier" than its meet on these samples, so the SD-vee hypothesis (`a ⊔ b = a ⊔ c`) rarely fires non-trivially while the SD-wedge hypothesis (`a ⊓ b = a ⊓ c`) often does. SD-vee declared confirmed is informationally weak (mostly vacuous); SD-wedge confirmed is strong.
+
+- **Track 2H's quantale framing intact**: the type lattice IS a quantale (tensor distributes over join). Quantale axioms are about the multiplicative tensor, not lattice meet/join distributivity. The lattice can be SD-not-distributive AND a quantale simultaneously — Phase 4 finding clarifies this distinction.
+
+**Discussion-phase considerations** (out-of-band scope; informed by Phase 4 finding):
+
+1. The registration at `unify.rkt:96` declares `'distributive prop-confirmed` unconditionally for type×subtype. This is over-broad relative to Track 2H's design body (which scoped to ground sublattice via F7). Discussion-phase decisions: amend declaration? extend property registry granularity to scope-aware?
+2. Property registry has no scope granularity — booleans only ({prop-confirmed, prop-refuted, prop-unknown, prop-contradicted}) per (domain, relation). For UCS dispatch to use distributive optimizations on ground sublattice while falling back to SD on binder-typed values, scope-awareness is required.
+3. Scope-awareness mechanisms ARE in scope for the in-flight PPN 4C work (sub-lattice bridges as Galois connections per Abstract Interpretation framing).
+4. Sister research-note candidates (queued at PTF master): quantale distributivity laws, substructural-logic non-distributivity at function-type boundary, recovering distributivity for unsolved dependent types (frontier).
 
 ### Phase 4: Sweep Semantic Correction (Scaffolding-Hides-Truth corrective)
 
