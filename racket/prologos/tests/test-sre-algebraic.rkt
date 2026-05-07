@@ -143,7 +143,7 @@
   ;; unions; the always-installed callback hid that this restored distributivity.
   ;; Phase 3c's principled refactor surfaces the post-Track-2H truth.
   (define td (lookup-domain 'type))
-  (define result (test-distributive td type-samples type-lattice-meet))
+  (define result (test-distributive td type-samples type-lattice-meet type-lattice-merge))
   (check-true (axiom-confirmed? result))
   ;; All 6³ = 216 triples confirm distributivity on type-samples.
   (check-eq? (axiom-confirmed-count result) 216))
@@ -269,15 +269,15 @@
 
 (test-case "test-sd-vee: returns axiom-untested when no meet-fn supplied"
   (define td (lookup-domain 'type))
-  (check-eq? (test-sd-vee td type-samples #f) axiom-untested))
+  (check-eq? (test-sd-vee td type-samples #f type-lattice-merge) axiom-untested))
 
 (test-case "test-sd-wedge: returns axiom-untested when no meet-fn supplied"
   (define td (lookup-domain 'type))
-  (check-eq? (test-sd-wedge td type-samples #f) axiom-untested))
+  (check-eq? (test-sd-wedge td type-samples #f type-lattice-merge) axiom-untested))
 
 (test-case "test-sd-vee: passes on type domain (with meet)"
   (define td (lookup-domain 'type))
-  (define result (test-sd-vee td type-samples type-lattice-meet))
+  (define result (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
   ;; Should be axiom-confirmed or axiom-refuted (not untested) since meet-fn provided.
   ;; The empirical answer for type-equality on these samples is recorded in Phase 3.
   ;; For Phase 1, we just assert the function returns one of the structured outcomes.
@@ -285,7 +285,7 @@
 
 (test-case "test-sd-wedge: passes on type domain (with meet)"
   (define td (lookup-domain 'type))
-  (define result (test-sd-wedge td type-samples type-lattice-meet))
+  (define result (test-sd-wedge td type-samples type-lattice-meet type-lattice-merge))
   (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
 
 (test-case "implication rule: distributive ⇒ sd-vee fires"
@@ -342,7 +342,7 @@
 
 (test-case "sd-evidence: untested when no meet-fn"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples #f))
+  (define ev (test-sd-vee/detailed td type-samples #f type-lattice-merge))
   (check-eq? (sd-evidence-status ev) 'untested)
   (check-eq? (sd-evidence-total-checked ev) 0)
   (check-eq? (sd-evidence-hypothesis-fired ev) 0)
@@ -351,7 +351,7 @@
 
 (test-case "sd-evidence: confirmed populates counts"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
   ;; Status either 'confirmed or 'refuted (not 'untested) since meet-fn provided.
   (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
                   (eq? (sd-evidence-status ev) 'refuted)))
@@ -366,8 +366,8 @@
 
 (test-case "sd-evidence: backward-compat wrappers translate correctly"
   (define td (lookup-domain 'type))
-  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet))
-  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet))
+  (define ev-vee (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
+  (define wrap-vee (test-sd-vee td type-samples type-lattice-meet type-lattice-merge))
   ;; If detailed = confirmed, wrapper = axiom-confirmed
   (case (sd-evidence-status ev-vee)
     [(confirmed) (check-true (axiom-confirmed? wrap-vee))]
@@ -376,7 +376,7 @@
 
 (test-case "sd-evidence: total-checked = |samples|³ on confirmed (full sweep)"
   (define td (lookup-domain 'type))
-  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td type-samples type-lattice-meet type-lattice-merge))
   ;; Either confirmed (full sweep, total = n³) or refuted (short-circuit, total < n³)
   (define n (length type-samples))
   (case (sd-evidence-status ev)
@@ -440,7 +440,7 @@
 (test-case "sd-evidence with generated samples: produces structured outcome"
   (define td (lookup-domain 'type))
   (define gen-samples (generate-domain-samples td #:max-depth 1 #:per-ctor-count 2))
-  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet))
+  (define ev (test-sd-vee/detailed td gen-samples type-lattice-meet type-lattice-merge))
   (check-true (or (eq? (sd-evidence-status ev) 'confirmed)
                   (eq? (sd-evidence-status ev) 'refuted)))
   ;; Total checked equals |samples|³ on confirmed; less or equal on refuted

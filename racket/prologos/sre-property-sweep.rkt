@@ -86,16 +86,20 @@
                              #:base-values base-atoms))
   (define sample-count (length samples))
   (define domain-name (sre-domain-name domain))
+  ;; Phase 4: derive both meet-fn and join-fn from the SAME relation
+  ;; (avoids lattice-mixing — see sre-core.rkt test-distributive comment).
+  (define merge-registry (sre-domain-merge-registry domain))
   (apply append
          (for/list ([rel (in-list relations)])
            (define meet-fn (sre-domain-meet domain rel))
+           (define join-fn (and merge-registry (merge-registry rel)))
            (list
              (sd-finding domain-name rel 'distributive sample-count
-                         (test-distributive domain samples meet-fn))
+                         (test-distributive domain samples meet-fn join-fn))
              (sd-finding domain-name rel 'sd-vee sample-count
-                         (test-sd-vee/detailed domain samples meet-fn))
+                         (test-sd-vee/detailed domain samples meet-fn join-fn))
              (sd-finding domain-name rel 'sd-wedge sample-count
-                         (test-sd-wedge/detailed domain samples meet-fn))))))
+                         (test-sd-wedge/detailed domain samples meet-fn join-fn))))))
 
 ;; ========================================================================
 ;; format-sd-findings

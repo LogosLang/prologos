@@ -327,24 +327,31 @@
 
 ;; Test distributivity: a ⊔ (b ⊓ c) = (a ⊔ b) ⊓ (a ⊔ c)
 ;; Requires meet-fn. Returns axiom-untested if no meet available.
-(define (test-distributive domain samples meet-fn)
-  (if (not meet-fn)
-      axiom-untested
-      (let ([join ((sre-domain-merge-registry domain) 'equality)])
-        (for/fold ([status (axiom-confirmed 0)])
-                  ([a (in-list samples)]
-                   #:break (axiom-refuted? status))
-          (for/fold ([st status])
-                    ([b (in-list samples)]
-                     #:break (axiom-refuted? st))
-            (for/fold ([st2 st])
-                      ([c (in-list samples)]
-                       #:break (axiom-refuted? st2))
-              (define lhs (join a (meet-fn b c)))
-              (define rhs (meet-fn (join a b) (join a c)))
-              (if (equal? lhs rhs)
-                  (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
-                  (axiom-refuted (list a b c)))))))))
+;;
+;; SRE Track 2I Phase 4 (Scaffolding-Hides-Truth corrective, 2026-04-30):
+;; join-fn is now an explicit parameter (was hardcoded `'equality` lookup
+;; from sre-domain-merge-registry, which mixed lattices when meet-fn came
+;; from a non-equality relation). Callers must derive both meet-fn and
+;; join-fn from the SAME relation to avoid lattice-mixing.
+(define (test-distributive domain samples meet-fn join-fn)
+  (cond
+    [(not meet-fn) axiom-untested]
+    [(not join-fn) axiom-untested]
+    [else
+     (for/fold ([status (axiom-confirmed 0)])
+               ([a (in-list samples)]
+                #:break (axiom-refuted? status))
+       (for/fold ([st status])
+                 ([b (in-list samples)]
+                  #:break (axiom-refuted? st))
+         (for/fold ([st2 st])
+                   ([c (in-list samples)]
+                    #:break (axiom-refuted? st2))
+           (define lhs (join-fn a (meet-fn b c)))
+           (define rhs (meet-fn (join-fn a b) (join-fn a c)))
+           (if (equal? lhs rhs)
+               (axiom-confirmed (+ (axiom-confirmed-count st2) 1))
+               (axiom-refuted (list a b c))))))]))
 
 ;; ========================================================================
 ;; SRE Track 2I: Semidistributivity (Jónsson-Kiefer 1962)
@@ -391,11 +398,15 @@
   #:transparent)
 
 ;; Detailed SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee/detailed domain samples meet-fn)
+;;
+;; SRE Track 2I Phase 4 (Scaffolding-Hides-Truth corrective, 2026-04-30):
+;; join-fn is now an explicit parameter; callers must pair it with a meet-fn
+;; from the SAME relation to avoid lattice-mixing (see test-distributive).
+(define (test-sd-vee/detailed domain samples meet-fn join-fn)
   (cond
-    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [(or (not meet-fn) (not join-fn))
+     (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -403,15 +414,15 @@
                      [b (in-list samples)]
                      [c (in-list samples)])
            (define t* (+ t 1))
-           (define ab (join a b))
-           (define ac (join a c))
+           (define ab (join-fn a b))
+           (define ac (join-fn a c))
            (cond
              [(not (equal? ab ac))
               ;; Hypothesis fails — vacuously satisfied
               (values t* f h)]
              [else
               ;; Hypothesis holds — check conclusion
-              (define conclusion (join a (meet-fn b c)))
+              (define conclusion (join-fn a (meet-fn b c)))
               (cond
                 [(equal? ab conclusion)
                  (values t* (+ f 1) (+ h 1))]
@@ -421,11 +432,11 @@
        (sd-evidence 'confirmed total fired held #f))]))
 
 ;; Detailed SD∧ (dual): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge/detailed domain samples meet-fn)
+(define (test-sd-wedge/detailed domain samples meet-fn join-fn)
   (cond
-    [(not meet-fn) (sd-evidence 'untested 0 0 0 #f)]
+    [(or (not meet-fn) (not join-fn))
+     (sd-evidence 'untested 0 0 0 #f)]
     [else
-     (define join ((sre-domain-merge-registry domain) 'equality))
      (let/ec return
        (define-values (total fired held)
          (for*/fold ([t 0] [f 0] [h 0])
@@ -439,7 +450,7 @@
              [(not (equal? ab ac))
               (values t* f h)]
              [else
-              (define conclusion (meet-fn a (join b c)))
+              (define conclusion (meet-fn a (join-fn b c)))
               (cond
                 [(equal? ab conclusion)
                  (values t* (+ f 1) (+ h 1))]
@@ -454,16 +465,17 @@
 ;; ------------------------------------------------------------------------
 
 ;; Test SD∨: a ⊔ b = a ⊔ c ⇒ a ⊔ b = a ⊔ (b ⊓ c)
-(define (test-sd-vee domain samples meet-fn)
-  (define ev (test-sd-vee/detailed domain samples meet-fn))
+;; Phase 4: thread join-fn through to /detailed variant.
+(define (test-sd-vee domain samples meet-fn join-fn)
+  (define ev (test-sd-vee/detailed domain samples meet-fn join-fn))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
 ;; Test SD∧ (dual of SD∨): a ⊓ b = a ⊓ c ⇒ a ⊓ b = a ⊓ (b ⊔ c)
-(define (test-sd-wedge domain samples meet-fn)
-  (define ev (test-sd-wedge/detailed domain samples meet-fn))
+(define (test-sd-wedge domain samples meet-fn join-fn)
+  (define ev (test-sd-wedge/detailed domain samples meet-fn join-fn))
   (case (sd-evidence-status ev)
     [(confirmed) (axiom-confirmed (sd-evidence-total-checked ev))]
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
@@ -498,21 +510,25 @@
   (define props-2
     (update-property props-1 'idempotent-join
                      (test-idempotent-join domain samples)))
+  ;; Phase 4: look up join-fn per relation (mirrors meet-fn discipline);
+  ;; both must come from the same relation to avoid lattice-mixing.
+  (define merge-registry (sre-domain-merge-registry domain))
+  (define join-fn (and merge-registry (merge-registry relation-name)))
   (define props-3
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-2 'distributive
-                         (test-distributive domain samples meet-fn))
+                         (test-distributive domain samples meet-fn join-fn))
         props-2))
-  ;; Track 2I: SD∨ and SD∧ (require meet-fn; otherwise untested)
+  ;; Track 2I: SD∨ and SD∧ (require meet-fn AND join-fn; otherwise untested)
   (define props-4
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-3 'sd-vee
-                         (test-sd-vee domain samples meet-fn))
+                         (test-sd-vee domain samples meet-fn join-fn))
         props-3))
   (define props-5
-    (if meet-fn
+    (if (and meet-fn join-fn)
         (update-property props-4 'sd-wedge
-                         (test-sd-wedge domain samples meet-fn))
+                         (test-sd-wedge domain samples meet-fn join-fn))
         props-4))
   props-5)
 
@@ -572,9 +588,15 @@
 
 ;; Full property resolution: declare → infer → derive implications.
 ;; Called at domain registration time. Returns final properties hash.
-(define (resolve-domain-properties domain samples #:meet-fn [meet-fn #f])
+;; Phase 4: thread #:relation through to infer-domain-properties so
+;; join-fn lookup uses the right per-relation merge.
+(define (resolve-domain-properties domain samples
+                                   #:meet-fn [meet-fn #f]
+                                   #:relation [relation-name 'equality])
   (define after-inference
-    (infer-domain-properties domain samples #:meet-fn meet-fn))
+    (infer-domain-properties domain samples
+                             #:meet-fn meet-fn
+                             #:relation relation-name))
   (derive-composite-properties after-inference))
 
 ;; ========================================================================
@@ -605,11 +627,19 @@
 
 ;; Run full property resolution and report diagnostic.
 ;; Returns: (values final-properties report-string)
-(define (resolve-and-report-properties domain samples #:meet-fn [meet-fn #f])
+;; Phase 4: thread #:relation through; look up join-fn per relation for
+;; the test-{distributive,sd-vee,sd-wedge} dispatch (avoids lattice-mixing).
+(define (resolve-and-report-properties domain samples
+                                       #:meet-fn [meet-fn #f]
+                                       #:relation [relation-name 'equality])
   ;; Step 1: Infer (produces inference evidence)
   (define after-inference
-    (infer-domain-properties domain samples #:meet-fn meet-fn))
-  ;; Step 2: Build evidence map for reporting
+    (infer-domain-properties domain samples
+                             #:meet-fn meet-fn
+                             #:relation relation-name))
+  ;; Step 2: Build evidence map for reporting (Phase 4: per-relation join-fn)
+  (define merge-registry (sre-domain-merge-registry domain))
+  (define join-fn (and merge-registry (merge-registry relation-name)))
   (define evidence
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
                                   distributive sd-vee sd-wedge))])
@@ -618,9 +648,9 @@
           [(commutative-join) test-commutative-join]
           [(associative-join) test-associative-join]
           [(idempotent-join) test-idempotent-join]
-          [(distributive) (lambda (d s) (test-distributive d s meet-fn))]
-          [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn))]
-          [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn))]
+          [(distributive) (lambda (d s) (test-distributive d s meet-fn join-fn))]
+          [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn join-fn))]
+          [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties
