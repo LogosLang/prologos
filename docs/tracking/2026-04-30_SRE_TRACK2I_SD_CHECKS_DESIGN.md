@@ -14,9 +14,13 @@
 
 ## Thesis
 
-Add SD∨ and SD∧ as first-class algebraic-property checks in the SRE registry, parallel to the existing `commutative-join` / `associative-join` / `idempotent-join` / `distributive` machinery (`sre-core.rkt:262-322`). Implication rule `distributive ⇒ sd-vee ∧ sd-wedge` lets the two confirmed-Heyting domains inherit SD trivially; empirical sweep on the three non-distributive-yet domains (type-equality, session-equality, secondary form registration) yields *information* — either confirms SD-but-not-distributive (a known-non-empty variety; canonical-form theory exists per Reading-Speyer-Thomas 2019) or surfaces counterexample triples we can act on.
+**Original (Phases 1-4)**: Add SD∨ and SD∧ as first-class algebraic-property checks in the SRE registry, parallel to the existing `commutative-join` / `associative-join` / `idempotent-join` / `distributive` machinery (`sre-core.rkt:262-322`). Implication rule `distributive ⇒ sd-vee ∧ sd-wedge` lets the two confirmed-Heyting domains inherit SD trivially; empirical sweep on the non-distributive-yet domains yields *information* — either confirms SD-but-not-distributive or surfaces counterexample triples.
 
-This is the smallest concrete move toward variety identification per [LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md §5.4](../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md). It does NOT commit to canonical-form algorithms, NOT commit to UCS dispatch by variety, and NOT commit to type-lattice variety identification at the broader level. It just adds the check.
+**Extended (Phases 5-10, scope expansion 2026-04-30 post-Phase-4)**: Comprehensive empirical lattice-variety categorization across all SRE-registered domains, culminating in a presentation-quality research document suitable for sharing with Prof. J.B. Nation (Freese-Ježek-Nation 1995 *Free Lattices*). Adds the algebraic properties most relevant to both technical utility and theoretic value: pseudo-complement (Heyting →), Whitman's W (free-lattice membership), modularity, breadth bound (Jónsson-Kiefer-Nation 1962), with conditional follow-ons (Stone identity, sectional complement). Sweeps extended to session and form domains via per-domain generator extensions. The closing report is a Stage 0/1 research artifact cross-linked from PTF master.
+
+This is the smallest concrete move toward variety identification per [LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md §5.4](../research/2026-04-30_LATTICE_VARIETY_AND_CANONICAL_FORM_FOR_SRE.md). It does NOT commit to canonical-form ALGORITHMS in implementation (Whitman six-case dispatch, Reading-Speyer-Thomas, etc.), and NOT commit to UCS dispatch by variety. It establishes EMPIRICAL CHARACTERIZATION of where each domain sits — the data that any future variety-driven dispatch would be grounded in.
+
+**Motivating context**: pseudo-complement and semi-complement checks arose from in-person conversation with Prof. Nation. The closing report is intended for the next meeting — a tangible, honest characterization of where Prologos's lattice structures live and what's open. Nation's *Free Lattices* monograph is the canonical reference; we cite Theorem 1.21 (his SD theorem with Jónsson-Kiefer 1962) and Theorem 1.17 (canonical form) directly. The extension respects his expertise: emphasis on what we can demonstrate, not pedagogy.
 
 ---
 
@@ -30,10 +34,14 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 3c | Per-relation `meet-registry` on sre-domain; retire `current-lattice-subtype-fn` callback; principled subtype-meet dispatch | ✅ | `d4e8c811`. User-flagged 2026-04-30 as principled cleanup. `meet-registry` field added to sre-domain; `type-meet-registry` registered in unify.rkt; `type-lattice-meet` refactored with `#:subtype-fn` keyword; callback retired; lint baseline updated; `type-pseudo-complement` updated to use explicit subtype-fn. **Bonus discovery**: Track 2G's "type lattice not distributive under equality merge" finding was an artifact of the always-installed callback mixing equality+subtype semantics. Post-3c with principled per-relation dispatch, equality lattice IS distributive (216/216 triples confirmed) — Track 2H (PPN 4C T-3 Commit B) had made it distributive via union-aware merge; the callback hid this. 4 stale test expectations updated in test-sre-algebraic.rkt + 4 cascading tests updated in test-sre-track2h.rkt + 5 new Phase-3c tests added. Sister callback `current-lattice-meta-solution-fn` deferred to PM Track 12 (cross-referenced in PM Master + DEFERRED.md). |
 | 3 | Empirical sweep across all registered domains × relations; record findings | ✅ | Findings table populated in § Phase 3 Findings. Ground sublattice (depth-0, 6 atoms, 216 triples): both relations confirm distributive + SD. Wider sample (depth-1 with binders, 58 samples, 195112 triples): both refute distributive (Pi-typed witness), both confirm SD with asymmetric non-vacuity (3.5% vs 91.4%). Validates Track 2H's F7 scope conjecture. Discussion-phase considerations recorded; declaration updates deferred per locked scope. |
 | 4 | Sweep semantic correction — per-relation join dispatch (Scaffolding-Hides-Truth corrective) | ✅ | _Commit pending_. 5 function signatures refactored (test-distributive, test-sd-{vee,wedge}/detailed + wrappers) to take explicit `join-fn`; ~25 callsites updated atomically across sre-core.rkt + sre-property-sweep.rkt + tests/test-sre-algebraic.rkt + tests/test-sre-sd-properties.rkt. Targeted suite GREEN (106 tests / 4.3s). Wider-sample sweep produced honest data: depth-0 ground sublattice both relations confirm distributive (matches Track 2H decl + Phase 3c hand-picked-6); depth-1 with binders BOTH refute distributive — empirical confirmation of Track 2H F7 scope conjecture. Both SD-vee + SD-wedge confirm on wider sample with asymmetric non-vacuity (3.5% vs 91.4%). |
-| 3.5 | (deferred) Has-pseudo-complement empirical check; determines Heyting reach for non-Heyting-declared domains | ⬜ | New test function parallel to test-distributive et al. ~30-50 LoC. Decoupled from Phase 3 to keep that scope tight. Would inform Discussion phase decisions. |
-| 3b | (deferred) Generator extension for session/form domains; sweep extends to those | ⬜ | Requires per-domain ctor analysis + atom-pool extension in `build-atoms-by-spec`. session×equality is the OTHER empirically-interesting case (NOT declared distributive); form×equality is Heyting-via-implication. |
-| T | Dedicated test phase: `test-sre-sd-properties.rkt` | ✅ | Realized early during Phase 3 (file created in commit `bd1179b1` to keep test-sre-algebraic.rkt fast under shared-fixture sweep). Phase 4 added 11 callsite updates + memq→check-not-false hygiene. Tests run in 0.28s at depth-0; cover sweep mechanism + ground-sublattice load-bearing assertions. Counterexample regression fixtures (per design intent) deferred to future work if/when bonus findings on other domains accumulate. |
-| Discussion | Review Phase 3 findings; decide on declaration updates | 🔄 | Findings recorded in § Phase 3 Findings; considerations captured + cross-linked. Substantive (8 considerations 2026-04-30). Discussion-phase artifact may spawn separate doc or fold into PPN 4C work; queued research notes (A/B/C) recorded in [PTF Master](2026-03-28_PTF_MASTER.md). |
+| 5 | Pseudo-complement family checks | ⬜ | `test-pseudo-complement` (relative; Heyting →) + `test-semi-complement` (dual pseudo-complement) + `test-stone-identity` (conditional, runs if pseudo-complement confirms). Implication rules: `distributive + has-pseudo-complement ⇒ heyting`. Supersedes deferred Phase 3.5. |
+| 6 | Free-lattice membership + modularity checks | ⬜ | `test-whitmans-condition` (W: 4-tuple O(N⁴) sweep; FL membership criterion; Nation's canonical-form territory) + `test-modular` (level between SD and distributive; clarifies binder-included posture) + `test-breadth-bound` (≤ k; Jónsson-Kiefer-Nation 1962 theorem; SD lattices have breadth ≤ 4 on finite sublattices) + `test-sectional-complement` (conditional, runs if modular confirms). |
+| 7 | Generator extension: session domain | ⬜ | Audit `session-lattice.rkt` / `session-propagators.rkt` ctor-descs; design realistic session atom pool (close, send-T, recv-T, select, offer, mu, ...); extend `build-atoms-by-spec`. Splits original deferred Phase 3b into per-domain sub-phases. |
+| 8 | Generator extension: form domain | ⬜ | Audit `form-cells.rkt` ctor-descs; design realistic form atom pool; extend `build-atoms-by-spec`. Form has nested-pipeline structure that may exhibit binder-like scope-sensitivity — possible 4th Scaffolding-Hides-Scope instance (mirror of Track 2H's form-cells.rkt:503 Heyting declaration). |
+| 9 | Comprehensive sweep + findings synthesis | ⬜ | Run sweep across all `(domain, relation)` × all 7+ algebraic properties: distributive, sd-vee, sd-wedge, has-pseudo-complement, has-semi-complement, modular, breadth-bound, whitmans-condition (+ conditionals). Expanded findings table replaces/extends § Phase 3 Findings with the wider matrix. |
+| 10 | Lattice Variety Report (presentation document) | ⬜ | Stage 0/1 research note `docs/research/YYYY-MM-DD_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md`. Comprehensive variety categorization per domain; cross-references to Freese-Ježek-Nation 1995, Whitman, Reading-Speyer-Thomas; worked examples + witnesses; open questions framed as conversation starters. Cross-linked from PTF master. Suitable for sharing with Prof. Nation. |
+| T | Dedicated test phase: `test-sre-sd-properties.rkt` | ✅ | Realized early during Phase 3 (file created in commit `bd1179b1` to keep test-sre-algebraic.rkt fast under shared-fixture sweep). Phase 4 added 11 callsite updates + memq→check-not-false hygiene. Tests run in 0.28s at depth-0; cover sweep mechanism + ground-sublattice load-bearing assertions. Phases 5-9 will extend with new property-check tests as each lands. |
+| Discussion (deprecated) | — | — | Discussion-phase scope folded into Phase 10's Lattice Variety Report. Findings + considerations from § Phase 3 Findings already captured + cross-linked. |
 
 ---
 
@@ -429,6 +437,100 @@ Total: ~25 callsite updates across 4 files.
 5. **API surface change**: any consumer of `test-sd-*` outside Track 2I/2G needs update. Audit confirmed none exist outside the four files listed.
 
 **Estimated scope**: ~30 LoC delta across sre-core.rkt + ~10 LoC across sre-property-sweep.rkt + ~15 LoC across test-sre-algebraic.rkt. ~30-45 min implementation + ~10 min sweep re-run + ~5 min validation.
+
+### Phase 5: Pseudo-complement family checks
+
+**Scope** (high-level; full mini-design + mini-audit when phase opens):
+
+Add three property-check functions to `sre-core.rkt` paralleling Phase 1's SD additions:
+
+- **`test-pseudo-complement`** (relative pseudo-complement; Heyting →): for each `(a, b)` pair in the sample set, the candidate is `a → b = ⋁{x : x ∧ a ≤ b}`. Verify the axiom: candidate `c` satisfies `c ∧ a ≤ b` AND for all `x` with `x ∧ a ≤ b`, `x ≤ c`. Sample-set-sensitive on infinite/non-bounded lattices; for ground sublattice with full sample, exhaustive.
+
+- **`test-semi-complement`** (dual pseudo-complement; reading (a) of "semi-complement"): for each `(a, b)`, candidate is `⋀{x : x ∨ a ≥ b}`. The Galois adjoint of join. Cheap addition alongside pseudo-complement; useful for completeness even though our common usage is meet-side.
+
+- **`test-stone-identity`** (conditional — runs only if pseudo-complement confirms): verifies `¬a ∨ ¬¬a = ⊤` for each atom `a`, where `¬a` is the pseudo-complement of `a` relative to ⊥. Characterizes Stone algebras (distributive pseudo-complemented + Stone identity) — connects to intermediate logics (Gödel-Dummett).
+
+**Property registry additions**: `'has-pseudo-complement`, `'has-semi-complement`, `'stone-identity`.
+
+**Implication rules** (extend `standard-implication-rules`):
+- `distributive + has-pseudo-complement ⇒ heyting` (already exists)
+- `heyting + has-complement ⇒ boolean` (already exists)
+- `distributive + has-pseudo-complement + stone-identity ⇒ stone-algebra` (new)
+
+**Calling discipline (per Phase 4 Scaffolding-Hides-Truth #3)**: takes explicit `meet-fn` AND `join-fn` parameters. Caller derives both from same relation via meet-registry + merge-registry.
+
+**Estimated scope**: ~80-120 LoC across sre-core.rkt + ~50 LoC of tests. Sweep integration (~10 LoC in sre-property-sweep.rkt + per-domain cell additions).
+
+### Phase 6: Free-lattice membership + modularity checks
+
+**Scope** (high-level):
+
+- **`test-whitmans-condition`** (Whitman's W; FL membership criterion): for each 4-tuple `(a, b, c, d)` in the sample, verify: if `a ∧ b ≤ c ∨ d`, then one of `a ≤ c ∨ d`, `b ≤ c ∨ d`, `a ∧ b ≤ c`, `a ∧ b ≤ d` holds. **O(N⁴) sweep**; at depth-0 (N=6), 1296 iterations — cheap. At depth-1 (N=58), 11.3M iterations — heavy but feasible (~minutes). Critical: if domain satisfies (W), free-lattice canonical form (Whitman six-case algorithm) applies — high theoretic + technical alignment with Nation's central work.
+
+- **`test-modular`**: for each `(a, b, c)` triple, verify modular law `a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c`. Hypothesis `a ≤ c` provides built-in non-vacuity gating. Modularity is the level between SD and distributive in the PTF hierarchy (§3.3) — clarifies whether binder-included sublattice is strictly SD or modular-but-not-distributive.
+
+- **`test-breadth-bound`** (Jónsson-Kiefer-Nation 1962): maximum antichain width `≤ k`. SD lattices have breadth ≤ 4 on finite sublattices (Theorem 1.21 corollary). Implementation: enumerate antichains in the sample, find maximum width. O(N^{2k}) worst case; limit to k=4 to keep tractable.
+
+- **`test-sectional-complement`** (conditional — runs if modular confirms): for each interval `[a, b]`, every element in the interval has a complement (relative to a, b) within the interval. Modular lattice cornerstone (Nation's classical territory).
+
+**Property registry additions**: `'whitmans-condition`, `'modular`, `'breadth-4`, `'sectionally-complemented`.
+
+**Implication rules**: `distributive ⇒ modular` (forward; modular is weaker), `modular + ... ⇒ ...` (TBD per findings). Whitman's W is a free-lattice-relative property with no clean implication chain to other properties.
+
+**Estimated scope**: ~100-150 LoC across sre-core.rkt + ~60-80 LoC of tests. Whitman's W is the dominant cost (4-tuple sweep).
+
+### Phase 7: Generator extension — session domain
+
+**Scope** (high-level):
+
+Extend `sre-sample-generator.rkt`'s `build-atoms-by-spec` to populate atom pools for the session domain. Audit ctor-descs in `session-lattice.rkt` / `session-propagators.rkt`; identify which slots take which lattice-specs; design realistic session atom pool: candidates `close`, `send-T` for atomic `T`, `recv-T`, `select` with branches, `offer`, recursive `mu`. Recursive types may need depth-bound special handling.
+
+**Estimated scope**: ~30-60 LoC generator extension + ~20 LoC atom pool design + ~20 LoC tests.
+
+### Phase 8: Generator extension — form domain
+
+**Scope** (high-level):
+
+Audit ctor-descs in `form-cells.rkt`; design realistic form atom pool. Form has nested-pipeline structure (forms-of-forms, polynomial-functor shape per Pocket Universe pattern) that may exhibit binder-like scope-sensitivity — sweep results may surface a 4th Scaffolding-Hides-Scope instance if `form-cells.rkt:503`'s Heyting declaration is over-broad relative to the design body's scope intent.
+
+**Estimated scope**: ~30-60 LoC generator extension + ~20 LoC atom pool + ~20 LoC tests.
+
+### Phase 9: Comprehensive sweep + findings synthesis
+
+**Scope** (high-level):
+
+Run `run-sd-sweep` (now extended to all 7+ properties via Phase 5+6 additions) across all SRE-registered `(domain, relation)` pairs:
+
+- `type × equality`, `type × subtype` (already swept in Phase 3)
+- `session × equality` (after Phase 7 generator extension)
+- `form × equality` (after Phase 8)
+- `mult × equality` (3-element lattice — exhaustive at depth-0)
+
+Captures expanded findings into design doc § Phase 9 Findings (replacing § Phase 3 Findings as the comprehensive table). Per-property non-vacuity ratios surface evidence-strength asymmetries (Phase 4 finding for SD-vee 3.5% vs SD-wedge 91.4%).
+
+Cross-references each finding to PTF Lattice Hierarchy note §5.1+§5.2 (which level unlocks which capability). Identifies any new Scaffolding-Hides-Scope instances surfaced by the wider sweep.
+
+**Estimated scope**: ~30 LoC sweep harness updates + ~50 LoC findings synthesis (markdown table + interpretation).
+
+### Phase 10: Lattice Variety Report (presentation document for Prof. Nation)
+
+**Scope** (high-level):
+
+New Stage 0/1 research note `docs/research/YYYY-MM-DD_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md`. Cross-linked from PTF master Research Documents table.
+
+**Content shape**:
+
+1. **Domain × variety placement table**: each Prologos lattice (type/session/form/mult × equality/subtype) placed in the hierarchy (free → SD → modular → distributive → Heyting → Boolean), with empirical evidence cited per cell.
+2. **Per-domain narrative**: type lattice (with binder-boundary scope-sensitivity finding prominently); session lattice; form lattice; mult lattice. Honest about what's confirmed, what's refuted, what's inconclusive on current samples.
+3. **Quantale framing**: explicit on type and session domains; clarifies orthogonality with lattice-distributivity (Track 2H quantale + SD-not-distributive at binder boundary).
+4. **Connection to canonical-form theory**: which algorithms apply per variety (Whitman six-case for free; Reading-Speyer-Thomas for SD; DNF/Birkhoff for distributive; Heyting → for relative pseudo-complement). Cites Theorems 1.17 (canonical form), 1.21 (Jónsson-Kiefer-Nation).
+5. **Worked examples + witnesses**: Pi-typed counterexample to distributivity; non-vacuity ratios; ground-vs-binder distinction; any session/form witnesses surfaced.
+6. **Open research questions**: dependent-type-distributivity recovery (PTF research note C); substructural-logic non-distributivity (B); quantale distributivity laws (A) — framed as conversation starters with Nation.
+7. **References**: Freese-Ježek-Nation 1995 explicitly + theorem citations + adjacent literature (Reading-Speyer-Thomas 2019; Adaricheva-Gorbunov-Tumanov 2003; Galatos-Jipsen-Kowalski-Ono).
+
+**Tone**: report what we have, not pedagogy. Nation has full theoretic background; the value is empirical characterization of our system.
+
+**Estimated scope**: ~500-1000 lines markdown.
 
 ### Phase T: Dedicated test file
 
