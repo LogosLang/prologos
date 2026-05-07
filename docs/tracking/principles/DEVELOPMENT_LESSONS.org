@@ -511,6 +511,121 @@ and commit messages when used to justify keeping old code paths. Use
 the deferral to be specific, tracked, and justified — rather than
 rationalized.
 
+** Scaffolding-Hides-Truth — Principled Refactor Surfaces Real Facts
+
+When defensive guards, hardcoded constants, or callback parameters are
+introduced as scaffolding (often for "safety" or "backward-compat"),
+they don't merely add overhead — they actively hide architectural,
+algebraic, or structural facts from observation. The system's true
+posture is masked because the scaffolding's behavior MIXES with the
+underlying mechanism, producing observed results that conflate the two.
+The principled refactor that retires the scaffolding doesn't just clean
+up — it /surfaces facts the scaffolding was hiding/.
+
+*The pattern* (3 data points across SRE Track 2I, 2026-04-30):
+
+1. *Phase 2a* — ~with-handlers~ silent-skip in the property-sample
+   generator (~sre-sample-generator.rkt~). Was scaffolding "for safety"
+   against reconstruction failures of compounds with sentinel-component
+   inputs. /Hidden truth/: lattice sentinels (bot/top) are NOT valid
+   structural components — feeding them through reconstruction produces
+   malformed values. The principled fix (per-component-spec pools that
+   filter sentinels) revealed the structural distinction between
+   "valid lattice elements" and "valid structural components." Without
+   the refactor, the scaffolding silently swallowed the malformed
+   compounds and made all downstream analysis lattice-incomplete.
+
+2. *Phase 3c* — always-installed ~current-lattice-subtype-fn~ callback
+   in the type lattice. Was scaffolding "for principled extensibility"
+   added in Track 2H. /Hidden truth/: under PPN 4C T-3 Commit B's
+   union-aware merge, the type lattice under equality merge IS
+   distributive on hand-picked-6 (216/216 triples). Track 2G had found
+   "type lattice not distributive" — correct AT THE TIME, before T-3
+   restored distributivity. The callback's mixed semantics (subtype-aware
+   meet under all relations) hid that restoration. Phase 3c retired the
+   callback for per-relation ~meet-registry~ dispatch, surfacing the
+   true post-T-3 algebraic posture.
+
+3. *Phase 4* — hardcoded ~'equality~ constant in
+   ~test-distributive~ / ~test-sd-{vee,wedge}/detailed~ for join lookup.
+   Was scaffolding from Phase 1+2 era when only equality-relation joins
+   existed. /Hidden truth/: per-relation merge-registry has existed
+   since Track 2F; the property-test functions never adopted per-relation
+   join dispatch. Pre-Phase-4 sweeps mixed lattices (meet from relation
+   R, join from equality), producing meaningless results for non-equality
+   relations. Phase 4 retired the hardcoded constant for explicit ~join-fn~
+   parameter, mirroring Phase 3c's ~meet-fn~ discipline.
+
+*The general statement*: an algebraic, structural, or behavioral
+posture is a property of the system's actual semantics under principled
+dispatch, /not/ a property "as observed under whatever scaffolding is
+currently in place." Scaffolding does not just slow things down; it
+falsifies observations. When you remove it, the observations change —
+sometimes confirming what the design intended, sometimes refuting it.
+Both outcomes are findings worth surfacing.
+
+*The discipline*:
+- When scaffolding is introduced (with-handlers, callback parameter,
+  hardcoded constant, defensive guard), name it explicitly as
+  scaffolding with retirement plan in the design doc — NOT as
+  "for safety" or "for backward-compat" without justification.
+- When a track changes core merge/meet/dispatch semantics, the
+  algebraic-property declarations on affected domains should be
+  re-validated, not just inherited from prior status. A merge-changing
+  track is implicitly a property-status-changing track.
+- The "principled refactor" of scaffolding-laden code is itself a
+  source of architectural insight. Plan for and look for the bonus
+  findings; do not treat them as surprises that derail the phase.
+
+*Discovered in*: SRE Track 2I 2026-04-30 (3 data points within a
+single track + day, codified after the third hit). See
+[[file:../2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md][SRE Track 2I design doc]] for the
+full instances. The pattern was historically called "Move B+" after
+its first instance in PPN 4C S2.c-iii (the corrective sub-phase that
+dropped a ~with-handlers~ wrapper preserved from PM 8F era), but that
+name was opaque — graduated 2026-04-30 to the descriptive name.
+
+*Red-flag phrases*: "for safety", "for backward-compat", "defensive
+guard", "preserved from prior architecture", "always-installed
+callback for extensibility." Each is a candidate for scaffolding-hides-
+truth analysis.
+
+** Scaffolding-Hides-Scope — Sub-form: Registration Erases Design Body Qualifiers
+
+Scaffolding-Hides-Truth has a sub-form distinct enough to call out:
+when the SCAFFOLDING is a registration declaration that elides scope
+qualifiers the design body acknowledges. The design body knows the
+property holds with caveats; the registration declares it
+unconditionally. Phase 4's wider-sample sweep (2026-04-30) is the
+canonical instance.
+
+*Instance*: Track 2H's design body § Phase 7 line 107 explicitly
+hedged "distributivity scope (F7): conjectured but not yet verified
+for binder substitution." But the registration at ~unify.rkt:96~
+declared ~'distributive prop-confirmed~ unconditionally. The Phase 4
+wider-sample sweep refuted distributivity at the binder boundary —
+empirically confirming Track 2H's F7 conjecture, AND surfacing that
+the registration was over-broad relative to the design body.
+
+*The general statement*: if the design body has a scope qualifier
+(only on ground sublattice; only for first-order types; only when
+metas are solved; ...), the registration MUST encode that qualifier.
+A boolean property declaration on a domain that has structurally
+distinct sub-domains is incomplete. The property registry's
+granularity is itself a design concern.
+
+*Sister concern*: this surfaces the property-registry-granularity
+gap. Boolean per-(domain, relation) declarations cannot express
+"true on sub-lattice A, false on sub-lattice B." Scope-aware property
+declarations are an open design consideration — at minimum, they
+belong in scope of any track that does cross-sub-lattice dispatch
+(currently: in-flight PPN 4C work).
+
+*Discovered in*: SRE Track 2I Phase 4 (2026-04-30). Sister of
+Scaffolding-Hides-Truth above; codified together at the parent
+pattern's graduation moment. See [[file:../2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md][SRE Track 2I design doc]] § Phase 3
+Findings for the empirical data + Discussion-phase considerations.
+
 ** CALM Requires Fixed Topology — Dynamic Topology Requires Stratification
 
 The CALM theorem (Consistency As Logical Monotonicity) guarantees that
