@@ -174,6 +174,21 @@ data QEntry
   ;; answer-pos route to the same local promise.
 
 ;; ===========================================================
+;; PipeMsg — Phase 41: wire-side pipeline message queue entry
+;; ===========================================================
+;;
+;; When peer pipelines `<op:deliver <desc:answer N> args ...>` and N
+;; is in our inbound bs-questions table, the bridge records (pid, args)
+;; here. The vat-side queue (PromiseState's pst-unresolved msgs) is
+;; for in-process pipelining and gets WIPED on fulfill; this bridge-
+;; level queue survives resolution so the pump can emit forwarding
+;; bytes when the local promise resolves to a peer-export-shaped refr.
+;; Single-constructor avoids issue #60.
+data PipeMsg
+  pipe-msg : Nat -> SyrupValue
+  ;; (local-promise-id, args)
+
+;; ===========================================================
 ;; Refr — runtime CapTP capability value (Phase 34a)
 ;; ===========================================================
 ;;
@@ -318,9 +333,19 @@ defn refr-to-syrup [r]
   syrup-tagged [refr-syrup-tag r] [syrup-nat [refr-id r]]
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry]
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
-  ;;  pending-out, outbound-questions, imports-refcount, exports-refcount)
+  ;;  pending-out, outbound-questions, imports-refcount, exports-refcount,
+  ;;  pipelined-msgs)
+  ;;
+  ;; 9th field `pipelined-msgs` (Phase 41): wire-side pipeline queue.
+  ;; Phase 38 records peer's pipelined args here (in addition to the
+  ;; vat-side promise queue). Pump-outbound walks this list on each
+  ;; turn; for every entry whose pid has resolved to a peer-export-
+  ;; shaped refr (`<desc:export K>`), emits a forwarding op:deliver
+  ;; targeting that refr and removes the entry. Survives fulfill
+  ;; (whereas the vat-side queue gets wiped); this is the bridge's
+  ;; canonical wire-side pipeline storage.
   ;;
   ;; 8th field `exports-refcount` (responder-side, Phase 36):
   ;; references peer holds to OUR exports. Entry tracks
@@ -359,7 +384,7 @@ data BridgeState
   ;; Reusing QEntry for the (Nat → Nat) lists; entry semantics
   ;; depends on which list it's in.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil nil]
 
 ;; Construct a BridgeState pre-loaded with our op:start-session bytes
 ;; queued for flush on the next pump-outbound. CapTP handshake
@@ -368,66 +393,70 @@ def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil ni
 ;; pump emit them alongside any vat-resolution outbound.
 spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
-  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil nil
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ _ _ _ _ -> ls
+  | bridge-state ls _ _ _ _ _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ _ _ _ _ -> es
+  | bridge-state _ es _ _ _ _ _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ _ _ _ _ -> as
+  | bridge-state _ _ as _ _ _ _ _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs _ _ _ _ -> qs
+  | bridge-state _ _ _ qs _ _ _ _ _ -> qs
 
 spec bs-pending-out BridgeState -> List String
 defn bs-pending-out
-  | bridge-state _ _ _ _ p _ _ _ -> p
+  | bridge-state _ _ _ _ p _ _ _ _ -> p
 
 spec bs-outbound-questions BridgeState -> List QEntry
 defn bs-outbound-questions
-  | bridge-state _ _ _ _ _ oqs _ _ -> oqs
+  | bridge-state _ _ _ _ _ oqs _ _ _ -> oqs
 
 spec bs-imports-refcount BridgeState -> List QEntry
 defn bs-imports-refcount
-  | bridge-state _ _ _ _ _ _ ir _ -> ir
+  | bridge-state _ _ _ _ _ _ ir _ _ -> ir
 
 spec bs-exports-refcount BridgeState -> List QEntry
 defn bs-exports-refcount
-  | bridge-state _ _ _ _ _ _ _ er -> er
+  | bridge-state _ _ _ _ _ _ _ er _ -> er
+
+spec bs-pipelined-msgs BridgeState -> List PipeMsg
+defn bs-pipelined-msgs
+  | bridge-state _ _ _ _ _ _ _ _ pm -> pm
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er
+  | tgt res [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er pm
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er
+  | pos cnt [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er pm
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls es [cons pos as] qs p oqs ir er
+  | pos [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es [cons pos as] qs p oqs ir er pm
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er
+  | remote local [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er pm
 
 spec bs-clear-pending-out BridgeState -> BridgeState
 defn bs-clear-pending-out
-  | bridge-state ls es as qs _ oqs ir er ->
-      bridge-state ls es as qs nil oqs ir er
+  | bridge-state ls es as qs _ oqs ir er pm ->
+      bridge-state ls es as qs nil oqs ir er pm
 
 ;; Phase 25: track an outbound question we asked. `our-q-pos` is the
 ;; position we used in the desc:answer of our outbound op:deliver;
@@ -436,8 +465,8 @@ defn bs-clear-pending-out
 ;; the helper that allocates and registers in one step.
 spec bs-add-outbound-question Nat Nat BridgeState -> BridgeState
 defn bs-add-outbound-question
-  | qpos local [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er
+  | qpos local [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er pm
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -482,16 +511,16 @@ defn list-remove-q-by-key
 ;; promise we allocated for it.
 spec bs-remove-question Nat BridgeState -> BridgeState
 defn bs-remove-question
-  | qpos [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er
+  | qpos [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er pm
 
 ;; Phase 31: remove the outbound-question entry for `our-q-pos`.
 ;; Used when WE've consumed peer's reply and want to send op:gc-answer
 ;; — the local-promise/q-pos mapping is no longer needed.
 spec bs-remove-outbound-question Nat BridgeState -> BridgeState
 defn bs-remove-outbound-question
-  | qpos [bridge-state ls es as qs p oqs ir er] ->
-      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er
+  | qpos [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er pm
 
 ;; ===========================================================
 ;; Phase 34c: imports-refcount accessors + updaters
@@ -545,11 +574,12 @@ defn bs-lookup-import-refcount [export-id st]
 ;; args (Phase 34b).
 spec bs-incr-import Nat BridgeState -> BridgeState
 defn bs-incr-import
-  | export-id [bridge-state ls es as qs p oqs ir er] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [add [unwrap-or zero [bs-lookup-question-loop ir export-id]] [suc zero]]]
         er
+        pm
 
 ;; Decrement imports-refcount[export-id] by k. Used by
 ;; release-import after sending op:gc-export. If decremented past 0
@@ -560,11 +590,12 @@ defn bs-incr-import
 ;; zeroed entries; for now the entry persists harmlessly.
 spec bs-decr-import Nat Nat BridgeState -> BridgeState
 defn bs-decr-import
-  | export-id k [bridge-state ls es as qs p oqs ir er] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop ir export-id]] k]]
         er
+        pm
 
 ;; ===========================================================
 ;; Phase 36: exports-refcount — symmetric to imports-refcount
@@ -581,19 +612,37 @@ defn bs-lookup-export-refcount [export-id st]
 
 spec bs-incr-export Nat BridgeState -> BridgeState
 defn bs-incr-export
-  | export-id [bridge-state ls es as qs p oqs ir er] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [add [unwrap-or zero [bs-lookup-question-loop er export-id]] [suc zero]]]
+        pm
 
 ;; Decrement exports-refcount[export-id] by k. Saturates at 0 if
 ;; peer's count exceeds ours (peer bug or pre-existing race).
 spec bs-decr-export Nat Nat BridgeState -> BridgeState
 defn bs-decr-export
-  | export-id k [bridge-state ls es as qs p oqs ir er] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop er export-id]] k]]
+        pm
+
+;; ===========================================================
+;; Phase 41: pipelined-msgs append (for wire-out forwarding)
+;; ===========================================================
+;;
+;; Append (pid, args) to the bridge's pipeline queue. Phase 38's
+;; dispatch-pipeline-on-our-q calls this AFTER the vat-side
+;; pipeline-deliver — both queues are populated, but only this one
+;; survives fulfill (the vat-side queue gets wiped). Pump-outbound
+;; later walks this list, emits forwarding bytes when a queued pid's
+;; promise has resolved to a peer-export refr.
+spec bs-add-pipeline-msg Nat SyrupValue BridgeState -> BridgeState
+defn bs-add-pipeline-msg
+  | pid args [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs p oqs ir er
+        [cons [pipe-msg pid args] pm]
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -901,7 +950,14 @@ spec dispatch-pipeline-on-our-q Nat SyrupValue Vat BridgeState -> BridgeStep
 defn dispatch-pipeline-on-our-q [qpos args v st]
   match [bs-lookup-question qpos st]
     | none     -> bridge-step v st
-    | some pid -> bridge-step [pipeline-deliver pid args v] st
+    | some pid ->
+        ;; Phase 41: dual-queue. The vat-side queue (via pipeline-deliver)
+        ;; is for in-process pipelining (and gets wiped on fulfill). The
+        ;; bridge-side queue (via bs-add-pipeline-msg) survives fulfill so
+        ;; pump-outbound can emit forwarding bytes when the local promise
+        ;; resolves to a peer-export refr.
+        bridge-step [pipeline-deliver pid args v]
+                    [bs-add-pipeline-msg pid args st]
 
 ;; Phase 25 questioner-side: peer is replying to our outbound
 ;; question. Look up the local promise tied to our question-pos
@@ -969,6 +1025,94 @@ defn captp-incoming-with-state
         [bs-incr-imports [extract-refrs-from-args args] st]
 
 ;; ===========================================================
+;; Phase 41: resolution-value inspection + forwarding
+;; ===========================================================
+;;
+;; The wire-out closure of pipelining: when a local promise resolves
+;; to a peer-export refr, walk the bridge-side pipeline queue and emit
+;; forwarding op:deliver bytes for each queued (pid, args).
+;;
+;; "Resolves to a peer-export refr" means the resolution-value is a
+;; SyrupValue of shape `<desc:export K>`. Other resolution shapes
+;; (peer-answer, local-actor, plain value, broken) drop queued msgs
+;; for now — desc:answer chaining (resolve-to-promise) and local-actor
+;; forwarding are deferred to a future phase.
+
+;; Extract the Nat from a syrup-nat, none for any other shape. Used
+;; after we've identified the surrounding desc:export tag.
+spec tagged-payload-as-nat SyrupValue -> [Option Nat]
+defn tagged-payload-as-nat
+  | syrup-null       -> [none Nat]
+  | syrup-bool _     -> [none Nat]
+  | syrup-nat n      -> [some Nat n]
+  | syrup-int _      -> [none Nat]
+  | syrup-string _   -> [none Nat]
+  | syrup-symbol _   -> [none Nat]
+  | syrup-list _     -> [none Nat]
+  | syrup-refr _     -> [none Nat]
+  | syrup-bytes _    -> [none Nat]
+  | syrup-promise _  -> [none Nat]
+  | syrup-tagged _ _ -> [none Nat]
+
+;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
+;; None for any other shape (including desc:answer, plain value, list,
+;; etc). 2-deep match (sidesteps pitfall #18).
+spec syrup-as-export-target SyrupValue -> [Option Nat]
+defn syrup-as-export-target
+  | syrup-null       -> [none Nat]
+  | syrup-bool _     -> [none Nat]
+  | syrup-nat _      -> [none Nat]
+  | syrup-int _      -> [none Nat]
+  | syrup-string _   -> [none Nat]
+  | syrup-symbol _   -> [none Nat]
+  | syrup-list _     -> [none Nat]
+  | syrup-refr _     -> [none Nat]
+  | syrup-bytes _    -> [none Nat]
+  | syrup-promise _  -> [none Nat]
+  | syrup-tagged tag p ->
+      match [str::eq tag "desc:export"]
+        | true  -> tagged-payload-as-nat p
+        | false -> [none Nat]
+
+;; Build the wire bytes for a forwarded op:deliver:
+;;   <op:deliver <desc:export K> args false false>
+;; K is the peer-export-id our promise resolved to; we pipe the
+;; queued args through to peer.
+spec forward-deliver-bytes Nat SyrupValue -> String
+defn forward-deliver-bytes [target-export args]
+  wire::encode-record "op:deliver"
+    [cons [syrup-tagged "desc:export" [syrup-nat target-export]]
+      [cons args
+        [cons [syrup-bool false]
+          [cons [syrup-bool false] nil]]]]
+
+;; Walk pipelined-msgs; for each entry whose pid matches `pid`, emit
+;; forwarding bytes targeting `target-export`. Entries with mismatched
+;; pid are ignored (they'll be handled when their own promise resolves
+;; on a future pump). Result is built head-first (most-recent first);
+;; caller appends/prepends as appropriate.
+spec forward-bytes-loop Nat Nat [List PipeMsg] [List String] -> [List String]
+defn forward-bytes-loop
+  | _   _      nil                          accum -> accum
+  | pid target [cons [pipe-msg p args] rest] accum ->
+      match [nat-eq? p pid]
+        | true  -> forward-bytes-loop pid target rest [cons [forward-deliver-bytes target args] accum]
+        | false -> forward-bytes-loop pid target rest accum
+
+;; Top-level: given a resolved promise's pid + resolution PromiseState
+;; + bridge's pipelined-msgs list, return the list of forwarding-bytes.
+;; If resolution-value is `<desc:export K>`, walks pipelined-msgs;
+;; otherwise empty list (no forwarding for non-export resolutions).
+spec forwarding-bytes-for-pid Nat PromiseState [List PipeMsg] -> [List String]
+defn forwarding-bytes-for-pid [pid pst pms]
+  match [resolution-value pst]
+    | none   -> [nil String]
+    | some v ->
+        match [syrup-as-export-target v]
+          | none   -> [nil String]
+          | some k -> forward-bytes-loop pid k pms [nil String]
+
+;; ===========================================================
 ;; Wire-OUT pump — Phase 16
 ;; ===========================================================
 ;;
@@ -1008,9 +1152,10 @@ defn pump-result-emitted
 ;; broken) AND the pid hasn't been emitted yet, prepend bytes
 ;; targeting the REMOTE answer-pos and add local to the emitted
 ;; list. Phase 17 extends Phase 16 to broken promises via
-;; `outbound-from-resolution`.
-spec pump-one Nat Nat Vat [List Nat] [List String] -> PumpResult
-defn pump-one [remote local v emitted accum]
+;; `outbound-from-resolution`. Phase 41 also walks pipelined-msgs
+;; and emits forwarding bytes when resolution is a desc:export refr.
+spec pump-one Nat Nat Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
+defn pump-one [remote local v pms emitted accum]
   match [member-nat? local emitted]
     | true  -> pump-result accum emitted
     | false ->
@@ -1021,16 +1166,17 @@ defn pump-one [remote local v emitted accum]
                 | none       -> pump-result accum emitted
                 | some bytes ->
                     pump-result
-                      [cons bytes accum]
+                      [cons bytes
+                        [append String [forwarding-bytes-for-pid local pst pms] accum]]
                       [cons local emitted]
 
 ;; Walk the question-table list once.
-spec pump-loop [List QEntry] Vat [List Nat] [List String] -> PumpResult
+spec pump-loop [List QEntry] Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
 defn pump-loop
-  | nil _ emitted accum -> pump-result accum emitted
-  | [cons [q-entry remote local] rest] v emitted accum ->
-      let r := [pump-one remote local v emitted accum]
-        pump-loop rest v
+  | nil _ _ emitted accum -> pump-result accum emitted
+  | [cons [q-entry remote local] rest] v pms emitted accum ->
+      let r := [pump-one remote local v pms emitted accum]
+        pump-loop rest v pms
           [pump-result-emitted r]
           [pump-result-bytes r]
 
@@ -1044,7 +1190,8 @@ defn prepend-pending-out [pending pr]
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
   :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply)."
 defn pump-outbound [v st emitted]
-  prepend-pending-out [bs-pending-out st] [pump-loop [bs-questions st] v emitted nil]
+  prepend-pending-out [bs-pending-out st]
+    [pump-loop [bs-questions st] v [bs-pipelined-msgs st] emitted nil]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).

@@ -1297,6 +1297,108 @@
               (length (conn-release-bytes pipe))))")
    "1N"))
 
+;; Phase 41: wire-out closure. When a local promise resolves to a
+;; <desc:export K> refr, pump-outbound emits forwarding op:deliver
+;; bytes for each queued pipelined arg.
+
+(test-case "bridge/dispatch-pipeline-on-our-q records args in bs-pipelined-msgs"
+  ;; Phase 41 dual-queue: dispatch records the args at bridge level
+  ;; (in addition to the vat-side queue, which gets wiped on fulfill).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"queued\")
+                          v0 st0))
+              (length (bs-pipelined-msgs (bridge-step-state step)))))")
+   "1N"))
+
+(test-case "bridge/syrup-as-export-target recognizes desc:export"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc zero)))))))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc zero)))))))")
+   "3N"))
+
+(test-case "bridge/syrup-as-export-target rejects desc:answer and plain values"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-tagged \"desc:answer\" (syrup-nat zero))))")
+   "none")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-export-target (syrup-string \"hi\")))")
+   "none"))
+
+(test-case "bridge/forward-deliver-bytes builds <op:deliver desc:export args false false>"
+  ;; The forwarding wire shape is the same as a normal outbound deliver
+  ;; targeting an export, but with answer-pos=false (fire-and-forget).
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (forward-deliver-bytes (suc (suc zero)) (syrup-string \"book-room\")))")))
+  ;; Build the expected shape via raw encode-record for byte equivalence.
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                  (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc zero))))
+                    (cons (syrup-string \"book-room\")
+                      (cons (syrup-bool false)
+                        (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/pump-outbound emits forwarding bytes when promise resolves to desc:export"
+  ;; Setup: peer asked Q1 (their q-pos=5, our local pid). Peer pipelined
+  ;; "chained-msg" onto q-pos=5 — bridge queued it at pid level. Then
+  ;; we resolve our local promise with `<desc:export 99>` (we got peer's
+  ;; export number from somewhere — could be from another peer in a
+  ;; three-vat scenario, or hardcoded for test). Pump should emit:
+  ;;   (a) the resolution bytes for desc:answer 5
+  ;;   (b) forwarding bytes for desc:export 99 with the queued args.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"chained-msg\")
+                          v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound emits NO forwarding when promise resolves to plain value"
+  ;; Promise resolves to a string (not a refr) — forwarding is dropped.
+  ;; Pump emits only the resolution bytes (1 byte-string).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"chained\")
+                          v0 st0)
+                  v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
 (test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
   ;; Regression: the Phase 25 reply-to-our-Q path still works after
   ;; the Phase 38 fall-through was added. Same wire shape, opposite
