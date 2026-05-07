@@ -64,6 +64,7 @@
  test-pseudo-complement-rel test-pseudo-complement-rel/detailed
  test-pseudo-complement-abs
  test-relatively-complemented
+ test-stone-identity
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -589,6 +590,61 @@
     [(refuted)   (axiom-refuted (pc-rel-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
+;; Compute absolute pseudo-complement candidate ¬a on a sample set.
+;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
+;; no such x exists in samples. Used by test-stone-identity below.
+;; Sample-set sensitive — returns sample-witness PC, may differ from
+;; lattice-theoretic PC if true PC is outside sample.
+(define (compute-abs-pc-candidate a samples meet-fn join-fn bot)
+  (define candidates
+    (for/list ([x (in-list samples)]
+               #:when (equal? (meet-fn x a) bot))
+      x))
+  (cond
+    [(null? candidates) #f]
+    [else (foldl join-fn (first candidates) (rest candidates))]))
+
+;; Test Stone identity: ¬a ∨ ¬¬a = ⊤ for all a (where ¬ is absolute pc).
+;;
+;; Stone algebras = distributive pseudo-complemented + Stone identity.
+;; Connects to intermediate logic (Gödel-Dummett, between intuitionistic
+;; and classical). The identity says: for every element a, the lattice
+;; is "covered" by a's pseudo-complement and its double-complement —
+;; the closure-under-double-negation is the whole lattice.
+;;
+;; Conditional check: only meaningful if has-pseudo-complement-rel
+;; confirms. The check itself just runs; callers gate via property
+;; registry inspection. Untested only when meet-fn or join-fn is #f.
+;;
+;; Sample-set sensitivity: per-atom; if pc-abs(a) doesn't exist on
+;; sample for some a, that atom is skipped (not refuted). Refutation
+;; only on a witness where ¬a ∨ ¬¬a ≠ ⊤ explicitly.
+(define (test-stone-identity domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define top (sre-domain-top-value domain))
+     (let/ec return
+       (define checked
+         (for/fold ([k 0])
+                   ([a (in-list samples)])
+           (define neg-a (compute-abs-pc-candidate a samples meet-fn join-fn bot))
+           (cond
+             [(not neg-a) k]   ; pc-abs of a not in sample; skip
+             [else
+              (define neg-neg-a
+                (compute-abs-pc-candidate neg-a samples meet-fn join-fn bot))
+              (cond
+                [(not neg-neg-a) k]
+                [else
+                 (define stone-result (join-fn neg-a neg-neg-a))
+                 (cond
+                   [(equal? stone-result top) (+ k 1)]
+                   [else
+                    (return (axiom-refuted (list a neg-a neg-neg-a stone-result)))])])])))
+       (axiom-confirmed checked))]))
+
 ;; Test relatively complemented: every interval [a, b] is complemented?
 ;;
 ;; A lattice L is relatively complemented if for every interval [a, b] in L
@@ -741,7 +797,16 @@
         (update-property props-7 'relatively-complemented
                          (test-relatively-complemented domain samples meet-fn join-fn))
         props-7))
-  props-8)
+  ;; Phase 5c: Stone identity (gated semantically on has-pseudo-complement-rel
+  ;; confirming — but we run unconditionally; the result is informative only
+  ;; if rel-pc also confirms. The implication rule below ensures stone-algebra
+  ;; only derives when both confirm.)
+  (define props-9
+    (if (and meet-fn join-fn)
+        (update-property props-8 'stone-identity
+                         (test-stone-identity domain samples meet-fn join-fn))
+        props-8))
+  props-9)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -773,7 +838,11 @@
                      'sd-vee)
    (implication-rule 'distributive→sd-wedge
                      '(distributive)
-                     'sd-wedge)))
+                     'sd-wedge)
+   ;; SRE Track 2I Phase 5c: Stone algebra = distributive + has-pseudo-complement-rel + stone-identity
+   (implication-rule 'stone-algebra
+                     '(distributive has-pseudo-complement-rel stone-identity)
+                     'stone-algebra)))
 
 ;; Derive composite properties from atomic ones.
 ;; Reads source properties, writes derived property using property-value-join.
@@ -855,7 +924,7 @@
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
                                   distributive sd-vee sd-wedge
                                   has-pseudo-complement-rel has-pseudo-complement-abs
-                                  relatively-complemented))])
+                                  relatively-complemented stone-identity))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -872,6 +941,9 @@
           ;; Phase 5b: relatively-complemented (Nation's term)
           [(relatively-complemented)
            (lambda (d s) (test-relatively-complemented d s meet-fn join-fn))]
+          ;; Phase 5c: Stone identity
+          [(stone-identity)
+           (lambda (d s) (test-stone-identity d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

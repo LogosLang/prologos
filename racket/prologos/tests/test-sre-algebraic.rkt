@@ -675,3 +675,40 @@
                                          #:meet-fn type-lattice-meet
                                          #:relation 'equality))
   (check-true (hash-has-key? props 'relatively-complemented)))
+
+;; Phase 5c: Stone identity (¬a ∨ ¬¬a = ⊤) — Stone algebra extension
+
+(test-case "Phase 5c: test-stone-identity untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-stone-identity td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-stone-identity td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5c: test-stone-identity returns axiom-* on type domain"
+  (define td (lookup-domain 'type))
+  (define result (test-stone-identity
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5c: implication distributive + has-pc-rel + stone-identity ⇒ stone-algebra"
+  ;; All three sources confirmed → derived stone-algebra confirmed.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'stone-identity prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'stone-algebra) prop-confirmed))
+
+(test-case "Phase 5c: stone-algebra refuted when any source refuted"
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'stone-identity prop-refuted))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'stone-algebra) prop-refuted))
+
+(test-case "Phase 5c: infer-domain-properties produces stone-identity entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'stone-identity)))
