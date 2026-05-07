@@ -461,6 +461,56 @@ Add three property-check functions to `sre-core.rkt` paralleling Phase 1's SD ad
 
 **Estimated scope**: ~80-120 LoC across sre-core.rkt + ~50 LoC of tests. Sweep integration (~10 LoC in sre-property-sweep.rkt + per-domain cell additions).
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-04-30)
+
+**Background research (Q2 — "semi-complement" semantics)**: WebSearch + mempalace survey + project-materials grep confirm that **"semi-complement" does not appear in Nation's canonical literature**. Nation's lexicon: "relatively complemented" (his primary terminology — partition lattice Eq X, Theorem 10.10 Dilworth 1950, Theorem 11.3 geometric lattices), "pseudo-complement" (standard meet-zero or relative form), "complemented" (Boolean sense). Most likely interpretation of the in-person conversation: phonetic carry-over from semi-distributivity discussion → user's "semi-complement" recollection corresponds to Nation's standard term **relatively complemented**. Mitigation: present BOTH (a) dual pseudo-complement AND (b) relative complementation in the report; let Nation clarify if either is wrong reading.
+
+**Q1 — Pseudo-complement disambiguation**: option (b) chosen — disambiguate. Both forms have distinct utility; relative implies absolute in distributive lattices but not in non-distributive cases (independently testable). Rename `'has-pseudo-complement` → `'has-pseudo-complement-rel`; introduce `'has-pseudo-complement-abs` as separate property. Atomic rename + Track 2H declaration update + implication-rule update in same commit (Phase 4 co-migration discipline).
+
+**Q3 — Stone identity gating**: only run when `'has-pseudo-complement-rel` confirms. Returns `axiom-untested` otherwise. Sensible.
+
+**Q4 — Phase structure**: single phase covering all 4 checks (relative + absolute pseudo-complement + relatively-complemented + Stone identity) — same family of axiom checks; ~150-250 LoC total. Sub-phase fallback if implementation exceeds 1h conversational stretch: 5a (relative + absolute pseudo-complement; rename), 5b (relatively-complemented), 5c (Stone identity conditional).
+
+**Updated Phase 5 family (post-adversarial pass)**:
+
+| Function | Form | Detailed variant? | Registry symbol |
+|---|---|---|---|
+| `test-pseudo-complement-rel` | `(domain samples meet-fn join-fn) → axiom-*` | **YES** (`pc-rel-evidence` parallel to `sd-evidence` — non-vacuity informationally rich) | `'has-pseudo-complement-rel` (renamed from existing) |
+| `test-pseudo-complement-abs` | `(domain samples meet-fn join-fn) → axiom-*` | No | `'has-pseudo-complement-abs` |
+| `test-relatively-complemented` | `(domain samples meet-fn join-fn) → axiom-*` | No (interval-wise; non-vacuity less obviously informative) | `'relatively-complemented` |
+| `test-stone-identity` | `(domain samples meet-fn join-fn) → axiom-*` (gated on `'has-pseudo-complement-rel` confirmed) | No (single per-atom check) | `'stone-identity` |
+
+**Implication rules updated**:
+- `distributive + has-pseudo-complement-rel ⇒ heyting` (renamed)
+- `heyting + has-complement ⇒ boolean` (unchanged)
+- `distributive + has-pseudo-complement-rel + stone-identity ⇒ stone-algebra` (new)
+
+**Adversarial-pass surfaced refinements** (CRITIQUE_METHODOLOGY two-column applied across P/R/M/S):
+
+1. **Property-registry rename atomic with Phase 5 commit**: `'has-pseudo-complement` → `'has-pseudo-complement-rel`. Updates: `unify.rkt:116` Track 2H declaration; `sre-core.rkt:552` heyting implication rule; any tests referencing the symbol. Atomic per Phase 4 co-migration discipline.
+
+2. **`type-pseudo-complement` at `subtype-predicate.rkt:309` gets clarifying comment** distinguishing "context-relative absolute pseudo-complement" (this function) from the empirical relative-pseudo-complement check (Phase 5 NEW). No code change; documentation only.
+
+3. **YAGNI on detailed variants**: emit `pc-rel-evidence` (parallel to `sd-evidence`) ONLY for pseudo-complement-rel (non-vacuity is informationally rich). Other 3 checks return simple `axiom-*` shape. Don't mass-produce.
+
+**Honest scope-acknowledgments** (P-lens challenges that didn't change the design but warrant naming):
+
+- *Property-registry granularity gap inherited*: 4-valued `{prop-confirmed, prop-refuted, prop-unknown, prop-contradicted}` cannot express scope qualifiers (Phase 4 finding "true on sub-A, false on sub-B"). Phase 5 doesn't fix; punts to Phase 9 / Discussion.
+- *Property checks remain off-network*: existing Track 2G scaffolding lineage. Retirement direction = property-cells migration (sister track).
+- *Phase 5 doesn't exploit the Hasse structure of the lattice being checked*: Phase 6's `test-breadth-bound` IS Hasse-structural; Phase 5's checks are sample-iteration. Honest gap; not new debt.
+
+**SRE Lattice Lens applied** (mandatory per CRITIQUE_METHODOLOGY): Phase 5 doesn't introduce a new lattice; characterizes existing ones. The Lens applies to the **property-value lattice** (axiom-confirmed | axiom-refuted | axiom-untested + 4-valued contradiction). Q1-Q5 catalogued; Q3 (bridges as Galois pairs from samples + meet-fn + join-fn → axiom-evidence) and Q6 (Hasse trivial for property-value lattice; rich for lattice-being-checked but not exploited) named honestly.
+
+**Drift risks (consolidated, 7 items)**:
+
+1. **Asymmetric meet/join lookup** (Phase 4 risk #1, recurring): callers derive both fns from same relation
+2. **Sample-set sensitivity for `test-pseudo-complement-rel`**: ground sublattice exhaustive (6 atoms); wider samples sensitive — flag in interpretation
+3. **Stone identity ordering**: gated on `'has-pseudo-complement-rel` confirming
+4. **API rename cascade**: `'has-pseudo-complement` → `'has-pseudo-complement-rel` touches 3-5 sites; atomic commit per pipeline.md co-migration
+5. **Property-registry granularity gap inherited** (P-lens challenge): Phase 5 doesn't fix; punts to Phase 9 / Discussion
+6. **YAGNI on detailed variants**: produce only where empirically interesting
+7. **Phase size approaching 1h conversational stretch boundary**: split into 5a/5b/5c if implementation exceeds; fallback plan locked
+
 ### Phase 6: Free-lattice membership + modularity checks
 
 **Scope** (high-level):
