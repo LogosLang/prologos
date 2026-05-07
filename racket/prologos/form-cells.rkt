@@ -507,7 +507,7 @@
                         'idempotent-join   prop-confirmed
                         'has-meet          prop-confirmed
                         'distributive      prop-confirmed
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed  ;; renamed Phase 5 (Q1)
                         'has-complement    prop-refuted))))
 
 (register-domain! form-cell-sre-domain)

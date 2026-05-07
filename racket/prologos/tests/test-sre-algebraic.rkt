@@ -162,21 +162,21 @@
 ;; 7. Implication Rules
 ;; ========================================
 
-(test-case "implications: distributive + has-pseudo-complement → heyting"
+(test-case "implications: distributive + has-pseudo-complement-rel → heyting"
   (define props (hasheq 'distributive prop-confirmed
-                        'has-pseudo-complement prop-confirmed))
+                        'has-pseudo-complement-rel prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-confirmed))
 
 (test-case "implications: distributive refuted → heyting refuted"
   (define props (hasheq 'distributive prop-refuted
-                        'has-pseudo-complement prop-confirmed))
+                        'has-pseudo-complement-rel prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-refuted))
 
 (test-case "implications: heyting + has-complement → boolean"
   (define props (hasheq 'distributive prop-confirmed
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
                         'has-complement prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-confirmed)
@@ -184,7 +184,7 @@
 
 (test-case "implications: heyting refuted → boolean refuted"
   (define props (hasheq 'distributive prop-refuted
-                        'has-pseudo-complement prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
                         'has-complement prop-confirmed))
   (define derived (derive-composite-properties props))
   (check-eq? (hash-ref derived 'heyting) prop-refuted)
@@ -207,10 +207,16 @@
   ;; Derived: distributive ⇒ sd-vee + sd-wedge fire (Phase 1 implication rules).
   (check-eq? (hash-ref final 'sd-vee) prop-confirmed)
   (check-eq? (hash-ref final 'sd-wedge) prop-confirmed)
-  ;; heyting requires has-pseudo-complement (not declared/inferred for equality
-  ;; relation here) → sources-incomplete → derived-value = unknown.
-  ;; boolean requires heyting → also unknown.
-  (check-eq? (hash-ref final 'heyting) prop-unknown)
+  ;; Phase 5 finding (2026-04-30): pseudo-complement-rel empirically CONFIRMS
+  ;; on the type domain × equality ground sublattice. Combined with distributive
+  ;; (Phase 3c finding), heyting derives confirmed via the implication rule.
+  ;; This is a NEW empirical claim about type×equality reaching Heyting on ground —
+  ;; previously only declared for type×subtype (Track 2H). Caveat: holds on
+  ;; the type-samples ground sublattice only; wider sample including binders
+  ;; refutes distributive (per Phase 3 wider-sample sweep) — Heyting reach is
+  ;; ground-sublattice-only.
+  (check-eq? (hash-ref final 'heyting) prop-confirmed)
+  ;; boolean still unknown — has-complement not inferred (no test for it yet).
   (check-eq? (hash-ref final 'boolean) prop-unknown))
 
 (test-case "resolve-and-report: produces report string"
@@ -585,3 +591,64 @@
 ;; SRE Track 2I Phase 3 sweep tests live in tests/test-sre-sd-properties.rkt
 ;; (separate file due to O(N³) sweep cost — keeps this file fast for the
 ;; thread-pool worker dispatch).
+
+;; ========================================
+;; SRE Track 2I Phase 5: Pseudo-complement family checks
+;; ========================================
+
+(test-case "Phase 5: lattice-leq? helper"
+  ;; x ≤ y iff x ∧ y = x. On type lattice ground sublattice.
+  (check-true (lattice-leq? (expr-Int) (expr-Int) type-lattice-meet))
+  (check-true (lattice-leq? type-bot (expr-Int) type-lattice-meet))
+  (check-true (lattice-leq? (expr-Int) type-top type-lattice-meet)))
+
+(test-case "Phase 5: test-pseudo-complement-rel returns axiom-untested without meet/join"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-pseudo-complement-rel td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-pseudo-complement-rel td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5: test-pseudo-complement-rel/detailed returns pc-rel-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-pseudo-complement-rel/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (pc-rel-evidence? ev))
+  (check-not-false (memq (pc-rel-evidence-status ev) '(confirmed refuted)))
+  (check-true (positive? (pc-rel-evidence-total-checked ev))))
+
+(test-case "Phase 5: test-pseudo-complement-rel wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-pseudo-complement-rel
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5: test-pseudo-complement-abs returns axiom-* (untested without fns)"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-pseudo-complement-abs td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (define result (test-pseudo-complement-abs
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5: implication distributive + has-pseudo-complement-rel → heyting"
+  ;; Verify the renamed implication rule fires correctly.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed))
+
+(test-case "Phase 5: implication distributive refuted → heyting refuted (renamed property)"
+  (define props (hasheq 'distributive prop-refuted
+                        'has-pseudo-complement-rel prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-refuted))
+
+(test-case "Phase 5: infer-domain-properties produces pseudo-complement entries"
+  ;; With meet-fn provided, both rel and abs entries should appear in output.
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'has-pseudo-complement-rel))
+  (check-true (hash-has-key? props 'has-pseudo-complement-abs)))

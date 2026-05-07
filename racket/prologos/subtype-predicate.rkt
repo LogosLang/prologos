@@ -295,6 +295,16 @@
 ;; Heyting pseudo-complement: ¬a = max{x | x ⊓ a ≤ ⊥}
 ;; For ground types: the union of all context types incompatible with `type`.
 ;;
+;; DISAMBIGUATION (SRE Track 2I Phase 5, 2026-04-30): this function computes
+;; the **context-relative absolute pseudo-complement** (¬a) — 1-arg over a
+;; supplied context list — for error-reporting use. Distinct from the
+;; **lattice-theoretic relative pseudo-complement** (a → b, the Heyting →
+;; operator) tested empirically by `test-pseudo-complement-rel` in sre-core.rkt.
+;; In a Heyting algebra, the relative form generalizes (a → ⊥ = ¬a). For our
+;; finite-context error-reporting purposes the 1-arg form is sufficient and
+;; cheaper. See sre-core.rkt for the empirical lattice-theoretic check used
+;; in the SRE algebraic-property registry.
+;;
 ;; SCAFFOLDING (M2, F6): This is a function over a list of context types.
 ;; The permanent solution is ATMS-derived: when a cell reaches type-top,
 ;; the ATMS nogood records the conflicting assumption set. Retracting the

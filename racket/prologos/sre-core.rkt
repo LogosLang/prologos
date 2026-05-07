@@ -58,6 +58,11 @@
  ;; Track 2I Phase 2: detailed SD evidence for vacuous-vs-non-vacuous reporting
  (struct-out sd-evidence)
  test-sd-vee/detailed test-sd-wedge/detailed
+ ;; Track 2I Phase 5: pseudo-complement family
+ lattice-leq?
+ (struct-out pc-rel-evidence)
+ test-pseudo-complement-rel test-pseudo-complement-rel/detailed
+ test-pseudo-complement-abs
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -481,6 +486,140 @@
     [(refuted)   (axiom-refuted (sd-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 5: Pseudo-complement family checks
+;; ========================================================================
+;;
+;; Adds empirical checks for pseudo-complement variants relevant to
+;; Heyting / Stone algebra structure on our lattices. Per Phase 5
+;; mini-design (2026-04-30):
+;;
+;;   - test-pseudo-complement-rel : relative pseudo-complement (Heyting →);
+;;     a → b = ⋁{x : x ∧ a ≤ b}. Combined with distributivity ⇒ Heyting.
+;;   - test-pseudo-complement-abs : absolute pseudo-complement (= a → ⊥);
+;;     ¬a = ⋁{x : x ∧ a = ⊥}. The meet-zero sense.
+;;
+;; Calling discipline (Phase 4 Scaffolding-Hides-Truth #3): explicit
+;; meet-fn AND join-fn from the SAME relation. Caller derives both via
+;; sre-domain-meet + sre-domain-merge-registry.
+;;
+;; Q1 disambiguation (Phase 5 mini-design 2026-04-30): the existing
+;; 'has-pseudo-complement registry symbol is RENAMED to
+;; 'has-pseudo-complement-rel (Track 2H meant the relative form when
+;; combining with distributive → Heyting). 'has-pseudo-complement-abs
+;; is added as a sibling.
+
+;; Lattice partial-order helper: x ≤ y iff x ∧ y = x.
+(define (lattice-leq? x y meet-fn)
+  (equal? (meet-fn x y) x))
+
+;; ------------------------------------------------------------------------
+;; pc-rel-evidence: detailed evidence for relative pseudo-complement check
+;; (parallels sd-evidence; non-vacuity is informationally rich here)
+;; ------------------------------------------------------------------------
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total (a, b) pairs iterated
+;;   hypothesis-fired  — pairs where {x : x ∧ a ≤ b} non-empty (non-vacuous)
+;;   conclusion-held   — pairs where the candidate join satisfies the axiom
+;;                       (i.e., relative pseudo-complement EXISTS for (a, b)
+;;                       on this sample set)
+;;   witness           — (list a b) on refute; #f on confirmed/untested
+(struct pc-rel-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+;; Test relative pseudo-complement: a → b exists for all (a, b)?
+;;
+;; Implementation:
+;;   1. For each (a, b), collect samples {x : x ∧ a ≤ b}.
+;;   2. If empty (vacuous), continue with non-fired count.
+;;   3. Else, candidate := join of all such x.
+;;   4. Verify: candidate ∧ a ≤ b. If yes, candidate IS the supremum
+;;      (and is in the set ⇒ is the maximum ⇒ relative pseudo-complement
+;;      exists empirically). If no, the supremum of the set isn't in the
+;;      set ⇒ no maximum ⇒ relative pseudo-complement does not exist on
+;;      this sample.
+;;
+;; Sample-set sensitivity: ground sublattice (6 atoms) is exhaustive for
+;; atomic types; wider samples may falsely refute when true PC exists
+;; outside sample. Flag in interpretation.
+(define (test-pseudo-complement-rel/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (pc-rel-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)])
+           (define t* (+ t 1))
+           ;; Step 1: collect candidates {x : x ∧ a ≤ b}
+           (define candidates
+             (for/list ([x (in-list samples)]
+                        #:when (lattice-leq? (meet-fn x a) b meet-fn))
+               x))
+           (cond
+             [(null? candidates)
+              ;; Vacuous: no x satisfies x ∧ a ≤ b. Hypothesis didn't fire.
+              (values t* f h)]
+             [else
+              ;; Step 2: candidate := join of all such x
+              (define candidate
+                (foldl join-fn (first candidates) (rest candidates)))
+              ;; Step 3: verify candidate ∧ a ≤ b (axiom)
+              (cond
+                [(lattice-leq? (meet-fn candidate a) b meet-fn)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (pc-rel-evidence 'refuted t* (+ f 1) h (list a b)))])])))
+       (pc-rel-evidence 'confirmed total fired held #f))]))
+
+;; Backward-compat wrapper: simple axiom shape for registry consumption.
+(define (test-pseudo-complement-rel domain samples meet-fn join-fn)
+  (define ev (test-pseudo-complement-rel/detailed domain samples meet-fn join-fn))
+  (case (pc-rel-evidence-status ev)
+    [(confirmed) (axiom-confirmed (pc-rel-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (pc-rel-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; Test absolute pseudo-complement: ¬a exists for all a?
+;; ¬a = ⋁{x : x ∧ a = ⊥} = max element disjoint from a in meet.
+;;
+;; Implementation parallels test-pseudo-complement-rel but with the
+;; bottom element of the lattice as the "b" target (semantically
+;; equivalent to test-pseudo-complement-rel with b=⊥; we provide a
+;; direct check for clarity + cases where rel-form check isn't run).
+(define (test-pseudo-complement-abs domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (let/ec return
+       (define count
+         (for/fold ([k 0])
+                   ([a (in-list samples)])
+           (define candidates
+             (for/list ([x (in-list samples)]
+                        #:when (equal? (meet-fn x a) bot))
+               x))
+           (cond
+             [(null? candidates) (+ k 1)] ;; vacuous (no disjoint x in sample)
+             [else
+              (define candidate
+                (foldl join-fn (first candidates) (rest candidates)))
+              (cond
+                [(equal? (meet-fn candidate a) bot)
+                 (+ k 1)]
+                [else
+                 (return (axiom-refuted (list a)))])])))
+       (axiom-confirmed count))]))
+
 ;; Infer properties for a domain from sample values.
 ;; SRE Track 2H: #:relation selects which sub-hash to work with.
 ;; Returns updated properties sub-hash for that relation.
@@ -530,7 +669,18 @@
         (update-property props-4 'sd-wedge
                          (test-sd-wedge domain samples meet-fn join-fn))
         props-4))
-  props-5)
+  ;; Phase 5: pseudo-complement family (require meet-fn AND join-fn)
+  (define props-6
+    (if (and meet-fn join-fn)
+        (update-property props-5 'has-pseudo-complement-rel
+                         (test-pseudo-complement-rel domain samples meet-fn join-fn))
+        props-5))
+  (define props-7
+    (if (and meet-fn join-fn)
+        (update-property props-6 'has-pseudo-complement-abs
+                         (test-pseudo-complement-abs domain samples meet-fn join-fn))
+        props-6))
+  props-7)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -549,7 +699,7 @@
 (define standard-implication-rules
   (list
    (implication-rule 'heyting
-                     '(distributive has-pseudo-complement)
+                     '(distributive has-pseudo-complement-rel)  ;; renamed Phase 5 (Q1 disambiguation)
                      'heyting)
    (implication-rule 'boolean
                      '(heyting has-complement)
@@ -642,7 +792,8 @@
   (define join-fn (and merge-registry (merge-registry relation-name)))
   (define evidence
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
-                                  distributive sd-vee sd-wedge))])
+                                  distributive sd-vee sd-wedge
+                                  has-pseudo-complement-rel has-pseudo-complement-abs))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -651,6 +802,11 @@
           [(distributive) (lambda (d s) (test-distributive d s meet-fn join-fn))]
           [(sd-vee)       (lambda (d s) (test-sd-vee d s meet-fn join-fn))]
           [(sd-wedge)     (lambda (d s) (test-sd-wedge d s meet-fn join-fn))]
+          ;; Phase 5: pseudo-complement family
+          [(has-pseudo-complement-rel)
+           (lambda (d s) (test-pseudo-complement-rel d s meet-fn join-fn))]
+          [(has-pseudo-complement-abs)
+           (lambda (d s) (test-pseudo-complement-abs d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties
