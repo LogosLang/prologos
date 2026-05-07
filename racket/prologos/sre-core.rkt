@@ -65,6 +65,13 @@
  test-pseudo-complement-abs
  test-relatively-complemented
  test-stone-identity
+ ;; Track 2I Phase 6: free-lattice membership + modularity
+ (struct-out modular-evidence)
+ test-modular test-modular/detailed
+ (struct-out whitman-evidence)
+ test-whitmans-condition test-whitmans-condition/detailed
+ test-breadth-bound
+ test-sectionally-complemented
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -590,6 +597,207 @@
     [(refuted)   (axiom-refuted (pc-rel-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 6: Free-lattice membership + modularity checks
+;; ========================================================================
+;;
+;; Three+ algebraic-property checks anchored on Nation's central work:
+;;
+;;   - test-modular         : a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c
+;;     Modular law (Dedekind 1900). Level between SD and distributive in
+;;     the PTF hierarchy (§3.3). Forbidden sublattice: pentagon N₅.
+;;
+;;   - test-whitmans-condition (W) : a ∧ b ≤ c ∨ d ⇒ one of {a ≤ c∨d,
+;;     b ≤ c∨d, a∧b ≤ c, a∧b ≤ d}. Whitman 1941. FL membership criterion
+;;     when combined with SD (Theorem 5.55/6.9, Nation 1982). High
+;;     theoretic alignment with Nation's central work in *Free Lattices*.
+;;
+;;   - test-breadth-bound k : maximum antichain width ≤ k. Theorem 1.21
+;;     corollary (Jónsson-Kiefer-Nation 1962): SD lattices have breadth ≤ 4
+;;     on finite sublattices. Parameterized via #:max-width (default 4).
+;;     FIRST Hasse-structural property check in Track 2I — exploits
+;;     antichain enumeration via incomparability adjacency.
+;;
+;;   - test-sectionally-complemented : every c ∈ [⊥, b] has d ∈ [⊥, b]
+;;     with c ∧ d = ⊥, c ∨ d = b. Grätzer's *General Lattice Theory*
+;;     definition. Distinct from (and weaker than) Phase 5b's
+;;     test-relatively-complemented (which uses interval bottom a, not ⊥).
+;;     Forward: rel-complemented ⇒ sect-complemented. Reverse fails.
+
+;; ------------------------------------------------------------------------
+;; Phase 6: modular-evidence (parallel to sd-evidence; non-vacuity rich)
+;; ------------------------------------------------------------------------
+;;
+;; status            — 'confirmed | 'refuted | 'untested
+;; total-checked     — total (a, b, c) triples iterated
+;; hypothesis-fired  — triples where a ≤ c (non-vacuous)
+;; conclusion-held   — triples where hypothesis fired AND conclusion held
+;; witness           — (list a b c) on refute; #f on confirmed/untested
+(struct modular-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+;; Test modular law: a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c
+;; Hypothesis a ≤ c provides non-vacuity gating.
+(define (test-modular/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (modular-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)])
+           (define t* (+ t 1))
+           (cond
+             [(not (lattice-leq? a c meet-fn))
+              ;; Hypothesis fails — vacuously satisfied
+              (values t* f h)]
+             [else
+              (define lhs (join-fn a (meet-fn b c)))
+              (define rhs (meet-fn (join-fn a b) (join-fn a c)))
+              (cond
+                [(equal? lhs rhs)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (modular-evidence 'refuted t* (+ f 1) h (list a b c)))])])))
+       (modular-evidence 'confirmed total fired held #f))]))
+
+(define (test-modular domain samples meet-fn join-fn)
+  (define ev (test-modular/detailed domain samples meet-fn join-fn))
+  (case (modular-evidence-status ev)
+    [(confirmed) (axiom-confirmed (modular-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (modular-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ------------------------------------------------------------------------
+;; Phase 6: whitman-evidence + Whitman's condition (W)
+;; ------------------------------------------------------------------------
+;;
+;; (W): a ∧ b ≤ c ∨ d ⇒ one of {a ≤ c∨d, b ≤ c∨d, a∧b ≤ c, a∧b ≤ d}
+;; Whitman 1941. FL membership criterion (with SD: Theorem 5.55, Nation 1982).
+;;
+;; O(N⁴) sweep — heavy at wider sample but tractable (depth-1 N=58 → 11.3M).
+;; Hypothesis non-vacuity matters; /detailed surfaces it.
+(struct whitman-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+(define (test-whitmans-condition/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (whitman-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     [d (in-list samples)])
+           (define t* (+ t 1))
+           (define ab (meet-fn a b))
+           (define cd (join-fn c d))
+           (cond
+             [(not (lattice-leq? ab cd meet-fn))
+              ;; Hypothesis a∧b ≤ c∨d fails — vacuously satisfied
+              (values t* f h)]
+             [else
+              ;; Hypothesis holds — check disjunctive conclusion
+              (define conc-1 (lattice-leq? a cd meet-fn))
+              (define conc-2 (lattice-leq? b cd meet-fn))
+              (define conc-3 (lattice-leq? ab c meet-fn))
+              (define conc-4 (lattice-leq? ab d meet-fn))
+              (cond
+                [(or conc-1 conc-2 conc-3 conc-4)
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return (whitman-evidence 'refuted t* (+ f 1) h (list a b c d)))])])))
+       (whitman-evidence 'confirmed total fired held #f))]))
+
+(define (test-whitmans-condition domain samples meet-fn join-fn)
+  (define ev (test-whitmans-condition/detailed domain samples meet-fn join-fn))
+  (case (whitman-evidence-status ev)
+    [(confirmed) (axiom-confirmed (whitman-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (whitman-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ------------------------------------------------------------------------
+;; Phase 6: Breadth bound (Jónsson-Kiefer-Nation 1962, Theorem 1.21 corollary)
+;; ------------------------------------------------------------------------
+;;
+;; Breadth ≤ k iff no (k+1)-element antichain exists. SD lattices satisfy
+;; breadth ≤ 4 on finite sublattices. Implementation: search for any
+;; (k+1)-element antichain by enumerating size-(k+1) subsets and checking
+;; pairwise incomparability. If found → breadth > k → refuted with witness.
+;;
+;; FIRST Hasse-structural property check in Track 2I — uses incomparability
+;; adjacency directly (no Hasse edge between two elements ⟺ incomparable).
+;;
+;; Cost: O(N^(k+1)) for the search. At k=4, N=6: 7776 (cheap). N=58: 656M
+;; (heavy but feasible).
+(define (test-breadth-bound domain samples meet-fn #:max-width [k 4])
+  (cond
+    [(not meet-fn) axiom-untested]
+    [else
+     ;; Helper: are all elements in the list pairwise incomparable?
+     (define (antichain? elts)
+       (for*/and ([x (in-list elts)]
+                  [y (in-list elts)]
+                  #:when (not (eq? x y)))
+         (and (not (lattice-leq? x y meet-fn))
+              (not (lattice-leq? y x meet-fn)))))
+     ;; Search for any (k+1)-element antichain among samples
+     (define antichain-found
+       (let loop ([picks '()] [pool samples] [remaining (+ k 1)])
+         (cond
+           [(zero? remaining) (and (antichain? picks) picks)]
+           [(null? pool) #f]
+           [else
+            (or (loop (cons (car pool) picks) (cdr pool) (- remaining 1))
+                (loop picks (cdr pool) remaining))])))
+     (cond
+       [antichain-found
+        (axiom-refuted antichain-found)]  ;; breadth > k
+       [else
+        (axiom-confirmed (length samples))])]))  ;; breadth ≤ k
+
+;; ------------------------------------------------------------------------
+;; Phase 6: Sectionally complemented (Grätzer's General Lattice Theory)
+;; ------------------------------------------------------------------------
+;;
+;; A bounded lattice is sectionally complemented iff for every b and every
+;; c ∈ [⊥, b], ∃ d ∈ [⊥, b] with c ∧ d = ⊥ AND c ∨ d = b.
+;;
+;; DISTINCT FROM Phase 5b's test-relatively-complemented (which uses
+;; interval bottom a as meet target; sectional uses ⊥). Forward implication:
+;; relatively-complemented ⇒ sectionally-complemented.
+(define (test-sectionally-complemented domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (let/ec return
+       (define count
+         (for/fold ([k 0])
+                   ([b (in-list samples)])
+           (for/fold ([k2 k])
+                     ([c (in-list samples)]
+                      #:when (lattice-leq? c b meet-fn))
+             ;; c ∈ [⊥, b]; search for d ∈ [⊥, b] with c ∧ d = ⊥, c ∨ d = b
+             (define d-found?
+               (for/or ([d (in-list samples)])
+                 (and (lattice-leq? d b meet-fn)
+                      (equal? (meet-fn c d) bot)
+                      (equal? (join-fn c d) b))))
+             (cond
+               [d-found? (+ k2 1)]
+               [else
+                (return (axiom-refuted (list b c)))]))))
+       (axiom-confirmed count))]))
+
 ;; Compute absolute pseudo-complement candidate ¬a on a sample set.
 ;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
 ;; no such x exists in samples. Used by test-stone-identity below.
@@ -806,7 +1014,31 @@
         (update-property props-8 'stone-identity
                          (test-stone-identity domain samples meet-fn join-fn))
         props-8))
-  props-9)
+  ;; Phase 6: modular law (Dedekind 1900)
+  (define props-10
+    (if (and meet-fn join-fn)
+        (update-property props-9 'modular
+                         (test-modular domain samples meet-fn join-fn))
+        props-9))
+  ;; Phase 6: Whitman's condition (W) — FL membership criterion (Nation 1982)
+  (define props-11
+    (if (and meet-fn join-fn)
+        (update-property props-10 'whitmans-condition
+                         (test-whitmans-condition domain samples meet-fn join-fn))
+        props-10))
+  ;; Phase 6: breadth bound (Jónsson-Kiefer-Nation 1962, default k=4)
+  (define props-12
+    (if meet-fn
+        (update-property props-11 'breadth-bound
+                         (test-breadth-bound domain samples meet-fn))
+        props-11))
+  ;; Phase 6: sectionally complemented (Grätzer; weaker than relatively-complemented)
+  (define props-13
+    (if (and meet-fn join-fn)
+        (update-property props-12 'sectionally-complemented
+                         (test-sectionally-complemented domain samples meet-fn join-fn))
+        props-12))
+  props-13)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -842,7 +1074,15 @@
    ;; SRE Track 2I Phase 5c: Stone algebra = distributive + has-pseudo-complement-rel + stone-identity
    (implication-rule 'stone-algebra
                      '(distributive has-pseudo-complement-rel stone-identity)
-                     'stone-algebra)))
+                     'stone-algebra)
+   ;; SRE Track 2I Phase 6: codify hierarchy SD ⊃ modular ⊃ distributive
+   (implication-rule 'distributive→modular
+                     '(distributive)
+                     'modular)
+   ;; SRE Track 2I Phase 6: relative ⇒ sectional (principal ideals are intervals)
+   (implication-rule 'rel-comp→sect-comp
+                     '(relatively-complemented)
+                     'sectionally-complemented)))
 
 ;; Derive composite properties from atomic ones.
 ;; Reads source properties, writes derived property using property-value-join.
@@ -924,7 +1164,10 @@
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
                                   distributive sd-vee sd-wedge
                                   has-pseudo-complement-rel has-pseudo-complement-abs
-                                  relatively-complemented stone-identity))])
+                                  relatively-complemented stone-identity
+                                  ;; Phase 6 additions
+                                  modular whitmans-condition breadth-bound
+                                  sectionally-complemented))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -944,6 +1187,15 @@
           ;; Phase 5c: Stone identity
           [(stone-identity)
            (lambda (d s) (test-stone-identity d s meet-fn join-fn))]
+          ;; Phase 6: free-lattice membership + modularity family
+          [(modular)
+           (lambda (d s) (test-modular d s meet-fn join-fn))]
+          [(whitmans-condition)
+           (lambda (d s) (test-whitmans-condition d s meet-fn join-fn))]
+          [(breadth-bound)
+           (lambda (d s) (test-breadth-bound d s meet-fn))]
+          [(sectionally-complemented)
+           (lambda (d s) (test-sectionally-complemented d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

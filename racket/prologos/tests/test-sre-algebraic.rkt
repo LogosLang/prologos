@@ -712,3 +712,89 @@
                                          #:meet-fn type-lattice-meet
                                          #:relation 'equality))
   (check-true (hash-has-key? props 'stone-identity)))
+
+;; ========================================
+;; SRE Track 2I Phase 6: Free-lattice membership + modularity
+;; ========================================
+
+(test-case "Phase 6: test-modular untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-modular td type-samples #f type-lattice-merge) axiom-untested)
+  (check-eq? (test-modular td type-samples type-lattice-meet #f) axiom-untested))
+
+(test-case "Phase 6: test-modular/detailed returns modular-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-modular/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (modular-evidence? ev))
+  (check-not-false (memq (modular-evidence-status ev) '(confirmed refuted)))
+  (check-true (positive? (modular-evidence-total-checked ev))))
+
+(test-case "Phase 6: test-modular wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-modular td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: test-whitmans-condition untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-whitmans-condition td type-samples #f type-lattice-merge)
+             axiom-untested))
+
+(test-case "Phase 6: test-whitmans-condition/detailed returns whitman-evidence"
+  (define td (lookup-domain 'type))
+  (define ev (test-whitmans-condition/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (whitman-evidence? ev))
+  (check-not-false (memq (whitman-evidence-status ev) '(confirmed refuted)))
+  ;; Whitman's W is O(N⁴): for type-samples N=6, total = 1296.
+  (check-true (positive? (whitman-evidence-total-checked ev))))
+
+(test-case "Phase 6: test-breadth-bound returns axiom-* with default k=4"
+  (define td (lookup-domain 'type))
+  (define result (test-breadth-bound td type-samples type-lattice-meet))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: test-breadth-bound parameterized via #:max-width"
+  ;; A 6-element flat lattice with all atoms incomparable would have width = #atoms.
+  ;; type-samples = (type-bot type-top Int Bool Nat String); the 4 atoms
+  ;; (Int, Bool, Nat, String) are pairwise incomparable under the FLAT meet
+  ;; (subtype absent at this layer's type-lattice-meet). So with k=3, the
+  ;; 4-atom antichain refutes; with k=4, it confirms (no 5-element antichain).
+  (define td (lookup-domain 'type))
+  (define result-k3 (test-breadth-bound td type-samples type-lattice-meet
+                                        #:max-width 3))
+  (check-true (axiom-refuted? result-k3))
+  (define result-k4 (test-breadth-bound td type-samples type-lattice-meet
+                                        #:max-width 4))
+  (check-true (axiom-confirmed? result-k4)))
+
+(test-case "Phase 6: test-sectionally-complemented untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-sectionally-complemented td type-samples #f type-lattice-merge)
+             axiom-untested))
+
+(test-case "Phase 6: test-sectionally-complemented returns axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-sectionally-complemented
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 6: implication distributive ⇒ modular"
+  (define props (hasheq 'distributive prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'modular) prop-confirmed))
+
+(test-case "Phase 6: implication relatively-complemented ⇒ sectionally-complemented"
+  (define props (hasheq 'relatively-complemented prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'sectionally-complemented) prop-confirmed))
+
+(test-case "Phase 6: infer-domain-properties produces all 4 Phase-6 entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'modular))
+  (check-true (hash-has-key? props 'whitmans-condition))
+  (check-true (hash-has-key? props 'breadth-bound))
+  (check-true (hash-has-key? props 'sectionally-complemented)))
