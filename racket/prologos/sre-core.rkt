@@ -63,6 +63,7 @@
  (struct-out pc-rel-evidence)
  test-pseudo-complement-rel test-pseudo-complement-rel/detailed
  test-pseudo-complement-abs
+ test-relatively-complemented
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -588,6 +589,60 @@
     [(refuted)   (axiom-refuted (pc-rel-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
+;; Test relatively complemented: every interval [a, b] is complemented?
+;;
+;; A lattice L is relatively complemented if for every interval [a, b] in L
+;; and every c ∈ [a, b], there exists d ∈ [a, b] (the relative complement
+;; of c) such that c ∧ d = a and c ∨ d = b.
+;;
+;; This is **Nation's primary terminology** (Notes on Lattice Theory ch4
+;; partition lattice Eq X, ch10 Theorem 10.10 Dilworth 1950 PCF lattices,
+;; ch11 Theorem 11.3 geometric lattices). Distinct from Heyting's relative
+;; pseudo-complement (a → b operator). This is the INTERVAL-WISE version
+;; of complementation.
+;;
+;; Implementation:
+;;   For each (a, b) with a ≤ b in samples (the interval [a, b]):
+;;     For each c with a ≤ c ≤ b in samples:
+;;       Search samples for d satisfying:
+;;         a ≤ d ≤ b (d in interval)
+;;         c ∧ d = a (meet)
+;;         c ∨ d = b (join)
+;;       If no such d found in samples, refuted with witness (a, b, c).
+;;
+;; Cost: O(N^4) worst case (intervals × c × d-search). At N=6 (ground), 1296
+;; iterations — cheap. At N=58 (depth-1), 11.3M — heavy but tractable.
+;;
+;; Sample-set sensitivity: similar to pseudo-complement-rel — may falsely
+;; refute when true relative complement exists outside sample but candidate
+;; d isn't drawn. Ground sublattice (6 atoms) is exhaustive for atomic
+;; types; flag in interpretation for wider sweeps.
+(define (test-relatively-complemented domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn)) axiom-untested]
+    [else
+     (let/ec return
+       (define count
+         (for*/fold ([k 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     #:when (lattice-leq? a b meet-fn))  ; only valid intervals
+           (for/fold ([k2 k])
+                     ([c (in-list samples)]
+                      #:when (and (lattice-leq? a c meet-fn)
+                                  (lattice-leq? c b meet-fn)))
+             (define d-found?
+               (for/or ([d (in-list samples)])
+                 (and (lattice-leq? a d meet-fn)
+                      (lattice-leq? d b meet-fn)
+                      (equal? (meet-fn c d) a)
+                      (equal? (join-fn c d) b))))
+             (cond
+               [d-found? (+ k2 1)]
+               [else
+                (return (axiom-refuted (list a b c)))]))))
+       (axiom-confirmed count))]))
+
 ;; Test absolute pseudo-complement: ¬a exists for all a?
 ;; ¬a = ⋁{x : x ∧ a = ⊥} = max element disjoint from a in meet.
 ;;
@@ -680,7 +735,13 @@
         (update-property props-6 'has-pseudo-complement-abs
                          (test-pseudo-complement-abs domain samples meet-fn join-fn))
         props-6))
-  props-7)
+  ;; Phase 5b: relatively-complemented (Nation's primary terminology)
+  (define props-8
+    (if (and meet-fn join-fn)
+        (update-property props-7 'relatively-complemented
+                         (test-relatively-complemented domain samples meet-fn join-fn))
+        props-7))
+  props-8)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -793,7 +854,8 @@
   (define evidence
     (for/hasheq ([prop (in-list '(commutative-join associative-join idempotent-join
                                   distributive sd-vee sd-wedge
-                                  has-pseudo-complement-rel has-pseudo-complement-abs))])
+                                  has-pseudo-complement-rel has-pseudo-complement-abs
+                                  relatively-complemented))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -807,6 +869,9 @@
            (lambda (d s) (test-pseudo-complement-rel d s meet-fn join-fn))]
           [(has-pseudo-complement-abs)
            (lambda (d s) (test-pseudo-complement-abs d s meet-fn join-fn))]
+          ;; Phase 5b: relatively-complemented (Nation's term)
+          [(relatively-complemented)
+           (lambda (d s) (test-relatively-complemented d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

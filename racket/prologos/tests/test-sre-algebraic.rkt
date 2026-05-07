@@ -652,3 +652,26 @@
                                          #:relation 'equality))
   (check-true (hash-has-key? props 'has-pseudo-complement-rel))
   (check-true (hash-has-key? props 'has-pseudo-complement-abs)))
+
+;; Phase 5b: relatively-complemented (Nation's primary term)
+
+(test-case "Phase 5b: test-relatively-complemented untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-relatively-complemented td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-relatively-complemented td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 5b: test-relatively-complemented returns axiom-* on type domain"
+  (define td (lookup-domain 'type))
+  (define result (test-relatively-complemented
+                  td type-samples type-lattice-meet type-lattice-merge))
+  ;; Result is one of confirmed/refuted (not untested since both fns provided).
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 5b: infer-domain-properties produces relatively-complemented entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'relatively-complemented)))
