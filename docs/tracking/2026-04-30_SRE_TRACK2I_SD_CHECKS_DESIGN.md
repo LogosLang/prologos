@@ -515,19 +515,65 @@ Add three property-check functions to `sre-core.rkt` paralleling Phase 1's SD ad
 
 **Scope** (high-level):
 
-- **`test-whitmans-condition`** (Whitman's W; FL membership criterion): for each 4-tuple `(a, b, c, d)` in the sample, verify: if `a ∧ b ≤ c ∨ d`, then one of `a ≤ c ∨ d`, `b ≤ c ∨ d`, `a ∧ b ≤ c`, `a ∧ b ≤ d` holds. **O(N⁴) sweep**; at depth-0 (N=6), 1296 iterations — cheap. At depth-1 (N=58), 11.3M iterations — heavy but feasible (~minutes). Critical: if domain satisfies (W), free-lattice canonical form (Whitman six-case algorithm) applies — high theoretic + technical alignment with Nation's central work.
+- **`test-modular`**: for each `(a, b, c)` triple, verify modular law `a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c`. Hypothesis `a ≤ c` provides built-in non-vacuity gating. Modularity is the level between SD and distributive in the PTF hierarchy (§3.3) — clarifies whether binder-included sublattice is strictly SD or modular-but-not-distributive. With `modular-evidence` /detailed variant.
 
-- **`test-modular`**: for each `(a, b, c)` triple, verify modular law `a ≤ c ⇒ a ∨ (b ∧ c) = (a ∨ b) ∧ c`. Hypothesis `a ≤ c` provides built-in non-vacuity gating. Modularity is the level between SD and distributive in the PTF hierarchy (§3.3) — clarifies whether binder-included sublattice is strictly SD or modular-but-not-distributive.
+- **`test-whitmans-condition`** (Whitman's W; FL membership criterion): for each 4-tuple `(a, b, c, d)` in the sample, verify: if `a ∧ b ≤ c ∨ d`, then one of `a ≤ c ∨ d`, `b ≤ c ∨ d`, `a ∧ b ≤ c`, `a ∧ b ≤ d` holds. **O(N⁴) sweep**; at depth-0 (N=6), 1296 iterations — cheap. At depth-1 (N=58), 11.3M iterations — heavy but feasible (~minutes). Critical: if domain satisfies (W), free-lattice canonical form (Whitman six-case algorithm) applies — high theoretic + technical alignment with Nation's central work (Theorem 5.55 / 6.9, Nation 1982). With `whitman-evidence` /detailed variant.
 
-- **`test-breadth-bound`** (Jónsson-Kiefer-Nation 1962): maximum antichain width `≤ k`. SD lattices have breadth ≤ 4 on finite sublattices (Theorem 1.21 corollary). Implementation: enumerate antichains in the sample, find maximum width. O(N^{2k}) worst case; limit to k=4 to keep tractable.
+- **`test-breadth-bound`** (Jónsson-Kiefer-Nation 1962): maximum antichain width `≤ k`. SD lattices have breadth ≤ 4 on finite sublattices (Theorem 1.21 corollary). Parameterized via `#:max-width` keyword (default 4). Search for any (k+1)-element antichain — if found, width > k → refuted. Cost: O(N^(k+1)). At k=4, N=6: 7776 iterations (cheap); N=58: 656M (heavy but feasible). **NEW (Q6 finding)**: this is the FIRST Hasse-structural property check — exploits adjacency (incomparability = no Hasse edge). Simple axiom-* shape (no /detailed; per-witness search).
 
-- **`test-sectional-complement`** (conditional — runs if modular confirms): for each interval `[a, b]`, every element in the interval has a complement (relative to a, b) within the interval. Modular lattice cornerstone (Nation's classical territory).
+- **`test-sectionally-complemented`** (Grätzer's *General Lattice Theory*): for every `b` and every `c ∈ [⊥, b]`, ∃ `d ∈ [⊥, b]` with `c ∧ d = ⊥` AND `c ∨ d = b`. **Distinct from Phase 5b's `test-relatively-complemented`** — sectional uses `⊥` as meet target (principal ideals only); relatively-complemented uses interval bottom `a` (all intervals). Forward implication: relatively-complemented ⇒ sectionally-complemented. Empirically separable: a lattice can be sectionally complemented but fail relative complementation. Simple axiom-* shape.
 
-**Property registry additions**: `'whitmans-condition`, `'modular`, `'breadth-4`, `'sectionally-complemented`.
+**Property registry additions**: `'modular`, `'whitmans-condition`, `'breadth-bound` (parameterized), `'sectionally-complemented`.
 
-**Implication rules**: `distributive ⇒ modular` (forward; modular is weaker), `modular + ... ⇒ ...` (TBD per findings). Whitman's W is a free-lattice-relative property with no clean implication chain to other properties.
+**Implication rules added** (extend `standard-implication-rules`):
+- `distributive ⇒ modular` (forward; codifies SD ⊃ modular ⊃ distributive hierarchy)
+- `relatively-complemented ⇒ sectionally-complemented` (forward; principal ideals are intervals)
 
-**Estimated scope**: ~100-150 LoC across sre-core.rkt + ~60-80 LoC of tests. Whitman's W is the dominant cost (4-tuple sweep).
+Whitman's W and breadth-bound have no clean implication chains to other registry properties (free-lattice-relative).
+
+**Estimated scope**: ~150-250 LoC across sre-core.rkt + ~60-80 LoC of tests. Whitman's W is the dominant cost (4-tuple sweep).
+
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-04-30)
+
+**Q1 — Sectional vs relatively-complemented disambiguation**: NOT redundant under standard literature treatment (Grätzer's *General Lattice Theory*). Relatively-complemented (Phase 5b) is the STRONGER property (all intervals); sectionally-complemented is the WEAKER (principal ideals `[⊥, b]` only). Forward implication: rel-complemented ⇒ sect-complemented. Reverse does not hold. Add `test-sectionally-complemented` as DISTINCT Phase 6 check.
+
+**Q2 — Breadth parameterization**: parameterize via `#:max-width` keyword, default 4 (Theorem 1.21 SD lattice bound). Future-proof for variety-specific bounds.
+
+**Q3 — Sub-phase fallback**: ready if implementation exceeds 1h. Likely partition: 6a (modular) + 6b (Whitman's W) + 6c (breadth + sectional). Decision deferred to implementation flow per Phase 5 precedent.
+
+**Q4 — Detailed evidence structs**: keep separate (`modular-evidence`, `whitman-evidence` parallel to `sd-evidence`, `pc-rel-evidence`). Per-property fields differ semantically. Decomplection over false generality.
+
+**Mini-audit findings persisted**:
+- sre-core.rkt at 1793 lines pre-Phase-6; Phase 6 adds ~200 LoC → ~2000 lines (approaching whale-file-splitting threshold per testing.md guidance, but within bounds)
+- Implication-rules section at line 825; 5 rules currently (heyting, boolean, sd-vee, sd-wedge, stone-algebra)
+- Inference pattern `props-0` through `props-9` (Phase 5c added); Phase 6 adds `props-10` through `props-13`
+- 9 registry symbols currently active (10 with stone-algebra derived)
+
+**Adversarial CRITIQUE pass surfaced refinements**:
+
+1. **Q6 Hasse exploitation**: breadth-bound IS the FIRST Hasse-structural property check in Track 2I — exploits antichain enumeration via incomparability adjacency. Worth highlighting in dailies + Phase 10 report.
+
+2. **Modular subsumes distributive**: type×equality on ground sublattice has distributive confirmed (Phase 3c) → modular SHOULD confirm via implication. Empirical sample-check is ALSO informative — non-vacuity ratio for modular's hypothesis (`a ≤ c`) likely differs from distributive's (always-fires).
+
+3. **Phase 6 may surface ground-vs-binder distinction below distributive**: if type×equality binder-included sample is SD-not-distributive (Phase 4 finding), is it ALSO SD-not-modular, or modular-not-distributive? Empirically interesting refinement of the variety placement.
+
+4. **File-size watch**: sre-core.rkt approaches 2000 lines after Phase 6. Sister concern (file split) noted; not Phase 6 scope.
+
+**Honest scope-acknowledgments**:
+
+- Property checks remain off-network (Track 2G scaffolding lineage; retirement = property-cells migration, sister track)
+- Property registry granularity gap inherited (Phase 4 finding)
+- Hasse-structural exploitation is partial — only breadth-bound; modular/Whitman's W don't exploit lattice topology
+
+**Drift risks (consolidated, 7 items)**:
+
+1. **Asymmetric meet/join lookup** (Phase 4 risk #1, recurring): callers derive both fns from same relation
+2. **Whitman's W hypothesis non-vacuity**: `a ∧ b ≤ c ∨ d` may rarely fire on type lattice ground sublattice; /detailed surfaces honestly
+3. **Breadth perf at wider sample**: O(N^(k+1)). Cap sample size if needed; default k=4
+4. **Modular-distributive trivial-confirm**: when distributive confirms, modular auto-confirms; non-vacuity ratio distinguishes trivial vs genuine confirmation
+5. **Phase 6 size approaching 1h boundary**: ~200-300 LoC; sub-phase 6a/6b/6c fallback ready
+6. **/detailed proliferation**: only modular + Whitman's W warrant /detailed; breadth + sectional simple axiom-*
+7. **File-size watch**: sre-core.rkt at ~2000 lines after Phase 6 — sister concern, not blocker
 
 ### Phase 7: Generator extension — session domain
 
