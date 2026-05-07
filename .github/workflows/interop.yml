@@ -85,3 +85,6 @@ jobs:
 
       - name: Run abort test (Phase 10 — graceful op:abort teardown)
         run: cd racket/prologos && raco test tests/test-ocapn-abort.rkt
+
+      - name: Run desc:import-object test (Phase 37 — 5th refr kind cross-impl round-trip)
+        run: cd racket/prologos && raco test tests/test-ocapn-import-object-interop.rkt
