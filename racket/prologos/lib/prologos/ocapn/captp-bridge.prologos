@@ -73,6 +73,7 @@ defn incoming-captp-op
 ;; been emitted (the bridge is stateless).
 
 require [prologos::ocapn::promise :refer-all]
+        [prologos::ocapn::pipelining :refer [pipeline-deliver]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
         [prologos::data::list :refer [append cons nil]]
 
@@ -881,14 +882,41 @@ defn dispatch-deliver [tgt args ap v st]
           | some local -> deliver-with-fresh-pid tgt args local v st
           | none       -> deliver-allocate tgt args remote v st
 
+;; Phase 38: wire-level promise pipelining (responder side).
+;;
+;; Peer sent `<op:deliver <desc:answer N> args ...>` where N is one of
+;; THEIR question positions — i.e., a position WE recorded in our
+;; inbound `bs-questions` table when peer first asked us. They want
+;; us to chain `args` onto whatever the answer at N is:
+;;   - If N's local promise is unresolved, queue `args` on it (so
+;;     when we eventually resolve it, queued messages flow forward
+;;     to the resolution target via vat-side pipelining).
+;;   - If N has resolved to a registered actor, send `args` to it.
+;;   - If N is unknown / settled-with-non-actor, drop.
+;;
+;; `pipeline-deliver` (from prologos::ocapn::pipelining) implements
+;; the actor-vs-promise dispatch on the local id; the bridge's job is
+;; just the q-pos → local-id lookup.
+spec dispatch-pipeline-on-our-q Nat SyrupValue Vat BridgeState -> BridgeStep
+defn dispatch-pipeline-on-our-q [qpos args v st]
+  match [bs-lookup-question qpos st]
+    | none     -> bridge-step v st
+    | some pid -> bridge-step [pipeline-deliver pid args v] st
+
 ;; Phase 25 questioner-side: peer is replying to our outbound
 ;; question. Look up the local promise tied to our question-pos
 ;; in `bs-outbound-questions`; resolve it with the answer payload.
-;; Unknown qpos = no-op (drop the message).
+;;
+;; Phase 38 fall-through: if `qpos` is NOT in our outbound table,
+;; check the inbound table — peer might be pipelining onto a question
+;; THEY asked, not replying to one WE asked. Same wire shape, two
+;; semantics; the disambiguation is which table holds `qpos`. (No
+;; overlap: outbound q-pos ids are allocated by us, inbound by peer.)
+;; Unknown to both = drop.
 spec dispatch-incoming-answer Nat SyrupValue Vat BridgeState -> BridgeStep
 defn dispatch-incoming-answer [qpos args v st]
   match [bs-lookup-outbound-question qpos st]
-    | none      -> bridge-step v st
+    | none      -> dispatch-pipeline-on-our-q qpos args v st
     | some pid  -> bridge-step [resolve-promise pid args v] st
 
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep

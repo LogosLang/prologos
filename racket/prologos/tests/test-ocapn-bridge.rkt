@@ -49,6 +49,7 @@
 (imports (prologos::ocapn::captp-wire :refer-all))
 (imports (prologos::ocapn::syrup-wire :refer-all))
 (imports (prologos::ocapn::captp-bridge :refer-all))
+(imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 (imports (prologos::data::string :as str :refer ()))
@@ -1189,3 +1190,68 @@
                           empty-connection))
               (conn-aborted? (conn-step-state step))))")
    "false"))
+
+;; Phase 38: wire-level promise pipelining.
+;; Peer sends op:deliver-to-answer for an INBOUND q-pos (one of THEIR
+;; questions to us) — bridge queues the args on our local promise so
+;; vat-side pipelining can forward them when the promise resolves.
+
+(test-case "bridge/dispatch-pipeline-on-our-q queues args on inbound q-pos's promise"
+  ;; Setup: peer's q-pos=5 → our local pid=allocated. Pipeline dispatch
+  ;; should leave the promise unresolved with 1 queued message.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"book-room\")
+                          v0 st0))
+              (promise-queue-length pid (bridge-step-vat step))))")
+   "1N"))
+
+(test-case "bridge/dispatch-pipeline-on-our-q drops on unknown q-pos"
+  ;; q-pos=42 not in bs-questions and not in bs-outbound-questions → no-op.
+  ;; State unchanged: bs-questions still empty.
+  (check-contains
+   (run-last
+    "(eval (let (step (dispatch-pipeline-on-our-q
+                        (suc (suc (suc (suc zero))))
+                        (syrup-string \"orphan\")
+                        empty-vat bridge-state-empty))
+              (length (bs-questions (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "bridge/captp-incoming op-deliver-to-answer pipelines onto inbound q-pos"
+  ;; End-to-end: dispatch via the public captp-incoming-with-state.
+  ;; Peer's q-pos=8 is in our bs-questions; the answer-pos isn't in
+  ;; outbound-questions (we never asked anything). Bridge falls through
+  ;; from dispatch-incoming-answer → dispatch-pipeline-on-our-q → queues.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))) pid bridge-state-empty)
+                  step  (captp-incoming-with-state
+                          (op-deliver-to-answer
+                            (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            (syrup-string \"chained\"))
+                          v0 st0))
+              (promise-queue-length pid (bridge-step-vat step))))")
+   "1N"))
+
+(test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
+  ;; Regression: the Phase 25 reply-to-our-Q path still works after
+  ;; the Phase 38 fall-through was added. Same wire shape, opposite
+  ;; semantics — disambiguation is which table holds the q-pos.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
+                  pid  (conn-ask-pid ask)
+                  cs1  (conn-ask-state ask)
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"reply\")) cs1))
+              (lookup-promise pid (conn-vat (conn-step-state step)))))")
+   "pst-fulfilled"))
