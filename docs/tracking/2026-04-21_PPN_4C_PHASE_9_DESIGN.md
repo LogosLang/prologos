@@ -3049,6 +3049,30 @@ Per user direction: phase-specific questions deferred to mini-design at phase st
 
 ---
 
+## Cross-track inputs (running log)
+
+This section captures cross-track findings that surface during PPN 4C's in-flight work and warrant consideration in the addendum design.
+
+### From SRE Track 2I Phase 3+4 (2026-04-30)
+
+The empirical sweep of algebraic properties on the type lattice ([SRE Track 2I design](2026-04-30_SRE_TRACK2I_SD_CHECKS_DESIGN.md) § Phase 3 Findings) produced a finding directly relevant to PPN 4C's compound-cell architecture and cross-context type propagation:
+
+**The type lattice has structurally distinct sub-lattices with different algebraic postures**:
+- *Ground sublattice* (atoms only — no binders, no metas): distributive, Heyting (per Track 2H decl).
+- *Binder-included sublattice* (Pi/Sigma/lam types): SD but not distributive.
+
+**Implications for PPN 4C scope** (consideration only — surfaced for design dialogue, not pulled into scope yet):
+
+1. **Cross-context type propagation across binder boundaries** is a normal occurrence in elaboration. If we want propagators that exploit distributive-level optimizations (DNF canonicalization, Birkhoff representation, Heyting pseudo-complement) on ground-sublattice values, the dispatch needs scope-awareness — "this value is binder-typed, route through SD path; this value is ground, route through distributive/Heyting path."
+
+2. **Property registry granularity gap**: current registry has booleans per (domain, relation). Cannot express "true on sub-lattice A, false on sub-lattice B." Either extend the registry to scope-tagged values, or distribute scope-awareness into per-value-shape dispatch at use sites. The former centralizes the discipline; the latter distributes it.
+
+3. **Galois-bridge framing** (per SRE Lattice Lens question 4 + PTF §5.4): cross-domain bridges between sub-lattices at different algebraic levels are problematic — bridges compose well when both sides are at the same level. PPN 4C's compound-cell propagators that cross binder boundaries are exactly such cross-sub-lattice bridges. The Galois-connection view from Abstract Interpretation is the natural framing.
+
+4. **The ground-vs-binder distinction may generalize**: similar shape likely applies to session lattice (ground vs phantom-typed) and form lattice (ground form vs nested-pipeline). Worth checking before any cross-sub-lattice mechanism lands.
+
+**Status**: open consideration. May fold into existing Phase 1E (or sister phase) once PPN 4C's near-term scope settles, or may spawn a separate design cycle. Track 2I provides empirical validation of the F7 conjecture from Track 2H's design body; PPN 4C is the natural home for design work that responds to the validation.
+
 ## Document status
 
 **Stage 3 Design D.3** — scope revised per Phase 1A mini-design audit finding (2026-04-21). Next: Phase 1A-i implementation (dead-code cleanup, ~30-50 LoC). Phase 1A-ii (elaborator-network.rkt migration) gets its own mini-design audit at phase start per Stage 4 methodology.
