@@ -1243,6 +1243,60 @@
               (promise-queue-length pid (bridge-step-vat step))))")
    "1N"))
 
+;; Phase 39: questioner-side pipelining (sender).
+;; We previously asked a Q (got our q-pos = pid); now we send a follow-up
+;; chained onto that Q's eventual answer. Wire form: same as a reply
+;; (peer's bridge disambiguates by which table holds the q-pos).
+
+(test-case "bridge/connection-pipeline emits op:deliver with desc:answer target"
+  ;; The bytes should match outbound-deliver-bytes for the same
+  ;; (q-pos, args) — pipeline-send and reply use the same wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (pipe (connection-pipeline (suc (suc (suc zero)))
+                                              (syrup-string \"book-room\")
+                                              empty-connection))
+                (first-bytes-or-default \"NO-BYTES\" (conn-release-bytes pipe))))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (outbound-deliver-bytes (suc (suc (suc zero))) (syrup-string \"book-room\")))")))
+  (check-equal? got expected))
+
+(test-case "bridge/connection-pipeline does not mutate state"
+  ;; Pipeline emits bytes only; outbound-questions count unchanged.
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"q1\") empty-connection)
+                  cs1  (conn-ask-state ask)
+                  pipe (connection-pipeline (conn-ask-pid ask) (syrup-string \"chain\") cs1))
+              (length (bs-outbound-questions
+                        (conn-bridge-state (conn-release-state pipe))))))")
+   "1N"))
+
+(test-case "bridge/connection-pipeline is a no-op once aborted"
+  (check-contains
+   (run-last
+    "(eval (let (cs0   empty-connection
+                  step1 (connection-step (op-abort \"bye\") cs0)
+                  pipe  (connection-pipeline (suc zero) (syrup-string \"x\")
+                                              (conn-step-state step1)))
+              (length (conn-release-bytes pipe))))")
+   "0N"))
+
+(test-case "bridge/connection-ask + connection-pipeline composes (full sender flow)"
+  ;; Ask peer a Q (allocates pid + bytes for op:deliver), then pipeline
+  ;; a chain message onto that pid. Both byte-strings must be present
+  ;; and distinct shapes (one targets desc:export, one targets desc:answer).
+  (check-contains
+   (run-last
+    "(eval (let (ask  (connection-ask zero (syrup-string \"q1\") empty-connection)
+                  cs1  (conn-ask-state ask)
+                  pipe (connection-pipeline (conn-ask-pid ask) (syrup-string \"chain\") cs1))
+              (length (conn-release-bytes pipe))))")
+   "1N"))
+
 (test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
   ;; Regression: the Phase 25 reply-to-our-Q path still works after
   ;; the Phase 38 fall-through was added. Same wire shape, opposite

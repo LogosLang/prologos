@@ -1254,6 +1254,43 @@ defn release-import [export-pos cnt cs]
             let bytes := [gc-export-bytes export-pos cnt]
               conn-release cs' [cons bytes [nil String]]
 
+;; ===========================================================
+;; Phase 39: questioner-side promise pipelining (sender)
+;; ===========================================================
+;;
+;; Symmetric to Phase 38 (which handled inbound pipelined messages).
+;; Here WE pipeline a follow-up message onto a question we previously
+;; asked: target = our q-pos (which peer recorded in their answers
+;; table when we asked). The wire shape is identical to a reply:
+;;
+;;   <op:deliver <desc:answer our-q-pos> args false false>
+;;
+;; Disambiguation is on the receiving side (peer): if our-q-pos is in
+;; their inbound questions table (the Q WE asked them), this is a
+;; pipelined chain; their bridge looks up the local promise/actor and
+;; forwards/queues. Same wire shape as their reply path; their bridge's
+;; Phase 38 fall-through resolves the ambiguity.
+;;
+;; State: no allocation, no tracking change — peer queues on their
+;; side. We just emit bytes. Reuses ConnRelease as the (state, bytes)
+;; carrier; the type's name is overspecific to GC but the shape fits.
+;;
+;; Caller usage:
+;;   ask  = connection-ask tgt args cs0          ; allocate Q
+;;   write (conn-ask-bytes ask)                  ; send Q bytes
+;;   ;; ... later, before peer replies ...
+;;   pipe = connection-pipeline (conn-ask-pid ask) more-args (conn-ask-state ask)
+;;   write (conn-release-bytes pipe)             ; send pipelined bytes
+;;
+;; Aborted-aware: no-op (empty bytes) if connection already aborted.
+spec connection-pipeline Nat SyrupValue ConnectionState -> ConnRelease
+defn connection-pipeline [our-q-pos args cs]
+  match [conn-aborted? cs]
+    | true  -> conn-release cs [nil String]
+    | false ->
+        let bytes := [outbound-deliver-bytes our-q-pos args]
+          conn-release cs [cons bytes [nil String]]
+
 ;; The per-op aborted check. We use a Bool predicate via match
 ;; rather than a boolean op (Prologos doesn't expose a generic
 ;; `||`). Once aborted, every subsequent step is a no-op
