@@ -1343,7 +1343,7 @@
   (define got
     (extract-value-bytes
      (run-last
-      "(eval (forward-deliver-bytes (suc (suc zero)) (syrup-string \"book-room\")))")))
+      "(eval (forward-deliver-bytes \"desc:export\" (suc (suc zero)) (syrup-string \"book-room\")))")))
   ;; Build the expected shape via raw encode-record for byte equivalence.
   (define expected
     (extract-value-bytes
@@ -1472,6 +1472,67 @@
                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
               (length (vat-queue (pump-result-vat pr)))))")
    "0N"))
+
+;; Phase 44: chained-answer resolution. When promise resolves to
+;; <desc:answer M>, forwarding emits <op:deliver <desc:answer M> args
+;; false false> for queued msgs. Peer's bridge dispatches via their
+;; Phase 38 fall-through (they look up M in their bs-questions, route
+;; to peer's local promise tied to our outbound Q).
+
+(test-case "bridge/syrup-as-answer-target recognizes desc:answer"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc (suc (suc zero))))))) ))")
+   "5N"))
+
+(test-case "bridge/syrup-as-answer-target rejects desc:export"
+  (check-contains
+   (run-last
+    "(eval (syrup-as-answer-target (syrup-tagged \"desc:export\" (syrup-nat zero))))")
+   "none"))
+
+(test-case "bridge/forward-deliver-bytes builds desc:answer-targeted op:deliver"
+  ;; Same builder, different tag. Wire form for chained-answer forwarding.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (forward-deliver-bytes \"desc:answer\" (suc (suc zero)) (syrup-string \"chained-msg\")))")))
+  (define expected
+    (extract-value-bytes
+     (run-last
+      "(eval (encode-record \"op:deliver\"
+                  (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc zero))))
+                    (cons (syrup-string \"chained-msg\")
+                      (cons (syrup-bool false)
+                        (cons (syrup-bool false) nil))))))")))
+  (check-equal? got expected))
+
+(test-case "bridge/pump-outbound emits answer-targeted forwarding when promise resolves to desc:answer M"
+  ;; Setup: peer's q-pos=5 → local pid. Peer pipelines "chain" onto pid.
+  ;; Then resolve pid with <desc:answer 4>. Pump should emit:
+  ;;   (a) resolution bytes: <op:deliver <desc:answer 5> <desc:answer 4> false false>
+  ;;   (b) forwarding:        <op:deliver <desc:answer 4> "chain" false false>
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"chain\")
+                          v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:answer\"
+                            (syrup-nat (suc (suc (suc (suc zero))))))
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
 
 (test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
   ;; Regression: the Phase 25 reply-to-our-Q path still works after

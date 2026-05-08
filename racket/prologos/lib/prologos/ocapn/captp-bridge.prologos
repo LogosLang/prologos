@@ -1046,30 +1046,50 @@ defn syrup-as-export-target
         | true  -> tagged-payload-as-nat p
         | false -> [none Nat]
 
+;; Phase 44: same inspection for desc:answer chained-answer resolution.
+;; Returns Some M if shape is `<desc:answer M>`, else none.
+spec syrup-as-answer-target SyrupValue -> [Option Nat]
+defn syrup-as-answer-target
+  | syrup-null       -> [none Nat]
+  | syrup-bool _     -> [none Nat]
+  | syrup-nat _      -> [none Nat]
+  | syrup-int _      -> [none Nat]
+  | syrup-string _   -> [none Nat]
+  | syrup-symbol _   -> [none Nat]
+  | syrup-list _     -> [none Nat]
+  | syrup-refr _     -> [none Nat]
+  | syrup-bytes _    -> [none Nat]
+  | syrup-promise _  -> [none Nat]
+  | syrup-tagged tag p ->
+      match [str::eq tag "desc:answer"]
+        | true  -> tagged-payload-as-nat p
+        | false -> [none Nat]
+
 ;; Build the wire bytes for a forwarded op:deliver:
-;;   <op:deliver <desc:export K> args false false>
-;; K is the peer-export-id our promise resolved to; we pipe the
-;; queued args through to peer.
-spec forward-deliver-bytes Nat SyrupValue -> String
-defn forward-deliver-bytes [target-export args]
+;;   <op:deliver <TAG target> args false false>
+;; where TAG is "desc:export" (Phase 41 — peer's export) or
+;; "desc:answer" (Phase 44 — chained answer at peer's bs-questions).
+;; Caller picks the tag based on the resolution-value shape.
+spec forward-deliver-bytes String Nat SyrupValue -> String
+defn forward-deliver-bytes [tag target args]
   wire::encode-record "op:deliver"
-    [cons [syrup-tagged "desc:export" [syrup-nat target-export]]
+    [cons [syrup-tagged tag [syrup-nat target]]
       [cons args
         [cons [syrup-bool false]
           [cons [syrup-bool false] nil]]]]
 
 ;; Walk pipelined-msgs; for each entry whose pid matches `pid`, emit
-;; forwarding bytes targeting `target-export`. Entries with mismatched
+;; forwarding bytes targeting (TAG, target). Entries with mismatched
 ;; pid are ignored (they'll be handled when their own promise resolves
 ;; on a future pump). Result is built head-first (most-recent first);
 ;; caller appends/prepends as appropriate.
-spec forward-bytes-loop Nat Nat [List PipeMsg] [List String] -> [List String]
+spec forward-bytes-loop String Nat Nat [List PipeMsg] [List String] -> [List String]
 defn forward-bytes-loop
-  | _   _      nil                          accum -> accum
-  | pid target [cons [pipe-msg p args] rest] accum ->
+  | _   _   _      nil                          accum -> accum
+  | tag pid target [cons [pipe-msg p args] rest] accum ->
       match [nat-eq? p pid]
-        | true  -> forward-bytes-loop pid target rest [cons [forward-deliver-bytes target args] accum]
-        | false -> forward-bytes-loop pid target rest accum
+        | true  -> forward-bytes-loop tag pid target rest [cons [forward-deliver-bytes tag target args] accum]
+        | false -> forward-bytes-loop tag pid target rest accum
 
 ;; ===========================================================
 ;; Phase 42: local-actor forwarding
@@ -1111,22 +1131,43 @@ spec fwd-effect-bytes ForwardEffect -> List String
 defn fwd-effect-bytes
   | forward-effect _ bs -> bs
 
-;; Innermost helper: K is the export target. Discriminate local-actor
-;; vs peer-export via lookup-actor. Bottom of the helper chain that
-;; sidesteps pitfall #18's 3-deep nested match.
+;; Innermost helper for desc:export: K is the export target.
+;; Discriminate local-actor (Phase 42) vs peer-export (Phase 41) via
+;; lookup-actor. Bottom of the helper chain that sidesteps pitfall #18's
+;; 3-deep nested match.
 spec dispatch-export-target Nat Nat [List PipeMsg] Vat -> ForwardEffect
 defn dispatch-export-target [pid k pms v]
   match [lookup-actor k v]
     | some _ -> [forward-effect [deliver-locally-loop pid k pms v] [nil String]]
-    | none   -> [forward-effect v [forward-bytes-loop pid k pms [nil String]]]
+    | none   -> [forward-effect v [forward-bytes-loop "desc:export" pid k pms [nil String]]]
 
-;; Middle helper: V is the resolution-value SyrupValue. If shape is
-;; `<desc:export K>`, dispatch on K; otherwise no effect.
+;; Phase 44: chained-answer dispatch. Resolution to `<desc:answer M>`
+;; means "the result is whatever lives at our outbound-question M (or
+;; will live there when peer answers)." Forwarding via wire as
+;; `<op:deliver <desc:answer M> args false false>` works: peer decodes
+;; the desc:answer target, falls through their dispatch-incoming-answer
+;; → dispatch-pipeline-on-our-q (Phase 38), looks up M in peer's
+;; bs-questions (= peer's local promise tied to our outbound Q), and
+;; queues the args there. The pipelining loop continues across the
+;; chain. No local re-binding needed.
+;;
+;; This is purely wire-side; the local-actor case doesn't apply to
+;; desc:answer (an answer-target isn't a local actor).
+spec dispatch-answer-target Nat Nat [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-answer-target [pid m pms v]
+  [forward-effect v [forward-bytes-loop "desc:answer" pid m pms [nil String]]]
+
+;; Middle helper: V is the resolution-value SyrupValue. Try
+;; desc:export first (most common); fall through to desc:answer
+;; (chained); else no effect. Two-deep match (sidesteps pitfall #18).
 spec dispatch-resolution-value Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
 defn dispatch-resolution-value [pid V pms v]
   match [syrup-as-export-target V]
-    | none   -> [forward-effect v [nil String]]
     | some k -> dispatch-export-target pid k pms v
+    | none ->
+        match [syrup-as-answer-target V]
+          | some m -> dispatch-answer-target pid m pms v
+          | none   -> [forward-effect v [nil String]]
 
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
 ;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect
