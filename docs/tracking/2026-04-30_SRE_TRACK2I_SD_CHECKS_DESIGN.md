@@ -1234,6 +1234,61 @@ For each candidate congruence θ, verify: `(a θ b) ∧ (c θ d) ⇒ (a∧c) θ 
 
 **Honest scope**: targeted tests can confirm specific congruences but cannot characterize Con(L) fully. Subdirectly-irreducible characterization (the classical use of Con(L)) requires checking that the ONLY non-trivial congruences are exactly the candidates we test — a stronger claim Phase 14 cannot make.
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**Q1 — Candidate set**: 4 candidates: `trivial`, `total` (sanity / framework-wiring confirmation; both vacuous-by-construction); `mult-forgetful` (type-domain-only — strips ALL multiplicity from Pi/Sigma/lam binders); `erasure-equivalence` (type-domain-only — strips ONLY m0-typed components per QTT erasure semantics; distinct from mult-forgetful which strips ALL mult).
+
+**Q2 — Canonical-form-projection DROPPED + sister concern recorded**: as originally proposed in the design doc, "canonical-form-projection" would be degenerate given our merge architecture (merge already produces canonical representatives via ACI + subtype absorption + dedup; canonical-form equivalence = identity = trivial). Phase 14 drops this candidate.
+
+**Sister concern — "merge-as-canonical-form" structural-optimality claim** (recorded for Phase 10 Nation report update, NOT new Phase 14 content): the substantive claim Nation discussed in the prior meeting is that **our merge IS the canonical-form witness emerging from the lattice structure** — the algebraic axioms (ACI + subtype absorption) DETERMINE the canonical representative; we don't compute it algorithmically and impose it. This matches Nation's lattice-theoretic canonical form (Whitman/Freese-Nation 1.17, Reading-Speyer-Thomas FTFSDL) framing. The Phase 10 Nation report should add a "merge-as-canonical-form" subsection capturing this structural-optimality claim.
+
+**Q3 — Sweep scope**: ALL 10 (domain, relation, depth) tuples for trivial + total (always applicable); type-domain-only for mult-forgetful + erasure-equiv. Non-type tuples for mult-forgetful + erasure return `axiom-untested` with reason `'congruence-not-applicable-to-domain`.
+
+**Q4 — Phase structure**: single phase per Phase 11+12+13 precedent.
+
+**Q5 — Time-budget pragma + ground-only sweep**: per user 2026-05-08, presentation time-crunch precludes full wider-sample sweep. **Ground-only sweep across all domains × all 4 candidates (~5 min wall).** Honest scope-bound flagged in findings: at ground sublattice (atomic sample, no Pi/Sigma/lam compounds), mult-forgetful and erasure-equivalence both DEGENERATE to trivial congruence (no binders to strip) → vacuously confirm with NO empirical content. **Framework-wiring + sanity confirmation only**; empirical content for mult-forgetful + erasure-equiv on type-domain wider sample deferred to post-meeting follow-up. Will opportunistically run small wider sample (per-ctor-count=1, ~30 samples, ~4 min) for type×{eq,sub} × {mult-forgetful, erasure-equiv} if time permits at phase close.
+
+**`/detailed` decomposition** (per Phase 11+13 Completeness-Over-Deferral):
+- `total-checked` — total `(a, b, c, d)` 4-tuples enumerated
+- `hypothesis-fired` — 4-tuples where `a ~ b ∧ c ~ d` (non-vacuous antecedent)
+- `conclusion-held` — 4-tuples where additionally `(a∧c) ~ (b∧d) ∧ (a∨c) ~ (b∨d)`
+- `witness` — `(a, b, c, d)` on refute
+
+**Implementation plan**:
+
+1. **Code** (~120-150 LoC sre-core.rkt):
+   - `congruence-evidence` 5-field struct
+   - `test-congruence-axiom domain samples meet-fn join-fn equiv-fn` — generic O(N⁴) check
+   - Wrapper functions per candidate that supply equiv-fn
+   - `mult-forgetful-equiv?` + helper `forget-mult-norm` (recursive type normalization)
+   - `erasure-equiv?` + helper `m0-erasure-norm` (recursive m0-stripping normalization)
+   - Wire into `infer-domain-properties` (`props-18..21`) + `resolve-and-report-properties` evidence map
+   - Add 4 properties to `all-sweep-properties`
+   - Sweep dispatch + extract-detailed-fields (both copies per Phase 11 lesson)
+
+2. **Tests** (~30 LoC).
+
+3. **Sweep run** (~5 min wall ground-only across all domains).
+
+4. **Report integration**: append to design doc § Phase 9 Findings + Nation report (with honest scope acknowledgment of ground-sublattice vacuity for type-domain candidates).
+
+**Adversarial pass surfaced**:
+- P-lens: same off-network sample-iteration scaffolding lineage. No new debt. Per-candidate domain-applicability is honest decomplection.
+- R-lens: 7 wire sites + 2 normalization helpers; existing pattern from Phase 11+12+13.
+- M-lens: O(N⁴) is step-think; same lineage as Phase 6 Whitman's W. Honest scaffolding.
+- S-lens: Q1 VALUE; Q3 bridges to congruence-quotient lattice (not implemented; honest gap); Q6 Hasse not exploited (sister concern).
+
+**No forward implication rule** added (matches Phase 12+13 sample-unsound discipline). Subdirectly-irreducible characterization — classical Nation territory — explicitly NOT claimed; Phase 14 cannot soundly make it.
+
+**Drift risks (7 named)**:
+1. Mult-forgetful + erasure-equiv applicability gating: type-domain-only; non-type tuples `axiom-untested` with reason `'congruence-not-applicable-to-domain`.
+2. Trivial/total clearly labeled "framework-wiring sanity check, not empirical content".
+3. **Ground-sublattice vacuity for mult-forgetful + erasure-equiv**: atomic sample has no binders → both degenerate to identity → vacuously confirm. Honestly flagged in findings.
+4. No forward implication rule (matches Phase 12+13 sample-unsound discipline).
+5. Both `extract-detailed-fields` copies (Phase 11 lesson): atomic update mandatory.
+6. Phase 13 type-domain sweep still running concurrently — single-CPU contention possible. Phase 14 sweep can wait if needed.
+7. Phase 10 Nation report "merge-as-canonical-form" subsection — separate task, recorded as Phase 14 sister concern; integrates at Nation report update post-Phase-13.
+
 ### Phase 15: Day's doubling / inflation detection
 
 **Scope** (high-level):
