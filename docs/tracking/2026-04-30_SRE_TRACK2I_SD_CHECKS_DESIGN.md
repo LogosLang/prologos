@@ -914,7 +914,69 @@ New Stage 0/1 research note `docs/research/YYYY-MM-DD_PROLOGOS_LATTICE_VARIETY_C
 
 **Tone**: report what we have, not pedagogy. Nation has full theoretic background; the value is empirical characterization of our system.
 
-**Estimated scope**: ~500-1000 lines markdown.
+**Estimated scope**: ~500-1000 lines markdown. **Refined to 400-600 lines** post-mini-design (terser; in-person meeting context).
+
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**Audience-specific calibration** (per user direction from prior in-person Nation meetings):
+- Nation oriented immediately to dependent types when described as **Pi/Sigma ↔ universal/existential quantification** — Phase 10 will use this framing.
+- Nation is **expert on Free Lattices but NOT on quantales** — referred user to colleagues for quantale follow-up. Phase 10 should AVOID heavy quantale framing; if mentioned, frame as "open territory we're exploring; Nation's referrals to colleagues remain valid."
+- Meeting is **in person** — terser is better. Doc supports the conversation; doesn't replace it.
+
+**Q1 — Document structure**: option **(b)**. Main markdown doc + raw findings appendix files (already captured at `docs/tracking/2026-04-30_SRE_TRACK2I_PHASE9_FINDINGS_RAW/`). Main doc compact for reading; raw data preserved.
+
+**Q2 — Pedagogy level**: option **(b)** brief Prologos-vocabulary orientation only (1 paragraph). Nation knows lattice theory; he doesn't know our specific abstractions ("domain", "relation", "meet-registry", "ctor-desc"). Brief mapping helps him read the rest.
+
+**Q3 — Witness rendering**: option **(c)** — show smallest representative; reference appendix for full. Pi-typed witnesses get a **brief dependent-types reminder** (Pi ↔ universal quantifier; Sigma ↔ existential) — Nation oriented to this in past meetings, but reminder helps.
+
+**Q4 — Diagrams**: option **(c)** Mermaid. Variety-hierarchy diagram with our domain placements highlighted; binder-boundary asymmetry diagram (equality preserves modularity; subtype refutes). Renderable in github markdown directly.
+
+**Q5 — Open-questions framing**: option **(b)** conversation-starter format. "We observed X. Two hypotheses: Y or Z. Which matches lattice-theoretic intuition?"
+
+**Q6 — Prologos-roadmap connection**: option **(a)** zero internal-roadmap context. If anything mentioned, frame as **lattice-theoretics of interest** (e.g., "how does this finding inform what canonical-form algorithm applies?" — not "this informs PPN 4C Phase X"). Quantale connections specifically deemphasized (Nation's expertise gap; his colleagues are the right audience for quantale-flavored follow-up).
+
+**Q7 — Format**: markdown primary at `docs/research/2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md`. **PDF render** as secondary deliverable for the meeting (post-process via pandoc or similar; can include rendered Mermaid diagrams).
+
+**Q8 — Order**: option **(a)** top-down — variety-placement matrix → per-domain narrative → open questions.
+
+**Q9 — Length**: 400-600 lines markdown. Terse for in-person meeting context.
+
+**Q10 — Lead with**: option **(a)** Whitman's W ✓ across all 10 (domain × relation × depth) combinations. Direct application of Nation's own Theorem 5.55/6.9. Strongest unified empirical claim. Sets up the per-domain refinements.
+
+**Honest scope acknowledgments** (P-lens):
+- Empirical sample-set claim, not constructive proof. Section will explicitly say: "We observed Whitman's W holds on all sampled triples (n³ at depth-0; n⁴ at depth-1) — sample-set-sensitive empirical evidence. Hypothesis non-vacuity ratios (83-99% on type, 92-100% on others) suggest the observation isn't vacuous, but constructive proof remains open."
+- Stone identity universally refutes — honest negative finding; doesn't reach for higher hierarchy levels.
+- Breadth bound exceeded at wider samples for most domains — honest about parallel-decomposition implications.
+
+**Drift risks (mid-flight checkpoints)**:
+1. **Padding / pedagogy creep** — most common synthesis-doc failure mode
+2. **Witness verbosity** — surveillance for unreadable 50-element unions; truncate per Q3 (c)
+3. **Over-claiming on small samples** — N=6 ground exhaustive but limited
+4. **Implementation digressions** — Nation doesn't need Racket struct shapes
+5. **Prologos-internal vocabulary leakage** — clarify once, don't re-explain
+6. **Forgetting open-questions are CONVERSATION starters** (not assertions)
+7. **Citation discipline** — Freese-Ježek-Nation 1995 + theorem numbers properly cited; Adaricheva-Gorbunov-Tumanov 2003; Reading-Speyer-Thomas 2019
+8. **Quantale over-framing** — Q6 refinement: deemphasize, don't dominate; Nation's not the right audience for deep quantale follow-up
+9. **Scope creep into deeper internal report** — that's a follow-on (see § Follow-on tracks below); Phase 10 is THE EXTERNAL doc only
+
+**Adversarial CRITIQUE pass** (P/R/M/S two-column):
+
+| Lens | Catalogue | **Challenge** |
+|---|---|---|
+| **P** | ✓ Compact synthesis (Q9); audience-specific calibration (no quantale-overload per Q6 refinement); raw appendix preserves data (Q1) | **Are we honest about empirical-vs-constructive scope?** Yes — explicit "sample-set-sensitive" caveat in lead. **Are we resisting Prologos-internal-roadmap padding?** Yes — Q6 lock. |
+| **R** | ✓ All findings already captured in Phase 9 raw files; design-doc § Phase 9 Findings has interpretive matrix | None new |
+| **M** | N/A — synthesis doc, not propagator-network design | — |
+| **S (SRE Lattice Lens)** | ✓ Variety-placement is Q1 (lattice classification at PTF hierarchy levels). Witnesses cite specific lattice elements. References cite canonical lattice-theory papers. | **Q6 (Hasse adjacency) — does report exploit it?** Indirectly via breadth-bound discussion. Could include a Hasse-diagram-implication paragraph but probably overkill given length budget. |
+
+VAG-projected: passes adversarially. Quantale-deemphasize is the biggest specific design adjustment from prior assumptions.
+
+#### Follow-on tracks (NOT Phase 10 scope)
+
+User-flagged 2026-05-08 mini-design dialogue:
+
+1. **Web-app interactive network topology** — small interactive demo capturing a representative network with cells, propagators, strata, color-coded for in-person exploration with Nation. Secondary to Phase 10 report. Captured here so the interest doesn't get lost; will return after Phase 10 commits.
+
+2. **Deeper internal lattice-variety report** — complementary doc with deeper explanations, full witness rendering, deeper Prologos-roadmap connections, quantale framing for our own architecture-team audience. Sister of Phase 10 but for INTERNAL use; Phase 10 is the EXTERNAL/Nation-facing version. Captured here; pickup after Phase 10 lands.
 
 ### Phase T: Dedicated test file
 
