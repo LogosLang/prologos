@@ -132,6 +132,51 @@ defn drive-handshake-q-and-pipeline [our-ver our-loc q-bytes pipe-bytes]
           | none -> ""
           | some op2 -> drive-handshake-with-two-ops our-ver our-loc op1 op2
 
+;; ===========================================================
+;; Phase 49: break-forwarding cross-impl driver
+;; ===========================================================
+;;
+;; Drive the bridge with TWO sequential inbound ops, then BREAK the
+;; local promise tied to peer's q-pos, then pump. This exercises
+;; Phase 17 (broken resolution) + Phase 45 (break-forwarding) in
+;; the wire-out path: peer sees the broken-promise reply at peer's
+;; q-pos AND error-answer bytes for each queued msg with ap=some.
+;;
+;; q-pos is hardcoded to 7 (suc^7 zero) — matches the Node-side
+;; ANSWER_POS in peer-break-forwarding.mjs. Generalising to a
+;; parameter would require process-string to pass a Nat through,
+;; which is awkward; the cross-impl peer test fixes the q-pos so a
+;; constant on the Prologos side is symmetric.
+;;
+;; Skips drain so the actor's resolve-promise effect doesn't fire —
+;; the promise stays pst-unresolved through dispatch, then break
+;; transitions it to pst-broken. Skipping drain is the only mechanism
+;; available without adding a "breaker" actor; resolve/break are
+;; monotone (vat.prologos:289+) so a post-drain break would no-op.
+
+def q-pos-7 : Nat := [suc [suc [suc [suc [suc [suc [suc zero]]]]]]]
+
+spec drive-break-with-two-ops String String CapTPOp CapTPOp String -> String
+defn drive-break-with-two-ops [our-ver our-loc op1 op2 reason]
+  let sa := [vat-spawn-actor beh-echo syrup-null empty-vat]
+    let step1 := [captp-incoming-with-state op1 [alloc-vat sa] [bridge-state-with-our-session our-ver our-loc]]
+      let step2 := [captp-incoming-with-state op2 [bridge-step-vat step1] [bridge-step-state step1]]
+        match [bs-lookup-question q-pos-7 [bridge-step-state step2]]
+          | none -> ""
+          | some pid ->
+              let v3 := [break-promise pid [syrup-string reason] [bridge-step-vat step2]]
+                let pr := [pump-outbound v3 [bridge-step-state step2] [nil Nat]]
+                  [framed-concat [pump-result-bytes pr]]
+
+spec drive-handshake-break-q-and-pipeline String String String String String -> String
+defn drive-handshake-break-q-and-pipeline [our-ver our-loc q-bytes pipe-bytes reason]
+  match [decode-op q-bytes]
+    | none -> ""
+    | some op1 ->
+        match [decode-op pipe-bytes]
+          | none -> ""
+          | some op2 -> drive-break-with-two-ops our-ver our-loc op1 op2 reason
+
 ;; Phase 34f helpers — defined bottom-up (callees first).
 
 ;; Take a ConnectionState, pump's already-emitted bytes, plus a

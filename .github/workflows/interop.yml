@@ -94,3 +94,6 @@ jobs:
 
       - name: Run pipeline-forwarding test (Phase 43 — wire-out closure cross-impl)
         run: cd racket/prologos && raco test tests/test-ocapn-pipeline-forwarding-interop.rkt
+
+      - name: Run break + plain-value test (Phase 49 — break-forwarding + plain-value-as-error cross-impl)
+        run: cd racket/prologos && raco test tests/test-ocapn-break-plain-interop.rkt
