@@ -39,7 +39,12 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 7 | Generator extension: session domain | ✅ | _Sub-phased 7a (session-meet-registry) + 7b (generator cross-domain-atoms) + 7c (session sweep tests)._ Surfaced + fixed pre-existing duplicate-registration bug: `phase1d-registrations.rkt` was overwriting session-sre-domain registration WITHOUT meet-registry. Fix replaces register/minimal call with explicit make-sre-domain that includes meet-registry per Phase 3c pattern. Generator API extended with `#:cross-domain-atoms` (caller-supplied per Decomplection + anti-Scaffolding-Hides-Truth). Targeted suite GREEN: 140 tests / 4.6s. 6 new Phase 7 test-cases. |
 | 8 | Form-cell + spec-cell domain meet definition + empirical sweep | ✅ | _Sub-phased 8a (form-pipeline-meet) + 8b (atoms) + 8c (form sweep + tests) + 8d (spec-cell mirror)._ Phase 8 differs structurally — form-cell has NO ctor-descs (Pocket Universe wrapper). **5th Scaffolding-Hides-Truth corrected**: form-cells.rkt:508 declared `'has-meet prop-confirmed` without an actual meet function. Phase 8a defines `form-pipeline-meet`; 8d defines `spec-cell-meet-fn`. API extended with `#:include-bot-top` (form-cell top defaults #f → breaks merge contract). 13 new tests. Targeted suite GREEN: 153 tests / 4.5s. |
 | 9 | Comprehensive sweep + findings synthesis | ✅ | _Sub-phased 9a (commits `8639c820` mini-design + `8d3257e7` code) + 9b (sweep run 2026-05-07 + findings persistence pending commit)._ 110 findings (10 (domain, relation, depth) tuples × 11 properties) captured via 4 concurrent per-domain sweep processes with `tools/run-phase9-sweep.rkt`. Wall time: ~34 min (type domain dominated; per-relation parallelization for type halved time vs sequential). **Comprehensive variety-placement matrix populated in § Phase 9 Findings**. **Headline findings**: (1) Whitman's W ✓ for all 10 — every Prologos lattice is FL-embeddable per Nation Theorem 5.55/6.9; (2) type×equality AND type×subtype both reach Heyting on ground sublattice (Phase 5a prediction validated comprehensively); (3) asymmetry between equality and subtype at binder boundary — equality preserves modularity, subtype refutes; (4) Stone identity refutes universally — no Prologos lattice reaches Stone-algebra level. No 6th Scaffolding-Hides-Truth instance surfaced. Adversarial VAG passed. |
-| 10 | Lattice Variety Report (presentation document) | ✅ | Stage 0/1 research note `docs/research/2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md` (272 lines, terser than original 400-600 target — appropriate for in-person meeting context). Headline: Whitman's W ✓ across all 10 (Nation Theorem 5.55/6.9). Per-domain narrative includes equality-vs-subtype binder-boundary asymmetry (NEW finding) + Mermaid diagrams. 6 open questions framed as conversation starters with Nation. Quantale framing deemphasized per audience-specific calibration (Nation's expertise gap; referred to colleagues). Cross-linked from PTF master Research Documents table (entry 4). Adversarial VAG passed at phase close. PDF render is post-process step for the meeting (markdown is canonical artifact). |
+| 10 | Lattice Variety Report (presentation document) | ✅ | Stage 0/1 research note `docs/research/2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md` (272 lines, terser than original 400-600 target — appropriate for in-person meeting context). Headline: Whitman's W ✓ across all 10 (Nation Theorem 5.55/6.9). Per-domain narrative includes equality-vs-subtype binder-boundary asymmetry (NEW finding) + Mermaid diagrams. 6 open questions framed as conversation starters with Nation. Quantale framing deemphasized per audience-specific calibration (Nation's expertise gap; referred to colleagues). Cross-linked from PTF master Research Documents table (entry 4). Adversarial VAG passed at phase close. **Track 2I "first-close" at this phase**; reopened 2026-05-08 per user direction to address gap-closure (Phases 11-15) — the report's "What we did not measure" section was too interesting to leave. Report will be updated in-place (Q-C lock 2026-05-08) once Phases 11-15 land. PDF render for the meeting is post-process step. |
+| 11 | `has-complement` empirical check (Boolean placement) | ⬜ | Per-element search: ∃x with a∧x=⊥ AND a∨x=⊤. O(N³) total. Closes Boolean column of variety-placement matrix (currently uniformly "—"). For type×{eq,sub}×ground (Heyting-confirmed), gives definitive Boolean placement. Implication-rule extension: `heyting + has-complement ⇒ boolean`. Tier 1 of gap-closure. |
+| 12 | M3 / N5 sublattice detection (Birkhoff theorem) | ⬜ | Enumerate 5-element subsets; check order-isomorphism to M3 (diamond) or N5 (pentagon). Birkhoff: distributive ⇔ no-M3 AND no-N5. Concrete WITNESS for distributivity refutation in lattice-theoretic vocabulary Nation immediately recognizes. Tier 1. |
+| 13 | Convex geometry / anti-exchange characterization | ⬜ | For SD-confirmed domains, dualize via Adaricheva-Gorbunov-Tumanov 2003 (recommended in Nation's lattice notes). Test anti-exchange property on closure operator (downward closure on join-irreducibles, canonical choice). Yields dual structural view of SD lattices. Tier 2. |
+| 14 | Targeted congruence tests | ⬜ | Full Con(L) is O(2^N) — explosive. Restricted: test specific candidate congruences (kernel of multiplicity-forgetful map; canonical-form projection). O(N²) per candidate. Subdirectly-irreducible characterization (classical Nation territory). Tier 3. |
+| 15 | Day's doubling / inflation detection | ⬜ | Test for interval-doubling structure per Adaricheva-Nation 2017. Most speculative (testing whether lattice ADMITS doubling vs WAS constructed via doubling). Higher implementation complexity. Tier 3. |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ✅ | Realized early during Phase 3 (file created in commit `bd1179b1` to keep test-sre-algebraic.rkt fast under shared-fixture sweep). Phase 4 added 11 callsite updates + memq→check-not-false hygiene. Tests run in 0.28s at depth-0; cover sweep mechanism + ground-sublattice load-bearing assertions. Phases 5-9 will extend with new property-check tests as each lands. |
 | Discussion (deprecated) | — | — | Discussion-phase scope folded into Phase 10's Lattice Variety Report. Findings + considerations from § Phase 3 Findings already captured + cross-linked. |
 
@@ -977,6 +982,99 @@ User-flagged 2026-05-08 mini-design dialogue:
 1. **Web-app interactive network topology** — small interactive demo capturing a representative network with cells, propagators, strata, color-coded for in-person exploration with Nation. Secondary to Phase 10 report. Captured here so the interest doesn't get lost; will return after Phase 10 commits.
 
 2. **Deeper internal lattice-variety report** — complementary doc with deeper explanations, full witness rendering, deeper Prologos-roadmap connections, quantale framing for our own architecture-team audience. Sister of Phase 10 but for INTERNAL use; Phase 10 is the EXTERNAL/Nation-facing version. Captured here; pickup after Phase 10 lands.
+
+### Phase 11: `has-complement` empirical check (Boolean placement)
+
+**Scope** (high-level; full mini-design + mini-audit when phase opens):
+
+Add `test-has-complement` to `sre-core.rkt`. For each element `a`, search the sample set for `x` such that `a ∧ x = ⊥` AND `a ∨ x = ⊤`. If found for every `a`, confirm; otherwise refute with witness atom (the element that has no complement).
+
+**Property registry**: `'has-complement` (the existing implication-rule already references this — it's been a source-not-yet-tested placeholder). Implication chain `heyting + has-complement ⇒ boolean` already in `standard-implication-rules`.
+
+**Sweep integration**: extend `all-sweep-properties` with `'has-complement`. Variety-placement-summary's Boolean column becomes empirically populated (currently uniformly "—").
+
+**Estimated scope**: ~30 LoC in sre-core.rkt + ~10 LoC sweep-dispatch. Tests + sweep run.
+
+### Phase 12: M3 / N5 sublattice detection (Birkhoff's forbidden-sublattice theorem)
+
+**Scope** (high-level):
+
+Add `test-no-m3-sublattice` and `test-no-n5-sublattice` to `sre-core.rkt`. Enumerate 5-element subsets of the sample. For each, check order-isomorphism to:
+- **M3** (the diamond): a 5-element lattice with `⊥, ⊤` and three pairwise-incomparable middle elements `a, b, c` with `a ∨ b = a ∨ c = b ∨ c = ⊤` and `a ∧ b = a ∧ c = b ∧ c = ⊥`.
+- **N5** (the pentagon): a 5-element non-modular lattice with `⊥, ⊤, a, b, c` satisfying `b ≤ a`, `c` incomparable with both, `a ∨ c = b ∨ c = ⊤`, `a ∧ c = b ∧ c = ⊥`.
+
+Refutation witness: the 5-element subset that IS isomorphic to M3 or N5. Concrete, lattice-theoretic vocabulary Nation immediately recognizes.
+
+**Birkhoff's theorem** (Theorem 9.2): a lattice is distributive iff it contains neither M3 nor N5 as a sublattice. Phase 12 is the empirical sublattice-detection counterpart.
+
+**Property registry**: `'no-m3-sublattice`, `'no-n5-sublattice`. Implication: `no-m3 + no-n5 ⇒ distributive` (forward; on finite samples). Inverse `distributive ⇒ no-m3 + no-n5` is the classical theorem.
+
+**Cost**: O(C(N, 5)) per check. For type wider (N=58): C(58, 5) = 4.5M subsets. Per-subset isomorphism check is O(constant) (just compare order structure). Estimated 5-15 min on type wider.
+
+**Estimated scope**: ~80 LoC in sre-core.rkt (M3/N5 fixtures + isomorphism check) + ~15 LoC sweep-dispatch + tests.
+
+### Phase 13: Convex geometry / anti-exchange characterization
+
+**Scope** (high-level):
+
+For SD-confirmed domains, the Adaricheva-Gorbunov-Tumanov 2003 theorem says: the dual lattice corresponds to a convex geometry (anti-exchange closure operator) iff the lattice is finite join-semidistributive. We test the anti-exchange property empirically on the canonical closure operator: downward closure on join-irreducibles.
+
+For a lattice L with join-irreducibles `J(L)`:
+- Define `cl(A) = {x ∈ J(L) : x ≤ ⋁A}` (downward closure)
+- Anti-exchange: for distinct `x, y ∉ cl(A)`, `y ∈ cl(A ∪ {x})` ⇒ `x ∉ cl(A ∪ {y})`
+
+Implementation:
+1. Enumerate join-irreducibles of the sample (elements not expressible as join of strictly-smaller elements)
+2. For each subset A and each pair (x, y) of non-members, check anti-exchange
+3. Confirm if all (A, x, y) pairs satisfy; refute with witness
+
+**Property registry**: `'anti-exchange-on-J(L)` (or `'convex-geometry-dual`). Implication: AGT 2003 is *iff* — `sd-vee-and-sd-wedge ⇔ anti-exchange-on-J(L)` (in finite case).
+
+**Cost**: depends on J(L) size; worst-case O(2^|J(L)|) for subset enumeration. For our domain samples typically |J(L)| ≪ N, so cost is bounded.
+
+**Estimated scope**: ~100 LoC (join-irreducibles enumeration + closure operator + anti-exchange check) + tests + sweep.
+
+**Why this matters for Nation**: AGT 2003 is *recommended in his lattice notes companion*. The duality between SD lattices and convex geometries is a key bridge to combinatorial-geometry literature. Confirming our SD lattices yield anti-exchange closure operators substantively connects our system to convex-geometry research.
+
+### Phase 14: Targeted congruence tests
+
+**Scope** (high-level):
+
+Full Con(L) characterization is O(2^N) — explosive on wider samples. Phase 14 tests **specific candidate congruences** rather than enumerating all:
+
+1. **Kernel of multiplicity-forgetful map** for type domain: equate types differing only in QTT multiplicity. Check meet/join compatibility.
+2. **Canonical-form projection**: equate types that have the same canonical form (after ACI normalization, subtype absorption, etc.). Check meet/join compatibility.
+3. **Trivial / total** as sanity: confirm both endpoints of Con(L) are present.
+
+For each candidate congruence θ, verify: `(a θ b) ∧ (c θ d) ⇒ (a∧c) θ (b∧d)` AND `(a∨c) θ (b∨d)`.
+
+**Property registry**: per-candidate symbols (`'mult-forgetful-congruence-valid`, `'canonical-form-congruence-valid`).
+
+**Cost**: O(N²) per candidate × number of candidates. Tractable.
+
+**Estimated scope**: ~60 LoC per candidate + ~30 LoC infrastructure. Tests + sweep.
+
+**Honest scope**: targeted tests can confirm specific congruences but cannot characterize Con(L) fully. Subdirectly-irreducible characterization (the classical use of Con(L)) requires checking that the ONLY non-trivial congruences are exactly the candidates we test — a stronger claim Phase 14 cannot make.
+
+### Phase 15: Day's doubling / inflation detection
+
+**Scope** (high-level):
+
+Adaricheva-Nation 2017 ("Inflation of finite lattices along all-or-nothing sets") characterizes Day's doubling construction. Phase 15 tests for **interval-doubling structure** in our lattice samples:
+
+1. Identify intervals `[a, b]` in the sample where `b` covers `a` plus 2+ chains.
+2. For each candidate interval, check if it has the *doubled* shape (two parallel sub-structures) per Day's construction.
+3. Confirm with witness intervals; refute if no interval admits doubling structure.
+
+**Property registry**: `'admits-day-doubling`.
+
+**Cost**: O(N²) interval enumeration × O(constant) per-interval check. Tractable.
+
+**Honesty scope**: testing whether a lattice ADMITS doubling structure is different from testing whether it WAS constructed via doubling. Phase 15 tests admittance.
+
+**Estimated scope**: ~150 LoC (interval enumeration + parallel-structure detection) + tests + sweep. Tier 3 — most speculative; may surface that the test framing itself needs refinement during implementation.
+
+**Why this matters for Nation**: Adaricheva-Nation 2017 is HIS OWN co-authored work. The empirical check of "does Prologos's lattice structure exhibit Day-doubling-amenable form" is direct relevance.
 
 ### Phase T: Dedicated test file
 

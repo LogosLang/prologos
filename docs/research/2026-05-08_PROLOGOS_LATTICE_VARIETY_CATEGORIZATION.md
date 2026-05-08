@@ -226,15 +226,21 @@ We interpret this as: **our wider sample is not a finite sublattice of FL** in t
 
 ---
 
-## What we did not measure
+## What we did not measure (and what we are about to)
 
-In the spirit of honest scope:
+In the spirit of honest scope, the following were *not* measured for the variety-placement matrix above. **Phases 11-15 (in progress as of 2026-05-08) address each**; this section will be updated in-place once those land:
 
-- **`has-complement`** (Boolean-algebra membership) was not run. Where Heyting refutes, Boolean is foreclosed; where Heyting confirms, has-complement would be the next check.
-- **Convex-geometry / anti-exchange characterization** (Adaricheva-Gorbunov-Tumanov 2003) — not directly tested. The dual `join-semidistributive ↔ convex-geometry` relationship suggests a separate sweep over join-irreducibles + closure operators.
-- **Day's doubling / inflation** characterizations (Adaricheva-Nation 2017) — not directly tested. Could surface refinement structure in domains where SD holds.
-- **Non-trivial congruences** — we don't characterize `Con(L)` for any of our domains.
-- **Variety membership beyond (W) + SD** — we test the properties but don't classify our lattices into specific subvarieties of SD (e.g., the Tamari lattice variety, or the variety of lattices of normal subgroups).
+- **`has-complement`** (Boolean-algebra membership). Phase 11. Per-element search for complements; closes the Boolean column of the variety-placement matrix (currently uniformly "—").
+- **M3 / N5 sublattice detection** (Birkhoff's forbidden-sublattice theorem). Phase 12. Empirical sublattice check provides concrete witness for *why* distributivity refutes — the specific 5-element subset that is order-isomorphic to the diamond M3 or pentagon N5.
+- **Convex-geometry / anti-exchange characterization** (Adaricheva-Gorbunov-Tumanov 2003). Phase 13. For SD-confirmed domains, dualize via the canonical closure operator on join-irreducibles. The AGT 2003 theorem ties finite join-semidistributive lattices to convex geometries iff anti-exchange holds — empirical confirmation would substantively connect our system to convex-geometry literature.
+- **Targeted congruences** — specific candidate congruences (kernel of multiplicity-forgetful map; canonical-form projection). Phase 14. Restricted scope: cannot fully characterize `Con(L)` (O(2^N) explosive) but can confirm/refute specific candidates relevant to our system's structure.
+- **Day's doubling / inflation** detection (Adaricheva-Nation 2017). Phase 15. Test for interval-doubling structure in lattice samples; speculative test framing.
+
+Beyond the immediate Phase 11-15 set, broader open frontiers we have not approached:
+
+- **Variety membership beyond (W) + SD** — classification into specific subvarieties of SD (e.g., the Tamari lattice variety, or the variety of lattices of normal subgroups). Out of scope for Phase 11-15.
+- **Non-trivial automorphism groups** — `Aut(L)` for any of our domains.
+- **Continuity / algebraicity** of the lattice in the order-topological sense (Scott domains, etc.).
 
 ---
 
