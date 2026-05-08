@@ -94,15 +94,16 @@
 ;; Shape and sanity tests
 ;; ============================================================================
 
-(test-case "Phase 3: run-sd-sweep returns 6 findings (3 properties × 2 relations)"
-  (check-equal? (length phase3-findings) 6))
+(test-case "Phase 3: run-sd-sweep returns N×len(properties) findings (Phase 9: default = all 10)"
+  ;; Default property list is `all-sweep-properties` (Phase 9). 2 relations × that.
+  (check-equal? (length phase3-findings) (* 2 (length all-sweep-properties))))
 
 (test-case "Phase 3: each finding has correct shape"
   (for ([f (in-list phase3-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'type)
     (check-not-false (memq (sd-finding-relation f) '(equality subtype)))
-    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
     (check-true (positive? (sd-finding-sample-count f)))))
 
 (test-case "Phase 3: distributive findings carry axiom-*; SD findings carry sd-evidence"
@@ -154,8 +155,9 @@
 (test-case "Phase 3: format-sd-findings produces well-formed markdown"
   (define md (format-sd-findings phase3-findings))
   (define lines (string-split md "\n"))
-  ;; Header + separator + 6 finding rows = 8 lines
-  (check-equal? (length lines) 8)
+  ;; Header + separator + len(all-sweep-properties)×2-relations finding rows
+  (check-equal? (length lines)
+                (+ 2 (* 2 (length all-sweep-properties))))
   ;; Header has expected columns
   (check-true (string-contains? (first lines) "Domain"))
   (check-true (string-contains? (first lines) "Property"))
@@ -220,16 +222,16 @@
                              #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
   (check-true (positive? (length samples))))
 
-(test-case "Phase 7c: run-sd-sweep on session×equality returns 3 findings"
+(test-case "Phase 7c: run-sd-sweep on session×equality returns len(all-sweep-properties) findings"
   ;; 3 properties (distributive, sd-vee, sd-wedge) × 1 relation (equality) = 3.
-  (check-equal? (length phase7-findings) 3))
+  (check-equal? (length phase7-findings) (length all-sweep-properties)))
 
 (test-case "Phase 7c: each session finding has correct shape"
   (for ([f (in-list phase7-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'session)
     (check-eq? (sd-finding-relation f) 'equality)
-    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
     (check-true (positive? (sd-finding-sample-count f)))))
 
 (test-case "Phase 7c: session sweep evidence types"
@@ -247,8 +249,9 @@
 (test-case "Phase 7c: format-sd-findings handles session findings"
   (define md (format-sd-findings phase7-findings))
   (define lines (string-split md "\n"))
-  ;; Header + separator + 3 finding rows = 5 lines
-  (check-equal? (length lines) 5)
+  ;; Header + separator + len(all-sweep-properties) finding rows
+  (check-equal? (length lines)
+                (+ 2 (length all-sweep-properties)))
   (check-true (string-contains? (first lines) "Domain"))
   ;; All rows mention "session"
   (for ([line (in-list (drop lines 2))])
@@ -333,15 +336,15 @@
                 ;; skip bot-top inclusion to avoid #f reaching merge/meet.
                 #:include-bot-top #f))
 
-(test-case "Phase 8c: form-cell sweep returns 3 findings (distributive + sd-vee + sd-wedge)"
-  (check-equal? (length phase8-form-findings) 3))
+(test-case "Phase 8c: form-cell sweep returns len(all-sweep-properties) findings"
+  (check-equal? (length phase8-form-findings) (length all-sweep-properties)))
 
 (test-case "Phase 8c: each form-cell finding has correct shape"
   (for ([f (in-list phase8-form-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'form-cell)
     (check-eq? (sd-finding-relation f) 'equality)
-    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))))
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))))
 
 ;; --- spec-cell atoms (Phase 8d) ---
 (define spec-cell-atom-bot spec-cell-bot)
@@ -393,11 +396,86 @@
                 ;; bot-top inclusion to avoid duplication.
                 #:include-bot-top #f))
 
-(test-case "Phase 8d: spec-cell sweep returns 3 findings"
-  (check-equal? (length phase8-spec-findings) 3))
+(test-case "Phase 8d: spec-cell sweep returns len(all-sweep-properties) findings"
+  (check-equal? (length phase8-spec-findings) (length all-sweep-properties)))
 
 (test-case "Phase 8d: each spec-cell finding has correct shape"
   (for ([f (in-list phase8-spec-findings)])
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'spec-cell)
     (check-eq? (sd-finding-relation f) 'equality)))
+
+;; ============================================================================
+;; Phase 9a: extended sweep harness — all 10 properties + untested-reason +
+;; variety-placement summary
+;; ============================================================================
+
+(test-case "Phase 9a: all-sweep-properties has 11 algebraic properties"
+  (check-equal? (length all-sweep-properties) 11)
+  (check-not-false (memq 'distributive all-sweep-properties))
+  (check-not-false (memq 'sd-vee all-sweep-properties))
+  (check-not-false (memq 'sd-wedge all-sweep-properties))
+  (check-not-false (memq 'modular all-sweep-properties))
+  (check-not-false (memq 'has-pseudo-complement-rel all-sweep-properties))
+  (check-not-false (memq 'has-pseudo-complement-abs all-sweep-properties))
+  (check-not-false (memq 'stone-identity all-sweep-properties))
+  (check-not-false (memq 'whitmans-condition all-sweep-properties))
+  (check-not-false (memq 'relatively-complemented all-sweep-properties))
+  (check-not-false (memq 'sectionally-complemented all-sweep-properties))
+  (check-not-false (memq 'breadth-bound all-sweep-properties)))
+
+(test-case "Phase 9a: each finding has untested-reason field (#f when tested)"
+  (for ([f (in-list phase3-findings)])
+    (define ev (sd-finding-evidence f))
+    (define ur (sd-finding-untested-reason f))
+    (cond
+      ;; If tested (status confirmed/refuted), untested-reason should be #f
+      [(or (axiom-confirmed? ev)
+           (axiom-refuted? ev))
+       (check-false ur)])))
+
+(test-case "Phase 9a: untested-reason 'no-relation for missing relation"
+  ;; session domain has no 'subtype relation in meet-registry → should
+  ;; produce findings with untested-reason = 'no-relation.
+  (define session-domain (lookup-domain 'session))
+  (define session-with-bogus-rel
+    (run-sd-sweep session-domain
+                  '(equality subtype)  ;; subtype not in session meet-registry
+                  realistic-session-atoms
+                  #:max-depth 0
+                  #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+  ;; All findings on the 'subtype relation should have untested-reason = 'no-relation
+  (define subtype-findings
+    (filter (λ (f) (eq? (sd-finding-relation f) 'subtype)) session-with-bogus-rel))
+  (check-true (positive? (length subtype-findings)))
+  (for ([f (in-list subtype-findings)])
+    (check-eq? (sd-finding-untested-reason f) 'no-relation)
+    (check-eq? (sd-finding-evidence f) axiom-untested)))
+
+(test-case "Phase 9a: format-variety-placement-summary produces well-formed table"
+  (define md (format-variety-placement-summary phase3-findings))
+  (define lines (string-split md "\n"))
+  ;; Header + separator + 1 row per (domain, relation) = 4 lines for type×{eq,sub}
+  (check-true (>= (length lines) 4))
+  ;; Header has the variety columns
+  (check-true (string-contains? (first lines) "SD"))
+  (check-true (string-contains? (first lines) "Modular"))
+  (check-true (string-contains? (first lines) "Distributive"))
+  (check-true (string-contains? (first lines) "Heyting"))
+  (check-true (string-contains? (first lines) "Stone"))
+  (check-true (string-contains? (first lines) "Boolean"))
+  (check-true (string-contains? (first lines) "(W)"))
+  ;; Separator line
+  (check-true (string-prefix? (second lines) "|---"))
+  ;; All data rows start with "| type"
+  (for ([line (in-list (drop lines 2))])
+    (check-true (string-prefix? line "| type"))))
+
+(test-case "Phase 9a: explicit #:properties override produces narrower sweep"
+  (define td (lookup-domain 'type))
+  (define narrow-findings
+    (run-sd-sweep td '(equality) realistic-type-atoms
+                  #:max-depth 0
+                  #:properties '(distributive)))
+  (check-equal? (length narrow-findings) 1)
+  (check-eq? (sd-finding-property (first narrow-findings)) 'distributive))
