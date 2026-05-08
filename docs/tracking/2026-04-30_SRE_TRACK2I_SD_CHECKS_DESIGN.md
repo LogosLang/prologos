@@ -1150,6 +1150,70 @@ Implementation:
 
 **Why this matters for Nation**: AGT 2003 is *recommended in his lattice notes companion*. The duality between SD lattices and convex geometries is a key bridge to combinatorial-geometry literature. Confirming our SD lattices yield anti-exchange closure operators substantively connects our system to convex-geometry research.
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**Q1 — Bounded subset size**: `k=2` default, parameterizable via `#:max-subset-size`. Cost analysis at |J|≈50: k=2 gives ~16M iter with caching → ~20 min/tuple → ~50 min sweep wall via 4-concurrent. Tractable; matches Phase 11/12 sweep budgets. Sample-limitation honestly bounded.
+
+**Q2 — AGT 2003 iff implication rule policy**: forward direction `sd-vee + sd-wedge ⇒ anti-exchange-on-J` **deliberately NOT encoded** (matches Phase 12 Birkhoff-9.2-forward precedent). Rationale: Nation gains MORE information from independent empirical measurements than from implication-derived results. Encoding the rule would auto-confirm anti-exchange whenever SD confirms (without empirical evidence) — hiding the AGT-iff-empirical-validation data point. NOT encoding lets us show empirical agreement (or boundary disagreement) across all 10 tuples — stronger presentation value. Same Phase 12 discipline.
+
+**Q3 — Sweep scope**: ALL 10 (domain, relation, depth) tuples (matches Phase 11/12). Refutation in non-SD case is itself informative boundary data. SD all confirms to date per Phase 9b, so the empirical question across all 10 is whether anti-exchange follows correspondingly.
+
+**Q4 — Phase structure**: single phase. Sub-phase fallback (13a join-irreducibles + closure helpers; 13b anti-exchange + wiring + sweep + report) only if implementation exceeds 1h. Phase 11+12 single-phase precedent.
+
+**Q5 — `/detailed` decomposition** (per Phase 11 Completeness-Over-Deferral):
+- `total-checked` — total `(A, x, y)` triples enumerated
+- `hypothesis-fired` — triples where `y ∈ cl(A ∪ {x})` (the "if" of anti-exchange holds)
+- `conclusion-held` — triples where additionally `x ∉ cl(A ∪ {y})` (axiom satisfied given hypothesis)
+- `witness` — `(A, x, y)` on refute
+
+Non-vacuity ratio captures hypothesis-firing rate — informative per Phase 11 precedent.
+
+**Implementation plan**:
+
+1. **Code** (~150 LoC sre-core.rkt):
+   - `sample-join-irreducibles domain samples meet-fn join-fn` — enumerate `J(L)` excluding `bot`
+   - `sample-closure-on-J A J meet-fn join-fn bot` — `cl(A) = {x ∈ J : x ≤ ⋁A}`
+   - `anti-exchange-evidence` 5-field struct (per Phase 11 pattern)
+   - `test-anti-exchange/detailed domain samples meet-fn join-fn #:max-subset-size [k 2]`
+   - `test-anti-exchange` wrapper translating to `axiom-*`
+   - Wire into `infer-domain-properties` (`props-17`) + `resolve-and-report-properties` evidence map
+
+2. **Sweep harness updates** (~10 LoC each in 2 files — Phase 11 lesson):
+   - `sre-property-sweep.rkt`: `all-sweep-properties` 14 → 15; `sweep-one-property` dispatch; `extract-detailed-fields` case
+   - `tools/run-phase9-sweep.rkt`: matching `extract-detailed-fields` case (atomic per Phase 11 lesson)
+
+3. **Tests** (~25 LoC):
+   - `test-anti-exchange-untested-without-fns`
+   - `test-anti-exchange/detailed returns anti-exchange-evidence struct`
+   - `test-anti-exchange empirical on type domain returns axiom-*`
+   - `infer-domain-properties produces anti-exchange-on-J entry`
+   - 4-5 cases per Phase 11+12 pattern
+
+4. **Sweep run** (~50 min wall):
+   - 4 concurrent processes split by domain via `tools/run-phase9-sweep.rkt --properties anti-exchange-on-J`
+   - Capture findings to file
+
+5. **Report integration** (~10 min):
+   - Append rows to design doc § Phase 9 Findings
+   - Update Nation report `2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md` with anti-exchange column
+   - Cross-reference AGT 2003 in references; emphasize empirical bidirectional iff data
+
+**Adversarial pass surfaced**:
+- P-lens: same off-network sample-iteration scaffolding lineage (existing Track 2G); no new debt. AGT iff NOT encoded as rule preserves empirical data point.
+- R-lens: 7 wire sites identified (5 file + 2 sweep harness copies); existing helpers from Phase 5.
+- M-lens: bounded-subset enumeration is step-think; same lineage as Phase 12 enumeration. Honest scaffolding.
+- S-lens: J(L) Hasse IS the Birkhoff representation poset. Q6 challenge: bounded-subset enumeration doesn't exploit J(L) Hasse adjacency (analogous to Gray-code for Boolean Q_n). NOT in scope; honest computational gap.
+
+**Drift risks (7 named)**:
+
+1. **|J(L)| explosion at wider sample**: bounded subset size `k=2` default; document scope-bound.
+2. **AGT 2003 iff implication rule** — deliberately NOT added (Q2 decision); document rationale.
+3. **Closure-cache memory**: precompute `cl(A)` per subset; |J|^k subsets × |J| each — manageable at k=2.
+4. **Sample-set sensitivity** (Phase 11/12 recurring): bounded-subset confirmation = bounded confidence.
+5. **Both `extract-detailed-fields` copies** (Phase 11 lesson): atomic update mandatory.
+6. **Phase 11 in-phase pattern**: single commit ties code + sweep + design doc + Nation report.
+7. **Phase size at 1h boundary**: ~150 LoC + sweep + report. Sub-phase fallback ready if exceeded.
+
 ### Phase 14: Targeted congruence tests
 
 **Scope** (high-level):
