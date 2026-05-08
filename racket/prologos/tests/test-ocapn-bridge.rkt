@@ -1706,3 +1706,69 @@
               (format "expected error answer to peer's queued ap 6; got: ~s" got))
   (check-true (regexp-match? #rx"deliver-to-non-callable" got)
               (format "expected synthesized error reason in bytes; got: ~s" got)))
+
+;; Phase 47: bs-pipelined-msgs gets pruned after pump emits forwarding
+;; bytes for a pid. Without GC the queue grows monotonically across
+;; the connection lifetime; with GC the queue shrinks back to entries
+;; whose pid hasn't yet been emitted.
+
+(test-case "bridge/bs-gc-pipelined-msgs-by-emitted filters by emitted set (Phase 47)"
+  ;; Build a pipelined-msgs list with pids [3, 5, 7]; emitted = [5].
+  ;; Result should keep [3, 7] only.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-pipeline-msg (suc (suc (suc zero))) (syrup-string \"a\") (none Nat)
+                       (bs-add-pipeline-msg (suc (suc (suc (suc (suc zero))))) (syrup-string \"b\") (none Nat)
+                         (bs-add-pipeline-msg (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                                              (syrup-string \"c\") (none Nat)
+                                              bridge-state-empty)))
+                  st1 (bs-gc-pipelined-msgs-by-emitted
+                        (cons (suc (suc (suc (suc (suc zero))))) (nil Nat))
+                        st0))
+              (length (bs-pipelined-msgs st1))))")
+   "2N"))
+
+(test-case "bridge/connection-step prunes pipelined-msgs for emitted pid (Phase 47)"
+  ;; Setup: bs-questions(3 → pid), peer pipelines onto q-pos=3 (queue
+  ;; grows to 1), then resolve pid externally and call connection-step
+  ;; with an unrelated op to trigger pump. After the pump:
+  ;;   - bytes emitted (resolution + forwarding for desc:export 11)
+  ;;   - pipelined-msgs GCed for pid (length back to 0)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc zero)))
+                          (syrup-string \"queued\")
+                          (some Nat (suc (suc zero)))
+                          v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  cs0   (conn-state v1 (bridge-step-state step) (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")
+   "0N"))
+
+(test-case "bridge/connection-step retains pipelined-msgs for unemitted pid (Phase 47)"
+  ;; Same setup but DON'T resolve pid — the queue should still hold
+  ;; the entry after connection-step (no emit, no GC).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc (suc zero)))
+                          (syrup-string \"queued\")
+                          (none Nat)
+                          v0 st0)
+                  cs0   (conn-state (bridge-step-vat step) (bridge-step-state step) (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")
+   "1N"))

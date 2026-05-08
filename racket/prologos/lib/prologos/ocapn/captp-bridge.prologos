@@ -1304,6 +1304,37 @@ defn member-nat?
         | true  -> true
         | false -> member-nat? n t
 
+;; ===========================================================
+;; Phase 47: GC of bridge-side pipelined-msgs entries
+;; ===========================================================
+;;
+;; Once pump-outbound has emitted forwarding bytes (or break-forward /
+;; plain-value error answers) for a given local promise pid, the
+;; queued entries with that pid are no longer needed — they've been
+;; processed end-to-end. Without GC, bs-pipelined-msgs grows
+;; monotonically across the connection's lifetime; with GC the queue
+;; shrinks back to entries whose pid hasn't yet been emitted.
+;;
+;; The filter is applied at connection-step granularity (after
+;; pump-outbound), keyed by pump-result's `emitted` cumulative list.
+
+spec list-filter-pipe-by-emitted [List PipeMsg] [List Nat] -> [List PipeMsg]
+  :doc "Drop pipe-msg entries whose pid is in the emitted set."
+defn list-filter-pipe-by-emitted
+  | nil _ -> [nil PipeMsg]
+  | [cons [pipe-msg p args ap] rest] emitted ->
+      match [member-nat? p emitted]
+        | true  -> list-filter-pipe-by-emitted rest emitted
+        | false ->
+            [cons [pipe-msg p args ap] [list-filter-pipe-by-emitted rest emitted]]
+
+spec bs-gc-pipelined-msgs-by-emitted [List Nat] BridgeState -> BridgeState
+  :doc "Phase 47: drop pipelined-msgs entries whose pid is in `emitted`. Applied after pump-outbound at connection-step granularity."
+defn bs-gc-pipelined-msgs-by-emitted
+  | emitted [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs p oqs ir er
+        [list-filter-pipe-by-emitted pm emitted]
+
 ;; Result of the pump: bytes emitted this turn + updated emitted-pids
 ;; + the vat (Phase 42 may have enqueued local-actor messages on it
 ;; via pipelined-msg forwarding to a refr-local-export resolution).
@@ -1660,8 +1691,14 @@ defn connection-step [op cs]
     | false ->
         let bs    := [captp-incoming-with-state op [conn-vat cs] [conn-bridge-state cs]]
           let v'    := [run-vat drain-fuel [bridge-step-vat bs]]
-            let st'   := [bs-clear-pending-out [bridge-step-state bs]]
+            let st0   := [bs-clear-pending-out [bridge-step-state bs]]
               let pump  := [pump-outbound v' [bridge-step-state bs] [conn-emitted cs]]
-                let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
-                  conn-step cs' [pump-result-bytes pump]
+                ;; Phase 47: GC pipelined-msgs whose pid has been
+                ;; emitted (forwarding/break-forward/plain-value-error
+                ;; bytes already produced); the queue no longer needs
+                ;; them. Without this the queue grows monotonically
+                ;; across the connection's lifetime.
+                let st'   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
+                  let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
+                    conn-step cs' [pump-result-bytes pump]
 
