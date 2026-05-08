@@ -98,6 +98,9 @@
  test-erasure-congruence test-erasure-congruence/detailed
  forget-mult-norm m0-erasure-norm
  trivial-equiv? total-equiv? mult-forgetful-equiv? erasure-equiv?
+ ;; Phase 15: Day's doubling / inflation detection (Adaricheva-Nation 2017)
+ (struct-out dd-evidence)
+ test-admits-day-doubling test-admits-day-doubling/detailed
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -1428,6 +1431,132 @@
        [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
        [(untested)  axiom-untested])]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 15: Day's doubling / inflation detection
+;; ========================================================================
+;;
+;; Per Adaricheva-Nation 2017 ("Inflation of finite lattices along
+;; all-or-nothing sets"). Generalizes Day's 1970 interval-doubling
+;; construction. An "all-or-nothing" pair (s₁, s₂) is a pair of
+;; incomparable elements such that every external element x is
+;; consistently positioned w.r.t. BOTH s₁ and s₂: either x ≤ s₁ AND
+;; x ≤ s₂, or x ≥ s₁ AND x ≥ s₂, or x is incomparable to both.
+;;
+;; If such a pair exists, the lattice ADMITS inflation along that pair
+;; (Adaricheva-Nation 2017). The check is sample-bounded: detection
+;; confirms admittance; absence on sample is refuted-on-sample (not
+;; theorem-strength refutation).
+;;
+;; Phase 12+13 discipline: NO forward implication rule (sample-unsound
+;; either direction). Phase 15 differs in confirmation/refutation
+;; semantics — existence-claim shape: ONE witness = confirmed; no
+;; witness across all pairs = refuted-on-sample.
+;;
+;; Witness format: (s₁ s₂ dependency-pattern) where dependency-pattern
+;; is a list of (external side) entries (truncated to first 5 for log
+;; readability). Side ∈ '(above below incomparable).
+
+(struct dd-evidence
+  (status
+   total-pairs            ; pairs (s₁, s₂) iterated
+   hypothesis-fired       ; pairs that were incomparable (non-vacuous)
+   conclusion-held        ; pairs that satisfied all-or-nothing
+   witness)               ; (s₁ s₂ dep-pattern) on confirmed; #f otherwise
+  #:transparent)
+
+;; Classify external element x's side w.r.t. pair (s1, s2).
+;; Returns 'above | 'below | 'incomparable | 'split (if x is on
+;; different sides of s1 vs s2 — violates all-or-nothing).
+(define (dd-classify-side x s1 s2 meet-fn)
+  (define x-leq-s1 (lattice-leq? x s1 meet-fn))
+  (define x-leq-s2 (lattice-leq? x s2 meet-fn))
+  (define s1-leq-x (lattice-leq? s1 x meet-fn))
+  (define s2-leq-x (lattice-leq? s2 x meet-fn))
+  (cond
+    ;; x ≤ both
+    [(and x-leq-s1 x-leq-s2) 'below]
+    ;; both ≤ x
+    [(and s1-leq-x s2-leq-x) 'above]
+    ;; x incomparable with both
+    [(and (not x-leq-s1) (not x-leq-s2)
+          (not s1-leq-x) (not s2-leq-x))
+     'incomparable]
+    ;; mixed: violates all-or-nothing
+    [else 'split]))
+
+;; Detailed Phase 15 check: empirical existence of all-or-nothing pair.
+;;
+;; Algorithm (Option B per Phase 15 mini-design):
+;;   For each pair (s1, s2) of distinct, incomparable samples:
+;;     Hypothesis-fired (incomparable pair, non-vacuous).
+;;     Check: ∀ external x ∈ samples \ {s1, s2}, classify-side ≠ 'split.
+;;     If all external x consistent: confirmed witness (return early).
+;;   If no pair satisfied: refuted-on-sample.
+(define (test-admits-day-doubling/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (dd-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([s1 (in-list samples)]
+                     [s2 (in-list samples)]
+                     ;; Canonicalize: s1 < s2 by hash to avoid permutation duplicates
+                     #:when (and (not (equal? s1 s2))
+                                 (< (equal-hash-code s1) (equal-hash-code s2))))
+           (define t* (+ t 1))
+           (cond
+             [(not (lattice-incomparable? s1 s2 meet-fn))
+              ;; Hypothesis didn't fire (pair is comparable — vacuous)
+              (values t* f h)]
+             [else
+              ;; Hypothesis fires: pair is incomparable
+              ;; Check all-or-nothing: every external x classified non-'split
+              (define dep-pattern
+                (for/list ([x (in-list samples)]
+                           #:when (and (not (equal? x s1))
+                                       (not (equal? x s2))))
+                  (cons x (dd-classify-side x s1 s2 meet-fn))))
+              (define any-split?
+                (for/or ([entry (in-list dep-pattern)])
+                  (eq? (cdr entry) 'split)))
+              (cond
+                [any-split?
+                 ;; Pair fails all-or-nothing — keep searching
+                 (values t* (+ f 1) h)]
+                [else
+                 ;; Witness found: confirmed
+                 (define truncated-pattern
+                   (for/list ([entry (in-list dep-pattern)]
+                              [i (in-naturals)]
+                              #:when (< i 5))
+                     entry))
+                 (return (dd-evidence 'confirmed t* (+ f 1) (+ h 1)
+                                      (list s1 s2 truncated-pattern)))])])))
+       ;; Iterated all pairs without finding witness — refuted-on-sample.
+       ;; Note: this differs from existential refutation. We confirm if
+       ;; ANY pair satisfies; refute if NO pair satisfies. Sample-bounded.
+       (cond
+         [(zero? fired)
+          ;; No pair was even incomparable — vacuously refuted; report so.
+          (dd-evidence 'refuted total fired held 'no-incomparable-pairs)]
+         [else
+          (dd-evidence 'refuted total fired held
+                       'no-all-or-nothing-pair-on-sample)]))]))
+
+(define (test-admits-day-doubling domain samples meet-fn join-fn)
+  (define ev (test-admits-day-doubling/detailed domain samples meet-fn join-fn))
+  (case (dd-evidence-status ev)
+    [(confirmed) (axiom-confirmed (dd-evidence-total-pairs ev))]
+    [(refuted)
+     ;; Witness convention: confirmed → (list s1 s2 dep-pattern);
+     ;; refuted-on-sample → symbol marker. Wrap symbol in list to satisfy
+     ;; axiom-refuted-witness contract (format-property-profile maps over it).
+     (define w (dd-evidence-witness ev))
+     (axiom-refuted (if (list? w) w (list w)))]
+    [(untested)  axiom-untested]))
+
 ;; Compute absolute pseudo-complement candidate ¬a on a sample set.
 ;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
 ;; no such x exists in samples. Used by test-stone-identity below.
@@ -1713,7 +1842,13 @@
         (update-property props-20 'erasure-congruence-valid
                          (test-erasure-congruence domain samples meet-fn join-fn))
         props-20))
-  props-21)
+  ;; Phase 15: Day's doubling / inflation detection (Adaricheva-Nation 2017)
+  (define props-22
+    (if (and meet-fn join-fn)
+        (update-property props-21 'admits-day-doubling
+                         (test-admits-day-doubling domain samples meet-fn join-fn))
+        props-21))
+  props-22)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -1865,7 +2000,9 @@
                                   trivial-congruence-valid
                                   total-congruence-valid
                                   mult-forgetful-congruence-valid
-                                  erasure-congruence-valid))])
+                                  erasure-congruence-valid
+                                  ;; Phase 15: Day's doubling / inflation (Adaricheva-Nation 2017)
+                                  admits-day-doubling))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -1914,6 +2051,9 @@
            (lambda (d s) (test-mult-forgetful-congruence d s meet-fn join-fn))]
           [(erasure-congruence-valid)
            (lambda (d s) (test-erasure-congruence d s meet-fn join-fn))]
+          ;; Phase 15: Day's doubling / inflation
+          [(admits-day-doubling)
+           (lambda (d s) (test-admits-day-doubling d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

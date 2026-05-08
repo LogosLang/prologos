@@ -1089,3 +1089,72 @@
   (check-true (hash-has-key? props 'total-congruence-valid))
   (check-true (hash-has-key? props 'mult-forgetful-congruence-valid))
   (check-true (hash-has-key? props 'erasure-congruence-valid)))
+
+;; ========================================
+;; SRE Track 2I Phase 15: Day's doubling / inflation detection
+;; (Adaricheva-Nation 2017 — all-or-nothing pair detection)
+;; ========================================
+
+(test-case "Phase 15: test-admits-day-doubling untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-admits-day-doubling td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-admits-day-doubling td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 15: test-admits-day-doubling/detailed returns dd-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (dd-evidence? ev))
+  (check-not-false (memq (dd-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (dd-evidence-total-pairs ev) 0)))
+
+(test-case "Phase 15: test-admits-day-doubling wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-admits-day-doubling
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result) (axiom-refuted? result))))
+
+(test-case "Phase 15: dd-evidence witness structure (when confirmed)"
+  ;; If a witness is found, it has shape (s1 s2 dependency-pattern)
+  ;; where dependency-pattern is a list of (external . side) pairs.
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (when (eq? (dd-evidence-status ev) 'confirmed)
+    (define witness (dd-evidence-witness ev))
+    (check-true (list? witness))
+    (check-eq? (length witness) 3)
+    (define dep-pattern (third witness))
+    (check-true (list? dep-pattern))
+    ;; Each entry is (external . side); side ∈ {above, below, incomparable}
+    (for ([entry (in-list dep-pattern)])
+      (check-true (pair? entry))
+      (check-not-false (memq (cdr entry) '(above below incomparable))))))
+
+(test-case "Phase 15: NO forward implication rule (sample-unsound, Phase 12+13 precedent)"
+  ;; Phase 15 deliberately does not introduce forward implications from
+  ;; admits-day-doubling. Empirical-positive findings only; matches
+  ;; sample-unsound discipline of Phase 12 (Birkhoff) and Phase 13 (AGT iff).
+  (define props (hasheq 'admits-day-doubling prop-confirmed))
+  (define derived (derive-composite-properties props))
+  ;; No new derived property keys beyond admits-day-doubling itself.
+  (check-eq? (hash-ref derived 'inflated-from-smaller prop-unknown) prop-unknown))
+
+(test-case "Phase 15: infer-domain-properties produces admits-day-doubling entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'admits-day-doubling)))
+
+(test-case "Phase 15: refuted carries reason marker (no-incomparable-pairs vs no-pair-on-sample)"
+  ;; If refuted, witness is a symbol distinguishing the two refutation modes.
+  (define td (lookup-domain 'type))
+  (define ev (test-admits-day-doubling/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (when (eq? (dd-evidence-status ev) 'refuted)
+    (check-not-false
+     (memq (dd-evidence-witness ev)
+           '(no-incomparable-pairs no-all-or-nothing-pair-on-sample)))))

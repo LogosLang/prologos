@@ -410,13 +410,14 @@
 ;; variety-placement summary
 ;; ============================================================================
 
-(test-case "Phase 9a / Phase 11-14: all-sweep-properties has 19 algebraic properties"
-  (check-equal? (length all-sweep-properties) 19)  ;; Phase 14: +4 congruence checks
+(test-case "Phase 9a / Phase 11-15: all-sweep-properties has 20 algebraic properties"
+  (check-equal? (length all-sweep-properties) 20)  ;; Phase 15: +1 admits-day-doubling
   (check-not-false (memq 'anti-exchange-on-J all-sweep-properties))
   (check-not-false (memq 'trivial-congruence-valid all-sweep-properties))
   (check-not-false (memq 'total-congruence-valid all-sweep-properties))
   (check-not-false (memq 'mult-forgetful-congruence-valid all-sweep-properties))
   (check-not-false (memq 'erasure-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'admits-day-doubling all-sweep-properties))  ;; Phase 15
   (check-not-false (memq 'distributive all-sweep-properties))
   (check-not-false (memq 'sd-vee all-sweep-properties))
   (check-not-false (memq 'sd-wedge all-sweep-properties))

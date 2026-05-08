@@ -313,6 +313,7 @@
     [(n5-evidence? ev) (n5-evidence-status ev)]
     [(anti-exchange-evidence? ev) (anti-exchange-evidence-status ev)]
     [(congruence-evidence? ev) (congruence-evidence-status ev)]
+    [(dd-evidence? ev) (dd-evidence-status ev)]  ;; Phase 15
     [(axiom-confirmed? ev) 'confirmed]
     [(axiom-refuted? ev)   'refuted]
     [(eq? ev axiom-untested) 'untested]
@@ -452,6 +453,14 @@
            (congruence-evidence-hypothesis-fired ev)
            (congruence-evidence-conclusion-held ev)
            (congruence-evidence-witness ev))]
+    [(dd-evidence? ev)  ;; Phase 15: Day's doubling
+     ;; Note: dd-evidence uses 'total-pairs' (not 'total-checked');
+     ;; semantics-equivalent for the harness's 5-tuple shape.
+     (list (dd-evidence-status ev)
+           (dd-evidence-total-pairs ev)
+           (dd-evidence-hypothesis-fired ev)
+           (dd-evidence-conclusion-held ev)
+           (dd-evidence-witness ev))]
     [else #f]))
 
 (define (non-vacuity-pct fired total)

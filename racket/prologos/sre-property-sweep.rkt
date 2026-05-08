@@ -89,7 +89,9 @@
     anti-exchange-on-J  ;; Phase 13: AGT 2003 convex geometry duality
     ;; Phase 14: targeted congruence tests
     trivial-congruence-valid total-congruence-valid
-    mult-forgetful-congruence-valid erasure-congruence-valid))
+    mult-forgetful-congruence-valid erasure-congruence-valid
+    ;; Phase 15: Day's doubling / inflation (Adaricheva-Nation 2017)
+    admits-day-doubling))
 
 ;; ========================================================================
 ;; run-sd-sweep
@@ -223,6 +225,9 @@
           (test-mult-forgetful-congruence/detailed domain samples meet-fn join-fn)]
          [(erasure-congruence-valid)
           (test-erasure-congruence/detailed domain samples meet-fn join-fn)]
+         ;; Phase 15: Day's doubling / inflation (Adaricheva-Nation 2017)
+         [(admits-day-doubling)
+          (test-admits-day-doubling/detailed domain samples meet-fn join-fn)]
          [else axiom-untested]))
      (sd-finding domain-name rel prop sample-count ev #f)]))
 
@@ -310,6 +315,14 @@
            (congruence-evidence-hypothesis-fired ev)
            (congruence-evidence-conclusion-held ev)
            (congruence-evidence-witness ev))]
+    [(dd-evidence? ev)  ;; Phase 15
+     ;; Note: dd-evidence uses 'total-pairs' instead of 'total-checked'
+     ;; — same shape semantics, different field name (pairs not triples).
+     (list (dd-evidence-status ev)
+           (dd-evidence-total-pairs ev)
+           (dd-evidence-hypothesis-fired ev)
+           (dd-evidence-conclusion-held ev)
+           (dd-evidence-witness ev))]
     [else #f]))
 
 (define (format-sd-finding-row f)
