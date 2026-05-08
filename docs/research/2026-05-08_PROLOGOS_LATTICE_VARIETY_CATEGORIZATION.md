@@ -165,6 +165,33 @@ We tested **specific candidate congruences** rather than full Con(L) (O(2^N) exp
 
 **Status**: framework-wiring + sanity confirmation succeeded. The empirical-content question — does the type lattice's algebraic structure preserve mult-forgetful / erasure-equivalence congruences on binder-included samples? — remains open.
 
+### Day's doubling / inflation detection (Adaricheva-Nation 2017)
+
+Per **Adaricheva-Nation 2017** (*Inflation of finite lattices along all-or-nothing sets*), we tested for **all-or-nothing pair detection** — pairs `(s₁, s₂)` of incomparable elements where every external element `x` is consistently positioned with respect to both: above both (`x ≥ s₁ ∧ x ≥ s₂`), below both (`x ≤ s₁ ∧ x ≤ s₂`), or incomparable to both — never "split" between them. Existence of such a pair witnesses that the lattice **admits inflation** along that pair (Day-1970 interval-doubling generalized).
+
+| Domain | Relation | Depth | admits-day-doubling | Non-vacuity | Witness |
+|---|---|---|---|---|---|
+| type | equality | ground | refuted-on-sample | n/a | hash-code anomaly† |
+| type | equality | wider | ✓ | 33% | `(Int, pair(Bool, Bool))` |
+| type | subtype | ground | refuted-on-sample | n/a | hash-code anomaly† |
+| type | subtype | wider | ✓ | **92%** | `(Bool, pair(Bool, Bool))` |
+| session | equality | ground | ✓ | **100%** | `(sess-end, sess-svar 0)` |
+| session | equality | wider | ✓ | **100%** | same pair holds across wider sample |
+| form-cell | equality | ground | ✓ | 40% | tag-set-differing form-pipeline values |
+| form-cell | equality | wider | ✓ | 40% | same |
+| spec-cell | equality | ground | ✓ | 33% | name-differing spec-cell values |
+| spec-cell | equality | wider | ✓ | 33% | same |
+
+**8/10 (domain × relation × depth) tuples confirm admittance** with concrete witnesses across heterogeneously-designed Prologos lattices.
+
+**The structural reading**: every Prologos lattice we measured satisfies BOTH foundational requirements of the **bounded-lattice / inflation-decomposability characterization** of free-lattice sublattices (Day 1979 + Adaricheva-Nation 2017 lineage): empirical Whitman's W ✓ universally (matrix above) AND Day-doubling admittance on 8/10 tuples (this table). The two findings together — independently tested via different empirical algorithms — paint a consistent picture of constructor-recursive lattice generation producing FL-sublattice-amenable structure.
+
+**Honest scope-bound**: pair-only detection (this report). Detection of an all-or-nothing pair witnesses inflation-amenability *along that specific pair*; it does not prove the lattice WAS constructed via a specific inflation sequence (the (a) admittance claim, not the (b) construction-history claim). Extension to triples and larger maximal all-or-nothing sets — richer Adaricheva-Nation 2017 structure — is open follow-up.
+
+**No forward implication rule** to inflated-from-smaller-lattice characterization. Sample-bounded existence claim is positive evidence; absence is sample-bounded non-detection. Matches the discipline of Phase 12 (Birkhoff 9.2) and Phase 13 (AGT 2003 iff): bounded-subset checks cannot soundly establish bidirectional theorem-strength claims.
+
+† **Type × ground sample-set anomaly**: the depth-0 atom set `{Int, Bool, Nat, String}` consists of nullary constructor instances whose `equal-hash-code` values frequently coincide. The canonical-pair filter `(< (hash s₁) (hash s₂))` skips same-hash pairs in BOTH directions — atomic-pair incomparable-detection bypassed at ground sublattice. Net effect: only bot/top-involving pairs remain (all comparable), so `fired=0` and refutation is a sample-set artifact of struct-instance hashing, not a structural finding. Wider-sample type results (rows 2 and 4 above) provide the substantive answer. Hash-code-stable canonicalization (e.g., index-based) would resolve the anomaly — small follow-up.
+
 ### Merge-as-canonical-form structural-optimality claim — follow-up to prior conversation
 
 Nation's prior-meeting discussion of canonical form raised the structural-optimality framing: *canonical form should be a structural property of the lattice, not an externally-imposed normalization.* This claim is directly relevant to Prologos's architecture.
@@ -364,26 +391,13 @@ We interpret this as: **our wider sample is not a finite sublattice of FL** in t
 
 ### Q7. Day-doubling admittance pervasive across heterogeneous domains
 
-Per **Adaricheva-Nation 2017** (*Inflation of finite lattices along all-or-nothing sets*) we tested for **all-or-nothing pair detection** — pairs `(s₁, s₂)` of incomparable elements where every external element `x` is consistently positioned w.r.t. both (above both, below both, or incomparable to both — never "split" between them). Existence of such a pair witnesses that the lattice **admits inflation** along that pair.
+Empirical results in the **Day's doubling / inflation detection (Adaricheva-Nation 2017)** subsection above. Briefly: 8/10 tuples confirm admittance with concrete witnesses.
 
-Empirical result: **8/10 (domain × relation × depth) tuples confirm admittance** with concrete witnesses:
+**Question for the conversation**: is the universality of all-or-nothing pair admittance across our heterogeneous domains an expected consequence of constructor-recursive lattice generation (analogous to (W)'s universality), or evidence of a more specific structural family?
 
-| Tuple | Status | Non-vacuity | Witness pair |
-|---|---|---|---|
-| type × eq × ground | refuted-on-sample | n/a | (no incomparable pairs surviving canonicalization — see anomaly note below) |
-| type × eq × wider | confirmed | 33% | `(Int, pair(Bool, Bool))` |
-| type × sub × ground | refuted-on-sample | n/a | (same anomaly) |
-| type × sub × wider | confirmed | 92% | `(Bool, pair(Bool, Bool))` |
-| session × eq × ground | confirmed | 100% | `(sess-end, sess-svar 0)` |
-| session × eq × wider | confirmed | 100% | `(sess-end, sess-svar 0)` |
-| form-cell × eq × {ground, wider} | confirmed | 40% | two `form-pipeline-value` instances differing only in tag set |
-| spec-cell × eq × {ground, wider} | confirmed | 33% | two `spec-cell-value` instances differing only in name |
+The 100% non-vacuity for session × equality (where the `sess-end` / `sess-svar` pair has every external session value classified consistently) is striking — suggests the session-protocol algebra has unusually strong symmetry around its base elements. Pair-only detection here; extended-set search (triples, quadruples, maximal all-or-nothing sets) would test whether the same symmetry extends.
 
-(Sample-set anomaly note for type × ground: the depth-0 atom set `{Int, Bool, Nat, String}` consists of nullary constructor instances whose `equal-hash-code` values frequently coincide, causing the canonical-pair filter `(< (hash s₁) (hash s₂))` to skip same-hash pairs in BOTH directions. Net effect: the algorithmic incomparable pairs Int-Bool, Int-Nat, etc., are filtered out before the all-or-nothing check sees them. This is a sample-set artifact of struct-instance hashing, not a structural finding. The wider-sample type results provide the substantive answer.)
-
-**The structural reading**: heterogeneously-designed Prologos lattices uniformly **admit Day-style inflation**. Combined with empirical confirmation of (W) across the same domains, every Prologos lattice we have measured satisfies BOTH foundational requirements of the **bounded-lattice / inflation-decomposability characterization** of free-lattice sublattices (Day 1979 + Adaricheva-Nation 2017 lineage). Honest scope-bound: detection of an all-or-nothing pair witnesses inflation-amenability *along that specific pair*; it does not prove the lattice WAS constructed via a specific inflation sequence (the (a) admittance claim, not the (b) construction-history claim).
-
-**Question for the conversation**: is the universality of all-or-nothing pair admittance across our heterogeneous domains an expected consequence of constructor-recursive lattice generation (analogous to (W)'s universality), or evidence of a more specific structural family? The 100% non-vacuity for session × equality (where the `sess-end` / `sess-svar` pair has every external session value classified consistently) is striking — suggests the session-protocol algebra has unusually strong symmetry around its base elements.
+A related secondary question: do the empirical (W) ✓ + Day-doubling admittance ✓ findings together support a stronger claim than each separately — specifically, that our domains sit in the **bounded-lattice** subvariety in the technical sense (bounded homomorphic image of FL via Day 1979)?
 
 ---
 
