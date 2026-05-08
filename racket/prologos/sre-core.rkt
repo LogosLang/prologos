@@ -75,6 +75,12 @@
  ;; Phase 11: has-complement (Boolean placement)
  (struct-out complement-evidence)
  test-has-complement test-has-complement/detailed
+ ;; Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+ (struct-out m3-evidence)
+ (struct-out n5-evidence)
+ test-no-m3-sublattice test-no-m3-sublattice/detailed
+ test-no-n5-sublattice test-no-n5-sublattice/detailed
+ lattice-incomparable? sublattice-closed?
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -889,6 +895,204 @@
     [(refuted)   (axiom-refuted (list (complement-evidence-witness ev)))]
     [(untested)  axiom-untested]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+;; ========================================================================
+;;
+;; Birkhoff's theorem (Theorem 9.2): a lattice is distributive iff it
+;; contains neither M3 nor N5 as a sublattice. Phase 12 is the empirical
+;; sublattice-detection counterpart — concrete witnesses (5-element
+;; sublattices) Nation immediately recognizes.
+;;
+;; M3 (the diamond): 5 elements {⊥', ⊤', m1, m2, m3} with m1, m2, m3
+;; pairwise-incomparable, m_i ∧ m_j = ⊥' for all i≠j, m_i ∨ m_j = ⊤'.
+;;
+;; N5 (the pentagon): 5 elements {⊥', ⊤', a, b, c} with b < a (covering
+;; pair), c incomparable with both, a ∨ c = b ∨ c = ⊤', a ∧ c = b ∧ c = ⊥'.
+;;
+;; Direct construction (NOT 5-tuple enumeration which is C(N,5) ≈ 4.5M
+;; subsets at N=58, prohibitive):
+;; - M3: enumerate antichain-of-3 triples; verify common pairwise
+;;   meet/join. O(N³) ≈ 30k iterations at N=58, ~20-30 sec per tuple.
+;; - N5: enumerate ordered comparable pairs (b<a); for each, iterate
+;;   incomparable c with common bounds. O(N³) similar.
+;;
+;; Both: closure verification post-construction (the 5-element witness
+;; must be CLOSED under meet/join with itself). Distinguishes
+;; "antichain-shape exists" from "embedded sublattice exists."
+
+(struct m3-evidence
+  (status            ;; 'confirmed | 'refuted | 'untested
+   total-checked     ;; total antichains-of-3 enumerated
+   hypothesis-fired  ;; antichains where common pairwise meet/join exist
+   conclusion-held   ;; antichains where the M3 axiom does NOT hold (confirms property)
+   witness)          ;; (list ⊥' ⊤' m1 m2 m3) on refute; #f otherwise
+  #:transparent)
+
+(struct n5-evidence
+  (status
+   total-checked     ;; total comparable pairs (b<a) enumerated
+   hypothesis-fired  ;; pairs where at least one incomparable c exists
+   conclusion-held   ;; pairs with no N5-completing c (confirms property)
+   witness)          ;; (list ⊥' ⊤' a b c) on refute; #f otherwise
+  #:transparent)
+
+;; Helper: x and y are incomparable iff neither ≤ the other.
+(define (lattice-incomparable? x y meet-fn)
+  (and (not (lattice-leq? x y meet-fn))
+       (not (lattice-leq? y x meet-fn))))
+
+;; Helper: verify a 5-element subset is closed under meet/join.
+;; Returns #t if closed, #f otherwise.
+(define (sublattice-closed? elems meet-fn join-fn)
+  (define elem-set (apply set elems))
+  (for/and ([x (in-list elems)])
+    (for/and ([y (in-list elems)])
+      (and (set-member? elem-set (meet-fn x y))
+           (set-member? elem-set (join-fn x y))))))
+
+;; M3 detection via antichain-of-3 enumeration.
+;;
+;; For each (a, b, c) where the three are pairwise-incomparable:
+;;   1. Compute pairwise meets ab, ac, bc; verify all equal (= ⊥')
+;;   2. Compute pairwise joins ab', ac', bc'; verify all equal (= ⊤')
+;;   3. Verify {⊥', ⊤', a, b, c} is closed under meet/join
+;;   4. Verify ⊥' ≠ a, b, c and ⊤' ≠ a, b, c (genuine 5-element sublattice)
+;;   5. Refute with witness (⊥', ⊤', a, b, c) on first match
+(define (test-no-m3-sublattice/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (m3-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     #:when (and (not (equal? a b))
+                                 (not (equal? a c))
+                                 (not (equal? b c))
+                                 ;; Canonicalize: a < b < c by hash-code
+                                 ;; to avoid permutation duplicates
+                                 (< (equal-hash-code a) (equal-hash-code b))
+                                 (< (equal-hash-code b) (equal-hash-code c))
+                                 (lattice-incomparable? a b meet-fn)
+                                 (lattice-incomparable? a c meet-fn)
+                                 (lattice-incomparable? b c meet-fn)))
+           (define t* (+ t 1))
+           ;; Hypothesis: pairwise meets/joins all equal
+           (define m-ab (meet-fn a b))
+           (define m-ac (meet-fn a c))
+           (define m-bc (meet-fn b c))
+           (define j-ab (join-fn a b))
+           (define j-ac (join-fn a c))
+           (define j-bc (join-fn b c))
+           (cond
+             [(and (equal? m-ab m-ac) (equal? m-ab m-bc)
+                   (equal? j-ab j-ac) (equal? j-ab j-bc))
+              ;; Hypothesis fires: M3 SHAPE candidate
+              (define bot-prime m-ab)
+              (define top-prime j-ab)
+              (cond
+                ;; Sanity: ⊥' and ⊤' distinct from a, b, c
+                [(or (equal? bot-prime a) (equal? bot-prime b) (equal? bot-prime c)
+                     (equal? top-prime a) (equal? top-prime b) (equal? top-prime c)
+                     (equal? bot-prime top-prime))
+                 (values t* (+ f 1) (+ h 1))]
+                ;; Closure check: {⊥', ⊤', a, b, c} closed under meet/join
+                [(sublattice-closed? (list bot-prime top-prime a b c) meet-fn join-fn)
+                 ;; Genuine M3 sublattice — refute
+                 (return (m3-evidence 'refuted t* (+ f 1) h
+                                       (list bot-prime top-prime a b c)))]
+                [else
+                 ;; Antichain shape but NOT closed; property holds for this triple
+                 (values t* (+ f 1) (+ h 1))])]
+             [else
+              ;; Hypothesis didn't fire (pairwise meets/joins not common)
+              (values t* f h)])))
+       (m3-evidence 'confirmed total fired held #f))]))
+
+(define (test-no-m3-sublattice domain samples meet-fn join-fn)
+  (define ev (test-no-m3-sublattice/detailed domain samples meet-fn join-fn))
+  (case (m3-evidence-status ev)
+    [(confirmed) (axiom-confirmed (m3-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (m3-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; N5 detection via ordered comparable-pair enumeration.
+;;
+;; For each ordered pair (b, a) with b < a (strictly), iterate c incomparable
+;; with both. Verify a ∨ c = b ∨ c (= ⊤') AND a ∧ c = b ∧ c (= ⊥').
+;; If yes AND closure + distinctness hold, refute.
+(define (test-no-n5-sublattice/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (n5-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     #:when (and (not (equal? a b))
+                                 (lattice-leq? b a meet-fn)
+                                 (not (lattice-leq? a b meet-fn))))
+           (define t* (+ t 1))
+           ;; Iterate c incomparable with both a and b
+           (define c-witness
+             (for/or ([c (in-list samples)]
+                      #:when (and (not (equal? c a))
+                                  (not (equal? c b))
+                                  (lattice-incomparable? c a meet-fn)
+                                  (lattice-incomparable? c b meet-fn)))
+               (define j-ac (join-fn a c))
+               (define j-bc (join-fn b c))
+               (define m-ac (meet-fn a c))
+               (define m-bc (meet-fn b c))
+               (cond
+                 [(and (equal? j-ac j-bc) (equal? m-ac m-bc))
+                  ;; N5 shape candidate: {m-ac, j-ac, a, b, c}
+                  (define bot-prime m-ac)
+                  (define top-prime j-ac)
+                  (cond
+                    [(or (equal? bot-prime a) (equal? bot-prime b) (equal? bot-prime c)
+                         (equal? top-prime a) (equal? top-prime b) (equal? top-prime c)
+                         (equal? bot-prime top-prime))
+                     #f]
+                    [(sublattice-closed? (list bot-prime top-prime a b c) meet-fn join-fn)
+                     (list bot-prime top-prime a b c)]  ;; witness
+                    [else #f])]
+                 [else #f])))
+           (cond
+             [c-witness
+              (return (n5-evidence 'refuted t* (+ f 1) h c-witness))]
+             [else
+              ;; b<a pair found; whether incomparable c existed is encoded
+              ;; in whether we entered for/or; conservatively count as
+              ;; hypothesis fired if any incomparable c existed at all.
+              ;; (Note: simplified — for/or returning #f doesn't distinguish
+              ;; "no incomparable c" from "all incomparable c's failed axiom".
+              ;; We count this pair as hypothesis-fired when at least one
+              ;; incomparable c exists; check via separate scan.)
+              (define has-incomparable-c?
+                (for/or ([c (in-list samples)])
+                  (and (not (equal? c a))
+                       (not (equal? c b))
+                       (lattice-incomparable? c a meet-fn)
+                       (lattice-incomparable? c b meet-fn))))
+              (if has-incomparable-c?
+                  (values t* (+ f 1) (+ h 1))
+                  (values t* f h))])))
+       (n5-evidence 'confirmed total fired held #f))]))
+
+(define (test-no-n5-sublattice domain samples meet-fn join-fn)
+  (define ev (test-no-n5-sublattice/detailed domain samples meet-fn join-fn))
+  (case (n5-evidence-status ev)
+    [(confirmed) (axiom-confirmed (n5-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (n5-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
 ;; Compute absolute pseudo-complement candidate ¬a on a sample set.
 ;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
 ;; no such x exists in samples. Used by test-stone-identity below.
@@ -1136,7 +1340,18 @@
         (update-property props-13 'has-complement
                          (test-has-complement domain samples meet-fn join-fn))
         props-13))
-  props-14)
+  ;; Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2 forbidden-sublattice)
+  (define props-15
+    (if (and meet-fn join-fn)
+        (update-property props-14 'no-m3-sublattice
+                         (test-no-m3-sublattice domain samples meet-fn join-fn))
+        props-14))
+  (define props-16
+    (if (and meet-fn join-fn)
+        (update-property props-15 'no-n5-sublattice
+                         (test-no-n5-sublattice domain samples meet-fn join-fn))
+        props-15))
+  props-16)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -1180,7 +1395,19 @@
    ;; SRE Track 2I Phase 6: relative ⇒ sectional (principal ideals are intervals)
    (implication-rule 'rel-comp→sect-comp
                      '(relatively-complemented)
-                     'sectionally-complemented)))
+                     'sectionally-complemented)
+   ;; SRE Track 2I Phase 12 NOTE (2026-05-08): the Birkhoff 9.2 forward
+   ;; implication `no-m3 + no-n5 ⇒ distributive` would seem natural, but
+   ;; is UNSOUND on sample-restricted checks. Birkhoff's theorem applies
+   ;; to the FULL lattice; a sample that fails to contain a closed M3/N5
+   ;; sublattice does NOT mean the lattice it's drawn from is distributive.
+   ;; Phase 12's empirical findings: type wider refutes distributive (per
+   ;; Phase 4 triple check) BUT confirms no-M3 + no-N5 (sample doesn't
+   ;; happen to contain closed forbidden sublattices). Both are honest
+   ;; sample-level data; one does NOT empirically derive the other on
+   ;; samples. Birkhoff's theorem is referenced in the design doc as
+   ;; structural connection; it does not fire as a derivation rule here.
+   ))
 
 ;; Derive composite properties from atomic ones.
 ;; Reads source properties, writes derived property using property-value-join.
@@ -1267,7 +1494,9 @@
                                   modular whitmans-condition breadth-bound
                                   sectionally-complemented
                                   ;; Phase 11: Boolean placement
-                                  has-complement))])
+                                  has-complement
+                                  ;; Phase 12: Birkhoff forbidden-sublattice
+                                  no-m3-sublattice no-n5-sublattice))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -1299,6 +1528,11 @@
           ;; Phase 11: has-complement (Boolean placement)
           [(has-complement)
            (lambda (d s) (test-has-complement d s meet-fn join-fn))]
+          ;; Phase 12: M3 / N5 sublattice detection
+          [(no-m3-sublattice)
+           (lambda (d s) (test-no-m3-sublattice d s meet-fn join-fn))]
+          [(no-n5-sublattice)
+           (lambda (d s) (test-no-n5-sublattice d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

@@ -88,6 +88,29 @@ Pseudo-complement results (separate column block, since the rel/abs distinction 
 | spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✓ |
 | spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✓ |
 
+Birkhoff 9.2 forbidden-sublattice results (✓ = no such sublattice in sample; ✗ = concrete witness found):
+
+| Domain | Relation | Depth | no-M3 (diamond) | no-N5 (pentagon) | Birkhoff verdict |
+|---|---|---|---|---|---|
+| type | equality | ground | ✓ | ✓ | sample contains no closed M3 or N5 |
+| type | equality | wider | ✓ | ✓ | sample limitation (distributive refutes via triple) |
+| type | subtype | ground | ✓ | ✓ | sample contains no closed M3 or N5 |
+| type | subtype | wider | ✓ | ✓ | sample limitation (distributive refutes via triple) |
+| session | equality | ground | ✓ | ✓ | only 2 samples; no antichain-of-3 possible |
+| session | equality | wider | **✗** | ✓ | **concrete M3 witness** (see W-S1 below) |
+| form-cell | equality | ground | ✓ | ✓ | sample contains no closed M3 or N5 |
+| form-cell | equality | wider | ✓ | ✓ | sample contains no closed M3 or N5 |
+| spec-cell | equality | ground | **✗** | ✓ | **concrete M3 witness** (see W-SC1 below) |
+| spec-cell | equality | wider | **✗** | ✓ | **concrete M3 witness** (see W-SC1 below) |
+
+**Birkhoff witnesses** (5-element closed sublattices isomorphic to M3):
+
+- **W-S1** (session × eq × wider M3): `(sess-bot, sess-top, sess-end, sess-svar 0, sess-send(Bool, sess-svar 0))`. The three middle sessions are pairwise-incomparable; their pairwise meets all give `sess-bot` and pairwise joins all give `sess-top`. Concrete structural reason for session × eq's non-distributivity (which Phase 9's distributive refutation already established empirically).
+
+- **W-SC1** (spec-cell × eq M3): `(spec-cell-bot, collision-top, spec-cell-value(bar, Int), spec-cell-value(foo, Int), spec-cell-value(foo, Bool))`. Three spec-cell values with conflicting names/types; pairwise meets give `spec-cell-bot`, pairwise joins give `collision-top`.
+
+**Type domain sample-limitation note**: type × {eq, sub} × wider has distributive refuted (Phase 4 found Pi-typed counterexample triple) but Phase 12 finds no closed M3/N5 sublattice in the depth-1 sample. Classical Birkhoff 9.2 says distributive ⇔ no-M3 ∧ no-N5 on the FULL lattice — so a witness sublattice MUST exist in the full type lattice. Our depth-1 generator captures local axiom failure (the triple) but not the global witness sublattice (the closed 5-element structure). Honest sample-set scope acknowledgment, not a contradiction. Constructing the witness sublattice would require deeper sample generation or direct construction from the Phase 4 triple — sister concern.
+
 Status note on Boolean column (updated 2026-05-08, Phase 11): empirical `has-complement` check now run via `tools/run-phase9-sweep.rkt --properties has-complement`. **Boolean refuted with witness `Int` for all type×{eq,sub} rows** (Int has no `x` such that `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge — same witness across all 4 type-domain depths). Spec-cell × equality also refutes. Notable: even on the type×{eq,sub}×ground rows where Heyting confirms, Boolean refutes — these lattices are Heyting but NOT Boolean.
 
 This is **architecturally correct for an open-world type system**. The Heyting/non-Boolean placement reflects our design commitment to *Open Extension, Closed Verification* — the type universe is open (new types can always be added), so "what's NOT Int" is an open collection (Bool, String, Nat, all function types, all not-yet-defined types) rather than a single complement type. The Heyting algebra's relative pseudo-complement (`a → b`) is the appropriate backward-flow operator in an open world; classical Boolean complement is foreclosed by construction.
@@ -244,6 +267,7 @@ We interpret this as: **our wider sample is not a finite sublattice of FL** in t
 In the spirit of honest scope, the following were *not* measured for the variety-placement matrix above. **Phases 11-15 (in progress as of 2026-05-08) address each**; this section will be updated in-place once those land:
 
 - ~~**`has-complement`** (Boolean-algebra membership). Phase 11. Per-element search for complements; closes the Boolean column of the variety-placement matrix (currently uniformly "—").~~ **DONE 2026-05-08**: Boolean refuted with witness `Int` for type×{eq,sub} (all depths) and spec-cell × equality (all depths). Session and form-cell remain untested due to sample-set bot/top absence; sister-concern requires per-domain atom-pool enrichment.
+- ~~**M3 / N5 sublattice detection** (Birkhoff's forbidden-sublattice theorem). Phase 12. Empirical sublattice check provides concrete witness for *why* distributivity refutes — the specific 5-element subset that is order-isomorphic to the diamond M3 or pentagon N5.~~ **DONE 2026-05-08**: direct-construction approach (antichain-of-3 for M3, comparable-pair-plus-incomparable for N5; O(N³) per check). **Concrete Birkhoff M3 witnesses found**: session × eq × wider yields `(sess-bot, sess-top, sess-end, sess-svar 0, sess-send Bool (sess-svar 0))` — three pairwise-incomparable session types with common pairwise meet/join, closed under operations. Spec-cell × eq × {ground, wider} yields M3 sublattice with three distinct spec-cell-values. Type × {eq, sub} confirms both no-M3 + no-N5 on depth-1 sample despite distributive refutation (Phase 4 triple) — sample-set limitation; classical Birkhoff witness exists in full type lattice but our depth-1 generator doesn't construct closed forbidden sublattices. Form-cell confirms both no-M3 + no-N5 on its sample. **Birkhoff forward implication deliberately not added as derivation rule** (sample-unsound; theorem applies to full lattice not arbitrary samples).
 - **M3 / N5 sublattice detection** (Birkhoff's forbidden-sublattice theorem). Phase 12. Empirical sublattice check provides concrete witness for *why* distributivity refutes — the specific 5-element subset that is order-isomorphic to the diamond M3 or pentagon N5.
 - **Convex-geometry / anti-exchange characterization** (Adaricheva-Gorbunov-Tumanov 2003). Phase 13. For SD-confirmed domains, dualize via the canonical closure operator on join-irreducibles. The AGT 2003 theorem ties finite join-semidistributive lattices to convex geometries iff anti-exchange holds — empirical confirmation would substantively connect our system to convex-geometry literature.
 - **Targeted congruences** — specific candidate congruences (kernel of multiplicity-forgetful map; canonical-form projection). Phase 14. Restricted scope: cannot fully characterize `Con(L)` (O(2^N) explosive) but can confirm/refute specific candidates relevant to our system's structure.

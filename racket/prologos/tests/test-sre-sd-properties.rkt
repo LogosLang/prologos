@@ -410,8 +410,8 @@
 ;; variety-placement summary
 ;; ============================================================================
 
-(test-case "Phase 9a / Phase 11: all-sweep-properties has 12 algebraic properties"
-  (check-equal? (length all-sweep-properties) 12)  ;; Phase 11: +has-complement
+(test-case "Phase 9a / Phase 11 / Phase 12: all-sweep-properties has 14 algebraic properties"
+  (check-equal? (length all-sweep-properties) 14)  ;; Phase 12: +no-m3, +no-n5
   (check-not-false (memq 'distributive all-sweep-properties))
   (check-not-false (memq 'sd-vee all-sweep-properties))
   (check-not-false (memq 'sd-wedge all-sweep-properties))
@@ -423,7 +423,9 @@
   (check-not-false (memq 'relatively-complemented all-sweep-properties))
   (check-not-false (memq 'sectionally-complemented all-sweep-properties))
   (check-not-false (memq 'breadth-bound all-sweep-properties))
-  (check-not-false (memq 'has-complement all-sweep-properties)))  ;; Phase 11
+  (check-not-false (memq 'has-complement all-sweep-properties))  ;; Phase 11
+  (check-not-false (memq 'no-m3-sublattice all-sweep-properties))  ;; Phase 12
+  (check-not-false (memq 'no-n5-sublattice all-sweep-properties)))  ;; Phase 12
 
 (test-case "Phase 9a: each finding has untested-reason field (#f when tested)"
   (for ([f (in-list phase3-findings)])

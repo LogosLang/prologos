@@ -84,7 +84,8 @@
     whitmans-condition
     relatively-complemented sectionally-complemented
     breadth-bound
-    has-complement))  ;; Phase 11: Boolean placement
+    has-complement  ;; Phase 11: Boolean placement
+    no-m3-sublattice no-n5-sublattice))  ;; Phase 12: Birkhoff forbidden-sublattice
 
 ;; ========================================================================
 ;; run-sd-sweep
@@ -200,6 +201,12 @@
          [(has-complement)
           ;; Phase 11: per-element search for complement (a∧x=⊥, a∨x=⊤)
           (test-has-complement/detailed domain samples meet-fn join-fn)]
+         [(no-m3-sublattice)
+          ;; Phase 12: M3 (diamond) sublattice detection via antichain-of-3
+          (test-no-m3-sublattice/detailed domain samples meet-fn join-fn)]
+         [(no-n5-sublattice)
+          ;; Phase 12: N5 (pentagon) sublattice detection via comparable-pair+c
+          (test-no-n5-sublattice/detailed domain samples meet-fn join-fn)]
          [else axiom-untested]))
      (sd-finding domain-name rel prop sample-count ev #f)]))
 
@@ -257,6 +264,18 @@
            (complement-evidence-hypothesis-fired ev)
            (complement-evidence-conclusion-held ev)
            (complement-evidence-witness ev))]
+    [(m3-evidence? ev)  ;; Phase 12
+     (list (m3-evidence-status ev)
+           (m3-evidence-total-checked ev)
+           (m3-evidence-hypothesis-fired ev)
+           (m3-evidence-conclusion-held ev)
+           (m3-evidence-witness ev))]
+    [(n5-evidence? ev)  ;; Phase 12
+     (list (n5-evidence-status ev)
+           (n5-evidence-total-checked ev)
+           (n5-evidence-hypothesis-fired ev)
+           (n5-evidence-conclusion-held ev)
+           (n5-evidence-witness ev))]
     [(whitman-evidence? ev)
      (list (whitman-evidence-status ev)
            (whitman-evidence-total-checked ev)

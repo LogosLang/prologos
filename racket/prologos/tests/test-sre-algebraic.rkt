@@ -863,3 +863,63 @@
                                          #:meet-fn type-lattice-meet
                                          #:relation 'equality))
   (check-true (hash-has-key? props 'has-complement)))
+
+;; ========================================
+;; SRE Track 2I Phase 12: M3 / N5 sublattice detection (Birkhoff 9.2)
+;; ========================================
+
+(test-case "Phase 12: test-no-m3-sublattice untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-no-m3-sublattice td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-no-m3-sublattice td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 12: test-no-n5-sublattice untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-no-n5-sublattice td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-no-n5-sublattice td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 12: test-no-m3-sublattice/detailed returns m3-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-no-m3-sublattice/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (m3-evidence? ev))
+  (check-not-false (memq (m3-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (m3-evidence-total-checked ev) 0)))
+
+(test-case "Phase 12: test-no-n5-sublattice/detailed returns n5-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-no-n5-sublattice/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (n5-evidence? ev))
+  (check-not-false (memq (n5-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (n5-evidence-total-checked ev) 0)))
+
+(test-case "Phase 12: lattice-incomparable? helper"
+  ;; type-bot ≤ everything; type-bot is comparable to all atoms.
+  (check-false (lattice-incomparable? type-bot (expr-Int) type-lattice-meet))
+  (check-false (lattice-incomparable? (expr-Int) type-bot type-lattice-meet))
+  ;; Two distinct atoms are incomparable in the equality lattice.
+  (check-true (lattice-incomparable? (expr-Int) (expr-Bool) type-lattice-meet)))
+
+(test-case "Phase 12: NO Birkhoff forward implication rule (sample-unsound)"
+  ;; The natural-seeming implication `no-m3 + no-n5 ⇒ distributive` would be
+  ;; UNSOUND on sample-restricted checks (Birkhoff applies to FULL lattice,
+  ;; not arbitrary samples). Phase 12 deliberately omits this implication
+  ;; rule; empirical sweep results stand on their own. Verify: with both
+  ;; sources confirmed, distributive remains prop-unknown (no rule fires).
+  (define props (hasheq 'no-m3-sublattice prop-confirmed
+                        'no-n5-sublattice prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'distributive prop-unknown) prop-unknown))
+
+(test-case "Phase 12: infer-domain-properties produces no-m3 + no-n5 entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'no-m3-sublattice))
+  (check-true (hash-has-key? props 'no-n5-sublattice)))

@@ -99,7 +99,10 @@
           '(equality)
           realistic-session-atoms
           (hasheq 'type realistic-type-atoms)
-          #t)
+          ;; Phase 11 + 12 lesson: session is bounded-below (bot=top=#f);
+          ;; #:include-bot-top #t injects #f into samples, producing bogus
+          ;; sublattice findings. Match form-cell pattern (Phase 8).
+          #f)
     (list 'form-cell
           '(equality)
           realistic-form-cell-atoms
@@ -414,6 +417,18 @@
            (complement-evidence-hypothesis-fired ev)
            (complement-evidence-conclusion-held ev)
            (complement-evidence-witness ev))]
+    [(m3-evidence? ev)  ;; Phase 12
+     (list (m3-evidence-status ev)
+           (m3-evidence-total-checked ev)
+           (m3-evidence-hypothesis-fired ev)
+           (m3-evidence-conclusion-held ev)
+           (m3-evidence-witness ev))]
+    [(n5-evidence? ev)  ;; Phase 12
+     (list (n5-evidence-status ev)
+           (n5-evidence-total-checked ev)
+           (n5-evidence-hypothesis-fired ev)
+           (n5-evidence-conclusion-held ev)
+           (n5-evidence-witness ev))]
     [(whitman-evidence? ev)
      (list (whitman-evidence-status ev)
            (whitman-evidence-total-checked ev)
