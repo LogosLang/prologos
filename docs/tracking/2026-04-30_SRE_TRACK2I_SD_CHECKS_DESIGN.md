@@ -577,11 +577,92 @@ Whitman's W and breadth-bound have no clean implication chains to other registry
 
 ### Phase 7: Generator extension — session domain
 
-**Scope** (high-level):
+**Scope** (revised post mini-audit 2026-04-30):
 
-Extend `sre-sample-generator.rkt`'s `build-atoms-by-spec` to populate atom pools for the session domain. Audit ctor-descs in `session-lattice.rkt` / `session-propagators.rkt`; identify which slots take which lattice-specs; design realistic session atom pool: candidates `close`, `send-T` for atomic `T`, `recv-T`, `select` with branches, `offer`, recursive `mu`. Recursive types may need depth-bound special handling.
+Phase 7 broadens from "generator extension only" to **three atomic concerns** after audit revealed `session-lattice-meet` exists (Track 2G addition, exported at `session-lattice.rkt:32`) but no `meet-registry` was wired. This is a sister of Phase 3c's type-domain meet-registry addition.
 
-**Estimated scope**: ~30-60 LoC generator extension + ~20 LoC atom pool design + ~20 LoC tests.
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-04-30)
+
+**Q1 — Cross-domain atom flow (explicit vs auto-discovery)**: option (A) explicit caller-supplied via `#:cross-domain-atoms` keyword. Locked on **Decomplection + anti-Scaffolding-Hides-Truth grounds**: auto-discovery is the same shape we retired in Phase 3c (always-installed callback hiding cross-domain flow). Caller burden (one hash literal per cross-domain sweep) is the cost of honest dependency surface.
+
+**Q2 — Realistic session atoms**: `(list (sess-end) (sess-svar 0))`. Sweet spot per audit:
+- (sess-end): canonical terminal session — semantically central
+- (sess-svar 0): de Bruijn variable for mu body, covers binder-context "atom" case
+- Higher svar indices (1+) reject: out-of-context for un-nested mu; diminishing return
+- Pre-baked compounds reject: defeat depth-0/depth-1 semantics
+- Empty/just-sess-end reject: too sparse (only 1 atom in pool after sentinel-filter)
+
+**Q3 — Meet-limitation addressable in Phase 7**: YES. `session-lattice-meet` exists at `session-lattice.rkt:122` (Track 2G) — just never registered. Add `session-meet-registry` as Phase 7a (~15 LoC; sister of Phase 3c). This unlocks all Phase 5/6 checks for session×equality sweep. Without this, sweep would produce only `commutative/associative/idempotent-join` empirical (3 findings) — adding meet-registry unlocks ~10 more.
+
+**Q4 — Sub-phase plan**: single phase intent; 7a/7b/7c sub-phase fallback ready.
+
+**Three atomic sub-phases**:
+
+| Sub-phase | Scope | Cost |
+|---|---|---|
+| **7a** | Add `session-meet-registry`; wire into `session-sre-domain`; atomic with declaration update if needed | ~15 LoC |
+| **7b** | Generator: `#:cross-domain-atoms` parameter through `generate-domain-samples` + `build-atoms-by-spec` + `run-sd-sweep`; tests | ~50-80 LoC |
+| **7c** | Define `realistic-session-atoms`; integration tests for session sweep mechanism on small sample; verify findings | ~30-50 LoC |
+
+**Implementation shape (7b core)**:
+
+```racket
+(define (generate-domain-samples domain
+                                 #:max-depth [max-depth 2]
+                                 #:per-ctor-count [per-ctor-count 2]
+                                 #:include-bot-top [include-bot-top #t]
+                                 #:base-values [base-values #f]
+                                 #:cross-domain-atoms [cross-domain-atoms (hasheq)])
+  ;; cross-domain-atoms: hash spec → atoms (e.g., (hasheq 'type realistic-type-atoms))
+  ;; Used for slots whose lattice-spec is from a domain other than `domain`.
+  ...)
+
+(define (build-atoms-by-spec full-pool per-ctor-count domain cross-domain-atoms)
+  ;; Self-domain pool from full-pool (sentinel-filtered);
+  ;; other-domain pools from cross-domain-atoms.
+  ...)
+```
+
+**Sweep invocation for session×equality**:
+
+```racket
+(run-sd-sweep session-domain
+              '(equality)
+              realistic-session-atoms
+              #:max-depth 1
+              #:per-ctor-count 2
+              #:cross-domain-atoms (hasheq 'type realistic-type-atoms))
+```
+
+**Audit findings persisted**:
+- 7 session ctors registered in `ctor-registry.rkt:690-786`: 6 arity-2 (sess-send/recv/dsend/drecv/async-send/async-recv) with cross-domain components (type, session); 1 arity-1 (sess-mu) intra-domain
+- Branch ctors NOT registered (sess-choice/sess-offer have variable arity) — limitation acknowledged
+- 0 arity-0 ctors registered (sess-end is a struct but not ctor-desc-registered as nullary)
+- session-sre-domain at `session-propagators.rkt:264` has merge-registry for 'equality only; no meet-registry; declared 'has-meet prop-confirmed
+- `session-lattice-meet` exists at `session-lattice.rkt:122` (Track 2G); exported but unwired
+
+**Adversarial CRITIQUE pass surfaced**:
+
+1. **Cross-domain atom flow as Galois bridge**: Phase 7 makes cross-domain atom flow first-class via parameter — explicit Galois-connection-style bridge between domain pools. PTF §5.4 framing applies. Worth noting in dailies + Phase 10 report as architectural insight.
+
+2. **Anti-Scaffolding-Hides-Truth in API design**: rejecting auto-discovery (option B) in favor of explicit caller-supply (option A) is a direct application of the pattern we graduated this session. The principle scales beyond defensive guards / hardcoded constants / always-installed callbacks to API-design choices that hide cross-cutting flow.
+
+3. **Q6 Hasse**: same as Phases 1-5 + Phase 7 — only Phase 6's breadth-bound exploits Hasse. Phase 7 doesn't.
+
+**Honest scope-acknowledgments**:
+- Branch ctors (sess-choice/sess-offer) NOT covered — variable arity, not ctor-registered. Sister concern.
+- Mu recursion: sess-mu compound generation may produce out-of-binder-context sess-svar values. Watch for malformed compounds (Phase 2a Scaffolding-Hides-Truth pattern could fire).
+- Caller responsibility: cross-domain-atoms supplied correctly by caller; generator doesn't validate (would-be over-engineering).
+
+**Drift risks (consolidated, 7 items)**:
+
+1. **Cross-domain atom pool leakage**: caller forgets type atoms → empty type pool → zero compound sess-send inhabitants. Mitigation: documentation; eventual count-per-ctor diagnostic if needed.
+2. **Session has no subtype relation**: only equality registered. Phase 7 doesn't add subtype-merge — sister concern.
+3. **Branch ctors not covered**: sess-choice/sess-offer variable arity, unregistered. Limitation; sister concern.
+4. **Mu recursion malformed compounds**: sess-mu with out-of-context sess-svar bodies may surface 4th Scaffolding-Hides-Truth instance. Watch via merge function behavior.
+5. **API change cascade**: cross-domain-atoms parameter touches generator + sweep + tests atomically.
+6. **Phase 7 size**: ~95-145 LoC. Sub-phase 7a/7b/7c fallback ready.
+7. **Session sweep findings dependent on meet-registry landing**: 7a must land before 7c sweep is informative. Sub-phase ordering matters.
 
 ### Phase 8: Generator extension — form domain
 
