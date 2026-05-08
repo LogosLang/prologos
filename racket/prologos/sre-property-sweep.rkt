@@ -72,18 +72,25 @@
 ;;
 ;; #:max-depth     — sample-generator depth (default 1; see Phase 2a)
 ;; #:per-ctor-count — sample-generator Cartesian width (default 2)
+;; #:cross-domain-atoms — Phase 7: hash spec → atom-list for ctor slots
+;;                   from other domains. E.g., sweeping session domain
+;;                   requires `(hasheq 'type type-atoms)` because session
+;;                   ctors (sess-send/recv/...) have type-payload slots.
+;;                   Default empty hasheq (no cross-domain ctors).
 ;;
 ;; Returns: (listof sd-finding) — 3 findings per relation; flattened.
 (define (run-sd-sweep domain
                       relations
                       base-atoms
                       #:max-depth [max-depth 1]
-                      #:per-ctor-count [per-ctor-count 2])
+                      #:per-ctor-count [per-ctor-count 2]
+                      #:cross-domain-atoms [cross-domain-atoms (hasheq)])
   (define samples
     (generate-domain-samples domain
                              #:max-depth max-depth
                              #:per-ctor-count per-ctor-count
-                             #:base-values base-atoms))
+                             #:base-values base-atoms
+                             #:cross-domain-atoms cross-domain-atoms))
   (define sample-count (length samples))
   (define domain-name (sre-domain-name domain))
   ;; Phase 4: derive both meet-fn and join-fn from the SAME relation
@@ -193,15 +200,20 @@
 
 (module+ main
   (require "driver.rkt"
-           "syntax.rkt")
+           "syntax.rkt"
+           "sessions.rkt")
   (define type-domain (lookup-domain 'type))
+  (define session-domain (lookup-domain 'session))
   (define realistic-type-atoms
     (list (expr-Int) (expr-Bool) (expr-Nat) (expr-String)))
-  (displayln ";; SRE Track 2I Phase 3 — wider-sample sweep findings")
+  (define realistic-session-atoms
+    (list (sess-end) (sess-svar 0)))
+  ;; Type domain sweep
+  (displayln ";; SRE Track 2I Phase 3 — wider-sample sweep findings (TYPE domain)")
   (displayln ";; Generated via: racket sre-property-sweep.rkt")
   (displayln ";; Sample params: max-depth 1, per-ctor-count 2, 4 realistic atoms")
   (newline)
-  (define findings
+  (define type-findings
     (time
      (run-sd-sweep type-domain
                    '(equality subtype)
@@ -209,4 +221,19 @@
                    #:max-depth 1
                    #:per-ctor-count 2)))
   (newline)
-  (displayln (format-sd-findings findings)))
+  (displayln (format-sd-findings type-findings))
+  ;; Session domain sweep (Phase 7)
+  (newline)
+  (displayln ";; SRE Track 2I Phase 7 — wider-sample sweep findings (SESSION domain)")
+  (displayln ";; Cross-domain atoms: realistic-type-atoms for type-payload slots")
+  (newline)
+  (define session-findings
+    (time
+     (run-sd-sweep session-domain
+                   '(equality)
+                   realistic-session-atoms
+                   #:max-depth 1
+                   #:per-ctor-count 2
+                   #:cross-domain-atoms (hasheq 'type realistic-type-atoms))))
+  (newline)
+  (displayln (format-sd-findings session-findings)))

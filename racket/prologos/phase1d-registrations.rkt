@@ -50,7 +50,7 @@
          (only-in "session-runtime.rkt"
                   choice-lattice-merge
                   msg-lattice-merge)
-         (only-in "session-lattice.rkt" session-lattice-merge)
+         (only-in "session-lattice.rkt" session-lattice-merge session-lattice-meet)  ;; Phase 7a
          (only-in "io-bridge.rkt" io-state-merge)
          (only-in "effect-position.rkt" eff-pos-merge)
          ;; Capability
@@ -170,8 +170,34 @@
                   (lambda (v) #f) #f)
 (register/minimal 'session-message msg-lattice-merge
                   (lambda (v) #f) #f)
-(register/minimal 'session session-lattice-merge
-                  (lambda (v) #f) #f)
+;; SRE Track 2I Phase 7a (2026-04-30): 'session needs meet-registry so empirical
+;; sweep can run Phase 5/6 algebraic-property checks. The pre-7a `register/minimal`
+;; only set merge-registry — leaving meet-registry #f. session-lattice-meet has
+;; existed since Track 2G but was never wired into the registry. We use a richer
+;; helper here that includes meet-registry while keeping the same minimal-otherwise
+;; shape (bot/top values, etc., remain #f as pre-7a).
+;;
+;; Note: session-propagators.rkt also defines a richer session-sre-domain (with
+;; bot=sess-bot, dual-pairs, declared-properties), but it's not in the production
+;; load chain (no module currently requires session-propagators.rkt for its body).
+;; Bringing it in would be a separate consolidation track.
+(let* ([d (make-sre-domain
+           #:name 'session
+           #:merge-registry (lambda (r)
+                              (case r
+                                [(equality) session-lattice-merge]
+                                [else (error 'phase1d-registration
+                                             "no merge for relation: ~a" r)]))
+           #:meet-registry (lambda (r)
+                             (case r
+                               [(equality) session-lattice-meet]
+                               [else (error 'phase1d-registration
+                                            "no meet for relation: ~a" r)]))
+           #:contradicts? (lambda (v) #f)
+           #:bot? (lambda (v) #f)
+           #:bot-value #f)])
+  (register-domain! d)
+  (register-merge-fn!/lattice session-lattice-merge #:for-domain 'session))
 (register/minimal 'io-state io-state-merge
                   (lambda (v) #f) #f)
 (register/minimal 'effect-position eff-pos-merge

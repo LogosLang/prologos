@@ -261,10 +261,23 @@
   (hash-ref session-merge-table rel-name
             (λ () (error 'session-merge-registry "no merge for: ~a" rel-name))))
 
+;; SRE Track 2I Phase 7a (2026-04-30): per-relation meet registry. Sister of
+;; Phase 3c's type-meet-registry. session-lattice-meet exists at
+;; session-lattice.rkt:122 (Track 2G addition); Phase 7a wires it into the
+;; sre-domain registry so Phase 5/6 algebraic-property checks can run on
+;; session×equality sweep.
+;; Currently session has only the equality relation registered (no subtype);
+;; meet-registry mirrors that.
+(define (session-meet-registry rel-name)
+  (case rel-name
+    [(equality) session-lattice-meet]
+    [else (error 'session-meet-registry "no meet for relation: ~a" rel-name)]))
+
 (define session-sre-domain
   (make-sre-domain
     #:name 'session
     #:merge-registry session-merge-registry
+    #:meet-registry session-meet-registry  ;; Phase 7a — unlock empirical sweep
     #:contradicts? session-lattice-contradicts?
     #:bot? sess-bot?
     #:bot-value sess-bot

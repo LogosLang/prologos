@@ -49,8 +49,10 @@
          racket/string
          "../driver.rkt"          ;; loads both domains via register-domain!
          "../sre-core.rkt"
+         (only-in "../sre-sample-generator.rkt" generate-domain-samples)  ;; Phase 7c
          "../sre-property-sweep.rkt"
-         "../syntax.rkt")
+         "../syntax.rkt"
+         "../sessions.rkt")        ;; Phase 7c: sess-end, sess-svar for session sweep
 
 ;; ============================================================================
 ;; Shared fixture: the Phase 3 sweep runs ONCE at module load
@@ -168,3 +170,79 @@
       (check-true (positive? total))
       (check-true (<= 0 fired total))
       (check-true (<= 0 held fired)))))
+
+;; ============================================================================
+;; SRE Track 2I Phase 7c: session domain sweep tests
+;; ============================================================================
+;;
+;; Phase 7a wired session-meet-registry; Phase 7b extended generator with
+;; #:cross-domain-atoms; Phase 7c integrates session sweep mechanism.
+;;
+;; Like Phase 3 sweep, depth-0 keeps these tests fast. Wider-sample session
+;; findings are produced by `racket sre-property-sweep.rkt` and captured
+;; into design doc § Phase 7 Findings as a versioned artifact.
+
+(define realistic-session-atoms
+  (list (sess-end) (sess-svar 0)))  ;; Phase 7 Q2: terminal + de Bruijn variable
+
+(define session-domain-for-sweep (lookup-domain 'session))
+
+;; depth-0: sess-bot + sess-top + (sess-end) + (sess-svar 0) = 4 samples
+;; (after sentinel-filter for components: 2 atoms — sess-end + sess-svar 0).
+;; 64 triples per check × 3 checks (distributive + sd-vee + sd-wedge) = 192 calls.
+;; Plus type cross-domain pool feeds session ctors' type slots.
+(define phase7-findings
+  (run-sd-sweep session-domain-for-sweep
+                '(equality)
+                realistic-session-atoms
+                #:max-depth 0
+                #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+
+(test-case "Phase 7a: session-sre-domain has meet-registry wired"
+  ;; Verifies the meet-registry Phase 7a addition: sre-domain-meet returns
+  ;; non-#f for the equality relation on session domain (it didn't pre-7a).
+  (define meet-fn (sre-domain-meet session-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 7b: generate-domain-samples accepts cross-domain-atoms"
+  (define samples
+    (generate-domain-samples session-domain-for-sweep
+                             #:max-depth 0
+                             #:base-values realistic-session-atoms
+                             #:cross-domain-atoms (hasheq 'type realistic-type-atoms)))
+  (check-true (positive? (length samples))))
+
+(test-case "Phase 7c: run-sd-sweep on session×equality returns 3 findings"
+  ;; 3 properties (distributive, sd-vee, sd-wedge) × 1 relation (equality) = 3.
+  (check-equal? (length phase7-findings) 3))
+
+(test-case "Phase 7c: each session finding has correct shape"
+  (for ([f (in-list phase7-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'session)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))
+    (check-true (positive? (sd-finding-sample-count f)))))
+
+(test-case "Phase 7c: session sweep evidence types"
+  ;; distributive → axiom-* shape; SD → sd-evidence struct.
+  (for ([f (in-list phase7-findings)])
+    (define ev (sd-finding-evidence f))
+    (case (sd-finding-property f)
+      [(distributive)
+       (check-true (or (axiom-confirmed? ev)
+                       (axiom-refuted? ev)
+                       (eq? ev axiom-untested)))]
+      [(sd-vee sd-wedge)
+       (check-true (sd-evidence? ev))])))
+
+(test-case "Phase 7c: format-sd-findings handles session findings"
+  (define md (format-sd-findings phase7-findings))
+  (define lines (string-split md "\n"))
+  ;; Header + separator + 3 finding rows = 5 lines
+  (check-equal? (length lines) 5)
+  (check-true (string-contains? (first lines) "Domain"))
+  ;; All rows mention "session"
+  (for ([line (in-list (drop lines 2))])
+    (check-true (string-prefix? line "|"))
+    (check-true (string-contains? line "session"))))

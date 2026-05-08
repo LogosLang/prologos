@@ -75,13 +75,29 @@
 ;;                    per depth.
 ;; #:include-bot-top — include bot-value and top-value at depth 0 (default #t)
 ;; #:base-values    — optional list of pre-built atomic samples.
+;; #:cross-domain-atoms — Phase 7 (2026-04-30): hash of lattice-spec → atom
+;;                    list for component slots whose lattice-spec is from
+;;                    OTHER domains. Required when sweeping a domain whose
+;;                    ctors have cross-domain components (e.g. session ctors
+;;                    have type-payload + session-cont; sweeping session
+;;                    requires `#:cross-domain-atoms (hasheq 'type type-atoms)`
+;;                    to populate the type slots). Default empty hasheq
+;;                    (back-compat for type-only sweeps that don't cross
+;;                    domains).
+;;
+;;                    Decomplection: caller-supplied (explicit) over
+;;                    auto-discovery via domain-registry lookup, on
+;;                    anti-Scaffolding-Hides-Truth grounds — the cross-domain
+;;                    flow is honest at the call site rather than hidden in
+;;                    generator internals.
 ;;
 ;; Returns: (listof value), deduplicated via equal?.
 (define (generate-domain-samples domain
                                  #:max-depth [max-depth 2]
                                  #:per-ctor-count [per-ctor-count 2]
                                  #:include-bot-top [include-bot-top #t]
-                                 #:base-values [base-values #f])
+                                 #:base-values [base-values #f]
+                                 #:cross-domain-atoms [cross-domain-atoms (hasheq)])
   (define domain-name (sre-domain-name domain))
   (define ctor-descs (all-ctor-descs #:domain domain-name))
 
@@ -107,7 +123,7 @@
               ([d (in-range 1 (+ max-depth 1))])
       (define prev-samples (last acc))
       (define atoms-by-spec
-        (build-atoms-by-spec prev-samples per-ctor-count domain))
+        (build-atoms-by-spec prev-samples per-ctor-count domain cross-domain-atoms))
       (define new-samples
         (compound-ctor-inhabitants ctor-descs atoms-by-spec))
       (append acc (list (remove-duplicates new-samples)))))
@@ -140,19 +156,30 @@
 ;;   - 'type sentinel    → component pool excluding lattice sentinels
 ;;   - mult-lattice-spec → the multiplicity pool (capped)
 ;;
-;; To extend for other domains:
-;;   - Add an entry mapping 'session, term-lattice-spec, etc. to its
-;;     domain-appropriate non-sentinel pool. The compound-ctor-inhabitants
-;;     function uses the hash uniformly.
-(define (build-atoms-by-spec full-pool per-ctor-count domain)
+;; Phase 7 (2026-04-30): generalized for cross-domain atom flow. Self-domain
+;; pool (matching `domain`) comes from `full-pool` (sentinel-filtered);
+;; other-domain pools come from `cross-domain-atoms` (caller-supplied).
+;; This makes cross-domain dependency explicit at call sites — e.g., session
+;; sweeps must supply `(hasheq 'type type-atoms)` because session ctors
+;; (sess-send, sess-recv, etc.) have cross-domain type-payload slots.
+(define (build-atoms-by-spec full-pool per-ctor-count domain cross-domain-atoms)
   (define bot (sre-domain-bot-value domain))
   (define top (sre-domain-top-value domain))
   (define non-sentinel-pool
     (filter (lambda (v) (and (not (equal? v bot))
                              (not (equal? v top))))
             full-pool))
-  (hash 'type            (take-up-to non-sentinel-pool per-ctor-count)
-        'session         (take-up-to non-sentinel-pool per-ctor-count)
+  (define self-pool (take-up-to non-sentinel-pool per-ctor-count))
+  (define domain-name (sre-domain-name domain))
+  ;; Helper: pool for a given lattice-spec.
+  ;; - If spec matches self-domain → use self-pool (sentinel-filtered full-pool)
+  ;; - Else → look up in cross-domain-atoms (caller-supplied)
+  (define (pool-for-spec spec)
+    (cond
+      [(equal? spec domain-name) self-pool]
+      [else (take-up-to (hash-ref cross-domain-atoms spec '()) per-ctor-count)]))
+  (hash 'type             (pool-for-spec 'type)
+        'session          (pool-for-spec 'session)
         mult-lattice-spec (take-up-to mult-pool per-ctor-count)))
 
 ;; ========================================================================
