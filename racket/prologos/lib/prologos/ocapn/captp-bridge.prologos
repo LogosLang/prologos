@@ -47,7 +47,7 @@ defn incoming-captp-op
       v
   | [op-gc-answer _pos] v ->
       v
-  | [op-deliver-to-answer _qpos _args] v ->
+  | [op-deliver-to-answer _qpos _args _ap _rm] v ->
       ;; Resolving an outbound question requires BridgeState (the
       ;; outbound-questions table). The stateless variant can't do it;
       ;; no-op here, the state-aware dispatcher handles it. Phase 25.
@@ -178,16 +178,18 @@ data QEntry
 ;; PipeMsg — Phase 41: wire-side pipeline message queue entry
 ;; ===========================================================
 ;;
-;; When peer pipelines `<op:deliver <desc:answer N> args ...>` and N
-;; is in our inbound bs-questions table, the bridge records (pid, args)
-;; here. The vat-side queue (PromiseState's pst-unresolved msgs) is
-;; for in-process pipelining and gets WIPED on fulfill; this bridge-
+;; When peer pipelines `<op:deliver <desc:answer N> args ap rm>` and N
+;; is in our inbound bs-questions table, the bridge records
+;; (pid, args, ap) here — ap is peer's answer-pos for the pipelined Q
+;; (Phase 45). The vat-side queue (PromiseState's pst-unresolved msgs)
+;; is for in-process pipelining and gets WIPED on fulfill; this bridge-
 ;; level queue survives resolution so the pump can emit forwarding
-;; bytes when the local promise resolves to a peer-export-shaped refr.
+;; bytes when the local promise resolves, AND can break-forward the
+;; queued delivers' answers when the local promise breaks.
 ;; Single-constructor avoids issue #60.
 data PipeMsg
-  pipe-msg : Nat -> SyrupValue
-  ;; (local-promise-id, args)
+  pipe-msg : Nat -> SyrupValue -> [Option Nat]
+  ;; (local-promise-id, args, queued-deliver-answer-pos)
 
 ;; ===========================================================
 ;; Refr — runtime CapTP capability value (Phase 34a)
@@ -639,11 +641,11 @@ defn bs-decr-export
 ;; survives fulfill (the vat-side queue gets wiped). Pump-outbound
 ;; later walks this list, emits forwarding bytes when a queued pid's
 ;; promise has resolved to a peer-export refr.
-spec bs-add-pipeline-msg Nat SyrupValue BridgeState -> BridgeState
+spec bs-add-pipeline-msg Nat SyrupValue [Option Nat] BridgeState -> BridgeState
 defn bs-add-pipeline-msg
-  | pid args [bridge-state ls es as qs p oqs ir er pm] ->
+  | pid args ap [bridge-state ls es as qs p oqs ir er pm] ->
       bridge-state ls es as qs p oqs ir er
-        [cons [pipe-msg pid args] pm]
+        [cons [pipe-msg pid args ap] pm]
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -926,8 +928,8 @@ defn dispatch-deliver [tgt args ap v st]
 ;; `pipeline-deliver` (from prologos::ocapn::pipelining) implements
 ;; the actor-vs-promise dispatch on the local id; the bridge's job is
 ;; just the q-pos → local-id lookup.
-spec dispatch-pipeline-on-our-q Nat SyrupValue Vat BridgeState -> BridgeStep
-defn dispatch-pipeline-on-our-q [qpos args v st]
+spec dispatch-pipeline-on-our-q Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-pipeline-on-our-q [qpos args ap v st]
   match [bs-lookup-question qpos st]
     | none     -> bridge-step v st
     | some pid ->
@@ -936,8 +938,11 @@ defn dispatch-pipeline-on-our-q [qpos args v st]
         ;; bridge-side queue (via bs-add-pipeline-msg) survives fulfill so
         ;; pump-outbound can emit forwarding bytes when the local promise
         ;; resolves to a peer-export refr.
+        ;; Phase 45: ap (peer's answer-pos for the pipelined deliver)
+        ;; threaded through so break-forward can emit error answers
+        ;; if the local promise breaks.
         bridge-step [pipeline-deliver pid args v]
-                    [bs-add-pipeline-msg pid args st]
+                    [bs-add-pipeline-msg pid args ap st]
 
 ;; Phase 25 questioner-side: peer is replying to our outbound
 ;; question. Look up the local promise tied to our question-pos
@@ -949,10 +954,10 @@ defn dispatch-pipeline-on-our-q [qpos args v st]
 ;; semantics; the disambiguation is which table holds `qpos`. (No
 ;; overlap: outbound q-pos ids are allocated by us, inbound by peer.)
 ;; Unknown to both = drop.
-spec dispatch-incoming-answer Nat SyrupValue Vat BridgeState -> BridgeStep
-defn dispatch-incoming-answer [qpos args v st]
+spec dispatch-incoming-answer Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-incoming-answer [qpos args ap v st]
   match [bs-lookup-outbound-question qpos st]
-    | none      -> dispatch-pipeline-on-our-q qpos args v st
+    | none      -> dispatch-pipeline-on-our-q qpos args ap v st
     | some pid  -> bridge-step [resolve-promise pid args v] st
 
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
@@ -992,7 +997,7 @@ defn captp-incoming-with-state
       ;; promise tied to that q-pos. Also append to gc-answers audit
       ;; log so callers can inspect what was released.
       bridge-step v [bs-remove-question pos [bs-add-gc-answer pos st]]
-  | [op-deliver-to-answer qpos args] v st ->
+  | [op-deliver-to-answer qpos args ap _rm] v st ->
       ;; Phase 25 questioner-side: peer is replying to our question
       ;; with pos `qpos`. Look up `qpos` in BridgeState's
       ;; outbound-questions; if found, resolve the corresponding
@@ -1001,7 +1006,9 @@ defn captp-incoming-with-state
       ;; protocol error or stale connection; conservative no-op).
       ;; Phase 34b: the answer args may contain refrs (peer sharing
       ;; refrs with us in their reply); increment imports-refcount.
-      dispatch-incoming-answer qpos args v
+      ;; Phase 45: ap threaded so dispatch-pipeline-on-our-q can
+      ;; record the queued deliver's answer-pos for break-forwarding.
+      dispatch-incoming-answer qpos args ap v
         [bs-incr-imports [extract-refrs-from-args args] st]
 
 ;; ===========================================================
@@ -1085,8 +1092,8 @@ defn forward-deliver-bytes [tag target args]
 ;; caller appends/prepends as appropriate.
 spec forward-bytes-loop String Nat Nat [List PipeMsg] [List String] -> [List String]
 defn forward-bytes-loop
-  | _   _   _      nil                          accum -> accum
-  | tag pid target [cons [pipe-msg p args] rest] accum ->
+  | _   _   _      nil                            accum -> accum
+  | tag pid target [cons [pipe-msg p args _] rest] accum ->
       match [nat-eq? p pid]
         | true  -> forward-bytes-loop tag pid target rest [cons [forward-deliver-bytes tag target args] accum]
         | false -> forward-bytes-loop tag pid target rest accum
@@ -1111,11 +1118,61 @@ defn forward-bytes-loop
 ;; the args to local actor `k`. Returns updated vat with msgs queued.
 spec deliver-locally-loop Nat Nat [List PipeMsg] Vat -> Vat
 defn deliver-locally-loop
-  | _   _ nil                          v -> v
-  | pid k [cons [pipe-msg p args] rest] v ->
+  | _   _ nil                            v -> v
+  | pid k [cons [pipe-msg p args _] rest] v ->
       match [nat-eq? p pid]
         | true  -> deliver-locally-loop pid k rest [send-only k args v]
         | false -> deliver-locally-loop pid k rest v
+
+;; ===========================================================
+;; Phase 45: break-forwarding
+;; ===========================================================
+;;
+;; When the local promise breaks (pst-broken r), each queued pipelined
+;; msg with ap = some M needs an error answer at peer's q-pos M, so
+;; peer's awaiting promise at M doesn't hang. Wire form for the error
+;; answer mirrors a normal answer reply:
+;;
+;;   <op:deliver <desc:answer M> <Error r> false false>
+;;
+;; Queued msgs whose ap was none (fire-and-forget pipelined deliver)
+;; are dropped silently — peer wasn't expecting an answer.
+
+;; Inner: ap is some/none and r is the broken reason. If ap is some M,
+;; build the error answer bytes and prepend; otherwise leave accum.
+spec break-step-matched-pid Nat SyrupValue [Option Nat] [List String] -> [List String]
+defn break-step-matched-pid [pid r ap accum]
+  match ap
+    | none   -> accum
+    | some m -> [cons [outbound-deliver-bytes m [wrap-error r]] accum]
+
+;; Middle: per-PipeMsg processing. If entry's pid matches, dispatch
+;; on its ap; otherwise pass through.
+spec break-step Nat SyrupValue PipeMsg [List String] -> [List String]
+defn break-step [pid r entry accum]
+  match entry
+    | pipe-msg p _args ap ->
+        match [nat-eq? p pid]
+          | false -> accum
+          | true  -> break-step-matched-pid pid r ap accum
+
+;; Walk pipelined-msgs accumulating error-answer bytes for each
+;; pid-matching entry whose ap is some.
+spec break-forward-loop Nat SyrupValue [List PipeMsg] [List String] -> [List String]
+defn break-forward-loop
+  | _   _ nil                accum -> accum
+  | pid r [cons entry rest]  accum ->
+      break-forward-loop pid r rest [break-step pid r entry accum]
+
+;; Phase 45: dispatch the broken case. If pst is pst-broken r, walk
+;; pipelined-msgs and emit error-answer bytes for each queued deliver
+;; that had a non-false answer-pos. Other PromiseStates: no effect.
+spec dispatch-broken-resolution Nat PromiseState [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-broken-resolution
+  | _   [pst-unresolved _] _   v -> [forward-effect v [nil String]]
+  | _   [pst-fulfilled  _] _   v -> [forward-effect v [nil String]]
+  | pid [pst-broken     r] pms v ->
+      [forward-effect v [break-forward-loop pid r pms [nil String]]]
 
 ;; ForwardEffect bundles the two outcomes of forwarding: an updated
 ;; Vat (if msgs were delivered locally) plus a list of bytes (if any
@@ -1171,15 +1228,25 @@ defn dispatch-resolution-value [pid V pms v]
 
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
 ;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect
-;; carrying (updated-vat, forward-bytes). The two outcomes are
-;; complementary: local-actor delivery updates the vat (no bytes);
-;; peer-export forwarding emits bytes (vat unchanged). Plain-value
-;; or unresolved → no effect.
+;; carrying (updated-vat, forward-bytes). Outcomes by PromiseState:
+;;   pst-broken r       → error-forward (Phase 45): emit <op:deliver
+;;                        <desc:answer M> <Error r> false false> for
+;;                        each queued msg with ap = some M.
+;;   pst-fulfilled V    → fulfilled-forward (Phase 41/42/44): dispatch
+;;                        on V's shape (desc:export local/wire,
+;;                        desc:answer chained).
+;;   pst-unresolved _   → no effect (caller already gates on
+;;                        outbound-from-resolution returning some).
+;; broken? gates the dispatch into the error path before resolution-
+;; value collapses fulfilled and broken into the same Some.
 spec build-forward-effect Nat PromiseState [List PipeMsg] Vat -> ForwardEffect
 defn build-forward-effect [pid pst pms v]
-  match [resolution-value pst]
-    | none   -> [forward-effect v [nil String]]
-    | some V -> dispatch-resolution-value pid V pms v
+  match [broken? pst]
+    | true  -> dispatch-broken-resolution pid pst pms v
+    | false ->
+        match [resolution-value pst]
+          | none   -> [forward-effect v [nil String]]
+          | some V -> dispatch-resolution-value pid V pms v
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16
@@ -1533,7 +1600,7 @@ defn op-is-abort?
   | op-listen _ _      -> false
   | op-gc-export _ _   -> false
   | op-gc-answer _     -> false
-  | op-deliver-to-answer _ _ -> false
+  | op-deliver-to-answer _ _ _ _ -> false
 
 ;; Once-aborted bool: was-aborted OR op-is-abort.
 spec or-bool Bool Bool -> Bool

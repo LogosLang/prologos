@@ -50,6 +50,7 @@
 (imports (prologos::ocapn::syrup-wire :refer-all))
 (imports (prologos::ocapn::captp-bridge :refer-all))
 (imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
+(imports (prologos::ocapn::bridge-interop-helpers :refer (framed-concat)))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 (imports (prologos::data::string :as str :refer ()))
@@ -615,7 +616,7 @@
 (test-case "bridge/dispatch-incoming-answer: unknown qpos is a no-op"
   (define got
     (run-last
-     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null empty-vat bridge-state-empty)))
+     "(eval (let ((step (dispatch-incoming-answer (suc zero) syrup-null (none Nat) empty-vat bridge-state-empty)))
               (queue-length (bridge-step-vat step))))"))
   (check-contains got "0N"))
 
@@ -628,7 +629,7 @@
               (let ((local-pid (alloc-id alloc)))
                 (let ((v0 (alloc-vat alloc)))
                   (let ((st0 (bs-add-outbound-question (suc zero) local-pid bridge-state-empty)))
-                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") v0 st0)))
+                    (let ((step (dispatch-incoming-answer (suc zero) (syrup-string \"hello-back\") (none Nat) v0 st0)))
                       (lookup-promise local-pid (bridge-step-vat step))))))))"))
   ;; lookup-promise returns Option PromiseState; want some pst-fulfilled
   (check-contains got "some")
@@ -1176,7 +1177,7 @@
     "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
                   pid  (conn-ask-pid ask)
                   cs1  (conn-ask-state ask)
-                  step (connection-step (op-deliver-to-answer pid (syrup-string \"answer\")) cs1))
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"answer\") (none Nat) (none Nat)) cs1))
               (lookup-promise pid (conn-vat (conn-step-state step)))))")
    "pst-fulfilled"))
 
@@ -1208,6 +1209,7 @@
                   step  (dispatch-pipeline-on-our-q
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"book-room\")
+                          (none Nat)
                           v0 st0))
               (promise-queue-length pid (bridge-step-vat step))))")
    "1N"))
@@ -1220,6 +1222,7 @@
     "(eval (let (step (dispatch-pipeline-on-our-q
                         (suc (suc (suc (suc zero))))
                         (syrup-string \"orphan\")
+                        (none Nat)
                         empty-vat bridge-state-empty))
               (length (bs-questions (bridge-step-state step)))))")
    "0N"))
@@ -1238,7 +1241,8 @@
                   step  (captp-incoming-with-state
                           (op-deliver-to-answer
                             (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))
-                            (syrup-string \"chained\"))
+                            (syrup-string \"chained\")
+                            (none Nat) (none Nat))
                           v0 st0))
               (promise-queue-length pid (bridge-step-vat step))))")
    "1N"))
@@ -1313,6 +1317,7 @@
                   step  (dispatch-pipeline-on-our-q
                           (suc (suc zero))
                           (syrup-string \"queued\")
+                          (none Nat)
                           v0 st0))
               (length (bs-pipelined-msgs (bridge-step-state step)))))")
    "1N"))
@@ -1372,6 +1377,7 @@
                   step  (dispatch-pipeline-on-our-q
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"chained-msg\")
+                          (none Nat)
                           v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:export\"
@@ -1393,6 +1399,7 @@
                   step  (dispatch-pipeline-on-our-q
                           (suc (suc zero))
                           (syrup-string \"chained\")
+                          (none Nat)
                           v0 st0)
                   v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
@@ -1421,6 +1428,7 @@
                   st0    (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
                   step   (dispatch-pipeline-on-our-q (suc (suc (suc zero)))
                                                       (syrup-string \"local-msg\")
+                                                      (none Nat)
                                                       v1 st0)
                   v2     (resolve-promise pid
                             (syrup-tagged \"desc:export\" (syrup-nat k))
@@ -1444,6 +1452,7 @@
                   st0    (bs-add-question (suc zero) pid bridge-state-empty)
                   step   (dispatch-pipeline-on-our-q (suc zero)
                                                       (syrup-string \"local-msg\")
+                                                      (none Nat)
                                                       v1 st0)
                   v2     (resolve-promise pid
                             (syrup-tagged \"desc:export\" (syrup-nat k))
@@ -1464,6 +1473,7 @@
                   st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
                   step  (dispatch-pipeline-on-our-q (suc (suc zero))
                                                      (syrup-string \"remote-msg\")
+                                                     (none Nat)
                                                      v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:export\"
@@ -1525,6 +1535,7 @@
                   step  (dispatch-pipeline-on-our-q
                           (suc (suc (suc (suc (suc zero)))))
                           (syrup-string \"chain\")
+                          (none Nat)
                           v0 st0)
                   v1    (resolve-promise pid
                           (syrup-tagged \"desc:answer\"
@@ -1533,6 +1544,85 @@
                   pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
               (length (pump-result-bytes pr))))")
    "2N"))
+
+;; Phase 45: break-forwarding. When local promise breaks, queued
+;; pipelined msgs with ap = some M get an error answer at peer's
+;; q-pos M (so peer's awaiting promise doesn't hang). Queued msgs
+;; with ap = none are still dropped (peer wasn't expecting an answer).
+
+(test-case "bridge/pump-outbound break-forwards error answers for queued msgs with ap=some"
+  ;; Setup: peer's q-pos=5 → local pid. Peer pipelines two msgs,
+  ;; one with ap=some 99 (peer wants an answer) and one with ap=none.
+  ;; Then we BREAK pid with reason "rejected".
+  ;; Pump should emit:
+  ;;   (a) the broken-resolution bytes for peer's q-pos 5
+  ;;   (b) error-answer bytes for q-pos 99 only (the ap=none msg drops)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc (suc zero))))) pid bridge-state-empty)
+                  step1 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"with-answer\")
+                          (some Nat (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                          v0 st0)
+                  step2 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc (suc zero)))))
+                          (syrup-string \"fire-and-forget\")
+                          (none Nat)
+                          (bridge-step-vat step1) (bridge-step-state step1))
+                  v1    (break-promise pid (syrup-string \"rejected\") (bridge-step-vat step2))
+                  pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
+              ;; resolution bytes (1) + 1 error-answer bytes (only the ap=some msg) = 2
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound emits NO error-answer bytes when all queued msgs have ap=none"
+  ;; All pipelined msgs are fire-and-forget (ap=none). On break, only
+  ;; the resolution bytes get emitted (no error answers).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q
+                          (suc (suc zero))
+                          (syrup-string \"no-answer-needed\")
+                          (none Nat)
+                          v0 st0)
+                  v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound break-forward bytes target peer's queued ap"
+  ;; Single queued msg with ap=some 7. On break, the bytes list
+  ;; contains both the resolution (targeting peer's q-pos 3) AND the
+  ;; error-answer (targeting peer's queued ap 7). Stitch via framed
+  ;; concat and look for the desc:answer 7 wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                    step  (dispatch-pipeline-on-our-q
+                            (suc (suc (suc zero)))
+                            (syrup-string \"q-payload\")
+                            (some Nat (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            v0 st0)
+                    v1    (break-promise pid (syrup-string \"oops\") (bridge-step-vat step))
+                    pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+                (framed-concat (pump-result-bytes pr))))")))
+  ;; Both wire shapes appear: peer's-q-pos=3 (resolution) and peer's-ap=7 (error answer).
+  (check-true (regexp-match? #rx"desc:answer3" got)
+              (format "expected resolution to peer's q-pos 3; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:answer7" got)
+              (format "expected error answer to peer's queued ap 7; got: ~s" got)))
 
 (test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
   ;; Regression: the Phase 25 reply-to-our-Q path still works after
@@ -1543,6 +1633,6 @@
     "(eval (let (ask  (connection-ask zero (syrup-string \"ping\") empty-connection)
                   pid  (conn-ask-pid ask)
                   cs1  (conn-ask-state ask)
-                  step (connection-step (op-deliver-to-answer pid (syrup-string \"reply\")) cs1))
+                  step (connection-step (op-deliver-to-answer pid (syrup-string \"reply\") (none Nat) (none Nat)) cs1))
               (lookup-promise pid (conn-vat (conn-step-state step)))))")
    "pst-fulfilled"))

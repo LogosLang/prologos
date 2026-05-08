@@ -55,13 +55,15 @@ data CapTPOp
   ;; op:gc-answer — peer is done with an answer position.
   op-gc-answer : Nat
   ;; op:deliver-to-answer — peer is REPLYING to a question we asked
-  ;; earlier. Wire form: <op:deliver <desc:answer N> args false false>
-  ;; where N is OUR question-pos. Distinguished from op-deliver
-  ;; (where target is a desc:export — peer is INITIATING a question).
-  ;; Phase 25: questioner-side. The bridge looks up our q-pos in
-  ;; outbound-questions and resolves the corresponding local promise.
-  ;;   our-question-pos args
-  op-deliver-to-answer : Nat -> SyrupValue
+  ;; OR pipelining onto one of their own questions. Wire form:
+  ;;   <op:deliver <desc:answer N> args ap rm>
+  ;; where N is the q-pos (ours when peer replies; peer's when peer
+  ;; pipelines), ap is the answer-pos for THIS deliver (so peer can
+  ;; await an answer to a pipelined Q), and rm is the resolver.
+  ;; Phase 44: ap retained so the bridge can break-forward queued msgs'
+  ;; answers when the chained promise breaks.
+  ;;   our-question-pos args answer-pos resolver
+  op-deliver-to-answer : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
 
 ;; ========================================
 ;; Constructors (smart wrappers)
@@ -95,7 +97,7 @@ defn deliver?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
-  | op-deliver-to-answer _ _ -> true
+  | op-deliver-to-answer _ _ _ _ -> true
 
 spec deliver-only? CapTPOp -> Bool
 defn deliver-only?
@@ -106,7 +108,7 @@ defn deliver-only?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
-  | op-deliver-to-answer _ _ -> false
+  | op-deliver-to-answer _ _ _ _ -> false
 
 spec listen? CapTPOp -> Bool
 defn listen?
@@ -117,7 +119,7 @@ defn listen?
   | op-listen _ _          -> true
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
-  | op-deliver-to-answer _ _ -> false
+  | op-deliver-to-answer _ _ _ _ -> false
 
 spec abort? CapTPOp -> Bool
 defn abort?
@@ -128,7 +130,7 @@ defn abort?
   | op-listen _ _          -> false
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
-  | op-deliver-to-answer _ _ -> false
+  | op-deliver-to-answer _ _ _ _ -> false
 
 ;; ========================================
 ;; Selectors
@@ -143,7 +145,7 @@ defn deliver-target
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
-  | op-deliver-to-answer t _ -> some t
+  | op-deliver-to-answer t _ _ _ -> some t
 
 spec deliver-args CapTPOp -> Option SyrupValue
 defn deliver-args
@@ -154,7 +156,7 @@ defn deliver-args
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
-  | op-deliver-to-answer _ a -> some a
+  | op-deliver-to-answer _ a _ _ -> some a
 
 spec deliver-answer-pos CapTPOp -> Option Nat
 defn deliver-answer-pos
@@ -165,7 +167,7 @@ defn deliver-answer-pos
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
-  | op-deliver-to-answer _ _ -> none
+  | op-deliver-to-answer _ _ ap _ -> ap
 
 spec deliver-resolver CapTPOp -> Option Nat
 defn deliver-resolver
@@ -176,4 +178,4 @@ defn deliver-resolver
   | op-listen _ _          -> none
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
-  | op-deliver-to-answer _ _ -> none
+  | op-deliver-to-answer _ _ _ rm -> rm
