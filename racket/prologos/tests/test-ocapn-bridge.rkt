@@ -1399,6 +1399,80 @@
               (length (pump-result-bytes pr))))")
    "1N"))
 
+;; Phase 42: local-actor pipelining. When a local promise resolves to
+;; <desc:export K> and K is one of OUR vat-registered actors,
+;; queued pipelined args are delivered LOCALLY via send-only — vat
+;; gets a new VatMsg queued, no wire forwarding emitted.
+
+(test-case "bridge/pump-outbound delivers locally when resolved-to export-id is a local actor"
+  ;; Spawn an echo actor (local actor with id K). Peer pipelines a msg
+  ;; onto our q-pos=3 (local promise pid). Then we resolve that promise
+  ;; with `<desc:export K>` — the export-id matches our local actor.
+  ;; Pump should NOT emit forwarding bytes; instead the vat should have
+  ;; the pipelined args queued as a VatMsg ready for the next drain.
+  (check-contains
+   (run-last
+    "(eval (let (alloc1 (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  k      (alloc-id alloc1)
+                  v0     (alloc-vat alloc1)
+                  alloc2 (fresh-promise v0)
+                  pid    (alloc-id alloc2)
+                  v1     (alloc-vat alloc2)
+                  st0    (bs-add-question (suc (suc (suc zero))) pid bridge-state-empty)
+                  step   (dispatch-pipeline-on-our-q (suc (suc (suc zero)))
+                                                      (syrup-string \"local-msg\")
+                                                      v1 st0)
+                  v2     (resolve-promise pid
+                            (syrup-tagged \"desc:export\" (syrup-nat k))
+                            (bridge-step-vat step))
+                  pr     (pump-outbound v2 (bridge-step-state step) (nil Nat)))
+              (length (vat-queue (pump-result-vat pr)))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound emits only resolution bytes when forwarded locally"
+  ;; Resolution to a local actor's K means the queued msg goes LOCAL,
+  ;; not on the wire. Pump emits exactly 1 byte-string (resolution
+  ;; only); no forwarding bytes.
+  (check-contains
+   (run-last
+    "(eval (let (alloc1 (vat-spawn-actor beh-echo syrup-null empty-vat)
+                  k      (alloc-id alloc1)
+                  v0     (alloc-vat alloc1)
+                  alloc2 (fresh-promise v0)
+                  pid    (alloc-id alloc2)
+                  v1     (alloc-vat alloc2)
+                  st0    (bs-add-question (suc zero) pid bridge-state-empty)
+                  step   (dispatch-pipeline-on-our-q (suc zero)
+                                                      (syrup-string \"local-msg\")
+                                                      v1 st0)
+                  v2     (resolve-promise pid
+                            (syrup-tagged \"desc:export\" (syrup-nat k))
+                            (bridge-step-vat step))
+                  pr     (pump-outbound v2 (bridge-step-state step) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "1N"))
+
+(test-case "bridge/pump-outbound forwards on the wire when resolved-to export-id is NOT a local actor"
+  ;; Regression: Phase 41 path still works when K isn't a local actor.
+  ;; Resolution to `<desc:export 99>` (no actor 99 in the vat) → forward
+  ;; bytes emitted, vat queue length unchanged (no local delivery).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                  step  (dispatch-pipeline-on-our-q (suc (suc zero))
+                                                     (syrup-string \"remote-msg\")
+                                                     v0 st0)
+                  v1    (resolve-promise pid
+                          (syrup-tagged \"desc:export\"
+                            (syrup-nat (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))))) ;; 11
+                          (bridge-step-vat step))
+                  pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+              (length (vat-queue (pump-result-vat pr)))))")
+   "0N"))
+
 (test-case "bridge/captp-incoming op-deliver-to-answer with q-pos in outbound resolves (regression)"
   ;; Regression: the Phase 25 reply-to-our-Q path still works after
   ;; the Phase 38 fall-through was added. Same wire shape, opposite

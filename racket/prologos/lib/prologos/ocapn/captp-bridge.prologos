@@ -1099,18 +1099,74 @@ defn forward-bytes-loop
         | true  -> forward-bytes-loop pid target rest [cons [forward-deliver-bytes target args] accum]
         | false -> forward-bytes-loop pid target rest accum
 
+;; ===========================================================
+;; Phase 42: local-actor forwarding
+;; ===========================================================
+;;
+;; Phase 41 handles the wire path: queued msgs forwarded to peer when
+;; resolution is `<desc:export K>` and K is peer's export. Phase 42
+;; handles the case where K is OUR own actor (registered in the vat's
+;; actor table). Then forwarding means delivering the queued msg
+;; LOCALLY via send-only — enqueueing a VatMsg on the vat queue, ready
+;; for the next drain.
+;;
+;; Discrimination: lookup-actor K v. If found, K is local; else K is
+;; (presumably) peer's export. In our id space actor ids and external
+;; refr ids don't collide (actors are vat-local; peer-export ids are
+;; peer-vat-local).
+
+;; Walk pipelined-msgs; for each entry whose pid matches `pid`, send
+;; the args to local actor `k`. Returns updated vat with msgs queued.
+spec deliver-locally-loop Nat Nat [List PipeMsg] Vat -> Vat
+defn deliver-locally-loop
+  | _   _ nil                          v -> v
+  | pid k [cons [pipe-msg p args] rest] v ->
+      match [nat-eq? p pid]
+        | true  -> deliver-locally-loop pid k rest [send-only k args v]
+        | false -> deliver-locally-loop pid k rest v
+
+;; ForwardEffect bundles the two outcomes of forwarding: an updated
+;; Vat (if msgs were delivered locally) plus a list of bytes (if any
+;; were forwarded on the wire). Single-constructor avoids issue #60.
+data ForwardEffect
+  forward-effect : Vat -> [List String]
+
+spec fwd-effect-vat ForwardEffect -> Vat
+defn fwd-effect-vat
+  | forward-effect v _ -> v
+
+spec fwd-effect-bytes ForwardEffect -> List String
+defn fwd-effect-bytes
+  | forward-effect _ bs -> bs
+
+;; Innermost helper: K is the export target. Discriminate local-actor
+;; vs peer-export via lookup-actor. Bottom of the helper chain that
+;; sidesteps pitfall #18's 3-deep nested match.
+spec dispatch-export-target Nat Nat [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-export-target [pid k pms v]
+  match [lookup-actor k v]
+    | some _ -> [forward-effect [deliver-locally-loop pid k pms v] [nil String]]
+    | none   -> [forward-effect v [forward-bytes-loop pid k pms [nil String]]]
+
+;; Middle helper: V is the resolution-value SyrupValue. If shape is
+;; `<desc:export K>`, dispatch on K; otherwise no effect.
+spec dispatch-resolution-value Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-resolution-value [pid V pms v]
+  match [syrup-as-export-target V]
+    | none   -> [forward-effect v [nil String]]
+    | some k -> dispatch-export-target pid k pms v
+
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
-;; + bridge's pipelined-msgs list, return the list of forwarding-bytes.
-;; If resolution-value is `<desc:export K>`, walks pipelined-msgs;
-;; otherwise empty list (no forwarding for non-export resolutions).
-spec forwarding-bytes-for-pid Nat PromiseState [List PipeMsg] -> [List String]
-defn forwarding-bytes-for-pid [pid pst pms]
+;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect
+;; carrying (updated-vat, forward-bytes). The two outcomes are
+;; complementary: local-actor delivery updates the vat (no bytes);
+;; peer-export forwarding emits bytes (vat unchanged). Plain-value
+;; or unresolved → no effect.
+spec build-forward-effect Nat PromiseState [List PipeMsg] Vat -> ForwardEffect
+defn build-forward-effect [pid pst pms v]
   match [resolution-value pst]
-    | none   -> [nil String]
-    | some v ->
-        match [syrup-as-export-target v]
-          | none   -> [nil String]
-          | some k -> forward-bytes-loop pid k pms [nil String]
+    | none   -> [forward-effect v [nil String]]
+    | some V -> dispatch-resolution-value pid V pms v
 
 ;; ===========================================================
 ;; Wire-OUT pump — Phase 16
@@ -1136,47 +1192,56 @@ defn member-nat?
         | true  -> true
         | false -> member-nat? n t
 
-;; Result of the pump: bytes emitted this turn + updated emitted-pids.
+;; Result of the pump: bytes emitted this turn + updated emitted-pids
+;; + the vat (Phase 42 may have enqueued local-actor messages on it
+;; via pipelined-msg forwarding to a refr-local-export resolution).
 data PumpResult
-  pump-result : [List String] -> [List Nat]
+  pump-result : Vat -> [List String] -> [List Nat]
+
+spec pump-result-vat PumpResult -> Vat
+defn pump-result-vat
+  | pump-result v _ _ -> v
 
 spec pump-result-bytes PumpResult -> List String
 defn pump-result-bytes
-  | pump-result bs _ -> bs
+  | pump-result _ bs _ -> bs
 
 spec pump-result-emitted PumpResult -> List Nat
 defn pump-result-emitted
-  | pump-result _ es -> es
+  | pump-result _ _ es -> es
 
 ;; Per-question: if the local promise has settled (fulfilled OR
 ;; broken) AND the pid hasn't been emitted yet, prepend bytes
 ;; targeting the REMOTE answer-pos and add local to the emitted
 ;; list. Phase 17 extends Phase 16 to broken promises via
 ;; `outbound-from-resolution`. Phase 41 also walks pipelined-msgs
-;; and emits forwarding bytes when resolution is a desc:export refr.
+;; and emits forwarding bytes when resolution is a peer-export refr;
+;; Phase 42 delivers locally if the export id is one of our own
+;; actors (the ForwardEffect carries the updated vat).
 spec pump-one Nat Nat Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
 defn pump-one [remote local v pms emitted accum]
   match [member-nat? local emitted]
-    | true  -> pump-result accum emitted
+    | true  -> pump-result v accum emitted
     | false ->
         match [lookup-promise local v]
-          | none -> pump-result accum emitted
+          | none -> pump-result v accum emitted
           | some pst ->
               match [outbound-from-resolution remote pst]
-                | none       -> pump-result accum emitted
+                | none       -> pump-result v accum emitted
                 | some bytes ->
-                    pump-result
-                      [cons bytes
-                        [append String [forwarding-bytes-for-pid local pst pms] accum]]
-                      [cons local emitted]
+                    let fwd := [build-forward-effect local pst pms v]
+                      [pump-result
+                        [fwd-effect-vat fwd]
+                        [cons bytes [append String [fwd-effect-bytes fwd] accum]]
+                        [cons local emitted]]
 
 ;; Walk the question-table list once.
 spec pump-loop [List QEntry] Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
 defn pump-loop
-  | nil _ _ emitted accum -> pump-result accum emitted
+  | nil v _ emitted accum -> pump-result v accum emitted
   | [cons [q-entry remote local] rest] v pms emitted accum ->
       let r := [pump-one remote local v pms emitted accum]
-        pump-loop rest v pms
+        pump-loop rest [pump-result-vat r] pms
           [pump-result-emitted r]
           [pump-result-bytes r]
 
@@ -1184,11 +1249,13 @@ defn pump-loop
 ;; Defined BEFORE pump-outbound so the call site below can resolve.
 spec prepend-pending-out [List String] PumpResult -> PumpResult
 defn prepend-pending-out [pending pr]
-  pump-result [append String pending [pump-result-bytes pr]] [pump-result-emitted pr]
+  pump-result [pump-result-vat pr]
+              [append String pending [pump-result-bytes pr]]
+              [pump-result-emitted pr]
 
 ;; Public top-level pump.
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
-  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply)."
+  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult."
 defn pump-outbound [v st emitted]
   prepend-pending-out [bs-pending-out st]
     [pump-loop [bs-questions st] v [bs-pipelined-msgs st] emitted nil]
