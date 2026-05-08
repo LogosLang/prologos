@@ -664,13 +664,85 @@ Phase 7 broadens from "generator extension only" to **three atomic concerns** af
 6. **Phase 7 size**: ~95-145 LoC. Sub-phase 7a/7b/7c fallback ready.
 7. **Session sweep findings dependent on meet-registry landing**: 7a must land before 7c sweep is informative. Sub-phase ordering matters.
 
-### Phase 8: Generator extension — form domain
+### Phase 8: Form-cell + spec-cell domain meet definition + empirical sweep
 
-**Scope** (high-level):
+**Scope** (revised post mini-audit 2026-04-30):
 
-Audit ctor-descs in `form-cells.rkt`; design realistic form atom pool. Form has nested-pipeline structure (forms-of-forms, polynomial-functor shape per Pocket Universe pattern) that may exhibit binder-like scope-sensitivity — sweep results may surface a 4th Scaffolding-Hides-Scope instance if `form-cells.rkt:503`'s Heyting declaration is over-broad relative to the design body's scope intent.
+Phase 8 differs structurally from Phases 7 + 6: form-cell domain has **NO ctor-descs registered** — it's a **Pocket Universe / lattice-embedding** wrapper, not a ctor-decomposable structure. Standard `generate-domain-samples` compound-generation doesn't apply. Phase 8 is **sweep on hand-picked atoms with NO compound generation**, plus the load-bearing **definition of `form-pipeline-meet` and `spec-cell-meet`** (sister of Phase 7a meet-registry wiring).
 
-**Estimated scope**: ~30-60 LoC generator extension + ~20 LoC atom pool + ~20 LoC tests.
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-04-30)
+
+**Q1 — Meet on Pocket Universe wrapper (lattice-embedding question)**: form-pipeline-value is a struct with mixed-content fields:
+- *Lattice content*: `transforms` (powerset = Boolean), `type-map` (per-key type-lattice)
+- *Non-lattice metadata*: `tree-node`, `registrations`, `source-pos`
+
+The SRE registry's `meet-fn` returns a value of the SAME shape (form-pipeline-value), so we MUST construct ALL 5 fields including non-lattice ones. The merge function already faces this (chose ad-hoc semantics: prefer-richer-side, append, prefer-one). The meet has to make analogous choices.
+
+**Resolution**: define meet with **lattice-consistent semantics per field** (preserves idempotent + commutative + associative axioms under field-by-field operation):
+- `transforms`: `set-intersect` (canonical Boolean meet)
+- `tree-node`: `(if (equal? old new) old #f)` (idempotent ✓ commutative ✓)
+- `registrations`: filter-intersection with dedup (set-intersection on lists)
+- `source-pos`: `(or old new)` (preserves provenance; same as merge)
+- `type-map`: per-key intersection with equal-only-on-shared-values
+
+This makes the WRAPPER algebraically consistent. Whether the declared properties (Heyting) hold under THIS meet choice is the empirical question Phase 8 answers.
+
+**Q2 — Realistic form-cell atoms (test wrapper or embedded?)**: option (c) mix:
+- Constant-metadata atoms (vary transforms only) test the embedded Boolean lattice
+- Vary-metadata atoms test wrapper preservation of declared properties
+
+Together these surface whether algebraic claims hold on the wrapper (Track 2H declaration) or only on the embedded sub-lattice. If wrapper refutes where embedded confirms → **5th Scaffolding-Hides-Truth instance**: hand-written `'distributive + has-pseudo-complement-rel` declarations don't survive principled metadata-handling. Honest finding for Phase 10 report.
+
+~8-10 atoms total. Mix design:
+- `form-cell-bot` (empty transforms; default metadata)
+- 5 "constant-metadata" atoms varying transforms across pipeline progression: `(seteq 'tagged)`, `(seteq 'grouped)`, `(seteq 'tagged 'grouped)`, `(seteq 'tagged 'grouped 'v0-0)`, `(seteq 'done)`
+- 2-3 "vary-metadata" atoms with non-trivial tree-node, registrations, source-pos values
+
+**Q3 — 'spec-cell domain: include as 8d**, NOT defer. Per user lean (sub-phase out immediately applicable work). Symmetric sub-phase mirroring 8a-c for spec-cell. Phase 9 comprehensive sweep covers both. Phase 10 report has both in matrix.
+
+**Q4 — Four sub-phases** (8a/8b/8c/8d).
+
+| Sub-phase | Scope | Cost |
+|---|---|---|
+| **8a** | Define `form-pipeline-meet` in surface-rewrite.rkt (sister of `form-pipeline-merge` at line 580); add `form-cell-meet-registry`; wire into `form-cell-sre-domain` | ~40-60 LoC |
+| **8b** | Define `realistic-form-cell-atoms` (Q2 mix) | ~30-40 LoC |
+| **8c** | Sweep + integration tests on `form-cell×equality` at depth-0 (no compound generation possible — no ctor-descs) | ~30-50 LoC |
+| **8d** | Mirror 8a-c for `'spec-cell`: define `spec-cell-meet`, wire registry, define `realistic-spec-cell-atoms`, sweep, tests | ~80-130 LoC |
+
+**Pre-existing Scaffolding-Hides-Truth candidate**: `form-cells.rkt:508` declares `'has-meet prop-confirmed` but **no `form-cell-meet` function exists in the codebase**. The declared property has no actual meet implementation. Phase 8a corrects.
+
+**Audit findings persisted**:
+- `'form-cell` domain registered at `form-cells.rkt:495-513` (driver.rkt:33 load chain — IS in production unlike session-propagators.rkt)
+- `'spec-cell` domain registered at `form-cells.rkt:534-548`
+- merge-registry exists for both (just `'equality`)
+- Neither has meet-registry
+- `form-pipeline-value` (`surface-rewrite.rkt:566`) is a Pocket Universe wrapper: transforms (Boolean powerset), tree-node, registrations, source-pos, type-map
+- No ctor-descs registered for either form-cell or spec-cell — Phase 8 ≠ ctor-based generator extension
+
+**Adversarial CRITIQUE pass surfaced**:
+
+1. **Pocket Universe / lattice-embedding pattern made empirical**: Phase 8 is the first Track-2I phase to test algebraic properties on a Pocket Universe wrapper (vs ctor-decomposable structural lattices). Worth Phase 10 report mention as architectural insight.
+
+2. **5th Scaffolding-Hides-Truth instance candidate**: declared `'has-meet prop-confirmed` without an actual meet function. Phase 8a fixes; pattern keeps firing.
+
+3. **Wrapper-vs-embedded algebraic-claim distinction**: declared Heyting on form-cell at form-cells.rkt:510 may hold on embedded transforms-lattice but NOT on wrapper. Empirically separable via Q2 atom design.
+
+4. **Hasse exploitation NOT in Phase 8**: same as Phases 1-5 + 7. Form-cell's transforms IS Q_9 hypercube (256 elements via 9 transform symbols); could in principle exploit BSP-LE Track 2's hypercube primitives. Sister concern; not Phase 8 scope.
+
+**Honest scope-acknowledgments**:
+- Sweep limited to hand-picked atoms (no compound generation possible without ctor-descs)
+- Metadata-handling semantics are best-effort (not unique-canonical); Phase 8a documents choice + rationale
+- 'spec-cell empirical characterization is fresh (declared only comm/assoc/idem-join; sweep populates the rest)
+
+**Drift risks (consolidated, 7 items)**:
+
+1. **Asymmetric meet/join lookup**: same Phase 4 discipline
+2. **Metadata semantic choices**: defensible but not unique; document trade-offs
+3. **Wrapper algebraic refutation surfaces**: expected (5th Scaffolding-Hides-Truth); discuss-when-found per drift-risk-#4 mandate
+4. **'spec-cell semantics**: spec-cell-value is a different struct shape (type-surf, type-erase, type-meta?, type-top? fields per spec-cell-merge-fn semantics); requires separate meet design with its own lattice-consistency choices
+5. **No compound generation**: limited diversity; depth-0 only
+6. **Phase 8 size**: ~180-280 LoC across 4 sub-phases (largest single Phase in Track 2I); sub-phase fallback ready
+7. **Hasse hypercube exploitation deferred**: form-cell IS hypercube Q_9 in transforms; not exploited here
 
 ### Phase 9: Comprehensive sweep + findings synthesis
 
