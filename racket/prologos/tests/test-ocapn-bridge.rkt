@@ -1772,3 +1772,149 @@
                   s2    (connection-step (op-gc-export (suc zero) zero) cs0))
               (length (bs-pipelined-msgs (conn-bridge-state (conn-step-state s2))))))")
    "1N"))
+
+;; Phase 48: op:listen notification on resolution. When a local promise
+;; pid settles, peer-registered listeners targeting pid get an
+;; op:deliver notification at their resolver-pos with the resolved
+;; payload (value if fulfilled, <Error r> if broken). Listeners are
+;; one-shot — once notified, the entry is GCed from bs-listeners.
+
+(test-case "bridge/op:listen registration adds a listener entry (Phase 48 setup)"
+  ;; Sanity: peer's op:listen tgt=4 resolver=99 records (listener 4 99).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen (suc (suc (suc (suc zero))))
+                                     (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))))
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "1N"))
+
+(test-case "bridge/listener-notify-loop emits op:deliver bytes for matched pid (Phase 48)"
+  ;; Direct unit: listener-notify-loop with one matching entry emits
+  ;; one byte-string; with no match emits zero.
+  (check-contains
+   (run-last
+    "(eval (length (listener-notify-loop
+                     (cons (listener (suc (suc zero)) (suc (suc (suc zero))))
+                       (cons (listener (suc (suc (suc (suc zero)))) (suc (suc (suc (suc (suc zero))))))
+                         (nil Listener)))
+                     (suc (suc zero))
+                     (syrup-string \"resolved\")
+                     (nil String))))")
+   "1N"))
+
+(test-case "bridge/listener-notify-loop matches all listeners with same target (Phase 48)"
+  ;; Two listeners targeting pid=2 with different resolver-pos. Both
+  ;; should fire — the loop walks the whole list filtering by target.
+  (check-contains
+   (run-last
+    "(eval (length (listener-notify-loop
+                     (cons (listener (suc (suc zero)) (suc (suc (suc zero))))
+                       (cons (listener (suc (suc zero)) (suc (suc (suc (suc (suc zero))))))
+                         (nil Listener)))
+                     (suc (suc zero))
+                     (syrup-string \"resolved\")
+                     (nil String))))")
+   "2N"))
+
+(test-case "bridge/connection-step emits listener notification when promise resolves (Phase 48)"
+  ;; Setup: bs-questions(3 → pid), peer registered listener (pid → 7).
+  ;; Resolve pid with a string. After connection-step:
+  ;;   - bytes contain the resolution (op:deliver to peer's q-pos 3)
+  ;;   - bytes contain the listener notification (op:deliver to peer's
+  ;;     export 7 with the resolved value)
+  ;;   - bs-listeners GCed (length 0)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  v1    (resolve-promise pid (syrup-string \"resolved\") v0)
+                  cs0   (conn-state v1 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (conn-step-outbound s2))))")
+   "2N"))
+
+(test-case "bridge/listener notification bytes target peer's resolver-pos (Phase 48)"
+  ;; Resolve with desc:export+desc:answer-free string; verify the bytes
+  ;; contain the listener notification with desc:export 7 (resolver-pos)
+  ;; and the resolved string payload.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                              bridge-state-empty))
+                    v1    (resolve-promise pid (syrup-string \"hello\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"desc:answer2" got)
+              (format "expected resolution to peer's q-pos 2; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"hello" got)
+              (format "expected resolved payload in bytes; got: ~s" got)))
+
+(test-case "bridge/listener notification carries Error wrapper on broken promise (Phase 48)"
+  ;; Same setup but break the promise instead of resolving. Listener
+  ;; notification's payload is <Error reason>.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                              bridge-state-empty))
+                    v1    (break-promise pid (syrup-string \"oops\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"5'Error" got)
+              (format "expected Error wrapper in listener payload; got: ~s" got)))
+
+(test-case "bridge/connection-step GCes notified listener (Phase 48)"
+  ;; After a settled-promise pump, the listener entry is removed (one-shot).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  v1    (resolve-promise pid (syrup-string \"resolved\") v0)
+                  cs0   (conn-state v1 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s2))))))")
+   "0N"))
+
+(test-case "bridge/connection-step retains listener when pid unresolved (Phase 48)"
+  ;; Don't resolve pid — listener stays registered.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc zero))) pid
+                          (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero)))))))
+                            bridge-state-empty))
+                  cs0   (conn-state v0 st0 (nil Nat) false)
+                  s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s2))))))")
+   "1N"))

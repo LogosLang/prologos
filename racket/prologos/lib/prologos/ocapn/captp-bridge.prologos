@@ -126,6 +126,21 @@ spec wrap-error SyrupValue -> SyrupValue
 defn wrap-error [reason]
   syrup-tagged "Error" reason
 
+;; Phase 48: build the bytes for a listener-notification op:deliver:
+;;   <op:deliver <desc:export resolver-pos> args false false>
+;; Sent to peer when our local promise resolves and peer had
+;; previously registered an op:listen for it. resolver-pos is the
+;; export-table position peer designated as the resolver capability.
+;; Both answer-pos and resolve-me are false: the notification doesn't
+;; expect its own answer.
+spec listener-notify-bytes Nat SyrupValue -> String
+defn listener-notify-bytes [resolver-pos args]
+  wire::encode-record "op:deliver"
+    [cons [syrup-tagged "desc:export" [syrup-nat resolver-pos]]
+      [cons args
+        [cons [syrup-bool false]
+          [cons [syrup-bool false] nil]]]]
+
 ;; If a promise has settled (fulfilled OR broken), return the
 ;; bytes of the corresponding outbound op:deliver:
 ;;   pst-fulfilled v  →  <op:deliver <desc:answer pid> v false false>
@@ -136,6 +151,18 @@ defn outbound-from-resolution
   | _   [pst-unresolved _] -> none
   | pid [pst-broken     r] -> some [outbound-deliver-bytes pid [wrap-error r]]
   | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
+
+;; Phase 48: extract the syrup-shaped resolution payload from a
+;; PromiseState, ready for shipment to a listener.
+;;   pst-fulfilled v  →  some v
+;;   pst-broken    r  →  some <Error r>
+;;   pst-unresolved _ →  none (listeners aren't notified until settled)
+spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+defn resolution-syrup-of-pst [pst]
+  match pst
+    | pst-unresolved _ -> none
+    | pst-broken     r -> some [wrap-error r]
+    | pst-fulfilled  v -> some v
 
 ;; ===========================================================
 ;; Bridge state — Phase 14
@@ -1335,6 +1362,54 @@ defn bs-gc-pipelined-msgs-by-emitted
       bridge-state ls es as qs p oqs ir er
         [list-filter-pipe-by-emitted pm emitted]
 
+;; ===========================================================
+;; Phase 48: op:listen notification on resolution
+;; ===========================================================
+;;
+;; When a local promise pid settles, peer-registered listeners
+;; targeting pid get a notification: `op:deliver` to the listener's
+;; resolver-pos with the resolution payload (the value if fulfilled,
+;; <Error r> if broken). Listeners are one-shot — once notified, the
+;; entry is filtered out of bs-listeners.
+;;
+;; Pre-Phase-48 behaviour: bs-add-listener stored entries but they
+;; were never consulted; resolution didn't notify the registrant.
+;; This phase wires the notification path end-to-end alongside
+;; pump-outbound's existing per-pid handling.
+
+;; Walk listeners; for every entry whose target = pid, prepend
+;; notification bytes (op:deliver to resolver-pos with payload) to
+;; accum. Returns the resulting bytes list.
+spec listener-notify-loop [List Listener] Nat SyrupValue [List String] -> [List String]
+defn listener-notify-loop
+  | nil _ _ accum -> accum
+  | [cons [listener tgt res] rest] pid payload accum ->
+      match [nat-eq? tgt pid]
+        | true  ->
+            listener-notify-loop rest pid payload
+              [cons [listener-notify-bytes res payload] accum]
+        | false -> listener-notify-loop rest pid payload accum
+
+;; Filter listeners: drop entries whose target is in the notified-pids
+;; set. One-shot semantics — once a listener has fired, its entry is
+;; no longer needed (and re-firing on a re-resolved promise would be a
+;; spec violation; promises settle exactly once).
+spec list-filter-listeners-by-notified [List Listener] [List Nat] -> [List Listener]
+defn list-filter-listeners-by-notified
+  | nil _ -> [nil Listener]
+  | [cons [listener tgt res] rest] notified ->
+      match [member-nat? tgt notified]
+        | true  -> list-filter-listeners-by-notified rest notified
+        | false ->
+            [cons [listener tgt res]
+              [list-filter-listeners-by-notified rest notified]]
+
+spec bs-gc-listeners-by-notified [List Nat] BridgeState -> BridgeState
+  :doc "Phase 48: drop listener entries whose target is in `notified`. Applied after pump-outbound at connection-step granularity, alongside pipelined-msgs GC."
+defn bs-gc-listeners-by-notified
+  | notified [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm
+
 ;; Result of the pump: bytes emitted this turn + updated emitted-pids
 ;; + the vat (Phase 42 may have enqueued local-actor messages on it
 ;; via pipelined-msg forwarding to a refr-local-export resolution).
@@ -1361,8 +1436,20 @@ defn pump-result-emitted
 ;; and emits forwarding bytes when resolution is a peer-export refr;
 ;; Phase 42 delivers locally if the export id is one of our own
 ;; actors (the ForwardEffect carries the updated vat).
-spec pump-one Nat Nat Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
-defn pump-one [remote local v pms emitted accum]
+;; Phase 48: build listener-notification bytes for `local` if pst has
+;; settled. Walks `ls` filtering target=local and emits notify bytes
+;; per matching listener. Returns the (possibly extended) accum.
+;; Pre-pump callers always have a settled pst here (called only on
+;; the `some bytes` branch), but resolution-syrup-of-pst still gates
+;; defensively to keep the helper total.
+spec listener-bytes-for-pid [List Listener] Nat PromiseState [List String] -> [List String]
+defn listener-bytes-for-pid [ls pid pst accum]
+  match [resolution-syrup-of-pst pst]
+    | none         -> accum
+    | some payload -> listener-notify-loop ls pid payload accum
+
+spec pump-one Nat Nat Vat [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
+defn pump-one [remote local v pms ls emitted accum]
   match [member-nat? local emitted]
     | true  -> pump-result v accum emitted
     | false ->
@@ -1373,18 +1460,22 @@ defn pump-one [remote local v pms emitted accum]
                 | none       -> pump-result v accum emitted
                 | some bytes ->
                     let fwd := [build-forward-effect local pst pms v]
-                      [pump-result
-                        [fwd-effect-vat fwd]
-                        [cons bytes [append String [fwd-effect-bytes fwd] accum]]
-                        [cons local emitted]]
+                      let listener-bytes :=
+                            [listener-bytes-for-pid ls local pst [nil String]]
+                        [pump-result
+                          [fwd-effect-vat fwd]
+                          [cons bytes
+                            [append String [fwd-effect-bytes fwd]
+                              [append String listener-bytes accum]]]
+                          [cons local emitted]]
 
 ;; Walk the question-table list once.
-spec pump-loop [List QEntry] Vat [List PipeMsg] [List Nat] [List String] -> PumpResult
+spec pump-loop [List QEntry] Vat [List PipeMsg] [List Listener] [List Nat] [List String] -> PumpResult
 defn pump-loop
-  | nil v _ emitted accum -> pump-result v accum emitted
-  | [cons [q-entry remote local] rest] v pms emitted accum ->
-      let r := [pump-one remote local v pms emitted accum]
-        pump-loop rest [pump-result-vat r] pms
+  | nil v _ _ emitted accum -> pump-result v accum emitted
+  | [cons [q-entry remote local] rest] v pms ls emitted accum ->
+      let r := [pump-one remote local v pms ls emitted accum]
+        pump-loop rest [pump-result-vat r] pms ls
           [pump-result-emitted r]
           [pump-result-bytes r]
 
@@ -1398,10 +1489,11 @@ defn prepend-pending-out [pending pr]
 
 ;; Public top-level pump.
 spec pump-outbound Vat BridgeState [List Nat] -> PumpResult
-  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult."
+  :doc "Walk the question table; emit bytes for newly-resolved promises plus any pending-out bytes (e.g. handshake reply). Phase 42: also delivers pipelined msgs locally to actors when applicable; the resulting Vat is in the PumpResult. Phase 48: also emits listener-notification bytes for any registered op:listen targeting a settled pid."
 defn pump-outbound [v st emitted]
   prepend-pending-out [bs-pending-out st]
-    [pump-loop [bs-questions st] v [bs-pipelined-msgs st] emitted nil]
+    [pump-loop [bs-questions st] v
+      [bs-pipelined-msgs st] [bs-listeners st] emitted nil]
 
 ;; Convenience helper for tests / callers that want the first
 ;; emitted byte-string (or a default if nothing was emitted).
@@ -1698,7 +1790,11 @@ defn connection-step [op cs]
                 ;; bytes already produced); the queue no longer needs
                 ;; them. Without this the queue grows monotonically
                 ;; across the connection's lifetime.
-                let st'   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
-                  let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
-                    conn-step cs' [pump-result-bytes pump]
+                ;; Phase 48: GC listeners that have been notified
+                ;; (one-shot: a promise settles exactly once, so a
+                ;; consumed listener entry serves no further purpose).
+                let st1   := [bs-gc-pipelined-msgs-by-emitted [pump-result-emitted pump] st0]
+                  let st'   := [bs-gc-listeners-by-notified [pump-result-emitted pump] st1]
+                    let cs'   := [conn-state v' st' [pump-result-emitted pump] [or-bool [conn-aborted? cs] [op-is-abort? op]]]
+                      conn-step cs' [pump-result-bytes pump]
 
