@@ -1082,6 +1082,45 @@ Refutation witness: the 5-element subset that IS isomorphic to M3 or N5. Concret
 
 **Estimated scope**: ~80 LoC in sre-core.rkt (M3/N5 fixtures + isomorphism check) + ~15 LoC sweep-dispatch + tests.
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**Implementation strategy reversal — direct construction, NOT full 5-tuple enumeration**: original scope said "enumerate 5-element subsets, check order-isomorphism." Cost analysis: at N=58 wider sample, C(58,5) = 4.5M subsets × ~1.4ms closure-check ≈ 105 minutes per tuple — unacceptable. Revised:
+
+- **M3 detection**: enumerate antichains of size 3 (O(N³) ≈ 30k triples at N=58). For each `(a, b, c)` pairwise-incomparable triple, verify `a∧b = a∧c = b∧c` (= ⊥') AND `a∨b = a∨c = b∨c` (= ⊤'). If yes AND the resulting 5-element set is closed under meet/join, refute with witness `(⊥', ⊤', a, b, c)`. ~20-30 sec per tuple at N=58.
+
+- **N5 detection**: enumerate ordered comparable pairs `(b, a)` with `b < a`. For each, iterate `c` incomparable with both. Verify `a ∨ c = b ∨ c` AND `a ∧ c = b ∧ c`. If yes AND closed, refute with witness. ~20-30 sec per tuple.
+
+**`/detailed` variants for both** (per Phase 11 Completeness-Over-Deferral discipline):
+- `m3-evidence` (5-field struct): status × total (antichains-of-3) × hypothesis-fired (common-meet/common-join exist) × conclusion-held (NOT M3) × witness
+- `n5-evidence` (5-field struct): status × total (b<a pairs) × hypothesis-fired (incomparable c exists) × conclusion-held (NO N5-completing c) × witness
+
+Non-vacuity meaningful: distinguishes "no antichains-of-3 in sample → vacuously confirmed (breadth ≤ 2)" from "many antichains checked, none completes M3 → strong confirmation."
+
+**Property registry + implication rule**:
+- `'no-m3-sublattice`, `'no-n5-sublattice`
+- Implication: `no-m3-sublattice + no-n5-sublattice ⇒ distributive` (forward — empirical sample-bounded; the classical Birkhoff 9.2 converse is theorem, not empirical)
+
+**Closure verification** post-construction: 5-element witness must be closed under meet/join with itself. The construction guarantees pairwise meets/joins are in {⊥', ⊤', a, b, c}; verify pairwise-meet-with-bot/top stays inside. Distinguishes "antichain shape exists" from "embedded sublattice exists."
+
+**Adversarial pass surfaced**:
+- P-lens: same off-network sample-iteration scaffolding lineage (existing). No new debt.
+- R-lens: 5 sites (sre-core.rkt definition + provide + 2 wirings + 2 sweep dispatches in different files + tests). Phase 11 pattern.
+- M-lens: O(N³) enumeration is step-think; same lineage as sample-iteration scaffolding.
+- S-lens: M3 and N5 ARE structural patterns Nation immediately recognizes; the witnesses are CONCRETE LATTICE STRUCTURES (not just refute-tuples). Stronger Nation-presentation value than Phase 4's Pi-typed-triple distributivity refutation.
+
+**Drift risks (7 named)**:
+1. Direct-construction soundness — antichain-of-3 with common pairwise meets/joins is M3 SHAPE, but embedded SUBLATTICE requires closure. Verify post-construction.
+2. Cost at N=58 — O(N³) ≈ 30k × ~700µs ≈ 20 sec per tuple. 8 sweeps × 20s = 160s sequential, ~40s wall via 4-concurrent. Tractable.
+3. Witness verbosity — 5-element lists of compound types may be large; Phase 9 already truncates; Phase 12 inherits.
+4. Sample-set sensitivity — same caveat as Phase 11. Document in interpretation.
+5. Both harness `extract-detailed-fields` copies need updates (Phase 11 lesson).
+6. Connection to Phase 4 distributivity refutation — does the Pi-typed witness complete M3 or N5? Phase 12 sweep tells us. Genuine architectural curiosity.
+7. Phase size — ~150 LoC code + tests + sweep + report. Single phase; within 1h budget.
+
+**Connection to Birkhoff 9.2**: classical theorem says distributive ⇔ no-M3 ∧ no-N5. Empirical sweep gives one direction (forward implication). Classical converse: distributive-refuted lattices MUST contain M3 or N5 — we'd EXPECT to find one in type×{eq,sub}×wider (Phase 4 found distributivity refuted). If Phase 12 finds neither, that's a bug or sample-set artifact.
+
+**Estimated scope**: ~150 LoC sre-core.rkt + ~20 LoC sweep dispatch (both files) + ~30 LoC tests + sweep + report integration. Single atomic commit per Phase 11 pattern.
+
 ### Phase 13: Convex geometry / anti-exchange characterization
 
 **Scope** (high-level):
