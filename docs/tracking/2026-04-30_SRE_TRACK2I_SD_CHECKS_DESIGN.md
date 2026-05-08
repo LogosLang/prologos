@@ -761,6 +761,71 @@ Cross-references each finding to PTF Lattice Hierarchy note §5.1+§5.2 (which l
 
 **Estimated scope**: ~30 LoC sweep harness updates + ~50 LoC findings synthesis (markdown table + interpretation).
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-07)
+
+**Mini-audit findings persisted**:
+- Sweep harness `sre-property-sweep.rkt:82-115` currently hardcodes 3 properties (distributive, sd-vee, sd-wedge); Phase 9a extends to all 10.
+- 6 sweepable (domain, relation) pairs: type × {equality, subtype, subtype-reverse}, session × equality, form-cell × equality, spec-cell × equality.
+- `format-sd-finding-row` handles `sd-evidence` + `axiom-*`; needs extension for `pc-rel-evidence`, `modular-evidence`, `whitman-evidence`.
+- Realistic atoms available per-domain (type from Phase 2a, session from Phase 7, form/spec from Phase 8).
+- `sre-domain-meet` returns `#f` for unregistered relations (e.g., session × subtype) — sweep must handle gracefully without erroring.
+
+**Q1 — Sweep depth strategy**: option **(b)** — full depth-1 sweep across all 10 properties × 6 (domain, relation) pairs. Estimated wall time ~45-60 min one-time; output captured as design-doc artifact. Rationale: the expensive properties at wider sample (Whitman's W, breadth-bound, relatively-complemented) are EXACTLY Nation's most-relevant theorems (Theorem 5.55/6.9 Nation 1982; Theorem 1.21 Jónsson-Kiefer-Nation 1962; Nation's primary terminology). Skipping them at depth-1 means telling Nation "we didn't run your theorems on the wider sample." Bounded one-time cost, high value for Phase 10 audience.
+
+**Q2 — Findings table structure**: option **(c)** two tables —
+1. **Variety-placement summary**: rows = (domain, relation, depth), columns = boolean variety membership (free? SD? modular? distributive? Heyting? Stone? Boolean?). At-a-glance hierarchy placement Nation will want first.
+2. **Per-finding detail**: rows = each (domain, relation, depth, property) finding, columns = status, total triples, hypothesis fired, conclusion held, non-vacuity %, witness footnote ref. Drillable detail.
+
+Phase 10 consumes both; Phase 9 produces both.
+
+**Q3 — Sub-phasing**: **9a + 9b** —
+- **9a**: code (extend `run-sd-sweep` to 10 properties + extend `format-sd-finding-row` for 4+ evidence types + add `untested-reason` field to `sd-finding` + variety-placement summary renderer)
+- **9b**: data (run comprehensive sweep + capture findings into design doc § Phase 9 Findings)
+- 9c (interpretation/synthesis) folded into Phase 10's report — Phase 9 produces empirical layer; Phase 10 = synthesis.
+
+**Q4 — Conditional-property handling**: option **(a)** — run all unconditionally; report raw axiom result; Phase 10 interprets the conditionals (e.g., "Stone identity is informationally significant only where pc-rel confirms"). Most honest data; cleanest separation of empirical layer vs interpretation.
+
+**Q5 — Witness rendering**: option **(b)** — footnoted witnesses. Findings table cells show `refuted (W3)` referencing footnote `W3: (Pi(m1, Bool, Bool), Int, Pi(m1, Int, Bool))`. Keeps table readable; Nation can cross-reference.
+
+**Q6 — Whale-file pressure on sre-core.rkt**: source-file organization sister concern, deferred. (NOT a testing.md whale-file rule trigger — that rule applies to test files only, was misread in Phase 6 audit.)
+
+**Q7 — Untested-reason reporting**: add **`untested-reason` symbol field** to `sd-finding` struct: `'no-relation` (relation not in domain registry), `'no-meet-fn` (relation in registry but meet returns #f), `'no-join-fn` (similarly for join), `#f` for tested results. Phase 9 sweeps emit explicit "not tested because X" findings for missing relations (e.g., session × subtype) — honest about coverage gaps. Nation sees complete map including what we didn't measure and why.
+
+**Phase 9 deliverables (locked)**:
+
+| Artifact | Phase 9a | Phase 9b |
+|---|---|---|
+| `run-sd-sweep` extended to all 10 properties | ✓ | — |
+| `format-sd-finding-row` extended for 4+ evidence types | ✓ | — |
+| `untested-reason` field added to `sd-finding` | ✓ | — |
+| `format-variety-placement-summary` renderer (new) | ✓ | — |
+| Sweep harness handles `(sre-domain-meet d r) = #f` gracefully | ✓ | — |
+| Comprehensive sweep run (depth-0 + depth-1 across all 6 pairs × 10 properties) | — | ✓ |
+| Variety-placement summary table populated in § Phase 9 Findings | — | ✓ |
+| Per-finding detail table populated in § Phase 9 Findings | — | ✓ |
+| Footnoted witnesses captured | — | ✓ |
+| Phase 9 close VAG adversarial two-column at end | — | ✓ |
+
+**Adversarial CRITIQUE pass surfaced**:
+
+| Lens | Catalogue | **Challenge** |
+|---|---|---|
+| **P** | ✓ Data Orientation, Decomplection, Correct-by-Construction | **Findings as data-records** ✓; variety-placement via `derive-composite-properties` ✓ data-driven. Honest scope: findings could BE cells with monotone merge in a future on-network world (sister concern of property-cells migration). |
+| **R** | ✓ All code surfaces audited; ~50-80 LoC delta total across 9a | None new |
+| **M** | Off-network sample-iteration + format renderer | Off-network is correct for pure data-rendering. Honest scaffolding lineage inherited. |
+| **S (SRE Lattice Lens)** | Findings characterize EXISTING lattices; output maps to PTF hierarchy | **Q6 Hasse exploitation**: breadth-bound is THE Hasse-structural check; Phase 9 reports it prominently. Variety-placement summary IS a hierarchy mapping (PTF §3 levels = table columns). ✓ |
+
+**Drift risks** (consolidated):
+1. **Sweep cost concentration on type domain** (~40 min of ~50 min total) — depth-1 with N=58 dominates; manageable per Q1 wall-time budget
+2. **Findings table format complexity** addressed by Q2 two-table separation
+3. **Conditional-property reporting honesty** addressed by Q4 raw-then-interpret in Phase 10
+4. **Format function extension cascade** — handles 4+ evidence types in 9a code
+5. **Cross-domain atom availability** ✓ established per-domain
+6. **Phase 9 may surface inconsistent property declarations** (declared vs empirical mismatch — variant of Phase 4/8) — if it fires → dialogue (potential 6th Scaffolding-Hides-Truth instance)
+7. **Source-file organization** for sre-core.rkt — sister concern, deferred per Q6
+8. **Witness rendering at scale** addressed by Q5 footnoting
+9. **Untested findings clarity** addressed by Q7 `untested-reason` field
+
 ### Phase 10: Lattice Variety Report (presentation document for Prof. Nation)
 
 **Scope** (high-level):
