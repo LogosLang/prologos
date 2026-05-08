@@ -1,0 +1,114 @@
+% LaTeX header for the Prologos Lattice Variety Categorization report.
+% Used via pandoc's -H flag. See build-nation-report.sh.
+%
+% Tuned for a multi-page research report: readable serif body, clean
+% sans for headings, monospace for lattice notation. Roomy but not
+% wasteful margins; tables that fit; cross-references styled cleanly.
+
+% --- Page geometry ---
+\usepackage[margin=1in,top=0.9in,bottom=1in]{geometry}
+
+% --- Unicode character fallbacks ---
+% Three characters aren't in DejaVu Serif's Latin-script lookup; map to
+% LaTeX equivalents via newunicodechar. Loaded BEFORE fontspec.
+\usepackage{newunicodechar}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{pifont}
+\newunicodechar{✓}{\ding{51}}     % heavy check mark via pifont
+\newunicodechar{✗}{\ding{55}}     % heavy x via pifont
+% ⋁ (big vee) handled via markdown preprocessor — it appears only inside
+% inline code where \ensuremath causes math-mode-in-texttt errors.
+% The preprocessor substitutes ⋁ with "⩒" (ASCII fallback) or similar.
+
+% --- Typography ---
+% DejaVu family provides broad, uniform Unicode coverage — required for
+% ✓ ✗ ⊥ ⊤ → ⋁ ⊓ ⊔ ≤ ≥ etc. throughout the report. Falls back gracefully
+% per font slot.
+\usepackage{fontspec}
+
+\IfFontExistsTF{DejaVu Serif}{
+  \setmainfont{DejaVu Serif}[Scale=0.95]
+}{%
+  \IfFontExistsTF{STIX Two Text}{\setmainfont{STIX Two Text}}{%
+    \IfFontExistsTF{Charter}{\setmainfont{Charter}[Numbers=OldStyle]}{}
+  }
+}
+
+\IfFontExistsTF{DejaVu Sans}{
+  \setsansfont{DejaVu Sans}[Scale=0.95]
+}{%
+  \IfFontExistsTF{Helvetica Neue}{\setsansfont{Helvetica Neue}}{}
+}
+
+\IfFontExistsTF{DejaVu Sans Mono}{
+  \setmonofont{DejaVu Sans Mono}[Scale=0.85]
+}{%
+  \IfFontExistsTF{Menlo}{\setmonofont{Menlo}[Scale=0.88]}{%
+    \setmonofont{Courier New}[Scale=0.88]
+  }
+}
+
+% --- Sectioning ---
+\usepackage{titlesec}
+\titleformat{\section}{\Large\sffamily\bfseries\color{rptblack}}{\thesection}{0.6em}{}[\vspace{2pt}\hrule]
+\titleformat{\subsection}{\large\sffamily\bfseries\color{rptblack}}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\sffamily\bfseries\color{rptblack}}{\thesubsubsection}{0.4em}{}
+\titlespacing*{\section}{0pt}{14pt}{4pt}
+\titlespacing*{\subsection}{0pt}{10pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{8pt}{2pt}
+
+% --- Colors + hyperref ---
+\usepackage{xcolor}
+\definecolor{rptblack}{HTML}{1A1A1A}
+\definecolor{rptlink}{HTML}{2C5CAA}
+\definecolor{rptcodebg}{HTML}{F4F4F4}
+\usepackage{hyperref}
+\hypersetup{urlcolor=rptlink,linkcolor=rptlink,citecolor=rptlink,colorlinks=true}
+
+% --- Code blocks (verbatim) styling ---
+\usepackage{fancyvrb}
+\fvset{fontsize=\small,frame=lines,framesep=4pt,framerule=0.4pt,
+       rulecolor=\color{gray!50},xleftmargin=8pt,xrightmargin=8pt}
+
+% --- Inline code ---
+\usepackage{soul}
+\newcommand{\code}[1]{\colorbox{rptcodebg}{\strut\texttt{\small #1}}}
+
+% --- Tables ---
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\renewcommand{\arraystretch}{1.15}
+
+% --- Lists ---
+\usepackage{enumitem}
+\setlist[itemize]{topsep=2pt,parsep=2pt,itemsep=1pt}
+\setlist[enumerate]{topsep=2pt,parsep=2pt,itemsep=1pt}
+
+% --- Page header / footer ---
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily Prologos Lattice Variety Categorization}
+\fancyhead[R]{\small\sffamily \today}
+\fancyfoot[C]{\small\sffamily \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% --- Spacing ---
+\setlength{\parskip}{4pt plus 1pt}
+\setlength{\parindent}{0pt}
+\linespread{1.05}
+
+% --- Title block ---
+\usepackage{titling}
+\pretitle{\begin{center}\Huge\sffamily\bfseries}
+\posttitle{\par\end{center}\vskip 0.5em}
+\preauthor{\begin{center}\large\sffamily}
+\postauthor{\par\end{center}\vskip 0.3em}
+\predate{\begin{center}\small\sffamily\itshape}
+\postdate{\par\end{center}\vskip 1.5em}
+
+% --- Misc ---
+\AtBeginDocument{\thispagestyle{empty}}  % clean first page (no header)
