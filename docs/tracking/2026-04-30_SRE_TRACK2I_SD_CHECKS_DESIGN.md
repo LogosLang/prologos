@@ -995,6 +995,71 @@ Add `test-has-complement` to `sre-core.rkt`. For each element `a`, search the sa
 
 **Estimated scope**: ~30 LoC in sre-core.rkt + ~10 LoC sweep-dispatch. Tests + sweep run.
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**YAGNI reversal on /detailed variant** (user-flagged 2026-05-08): the original Phase 11 scope said "no /detailed variant per Phase 5 YAGNI discipline." User pushback: "YAGNI may prematurely preclude considerations vacuously, as an excuse to defer." The honest framing is *Completeness Over Deferral* — when the marginal cost is small AND the data is informationally distinct, build it. For has-complement:
+
+- **total-checked** = total `a` iterated
+- **hypothesis-fired** = `a` where bot AND top are reachable in sample (= check is non-vacuous for this `a`)
+- **conclusion-held** = `a` with successful complement candidate found
+- **witness** = `a` with no complement (refute)
+
+Non-vacuity ratio (`fired / total-checked`) distinguishes strong-empirical-Boolean (high non-vacuity, confirms) from weak-empirical-Boolean (low non-vacuity, confirms only on tested elements) from concrete-refutation (witness atom). Phase 4's SD-vee 3.5% vs SD-wedge 91.4% asymmetry is the precedent — that finding would have been invisible without `/detailed`. Has-complement deserves the same treatment.
+
+**Going-forward discipline (Phases 12-15)**: each property check that has a meaningful non-vacuity decomposition gets a `/detailed` variant unless we can articulate WHY the decomposition is genuinely uninformative for that property (NOT "we don't need it yet" but "it doesn't measure anything different for this check"). The honest test for each: do we get more information from the 5-tuple than from confirmed/refuted alone?
+
+**In-phase sweep + report integration** (user-flagged 2026-05-08): original Phase 11 scope said "validation only; comprehensive sweep deferred." User pushback: front-loading code and back-loading data is unprincipled. Revised:
+
+- After Phase 11 code lands and tests pass: run sweep on `has-complement` across all 10 (domain, relation, depth) tuples
+- Append new rows to design doc § Phase 9 Findings (the comprehensive variety-placement matrix)
+- Update Nation report's matrix in-place — replace the Boolean column's "—" entries with empirical results
+- Adversarial VAG with the actual data, not just code shape
+- Single commit: code + sweep findings + design doc + Nation report update
+
+Cost analysis: O(N²) per (domain, relation, depth). At wider sample N=58, ~3364 iterations × ~70µs/iter = ~4 min per tuple. Across 10 tuples sequentially: ~40 min. With existing 4-concurrent-process model in `tools/run-phase9-sweep.rkt` (per Phase 9b harness): ~10-15 min wall.
+
+Per-phase sweep applied to all of Phases 11-15 going forward — Nation report stays a living document throughout.
+
+**Implementation plan**:
+
+1. **Code** (~80-100 LoC):
+   - `complement-evidence` struct (5-field, parallels sd-evidence/pc-rel-evidence/modular-evidence/whitman-evidence)
+   - `test-has-complement/detailed` (parameterized; per-element decomposition; skip vacuous when bot or top missing for that `a`; track fired vs held)
+   - `test-has-complement` wrapper translating to `axiom-*` shape
+   - Wire into `infer-domain-properties` (`props-N+1`) + `resolve-and-report-properties` evidence map
+   - Add to `all-sweep-properties` in `sre-property-sweep.rkt` (now 12 properties)
+   - Add `[(has-complement) ...]` branch in `sweep-one-property`
+   - Update `extract-detailed-fields` in `sre-property-sweep.rkt` to handle `complement-evidence`
+   - Update `format-sd-finding-row` if needed
+
+2. **Tests** (~30 LoC):
+   - `test-has-complement-untested-without-fns`
+   - `test-has-complement-detailed returns complement-evidence`
+   - `test-has-complement-empirical refutes form domain` (validates Track 2H decl)
+   - `infer-domain-properties produces has-complement entry`
+   - 4-5 cases
+
+3. **Sweep run** (~10-15 min wall):
+   - Extend `tools/run-phase9-sweep.rkt` (or invoke directly with `#:properties '(has-complement)`)
+   - 4 concurrent processes split by domain
+   - Capture findings to file
+
+4. **Report integration** (~10 min):
+   - Append new rows to design doc § Phase 9 Findings (10 rows for `has-complement` × 10 tuples)
+   - Update Nation report `docs/research/2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md` Boolean column
+   - Update report's "What we did not measure" — strike has-complement from that list
+
+**Drift risks**:
+
+1. **Sample-set sensitivity** (Phase 5 acknowledged): wider sample may falsely refute when true complement exists outside sample. Flag in interpretation.
+2. **Bot/top absence per-element handling**: skip vacuous (treat as not-fired); mirrors `test-pseudo-complement-abs` pattern. Honestly captured in detailed evidence.
+3. **Form domain expected refutation**: `form-cells.rkt:562` declares `has-complement prop-refuted`. Phase 11 sweep validates. If sweep CONFIRMS instead → Scaffolding-Hides-Truth #6 candidate; escalate per drift-risk-#4 dialogue mandate.
+4. **Type×subtype potential Boolean reach**: type×subtype is declared Heyting (Track 2H). If has-complement empirically confirms on ground sublattice → Boolean derives via implication rule. NEW architectural finding parallel to Phase 5a's type×equality Heyting reach. Watch.
+5. **Sweep findings integration into Nation report**: ensure consistency with existing Phase 9 matrix rendering style — same row format, same per-(domain, relation, depth) granularity.
+6. **Implication-rule ordering on derive-composite-properties**: existing `heyting + has-complement ⇒ boolean` rule fires after has-complement is inferred. Verify no race condition in inference order.
+
+**Estimated scope**: ~80-100 LoC code + ~10-15 min sweep + ~10 min report integration. Single phase; one commit ties code + sweep findings + design doc + Nation report all together.
+
 ### Phase 12: M3 / N5 sublattice detection (Birkhoff's forbidden-sublattice theorem)
 
 **Scope** (high-level):
