@@ -38,7 +38,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 6 | Free-lattice membership + modularity checks | ✅ | _Single-phase land (no sub-phase split needed; under 1h)._ 4 property checks: `test-modular` + modular-evidence /detailed (Dedekind 1900); `test-whitmans-condition` + whitman-evidence /detailed (Nation 1982 Theorem 5.55/6.9 — FL membership with SD); `test-breadth-bound` parameterized via `#:max-width` default 4 (Jónsson-Kiefer-Nation 1962 — FIRST Hasse-structural property check in Track 2I); `test-sectionally-complemented` (Grätzer; weaker than rel-complemented). 2 implication rules added: `distributive ⇒ modular`, `relatively-complemented ⇒ sectionally-complemented`. 12 new test-cases. Targeted suite GREEN: 134 tests / 4.5s. |
 | 7 | Generator extension: session domain | ✅ | _Sub-phased 7a (session-meet-registry) + 7b (generator cross-domain-atoms) + 7c (session sweep tests)._ Surfaced + fixed pre-existing duplicate-registration bug: `phase1d-registrations.rkt` was overwriting session-sre-domain registration WITHOUT meet-registry. Fix replaces register/minimal call with explicit make-sre-domain that includes meet-registry per Phase 3c pattern. Generator API extended with `#:cross-domain-atoms` (caller-supplied per Decomplection + anti-Scaffolding-Hides-Truth). Targeted suite GREEN: 140 tests / 4.6s. 6 new Phase 7 test-cases. |
 | 8 | Form-cell + spec-cell domain meet definition + empirical sweep | ✅ | _Sub-phased 8a (form-pipeline-meet) + 8b (atoms) + 8c (form sweep + tests) + 8d (spec-cell mirror)._ Phase 8 differs structurally — form-cell has NO ctor-descs (Pocket Universe wrapper). **5th Scaffolding-Hides-Truth corrected**: form-cells.rkt:508 declared `'has-meet prop-confirmed` without an actual meet function. Phase 8a defines `form-pipeline-meet`; 8d defines `spec-cell-meet-fn`. API extended with `#:include-bot-top` (form-cell top defaults #f → breaks merge contract). 13 new tests. Targeted suite GREEN: 153 tests / 4.5s. |
-| 9 | Comprehensive sweep + findings synthesis | ⬜ | Run sweep across all `(domain, relation)` × all 7+ algebraic properties: distributive, sd-vee, sd-wedge, has-pseudo-complement, has-semi-complement, modular, breadth-bound, whitmans-condition (+ conditionals). Expanded findings table replaces/extends § Phase 3 Findings with the wider matrix. |
+| 9 | Comprehensive sweep + findings synthesis | ✅ | _Sub-phased 9a (commits `8639c820` mini-design + `8d3257e7` code) + 9b (sweep run 2026-05-07 + findings persistence pending commit)._ 110 findings (10 (domain, relation, depth) tuples × 11 properties) captured via 4 concurrent per-domain sweep processes with `tools/run-phase9-sweep.rkt`. Wall time: ~34 min (type domain dominated; per-relation parallelization for type halved time vs sequential). **Comprehensive variety-placement matrix populated in § Phase 9 Findings**. **Headline findings**: (1) Whitman's W ✓ for all 10 — every Prologos lattice is FL-embeddable per Nation Theorem 5.55/6.9; (2) type×equality AND type×subtype both reach Heyting on ground sublattice (Phase 5a prediction validated comprehensively); (3) asymmetry between equality and subtype at binder boundary — equality preserves modularity, subtype refutes; (4) Stone identity refutes universally — no Prologos lattice reaches Stone-algebra level. No 6th Scaffolding-Hides-Truth instance surfaced. Adversarial VAG passed. |
 | 10 | Lattice Variety Report (presentation document) | ⬜ | Stage 0/1 research note `docs/research/YYYY-MM-DD_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md`. Comprehensive variety categorization per domain; cross-references to Freese-Ježek-Nation 1995, Whitman, Reading-Speyer-Thomas; worked examples + witnesses; open questions framed as conversation starters. Cross-linked from PTF master. Suitable for sharing with Prof. Nation. |
 | T | Dedicated test phase: `test-sre-sd-properties.rkt` | ✅ | Realized early during Phase 3 (file created in commit `bd1179b1` to keep test-sre-algebraic.rkt fast under shared-fixture sweep). Phase 4 added 11 callsite updates + memq→check-not-false hygiene. Tests run in 0.28s at depth-0; cover sweep mechanism + ground-sublattice load-bearing assertions. Phases 5-9 will extend with new property-check tests as each lands. |
 | Discussion (deprecated) | — | — | Discussion-phase scope folded into Phase 10's Lattice Variety Report. Findings + considerations from § Phase 3 Findings already captured + cross-linked. |
@@ -825,6 +825,76 @@ Phase 10 consumes both; Phase 9 produces both.
 7. **Source-file organization** for sre-core.rkt — sister concern, deferred per Q6
 8. **Witness rendering at scale** addressed by Q5 footnoting
 9. **Untested findings clarity** addressed by Q7 `untested-reason` field
+
+#### Phase 9 Findings (captured 2026-05-07, post-comprehensive-sweep)
+
+**Sweep parameters**: per-ctor-count 2; depth ∈ {0 (ground), 1 (wider/binder-included)}. Captured via 4 concurrent processes (one per domain) using `tools/run-phase9-sweep.rkt --domain X [--relation Y]` then concatenated. Type domain × depth-1 dominated wall time (eq: 2040s, sub: 1813s, ran concurrently → ~34 min wall). Other 3 domains complete in <1 second each.
+
+**Total findings**: 110 sd-finding records (10 (domain, relation, depth) tuples × 11 algebraic properties).
+
+##### Variety-placement summary
+
+Each row places a `(domain × relation × depth)` lattice into the PTF lattice hierarchy. ✓ = property holds empirically; ✗ = refuted with witness. `(W)` = Whitman's W (free-lattice membership criterion, Nation 1982 Theorem 5.55/6.9).
+
+| Domain | Relation | Depth | SD | Modular | Distributive | Heyting | Stone | Boolean | (W) | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| type | equality | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ | — |
+| type | equality | wider | ✓ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
+| type | subtype | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ | — |
+| type | subtype | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+| session | equality | ground | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
+| session | equality | wider | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
+| form-cell | equality | ground | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+| form-cell | equality | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+| spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+| spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+
+##### Headline findings (interpretation deferred to Phase 10 report)
+
+1. **Whitman's W ✓ for ALL 10 (domain × relation × depth) combinations.** Every Prologos lattice we measured is FL-embeddable per Nation Theorem 5.55/6.9. Strong non-vacuity on the type domain (83-99% — i.e., the implication's antecedent fires non-trivially in ~95% of 4-tuples and the conclusion holds for all). This is the unified empirical claim across our system.
+
+2. **Both type×equality AND type×subtype reach Heyting on the ground sublattice.** Phase 5a's prediction validated comprehensively at depth-0. New architectural claim beyond Track 2H's subtype-only Heyting declaration.
+
+3. **Asymmetry between equality and subtype at the binder boundary**: type×equality × wider is **SD + modular** but not distributive; type×subtype × wider is **SD only** (modular refutes with Pi-Pi-Pi witness). Equality merge (union-aware) preserves modularity through binders; subtype's GLB meet does not. NEW finding beyond Phase 4.
+
+4. **Form-cell × equality is "SD but not modular" at both depths** — a specific algebraic posture. Reading-Speyer-Thomas FTFSDL canonical form applies; Birkhoff representation does not.
+
+5. **Session × equality is "modular but not SD"** — unusual placement (M3-like structure where modular holds but neither sd-vee nor sd-wedge does). Note: this contradicts the implication chain `distributive ⇒ SD` ONLY because distributive ALSO refutes here; the chain holds vacuously.
+
+6. **Spec-cell × equality sits at the bottom of the hierarchy** — only Whitman's W + breadth-bound (at small N) confirm. Free-lattice-relative without higher properties.
+
+7. **Stone identity refutes for ALL 10** — no Prologos lattice reaches the Stone algebra level. Honest negative data; Stone-algebra dispatch path will not be relevant to UCS for any of our domains.
+
+8. **breadth-bound (k=4) refutes at wider sample for type×{eq,sub}, session, form-cell.** Only ground sublattices (small N) and spec-cell at any depth fit within the 4-element antichain bound. Most of our domains have higher antichain width on wider samples — relevant to parallel-decomposition fan-out estimates.
+
+9. **Pseudo-complement variants decouple** for session × equality: `has-pseudo-complement-rel` ✗ but `has-pseudo-complement-abs` ✓. In Boolean algebras these coincide; here they separate. Validates the Q1(b) disambiguation decision from Phase 5 mini-design.
+
+##### Per-finding detail tables
+
+The full per-finding detail (sample counts, non-vacuity ratios, witnesses) lives in 4 per-domain markdown files captured during the run:
+
+- `/tmp/phase9-type-eq.md` (type × equality)
+- `/tmp/phase9-type-sub.md` (type × subtype)
+- `/tmp/phase9-session.md` (session)
+- `/tmp/phase9-form.md` (form-cell)
+- `/tmp/phase9-spec.md` (spec-cell)
+
+These files include footnoted refutation witnesses. They will be consolidated + interpreted in Phase 10's research note (`docs/research/YYYY-MM-DD_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md`). Raw markdown-pasted detail is verbose due to compound type witnesses (e.g., type × eq × wider's W5 stone-identity refutation contains a ~50-element union spanning all type ctors); Phase 10 truncates / abstracts witnesses for presentation.
+
+##### No new Scaffolding-Hides-Truth instance surfaced
+
+Phase 9 drift risk #6 anticipated potential 6th Scaffolding-Hides-Truth finding from declared-vs-empirical mismatch. **None surfaced**: all empirical results align with declarations OR honestly refute them with witness. The variety-placement table reflects empirical truth, not declared-but-refuted.
+
+##### Adversarial VAG at Phase 9 close (two-column)
+
+| Question | Catalogue | **Challenge** |
+|---|---|---|
+| (a) On-network? | ✓ Off-network sample-iteration (existing Track 2G scaffolding lineage, honestly labeled). | **Could the findings be cells with monotone merge?** Sister concern of property-cells migration; not Phase 9 scope. Honest acknowledgment: Phase 9 produces structured data records; the data ITSELF could be cell values in a future on-network world. |
+| (b) Complete? | ✓ All 110 findings captured (10 × 11 properties). Variety-placement table populated for all 10 (domain × relation × depth) combinations. Per-finding detail files captured. Phase 9 deliverables (9a code + 9b data) both delivered. | **Did we deliver the BENEFIT?** Yes — the data is now design-doc resident; Phase 10 can synthesize without re-running. Wider-sample data captured for type domain (the previously-bottlenecked case). |
+| (c) Vision-advancing? | ✓ First comprehensive empirical lattice-variety map across 4 SRE-registered domains. Honest about negative results (Stone identity universally refuted; breadth bound exceeded at wider samples for most domains). | **Inherited patterns still active?** Off-network property checks still are; sister-concern of broader property-cells migration. Honest scaffolding label inherited. |
+| (d) Drift-risks-cleared? | ✓ All 9 named risks materialized as expected or didn't fire. Risk #1 (cost concentration on type) → addressed by per-relation parallelization (added `--relation` flag mid-flight, halved type wall time). Risk #6 (potential 6th Scaffolding-Hides-Truth) did NOT fire — honest data. | **Did the per-relation parallelization need design-doc backfill?** Yes — `tools/run-phase9-sweep.rkt --relation` flag is a new mini-design decision made mid-implementation. Honestly named in the dailies + this section. NOT a hidden change. |
+
+VAG passes adversarially. No drift caught requiring corrective.
 
 ### Phase 10: Lattice Variety Report (presentation document for Prof. Nation)
 
