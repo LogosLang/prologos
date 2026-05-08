@@ -46,13 +46,21 @@
 
 (require rackunit
          racket/list
+         racket/set
          racket/string
          "../driver.rkt"          ;; loads both domains via register-domain!
          "../sre-core.rkt"
          (only-in "../sre-sample-generator.rkt" generate-domain-samples)  ;; Phase 7c
          "../sre-property-sweep.rkt"
          "../syntax.rkt"
-         "../sessions.rkt")        ;; Phase 7c: sess-end, sess-svar for session sweep
+         "../sessions.rkt"        ;; Phase 7c: sess-end, sess-svar for session sweep
+         "../surface-rewrite.rkt"  ;; Phase 8: form-pipeline-value, form-pipeline-meet
+         (only-in "../form-cells.rkt"
+                  form-cell-bot form-cell-merge-fn form-cell-meet-fn
+                  spec-cell-bot spec-cell-merge-fn spec-cell-meet-fn
+                  spec-cell-value spec-cell-value? spec-cell-value-name
+                  spec-cell-value-type-surf spec-cell-value-metadata
+                  spec-cell-value-top?))
 
 ;; ============================================================================
 ;; Shared fixture: the Phase 3 sweep runs ONCE at module load
@@ -246,3 +254,150 @@
   (for ([line (in-list (drop lines 2))])
     (check-true (string-prefix? line "|"))
     (check-true (string-contains? line "session"))))
+
+;; ============================================================================
+;; SRE Track 2I Phase 8: form-cell + spec-cell domain sweep tests
+;; ============================================================================
+;;
+;; Phase 8 differs from Phases 6-7: form-cell has no ctor-descs (Pocket
+;; Universe wrapper, not ctor-decomposable). Sweep is depth-0 on hand-picked
+;; atoms only.
+;;
+;; Phase 8a: form-pipeline-meet defined (sister of form-pipeline-merge);
+;; form-cell-meet-registry wired.
+;; Phase 8b: realistic-form-cell-atoms — mix of constant-metadata atoms
+;; (vary transforms) + vary-metadata atoms (test wrapper-vs-embedded
+;; distinction empirically).
+;; Phase 8c: sweep + tests on form-cell × equality at depth-0.
+;; Phase 8d: spec-cell mirror.
+
+;; --- form-cell atoms (Q2 mix design) ---
+;; Constant-metadata atoms: vary transforms only — test embedded Boolean lattice
+(define form-cell-atom-bot form-cell-bot)  ;; (seteq) transforms; default metadata
+(define form-cell-atom-tagged
+  (form-pipeline-value (seteq 'tagged) #f '() #f (hasheq)))
+(define form-cell-atom-grouped
+  (form-pipeline-value (seteq 'grouped) #f '() #f (hasheq)))
+(define form-cell-atom-tagged+grouped
+  (form-pipeline-value (seteq 'tagged 'grouped) #f '() #f (hasheq)))
+(define form-cell-atom-done
+  (form-pipeline-value (seteq 'done) #f '() #f (hasheq)))
+;; Vary-metadata atoms: same transforms, different metadata — surface
+;; wrapper-vs-embedded distinction
+(define form-cell-atom-tagged-with-node
+  (form-pipeline-value (seteq 'tagged) 'mock-tree-node-A '((reg-1 . val-1)) 'pos-A (hasheq)))
+(define form-cell-atom-tagged-with-other-node
+  (form-pipeline-value (seteq 'tagged) 'mock-tree-node-B '((reg-2 . val-2)) 'pos-B (hasheq)))
+
+(define realistic-form-cell-atoms
+  (list form-cell-atom-bot
+        form-cell-atom-tagged
+        form-cell-atom-grouped
+        form-cell-atom-tagged+grouped
+        form-cell-atom-done
+        form-cell-atom-tagged-with-node
+        form-cell-atom-tagged-with-other-node))
+
+(define form-cell-domain-for-sweep (lookup-domain 'form-cell))
+
+(test-case "Phase 8a: form-cell-sre-domain has meet-registry wired"
+  (define meet-fn (sre-domain-meet form-cell-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 8a: form-pipeline-meet on transforms is set-intersection"
+  (define a (form-pipeline-value (seteq 'tagged 'grouped) #f '() #f (hasheq)))
+  (define b (form-pipeline-value (seteq 'grouped 'v0-0) #f '() #f (hasheq)))
+  (define m (form-pipeline-meet a b))
+  ;; Intersection of transforms = {'grouped}
+  (check-equal? (form-pipeline-value-transforms m) (seteq 'grouped)))
+
+(test-case "Phase 8a: form-pipeline-meet on equal atoms is idempotent"
+  (define a (form-pipeline-value (seteq 'tagged) 'node-X '((r1 . v1)) 'pos1 (hasheq)))
+  (define m (form-pipeline-meet a a))
+  (check-equal? (form-pipeline-value-transforms m) (seteq 'tagged))
+  (check-equal? (form-pipeline-value-tree-node m) 'node-X))
+
+(test-case "Phase 8a: form-pipeline-meet on different tree-nodes returns #f node"
+  (define a (form-pipeline-value (seteq 'tagged) 'node-A '() #f (hasheq)))
+  (define b (form-pipeline-value (seteq 'tagged) 'node-B '() #f (hasheq)))
+  (define m (form-pipeline-meet a b))
+  ;; Tree-nodes differ → meet's tree-node is #f (no shared node)
+  (check-false (form-pipeline-value-tree-node m)))
+
+(define phase8-form-findings
+  (run-sd-sweep form-cell-domain-for-sweep
+                '(equality)
+                realistic-form-cell-atoms
+                #:max-depth 0
+                ;; form-cell top-value defaults to #f (no real top defined);
+                ;; skip bot-top inclusion to avoid #f reaching merge/meet.
+                #:include-bot-top #f))
+
+(test-case "Phase 8c: form-cell sweep returns 3 findings (distributive + sd-vee + sd-wedge)"
+  (check-equal? (length phase8-form-findings) 3))
+
+(test-case "Phase 8c: each form-cell finding has correct shape"
+  (for ([f (in-list phase8-form-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'form-cell)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) '(distributive sd-vee sd-wedge)))))
+
+;; --- spec-cell atoms (Phase 8d) ---
+(define spec-cell-atom-bot spec-cell-bot)
+(define spec-cell-atom-foo-Int
+  (spec-cell-value 'foo 'mock-Int-surf #f #f))
+(define spec-cell-atom-foo-Bool
+  (spec-cell-value 'foo 'mock-Bool-surf #f #f))
+(define spec-cell-atom-bar-Int
+  (spec-cell-value 'bar 'mock-Int-surf #f #f))
+(define spec-cell-atom-top
+  (spec-cell-value #f #f #f #t))  ;; collision-top
+
+(define realistic-spec-cell-atoms
+  (list spec-cell-atom-bot
+        spec-cell-atom-foo-Int
+        spec-cell-atom-foo-Bool
+        spec-cell-atom-bar-Int
+        spec-cell-atom-top))
+
+(define spec-cell-domain-for-sweep (lookup-domain 'spec-cell))
+
+(test-case "Phase 8d: spec-cell-sre-domain has meet-registry wired"
+  (define meet-fn (sre-domain-meet spec-cell-domain-for-sweep 'equality))
+  (check-not-false meet-fn))
+
+(test-case "Phase 8d: spec-cell-meet bot ⊓ x = bot"
+  (define m (spec-cell-meet-fn spec-cell-atom-bot spec-cell-atom-foo-Int))
+  (check-eq? (spec-cell-value-type-surf m) #f))  ;; bot
+
+(test-case "Phase 8d: spec-cell-meet top ⊓ x = x"
+  (define m (spec-cell-meet-fn spec-cell-atom-top spec-cell-atom-foo-Int))
+  (check-equal? m spec-cell-atom-foo-Int))
+
+(test-case "Phase 8d: spec-cell-meet idempotent on equal"
+  (define m (spec-cell-meet-fn spec-cell-atom-foo-Int spec-cell-atom-foo-Int))
+  (check-equal? m spec-cell-atom-foo-Int))
+
+(test-case "Phase 8d: spec-cell-meet different specs = bot"
+  (define m (spec-cell-meet-fn spec-cell-atom-foo-Int spec-cell-atom-foo-Bool))
+  (check-eq? (spec-cell-value-type-surf m) #f))  ;; bot
+
+(define phase8-spec-findings
+  (run-sd-sweep spec-cell-domain-for-sweep
+                '(equality)
+                realistic-spec-cell-atoms
+                #:max-depth 0
+                ;; spec-cell HAS a real top-value (collision); but our atoms
+                ;; already include both top and bot explicitly. Skip default
+                ;; bot-top inclusion to avoid duplication.
+                #:include-bot-top #f))
+
+(test-case "Phase 8d: spec-cell sweep returns 3 findings"
+  (check-equal? (length phase8-spec-findings) 3))
+
+(test-case "Phase 8d: each spec-cell finding has correct shape"
+  (for ([f (in-list phase8-spec-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'spec-cell)
+    (check-eq? (sd-finding-relation f) 'equality)))

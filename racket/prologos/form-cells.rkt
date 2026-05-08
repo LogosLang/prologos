@@ -44,6 +44,9 @@
  annotate-surfs-with-specs
  ;; Phase 6: Merge function (exposed for testing / validation)
  form-cell-merge-fn
+ ;; SRE Track 2I Phase 8a: form-cell meet + bot exposed for empirical testing
+ form-cell-meet-fn
+ form-cell-bot
  ;; §12: SRE domain registrations
  form-cell-sre-domain
  spec-cell-sre-domain
@@ -51,6 +54,8 @@
  ;; Phase 3a: Spec cells
  (struct-out spec-cell-value)
  spec-cell-merge-fn
+ ;; SRE Track 2I Phase 8d: spec-cell meet exposed for empirical testing
+ spec-cell-meet-fn
  create-spec-cell
  write-spec-cell
  read-spec-cell
@@ -399,6 +404,35 @@
 ;; Bot value for spec cells
 (define spec-cell-bot (spec-cell-value #f #f #f #f))
 
+;; SRE Track 2I Phase 8d (2026-04-30): spec-cell-meet-fn — lattice meet
+;; (greatest lower bound) on spec-cell-value. Sister of spec-cell-merge-fn.
+;; Pre-Phase-8d: spec-cell-sre-domain had no meet-registry; declared
+;; properties only included comm/assoc/idem-join (no has-meet declared, so
+;; no Scaffolding-Hides-Truth pre-condition like form-cell had). Phase 8d
+;; adds the meet so empirical sweep on spec-cell can run Phase 5/6 checks.
+;;
+;; Semantics dual to merge:
+;;   - bot ⊓ x = bot (bot absorbs in meet; dual to bot ⊔ x = x in merge)
+;;   - top ⊓ x = x (top is identity in meet; dual to top ⊔ x = top in merge)
+;;   - x ⊓ x = x (idempotent on equal)
+;;   - x ⊓ y = bot when x ≠ y and both ≠ top (no common information)
+(define (spec-cell-meet-fn old new)
+  (cond
+    ;; Top cases FIRST (top is identity in meet — dual to top-absorbs in
+    ;; merge). Order matters: top values have type-surf=#f too, so we must
+    ;; classify them as top BEFORE checking type-surf for bot.
+    [(spec-cell-value-top? old) new]
+    [(spec-cell-value-top? new) old]
+    ;; Bot cases: bot absorbs in meet
+    [(not (spec-cell-value-type-surf old)) old]   ; old is bot → bot
+    [(not (spec-cell-value-type-surf new)) new]   ; new is bot → bot
+    ;; Same name + same type → idempotent
+    [(and (eq? (spec-cell-value-name old) (spec-cell-value-name new))
+          (equal? (spec-cell-value-type-surf old) (spec-cell-value-type-surf new)))
+     old]
+    ;; Different specs: meet = bot (no common information)
+    [else spec-cell-bot]))
+
 ;; Merge function for spec cells:
 ;; - bot ⊔ x = x
 ;; - x ⊔ bot = x
@@ -483,6 +517,22 @@
             (lambda () (error 'form-cell-merge-registry
                               "no merge for relation: ~a" rel-name))))
 
+;; SRE Track 2I Phase 8a (2026-04-30): form-cell-meet-fn / form-cell-meet-registry.
+;; Sister of form-cell-merge-fn — wires form-pipeline-meet (defined in
+;; surface-rewrite.rkt) into the SRE registry.
+;; Pre-Phase-8a: form-cell-sre-domain declared 'has-meet prop-confirmed but
+;; no actual meet function existed (5th Scaffolding-Hides-Truth instance).
+(define (form-cell-meet-fn old new)
+  (form-pipeline-meet old new))
+
+(define form-cell-meet-table
+  (hasheq 'equality form-cell-meet-fn))
+
+(define (form-cell-meet-registry rel-name)
+  (hash-ref form-cell-meet-table rel-name
+            (lambda () (error 'form-cell-meet-registry
+                              "no meet for relation: ~a" rel-name))))
+
 (define form-cell-bot
   (form-pipeline-value (seteq) #f '() #f (hasheq)))
 
@@ -496,6 +546,7 @@
   (make-sre-domain
     #:name 'form-cell
     #:merge-registry form-cell-merge-registry
+    #:meet-registry form-cell-meet-registry  ;; Phase 8a — backs declared 'has-meet
     #:contradicts? form-cell-contradicts?
     #:bot? form-cell-bot?
     #:bot-value form-cell-bot
@@ -517,6 +568,15 @@
 (define spec-cell-merge-table
   (hasheq 'equality spec-cell-merge-fn))
 
+;; SRE Track 2I Phase 8d: spec-cell-meet-registry (sister of spec-cell-merge-table).
+(define spec-cell-meet-table
+  (hasheq 'equality spec-cell-meet-fn))
+
+(define (spec-cell-meet-registry rel-name)
+  (hash-ref spec-cell-meet-table rel-name
+            (lambda () (error 'spec-cell-meet-registry
+                              "no meet for relation: ~a" rel-name))))
+
 (define (spec-cell-merge-registry rel-name)
   (hash-ref spec-cell-merge-table rel-name
             (lambda () (error 'spec-cell-merge-registry
@@ -534,16 +594,19 @@
   (make-sre-domain
     #:name 'spec-cell
     #:merge-registry spec-cell-merge-registry
+    #:meet-registry spec-cell-meet-registry  ;; Phase 8d
     #:contradicts? spec-cell-contradicts?
     #:bot? spec-cell-bot?
     #:bot-value spec-cell-bot
     #:top-value (spec-cell-value #f #f #f #t)  ;; top value (collision)
     ;; Track 2H: declared-properties nested by relation
+    ;; Phase 8d: 'has-meet now backed by spec-cell-meet-fn.
     #:declared-properties
     (hasheq
       'equality (hasheq 'commutative-join  prop-confirmed
                         'associative-join  prop-confirmed
-                        'idempotent-join   prop-confirmed))))
+                        'idempotent-join   prop-confirmed
+                        'has-meet          prop-confirmed))))
 
 (register-domain! spec-cell-sre-domain)
 

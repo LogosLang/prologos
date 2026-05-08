@@ -84,12 +84,18 @@
                       base-atoms
                       #:max-depth [max-depth 1]
                       #:per-ctor-count [per-ctor-count 2]
-                      #:cross-domain-atoms [cross-domain-atoms (hasheq)])
+                      #:cross-domain-atoms [cross-domain-atoms (hasheq)]
+                      ;; Phase 8: domains may have non-trivial bot/top that
+                      ;; aren't safe to feed through merge/meet (e.g.,
+                      ;; form-cell top-value defaults to #f, breaks
+                      ;; form-pipeline-merge contract). Caller controls.
+                      #:include-bot-top [include-bot-top #t])
   (define samples
     (generate-domain-samples domain
                              #:max-depth max-depth
                              #:per-ctor-count per-ctor-count
                              #:base-values base-atoms
+                             #:include-bot-top include-bot-top
                              #:cross-domain-atoms cross-domain-atoms))
   (define sample-count (length samples))
   (define domain-name (sre-domain-name domain))
