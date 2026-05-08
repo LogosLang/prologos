@@ -91,3 +91,6 @@ jobs:
 
       - name: Run pipelining test (Phase 40 — promise-pipelining receiver cross-impl)
         run: cd racket/prologos && raco test tests/test-ocapn-pipelining-interop.rkt
+
+      - name: Run pipeline-forwarding test (Phase 43 — wire-out closure cross-impl)
+        run: cd racket/prologos && raco test tests/test-ocapn-pipeline-forwarding-interop.rkt

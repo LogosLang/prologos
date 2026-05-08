@@ -75,6 +75,7 @@ defn incoming-captp-op
 require [prologos::ocapn::promise :refer-all]
         [prologos::ocapn::pipelining :refer [pipeline-deliver]]
         [prologos::ocapn::syrup-wire :as wire :refer []]
+        [prologos::ocapn::captp-wire :refer [wire-nat]]
         [prologos::data::list :refer [append cons nil]]
 
 ;; Build the bytes for an outbound op:deliver targeting an
@@ -770,35 +771,22 @@ defn deliver-allocate [tgt args remote v st]
 ;; is acknowledged but deferred to a future phase.
 
 ;; Extract refrs from a desc:export payload. Payload should be a
-;; syrup-nat N; if shape is unexpected, returns empty list (peer bug).
+;; syrup-nat N OR syrup-int N (wire decoder produces the latter for
+;; `N+` literals). Anything else returns empty list (peer bug).
+;; wire-nat handles both shapes; this function lifts that into a
+;; List Refr.
 spec match-payload-as-export SyrupValue -> List Refr
-defn match-payload-as-export
-  | syrup-nat n      -> [cons [refr-remote-export n] [nil Refr]]
-  | syrup-null       -> [nil Refr]
-  | syrup-bool _     -> [nil Refr]
-  | syrup-int _      -> [nil Refr]
-  | syrup-string _   -> [nil Refr]
-  | syrup-symbol _   -> [nil Refr]
-  | syrup-list _     -> [nil Refr]
-  | syrup-tagged _ _ -> [nil Refr]
-  | syrup-refr _     -> [nil Refr]
-  | syrup-bytes _    -> [nil Refr]
-  | syrup-promise _  -> [nil Refr]
+defn match-payload-as-export [p]
+  match [wire-nat p]
+    | none   -> [nil Refr]
+    | some n -> [cons [refr-remote-export n] [nil Refr]]
 
 ;; Same for desc:answer payloads.
 spec match-payload-as-answer SyrupValue -> List Refr
-defn match-payload-as-answer
-  | syrup-nat n      -> [cons [refr-remote-answer n] [nil Refr]]
-  | syrup-null       -> [nil Refr]
-  | syrup-bool _     -> [nil Refr]
-  | syrup-int _      -> [nil Refr]
-  | syrup-string _   -> [nil Refr]
-  | syrup-symbol _   -> [nil Refr]
-  | syrup-list _     -> [nil Refr]
-  | syrup-tagged _ _ -> [nil Refr]
-  | syrup-refr _     -> [nil Refr]
-  | syrup-bytes _    -> [nil Refr]
-  | syrup-promise _  -> [nil Refr]
+defn match-payload-as-answer [p]
+  match [wire-nat p]
+    | none   -> [nil Refr]
+    | some n -> [cons [refr-remote-answer n] [nil Refr]]
 
 ;; Phase 37: same for desc:import-object payloads. The OCapN
 ;; three-vat handoff form. Decoded as refr-remote-import-object;
@@ -807,18 +795,10 @@ defn match-payload-as-answer
 ;; "peer is introducing some capability; we'll preserve its identity
 ;; and round-trip it on the wire" — full handoff semantics deferred.
 spec match-payload-as-import-object SyrupValue -> List Refr
-defn match-payload-as-import-object
-  | syrup-nat n      -> [cons [refr-remote-import-object n] [nil Refr]]
-  | syrup-null       -> [nil Refr]
-  | syrup-bool _     -> [nil Refr]
-  | syrup-int _      -> [nil Refr]
-  | syrup-string _   -> [nil Refr]
-  | syrup-symbol _   -> [nil Refr]
-  | syrup-list _     -> [nil Refr]
-  | syrup-tagged _ _ -> [nil Refr]
-  | syrup-refr _     -> [nil Refr]
-  | syrup-bytes _    -> [nil Refr]
-  | syrup-promise _  -> [nil Refr]
+defn match-payload-as-import-object [p]
+  match [wire-nat p]
+    | none   -> [nil Refr]
+    | some n -> [cons [refr-remote-import-object n] [nil Refr]]
 
 ;; Phase 37: handle the desc:answer / desc:import-object branch of
 ;; tag-dispatch. Pulled out as a 2-deep helper so the top-level
@@ -1038,21 +1018,13 @@ defn captp-incoming-with-state
 ;; for now — desc:answer chaining (resolve-to-promise) and local-actor
 ;; forwarding are deferred to a future phase.
 
-;; Extract the Nat from a syrup-nat, none for any other shape. Used
-;; after we've identified the surrounding desc:export tag.
+;; Extract the Nat from a syrup-nat OR a non-negative syrup-int (the
+;; wire decoder produces syrup-int for `N+` literals — both shapes
+;; need to be handled). Reuses captp-wire's wire-nat which does the
+;; syrup-int → Nat conversion when the int is non-negative.
 spec tagged-payload-as-nat SyrupValue -> [Option Nat]
-defn tagged-payload-as-nat
-  | syrup-null       -> [none Nat]
-  | syrup-bool _     -> [none Nat]
-  | syrup-nat n      -> [some Nat n]
-  | syrup-int _      -> [none Nat]
-  | syrup-string _   -> [none Nat]
-  | syrup-symbol _   -> [none Nat]
-  | syrup-list _     -> [none Nat]
-  | syrup-refr _     -> [none Nat]
-  | syrup-bytes _    -> [none Nat]
-  | syrup-promise _  -> [none Nat]
-  | syrup-tagged _ _ -> [none Nat]
+defn tagged-payload-as-nat [p]
+  wire-nat p
 
 ;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
 ;; None for any other shape (including desc:answer, plain value, list,
