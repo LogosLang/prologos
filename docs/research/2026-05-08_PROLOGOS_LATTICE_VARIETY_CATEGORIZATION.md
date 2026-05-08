@@ -62,16 +62,16 @@ graph TD
 
 | Domain | Relation | Depth | SD | Modular | Distributive | Heyting | Stone | Boolean | (W) |
 |---|---|---|---|---|---|---|---|---|---|
-| type | equality | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ |
-| type | equality | wider | ✓ | ✓ | ✗ | ✗ | ✗ | — | ✓ |
-| type | subtype | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ |
-| type | subtype | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ |
+| type | equality | ground | ✓ | ✓ | ✓ | **✓** | ✗ | ✗ | ✓ |
+| type | equality | wider | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| type | subtype | ground | ✓ | ✓ | ✓ | **✓** | ✗ | ✗ | ✓ |
+| type | subtype | wider | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
 | session | equality | ground | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ |
 | session | equality | wider | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ |
 | form-cell | equality | ground | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ |
 | form-cell | equality | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ |
-| spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ |
-| spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ |
+| spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
+| spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ |
 
 Pseudo-complement results (separate column block, since the rel/abs distinction is part of the empirical story):
 
@@ -88,7 +88,7 @@ Pseudo-complement results (separate column block, since the rel/abs distinction 
 | spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✓ |
 | spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✓ |
 
-Status note on Boolean column: we did not run a `has-complement` empirical check, so Boolean placement is uniformly "—" (not measured). On lattices where Heyting refutes, Boolean is foreclosed regardless. We were comfortable inferring this without measuring.
+Status note on Boolean column (updated 2026-05-08, Phase 11): empirical `has-complement` check now run via `tools/run-phase9-sweep.rkt --properties has-complement`. **Boolean refuted with witness `Int` for all type×{eq,sub} rows** (Int has no `x` such that `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge — same witness across all 4 type-domain depths). Spec-cell × equality also refutes. Notable: even on the type×{eq,sub}×ground rows where Heyting confirms, Boolean refutes — these lattices are Heyting but NOT Boolean. Session and form-cell rows remain "—" because their default samples don't include both bot AND top (sample-set limitation; would require domain-specific atom-pool enrichment to test).
 
 Status note on (W) sample-set scope: empirical claim on sampled 4-tuples, not a constructive proof. Hypothesis non-vacuity ratios per domain × depth are: type 83-95% (ground / wider); session 92-99%; form-cell 64%; spec-cell 87%. Confirmation is non-vacuous; we believe the observation but acknowledge the constructive-proof gap.
 
@@ -230,7 +230,7 @@ We interpret this as: **our wider sample is not a finite sublattice of FL** in t
 
 In the spirit of honest scope, the following were *not* measured for the variety-placement matrix above. **Phases 11-15 (in progress as of 2026-05-08) address each**; this section will be updated in-place once those land:
 
-- **`has-complement`** (Boolean-algebra membership). Phase 11. Per-element search for complements; closes the Boolean column of the variety-placement matrix (currently uniformly "—").
+- ~~**`has-complement`** (Boolean-algebra membership). Phase 11. Per-element search for complements; closes the Boolean column of the variety-placement matrix (currently uniformly "—").~~ **DONE 2026-05-08**: Boolean refuted with witness `Int` for type×{eq,sub} (all depths) and spec-cell × equality (all depths). Session and form-cell remain untested due to sample-set bot/top absence; sister-concern requires per-domain atom-pool enrichment.
 - **M3 / N5 sublattice detection** (Birkhoff's forbidden-sublattice theorem). Phase 12. Empirical sublattice check provides concrete witness for *why* distributivity refutes — the specific 5-element subset that is order-isomorphic to the diamond M3 or pentagon N5.
 - **Convex-geometry / anti-exchange characterization** (Adaricheva-Gorbunov-Tumanov 2003). Phase 13. For SD-confirmed domains, dualize via the canonical closure operator on join-irreducibles. The AGT 2003 theorem ties finite join-semidistributive lattices to convex geometries iff anti-exchange holds — empirical confirmation would substantively connect our system to convex-geometry literature.
 - **Targeted congruences** — specific candidate congruences (kernel of multiplicity-forgetful map; canonical-form projection). Phase 14. Restricted scope: cannot fully characterize `Con(L)` (O(2^N) explosive) but can confirm/refute specific candidates relevant to our system's structure.

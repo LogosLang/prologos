@@ -40,7 +40,7 @@ This is the smallest concrete move toward variety identification per [LATTICE_VA
 | 8 | Form-cell + spec-cell domain meet definition + empirical sweep | ✅ | _Sub-phased 8a (form-pipeline-meet) + 8b (atoms) + 8c (form sweep + tests) + 8d (spec-cell mirror)._ Phase 8 differs structurally — form-cell has NO ctor-descs (Pocket Universe wrapper). **5th Scaffolding-Hides-Truth corrected**: form-cells.rkt:508 declared `'has-meet prop-confirmed` without an actual meet function. Phase 8a defines `form-pipeline-meet`; 8d defines `spec-cell-meet-fn`. API extended with `#:include-bot-top` (form-cell top defaults #f → breaks merge contract). 13 new tests. Targeted suite GREEN: 153 tests / 4.5s. |
 | 9 | Comprehensive sweep + findings synthesis | ✅ | _Sub-phased 9a (commits `8639c820` mini-design + `8d3257e7` code) + 9b (sweep run 2026-05-07 + findings persistence pending commit)._ 110 findings (10 (domain, relation, depth) tuples × 11 properties) captured via 4 concurrent per-domain sweep processes with `tools/run-phase9-sweep.rkt`. Wall time: ~34 min (type domain dominated; per-relation parallelization for type halved time vs sequential). **Comprehensive variety-placement matrix populated in § Phase 9 Findings**. **Headline findings**: (1) Whitman's W ✓ for all 10 — every Prologos lattice is FL-embeddable per Nation Theorem 5.55/6.9; (2) type×equality AND type×subtype both reach Heyting on ground sublattice (Phase 5a prediction validated comprehensively); (3) asymmetry between equality and subtype at binder boundary — equality preserves modularity, subtype refutes; (4) Stone identity refutes universally — no Prologos lattice reaches Stone-algebra level. No 6th Scaffolding-Hides-Truth instance surfaced. Adversarial VAG passed. |
 | 10 | Lattice Variety Report (presentation document) | ✅ | Stage 0/1 research note `docs/research/2026-05-08_PROLOGOS_LATTICE_VARIETY_CATEGORIZATION.md` (272 lines, terser than original 400-600 target — appropriate for in-person meeting context). Headline: Whitman's W ✓ across all 10 (Nation Theorem 5.55/6.9). Per-domain narrative includes equality-vs-subtype binder-boundary asymmetry (NEW finding) + Mermaid diagrams. 6 open questions framed as conversation starters with Nation. Quantale framing deemphasized per audience-specific calibration (Nation's expertise gap; referred to colleagues). Cross-linked from PTF master Research Documents table (entry 4). Adversarial VAG passed at phase close. **Track 2I "first-close" at this phase**; reopened 2026-05-08 per user direction to address gap-closure (Phases 11-15) — the report's "What we did not measure" section was too interesting to leave. Report will be updated in-place (Q-C lock 2026-05-08) once Phases 11-15 land. PDF render for the meeting is post-process step. |
-| 11 | `has-complement` empirical check (Boolean placement) | ⬜ | Per-element search: ∃x with a∧x=⊥ AND a∨x=⊤. O(N³) total. Closes Boolean column of variety-placement matrix (currently uniformly "—"). For type×{eq,sub}×ground (Heyting-confirmed), gives definitive Boolean placement. Implication-rule extension: `heyting + has-complement ⇒ boolean`. Tier 1 of gap-closure. |
+| 11 | `has-complement` empirical check (Boolean placement) | ✅ | _Code + sweep + report integration in single commit per user-flagged in-phase pattern (2026-05-08)._ Added `complement-evidence` struct (5-field; YAGNI reversed per Completeness Over Deferral) + `test-has-complement/detailed` + wrapper. Atomic wiring: `infer-domain-properties` props-14, `resolve-and-report-properties` evidence map, `all-sweep-properties` (now 12), `sweep-one-property` dispatch, `extract-detailed-fields` (sre-property-sweep + run-phase9-sweep harness), Boolean column derivation in both summary tables. 6 new test-cases. Targeted suite GREEN: 164 tests / 4.4s. **Phase 11 finding**: Boolean refuted with witness `Int` for type×{eq,sub}×{ground,wider} AND spec-cell×equality×{ground,wider}; session + form-cell remain untested (sample-set bot/top absence). Type×{eq,sub} is **Heyting on ground but NOT Boolean** — net-new architectural data. Sweep via 4 concurrent processes with `--properties has-complement` flag (added to harness). Findings persisted to design doc § Phase 9 Findings + Nation report Boolean column updated in-place. Adversarial VAG passed. |
 | 12 | M3 / N5 sublattice detection (Birkhoff theorem) | ⬜ | Enumerate 5-element subsets; check order-isomorphism to M3 (diamond) or N5 (pentagon). Birkhoff: distributive ⇔ no-M3 AND no-N5. Concrete WITNESS for distributivity refutation in lattice-theoretic vocabulary Nation immediately recognizes. Tier 1. |
 | 13 | Convex geometry / anti-exchange characterization | ⬜ | For SD-confirmed domains, dualize via Adaricheva-Gorbunov-Tumanov 2003 (recommended in Nation's lattice notes). Test anti-exchange property on closure operator (downward closure on join-irreducibles, canonical choice). Yields dual structural view of SD lattices. Tier 2. |
 | 14 | Targeted congruence tests | ⬜ | Full Con(L) is O(2^N) — explosive. Restricted: test specific candidate congruences (kernel of multiplicity-forgetful map; canonical-form projection). O(N²) per candidate. Subdirectly-irreducible characterization (classical Nation territory). Tier 3. |
@@ -843,16 +843,16 @@ Each row places a `(domain × relation × depth)` lattice into the PTF lattice h
 
 | Domain | Relation | Depth | SD | Modular | Distributive | Heyting | Stone | Boolean | (W) | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| type | equality | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ | — |
-| type | equality | wider | ✓ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
-| type | subtype | ground | ✓ | ✓ | ✓ | **✓** | ✗ | — | ✓ | — |
-| type | subtype | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
-| session | equality | ground | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
-| session | equality | wider | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | — |
-| form-cell | equality | ground | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
-| form-cell | equality | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
-| spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
-| spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✗ | — | ✓ | — |
+| type | equality | ground | ✓ | ✓ | ✓ | **✓** | ✗ | ✗ | ✓ | Boolean refuted, witness Int |
+| type | equality | wider | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✓ | Boolean refuted, witness Int |
+| type | subtype | ground | ✓ | ✓ | ✓ | **✓** | ✗ | ✗ | ✓ | Boolean refuted, witness Int |
+| type | subtype | wider | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | Boolean refuted, witness Int |
+| session | equality | ground | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | has-complement untested (no top in samples) |
+| session | equality | wider | ✗ | ✓ | ✗ | ✗ | ✗ | — | ✓ | has-complement untested (no top in samples) |
+| form-cell | equality | ground | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | has-complement untested (no bot/top per Phase 8) |
+| form-cell | equality | wider | ✓ | ✗ | ✗ | ✗ | ✗ | — | ✓ | has-complement untested (no bot/top per Phase 8) |
+| spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | Boolean refuted, witness in spec-cell-bot context |
+| spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ | Boolean refuted, witness in spec-cell-bot context |
 
 ##### Headline findings (interpretation deferred to Phase 10 report)
 
@@ -873,6 +873,10 @@ Each row places a `(domain × relation × depth)` lattice into the PTF lattice h
 8. **breadth-bound (k=4) refutes at wider sample for type×{eq,sub}, session, form-cell.** Only ground sublattices (small N) and spec-cell at any depth fit within the 4-element antichain bound. Most of our domains have higher antichain width on wider samples — relevant to parallel-decomposition fan-out estimates.
 
 9. **Pseudo-complement variants decouple** for session × equality: `has-pseudo-complement-rel` ✗ but `has-pseudo-complement-abs` ✓. In Boolean algebras these coincide; here they separate. Validates the Q1(b) disambiguation decision from Phase 5 mini-design.
+
+10. **Boolean refutes for type×{eq,sub} and spec-cell × equality (Phase 11, 2026-05-08)**. Same witness `Int` for all 4 type-domain rows (eq×ground, eq×wider, sub×ground, sub×wider) — Int has no `x` with `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge. Spec-cell × equality also refutes. Closes the Boolean column definitively for these 6 rows. **type×{eq,sub} reaches Heyting on ground sublattice (Phase 5a finding) but does NOT extend to Boolean** — substantive new architectural data point.
+
+11. **has-complement remains untested for session × equality and form-cell × equality** — both depths. Sample-set limitation: session and form-cell domains don't include both bot AND top in their default samples (form-cell top defaults to #f per Phase 8 lesson; session has no canonical top). Honest negative: cannot empirically determine Boolean placement on current samples; sister concern requires Phase 8 follow-up to enrich those domain atom pools.
 
 ##### Per-finding detail tables
 

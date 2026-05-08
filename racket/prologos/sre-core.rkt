@@ -72,6 +72,9 @@
  test-whitmans-condition test-whitmans-condition/detailed
  test-breadth-bound
  test-sectionally-complemented
+ ;; Phase 11: has-complement (Boolean placement)
+ (struct-out complement-evidence)
+ test-has-complement test-has-complement/detailed
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -798,6 +801,94 @@
                 (return (axiom-refuted (list b c)))]))))
        (axiom-confirmed count))]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 11: has-complement empirical check (Boolean placement)
+;; ========================================================================
+;;
+;; A bounded lattice has complements iff for every element `a`, there
+;; exists `x` with `a ∧ x = ⊥` AND `a ∨ x = ⊤`. Combined with distributive
+;; + has-pseudo-complement-rel (Heyting), has-complement gives Boolean.
+;;
+;; The existing implication rule `heyting + has-complement ⇒ boolean`
+;; (`standard-implication-rules`, ~line 1063) consumes this empirical value.
+;; Phase 11 fills the source side of that rule.
+;;
+;; Calling discipline (Phase 4): explicit meet-fn AND join-fn from same relation.
+;;
+;; /detailed variant rationale (Phase 11 mini-design 2026-05-08): non-vacuity
+;; ratio is informative. Distinguishes:
+;;   - strong-empirical-Boolean (high non-vacuity, confirms)
+;;   - weak-empirical-Boolean (low non-vacuity, confirms only on tested elements)
+;;   - concrete-refutation (refute witness names which atom has no complement)
+;; Same shape as Phase 4's SD-vee 3.5% vs SD-wedge 91.4% asymmetry: had we
+;; not tracked non-vacuity, the structural insight would have been invisible.
+
+;; complement-evidence: detailed evidence for has-complement check.
+;; Same 5-field shape as sd-evidence / pc-rel-evidence / modular-evidence /
+;; whitman-evidence (uniform extract-detailed-fields handling).
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total `a` iterated
+;;   hypothesis-fired  — `a` where bot AND top reachable (= check non-vacuous)
+;;   conclusion-held   — `a` with successful complement candidate found
+;;   witness           — refute-witness `a` (the element with no complement); #f on confirmed/untested
+(struct complement-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+(define (test-has-complement/detailed domain samples meet-fn join-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (complement-evidence 'untested 0 0 0 #f)]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define top (sre-domain-top-value domain))
+     ;; Sanity: domain bot/top must be present in lattice for axiom to be checkable.
+     ;; If either is #f (e.g., form-cell domain pre-Phase-8 fix), all checks vacuous.
+     (cond
+       [(or (not bot) (not top))
+        (complement-evidence 'untested (length samples) 0 0 #f)]
+       [else
+        (let/ec return
+          (define-values (total fired held)
+            (for/fold ([t 0] [f 0] [h 0])
+                      ([a (in-list samples)])
+              (define t* (+ t 1))
+              ;; Hypothesis non-vacuity: bot AND top must be reachable for `a`'s
+              ;; complement check. We check by sample membership (whether bot/top
+              ;; are in samples) AND that a meets bot to bot (sanity).
+              (cond
+                [(not (and (member bot samples) (member top samples)))
+                 ;; bot or top missing from sample → vacuous for this a
+                 (values t* f h)]
+                [else
+                 ;; Hypothesis fires; search for complement
+                 (define complement-found?
+                   (for/or ([x (in-list samples)])
+                     (and (equal? (meet-fn a x) bot)
+                          (equal? (join-fn a x) top))))
+                 (cond
+                   [complement-found?
+                    (values t* (+ f 1) (+ h 1))]
+                   [else
+                    (return (complement-evidence 'refuted t* (+ f 1) h a))])])))
+          (complement-evidence 'confirmed total fired held #f))])]))
+
+;; Backward-compat wrapper: simple axiom shape for registry consumption.
+;; Witness is wrapped in a list per convention (format-property-profile
+;; maps over axiom-refuted-witness expecting list shape; detailed evidence
+;; carries the bare atom for richness).
+(define (test-has-complement domain samples meet-fn join-fn)
+  (define ev (test-has-complement/detailed domain samples meet-fn join-fn))
+  (case (complement-evidence-status ev)
+    [(confirmed) (axiom-confirmed (complement-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (list (complement-evidence-witness ev)))]
+    [(untested)  axiom-untested]))
+
 ;; Compute absolute pseudo-complement candidate ¬a on a sample set.
 ;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
 ;; no such x exists in samples. Used by test-stone-identity below.
@@ -1038,7 +1129,14 @@
         (update-property props-12 'sectionally-complemented
                          (test-sectionally-complemented domain samples meet-fn join-fn))
         props-12))
-  props-13)
+  ;; Phase 11: has-complement (Boolean placement; combines with heyting via
+  ;; the existing implication rule heyting + has-complement ⇒ boolean)
+  (define props-14
+    (if (and meet-fn join-fn)
+        (update-property props-13 'has-complement
+                         (test-has-complement domain samples meet-fn join-fn))
+        props-13))
+  props-14)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -1167,7 +1265,9 @@
                                   relatively-complemented stone-identity
                                   ;; Phase 6 additions
                                   modular whitmans-condition breadth-bound
-                                  sectionally-complemented))])
+                                  sectionally-complemented
+                                  ;; Phase 11: Boolean placement
+                                  has-complement))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -1196,6 +1296,9 @@
            (lambda (d s) (test-breadth-bound d s meet-fn))]
           [(sectionally-complemented)
            (lambda (d s) (test-sectionally-complemented d s meet-fn join-fn))]
+          ;; Phase 11: has-complement (Boolean placement)
+          [(has-complement)
+           (lambda (d s) (test-has-complement d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

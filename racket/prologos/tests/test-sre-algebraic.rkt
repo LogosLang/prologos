@@ -216,8 +216,15 @@
   ;; refutes distributive (per Phase 3 wider-sample sweep) — Heyting reach is
   ;; ground-sublattice-only.
   (check-eq? (hash-ref final 'heyting) prop-confirmed)
-  ;; boolean still unknown — has-complement not inferred (no test for it yet).
-  (check-eq? (hash-ref final 'boolean) prop-unknown))
+  ;; Phase 11 finding (2026-05-08): has-complement is now empirically swept;
+  ;; type×equality refutes has-complement (Heyting but NOT Boolean — at least
+  ;; one atom has no complement on the ground sublattice). The implication
+  ;; rule heyting + has-complement ⇒ boolean derives boolean prop-refuted.
+  ;; This is a new architectural data point: type×equality lives at Heyting
+  ;; but does not reach Boolean. Caveat: ground sublattice only; wider sample
+  ;; with binders refutes distributive → Heyting reach already known
+  ;; ground-sublattice-only.
+  (check-eq? (hash-ref final 'boolean) prop-refuted))
 
 (test-case "resolve-and-report: produces report string"
   (define td (lookup-domain 'type))
@@ -226,10 +233,13 @@
   (check-true (string? report))
   (check-true (string-contains? report "type"))
   (check-true (string-contains? report "prop-confirmed"))
-  ;; Phase 3c: equality lattice is distributive (no refutations on these samples).
-  ;; Heyting/boolean derived-unknown (sources incomplete). Report contains
-  ;; prop-unknown for the underived composite properties.
-  (check-true (string-contains? report "prop-unknown")))
+  ;; Phase 11 (2026-05-08): with has-complement now empirically swept,
+  ;; the type×equality report contains BOTH prop-confirmed (most properties)
+  ;; AND prop-refuted (has-complement refuted ⇒ boolean refuted via
+  ;; the implication rule). Pre-Phase-11 it contained prop-unknown for
+  ;; boolean (derivation source incomplete). Phase 11's empirical sweep
+  ;; closed that gap; fewer prop-unknown entries remain.
+  (check-true (string-contains? report "prop-refuted")))
 
 ;; ========================================
 ;; 9. Property-Gated Behavior
@@ -798,3 +808,58 @@
   (check-true (hash-has-key? props 'whitmans-condition))
   (check-true (hash-has-key? props 'breadth-bound))
   (check-true (hash-has-key? props 'sectionally-complemented)))
+
+;; ========================================
+;; SRE Track 2I Phase 11: has-complement empirical check (Boolean placement)
+;; ========================================
+
+(test-case "Phase 11: test-has-complement untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-has-complement td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-has-complement td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 11: test-has-complement/detailed returns complement-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-has-complement/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (complement-evidence? ev))
+  (check-not-false (memq (complement-evidence-status ev) '(confirmed refuted untested)))
+  (check-true (>= (complement-evidence-total-checked ev) 0))
+  (check-true (<= (complement-evidence-conclusion-held ev)
+                  (complement-evidence-hypothesis-fired ev)))
+  (check-true (<= (complement-evidence-hypothesis-fired ev)
+                  (complement-evidence-total-checked ev))))
+
+(test-case "Phase 11: test-has-complement wrapper translates to axiom-*"
+  (define td (lookup-domain 'type))
+  (define result (test-has-complement
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (or (axiom-confirmed? result)
+                  (axiom-refuted? result)
+                  (eq? result axiom-untested))))
+
+(test-case "Phase 11: implication heyting + has-complement ⇒ boolean (existing rule activated)"
+  ;; All sources confirmed → boolean confirmed.
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'has-complement prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed)
+  (check-eq? (hash-ref derived 'boolean) prop-confirmed))
+
+(test-case "Phase 11: boolean refuted when has-complement refuted"
+  (define props (hasheq 'distributive prop-confirmed
+                        'has-pseudo-complement-rel prop-confirmed
+                        'has-complement prop-refuted))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'heyting) prop-confirmed)
+  (check-eq? (hash-ref derived 'boolean) prop-refuted))
+
+(test-case "Phase 11: infer-domain-properties produces has-complement entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'has-complement)))

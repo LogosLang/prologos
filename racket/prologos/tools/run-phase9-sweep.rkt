@@ -118,7 +118,7 @@
 ;; Sweep runner
 ;; ============================================================================
 
-(define (run-domain-sweep cfg max-depth)
+(define (run-domain-sweep cfg max-depth [properties-filter #f])
   (define domain-name (first cfg))
   (define relations   (second cfg))
   (define atoms       (third cfg))
@@ -130,16 +130,25 @@
      (eprintf "WARN: domain '~a not registered; skipping.\n" domain-name)
      '()]
     [else
-     (eprintf ";; sweeping ~a × ~a at depth ~a... " domain-name relations max-depth)
+     (eprintf ";; sweeping ~a × ~a at depth ~a~a... "
+              domain-name relations max-depth
+              (if properties-filter (format " [~a]" properties-filter) ""))
      (define start-ms (current-inexact-milliseconds))
      (define findings
-       (run-sd-sweep domain
-                     relations
-                     atoms
-                     #:max-depth max-depth
-                     #:per-ctor-count 2
-                     #:cross-domain-atoms cross-doms
-                     #:include-bot-top include-bt?))
+       (cond
+         [properties-filter
+          (run-sd-sweep domain relations atoms
+                        #:max-depth max-depth
+                        #:per-ctor-count 2
+                        #:cross-domain-atoms cross-doms
+                        #:include-bot-top include-bt?
+                        #:properties properties-filter)]
+         [else
+          (run-sd-sweep domain relations atoms
+                        #:max-depth max-depth
+                        #:per-ctor-count 2
+                        #:cross-domain-atoms cross-doms
+                        #:include-bot-top include-bt?)]))
      (define elapsed (- (current-inexact-milliseconds) start-ms))
      (eprintf "(~as, ~a findings)\n"
               (~r (/ elapsed 1000.0) #:precision '(= 1))
@@ -149,7 +158,8 @@
 
 (define (run-comprehensive-sweep [domain-filter #f]
                                  [depths '(0 1)]
-                                 [relation-filter #f])
+                                 [relation-filter #f]
+                                 [properties-filter #f])
   (define cfgs
     (cond
       [(not domain-filter) sweep-config]
@@ -174,7 +184,7 @@
          (for/list ([cfg (in-list non-empty-cfgs)])
            (apply append
                   (for/list ([d (in-list depths)])
-                    (run-domain-sweep cfg d))))))
+                    (run-domain-sweep cfg d properties-filter))))))
 
 ;; ============================================================================
 ;; Markdown output
@@ -259,7 +269,13 @@
       [(and (eq? heyting-status 'confirmed) (eq? stone-status 'confirmed)) 'confirmed]
       [(or (eq? heyting-status 'refuted) (eq? stone-status 'refuted)) 'refuted]
       [else 'untested]))
-  (define boolean-status 'untested)  ;; has-complement not swept
+  ;; Phase 11: has-complement now empirically swept; Boolean derives
+  (define has-complement-status (status-of 'has-complement))
+  (define boolean-status
+    (cond
+      [(and (eq? heyting-status 'confirmed) (eq? has-complement-status 'confirmed)) 'confirmed]
+      [(or (eq? heyting-status 'refuted) (eq? has-complement-status 'refuted)) 'refuted]
+      [else 'untested]))
   (define w-status (status-of 'whitmans-condition))
   (define untested-reasons
     (remove-duplicates
@@ -392,6 +408,12 @@
            (modular-evidence-hypothesis-fired ev)
            (modular-evidence-conclusion-held ev)
            (modular-evidence-witness ev))]
+    [(complement-evidence? ev)  ;; Phase 11
+     (list (complement-evidence-status ev)
+           (complement-evidence-total-checked ev)
+           (complement-evidence-hypothesis-fired ev)
+           (complement-evidence-conclusion-held ev)
+           (complement-evidence-witness ev))]
     [(whitman-evidence? ev)
      (list (whitman-evidence-status ev)
            (whitman-evidence-total-checked ev)
@@ -422,6 +444,7 @@
   (define cli-domain-filter   (make-parameter #f))
   (define cli-depths          (make-parameter '(0 1)))
   (define cli-relation-filter (make-parameter #f))
+  (define cli-properties      (make-parameter #f))
   (command-line
    #:program "run-phase9-sweep"
    #:once-each
@@ -431,6 +454,9 @@
                 (cli-depths (list (string->number n)))]
    [("--relation") r "Restrict sweep to one relation within the domain (equality | subtype | ...)"
                    (cli-relation-filter (string->symbol r))]
+   [("--properties") p "Comma-separated list of property symbols to sweep (default: all)"
+                     (cli-properties
+                      (map string->symbol (string-split p ",")))]
    #:args ()
    (void))
   (eprintf ";; SRE Track 2I Phase 9b — Comprehensive lattice variety sweep\n")
@@ -450,7 +476,8 @@
   (define tagged-findings
     (time (run-comprehensive-sweep (cli-domain-filter)
                                    (cli-depths)
-                                   (cli-relation-filter))))
+                                   (cli-relation-filter)
+                                   (cli-properties))))
   (define total-elapsed (- (current-inexact-milliseconds) start-ms))
   (eprintf ";; Sweep total: ~as wall time. ~a tagged findings.\n"
            (~r (/ total-elapsed 1000.0) #:precision '(= 1))

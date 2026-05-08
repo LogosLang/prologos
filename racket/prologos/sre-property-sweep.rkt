@@ -83,7 +83,8 @@
     stone-identity
     whitmans-condition
     relatively-complemented sectionally-complemented
-    breadth-bound))
+    breadth-bound
+    has-complement))  ;; Phase 11: Boolean placement
 
 ;; ========================================================================
 ;; run-sd-sweep
@@ -196,6 +197,9 @@
           ;; test-breadth-bound takes (domain samples meet-fn #:max-width k)
           ;; — no join-fn (Hasse-structural). Default #:max-width 4 per Phase 6.
           (test-breadth-bound domain samples meet-fn)]
+         [(has-complement)
+          ;; Phase 11: per-element search for complement (a∧x=⊥, a∨x=⊤)
+          (test-has-complement/detailed domain samples meet-fn join-fn)]
          [else axiom-untested]))
      (sd-finding domain-name rel prop sample-count ev #f)]))
 
@@ -247,6 +251,12 @@
            (modular-evidence-hypothesis-fired ev)
            (modular-evidence-conclusion-held ev)
            (modular-evidence-witness ev))]
+    [(complement-evidence? ev)  ;; Phase 11
+     (list (complement-evidence-status ev)
+           (complement-evidence-total-checked ev)
+           (complement-evidence-hypothesis-fired ev)
+           (complement-evidence-conclusion-held ev)
+           (complement-evidence-witness ev))]
     [(whitman-evidence? ev)
      (list (whitman-evidence-status ev)
            (whitman-evidence-total-checked ev)
@@ -316,8 +326,8 @@
 ;;   - Distributive: distributive confirmed
 ;;   - Heyting: distributive ∧ has-pseudo-complement-rel confirmed
 ;;   - Stone: distributive ∧ has-pseudo-complement-rel ∧ stone-identity confirmed
-;;   - Boolean: heyting ∧ has-complement (latter not yet swept; reported as
-;;     "—" for now, awaiting future has-complement check)
+;;   - Boolean: heyting ∧ has-complement (Phase 11 added empirical
+;;     has-complement check; was reported as "—" pre-Phase-11)
 ;;
 ;; "Notes" column flags Whitman's W (FL membership) status, breadth bound,
 ;; and any honest gaps (untested due to no-relation etc.).
@@ -385,8 +395,13 @@
       [(and (eq? heyting-status 'confirmed) (eq? stone-id-status 'confirmed)) 'confirmed]
       [(or (eq? heyting-status 'refuted) (eq? stone-id-status 'refuted)) 'refuted]
       [else 'untested]))
-  ;; Boolean = Heyting + has-complement; has-complement not yet swept
-  (define boolean-status 'untested)
+  ;; Boolean = Heyting + has-complement (Phase 11: now empirically swept)
+  (define has-complement-status (status-of 'has-complement))
+  (define boolean-status
+    (cond
+      [(and (eq? heyting-status 'confirmed) (eq? has-complement-status 'confirmed)) 'confirmed]
+      [(or (eq? heyting-status 'refuted) (eq? has-complement-status 'refuted)) 'refuted]
+      [else 'untested]))
   (define w-status (status-of 'whitmans-condition))
   ;; Notes: untested reasons + breadth/sectional-complemented summaries
   (define untested-reasons
