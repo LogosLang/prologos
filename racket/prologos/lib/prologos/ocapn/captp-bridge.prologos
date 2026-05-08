@@ -1174,6 +1174,24 @@ defn dispatch-broken-resolution
   | pid [pst-broken     r] pms v ->
       [forward-effect v [break-forward-loop pid r pms [nil String]]]
 
+;; Phase 46: plain-value resolution. When the promise fulfills with a
+;; value that isn't a callable (not desc:export, not desc:answer),
+;; applying op:deliver to it is itself an error. Each queued msg is
+;; processed as if delivered, fails type-check, and produces an error
+;; answer at peer's ap. Same shape as break-forwarding (Phase 45) with
+;; a synthesized reason. Queued msgs with ap=none have nowhere to send
+;; the error, but ARE still semantically processed (not dropped).
+spec plain-value-error-reason String -> SyrupValue
+defn plain-value-error-reason [_msg]
+  ;; The reason names the type-error condition. Caller passes a hint
+  ;; string for now (kept generic in case future variants want richer
+  ;; reasons — e.g., the actual resolution-value SyrupValue inlined).
+  syrup-string "deliver-to-non-callable"
+
+spec dispatch-plain-value-resolution Nat [List PipeMsg] Vat -> ForwardEffect
+defn dispatch-plain-value-resolution [pid pms v]
+  [forward-effect v [break-forward-loop pid [plain-value-error-reason ""] pms [nil String]]]
+
 ;; ForwardEffect bundles the two outcomes of forwarding: an updated
 ;; Vat (if msgs were delivered locally) plus a list of bytes (if any
 ;; were forwarded on the wire). Single-constructor avoids issue #60.
@@ -1216,7 +1234,12 @@ defn dispatch-answer-target [pid m pms v]
 
 ;; Middle helper: V is the resolution-value SyrupValue. Try
 ;; desc:export first (most common); fall through to desc:answer
-;; (chained); else no effect. Two-deep match (sidesteps pitfall #18).
+;; (chained); else plain value (Phase 46) — error-forward each queued
+;; msg with reason "deliver-to-non-callable". We never drop the queue:
+;; per the user's correction (Phase 46 design), `op:deliver` to a
+;; plain non-callable value is a TYPE error reported at the queued
+;; msg's ap, structurally identical to broken-promise error-forwarding
+;; (Phase 45). Two-deep match (sidesteps pitfall #18).
 spec dispatch-resolution-value Nat SyrupValue [List PipeMsg] Vat -> ForwardEffect
 defn dispatch-resolution-value [pid V pms v]
   match [syrup-as-export-target V]
@@ -1224,7 +1247,7 @@ defn dispatch-resolution-value [pid V pms v]
     | none ->
         match [syrup-as-answer-target V]
           | some m -> dispatch-answer-target pid m pms v
-          | none   -> [forward-effect v [nil String]]
+          | none   -> dispatch-plain-value-resolution pid pms v
 
 ;; Top-level: given a resolved promise's pid + resolution PromiseState
 ;; + bridge's pipelined-msgs list + current Vat, return a ForwardEffect
@@ -1232,11 +1255,20 @@ defn dispatch-resolution-value [pid V pms v]
 ;;   pst-broken r       → error-forward (Phase 45): emit <op:deliver
 ;;                        <desc:answer M> <Error r> false false> for
 ;;                        each queued msg with ap = some M.
-;;   pst-fulfilled V    → fulfilled-forward (Phase 41/42/44): dispatch
-;;                        on V's shape (desc:export local/wire,
-;;                        desc:answer chained).
+;;   pst-fulfilled V    → fulfilled-forward, dispatch on V's shape:
+;;                          desc:export → local-actor (Phase 42) or
+;;                                        peer-export wire forward
+;;                                        (Phase 41)
+;;                          desc:answer → chained-answer wire forward
+;;                                        (Phase 44)
+;;                          plain V    → error-forward (Phase 46) with
+;;                                        reason "deliver-to-non-
+;;                                        callable" — same shape as
+;;                                        broken; we never drop the
+;;                                        queue.
 ;;   pst-unresolved _   → no effect (caller already gates on
-;;                        outbound-from-resolution returning some).
+;;                        outbound-from-resolution returning some;
+;;                        unresolved means "wait, not drop").
 ;; broken? gates the dispatch into the error path before resolution-
 ;; value collapses fulfilled and broken into the same Some.
 spec build-forward-effect Nat PromiseState [List PipeMsg] Vat -> ForwardEffect

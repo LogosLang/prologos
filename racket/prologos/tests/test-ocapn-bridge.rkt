@@ -1387,9 +1387,12 @@
               (length (pump-result-bytes pr))))")
    "2N"))
 
-(test-case "bridge/pump-outbound emits NO forwarding when promise resolves to plain value"
-  ;; Promise resolves to a string (not a refr) — forwarding is dropped.
-  ;; Pump emits only the resolution bytes (1 byte-string).
+(test-case "bridge/pump-outbound emits NO error-answer when ap=none + plain value (Phase 46)"
+  ;; Promise resolves to a string (not a refr / not desc:answer). Per
+  ;; Phase 46, plain value is a TYPE error for op:deliver — we'd emit
+  ;; an error-answer for each queued msg with ap=some, but here the
+  ;; queued msg is ap=none (fire-and-forget) so there's nowhere to
+  ;; send the error. Pump emits only the resolution bytes (1 byte).
   (check-contains
    (run-last
     "(eval (let (alloc (fresh-promise empty-vat)
@@ -1636,3 +1639,70 @@
                   step (connection-step (op-deliver-to-answer pid (syrup-string \"reply\") (none Nat) (none Nat)) cs1))
               (lookup-promise pid (conn-vat (conn-step-state step)))))")
    "pst-fulfilled"))
+
+;; Phase 46: plain-value-as-error forwarding. When a local promise
+;; resolves to a plain value (not desc:export, not desc:answer),
+;; applying op:deliver to it would be a TYPE error — but the queued
+;; pipelined msgs aren't dropped. Each msg with ap=some M gets an
+;; error answer at peer's M (reason "deliver-to-non-callable"). Same
+;; structural shape as Phase 45's break-forwarding; differs only in
+;; the source of the error reason (synthesized vs broken-promise's r).
+;; Principle: we never drop a queue.
+
+(test-case "bridge/pump-outbound forwards error answers when ap=some + plain value (Phase 46)"
+  ;; Setup: peer's q-pos=4 → local pid. Peer pipelines two msgs, one
+  ;; with ap=some 88 (peer wants an answer) and one with ap=none.
+  ;; Then we resolve pid with a plain string (non-callable).
+  ;; Pump should emit:
+  ;;   (a) the resolution bytes for peer's q-pos 4
+  ;;   (b) error-answer bytes for q-pos 88 only (the ap=none msg
+  ;;       still gets processed but has nowhere to send the error)
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  st0   (bs-add-question (suc (suc (suc (suc zero)))) pid bridge-state-empty)
+                  step1 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc zero))))
+                          (syrup-string \"with-answer\")
+                          (some Nat (suc (suc (suc (suc (suc (suc (suc (suc zero)))))))))
+                          v0 st0)
+                  step2 (dispatch-pipeline-on-our-q
+                          (suc (suc (suc (suc zero))))
+                          (syrup-string \"fire-and-forget\")
+                          (none Nat)
+                          (bridge-step-vat step1) (bridge-step-state step1))
+                  v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step2))
+                  pr    (pump-outbound v1 (bridge-step-state step2) (nil Nat)))
+              (length (pump-result-bytes pr))))")
+   "2N"))
+
+(test-case "bridge/pump-outbound plain-value error-answer targets peer's queued ap (Phase 46)"
+  ;; Single queued msg with ap=some 6. On plain-value resolve, the
+  ;; bytes list contains both the resolution (targeting peer's q-pos 2)
+  ;; AND the error-answer (targeting peer's queued ap 6). Stitch via
+  ;; framed concat and look for the desc:answer 6 wire shape plus the
+  ;; "deliver-to-non-callable" reason.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid bridge-state-empty)
+                    step  (dispatch-pipeline-on-our-q
+                            (suc (suc zero))
+                            (syrup-string \"q-payload\")
+                            (some Nat (suc (suc (suc (suc (suc (suc zero)))))))
+                            v0 st0)
+                    v1    (resolve-promise pid (syrup-string \"plain-value\") (bridge-step-vat step))
+                    pr    (pump-outbound v1 (bridge-step-state step) (nil Nat)))
+                (framed-concat (pump-result-bytes pr))))")))
+  ;; Both shapes appear: peer's-q-pos=2 (resolution) and peer's-ap=6 (error answer).
+  (check-true (regexp-match? #rx"desc:answer2" got)
+              (format "expected resolution to peer's q-pos 2; got: ~s" got))
+  (check-true (regexp-match? #rx"desc:answer6" got)
+              (format "expected error answer to peer's queued ap 6; got: ~s" got))
+  (check-true (regexp-match? #rx"deliver-to-non-callable" got)
+              (format "expected synthesized error reason in bytes; got: ~s" got)))
