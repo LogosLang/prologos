@@ -21,7 +21,12 @@
          racket/set
          racket/string
          "propagator.rkt"
-         "ctor-registry.rkt")
+         "ctor-registry.rkt"
+         (only-in "syntax.rkt"
+                  expr-Pi expr-Pi? expr-Pi-mult expr-Pi-domain expr-Pi-codomain
+                  expr-Sigma expr-Sigma? expr-Sigma-fst-type expr-Sigma-snd-type
+                  expr-lam expr-lam? expr-lam-mult expr-lam-type expr-lam-body
+                  expr-union expr-union? expr-union-left expr-union-right))
 
 (provide
  ;; Domain spec
@@ -81,6 +86,18 @@
  test-no-m3-sublattice test-no-m3-sublattice/detailed
  test-no-n5-sublattice test-no-n5-sublattice/detailed
  lattice-incomparable? sublattice-closed?
+ ;; Phase 13: Convex geometry / anti-exchange (AGT 2003)
+ (struct-out anti-exchange-evidence)
+ test-anti-exchange test-anti-exchange/detailed
+ sample-join-irreducibles sample-closure-on-J
+ ;; Phase 14: Targeted congruence tests
+ (struct-out congruence-evidence)
+ test-trivial-congruence test-trivial-congruence/detailed
+ test-total-congruence test-total-congruence/detailed
+ test-mult-forgetful-congruence test-mult-forgetful-congruence/detailed
+ test-erasure-congruence test-erasure-congruence/detailed
+ forget-mult-norm m0-erasure-norm
+ trivial-equiv? total-equiv? mult-forgetful-equiv? erasure-equiv?
  infer-domain-properties
  ;; Track 2G: implication rules + resolution
  (struct-out implication-rule)
@@ -1093,6 +1110,324 @@
     [(refuted)   (axiom-refuted (n5-evidence-witness ev))]
     [(untested)  axiom-untested]))
 
+;; ========================================================================
+;; SRE Track 2I Phase 13: Convex geometry / anti-exchange characterization
+;; ========================================================================
+;;
+;; Adaricheva-Gorbunov-Tumanov 2003 (recommended in Nation's lattice notes
+;; ch11): a finite lattice L is join-semidistributive (SD∨ + SD∧) if and
+;; only if its dual yields a convex geometry — i.e., the canonical closure
+;; operator on join-irreducibles satisfies the anti-exchange property:
+;;
+;;   For all A ⊆ J(L), for all distinct x, y ∈ J(L) with x, y ∉ cl(A):
+;;       y ∈ cl(A ∪ {x})  ⇒  x ∉ cl(A ∪ {y})
+;;
+;; where cl(A) = {x ∈ J(L) : x ≤ ⋁A} is downward-closure-on-J.
+;;
+;; Per Phase 13 mini-design (2026-05-08): bounded-subset enumeration at
+;; k=2 default (sample-limitation honest scope). Forward implication
+;; rule sd-vee + sd-wedge ⇒ anti-exchange-on-J DELIBERATELY NOT encoded
+;; (matches Phase 12 Birkhoff-9.2-forward precedent — empirical
+;; comparison across all 10 tuples gives more information for Nation
+;; than implication-derived auto-confirmations would).
+
+;; Enumerate join-irreducibles of the sample.
+;; x is join-irreducible iff x ≠ bot AND no a, b ∈ samples exist with
+;; a < x AND b < x AND a ∨ b = x. We exclude bot by convention.
+(define (sample-join-irreducibles samples bot meet-fn join-fn)
+  (filter
+   (lambda (x)
+     (and (not (equal? x bot))
+          (not (for/or ([a (in-list samples)])
+                 (and (not (equal? a x))
+                      (lattice-leq? a x meet-fn)
+                      (for/or ([b (in-list samples)])
+                        (and (not (equal? b x))
+                             (lattice-leq? b x meet-fn)
+                             (equal? (join-fn a b) x))))))))
+   samples))
+
+;; Closure operator on J(L): cl(A) = {x ∈ J : x ≤ ⋁A}.
+;; A is a list of join-irreducibles. Empty A: ⋁∅ = ⊥, cl(∅) = ∅
+;; (since join-irreducibles exclude ⊥).
+(define (sample-closure-on-J A J meet-fn join-fn)
+  (cond
+    [(null? A) '()]
+    [else
+     (define joinA (foldl join-fn (first A) (rest A)))
+     (filter (lambda (x) (lattice-leq? x joinA meet-fn)) J)]))
+
+;; ------------------------------------------------------------------------
+;; anti-exchange-evidence: detailed evidence (5-field per Phase 11 pattern)
+;; ------------------------------------------------------------------------
+;;
+;;   status            — 'confirmed | 'refuted | 'untested
+;;   total-checked     — total (A, x, y) triples enumerated
+;;   hypothesis-fired  — triples where y ∈ cl(A ∪ {x}) (the "if" fires)
+;;   conclusion-held   — triples where additionally x ∉ cl(A ∪ {y})
+;;                       (i.e., axiom satisfied given hypothesis)
+;;   witness           — (list A x y) on refute; #f on confirmed/untested
+(struct anti-exchange-evidence
+  (status
+   total-checked
+   hypothesis-fired
+   conclusion-held
+   witness)
+  #:transparent)
+
+;; Enumerate subsets of J of bounded size (size 0 to k inclusive).
+;; Returns a list of subsets (each a list).
+(define (bounded-subsets J k)
+  (cond
+    [(or (zero? k) (null? J))
+     (list '())]
+    [else
+     (define rest-subsets (bounded-subsets (cdr J) k))
+     (define rest-bounded-1 (bounded-subsets (cdr J) (- k 1)))
+     (append rest-subsets
+             (map (lambda (s) (cons (car J) s)) rest-bounded-1))]))
+
+;; Test anti-exchange axiom on join-irreducibles closure (AGT 2003).
+;;
+;; For each subset A of J(L) with |A| ≤ max-subset-size, for each
+;; (x, y) pair from J(L) \ cl(A) with x ≠ y: verify the implication
+;;     y ∈ cl(A ∪ {x})  ⇒  x ∉ cl(A ∪ {y})
+;;
+;; Sample-set sensitivity: bounded subset size + sample-bounded J(L)
+;; means we get bounded confidence. Refutation on bounded-subset = real
+;; refutation. Confirmation on bounded-subset = bounded confirmation.
+(define (test-anti-exchange/detailed domain samples meet-fn join-fn
+                                     #:max-subset-size [max-subset-size 2])
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (anti-exchange-evidence 'untested 0 0 0 #f)]
+    [else
+     (define bot (sre-domain-bot-value domain))
+     (define J (sample-join-irreducibles samples bot meet-fn join-fn))
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([A (in-list (bounded-subsets J max-subset-size))])
+           (define clA (sample-closure-on-J A J meet-fn join-fn))
+           (define non-members
+             (filter (lambda (z) (not (member z clA))) J))
+           (for*/fold ([t* t] [f* f] [h* h])
+                      ([x (in-list non-members)]
+                       [y (in-list non-members)])
+             (cond
+               [(equal? x y) (values t* f* h*)]
+               [else
+                (define t** (+ t* 1))
+                (define cl-Ax (sample-closure-on-J (cons x A) J meet-fn join-fn))
+                (cond
+                  [(member y cl-Ax)
+                   ;; Hypothesis fired: y ∈ cl(A ∪ {x})
+                   (define cl-Ay (sample-closure-on-J (cons y A) J meet-fn join-fn))
+                   (cond
+                     [(member x cl-Ay)
+                      ;; Anti-exchange violated: x ALSO in cl(A ∪ {y})
+                      (return
+                       (anti-exchange-evidence 'refuted t** (+ f* 1) h*
+                                               (list A x y)))]
+                     [else
+                      ;; Conclusion held: x ∉ cl(A ∪ {y})
+                      (values t** (+ f* 1) (+ h* 1))])]
+                  [else
+                   ;; Hypothesis didn't fire (vacuous)
+                   (values t** f* h*)])]))))
+       (anti-exchange-evidence 'confirmed total fired held #f))]))
+
+(define (test-anti-exchange domain samples meet-fn join-fn
+                            #:max-subset-size [max-subset-size 2])
+  (define ev (test-anti-exchange/detailed domain samples meet-fn join-fn
+                                          #:max-subset-size max-subset-size))
+  (case (anti-exchange-evidence-status ev)
+    [(confirmed) (axiom-confirmed (anti-exchange-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (anti-exchange-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; ========================================================================
+;; SRE Track 2I Phase 14: Targeted congruence tests
+;; ========================================================================
+;;
+;; Per Phase 14 mini-design (2026-05-08): test SPECIFIC candidate
+;; congruences (not full Con(L) — explosive). For each candidate ~,
+;; verify the congruence axiom on samples:
+;;
+;;   (a ~ b) ∧ (c ~ d)  ⇒  (a ∧ c) ~ (b ∧ d)  ∧  (a ∨ c) ~ (b ∨ d)
+;;
+;; Candidates (Q1 decision):
+;;   - trivial         — identity (a~b iff a=b); vacuous-by-construction
+;;   - total           — single class (a~b for all); vacuous-by-construction
+;;   - mult-forgetful  — type-domain only; strips ALL mult from binders
+;;   - erasure-equiv   — type-domain only; strips m0 ONLY (QTT erasure)
+;;
+;; Phase 14 ground-only sweep (Q5 time-budget pragma): atomic samples
+;; have no Pi/Sigma/lam compounds, so mult-forgetful and erasure-equiv
+;; both DEGENERATE to identity at ground sublattice. Honest scope-bound:
+;; framework-wiring + sanity confirmation; substantive empirical content
+;; for type-domain candidates deferred to wider-sample post-meeting.
+;;
+;; No forward implication rule (matches Phase 12+13 sample-unsound
+;; discipline). Subdirectly-irreducible characterization classical
+;; Nation territory; explicitly NOT claimed.
+
+(struct congruence-evidence
+  (status total-checked hypothesis-fired conclusion-held witness)
+  #:transparent)
+
+;; Generic congruence axiom check, parameterized by an equivalence
+;; predicate `equiv-fn`. O(N⁴) on sample size.
+(define (test-congruence-axiom/detailed domain samples meet-fn join-fn equiv-fn)
+  (cond
+    [(or (not meet-fn) (not join-fn))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (let/ec return
+       (define-values (total fired held)
+         (for*/fold ([t 0] [f 0] [h 0])
+                    ([a (in-list samples)]
+                     [b (in-list samples)]
+                     [c (in-list samples)]
+                     [d (in-list samples)])
+           (define t* (+ t 1))
+           (cond
+             [(not (and (equiv-fn a b) (equiv-fn c d)))
+              ;; Hypothesis didn't fire (a~b or c~d false)
+              (values t* f h)]
+             [else
+              ;; Hypothesis fired: check conclusion
+              (define meet-lhs (meet-fn a c))
+              (define meet-rhs (meet-fn b d))
+              (define join-lhs (join-fn a c))
+              (define join-rhs (join-fn b d))
+              (cond
+                [(and (equiv-fn meet-lhs meet-rhs)
+                      (equiv-fn join-lhs join-rhs))
+                 (values t* (+ f 1) (+ h 1))]
+                [else
+                 (return
+                  (congruence-evidence 'refuted t* (+ f 1) h
+                                       (list a b c d)))])])))
+       (congruence-evidence 'confirmed total fired held #f))]))
+
+;; Trivial congruence: identity. Vacuously confirmed.
+(define (trivial-equiv? a b) (equal? a b))
+
+;; Total congruence: all-equivalent. Vacuously confirmed.
+(define (total-equiv? a b) #t)
+
+;; Mult-forgetful normalization: recursively strip multiplicity from
+;; Pi and lam binders by replacing with sentinel 'mforget. Sigma has
+;; no mult field. Type-domain only — for non-type values, returns
+;; the input unchanged (acts as identity → equiv-fn degenerates to
+;; trivial for non-type domains; expected per applicability gating).
+(define (forget-mult-norm v)
+  (cond
+    [(expr-Pi? v)
+     (expr-Pi 'mforget
+              (forget-mult-norm (expr-Pi-domain v))
+              (forget-mult-norm (expr-Pi-codomain v)))]
+    [(expr-lam? v)
+     (expr-lam 'mforget
+               (forget-mult-norm (expr-lam-type v))
+               (forget-mult-norm (expr-lam-body v)))]
+    [(expr-Sigma? v)
+     (expr-Sigma (forget-mult-norm (expr-Sigma-fst-type v))
+                 (forget-mult-norm (expr-Sigma-snd-type v)))]
+    [(expr-union? v)
+     (expr-union (forget-mult-norm (expr-union-left v))
+                 (forget-mult-norm (expr-union-right v)))]
+    [else v]))
+
+(define (mult-forgetful-equiv? a b)
+  (equal? (forget-mult-norm a) (forget-mult-norm b)))
+
+;; Erasure-equiv normalization: recursively replace m0 with sentinel
+;; 'erased; preserve m1 and mw distinct. Models QTT type erasure.
+(define (m0-erasure-norm v)
+  (cond
+    [(expr-Pi? v)
+     (expr-Pi (if (eq? (expr-Pi-mult v) 'm0) 'erased (expr-Pi-mult v))
+              (m0-erasure-norm (expr-Pi-domain v))
+              (m0-erasure-norm (expr-Pi-codomain v)))]
+    [(expr-lam? v)
+     (expr-lam (if (eq? (expr-lam-mult v) 'm0) 'erased (expr-lam-mult v))
+               (m0-erasure-norm (expr-lam-type v))
+               (m0-erasure-norm (expr-lam-body v)))]
+    [(expr-Sigma? v)
+     (expr-Sigma (m0-erasure-norm (expr-Sigma-fst-type v))
+                 (m0-erasure-norm (expr-Sigma-snd-type v)))]
+    [(expr-union? v)
+     (expr-union (m0-erasure-norm (expr-union-left v))
+                 (m0-erasure-norm (expr-union-right v)))]
+    [else v]))
+
+(define (erasure-equiv? a b)
+  (equal? (m0-erasure-norm a) (m0-erasure-norm b)))
+
+;; Wrappers: each candidate gets its own /detailed + axiom-* shape.
+
+(define (test-trivial-congruence/detailed domain samples meet-fn join-fn)
+  (test-congruence-axiom/detailed domain samples meet-fn join-fn trivial-equiv?))
+
+(define (test-trivial-congruence domain samples meet-fn join-fn)
+  (define ev (test-trivial-congruence/detailed domain samples meet-fn join-fn))
+  (case (congruence-evidence-status ev)
+    [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+(define (test-total-congruence/detailed domain samples meet-fn join-fn)
+  (test-congruence-axiom/detailed domain samples meet-fn join-fn total-equiv?))
+
+(define (test-total-congruence domain samples meet-fn join-fn)
+  (define ev (test-total-congruence/detailed domain samples meet-fn join-fn))
+  (case (congruence-evidence-status ev)
+    [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+    [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+    [(untested)  axiom-untested]))
+
+;; Mult-forgetful: type-domain-only (returns axiom-untested with reason
+;; 'congruence-not-applicable-to-domain on non-type domains).
+(define (test-mult-forgetful-congruence/detailed domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (test-congruence-axiom/detailed domain samples meet-fn join-fn
+                                     mult-forgetful-equiv?)]))
+
+(define (test-mult-forgetful-congruence domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type)) axiom-untested]
+    [else
+     (define ev (test-mult-forgetful-congruence/detailed
+                 domain samples meet-fn join-fn))
+     (case (congruence-evidence-status ev)
+       [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+       [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+       [(untested)  axiom-untested])]))
+
+(define (test-erasure-congruence/detailed domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type))
+     (congruence-evidence 'untested 0 0 0 #f)]
+    [else
+     (test-congruence-axiom/detailed domain samples meet-fn join-fn
+                                     erasure-equiv?)]))
+
+(define (test-erasure-congruence domain samples meet-fn join-fn)
+  (cond
+    [(not (eq? (sre-domain-name domain) 'type)) axiom-untested]
+    [else
+     (define ev (test-erasure-congruence/detailed
+                 domain samples meet-fn join-fn))
+     (case (congruence-evidence-status ev)
+       [(confirmed) (axiom-confirmed (congruence-evidence-total-checked ev))]
+       [(refuted)   (axiom-refuted (congruence-evidence-witness ev))]
+       [(untested)  axiom-untested])]))
+
 ;; Compute absolute pseudo-complement candidate ¬a on a sample set.
 ;; Returns the candidate (the join of all x with x ∧ a = ⊥), or #f if
 ;; no such x exists in samples. Used by test-stone-identity below.
@@ -1351,7 +1686,34 @@
         (update-property props-15 'no-n5-sublattice
                          (test-no-n5-sublattice domain samples meet-fn join-fn))
         props-15))
-  props-16)
+  ;; Phase 13: anti-exchange-on-J (AGT 2003 — convex geometry duality)
+  (define props-17
+    (if (and meet-fn join-fn)
+        (update-property props-16 'anti-exchange-on-J
+                         (test-anti-exchange domain samples meet-fn join-fn))
+        props-16))
+  ;; Phase 14: targeted congruence tests
+  (define props-18
+    (if (and meet-fn join-fn)
+        (update-property props-17 'trivial-congruence-valid
+                         (test-trivial-congruence domain samples meet-fn join-fn))
+        props-17))
+  (define props-19
+    (if (and meet-fn join-fn)
+        (update-property props-18 'total-congruence-valid
+                         (test-total-congruence domain samples meet-fn join-fn))
+        props-18))
+  (define props-20
+    (if (and meet-fn join-fn)
+        (update-property props-19 'mult-forgetful-congruence-valid
+                         (test-mult-forgetful-congruence domain samples meet-fn join-fn))
+        props-19))
+  (define props-21
+    (if (and meet-fn join-fn)
+        (update-property props-20 'erasure-congruence-valid
+                         (test-erasure-congruence domain samples meet-fn join-fn))
+        props-20))
+  props-21)
 
 ;; ========================================================================
 ;; SRE Track 2G Phase 6: Implication Rules (Derive Composite Properties)
@@ -1496,7 +1858,14 @@
                                   ;; Phase 11: Boolean placement
                                   has-complement
                                   ;; Phase 12: Birkhoff forbidden-sublattice
-                                  no-m3-sublattice no-n5-sublattice))])
+                                  no-m3-sublattice no-n5-sublattice
+                                  ;; Phase 13: AGT 2003 anti-exchange
+                                  anti-exchange-on-J
+                                  ;; Phase 14: targeted congruences
+                                  trivial-congruence-valid
+                                  total-congruence-valid
+                                  mult-forgetful-congruence-valid
+                                  erasure-congruence-valid))])
       (define test-fn
         (case prop
           [(commutative-join) test-commutative-join]
@@ -1533,6 +1902,18 @@
            (lambda (d s) (test-no-m3-sublattice d s meet-fn join-fn))]
           [(no-n5-sublattice)
            (lambda (d s) (test-no-n5-sublattice d s meet-fn join-fn))]
+          ;; Phase 13: AGT 2003 anti-exchange-on-J
+          [(anti-exchange-on-J)
+           (lambda (d s) (test-anti-exchange d s meet-fn join-fn))]
+          ;; Phase 14: targeted congruences
+          [(trivial-congruence-valid)
+           (lambda (d s) (test-trivial-congruence d s meet-fn join-fn))]
+          [(total-congruence-valid)
+           (lambda (d s) (test-total-congruence d s meet-fn join-fn))]
+          [(mult-forgetful-congruence-valid)
+           (lambda (d s) (test-mult-forgetful-congruence d s meet-fn join-fn))]
+          [(erasure-congruence-valid)
+           (lambda (d s) (test-erasure-congruence d s meet-fn join-fn))]
           [else (lambda (d s) axiom-untested)]))
       (values prop (test-fn domain samples))))
   ;; Step 3: Derive composite properties

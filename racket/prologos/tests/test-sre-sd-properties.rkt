@@ -410,8 +410,13 @@
 ;; variety-placement summary
 ;; ============================================================================
 
-(test-case "Phase 9a / Phase 11 / Phase 12: all-sweep-properties has 14 algebraic properties"
-  (check-equal? (length all-sweep-properties) 14)  ;; Phase 12: +no-m3, +no-n5
+(test-case "Phase 9a / Phase 11-14: all-sweep-properties has 19 algebraic properties"
+  (check-equal? (length all-sweep-properties) 19)  ;; Phase 14: +4 congruence checks
+  (check-not-false (memq 'anti-exchange-on-J all-sweep-properties))
+  (check-not-false (memq 'trivial-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'total-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'mult-forgetful-congruence-valid all-sweep-properties))
+  (check-not-false (memq 'erasure-congruence-valid all-sweep-properties))
   (check-not-false (memq 'distributive all-sweep-properties))
   (check-not-false (memq 'sd-vee all-sweep-properties))
   (check-not-false (memq 'sd-wedge all-sweep-properties))

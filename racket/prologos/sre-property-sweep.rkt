@@ -85,7 +85,11 @@
     relatively-complemented sectionally-complemented
     breadth-bound
     has-complement  ;; Phase 11: Boolean placement
-    no-m3-sublattice no-n5-sublattice))  ;; Phase 12: Birkhoff forbidden-sublattice
+    no-m3-sublattice no-n5-sublattice  ;; Phase 12: Birkhoff forbidden-sublattice
+    anti-exchange-on-J  ;; Phase 13: AGT 2003 convex geometry duality
+    ;; Phase 14: targeted congruence tests
+    trivial-congruence-valid total-congruence-valid
+    mult-forgetful-congruence-valid erasure-congruence-valid))
 
 ;; ========================================================================
 ;; run-sd-sweep
@@ -207,6 +211,18 @@
          [(no-n5-sublattice)
           ;; Phase 12: N5 (pentagon) sublattice detection via comparable-pair+c
           (test-no-n5-sublattice/detailed domain samples meet-fn join-fn)]
+         [(anti-exchange-on-J)
+          ;; Phase 13: AGT 2003 anti-exchange on join-irreducibles closure
+          (test-anti-exchange/detailed domain samples meet-fn join-fn)]
+         ;; Phase 14: targeted congruence tests
+         [(trivial-congruence-valid)
+          (test-trivial-congruence/detailed domain samples meet-fn join-fn)]
+         [(total-congruence-valid)
+          (test-total-congruence/detailed domain samples meet-fn join-fn)]
+         [(mult-forgetful-congruence-valid)
+          (test-mult-forgetful-congruence/detailed domain samples meet-fn join-fn)]
+         [(erasure-congruence-valid)
+          (test-erasure-congruence/detailed domain samples meet-fn join-fn)]
          [else axiom-untested]))
      (sd-finding domain-name rel prop sample-count ev #f)]))
 
@@ -282,6 +298,18 @@
            (whitman-evidence-hypothesis-fired ev)
            (whitman-evidence-conclusion-held ev)
            (whitman-evidence-witness ev))]
+    [(anti-exchange-evidence? ev)  ;; Phase 13
+     (list (anti-exchange-evidence-status ev)
+           (anti-exchange-evidence-total-checked ev)
+           (anti-exchange-evidence-hypothesis-fired ev)
+           (anti-exchange-evidence-conclusion-held ev)
+           (anti-exchange-evidence-witness ev))]
+    [(congruence-evidence? ev)  ;; Phase 14
+     (list (congruence-evidence-status ev)
+           (congruence-evidence-total-checked ev)
+           (congruence-evidence-hypothesis-fired ev)
+           (congruence-evidence-conclusion-held ev)
+           (congruence-evidence-witness ev))]
     [else #f]))
 
 (define (format-sd-finding-row f)

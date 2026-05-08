@@ -111,6 +111,63 @@ Birkhoff 9.2 forbidden-sublattice results (✓ = no such sublattice in sample; �
 
 **Type domain sample-limitation note**: type × {eq, sub} × wider has distributive refuted (Phase 4 found Pi-typed counterexample triple) but Phase 12 finds no closed M3/N5 sublattice in the depth-1 sample. Classical Birkhoff 9.2 says distributive ⇔ no-M3 ∧ no-N5 on the FULL lattice — so a witness sublattice MUST exist in the full type lattice. Our depth-1 generator captures local axiom failure (the triple) but not the global witness sublattice (the closed 5-element structure). Honest sample-set scope acknowledgment, not a contradiction. Constructing the witness sublattice would require deeper sample generation or direct construction from the Phase 4 triple — sister concern.
 
+### Convex geometry / anti-exchange (AGT 2003) — added Phase 13 (2026-05-08)
+
+Adaricheva-Gorbunov-Tumanov 2003 (recommended in Nation's *Notes on Lattice Theory* ch11) establishes the iff: a finite lattice is join-semidistributive ⇔ its dual is a convex geometry, equivalent to the anti-exchange property on the canonical closure operator over join-irreducibles. We test the anti-exchange axiom empirically with bounded-subset enumeration (k=2):
+
+| Domain | Relation | Depth | anti-exchange-on-J | Coheres with SD? |
+|---|---|---|---|---|
+| type | equality | ground | ✓ (26.9% non-vacuity) | yes — SD ✓ + AGT ✓ aligned |
+| type | equality | wider | — (sweep timeout; deferred) | type-wider sweep killed at 57min CPU |
+| type | subtype | ground | ✓ (32.2% non-vacuity) | yes |
+| type | subtype | wider | — (sweep timeout; deferred) | same |
+| session | equality | ground | ✓ (vacuous; \|J\|=2) | n/a |
+| session | equality | wider | **✗** (757 triples, 1 fired, 0 held) | **iff disagreement at sample bounds** |
+| form-cell | equality | ground | ✓ (1.1% non-vacuity) | yes |
+| form-cell | equality | wider | ✓ (1.1% non-vacuity) | yes |
+| spec-cell | equality | ground | **✗** (concrete witness) | yes — both SD ✗ + AGT ✗ refute |
+| spec-cell | equality | wider | **✗** (concrete witness) | yes |
+
+**The session×eq×wider iff disagreement is the empirical headline**: SD-confirmed per Phase 9 empirical sweep, anti-exchange-refuted per Phase 13 — empirical sample-bounded contradiction of the AGT 2003 iff. The iff is a theorem on full lattices; bounded-subset checks (k=2 here) cannot soundly establish bidirectional empirical agreement. **AGT 2003 forward implication rule deliberately NOT encoded** (matches Phase 12 Birkhoff-9.2 precedent) — preserves the empirical-comparison data point.
+
+**type × {eq, sub} × wider untested** (sweep killed at 57 min CPU — k=2 enumeration on |J(L)|>>50 estimate). Sister concern: smaller k=1 rerun or smaller per-ctor-count sample would round out the matrix in post-meeting follow-up.
+
+### Targeted congruence tests — added Phase 14 (2026-05-08)
+
+Phase 14 tests **specific candidate congruences** rather than full Con(L) (O(2^N) explosive). 4 candidates: trivial (identity), total (single class), mult-forgetful (strip ALL multiplicity), erasure-equivalence (strip ONLY m0 per QTT erasure).
+
+| Domain | Relation | Depth | trivial | total | mult-forget | erasure-equiv |
+|---|---|---|---|---|---|---|
+| type | equality | ground | ✓ | ✓ | ✓ (vacuous†) | ✓ (vacuous†) |
+| type | subtype | ground | ✓ | ✓ | ✓ (vacuous†) | ✓ (vacuous†) |
+| session | equality | ground | ✓ | ✓ | — (n/a) | — (n/a) |
+| form-cell | equality | ground | ✓ | ✓ | — (n/a) | — (n/a) |
+| spec-cell | equality | ground | ✓ | ✓ | — (n/a) | — (n/a) |
+
+† **Vacuous note**: at ground sublattice, atomic samples have no `Pi`/`Sigma`/`lam` compounds, so `mult-forgetful` and `erasure-equiv` both degenerate to identity (no binders to strip). Per-Phase-14 mini-design Q5 time-budget pragma: empirical content for these candidates on type-domain wider sample (with binder compounds) deferred to post-meeting follow-up.
+
+**No forward implication rule** to subdirectly-irreducible characterization (the classical Nation territory). Targeted candidates can confirm specific congruences but cannot characterize Con(L) fully — Phase 14 explicitly does NOT claim SI characterization (would require global Con(L) analysis).
+
+**Status**: framework-wiring + sanity confirmation succeeded. The empirical-content question — does the type lattice's algebraic structure preserve mult-forgetful / m0-erasure equivalences? — remains open for wider-sample sweep.
+
+### Merge-as-canonical-form structural-optimality claim — added 2026-05-08 per prior-meeting follow-up
+
+Nation's prior-meeting discussion of canonical form raised the structural-optimality framing: *canonical form should be a structural property of the lattice, not an externally-imposed normalization.* This claim is directly relevant to Prologos's architecture.
+
+**The claim**: our merge functions (Track 2H's `subtype-lattice-merge`, `type-lattice-merge`, etc.) **produce canonical representatives as an emergent property of the lattice's algebraic axioms** (ACI normalization + subtype absorption + dedup). Two types are equal in the lattice iff their merge-produced representatives are syntactically equal. We do NOT compute canonical form algorithmically and impose it; the lattice operations themselves yield it.
+
+**Mapping to lattice-theoretic canonical-form theory**:
+
+- Whitman / Freese-Nation 1.17 (free lattices): each FL element has a unique-up-to-iso minimal-length term representative, computable via Whitman's six-case algorithm.
+- Reading-Speyer-Thomas 2019 (FTFSDL): canonical form for ALL finite SD lattices, generalizing Birkhoff for distributive + Freese-Nation for free.
+- **Our claim**: the merge function IS the canonicalization for Prologos lattices. The structural optimality is built into the merge axioms.
+
+**For our context**: this matters because compute over our networks is structurally-optimality-bound (algorithmic complexity is less meaningful — propagators converge by lattice structure). If our merge produces canonical-form representatives, then canonical-form-equivalence (Phase 14 dropped candidate) is degenerate: we already work with canonical reps. The structural-optimality claim subsumes the canonical-form-projection congruence test.
+
+**Open question for Nation**: does our merge produce representatives **equivalent** to the FL/RST canonical form, or is it a different (perhaps weaker) canonical witness? Empirically validating this would require implementing FL/RST canonical form and comparing — beyond Phase 14 scope, but a natural next direction for post-meeting research.
+
+**Connection to Phase 6 Whitman's W result**: Phase 9b finding #1 — Whitman's W ✓ for all 10 (domain, relation, depth) tuples — establishes that every Prologos lattice is FL-embeddable per Nation Theorem 5.55/6.9. This is a *necessary* condition for FL canonical-form theory to apply. The merge-as-canonical-form claim is the conjectured *sufficiency* — that our merge implements the FL canonicalization. Whitman's W ✓ + sample-confirmed FL membership = the structural foundation; the canonical-form-equivalence claim is the next layer.
+
 Status note on Boolean column (updated 2026-05-08, Phase 11): empirical `has-complement` check now run via `tools/run-phase9-sweep.rkt --properties has-complement`. **Boolean refuted with witness `Int` for all type×{eq,sub} rows** (Int has no `x` such that `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge — same witness across all 4 type-domain depths). Spec-cell × equality also refutes. Notable: even on the type×{eq,sub}×ground rows where Heyting confirms, Boolean refutes — these lattices are Heyting but NOT Boolean.
 
 This is **architecturally correct for an open-world type system**. The Heyting/non-Boolean placement reflects our design commitment to *Open Extension, Closed Verification* — the type universe is open (new types can always be added), so "what's NOT Int" is an open collection (Bool, String, Nat, all function types, all not-yet-defined types) rather than a single complement type. The Heyting algebra's relative pseudo-complement (`a → b`) is the appropriate backward-flow operator in an open world; classical Boolean complement is foreclosed by construction.

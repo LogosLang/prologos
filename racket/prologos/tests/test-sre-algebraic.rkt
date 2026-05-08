@@ -923,3 +923,169 @@
                                          #:relation 'equality))
   (check-true (hash-has-key? props 'no-m3-sublattice))
   (check-true (hash-has-key? props 'no-n5-sublattice)))
+
+;; ========================================
+;; SRE Track 2I Phase 13: Convex geometry / anti-exchange (AGT 2003)
+;; ========================================
+
+(test-case "Phase 13: test-anti-exchange untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-anti-exchange td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-anti-exchange td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 13: test-anti-exchange/detailed returns anti-exchange-evidence struct"
+  (define td (lookup-domain 'type))
+  (define ev (test-anti-exchange/detailed
+              td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (anti-exchange-evidence? ev))
+  (check-not-false (memq (anti-exchange-evidence-status ev)
+                         '(confirmed refuted untested)))
+  (check-true (>= (anti-exchange-evidence-total-checked ev) 0)))
+
+(test-case "Phase 13: sample-join-irreducibles excludes bot"
+  (define td (lookup-domain 'type))
+  (define J (sample-join-irreducibles
+             type-samples type-bot type-lattice-meet type-lattice-merge))
+  (check-false (member type-bot J))
+  ;; Atomic types Int, Bool, Nat, String should be join-irreducible
+  ;; (no smaller-pair joins to them in the equality lattice on type-samples).
+  (check-not-false (member (expr-Int) J))
+  (check-not-false (member (expr-Bool) J)))
+
+(test-case "Phase 13: sample-closure-on-J of empty set is empty"
+  (define td (lookup-domain 'type))
+  (define J (sample-join-irreducibles
+             type-samples type-bot type-lattice-meet type-lattice-merge))
+  (check-equal? (sample-closure-on-J '() J type-lattice-meet type-lattice-merge)
+                '()))
+
+(test-case "Phase 13: NO AGT 2003 forward implication rule (sample-unsound)"
+  ;; AGT 2003 iff: SD ⇔ anti-exchange-on-J. The forward implication
+  ;; `sd-vee + sd-wedge ⇒ anti-exchange-on-J` would be sample-unsound
+  ;; (matches Phase 12 Birkhoff-9.2-forward precedent). Phase 13
+  ;; deliberately omits the rule; independent empirical measurement
+  ;; preserves bidirectional iff data for Nation. Verify: with both
+  ;; SD sources confirmed, anti-exchange-on-J remains prop-unknown.
+  (define props (hasheq 'sd-vee prop-confirmed
+                        'sd-wedge prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'anti-exchange-on-J prop-unknown) prop-unknown))
+
+(test-case "Phase 13: infer-domain-properties produces anti-exchange-on-J entry"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'anti-exchange-on-J)))
+
+;; ========================================
+;; SRE Track 2I Phase 14: Targeted congruence tests
+;; ========================================
+
+(test-case "Phase 14: trivial-equiv? = identity"
+  (check-true (trivial-equiv? (expr-Int) (expr-Int)))
+  (check-false (trivial-equiv? (expr-Int) (expr-Bool))))
+
+(test-case "Phase 14: total-equiv? always #t"
+  (check-true (total-equiv? (expr-Int) (expr-Bool)))
+  (check-true (total-equiv? type-bot type-top)))
+
+(test-case "Phase 14: forget-mult-norm strips Pi mult to 'mforget"
+  (define pi-m1 (expr-Pi 'm1 (expr-Int) (expr-Bool)))
+  (define pi-mw (expr-Pi 'mw (expr-Int) (expr-Bool)))
+  (define pi-m0 (expr-Pi 'm0 (expr-Int) (expr-Bool)))
+  ;; All three normalize to the same form
+  (check-equal? (forget-mult-norm pi-m1) (forget-mult-norm pi-mw))
+  (check-equal? (forget-mult-norm pi-mw) (forget-mult-norm pi-m0))
+  ;; mult-forgetful-equiv? uses normalize
+  (check-true (mult-forgetful-equiv? pi-m1 pi-mw))
+  (check-true (mult-forgetful-equiv? pi-m1 pi-m0))
+  ;; Different domain → not equiv
+  (check-false (mult-forgetful-equiv?
+                pi-m1 (expr-Pi 'm1 (expr-Bool) (expr-Bool)))))
+
+(test-case "Phase 14: m0-erasure-norm strips ONLY m0"
+  (define pi-m1 (expr-Pi 'm1 (expr-Int) (expr-Bool)))
+  (define pi-mw (expr-Pi 'mw (expr-Int) (expr-Bool)))
+  (define pi-m0 (expr-Pi 'm0 (expr-Int) (expr-Bool)))
+  ;; m1 and mw stay distinct
+  (check-not-equal? (m0-erasure-norm pi-m1) (m0-erasure-norm pi-mw))
+  ;; m0 normalizes to 'erased (distinct from m1, mw)
+  (check-not-equal? (m0-erasure-norm pi-m0) (m0-erasure-norm pi-m1))
+  ;; Identity for non-m0
+  (check-equal? (m0-erasure-norm pi-m1) pi-m1)
+  ;; erasure-equiv? uses normalize
+  (check-false (erasure-equiv? pi-m1 pi-mw))
+  (check-false (erasure-equiv? pi-m0 pi-m1)))
+
+(test-case "Phase 14: test-trivial-congruence untested without fns"
+  (define td (lookup-domain 'type))
+  (check-eq? (test-trivial-congruence td type-samples #f type-lattice-merge)
+             axiom-untested)
+  (check-eq? (test-trivial-congruence td type-samples type-lattice-meet #f)
+             axiom-untested))
+
+(test-case "Phase 14: test-trivial-congruence vacuously confirms"
+  ;; Identity congruence: always valid (a~b iff a=b; lattice ops respect identity).
+  (define td (lookup-domain 'type))
+  (define result (test-trivial-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-total-congruence vacuously confirms"
+  ;; Total congruence: all-equivalent; lattice ops always stay in single class.
+  (define td (lookup-domain 'type))
+  (define result (test-total-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-mult-forgetful-congruence axiom-untested on non-type domains"
+  ;; Type-domain-only candidate; non-type returns axiom-untested.
+  (define sd (lookup-domain 'session))
+  (when sd
+    (define meet-fn (sre-domain-meet sd 'equality))
+    (define merge (sre-domain-merge-registry sd))
+    (define join-fn (and merge (merge 'equality)))
+    (when (and meet-fn join-fn)
+      (check-eq? (test-mult-forgetful-congruence sd '() meet-fn join-fn)
+                 axiom-untested))))
+
+(test-case "Phase 14: test-mult-forgetful-congruence on type ground sublattice"
+  ;; Atomic samples have no Pi/Sigma/lam compounds → degenerates to trivial
+  ;; → vacuously confirms. Honest scope-bound per Phase 14 mini-design Q5.
+  (define td (lookup-domain 'type))
+  (define result (test-mult-forgetful-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: test-erasure-congruence on type ground sublattice"
+  (define td (lookup-domain 'type))
+  (define result (test-erasure-congruence
+                  td type-samples type-lattice-meet type-lattice-merge))
+  (check-true (axiom-confirmed? result)))
+
+(test-case "Phase 14: NO forward implication rule (sample-unsound)"
+  ;; Phase 14 deliberately omits any forward implication from candidate-
+  ;; congruence-validity to subdirectly-irreducible characterization.
+  ;; The classical Nation territory (full Con(L) → SI) requires global
+  ;; Con(L), which targeted candidates cannot capture. Verify: with all 4
+  ;; candidates confirmed, no derived 'subdirectly-irreducible appears.
+  (define props (hasheq 'trivial-congruence-valid prop-confirmed
+                        'total-congruence-valid prop-confirmed
+                        'mult-forgetful-congruence-valid prop-confirmed
+                        'erasure-congruence-valid prop-confirmed))
+  (define derived (derive-composite-properties props))
+  (check-eq? (hash-ref derived 'subdirectly-irreducible prop-unknown)
+             prop-unknown))
+
+(test-case "Phase 14: infer-domain-properties produces all 4 congruence entries"
+  (define td (lookup-domain 'type))
+  (define props (infer-domain-properties td type-samples
+                                         #:meet-fn type-lattice-meet
+                                         #:relation 'equality))
+  (check-true (hash-has-key? props 'trivial-congruence-valid))
+  (check-true (hash-has-key? props 'total-congruence-valid))
+  (check-true (hash-has-key? props 'mult-forgetful-congruence-valid))
+  (check-true (hash-has-key? props 'erasure-congruence-valid)))

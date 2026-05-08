@@ -308,6 +308,11 @@
     [(pc-rel-evidence? ev) (pc-rel-evidence-status ev)]
     [(modular-evidence? ev) (modular-evidence-status ev)]
     [(whitman-evidence? ev) (whitman-evidence-status ev)]
+    [(complement-evidence? ev) (complement-evidence-status ev)]
+    [(m3-evidence? ev) (m3-evidence-status ev)]
+    [(n5-evidence? ev) (n5-evidence-status ev)]
+    [(anti-exchange-evidence? ev) (anti-exchange-evidence-status ev)]
+    [(congruence-evidence? ev) (congruence-evidence-status ev)]
     [(axiom-confirmed? ev) 'confirmed]
     [(axiom-refuted? ev)   'refuted]
     [(eq? ev axiom-untested) 'untested]
@@ -435,6 +440,18 @@
            (whitman-evidence-hypothesis-fired ev)
            (whitman-evidence-conclusion-held ev)
            (whitman-evidence-witness ev))]
+    [(anti-exchange-evidence? ev)  ;; Phase 13
+     (list (anti-exchange-evidence-status ev)
+           (anti-exchange-evidence-total-checked ev)
+           (anti-exchange-evidence-hypothesis-fired ev)
+           (anti-exchange-evidence-conclusion-held ev)
+           (anti-exchange-evidence-witness ev))]
+    [(congruence-evidence? ev)  ;; Phase 14
+     (list (congruence-evidence-status ev)
+           (congruence-evidence-total-checked ev)
+           (congruence-evidence-hypothesis-fired ev)
+           (congruence-evidence-conclusion-held ev)
+           (congruence-evidence-witness ev))]
     [else #f]))
 
 (define (non-vacuity-pct fired total)
