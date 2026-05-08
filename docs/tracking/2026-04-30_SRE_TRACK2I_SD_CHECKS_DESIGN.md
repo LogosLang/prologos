@@ -1327,6 +1327,63 @@ Adaricheva-Nation 2017 ("Inflation of finite lattices along all-or-nothing sets"
 
 **Why this matters for Nation**: Adaricheva-Nation 2017 is HIS OWN co-authored work. The empirical check of "does Prologos's lattice structure exhibit Day-doubling-amenable form" is direct relevance.
 
+#### Decisions (mini-design + mini-audit + adversarial pass 2026-05-08)
+
+**Background research (Adaricheva-Nation 2017 lineage)**: Mempalace surfaced the lineage cleanly — Day 1970 original interval-doubling (used to prove (W) for free lattices), 1979 bounded-homomorphic-image characterization, Adaricheva-Nation 2017 generalizes Day's interval doubling to **all-or-nothing set inflation** (subsets S where every external element compares uniformly to all of S).
+
+**Q1 — Algorithm choice**: **Option B (Adaricheva-Nation 2017 all-or-nothing pair detection)**. Rationale: direct relevance to Nation's recent co-authored work; generalizes Day's singleton-pair signature; empirically richer (catches inflation along subsets that don't exhibit covering-pair doubling). **Option A (Day 1970 interval-doubled-pair signature) subsumed** — every Day-doubled pair is also an all-or-nothing pair under Option B.
+
+**Q2 — Pair-only scope**: pair-only for Phase 15. Extended-set search (extending confirmed pairs to triples/quadruples for richer witnesses) is **Tier 4 follow-up** if interesting post-meeting. Honest framing — pair-only finding is sound; richer witnesses are nice-to-have.
+
+**Q3 — No forward implication rule**: per Phase 12 + 13 precedent (sample-unsound for negative absence claims). Phase 15 is primary empirical property, not derived.
+
+**Q4 — Sweep scope**: all 4 domains × all relations × {ground, wider} (10 tuples), matching Phase 11 + 12 + 13 pattern. Expected runtime: ~minutes (O(N³) tractable).
+
+**Q5 — Report honesty framing**: Phase 15 finding is a **sample-bounded claim about admittance**, not a theorem-strength claim about inflation history. Detection = "lattice admits inflation along this pair on this sample"; absence = "no all-or-nothing pair found on this sample". Both honestly named in evidence struct + report.
+
+**Algorithm (Option B)**:
+
+For each pair `(s₁, s₂)` of distinct, incomparable samples:
+1. Hypothesis-fired: pair is incomparable (not vacuous).
+2. Check all-or-nothing: ∀ external `x` ∈ samples, `x` is consistently above (`x ≥ s₁ AND x ≥ s₂`), below (`x ≤ s₁ AND x ≤ s₂`), or incomparable to BOTH s₁ and s₂.
+3. If property holds for all external x: **confirmed witness** found — return early with `(s₁, s₂)` + dependency-pattern summary.
+4. If no pair satisfies the property: **refuted on sample** — no all-or-nothing pair detected.
+
+**Note on confirmation/refutation semantics**: Phase 15 differs from Phase 12+13 in that **finding even ONE witness is positive evidence of inflation-amenability**. The check thus returns `confirmed` on first witness, `refuted` only if EVERY pair was checked without finding one. This is the existence-claim shape (positive empirical assertion) — distinct from universal-claim shape (Phase 12 M3-absence) and iff-claim shape (Phase 13 anti-exchange).
+
+**Witness format**: `(s₁, s₂, [dep-pattern])` where dep-pattern is a list of `(external, side)` with side ∈ `{above, below, incomparable}` summarizing the all-or-nothing dependency structure. Truncated to first 5 entries for log readability; full pattern in raw findings file.
+
+**Property registry**: `'admits-day-doubling`. Single symbol; no derived counterpart needed.
+
+**Deliverables (locked)**:
+- `dd-evidence` struct: 5-field (status × total-pairs × hypothesis-fired-incomparable × conclusion-held-allon × witness)
+- `test-admits-day-doubling/detailed` + wrapper (sre-core.rkt)
+- Wiring: provides + props-19 + evidence map + 7-site dispatch (sre-property-sweep + run-phase9-sweep extract-detailed-fields)
+- ~6-8 new test-cases (Phase 12 pattern)
+- Sweep run via 4 concurrent processes
+- Nation report integration: new column block + Adaricheva-Nation 2017 citation
+- Single atomic commit per Phase 11+ in-phase pattern
+
+**Adversarial pass (P/R/M/S two-column)**:
+
+| Lens | Catalogue | **Challenge** |
+|---|---|---|
+| **P** Principles | ✓ Decomplection (orthogonal property check); Correct-by-Construction (explicit meet+join from same relation per Phase 4 discipline); Data Orientation (dd-evidence struct) | **Off-network scaffolding** (Track 2G lineage); inherits property-registry granularity gap. **NOT new debt** — same scaffolding markers as Phase 11-14. Honest. |
+| **R** Reality-Check | ✓ Concrete sites: sre-core.rkt provides + infer/resolve callsites + sre-property-sweep + run-phase9-sweep. Phase 12 pattern proven across 4 domains × 2 depths. | **Sweep cost**: O(N³). At N=58 wider, 195k iterations × meet/leq calls ≈ minutes per domain. Manageable. **No external API consumers** — internal to Track 2I scope. |
+| **M** Propagator-Mindspace | ✓ Off-network sample-iteration (Track 2G lineage; honest scaffolding label) | **for/fold over N² pairs** is step-think; could be `net-add-broadcast-propagator` decomposition. NOT migrating — sister concern of property-cells migration track. Honestly labeled. |
+| **S** SRE Lattice Lens | The lattice being characterized is the property-value lattice (4-valued); Phase 15 doesn't introduce new lattice. Q1-Q5 catalogued (VALUE; 4-valued; bridges via Galois pairs from samples; extends Track 2G; primary=declared, derived=inferred). | **Q6 Hasse**: property-value lattice trivial (4-element diamond); lattice-being-checked (the 4 SRE domains) has rich Hasse — Phase 15 doesn't exploit Hasse adjacency in the sweep. **Acknowledged sister-concern**: Hasse-traversal-ordered checks could be cheaper; not in Phase 15 scope. |
+
+**Adversarial passes**: no drift requiring corrective. All 4 lens challenges produce honest scope-acknowledgments rather than required redesign.
+
+**Drift risks (consolidated, 7 items)**:
+1. **(a) admits-doubling vs (b) was-constructed-via-doubling honesty** — Phase 15 tests (a). Witness names the pair + dependency pattern. ✓
+2. **Sample-set sensitivity** — refutation on sample ≠ refutation on full lattice. Honest scope-bound matching Phase 12-13 discipline.
+3. **No forward implication rule** — sample-unsound either direction (per Q3). Empirical-positive primary property only.
+4. **Cost O(N³) on wider sample** — manageable per Phase 12-13 measurements.
+5. **Algorithm locked** — Option B (Adaricheva-Nation 2017). Option A subsumed.
+6. **Witness format truncation** — first 5 dependency entries in evidence struct; full pattern in raw findings file. Conservative for log readability.
+7. **Phase 15 = final reopened-arc phase** — Track 2I closes after Phase 15. Adversarial VAG at close should extend to **whole reopened arc Phases 11-15** combined, surfacing any drift across the gap-closure work as a unit.
+
 ### Phase T: Dedicated test file
 
 **Goal**: `tests/test-sre-sd-properties.rkt` consolidating SD-specific tests:
