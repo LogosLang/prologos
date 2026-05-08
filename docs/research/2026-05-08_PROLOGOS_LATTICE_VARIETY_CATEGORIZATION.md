@@ -88,7 +88,20 @@ Pseudo-complement results (separate column block, since the rel/abs distinction 
 | spec-cell | equality | ground | ✗ | ✗ | ✗ | ✗ | ✓ |
 | spec-cell | equality | wider | ✗ | ✗ | ✗ | ✗ | ✓ |
 
-Status note on Boolean column (updated 2026-05-08, Phase 11): empirical `has-complement` check now run via `tools/run-phase9-sweep.rkt --properties has-complement`. **Boolean refuted with witness `Int` for all type×{eq,sub} rows** (Int has no `x` such that `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge — same witness across all 4 type-domain depths). Spec-cell × equality also refutes. Notable: even on the type×{eq,sub}×ground rows where Heyting confirms, Boolean refutes — these lattices are Heyting but NOT Boolean. Session and form-cell rows remain "—" because their default samples don't include both bot AND top (sample-set limitation; would require domain-specific atom-pool enrichment to test).
+Status note on Boolean column (updated 2026-05-08, Phase 11): empirical `has-complement` check now run via `tools/run-phase9-sweep.rkt --properties has-complement`. **Boolean refuted with witness `Int` for all type×{eq,sub} rows** (Int has no `x` such that `Int ∧ x = ⊥` AND `Int ∨ x = ⊤` under either equality or subtype merge — same witness across all 4 type-domain depths). Spec-cell × equality also refutes. Notable: even on the type×{eq,sub}×ground rows where Heyting confirms, Boolean refutes — these lattices are Heyting but NOT Boolean.
+
+This is **architecturally correct for an open-world type system**. The Heyting/non-Boolean placement reflects our design commitment to *Open Extension, Closed Verification* — the type universe is open (new types can always be added), so "what's NOT Int" is an open collection (Bool, String, Nat, all function types, all not-yet-defined types) rather than a single complement type. The Heyting algebra's relative pseudo-complement (`a → b`) is the appropriate backward-flow operator in an open world; classical Boolean complement is foreclosed by construction.
+
+**Bounded vs bounded-below distinction** (Session and form-cell remain "—"):
+
+| Domain | Bounded? | ⊥ | ⊤ | Boolean question well-posed? |
+|---|---|---|---|---|
+| type | bounded | `type-bot` | `type-top` | yes (refuted, witness Int) |
+| spec-cell | bounded | `spec-cell-bot` | `spec-cell-top` (Phase 8d) | yes (refuted) |
+| session | bounded-below | `close-session` | — | **no — undefined** |
+| form-cell | bounded-below | `form-cell-bot` | — (`#f` placeholder per Phase 8) | **no — undefined** |
+
+Session and form-cell are bounded-below join-semilattices (have ⊥ but no canonical ⊤). The Boolean-algebra complement axiom `a ∨ x = ⊤` is meaningless without ⊤; the question is **architecturally undefined**, not "we didn't measure." If Boolean-algebra-level machinery becomes load-bearing for those domains (none currently planned), the prerequisite work is **defining canonical top semantics for those domains** — a domain-design question (what IS a "maximal session"? a "maximal form-cell"?) — not a sweep-coverage question.
 
 Status note on (W) sample-set scope: empirical claim on sampled 4-tuples, not a constructive proof. Hypothesis non-vacuity ratios per domain × depth are: type 83-95% (ground / wider); session 92-99%; form-cell 64%; spec-cell 87%. Confirmation is non-vacuous; we believe the observation but acknowledge the constructive-proof gap.
 
