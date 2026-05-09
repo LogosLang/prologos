@@ -363,10 +363,28 @@ defn refr-to-syrup [r]
   syrup-tagged [refr-syrup-tag r] [syrup-nat [refr-id r]]
 
 data BridgeState
-  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg]
+  bridge-state : [List Listener] -> [List GcExportReq] -> [List Nat] -> [List QEntry] -> [List String] -> [List QEntry] -> [List QEntry] -> [List QEntry] -> [List PipeMsg] -> [List QEntry]
   ;; (listeners, gc-export-requests, gc-answer-positions, inbound-questions,
   ;;  pending-out, outbound-questions, imports-refcount, exports-refcount,
-  ;;  pipelined-msgs)
+  ;;  pipelined-msgs, gifts)
+  ;;
+  ;; 10th field `gifts` (responder-side, Phase 52): the gift table for
+  ;; the OCapN three-vat handoff protocol. When peer sends an op:
+  ;; deposit-gift G N (deferred to Phase 52b), the bridge records
+  ;; (gift-id G → exported-pos N) here so a later op:withdraw-gift G
+  ;; (also Phase 52b) can look up the deposited refr. The shape
+  ;; (List QEntry — pair of Nat) suits the simple case where the gift
+  ;; is a `<desc:export N>`; richer shapes (gifts that are themselves
+  ;; promises, or carry resolution metadata) would require extending
+  ;; the entry type.
+  ;;
+  ;; This phase ships only the state-level scaffolding. The wire op
+  ;; codes (op-deposit-gift / op-withdraw-gift) and their dispatch
+  ;; through captp-incoming-with-state are deferred to Phase 52b
+  ;; because adding new CapTPOp variants requires touching every
+  ;; pattern match across message.prologos + captp-bridge.prologos
+  ;; (~50 sites). This phase establishes the storage; the next phase
+  ;; wires the protocol.
   ;;
   ;; 9th field `pipelined-msgs` (Phase 41): wire-side pipeline queue.
   ;; Phase 38 records peer's pipelined args here (in addition to the
@@ -414,7 +432,7 @@ data BridgeState
   ;; Reusing QEntry for the (Nat → Nat) lists; entry semantics
   ;; depends on which list it's in.
 
-def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil nil]
+def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil nil nil nil nil]
 
 ;; Construct a BridgeState pre-loaded with our op:start-session bytes
 ;; queued for flush on the next pump-outbound. CapTP handshake
@@ -423,70 +441,75 @@ def bridge-state-empty : BridgeState := [bridge-state nil nil nil nil nil nil ni
 ;; pump emit them alongside any vat-resolution outbound.
 spec bridge-state-with-our-session String String -> BridgeState
 defn bridge-state-with-our-session [ver loc]
-  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil nil
+  bridge-state nil nil nil nil [cons [our-session-bytes ver loc] nil] nil nil nil nil nil
 
 spec bs-listeners BridgeState -> List Listener
 defn bs-listeners
-  | bridge-state ls _ _ _ _ _ _ _ _ -> ls
+  | bridge-state ls _ _ _ _ _ _ _ _ _ -> ls
 
 spec bs-gc-exports BridgeState -> List GcExportReq
 defn bs-gc-exports
-  | bridge-state _ es _ _ _ _ _ _ _ -> es
+  | bridge-state _ es _ _ _ _ _ _ _ _ -> es
 
 spec bs-gc-answers BridgeState -> List Nat
 defn bs-gc-answers
-  | bridge-state _ _ as _ _ _ _ _ _ -> as
+  | bridge-state _ _ as _ _ _ _ _ _ _ -> as
 
 spec bs-questions BridgeState -> List QEntry
 defn bs-questions
-  | bridge-state _ _ _ qs _ _ _ _ _ -> qs
+  | bridge-state _ _ _ qs _ _ _ _ _ _ -> qs
 
 spec bs-pending-out BridgeState -> List String
 defn bs-pending-out
-  | bridge-state _ _ _ _ p _ _ _ _ -> p
+  | bridge-state _ _ _ _ p _ _ _ _ _ -> p
 
 spec bs-outbound-questions BridgeState -> List QEntry
 defn bs-outbound-questions
-  | bridge-state _ _ _ _ _ oqs _ _ _ -> oqs
+  | bridge-state _ _ _ _ _ oqs _ _ _ _ -> oqs
 
 spec bs-imports-refcount BridgeState -> List QEntry
 defn bs-imports-refcount
-  | bridge-state _ _ _ _ _ _ ir _ _ -> ir
+  | bridge-state _ _ _ _ _ _ ir _ _ _ -> ir
 
 spec bs-exports-refcount BridgeState -> List QEntry
 defn bs-exports-refcount
-  | bridge-state _ _ _ _ _ _ _ er _ -> er
+  | bridge-state _ _ _ _ _ _ _ er _ _ -> er
 
 spec bs-pipelined-msgs BridgeState -> List PipeMsg
 defn bs-pipelined-msgs
-  | bridge-state _ _ _ _ _ _ _ _ pm -> pm
+  | bridge-state _ _ _ _ _ _ _ _ pm _ -> pm
+
+;; Phase 52: gift-table accessor.
+spec bs-gifts BridgeState -> List QEntry
+defn bs-gifts
+  | bridge-state _ _ _ _ _ _ _ _ _ gs -> gs
 
 ;; Pure updates.
 
 spec bs-add-listener Nat Nat BridgeState -> BridgeState
 defn bs-add-listener
-  | tgt res [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er pm
+  | tgt res [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state [cons [listener tgt res] ls] es as qs p oqs ir er pm gs
 
 spec bs-add-gc-export Nat Nat BridgeState -> BridgeState
 defn bs-add-gc-export
-  | pos cnt [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er pm
+  | pos cnt [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls [cons [gc-export-req pos cnt] es] as qs p oqs ir er pm gs
 
 spec bs-add-gc-answer Nat BridgeState -> BridgeState
 defn bs-add-gc-answer
-  | pos [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es [cons pos as] qs p oqs ir er pm
+  | pos [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es [cons pos as] qs p oqs ir er pm gs
 
 spec bs-add-question Nat Nat BridgeState -> BridgeState
 defn bs-add-question
-  | remote local [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er pm
+  | remote local [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as [cons [q-entry remote local] qs] p oqs ir er pm gs
 
 spec bs-clear-pending-out BridgeState -> BridgeState
 defn bs-clear-pending-out
-  | bridge-state ls es as qs _ oqs ir er pm ->
-      bridge-state ls es as qs nil oqs ir er pm
+  | bridge-state ls es as qs _ oqs ir er pm gs ->
+      bridge-state ls es as qs nil oqs ir er pm gs
 
 ;; Phase 50: append a single byte-string to pending-out. Used by
 ;; declarative-release helpers that stage `op:gc-export` bytes for
@@ -494,8 +517,8 @@ defn bs-clear-pending-out
 ;; question replies.
 spec bs-append-pending-out String BridgeState -> BridgeState
 defn bs-append-pending-out
-  | bytes [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es as qs [cons bytes p] oqs ir er pm
+  | bytes [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs [cons bytes p] oqs ir er pm gs
 
 ;; Phase 25: track an outbound question we asked. `our-q-pos` is the
 ;; position we used in the desc:answer of our outbound op:deliver;
@@ -504,8 +527,8 @@ defn bs-append-pending-out
 ;; the helper that allocates and registers in one step.
 spec bs-add-outbound-question Nat Nat BridgeState -> BridgeState
 defn bs-add-outbound-question
-  | qpos local [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er pm
+  | qpos local [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs p [cons [q-entry qpos local] oqs] ir er pm gs
 
 ;; Look up the local-id for a given remote-question-pos.
 ;; First (most-recent) match wins per cons-at-head insertion.
@@ -550,16 +573,16 @@ defn list-remove-q-by-key
 ;; promise we allocated for it.
 spec bs-remove-question Nat BridgeState -> BridgeState
 defn bs-remove-question
-  | qpos [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er pm
+  | qpos [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as [list-remove-q-by-key qs qpos] p oqs ir er pm gs
 
 ;; Phase 31: remove the outbound-question entry for `our-q-pos`.
 ;; Used when WE've consumed peer's reply and want to send op:gc-answer
 ;; — the local-promise/q-pos mapping is no longer needed.
 spec bs-remove-outbound-question Nat BridgeState -> BridgeState
 defn bs-remove-outbound-question
-  | qpos [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er pm
+  | qpos [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs p [list-remove-q-by-key oqs qpos] ir er pm gs
 
 ;; ===========================================================
 ;; Phase 34c: imports-refcount accessors + updaters
@@ -613,12 +636,13 @@ defn bs-lookup-import-refcount [export-id st]
 ;; args (Phase 34b).
 spec bs-incr-import Nat BridgeState -> BridgeState
 defn bs-incr-import
-  | export-id [bridge-state ls es as qs p oqs ir er pm] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [add [unwrap-or zero [bs-lookup-question-loop ir export-id]] [suc zero]]]
         er
         pm
+        gs
 
 ;; Decrement imports-refcount[export-id] by k. Used by
 ;; release-import after sending op:gc-export. If decremented past 0
@@ -629,12 +653,13 @@ defn bs-incr-import
 ;; zeroed entries; for now the entry persists harmlessly.
 spec bs-decr-import Nat Nat BridgeState -> BridgeState
 defn bs-decr-import
-  | export-id k [bridge-state ls es as qs p oqs ir er pm] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs
         [list-set-q-by-key ir export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop ir export-id]] k]]
         er
         pm
+        gs
 
 ;; ===========================================================
 ;; Phase 36: exports-refcount — symmetric to imports-refcount
@@ -651,21 +676,23 @@ defn bs-lookup-export-refcount [export-id st]
 
 spec bs-incr-export Nat BridgeState -> BridgeState
 defn bs-incr-export
-  | export-id [bridge-state ls es as qs p oqs ir er pm] ->
+  | export-id [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [add [unwrap-or zero [bs-lookup-question-loop er export-id]] [suc zero]]]
         pm
+        gs
 
 ;; Decrement exports-refcount[export-id] by k. Saturates at 0 if
 ;; peer's count exceeds ours (peer bug or pre-existing race).
 spec bs-decr-export Nat Nat BridgeState -> BridgeState
 defn bs-decr-export
-  | export-id k [bridge-state ls es as qs p oqs ir er pm] ->
+  | export-id k [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir
         [list-set-q-by-key er export-id
           [sat-sub [unwrap-or zero [bs-lookup-question-loop er export-id]] k]]
         pm
+        gs
 
 ;; ===========================================================
 ;; Phase 41: pipelined-msgs append (for wire-out forwarding)
@@ -679,9 +706,44 @@ defn bs-decr-export
 ;; promise has resolved to a peer-export refr.
 spec bs-add-pipeline-msg Nat SyrupValue [Option Nat] BridgeState -> BridgeState
 defn bs-add-pipeline-msg
-  | pid args ap [bridge-state ls es as qs p oqs ir er pm] ->
+  | pid args ap [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir er
         [cons [pipe-msg pid args ap] pm]
+        gs
+
+;; ===========================================================
+;; Phase 52: gift-table mutators
+;; ===========================================================
+;;
+;; The gift table holds (gift-id → exported-pos) entries deposited
+;; by peer for the OCapN three-vat handoff. This phase ships only
+;; the state-level helpers; wire-level op:deposit-gift /
+;; op:withdraw-gift dispatch is deferred to Phase 52b (requires
+;; new CapTPOp variants — touches every pattern match site).
+;;
+;; The simple shape (List QEntry — pair of Nat) suits gifts that
+;; are `<desc:export N>` shaped. Gifts that are themselves promises
+;; (or carry resolution metadata) would require extending the
+;; entry type; deferred until a use case demands it.
+
+spec bs-add-gift Nat Nat BridgeState -> BridgeState
+  :doc "Phase 52: record a deposited gift (gift-id → exported-pos). Called by op-deposit-gift handler in Phase 52b."
+defn bs-add-gift
+  | gid xid [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs p oqs ir er pm
+        [cons [q-entry gid xid] gs]
+
+spec bs-lookup-gift Nat BridgeState -> [Option Nat]
+  :doc "Phase 52: look up the exported-pos for a deposited gift-id. Called by op-withdraw-gift handler in Phase 52b."
+defn bs-lookup-gift [gid st]
+  bs-lookup-question-loop [bs-gifts st] gid
+
+spec bs-remove-gift Nat BridgeState -> BridgeState
+  :doc "Phase 52: drop a gift entry by gift-id. Called after op-withdraw-gift consumes the gift."
+defn bs-remove-gift
+  | gid [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state ls es as qs p oqs ir er pm
+        [list-remove-q-by-key gs gid]
 
 ;; ===========================================================
 ;; Phase 27: vat-side `ask` wiring — bridge-send-question
@@ -1404,9 +1466,10 @@ defn list-filter-pipe-by-emitted
 spec bs-gc-pipelined-msgs-by-emitted [List Nat] BridgeState -> BridgeState
   :doc "Phase 47: drop pipelined-msgs entries whose pid is in `emitted`. Applied after pump-outbound at connection-step granularity."
 defn bs-gc-pipelined-msgs-by-emitted
-  | emitted [bridge-state ls es as qs p oqs ir er pm] ->
+  | emitted [bridge-state ls es as qs p oqs ir er pm gs] ->
       bridge-state ls es as qs p oqs ir er
         [list-filter-pipe-by-emitted pm emitted]
+        gs
 
 ;; ===========================================================
 ;; Phase 48: op:listen notification on resolution
@@ -1453,8 +1516,8 @@ defn list-filter-listeners-by-notified
 spec bs-gc-listeners-by-notified [List Nat] BridgeState -> BridgeState
   :doc "Phase 48: drop listener entries whose target is in `notified`. Applied after pump-outbound at connection-step granularity, alongside pipelined-msgs GC."
 defn bs-gc-listeners-by-notified
-  | notified [bridge-state ls es as qs p oqs ir er pm] ->
-      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm
+  | notified [bridge-state ls es as qs p oqs ir er pm gs] ->
+      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm gs
 
 ;; Result of the pump: bytes emitted this turn + updated emitted-pids
 ;; + the vat (Phase 42 may have enqueued local-actor messages on it

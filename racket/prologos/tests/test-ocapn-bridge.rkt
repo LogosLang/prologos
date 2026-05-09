@@ -2099,3 +2099,69 @@
               (format "expected listener notification to peer's resolver 7; got: ~s" got))
   (check-true (regexp-match? #rx"5'Error" got)
               (format "expected Error wrapper on broken late-fire; got: ~s" got)))
+
+;; Phase 52: gift-table scaffolding for OCapN three-vat handoff.
+;; State-level helpers only; wire-level op:deposit-gift /
+;; op:withdraw-gift dispatch deferred to Phase 52b.
+
+(test-case "bridge/bs-gifts on empty state is empty (Phase 52)"
+  (check-contains
+   (run-last
+    "(eval (length (bs-gifts bridge-state-empty)))")
+   "0N"))
+
+(test-case "bridge/bs-add-gift records gift-id → exported-pos (Phase 52)"
+  ;; Deposit gift-id 2 → exported-pos 7. bs-gifts should contain 1 entry.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty))
+              (length (bs-gifts st0))))")
+   "1N"))
+
+(test-case "bridge/bs-lookup-gift finds deposited entry (Phase 52)"
+  ;; Deposit gift-id 3 → exported-pos 5; lookup 3 returns some 5.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc (suc zero))) (suc (suc (suc (suc (suc zero))))) bridge-state-empty))
+              (bs-lookup-gift (suc (suc (suc zero))) st0)))")
+   "some")
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc (suc zero))) (suc (suc (suc (suc (suc zero))))) bridge-state-empty))
+              (bs-lookup-gift (suc (suc (suc zero))) st0)))")
+   "5N"))
+
+(test-case "bridge/bs-lookup-gift returns none for unknown gift-id (Phase 52)"
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc (suc zero))) (suc (suc (suc (suc (suc zero))))) bridge-state-empty))
+              (bs-lookup-gift (suc (suc (suc (suc (suc (suc (suc zero))))))) st0)))")
+   "none"))
+
+(test-case "bridge/bs-remove-gift drops the entry (Phase 52)"
+  ;; Deposit gift-id 2, then remove it. bs-gifts should be empty.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc zero)))) bridge-state-empty)
+                  st1 (bs-remove-gift (suc (suc zero)) st0))
+              (length (bs-gifts st1))))")
+   "0N"))
+
+(test-case "bridge/bs-remove-gift on unknown gift-id is a no-op (Phase 52)"
+  ;; Deposit gift-id 2; try removing gift-id 9. The original entry stays.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc zero)))) bridge-state-empty)
+                  st1 (bs-remove-gift (suc (suc (suc (suc (suc (suc (suc (suc (suc zero))))))))) st0))
+              (length (bs-gifts st1))))")
+   "1N"))
+
+(test-case "bridge/bs-add-gift accumulates multiple deposits (Phase 52)"
+  ;; Deposit 3 gift-ids → bs-gifts has length 3.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-add-gift (suc zero) (suc (suc zero))
+                       (bs-add-gift (suc (suc zero)) (suc (suc (suc zero)))
+                         (bs-add-gift (suc (suc (suc zero))) (suc (suc (suc (suc zero)))) bridge-state-empty))))
+              (length (bs-gifts st0))))")
+   "3N"))
