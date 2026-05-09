@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Prologos Propagator Network — Stratified BSP Demo</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+    max-width: 1180px;
+    margin: 2em auto;
+    padding: 0 1.5em 4em;
+    color: #1a1a1a;
+    line-height: 1.45;
+  }
+  h1 {
+    font-size: 1.7em;
+    margin-bottom: 0.3em;
+    border-bottom: 2px solid #1976d2;
+    padding-bottom: 0.3em;
+  }
+  h2 { font-size: 1.2em; margin-top: 1.5em; }
+  .subtitle { color: #555; margin-top: 0; font-style: italic; }
+  .intro { background: #f5f5f5; padding: 1em 1.5em; border-radius: 6px; margin: 1em 0; }
+  .intro code { background: #fff; padding: 0.1em 0.3em; border-radius: 3px; }
+
+  /* Controls */
+  .controls {
+    text-align: center;
+    margin: 1.4em 0 0.5em;
+    padding: 0.8em;
+    background: #fafafa;
+    border-radius: 6px;
+  }
+  .controls button {
+    font-size: 14px;
+    padding: 0.5em 1.4em;
+    margin: 0 0.3em;
+    border: 1.5px solid #1976d2;
+    background: #fff;
+    color: #1976d2;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .controls button:hover { background: #1976d2; color: #fff; }
+  .controls button:disabled {
+    border-color: #ccc;
+    color: #ccc;
+    cursor: not-allowed;
+  }
+  .controls button:disabled:hover { background: #fff; color: #ccc; }
+  .controls button.primary { background: #1976d2; color: #fff; }
+  .controls button.primary:hover { background: #115293; }
+  .step-counter {
+    display: inline-block;
+    margin-left: 1em;
+    font-size: 13px;
+    color: #555;
+  }
+
+  /* Narration */
+  .narration {
+    background: #f0f7ff;
+    padding: 1em 1.5em;
+    border-left: 4px solid #1976d2;
+    margin: 1em 0;
+    font-size: 14.5px;
+    border-radius: 0 6px 6px 0;
+  }
+  .narration .step-title {
+    font-weight: 600;
+    margin-bottom: 0.4em;
+    color: #115293;
+  }
+  .narration code {
+    background: #fff;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+
+  /* SVG visual */
+  svg.network {
+    display: block;
+    margin: 0.5em auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+  }
+
+  /* Legend */
+  .legend {
+    margin-top: 2em;
+    background: #fafafa;
+    padding: 1em 1.5em;
+    border-radius: 6px;
+    font-size: 13.5px;
+  }
+  .legend-row {
+    display: flex;
+    align-items: center;
+    margin: 0.5em 0;
+  }
+  .legend-swatch {
+    width: 24px;
+    height: 16px;
+    margin-right: 0.7em;
+    border: 1px solid #555;
+    border-radius: 3px;
+  }
+  .legend-swatch.s0 { background: #e3f2fd; border-color: #1976d2; }
+  .legend-swatch.topology { background: #f5f5f5; border-color: #616161; }
+  .legend-swatch.s1naf { background: #e8f5e9; border-color: #388e3c; }
+  .legend-swatch.cell {
+    background: #fff;
+    border-color: #333;
+    border-width: 2px;
+  }
+  .legend-swatch.cell-active {
+    background: #fff9c4;
+    border-color: #f57c00;
+    border-width: 2px;
+  }
+  .legend-swatch.prop-firing {
+    background: #fff176;
+    border-color: #f57c00;
+    border-width: 2px;
+  }
+
+  /* Inspector panel (cell hover) */
+  .inspector {
+    position: fixed;
+    top: 1em;
+    right: 1em;
+    width: 280px;
+    background: #fff;
+    border: 1.5px solid #1976d2;
+    border-radius: 6px;
+    padding: 0.8em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 13px;
+    display: none;
+    z-index: 10;
+  }
+  .inspector h3 {
+    margin: 0 0 0.5em;
+    font-size: 14px;
+    color: #1976d2;
+  }
+  .inspector code {
+    background: #f5f5f5;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.9em;
+  }
+
+  /* How-to */
+  .howto {
+    margin-top: 2em;
+    font-size: 13.5px;
+    color: #555;
+  }
+  .howto ul { padding-left: 1.4em; }
+</style>
+</head>
+<body>
+
+<h1>Prologos Propagator Network — Stratified BSP Demo</h1>
+<p class="subtitle">Worked example: graph-reachability with negation-as-failure (S0 monotone → S1 NAF stratification).</p>
+
+<div class="intro">
+  <p>This page shows a small Prologos propagator network executing a stratified Datalog-style derivation. The network derives <code>path(X,Y)</code> as the transitive closure of <code>edge(X,Y)</code>, then derives <code>unreachable_from_a(X)</code> via negation-as-failure on the path relation. Negation requires <strong>stratification</strong>: the NAF rule cannot fire until the monotone <code>path</code> derivation has reached fixpoint (quiescence). The visualization makes the strata, cells, and propagator firings explicit.</p>
+
+  <p><strong>Lattice-theoretic framing</strong>: each derived-fact cell holds a join-semilattice value (set of facts, monotonically growing under set-union). Each S0 propagator is a monotone Q-module morphism on the cell network. Quiescence is a fixed point in the Tarski-Knaster sense. The S1 NAF stratum activates as a higher-order computation — it reads the converged S0 lattice values and computes a non-monotone derived value.</p>
+</div>
+
+<div class="controls">
+  <button id="reset" type="button">⟲ Reset</button>
+  <button id="step" type="button" class="primary">▶ Step</button>
+  <button id="play" type="button">▶▶ Play through</button>
+  <span class="step-counter">Step <span id="step-num">0</span> of <span id="step-total">9</span></span>
+</div>
+
+<svg class="network" width="1100" height="700" viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg">
+  <!-- Stratum bands -->
+  <g id="strata">
+    <rect class="stratum-S0" x="40" y="60" width="1020" height="180" fill="#e3f2fd" stroke="#1976d2" stroke-width="1.5" stroke-dasharray="6 4" rx="6" opacity="0.55"/>
+    <text x="55" y="84" font-size="14" font-weight="600" fill="#0d47a1">S0 — Monotone BSP propagation</text>
+    <text x="55" y="100" font-size="11" fill="#1565c0" font-style="italic">Fires repeatedly until cell values stop changing (quiescence).</text>
+
+    <rect class="stratum-Top" x="40" y="260" width="1020" height="100" fill="#f5f5f5" stroke="#616161" stroke-width="1.5" stroke-dasharray="6 4" rx="6" opacity="0.65"/>
+    <text x="55" y="284" font-size="14" font-weight="600" fill="#212121">Topology stratum — quiescence detection</text>
+    <text x="55" y="300" font-size="11" fill="#424242" font-style="italic">Activates when S0 reaches fixpoint; flips the S1-readiness signal.</text>
+
+    <rect class="stratum-S1" x="40" y="380" width="1020" height="180" fill="#e8f5e9" stroke="#388e3c" stroke-width="1.5" stroke-dasharray="6 4" rx="6" opacity="0.55"/>
+    <text x="55" y="404" font-size="14" font-weight="600" fill="#1b5e20">S1 — NAF (negation-as-failure) stratum</text>
+    <text x="55" y="420" font-size="11" fill="#2e7d32" font-style="italic">Gated on Topology's quiescence signal; non-monotone derivations live here.</text>
+
+    <text x="55" y="600" font-size="13" font-weight="600" fill="#555">Cell legend (lattice values, monotone or once-flipped)</text>
+  </g>
+
+  <!-- Cells: declared by id; their visual state is updated by JS -->
+  <g id="cells"></g>
+
+  <!-- Propagators: declared by id; styled per stratum -->
+  <g id="propagators"></g>
+
+  <!-- Arrows (read/write edges) -->
+  <g id="arrows"></g>
+
+  <!-- Arrow marker definitions -->
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,8 L8,4 z" fill="#888"/>
+    </marker>
+    <marker id="arrowhead-active" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,9 L9,4.5 z" fill="#f57c00"/>
+    </marker>
+  </defs>
+</svg>
+
+<div id="narration" class="narration">
+  <div class="step-title">Step 0 — Initial state</div>
+  <div class="step-body">All cells initialized. <code>edge</code> populated with input facts; <code>vertex</code> populated with the 6-vertex graph. <code>path</code> is empty (⊥), <code>path_quiescent</code> is <code>false</code>, <code>unreachable_from_a</code> is empty. No propagators have fired yet. The S0 stratum is ready to begin the BSP-style monotone propagation.</div>
+</div>
+
+<div class="legend">
+  <strong>Legend</strong>
+  <div class="legend-row"><div class="legend-swatch s0"></div>S0 (monotone) — base + recursive Datalog rules</div>
+  <div class="legend-row"><div class="legend-swatch topology"></div>Topology — quiescence-watcher (one-shot)</div>
+  <div class="legend-row"><div class="legend-swatch s1naf"></div>S1 NAF — non-monotone derivation gated on S0 fixpoint</div>
+  <div class="legend-row"><div class="legend-swatch cell"></div>Cell (idle) — holds current lattice value</div>
+  <div class="legend-row"><div class="legend-swatch cell-active"></div>Cell (just updated this round)</div>
+  <div class="legend-row"><div class="legend-swatch prop-firing"></div>Propagator (firing this round)</div>
+</div>
+
+<div class="howto">
+  <h2>How to read the demo</h2>
+  <ul>
+    <li><strong>Cells</strong> (rounded boxes) hold lattice values. Set-typed cells (<code>edge</code>, <code>path</code>, <code>vertex</code>, <code>unreachable_from_a</code>) hold join-semilattice values that grow monotonically under set-union. The boolean <code>path_quiescent</code> is a 2-element lattice <code>{false ≤ true}</code>.</li>
+    <li><strong>Propagators</strong> (boxes inside stratum bands) react to cell changes and write to other cells. Each propagator belongs to exactly one stratum.</li>
+    <li><strong>Arrows</strong> show data flow. An arrow from cell <em>C</em> to propagator <em>P</em> means <em>P</em> reads <em>C</em>; an arrow from <em>P</em> to <em>C</em> means <em>P</em> writes to <em>C</em>.</li>
+    <li><strong>Strata</strong> are the colored bands. The BSP scheduler drives S0 to quiescence first, then activates Topology stratum to detect quiescence, then activates S1 NAF.</li>
+    <li><strong>Click a cell</strong> to inspect its current value in detail.</li>
+  </ul>
+
+  <h2>Architectural connection</h2>
+  <p>This is exactly the propagator network architecture Prologos's elaborator + solver use, scaled down for visualization. Every cell and every propagator in the real system follows the same pattern: cells hold lattice values, propagators are monotone reactive functions, strata stratify non-monotone steps, BSP scheduling drives quiescence. The empirical sweep findings in the variety-categorization report were computed using property-cells + property-test-propagators on this same architecture (off-network scaffolding for now; sister-track migrates them on-network).</p>
+</div>
+
+<div id="inspector" class="inspector">
+  <h3 id="ins-title"></h3>
+  <div id="ins-body"></div>
+</div>
+
+<script>
+// ============================================================================
+// Demo data: cells, propagators, and step state.
+// ============================================================================
+
+// Cell descriptors: id, label, position, lattice description.
+const CELLS = [
+  // Source facts (S0 input)
+  { id: 'edge', label: 'edge', x: 110, y: 195, w: 180, h: 50,
+    desc: 'Input facts: 4 directed edges. Held in a set-typed cell (join-semilattice under set-union). Read-only after initial load.' },
+  { id: 'path', label: 'path', x: 480, y: 195, w: 180, h: 50,
+    desc: 'Derived: transitive closure of edge. Set-typed; grows monotonically under S0 propagation. Once quiescent, the value is the least fixpoint of the path-recursive rule.' },
+  { id: 'vertex', label: 'vertex', x: 850, y: 195, w: 200, h: 50,
+    desc: 'Input facts: 6 vertices {a, b, c, d, e, f}. Held in a set-typed cell. Read-only.' },
+  // Topology stratum cell
+  { id: 'path_quiescent', label: 'path_quiescent', x: 470, y: 305, w: 200, h: 40,
+    desc: 'Boolean readiness signal. Lives in the 2-element lattice {false ≤ true}. Flips to true when S0 reaches quiescence on path. Gates the S1 NAF stratum.' },
+  // S1 NAF stratum cell
+  { id: 'unreachable_from_a', label: 'unreachable_from_a', x: 850, y: 510, w: 200, h: 50,
+    desc: 'Derived via negation-as-failure: vertices NOT reachable from a. Computed only after path_quiescent is true. Set-typed; grows monotonically once computed.' },
+];
+
+// Propagator descriptors: id, label, position, stratum, reads/writes.
+const PROPAGATORS = [
+  { id: 'P1', label: 'P1: path(X,Y) ← edge(X,Y)', x: 305, y: 130, w: 250, h: 36, stratum: 's0',
+    desc: 'S0 base case. Reads edge cell, writes path. Monotone.' },
+  { id: 'P2', label: 'P2: path(X,Z) ← edge(X,Y), path(Y,Z)', x: 580, y: 130, w: 320, h: 36, stratum: 's0',
+    desc: 'S0 recursive rule (transitivity). Reads edge AND path, writes back to path. Monotone fixed-point iteration.' },
+  { id: 'P3', label: 'P3: quiescence-watcher', x: 230, y: 305, w: 200, h: 36, stratum: 'topology',
+    desc: 'Topology stratum. Watches path; flips path_quiescent to true when path stops growing across a BSP round. One-shot.' },
+  { id: 'P4', label: 'P4: unreachable_from_a(X) ← vertex(X), ¬path(a,X)', x: 110, y: 510, w: 470, h: 36, stratum: 's1naf',
+    desc: 'S1 NAF stratum. Gated on path_quiescent = true. Reads vertex, path, path_quiescent; writes unreachable_from_a. Non-monotone (depends on absence-of-fact).' },
+];
+
+// Arrows: from -> to. Type: 'read' or 'write'.
+const ARROWS = [
+  // P1: reads edge, writes path
+  { from: 'edge', to: 'P1', type: 'read' },
+  { from: 'P1', to: 'path', type: 'write' },
+  // P2: reads edge AND path, writes path
+  { from: 'edge', to: 'P2', type: 'read' },
+  { from: 'path', to: 'P2', type: 'read', curve: true },
+  { from: 'P2', to: 'path', type: 'write', curve: true },
+  // P3: reads path, writes path_quiescent
+  { from: 'path', to: 'P3', type: 'read' },
+  { from: 'P3', to: 'path_quiescent', type: 'write' },
+  // P4: reads vertex, path, path_quiescent; writes unreachable_from_a
+  { from: 'vertex', to: 'P4', type: 'read' },
+  { from: 'path', to: 'P4', type: 'read' },
+  { from: 'path_quiescent', to: 'P4', type: 'read' },
+  { from: 'P4', to: 'unreachable_from_a', type: 'write' },
+];
+
+// ============================================================================
+// Step state machine.
+// ============================================================================
+
+const STEPS = [
+  {
+    title: "Step 0 — Initial state",
+    body: "All cells initialized. <code>edge</code> populated with input facts; <code>vertex</code> populated with the 6-vertex graph. <code>path</code> is empty (⊥), <code>path_quiescent</code> is <code>false</code>, <code>unreachable_from_a</code> is empty. No propagators have fired yet. The S0 stratum is ready to begin BSP propagation.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: [],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'false',
+      unreachable_from_a: []
+    },
+    firing: [], updated: []
+  },
+  {
+    title: "Step 1 — S0 round 1: P1 fires (base case)",
+    body: "P1 watches <code>edge</code>; on its first BSP round it lifts every edge to a length-1 path. <code>path</code> goes from ⊥ (empty) to {(a,b), (b,c), (c,d), (b,e)} via set-union. P2 has nothing useful yet (path was empty when read).",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'false',
+      unreachable_from_a: []
+    },
+    firing: ['P1'],
+    updated: ['path']
+  },
+  {
+    title: "Step 2 — S0 round 2: P2 fires (transitivity, depth 2)",
+    body: "P2 sees the new path facts. For each edge(X,Y) and path(Y,Z), it derives path(X,Z). New depth-2 paths: (a,c), (b,d), (a,e). P1 is also re-eligible but its output is unchanged (already in path). The lattice value of <code>path</code> grows monotonically under set-union.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'false',
+      unreachable_from_a: []
+    },
+    firing: ['P2'],
+    updated: ['path']
+  },
+  {
+    title: "Step 3 — S0 round 3: P2 fires again (depth 3)",
+    body: "P2 sees the depth-2 paths and derives one more transitive closure: (a,d) via edge(a,b) + path(b,d), or equivalently edge(a,c) — actually no edge(a,c), so via existing chain. New fact: (a,d). This is the last new path.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)', '(a,d)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'false',
+      unreachable_from_a: []
+    },
+    firing: ['P2'],
+    updated: ['path']
+  },
+  {
+    title: "Step 4 — S0 round 4: P2 fires, no new facts. S0 quiescence reached.",
+    body: "P2 fires once more but produces nothing not already in <code>path</code>. The set-union join is idempotent; the cell value doesn't change. S0 is at fixpoint — the BSP scheduler detects no cell changed in this round and concludes the S0 stratum is quiescent.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)', '(a,d)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'false',
+      unreachable_from_a: []
+    },
+    firing: ['P2'],
+    updated: []
+  },
+  {
+    title: "Step 5 — Topology stratum activates: P3 detects quiescence",
+    body: "With S0 quiescent, the BSP scheduler activates the Topology stratum. P3 watches <code>path</code> and confirms no further changes; it writes <code>path_quiescent</code> = true. This flips the readiness signal that the S1 NAF stratum has been waiting on.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)', '(a,d)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'true',
+      unreachable_from_a: []
+    },
+    firing: ['P3'],
+    updated: ['path_quiescent']
+  },
+  {
+    title: "Step 6 — S1 NAF stratum activates: P4 fires",
+    body: "<code>path_quiescent</code> = true gates P4. P4 reads <code>vertex</code>, <code>path</code>, <code>path_quiescent</code>; for each vertex X, checks if path(a, X) is in the converged path cell. If absent, X joins the unreachable set. From a we can reach {b, c, d, e}; we cannot reach {f}. P4 writes <code>unreachable_from_a</code> = {f}.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)', '(a,d)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'true',
+      unreachable_from_a: ['f']
+    },
+    firing: ['P4'],
+    updated: ['unreachable_from_a']
+  },
+  {
+    title: "Step 7 — Final fixpoint",
+    body: "All strata are quiescent. The network has computed the least-fixpoint of the stratified program. The empirical answer: from vertex a, the set of unreachable vertices is {f}. Total: 4 BSP rounds for S0 quiescence + 1 for Topology + 1 for S1 NAF.",
+    cellValues: {
+      edge: ['(a,b)', '(b,c)', '(c,d)', '(b,e)'],
+      path: ['(a,b)', '(b,c)', '(c,d)', '(b,e)', '(a,c)', '(b,d)', '(a,e)', '(a,d)'],
+      vertex: ['a', 'b', 'c', 'd', 'e', 'f'],
+      path_quiescent: 'true',
+      unreachable_from_a: ['f']
+    },
+    firing: [],
+    updated: []
+  },
+];
+
+// ============================================================================
+// Rendering.
+// ============================================================================
+
+function setText(el, text) { el.textContent = text; }
+
+function renderCells(state) {
+  const g = document.getElementById('cells');
+  g.innerHTML = '';
+
+  for (const c of CELLS) {
+    const isUpdated = state.updated.includes(c.id);
+    const value = state.cellValues[c.id];
+    const valueText = formatValue(value);
+
+    // Cell rectangle
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('class', 'cell ' + (isUpdated ? 'cell-active' : ''));
+    rect.setAttribute('x', c.x);
+    rect.setAttribute('y', c.y);
+    rect.setAttribute('width', c.w);
+    rect.setAttribute('height', c.h);
+    rect.setAttribute('rx', 6);
+    rect.setAttribute('fill', isUpdated ? '#fff9c4' : '#fff');
+    rect.setAttribute('stroke', isUpdated ? '#f57c00' : '#333');
+    rect.setAttribute('stroke-width', isUpdated ? 2.5 : 1.5);
+    rect.style.cursor = 'pointer';
+    rect.onclick = () => showInspector(c, value);
+    g.appendChild(rect);
+
+    // Cell label (top)
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', c.x + c.w / 2);
+    label.setAttribute('y', c.y + 16);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('font-weight', '600');
+    label.setAttribute('font-size', '12px');
+    label.setAttribute('fill', '#1a1a1a');
+    label.style.pointerEvents = 'none';
+    label.textContent = c.label;
+    g.appendChild(label);
+
+    // Cell value (below label)
+    const val = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    val.setAttribute('x', c.x + c.w / 2);
+    val.setAttribute('y', c.y + 36);
+    val.setAttribute('text-anchor', 'middle');
+    val.setAttribute('font-size', '11px');
+    val.setAttribute('font-family', 'DejaVu Sans Mono, Menlo, monospace');
+    val.setAttribute('fill', '#333');
+    val.style.pointerEvents = 'none';
+    val.textContent = valueText;
+    g.appendChild(val);
+  }
+}
+
+function formatValue(value) {
+  if (value === undefined || value === null) return '⊥';
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '∅ (empty)';
+    if (value.length <= 4) return '{' + value.join(', ') + '}';
+    return '{' + value.slice(0, 3).join(', ') + ', ... +' + (value.length - 3) + '}';
+  }
+  return String(value);
+}
+
+function renderPropagators(state) {
+  const g = document.getElementById('propagators');
+  g.innerHTML = '';
+
+  for (const p of PROPAGATORS) {
+    const isFiring = state.firing.includes(p.id);
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', p.x);
+    rect.setAttribute('y', p.y);
+    rect.setAttribute('width', p.w);
+    rect.setAttribute('height', p.h);
+    rect.setAttribute('rx', 4);
+    rect.setAttribute('fill', isFiring ? '#fff176' : '#fff');
+    rect.setAttribute('stroke', isFiring ? '#f57c00' : '#333');
+    rect.setAttribute('stroke-width', isFiring ? 2.5 : 1.5);
+    rect.style.cursor = 'pointer';
+    rect.onclick = () => showInspector(p, null);
+    g.appendChild(rect);
+
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', p.x + p.w / 2);
+    label.setAttribute('y', p.y + p.h / 2 + 4);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('font-size', '11.5px');
+    label.setAttribute('font-family', 'DejaVu Sans Mono, Menlo, monospace');
+    label.setAttribute('fill', '#1a1a1a');
+    label.style.pointerEvents = 'none';
+    label.textContent = p.label;
+    g.appendChild(label);
+  }
+}
+
+function getNodeBounds(id) {
+  const cell = CELLS.find(c => c.id === id);
+  if (cell) return cell;
+  const prop = PROPAGATORS.find(p => p.id === id);
+  if (prop) return prop;
+  return null;
+}
+
+function getAttachPoint(node, side) {
+  // side ∈ 'top', 'bottom', 'left', 'right', 'topLeft', etc.
+  switch (side) {
+    case 'top':    return [node.x + node.w / 2, node.y];
+    case 'bottom': return [node.x + node.w / 2, node.y + node.h];
+    case 'left':   return [node.x, node.y + node.h / 2];
+    case 'right':  return [node.x + node.w, node.y + node.h / 2];
+    case 'topRight': return [node.x + node.w * 0.75, node.y];
+    case 'bottomRight': return [node.x + node.w * 0.75, node.y + node.h];
+    case 'topLeft': return [node.x + node.w * 0.25, node.y];
+    case 'bottomLeft': return [node.x + node.w * 0.25, node.y + node.h];
+  }
+  return [node.x + node.w / 2, node.y + node.h / 2];
+}
+
+function renderArrows(state) {
+  const g = document.getElementById('arrows');
+  g.innerHTML = '';
+
+  // Hand-curated path geometries for clarity in this layout.
+  const arrowGeoms = [
+    // P1 reads edge
+    { from: 'edge', to: 'P1', fromSide: 'top', toSide: 'bottom', type: 'read' },
+    // P1 writes path
+    { from: 'P1', to: 'path', fromSide: 'bottom', toSide: 'top', type: 'write' },
+    // P2 reads edge
+    { from: 'edge', to: 'P2', fromSide: 'topRight', toSide: 'bottomLeft', type: 'read' },
+    // P2 reads path (curve up + back)
+    { from: 'path', to: 'P2', fromSide: 'top', toSide: 'bottom', type: 'read', label: 'reads' },
+    // P2 writes path (curve)
+    { from: 'P2', to: 'path', fromSide: 'bottomRight', toSide: 'topRight', type: 'write', label: 'writes' },
+    // P3 reads path
+    { from: 'path', to: 'P3', fromSide: 'bottomLeft', toSide: 'topRight', type: 'read' },
+    // P3 writes path_quiescent
+    { from: 'P3', to: 'path_quiescent', fromSide: 'bottom', toSide: 'top', type: 'write' },
+    // P4 reads vertex
+    { from: 'vertex', to: 'P4', fromSide: 'bottom', toSide: 'top', type: 'read' },
+    // P4 reads path
+    { from: 'path', to: 'P4', fromSide: 'bottomLeft', toSide: 'topRight', type: 'read' },
+    // P4 reads path_quiescent (the gating signal)
+    { from: 'path_quiescent', to: 'P4', fromSide: 'bottom', toSide: 'top', type: 'read', label: 'gates' },
+    // P4 writes unreachable_from_a
+    { from: 'P4', to: 'unreachable_from_a', fromSide: 'right', toSide: 'left', type: 'write' },
+  ];
+
+  const firing = new Set(state.firing);
+
+  for (const ag of arrowGeoms) {
+    const fromNode = getNodeBounds(ag.from);
+    const toNode = getNodeBounds(ag.to);
+    if (!fromNode || !toNode) continue;
+
+    const [x1, y1] = getAttachPoint(fromNode, ag.fromSide);
+    const [x2, y2] = getAttachPoint(toNode, ag.toSide);
+
+    // Active if either endpoint is "involved" in the firing/update this round.
+    const active = firing.has(ag.from) || firing.has(ag.to);
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    // Simple curved/cubic path
+    const dx = x2 - x1, dy = y2 - y1;
+    const cx1 = x1 + dx * 0.2;
+    const cy1 = y1 + dy * 0.5;
+    const cx2 = x2 - dx * 0.2;
+    const cy2 = y2 - dy * 0.5;
+    path.setAttribute('d', `M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', active ? '#f57c00' : '#888');
+    path.setAttribute('stroke-width', active ? 2.5 : 1.2);
+    path.setAttribute('marker-end', active ? 'url(#arrowhead-active)' : 'url(#arrowhead)');
+    if (ag.type === 'read') path.setAttribute('stroke-dasharray', active ? '0' : '4 3');
+    g.appendChild(path);
+  }
+}
+
+function renderNarration(state) {
+  document.querySelector('#narration .step-title').textContent = state.title;
+  document.querySelector('#narration .step-body').innerHTML = state.body;
+  document.getElementById('step-num').textContent = currentStep;
+}
+
+// ============================================================================
+// Inspector
+// ============================================================================
+
+function showInspector(node, value) {
+  const inspector = document.getElementById('inspector');
+  document.getElementById('ins-title').textContent = node.label || node.id;
+  let body = '<p>' + (node.desc || '(no description)') + '</p>';
+  if (value !== null && value !== undefined) {
+    body += '<p><strong>Current value</strong>: <code>' + formatValue(value) + '</code></p>';
+  }
+  body += '<p style="font-size:11px;color:#888;margin-top:1em;">Click outside to dismiss.</p>';
+  document.getElementById('ins-body').innerHTML = body;
+  inspector.style.display = 'block';
+}
+
+function hideInspector() {
+  document.getElementById('inspector').style.display = 'none';
+}
+
+document.body.addEventListener('click', (e) => {
+  if (!e.target.closest('rect') && !e.target.closest('.inspector')) {
+    hideInspector();
+  }
+});
+
+// ============================================================================
+// State + controls
+// ============================================================================
+
+let currentStep = 0;
+let playInterval = null;
+
+document.getElementById('step-total').textContent = STEPS.length - 1;
+
+function render() {
+  const state = STEPS[currentStep];
+  renderCells(state);
+  renderPropagators(state);
+  renderArrows(state);
+  renderNarration(state);
+  document.getElementById('step').disabled = currentStep >= STEPS.length - 1;
+  document.getElementById('reset').disabled = currentStep === 0;
+}
+
+function reset() {
+  if (playInterval) { clearInterval(playInterval); playInterval = null; document.getElementById('play').textContent = '▶▶ Play through'; }
+  currentStep = 0;
+  render();
+}
+
+function step() {
+  if (currentStep < STEPS.length - 1) {
+    currentStep++;
+    render();
+  }
+}
+
+function play() {
+  if (playInterval) {
+    clearInterval(playInterval);
+    playInterval = null;
+    document.getElementById('play').textContent = '▶▶ Play through';
+    return;
+  }
+  document.getElementById('play').textContent = '⏸ Pause';
+  playInterval = setInterval(() => {
+    if (currentStep >= STEPS.length - 1) {
+      clearInterval(playInterval);
+      playInterval = null;
+      document.getElementById('play').textContent = '▶▶ Play through';
+      return;
+    }
+    step();
+  }, 1500);
+}
+
+document.getElementById('reset').addEventListener('click', reset);
+document.getElementById('step').addEventListener('click', step);
+document.getElementById('play').addEventListener('click', play);
+
+// Initial render
+render();
+
+</script>
+
+</body>
+</html>
