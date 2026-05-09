@@ -488,6 +488,15 @@ defn bs-clear-pending-out
   | bridge-state ls es as qs _ oqs ir er pm ->
       bridge-state ls es as qs nil oqs ir er pm
 
+;; Phase 50: append a single byte-string to pending-out. Used by
+;; declarative-release helpers that stage `op:gc-export` bytes for
+;; flushing on the next pump-outbound, alongside any newly-resolved
+;; question replies.
+spec bs-append-pending-out String BridgeState -> BridgeState
+defn bs-append-pending-out
+  | bytes [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs [cons bytes p] oqs ir er pm
+
 ;; Phase 25: track an outbound question we asked. `our-q-pos` is the
 ;; position we used in the desc:answer of our outbound op:deliver;
 ;; `local-promise-id` is the vat-side promise that will be resolved
@@ -1702,6 +1711,47 @@ defn release-import [export-pos cnt cs]
           let cs' := [conn-state [conn-vat cs] st' [conn-emitted cs] [conn-aborted? cs]]
             let bytes := [gc-export-bytes export-pos cnt]
               conn-release cs' [cons bytes [nil String]]
+
+;; ===========================================================
+;; Phase 50: declarative release queue
+;; ===========================================================
+;;
+;; release-import (above) is the imperative form: it returns a
+;; ConnRelease whose bytes the caller threads into the outbound
+;; stream. That works for one-shot release calls, but doesn't
+;; integrate naturally with the pump-on-each-step flow — every
+;; release-import call requires the caller to do its own bytes
+;; concatenation.
+;;
+;; This phase adds the declarative form: the caller stages a
+;; release on bridge state via bs-queue-release-import, and the
+;; next pump-outbound flushes the staged op:gc-export bytes
+;; alongside any newly-resolved question replies (because
+;; pump-outbound already prepends bs-pending-out to its result).
+;;
+;; Shape symmetry: this is exactly how bridge-state-with-our-session
+;; pre-queues the start-session reply for flush on the first pump.
+;; Phase 50 generalises that pre-queue mechanism to "any outbound
+;; bytes the caller wants flushed" — op:gc-export is the first
+;; consumer.
+
+spec bs-queue-release-import Nat Nat BridgeState -> BridgeState
+  :doc "Phase 50: stage an op:gc-export N k for flush on next pump, AND decrement imports-refcount[N] by k. Declarative form of release-import — returns the updated bridge state instead of immediate bytes."
+defn bs-queue-release-import [export-pos cnt st]
+  let bytes := [gc-export-bytes export-pos cnt]
+    [bs-append-pending-out bytes [bs-decr-import export-pos cnt st]]
+
+;; ConnectionState wrapper around bs-queue-release-import. Returns
+;; the updated CS without producing bytes — the next connection-step
+;; flushes them via pump-outbound.
+spec connection-queue-release-import Nat Nat ConnectionState -> ConnectionState
+  :doc "Phase 50: declarative release-import on a ConnectionState. Aborted-aware (no-op if connection is aborted)."
+defn connection-queue-release-import [export-pos cnt cs]
+  match [conn-aborted? cs]
+    | true  -> cs
+    | false ->
+        let st' := [bs-queue-release-import export-pos cnt [conn-bridge-state cs]]
+          conn-state [conn-vat cs] st' [conn-emitted cs] [conn-aborted? cs]
 
 ;; ===========================================================
 ;; Phase 39: questioner-side promise pipelining (sender)

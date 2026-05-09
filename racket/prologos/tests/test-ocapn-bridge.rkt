@@ -1918,3 +1918,64 @@
                   s2    (connection-step (op-gc-export (suc zero) zero) cs0))
               (length (bs-listeners (conn-bridge-state (conn-step-state s2))))))")
    "1N"))
+
+;; Phase 50: declarative release queue. release-import (Phase 34e) is
+;; the imperative form. bs-queue-release-import / connection-queue-
+;; release-import stage the gc-export bytes on bridge state's
+;; pending-out for flush on the next pump-outbound. Closes the
+;; "release fits naturally into the connection-step flow" loop.
+
+(test-case "bridge/bs-queue-release-import appends gc-export bytes to pending-out (Phase 50)"
+  ;; Stage release of import 5, count 2. pending-out should contain
+  ;; one byte-string (the gc-export wire bytes).
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc (suc zero))))) bridge-state-empty)
+                  st1 (bs-queue-release-import (suc (suc (suc (suc (suc zero))))) (suc (suc zero)) st0))
+              (length (bs-pending-out st1))))")
+   "1N"))
+
+(test-case "bridge/bs-queue-release-import decrements imports-refcount (Phase 50)"
+  ;; Increment import 3 once (refcount=1), queue-release count=1 → 0.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc zero))) bridge-state-empty)
+                  st1 (bs-queue-release-import (suc (suc (suc zero))) (suc zero) st0))
+              (bs-lookup-import-refcount (suc (suc (suc zero))) st1)))")
+   "0N"))
+
+(test-case "bridge/connection-queue-release-import flushes via next pump (Phase 50)"
+  ;; Queue a release on a ConnectionState; verify next connection-step
+  ;; emits the gc-export bytes via pump's pending-out flush.
+  (check-contains
+   (run-last
+    "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc zero)))) bridge-state-empty)
+                  cs0 (conn-state empty-vat st0 (nil Nat) false)
+                  cs1 (connection-queue-release-import (suc (suc (suc (suc zero)))) (suc zero) cs0)
+                  s2  (connection-step (op-gc-export (suc zero) zero) cs1))
+              (length (conn-step-outbound s2))))")
+   "1N"))
+
+(test-case "bridge/connection-queue-release-import emitted bytes target export-pos (Phase 50)"
+  ;; Verify the emitted bytes are the canonical op:gc-export wire shape.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (st0 (bs-incr-import (suc (suc (suc (suc zero)))) bridge-state-empty)
+                    cs0 (conn-state empty-vat st0 (nil Nat) false)
+                    cs1 (connection-queue-release-import (suc (suc (suc (suc zero)))) (suc zero) cs0)
+                    s2  (connection-step (op-gc-export (suc zero) zero) cs1))
+                (framed-concat (conn-step-outbound s2))))")))
+  (check-true (regexp-match? #rx"op:gc-export" got)
+              (format "expected op:gc-export in flushed bytes; got: ~s" got))
+  (check-true (regexp-match? #rx"4\\+" got)
+              (format "expected export-pos 4 (Nat) in bytes; got: ~s" got)))
+
+(test-case "bridge/connection-queue-release-import is no-op when aborted (Phase 50)"
+  ;; If connection is already aborted, queueing should be a no-op.
+  (check-contains
+   (run-last
+    "(eval (let (cs0 (conn-state empty-vat bridge-state-empty (nil Nat) true)
+                  cs1 (connection-queue-release-import (suc (suc (suc zero))) (suc zero) cs0))
+              (length (bs-pending-out (conn-bridge-state cs1)))))")
+   "0N"))
