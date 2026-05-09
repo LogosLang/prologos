@@ -205,31 +205,48 @@
 
 <h2>The Prologos source</h2>
 
-<p>The propagator network shown below is what this Prologos program <em>compiles to</em>. Each <code>defr</code> relation case becomes a propagator; each shared logic variable becomes a cell holding a join-semilattice of bindings; the <code>not</code> in the last clause forces stratification — the elaborator places that propagator in the S1 NAF stratum, gated on quiescence of the monotone S0 stratum.</p>
+<p>The propagator network shown below is what this Prologos program <em>compiles to</em>. Each <code>defr</code> rule case becomes a propagator; each shared logic variable becomes a cell holding a join-semilattice of bindings; the <code>not</code> in the <code>unreachable-from-a</code> clause forces stratification — the well-founded solver places that propagator in the S1 NAF stratum, gated on quiescence of the monotone S0 stratum where <code>path</code> is derived. (The program below is runnable as-is via <code>process-file</code> on a <code>.prologos</code> file.)</p>
 
-<pre class="prologos-source"><span data-line="comment">;; Input facts: 4 directed edges over a 6-vertex graph</span>
-<span data-prop="edge">defr edge
-  | "a" "b"
-  | "b" "c"
-  | "c" "d"
-  | "b" "e"</span>
+<pre class="prologos-source"><span data-line="comment">;; Solver registration — the well-founded engine is required for NAF
+;; against the recursive `path` relation.</span>
+solver wf-solver
+  :semantics well-founded
 
-<span data-prop="vertex">defr vertex
-  | "a" | "b" | "c" | "d" | "e" | "f"</span>
+<span data-line="comment">;; Input facts: 4 directed edges over a 6-vertex graph</span>
+<span data-prop="edge">defr edge [?from ?to]
+  || "a" "b"
+     "b" "c"
+     "c" "d"
+     "b" "e"</span>
+
+<span data-prop="vertex">defr vertex [?v]
+  || "a"
+     "b"
+     "c"
+     "d"
+     "e"
+     "f"</span>
 
 <span data-line="comment">;; Transitive closure of edge — S0 monotone propagation</span>
-defr path
-  <span data-prop="P1">| x y -&gt; (edge x y)                    <span data-line="comment">;; base case</span></span>
-  <span data-prop="P2">| x z -&gt; (edge x y) (path y z)         <span data-line="comment">;; recursive: x→y→…→z</span></span>
+defr path [?from ?to]
+  <span data-prop="P1">&amp;&gt; (edge from to)                    <span data-line="comment">;; base case</span></span>
+  <span data-prop="P2">&amp;&gt; (edge from mid) (path mid to)     <span data-line="comment">;; recursive: from →…→ mid →…→ to</span></span>
 
-<span data-line="comment">;; Vertices NOT reachable from "a" — S1 NAF stratum
-;; The 'not' forces stratification; the elaborator gates this propagator
-;; on quiescence of the path relation's S0 derivation.</span>
-<span data-prop="P4">defr unreachable-from-a
-  | x -&gt; (vertex x) (not (path "a" x))</span>
+<span data-line="comment">;; Vertices NOT reachable from "a" — S1 NAF stratum.
+;; The 'not' forces stratification; the well-founded solver places
+;; this propagator on the S1 NAF stratum, gated on quiescence of
+;; path's S0 derivation.</span>
+<span data-prop="P4">defr unreachable-from-a [?x]
+  &amp;&gt; (vertex x) (not (path "a" x))</span>
 
-<span data-line="comment">;; Query — drives derivation</span>
-solve (unreachable-from-a x)</pre>
+<span data-line="comment">;; Queries — drive the derivation</span>
+solve (path "a" dest)
+<span data-line="comment">;; =&gt; [{:dest "b"} {:dest "c"} {:dest "d"} {:dest "e"}]</span>
+
+solve-with wf-solver (unreachable-from-a x)
+<span data-line="comment">;; =&gt; [{:x "a"} {:x "f"}]
+;;   "a" is unreachable from itself (no self-edge in this graph);
+;;   "f" is isolated (no chain of edges reaches it).</span></pre>
 
 <div class="controls">
   <button id="reset" type="button">⟲ Reset</button>
