@@ -69,6 +69,38 @@
 - **Pipeline `|>` and `compose`** for chaining named functions -- `|> 5 inc dbl sqr` is idiomatic.
 - **Eval is implicit** -- write `[f x]` not `eval [f x]`. Top-level expressions just evaluate.
 - **Don't wrap outer tree** -- top-level forms are implicit.
+- **Keep multi-arg applications on a single line.** A continuation line whose first token is a bare identifier is parsed as a sibling form, not as more args to the previous head. Pitfalls #36 and #38 (goblin-pitfalls log) both stem from this:
+  ```
+  ;; WRONG — `es as qs p oqs ir er pm` is parsed as an application of `es` to 7 args
+  bridge-state [list-filter-listeners-by-notified ls notified]
+               es as qs p oqs ir er pm
+
+  ;; WRONG — `let X := EXPR` value can't span lines; reader sees no value for X
+  let step1 := [captp-incoming-with-state op1 [alloc-vat sa]
+                 [bridge-state-with-our-session ver loc]]
+
+  ;; RIGHT — all positional args on the function-head line; break BEFORE a bracketed sub-call (which becomes the last arg) if the line gets too long
+  bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm
+  ```
+  If a line is unavoidably long, factor a sub-expression to a separate `let` or top-level helper rather than splitting positional args.
+
+- **Single-arg `defn` over a `data` type uses `defn name [arg] match arg | ...`, NOT multi-arity `defn name | [pat1] -> ... | [pat2] -> ...`.** The latter shape can cause the elaborator to lift a phantom 2nd parameter (pitfall #37 in goblin-pitfalls). Multi-arity `defn` is fine for 2+ args; for one-arg over a data type, prefer `match`:
+  ```
+  ;; WRONG — inferred type becomes `PromiseState SyrupValue -> [Option SyrupValue]` (2 args)
+  spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+  defn resolution-syrup-of-pst
+    | [pst-unresolved _] -> none
+    | [pst-broken     r] -> some [wrap-error r]
+    | [pst-fulfilled  v] -> some v
+
+  ;; RIGHT — inferred type matches the spec
+  spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+  defn resolution-syrup-of-pst [pst]
+    match pst
+      | pst-unresolved _ -> none
+      | pst-broken     r -> some [wrap-error r]
+      | pst-fulfilled  v -> some v
+  ```
 
 ## Type annotations
 

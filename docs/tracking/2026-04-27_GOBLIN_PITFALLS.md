@@ -1520,6 +1520,274 @@ the workaround still works:
   on multi-arg helpers calling `captp-incoming-with-state`. Worked
   around by pulling helpers down to 2-3 args via `BridgeStep`.
 
+---
+
+### #36 — Multi-line constructor / function application: continuation args eaten as inner application (2026-05-08, real bug)
+
+**Symptom.** Calling a constructor or function with N args, where
+the args are split across multiple lines, parses the *continuation*
+args as a single nested application instead of N separate args:
+
+```prologos
+;; 9-field BridgeState constructor split across two lines
+defn bs-gc-listeners-by-notified
+  | notified [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state [list-filter-listeners-by-notified ls notified]
+                   es as qs p oqs ir er pm                  ;; ← BROKEN
+```
+
+The body call gets parsed as `bridge-state` applied to TWO args:
+the first `[list-filter-listeners-by-notified ls notified]`, and
+the second `[es as qs p oqs ir er pm]` (an APPLICATION
+of `es` to seven args). `defn` then defines `bs-gc-listeners-by-
+notified` with the wrong arity, and downstream callers report
+`Unbound variable: bs-gc-listeners-by-notified` (because the def
+silently failed to bind anything sensible).
+
+The same pattern bit Phase 41 with the 9-field `bridge-state`
+reconstruction in `bs-add-pipeline-msg` — solved at the time by
+putting `er` and `pm` on separate lines, which happens to work,
+but the load-bearing constraint is "all positional args on the
+SAME line as the function head."
+
+**Workaround.** Inline ALL positional args of a multi-arg call onto
+the same line as the function head:
+
+```prologos
+defn bs-gc-listeners-by-notified
+  | notified [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state [list-filter-listeners-by-notified ls notified] es as qs p oqs ir er pm
+```
+
+If the line is too long, break BEFORE a non-positional sub-application
+(the bracketed call) instead of mid-positional-list. The pre-existing
+`bs-gc-pipelined-msgs-by-emitted` works because the bracketed sub-call
+appears LAST and the trailing arg is the only continuation:
+
+```prologos
+defn bs-gc-pipelined-msgs-by-emitted
+  | emitted [bridge-state ls es as qs p oqs ir er pm] ->
+      bridge-state ls es as qs p oqs ir er
+        [list-filter-pipe-by-emitted pm emitted]                 ;; OK — the sub-call is the last arg
+```
+
+What does NOT work: a continuation line whose first token is a
+plain identifier (like `es as qs p oqs ir er pm` above) — it gets
+read as a fresh application.
+
+**Cause.** Layout-rule interpretation of multi-arg application.
+The reader treats the continuation line as a fresh expression
+because layout indent groups it as a sibling form, not a
+continuation of the parent argument list. Possibly fixable by
+having WS-mode require explicit `\` continuation or by detecting
+"line starts at greater indent than the function head" and
+treating it as continuation — neither is currently the rule.
+
+**Diagnosis.** Silent until you hit "Unbound variable" downstream
+or a runtime arity mismatch ("Too many arguments to X" with the
+wrong count, e.g. "given 4, expected 3"). The failure cascades:
+the broken `defn` doesn't bind, so every caller — including in
+test files — reports the function as unbound.
+
+**Discovered.** OCapN Phase 48 (2026-05-08, commit `a990e2f`).
+~10 minutes diagnosis after seeing repeated `Unbound variable:
+bs-gc-listeners-by-notified` errors despite the spec/defn pair
+being syntactically well-formed. Cleared by inspecting the elaborated
+body in `process-file` debug output: `[bridge-state [filter] [es as qs ...]]`
+— two args, not nine, made the bug visible.
+
+**Verdict.** Real WS-mode reader/parser bug. The silent-drop
+behavior is the worst part. Recommended fix: a "continuation lines
+must start at less-than-or-equal indent" rule, or a syntax error
+when a `defn` body produces a malformed term.
+
+For now: any multi-arg constructor/function call must inline all
+positional args onto the function-head line. If the line gets long,
+break BEFORE a bracketed sub-application (the last arg), not
+mid-args.
+
+---
+
+### #37 — Single-arg multi-arity `defn` over `data` patterns sometimes infers a phantom 2nd parameter (2026-05-08, real bug)
+
+**Symptom.** Defined a 1-arg helper that destructures a single
+`PromiseState`:
+
+```prologos
+spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+defn resolution-syrup-of-pst
+  | [pst-unresolved _] -> none
+  | [pst-broken     r] -> some [wrap-error r]
+  | [pst-fulfilled  v] -> some v
+```
+
+The elaboration trace reported the inferred type as
+
+```
+resolution-syrup-of-pst : PromiseState SyrupValue -> [Option SyrupValue]
+```
+
+i.e. **two** args, not one — the spec annotation was apparently
+ignored. Callers that pass one arg got "Unbound variable" downstream
+because the elaborator's view of the function arity didn't match
+the call sites.
+
+The IDENTICAL surface shape works in `outbound-from-resolution`
+(in the same module) — the difference is that `outbound-from-resolution`
+has TWO patterns per clause, so the multi-arity dispatcher isn't
+reduced to "one pattern per clause":
+
+```prologos
+spec outbound-from-resolution Nat PromiseState -> [Option String]
+defn outbound-from-resolution
+  | _   [pst-unresolved _] -> none                       ;; OK — 2 patterns
+  | pid [pst-broken     r] -> some [outbound-deliver-bytes pid [wrap-error r]]
+  | pid [pst-fulfilled  v] -> some [outbound-deliver-bytes pid v]
+```
+
+**Workaround.** Switch to the explicit-bound + `match` form. Same
+semantics, correct inferred type:
+
+```prologos
+spec resolution-syrup-of-pst PromiseState -> [Option SyrupValue]
+defn resolution-syrup-of-pst [pst]
+  match pst
+    | pst-unresolved _ -> none
+    | pst-broken     r -> some [wrap-error r]
+    | pst-fulfilled  v -> some v
+```
+
+This pinned the inferred type to `PromiseState -> [Option SyrupValue]`
+(matching the spec). The trace's body-form differs too: the working
+`match` form produces `[fn [x ...] [reduce x ...]]`; the broken
+multi-arity form produced an extra `fn` wrapper that picked up an
+extra inferred parameter from the body.
+
+**Cause.** Speculative — narrowing-style multi-arity `defn` with
+exactly one pattern per clause (and the patterns being 1-arg `data`
+constructors) seems to cause the elaborator to lift one of the body
+expressions' free-floating type parameters into an additional pi
+binder. The first clause's `none` (which has type `Option a` with
+unsolved `a`) appears related: when `a` doesn't get pinned by a
+bracketed type annotation (`[none SyrupValue]` is what the existing
+`outbound-from-resolution` uses on bare-`none`-style clauses, but
+through `some [outbound-deliver-bytes ...]` with a String result),
+the elaborator may be solving `a` against the wrong context.
+
+**Confirmed isolation.** Tried `[none SyrupValue]` (the explicit
+type-annotated form) in the multi-arity `resolution-syrup-of-pst`
+body: same phantom-arg result. Only switching to `defn name [pst]
+match pst | ...` cleared it. So the bug is specifically in the
+multi-arity-with-one-pattern shape, not in `none`'s type inference.
+
+**Discovered.** OCapN Phase 48 (2026-05-08, commit `a990e2f`).
+~5 minutes diagnosis. Cost-bearing because the cascading "Unbound
+variable" errors were misleading — the helper *was* defined, just
+with the wrong arity, so callers like `pump-one` couldn't link.
+
+**Verdict.** Real elaborator bug. Workaround is mechanical (switch
+to `match` form), but the silent-bad-arity behavior is the dangerous
+part. Recommended: when a `defn`'s inferred type doesn't match its
+spec annotation, raise a hard error. Currently the spec is treated
+as documentation; the inferred type wins.
+
+For now: when writing a 1-arg `defn` that destructures a `data`
+type with multiple constructors, prefer the `defn name [arg] match
+arg | ...` form over `defn name | [pat1] -> ... | [pat2] -> ...`.
+For 2+ args, the multi-arity form is fine (per #18 caveats).
+
+---
+
+### #38 — `let X := EXPR` body can't span multiple lines (2026-05-08, real bug)
+
+**Symptom.** A `let` binding whose value expression spans multiple
+lines silently fails parsing. The error is specifically:
+
+```
+let: let :=: missing value after := for step2
+```
+
+even though there IS a value — it just continues onto the next line:
+
+```prologos
+;; BROKEN:
+let step1 := [captp-incoming-with-state op1 [alloc-vat sa]
+               [bridge-state-with-our-session our-ver our-loc]]
+  let step2 := ...
+```
+
+The reader sees `step1 :=` then a layout-detached fragment
+starting with `[captp-incoming-with-state ...]` whose continuation
+on the next line `[bridge-state-with-our-session ...]` it parses
+as a SIBLING let-binding rather than a continuation of step1's
+value. By the time it gets to `let step2 :=`, the parser is in
+a state where it's expecting a value for step2 and sees nothing.
+
+The error message is misleading because the line that "lacks a
+value" (step2) is fine — the actual broken line is step1, the
+continuation of which has been misclassified.
+
+**Workaround.** Inline the value onto a single line per `let`
+binding. If the value is too long, factor a sub-expression into a
+nested `let` or a top-level helper:
+
+```prologos
+;; OK:
+let step1 := [captp-incoming-with-state op1 [alloc-vat sa] [bridge-state-with-our-session our-ver our-loc]]
+  let step2 := [captp-incoming-with-state op2 [bridge-step-vat step1] [bridge-step-state step1]]
+    ...
+```
+
+What does NOT work: a `let X := [foo arg1` on one line, `arg2]`
+on the next, even if the second line is indented past the `:=`.
+
+**Relation to #21.** Same root cause shape as #21 (multi-line
+clause body produces match-fail) — both are about WS-mode layout
+not propagating multi-arg application across lines. Different
+binding form (`let` vs `defn` clause body), same fix (collapse to
+one line). Worth recording as a separate entry because the error
+message is different (a hard error here, a silent runtime hole in
+#21) and the workarounds are slightly different (you can split a
+clause body by putting the body on the LINE BELOW the `->`; with
+`let X := EXPR` the binder and value share a line and you can't
+break in between).
+
+**Discovered.** OCapN Phase 49 (2026-05-08, commit `532a1e4`),
+adding `drive-break-with-two-ops` to bridge-interop-helpers.
+~5 minutes diagnosis after the misleading "missing value after :="
+error pointed at the wrong line. Realised the previous let's value
+was multi-line and inlined it; problem cleared.
+
+**Verdict.** Real WS-mode reader bug, of the same family as #21
+and #36. Continuation lines for multi-arg applications don't
+work in any of the binding contexts (clause body, `let` value,
+multi-arg ctor application). Workaround is mechanical (one line)
+but ergonomically poor for verbose function calls.
+
+For now: `let X := EXPR` value must fit on one line; if it
+doesn't, factor a sub-expression to a separate `let` or top-level
+helper.
+
+---
+
+### Recurrences during Phase 47-49 (2026-05-08, no new pitfall — confirms existing entries)
+
+For the record, the Phase 47/48/49 OCapN work hit two PRE-EXISTING
+pitfalls multiple times:
+
+- **Pitfall #16** (forward references). Hit when adding
+  `list-filter-pipe-by-emitted` near the bridge's GC helpers — it
+  used `member-nat?` defined later in the same file. The GC helpers
+  had to be moved to AFTER `member-nat?`'s definition. Standard
+  one-pass FP language convention; entry already has it correctly.
+
+- **Pitfall #36 ↔ #38** the multi-line continuation hazards
+  recurred multiple times across Phase 47 (`bs-gc-pipelined-msgs-
+  by-emitted` initially split fields; collapsed before commit) and
+  Phase 49 (`drive-break-with-two-ops` initial form had multi-line
+  `let` values). Both classes of bug have the same workaround:
+  inline to one line.
+
 
 
 
