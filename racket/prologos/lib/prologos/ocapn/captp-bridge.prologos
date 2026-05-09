@@ -996,6 +996,35 @@ defn dispatch-incoming-answer [qpos args ap v st]
     | none      -> dispatch-pipeline-on-our-q qpos args ap v st
     | some pid  -> bridge-step [resolve-promise pid args v] st
 
+;; Phase 51: op:listen late-registration handling.
+;;
+;; When peer sends op:listen for a target promise, the target may
+;; already have settled (peer's view is async; their op:listen may
+;; arrive after our pump-outbound already emitted the resolution).
+;; Two cases:
+;;
+;;   target unsettled  → add listener to bs-listeners as usual; the
+;;                       next pump-outbound walks listeners during
+;;                       resolution emission.
+;;   target settled    → stage an immediate listener-notify-bytes on
+;;                       pending-out (flushed by the next pump). Do
+;;                       NOT add to bs-listeners — pid is already in
+;;                       `emitted`, so the pump's walk would skip it,
+;;                       leaving the listener stuck forever.
+;;
+;; Without this handler, late-arriving op:listen for a settled promise
+;; never fires the notification; the listener entry leaks because no
+;; future pump-outbound iteration touches it.
+spec bs-handle-listen-with-late-fire Nat Nat Vat BridgeState -> BridgeState
+defn bs-handle-listen-with-late-fire [tgt resolver v st]
+  match [lookup-promise tgt v]
+    | none -> bs-add-listener tgt resolver st
+    | some pst ->
+        match [resolution-syrup-of-pst pst]
+          | none         -> bs-add-listener tgt resolver st
+          | some payload ->
+              bs-append-pending-out [listener-notify-bytes resolver payload] st
+
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
   :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 + 34b."
 defn captp-incoming-with-state
@@ -1019,7 +1048,15 @@ defn captp-incoming-with-state
       ;; will flush them. State-preserving here, emission deferred.
       bridge-step v st
   | [op-listen tgt resolver] v st ->
-      bridge-step v [bs-add-listener tgt resolver st]
+      ;; Phase 51: late-registration handling. If the target promise
+      ;; has ALREADY settled by the time the op:listen arrives, the
+      ;; pump-outbound walk would skip it (the `emitted` set gates
+      ;; re-emission). Register the listener anyway so the next pump
+      ;; sees it AND stage an immediate notification on pending-out
+      ;; — without this, a "late" op:listen never fires because the
+      ;; promise's pump pass already happened.
+      bridge-step v
+        [bs-handle-listen-with-late-fire tgt resolver v st]
   | [op-gc-export pos cnt] v st ->
       ;; Phase 36: peer dropped k references to our export N.
       ;; Decrement exports-refcount[N] by k (saturating at 0) AND

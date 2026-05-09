@@ -1979,3 +1979,123 @@
                   cs1 (connection-queue-release-import (suc (suc (suc zero))) (suc zero) cs0))
               (length (bs-pending-out (conn-bridge-state cs1)))))")
    "0N"))
+
+;; Phase 51: multi-listener ordering + late-registration handling.
+;;
+;; Two refinements over Phase 48:
+;;   (a) verify multiple listeners on the same pid fire in INSERTION
+;;       order — first-registered fires first.
+;;   (b) op:listen arriving AFTER the target promise has settled
+;;       must fire immediately (Phase 48 silently dropped late
+;;       registrations because pump-outbound's `emitted` set gates
+;;       per-pid emission).
+
+(test-case "bridge/multi-listener notify-loop fires all and emits deterministic order (Phase 51)"
+  ;; Add 3 listeners on the same pid with resolver-pos 3, 5, 7.
+  ;; Insertion order in the test source: 7-innermost, 5-middle,
+  ;; 3-outermost. bs-add-listener cons-at-head means the resulting
+  ;; list is [3, 5, 7] (outermost-first). listener-notify-loop walks
+  ;; head→tail PREPENDING bytes — so the emitted bytes order is the
+  ;; REVERSE of the in-list order: 7, 5, 3. That is, the LAST cons
+  ;; (= outermost = 3) fires LAST in the wire output. The chosen
+  ;; ordering invariant is "outermost-bs-add-listener emits last."
+  ;; Both orderings are spec-valid (OCapN doesn't mandate one); we
+  ;; pin THIS one as a regression check so callers know what to
+  ;; expect.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    st0   (bs-add-question (suc (suc zero)) pid
+                            (bs-add-listener pid (suc (suc (suc zero)))
+                              (bs-add-listener pid (suc (suc (suc (suc (suc zero)))))
+                                (bs-add-listener pid (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty))))
+                    v1    (resolve-promise pid (syrup-string \"r\") v0)
+                    cs0   (conn-state v1 st0 (nil Nat) false)
+                    s2    (connection-step (op-gc-export (suc zero) zero) cs0))
+                (framed-concat (conn-step-outbound s2))))")))
+  (define m3 (regexp-match-positions #rx"desc:export3\\+" got))
+  (define m5 (regexp-match-positions #rx"desc:export5\\+" got))
+  (define m7 (regexp-match-positions #rx"desc:export7\\+" got))
+  ;; All three listeners produced bytes.
+  (check-true (and m3 m5 m7 #t)
+              (format "expected all three listeners in bytes; got: ~s" got))
+  ;; Pinned ordering: 7 first, then 5, then 3.
+  (check-true (and m7 m5 (< (car (car m7)) (car (car m5))))
+              (format "expected L7 before L5; got positions: ~s, ~s" m7 m5))
+  (check-true (and m5 m3 (< (car (car m5)) (car (car m3))))
+              (format "expected L5 before L3; got positions: ~s, ~s" m5 m3)))
+
+(test-case "bridge/op:listen on already-settled promise fires immediately (Phase 51)"
+  ;; Resolve pid first; THEN send op:listen. Without Phase 51 the
+  ;; listener would be added to bs-listeners but never fire (pump
+  ;; gates pid via `emitted`). With Phase 51 the late-listen handler
+  ;; stages immediate notification bytes on pending-out and skips
+  ;; bs-add-listener (avoids the leak).
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
+                  cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          cs0))
+              (length (conn-step-outbound s1))))")
+   "1N"))
+
+(test-case "bridge/late op:listen does NOT add to bs-listeners (Phase 51)"
+  ;; Verify the late-listen path skips bs-add-listener entirely —
+  ;; bs-listeners stays empty. The notification fires once via
+  ;; pending-out; no entry is left over.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  v1    (resolve-promise pid (syrup-string \"already-resolved\") v0)
+                  cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "0N"))
+
+(test-case "bridge/op:listen on UNSETTLED promise still adds to bs-listeners (Phase 51)"
+  ;; Regression: late-fire path only kicks in for settled promises;
+  ;; the normal-case op:listen for an unsettled promise must still
+  ;; register the listener.
+  (check-contains
+   (run-last
+    "(eval (let (alloc (fresh-promise empty-vat)
+                  pid   (alloc-id alloc)
+                  v0    (alloc-vat alloc)
+                  cs0   (conn-state v0 bridge-state-empty (nil Nat) false)
+                  s1    (connection-step
+                          (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                          cs0))
+              (length (bs-listeners (conn-bridge-state (conn-step-state s1))))))")
+   "1N"))
+
+(test-case "bridge/late op:listen carries Error wrapper on broken promise (Phase 51)"
+  ;; Broken-promise variant of the late-fire path. Reason wrapped in
+  ;; <Error _> per resolution-syrup-of-pst.
+  (define got
+    (extract-value-bytes
+     (run-last
+      "(eval (let (alloc (fresh-promise empty-vat)
+                    pid   (alloc-id alloc)
+                    v0    (alloc-vat alloc)
+                    v1    (break-promise pid (syrup-string \"oops\") v0)
+                    cs0   (conn-state v1 bridge-state-empty (nil Nat) false)
+                    s1    (connection-step
+                            (op-listen pid (suc (suc (suc (suc (suc (suc (suc zero))))))))
+                            cs0))
+                (framed-concat (conn-step-outbound s1))))")))
+  (check-true (regexp-match? #rx"desc:export7" got)
+              (format "expected listener notification to peer's resolver 7; got: ~s" got))
+  (check-true (regexp-match? #rx"5'Error" got)
+              (format "expected Error wrapper on broken late-fire; got: ~s" got)))
