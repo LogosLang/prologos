@@ -1,0 +1,39 @@
+ns ocapn-on-hybrid-6
+
+;; Sixth OCapN program — MULTI-ARG match (two SyrupValue arguments).
+;;
+;; promise.prologos's `fulfill` defn pattern-matches on TWO arguments
+;; simultaneously:
+;;   defn fulfill
+;;     | v [pst-unresolved _] -> pst-fulfilled v
+;;     | _ [pst-fulfilled  x] -> pst-fulfilled x
+;;     | _ [pst-broken     x] -> pst-broken     x
+;;
+;; This stresses the elaborator's multi-pattern compile path AND
+;; the kernel's match dispatch when the scrutinee is a *pair* of
+;; values being inspected together.
+;;
+;; We open-code a small version with a custom data type to keep the
+;; test self-contained.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; A tiny state machine with two ctors.
+data Two
+  one : SyrupValue
+  two : SyrupValue -> SyrupValue
+
+;; Multi-arg defn — match on BOTH arguments. The first arg
+;; contributes a pure binding; the second drives the dispatch.
+spec pick SyrupValue Two -> SyrupValue
+defn pick
+  | v [one _]   -> v
+  | _ [two _ y] -> y
+
+;; Three call shapes, exercising both arms.
+def r1 := [pick syrup-null [one [syrup-nat zero]]]            ;; → syrup-null (first arm)
+def r2 := [pick syrup-null [two [syrup-nat zero] [syrup-bool true]]]  ;; → syrup-bool true (second arm)
+def r3 := [tagged? r1]   ;; should be false — syrup-null is not tagged
+def r4 := [bool? r2]     ;; should be true  — syrup-bool is bool
+
+def main := [pair r3 r4]

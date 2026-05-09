@@ -1,0 +1,9 @@
+;; Pow-of-2 via repeated doubling. pow2(8) = 256.
+
+spec pow2 Int -> Int
+defn pow2 [n]
+  match [int-eq n 0]
+    | true  -> 1
+    | false -> [int* 2 [pow2 [int- n 1]]]
+
+def main : Int := [pow2 8]

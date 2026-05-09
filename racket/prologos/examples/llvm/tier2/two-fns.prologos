@@ -1,0 +1,9 @@
+spec add Int Int -> Int
+defn add [x y] [int+ x y]
+
+spec mul Int Int -> Int
+defn mul [x y] [int* x y]
+
+def main : Int := [add [mul 2 3] [mul 4 5]]
+
+;; :expect-exit 26

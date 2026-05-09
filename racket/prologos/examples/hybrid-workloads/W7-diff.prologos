@@ -1,0 +1,27 @@
+;; Symbolic differentiation. d/dx ((x+3)*(x+5)) — node count of result.
+
+data Expr
+  evar
+  econst : Int
+  eadd   : Expr -> Expr
+  emul   : Expr -> Expr
+
+spec diff Expr -> Expr
+defn diff [e]
+  match e
+    | evar       -> [econst 1]
+    | econst _   -> [econst 0]
+    | eadd a b   -> [eadd [diff a] [diff b]]
+    | emul a b   -> [eadd [emul [diff a] b] [emul a [diff b]]]
+
+spec size Expr -> Int
+defn size [e]
+  match e
+    | evar       -> 1
+    | econst _   -> 1
+    | eadd a b   -> [int+ 1 [int+ [size a] [size b]]]
+    | emul a b   -> [int+ 1 [int+ [size a] [size b]]]
+
+def expr : Expr := [emul [eadd evar [econst 3]] [eadd evar [econst 5]]]
+
+def main : Int := [size [diff expr]]

@@ -1,0 +1,10 @@
+;; Regression: native fire-fns must check TAG_BOT inputs.
+;; Pre-fix: int-eq fires prematurely with int-mod's still-bot output
+;; (payload_of(bot)=0, so 0==0 returns TRUE), latching the wrong arm.
+;; Post-fix: native fire-fns return bot when any input is bot, letting
+;; them fire correctly next round.
+;; int-mod 1 2 = 1, int-eq 1 0 = false -> false arm = 0.
+def main : Int :=
+  match [int-eq [int-mod 1 2] 0]
+    | true  -> [int+ 0 1]
+    | false -> 0

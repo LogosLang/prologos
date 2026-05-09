@@ -1,0 +1,16 @@
+ns ocapn-on-hybrid-11
+
+;; Eleventh OCapN program — exercises the newly-pulled
+;; prologos::ocapn::locator module on the kernel.
+;;
+;; Locator has Transport (2 ctors) + (likely) Locator-record + a few
+;; predicates / selectors. We exercise transport-name on both tags.
+
+require [prologos::ocapn::locator :refer-all]
+
+;; transport-name is a defn that pattern-matches on Transport.
+def loop-name := [transport-name tr-loopback]
+def tcp-name  := [transport-name tr-tcp-testing-only]
+
+;; main combines into a pair to capture both.
+def main := [pair loop-name tcp-name]

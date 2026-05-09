@@ -1,0 +1,3 @@
+;; natrec with motive Int — simple counter: count up from 0 to suc^3 zero.
+;; rec n = if n=zero then 0 else suc (rec (n-1))   -- lifted to Int
+def main : Int := [natrec Int 0 [fn [_n : Nat] [fn [acc : Int] [int+ acc 1]]] [suc [suc [suc zero]]]]

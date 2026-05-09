@@ -1,0 +1,4 @@
+;; Regression: callback (int-mod) feeds native (int-eq).
+;; Pre-fix: returns true (wrong); post-fix: returns false.
+;; int-mod 7 3 = 1; int-eq 1 0 = false.
+def main : Bool := [int-eq [int-mod 7 3] 0]

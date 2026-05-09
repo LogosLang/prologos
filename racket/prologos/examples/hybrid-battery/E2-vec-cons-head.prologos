@@ -1,0 +1,1 @@
+def main : Int := [vhead [vcons 42 vnil]]

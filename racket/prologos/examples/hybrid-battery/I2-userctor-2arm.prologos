@@ -1,0 +1,9 @@
+;; 2-arm match.
+data RB := red | blue
+
+spec score RB -> Int
+defn score
+  | red  -> 1
+  | blue -> 2
+
+def main : Int := [int+ [score red] [score blue]]

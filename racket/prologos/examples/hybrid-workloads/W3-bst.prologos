@@ -1,0 +1,29 @@
+;; BST insert + find-min via leftmost descent.
+
+data BST
+  tnil
+  tnode : Int -> BST -> BST
+
+spec bst-insert Int -> BST -> BST
+defn bst-insert [x t]
+  match t
+    | tnil         -> [tnode x tnil tnil]
+    | tnode y l r  -> match [int-lt x y]
+                        | true  -> [tnode y [bst-insert x l] r]
+                        | false -> [tnode y l [bst-insert x r]]
+
+spec bst-find-min BST -> Int
+defn bst-find-min
+  | tnil          -> 0
+  | tnode y l _   -> match l
+                       | tnil       -> y
+                       | tnode _ _ _ -> [bst-find-min l]
+
+def t : BST := [bst-insert 7
+                 [bst-insert 2
+                   [bst-insert 5
+                     [bst-insert 1
+                       [bst-insert 9
+                         [bst-insert 3 tnil]]]]]]
+
+def main : Int := [bst-find-min t]

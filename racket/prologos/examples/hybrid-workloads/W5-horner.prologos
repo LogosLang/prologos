@@ -1,0 +1,18 @@
+;; Horner's-method polynomial evaluation.
+;;   p(x) = sum c_i x^i; coefficients are an IntList head-first.
+;;   horner [c0,c1,c2] x = c0 + x*(c1 + x*(c2 + x*0))
+;; Evaluates 1 + 2x + 3x^2 at x=4 = 1 + 8 + 48 = 57.
+
+data IntList
+  hnil
+  hcons : Int -> IntList
+
+spec horner IntList -> Int -> Int
+defn horner [coeffs x]
+  match coeffs
+    | hnil       -> 0
+    | hcons c rs -> [int+ c [int* x [horner rs x]]]
+
+def coeffs : IntList := [hcons 1 [hcons 2 [hcons 3 hnil]]]
+
+def main : Int := [horner coeffs 4]

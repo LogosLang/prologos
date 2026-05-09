@@ -1,0 +1,39 @@
+ns ocapn-on-hybrid-3
+
+;; Third OCapN program — function definition + call.
+;;
+;; Defines a small function that pattern-matches on a SyrupValue
+;; (forwarding through the existing tagged? predicate). Calls it
+;; twice with different inputs. Exercises:
+;;   - User-defined function (defn) with an expr-reduce body
+;;   - Two compositions exercising the function under different
+;;     ctors (force a different arm path each time).
+;;
+;; Each (eval main) compiles+runs through the kernel. main is a
+;; pair so we capture both invocations in one result.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; Custom predicate: returns true iff the input is a tagged value
+;; AND the tag matches a fixed string. Composes get-tag (returns Option
+;; String) — but to avoid Option-vs-String dispatch we keep simple.
+spec is-tagged-or-promise SyrupValue -> Bool
+defn is-tagged-or-promise
+  | syrup-null         -> false
+  | syrup-bool _       -> false
+  | syrup-nat _        -> false
+  | syrup-int _        -> false
+  | syrup-string _     -> false
+  | syrup-symbol _     -> false
+  | syrup-list _       -> false
+  | syrup-tagged _ _   -> true
+  | syrup-refr _       -> false
+  | syrup-promise _    -> true
+
+;; Two test inputs, different ctors → different match arms.
+def m1 := [is-tagged-or-promise [syrup-tagged "op:deliver" syrup-null]]
+def m2 := [is-tagged-or-promise syrup-null]
+def m3 := [is-tagged-or-promise [syrup-promise zero]]
+
+;; main := combination of the three. Use a pair-of-pairs to capture all.
+def main := [pair m1 [pair m2 m3]]

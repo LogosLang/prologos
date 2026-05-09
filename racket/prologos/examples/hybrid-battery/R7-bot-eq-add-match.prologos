@@ -1,0 +1,6 @@
+;; Same shape as R6 with int+ instead of int-mod. int+ 1 2 = 3,
+;; int-eq 3 0 = false -> false arm = 200.
+def main : Int :=
+  match [int-eq [int+ 1 2] 0]
+    | true  -> 100
+    | false -> 200

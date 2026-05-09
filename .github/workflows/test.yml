@@ -21,6 +21,44 @@ jobs:
       - name: Install dependencies
         run: cd racket/prologos && raco pkg install --auto --skip-installed
 
+      - name: Install rackcheck (for property-based tests)
+        # rackcheck is declared as build-deps (not deps) in info.rkt, so
+        # the previous `raco pkg install --auto` step skips it. Tests
+        # `test-generators.rkt` and `test-properties.rkt` (require rackcheck)
+        # at module load time. Install explicitly so they run on CI.
+        run: raco pkg install --auto --skip-installed rackcheck
+
+      - name: Install Zig (for hybrid runtime kernel)
+        # Zig 0.13 builds runtime/libprologos-runtime-hybrid.so used by
+        # tests/test-preduce-hybrid-differential.rkt. The test gracefully
+        # skips if the .so isn't built; this step ensures CI exercises
+        # the hybrid path.
+        uses: mlugg/setup-zig@v1
+        with:
+          version: '0.13.0'
+
+      - name: Build hybrid runtime kernel
+        run: cd runtime && zig build-lib -dynamic prologos-runtime-hybrid.zig -O ReleaseFast
+
+      - name: Install Node.js (for OCapN interop tests)
+        # The OCapN tests (test-ocapn-{abort,bridge-interop,conversation,
+        # handshake,live-interop,pipelined,rpc}.rkt) spawn Node.js peer
+        # scripts under tools/interop/peer-*.mjs as subprocesses for
+        # bidirectional interop testing. Each test self-skips with
+        # (exit 0) if Node + node_modules are absent, so this step is
+        # what makes them actually run on CI.
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install OCapN interop deps
+        # Fetches @endo/ocapn (the JS reference implementation) into
+        # tools/interop/node_modules/. The test runner's
+        # `interop-deps-present?` check looks for
+        # tools/interop/node_modules/@endo/ocapn/src/syrup/js-representation.js
+        # to gate the OCapN-FFI test suite.
+        run: cd tools/interop && npm install --no-audit
+
       - name: Pre-compile modules
         run: cd racket/prologos && raco make driver.rkt
 

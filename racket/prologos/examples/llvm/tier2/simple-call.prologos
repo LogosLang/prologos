@@ -1,0 +1,6 @@
+spec add Int Int -> Int
+defn add [x y] [int+ x y]
+
+def main : Int := [add 5 7]
+
+;; :expect-exit 12

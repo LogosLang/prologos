@@ -1,0 +1,2 @@
+;; THE one int-binary not yet routed to a native tag.
+def main : Int := [int-mod 17 5]

@@ -1,0 +1,8 @@
+;; Iterative factorial — already in preduce-lite/07 — restated for batch.
+spec fact-iter Int -> Int -> Int
+defn fact-iter [acc n]
+  match [int-le n 1]
+    | true  -> acc
+    | false -> [fact-iter [int* acc n] [int- n 1]]
+
+def main : Int := [fact-iter 1 6]

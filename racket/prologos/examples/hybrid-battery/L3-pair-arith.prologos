@@ -1,0 +1,4 @@
+spec swap-add <Int * Int> -> Int
+defn swap-add [p] [int+ [snd p] [fst p]]
+
+def main : Int := [int+ [swap-add [pair 1 10]] [swap-add [pair 100 1000]]]

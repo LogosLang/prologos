@@ -1,0 +1,23 @@
+spec pell-iter Int -> Int -> Int -> Int
+defn pell-iter [a b n]
+  match [int-lt n 1]
+    | true  -> a
+    | false -> [pell-iter b [int+ [int* 2 b] a] [int- n 1]]
+
+def main : Int := [pell-iter 0 1 5]
+
+;; Pell numbers: P(n) = 2*P(n-1) + P(n-2). Same recurrence shape as
+;; fib but with a multiplication in the iteration step. Pre-F.5 this
+;; failed because step expression `int+ (int* 2 b) a` is depth-2,
+;; while step for `n-1` is depth-1, causing BSP lag mismatch and
+;; wrong values via stale step reads.
+;;
+;; Sprint F.5 (2026-05-01): emit-aligned-propagator! lifts inputs
+;; to a common max depth before each binary/select emission, AND
+;; lower-tail-rec uniformly lifts cond + step-leaves to max-depth
+;; before the per-state-slot selects. Together these guarantee that
+;; all step values reach the selects at the same iteration boundary,
+;; producing correct results for nested-arithmetic step expressions.
+;;
+;; P(5) = 0, 1, 2, 5, 12, 29 → 29.
+;; :expect-exit 29

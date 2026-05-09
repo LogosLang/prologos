@@ -1,0 +1,26 @@
+ns ocapn-on-hybrid-2
+
+;; Second OCapN program — exercises a function call + chained
+;; predicates + selectors + smart constructor.
+;;
+;; The headline AST: (mk-tagged "op:listen" syrup-null) constructs a
+;; syrup-tagged via a smart constructor (which itself is a function
+;; call → static-β + ctor-app); then (tagged? ...) and (get-tag ...)
+;; pull it apart.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; mk-tagged composes: build a syrup-tagged via the smart constructor.
+def msg := [mk-tagged "op:listen" syrup-null]
+
+;; Predicate dispatch on the constructed value.
+def is-tagged? := [tagged? msg]
+
+;; Selector — extract the tag string.
+def the-tag := [get-tag msg]
+
+;; main combines: returns a Bool indicating whether the message is
+;; tagged AND whether its tag is non-none. Pure Phase-10b workload:
+;; ctor construction, predicate match, selector match, all on a value
+;; built via a function call.
+def main := the-tag

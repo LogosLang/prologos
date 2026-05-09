@@ -1,0 +1,3 @@
+def main : Int := [int+ 1 2]
+
+;; :expect-exit 3

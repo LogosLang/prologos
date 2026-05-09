@@ -1,0 +1,2 @@
+def m : [Map Int Int] := [map-empty Int Int]
+def main : Nat := [map-size m]

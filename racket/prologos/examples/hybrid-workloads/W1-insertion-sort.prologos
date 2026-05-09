@@ -1,0 +1,29 @@
+;; Insertion sort over a locally-defined IntList.
+;; Exercises: recursive defn, 2-arm match, int-le, ctor reconstruction.
+
+data IntList
+  inil
+  icons : Int -> IntList
+
+spec insert Int -> IntList -> IntList
+defn insert [x xs]
+  match xs
+    | inil       -> [icons x inil]
+    | icons y ys -> match [int-le x y]
+                      | true  -> [icons x [icons y ys]]
+                      | false -> [icons y [insert x ys]]
+
+spec isort IntList -> IntList
+defn isort
+  | inil       -> inil
+  | icons x xs -> [insert x [isort xs]]
+
+spec head-or-zero IntList -> Int
+defn head-or-zero
+  | inil       -> 0
+  | icons x _  -> x
+
+def unsorted : IntList :=
+  [icons 3 [icons 1 [icons 4 [icons 1 [icons 5 [icons 9 [icons 2 [icons 6 inil]]]]]]]]
+
+def main : Int := [head-or-zero [isort unsorted]]

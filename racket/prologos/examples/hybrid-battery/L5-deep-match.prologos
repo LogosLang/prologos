@@ -1,0 +1,22 @@
+;; Multi-step recursive match dispatch.
+data Bin := zero-b | one-b | two-b | three-b | four-b | five-b
+
+spec dec Bin -> Bin
+defn dec
+  | zero-b  -> zero-b
+  | one-b   -> zero-b
+  | two-b   -> one-b
+  | three-b -> two-b
+  | four-b  -> three-b
+  | five-b  -> four-b
+
+spec to-int Bin -> Int
+defn to-int
+  | zero-b  -> 0
+  | one-b   -> 1
+  | two-b   -> 2
+  | three-b -> 3
+  | four-b  -> 4
+  | five-b  -> 5
+
+def main : Int := [to-int [dec [dec five-b]]]

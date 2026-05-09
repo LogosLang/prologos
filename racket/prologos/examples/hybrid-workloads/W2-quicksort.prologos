@@ -1,0 +1,43 @@
+;; Quicksort. Exercises: nested helpers, append, partition, deeper recursion.
+
+data IntList
+  qnil
+  qcons : Int -> IntList
+
+spec append IntList -> IntList -> IntList
+defn append [xs ys]
+  match xs
+    | qnil       -> ys
+    | qcons x rs -> [qcons x [append rs ys]]
+
+spec partition-lt Int -> IntList -> IntList
+defn partition-lt [p xs]
+  match xs
+    | qnil       -> qnil
+    | qcons x rs -> match [int-lt x p]
+                      | true  -> [qcons x [partition-lt p rs]]
+                      | false -> [partition-lt p rs]
+
+spec partition-ge Int -> IntList -> IntList
+defn partition-ge [p xs]
+  match xs
+    | qnil       -> qnil
+    | qcons x rs -> match [int-lt x p]
+                      | true  -> [partition-ge p rs]
+                      | false -> [qcons x [partition-ge p rs]]
+
+spec qsort IntList -> IntList
+defn qsort
+  | qnil       -> qnil
+  | qcons p rs -> [append [qsort [partition-lt p rs]]
+                          [qcons p [qsort [partition-ge p rs]]]]
+
+spec head-or-zero IntList -> Int
+defn head-or-zero
+  | qnil      -> 0
+  | qcons x _ -> x
+
+def unsorted : IntList :=
+  [qcons 7 [qcons 2 [qcons 5 [qcons 3 [qcons 1 qnil]]]]]
+
+def main : Int := [head-or-zero [qsort unsorted]]

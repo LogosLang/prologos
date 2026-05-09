@@ -1,0 +1,297 @@
+name: Network Lowering (N-series)
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  network-lower:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Racket
+        uses: Bogdanp/setup-racket@v1.11
+        with:
+          version: '9.0'
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+
+      - name: Verify clang is available
+        run: |
+          clang --version
+          which clang
+
+      - name: Install Prologos package dependencies
+        run: cd racket/prologos && raco pkg install --auto --skip-installed
+
+      - name: Pre-compile compiler + network passes
+        run: |
+          cd racket/prologos
+          raco make driver.rkt
+          raco make network-emit.rkt
+          raco make network-lower.rkt
+
+      - name: Pre-compile network tools
+        run: raco make tools/network-compile.rkt tools/network-test.rkt
+
+      - name: Zig HAMT unit tests
+        # SH Track 6 sub-piece (Issue #42 Path A). Zig-internal `test`
+        # blocks in runtime/prologos-hamt.zig. Requires libc for the
+        # extern abort symbol (test mode does not auto-link libc).
+        run: zig test -lc runtime/prologos-hamt.zig
+
+      - name: Build Zig HAMT object
+        run: |
+          zig build-obj runtime/prologos-hamt.zig \
+            -OReleaseFast -fstrip -fPIC \
+            -femit-bin=runtime/prologos-hamt.o
+          ls -la runtime/prologos-hamt.o
+
+      - name: HAMT C-ABI smoke test
+        # Validates that the .o links cleanly against a non-Zig caller.
+        run: |
+          clang runtime/test-hamt.c runtime/prologos-hamt.o -o /tmp/test-hamt
+          /tmp/test-hamt
+
+      - name: Build Zig kernel
+        run: |
+          zig version
+          # -OReleaseFast: omit bounds/overflow safety checks. Our explicit
+          # bounds checks already cover the boundary; without ReleaseFast,
+          # implicit checks emit calls into Zig's panic handler that
+          # zig build-obj does not include in the .o, leaving unresolved
+          # symbols when clang links against plain libc.
+          # -fstrip: drop debug info to keep the .o minimal.
+          # -fPIC: produce position-independent code. Modern clang on Linux
+          # links PIE executables by default; non-PIC objects fail with
+          # "relocation R_X86_64_32S against `.bss' can not be used when
+          # making a PIE object". -fPIC is the standard fix.
+          zig build-obj runtime/prologos-runtime.zig \
+            -OReleaseFast -fstrip -fPIC \
+            -femit-bin=runtime/prologos-runtime.o
+          ls -la runtime/prologos-runtime.o
+          file runtime/prologos-runtime.o
+          echo "--- exported symbols (T = strong, U = undefined) ---"
+          nm runtime/prologos-runtime.o || true
+          echo "--- undefined symbols only (should be only abort + maybe libc-internals) ---"
+          nm -u runtime/prologos-runtime.o || true
+
+      - name: Smoke-test runtime linkage with a minimal IR
+        run: |
+          cat > /tmp/smoke.ll <<'EOF'
+          declare i32 @prologos_cell_alloc()
+          declare i64 @prologos_cell_read(i32)
+          declare void @prologos_cell_write(i32, i64)
+          define i64 @main() {
+          entry:
+            %c = call i32 @prologos_cell_alloc()
+            call void @prologos_cell_write(i32 %c, i64 99)
+            %v = call i64 @prologos_cell_read(i32 %c)
+            ret i64 %v
+          }
+          EOF
+          clang /tmp/smoke.ll runtime/prologos-runtime.o -o /tmp/smoke
+          # GitHub Actions runs `bash -eo pipefail`. /tmp/smoke is *expected*
+          # to return non-zero (the cell value as exit code). Without disabling
+          # -e around the call, set -e treats the expected return as a failure
+          # and the step exits with the smoke binary's exit code BEFORE the
+          # explicit `test` check runs.
+          set +e
+          /tmp/smoke
+          ec=$?
+          set -e
+          echo "smoke exit code: $ec"
+          test "$ec" -eq 99
+
+      - name: BSP scheduler + instrumentation smoke test
+        # Sprint B+C (2026-05-01). Validates run_to_quiescence runs proper
+        # BSP rounds (snapshot/diff/merge), the (3,1) select propagator
+        # works, and the prologos_get_stat / prologos_reset_stats /
+        # prologos_set_max_rounds interfaces match the kernel's exports.
+        run: |
+          clang runtime/test-bsp-stats.c runtime/prologos-runtime.o \
+            -o /tmp/test-bsp-stats
+          /tmp/test-bsp-stats
+
+      - name: BSP feedback smoke test (Sprint E)
+        # Sprint E (2026-05-01). Validates the (1,1) shape (kernel-identity)
+        # and that the BSP barrier keeps reads/writes consistent under
+        # cyclic networks. Includes iterative fib(0..20) computed by a
+        # gated self-feedback loop — the same algorithm a future
+        # source-level expr-iterate would lower to.
+        run: |
+          clang runtime/test-bsp-feedback.c runtime/prologos-runtime.o \
+            -o /tmp/test-bsp-feedback
+          /tmp/test-bsp-feedback
+
+      - name: N0 end-to-end (lower + clang + run)
+        env:
+          PROLOGOS_NETWORK_TIER: "0"
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: racket tools/network-test.rkt --tier 0 racket/prologos/examples/network/n0
+
+      - name: pnet-compile end-to-end (.prologos → .pnet → .ll → binary)
+        # SH milestone: full pipeline through Track 1's deployment-mode
+        # .pnet artifact format (instead of N0's network-skeleton).
+        # Validates the formal SH track structure end-to-end.
+        # Note on `|| ec=$?`: racket exits with the program's exit code
+        # (e.g. 7 for exit-7.prologos), which is the expected non-zero
+        # return. Without the || guard, GitHub Actions' bash -e treats
+        # the non-zero racket exit as step failure before our test check.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          raco make tools/pnet-compile.rkt
+          for f in 0 7 42; do
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/test-pnet-$f \
+              racket/prologos/examples/network/n0/exit-$f.prologos > /dev/null 2>&1 || ec=$?
+            echo "exit-$f.prologos → racket exit=$ec (expected $f)"
+            test "$ec" -eq "$f"
+          done
+
+      - name: pnet-compile arithmetic end-to-end (n1-arith)
+        # Phase 2.D: arithmetic programs compile to a propagator network
+        # via .pnet, with kernel-int-add/sub/mul/div fire-fns dispatched
+        # by the in-kernel scheduler. 6 acceptance programs covering
+        # add, sub, mul, div, nested, and deeply-nested arithmetic.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n1-arith/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n1-arith-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile tail-recursive iteration (n2-tailrec)
+        # Sprint E.3 (2026-05-01). Tail-recursive defn forms are
+        # recognized by ast-to-low-pnet's `match-tail-rec` and lowered
+        # to a feedback propagator network — the same shape as
+        # test-bsp-feedback.c's hand-rolled iterative fib, but generated
+        # from regular Prologos source. Programs use 9-12 cells + 7-10
+        # propagators independent of input size; networks self-terminate
+        # via the cond gate (no fuel needed).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n2-tailrec/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n2-tailrec-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile non-recursive helpers (n3-helpers)
+        # Sprint F.1 (2026-05-01). Non-recursive helper functions are
+        # inlined at lowering time via beta-substitution: when an
+        # `(expr-app^k (expr-fvar f) args)` doesn't match the tail-rec
+        # pattern, look up f's body and substitute it for the fvar.
+        # Falls through to the multi-arg beta-redex handler. Self-
+        # recursive non-tail-rec forms error cleanly; mutual recursion
+        # caught by depth limit (MAX-INLINING-DEPTH=64).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n3-helpers/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n3-helpers-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile non-dependent pairs (n4-pairs)
+        # Sprint F.2 (2026-05-01). Non-dependent pair lowering. build
+        # returns a value-tree (cell-id for scalars, list for pairs).
+        # expr-pair allocates per-component; expr-fst/expr-snd project.
+        # Per-component decomposition flows transparently through let-
+        # binding and conditional select. Helpers can take and return
+        # pair-typed values. Scope is simply-typed pairs only —
+        # dependent Sigma is intentionally excluded (per collaborator
+        # feedback 2026-05-01).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n4-pairs/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n4-pairs-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile pair-typed iteration state (n5-pair-state)
+        # Sprint F.3 (2026-05-01). Extends tail-rec lowering to support
+        # pair-typed state slots. literal-init-value recurses through
+        # expr-pair (so [pair 0 1] becomes a vtree of literals).
+        # State allocation, cond, step-args, and feedback all walk the
+        # vtrees per-leaf. Bridge logic for shared state cells operates
+        # per-leaf as well. fib via <a*b> pair state produces identical
+        # metrics to the 3-scalar fib-iter, confirming the per-leaf
+        # decomposition is equivalent.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n5-pair-state/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n5-pair-state-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile Nat match (n6-nat-match)
+        # Sprint F.4 (2026-05-01). expr-zero / expr-suc / expr-nat-val
+        # lower to Int cells (Nat is i64 at runtime). Two-arm match
+        # `match n | zero -> z-body | suc m -> s-body` lowers to a
+        # cascaded select gated on (int-eq scrut 0); the suc arm's
+        # binder `m` becomes a cell holding (scrut - 1) pushed onto
+        # env. Multi-arm (>2) match for general sum types is deferred
+        # — needs tagged-union runtime representation.
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n6-nat-match/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n6-nat-match-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done
+
+      - name: pnet-compile combined-features showcase (n7-showcase)
+        # Single Prologos program exercising every Sprint A-F.4 feature
+        # together: int arith + comparison (A), tail-recursive defn
+        # (E.3), non-recursive helper inlining (F.1), pair construction
+        # + projection (F.2), pair-typed iteration state (F.3).
+        # Same fib(10)=55 result as the simpler iterative variants,
+        # validating that feature composition produces the expected
+        # minimal network (12 cells, 10 props, 32 BSP rounds).
+        env:
+          PROLOGOS_RUNTIME_OBJ: "runtime/prologos-runtime.o"
+        run: |
+          for f in racket/prologos/examples/network/n7-showcase/*.prologos; do
+            expected=$(grep -oE ':expect-exit -?[0-9]+' "$f" | grep -oE '\-?[0-9]+')
+            ec=0
+            racket tools/pnet-compile.rkt -o /tmp/n7-showcase-test \
+              "$f" > /dev/null 2>&1 || ec=$?
+            echo "$(basename $f) → exit=$ec (expected $expected)"
+            test "$ec" -eq "$expected"
+          done

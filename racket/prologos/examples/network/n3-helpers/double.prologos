@@ -1,0 +1,10 @@
+spec double Int -> Int
+defn double [x] [int* x 2]
+
+def main : Int := [double 21]
+
+;; Sprint F.1: non-recursive helper inlining at lowering time. The
+;; lookup-and-substitute path replaces `(expr-fvar 'double)` with its
+;; lambda value, falling through to the let-binding handler.
+;; double(21) = 42.
+;; :expect-exit 42

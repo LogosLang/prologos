@@ -133,10 +133,45 @@
 ;; Standard library path (computed from this module's location)
 ;; ========================================
 ;; driver.rkt lives at prologos/driver.rkt, lib/ is at prologos/lib/
+;; Post-`raco exe` / `raco distribute`, resolved-module-path-name returns
+;; an embedded symbol like '#%embedded:prologos/driver:' — not a filesystem
+;; path. We detect that case and look for lib/ relative to the executable
+;; instead. PROLOGOS_LIB_DIR env var takes priority for fully explicit
+;; deployments.
 (define prologos-lib-dir
-  (let ([mod-path (variable-reference->module-path-index (#%variable-reference))])
-    (define resolved (resolved-module-path-name (module-path-index-resolve mod-path)))
-    (simplify-path (build-path (path-only resolved) "lib"))))
+  (cond
+    [(getenv "PROLOGOS_LIB_DIR")
+     => (lambda (p) (simplify-path (string->path p)))]
+    [else
+     (let ([mod-path (variable-reference->module-path-index (#%variable-reference))])
+       (define resolved (resolved-module-path-name (module-path-index-resolve mod-path)))
+       (cond
+         [(path? resolved)
+          (simplify-path (build-path (path-only resolved) "lib"))]
+         [else
+          ;; Embedded: derive from the running executable's directory.
+          ;; Bundle layout: bin/<exe>; we look for share/prologos/lib/ alongside.
+          (define exe-path (find-executable-path
+                            (or (find-system-path 'run-file) "racket")))
+          (cond
+            [exe-path
+             (define exe-dir (path-only exe-path))
+             ;; Try: <exe-dir>/../share/prologos/lib (raco distribute layout)
+             (define candidate1
+               (simplify-path (build-path exe-dir 'up "share" "prologos" "lib")))
+             ;; Or: <exe-dir>/../lib/prologos (alternate)
+             (define candidate2
+               (simplify-path (build-path exe-dir 'up "lib" "prologos")))
+             (cond
+               [(directory-exists? candidate1) candidate1]
+               [(directory-exists? candidate2) candidate2]
+               [else
+                ;; Last resort: current directory's lib/. Almost certainly
+                ;; wrong but lets the binary at least start; user will see
+                ;; "module not found" errors that point to the lib path.
+                (build-path (current-directory) "prologos-lib")])]
+            [else
+             (build-path (current-directory) "prologos-lib")])]))]))
 
 ;; ========================================
 ;; Sprint 9: Recover a name map from the meta store for error formatting.

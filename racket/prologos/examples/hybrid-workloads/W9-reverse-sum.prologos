@@ -1,0 +1,23 @@
+;; Reverse a list (using helper) then sum it.
+
+data IntList
+  rsnil
+  rscons : Int -> IntList
+
+spec rev-acc IntList -> IntList -> IntList
+defn rev-acc [xs acc]
+  match xs
+    | rsnil       -> acc
+    | rscons x rs -> [rev-acc rs [rscons x acc]]
+
+spec reverse IntList -> IntList
+defn reverse [xs] [rev-acc xs rsnil]
+
+spec sum IntList -> Int
+defn sum
+  | rsnil       -> 0
+  | rscons x rs -> [int+ x [sum rs]]
+
+def xs : IntList := [rscons 1 [rscons 2 [rscons 3 [rscons 4 [rscons 5 rsnil]]]]]
+
+def main : Int := [int+ [sum xs] [sum [reverse xs]]]

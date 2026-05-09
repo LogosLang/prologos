@@ -1,0 +1,3 @@
+;; Just construct refl + use it as proof; no full J induction.
+def proof : [Eq Int 5 5] := refl
+def main : Int := 42

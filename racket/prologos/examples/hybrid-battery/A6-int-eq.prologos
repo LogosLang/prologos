@@ -1,0 +1,1 @@
+def main : Bool := [int-eq 42 42]

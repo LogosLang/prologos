@@ -1,0 +1,4 @@
+;; Regression: int-mod via top-level def, then native consumer.
+;; Pre-fix: 100 (wrong); post-fix: 101.
+def x : Int := [int-mod 7 3]
+def main : Int := [int+ x 100]

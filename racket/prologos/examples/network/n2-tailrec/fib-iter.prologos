@@ -1,0 +1,14 @@
+spec fib-iter Int -> Int -> Int -> Int
+defn fib-iter [a b n]
+  match [int-lt n 1]
+    | true  -> a
+    | false -> [fib-iter b [int+ a b] [int- n 1]]
+
+def main : Int := [fib-iter 0 1 10]
+
+;; Iterative fibonacci via tail recursion. The compiler recognizes the
+;; tail-recursive pattern and lowers it to a feedback propagator
+;; network: 12 cells + 10 propagators + 32 BSP rounds, regardless of N
+;; (until i64 overflows around fib(92)).
+;; fib(10) = 55.
+;; :expect-exit 55

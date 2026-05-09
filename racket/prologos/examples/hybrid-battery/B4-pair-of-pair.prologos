@@ -1,0 +1,4 @@
+spec sumpair <Int * Int> -> Int
+defn sumpair [p] [int+ [fst p] [snd p]]
+
+def main : Int := [int+ [sumpair [pair 1 2]] [sumpair [pair 3 4]]]

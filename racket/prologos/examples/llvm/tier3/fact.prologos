@@ -1,0 +1,8 @@
+spec fact Int -> Int
+defn fact
+  | 0 -> 1
+  | n -> [int* n [fact [int- n 1]]]
+
+def main : Int := [fact 5]
+
+;; :expect-exit 120

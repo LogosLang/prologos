@@ -1,0 +1,42 @@
+;; Run-length encoding (sort of). Walks an IntList, counts consecutive
+;; equal values, packs to a (value, count) pair list.
+;; For input [1,1,1,2,2,3] result first-pair is (1, 3).
+
+data IntList
+  rnil
+  rcons : Int -> IntList
+
+data RLEList
+  rlnil
+  rlcons : Int -> Int -> RLEList
+
+spec count-run Int -> IntList -> Int
+defn count-run [v xs]
+  match xs
+    | rnil       -> 0
+    | rcons x rs -> match [int-eq x v]
+                      | true  -> [int+ 1 [count-run v rs]]
+                      | false -> 0
+
+spec drop-run Int -> IntList -> IntList
+defn drop-run [v xs]
+  match xs
+    | rnil       -> rnil
+    | rcons x rs -> match [int-eq x v]
+                      | true  -> [drop-run v rs]
+                      | false -> [rcons x rs]
+
+spec rle IntList -> RLEList
+defn rle
+  | rnil       -> rlnil
+  | rcons x rs -> [rlcons x [int+ 1 [count-run x rs]] [rle [drop-run x rs]]]
+
+;; Extract the count field of the first run.
+spec first-count RLEList -> Int
+defn first-count
+  | rlnil          -> 0
+  | rlcons _ c _   -> c
+
+def input : IntList := [rcons 1 [rcons 1 [rcons 1 [rcons 2 [rcons 2 [rcons 3 rnil]]]]]]
+
+def main : Int := [first-count [rle input]]

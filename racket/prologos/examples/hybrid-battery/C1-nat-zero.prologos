@@ -1,0 +1,2 @@
+;; from-nat lifts a Nat literal to Int. Tests zero ctor + lift.
+def main : Int := [from-nat zero]

@@ -1,0 +1,2 @@
+def s : [Set Int] := [set-empty Int]
+def main : Nat := [set-size s]

@@ -1,0 +1,1 @@
+def main : Int := [from-nat [suc [suc [suc zero]]]]

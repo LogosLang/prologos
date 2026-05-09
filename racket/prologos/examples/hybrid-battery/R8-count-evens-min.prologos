@@ -1,0 +1,15 @@
+;; Smaller count-evens. Pre-fix: 2 (over-count); post-fix: 1.
+;; Tests deeper interaction: callback defn (is-even) with two native
+;; ops in its body, feeding a match in another defn (count-evens).
+spec is-even Int -> Bool
+defn is-even [n] [int-eq [int-mod n 2] 0]
+
+spec count-evens Int -> Int -> Int
+defn count-evens [lo hi]
+  match [int-lt hi lo]
+    | true  -> 0
+    | false -> match [is-even lo]
+                 | true  -> [int+ 1 [count-evens [int+ lo 1] hi]]
+                 | false -> [count-evens [int+ lo 1] hi]
+
+def main : Int := [count-evens 5 6]

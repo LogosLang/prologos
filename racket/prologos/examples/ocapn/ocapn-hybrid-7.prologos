@@ -1,0 +1,30 @@
+ns ocapn-on-hybrid-7
+
+;; Seventh OCapN program — exercises promise.prologos directly.
+;; Calls fulfill/break/enqueue/take-queue/resolution-value/predicates
+;; on actual PromiseState values.
+;;
+;; promise.prologos's defns use real multi-arg match clauses that
+;; pattern on TWO arguments (pst-unresolved/pst-fulfilled/pst-broken
+;; states with arbitrary inputs). Validates the elaborator's full
+;; multi-pattern compile path through the kernel.
+
+require [prologos::ocapn::syrup  :refer-all]
+        [prologos::ocapn::promise :refer-all]
+
+;; NOTE: cannot use `fresh` directly — depends on `nil` from prologos::
+;; data::list which hits Pitfall #1 in our pitfalls doc. Construct
+;; pst-fulfilled and pst-broken directly; skip pst-unresolved tests.
+
+def filled       := [pst-fulfilled [syrup-nat zero]]   ;; pst-fulfilled
+def broken-state := [pst-broken    [syrup-nat zero]]   ;; pst-broken
+
+;; Predicate matrix on the two states we can construct.
+def p1 := [fulfilled?  filled]       ;; true
+def p2 := [broken?     broken-state] ;; true
+def p3 := [resolved?   filled]       ;; true (fulfilled IS resolved)
+def p4 := [resolved?   broken-state] ;; true (broken IS resolved)
+def p5 := [unresolved? filled]       ;; false
+
+;; Combine all five into one nested-pair so we capture them in main.
+def main := [pair p1 [pair p2 [pair p3 [pair p4 p5]]]]

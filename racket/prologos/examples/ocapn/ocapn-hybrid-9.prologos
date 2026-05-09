@@ -1,0 +1,24 @@
+ns ocapn-on-hybrid-9
+
+;; Ninth OCapN program — recursive function over Nat.
+;;
+;; Tests: fvar self-recursion + Nat eliminator (natrec) inside an
+;; OCapN-shape program. The pre-refactor preduce-hybrid had Phase-8b
+;; coverage only, so it couldn't even run this. Now should work
+;; through compile-expr's natrec → backend-hybrid path.
+;;
+;; Computes (sum-to-n 5) = 0+1+2+3+4+5 = 15, returned as syrup-int.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; Recursive sum 0..n.
+spec sum-to-n Nat -> Int
+defn sum-to-n
+  | zero  -> 0
+  | suc m -> [int+ [from-nat [suc m]] [sum-to-n m]]
+
+def total := [sum-to-n [suc [suc [suc [suc [suc zero]]]]]]   ;; 5+4+3+2+1+0 = 15
+
+;; Wrap as a syrup-int — exercises ctor-app on the result of
+;; recursive Int computation.
+def main := [syrup-int total]

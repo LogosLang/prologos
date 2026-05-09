@@ -1,0 +1,32 @@
+ns ocapn-on-hybrid-1
+
+;; First OCapN program through the hybrid kernel.
+;; Tier B workload: imports prologos::ocapn::syrup, exercises
+;;   - bare nullary user ctor (syrup-null)
+;;   - unary ctor application (syrup-nat)
+;;   - predicate match (refr?, tagged?, null?)
+;;   - selector with field extraction (get-nat)
+;; All of these go through preduce.rkt's compile-expr → backend-hybrid
+;; → Zig kernel via the swappable-backend refactor.
+
+require [prologos::ocapn::syrup :refer-all]
+
+;; Test 1: bare nullary user ctor
+;;   Should produce a SyrupValue (preduce-user-ctor 'syrup-null '())
+def test1 := syrup-null
+
+;; Test 2: unary ctor with Nat field
+def test2 := [syrup-nat [suc [suc [suc zero]]]]
+
+;; Test 3: predicate dispatch — null? syrup-null = true
+def test3 := [null? syrup-null]
+
+;; Test 4: predicate dispatch — null? on a non-null = false
+def test4 := [null? [syrup-nat zero]]
+
+;; Test 5: selector with field extraction — get-nat on a syrup-nat
+;;   = some <nat>; tests Phase 10b match-with-field-bind through hybrid
+def test5 := [get-nat [syrup-nat [suc [suc zero]]]]
+
+;; main : tied to test5 since the binary prints (eval main).
+def main := test5

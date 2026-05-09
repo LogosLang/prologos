@@ -1,0 +1,8 @@
+;; Naive Fibonacci.
+spec fib Int -> Int
+defn fib [n]
+  match [int-le n 1]
+    | true  -> n
+    | false -> [int+ [fib [int- n 1]] [fib [int- n 2]]]
+
+def main : Int := [fib 8]

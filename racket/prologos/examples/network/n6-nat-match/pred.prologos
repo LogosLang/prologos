@@ -1,0 +1,10 @@
+spec pred Nat -> Nat
+defn pred
+  | zero  -> zero
+  | suc n -> n
+
+def main : Nat := [pred 7N]
+
+;; The suc arm's binder `n` becomes a cell holding (scrutinee - 1).
+;; pred(suc(suc(... 0))) where suc-depth = 7 returns 6.
+;; :expect-exit 6

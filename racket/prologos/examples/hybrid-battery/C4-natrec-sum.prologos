@@ -1,0 +1,2 @@
+;; sum of 0..4 = 10 via natrec (using from-nat to inject the loop var).
+def main : Int := [natrec Int 0 [fn [n : Nat] [fn [acc : Int] [int+ acc [from-nat [suc n]]]]] [suc [suc [suc [suc zero]]]]]

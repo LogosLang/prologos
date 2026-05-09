@@ -1,0 +1,9 @@
+spec fact Int -> Int
+defn fact
+  | 0 -> 1
+  | n -> [int* n [fact [int- n 1]]]
+
+;; 5040 mod 256 = 176
+def main : Int := [int-mod [fact 7] 256]
+
+;; :expect-exit 176

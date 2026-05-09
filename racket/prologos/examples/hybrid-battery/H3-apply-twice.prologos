@@ -1,0 +1,4 @@
+spec twice [Int -> Int] -> Int -> Int
+defn twice [f x] [f [f x]]
+
+def main : Int := [twice [fn [n : Int] [int+ n 1]] 10]
