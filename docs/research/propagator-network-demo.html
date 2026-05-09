@@ -88,6 +88,35 @@
     border-radius: 6px;
   }
 
+  /* Prologos source */
+  pre.prologos-source {
+    background: #fafafa;
+    padding: 1em 1.4em;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    font-family: "DejaVu Sans Mono", Menlo, "Liberation Mono", monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+  pre.prologos-source [data-line="comment"] {
+    color: #888;
+    font-style: italic;
+  }
+  pre.prologos-source [data-prop] {
+    border-radius: 3px;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease;
+    padding: 0.05em 0.15em;
+  }
+  pre.prologos-source [data-prop].firing {
+    background: #fff176;
+    box-shadow: 0 0 0 2px #f57c00;
+  }
+  pre.prologos-source [data-prop].dimmed {
+    opacity: 0.4;
+  }
+
   /* Legend */
   .legend {
     margin-top: 2em;
@@ -174,8 +203,37 @@
   <p><strong>Lattice-theoretic framing</strong>: each derived-fact cell holds a join-semilattice value (set of facts, monotonically growing under set-union). Each S0 propagator is a monotone Q-module morphism on the cell network. Quiescence is a fixed point in the Tarski-Knaster sense. The S1 NAF stratum activates as a higher-order computation — it reads the converged S0 lattice values and computes a non-monotone derived value.</p>
 </div>
 
+<h2>The Prologos source</h2>
+
+<p>The propagator network shown below is what this Prologos program <em>compiles to</em>. Each <code>defr</code> relation case becomes a propagator; each shared logic variable becomes a cell holding a join-semilattice of bindings; the <code>not</code> in the last clause forces stratification — the elaborator places that propagator in the S1 NAF stratum, gated on quiescence of the monotone S0 stratum.</p>
+
+<pre class="prologos-source"><span data-line="comment">;; Input facts: 4 directed edges over a 6-vertex graph</span>
+<span data-prop="edge">defr edge
+  | "a" "b"
+  | "b" "c"
+  | "c" "d"
+  | "b" "e"</span>
+
+<span data-prop="vertex">defr vertex
+  | "a" | "b" | "c" | "d" | "e" | "f"</span>
+
+<span data-line="comment">;; Transitive closure of edge — S0 monotone propagation</span>
+defr path
+  <span data-prop="P1">| x y -&gt; (edge x y)                    <span data-line="comment">;; base case</span></span>
+  <span data-prop="P2">| x z -&gt; (edge x y) (path y z)         <span data-line="comment">;; recursive: x→y→…→z</span></span>
+
+<span data-line="comment">;; Vertices NOT reachable from "a" — S1 NAF stratum
+;; The 'not' forces stratification; the elaborator gates this propagator
+;; on quiescence of the path relation's S0 derivation.</span>
+<span data-prop="P4">defr unreachable-from-a
+  | x -&gt; (vertex x) (not (path "a" x))</span>
+
+<span data-line="comment">;; Query — drives derivation</span>
+solve (unreachable-from-a x)</pre>
+
 <div class="controls">
   <button id="reset" type="button">⟲ Reset</button>
+  <button id="back" type="button">◀ Back</button>
   <button id="step" type="button" class="primary">▶ Step</button>
   <button id="play" type="button">▶▶ Play through</button>
   <span class="step-counter">Step <span id="step-num">0</span> of <span id="step-total">9</span></span>
@@ -241,11 +299,13 @@
     <li><strong>Propagators</strong> (boxes inside stratum bands) react to cell changes and write to other cells. Each propagator belongs to exactly one stratum.</li>
     <li><strong>Arrows</strong> show data flow. An arrow from cell <em>C</em> to propagator <em>P</em> means <em>P</em> reads <em>C</em>; an arrow from <em>P</em> to <em>C</em> means <em>P</em> writes to <em>C</em>.</li>
     <li><strong>Strata</strong> are the colored bands. The BSP scheduler drives S0 to quiescence first, then activates Topology stratum to detect quiescence, then activates S1 NAF.</li>
-    <li><strong>Click a cell</strong> to inspect its current value in detail.</li>
+    <li><strong>Source highlights</strong>: as a propagator fires, the corresponding case in the Prologos source is highlighted. The mapping is what the elaborator does at compile time — each <code>defr</code> case becomes one propagator.</li>
+    <li><strong>Click a cell or propagator</strong> to inspect its description and current value.</li>
+    <li><strong>Keyboard</strong>: ← Back, → Step, <kbd>R</kbd> Reset, <kbd>Space</kbd> Play/Pause.</li>
   </ul>
 
   <h2>Architectural connection</h2>
-  <p>This is exactly the propagator network architecture Prologos's elaborator + solver use, scaled down for visualization. Every cell and every propagator in the real system follows the same pattern: cells hold lattice values, propagators are monotone reactive functions, strata stratify non-monotone steps, BSP scheduling drives quiescence. The empirical sweep findings in the variety-categorization report were computed using property-cells + property-test-propagators on this same architecture (off-network scaffolding for now; sister-track migrates them on-network).</p>
+  <p>This is exactly the propagator network architecture Prologos's elaborator and solver use, scaled down for visualization. Every cell and every propagator in the real system follows the same pattern: cells hold lattice values, propagators are monotone reactive functions, strata stratify non-monotone steps, and BSP scheduling drives the network to quiescence.</p>
 </div>
 
 <div id="inspector" class="inspector">
@@ -639,13 +699,22 @@ let playInterval = null;
 
 document.getElementById('step-total').textContent = STEPS.length - 1;
 
+function renderSource(state) {
+  // Highlight source spans whose data-prop matches a firing propagator.
+  document.querySelectorAll('pre.prologos-source [data-prop]').forEach(el => {
+    el.classList.toggle('firing', state.firing.includes(el.dataset.prop));
+  });
+}
+
 function render() {
   const state = STEPS[currentStep];
   renderCells(state);
   renderPropagators(state);
   renderArrows(state);
   renderNarration(state);
+  renderSource(state);
   document.getElementById('step').disabled = currentStep >= STEPS.length - 1;
+  document.getElementById('back').disabled = currentStep === 0;
   document.getElementById('reset').disabled = currentStep === 0;
 }
 
@@ -658,6 +727,14 @@ function reset() {
 function step() {
   if (currentStep < STEPS.length - 1) {
     currentStep++;
+    render();
+  }
+}
+
+function back() {
+  if (playInterval) { clearInterval(playInterval); playInterval = null; document.getElementById('play').textContent = '▶▶ Play through'; }
+  if (currentStep > 0) {
+    currentStep--;
     render();
   }
 }
@@ -682,8 +759,18 @@ function play() {
 }
 
 document.getElementById('reset').addEventListener('click', reset);
+document.getElementById('back').addEventListener('click', back);
 document.getElementById('step').addEventListener('click', step);
 document.getElementById('play').addEventListener('click', play);
+
+// Keyboard navigation: ← Back, → Step, R Reset, Space Play/Pause
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight') { step(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { back(); e.preventDefault(); }
+  else if (e.key === 'r' || e.key === 'R') { reset(); }
+  else if (e.key === ' ') { play(); e.preventDefault(); }
+});
 
 // Initial render
 render();
