@@ -2,9 +2,9 @@
 
 **Date**: 2026-04-26
 **Stage**: 3 — Design per [DESIGN_METHODOLOGY.org](principles/DESIGN_METHODOLOGY.org) Stage 3
-**Version**: D.3 — D.2.SC self-critique findings incorporated (in progress; per-finding resolution review with user)
+**Version**: D.4 — architectural reframing: Cell/Propagator/Scheduler Orthogonality principle applied; hybrid pivot RECONSIDERED toward on-network optimized cell type
 **Scope**: PPN 4C Phase 1A-iii-b + 1A-iii-c + 1B + 1C + 1V (γ-bundle-wide; closes Phase 1 entirely)
-**Status**: Stage 3 design cycle — D.3 incorporating critique findings; further critique rounds (external) pending
+**Status**: Stage 3 design cycle — D.4 redesign in progress; Pre-0 spike pending to verify on-network optimization feasibility; conditional commit (if spike passes, D.4 is canonical; if fails, D.3 hybrid pivot stays)
 
 **Prior stages** (this track):
 - Stage 1 research: [`docs/research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md`](../research/2026-04-21_TROPICAL_QUANTALE_RESEARCH.md) (commit `de357aa1`) — depth-first formal grounding; 12 sections, ~1000 lines
@@ -13,7 +13,81 @@
 
 ---
 
-## D.3 Revision Summary (2026-04-26 — in progress)
+## D.4 Revision Summary (2026-04-26)
+
+**Architectural reframing** in response to user-articulated [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle (codified 2026-04-26 from D.3.EC critique review).
+
+**The pivot**: D.3's hybrid pivot architecture (preserve struct-field as off-network live state + cell substrate for Phase 3C consumers) violates the orthogonality principle in spirit — it makes the cell DERIVED rather than PRIMARY, with the struct field providing per-decrement fast-path. This was empirically justified by Pre-0 R-19 (extrapolation: full cell-migration would trigger major GC), but the extrapolation was NEVER DIRECTLY MEASURED for an optimized cell mechanism.
+
+**D.4's reframing**: extend the cell mechanism to support specialized storage strategies declared per-cell. The fuel cost cell declares `:storage 'monotone-counter` + `:fires-on '(threshold-crossing)` + `:on-write-check '(>= cost budget)`. The cell mechanism dispatches based on the declaration:
+- Under no-speculation: direct unboxed-fixnum mutation (no `tagged-cell-value`, no allocation per write)
+- On-write predicate checks threshold inline (no separate propagator-fire ceremony)
+- Only fires dependent propagators on threshold crossing (not per-write)
+- Under speculation: falls back to `tagged-cell-value` (correctness preserved)
+
+**The cell IS the live state** (no struct-field carve-out). The optimization is at the CELL LAYER, not the SCHEDULER LAYER. Per the Orthogonality principle: this stays portable across Gauss-Seidel, BSP, Zig-LLVM, and future self-hosted/distributed schedulers.
+
+**What changes from D.3 → D.4**:
+
+| Section | D.3 → D.4 |
+|---|---|
+| Front matter | Version D.4; status updated |
+| Top-of-doc Revision Summary | D.4 summary supersedes D.3 |
+| §1.2 Phase scope | Phase 1B scope revised: includes cell-mechanism extension for specialized storage; Phase 1C scope reverts toward direct migration (no hybrid scaffolding) |
+| §3 Progress Tracker | D.4 redesign row added; D.3 marked SUPERSEDED |
+| **§4.6 (NEW)** | **Specialized cell type framework — NTT model for on-network optimized cell type** (composes Options A+B+C+D from D.3.EC exploration) |
+| §9 Phase 1B (REVISED) | Adds cell-mechanism extension (specialized storage framework); fuel-cost cell registration with `:storage 'monotone-counter` + `:fires-on '(threshold-crossing)` + `:on-write-check`; threshold propagator REPLACED with on-write predicate (no separate propagator) |
+| §10 Phase 1C (REVISED) | Direct migration of decrement sites + check sites to cell-API (NO hybrid; NO struct-field preservation); macro `prop-network-fuel` + struct field `prop-net-cold-fuel` RETIRE per D.1 original framing; cell IS live state |
+| §14.4 Q5 (REVERT) | Single classification: cell PRIMARY (no dual classification); Q3/Q4/Q6 hybrid clarifications RETIRE |
+| §10.1.A (RETIRED) | Honest framing + retirement plan no longer needed (no scaffolding to retire) |
+| §10.A (RETIRED) | Threshold propagator role under hybrid — REPLACED by specialized cell type (threshold becomes on-write predicate at cell layer) |
+| §10.B (RETIRED) | Cell Staleness Contract — no staleness under D.4 (cell IS live state) |
+| Q-1B-6 (REPURPOSED) | Pre-0 spike scope changes: measure SPECIALIZED cell-write (not generic cell-write) directly against struct-copy baseline |
+| §11.3 Phase 1V exit criteria | Hybrid pivot gates RETIRE; on-network optimized cell-write performance gate ADDED |
+| Issue #55 + DEFERRED.md entry | Status: SUPERSEDED if D.4 ships; archived if hybrid was never built |
+
+**D.2.SC + D.3.EC finding status under D.4**:
+
+| Finding | D.3 status | D.4 status |
+|---|---|---|
+| P1 (Cell-as-SST inversion) | REFINEMENT closed | MOOT (cell IS primary) |
+| P2 (belt-and-suspenders) | REFINEMENT closed | MOOT (no dual mechanism) |
+| P3 (cell staleness contract) | BLOCKING closed | MOOT (cell IS live state) |
+| P4 (decomplection vs incomplete) | REFINEMENT closed | MOOT (no incomplete migration) |
+| P6 (hybrid-as-scaffolding-NOT-template) | REFINEMENT closed | MOOT (no hybrid to template) |
+| M1 (threshold propagator decoration) | BLOCKING closed | RESOLVED differently (threshold is on-write predicate, NOT propagator-as-decoration) |
+| M2 (imperative dispatch on-exhaustion) | REFINEMENT closed | MOOT (on-write predicate is structural, not imperative dispatch) |
+| M3 (imposed ordering) | ACKNOWLEDGE closed | MOOT (no scheduled cell-update cadence; writes happen when they happen) |
+| S1 (§14.4 Q5 inconsistency) | BLOCKING closed | RESOLVED differently (Q5 reverts to single PRIMARY classification) |
+| R1 (Phase 1C ~45-90 LoC estimate) | REFINEMENT closed | REVISED (Phase 1C ~150-250 LoC; full migration scope per D.1 §10.4) |
+| R2 (17-refs framing) | REFINEMENT closed | REVISED (all 17 refs migrate per direct cell-API) |
+| TD1 (four-surface tracking) | REFINEMENT closed | MOOT (no scaffolding to track) |
+| MB1 (retirement checklist) | REFINEMENT closed | MOOT (no retirement needed) |
+| CL1, CL2 (cognitive load) | varied | LIKELY reduced (simpler design; fewer sections) |
+| S2 (`:fires-when` NTT extension) | REFINEMENT closed | REVISED (on-write check predicate IS the structural mechanism; subsumes `:fires-when` use case for monotone counters) |
+| S3 (multi-quantale completeness) | REFINEMENT closed | UNCHANGED (still relevant) |
+| S4 (quantaloid forward-compat) | REFINEMENT closed | UNCHANGED (still relevant) |
+| S5 (C-series quantale axiom verification) | ACKNOWLEDGE closed | UNCHANGED (still relevant) |
+| R3 (Q-1C-3 BLOCKING for 1C-iv) | ACKNOWLEDGE closed | MOOT (no staleness; no cell-update cadence enumeration needed) |
+| MG1 (cell-write extrapolation gap) | REFINEMENT closed | RESOLVED (D.4 directly measures via Pre-0 spike) |
+| MG2 (multi-worldview cell-write) | DEFER-WITH-TRACKING | UNCHANGED (still deferred to Phase 3A) |
+| TS1 (staleness contract tests) | REFINEMENT closed | MOOT (no staleness contract) |
+| EX1 (e-graph positioning) | REFINEMENT closed | UNCHANGED (still relevant; arguably MORE relevant under on-network framing) |
+| OS1 (propagator over-specification) | REFINEMENT closed | MOOT (no threshold propagator; threshold is cell-layer predicate) |
+| SP1 (§10 sprawl) | REFINEMENT closed | LIKELY resolved (simpler D.4 §10) |
+| AP1 (naming asymmetry) | DEFER-WITH-TRACKING | MOOT under D.4 (no `/synced` API; no staleness; cell-read is always live) |
+
+**Roughly: 18 of 22 D.2.SC+D.3.EC findings become MOOT under D.4** (the architectural reframing eliminates the underlying concerns rather than addressing them piecemeal). The remaining 4 (S3, S4, S5, EX1, MG2) are about multi-quantale composition or external positioning — orthogonal to the cell substrate concerns.
+
+**Conditional commit**: D.4 is design-state-pending. The Pre-0 spike (see new §13.6) directly measures specialized-cell-write against struct-copy baseline. IF spike passes (cell-write ≤ struct-copy cost + zero major-GC at 100k), D.4 is canonical; D.3 hybrid pivot retires before shipping; Issue #55 closes as "superseded." IF spike fails (cell-write significantly costlier OR major-GC pressure), D.3 hybrid pivot remains the architecture and D.4 retires.
+
+---
+
+## D.3 Revision Summary (2026-04-26 — SUPERSEDED BY D.4)
+
+**Status note (D.4)**: D.3 closed the D.2.SC self-critique + D.3.EC external critique findings within the hybrid pivot framing. D.4 reframes the entire hybrid pivot toward on-network optimized cell type. Most D.3 critique resolutions become MOOT under D.4 (the underlying concerns disappear with the architectural reframing). D.3 content is preserved below for historical record + critique-resolution traceability.
+
+
 
 **Version bump**: D.2 → D.3 incorporates accepted findings from [D.2.SC self-critique](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md) (P/R/M/S; 18 findings; 3 BLOCKING + 10 REFINEMENT + 5 ACKNOWLEDGE + 0 PUSHBACK).
 
@@ -460,6 +534,136 @@ Per NTT methodology "Observations" subsection requirement (D.3 §4.5 already cov
    - `:fires-when (predicate)` — runtime-condition-gated fire (already flagged D.3 §4.5)
 
 4. **Quantaloids (out of scope)** — when multi-domain cost currencies emerge (memory + messages + time), the quantale-of-quantales pattern (Stubbe 2013) becomes load-bearing. Not Phase 1 scope; flagged for future.
+
+### §4.5 (D.3) `:fires-when` extension-note — UPDATED FOR D.4
+
+Under D.3 hybrid pivot, the `:fires-when` NTT extension was a refinement candidate; under D.4 on-network framing (per §4.6), the equivalent pattern is `:on-write-check` (cell-layer predicate) — see §4.6. The `:fires-when` extension would still be useful for tracks where per-event filtering at scheduler level is performance-critical (NOT this addendum).
+
+### §4.6 Specialized cell type framework (NEW per D.4 — on-network optimized cell type) (NEW)
+
+**The architectural pivot from hybrid (D.3) to on-network optimized (D.4)** rests on extending the cell mechanism with PER-CELL declarations of storage strategy + fire-on policy + on-write predicates. This subsection NTT-models the framework.
+
+**Cell type declarations** extend `cell` syntax with optional fields:
+
+```ntt
+;; Generic cell (current; D.3 baseline)
+cell <name>
+  :type <LatticeType>
+  :merge <merge-fn>
+  :bot <bot-value>
+
+;; D.4 specialized cell (extends above with optimization declarations)
+cell <name>
+  :type <LatticeType>
+  :merge <merge-fn>
+  :bot <bot-value>
+  :tier 'hot | 'warm | 'cold       ;; storage tier (extends BSP-LE Track 0 prop-net-hot/cold split to cells)
+  :storage 'monotone-counter |     ;; specialized storage strategy
+           'general |              ;; (default)
+           'sparse |
+           ...
+  :fires-on 'any-change |          ;; when do dependent propagators fire?
+            'threshold-crossing |  ;; only on threshold-crossing (cheap monotone case)
+            'monotonic-progress |
+            ...
+  :on-write-check <predicate>      ;; OPTIONAL: inline check at write time
+                                    ;; if predicate returns truthy, write contradiction
+                                    ;; (replaces threshold propagator pattern)
+  :on-read-check <predicate>       ;; OPTIONAL: inline check at read time
+                                    ;; (typically used for derived properties)
+```
+
+**For the canonical fuel cost cell** (D.4 Phase 1B/1C):
+
+```ntt
+cell fuel-cost
+  :type TropicalFuel              ;; per §4.1
+  :merge tropical-fuel-merge       ;; min (idempotent)
+  :bot 0
+  :tier 'hot                       ;; per-decrement workload; needs hot-path
+  :storage 'monotone-counter       ;; non-decreasing integer; direct fixnum storage
+  :fires-on 'threshold-crossing    ;; only fire dependent propagators when cost crosses budget
+  :on-write-check (lambda (new-cost net)
+                    (>= new-cost (net-cell-read net fuel-budget-cell-id)))
+  ;; if on-write-check returns #t, the cell-write path writes contradiction
+  ;; structurally (NO separate threshold propagator)
+```
+
+**Cell mechanism dispatch** (under-the-hood):
+
+```racket
+;; net-cell-write under D.4 specialized cell type framework
+(define (net-cell-write net cell-id new-value)
+  (define meta (net-cell-meta net cell-id))
+  (cond
+    ;; FAST PATH: hot + monotone-counter + no-speculation
+    [(and (eq? (cell-meta-tier meta) 'hot)
+          (eq? (cell-meta-storage meta) 'monotone-counter)
+          (not (under-speculation? net)))
+     (define current (direct-counter-cell-ref net cell-id))
+     (define merged (tropical-fuel-merge current new-value))
+     ;; On-write predicate check (replaces threshold propagator):
+     (cond
+       [(and (cell-meta-on-write-check meta)
+             ((cell-meta-on-write-check meta) merged net))
+        (net-contradiction net 'tropical-fuel-exhausted)]
+       [else
+        (define net' (direct-counter-cell-set! net cell-id merged))
+        ;; Fire-on policy: only notify dependent propagators if threshold crossed
+        (cond
+          [(and (eq? (cell-meta-fires-on meta) 'threshold-crossing)
+                (not (threshold-crossed? current merged)))
+           net']  ;; no propagator-fire ceremony
+          [else
+           (notify-dependents net' cell-id)])])]
+
+    ;; SLOW PATH: general case (existing net-cell-write logic)
+    [else
+     (existing-net-cell-write-implementation net cell-id new-value)]))
+```
+
+Key properties:
+1. **The cell IS the live state** — `direct-counter-cell-ref` reads the live value; no struct field carve-out
+2. **Direct fixnum mutation under no-speculation** — no `tagged-cell-value` wrapping; no allocation per write
+3. **Inline on-write check** — no propagator-fire ceremony for threshold detection; the check runs in-line during cell-write
+4. **Fire-on-threshold-crossing only** — most cell-writes don't notify propagators (only the rare threshold crossing does); the BSP scheduler doesn't see per-decrement worklist entries
+5. **Scheduler-neutral** — Gauss-Seidel, BSP, Zig-LLVM all run this dispatch identically; the optimization is at the cell layer
+
+**Under speculation worldview**:
+- The fast path falls through to the general case (correctness preserved via `tagged-cell-value`)
+- Speculation paths happen RARELY relative to hot-path decrements; the overhead amortizes
+- Per D.3.EC MG2 (still relevant): multi-worldview cell-write deferred to Phase 3A measurement
+
+**NTT Observations**:
+1. **Everything on-network?** YES. The fuel cost cell IS the live state; on-write check is a cell-layer property; fire-on policy is cell-layer declaration. No off-network struct field carve-out.
+2. **Architectural impurities revealed?** NONE under D.4 (compared to D.3 which had the principle inversion at §10.1.A acknowledged-but-not-fixed).
+3. **NTT syntax gaps surfaced**:
+   - `:tier 'hot`/'warm'/'cold' — extends cell registration with storage-tier annotation (cell mechanism dispatches; scheduler agnostic)
+   - `:storage 'monotone-counter` — declares specialized storage strategy
+   - `:fires-on 'threshold-crossing` — declares fire-on policy (more granular than "any-change")
+   - `:on-write-check predicate` — inline check at write time (replaces separate threshold propagator)
+   - `:on-read-check predicate` — inline check at read time (for derived properties on read)
+4. **Scheduler-portability check**: ✓ all declarations are CELL properties; scheduler reads them via uniform `net-cell-write` API; no scheduler-specific dispatch.
+5. **CALM-safety check**: ✓ the on-write predicate is monotone (cost can only grow; threshold crossing is monotone-detectable). The cell value lattice (tropical fuel) is monotone. CALM theorem applies.
+
+**Implementation cost**:
+- Cell mechanism extension (cell-meta fields + `net-cell-write` dispatch + direct-counter-cell storage): ~150-300 LoC (new module: `specialized-cells.rkt`)
+- Fuel-cost cell registration (uses the framework): ~30-50 LoC (within `tropical-fuel.rkt`)
+- Tests for the framework + fuel-cost cell: ~100-200 LoC
+
+**Total**: ~250-450 LoC for Phase 1B (specialized cell framework + fuel-cost cell registration + tests). Phase 1C remains direct migration of decrement/check sites (~100-200 LoC).
+
+**Comparison to D.3 (hybrid pivot)**:
+- D.3 Phase 1B: ~150-250 LoC (just the substrate + threshold propagator)
+- D.3 Phase 1C: ~45-90 LoC (hybrid; struct-field preserved)
+- D.3 total: ~200-340 LoC, but with hybrid scaffolding maintenance debt
+- D.4 Phase 1B: ~250-450 LoC (cell framework extension + cell registration + tests)
+- D.4 Phase 1C: ~100-200 LoC (direct migration)
+- D.4 total: ~350-650 LoC; NO scaffolding maintenance debt; PReduce + OE inherit the framework
+
+D.4 is MORE work UPFRONT but pays off through (a) no retirement work later, (b) framework reuse by future tracks.
+
+**Pre-0 spike to verify feasibility**: see §13.6 (NEW).
 
 ---
 
@@ -968,7 +1172,43 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 
 ---
 
-## §10 Phase 1C — Canonical BSP fuel substrate (hybrid pivot architecture)
+## §10 Phase 1C — Canonical BSP fuel substrate (D.4 RECONSIDERED; D.3 hybrid pivot UNDER REVIEW)
+
+> **D.4 status (2026-04-26)**: This section is UNDER RECONSIDERATION. Per the [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle codified 2026-04-26, the hybrid pivot architecture violates principle alignment (cell DERIVED, struct-field PRIMARY at hot path) and was empirically motivated by extrapolation that was never directly measured.
+>
+> Under D.4, Phase 1C is reframed as a **direct migration** of decrement sites + check sites to the on-network optimized cell API (per §4.6 specialized cell type framework). The struct-field `prop-net-cold-fuel` and macro `prop-network-fuel` RETIRE as planned in D.1 §10.3; the cell IS the live state.
+>
+> **Conditional commit**: D.4 Phase 1C ships IF §13.6 spike passes (specialized cell-write within 25-50% of struct-copy + zero major-GC at 100k). IF spike fails, D.3 hybrid pivot (below) ships as canonical.
+>
+> **D.4 Phase 1C revised scope** (NOT YET FULLY DETAILED; see this session's continuation):
+> - Allocate canonical fuel-cost-cell + fuel-budget-cell using §4.6 specialized cell type framework (cell registration declares `:tier 'hot` + `:storage 'monotone-counter` + `:fires-on 'threshold-crossing` + `:on-write-check`)
+> - Migrate 4 decrement sites: `(struct-copy prop-net-cold ... [fuel (- fuel n)])` → `(net-cell-write net fuel-cost-cell-id (+ current n))` (direct cell-API; cell mechanism handles fast-path)
+> - Migrate 11 check sites: `(<= (prop-network-fuel net) 0)` → `(net-contradiction? net)` (on-write check writes contradiction; check sites just observe contradiction state)
+> - Retire `prop-network-fuel` macro + `prop-net-cold-fuel` struct field
+> - Migrate read-as-value sites (3) + typing-propagators saved-fuel + pretty-print
+> - Update tests (13 sites) + bench (2 sites)
+> - Total: ~150-250 LoC (per D.1 §10.4 original framing; the cell mechanism extension is in Phase 1B per §4.6)
+>
+> **D.4 Phase 1C drift risks** (NEW):
+> - *D-1C-7 (D.4)*: specialized cell-write fast-path not as fast as expected (mitigation: §13.6 spike measures directly; falsifies the D.4 commit if true)
+> - *D-1C-8 (D.4)*: speculation-fallback path (tagged-cell-value) has different semantics than expected for monotone counter (mitigation: C-series quantale axiom verification per S5)
+> - *D-1C-9 (D.4)*: fire-on-threshold-crossing notification mechanism misses crossings (mitigation: behavioral tests per S5 + Phase 3A multi-worldview measurement per MG2)
+>
+> **D.4 Phase 1C sub-phase plan** (replaces D.3 hybrid sub-phases):
+> - **1C-i**: pre-implementation audit; verify §4.6 framework + fuel-cost cell registration work as designed; measurements from §13.6 spike re-verified at scale
+> - **1C-ii**: migrate 4 decrement sites (direct cell-write)
+> - **1C-iii**: migrate 11 check sites (replace inline `(<= fuel 0)` with `(net-contradiction? net)`)
+> - **1C-iv**: retire `prop-network-fuel` macro + `prop-net-cold-fuel` struct field; migrate read-as-value + typing-propagators + pretty-print
+> - **1C-v**: migrate 13 test sites + 2 bench sites (batch mechanical)
+> - **1C-vi**: verification + close: probe + targeted suite + full suite + parity test (tropical-fuel-counter-parity per §15)
+>
+> 6 sub-phases (vs D.3 hybrid's 5 sub-phases under hybrid). The total work is more (~150-250 LoC vs ~45-90 LoC under hybrid), but the result is principle-aligned + no scaffolding maintenance debt + framework reusable by future tracks (PReduce, OE).
+
+> **D.3 hybrid pivot content preserved below for traceability + fallback (if §13.6 spike fails)**.
+
+---
+
+## §10 (D.3 historical) — Canonical BSP fuel substrate (hybrid pivot architecture)
 
 **REWRITTEN in D.2** per Pre-0 findings. The original D.1 §10 framing — "replace the imperative `(fuel 1000000)` decrementing counter with the on-network tropical fuel cell" — was reframed by Pre-0 measurement evidence (8 supporting findings + S-tier baseline finding 20). The hybrid pivot is empirically grounded across all 5 measurement tiers (M+A+E+R+S).
 
@@ -1006,7 +1246,10 @@ Future PReduce / OE consumers (per §6.6 hybrid-as-scaffolding-NOT-template cave
 
 Cell-update cadence (semantic-transition-only per §10.B + Q-1C-3) is IMPOSED ORDERING, not emergent from dataflow per [`propagator-design.md` § "Emergent vs. imposed ordering"](../../.claude/rules/propagator-design.md). This is the consequence of preserving struct-field as live state (per M2 + R-19): without per-decrement cell-write, the cell's update points must be imperatively chosen ("update at start of phase" / "update on save/restore" / "update on exhaustion"). **Trade-off explicit**: imposed ordering (lose mantra alignment at hot-path) vs major-GC-risk (lose runtime feasibility). The hybrid chooses the former for the per-decrement timescale; SH Series retirement (per Issue #55) restores emergent ordering when runtime supports per-decrement cell-write.
 
-### §10.1.A Honest framing & retirement plan (D.3 consolidating P1 + P4 REFINEMENTs)
+### §10.1.A Honest framing & retirement plan (D.3 consolidating P1 + P4 REFINEMENTs) — SUPERSEDED BY D.4
+
+> **D.4 status**: SUPERSEDED. Under D.4 architectural reframing (per §4.6 specialized cell type framework), the hybrid pivot is reconsidered. If the §13.6 Pre-0 spike PASSES, this section retires entirely (no scaffolding to track; no retirement plan needed; cell IS the live state). If the spike FAILS, this section remains as the canonical retirement plan for hybrid pivot scaffolding. Section content preserved below for traceability.
+
 
 The "decomplection" framing in §10.1 describes WHAT the hybrid does at the architectural level. This subsection adds the WHY (specific blocker), the principle-level acknowledgment (Cell-as-Single-Source-of-Truth inversion), and the retirement plan with dual-surface tracking. Both framings are simultaneously true and intentional — design intent + honest accountability.
 
@@ -1040,7 +1283,10 @@ The four-surface tracking (design-doc + DEFERRED.md + GitHub Issue + bracketed i
 
 **This is honest deferral, not principle violation** per `workflow.md` § "Validated ≠ Deployed" + `DEVELOPMENT_LESSONS.org` § "'Pragmatic' Is a Rationalization for Incomplete." The principled discipline: name the specific blocker (✓ Racket runtime GC at per-decrement cell-write rate); name the retirement trigger (✓ SH Series runtime infrastructure); track at multiple surfaces (✓ four surfaces above); verify the deferral remains valid (✓ Q-1B-6 + §11.3 falsification gates).
 
-### §10.A The threshold propagator's role under hybrid (D.3 from M1 BLOCKING)
+### §10.A The threshold propagator's role under hybrid (D.3 from M1 BLOCKING) — SUPERSEDED BY D.4
+
+> **D.4 status**: SUPERSEDED. Under D.4 (per §4.6), the threshold check is an INLINE on-write predicate at the CELL layer (NOT a separate propagator). The propagator-as-decoration concern from M1 retires entirely. Section content preserved below for traceability with M1 resolution rationale.
+
 
 Per Network Reality Check (`workflow.md`): apply the three concrete questions to the threshold propagator under hybrid:
 
@@ -1065,7 +1311,10 @@ Per Network Reality Check (`workflow.md`): apply the three concrete questions to
 
 **Cross-reference**: per §10.B Cell Staleness Contract, the propagator's three roles all involve EXPLICIT cell-write operations (not implicit per-decrement updates); this is consistent with the staleness contract's "cell value lags struct-field by at most one semantic transition" framing.
 
-### §10.B Cell Staleness Contract (D.3 from P3 BLOCKING)
+### §10.B Cell Staleness Contract (D.3 from P3 BLOCKING) — SUPERSEDED BY D.4
+
+> **D.4 status**: SUPERSEDED. Under D.4 (per §4.6), the cell IS the live state — no staleness; no dual-API discipline; `net-cell-read` always returns the current value (or `tagged-cell-value` filtered by current worldview). P3 staleness concern retires entirely. Section content preserved below for traceability with P3 resolution rationale.
+
 
 Under hybrid pivot, the fuel-cost cell's value LAGS the struct-field's live state. This subsection makes the staleness explicit at the API surface so consumers can reason correctly.
 
@@ -1449,6 +1698,54 @@ Per DESIGN_METHODOLOGY Stage 3 Pre-0 Benchmarks Per Semantic Axis. Extends exist
 - Establish predicted post-implementation deltas in this design (Phase 1V verifies actuals)
 - Cost: ~15-30 min for benchmark execution; ~30-60 min for benchmark code addition
 
+### §13.6 D.4 specialized cell-write spike plan (NEW)
+
+**Purpose**: directly measure the cost of specialized cell-write (per §4.6 framework) against the existing struct-copy baseline. This is the FALSIFICATION TEST for the D.4 architectural pivot — if the spike passes, D.4 is canonical; if it fails, D.3 hybrid pivot remains.
+
+**What was extrapolated** (per D.3.EC MG1 acknowledgment):
+- Pre-0 R-19 inferred "full cell-migration would trigger major GC at 100k decrements" from struct-copy measurements
+- The cell-write mechanism we'd ACTUALLY implement (specialized hot+monotone-counter cell with direct-fixnum storage under no-speculation) was NOT directly measured
+- D.3 hybrid pivot rested on this extrapolation
+- The D.4 framework changes the cell mechanism's dispatch — the extrapolation may not hold for the SPECIALIZED cell type
+
+**Spike scope** (~30-60 min execution; minimal implementation):
+1. **Mock the specialized cell mechanism** (`benchmarks/micro/bench-specialized-cell-spike.rkt`):
+   - Implement a minimal direct-counter-cell storage (just enough to write/read a fixnum without `tagged-cell-value` wrapping)
+   - Implement the on-write check predicate inline (no propagator-fire ceremony)
+   - Skip the full cell-meta framework; hardcode the hot+monotone-counter dispatch
+2. **Measure**:
+   - **W1**: Specialized cell-write cost (no-speculation; no threshold crossing) — target ≤ 30 ns/call (within ~25% of struct-copy 24 ns)
+   - **W2**: Specialized cell-write cost (threshold crossing detected; contradiction written) — rare; target ≤ 200 ns/call (allows for contradiction-write ceremony)
+   - **W3**: Specialized cell-write GC profile at 100k decrements — target ZERO major-GC (matches R3 baseline)
+   - **W4**: Specialized cell-read cost (direct-counter access) — target ≤ 15 ns/call (within ~50% of struct-field 6 ns; cell-API has indirection)
+   - **W5**: Specialized cell-write under tagged-cell-value (speculation) — fallback path; measure as reference; target ≤ 600 ns/call (matches existing cell-write under speculation)
+3. **Compare to Pre-0 baseline**:
+   - Per-decrement cycle (W1 + W4): target ≤ 45 ns total (within ~25% of struct-copy + inline check ~30 ns)
+   - GC profile (W3): target ZERO major-GC at 100k (matches R3)
+
+**Decision criteria**:
+- **PASS (D.4 canonical)**: W1 ≤ 30 ns + W3 = ZERO major-GC + W4 ≤ 15 ns + per-decrement cycle ≤ 45 ns. The specialized cell-write is within 25-50% of struct-copy cost AND GC-friendly.
+- **FAIL (D.3 hybrid pivot remains)**: W1 > 60 ns OR W3 > 0 major-GC at 100k OR per-decrement cycle > 60 ns. The specialized cell-write doesn't close the gap; hybrid pivot's empirical motivation holds.
+- **MIXED (re-design required)**: cell-write fast but GC pressured, or vice-versa. Investigate; may indicate the specialized-storage strategy needs further work (e.g., object pooling, different layout).
+
+**Implementation cost for the spike itself**: ~100-200 LoC for the mock specialized cell mechanism. NOT the full Phase 1B framework — just enough to measure the core fast-path under realistic workload.
+
+**Spike-vs-Phase-1B relationship**:
+- The spike's mock is THROWAWAY (won't ship; spike-only code)
+- Phase 1B implements the FULL framework (cell-meta fields, dispatch logic, registration API, tests) per §4.6
+- If spike passes, Phase 1B builds the framework with confidence; if spike fails, hybrid pivot ships per D.3
+- Spike runs at Phase 1B mini-design OPENING (per Q-1B-6, but spike scope is now D.4-specific, NOT generic cell-write)
+
+**Updated Q-1B-6** (was: "generic cell-write empirical-validation spike"; now per D.4: "specialized cell-write spike per §13.6"):
+
+Phase 1B mini-design opening runs the spike per §13.6. The spike result drives the architectural decision (D.4 canonical vs D.3 hybrid pivot retains). The spike is fast (~30-60 min) AND cheap (~100-200 LoC throwaway code).
+
+**Risk register**:
+- *R1*: Specialized storage strategy doesn't actually deliver fixnum-direct-mutation under Racket's runtime (e.g., the indirection through `net-cell-meta` lookup adds overhead). Mitigation: spike measures directly; if R1 materializes, investigate sub-options (struct-field on `prop-net-cold` for cell-id lookup; specialized cell registry separate from CHAMP).
+- *R2*: Tagged-cell-value fallback adds significant overhead under speculation. Mitigation: per D.3.EC MG2, multi-worldview measurement is Phase 3A scope; for Phase 1B spike, no-speculation hot path is the target.
+- *R3*: On-write predicate's allocation cost is higher than expected. Mitigation: spike measures with a representative predicate (`(>= cost budget)`); should be 0-allocation under fixnum comparison.
+- *R4*: Fire-on-threshold-crossing notification mechanism has subtle bugs (e.g., misses crossing if multi-write batch). Mitigation: this is a correctness concern, not perf; tested via C-series + behavioral tests.
+
 ### §13.5 What Pre-0 might surface (potentially design-affecting)
 
 - If M7 shows cell-write is significantly slower (>2x struct-copy), reconsider canonical instance approach — maybe per-consumer allocation only, with no canonical fuel cell
@@ -1496,7 +1793,11 @@ No "scan" / "walk" / "iterate" in design. The "fuel exhaustion" check IS a thres
 
 ### §14.4 S — SRE Structural Thinking (load-bearing)
 
-**SRE lattice lens (mandatory)** per CRITIQUE_METHODOLOGY. **D.3 update from S1 BLOCKING**: §14.4 Q5 was inconsistent with D.2 §10's hybrid pivot (Q5 declared cell PRIMARY under D.1's full-migration; hybrid inverts to struct-field PRIMARY, cell DERIVED). Q5 + dependent Qs (Q3, Q4, Q6) updated below to acknowledge dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot).
+**SRE lattice lens (mandatory)** per CRITIQUE_METHODOLOGY.
+
+**D.4 status (2026-04-26)**: §14.4 Q5's dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot) was a D.3 reconciliation under hybrid. Under D.4 architectural reframing (per §4.6 + §10), the cell IS the live state and Q5 reverts to SINGLE classification (cell PRIMARY). Q3 + Q4 + Q6 hybrid clarifications retire. The dual-classification framing is preserved below for traceability with D.3.SC S1 BLOCKING resolution rationale; it becomes MOOT if §13.6 spike passes.
+
+**D.3 status note (preserved)**: §14.4 Q5 was inconsistent with D.2 §10's hybrid pivot (Q5 declared cell PRIMARY under D.1's full-migration; hybrid inverts to struct-field PRIMARY, cell DERIVED). Q5 + dependent Qs (Q3, Q4, Q6) updated below to acknowledge dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot).
 
 | Aspect | Tropical fuel quantale (this addendum) |
 |---|---|
@@ -1569,25 +1870,33 @@ Per user's workflow direction (2026-04-26): "if there are any remaining open que
 
 ## §17 What's next
 
-Per user's workflow:
+Per user's workflow (updated for D.4 architectural reframing 2026-04-26):
 1. ✅ **D.1 draft complete** (commit `fc4b9d3e`)
-2. ✅ **Pre-0 microbenchmark plan + execution** — comprehensive plan (`f79650fa`) + M-tier (`f6576479`/`bef1f518`) + A-tier (`4be5e875`) + capture-gap closure (`d270769b`) + E-tier (`d0934329`) + R-tier (`76129725`) + S-tier (`8a29f6af`); 22 cumulative design-affecting findings
-3. ✅ **D.2 revise** (THIS COMMIT) — Pre-0 findings incorporated; hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
-4. ⬜ **D.3+ critique rounds** (NEXT) — P/R/M/S lenses (especially S for algebra; SRE lattice lens load-bearing per CRITIQUE_METHODOLOGY); possibly external critique. Per CRITIQUE_METHODOLOGY § Cataloguing Instead of Challenging: TWO-COLUMN adversarial framing mandatory at every gate. The hybrid pivot decision itself is a candidate for adversarial scrutiny in D.3 (is "decomplection of fast-path optimization from architectural substrate" genuinely principled, or rationalization for incomplete migration?).
-5. ✅ **Stage 0 gates verified**: NTT Model Requirement (§4 ✓ multi-quantale completed); Design Mantra Audit (§5 ✓); Pre-0 Benchmarks Per Semantic Axis (§13 ✓ executed; 22 findings); Parity Test Skeleton (§15 ✓; tropical-fuel-counter-parity reframed for hybrid)
-6. ⬜ **Stage 4 implementation** — per-phase mini-design+audit before each phase's implementation; phase-specific open questions (§16) resolved at phase mini-design with code in hand
-   - Phase 1B substrate ships first (per Q-Open-4 strict sequencing)
-   - Phase 1A-iii-b + 1A-iii-c parallelize with 1C
-   - Phase 1C consumes 1B substrate (under hybrid: substrate setup + selective non-hot-path migration)
-   - Phase 1V atomic close
-7. **Phase 1B implementation checklist** captured at D.1 §9.10 (M10 + M12 + R4 + A12 verification)
+2. ✅ **Pre-0 microbenchmark plan + execution** — 8 commits; 22 cumulative design-affecting findings
+3. ✅ **D.2 revise** (commit `2a4d938c`) — Pre-0 findings incorporated; hybrid pivot architecture committed for Phase 1C
+4. ✅ **D.2.SC self-critique** (commit `219d8eb9`) — 18 findings; D.3 incorporated all
+5. ✅ **D.3 revisions** — 10 commits closing all D.2.SC findings (commit `76a73ada` complete)
+6. ✅ **D.3.EC external critique** (commit `61d7ab07`) — 11 findings; resolution review surfaced architectural concern
+7. ✅ **D.4 architectural reframing** (commit `6a628bc7`) — Cell/Propagator/Scheduler Orthogonality principle codified; hybrid pivot reconsidered
+8. ✅ **D.4 scaffolding pass** (THIS COMMIT) — §4.6 NEW (specialized cell type framework NTT model); §13.6 NEW (Pre-0 spike plan); §10 + §14.4 reframed; §10.1.A + §10.A + §10.B marked SUPERSEDED
+9. ⬜ **§13.6 Pre-0 spike** (NEXT SESSION) — directly measure specialized cell-write vs struct-copy baseline. ~30-60 min execution + ~100-200 LoC throwaway spike code. Result drives D.4 vs D.3 commit decision:
+   - **PASS**: D.4 canonical; D.3 hybrid pivot retires before shipping; Issue #55 + DEFERRED.md entry close as "superseded"
+   - **FAIL**: D.3 hybrid pivot remains; D.4 retires; honest framing per workflow.md (deferred to SH Series runtime)
+10. ⬜ **D.4 full Phase 1B/1C revision** — if spike passes, complete the §9 + §10 revisions in detail (the scaffolding pass establishes the structure; full content remains to be drilled into)
+11. ⬜ **Stage 4 implementation** — per-phase mini-design+audit
+    - Under D.4: Phase 1B builds specialized cell type framework + fuel-cost cell registration (~250-450 LoC); Phase 1C migrates decrement+check sites directly (~150-250 LoC); total ~350-650 LoC; no scaffolding maintenance debt
+    - Under D.3 (fallback if spike fails): Phase 1B builds substrate + threshold propagator (~150-250 LoC); Phase 1C hybrid (~45-90 LoC); total ~200-340 LoC + scaffolding maintenance debt
 
-**D.3 critique opening adversarial questions** (forward-capture for the next session):
-- Is the hybrid pivot's decomplection between fast-path optimization and architectural substrate genuinely principled, or does it preserve scaffolding that should retire under the new architecture? (Lens P)
-- The struct field `prop-net-cold-fuel` and macro `prop-network-fuel` are PRESERVED under hybrid — is this honest "fast-path needed for performance" or "old mechanism preserved for safety" (workflow.md belt-and-suspenders red flag)? (Lens P)
-- Does the hybrid's cell-update-at-semantic-transitions cadence have well-defined, exhaustively-enumerated transitions, or is "semantic transition" ambiguous in practice? (Lens R + Q-1C-3)
-- Under hybrid, the cell value can be stale relative to struct-field — does this violate "cell as single source of truth" principle (DESIGN_PRINCIPLES.org § Propagator-First Infrastructure)? (Lens M + S)
-- Does the SRE lattice lens analysis (§14.4) hold under hybrid's reduced cell-write rate? (Lens S)
+**D.4 adversarial questions to scrutinize at next session opening** (forward-capture):
+- Does the specialized cell type framework (§4.6) genuinely close the cell-write performance gap, or is it another extrapolation? Spike measures directly to answer.
+- Is the `:on-write-check` predicate at the cell layer ACTUALLY structural-not-imperative? It runs INLINE during write; that's deterministic + scheduler-agnostic, which is structural. But it's IMPERATIVE in the sense that the writer triggers the check rather than emergent from cell state changes. Honest framing: this is "cell-level reactive dispatch" — structural in the sense that the cell type's behavior is uniform; imperative in the sense that the dispatch is per-write.
+- Under speculation worldview, does the fast path correctly fall through to `tagged-cell-value`? Verify with C-series + behavioral tests.
+- Does the fire-on-threshold-crossing notification mechanism miss crossings under any code path (e.g., multi-write batch within one BSP round)? Behavioral tests.
+- Future PReduce + OE inheritance: does the §4.6 framework actually generalize, or is it fuel-cell-specific? Test by sketching a PReduce e-graph cost extraction use case against the framework (~30 min sketch; not implementation).
+
+**D.4 vs D.3 conditional commit**: this is the rare design state where two architectures are live simultaneously, with the Pre-0 spike acting as the falsification test. D.4 is the PREFERRED architecture (principle-aligned); D.3 is the FALLBACK (empirically-grounded if D.4 doesn't pan out). After the spike, exactly one ships.
+
+**Mempalace + dailies discipline**: D.4 architectural reframing is a major design moment; capture in dailies (done in `6a628bc7`); ensure mempalace re-mine post-commit triggers; update master roadmap per CL → orthogonality inheritance discipline (done in `6a628bc7`).
 
 ---
 
@@ -1632,17 +1941,33 @@ Per user's workflow:
 
 ## Document status
 
-**Stage 3 Design D.3** — D.2.SC self-critique findings incorporated (18/18 closed: 3 BLOCKING + 10 REFINEMENT + 5 ACKNOWLEDGE + 0 PUSHBACK). Per user's workflow direction:
+**Stage 3 Design D.4** — architectural reframing in progress; Cell/Propagator/Scheduler Orthogonality principle codified; hybrid pivot under reconsideration.
+
+**Design trajectory** (D.1 → D.2 → D.2.SC → D.3 → D.3.EC → D.4):
 1. ✅ D.1 drafted (commit `fc4b9d3e`)
-2. ✅ Pre-0 microbenchmark plan + execution (M+A+E+R+S-tiers; 22 design-affecting findings; commits `f79650fa`, `f6576479`, `bef1f518`, `4be5e875`, `d270769b`, `d0934329`, `76129725`, `8a29f6af`)
-3. ✅ D.2 revise (commit `2a4d938c`) — hybrid pivot architecture committed for Phase 1C; cross-cutting open questions all RESOLVED
-4. ✅ D.2.SC self-critique drafted (commit `219d8eb9`) — 18 findings via P/R/M/S TWO-COLUMN adversarial framing
-5. ✅ **D.3 revisions** (commits `0538582f` BLOCKINGs + `934b2ba3` P1+Issue#55 + `db15bece` P2 + `a4cbbbfc` P4-consolidated + `9c014389` P6 + `c1a1e5c8` P5 + `072eea14` R1 + `00fe67cc` R2 + `9cf19ce7` R4 + this commit batch) — all 18 D.2.SC findings closed; design ready for Stage 4
-6. ⬜ Optional: external critique round (P/R/M/S/external) before Stage 4
-7. ⬜ Stage 4 implementation per per-phase mini-design+audit. Phase 1B implementation checklist captured at §9.10 (M10 + M12 + R4 + A12 verification); Q-1B-6 spike at §9.9 (hybrid pivot empirical-validation pre-build); Q-1C-3 BLOCKING for 1C-iv at §10.7 (semantic-transition enumeration); §11.3 Phase 1V exit criteria with 11 microbench re-runs.
+2. ✅ Pre-0 microbenchmark plan + execution (M+A+E+R+S-tiers; 22 design-affecting findings)
+3. ✅ D.2 revise (commit `2a4d938c`) — hybrid pivot architecture committed
+4. ✅ D.2.SC self-critique (commit `219d8eb9`) — 18 findings via P/R/M/S
+5. ✅ D.3 revisions (10 commits through `76a73ada`) — all 18 D.2.SC findings closed
+6. ✅ D.3.EC external critique (commit `61d7ab07`) — 11 findings via fresh lenses (CL/MG/SP/OS/TD/AP/TS/EX/MB)
+7. ✅ **D.4 architectural reframing — orthogonality principle codified** (commit `6a628bc7`)
+8. ✅ **D.4 scaffolding pass** (this commit) — §4.6 specialized cell type framework NTT model; §13.6 Pre-0 spike plan; §10 + §14.4 reframed; §10.1.A + §10.A + §10.B marked SUPERSEDED
+9. ⬜ §13.6 Pre-0 spike (NEXT SESSION) — directly measure specialized cell-write
+10. ⬜ D.4 full revision (if spike passes) — complete §9 + §10 detail
+11. ⬜ Stage 4 implementation per per-phase mini-design+audit
 
-**Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.** Phase-specific open questions (§16) resolved at that time with code in hand.
+**Conditional commit state**: D.4 is the PREFERRED architecture (principle-aligned per Cell/Propagator/Scheduler Orthogonality); D.3 is the FALLBACK (empirically-grounded). §13.6 Pre-0 spike is the falsification test:
+- **D.4 PASSES**: specialized cell-write within 25-50% of struct-copy + zero major-GC at 100k → D.4 canonical; D.3 hybrid pivot retires before shipping; Issue #55 + DEFERRED.md entry close as "superseded"
+- **D.4 FAILS**: cell-write significantly costlier or major-GC pressure → D.3 hybrid pivot ships; D.4 retires
 
-**The architectural foundation: tropical quantale as the substrate for OE Series Track 0/1/2 first production landing + future PReduce + future cost-guided search. Phase 3C residuation error explanation as the first downstream consumer (Form C cross-reference scheduled at right phase).**
+**Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.**
 
-**The hybrid pivot (D.2 commit): Phase 1C reframes from "replace counter with cell" to "introduce cell substrate alongside preserved counter fast-path." The decomplection of fast-path optimization (struct-copy + inline check; ~30-40 ns) from architectural substrate (cell + threshold propagator; semantic-transition-granular) preserves R3's zero-major-GC property while routing contradiction-on-exhaustion through the propagator network. Empirically grounded across 5 measurement tiers (M+A+E+R+S; 8 supporting findings + S-tier baseline). Subject to D.3 adversarial scrutiny (is decomplection genuinely principled, or scaffolding preservation rationalized?).**
+**The architectural foundation under D.4**: tropical quantale as the substrate for OE Series Track 0/1/2 first production landing + future PReduce + future cost-guided search; **specialized cell type framework (§4.6) inherited by future tracks** (PReduce e-graph cost extraction, OE weighted parsing). The framework is PRINCIPLED on-network optimization; future tracks target it from the start, not the hybrid scaffolding pattern.
+
+**The D.4 reframing rationale (per Cell/Propagator/Scheduler Orthogonality)**:
+- D.3 hybrid pivot's "off-network struct field as live state" violates principle alignment (cell DERIVED, not PRIMARY)
+- D.3's empirical justification (R-19) was extrapolation NEVER directly measured
+- D.4 specializes the CELL mechanism (not the SCHEDULER) — optimization at the proper architectural layer
+- Result: portable across schedulers (Gauss-Seidel, BSP, Zig-LLVM, future) + no scaffolding maintenance debt + framework reusable
+
+**This is the rare design state where two architectures are live simultaneously**, with the Pre-0 spike as the deciding empirical test. The discipline: never extrapolate a principle-violating commit when the alternative can be directly measured.
