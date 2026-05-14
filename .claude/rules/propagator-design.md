@@ -182,3 +182,28 @@ This bug is silent — no error, no crash. The fire function returns a stale net
 ## Assumption-Tagged Dependents
 
 When a propagator belongs to a branch (e.g., a clause in multi-clause execution), tag it with `#:assumption aid #:decision-cell dcid`. The scheduler's `filter-dependents-by-paths` checks viability via on-network decision cell read — when the assumption is eliminated, the propagator becomes inert without explicit removal.
+
+## Cell / Propagator / Scheduler Orthogonality
+
+Propagator design must respect the architectural orthogonality between **Cell**, **Propagator**, and **Scheduler** layers (per [`DESIGN_PRINCIPLES.org` § Cell / Propagator / Scheduler Orthogonality](../../docs/tracking/principles/DESIGN_PRINCIPLES.org)).
+
+**Optimization location rule** — locate optimizations at the layer that owns the concern:
+
+| Concern | Layer |
+|---|---|
+| State storage strategy (hot/warm/cold; specialized storage for monotone counters; unboxed-fixnum fast-path under no-speculation) | **Cell** |
+| Fire-pattern (fire-once; broadcast; set-latch fan-in; threshold-gated firing) | **Propagator** |
+| Dependency notification (skip per-write notification for monotone-counter cells; only notify on threshold crossing) | **Cell + Propagator** (cell declares fire-on policy; propagator declares fire-pattern) |
+| Scheduling efficiency (BSP barriers; round-robin vs priority; work-stealing; LLVM-lowered firing) | **Scheduler** |
+
+**Anti-pattern: scheduler-coupled propagator optimization**:
+
+When tempted to "piggyback this propagator's behavior into BSP's worklist drain pass" or "make this propagator fire-pattern depend on whether the scheduler is sequential or parallel," STOP. The optimization couples to scheduler-specific machinery and breaks portability across schedulers (Gauss-Seidel, BSP, Zig-LLVM, future distributed runtime).
+
+Find the equivalent optimization at the cell or propagator level:
+- Cell declares specialized storage strategy → fast-path applies under any scheduler
+- Propagator declares fire-pattern + dependency-policy → scheduler just drains worklist as usual
+
+Per the CALM theorem: monotone computation on fixed topology converges to the same fixpoint regardless of evaluation order. The order is the scheduler's concern. If a propagator's correctness depends on scheduling order, it has a layering violation.
+
+**Historical example (rejected, 2026-04-26)**: during PPN 4C tropical fuel addendum design, an "Option E (BSP-aware piggyback)" piggybacked threshold checks into BSP's worklist drain pass. Rejected because Gauss-Seidel scheduler has no equivalent drain pass; Zig-LLVM scheduler would have entirely different round structure. The correct optimization (cell-level specialized-storage + propagator-level fire-on-threshold-crossing) was adopted instead. See [`DESIGN_PRINCIPLES.org` § Cell / Propagator / Scheduler Orthogonality](../../docs/tracking/principles/DESIGN_PRINCIPLES.org) for the load-bearing principle.

@@ -727,3 +727,190 @@ a stateful "fire once" propagator --- but preserves full observability.
 | Instance registry | =hash-set!= on mutable parameter | Cell write to CHAMP-backed registry cell |
 | IO effects | Execute during AST walk | Collect ordering in session cells; execute at barrier |
 
+
+* Cell / Propagator / Scheduler Orthogonality
+
+The architecture has three distinct, orthogonal concerns:
+
+- *Cell*: state storage + read/write API; declares lattice + merge function +
+  (optionally) storage strategy
+- *Propagator*: computational rule; reads cells, writes cells; declares
+  dependencies + fire-pattern
+- *Scheduler*: runs propagators against cells; determines firing order,
+  parallelism, round structure
+
+Per the CALM theorem (Consistency As Logical Monotonicity), monotone
+computation on a fixed topology converges to the same fixpoint regardless of
+evaluation order. The order IS the scheduler's concern; the computation is
+the cell + propagator's concern. *These layers must remain orthogonal* —
+mixing them creates coupling that destroys portability AND violates the
+separation-of-concerns the CALM theorem rests on.
+
+** The Portability Argument
+
+A CALM-compliant network can be run by ARBITRARY schedulers — same semantics,
+different execution strategies. We have already demonstrated this with three
+scheduler implementations:
+- Gauss-Seidel (sequential fixpoint iteration)
+- BSP (sync barrier between rounds)
+- Sequential BFS-like BSP
+
+An experimental Zig+LLVM scheduler is exploring early lowering with a
+scheduler written outside the BEAM. Future self-hosted Prologos may have its
+own scheduler with different parallelism characteristics. /All of these
+schedulers run the same network with the same semantics/.
+
+The portability is load-bearing for the project's vision: Prologos networks
+should be RUNNABLE across language boundaries (Racket prototype, Zig+LLVM
+lowering, self-hosted runtime, future distributed runtime). Coupling
+computation to scheduler-specific behavior makes each scheduler port a
+re-implementation rather than a substitution.
+
+** Optimization Location Rule
+
+Optimizations should be located AT THE LAYER THAT OWNS THE CONCERN:
+
+| Concern | Optimization Examples | Layer |
+|---------+----------------------+-------|
+| State storage strategy | Hot/warm/cold cells; specialized storage for monotone counters; unboxed-fixnum fast-path under no-speculation | Cell |
+| Fire-pattern | Fire-once propagators; broadcast (1 propagator, N items); set-latch fan-in; threshold-gated firing | Propagator |
+| Dependency notification | Skip per-write notification for monotone-counter cells; only notify on threshold crossing | Cell + Propagator (cell declares fire-on policy; propagator declares fire-pattern) |
+| Scheduling efficiency | BSP barriers; round-robin vs priority; work-stealing across threads; LLVM-lowered firing | Scheduler |
+
+*Mixing layers is the anti-pattern*. Specifically:
+
+- *Anti-pattern*: piggybacking optimization into scheduler-specific machinery
+  (e.g., "the threshold check piggybacks into BSP's worklist drain pass")
+  — couples to BSP; Gauss-Seidel can't replicate; loses portability
+- *Anti-pattern*: cell semantics depending on scheduler-specific execution
+  mode (e.g., "this cell behaves differently under sequential vs parallel
+  schedulers") — violates CALM's order-independence
+- *Anti-pattern*: propagator dependencies that fire-pattern-vary by scheduler
+  (e.g., "this propagator fires immediately under sequential, lazily under
+  BSP") — same problem
+
+** Implications for Design
+
+1. *Multiple schedulers run the same network identically* — Gauss-Seidel,
+   BSP, Zig-LLVM, future distributed runtime all produce equivalent fixpoints
+   when given the same cell+propagator network
+
+2. *The scheduler stays thin* — its smarts are about scheduling EFFICIENCY
+   (parallelism, work distribution, round structure), not computation
+   BEHAVIOR (when does which propagator fire on what cell state)
+
+3. *Cell + Propagator declarations are sufficient* to specify the
+   computation; the scheduler only needs to know "fire propagators when
+   their input cells change" — the dependency graph + lattice merge are
+   complete specification
+
+4. *Optimization patterns survive scheduler changes* — fire-once, broadcast,
+   set-latch, monotone-counter cells (etc.) work under any scheduler
+   because they're declared at cell + propagator level
+
+5. *Future schedulers inherit existing optimizations* — when a new scheduler
+   is built, it doesn't have to re-implement cell/propagator optimizations;
+   they're already part of the network specification
+
+** Relationship to Other Principles
+
+- *Propagators as Universal Computational Substrate*: the universality
+  argument relies on scheduler-independence. If networks are
+  scheduler-coupled, they're not a universal substrate; they're a specific
+  scheduler's specific computational model. The Hyperlattice Conjecture
+  rests on this orthogonality.
+
+- *Propagator-First Infrastructure*: building infrastructure as cells + 
+  propagators is only load-bearing if those cells + propagators are
+  scheduler-neutral. Otherwise, each scheduler's reimplementation breaks
+  the infrastructure.
+
+- *Decomplection*: this principle IS decomplection applied to the
+  computation/runtime boundary. The computation (cells + propagators) is
+  decomplected from the runtime (scheduler).
+
+- *Correct by Construction*: scheduler-independent semantics make wrong
+  semantics hard to express. A network that runs correctly under
+  Gauss-Seidel but wrongly under BSP has a layering violation; the
+  principle catches the class of bugs structurally.
+
+** Where the Distributed-Concurrent Runtime Lives
+
+The distributed-concurrent runtime concept (multi-process, multi-node,
+async I/O, message-passing between propagator networks across machines)
+belongs at the *scheduler + networking* layer, NOT in the propagator
+network itself. The network specifies WHAT computation; the runtime
+specifies HOW it executes across hardware.
+
+Concretely:
+- Per-network parallelism (multiple cores running one network) →
+  scheduler concern (work distribution within one BSP round, or
+  Gauss-Seidel sub-round)
+- Cross-network communication (two networks exchanging information) →
+  scheduler + cell-API concern (cells are the boundary; the scheduler
+  marshals values across)
+- Async I/O integration → scheduler concern (the scheduler awaits I/O
+  events between propagator firings)
+
+This separation defers the distributed-concurrent runtime to the
+self-hosted era (post-PPN 4C, post-SH Series) without coupling it to
+the current network design. Future runtimes inherit the current
+networks unchanged.
+
+** Anti-Pattern: Scheduler-Coupled Optimization
+
+A specific recurring temptation: when an optimization is "easy to
+implement in scheduler X," reach for it. This usually couples the
+optimization to scheduler X's specific machinery. /Resist this
+temptation/. Find the equivalent optimization at the cell or propagator
+level — even if it's harder to implement initially, it preserves
+portability.
+
+Historical example (rejected, 2026-04-26): during the PPN 4C tropical
+fuel addendum design, an "Option E (BSP-aware piggyback)" was proposed
+that would piggyback the threshold check into BSP's worklist-drain
+pass. This was rejected after the user articulated the orthogonality
+principle: BSP-specific piggybacking would not survive porting to
+Gauss-Seidel or Zig-LLVM scheduler. The correct optimization (cell-level
+specialized-storage + propagator-level fire-on-threshold-crossing) was
+adopted instead.
+
+** When to Codify a Scheduler-Specific Optimization
+
+There are legitimate scheduler-level optimizations — work-stealing,
+NUMA-aware placement, GC integration. These belong at the scheduler
+layer because the layer owns the concern. The test:
+
+- Does the optimization affect the SEMANTICS of the network (which
+  propagators fire on which cell states)? → must be at cell/propagator
+  level
+- Does the optimization only affect the EFFICIENCY (when/where/how firings
+  happen, with same final fixpoint)? → can be at scheduler level
+
+If the optimization changes semantics, it's at the wrong layer.
+
+** Provenance
+
+Articulated by user during PPN 4C tropical addendum D.3.EC critique
+review (2026-04-26). The user observed: "We've explored three scheduler
+implementations without changes to the network computation... given our
+CALM-compliant network architecture, it is conceivable that we could
+have arbitrary number of different schedulers to run the same network —
+even in different languages. This could make Prologos highly portable if
+done correctly... The problem I see, is about coupling too much on the
+scheduler, complecting what should be orthogonal — making a thin scheduler
+and portability more tricky."
+
+This insight rejected the hybrid pivot's "Option E (BSP-aware piggyback)"
+and motivated a redesign of Phase 1B/1C toward on-network optimized cell
+type (storage strategy + fire-on policy at cell + propagator level, NOT
+at scheduler level). The reframing applies prophylactically to future
+PReduce, OE, and SH Series tracks.
+
+** Cross-References
+
+- [[../../research/2026-03-26_PARALLEL_PROPAGATOR_SCHEDULING.md][PAR Series: Parallel Propagator Scheduling]]
+- [[../2026-03-27_PAR_MASTER.md][PAR Master]] — CALM-compliant scheduling
+- [[../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][BSP-LE Track 0]] — cell-level hot/cold split (storage strategy at cell layer)
+- [[../../.claude/rules/propagator-design.md][propagator-design.md]] — propagator-level optimization patterns (fire-once, broadcast, set-latch)
+- [[../../.claude/rules/on-network.md][on-network.md]] — the on-network mandate (which this principle extends with the orthogonality requirement)

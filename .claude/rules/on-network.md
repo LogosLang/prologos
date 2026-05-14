@@ -45,3 +45,28 @@ Every cell value must be a lattice element with a monotone merge. If you can't d
 When a propagator discovers it needs infrastructure that doesn't exist yet (e.g., a table cell for an unregistered relation), it emits a topology request. The topology stratum (between BSP rounds) processes the request, allocates cells, updates registries. This is the CALM-safe protocol for structural mutation.
 
 Pre-quiescence allocation (during installation) is the common case. Topology requests are for mid-quiescence discovery.
+
+## Cell / Propagator / Scheduler Orthogonality (load-bearing constraint on optimization placement)
+
+The on-network mandate is necessary but not sufficient. The mandate says "put everything on the network"; the orthogonality principle says "put it at the RIGHT LAYER of the network."
+
+Per [`DESIGN_PRINCIPLES.org` § Cell / Propagator / Scheduler Orthogonality](../../docs/tracking/principles/DESIGN_PRINCIPLES.org), the architecture has three orthogonal layers:
+- **Cell**: state storage + read/write API; declares lattice + merge + (optionally) storage strategy
+- **Propagator**: computational rule; reads cells, writes cells; declares dependencies + fire-pattern
+- **Scheduler**: runs propagators against cells; determines firing order, parallelism, round structure
+
+Optimizations on the on-network substrate should be located at the layer that owns the concern. **Specifically: optimization choices that respect on-network must ALSO respect scheduler-independence**.
+
+**Red flag for on-network optimization**: when "this cell's behavior is faster under scheduler X" or "this propagator's optimization piggybacks on BSP's worklist drain," you've coupled on-network state to scheduler-specific execution. The state is technically on-network but its SEMANTICS depend on the scheduler — which violates CALM's order-independence and breaks portability across schedulers (Gauss-Seidel, BSP, Zig-LLVM, future distributed runtime).
+
+**On-network optimization is principled when**:
+1. The optimization is a property of the CELL (storage strategy, write-pattern, read-policy)
+2. The optimization is a property of the PROPAGATOR (fire-pattern, dependency-notification policy)
+3. The optimization's semantics are identical under any scheduler
+
+**On-network optimization is principle-violating when**:
+1. The optimization piggybacks on scheduler-specific machinery (e.g., BSP-round drain pass)
+2. The cell or propagator's behavior depends on the scheduler's execution mode (sequential vs parallel; sync vs async)
+3. Porting to a new scheduler requires re-implementing the optimization (not just inheriting it)
+
+This rule is load-bearing for future tracks where optimization pressure is high (PReduce e-graph cost extraction; OE Series weighted parsing; SH Series self-hosted runtime). Without the orthogonality discipline, optimizations would couple to the current scheduler (Racket BSP) and have to be re-derived for each future scheduler. With the discipline, optimizations declared at cell + propagator level work under ANY scheduler — Prologos networks become genuinely portable.

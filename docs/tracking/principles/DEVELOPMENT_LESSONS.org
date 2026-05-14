@@ -1273,3 +1273,59 @@ architecture" is NOT the challenge "did we capture the perf benefit
 the architecture was supposed to deliver, AND did we MAINTAIN it
 through subsequent sub-phases?" Both Catalogue1 (shipped) and
 Catalogue2 (initially captured) miss the Challenge (durably maintained).
+
+** Cell / Propagator / Scheduler Orthogonality — Codified Architectural Principle
+
+When optimization pressure surfaces on the propagator substrate, the natural
+temptation is to reach for whatever's easy to implement in the current
+scheduler. The hybrid pivot's "Option E (BSP-aware piggyback)" was an
+example: piggyback the threshold check into BSP's worklist drain pass.
+Easy to implement; wrong layer.
+
+*The principle* (codified in [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator /
+Scheduler Orthogonality]]): the architecture has three orthogonal layers
+(Cell, Propagator, Scheduler), and optimizations should be located at the
+layer that owns the concern. Mixing layers breaks scheduler-portability
+(violates CALM's order-independence in practice) and creates re-implementation
+debt for every new scheduler.
+
+*The discipline*: when an optimization is tempting because "it's easy to
+implement in scheduler X," that's a red flag. The optimization is at the
+wrong layer. Find the equivalent optimization at the cell or propagator
+level — even if it's harder to implement initially, it preserves portability
+across all current and future schedulers (Gauss-Seidel, BSP, Zig-LLVM,
+self-hosted runtime, future distributed runtime).
+
+*Origin*: PPN 4C tropical addendum D.3.EC critique review (2026-04-26). The
+user articulated the orthogonality principle in response to the hybrid pivot
+exploration. The principle rejected "Option E (BSP-aware piggyback)" and
+motivated a redesign of Phase 1B/1C toward on-network optimized cell type
+(storage strategy + fire-on policy at cell + propagator level).
+
+*Application going forward* (prophylactic discipline):
+- *PReduce series*: e-graph cost extraction inherits the cell-level
+  monotone-counter optimization pattern; no scheduler coupling
+- *OE Series*: cost-bounded exploration uses cell-level specialized storage;
+  no BSP-specific piggybacking
+- *SH Series*: self-hosted scheduler runs existing networks unchanged
+- *Future tracks*: every optimization decision passes the "does this couple
+  to scheduler-specific behavior?" test BEFORE implementation
+
+*Anti-pattern catch* (apply at design and implementation time):
+- "This is easy to add to BSP's worklist drain" → red flag; move to cell/prop layer
+- "This cell behaves differently under sequential vs parallel" → CALM violation
+- "Porting to scheduler X requires re-implementing this optimization" → wrong layer
+- "The scheduler needs to know about this special cell type" → cell-mech should be opaque to scheduler
+
+Codified 2026-04-26 from a single user-articulated insight during external
+critique resolution. Treated as foundational architectural principle (added
+to DESIGN_PRINCIPLES.org as a top-level principle, not just a watching-list
+candidate) because the alternative — hybrid pivot scaffolding propagating
+across PReduce/OE/SH Series — would have created compounding architectural
+debt across multiple multi-month tracks. The cost of codifying now is one
+session; the cost of re-deriving for each track is multi-session × N tracks.
+
+See:
+- [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]] — the canonical principle
+- [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]] — propagator-level operational rule
+- [[../../.claude/rules/on-network.md][on-network.md § Cell / Propagator / Scheduler Orthogonality]] — on-network constraint extension
