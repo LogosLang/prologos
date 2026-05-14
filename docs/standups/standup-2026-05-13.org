@@ -1,0 +1,113 @@
+#+TITLE: Standup — 2026-05-13
+#+DATE: 2026-05-13
+
+* Yesterday (since 2026-05-02 standup)
+
+An 11-day interval. Two principal threads of work: (1) SRE Track 2I
+reopened-arc completion (Phases 11-15 — Nation meeting preparation +
+gap closure), and (2) external-contributor PR review pass with usage-issue
+cleanup (LSP integration fix, stdout-clean lint tooling, PPN 4C addendum
+Phase 4 slot for top-level on-network elaboration).
+
+** SRE Track 2I — reopened arc closed (Phases 11-15)
+
+After Phase 10 "first close" (2026-05-08), reopened the track for
+gap-closure Phases 11-15. Comprehensive lattice variety extensions
+delivered:
+
+- **Phase 11** ✅ — has-complement (Boolean placement) check + Lattice
+  Variety Report integration. Sweep + Nation report (commit =802833c6=).
+- **Phase 12** ✅ — M3/N5 sublattice detection (Birkhoff Theorem 9.2)
+  (commit =d61ed39d=).
+- **Phase 13** + **Phase 14** ✅ — Anti-exchange property (AGT 2003 iff)
+  + congruences/SI characterization, combined commit =26bcbd18=. Phase 14
+  type-domain wider-sample empirical content honestly deferred (samples
+  unsound at scale).
+- **Phase 15** ✅ — Day's doubling / inflation detection (commit
+  =e9f3a51c=). Hash-code-collision anomaly surfaced and documented as
+  in-flight finding (Tier 4 extended-set search deferred follow-up).
+- **Track 2I TRUE close** (commit =82f2f5bd=) — reopened-arc adversarial
+  VAG (P/R/M/S two-column) passed across Phases 11-15 as a unit.
+
+196 tests GREEN, 20 algebraic properties in =all-sweep-properties=, 4
+SRE-registered domains × {ground, wider} sweep matrix populated. Nation
+meeting deliverable ready.
+
+** Nation report — propagator demo + PDF build infrastructure
+
+- =research/2026-05-09_NATION_REPORT/= cleaned + conversation rehearsal
+  document (commit =f23ed5ec=).
+- Bounded vs bounded-below clarification (Phase 11 follow-on, commit
+  =4257f869=).
+- PDF build infrastructure (commit =31b7a862=).
+- Phase 15 promoted to dedicated results subsection (commit =e0c5da2a=).
+- **Propagator network visualization demo** for Nation meeting (commits
+  =bbdbe05e=, =77a4be07=, =73f7aff9=) — runnable Prologos source +
+  matching =.prologos= file + back-step + keyboard nav.
+
+** Two cross-phase patterns flagged for promotion
+
+From the reopened-arc dailies, both 4-data-point patterns awaiting
+=DEVELOPMENT_LESSONS.org= graduation:
+
+1. **No-forward-implication-rule discipline** (sample-unsound): Phases
+   12, 13, 14, 15 all deliberately omitted forward rules.
+2. **Single-commit code+sweep+report rhythm**: Phases 11, 12, 13/14, 15
+   — tight scope on substantively-complete tracks.
+
+** Today (2026-05-13): External-contributor PR review + LSP fix arc
+
+A focused session covering external contributions and usage-driven
+cleanup:
+
+- **LSP integration fix** (commit =1fe1422f=): VS Code LSP failed to
+  connect — =sre-rewrite.rkt= had 5 top-level =verify-rewrite-rule=
+  calls returning =#t=, which =#lang racket/base='s =current-print=
+  emitted to stdout, corrupting LSP's JSON-RPC framing. Surgical
+  =(void ...)= wrap; tests preserved.
+- **Stdout-clean lint** (commit =de81554e=): new
+  =tools/check-stdout-clean.rkt= verifies production modules don't
+  pollute stdout on load. 1s for 112-file audit. Pre-commit hook
+  extended to run both check-parens + check-stdout-clean on staged
+  files. Class-of-bug prevention.
+- **8 kumavis PRs merged**: #10 (CI unblock), #4 (multi-line spec
+  splice), #5 (pvec-zip-with), #8 (eta-expand prim ops), #13 (Rat slash
+  literals + bonus pitfall #10), #16 (defn bare-token compound
+  patterns), #11 (multi-line let body), #6 (pretty-print =[T A]= form).
+- **2 PRs approved, awaiting rebase**: #12 (def := multi-line splice),
+  #15 (pvec Int helpers). CONFLICTING after sibling merges.
+- **PR #14** (mutual recursion via pre-pass) — commented, no merge.
+  Architectural concerns surfaced (3-call-site duplication, defensive
+  with-handlers, Layer-2 fallback reliance, PPN 4C interaction). Aligns
+  with kumavis's own "pending revisit" flag.
+- **PR #17** (unify =m0/mw= lenience) — commented, disposition pending
+  prior-art audit. Decided structural fix preferred — see #23.
+- **6 GitHub issues filed**:
+  - #18: =compile-match-tree= variable-binding bug (latent, surfaced
+    via #16; affects recursive compound patterns)
+  - #20: improved implicit inference (Directions 1 + 2 from 2026-02-22
+    design; help wanted)
+  - #21: document the four working WS-mode =let= variants (docs + tests
+    track)
+  - #22: PPN 4C top-level form processing on-network (retire
+    =process-command= sequential orchestrator; motivated by #14)
+  - #23: multiplicity subtyping =m0 <: mw= (structural, declined kumavis
+    lenience fix)
+  - #57: =def= stores AST instead of reduced value (eager-nf experiment
+    discovered def-time regression; design space documented)
+- **PPN 4C addendum Phase 4 slot** (commit =b4696b11=): added new
+  Phase 4 to the substrate/orchestration addendum thesis + scope +
+  progress tracker, capturing the top-level on-network gap explicitly.
+
+* Today
+
+(See =docs/tracking/standups/2026-05-13_dailies.md= for the live log.)
+
+Plan: depends on context budget. Candidates: PReduce Track 0.1
+(architectural sketch), SRE Track 2I follow-up items (post-Nation
+meeting), PPN 4C Phase 1B (tropical fuel substrate), or open another
+usage-driven cleanup pass.
+
+* Blockers
+
+None.
