@@ -1329,3 +1329,108 @@ See:
 - [[file:DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]] — the canonical principle
 - [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]] — propagator-level operational rule
 - [[../../.claude/rules/on-network.md][on-network.md § Cell / Propagator / Scheduler Orthogonality]] — on-network constraint extension
+
+** "Spike Validates Feasibility, Not Optimality" — Distinguish Acceptable from Best
+
+When a Pre-0 spike PASSES its decision criteria, the verdict is "the
+architecture is FEASIBLE at acceptable cost" — NOT "the architecture is
+OPTIMAL." A passing spike doesn't foreclose better alternatives; it only
+forecloses worse-than-target alternatives. Stage 3 should continue surfacing
+refinements even after the spike PASSES.
+
+*Pattern* (1 data point, PPN 4C tropical addendum 2026-05-15): the §13.6
+spike PASSED with W1+ = 6.4 ns/call (≤ 30 ns target, ~4× under). The verdict
+was "D.4 canonical." During Phase 1B mini-design, a friend's question about
+fuel-cell write semantics surfaced an architectural lever (Option 13
+deferred-write at round boundaries) that the spike hadn't tested. Option 13
+estimates ~2 ns/cycle amortized — ~3× better than the spike's 6.4 ns. The
+spike validated D.4 (Option Y per-fire) as feasible; it did NOT validate
+that Option Y was optimal vs Option 13 deferred-write.
+
+*The lesson*: a passing Pre-0 spike doesn't close design exploration. It
+narrows the field to "architectures that pass the spike's criteria"; further
+refinement may surface better-performing architectures within that field.
+Stage 3 critique rounds should continue past the spike's PASS verdict.
+
+*The discipline*:
+- Don't treat a spike PASS as "design closed"
+- Continue surfacing refinements + alternative-within-architecture during
+  Stage 3 + Phase mini-design
+- Friend-/external-question/-driven exploration is especially valuable
+  AFTER a spike PASS (the spike's data informs the exploration; the
+  question's outside-perspective surfaces what the spike's framing missed)
+
+*The complementary pattern* (per-phase measurement gates): each
+sub-phase boundary in Stage 4 should explicitly measure the design's
+performance assumptions and compare against ALTERNATIVES (A/B/C structure).
+The §13.7 Per-Phase Measurement Plan codifies this for PPN 4C tropical
+addendum. The pattern: design assumptions about performance need explicit
+gates that catch divergences early.
+
+Origin: PPN 4C Tropical Addendum Phase 1B mini-design 2026-05-15. The
+friend's question "what increments the fuel cell" surfaced the
+spike-validates-feasibility-not-optimality gap; the Option 13 deferred-write
+refinement followed. Watching list: 1 data point; ~1-2 more for graduation
+(future tracks where a Pre-0 spike PASSES but subsequent design exploration
+finds a better-performing alternative within the architecture).
+
+See:
+- PPN 4C Tropical Addendum D.4 §13.6 (spike) + §13.6.A (Option 13 spike) +
+  §13.7 (per-phase measurement plan)
+- DESIGN_PRINCIPLES.org § Cell/Propagator/Scheduler Orthogonality §
+  Scheduler-State Cells
+
+** Per-Phase Measurement Plan with A/B/C Structure
+
+When a design's correctness rests on assumptions about performance (e.g.,
+"Option 13 achieves ~2 ns/cycle amortized"), the implementation plan should
+EXPLICITLY name the measurements that validate each assumption at each
+sub-phase boundary. This is stronger than the existing "per-phase
+microbench" discipline (`workflow.md` "Benchmark after infrastructure
+phases") because it names CONCRETE comparisons (A/B/C variants) and
+DECISION RULES (PASS/FAIL/INVESTIGATE), rather than ad-hoc per-phase
+measurements.
+
+*Pattern* (1 data point, PPN 4C tropical addendum 2026-05-15): the §13.7
+Per-Phase Measurement Plan establishes A/B/C variants for the fuel-cost
+write pattern (A = current struct-copy / B = D.4 per-fire / C = Option 13
+deferred-write); each Phase 1B + 1C sub-phase has a microbench gate that
+validates the C variant against B (post-Phase-1B reference) and A (current
+baseline). Measurement work is ~30-60 min per sub-phase × ~6 sub-phases =
+~3-6 hours total — but catches regressions when they're cheap to address.
+
+*The principle*: design assumptions about performance need EXPLICIT
+measurement gates, not ad-hoc validation. The gate's structure:
+
+- *What's measured* (specific microbench + name)
+- *When* (which sub-phase boundary)
+- *Against what target* (PASS criterion; numeric)
+- *Decision rule* (PASS → continue; FAIL → stop + investigate;
+  INVESTIGATE → resolve before next sub-phase)
+- *Comparison structure* (A/B/C variants when multiple alternatives are
+  in scope)
+
+*Why A/B/C rather than just A/B*: when refinements emerge during Stage 4
+(e.g., Option 13 surfaced post-spike), three-variant comparison (current
+baseline + spike-validated alternative + production refinement) shows
+where the savings come from. With only A/B, the source of the perf delta
+is ambiguous; with A/B/C, each delta is attributable.
+
+*The complementary pattern*: see "Spike Validates Feasibility, Not
+Optimality" above — the per-phase measurement plan is the discipline that
+catches alternatives that improve on the spike's verdict.
+
+Origin: PPN 4C Tropical Addendum Phase 1B mini-design 2026-05-15. The
+user's discipline ask: "make sure that we are measuring things at
+appropriate places throughout the design to validate our assumptions...
+A/B/C test various approaches/assumptions." Watching list: 1 data point;
+~1-2 more for graduation.
+
+See:
+- PPN 4C Tropical Addendum D.4 §13.7 — canonical example with full A/B/C
+  structure across Phase 1B + 1C
+- `workflow.md` "Benchmark after infrastructure phases" — the existing
+  per-phase microbench discipline (this lesson refines + makes concrete)
+- DEVELOPMENT_LESSONS.org § "Microbench-Claim Verification Pays Off Across
+  Sub-Phase Arcs" — the post-implementation verification discipline (this
+  lesson extends to per-sub-phase verification)

@@ -29,6 +29,13 @@
 
 **The cell IS the live state** (no struct-field carve-out). The optimization is at the CELL LAYER, not the SCHEDULER LAYER. Per the Orthogonality principle: this stays portable across Gauss-Seidel, BSP, Zig-LLVM, and future self-hosted/distributed schedulers. **The §13.6 spike empirically validated all five W1-W5 measurements within their targets** by margins of 4× to 90× under (see §10.1 spike results table).
 
+**D.4 REFINEMENT 2026-05-15 — Option 13 deferred-write at round boundaries**: per Phase 1B mini-design (friend-surfaced concern about per-fire dispatch overhead), §10.3.A captures a scheduler-side optimization within the D.4 framework: BSP scheduler maintains a local-var fuel counter for the hot path; the cell is read at round entry, written at round exit (or immediately on exhaustion). The cell IS still canonical (no principle inversion — local-var is scheduler-internal SCRATCH, not cache of off-network state). Performance: estimated ~2 ns/cycle amortized (matches "native gas tracker"; ~3× better than per-fire pattern). **Validation gates**:
+- §13.6.A Option 13 spike (PENDING; Phase 1C-i opening) — direct measurement of W1-O13 through W4-O13
+- §13.7 Per-Phase Measurement Plan — A/B/C gates at every Phase 1B + 1C sub-phase boundary
+- §11.3 Phase 1V exit criteria — refined gates for Option 13 (replaces D.3 hybrid pivot gates)
+
+The Option 13 refinement also CONFIRMS the "scheduler-state cell" category from the Q-J question: cells the scheduler writes (vs cells propagators write) permit scheduler-side write-batching optimizations that propagator-state cells cannot. See DESIGN_PRINCIPLES.org § Cell/Propagator/Scheduler Orthogonality § "Scheduler-State Cells" (refined post-Option-13).
+
 **What changes from D.3 → D.4**:
 
 | Section | D.3 → D.4 |
@@ -1508,42 +1515,135 @@ Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" d
 ;;   (24 ns struct-copy baseline) and the spike's W1+ (6.4 ns specialized).
 ```
 
-### §10.4 Sub-phase plan (6 sub-phases under D.4)
+### §10.3.A Option 13 — Scheduler-side deferred write at round boundaries (D.4 REFINEMENT 2026-05-15)
+
+> **Origin**: surfaced during Phase 1B mini-design when a friend's question highlighted that D.4's per-fire `net-cell-write` pattern adds ~3-4 ns dispatch overhead vs a "native" gas tracker. The architectural lever the question makes visible: **D.4 assumed `net-cell-write` should be called per-fire**. That assumption is what produces the dispatch overhead. The orthogonality principle does NOT require per-fire writes — only that the cell's BEHAVIOR is scheduler-neutral. The scheduler is free to CHOOSE WHEN to call `net-cell-write` (per-fire OR batched) as long as the cell's observable semantics are preserved at the points where anything else can observe them.
+
+**The pattern**: BSP scheduler maintains a local-var fuel counter for the hot path; the cell is read at round entry, written at round exit (or immediately on exhaustion):
+
+```racket
+;; At BSP round entry — pull cell value into scheduler-local working register
+(define local-fuel-cost (box (net-cell-read net fuel-cost-cell-id)))
+(define budget (net-cell-read net fuel-budget-cell-id))
+
+;; Per fire (inline, in the BSP loop body):
+(define new-cost (+ (unbox local-fuel-cost) 1))
+(set-box! local-fuel-cost new-cost)
+(when (>= new-cost budget)
+  ;; Flush + contradict (rare; on exhaustion only)
+  (set! net (net-cell-write net fuel-cost-cell-id new-cost))
+  ;; The on-write check at the cell layer routes contradiction structurally
+  (return-from-bsp-round net))
+
+;; At BSP round exit (no exhaustion in this round):
+(set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
+```
+
+**Performance characterization (ESTIMATED — pending §13.6.A spike validation)**:
+
+| Component | Estimated cost | Frequency | Validation |
+|---|---|---|---|
+| Per-fire local-var decrement + threshold check (hot path) | ~2 ns | 100s-1000s per round | §13.6.A W1-O13 spike |
+| Per-round cell-read at entry | ~6 ns | Once per round | §13.6.A W2a-O13 |
+| Per-round cell-write at exit | ~6 ns | Once per round | §13.6.A W2b-O13 |
+| Contradiction flush on exhaustion (rare path) | ~10 ns | Once per workload typically | §13.6.A W3-O13 |
+
+At typical 100-1000 fires per round, per-round overhead amortizes to **~2 ns/cycle effective** — approximating native gas tracker performance, ~3× better than D.4 per-fire dispatch (6.4 ns/cycle from §13.6 spike).
+
+**Why this is materially different from D.3 hybrid pivot (not a principle inversion)**:
+
+| Aspect | D.3 hybrid | Option 13 deferred-write |
+|---|---|---|
+| Live state location | Struct-field (off-network) | Cell (on-network) — same as D.4 canonical |
+| Per-fire decrement | `(struct-copy prop-net-hot ... [fuel ...])` | `(set-box! local-fuel-cost ...)` (scheduler-internal) |
+| Cell update timing | "Semantic transitions" (vague; ambiguous to enumerate) | BSP round boundaries (well-defined; matches CALM's natural granularity) |
+| Phase 3C reads | Possibly stale per Cell Staleness Contract | Always-current at round boundary (where Phase 3C consumers fire) |
+| Principle alignment | Cell DERIVED, struct PRIMARY (INVERSION) | Cell PRIMARY, local-var SCRATCH (no inversion) |
+| Cell visible to consumers | Yes, with staleness contract | Yes, at all observation points |
+
+D.3 made the cell a **cache** of an off-network struct (read this; the struct is the truth). Option 13 makes the local-var a **scratch** of the cell (read the cell; the local-var is the scheduler's working register that flushes back). The cell IS canonical at every observation point; the local-var is invisible outside the BSP scheduler's fire loop.
+
+**Why this preserves Cell/Propagator/Scheduler Orthogonality**:
+
+The deferred-write is a SCHEDULER-LAYER optimization. The cell mechanism's behavior is unchanged: when `net-cell-write` is called (at round boundary or on exhaustion), it dispatches per §9.2.B; the on-write check runs; the value is written. The scheduler CHOOSES WHEN to invoke `net-cell-write` — this choice is the scheduler's own concern.
+
+Other schedulers (Gauss-Seidel, Zig-LLVM, future) can choose their own strategies:
+- Gauss-Seidel might call per-update (its natural granularity)
+- Zig-LLVM might batch per-N-iterations (its loop structure)
+- BSP uses round boundaries (this design)
+
+The cell's contract is: "when written, the on-write check runs and may produce contradiction." How often `net-cell-write` is called is the scheduler's concern. **This is exactly the orthogonality principle's "scheduler optimizes WITHOUT coupling cell behavior" case** — fully aligned, not just permissively allowed.
+
+**Why this confirms the "scheduler-state cell" category**:
+
+Scheduler-state cells (cells the scheduler writes; not written by any fire function) permit deferred-write optimization that propagator-state cells (cells written by fire functions in parallel) cannot. Propagator-state cells have writes that must be individually consequential (they're outputs of computation). Scheduler-state cells are the scheduler's own bookkeeping; the scheduler can batch its own writes without breaking anyone else's observation.
+
+This is a **clean architectural category** that the D.4 design implicitly assumed but didn't name. With Option 13 + the category, future schedulers (and scheduler-state cells beyond fuel-cost — e.g., worklist-cache, future BSP-round-counter cell, etc.) inherit the deferred-write pattern naturally.
+
+**Trade-offs and complications**:
+
+- **Snapshot/restore**: when speculation forks mid-round (rare; usually at round boundaries), local-var must flush first. Adds ~6 ns to fork operation. Speculation operations are rare relative to fires; net overhead is negligible.
+- **Phase 3C consumer granularity**: round-level not per-fire. For UC1 (blame attribution), round-level + dependency-graph traversal gives propagator-level attribution (acceptable). For UC2 (cost-bounded elaboration), round-level is natural (decision points are between rounds). For UC3 (per-branch cost): each branch's BSP has its own local-var → cell updates at branch fork/join boundaries (correct semantics).
+- **Mid-round on-write check**: the on-write predicate currently runs at cell-write time. Under deferred-write, predicate runs at flush time (round boundary OR exhaustion). For monotone counter (fuel-cost), this works correctly — if final value crosses threshold, contradiction fires. For non-monotone use cases (future), per-write semantics would still be required.
+- **Parallel BSP (Phase 2 PAR future)**: workers each have local-var; reduce at round end via atomic-add or single-thread aggregation. Deferred to Phase 2 PAR design.
+- **Cell-API call boundary**: the deferred-write pattern still calls `net-cell-write` — just less often. The cell mechanism's contract is unchanged. The scheduler CHOOSES the call frequency.
+
+**Composability with macro-based specialization (Optional optimization Option 14)**:
+
+We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sites, eliminating function-call overhead entirely. Shaves another ~0.5-1 ns per cycle. Probably worth doing if Phase 1V close microbenches show the deferred-write pattern still has measurable overhead vs ideal native. Deferred to Phase 1C-iv mini-design with code in hand.
+
+### §10.4 Sub-phase plan (6 sub-phases under D.4 — REFINED for Option 13)
 
 - **1C-i** — Pre-implementation audit + mini-design:
   - Verify §9 framework implementation (Phase 1B) lands cleanly; cell registration API stable
+  - **Run §13.6.A Option 13 spike** (deferred-write pattern measurement; validates the ~2 ns/cycle amortized estimate)
   - Re-verify §13.6 spike measurements at scale (probe + targeted-test runs)
   - Identify any cell-id 11/12 conflicts (per D-1C-3)
   - Confirm speculation-fallback semantics for monotone-counter cells (per D-1C-8)
+  - Identify the 4 BSP fire sites (lines 1852, 1887, 3000, 3053) and the local-var boundary scope at each
+  - **Per §13.7 measurement plan: capture A baseline (current struct-copy) microbench data for A/B/C comparison at 1C-vi close**
 
-- **1C-ii** — Migrate 4 decrement sites:
-  - Atomic commit; each site replaces `struct-copy` with `net-cell-write`
-  - Verify per-decrement performance preserved (M7+M8+M13 within Pre-0 variance + spike margins)
+- **1C-ii** — Migrate 4 BSP fire sites to Option 13 deferred-write pattern:
+  - At BSP round entry: read fuel-cost cell into local-var (box)
+  - Per-fire: inline local-var decrement + threshold check (~2 ns/cycle target)
+  - At BSP round exit: flush local-var to cell (~6 ns; once per round)
+  - On exhaustion (mid-round): flush + contradiction (via cell-mechanism on-write check)
+  - Atomic commit; verify exhaustion semantics + performance preserved
+  - **Per §13.7: re-microbench M7+M8+M13; expected ~2 ns/cycle amortized (matches §13.6.A spike target)**
   - Targeted test: test-propagator + test-tropical-fuel
 
 - **1C-iii** — Migrate 11 check sites:
   - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)`
+  - Most check sites are AFTER round boundary OR within BSP fire loop (where local-var is current); semantic equivalence preserved
   - Verify exhaustion semantics: representative workloads exhaust at correct points
+  - **Per §13.7: re-microbench check-site cost; target unchanged ~6 ns**
   - Targeted test: full suite (these check sites are widely distributed)
 
-- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print:
+- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print + Option 14 specialization decision:
   - Retire `prop-network-fuel` macro (propagator.rkt:399)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
-  - Migrate 3 read-as-value sites
-  - Migrate typing-propagators saved-fuel handling
+  - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries)
+  - Migrate typing-propagators.rkt:2269 saved-fuel handling — speculation forks flush local-var BEFORE fork; sub-fork starts with current cell value
   - Update pretty-print display
   - Verify no orphan callers (grep verification)
+  - **Per §13.7: macro-specialization decision point (Option 14 from §10.3.A) — measure deferred-write overhead with macro-expansion vs without; decide if specialization warranted (e.g., if overhead > 0.5 ns/cycle, apply Option 14)**
 
 - **1C-v** — Migrate 13 test sites + 2 bench sites:
   - Batch mechanical migration via 2-pass sed pattern per workflow.md (single-file verification before batch)
+  - Tests' `(prop-network-fuel result)` assertions become `(- (net-cell-read result fuel-budget-cell-id) (net-cell-read result fuel-cost-cell-id))` for remaining-fuel, OR direct cell-read for cost-tracking
   - Full suite verification post-batch
-  - Post-impl bench captures the D.4 numbers for A/B comparison vs Pre-0 baseline
+  - Post-impl bench captures the D.4 numbers for A/B/C comparison vs Pre-0 baseline (per §13.7)
 
 - **1C-vi** — Verification + close:
   - Probe + acceptance file + full suite
-  - Tropical-fuel-counter-parity test (per §15): exhaustion semantics equivalent before/after
-  - Performance verification: per-decrement cycle ≤ 45 ns (matches §13.6 spike + ≤5% regression vs Pre-0)
-  - Re-microbench M7 (now measuring `net-cell-write`) + M13 (now measuring `net-cell-read`) — confirms framework lands the perf benefit
+  - Tropical-fuel-counter-parity test (per §15): exhaustion semantics equivalent before/after at round-boundary observation points
+  - **Per §13.7: full A/B/C comparison report**:
+    - A = current struct-copy (baseline)
+    - B = hypothetical per-fire `net-cell-write` (D.4 original; spike's W1+ measured but not implemented)
+    - C = Option 13 deferred-write (this design; the actual production landing)
+    - Confirm C ≤ A on per-cycle cost; confirm C matches §13.6.A spike's ~2 ns/cycle target
+  - Performance verification: per-decrement cycle ≤ 5 ns amortized (Option 13 target; vs ≤ 45 ns per-fire which we no longer implement)
+  - Re-microbench Phase 1V exit criteria (per §11.3; 11 microbenches refined for Option 13)
 
 ### §10.5 Drift risks (D.4)
 
@@ -2003,11 +2103,15 @@ Per microbench-claim verification rule ([`DEVELOPMENT_LESSONS.org § Microbench-
 
 The list is comprehensive for the "did the perf claims land" verification. ~30-60 min total at Phase 1V close.
 
-**Architectural + reconsideration gates** (D.2 + D.3 from P2 REFINEMENT):
+**Architectural + reconsideration gates (D.4 CANONICAL + Option 13 refinement)**:
 
-- **Hybrid pivot performance gate** (NEW per D.2): per-decrement cycle (M7+M8+M13 sum) ≤ 5% regression vs Pre-0 baseline (~36 ns) — overlaps with R4 microbench list above
-- **Hybrid pivot architectural gate** (NEW per D.2): aggregate `prop_firings` post-impl ≤ 1× per file BSP-barrier-equivalent (S-20 baseline = 0; under hybrid, threshold propagator should fire only on rare exhaustion + semantic-transition-cell-writes, NOT per-decrement)
-- **Hybrid pivot reconsideration gate** (NEW per D.3 from P2 REFINEMENT): post-implementation re-microbench M7 (cell-write cost vs struct-copy) + R3 (GC profile under sustained cell-write at 100k+ ops/sec); IF cell-write ≤ 50% of struct-copy AND R3 GC stays at zero major-GC, escalate to user — "the hybrid pivot's empirical motivation does NOT hold under Phase 1B reality; reconsider hybrid retirement timing?" Cross-reference: Q-1B-6 (Phase 1B mini-design opening spike) is the EARLY signal; this Phase 1V gate is the FINAL verification. The two gates differ in timing (pre-build vs post-build) and granularity (spike vs full microbench suite); both serve the falsification-test discipline per workflow.md "Belt-and-Suspenders Masks Bugs."
+- **Option 13 deferred-write performance gate**: per-cycle amortized cost (W3-O13 at typical N) ≤ 5 ns; per-fire local-var decrement (W1-O13) ≤ 5 ns; round-boundary flush (W2b-O13) ≤ 15 ns. Cross-reference §13.6.A spike target. **A/B/C comparison**: confirm C (Option 13) ≤ A (current struct-copy) at amortized per-cycle cost.
+- **Option 13 architectural gate**: aggregate `prop_firings` post-impl shows on-write-check fires ONLY at round boundaries + exhaustion events (NOT per-fire) — verifies the deferred-write pattern actually defers. Suite-wide `prop_firings` delta from S-20 baseline should be small + bounded.
+- **Cell observability gate**: probe + acceptance file workflows that read fuel-cost cell at consumer-fire boundaries see correct values (round-boundary granularity is sufficient for Phase 3C UC patterns).
+- **Speculation correctness gate**: A9 microbench (100 spec cycles save+write+restore) shows correct rollback under deferred-write (local-var flushes before fork; sub-fork starts with current cell value).
+- **Macro-specialization decision gate** (Option 14 from §10.3.A): measure deferred-write at production fire sites with/without macro-expansion; apply Option 14 if saves ≥ 1 ns/cycle.
+
+> **D.3 hybrid pivot gates** (RETIRED-PER-D.4-CANONICAL): the previous "Hybrid pivot performance gate" / "architectural gate" / "reconsideration gate" tracked the hybrid pivot's behavior; under D.4 + Option 13, those gates are superseded by the gates above. Preserved here for traceability: the D.3 gates were `per-decrement cycle ≤ 5% regression`, `prop_firings ≤ 1× per file BSP-barrier-equivalent`, and `post-impl reconsider if cell-write ≤ 50% of struct-copy + R3 zero major-GC`.
 
 ---
 
@@ -2125,6 +2229,48 @@ Phase 1B mini-design opening runs the spike per §13.6. The spike result drives 
 - *R3*: On-write predicate's allocation cost is higher than expected. Mitigation: spike measures with a representative predicate (`(>= cost budget)`); should be 0-allocation under fixnum comparison.
 - *R4*: Fire-on-threshold-crossing notification mechanism has subtle bugs (e.g., misses crossing if multi-write batch). Mitigation: this is a correctness concern, not perf; tested via C-series + behavioral tests.
 
+### §13.6.A Option 13 deferred-write spike plan (D.4 REFINEMENT 2026-05-15)
+
+**Purpose**: validate the Option 13 deferred-write pattern's ~2 ns/cycle amortized estimate before committing to the BSP fire-site migration at Phase 1C-ii. The §13.6 spike validated per-fire cell-write (6.4 ns/call with realistic dispatch); §13.6.A validates the scheduler-side deferred-write refinement (target: ~2 ns/cycle amortized).
+
+**Spike scope** (~30-40 min execution; extends `bench-specialized-cell-spike.rkt` OR a new sibling spike file):
+
+1. **Mock the deferred-write pattern**:
+   - Local-var box for fuel-cost counter (scheduler-internal scratch)
+   - Per-fire: `(set-box! local-fuel-cost (+ 1 (unbox local-fuel-cost)))` + threshold check
+   - Per-round-boundary: simulated `net-cell-write` to mock cell (use §13.6's specialized mock cell with `set-mutable-counter!`)
+   - On-exhaustion: flush + contradiction (mock)
+
+2. **Measure 4 dimensions (W1-O13 through W4-O13)**:
+   - **W1-O13**: Per-fire local-var decrement + threshold check (no exhaustion) — target ≤ 5 ns/call (estimate: ~2 ns; the box + add + compare + branch)
+   - **W2a-O13**: Per-round cell-read at entry — target ≤ 15 ns/call (just `net-cell-read` from spike's W4 baseline of 0.8 ns; expect slightly higher in production)
+   - **W2b-O13**: Per-round cell-write at exit — target ≤ 15 ns/call (using §13.6's W1+ dispatch path of 6.4 ns + slight overhead for production)
+   - **W3-O13**: Per-fire amortized cost across BSP round of N fires (N=10, 100, 1000) — at N=100 expect ~2.1 ns/cycle (W1-O13 + W2/N); at N=1000 expect ~2.01 ns/cycle
+   - **W4-O13**: Exhaustion-path cost (flush + contradiction-write) — target ≤ 50 ns/call (rare; only once per workload typically)
+
+3. **Compare A/B/C**:
+   - **A**: spike's "B.M7.2 nested struct-copy" (5.7 ns from §13.6 spike; mirrors current implementation)
+   - **B**: spike's "W1+ specialized cell-write with dispatch" (6.4 ns from §13.6 spike; per-fire pattern of D.4 original Option Y)
+   - **C**: this spike's "W3-O13 amortized" (target ~2-2.1 ns at typical N; deferred-write pattern of Option 13)
+
+**Decision criteria for §13.6.A spike**:
+- **PASS**: W1-O13 ≤ 5 ns + W3-O13 ≤ 3 ns at N=100 + amortized comparable to or better than C above struct-copy baseline → Option 13 canonical for Phase 1C
+- **FAIL**: W1-O13 > 10 ns OR amortized exceeds D.4 per-fire baseline → revert to D.4 per-fire pattern (Option Y; spike W1+ ≤ 30 ns target still satisfied)
+- **MIXED**: per-fire fast but per-round overhead higher than expected; investigate (likely Q-1B-8 cell-meta storage representation differs from spike mock)
+
+**Implementation cost for spike itself**: ~50-100 LoC extension to `bench-specialized-cell-spike.rkt`. NOT the full Phase 1C migration — just enough to validate the deferred-write pattern's measured performance characteristics.
+
+**Spike-vs-Phase-1C relationship**:
+- The spike's mock is THROWAWAY (won't ship; spike-only code)
+- Phase 1C-ii implements the deferred-write pattern AT the 4 BSP fire sites for production
+- If §13.6.A spike PASSES, Phase 1C builds the migration with confidence; if FAILS, fall back to D.4 per-fire pattern (already validated by §13.6 spike)
+
+**Risk register**:
+- *RO13-1*: Box mutation isn't actually ~2 ns under Racket's runtime (e.g., box-mutation has higher overhead than expected). Mitigation: spike measures directly; if RO13-1 materializes, consider unboxed-fixnum alternatives (e.g., mutable struct field on a scheduler-private struct).
+- *RO13-2*: Amortization at low N (e.g., short BSP rounds with < 10 fires) doesn't deliver the expected savings. Mitigation: measure across N values; if low-N has poor amortization, Phase 1C-ii sub-phase can apply per-fire pattern for short-round workloads, deferred-write for long-round workloads (hybrid; opt-in per fire-site).
+- *RO13-3*: Snapshot/restore at speculation forks doesn't compose cleanly with deferred-write. Mitigation: speculation flushes local-var before fork (validated via A9 microbench at Phase 1V).
+- *RO13-4*: On-write check timing under deferred-write — for monotone counter, the check sees final value of round (correct semantics). Verify with behavioral tests; not a perf concern.
+
 ### §13.5 What Pre-0 might surface (potentially design-affecting)
 
 - If M7 shows cell-write is significantly slower (>2x struct-copy), reconsider canonical instance approach — maybe per-consumer allocation only, with no canonical fuel cell
@@ -2132,6 +2278,53 @@ Phase 1B mini-design opening runs the spike per §13.6. The spike result drives 
 - If M9 shows non-O(1) allocation, reconsider per-consumer allocation feasibility
 
 These are unlikely (per S2 architectural pattern + BSP-LE 2B benchmarks showing cell ops are fast), but Pre-0 verifies before D.1 commits to specifics.
+
+### §13.7 Per-Phase Measurement Plan (D.4 CANONICAL 2026-05-15)
+
+> **Purpose**: validate D.4 design assumptions throughout Stage 4 implementation. The §13.6 + §13.6.A spikes establish the architectural feasibility; this section establishes the per-phase microbench gates that catch regressions or assumption-violations early, when they're cheap to address.
+>
+> **Discipline origin**: surfaced during Phase 1B mini-design when a friend's question about fuel-cell write semantics highlighted that the §13.6 spike's PASS verdict validated "D.4 is feasible at acceptable cost" but did NOT validate "D.4 is the optimal architecture for fuel-cost specifically." The architecturally-correct response is **explicit measurement gates at sub-phase boundaries** rather than relying on the post-implementation Phase 1V close to catch divergences.
+>
+> Aligns with `workflow.md` "Measure before, during, AND after — and include memory cost"; makes the discipline CONCRETE (named measurements, named targets, named decision rules) rather than implicit.
+
+**A/B/C structure for fuel-cost write pattern** (the key architectural decision under Option 13):
+
+| Variant | Pattern | Expected per-cycle cost | Validation source |
+|---|---|---|---|
+| **A** (baseline) | Current native struct-copy (`(struct-copy prop-net-hot ... [fuel ...])`) | ~24 ns (Pre-0 M7 measured) | Pre-0 baseline file 2026-04-26 |
+| **B** (D.4 per-fire — NOT implemented; reference only) | `(net-cell-write net fuel-cost-cell-id ...)` per fire | ~6 ns (§13.6 W1+) | §13.6 spike (2026-05-14, commit `7b681b9e`) |
+| **C** (D.4 + Option 13 deferred-write — production target) | Local-var per fire + cell-write at round boundary | ~2 ns/cycle amortized (estimated) | §13.6.A spike (Phase 1C-i; PENDING) |
+
+**Per-sub-phase measurement gates (Phase 1B + 1C)**:
+
+| Sub-phase | Measurements | Decision rule (PASS = continue; FAIL = stop & investigate) |
+|---|---|---|
+| **1B-i** (mini-audit) | Q-1B-8 cell-meta storage choice prototyped + measured (vector-indexed on prop-net-cold; CHAMP-keyed; struct field on prop-cell). Microbench: cell-meta lookup cost at production storage. | Storage choice ≤ 5 ns lookup overhead → PASS. > 10 ns → investigate alternative storage strategy. |
+| **1B-ii** (framework module + dispatch) | Re-microbench W1+ at production storage rep (vs §13.6 spike's vector-ref mock). Memory: framework module load cost (M12-equivalent). | Production W1+ ≤ 1.5× spike's 6.4 ns (≤ 10 ns) → PASS. > 15 ns → optimize dispatch path. Memory: framework module load < 1 ms, < 10 KB. |
+| **1B-iii** (tropical fuel module) | C-series quantale axiom verification (§9.4); M10 residuation operator cost; M11 tensor cost; M12 SRE registration. | Quantale axioms hold → PASS. Any C-series failure → CRITICAL; halt before 1B-iv. M10 ≤ 30 ns; M11 ≤ 5 ns; M12 < 1 ms one-time. |
+| **1B-iv** (cell registration + tests + close) | Full Phase 1B framework microbench: cell-write/read across all registered specialized cells. Test coverage: 12+ tests per §9.6. Probe: 28 commands unchanged (semantic parity per S4 baseline). | All targets within bounds → PASS. Probe semantic divergence → CRITICAL. Phase 1B closed. |
+| **1C-i** (mini-audit) | **§13.6.A Option 13 spike executes here** (W1-O13 through W4-O13). | Spike PASS → continue with Option 13 pattern at 1C-ii. Spike FAIL → fall back to D.4 per-fire (Option Y; spike already validated at §13.6). Spike MIXED → re-design. |
+| **1C-ii** (4 BSP fire sites migrate) | Re-microbench M7+M8+M13 at production BSP fire sites (now using deferred-write pattern). Compare to §13.6.A spike numbers + Pre-0 baseline. | Per-cycle ≤ §13.6.A target + 1 ns slack → PASS. Per-cycle > §13.6.A target by > 2 ns → investigate (production overhead vs spike mock). |
+| **1C-iii** (11 check sites migrate) | Re-microbench check-site cost (now `net-contradiction?` call). Full suite parity (these sites widely distributed). | Per-check cost ≤ 10 ns + full suite GREEN → PASS. Suite regression > 5% → investigate. |
+| **1C-iv** (macro + struct field retirement + Option 14 decision) | Measure deferred-write at production sites with/without macro-expansion specialization. | If macro saves ≥ 1 ns/cycle → apply Option 14 specialization. If saving < 0.5 ns/cycle → skip (YAGNI). |
+| **1C-v** (test/bench migration) | Full suite GREEN; benchmark file replays match (A/B baseline data captured for Phase 1V close). | Suite GREEN; A/B baseline captured → PASS. Any test divergence → investigate (likely an `(prop-network-fuel result)` assertion that needs migration semantics review). |
+| **1C-vi** (verification + close) | **Full A/B/C comparison report generated**. All 11 Phase 1V microbenches per §11.3 re-run. Probe semantic parity confirmed. | A/B/C report shows C ≤ A on per-cycle cost AND C achieves §13.6.A target → PASS. Any divergence → investigate before Phase 1V close. |
+
+**§11.3 Phase 1V exit criteria — refined for Option 13**: see §11.3 (the existing 11-microbench list refined with Option 13-specific targets and A/B/C summary).
+
+**Cross-track measurement integration**:
+
+- **Bench infrastructure**: extends `racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt` (existing W7-tier section) with Option 13 measurements (the existing bench file is the home; the spike file `bench-specialized-cell-spike.rkt` is throwaway). Per-phase measurements run via `racket tools/bench-ab.rkt --runs 10 ...` for statistical rigor.
+- **A/B/C comparison tool**: `tools/bench-ab.rkt` currently supports A/B (`--ref HEAD~1`). For A/B/C: run 3 separate `bench-ab.rkt` invocations against tagged baseline commits (e.g., `--ref pre-1c-baseline` for A; current HEAD for B/C). Or extend `bench-ab.rkt` with `--refs` for multi-way comparison (Phase 1C-vi requirement; small tool enhancement).
+- **Suite-level (S-tier)**: full suite wall-time recorded post-each-sub-phase per `tools/run-affected-tests.rkt`; expected variance within Pre-0 S1 baseline (119.3s ± 10%). Larger regressions investigated immediately, not deferred to Phase 1V.
+
+**Honest framing of the measurement discipline**:
+
+This per-phase plan adds measurement OVERHEAD to Stage 4 implementation — each sub-phase pause for microbench + A/B/C capture. Estimated cost: ~30-60 min per sub-phase boundary × ~6 sub-phases (1B-i through 1C-iv) = ~3-6 hours of measurement work across Phase 1B + 1C. Worth it because: (a) catches regressions when they're cheap to address (1 sub-phase ago, not at Phase 1V close); (b) validates the Option 13 ~2 ns/cycle estimate before committing; (c) generates A/B/C data that informs future tracks (PReduce, OE) about what's actually fast.
+
+**Codification candidate (post-Phase-1V close)**:
+
+"Per-phase measurement plan with A/B/C structure" pattern — when a design's correctness rests on assumptions about performance (e.g., "Option 13 achieves ~2 ns/cycle amortized"), the implementation plan should EXPLICITLY name the measurements that validate each assumption at each sub-phase boundary. This is stronger than the existing "per-phase microbench" discipline because it names CONCRETE comparisons (A/B/C) and DECISION RULES (PASS/FAIL/INVESTIGATE), rather than ad-hoc per-phase measurements. Watching list: 1 data point (this addendum); ~1-2 more for graduation.
 
 ---
 
@@ -2264,8 +2457,11 @@ Per user's workflow (updated post-§13.6 spike 2026-05-14):
 7. ✅ **D.4 architectural reframing** (commit `6a628bc7`) — Cell/Propagator/Scheduler Orthogonality principle codified
 8. ✅ **D.4 scaffolding pass** (commit `45181c07`) — §4.6 specialized cell type framework NTT + §13.6 Pre-0 spike plan + supersession notes
 9. ✅ **§13.6 Pre-0 spike — ✓ PASS** (commit `7b681b9e`) — W1+ = 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements; ~4× under all targets. **D.4 canonical**; D.3 hybrid pivot SCAFFOLDING never shipped.
-10. 🔄 **D.4 CANONICAL full revisions (in progress, this session)** — Chunk 1 (this commit): §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL. Chunk 2 (next): governance surfaces — close GitHub Issue #55, retire DEFERRED.md hybrid scaffolding entry, update MASTER_ROADMAP.org § OE Series caveat (remove hybrid scaffolding language).
-11. ⬜ **Stage 4 implementation** — per-phase mini-design+audit
+10. ✅ **D.4 CANONICAL Chunk 1** (commit `ae057b3a`) — §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL
+11. ✅ **D.4 CANONICAL Chunk 2** (commit `bb503255`) — Issue #55 CLOSED + DEFERRED.md RETIRED + MASTER_ROADMAP.org refined
+12. 🔄 **D.4 REFINEMENT Option 13 + §13.7 measurement discipline (THIS commit)** — surfaced during Phase 1B mini-design via friend's question about per-fire dispatch overhead. Captures Option 13 deferred-write pattern (§10.3.A); §13.6.A spike plan; §13.7 Per-Phase Measurement Plan with explicit A/B/C gates. Confirms scheduler-state cell category (refines DESIGN_PRINCIPLES.org orthogonality).
+13. ⬜ **§13.6.A Option 13 spike** (Phase 1C-i opening) — validates ~2 ns/cycle amortized estimate before BSP fire-site migration. ~30-40 min execution.
+14. ⬜ **Stage 4 implementation** — per-phase mini-design+audit with §13.7 measurement gates at each sub-phase boundary
     - **Phase 1B** (~400-700 LoC): tropical-fuel.rkt module + specialized-cells.rkt framework + fuel-cost cell registration + tests (~4 sub-phases)
     - **Phase 1A-iii-b** (~250-400 LoC deletion): Tier 2 deprecated ATMS internal API retirement (~5 sub-phases)
     - **Phase 1A-iii-c** (~600-1000 LoC deletion): Tier 3 surface ATMS AST 14-file pipeline retirement (~8 sub-phases)
@@ -2336,9 +2532,11 @@ Per user's workflow (updated post-§13.6 spike 2026-05-14):
 7. ✅ **D.4 architectural reframing — orthogonality principle codified** (commit `6a628bc7`)
 8. ✅ **D.4 scaffolding pass** (commit `45181c07`) — §4.6 specialized cell type framework NTT model; §13.6 Pre-0 spike plan; §10 + §14.4 reframed; §10.1.A + §10.A + §10.B marked SUPERSEDED
 9. ✅ **§13.6 Pre-0 spike — ✓ PASS** (commit `7b681b9e`) — W1+ = 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements; ~4× under all targets. **D.4 canonical**.
-10. 🔄 **D.4 CANONICAL full revisions (THIS commit, Chunk 1)** — §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL; §1.2 + §3 + §16 + §17 + Revision Summary updated
-11. ⬜ **D.4 CANONICAL governance surfaces (next Chunk 2)** — close Issue #55 + retire DEFERRED.md hybrid entry + update MASTER_ROADMAP.org § OE Series caveat
-12. ⬜ Stage 4 implementation per per-phase mini-design+audit
+10. ✅ **D.4 CANONICAL Chunk 1** (commit `ae057b3a`) — §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL
+11. ✅ **D.4 CANONICAL Chunk 2** (commit `bb503255`) — Issue #55 CLOSED + DEFERRED.md RETIRED + MASTER_ROADMAP.org refined; all four D.3 hybrid pivot tracking surfaces now consistent
+12. 🔄 **D.4 REFINEMENT Option 13 + measurement discipline (THIS commit)** — §10.3.A deferred-write pattern (~2 ns/cycle amortized estimate); §13.6.A spike plan; §13.7 Per-Phase Measurement Plan; refined §11.3 + §10.4; scheduler-state cell category confirmed
+13. ⬜ §13.6.A Option 13 spike (Phase 1C-i opening; ~30-40 min)
+14. ⬜ Stage 4 implementation per per-phase mini-design+audit with §13.7 gates
 
 **Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.**
 
