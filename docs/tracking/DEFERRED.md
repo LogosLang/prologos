@@ -660,49 +660,28 @@ Existing pre-4C off-network registries (`register-domain!`, `register-typing-rul
 
 ---
 
-## PPN 4C tropical addendum: hybrid pivot scaffolding retirement (per-decrement fuel-cost cell migration under SH Series runtime)
+## PPN 4C tropical addendum: hybrid pivot scaffolding retirement — RETIRED-PER-D.4-CANONICAL (2026-05-14)
 
-**Origin**: PPN 4C Phase 9+10+11 Tropical Quantale Addendum D.3 (2026-04-26). The addendum's Phase 1C ships a HYBRID PIVOT architecture for the canonical BSP fuel substrate per [D.3 §10](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md). The hybrid:
-- PRESERVES the existing struct field `prop-net-cold-fuel` + macro `prop-network-fuel` + inline `(<= fuel 0)` check at decrement sites (per-decrement HOT PATH; ~30-40 ns per cycle)
-- ALLOCATES the canonical fuel-cost-cell + fuel-budget-cell at well-known IDs (cell-id 11/12)
-- INSTALLS threshold propagator (load-bearing for non-decrement-site paths only — per D.3 §10.A)
-- Cell value updated at SEMANTIC TRANSITIONS only (per D.3 §10.B Cell Staleness Contract), NOT per-decrement
+**Status (2026-05-14)**: RETIRED. The hybrid pivot SCAFFOLDING never shipped. Under the D.4 architectural reframing (Cell/Propagator/Scheduler Orthogonality principle codified `6a628bc7`), the §13.6 Pre-0 spike (commit `7b681b9e`) directly measured the specialized cell type framework's fast-path performance and falsified the hybrid pivot's empirical motivation (Pre-0 R-19 extrapolation). The cell IS the live state under D.4 canonical — no scaffolding to retire later.
 
-**Why scaffolding (empirically forced, not stylistic)**:
+**Spike results that falsified the hybrid motivation**:
+- W1+ specialized cell-write (with realistic dispatch overhead): **6.4 ns/call** (target ≤ 30 ns; ~4× under)
+- W3 GC at 5×100k decrements: **0.000 ms major-GC** (target ZERO; structurally guaranteed by direct fixnum mutation)
+- W3 alloc (10×100k decrements): **1.1 KB** (vs Pre-0 A7.3 struct-copy 6251 KB — **5700× memory improvement**)
+- W4 specialized cell-read: **0.8 ns/call** (target ≤ 15 ns)
+- W1+ + W4 per-decrement cycle: **7.3 ns** (target ≤ 45 ns)
 
-The hybrid pivot INVERTS the Cell-as-Single-Source-of-Truth principle ([DESIGN_PRINCIPLES.org § Propagator-First Infrastructure](principles/DESIGN_PRINCIPLES.org)) at the per-decrement timescale. The inversion is empirically forced by [Pre-0 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md):
-- R3 measured ZERO major GC during 100k decrements under struct-copy decrement workload
-- Full cell-based path (per-decrement cell-write) would generate tagged-cell-value entries at 100k+ ops/sec → MAJOR GC pressure under the current Racket runtime
-- The hybrid pivot is the ONLY architecture preserving R3's GC-friendly property
+**What this entry would have tracked** (preserved for historical record): under D.3 hybrid pivot, the per-decrement fuel-cost cell migration was scaffolded as off-network struct field (PRIMARY) + cell (DERIVED via lazy sync). The retirement was deferred to SH Series runtime infrastructure. The discipline added a four-surface tracking matrix (this DEFERRED.md entry + GitHub Issue #55 + D.3 §10.1.A retirement plan + Q-1B-6 falsification gate) to ensure the scaffolding wasn't forgotten.
 
-**Specific blocker**: Racket runtime GC behavior at per-decrement cell-write rate.
-
-**Retirement trigger**: SH Series (self-hosted Prologos) runtime infrastructure that makes per-decrement cell-write GC-friendly via (a) cheaper GC characteristics for tagged-cell-value entries, (b) lighter cell representation, OR (c) object pooling for tagged-cell-value entries.
-
-**Retirement scope** (when triggered):
-1. Migrate per-decrement decrement sites (4 sites in `racket/prologos/propagator.rkt` per Q-Audit-1) from struct-copy to cell-write
-2. Migrate inline check sites (11 sites) from inline `(<= fuel 0)` to threshold-propagator-emergent contradiction detection
-3. Retire `prop-network-fuel` macro (`propagator.rkt:399`) + `prop-net-cold-fuel` struct field (`propagator.rkt:337`)
-4. Cell becomes PRIMARY for fuel-cost tracking (matches D.1 original full-migration design intent)
-5. Update D.3 §14.4 Q5 + dependent Qs to revert dual-classification → single (cell PRIMARY)
-6. Retire D.3 §10.A "threshold propagator's role under hybrid" — propagator becomes load-bearing per-decrement
-7. Retire D.3 §10.B "Cell Staleness Contract" — `net-fuel-cost-read` becomes the only API (no staleness)
-
-**Verification at retirement**:
-- Re-microbench M7 + M8 + M13 + R3 to verify per-decrement cell-write under SH Series stays at acceptable cost (target: ~30-40 ns total cycle, matching current hybrid; ZERO major GC at 100k decrements)
-- Full suite GREEN within variance band
-- V-tier parity tests: counter-vs-cell exhaustion equivalence at semantic-phase boundaries
-
-**Estimated retirement scope**: ~250-400 LoC migration (per D.1 §10.4 original sub-phase plan, which retired under D.2 hybrid pivot — recoverable as the future migration scope).
+**Why this is RETIRED rather than DELETED**: the entry serves as a record of the alternative design considered + the discipline applied. The discipline itself (four-surface tracking; falsification gate before locking in a principle-violating commit) is valid prophylactically for future tracks; this entry serves as a worked example. The "Hot-Load Is a Protocol, Not a Prioritization" pattern from DEVELOPMENT_LESSONS.org applies: don't delete the historical record of design alternatives considered.
 
 **Cross-references**:
-- [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — operational tracking surface (queryable, linkable from PRs, dashboard-visible)
-- [D.3 §10.1 acknowledgment](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) (principle inversion + scaffolding-with-retirement-plan)
-- [D.3 §10.A Threshold propagator role under hybrid](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.3 §10.B Cell Staleness Contract](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.3 §14.4 Q5 dual classification](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md)
-- [D.2.SC self-critique finding P1](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_SELF_CRITIQUE.md)
-- [Pre-0 plan §12.6 Finding 19](2026-04-26_TROPICAL_ADDENDUM_PRE0_PLAN.md) — R3 zero-major-GC empirical baseline
-- [MASTER_ROADMAP.org § OE Series + § SH Series](MASTER_ROADMAP.org)
-
-**Dual-surface tracking rationale**: GitHub Issue #55 provides operational visibility (queryable, linkable from PRs, surfaces in repo dashboards); this DEFERRED.md entry is the in-repo single-source-of-truth for design-time tracking. When SH Series runtime work begins, both surfaces flag this scaffolding for retirement.
+- [GitHub Issue #55](https://github.com/LogosLang/prologos/issues/55) — closed as "superseded by D.4 principled on-network design"
+- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §10 — D.4 canonical direct migration (replaces D.3 hybrid)
+- [D.4 design doc](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) §13.6 — Pre-0 spike plan + result
+- [§4.6 Specialized cell type framework](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) — the canonical D.4 architecture
+- Spike implementation: `racket/prologos/benchmarks/micro/bench-specialized-cell-spike.rkt` (throwaway; commit `7b681b9e`)
+- Spike result data: `racket/prologos/data/benchmarks/tropical-spike-d4-2026-05-14.txt`
+- D.3 historical sections marked RETIRED-PER-D.4-CANONICAL: §10.1.A (Honest framing + retirement plan), §10.A (Threshold propagator role under hybrid), §10.B (Cell Staleness Contract), §14.4 Q5 (dual classification)
+- [DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org)
+- [DEVELOPMENT_LESSONS.org § Cell/Propagator/Scheduler Orthogonality](principles/DEVELOPMENT_LESSONS.org)

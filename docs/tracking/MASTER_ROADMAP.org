@@ -4,7 +4,7 @@
 #+DATE: 2026-03-21
 #+OPTIONS: toc:nil
 
-*Last updated*: 2026-05-02 (staleness sweep — series-header lines, missing tracks, SH + UCS top-level promotion, naming consistency)
+*Last updated*: 2026-05-14 (PPN 4C tropical addendum D.4 CANONICAL — §13.6 Pre-0 spike PASS commit ~7b681b9e~; D.3 hybrid pivot scaffolding retired before shipping; OE Series caveat refined to specialized cell type framework as the canonical pattern; Issue #55 closed)
 
 * Purpose
 
@@ -442,7 +442,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 |------------------+------|
 | *Thesis*         | Parsing IS attribute evaluation IS propagator fixpoint (Engelfriet-Heyker). The multi-phase 14-file pipeline collapses to registered rewrite rules on the network. User-defined grammar extensions as typed hyperedge replacement rules — more powerful than Lisp macros. |
 | *Master Roadmap* | [[file:2026-03-26_PPN_MASTER.md][2026-03-26_PPN_MASTER.md]] |
-| *Status*         | Tracks 0, 1, 2, 2B, 3, 4A, 4B complete. Track 4C 🔄 (D.2 hybrid pivot committed; Pre-0 100% complete; Phase 1C ready). Tracks 3.5, 4D, 5-9 pending. PRIORITY: prerequisite to future syntax/language design work. |
+| *Status*         | Tracks 0, 1, 2, 2B, 3, 4A, 4B complete. Track 4C 🔄 (tropical addendum D.4 CANONICAL committed 2026-05-14 per §13.6 spike PASS, commit ~7b681b9e~; specialized cell type framework canonical; D.3 hybrid pivot scaffolding retired before shipping; Stage 4 implementation ready). Tracks 3.5, 4D, 5-9 pending. PRIORITY: prerequisite to future syntax/language design work. |
 | *Origin*         | [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research]], [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]] |
 | *Contributes to PRN* | Parse lattice design, ambiguity resolution, bidirectional type↔parse flow |
 
@@ -458,7 +458,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 | 3.5 | Grammar Form research + speculative design | ⬜ | [[file:../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md][Grammar form research]]. Multi-view spec, DPO structural preservation. Can interleave with Track 4. |
 | 4A | Elaboration as attribute evaluation — typing on-network | ✅ [[file:2026-04-04_PPN_TRACK4_DESIGN.md][Design D.4]] [[file:2026-04-04_PPN_TRACK4_PIR.md][PIR]] | 46% on-network typing, ephemeral PU, SRE typing domain (~150 entries) |
 | 4B | Full attribute evaluation — typing + constraints + mult + warnings | ✅ [[file:2026-04-05_PPN_TRACK4B_DESIGN.md][Design D.2]] [[file:2026-04-07_PPN_TRACK4B_PIR.md][PIR]] | All 5 attribute domains on-network, 7578 tests GREEN, 6 imperative bridges as scaffolding |
-| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.2]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. Tropical fuel cell + multi-quantale composition. Pre-0 100% complete; Phase 1C hybrid pivot ready. |
+| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.4 CANONICAL]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. Tropical fuel cell + specialized cell type framework + multi-quantale composition. Pre-0 100% complete; §13.6 spike PASS (commit ~7b681b9e~); D.4 canonical full revisions complete; Stage 4 implementation ready (Phase 1B first per Q-Open-4). |
 | 4D | *Attribute Grammar Substrate Unification* | ⬜ | [[file:../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md][Vision Research]]. Collapse fragmented typing/elaboration/reduction subsystems. Prereq: 4C complete + T-3 landed + PM Track 12. Multi-month scope. |
 | 5 | Type-directed disambiguation | ⬜ | Track 4. Backward type→parse via Galois bridges. Bilattice (gfp/elimination). |
 | 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3. Tropical semiring optimization. |
@@ -491,7 +491,7 @@ trajectory.
 | *Thesis*         | Correctness (join-semilattice) and optimization (min-plus tropical semiring) are two enrichments on the same network. Cells carry both a value and a cost. The tropical merge keeps cheapest derivations. Cost-bounded exploration replaces flat fuel limits with problem-aware thresholds. |
 | *Status*         | Stage 0 research. |
 | *Origin*         | [[file:../research/2026-03-24_TROPICAL_OPTIMIZATION_NETWORK_ARCHITECTURE.md][Tropical Optimization Research]], [[file:../research/2026-03-24_HYPERGRAPH_REWRITING_PROPAGATOR_PARSING.md][Hypergraph Rewriting Research §5]] |
-| *Architectural discipline (revised 2026-05-14)* | OE Series + future PReduce inherit the Cell/Propagator/Scheduler Orthogonality principle ([[file:principles/DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]]) — optimizations live at the cell or propagator layer, NOT the scheduler. The hybrid pivot framing previously committed at PPN 4C tropical addendum D.3 is under REDESIGN (D.4 in progress) toward on-network optimized cell type (specialized storage strategy + fire-on policy declared at cell + propagator level). Future OE tracks target on-network optimization patterns from the start; scheduler-coupled optimizations are anti-patterns (see [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]]). The "first production landing establishes pattern" framing is preserved, but the pattern being established is the on-network specialized-storage cell type, not hybrid scaffolding. |
+| *Architectural discipline (D.4 CANONICAL 2026-05-14)* | OE Series + future PReduce inherit the Cell/Propagator/Scheduler Orthogonality principle ([[file:principles/DESIGN_PRINCIPLES.org][DESIGN_PRINCIPLES.org § Cell / Propagator / Scheduler Orthogonality]]) — optimizations live at the cell or propagator layer, NOT the scheduler. The PPN 4C tropical addendum's specialized cell type framework (D.4 §4.6, validated by §13.6 Pre-0 spike commit ~7b681b9e~: W1+ = 6.4 ns/call with realistic dispatch + zero major-GC at 100k decrements) is the FIRST PRODUCTION LANDING establishing the canonical pattern — `:tier 'hot` + `:storage 'monotone-counter` + `:fires-on 'threshold-crossing` + `:on-write-check` declared at cell registration, with the cell mechanism dispatching accordingly. Future OE tracks target this framework from the start; scheduler-coupled optimizations are anti-patterns (see [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]]). The D.3 hybrid pivot SCAFFOLDING (off-network struct field as live state + cell as derived) never shipped — the §13.6 spike falsified its empirical motivation (Pre-0 R-19 extrapolation). |
 
 *** Research Tracks (Proposed)
 
@@ -797,7 +797,7 @@ For per-series detail see the priority ordering inside the SRE section above.
 #+begin_example
   Active (in flight):
    - SRE Track 2I             (SD∨/SD∧ checks; Phase 4 corrective + Phase 3 close)
-   - PPN 4C addendum Phase 1C (tropical fuel substrate; Pre-0 100% complete; hybrid pivot ready)
+   - PPN 4C addendum Phase 1B + 1C (tropical fuel substrate + specialized cell type framework; D.4 CANONICAL per §13.6 spike PASS commit ~7b681b9e~; Stage 4 implementation ready)
    - PReduce Track 0          (series founding research synthesis; sub-deliverables 0.1, 0.2, 0.3)
 
   Recently completed (since 2026-04-15):
@@ -849,7 +849,7 @@ For per-series detail see the priority ordering inside the SRE section above.
                                  │     └──→ SRE Tracks 2B, 2C, 2E, 3-7 ⬜
                                  │
   SRE Track 2H ✅ (Heyting) ───┴──→ PPN Track 4A / 4B ✅
-                                     PPN Track 4C 🔄 (tropical addendum D.2)
+                                     PPN Track 4C 🔄 (tropical addendum D.4 CANONICAL)
                                      │
                                      ├──→ PReduce Series ✅ (founded 2026-05-02)
                                      │     ├──→ Track 0 sub-deliverables (architectural sketch / rule taxonomy / .pnet+LLVM interface)
