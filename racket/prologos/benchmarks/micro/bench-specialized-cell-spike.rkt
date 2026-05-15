@@ -357,7 +357,281 @@
 (printf "\n")
 
 ;; ============================================================
-;; DECISION EVALUATION
+;; §13.6.A OPTION 13 DEFERRED-WRITE SPIKE
+;; ============================================================
+;;
+;; The Option 13 pattern (from D.4 §10.3.A):
+;; - BSP scheduler reads cell at round entry → local-var (box)
+;; - Per fire: inline local-var decrement + threshold check (~2 ns target)
+;; - At round exit: flush local-var to cell (~6 ns)
+;; - On exhaustion (rare): immediate flush + contradiction
+;;
+;; The measurements compare:
+;; - Function-call variant (general; matches §10.3.A pseudocode)
+;; - Macro-inline variant (Option 14; if savings ≥ 1 ns/cycle apply per §10.4)
+
+(printf "=== §13.6.A OPTION 13 DEFERRED-WRITE SPIKE ===\n\n")
+
+;; Local-var scheduler-scratch
+(define local-fuel-cost-O13 (box 0))
+
+;; Function-call variant of per-fire (general; ~3-4 ns expected)
+(define (option13-per-fire-fn budget)
+  (define new-cost (+ (unbox local-fuel-cost-O13) 1))
+  (set-box! local-fuel-cost-O13 new-cost)
+  (when (>= new-cost budget) 'crossed))
+
+;; Macro-inline variant (Option 14 specialization; ~2 ns expected)
+(define-syntax-rule (option13-per-fire-inline budget)
+  (let ([new-cost (+ (unbox local-fuel-cost-O13) 1)])
+    (set-box! local-fuel-cost-O13 new-cost)
+    (when (>= new-cost budget) 'crossed)))
+
+;; Round-boundary cell-read (entry)
+(define (option13-round-entry net)
+  (set-box! local-fuel-cost-O13 (specialized-cell-read net)))
+
+;; Round-boundary cell-write (exit)
+(define (option13-round-exit net)
+  (specialized-cell-write-fast net (unbox local-fuel-cost-O13)))
+
+;; Simulate a full BSP round of N fires (function-call variant)
+(define (simulate-round-of-N-fn N net)
+  (option13-round-entry net)
+  (for ([_ (in-range N)])
+    (option13-per-fire-fn spike-budget))
+  (option13-round-exit net))
+
+;; Simulate a full BSP round of N fires (macro-inline variant)
+(define-syntax-rule (simulate-round-of-N-inline N net)
+  (begin
+    (option13-round-entry net)
+    (for ([_ (in-range N)])
+      (option13-per-fire-inline spike-budget))
+    (option13-round-exit net)))
+
+;; ----------------------------------------
+;; W1-O13: Per-fire local-var decrement + threshold check
+;; ----------------------------------------
+(printf "W1-O13: Per-fire local-var decrement + threshold check\n")
+(printf "  Target: <= 5 ns/call (estimate: 2-4 ns)\n")
+
+;; W1-O13a: function-call variant
+(set-box! local-fuel-cost-O13 0)
+(define w1-o13a
+  (bench-ns "W1-O13a function-call per-fire" 50000
+    (option13-per-fire-fn spike-budget)))
+
+;; W1-O13b: macro-inline variant
+(set-box! local-fuel-cost-O13 0)
+(define w1-o13b
+  (bench-ns "W1-O13b macro-inline per-fire" 50000
+    (option13-per-fire-inline spike-budget)))
+
+(printf "\n")
+
+;; ----------------------------------------
+;; W2a-O13: Per-round cell-read at entry
+;; ----------------------------------------
+(printf "W2a-O13: Per-round cell-read at entry\n")
+(printf "  Target: ≤ 15 ns/call\n")
+
+(set-mock-net-fuel-cost! spike-net 12345)
+(define w2a-o13
+  (bench-ns "W2a-O13.1 cell-read at round entry" 50000
+    (option13-round-entry spike-net)))
+
+(printf "\n")
+
+;; ----------------------------------------
+;; W2b-O13: Per-round cell-write at exit
+;; ----------------------------------------
+(printf "W2b-O13: Per-round cell-write at exit\n")
+(printf "  Target: ≤ 15 ns/call (using specialized cell-write fast path)\n")
+
+(set-mock-net-fuel-cost! spike-net 0)
+(set-box! local-fuel-cost-O13 100)  ;; representative final-round value
+(define w2b-o13
+  (bench-ns "W2b-O13.1 cell-write at round exit" 50000
+    (option13-round-exit spike-net)))
+
+(printf "\n")
+
+;; ----------------------------------------
+;; W3-O13: Amortized per-fire cost across BSP round of N fires
+;; ----------------------------------------
+(printf "W3-O13: Amortized per-fire cost across round of N fires\n")
+(printf "  Target: ≤ 3 ns/cycle at N=100\n")
+(printf "  Compares function-call (W3-O13a) vs macro-inline (W3-O13b) variants\n")
+
+;; W3-O13a: function-call variant, multiple N
+(define w3-o13a-10
+  (bench-ns "W3-O13a.1 function-call: N=10 fires/round" 5000
+    (simulate-round-of-N-fn 10 spike-net)))
+(define w3-o13a-100
+  (bench-ns "W3-O13a.2 function-call: N=100 fires/round" 500
+    (simulate-round-of-N-fn 100 spike-net)))
+(define w3-o13a-1000
+  (bench-ns "W3-O13a.3 function-call: N=1000 fires/round" 50
+    (simulate-round-of-N-fn 1000 spike-net)))
+
+;; W3-O13b: macro-inline variant, multiple N
+(define w3-o13b-10
+  (bench-ns "W3-O13b.1 macro-inline: N=10 fires/round" 5000
+    (simulate-round-of-N-inline 10 spike-net)))
+(define w3-o13b-100
+  (bench-ns "W3-O13b.2 macro-inline: N=100 fires/round" 500
+    (simulate-round-of-N-inline 100 spike-net)))
+(define w3-o13b-1000
+  (bench-ns "W3-O13b.3 macro-inline: N=1000 fires/round" 50
+    (simulate-round-of-N-inline 1000 spike-net)))
+
+;; Convert to per-fire (bench-ns measures per-call where each call = one round of N fires)
+(define w3-o13a-10-per-fire (/ w3-o13a-10 10.0))
+(define w3-o13a-100-per-fire (/ w3-o13a-100 100.0))
+(define w3-o13a-1000-per-fire (/ w3-o13a-1000 1000.0))
+(define w3-o13b-10-per-fire (/ w3-o13b-10 10.0))
+(define w3-o13b-100-per-fire (/ w3-o13b-100 100.0))
+(define w3-o13b-1000-per-fire (/ w3-o13b-1000 1000.0))
+
+(printf "\n")
+(printf "  W3-O13a function-call amortized per-fire:\n")
+(printf "    N=10:    ~a ns/cycle\n" (~r w3-o13a-10-per-fire #:precision '(= 2)))
+(printf "    N=100:   ~a ns/cycle\n" (~r w3-o13a-100-per-fire #:precision '(= 2)))
+(printf "    N=1000:  ~a ns/cycle\n" (~r w3-o13a-1000-per-fire #:precision '(= 2)))
+(printf "  W3-O13b macro-inline amortized per-fire:\n")
+(printf "    N=10:    ~a ns/cycle\n" (~r w3-o13b-10-per-fire #:precision '(= 2)))
+(printf "    N=100:   ~a ns/cycle\n" (~r w3-o13b-100-per-fire #:precision '(= 2)))
+(printf "    N=1000:  ~a ns/cycle\n" (~r w3-o13b-1000-per-fire #:precision '(= 2)))
+(printf "\n")
+
+;; ----------------------------------------
+;; W4-O13: Exhaustion-path cost
+;; ----------------------------------------
+(printf "W4-O13: Exhaustion-path cost (flush + contradiction-write)\n")
+(printf "  Target: ≤ 50 ns/call (rare; once per workload typically)\n")
+
+;; Setup: small-budget cell so write triggers on-write check
+;; Each iteration: reset cost to 0; set local-var to budget; flush triggers crossing
+(define exhaustion-spike-net (mock-net 0 1000 0))
+(define w4-o13
+  (bench-ns "W4-O13.1 exhaustion flush + contradiction" 10000
+    (begin
+      (set-mock-net-fuel-cost! exhaustion-spike-net 0)
+      (set-box! local-fuel-cost-O13 1001)
+      (specialized-cell-write-fast exhaustion-spike-net
+                                   (unbox local-fuel-cost-O13)))))
+
+(printf "  W4-O13 crossing-count verification (should be 10100): ~a\n"
+        (mock-net-crossing-count exhaustion-spike-net))
+(printf "\n")
+
+;; ============================================================
+;; §13.6.A DECISION EVALUATION
+;; ============================================================
+
+(printf "=== §13.6.A OPTION 13 DECISION EVALUATION ===\n\n")
+
+(printf "  W1-O13a function-call per-fire:           ~a ns/call\n"
+        (~r w1-o13a #:precision '(= 1)))
+(printf "  W1-O13b macro-inline per-fire:            ~a ns/call\n"
+        (~r w1-o13b #:precision '(= 1)))
+(printf "  W2a-O13 round-entry cell-read:            ~a ns/call\n"
+        (~r w2a-o13 #:precision '(= 1)))
+(printf "  W2b-O13 round-exit cell-write:            ~a ns/call\n"
+        (~r w2b-o13 #:precision '(= 1)))
+(printf "  W3-O13a function-call amortized N=100:    ~a ns/cycle\n"
+        (~r w3-o13a-100-per-fire #:precision '(= 2)))
+(printf "  W3-O13b macro-inline amortized N=100:     ~a ns/cycle\n"
+        (~r w3-o13b-100-per-fire #:precision '(= 2)))
+(printf "  W4-O13 exhaustion flush + contradiction:  ~a ns/call\n"
+        (~r w4-o13 #:precision '(= 1)))
+
+(printf "\n  Targets per §13.6.A:\n")
+(define tO13-1a (<= w1-o13a 5))
+(define tO13-1b (<= w1-o13b 5))
+(define tO13-2a (<= w2a-o13 15))
+(define tO13-2b (<= w2b-o13 15))
+(define tO13-3a (<= w3-o13a-100-per-fire 3))
+(define tO13-3b (<= w3-o13b-100-per-fire 3))
+(define tO13-4 (<= w4-o13 50))
+
+(printf "    W1-O13a (fn-call) ≤ 5 ns:        ~a (~a)\n"
+        (if tO13-1a "✓ PASS" "✗ FAIL")
+        (~r w1-o13a #:precision '(= 1)))
+(printf "    W1-O13b (macro) ≤ 5 ns:          ~a (~a)\n"
+        (if tO13-1b "✓ PASS" "✗ FAIL")
+        (~r w1-o13b #:precision '(= 1)))
+(printf "    W2a-O13 ≤ 15 ns:                  ~a (~a)\n"
+        (if tO13-2a "✓ PASS" "✗ FAIL")
+        (~r w2a-o13 #:precision '(= 1)))
+(printf "    W2b-O13 ≤ 15 ns:                  ~a (~a)\n"
+        (if tO13-2b "✓ PASS" "✗ FAIL")
+        (~r w2b-o13 #:precision '(= 1)))
+(printf "    W3-O13a N=100 ≤ 3 ns:             ~a (~a)\n"
+        (if tO13-3a "✓ PASS" "✗ FAIL")
+        (~r w3-o13a-100-per-fire #:precision '(= 2)))
+(printf "    W3-O13b N=100 ≤ 3 ns:             ~a (~a)\n"
+        (if tO13-3b "✓ PASS" "✗ FAIL")
+        (~r w3-o13b-100-per-fire #:precision '(= 2)))
+(printf "    W4-O13 ≤ 50 ns:                   ~a (~a)\n"
+        (if tO13-4 "✓ PASS" "✗ FAIL")
+        (~r w4-o13 #:precision '(= 1)))
+
+;; A/B/C comparison
+(printf "\n  A/B/C COMPARISON:\n")
+(printf "    A (current native struct-copy; B.M7.2):       ~a ns/cycle\n"
+        (~r b-m7-nested #:precision '(= 1)))
+(printf "    B (D.4 per-fire cell-write w/ dispatch; W1+): ~a ns/cycle\n"
+        (~r w1+1 #:precision '(= 1)))
+(printf "    C-fn (Option 13 function-call N=100):         ~a ns/cycle\n"
+        (~r w3-o13a-100-per-fire #:precision '(= 2)))
+(printf "    C-macro (Option 13 + Option 14 macro N=100):  ~a ns/cycle\n"
+        (~r w3-o13b-100-per-fire #:precision '(= 2)))
+
+;; Option 14 specialization decision: macro saves ≥ 1 ns/cycle vs fn-call
+(define option14-savings (- w3-o13a-100-per-fire w3-o13b-100-per-fire))
+(printf "\n  Option 14 specialization (macro vs fn-call savings at N=100): ~a ns/cycle\n"
+        (~r option14-savings #:precision '(= 2)))
+(printf "    ~a\n"
+        (cond
+          [(>= option14-savings 1.0) "→ APPLY Option 14 macro specialization (savings ≥ 1 ns/cycle)"]
+          [(>= option14-savings 0.5) "→ INVESTIGATE Option 14 (savings 0.5-1 ns/cycle; marginal)"]
+          [else                       "→ SKIP Option 14 (savings < 0.5 ns/cycle; not worth complexity)"]))
+
+;; Overall decision per §13.6.A criteria
+;; PASS:  W1-O13 ≤ 5 ns + W3-O13 ≤ 3 ns at N=100 + amortized ≤ B (D.4 per-fire 6.4 ns)
+;; FAIL:  W1-O13 > 10 ns OR amortized > B
+;; MIXED: in between
+(define o13-best-w1 (min w1-o13a w1-o13b))
+(define o13-best-amortized (min w3-o13a-100-per-fire w3-o13b-100-per-fire))
+
+(define o13-pass? (and (<= o13-best-w1 5)
+                       (<= o13-best-amortized 3)
+                       (< o13-best-amortized w1+1)))  ;; better than D.4 per-fire
+(define o13-fail? (or (> o13-best-w1 10)
+                      (> o13-best-amortized w1+1)))
+
+(printf "\n=== §13.6.A DECISION: ")
+(cond
+  [o13-pass?
+   (printf "✓ PASS\n")
+   (printf "    → Option 13 canonical for Phase 1C\n")
+   (printf "    → BSP fire sites migrate to deferred-write pattern\n")
+   (printf "    → D.4 per-fire pattern (Option Y) NOT implemented; reference only\n")]
+  [o13-fail?
+   (printf "✗ FAIL\n")
+   (printf "    → Fall back to D.4 per-fire pattern (Option Y)\n")
+   (printf "    → §13.6 spike already validated Option Y; Phase 1C uses per-fire net-cell-write\n")
+   (printf "    → Option 13 explored but falsified\n")]
+  [else
+   (printf "⚠ MIXED\n")
+   (printf "    → Per-fire fast but amortized higher than expected, or vice-versa\n")
+   (printf "    → Investigate before Phase 1C-ii commits\n")])
+(printf "=== END §13.6.A SPIKE ===\n\n")
+
+;; ============================================================
+;; DECISION EVALUATION (§13.6 — kept for the original spike)
 ;; ============================================================
 
 (printf "=== DECISION EVALUATION ===\n\n")

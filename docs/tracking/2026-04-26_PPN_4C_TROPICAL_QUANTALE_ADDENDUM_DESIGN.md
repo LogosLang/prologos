@@ -29,12 +29,18 @@
 
 **The cell IS the live state** (no struct-field carve-out). The optimization is at the CELL LAYER, not the SCHEDULER LAYER. Per the Orthogonality principle: this stays portable across Gauss-Seidel, BSP, Zig-LLVM, and future self-hosted/distributed schedulers. **The §13.6 spike empirically validated all five W1-W5 measurements within their targets** by margins of 4× to 90× under (see §10.1 spike results table).
 
-**D.4 REFINEMENT 2026-05-15 — Option 13 deferred-write at round boundaries**: per Phase 1B mini-design (friend-surfaced concern about per-fire dispatch overhead), §10.3.A captures a scheduler-side optimization within the D.4 framework: BSP scheduler maintains a local-var fuel counter for the hot path; the cell is read at round entry, written at round exit (or immediately on exhaustion). The cell IS still canonical (no principle inversion — local-var is scheduler-internal SCRATCH, not cache of off-network state). Performance: estimated ~2 ns/cycle amortized (matches "native gas tracker"; ~3× better than per-fire pattern). **Validation gates**:
-- §13.6.A Option 13 spike (PENDING; Phase 1C-i opening) — direct measurement of W1-O13 through W4-O13
+**D.4 REFINEMENT 2026-05-15 — Option 13 deferred-write at round boundaries (✓ VALIDATED)**: per Phase 1B mini-design (friend-surfaced concern about per-fire dispatch overhead), §10.3.A captures a scheduler-side optimization within the D.4 framework: BSP scheduler maintains a local-var fuel counter for the hot path; the cell is read at round entry, written at round exit (or immediately on exhaustion). The cell IS still canonical (no principle inversion — local-var is scheduler-internal SCRATCH, not cache of off-network state).
+
+**§13.6.A spike results (2026-05-15)**: ✓ PASS. Measured amortized 2.16 ns/cycle at N=100 fires/round — **2.4× faster than current native struct-copy** (5.2 ns); **3.1× faster than D.4 per-fire** (6.6 ns from §13.6 W1+). All targets achieved with margins of 1.4× to 13.5× under. Option 14 macro specialization SKIPPED (savings 0.02 ns/cycle, below threshold).
+
+**Validation gates**:
+- ✅ §13.6.A Option 13 spike (2026-05-15) — Option 13 canonical for Phase 1C
 - §13.7 Per-Phase Measurement Plan — A/B/C gates at every Phase 1B + 1C sub-phase boundary
 - §11.3 Phase 1V exit criteria — refined gates for Option 13 (replaces D.3 hybrid pivot gates)
 
-The Option 13 refinement also CONFIRMS the "scheduler-state cell" category from the Q-J question: cells the scheduler writes (vs cells propagators write) permit scheduler-side write-batching optimizations that propagator-state cells cannot. See DESIGN_PRINCIPLES.org § Cell/Propagator/Scheduler Orthogonality § "Scheduler-State Cells" (refined post-Option-13).
+The Option 13 refinement CONFIRMS the "scheduler-state cell" category from the Q-J question: cells the scheduler writes (vs cells propagators write) permit scheduler-side write-batching optimizations that propagator-state cells cannot. See DESIGN_PRINCIPLES.org § Cell/Propagator/Scheduler Orthogonality § "Scheduler-State Cells" (refined post-Option-13).
+
+**The spike falsified its own design assumption**: §10.3.A originally framed Option 13 as "approximating native gas tracker performance" — implying it would match native, not exceed it. Measurement showed Option 13 is structurally FASTER than current native struct-copy (which has nested struct allocation per cycle; Option 13 has only mutable-box decrement). This is a 2.4× perf improvement vs the current implementation, not just a "no regression vs native" result.
 
 **What changes from D.3 → D.4**:
 
@@ -1539,16 +1545,20 @@ Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" d
 (set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
 ```
 
-**Performance characterization (ESTIMATED — pending §13.6.A spike validation)**:
+**Performance characterization (MEASURED — §13.6.A spike VALIDATED 2026-05-15)**:
 
-| Component | Estimated cost | Frequency | Validation |
+| Component | Measured cost | Frequency | Source |
 |---|---|---|---|
-| Per-fire local-var decrement + threshold check (hot path) | ~2 ns | 100s-1000s per round | §13.6.A W1-O13 spike |
-| Per-round cell-read at entry | ~6 ns | Once per round | §13.6.A W2a-O13 |
-| Per-round cell-write at exit | ~6 ns | Once per round | §13.6.A W2b-O13 |
-| Contradiction flush on exhaustion (rare path) | ~10 ns | Once per workload typically | §13.6.A W3-O13 |
+| Per-fire local-var decrement + threshold check (function-call) | **2.2 ns/call** | 100s-1000s per round | §13.6.A W1-O13a |
+| Per-fire local-var decrement + threshold check (macro-inline) | **2.1 ns/call** | (alternative; ~equivalent) | §13.6.A W1-O13b |
+| Per-round cell-read at entry | **1.3 ns/call** | Once per round | §13.6.A W2a-O13 |
+| Per-round cell-write at exit | **1.4 ns/call** | Once per round | §13.6.A W2b-O13 |
+| Amortized per-fire at N=100 fires/round (function-call) | **2.16 ns/cycle** | Hot path under typical workload | §13.6.A W3-O13a.2 |
+| Contradiction flush on exhaustion | **3.7 ns/call** | Once per workload typically | §13.6.A W4-O13 |
 
-At typical 100-1000 fires per round, per-round overhead amortizes to **~2 ns/cycle effective** — approximating native gas tracker performance, ~3× better than D.4 per-fire dispatch (6.4 ns/cycle from §13.6 spike).
+At typical 100-1000 fires per round, per-round overhead amortizes to **2.16 ns/cycle effective** — **2.4× faster than current native struct-copy baseline (5.2 ns)**; **3.1× faster than D.4 per-fire pattern (6.6 ns from §13.6 W1+)**. The Option 14 macro specialization saves only 0.02 ns/cycle (below the 1 ns threshold for application); SKIP Option 14.
+
+> **The spike falsified an assumption in the design**: §10.3.A originally estimated "approximating native gas tracker performance" suggesting Option 13 might just match native. The measurement shows Option 13 actually BEATS native struct-copy by 2.4×. The reason: current native uses nested struct-copy on `prop-network` + `prop-net-hot` (multiple allocator calls per cycle); Option 13's mutable-box pattern allocates nothing per cycle. The deferred-write pattern is structurally faster than the current native implementation.
 
 **Why this is materially different from D.3 hybrid pivot (not a principle inversion)**:
 
@@ -2229,9 +2239,43 @@ Phase 1B mini-design opening runs the spike per §13.6. The spike result drives 
 - *R3*: On-write predicate's allocation cost is higher than expected. Mitigation: spike measures with a representative predicate (`(>= cost budget)`); should be 0-allocation under fixnum comparison.
 - *R4*: Fire-on-threshold-crossing notification mechanism has subtle bugs (e.g., misses crossing if multi-write batch). Mitigation: this is a correctness concern, not perf; tested via C-series + behavioral tests.
 
-### §13.6.A Option 13 deferred-write spike plan (D.4 REFINEMENT 2026-05-15)
+### §13.6.A Option 13 deferred-write spike plan + RESULTS (D.4 REFINEMENT 2026-05-15)
 
-**Purpose**: validate the Option 13 deferred-write pattern's ~2 ns/cycle amortized estimate before committing to the BSP fire-site migration at Phase 1C-ii. The §13.6 spike validated per-fire cell-write (6.4 ns/call with realistic dispatch); §13.6.A validates the scheduler-side deferred-write refinement (target: ~2 ns/cycle amortized).
+**Status (2026-05-15)**: ✓ PASS — Option 13 canonical for Phase 1C. Spike executed at session-tail of Phase 1B mini-design; results saved to `racket/prologos/data/benchmarks/tropical-spike-d4-option13-2026-05-15.txt`.
+
+**Results vs targets**:
+
+| Measurement | Target | Spike result | Margin |
+|---|---|---|---|
+| W1-O13a function-call per-fire | ≤ 5 ns | **2.2 ns/call** | ~2.3× under |
+| W1-O13b macro-inline per-fire | ≤ 5 ns | **2.1 ns/call** | ~2.4× under |
+| W2a-O13 round-entry cell-read | ≤ 15 ns | **1.3 ns/call** | ~11.5× under |
+| W2b-O13 round-exit cell-write | ≤ 15 ns | **1.4 ns/call** | ~10.7× under |
+| W3-O13a function-call amortized N=100 | ≤ 3 ns | **2.16 ns/cycle** | ~1.4× under |
+| W3-O13b macro-inline amortized N=100 | ≤ 3 ns | **2.14 ns/cycle** | ~1.4× under |
+| W4-O13 exhaustion flush + contradiction | ≤ 50 ns | **3.7 ns/call** | ~13.5× under |
+
+**A/B/C comparison** (Option 13 vs alternatives):
+
+| Variant | Per-cycle cost | vs Option 13 |
+|---|---|---|
+| A — Current native struct-copy (B.M7.2 in spike) | 5.2 ns/cycle | Option 13 is **2.4× faster** |
+| B — D.4 per-fire cell-write w/ dispatch (W1+ from §13.6) | 6.6 ns/cycle | Option 13 is **3.1× faster** |
+| **C-fn — Option 13 function-call (canonical)** | **2.16 ns/cycle** | — |
+| C-macro — Option 13 + Option 14 macro | 2.14 ns/cycle | savings 0.02 ns/cycle vs C-fn |
+
+**Option 14 specialization decision (per §10.4 1C-iv decision gate)**:
+- Macro savings: 0.02 ns/cycle (essentially zero)
+- Decision: **SKIP Option 14** — function-call variant achieves the perf target on its own; macro specialization adds complexity for negligible benefit. Per the decision rule "if savings ≥ 1 ns/cycle apply Option 14": savings 0.02 ns far below threshold; SKIP.
+
+**Critical insight from spike**: Option 13 amortized cost (2.16 ns/cycle at N=100) is FASTER than:
+- Current production native struct-copy (5.2 ns/cycle) — 2.4× faster
+- D.4 per-fire pattern (6.6 ns/cycle) — 3.1× faster
+- Spike's W1 specialized cell-write fast path (2.2 ns/cycle) — essentially equivalent
+
+The deferred-write pattern doesn't just match native performance — it BEATS the native struct-copy baseline. The reason: the current struct-copy on `prop-network` (3 fields) + `prop-net-hot` (with fuel field) is more expensive than mutable-box decrement + occasional cell-flush. Option 13 is structurally faster.
+
+**Purpose** (original): validate the Option 13 deferred-write pattern's ~2 ns/cycle amortized estimate before committing to the BSP fire-site migration at Phase 1C-ii. The §13.6 spike validated per-fire cell-write (6.4 ns/call with realistic dispatch); §13.6.A validates the scheduler-side deferred-write refinement (target: ~2 ns/cycle amortized). **Result**: target achieved with margin.
 
 **Spike scope** (~30-40 min execution; extends `bench-specialized-cell-spike.rkt` OR a new sibling spike file):
 
@@ -2459,9 +2503,9 @@ Per user's workflow (updated post-§13.6 spike 2026-05-14):
 9. ✅ **§13.6 Pre-0 spike — ✓ PASS** (commit `7b681b9e`) — W1+ = 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements; ~4× under all targets. **D.4 canonical**; D.3 hybrid pivot SCAFFOLDING never shipped.
 10. ✅ **D.4 CANONICAL Chunk 1** (commit `ae057b3a`) — §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL
 11. ✅ **D.4 CANONICAL Chunk 2** (commit `bb503255`) — Issue #55 CLOSED + DEFERRED.md RETIRED + MASTER_ROADMAP.org refined
-12. 🔄 **D.4 REFINEMENT Option 13 + §13.7 measurement discipline (THIS commit)** — surfaced during Phase 1B mini-design via friend's question about per-fire dispatch overhead. Captures Option 13 deferred-write pattern (§10.3.A); §13.6.A spike plan; §13.7 Per-Phase Measurement Plan with explicit A/B/C gates. Confirms scheduler-state cell category (refines DESIGN_PRINCIPLES.org orthogonality).
-13. ⬜ **§13.6.A Option 13 spike** (Phase 1C-i opening) — validates ~2 ns/cycle amortized estimate before BSP fire-site migration. ~30-40 min execution.
-14. ⬜ **Stage 4 implementation** — per-phase mini-design+audit with §13.7 measurement gates at each sub-phase boundary
+12. ✅ **D.4 REFINEMENT Option 13 + §13.7 measurement discipline** (commit `8aa4c907`) — Option 13 deferred-write pattern captured; §13.6.A spike plan + §13.7 Per-Phase Measurement Plan; scheduler-state cell category confirmed in DESIGN_PRINCIPLES.org
+13. ✅ **§13.6.A Option 13 spike — ✓ PASS (THIS commit)** — measured 2.16 ns/cycle amortized at N=100; **2.4× faster than native struct-copy + 3.1× faster than D.4 per-fire**. Option 14 macro specialization SKIPPED (savings 0.02 ns/cycle).
+14. ⬜ **Stage 4 implementation** — per-phase mini-design+audit with §13.7 measurement gates at each sub-phase boundary. Phase 1B substrate first per Q-Open-4 strict sequencing; Phase 1C migrates BSP fire sites to Option 13 deferred-write pattern.
     - **Phase 1B** (~400-700 LoC): tropical-fuel.rkt module + specialized-cells.rkt framework + fuel-cost cell registration + tests (~4 sub-phases)
     - **Phase 1A-iii-b** (~250-400 LoC deletion): Tier 2 deprecated ATMS internal API retirement (~5 sub-phases)
     - **Phase 1A-iii-c** (~600-1000 LoC deletion): Tier 3 surface ATMS AST 14-file pipeline retirement (~8 sub-phases)
@@ -2534,8 +2578,8 @@ Per user's workflow (updated post-§13.6 spike 2026-05-14):
 9. ✅ **§13.6 Pre-0 spike — ✓ PASS** (commit `7b681b9e`) — W1+ = 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements; ~4× under all targets. **D.4 canonical**.
 10. ✅ **D.4 CANONICAL Chunk 1** (commit `ae057b3a`) — §9 + §10 + §15 full content; D.3 historical sections RETIRED-PER-D.4-CANONICAL
 11. ✅ **D.4 CANONICAL Chunk 2** (commit `bb503255`) — Issue #55 CLOSED + DEFERRED.md RETIRED + MASTER_ROADMAP.org refined; all four D.3 hybrid pivot tracking surfaces now consistent
-12. 🔄 **D.4 REFINEMENT Option 13 + measurement discipline (THIS commit)** — §10.3.A deferred-write pattern (~2 ns/cycle amortized estimate); §13.6.A spike plan; §13.7 Per-Phase Measurement Plan; refined §11.3 + §10.4; scheduler-state cell category confirmed
-13. ⬜ §13.6.A Option 13 spike (Phase 1C-i opening; ~30-40 min)
+12. ✅ **D.4 REFINEMENT Option 13 + measurement discipline** (commit `8aa4c907`) — §10.3.A deferred-write pattern; §13.6.A spike plan; §13.7 Per-Phase Measurement Plan; refined §11.3 + §10.4; scheduler-state cell category confirmed in DESIGN_PRINCIPLES.org
+13. ✅ **§13.6.A Option 13 spike — ✓ PASS (THIS commit)** — measured 2.16 ns/cycle at N=100 (2.4× faster than native struct-copy; 3.1× faster than D.4 per-fire); Option 14 macro specialization SKIPPED
 14. ⬜ Stage 4 implementation per per-phase mini-design+audit with §13.7 gates
 
 **Sub-phase mini-design+audit happens BEFORE each phase's implementation per Stage 4 Per-Phase Protocol.**
