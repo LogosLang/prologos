@@ -1296,7 +1296,7 @@ level — even if it's harder to implement initially, it preserves portability
 across all current and future schedulers (Gauss-Seidel, BSP, Zig-LLVM,
 self-hosted runtime, future distributed runtime).
 
-*Origin*: PPN 4C tropical addendum D.3.EC critique review (2026-04-26). The
+*Origin*: PPN 4C tropical addendum D.3.EC critique review (2026-05-14). The
 user articulated the orthogonality principle in response to the hybrid pivot
 exploration. The principle rejected "Option E (BSP-aware piggyback)" and
 motivated a redesign of Phase 1B/1C toward on-network optimized cell type
@@ -1317,7 +1317,7 @@ motivated a redesign of Phase 1B/1C toward on-network optimized cell type
 - "Porting to scheduler X requires re-implementing this optimization" → wrong layer
 - "The scheduler needs to know about this special cell type" → cell-mech should be opaque to scheduler
 
-Codified 2026-04-26 from a single user-articulated insight during external
+Codified 2026-05-14 from a single user-articulated insight during external
 critique resolution. Treated as foundational architectural principle (added
 to DESIGN_PRINCIPLES.org as a top-level principle, not just a watching-list
 candidate) because the alternative — hybrid pivot scaffolding propagating

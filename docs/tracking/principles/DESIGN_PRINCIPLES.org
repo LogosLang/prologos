@@ -866,7 +866,7 @@ temptation/. Find the equivalent optimization at the cell or propagator
 level — even if it's harder to implement initially, it preserves
 portability.
 
-Historical example (rejected, 2026-04-26): during the PPN 4C tropical
+Historical example (rejected, 2026-05-14): during the PPN 4C tropical
 fuel addendum design, an "Option E (BSP-aware piggyback)" was proposed
 that would piggyback the threshold check into BSP's worklist-drain
 pass. This was rejected after the user articulated the orthogonality
@@ -892,7 +892,7 @@ If the optimization changes semantics, it's at the wrong layer.
 ** Provenance
 
 Articulated by user during PPN 4C tropical addendum D.3.EC critique
-review (2026-04-26). The user observed: "We've explored three scheduler
+review (2026-05-14). The user observed: "We've explored three scheduler
 implementations without changes to the network computation... given our
 CALM-compliant network architecture, it is conceivable that we could
 have arbitrary number of different schedulers to run the same network —

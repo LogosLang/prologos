@@ -10,7 +10,7 @@
 
 1. **The rare design state where two architectures are live simultaneously**: D.4 (on-network specialized cell type) is the PREFERRED architecture (principle-aligned per Cell/Propagator/Scheduler Orthogonality); D.3 (hybrid pivot) is the FALLBACK (empirically-grounded). §13.6 Pre-0 spike acts as the FALSIFICATION TEST that decides which architecture ships. Per discipline (newly codified): never extrapolate a principle-violating commit when the alternative can be directly measured.
 
-2. **Cell/Propagator/Scheduler Orthogonality is now a load-bearing principle** (codified 2026-04-26 in DESIGN_PRINCIPLES.org). The architecture has three orthogonal layers; optimizations should be located at the layer that owns the concern. Mixing layers breaks scheduler-portability AND violates CALM's order-independence. This principle is prophylactic for PReduce, OE, SH Series tracks — without it, hybrid scaffolding would propagate as the de facto template across multiple tracks (compounding architectural debt).
+2. **Cell/Propagator/Scheduler Orthogonality is now a load-bearing principle** (codified 2026-05-14 in DESIGN_PRINCIPLES.org). The architecture has three orthogonal layers; optimizations should be located at the layer that owns the concern. Mixing layers breaks scheduler-portability AND violates CALM's order-independence. This principle is prophylactic for PReduce, OE, SH Series tracks — without it, hybrid scaffolding would propagate as the de facto template across multiple tracks (compounding architectural debt).
 
 3. **D.3 critique findings (18 from D.2.SC + 11 from D.3.EC = 29 total) status under D.4**: 18 become MOOT under the on-network reframing (the architectural reframing eliminates the underlying concerns rather than addressing piecemeal); 4 remain RELEVANT (S3, S4, S5, EX1, MG2 — multi-quantale composition + external positioning, orthogonal to cell substrate concerns). The full D.2.SC + D.3.EC + D.4 critique-resolution work in this session arc is captured in the D.4 Revision Summary table at the top of the design doc.
 
@@ -53,7 +53,7 @@
 - **Working tree**: clean except pre-existing user-managed changes (standup edits, benchmark data, deleted .md files with .org versions, .prologos file edits)
 - **Suite state**: 7914 tests / 119.3s / 0 failures (per S2.e-v close `118ab57a`; not re-run this session)
 
-### Session arc commits (2026-04-26 continuing from `ffab0079` Pre-0 S-tier prep)
+### Session arc commits (multi-session — continuing from `ffab0079` Pre-0 S-tier prep)
 
 | Commit | Focus |
 |---|---|
@@ -71,7 +71,7 @@
 | **`6a628bc7`** | **Cell/Propagator/Scheduler Orthogonality principle codified** — architectural reframing initiated |
 | **`45181c07`** | **D.4 scaffolding pass** — §4.6 specialized cell type framework + §13.6 Pre-0 spike plan + supersession notes |
 
-### Design state snapshot (2026-04-26 session close)
+### Design state snapshot (2026-05-14 session close)
 
 | Sub-phase | Status | Notes |
 |---|---|---|
@@ -468,7 +468,7 @@ Apply at every gate. Especially: at §13.6 spike result interpretation (are we c
 
 §13.6 spike IS the microbench-claim verification for the D.4 extrapolation. The cell-write performance claim is load-bearing; the spike directly measures it. Per the codified discipline: "when a phase's design references a microbench finding as load-bearing, the phase's CLOSE must include re-microbench to verify the claim landed." §13.6 closes the Pre-0 gap.
 
-### §6.4 6 codifications graduated 2026-04-25 + 1 NEW 2026-04-26 apply prophylactically
+### §6.4 6 codifications graduated 2026-04-25 + 1 NEW 2026-05-14 apply prophylactically
 
 **NEW**: Cell/Propagator/Scheduler Orthogonality (codified DESIGN_PRINCIPLES.org). Prophylactic for PReduce, OE, SH Series.
 

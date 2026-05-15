@@ -13,9 +13,9 @@
 
 ---
 
-## D.4 Revision Summary (2026-04-26)
+## D.4 Revision Summary (2026-05-14)
 
-**Architectural reframing** in response to user-articulated [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle (codified 2026-04-26 from D.3.EC critique review).
+**Architectural reframing** in response to user-articulated [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle (codified 2026-05-14 from D.3.EC critique review).
 
 **The pivot**: D.3's hybrid pivot architecture (preserve struct-field as off-network live state + cell substrate for Phase 3C consumers) violates the orthogonality principle in spirit — it makes the cell DERIVED rather than PRIMARY, with the struct field providing per-decrement fast-path. This was empirically justified by Pre-0 R-19 (extrapolation: full cell-migration would trigger major GC), but the extrapolation was NEVER DIRECTLY MEASURED for an optimized cell mechanism.
 
@@ -83,7 +83,7 @@
 
 ---
 
-## D.3 Revision Summary (2026-04-26 — SUPERSEDED BY D.4)
+## D.3 Revision Summary (2026-05-02 — SUPERSEDED BY D.4 on 2026-05-14)
 
 **Status note (D.4)**: D.3 closed the D.2.SC self-critique + D.3.EC external critique findings within the hybrid pivot framing. D.4 reframes the entire hybrid pivot toward on-network optimized cell type. Most D.3 critique resolutions become MOOT under D.4 (the underlying concerns disappear with the architectural reframing). D.3 content is preserved below for historical record + critique-resolution traceability.
 
@@ -1174,7 +1174,7 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 
 ## §10 Phase 1C — Canonical BSP fuel substrate (D.4 RECONSIDERED; D.3 hybrid pivot UNDER REVIEW)
 
-> **D.4 status (2026-04-26)**: This section is UNDER RECONSIDERATION. Per the [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle codified 2026-04-26, the hybrid pivot architecture violates principle alignment (cell DERIVED, struct-field PRIMARY at hot path) and was empirically motivated by extrapolation that was never directly measured.
+> **D.4 status (2026-05-14)**: This section is UNDER RECONSIDERATION. Per the [Cell/Propagator/Scheduler Orthogonality](principles/DESIGN_PRINCIPLES.org) principle codified 2026-05-14, the hybrid pivot architecture violates principle alignment (cell DERIVED, struct-field PRIMARY at hot path) and was empirically motivated by extrapolation that was never directly measured.
 >
 > Under D.4, Phase 1C is reframed as a **direct migration** of decrement sites + check sites to the on-network optimized cell API (per §4.6 specialized cell type framework). The struct-field `prop-net-cold-fuel` and macro `prop-network-fuel` RETIRE as planned in D.1 §10.3; the cell IS the live state.
 >
@@ -1795,7 +1795,7 @@ No "scan" / "walk" / "iterate" in design. The "fuel exhaustion" check IS a thres
 
 **SRE lattice lens (mandatory)** per CRITIQUE_METHODOLOGY.
 
-**D.4 status (2026-04-26)**: §14.4 Q5's dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot) was a D.3 reconciliation under hybrid. Under D.4 architectural reframing (per §4.6 + §10), the cell IS the live state and Q5 reverts to SINGLE classification (cell PRIMARY). Q3 + Q4 + Q6 hybrid clarifications retire. The dual-classification framing is preserved below for traceability with D.3.SC S1 BLOCKING resolution rationale; it becomes MOOT if §13.6 spike passes.
+**D.4 status (2026-05-14)**: §14.4 Q5's dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot) was a D.3 reconciliation under hybrid. Under D.4 architectural reframing (per §4.6 + §10), the cell IS the live state and Q5 reverts to SINGLE classification (cell PRIMARY). Q3 + Q4 + Q6 hybrid clarifications retire. The dual-classification framing is preserved below for traceability with D.3.SC S1 BLOCKING resolution rationale; it becomes MOOT if §13.6 spike passes.
 
 **D.3 status note (preserved)**: §14.4 Q5 was inconsistent with D.2 §10's hybrid pivot (Q5 declared cell PRIMARY under D.1's full-migration; hybrid inverts to struct-field PRIMARY, cell DERIVED). Q5 + dependent Qs (Q3, Q4, Q6) updated below to acknowledge dual classification (D.1 full-migration vs D.2/D.3 hybrid pivot).
 
@@ -1870,7 +1870,7 @@ Per user's workflow direction (2026-04-26): "if there are any remaining open que
 
 ## §17 What's next
 
-Per user's workflow (updated for D.4 architectural reframing 2026-04-26):
+Per user's workflow (updated for D.4 architectural reframing 2026-05-14):
 1. ✅ **D.1 draft complete** (commit `fc4b9d3e`)
 2. ✅ **Pre-0 microbenchmark plan + execution** — 8 commits; 22 cumulative design-affecting findings
 3. ✅ **D.2 revise** (commit `2a4d938c`) — Pre-0 findings incorporated; hybrid pivot architecture committed for Phase 1C
