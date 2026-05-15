@@ -919,31 +919,71 @@ observation. **Observers see the cell value at the points where they fire**
 — which is between BSP rounds. The scheduler's mid-round local-var
 optimization is invisible to observers.
 
-*** The deferred-write pattern (canonical example: fuel-cost cell under Option 13)
+*** The deferred-write pattern — two variants (canonical example: fuel-cost cell under Option 13)
 
-A scheduler-side optimization for hot scheduler-state cells:
+A scheduler-side optimization for hot scheduler-state cells. The pattern has
+TWO variants depending on the scheduler's loop structure (refined 2026-05-15
+after auditing the production scheduler architecture):
+
+**** Variant A — Round-entry batch decrement (parallel BSP main loop)
+
+For schedulers that have a natural "round" structure where a batch of N
+propagators is identified before firing (parallel BSP main loop):
 
 #+begin_src
-;; At BSP round entry — pull cell value into scheduler-local working register
+;; Inside the BSP outer loop: pop worklist → pids of length n
+;; BEFORE workers spin up: single cell-write at round entry
+(define new-fuel-cost (+ (net-cell-read net fuel-cost-cell-id) n))
+(define snapshot (net-cell-write base-snapshot fuel-cost-cell-id new-fuel-cost))
+;; Cell's on-write predicate runs here; if exhausted, contradiction routes
+;; structurally. Workers fire against snapshot but don't touch fuel-cost.
+(executor snapshot pids)  ; parallel
+#+end_src
+
+Cost: ~6 ns per BSP round (one cell-write); amortized over N=100 fires per
+round = **~0.06 ns/cycle**. The dominant per-fire cost is the propagator-fire
+itself, not anything related to fuel.
+
+**** Variant B — Local-var + cell-write at phase boundaries (sequential schedulers)
+
+For schedulers that have a sequential per-fire loop without natural batching:
+
+#+begin_src
+;; At sequential-phase entry — pull cell value into local-var
 (define local-fuel-cost (box (net-cell-read net fuel-cost-cell-id)))
 (define budget (net-cell-read net fuel-budget-cell-id))
 
-;; Per fire (inline, in BSP loop body): hot path; ~2 ns/cycle
+;; Per fire (inline, in the loop body): hot path; ~2 ns/cycle
 (define new-cost (+ (unbox local-fuel-cost) 1))
 (set-box! local-fuel-cost new-cost)
 (when (>= new-cost budget)
   ;; Flush + contradict (rare; on exhaustion only)
   (set! net (net-cell-write net fuel-cost-cell-id new-cost))
-  (return-from-bsp-round net))
+  (return-from-phase net))
 
-;; At BSP round exit (no exhaustion in this round): flush ~6 ns
+;; At phase exit (no exhaustion): flush local-var → cell
 (set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
 #+end_src
 
-Estimated cost: ~2 ns/cycle amortized at typical fires-per-round (vs ~6 ns
-for per-fire `net-cell-write` dispatch — matches "native gas tracker"
-performance). The cell is canonical at all observation points; the local-var
-is scheduler-internal SCRATCH.
+Cost: ~2.16 ns/cycle amortized at typical N (measured via spike); applies to
+sequential schedulers (Gauss-Seidel, widening, narrowing — all per-fire
+loops). The cell is canonical at all observation points; the local-var is
+scheduler-internal SCRATCH.
+
+**** Scheduler/variant assignment
+
+| Scheduler | Loop structure | Variant |
+|---|---|---|
+| Parallel BSP (production default) | Round-entry batch of N propagators | A |
+| Gauss-Seidel sequential | Per-fire loop | B |
+| Widening/narrowing phases | Per-fire loop | B |
+| Sequential BFS-like BSP | Per-fire loop | B |
+| Future Zig-LLVM scheduler | Per-loop-batch (likely) | A or hybrid |
+
+The scheduler CHOOSES the variant fitting its loop structure. Both variants
+preserve the orthogonality principle: the cell mechanism's behavior is
+unchanged; the scheduler's choice of WHEN to invoke `net-cell-write` is the
+scheduler's own concern.
 
 *** Why this preserves orthogonality (not a violation)
 

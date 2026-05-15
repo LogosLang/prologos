@@ -42,6 +42,16 @@ The Option 13 refinement CONFIRMS the "scheduler-state cell" category from the Q
 
 **The spike falsified its own design assumption**: §10.3.A originally framed Option 13 as "approximating native gas tracker performance" — implying it would match native, not exceed it. Measurement showed Option 13 is structurally FASTER than current native struct-copy (which has nested struct allocation per cycle; Option 13 has only mutable-box decrement). This is a 2.4× perf improvement vs the current implementation, not just a "no regression vs native" result.
 
+**Audit correction 2026-05-15** (Phase 1B mini-design + user challenge): the production scheduler is the parallel BSP from PAR Track 2 R1-R2 (`driver.rkt:435` sets `current-parallel-executor` globally to `make-parallel-thread-fire-all`). The codebase has FIVE scheduler entry points with different loop structures and therefore different deferred-write variants:
+- **Variant A (round-entry batch)**: parallel BSP main loop (`run-to-quiescence-bsp` line 2384) — one cell-write per BSP round; main thread sequential; workers don't touch fuel; amortized ~0.06 ns/cycle at N=100
+- **Variant B (local-var per-fire)**: four sequential schedulers (`run-to-quiescence-inner`, `/traced`, `run-widen-phase`, `run-narrow-phase`) — local-var box + per-fire decrement + cell-write at phase end; amortized 2.16 ns/cycle per §13.6.A spike
+
+The audit's correction:
+- **Q-1C-M parallel BSP composition** changed from DEFER-TO-PAR-FUTURE to RESOLVED IN-SCOPE: the main BSP thread already serializes fuel-state updates at line 2384 (current production); Phase 1C migration changes the substrate (struct field → cell) without changing the concurrency pattern
+- **§10.4 sub-phase plan** enumerates all 5 scheduler entry points with per-scheduler variant assignment
+- **§13.6.A spike's measurements** apply to Variant B (the local-var pattern); Variant A has even lower amortized cost
+- **§9.9 open questions** RESOLVED for 7 of 8 architectural questions (Q-1B-8 → A2; Q-1B-9 → F2; Q-1B-10 → B1-prime; Q-1B-11 → D1; Q-1B-12 → E1; Q-1B-13 → G1; Q-1B-14 → L1); 3 implementation-detail questions (Q-1B-1/2/4) remain deferred to 1B-i mini-design with code in hand
+
 **What changes from D.3 → D.4**:
 
 | Section | D.3 → D.4 |
@@ -1286,14 +1296,44 @@ These three use cases ground the Form B anticipated-use enumeration. Phase 3C's 
 - **D-1B-7 (D.4 NEW)**: `:on-write-check` predicate allocation under repeated invocation — predicate closure capture must be 0-allocation under fixnum comparison; verify with `bench-mem` on the registered fuel-cost cell. Mitigation: predicate written as a top-level `define`, not a closure capturing budget; budget read inside predicate via `net-cell-read` (cell-id is constant)
 - **D-1B-8 (D.4 NEW)**: Cell-meta storage representation — open design choice (hash-keyed by cell-id, vector-indexed, struct field on prop-net-warm). Mitigation: decide at 1B mini-design with code in hand; default to vector-indexed for fast-path performance (per §13.6 spike); Phase 3A may revisit if multi-worldview meta requires hash representation
 
-### §9.9 Open questions (D.4 CANONICAL; deferred to per-phase mini-design+audit)
+### §9.9 Open questions + Phase 1B mini-design resolutions (D.4 CANONICAL; Phase 1B mini-design 2026-05-15)
 
-- **Q-1B-1**: API naming. Lean: `tropical-fuel-merge`, `tropical-fuel-tensor`, `tropical-left-residual`. Alternative: `min-merge`, `quantale-join`, etc. Decide at 1B mini-design with code in hand.
-- **Q-1B-2**: `+inf.0` (Racket float-infinity) vs sentinel `'tropical-top`. Lean: `+inf.0` — Racket-native; arithmetic well-defined (`+inf.0 + a = +inf.0`); easier interop. Alternative: sentinel for type clarity; might be more SRE-aligned. Decide at 1B mini-design.
-- **Q-1B-4**: Residuation operator as read-time helper vs propagator. Lean: read-time helper (per §9.5 + §6.5). Decide at 1B mini-design with Phase 3C UC1/UC2/UC3 anticipated use cases in hand.
-- **Q-1B-6 (RETIRED under D.4)**: Hybrid pivot empirical-validation spike. **EXECUTED 2026-05-14** (commit `7b681b9e`). Results: ✓ PASS — D.4 canonical. Specialized cell-write fast-path 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements (structural). The hybrid pivot's empirical motivation (R-19 extrapolation) is falsified for the specialized cell type framework. Phase 1B builds the framework + the canonical cell registration. See §13.6 for the spike plan + results.
-- **Q-1B-8 (D.4 NEW)**: Specialized cell framework integration with prop-net layout — where do cell-meta records live? Options: (a) struct field on `prop-net-warm` (cell-id-keyed vector), (b) hash-keyed CHAMP map, (c) parallel struct. Lean: (a) for fast-path performance per D-1B-8. Decide at 1B mini-design with code in hand.
-- **Q-1B-9 (D.4 NEW)**: Predicate API for `:on-write-check` — accepts `(new-value, net)` and returns boolean. Open: should it accept (current, new-value, net) for crossing detection (current vs new vs threshold)? Lean: pass (new-value, net); the framework's fire-on-threshold-crossing logic does the crossing-detection separately by comparing pre-write and post-write values. Decide at 1B mini-design.
+**Mini-design conversation 2026-05-15** (between mini-design + Option 13 + §13.6.A spike + audit-correction) resolved most architectural questions. Implementation-detail questions remain deferred to per-phase mini-design+audit with code in hand. Status: ✅ RESOLVED / 🔄 DEFER-TO-CODE / 🚫 RETIRED.
+
+**Implementation-detail questions (defer to 1B-i / 1C-i mini-design with code)**:
+
+- **Q-1B-1** 🔄: API naming. Lean: `tropical-fuel-merge`, `tropical-fuel-tensor`, `tropical-left-residual`. Alternative: `min-merge`, `quantale-join`, etc. Decide at 1B mini-design with code in hand.
+- **Q-1B-2** 🔄: `+inf.0` (Racket float-infinity) vs sentinel `'tropical-top`. Lean: `+inf.0` — Racket-native; arithmetic well-defined (`+inf.0 + a = +inf.0`); easier interop. Decide at 1B mini-design.
+- **Q-1B-4** 🔄: Residuation operator as read-time helper vs propagator. Lean: read-time helper (per §9.5 + §6.5). Decide at 1B mini-design with Phase 3C UC1/UC2/UC3 anticipated use cases in hand.
+
+**Spike-validated questions**:
+
+- **Q-1B-6** 🚫 (RETIRED under D.4): Hybrid pivot empirical-validation spike. **EXECUTED 2026-05-14** (commit `7b681b9e`). Results: ✓ PASS — D.4 canonical. Specialized cell-write fast-path 6.4 ns/call (with realistic dispatch); zero major-GC at 100k decrements (structural). The hybrid pivot's empirical motivation (R-19 extrapolation) is falsified for the specialized cell type framework. See §13.6 for spike plan + results.
+
+**Architectural questions resolved in Phase 1B mini-design 2026-05-15**:
+
+- **Q-1B-8 (resolved A2)** ✅: Cell-meta storage representation. Under Option 13's deferred-write, cell-meta dispatch fires only at scheduler boundaries (Variant A: once per BSP round; Variant B: once per phase entry+exit), not per fire. Performance pressure that initially favored vector-indexed dispatch has dissolved. **Resolution: A2 — meta field on `prop-cell` struct itself**. Cell knows its own meta; one extra word per cell (~8 bytes); no separate CHAMP lookup; one accessor at boundary. A1 (parallel CHAMP on prop-net-cold) is viable too but adds dispatch indirection that A2 avoids. Cleanliness wins under the relaxed perf pressure.
+
+- **Q-1B-9 (resolved F2)** ✅: Predicate API for `:on-write-check`. Under Option 13 (and Phase 3C forward-compat), passing `(current, new-value, net)` lets the predicate distinguish "threshold crossed this write" from "threshold already crossed in a prior write." For monotone counter the distinction doesn't matter, but forward-compatibility for future Phase 3C consumers (which may want "transition" semantics) is cheap. **Resolution: F2 — predicate signature `(current, new-value, net) -> boolean`**.
+
+- **Q-1B-10 (NEW; resolved B1-prime)** ✅: Module organization. Under Option 13 the framework's dispatch site is in `propagator.rkt`'s `net-cell-write` (the natural home for cell mechanism). The Option 13 BSP-deferred-write logic lives in BSP scheduler code (Variant A at line 2384's equivalent; Variant B in sequential phase functions). **Resolution: B1-prime — cell-meta struct + registration API + dispatch in `propagator.rkt`; a thin `specialized-cells.rkt` provides convenience constructors (e.g., `make-monotone-counter-meta`) but isn't load-bearing; BSP deferred-write helpers (the local-var boilerplate for Variant B) live in BSP scheduler code OR a `bsp-helpers.rkt` if reused**. Avoids the circular-import dance from earlier framing.
+
+- **Q-1B-11 (NEW; resolved D1)** ✅: Storage strategy enum scope. **Resolution: D1 — ship `'general` (default) + `'monotone-counter`**. Other strategies (`'sparse`, `'specialized-vector`, etc.) added when future PReduce/OE consumers need them. Aligns with "Let pain drive design" (DEVELOPMENT_LESSONS.org).
+
+- **Q-1B-12 (NEW; resolved E1)** ✅: Fire-on policy enum scope. **Resolution: E1 — ship `'any-change` (default) + `'threshold-crossing`**. Other policies (`'monotonic-progress`, `'change-magnitude`) added when future consumers need them.
+
+- **Q-1B-13 (NEW; resolved G1)** ✅: On-write predicate timing — runs BEFORE merge or AFTER. **Resolution: G1 — predicate runs AFTER merge**. For monotone counter (fuel-cost), merge is `min` (idempotent) so post-merge value is the live state; predicate sees the actual cell-state-after-write. Matches §9.2.B sketch + §13.6.A spike pattern.
+
+- **Q-1B-14 (NEW; resolved at §10.3.A)** ✅: Local-var location for Variant B. **Resolution: L1 — let-scoped `box`, ephemeral per scheduler-phase invocation**. Each phase reads cell at entry, writes cell at exit. Avoids "what's the source of truth between phases" question.
+
+**Deferred-but-named questions** (under Option 13 + audit-corrected scheduler matrix):
+
+- **Q-1C-K** 🔄 → defer-to-1C-i mini-audit per §10.7 — local-var flush timing enumeration.
+- **Q-1C-L** ✅ → resolved L1 per Q-1B-14.
+- **Q-1C-M** ✅ → RESOLVED IN-SCOPE per §10.7 (parallel BSP composition via main-thread serialization).
+- **Q-1C-N** 🔄 → forward-capture per §13.7 (other scheduler-state cells using deferred-write pattern).
+
+> **Phase 1B mini-design status**: 8 questions resolved (Q-1B-8/9/10/11/12/13/14 + Q-1B-6 retired); 3 deferred to code (Q-1B-1/2/4). Phase 1B is ready to enter Stage 4 implementation with the architectural decisions locked in.
 
 ### §9.10 Post-Phase-1B benchmark capture — forward-pointer for Pre-0 deferred items (NEW 2026-04-26)
 
@@ -1521,44 +1561,93 @@ Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" d
 ;;   (24 ns struct-copy baseline) and the spike's W1+ (6.4 ns specialized).
 ```
 
-### §10.3.A Option 13 — Scheduler-side deferred write at round boundaries (D.4 REFINEMENT 2026-05-15)
+### §10.3.A Option 13 — Scheduler-side deferred write at boundaries (D.4 REFINEMENT 2026-05-15, corrected 2026-05-15)
 
 > **Origin**: surfaced during Phase 1B mini-design when a friend's question highlighted that D.4's per-fire `net-cell-write` pattern adds ~3-4 ns dispatch overhead vs a "native" gas tracker. The architectural lever the question makes visible: **D.4 assumed `net-cell-write` should be called per-fire**. That assumption is what produces the dispatch overhead. The orthogonality principle does NOT require per-fire writes — only that the cell's BEHAVIOR is scheduler-neutral. The scheduler is free to CHOOSE WHEN to call `net-cell-write` (per-fire OR batched) as long as the cell's observable semantics are preserved at the points where anything else can observe them.
+>
+> **Correction (2026-05-15 audit)**: the production scheduler is the PARALLEL BSP from PAR Track 2 R1-R2 (commit `driver.rkt:435` sets `current-parallel-executor` globally to `make-parallel-thread-fire-all`). The codebase has FIVE scheduler entry points, with different loop structures and therefore different deferred-write variants. The original §10.3.A pseudocode described only the SEQUENTIAL local-var pattern; the parallel BSP main loop uses a simpler round-entry batch decrement pattern. Both variants are valid implementations of "Option 13 deferred-write" — they share the architectural principle (scheduler writes cell at boundaries, not per-fire), with the boundary choice fitting the scheduler's loop structure.
 
-**The pattern**: BSP scheduler maintains a local-var fuel counter for the hot path; the cell is read at round entry, written at round exit (or immediately on exhaustion):
+**Scheduler entry points and their deferred-write variants** (audit 2026-05-15):
+
+| # | Function (line) | Loop structure | Variant | Pattern |
+|---|---|---|---|---|
+| 1 | `run-to-quiescence-inner` (1835-1866) | Sequential Gauss-Seidel; box-mutation; per-fire | **Variant B (local-var)** | Local-var box + per-fire decrement + cell-write at phase end |
+| 2 | `run-to-quiescence-inner/traced` (1870-1898) | Same + tracing | **Variant B (local-var)** | Same as #1 |
+| 3 | `run-to-quiescence-bsp` (2315+) | **PARALLEL BSP** (production default); round-entry batch | **Variant A (round-entry-batch)** | Single `net-cell-write` at line 2384 equivalent; main thread sequential; workers don't touch fuel |
+| 4 | `run-widen-phase` (2989+) | Sequential widening; per-fire | **Variant B (local-var)** | Same as #1 |
+| 5 | `run-narrow-phase` (3042+) | Sequential narrowing; per-fire | **Variant B (local-var)** | Same as #1 |
+
+**Variant A — Round-entry batch decrement (parallel BSP main loop; production default)**:
 
 ```racket
-;; At BSP round entry — pull cell value into scheduler-local working register
+;; Inside the BSP outer loop (run-to-quiescence-bsp at line 2376+):
+(define raw-pids (dedup-pids (prop-network-worklist net)))
+(define pids (filter (lambda (pid) (not (hash-has-key? fired-set pid))) raw-pids))
+(define n (length pids))
+
+;; Round-entry batch decrement: ONE cell-write per BSP round, on main thread,
+;; BEFORE parallel workers spin up. Workers see the post-decrement value in the
+;; snapshot but don't write fuel.
+(define new-fuel-cost (+ (net-cell-read net fuel-cost-cell-id) n))
+(define snapshot
+  (struct-copy prop-network net
+    [hot (struct-copy prop-net-hot (prop-network-hot net)
+           [worklist '()])]))
+;; D.4: net-cell-write replaces the old [fuel (- ...)] field in struct-copy
+(define snapshot+fuel
+  (net-cell-write snapshot fuel-cost-cell-id new-fuel-cost))
+;; The cell's on-write predicate runs here; if exhausted, contradiction is
+;; written structurally and worker dispatch is short-circuited.
+
+;; Workers fire pids against snapshot+fuel (sequentially per-thread; parallel
+;; across threads). Workers don't touch fuel-cost cell during fire.
+(define all-writes (executor snapshot+fuel pids))
+;; ... bulk-merge proceeds as before
+```
+
+Cost: ~6 ns per BSP round (one cell-write); amortized over N=100 fires per round = **~0.06 ns/cycle**. The dominant per-fire cost is the propagator-fire itself, NOT the fuel update.
+
+**Variant B — Local-var + cell-write at phase boundaries (sequential schedulers)**:
+
+```racket
+;; At sequential-phase entry (e.g., run-to-quiescence-inner, run-widen-phase):
 (define local-fuel-cost (box (net-cell-read net fuel-cost-cell-id)))
 (define budget (net-cell-read net fuel-budget-cell-id))
 
-;; Per fire (inline, in the BSP loop body):
+;; Per fire (inline, in the sequential loop body):
 (define new-cost (+ (unbox local-fuel-cost) 1))
 (set-box! local-fuel-cost new-cost)
 (when (>= new-cost budget)
   ;; Flush + contradict (rare; on exhaustion only)
   (set! net (net-cell-write net fuel-cost-cell-id new-cost))
   ;; The on-write check at the cell layer routes contradiction structurally
-  (return-from-bsp-round net))
+  (return-from-sequential-phase net))
 
-;; At BSP round exit (no exhaustion in this round):
+;; At sequential-phase exit (no exhaustion):
 (set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
 ```
 
+Cost: ~2.16 ns/cycle amortized (per §13.6.A spike); applies to sequential schedulers (#1, #2, #4, #5).
+
 **Performance characterization (MEASURED — §13.6.A spike VALIDATED 2026-05-15)**:
 
-| Component | Measured cost | Frequency | Source |
-|---|---|---|---|
-| Per-fire local-var decrement + threshold check (function-call) | **2.2 ns/call** | 100s-1000s per round | §13.6.A W1-O13a |
-| Per-fire local-var decrement + threshold check (macro-inline) | **2.1 ns/call** | (alternative; ~equivalent) | §13.6.A W1-O13b |
-| Per-round cell-read at entry | **1.3 ns/call** | Once per round | §13.6.A W2a-O13 |
-| Per-round cell-write at exit | **1.4 ns/call** | Once per round | §13.6.A W2b-O13 |
-| Amortized per-fire at N=100 fires/round (function-call) | **2.16 ns/cycle** | Hot path under typical workload | §13.6.A W3-O13a.2 |
-| Contradiction flush on exhaustion | **3.7 ns/call** | Once per workload typically | §13.6.A W4-O13 |
+| Component | Measured cost | Frequency | Source | Variant |
+|---|---|---|---|---|
+| Variant A: round-entry batch cell-write (one per BSP round) | **~6 ns/round** | Once per BSP round | §13.6.A W2b-O13 + ~3 ns dispatch | A |
+| Variant A: amortized per fire at N=100 fires/round | **~0.06 ns/cycle** | Hot path under parallel BSP | Variant A formula | A |
+| Variant B: per-fire local-var decrement + threshold check | **2.2 ns/call** | 100s-1000s per phase | §13.6.A W1-O13a | B |
+| Variant B: amortized per-fire at N=100 fires/phase | **2.16 ns/cycle** | Hot path under sequential | §13.6.A W3-O13a.2 | B |
+| Both: per-boundary cell-read | **1.3 ns/call** | Once per boundary | §13.6.A W2a-O13 | A + B |
+| Both: per-boundary cell-write | **1.4 ns/call** | Once per boundary | §13.6.A W2b-O13 | A + B |
+| Both: contradiction flush on exhaustion | **3.7 ns/call** | Once per workload typically | §13.6.A W4-O13 | A + B |
 
-At typical 100-1000 fires per round, per-round overhead amortizes to **2.16 ns/cycle effective** — **2.4× faster than current native struct-copy baseline (5.2 ns)**; **3.1× faster than D.4 per-fire pattern (6.6 ns from §13.6 W1+)**. The Option 14 macro specialization saves only 0.02 ns/cycle (below the 1 ns threshold for application); SKIP Option 14.
+For the production parallel BSP main loop (Variant A), per-cycle cost amortizes to **~0.06 ns/cycle at N=100** — far below any per-fire overhead concern. For sequential schedulers (Variant B), per-cycle cost is **~2.16 ns/cycle** — still faster than current native struct-copy (5.2 ns) by 2.4×. Both variants beat the per-fire `net-cell-write` pattern (Option Y from D.4 original) which was 6.6 ns/cycle (§13.6 W1+).
 
-> **The spike falsified an assumption in the design**: §10.3.A originally estimated "approximating native gas tracker performance" suggesting Option 13 might just match native. The measurement shows Option 13 actually BEATS native struct-copy by 2.4×. The reason: current native uses nested struct-copy on `prop-network` + `prop-net-hot` (multiple allocator calls per cycle); Option 13's mutable-box pattern allocates nothing per cycle. The deferred-write pattern is structurally faster than the current native implementation.
+**The original §10.3.A pseudocode applied only to sequential schedulers** (the local-var pattern). The parallel BSP main loop uses the simpler Variant A; this correction names both variants and the scheduler/variant mapping.
+
+The Option 14 macro specialization saves only 0.02 ns/cycle (per §13.6.A W3-O13a vs W3-O13b); SKIP Option 14. The savings are within the same variant; cross-variant the architectural choice (A vs B per scheduler) dominates.
+
+> **The spike falsified an assumption in the design**: §10.3.A originally estimated "approximating native gas tracker performance" suggesting Option 13 might just match native. The measurement shows Option 13 (Variant B) actually BEATS native struct-copy by 2.4× for sequential schedulers; Variant A is even faster for the parallel BSP main loop (amortized 0.06 ns/cycle vs 5.2 ns native = ~87× faster). The reason: current native uses nested struct-copy on `prop-network` + `prop-net-hot` (multiple allocator calls per cycle); Variants A + B avoid the struct-copy allocation entirely. The deferred-write pattern is structurally faster than the current native implementation.
 
 **Why this is materially different from D.3 hybrid pivot (not a principle inversion)**:
 
@@ -1592,10 +1681,11 @@ This is a **clean architectural category** that the D.4 design implicitly assume
 
 **Trade-offs and complications**:
 
-- **Snapshot/restore**: when speculation forks mid-round (rare; usually at round boundaries), local-var must flush first. Adds ~6 ns to fork operation. Speculation operations are rare relative to fires; net overhead is negligible.
-- **Phase 3C consumer granularity**: round-level not per-fire. For UC1 (blame attribution), round-level + dependency-graph traversal gives propagator-level attribution (acceptable). For UC2 (cost-bounded elaboration), round-level is natural (decision points are between rounds). For UC3 (per-branch cost): each branch's BSP has its own local-var → cell updates at branch fork/join boundaries (correct semantics).
-- **Mid-round on-write check**: the on-write predicate currently runs at cell-write time. Under deferred-write, predicate runs at flush time (round boundary OR exhaustion). For monotone counter (fuel-cost), this works correctly — if final value crosses threshold, contradiction fires. For non-monotone use cases (future), per-write semantics would still be required.
-- **Parallel BSP (Phase 2 PAR future)**: workers each have local-var; reduce at round end via atomic-add or single-thread aggregation. Deferred to Phase 2 PAR design.
+- **Snapshot/restore**: when speculation forks mid-phase (rare; usually at phase boundaries), Variant B local-var must flush first. Adds ~6 ns to fork operation. Variant A (parallel BSP main) naturally aligns with round boundaries; speculation forks at round boundaries see the post-decrement cell value. Speculation operations are rare relative to fires; net overhead is negligible.
+- **Phase 3C consumer granularity**: round/phase-level not per-fire. For UC1 (blame attribution), round-level + dependency-graph traversal gives propagator-level attribution (acceptable). For UC2 (cost-bounded elaboration), round-level is natural (decision points are between rounds). For UC3 (per-branch cost): each branch's scheduler instance has its own boundary writes → cell updates at branch fork/join boundaries (correct semantics).
+- **Mid-phase on-write check**: the on-write predicate currently runs at cell-write time. Under deferred-write, predicate runs at boundary cell-write (round entry for Variant A; phase entry+exit for Variant B; OR on-exhaustion mid-loop for both). For monotone counter (fuel-cost), this works correctly — the predicate sees the post-batch value (Variant A) or the post-phase value (Variant B); if it crosses threshold, contradiction fires. For non-monotone use cases (future), per-write semantics would still be required.
+- **Parallel BSP (production default; PAR Track 2 R1-R2 closed)**: **RESOLVED IN-SCOPE** for Phase 1B/1C. The parallel BSP main loop (Variant A) does the cell-write on the MAIN THREAD at round entry (line 2384's equivalent), BEFORE workers spin up. Workers fire pids against the post-decrement snapshot without touching fuel-cost. No contention; no reduce-at-round-end needed. The parallel BSP architecture already serializes scheduler-state updates on the main thread; Phase 1C migration just changes the substrate (struct field → cell) without changing the concurrency pattern. This was incorrectly marked "deferred to Phase 2 PAR" before the 2026-05-15 audit; corrected here.
+- **Future parallel scheduler variants** (Phase 2 PAR R3+): if a future PAR design eliminates the main-thread round-boundary serialization (e.g., per-worker fuel-counter shards with atomic reduction), THAT design choice would need to revisit fuel-cost cell semantics. Currently out of scope; the production parallel BSP keeps the main-thread serialization.
 - **Cell-API call boundary**: the deferred-write pattern still calls `net-cell-write` — just less often. The cell mechanism's contract is unchanged. The scheduler CHOOSES the call frequency.
 
 **Composability with macro-based specialization (Optional optimization Option 14)**:
@@ -1606,21 +1696,25 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
 
 - **1C-i** — Pre-implementation audit + mini-design:
   - Verify §9 framework implementation (Phase 1B) lands cleanly; cell registration API stable
-  - **Run §13.6.A Option 13 spike** (deferred-write pattern measurement; validates the ~2 ns/cycle amortized estimate)
+  - ✅ **§13.6.A Option 13 spike executed** (commit `77daf81c`) — Variant B amortized 2.16 ns/cycle (sequential schedulers); Variant A amortized ~0.06 ns/cycle (parallel BSP); Option 14 SKIPPED
   - Re-verify §13.6 spike measurements at scale (probe + targeted-test runs)
   - Identify any cell-id 11/12 conflicts (per D-1C-3)
   - Confirm speculation-fallback semantics for monotone-counter cells (per D-1C-8)
-  - Identify the 4 BSP fire sites (lines 1852, 1887, 3000, 3053) and the local-var boundary scope at each
-  - **Per §13.7 measurement plan: capture A baseline (current struct-copy) microbench data for A/B/C comparison at 1C-vi close**
+  - **Audit all FIVE scheduler entry points** (per §10.3.A corrected; identify per-scheduler variant assignment):
+    - #1 `run-to-quiescence-inner` (1835-1866): Variant B (sequential; box-mutation → local-var pattern)
+    - #2 `run-to-quiescence-inner/traced` (1870-1898): Variant B (same as #1)
+    - #3 `run-to-quiescence-bsp` line 2384: **Variant A** (parallel BSP; round-entry batch)
+    - #4 `run-widen-phase` (2989+): Variant B (sequential; struct-copy → local-var pattern)
+    - #5 `run-narrow-phase` (3042+): Variant B (sequential; struct-copy → local-var pattern)
+  - **Per §13.7 measurement plan: capture A baseline (current implementation per-entry-point) microbench data for A/B/C comparison at 1C-vi close**
 
-- **1C-ii** — Migrate 4 BSP fire sites to Option 13 deferred-write pattern:
-  - At BSP round entry: read fuel-cost cell into local-var (box)
-  - Per-fire: inline local-var decrement + threshold check (~2 ns/cycle target)
-  - At BSP round exit: flush local-var to cell (~6 ns; once per round)
-  - On exhaustion (mid-round): flush + contradiction (via cell-mechanism on-write check)
-  - Atomic commit; verify exhaustion semantics + performance preserved
-  - **Per §13.7: re-microbench M7+M8+M13; expected ~2 ns/cycle amortized (matches §13.6.A spike target)**
-  - Targeted test: test-propagator + test-tropical-fuel
+- **1C-ii** — Migrate 5 scheduler entry points to Option 13 deferred-write pattern (per-variant):
+  - **Variant A migration (entry point #3, parallel BSP main loop)**: replace line 2384's `[fuel (- (prop-network-fuel net) n)]` in struct-copy with a `net-cell-write` of `(+ current n)` to fuel-cost-cell, BEFORE workers spin up. Main thread sequential; workers don't touch fuel-cost. Single cell-write per BSP round. Cost: ~6 ns/round (amortized ~0.06 ns/cycle at N=100).
+  - **Variant B migration (entry points #1, #2, #4, #5, sequential schedulers)**: at phase entry, read fuel-cost cell into local-var box; per-fire decrement local-var + threshold check inline; at phase exit, flush local-var → cell-write. Cost: ~2.16 ns/cycle amortized.
+  - On exhaustion (any variant; rare): flush + contradiction-write (via cell-mechanism on-write check).
+  - Atomic commit per variant (Variant A as one commit; Variant B sites as one commit OR split per entry point if scope-warranted).
+  - **Per §13.7**: re-microbench BOTH variants; verify Variant A achieves ~0.06 ns/cycle amortized + Variant B achieves ~2.16 ns/cycle amortized (matches §13.6.A spike targets).
+  - Targeted tests: test-propagator + test-tropical-fuel + test-widen-narrow.
 
 - **1C-iii** — Migrate 11 check sites:
   - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)`
@@ -1629,14 +1723,14 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - **Per §13.7: re-microbench check-site cost; target unchanged ~6 ns**
   - Targeted test: full suite (these check sites are widely distributed)
 
-- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print + Option 14 specialization decision:
+- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print:
   - Retire `prop-network-fuel` macro (propagator.rkt:399)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
-  - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries)
-  - Migrate typing-propagators.rkt:2269 saved-fuel handling — speculation forks flush local-var BEFORE fork; sub-fork starts with current cell value
+  - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value)
+  - Migrate typing-propagators.rkt:2269 saved-fuel handling — speculation forks at round/phase boundaries see the cell value naturally; for Variant B mid-phase forks, local-var flushes BEFORE fork (sub-fork starts with current cell value)
   - Update pretty-print display
   - Verify no orphan callers (grep verification)
-  - **Per §13.7: macro-specialization decision point (Option 14 from §10.3.A) — measure deferred-write overhead with macro-expansion vs without; decide if specialization warranted (e.g., if overhead > 0.5 ns/cycle, apply Option 14)**
+  - ✅ **Option 14 (macro specialization) RESOLVED via §13.6.A spike (commit `77daf81c`): SKIP** — measured savings 0.02 ns/cycle, far below 1 ns threshold. Function-call pattern is sufficient.
 
 - **1C-v** — Migrate 13 test sites + 2 bench sites:
   - Batch mechanical migration via 2-pass sed pattern per workflow.md (single-file verification before batch)
@@ -1667,6 +1761,8 @@ Risks named at design time; verified at implementation:
 - **D-1C-7** (D.4 NEW): specialized cell-write fast-path performance regression vs §13.6 spike — possible if cell-meta dispatch in production has higher overhead than the vector-ref mock. Mitigation: 1C-vi re-microbench; if regression, investigate via cell-meta lookup optimization (struct-field on prop-net-cold for cell-id 11/12 fast path; specialized cell registry separate from CHAMP)
 - **D-1C-8** (D.4 NEW): speculation-fallback path semantics differ from monotone-counter expectations — possible if tagged-cell-value's worldview-narrow doesn't preserve the on-write predicate's threshold-check behavior. Mitigation: C-series quantale axiom verification (§9.4) under speculation; behavioral tests for cross-worldview cost semantics.
 - **D-1C-9** (D.4 NEW): fire-on-threshold-crossing notification mechanism misses crossings — possible if multi-write batches happen within one BSP round and the crossing is detected for the wrong intermediate value. Mitigation: correctness behavioral tests; the predicate runs INLINE at each write, so single-write atomicity guarantees correct detection (multi-write batching would only happen within a single propagator's body, where the writes are sequenced).
+- **D-1C-10** (D.4 NEW, 2026-05-15 audit): five scheduler entry points must be migrated with the CORRECT variant per scheduler. Risk: applying Variant B (local-var pattern) to entry point #3 (parallel BSP main) would introduce a per-fire local-var decrement that doesn't exist today — wasteful and incorrect. Applying Variant A (round-entry batch) to sequential schedulers (#1, #2, #4, #5) would require introducing a "round" concept that doesn't exist in their loop structures. Mitigation: 1C-i mini-audit enumerates each entry point + its variant assignment per §10.3.A's scheduler-pattern matrix; 1C-ii migration follows the matrix; 1C-vi verification re-microbenches per variant to confirm correct application.
+- **D-1C-11** (D.4 NEW, 2026-05-15 audit): existing parallel BSP main loop's batch decrement at line 2384 must NOT be replaced with a per-fire pattern. Under D.4 Variant A, the single `[fuel (- ... n)]` field in the struct-copy becomes a `net-cell-write` BEFORE workers spin up. The decrement remains BATCH (by N), not per-fire. Mitigation: 1C-ii Variant A migration explicitly preserves the batch semantic; targeted test verifies workers don't write fuel-cost cell during parallel fire.
 
 ### §10.6 Termination + parity
 
@@ -1686,6 +1782,28 @@ Risks named at design time; verified at implementation:
 - **Q-1C-3** (RETIRED under D.4): cell-update cadence enumeration. Was BLOCKING for Phase 1C-iv under D.3 (hybrid required exhaustive enumeration of semantic transitions for the Cell Staleness Contract). Under D.4, the cell IS the live state — no staleness; the cell value updates per-decrement, which is what the propagator network sees. No cadence enumeration needed.
 
 - **Q-1C-4** (D.4 NEW): cell-id 11/12 reservation — verify no future phase wants these slots; consider if cell-id allocation should be more flexible (e.g., per-domain allocation registry). Lean: hard-code 11/12 for now per §4.3 (well-known positions); future flexibility via the SRE domain registry is a Phase 1E/2 concern.
+
+- **Q-1C-K** (D.4 NEW, Option 13 refinement; defer-to-1C-i-mini-audit): local-var flush timing — enumerate the boundary points where Variant B flushes local-var to cell. Candidate list:
+  - Phase entry (cell-read into local-var)
+  - Phase exit (local-var → cell-write)
+  - Contradiction detection (immediate flush + contradiction-write)
+  - Speculation fork (immediate flush before fork; sub-fork reads from cell)
+  - External snapshot/restore boundary (immediate flush)
+  
+  Variant A (parallel BSP main loop) only has one boundary point: round entry. No flush logic needed beyond the round-entry cell-write itself.
+  
+  Lean: 1C-i mini-audit enumerates each variant's flush points; implement uniformly via a `flush-fuel-local-var!` helper macro/function called at each site for Variant B; Variant A's single cell-write at round entry handles its case directly.
+
+- **Q-1C-L** (D.4 NEW, Option 13 refinement; RESOLVED): local-var location for Variant B — three options:
+  - L1: Let-scoped `box` inside the sequential phase's function (ephemeral; lives only during the phase invocation)
+  - L2: Struct field on `prop-network` (persistent; mutable)
+  - L3: Racket parameter (banned per DEVELOPMENT_LESSONS.org "Callbacks Are a Propagator-First Anti-Pattern" + off-network state)
+  
+  Lean: **L1 (let-scoped box, ephemeral)**. Avoids "what's the source of truth between phases" question — each phase reads cell at entry, writes cell at exit. Variant A doesn't have a local-var at all (the cell-write at round entry is direct).
+
+- **Q-1C-M** (D.4 NEW, Option 13 refinement; RESOLVED IN-SCOPE 2026-05-15 per audit): parallel BSP composition. The production scheduler is the parallel BSP from PAR Track 2 R1-R2 (`current-parallel-executor` set globally in `driver.rkt:435`). Under Variant A: the main BSP thread does the round-entry cell-write SEQUENTIALLY before workers spin up; workers fire pids against the post-decrement snapshot but don't touch fuel-cost cell. No multi-thread contention on fuel; no reduce-at-round-end needed. The parallel BSP architecture already serializes scheduler-state updates on the main thread (per current line 2384's struct-copy on the main thread); Phase 1C migration changes the substrate (struct field → cell) without changing the concurrency pattern. Earlier framing as "deferred to Phase 2 PAR future" was incorrect; corrected 2026-05-15.
+
+- **Q-1C-N** (D.4 NEW, Option 13 refinement; FORWARD-CAPTURE): other scheduler-state cells that could use the deferred-write pattern. Candidates: worklist-cache cell (currently read per BSP round; could benefit from Variant A); future BSP-round-counter cell (if introduced); future PReduce/OE cost cells. Out of scope for Phase 1B/1C; captured in §13.7 forward-look for future tracks.
 
 ---
 
