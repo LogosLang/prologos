@@ -1042,6 +1042,68 @@ Options considered: (A) struct field on `prop-net-warm` alongside `contradiction
 
 **Why A2 over A' (cell-id 1 worldview-cache)**: A' would re-use cell-id 1 which was allocated for the tagged-cell-value worldview-bitmask cache mechanism. Re-using it for specialized-cell dispatch couples two distinct concerns (tagged-cell-value caching + specialized-cell speculation gate) to the same cell. A2 gives speculation-state its own dedicated, named field; matches the existing co-location pattern with `contradiction`. More principled. Implementation cost is similar (~10 LoC vs ~5 LoC).
 
+### §9.2.0.6 1B-iii mini-design resolutions (D.4 CANONICAL 2026-05-15/16)
+
+Conversational mini-design + codebase audit opened 1B-iii (tropical-fuel module + SRE registration + C-series). Four architectural questions resolved.
+
+**Q-1B-iii-α — Cell value semantic: remaining-fuel vs accumulated-cost**
+
+The design has an internal tension flagged at 1B-ii close:
+- §9.3 (algebraic foundations): `tropical-fuel-merge = min` (Lawvere join)
+- §10.3 D.4 (Phase 1C migration patterns): `(net-cell-write net cid (+ current n))` — writes accumulate UP
+- Under min-merge, `(min current current+n) = current` → writes silently dropped
+
+Two framings considered:
+
+| Option | Cell semantic | Initial | Writes | Operational exhaustion | Algebraic correctness |
+|---|---|---|---|---|---|
+| A | "Remaining fuel" (counts down) | `budget` | `(- current n)` | `(<= remaining 0)` | min-merge correctly takes the lower-remaining ✓ |
+| B | "Accumulated cost" (counts up) | `0` | `(+ current n)` | `(>= cost budget)` | requires max-merge or replace; breaks Lawvere consistency |
+
+**Resolution: Option A (remaining fuel)**. Rationale:
+- Matches existing native fuel mechanism 1:1 (`prop-net-hot.fuel` decrements; cell becomes on-network equivalent)
+- Algebraically clean under Lawvere convention — writes refine downward; min-merge correctly takes the lower-remaining value at speculation reconciliation
+- Phase 1C migration scope shrinks (decrement sites become subtractions, not the broader rewrite)
+- The "cost" framing remains as semantic concept: derive `cost = budget - remaining` when needed
+- §10.3 D.4 examples (`(+ current n)`) are wrong under Option A — they need correcting at 1B-iv cell registration / Phase 1C migration. **Tracked as a 1B-iv consistency item**.
+
+**Constraint on §9.4 SRE domain (preserved unchanged)**:
+- `bot-value = 0`, `top-value = +inf.0`, `contradicts? = (= v +inf.0)` stay as-is. These describe the **abstract tropical quantale** (`T_min` per §9.3). The operational exhaustion check for the fuel-cost cell happens at the **cell-specific `on-write-check` layer** (1B-iv) — `(λ (old new net) (<= new 0))`. The two predicates serve different purposes:
+  - SRE domain `contradicts?` — "is this value the algebraic top?" (lattice-level)
+  - Cell `on-write-check` — "does this write trigger the operational threshold?" (cell-level)
+
+This separation is **architecturally cleaner**: the SRE domain captures abstract algebra; the cell instance overlays operational semantics. 1B-iii ships the algebra; 1B-iv applies it.
+
+**Q-1B-iii-β — SRE domain registration scope: full quantale property declarations**
+
+Resolution: ship the FULL quantale property declarations per §9.4 (commutative-join, associative-join, idempotent-join, has-meet, distributive, quantale, commutative-quantale, unital-quantale, integral-quantale, residuated, has-pseudo-complement). Plus operations: `tensor` (= `+`) + `residual` (= `tropical-left-residual`). Plus a meet function (= `max`; registered via meet-registry for downstream consumers).
+
+Rationale: the addendum's thesis is "tropical quantales as cost-optimization substrate." Declaring properties is load-bearing for SRE Track 2I's property-cell mechanisms / property-based testing. Future tracks (PReduce e-graph cost extraction, OE Series) read these declarations to validate algebraic preconditions.
+
+**User-flagged consideration**: "this should be something we can test for with our SRE algebraic mechanisms/property testing." SRE Track 2I's property-testing infrastructure (sweep matrices via `all-sweep-properties`) can verify the declared properties against samples. **Tracked as a 1B-iii post-impl consideration**: after the domain is registered, run the SRE property-testing sweep on it to confirm the declarations hold empirically. If property infrastructure isn't ready, defer to 1B-iv close or Phase 1V.
+
+**Q-1B-iii-γ — C-series scope and methodology**
+
+Resolution: C1 (quantale axioms) + C2 (residuation laws) + C3 (integral verification) in 1B-iii. C4 (module-theory laws) + C5 (CALM-safety) deferred to 1B-iv where cells exist to test module action + CALM property. Place tests in `tests/test-tropical-fuel.rkt` per §9.6.
+
+Methodology: assertion-based via rackunit `check-equal?` with sample tuples + boundary cases. Particular attention to `+inf.0` edge cases per S5 ACKNOWLEDGE — distributivity, residuation at infinity, tensor identity at infinity, min identity at zero.
+
+**Q-1B-iii-δ — API naming + representation choices**
+
+Resolutions per Q-1B-1 / Q-1B-2 / Q-1B-4 (deferred to 1B-iii from earlier mini-design):
+- **API naming** (Q-1B-1): `tropical-fuel-bot`, `tropical-fuel-top`, `tropical-fuel-merge`, `tropical-fuel-contradiction?`, `tropical-fuel-tensor`, `tropical-left-residual` per §9.2 Provides — locked in.
+- **`+inf.0` vs sentinel** (Q-1B-2): `+inf.0` (Racket float-infinity). Racket-native, well-defined arithmetic, IEEE 754 absorbing-element semantics. Sentinel would complicate the residuation formula.
+- **Residuation as helper vs propagator** (Q-1B-4): read-time helper (pure function). Phase 3C consumers wrap in propagator if needed.
+
+**Summary**: 4 architectural questions resolved. 1B-iii ships the algebraic substrate; 1B-iv applies it to specific fuel-cost cell registration.
+
+**Drift risks named for 1B-iii**:
+- D-1B-iii-1: Numerical edge cases at `+inf.0` — verified via C1+C2 assertion tests
+- D-1B-iii-2: Residuation formula correctness — verified via C2 adjunction law (`(+ a (tropical-left-residual a b)) <=_rev b`)
+- D-1B-iii-3: merge-registry function signature — must return #f for unknown relations (verify against existing SRE domain patterns)
+- D-1B-iii-4: 1B-iv consistency item — §10.3 D.4 `(+ current n)` examples are wrong under Option A; must correct at 1B-iv cell registration
+- D-1B-iii-5: SRE property-test sweep on the new domain — deferred to 1B-iv close or Phase 1V if Track 2I infrastructure ready
+
 **Q-1B-ii-β — Specialized cell value storage location (NEW)**
 
 The 1B-ii audit of `net-cell-write` (propagator.rkt:1205-1303) surfaced that the existing path does substantial work per call: 2 CHAMP lookups (cells + merge-fns) + tagged-cell-value wrapping + struct-copy prop-cell + CHAMP insert + dependent filtering + 2 struct-copy prop-network ≈ 140 ns total. The §13.6 spike's W1+ of 6.4 ns measured a vector-indexed sidecar mock that bypassed CHAMP entirely. Two architectures available:
