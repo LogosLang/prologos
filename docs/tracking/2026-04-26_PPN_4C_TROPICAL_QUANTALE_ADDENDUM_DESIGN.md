@@ -391,7 +391,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1A-iii-b** | Tier 2 deprecated ATMS internal API retirement | ⬜ | Per §7 |
 | **1A-iii-c** | Tier 3 surface ATMS AST 14-file pipeline retirement | ⬜ | Per §8 |
 | **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
-| **1B-ii** | Specialized cell framework module + dispatch extension | ⬜ | Per §9.2.A + §9.2.B; A2 struct-field per §9.2.0 |
+| **1B-ii** | Specialized cell framework module + net-cell-write dispatch + prop-net-warm under-speculation? field | ✅ ✓ PASS | CW3 per-cycle amortized = 2.98 ns/cycle (§13.7 gate ≤ 3 ns; boundary); 8257 tests / 114.5s / 0 failures |
 | **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C-series) | ⬜ | Per §9.2 + §9.3 + §9.4 |
 | **1B-iv** | Cell registration via framework + tests + close | ⬜ | Per §9.2.C + §9.6 |
 | **1C** | Canonical BSP fuel substrate (D.4 CANONICAL — direct migration) | ⬜ | Per §10 |
@@ -1032,9 +1032,15 @@ Conversational mini-design between user + Claude opened 1B-ii by surfacing **fou
 
 The 1B-i microbench surfaced that using a Racket parameter for the speculation check (matching production's `current-speculation-assumption` convention at `metavar-store.rkt:194`) costs ~50 ns/call — defeating the cell-meta dispatch budget.
 
-Options considered: (A) struct field on `prop-net-warm` alongside `contradiction`; (B) explicit argument to `net-cell-write`; (C) parameter (rejected).
+Options considered: (A) struct field on `prop-net-warm` alongside `contradiction`; (A') re-use existing cell-id 1 `worldview-cache-cell-id`; (B) explicit argument to `net-cell-write`; (C/D) parameter (rejected).
 
-**Resolution**: **(A) — struct field on `prop-net-warm`**. The under-speculation? state IS on-network state; it co-locates with `contradiction` which has identical lifecycle semantics (set during speculation entry; cleared at rollback boundary). One struct-field load ~1 ns; orthogonality-aligned (cell-layer decision; scheduler-neutral); no parameter-ref overhead.
+**Resolution**: **(A2) — struct field on `prop-net-warm`, scheduler-refresh form**. Speculation state co-locates with `contradiction` (matching lifecycle semantics — both are set during execution, cleared at rollback boundary); one struct-field load ~1 ns. The 2026-05-15 codebase audit surfaced an initial concern that adding the field would require refactoring 8 `parameterize` binding sites + threading the network through speculation entry/exit; the audit also overstated by counting 19 `struct-copy` sites as needing updates (struct-copy auto-preserves unspecified fields — no change needed).
+
+**A2-scheduler-refresh form** keeps `parameterize` machinery unchanged. The BSP scheduler reads `(current-worldview-bitmask)` once at round entry and struct-copies `prop-net-warm` with `[under-speculation? (not (zero? bm))]`. The field is a **scheduler-maintained cache** of the parameter. Total cost: ~5-10 LoC at one site (the BSP round-entry code).
+
+**Named constraint (load-bearing)**: the cache is **fresh per BSP round entry**; stays fixed during the round. If a fire function entered speculation mid-fire (via `with-speculative-rollback`), the parameter would go non-zero but the cache would stay stale until next round entry. **This is acceptable** because specialized cells are scheduler-state cells per DESIGN_PRINCIPLES.org § Scheduler-State Cells — they are written by the scheduler at round/phase boundaries, not by fire functions. The cache-staleness window doesn't overlap with specialized-cell writes in Phase 1B/1C. Future tracks adding specialized cells that ARE written by fire functions would need a different refresh discipline (likely write-time parameter ref inside the dispatch, or threading-style refactor).
+
+**Why A2 over A' (cell-id 1 worldview-cache)**: A' would re-use cell-id 1 which was allocated for the tagged-cell-value worldview-bitmask cache mechanism. Re-using it for specialized-cell dispatch couples two distinct concerns (tagged-cell-value caching + specialized-cell speculation gate) to the same cell. A2 gives speculation-state its own dedicated, named field; matches the existing co-location pattern with `contradiction`. More principled. Implementation cost is similar (~10 LoC vs ~5 LoC).
 
 **Q-1B-ii-β — Specialized cell value storage location (NEW)**
 

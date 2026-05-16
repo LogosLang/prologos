@@ -840,6 +840,112 @@
 (printf "  cm-acc box value (proves DCE didn't elide access): ~v\n" (unbox cm-acc))
 
 ;; ============================================================
+;; CW1-CW3: 1B-ii Per-cycle amortized microbench (§13.7 PRIMARY GATE)
+;; Per docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+;; §13.7 row 1B-ii (revised under Q-1B-ii-δ): primary gate is per-cycle
+;; amortized cost at N=100 fires/round; secondary is informational W1+
+;; on production CHAMP-based storage (per Q-1B-ii-β resolution).
+;;
+;; Target: per-cycle amortized ≤ 3 ns at N=100 → PASS.
+;; ============================================================
+
+(displayln "\n\n=== CW1-CW3: 1B-ii PER-CYCLE AMORTIZED MICROBENCH (§13.7 PRIMARY GATE) ===\n")
+
+(require (only-in "../../propagator.rkt"
+                  make-prop-network
+                  net-new-cell net-cell-read net-cell-write
+                  net-register-specialized-cell))
+
+;; Standard merge: max for monotone counter (cost accumulates upward)
+(define max-merge-for-bench (lambda (a b) (if (> b a) b a)))
+
+;; ----------------------------------------------------------------
+;; CW1: Generic cell-write cost (baseline; no specialized-cell-meta)
+;; ----------------------------------------------------------------
+(displayln "\nCW1: Generic cell-write cost (baseline; meta=#f slow path)")
+
+(define-values (cw-bench-net cw-cid)
+  (net-new-cell (make-prop-network 1000000) 0 max-merge-for-bench))
+
+(define cw-net-box (box cw-bench-net))
+
+;; Force into a let-bound box so JIT can't elide the write
+(define cw1 (bench "CW1 generic net-cell-write (slow path; meta=#f)" 10000
+              (let ([n (unbox cw-net-box)])
+                (set-box! cw-net-box (net-cell-write n cw-cid 1)))))
+
+;; ----------------------------------------------------------------
+;; CW2: Specialized cell-write cost (fast path; meta present)
+;; ----------------------------------------------------------------
+(displayln "\nCW2: Specialized cell-write cost (fast path; production CHAMP-based)")
+
+(define-values (cw-spec-net cw-spec-cid)
+  (net-register-specialized-cell (make-prop-network 1000000) 0 max-merge-for-bench
+                                 #:tier 'hot
+                                 #:storage 'monotone-counter
+                                 #:fires-on 'threshold-crossing
+                                 #:on-write-check
+                                   (lambda (old new net) (>= new 999999999))))
+
+(define cw-spec-box (box cw-spec-net))
+(define cw-counter-box (box 0))
+
+(define cw2 (bench "CW2 specialized net-cell-write (fast path)" 10000
+              (let ([n (unbox cw-spec-box)]
+                    [c (unbox cw-counter-box)])
+                (set-box! cw-counter-box (+ c 1))
+                (set-box! cw-spec-box (net-cell-write n cw-spec-cid (+ c 1))))))
+
+;; ----------------------------------------------------------------
+;; CW3: Per-cycle amortized at N=100 (the GATE)
+;; ----------------------------------------------------------------
+;; Simulates Option 13 Variant A pattern: one net-cell-write per BSP round
+;; entry, amortized over N=100 fires per round. The "fires" are simulated
+;; by a local-var set-box! mutation (matches the actual Variant B pattern
+;; per §10.3.A); the cell-write happens once per round.
+(displayln "\nCW3: Per-cycle amortized at N=100 (§13.7 GATE: ≤ 3 ns/cycle)")
+
+(define cw3-spec-box (box cw-spec-net))
+(define cw3-fuel-box (box 0))
+
+(define (simulate-bsp-round-N100 net)
+  (let ([fuel-box (box 0)])
+    ;; 100 "fires" — local-var mutation (Variant B pattern; or N=100 cycle)
+    (for ([i (in-range 100)])
+      (set-box! fuel-box (+ (unbox fuel-box) 1)))
+    ;; 1 cell-write at round exit (Variant A pattern: round-entry batch)
+    (net-cell-write net cw-spec-cid (unbox fuel-box))))
+
+(define cw3 (bench "CW3 round-of-N=100 (1 write + 100 local-var inc)" 5000
+              (let ([n (unbox cw3-spec-box)])
+                (set-box! cw3-spec-box (simulate-bsp-round-N100 n)))))
+
+;; cw3 measured cost is for ONE round (1 write + 100 local-vars).
+;; Per-cycle amortized = cw3 / 100.
+(define cw-per-cycle-us (/ cw3 100.0))
+(define cw-per-cycle-ns (* 1000.0 cw-per-cycle-us))
+
+;; ----------------------------------------------------------------
+;; CW gate verdict (§13.7 1B-ii primary)
+;; ----------------------------------------------------------------
+(displayln "\nCW gate verdict (§13.7 1B-ii primary: per-cycle amortized ≤ 3 ns at N=100):")
+
+(define cw1-ns (* 1000.0 cw1))
+(define cw2-ns (* 1000.0 cw2))
+
+(printf "  CW1 generic cell-write (slow path):  ~a ns/call\n"
+        (~r cw1-ns #:precision '(= 1)))
+(printf "  CW2 specialized cell-write (fast path):  ~a ns/call\n"
+        (~r cw2-ns #:precision '(= 1)))
+(printf "  CW3 round-of-N=100 total:  ~a ns (1 write + 100 local-vars)\n"
+        (~r (* 1000.0 cw3) #:precision '(= 1)))
+(printf "  → Per-cycle amortized:  ~a ns/cycle  →  ~a (gate: ≤ 3 ns)\n"
+        (~r cw-per-cycle-ns #:precision '(= 2))
+        (if (<= cw-per-cycle-ns 3.0) "✓ PASS" "✗ FAIL — investigate dispatch path"))
+(printf "  Secondary (informational): production W1+ (CW2) = ~a ns; expected 50-70 ns per Q-1B-ii-β CHAMP-based\n"
+        (~r cw2-ns #:precision '(= 1)))
+
+;; ============================================================
 ;; Summary
 ;; ============================================================
 

@@ -86,6 +86,9 @@
  net-cell-read
  net-cell-write
  net-cell-replace  ;; Track 7 post-fix: bypass merge for S(-1) retraction
+ ;; D.4 1B-ii: specialized cell type framework (per §9.2.A Shape 2)
+ (struct-out specialized-cell-meta)
+ net-register-specialized-cell
  net-remove-propagator-from-dependents  ;; Track 4B P2: remove ONE propagator from cell dependents
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
@@ -250,7 +253,38 @@
 ;; dependents: champ-root (prop-id → dependent-entry)
 ;;   PPN Track 4 Phase 1a: component-indexed propagator firing
 ;;   BSP-LE Track 2 Phase 2: assumption-tagged dependents (emergent dissolution)
-(struct prop-cell (value dependents) #:transparent)
+;; meta: #f | specialized-cell-meta — D.4 1B-ii specialized cell type framework
+;;   #f (default) = regular cell, takes generic net-cell-write path
+;;   specialized-cell-meta value = specialized cell, takes fast-path dispatch when
+;;     conditions hold (per §9.2.B). See net-register-specialized-cell.
+(struct prop-cell (value dependents meta) #:transparent)
+
+;; D.4 1B-ii: Specialized cell-meta (per §9.2.A + §9.2.0.5).
+;; Struct name `specialized-cell-meta` (rather than just `cell-meta`) avoids
+;; collision with `prop-observatory.rkt`'s pre-existing `cell-meta` struct
+;; (different concept — observability metadata vs framework dispatch config).
+;; Per-cell declarations for storage strategy, fire-on policy, and inline
+;; on-write/on-read predicates. specialized-cell-meta = #f on regular cells (default);
+;; specialized-cell-meta value triggers fast-path dispatch in net-cell-write when its
+;; tier/storage conditions hold and the network is not under speculation.
+;;
+;; Fields:
+;; - tier: 'hot | 'warm | 'cold — storage tier; current dispatch checks 'hot
+;; - storage: 'general | 'monotone-counter — storage strategy; current
+;;   dispatch checks 'monotone-counter
+;; - fires-on: 'any-change | 'threshold-crossing — dependent notification
+;;   policy; 'threshold-crossing skips dep enqueuing unless on-write-check
+;;   fires (signaling threshold crossed this write)
+;; - on-write-check: #f | (old new net → boolean) — inline predicate; if
+;;   returns truthy, dispatch writes contradiction structurally
+;; - on-read-check: #f | (val net → boolean) — reserved for future
+;;   read-time dispatch (not used in 1B-ii)
+;;
+;; Storage strategy + fire-on policy enums initially shipped: 'general +
+;; 'monotone-counter; 'any-change + 'threshold-crossing. Future tracks
+;; extend per "Let pain drive design."
+(struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check)
+  #:transparent)
 
 ;; BSP-LE Track 2 Phase 2: Dependent entry with component-path + assumption tag.
 ;; paths: #f | symbol | (listof component-path-or-#f)
@@ -333,7 +367,15 @@
 ;; Warm: mutated per cell-write (cells, contradiction)
 ;; Cold: mutated only at allocation/setup time (all other fields)
 (struct prop-net-hot (worklist fuel) #:transparent)
-(struct prop-net-warm (cells contradiction) #:transparent)
+;; D.4 1B-ii: under-speculation? — scheduler-maintained cache of speculation
+;; state for specialized cell fast-path dispatch (per §9.2.0.5 Q-1B-ii-α A2).
+;; #f = no speculation; #t = under speculation (current-worldview-bitmask non-zero).
+;; Refreshed by the BSP scheduler at round entry by reading
+;; (current-worldview-bitmask). Constraint: fresh per BSP round entry;
+;; specialized cells must be scheduler-state cells (written by scheduler
+;; at round/phase boundaries, not by fire functions inside a speculation
+;; parameterize block). See DESIGN_PRINCIPLES.org § Scheduler-State Cells.
+(struct prop-net-warm (cells contradiction under-speculation?) #:transparent)
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
                        cell-decomps pair-decomps cell-dirs
@@ -555,7 +597,7 @@
 ;;
 ;; NOTE: hard-coded cell-IDs are a known debt. A future track may explore
 ;; dynamic cell-ID allocation for strata (see BSP-LE Master "Open Questions" #6
-;; cell-metadata-driven scheduling). For now, 6-9 is the natural contiguous
+;; specialized-cell-metadata-driven scheduling). For now, 6-9 is the natural contiguous
 ;; allocation after the 6 well-known cells (0-5).
 (define constraint-propagators-topology-cell-id (cell-id 6))
 (define elaborator-topology-cell-id (cell-id 7))
@@ -618,46 +660,46 @@
   ;; Pre-allocated with empty set as initial value and set-union as merge.
   (define req-cid decomp-request-cell-id)
   (define req-h (cell-id-hash req-cid))
-  (define req-cell (prop-cell (set) champ-empty))  ;; empty set, no dependents
+  (define req-cell (prop-cell (set) champ-empty #f))  ;; empty set, no dependents
   ;; BSP-LE Track 2 Phase 4: cell-id 1 is the worldview bitmask cache.
   ;; Pre-allocated with 0 (no speculation) and bitwise-ior as merge.
   (define wv-cid worldview-cache-cell-id)
   (define wv-h (cell-id-hash wv-cid))
-  (define wv-cell (prop-cell 0 champ-empty))  ;; 0 = no assumptions, no dependents
+  (define wv-cell (prop-cell 0 champ-empty #f))  ;; 0 = no assumptions, no dependents
   ;; BSP-LE Track 2B Phase R1: cell-id 2 = relation store, cell-id 3 = config.
   ;; Pre-allocated with bot values. Written by solve-goal-propagator at query start.
   (define rs-cid relation-store-cell-id)
   (define rs-h (cell-id-hash rs-cid))
-  (define rs-cell (prop-cell (hasheq) champ-empty))  ;; empty store, no dependents
+  (define rs-cell (prop-cell (hasheq) champ-empty #f))  ;; empty store, no dependents
   (define cfg-cid config-cell-id)
   (define cfg-h (cell-id-hash cfg-cid))
-  (define cfg-cell (prop-cell #f champ-empty))  ;; #f = no config yet, no dependents
+  (define cfg-cell (prop-cell #f champ-empty #f))  ;; #f = no config yet, no dependents
   ;; BSP-LE Track 2B Phase R4: cell-id 4 = NAF-pending (S1 request accumulator).
   (define naf-cid naf-pending-cell-id)
   (define naf-h (cell-id-hash naf-cid))
-  (define naf-cell (prop-cell (hasheq) champ-empty))  ;; empty registry, no dependents
+  (define naf-cell (prop-cell (hasheq) champ-empty #f))  ;; empty registry, no dependents
   ;; Phase 2c: cell-id 5 = pool configuration.
   (define pc-cid pool-config-cell-id)
   (define pc-h (cell-id-hash pc-cid))
-  (define pc-cell (prop-cell #f champ-empty))  ;; #f = no pool config yet
+  (define pc-cell (prop-cell #f champ-empty #f))  ;; #f = no pool config yet
   ;; A1: cells 6-9 = per-subsystem topology request cells.
   ;; All SET-valued with set-union merge; initial value empty set.
   (define cp-cid constraint-propagators-topology-cell-id)
   (define cp-h  (cell-id-hash cp-cid))
-  (define cp-cell (prop-cell (set) champ-empty))
+  (define cp-cell (prop-cell (set) champ-empty #f))
   (define elab-cid elaborator-topology-cell-id)
   (define elab-h  (cell-id-hash elab-cid))
-  (define elab-cell (prop-cell (set) champ-empty))
+  (define elab-cell (prop-cell (set) champ-empty #f))
   (define narr-cid narrowing-topology-cell-id)
   (define narr-h  (cell-id-hash narr-cid))
-  (define narr-cell (prop-cell (set) champ-empty))
+  (define narr-cell (prop-cell (set) champ-empty #f))
   (define sre-cid sre-topology-cell-id)
   (define sre-h  (cell-id-hash sre-cid))
-  (define sre-cell (prop-cell (set) champ-empty))
+  (define sre-cell (prop-cell (set) champ-empty #f))
   ;; PPN 4C Phase 3c-iii: cell-id 10 = classify-inhabit residuation request.
   (define cir-cid classify-inhabit-request-cell-id)
   (define cir-h (cell-id-hash cir-cid))
-  (define cir-cell (prop-cell (hasheq) champ-empty))  ;; empty hasheq, no dependents
+  (define cir-cell (prop-cell (hasheq) champ-empty #f))  ;; empty hasheq, no dependents
   (prop-network
    (prop-net-hot '() fuel)
    (prop-net-warm (for/fold ([acc champ-empty])
@@ -673,7 +715,8 @@
                                                   (cons sre-h (cons sre-cid sre-cell))
                                                   (cons cir-h (cons cir-cid cir-cell))))])
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
-                  #f)
+                  #f   ;; contradiction
+                  #f)  ;; under-speculation? (D.4 1B-ii; scheduler refreshes at BSP round entry)
    (prop-net-cold (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid decomp-request-merge))
                                                   (cons wv-h (cons wv-cid worldview-cache-merge))
@@ -704,7 +747,7 @@
 (define (fork-prop-network net [fuel 1000000])
   (prop-network
    (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
-   (prop-net-warm (prop-network-cells net) #f)          ;; shared cells, no contradiction
+   (prop-net-warm (prop-network-cells net) #f #f)       ;; shared cells, no contradiction, no speculation (D.4 1B-ii)
    (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
@@ -753,9 +796,54 @@
   (define local-id (prop-network-next-cell-id net))
   (define id (cell-id (if (zero? ns) local-id
                           (+ (arithmetic-shift ns 32) local-id))))
-  (define cell (prop-cell initial-value champ-empty))
+  (define cell (prop-cell initial-value champ-empty #f))
   (define h (cell-id-hash id))
   ;; Tier 3 domain resolution: override else inherited from merge-fn else #f
+  (define resolved-domain
+    (or explicit-domain (lookup-merge-fn-domain merge-fn)))
+  (define net*
+    (struct-copy prop-network net
+      [warm (struct-copy prop-net-warm (prop-network-warm net)
+              [cells (champ-insert (prop-network-cells net) h id cell)])]
+      [cold (struct-copy prop-net-cold (prop-network-cold net)
+              [merge-fns (champ-insert (prop-network-merge-fns net) h id merge-fn)]
+              [next-cell-id (+ 1 (prop-network-next-cell-id net))]
+              [cell-domains (if resolved-domain
+                                (champ-insert (prop-network-cell-domains net)
+                                              h id resolved-domain)
+                                (prop-network-cell-domains net))])]))
+  (values
+   (if contradicts?
+       (struct-copy prop-network net*
+         [cold (struct-copy prop-net-cold (prop-network-cold net*)
+                 [contradiction-fns
+                  (champ-insert (prop-network-contradiction-fns net*)
+                                h id contradicts?)])])
+       net*)
+   id))
+
+;; D.4 1B-ii: Register a specialized cell with framework metadata.
+;; Returns (values net cell-id). Equivalent to net-new-cell but stores
+;; specialized-cell-meta on the prop-cell, enabling fast-path dispatch in net-cell-write.
+;;
+;; Per §9.2.0.5 Q-1B-ii-γ (Shape 2): specialized-cell-meta + registration API live in
+;; propagator.rkt; specialized-cells.rkt provides convenience constructors.
+(define (net-register-specialized-cell net initial-value merge-fn
+                                       #:tier tier
+                                       #:storage storage
+                                       #:fires-on fires-on
+                                       #:on-write-check [on-write-check #f]
+                                       #:on-read-check [on-read-check #f]
+                                       #:contradicts? [contradicts? #f]
+                                       #:domain [explicit-domain #f])
+  (perf-inc-cell-alloc!)
+  (define ns (current-cell-id-namespace))
+  (define local-id (prop-network-next-cell-id net))
+  (define id (cell-id (if (zero? ns) local-id
+                          (+ (arithmetic-shift ns 32) local-id))))
+  (define meta (specialized-cell-meta tier storage fires-on on-write-check on-read-check))
+  (define cell (prop-cell initial-value champ-empty meta))
+  (define h (cell-id-hash id))
   (define resolved-domain
     (or explicit-domain (lookup-merge-fn-domain merge-fn)))
   (define net*
@@ -833,7 +921,7 @@
   (define local-id (prop-network-next-cell-id net))
   (define id (cell-id (if (zero? ns) local-id
                           (+ (arithmetic-shift ns 32) local-id))))
-  (define cell (prop-cell top-value champ-empty))
+  (define cell (prop-cell top-value champ-empty #f))
   (define h (cell-id-hash id))
   ;; PPN 4C Phase 1c: Tier 3 domain inheritance (meet-fn functions as merge-fn for lookup).
   (define resolved-domain
@@ -896,7 +984,7 @@
       (define h (cell-id-hash id))
       (define initial-value (car spec))
       (define merge-fn (cadr spec))
-      (define cell (prop-cell initial-value champ-empty))
+      (define cell (prop-cell initial-value champ-empty #f))
       (tchamp-insert! t-cells h id cell)
       (tchamp-insert! t-merge h id merge-fn)
       (when (and (pair? (cddr spec)) (caddr spec))
@@ -1137,7 +1225,7 @@
   (define cell (champ-lookup cells h cid))
   (when (eq? cell 'none)
     (error 'net-cell-reset "unknown cell: ~a" cid))
-  (define new-cell (prop-cell new-val (prop-cell-dependents cell)))
+  (define new-cell (prop-cell new-val (prop-cell-dependents cell) (prop-cell-meta cell)))
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
             [cells (champ-insert cells h cid new-cell)])]))
@@ -1178,7 +1266,7 @@
       (let* ([deps (prop-cell-dependents cell)]
              [ph (prop-id-hash pid)]
              [new-deps (champ-delete deps ph pid)]
-             [new-cell (prop-cell (prop-cell-value cell) new-deps)])
+             [new-cell (prop-cell (prop-cell-value cell) new-deps (prop-cell-meta cell))])
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
                   [cells (champ-insert cells h cid new-cell)])]))))
@@ -1195,7 +1283,7 @@
   (define cell (champ-lookup cells h cid))
   (if (eq? cell 'none)
       net  ;; unknown cell — no-op (defensive)
-      (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty)])
+      (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty (prop-cell-meta cell))])
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
                   [cells (champ-insert cells h cid new-cell)])]))))
@@ -1211,6 +1299,66 @@
   ;; B2f Phase 0: count every write attempt
   (define wc (current-quiescence-write-counter))
   (when wc (set-box! wc (add1 (unbox wc))))
+  ;; D.4 1B-ii: Specialized cell fast-path dispatch (per §9.2.A + §9.2.B).
+  ;; If cell has specialized-cell-meta + tier='hot + storage='monotone-counter and the
+  ;; network is not under speculation (cached in prop-net-warm.under-speculation?
+  ;; per §9.2.0.5 Q-1B-ii-α A2-scheduler-refresh), take the fast path:
+  ;; - Run on-write-check inline; if truthy, write contradiction structurally
+  ;; - Otherwise: struct-copy cell + champ-insert + apply fire-on policy
+  ;;   ('threshold-crossing skips dep enqueuing; 'any-change enqueues all)
+  ;; The slow path (existing body below) handles all other cells unchanged.
+  (define meta (prop-cell-meta cell))
+  (define fast-path?
+    (and meta
+         (eq? (specialized-cell-meta-tier meta) 'hot)
+         (eq? (specialized-cell-meta-storage meta) 'monotone-counter)
+         (not (prop-net-warm-under-speculation? (prop-network-warm net)))))
+  (cond
+    [fast-path?
+     (let ([old-val (prop-cell-value cell)])
+       (cond
+         [(or (eq? new-val old-val) (equal? new-val old-val))
+          net]  ;; No change — return same network (critical for termination)
+         [else
+          (define on-write (specialized-cell-meta-on-write-check meta))
+          (define contradicted? (and on-write (on-write old-val new-val net)))
+          (define cc (current-quiescence-change-counter))
+          (when cc (set-box! cc (add1 (unbox cc))))
+          (let* ([new-cell (struct-copy prop-cell cell [value new-val])]
+                 [new-cells (champ-insert cells h cid new-cell)])
+            (cond
+              [contradicted?
+               ;; Structural contradiction — record cell-id on prop-net-warm
+               (struct-copy prop-network net
+                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                         [cells new-cells]
+                         [contradiction cid])])]
+              [else
+               ;; Apply fire-on policy
+               (define fire-on (specialized-cell-meta-fires-on meta))
+               (define new-wl
+                 (cond
+                   [(eq? fire-on 'threshold-crossing)
+                    ;; on-write returned #f → threshold not crossed this write
+                    ;; → skip dependent enqueuing (per §9.2.A fire-on policy)
+                    (prop-network-worklist net)]
+                   [else
+                    ;; 'any-change (default) — enqueue all dependents
+                    (define deps-champ (prop-cell-dependents cell))
+                    (append (champ-keys deps-champ)
+                            (prop-network-worklist net))]))
+               (struct-copy prop-network net
+                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                         [cells new-cells])]
+                 [hot (struct-copy prop-net-hot (prop-network-hot net)
+                        [worklist new-wl])])]))]))]
+    [else
+     (net-cell-write/slow-path net cid new-val cells h cell)]))
+
+;; D.4 1B-ii: slow-path body of net-cell-write extracted as helper so the
+;; specialized fast-path can short-circuit cleanly. Body unchanged from
+;; pre-1B-ii except for the helper-extraction wrapper.
+(define (net-cell-write/slow-path net cid new-val cells h cell)
   (define merge-fn
     (champ-lookup (prop-network-merge-fns net) h cid))
   (define old-val (prop-cell-value cell))
@@ -2378,10 +2526,18 @@
                      [pids (filter (lambda (pid) (not (hash-has-key? fired-set pid)))
                                    raw-pids)]
                      [n (length pids)]
+                     ;; D.4 1B-ii: refresh prop-net-warm.under-speculation? from
+                     ;; current-worldview-bitmask parameter. Scheduler-maintained
+                     ;; cache for specialized cell fast-path dispatch (per §9.2.0.5
+                     ;; Q-1B-ii-α A2-scheduler-refresh). Constraint: fresh per BSP
+                     ;; round entry; specialized cells must be scheduler-state cells.
                      [snapshot (struct-copy prop-network net
                                  [hot (struct-copy prop-net-hot (prop-network-hot net)
                                         [worklist '()]
-                                        [fuel (- (prop-network-fuel net) n)])])]
+                                        [fuel (- (prop-network-fuel net) n)])]
+                                 [warm (struct-copy prop-net-warm (prop-network-warm net)
+                                         [under-speculation?
+                                          (not (zero? (current-worldview-bitmask)))])])]
                      ;; R1: time fire phase
                      [t-fire-start (current-inexact-monotonic-milliseconds)]
                      [all-writes (executor snapshot pids)]
