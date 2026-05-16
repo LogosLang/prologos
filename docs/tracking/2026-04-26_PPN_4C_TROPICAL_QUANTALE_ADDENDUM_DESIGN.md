@@ -1024,30 +1024,103 @@ Lean: **A (struct field on `prop-net-warm`)** — preserves orthogonality (state
 
 **Lesson surfaced (codification candidate)**: per-phase microbench gates validate not just the gate-target answer, but also the **production implementation choices that the design didn't pin down**. Without CM5.2 measuring the parameter-based dispatch path, 1B-ii might have used a parameter for the speculation check (matching production's `current-speculation-assumption` convention) and silently regressed ~50 ns vs the §13.6 spike's vector-ref baseline. The microbench acted as a design-question surfacer, not just a gate validator. Watching list: 1 data point (this measurement); 1-2 more for graduation.
 
-### §9.2.A Specialized cell type framework module (D.4 CANONICAL — NEW per §4.6)
+### §9.2.0.5 1B-ii mini-design resolutions (D.4 CANONICAL 2026-05-15)
 
-**Module**: `racket/prologos/specialized-cells.rkt` (NEW under D.4)
+Conversational mini-design between user + Claude opened 1B-ii by surfacing **four architectural questions** that the prior design didn't pin down (three NEW from the post-1B-i audit; one carried from 1B-i CM5.2). Resolutions captured here so 1B-ii implementation enters Stage 4 with the decisions locked in.
 
-This module extends the propagator network's cell mechanism with per-cell declarations of storage strategy, fire-on policy, and on-write/on-read predicates — per the §4.6 NTT model. Under no-speculation, hot+monotone-counter cells use direct fixnum mutation (no `tagged-cell-value` wrapping, no per-write allocation). Under speculation, the fast path falls through to the existing generic cell-write with `tagged-cell-value` worldview tagging (per-D.3.EC-MG2; multi-worldview measurement deferred to Phase 3A).
+**Q-1B-ii-α — Speculation-check mechanism (carried from 1B-i CM5.2)**
 
-**Imports**:
-- `propagator.rkt` (extends `net-cell-write` dispatch; reads/writes via existing cell API)
-- `sre-core.rkt` (cell registration integrates with SRE domain)
-- No higher-level dependencies (framework is foundational, like `tropical-fuel.rkt`)
+The 1B-i microbench surfaced that using a Racket parameter for the speculation check (matching production's `current-speculation-assumption` convention at `metavar-store.rkt:194`) costs ~50 ns/call — defeating the cell-meta dispatch budget.
 
-**Provides**:
+Options considered: (A) struct field on `prop-net-warm` alongside `contradiction`; (B) explicit argument to `net-cell-write`; (C) parameter (rejected).
+
+**Resolution**: **(A) — struct field on `prop-net-warm`**. The under-speculation? state IS on-network state; it co-locates with `contradiction` which has identical lifecycle semantics (set during speculation entry; cleared at rollback boundary). One struct-field load ~1 ns; orthogonality-aligned (cell-layer decision; scheduler-neutral); no parameter-ref overhead.
+
+**Q-1B-ii-β — Specialized cell value storage location (NEW)**
+
+The 1B-ii audit of `net-cell-write` (propagator.rkt:1205-1303) surfaced that the existing path does substantial work per call: 2 CHAMP lookups (cells + merge-fns) + tagged-cell-value wrapping + struct-copy prop-cell + CHAMP insert + dependent filtering + 2 struct-copy prop-network ≈ 140 ns total. The §13.6 spike's W1+ of 6.4 ns measured a vector-indexed sidecar mock that bypassed CHAMP entirely. Two architectures available:
+
+- **CHAMP-based**: specialized cells live in the existing CHAMP; meta on prop-cell; net-cell-write has fast-path branches but uses the unified cell store. Production W1+ ~50-70 ns. Per-cycle amortized under Option 13 deferred-write at N=100 fires/round: ~0.5-0.7 ns (Variant A) or ~2.2 ns (Variant B, dominated by local-var set-box!).
+- **Sidecar**: specialized cells live in a separate vector-indexed storage; bypass CHAMP for fast-path writes. Production W1+ ~6-10 ns matching spike. Adds dual-source-of-truth complexity (CHAMP entry + sidecar value; invariants under speculation-rollback; Phase 3C consumer API splits).
+
+**Resolution**: **CHAMP-based**. Under Option 13 deferred-write, per-cycle cost is dominated by Variant B's local-var set-box! (~2 ns) or Variant A's amortization (~0.06 ns/cycle). The ~50 ns vs ~10 ns difference at the boundary becomes 0.5 ns vs 0.1 ns per cycle — tiny. Sidecar complexity (dual storage, invariant maintenance, Phase 3C API split) outweighs the marginal speedup. Per "Let pain drive design": ship the simpler architecture; future PReduce/OE Series tracks may want the sidecar; defer until concrete need.
+
+**Q-1B-ii-γ — `specialized-cells.rkt` module shape (NEW; resolves §9.2.A ↔ §9.9 Q-1B-10 inconsistency)**
+
+The design doc has an internal inconsistency: §9.2.A (drafted at D.4 scaffolding pass) places cell-meta struct + registration API + dispatch hooks in `specialized-cells.rkt`; §9.9 Q-1B-10 (resolved at the 2026-05-15 mini-design walkthrough) chose **B1-prime**: cell-meta + registration + dispatch in `propagator.rkt`, with `specialized-cells.rkt` as a thin convenience-only layer. The B1-prime resolution avoided a circular-import risk (the dispatch logic in `net-cell-write` needs cell-meta accessors).
+
+Three shapes considered during mini-design:
+
+| Shape | cell-meta location | `specialized-cells.rkt` | Trade-off |
+|---|---|---|---|
+| 1 | propagator.rkt | NOT shipped (no file) | Simplest; but framework/substrate boundary muddied; future tracks grow propagator.rkt |
+| 2 (B1-prime) | propagator.rkt | THIN (re-exports + convenience constructors) | Framework anchor exists; no circular imports; thin layer ~20-40 LoC |
+| 3 (§9.2.A as written) | specialized-cells.rkt | FULL (struct + API + dispatch hooks) | Most separation; circular-import risk; B1-prime rejected this |
+
+**Resolution**: **Shape 2 (B1-prime)**. The D.4 §4.6 NTT model frames the specialized cell type framework as canonical infrastructure that future PReduce / OE / SH tracks inherit. Shape 1 muddies framework/substrate; Shape 3 has the import risk. Shape 2 establishes a proper anchor without duplication.
+
+**Concrete split**:
+- `propagator.rkt`: `cell-meta` struct, `net-register-specialized-cell` API, `net-cell-write` fast-path dispatch
+- `racket/prologos/specialized-cells.rkt` (NEW, thin ~20-40 LoC): re-exports `cell-meta` + provides convenience constructors `make-monotone-counter-meta` and `make-cold-general-meta` for the two specialized cells Phase 1B/1C ships
+
+**§9.2.A update required** (drive-by edit in this commit): align §9.2.A's Module / Imports / Provides description with Shape 2.
+
+**Q-1B-ii-δ — §13.7 1B-ii gate target (NEW; revise under Option 13)**
+
+The current §13.7 row for 1B-ii reads "Production W1+ ≤ 1.5× spike's 6.4 ns (≤ 10 ns) → PASS." But that gate was set BEFORE Option 13 was discovered (per §10.3.A 2026-05-15 refinement). Under Option 13 deferred-write, the load-bearing measurement is **per-cycle amortized cost at N=100 fires/round**, not per-call W1+.
+
+**Resolution**: revise the §13.7 1B-ii gate to:
+- **Primary (load-bearing)**: per-cycle amortized cost ≤ 3 ns at synthetic N=100 BSP round (matches Option 13 production reality)
+- **Secondary (informational)**: production W1+ documented; expected ~50-70 ns under CHAMP-based; that's fine because Option 13 amortization absorbs it
+
+§13.7 row will be updated in this commit.
+
+**Summary**: 4 architectural questions resolved. 1B-ii enters Stage 4 with α/β/γ/δ locked in.
+
+### §9.2.A Cell mechanism extension (D.4 CANONICAL — Shape 2 per §9.2.0.5 Q-1B-ii-γ)
+
+**Two-module split (Shape 2)**:
+
+| Module | Role | Ships in |
+|---|---|---|
+| `propagator.rkt` | `cell-meta` struct + `net-register-specialized-cell` API + `net-cell-write` fast-path dispatch + `under-speculation?` (reads `prop-net-warm.under-speculation?` field) | EXTENDED (cell-meta machinery added; no new file) |
+| `racket/prologos/specialized-cells.rkt` | Re-exports `cell-meta` + provides convenience constructors (`make-monotone-counter-meta`, `make-cold-general-meta`) | NEW (~20-40 LoC thin) |
+
+The cell-meta struct + registration API + dispatch live in `propagator.rkt` because `net-cell-write`'s fast-path dispatch needs cell-meta accessors (the §9.9 Q-1B-10 B1-prime resolution avoids circular imports this way). `specialized-cells.rkt` is the **conceptual anchor for the framework** — future PReduce / OE / SH tracks looking for "how do I declare a specialized cell?" find it here. Phase 1B/1C uses it for the two convenience constructors; future tracks extend it without modifying `propagator.rkt`.
+
+This module extends the propagator network's cell mechanism with per-cell declarations of storage strategy, fire-on policy, and on-write/on-read predicates — per the §4.6 NTT model. Under no-speculation, hot+monotone-counter cells use direct fixnum mutation (no `tagged-cell-value` wrapping, no per-write allocation). Under speculation (detected via `prop-net-warm.under-speculation?` field per Q-1B-ii-α), the fast path falls through to the existing generic cell-write with `tagged-cell-value` worldview tagging (per-D.3.EC-MG2; multi-worldview measurement deferred to Phase 3A).
+
+**`propagator.rkt` extensions (cell-meta machinery)**:
+
 ```racket
+;; In propagator.rkt — colocated with prop-cell struct + net-cell-write
 (provide
-  ;; Cell-meta data structure
   cell-meta cell-meta?
   cell-meta-tier cell-meta-storage cell-meta-fires-on
   cell-meta-on-write-check cell-meta-on-read-check
-  ;; Registration API
-  net-register-specialized-cell  ;; net + opts -> (values net cell-id)
-  ;; Internal dispatch hooks (used by extended net-cell-write)
-  specialized-cell-write specialized-cell-read
+  net-register-specialized-cell
   under-speculation?)
 ```
+
+**`racket/prologos/specialized-cells.rkt` (NEW; thin convenience layer)**:
+
+```racket
+;; Re-exports cell-meta from propagator.rkt + provides convenience constructors
+(require "propagator.rkt")
+(provide
+  (struct-out cell-meta)               ;; re-export
+  net-register-specialized-cell        ;; re-export
+  make-monotone-counter-meta           ;; tier='hot, storage='monotone-counter, fires-on='threshold-crossing
+  make-cold-general-meta)              ;; tier='cold, storage='general, fires-on='any-change
+
+(define (make-monotone-counter-meta on-write-check)
+  (cell-meta 'hot 'monotone-counter 'threshold-crossing on-write-check #f))
+
+(define (make-cold-general-meta)
+  (cell-meta 'cold 'general 'any-change #f #f))
+```
+
+Future tracks adding storage strategies / fire-on policies extend `specialized-cells.rkt` with new convenience constructors. The cell-meta struct + dispatch stay in `propagator.rkt`.
 
 **Cell-meta data**:
 ```racket
@@ -2509,7 +2582,7 @@ These are unlikely (per S2 architectural pattern + BSP-LE 2B benchmarks showing 
 | Sub-phase | Measurements | Decision rule (PASS = continue; FAIL = stop & investigate) |
 |---|---|---|
 | **1B-i** (mini-audit) | Q-1B-8 cell-meta storage choice prototyped + measured (vector-indexed on prop-net-cold; CHAMP-keyed; struct field on prop-cell). Microbench: cell-meta lookup cost at production storage. | Storage choice ≤ 5 ns lookup overhead → PASS. > 10 ns → investigate alternative storage strategy. |
-| **1B-ii** (framework module + dispatch) | Re-microbench W1+ at production storage rep (vs §13.6 spike's vector-ref mock). Memory: framework module load cost (M12-equivalent). | Production W1+ ≤ 1.5× spike's 6.4 ns (≤ 10 ns) → PASS. > 15 ns → optimize dispatch path. Memory: framework module load < 1 ms, < 10 KB. |
+| **1B-ii** (framework module + dispatch) | **Primary (load-bearing per Q-1B-ii-δ)**: synthetic N=100 BSP round amortized per-cycle cost. **Secondary (informational)**: production W1+ at CHAMP-based storage (Q-1B-ii-β resolution). Memory: framework module load cost (M12-equivalent). | Primary: per-cycle amortized ≤ 3 ns at N=100 → PASS. Secondary: W1+ documented (~50-70 ns expected under CHAMP-based; absorbed by Option 13 amortization). Memory: framework module load < 1 ms, < 10 KB. **Note**: prior gate "W1+ ≤ 10 ns" assumed vector-indexed sidecar; revised per Option 13 + CHAMP-based architecture. |
 | **1B-iii** (tropical fuel module) | C-series quantale axiom verification (§9.4); M10 residuation operator cost; M11 tensor cost; M12 SRE registration. | Quantale axioms hold → PASS. Any C-series failure → CRITICAL; halt before 1B-iv. M10 ≤ 30 ns; M11 ≤ 5 ns; M12 < 1 ms one-time. |
 | **1B-iv** (cell registration + tests + close) | Full Phase 1B framework microbench: cell-write/read across all registered specialized cells. Test coverage: 12+ tests per §9.6. Probe: 28 commands unchanged (semantic parity per S4 baseline). | All targets within bounds → PASS. Probe semantic divergence → CRITICAL. Phase 1B closed. |
 | **1C-i** (mini-audit) | **§13.6.A Option 13 spike executes here** (W1-O13 through W4-O13). | Spike PASS → continue with Option 13 pattern at 1C-ii. Spike FAIL → fall back to D.4 per-fire (Option Y; spike already validated at §13.6). Spike MIXED → re-design. |
