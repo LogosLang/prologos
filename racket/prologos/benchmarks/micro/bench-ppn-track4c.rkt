@@ -709,6 +709,137 @@
 (printf "  V-total: ~a failures\n" v-failures)
 
 ;; ============================================================
+;; CM1-CM5: 1B-i Cell-Meta Microbenches (D.4 framework validation)
+;; Per docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+;; §9.2.A (specialized cell framework) + §9.9 Q-1B-8 A2 resolution
+;; + §13.7 row 1 (gate ≤ 5 ns lookup overhead)
+;;
+;; Validates Q-1B-8 resolution A2: meta field on prop-cell struct itself
+;; (cell knows its own meta; one extra word per cell; no separate CHAMP).
+;;
+;; Throwaway prototype: mock structs mimic A2's production layout; no
+;; production code change yet. If gate passes (CM2 ≤ 5 ns), 1B-ii adds
+;; the meta field to the real prop-cell struct in propagator.rkt.
+;;
+;; Methodology: defeat dead-code elimination via mutable box accumulator
+;; (per §13.6 spike lesson "Baseline stability check requires defeating
+;; dead-code elimination"). Each measurement captures the result so the
+;; JIT cannot elide the access.
+;; ============================================================
+
+(displayln "\n\n=== CM1-CM5: 1B-i CELL-META MICROBENCHES (D.4 framework; A2 layout) ===\n")
+
+;; Mock cell-meta — mirrors the §9.2.A struct (5 fields, transparent)
+(struct mock-cell-meta (tier storage fires-on on-write-check on-read-check) #:transparent)
+
+;; Mock prop-cell-v1 (CURRENT production: 2 fields — propagator.rkt:253)
+(struct mock-cell-v1 (value dependents) #:transparent)
+
+;; Mock prop-cell-v2 (D.4 A2 proposal: 3 fields — meta added)
+(struct mock-cell-v2 (value dependents meta) #:transparent)
+
+;; Sample cell-meta for fuel-cost-cell pattern (per §9.2.C):
+;; :tier 'hot + :storage 'monotone-counter + :fires-on 'threshold-crossing
+;; + :on-write-check (lambda checking >= budget)
+(define sample-meta
+  (mock-cell-meta 'hot 'monotone-counter 'threshold-crossing
+                  (lambda (cur new net) (>= new 1000000))
+                  #f))
+
+;; Pre-allocated cell instances for access measurements
+(define cell-v1-fixture (mock-cell-v1 0 'fake-deps))
+(define cell-v2-no-meta (mock-cell-v2 0 'fake-deps #f))             ;; backward-compat case
+(define cell-v2-with-meta (mock-cell-v2 0 'fake-deps sample-meta))  ;; specialized case
+
+;; Mock speculation parameter — mirrors production current-speculation-assumption
+;; (metavar-store.rkt:194; #f at depth 0)
+(define mock-current-speculation (make-parameter #f))
+
+;; DCE-defeating accumulator
+(define cm-acc (box 0))
+
+;; CM1: Construction cost (3-arg vs 2-arg baseline)
+(displayln "\nCM1: Construction cost (mock-prop-cell allocation)")
+
+(define cm1-v1 (bench "CM1.1 2-field construct (current baseline)" 50000
+                 (set-box! cm-acc (mock-cell-v1 0 'fake-deps))))
+
+(define cm1-v2-bc (bench "CM1.2 3-field construct, meta=#f (backward-compat)" 50000
+                    (set-box! cm-acc (mock-cell-v2 0 'fake-deps #f))))
+
+(define cm1-v2-spec (bench "CM1.3 3-field construct, meta=sample (specialized)" 50000
+                      (set-box! cm-acc (mock-cell-v2 0 'fake-deps sample-meta))))
+
+;; CM2: Meta field accessor cost — THE §13.7 GATE MEASUREMENT
+(displayln "\nCM2: Meta field accessor cost (CORE GATE: §13.7 row 1 target ≤ 5 ns)")
+
+(define cm2-no-meta (bench "CM2.1 (prop-cell-meta cell), meta=#f" 50000
+                      (set-box! cm-acc (mock-cell-v2-meta cell-v2-no-meta))))
+
+(define cm2-with-meta (bench "CM2.2 (prop-cell-meta cell), meta=sample" 50000
+                        (set-box! cm-acc (mock-cell-v2-meta cell-v2-with-meta))))
+
+;; CM3: Backward-compat branch (common case: most cells have meta=#f)
+;; Production fast-path dispatch will start with this check; if meta=#f, skip
+;; to the existing generic cell-write path with no further dispatch overhead.
+(displayln "\nCM3: Backward-compat branch (if-meta-then-else; common case meta=#f)")
+
+(define cm3-no-meta (bench "CM3.1 (if meta special generic), meta=#f" 50000
+                      (set-box! cm-acc
+                        (if (mock-cell-v2-meta cell-v2-no-meta) 'special 'generic))))
+
+(define cm3-with-meta (bench "CM3.2 (if meta special generic), meta=sample" 50000
+                        (set-box! cm-acc
+                          (if (mock-cell-v2-meta cell-v2-with-meta) 'special 'generic))))
+
+;; CM4: Chained meta-field access (tier on the meta value)
+(displayln "\nCM4: Chained access (cell-meta-tier on meta-value)")
+
+(define cm4 (bench "CM4 (cell-meta-tier (prop-cell-meta cell))" 50000
+              (set-box! cm-acc
+                (mock-cell-meta-tier (mock-cell-v2-meta cell-v2-with-meta)))))
+
+;; CM5: Full fast-path dispatch check (mimics §9.2.B production pattern)
+;;   (and meta
+;;        (eq? (cell-meta-tier meta) 'hot)
+;;        (eq? (cell-meta-storage meta) 'monotone-counter)
+;;        (not (current-speculation-assumption)))
+(displayln "\nCM5: Full fast-path dispatch check (mimics §9.2.B net-cell-write)")
+
+(define cm5-bc (bench "CM5.1 full dispatch, meta=#f (slow path bypass)" 50000
+                 (set-box! cm-acc
+                   (let ([m (mock-cell-v2-meta cell-v2-no-meta)])
+                     (and m
+                          (eq? (mock-cell-meta-tier m) 'hot)
+                          (eq? (mock-cell-meta-storage m) 'monotone-counter)
+                          (not (mock-current-speculation)))))))
+
+(define cm5-fast (bench "CM5.2 full dispatch, meta=sample (takes fast path)" 50000
+                   (set-box! cm-acc
+                     (let ([m (mock-cell-v2-meta cell-v2-with-meta)])
+                       (and m
+                            (eq? (mock-cell-meta-tier m) 'hot)
+                            (eq? (mock-cell-meta-storage m) 'monotone-counter)
+                            (not (mock-current-speculation)))))))
+
+;; CM gate verdict
+(displayln "\nCM gate verdict (§13.7 row 1: ≤ 5 ns lookup overhead):")
+
+(define (us->ns us) (* 1000.0 us))
+(define cm2-ns (us->ns cm2-with-meta))
+(define cm5-ns (us->ns cm5-fast))
+
+(printf "  CM2 meta access:    ~a ns/call  →  ~a (gate: ≤ 5 ns)\n"
+        (~r cm2-ns #:precision '(= 2))
+        (if (<= cm2-ns 5.0) "✓ PASS" "✗ FAIL — investigate alternative storage"))
+(printf "  CM5 full dispatch:  ~a ns/call  (informational; parameter-based mock; production-realistic dispatch may differ)\n"
+        (~r cm5-ns #:precision '(= 2)))
+(printf "  (Context: §13.6 spike W1+ vector-ref dispatch was 6.4 ns/call; CM5 uses Racket parameter for speculation check which adds approximately 50 ns; production dispatch design TBD at 1B-ii)\n")
+
+;; Sanity: acc-box has been written (proves access was observable to runtime)
+(printf "  cm-acc box value (proves DCE didn't elide access): ~v\n" (unbox cm-acc))
+
+;; ============================================================
 ;; Summary
 ;; ============================================================
 

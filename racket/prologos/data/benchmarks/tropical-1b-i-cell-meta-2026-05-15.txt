@@ -1,0 +1,28 @@
+=== CM1-CM5: 1B-i CELL-META MICROBENCHES (D.4 framework; A2 layout) ===
+
+
+CM1: Construction cost (mock-prop-cell allocation)
+  CM1.1 2-field construct (current baseline): 0.005 μs/call (50000 calls)
+  CM1.2 3-field construct, meta=#f (backward-compat): 0.005 μs/call (50000 calls)
+  CM1.3 3-field construct, meta=sample (specialized): 0.005 μs/call (50000 calls)
+
+CM2: Meta field accessor cost (CORE GATE: §13.7 row 1 target ≤ 5 ns)
+  CM2.1 (prop-cell-meta cell), meta=#f: 0.004 μs/call (50000 calls)
+  CM2.2 (prop-cell-meta cell), meta=sample: 0.004 μs/call (50000 calls)
+
+CM3: Backward-compat branch (if-meta-then-else; common case meta=#f)
+  CM3.1 (if meta special generic), meta=#f: 0.005 μs/call (50000 calls)
+  CM3.2 (if meta special generic), meta=sample: 0.004 μs/call (50000 calls)
+
+CM4: Chained access (cell-meta-tier on meta-value)
+  CM4 (cell-meta-tier (prop-cell-meta cell)): 0.007 μs/call (50000 calls)
+
+CM5: Full fast-path dispatch check (mimics §9.2.B net-cell-write)
+  CM5.1 full dispatch, meta=#f (slow path bypass): 0.004 μs/call (50000 calls)
+  CM5.2 full dispatch, meta=sample (takes fast path): 0.054 μs/call (50000 calls)
+
+CM gate verdict (§13.7 row 1: ≤ 5 ns lookup overhead):
+  CM2 meta access:    4.06 ns/call  →  ✓ PASS (gate: ≤ 5 ns)
+  CM5 full dispatch:  54.00 ns/call  (informational; parameter-based mock; production-realistic dispatch may differ)
+  (Context: §13.6 spike W1+ vector-ref dispatch was 6.4 ns/call; CM5 uses Racket parameter for speculation check which adds approximately 50 ns; production dispatch design TBD at 1B-ii)
+  cm-acc box value (proves DCE didn't elide access): #t

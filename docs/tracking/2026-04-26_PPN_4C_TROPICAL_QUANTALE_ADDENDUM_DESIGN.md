@@ -390,7 +390,10 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **Stage 3 D.4 CANONICAL** | Full §9 + §10 + §15 revisions; D.3 historical sections RETIRED-PER-D.4-CANONICAL | 🔄 | THIS commit + next |
 | **1A-iii-b** | Tier 2 deprecated ATMS internal API retirement | ⬜ | Per §7 |
 | **1A-iii-c** | Tier 3 surface ATMS AST 14-file pipeline retirement | ⬜ | Per §8 |
-| **1B** | Tropical fuel primitive + specialized cell framework (NEW D.4) + SRE registration | ⬜ | Per §9 |
+| **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
+| **1B-ii** | Specialized cell framework module + dispatch extension | ⬜ | Per §9.2.A + §9.2.B; A2 struct-field per §9.2.0 |
+| **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C-series) | ⬜ | Per §9.2 + §9.3 + §9.4 |
+| **1B-iv** | Cell registration via framework + tests + close | ⬜ | Per §9.2.C + §9.6 |
 | **1C** | Canonical BSP fuel substrate (D.4 CANONICAL — direct migration) | ⬜ | Per §10 |
 | **1V** | Vision Alignment Gate Phase 1 (closes 1A + 1B + 1C) | ⬜ | Per §11 |
 
@@ -976,6 +979,50 @@ This is the substrate that Phase 1C (direct migration of decrement/check sites),
   ;; SRE domain (referenced by registrations)
   tropical-fuel-sre-domain)
 ```
+
+### §9.2.0 1B-i mini-audit findings (D.4 CANONICAL 2026-05-15 — validates A2)
+
+> **Status**: ✓ GATE PASS. Q-1B-8 resolution A2 (meta field on `prop-cell` struct itself) is empirically validated.
+> **Spike data**: [`racket/prologos/data/benchmarks/tropical-1b-i-cell-meta-2026-05-15.txt`](../../racket/prologos/data/benchmarks/tropical-1b-i-cell-meta-2026-05-15.txt).
+> **Microbench code**: [`bench-ppn-track4c.rkt`](../../racket/prologos/benchmarks/micro/bench-ppn-track4c.rkt) §CM1-CM5.
+
+**Codebase audit findings**:
+
+- **`prop-cell` struct** at `propagator.rkt:253`: current 2 fields `(value dependents)`, `#:transparent`. A2 modification adds a 3rd `meta` field → `(value dependents meta)`.
+- **~30 construction sites** in `propagator.rkt` use the 2-arg constructor `(prop-cell init-val champ-empty)` — all need updating to `(prop-cell init-val champ-empty #f)` in 1B-ii. Backward compat via `meta = #f` default for regular cells.
+- **`struct-copy` sites** for `prop-cell` (~5 sites) preserve unspecified fields automatically — no changes needed beyond the struct definition itself.
+- **Accessors** `prop-cell-value`, `prop-cell-dependents` unchanged. `prop-cell-meta` becomes the new accessor for specialized-cell dispatch.
+- **Cell-id allocation**: production `make-prop-network` (lines 621-660) allocates 11 well-known cells (cell-ids 0-10: req-cell, wv-cell, rs-cell, cfg-cell, naf-cell, pc-cell, cp-cell, elab-cell, narr-cell, sre-cell, cir-cell). Cell-ids 11/12 (fuel-cost-cell + fuel-budget-cell per §4.3) are the next slots — no conflict (resolves D-1C-3).
+
+**Microbench results (CM1-CM5)** — 50000 iterations per measurement; mock structs mimic A2's layout; DCE defeated via mutable-box accumulator:
+
+| Measurement | Result | Notes |
+|---|---|---|
+| CM1.1 2-field construct (current baseline) | 5 ns/call | Current production rep |
+| CM1.2 3-field construct, meta=#f (backward-compat) | 5 ns/call | **NO construction regression for regular cells** |
+| CM1.3 3-field construct, meta=sample (specialized) | 5 ns/call | NO regression for specialized cells either |
+| **CM2.2 meta accessor, meta=sample (CORE GATE)** | **4.06 ns/call** | **§13.7 target ≤ 5 ns → ✓ PASS** |
+| CM2.1 meta accessor, meta=#f | 4 ns/call | Common case |
+| CM3.1 backward-compat branch, meta=#f | 5 ns/call | `(if meta special generic)` short-circuits to generic |
+| CM3.2 specialized branch, meta=sample | 4 ns/call | Takes special path |
+| CM4 chained access `cell-meta-tier ∘ prop-cell-meta` | 7 ns/call | 2 struct-field reads |
+| CM5.1 full dispatch, meta=#f (slow-path bypass) | 4 ns/call | `and` short-circuits at meta=#f |
+| CM5.2 full dispatch, meta=sample (full path) | 54 ns/call | **Parameter-ref dominates; see surfaced finding** |
+
+**Verdict: ✓ GATE PASS** — A2 confirmed feasible. 1B-ii proceeds with `(struct prop-cell (value dependents meta) #:transparent)` modification + the ~30 construction-site updates.
+
+**Surfaced architectural finding for 1B-ii** (the microbench made visible):
+
+CM5.2's 54 ns/call is **dominated by the Racket-parameter ref** for the speculation check (`(mock-current-speculation)`). Production uses `(current-speculation-assumption)` (parameter) per `metavar-store.rkt:194`. If 1B-ii's `net-cell-write` fast-path dispatch reads the speculation state via a parameter, the dispatch overhead is ~54 ns (10× the §13.6 spike's 6.4 ns vector-ref dispatch). **The §13.6 spike's W1+ measurement didn't include a parameter ref** — it used a struct field on the mock-net to indicate speculation state.
+
+**Architectural recommendation for 1B-ii**: avoid Racket parameter for the speculation check in the cell-write fast path. Options:
+- A: read speculation state from a struct field on `prop-net-warm` (where contradiction already lives) — ~1 ns access
+- B: pass the under-speculation flag as an explicit argument to `net-cell-write` (caller-supplies; scheduler knows its own speculation state) — 0 ns intrinsic
+- C: keep parameter but only check it on a slow path (most writes are no-speculation; structure dispatch to skip the param ref entirely under the common case)
+
+Lean: **A (struct field on `prop-net-warm`)** — preserves orthogonality (state on-network; no scheduler coupling), constant-time check, no parameter overhead. Confirm at 1B-ii mini-design.
+
+**Lesson surfaced (codification candidate)**: per-phase microbench gates validate not just the gate-target answer, but also the **production implementation choices that the design didn't pin down**. Without CM5.2 measuring the parameter-based dispatch path, 1B-ii might have used a parameter for the speculation check (matching production's `current-speculation-assumption` convention) and silently regressed ~50 ns vs the §13.6 spike's vector-ref baseline. The microbench acted as a design-question surfacer, not just a gate validator. Watching list: 1 data point (this measurement); 1-2 more for graduation.
 
 ### §9.2.A Specialized cell type framework module (D.4 CANONICAL — NEW per §4.6)
 
