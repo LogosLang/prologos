@@ -389,7 +389,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **§13.6 Pre-0 spike** | Falsification test for D.4: W1+W2+W3+W4+W5 measurements | ✅ ✓ PASS | `7b681b9e` (6.4 ns/call W1+; 0 major-GC W3; 0.8 ns W4; ~4× under all targets) |
 | **Stage 3 D.4 CANONICAL** | Full §9 + §10 + §15 revisions; D.3 historical sections RETIRED-PER-D.4-CANONICAL | 🔄 | THIS commit + next |
 | **1A-iii-b mini-design + mini-audit** | α1+α3/β1/γ1/δ-audit-resolved/ε1 resolved (12 mini-audit findings F1-F12; 5 drift risks D-1A-iii-b-1/2/3/4/5; 3 design doc corrections at §3 + §7.2 + §8.2; 3 codification candidates surfaced); inverted §3 ordering claim (1A-iii-c MUST precede 1A-iii-b); single atomic commit ε1 | ✅ | §7.7 (2026-05-17) |
-| **1A-iii-b (atomic retirement; UNBLOCKED at `d9c91f38`)** | 13 deprecated functions + atms struct + atms-believed + atms-empty + provides cleanup + test-atms.rkt DELETE + 2 bench retirements (ε2-style stubs) | ⬜ | Per §7 + §7.7 (UNBLOCKED — 1A-iii-c landed `d9c91f38`; ready to implement atomic per ε1) |
+| **1A-iii-b mini-audit update** | Re-verification post-1A-iii-c: F1-F12 ✅ HOLD; F13-F17 NEW findings; refined ε1 scope (surgical by-name; +supported-value/tms-cell/assumption-id-hash retire; F13 γ2-extension; F14 PRESERVE nogood-explanation + greedy-hitting-set per F17); 5 user-confirmed decisions; NEW codification candidate (2 data points across 1A-iii-c F11 + 1A-iii-b F14) | ✅ | §7.9 (2026-05-17) |
+| **1A-iii-b (atomic retirement; UNBLOCKED at `d9c91f38`; REFINED scope per §7.9)** | Surgical-by-name retirement: 13 deprecated functions + atms struct + atms-believed + atms-empty + supported-value struct + tms-cell struct + assumption-id-hash + provides cleanup; PRESERVE shared helpers (nogood-explanation, greedy-hitting-set, assumption-id, assumption, hash-subset?, cartesian-product, aids->set); test-atms.rkt DELETE; 2 bench retirements (ε2-style stubs at HEAD `2a0af127`); 2 comment updates (decision-cell.rkt:13 + elab-speculation.rkt:51); ~700-900 LoC delta | ⬜ | Per §7 + §7.7 + §7.9 (UNBLOCKED — refined ε1 scope from §7.9) |
 | **1A-iii-c mini-design + mini-audit** | α1/β1/γ2/δ-audit-resolved/ε1/ζ1/η1 resolved (18 mini-audit findings F1-F18; 7 drift risks D-1A-iii-c-1/2/3/4/5/6/7; **8 non-optional design doc corrections** at §3 + §8.2 (×5) + §8.3 + §8.6; 4 NEW codification candidates surfaced); confirmed 1A-iii-b ordering inversion (already corrected at §7.7); **§8.2 dependency cleanup scope corrected (6 files → 2 files; typing-errors + capability-inference are false positives)**; pnet-serialize.rkt has NO atms registrations (F11); trace-serialize atms-event:* PRESERVE (F12 + ε1); single atomic commit ζ1+η1 | ✅ | §8.7 + §8.8 (2026-05-17) |
 | **1A-iii-c (atomic retirement)** | 14 surface AST structs + parse rules + elaboration + 3-fn zonk + shift+subst + pp-expr + uses-bvar0? + typing-core + qtt rules + qtt subtype + union-types tags + trait-resolution mappings + test-atms-integration.rkt DELETE + test-atms-types.rkt DELETE + examples comment cleanup + **4 audit-missed sites caught by corrective sweep**: reduction.rkt nf cases + dead helpers, typing-core.rkt subtype/equiv + infer-level cases, atms.rkt comment, tools/dep-graph.rkt deleted-file refs, test-solver-context.rkt comment | ✅ ✓ PASS | commit `d9c91f38`; 18 files changed, +5 / -1143; 8251 tests / 118.3s / 0 failures; -48 tests (consistent with test deletion); pipeline.md function-coverage audit gap surfaced (codification candidate) |
 | **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
@@ -1006,6 +1007,126 @@ Rationale:
 | **Original design doc's "independence" claims need audit re-verification** (claims about sub-phase ordering, scope membership, etc.) | 2 (1A-iii-b α inverted "any order" claim; 1A-iii-b γ corrected §8.2 test-atms.rkt scope membership) | **NEW watching list** |
 | **Audit grep with proper regex escaping** (early audit missed atms? caller due to `?` regex confusion) | 1 (1A-iii-b grep iteration) | NEW watching list |
 | **Original design's sub-phase plans get pruned by audit reality** (e.g., §7.3's 5 sub-sub-phases became 1 atomic per ε1) | 1 (1A-iii-b ε1 collapsing §7.3's 5-step plan) | NEW watching list |
+
+### §7.9 1A-iii-b Mini-Audit Update — Re-verification post-1A-iii-c (2026-05-17)
+
+> **Status**: §7.7 mini-design+audit ✅ COMPLETE (commit `4061afcb`). Re-verification at HEAD `2a0af127` (post-1A-iii-c landing at `d9c91f38`) ✅ COMPLETE (this section). All §7.7 F1-F12 findings VERIFIED HOLD. **5 NEW findings (F13-F17)** surfaced from per-function exhaustiveness check (applying §8.7 codification lesson preemptively). **Scope refined surgically**: §7.7 ε1's "delete lines 213-454" framing is IMPRECISE per F14 — retirement must be BY FUNCTION NAME (interleaved shared helpers). **5 user-confirmed decisions** (F13 γ2-extension / F15 scope expansion / F16 assumption-id-hash retire / persistence as §7.9 / proceed to atomic implementation).
+
+**Re-verification context**: 1A-iii-c landed at `d9c91f38` (atomic ~1075 LoC deletion); §3 Progress Tracker updated at `2a0af127`. Per §7.7 D-1A-iii-b-1 mitigation: "re-grep at 1A-iii-b implementation opening (post-1A-iii-c landing); full suite GREEN catches dynamic resolution surprises." This re-verification IS that gate.
+
+**§7.7 F1-F12 re-verification results** (all ✅ HOLD):
+
+| # | Finding | Re-verification at HEAD `2a0af127` |
+|---|---|---|
+| **F1 ✅** | atms.rkt structure intact | 13 deprecated functions still at lines 213-454 (specifically: 213/225/235/241/251/264/295/310/333/370/383/408/454); atms struct at 159; atms-empty at 198; atms-believed referenced 6× internally |
+| **F2 ✅** | Provides block (28-75) | All 13 deprecated function provides + struct-out atms + atms-empty + struct-out nogood-explanation + assumption-id-hash + hash-subset? exports still present |
+| **F3 ✅** (REFINED) | Production callers post-1A-iii-c | parser.rkt + surface-syntax.rkt + elaborator.rkt + reduction.rkt + zonk.rkt + substitution.rkt + pretty-print.rkt + typing-core.rkt + qtt.rkt **NO LONGER CALL** deprecated atms-* (retired at `d9c91f38`). Remaining production refs: 2 bench files (per β1; expected) + **2 NEW comment-only refs (F13)**. Pre-condition gate D-1A-iii-b-1 ✅ SATISFIED. |
+| **F4 ✅** | §3 ordering correction | Already applied at `4061afcb`; tracker corrected; satisfied |
+| **F5 ✅** | atms-empty callers (8 calls) | Confirmed only in bench-bsp-le-track2.rkt + bench-ppn-track0.rkt; total 8 calls; ε2-style stub retirement scope intact |
+| **F6 ✅** | atms-believed external callers | ZERO outside atms.rkt; retires cleanly with struct |
+| **F7 ✅** (PREDICTION HELD) | atms? external callers | ZERO. pretty-print.rkt:502 atms? retired naturally with 1A-iii-c per F7 prediction. δ-audit-resolved CONFIRMED. |
+| **F8 ✅** | (struct-out atms) external callers | ZERO (atms struct only used internally in atms.rkt) |
+| **F9 ✅** | stratified-eval.rkt:206 | `[(atms) #t]` strategy keyword case still present (strategy DISPATCH symbol; UNRELATED to deprecated API; PRESERVE per F9) |
+| **F10 ✅** | test-atms.rkt | 469 LoC / 42 test cases confirmed; DELETE per γ1 |
+| **F11 ✅** | Bench file scope | Both bench-bsp-le-track2.rkt + bench-ppn-track0.rkt confirmed deprecated callers; ε2-style stubs per β1 |
+| **F12 ✅** | Modern test coverage | Validated during 1A-iii-c verification at `d9c91f38` (104 tests across 5 modern files / all PASS) |
+
+**NEW findings F13-F17** (from per-function exhaustiveness check):
+
+| # | Finding | Result |
+|---|---|---|
+| **F13** (NEW) | Comment-only references in production | `decision-cell.rkt:13` doc comment + `elab-speculation.rkt:51` struct field annotation. NOT function calls — conceptual documentation about atms-amb ≈ solver-amb relationship. **γ2-extension** (user-confirmed): update text to use modern naming. |
+| **F14 ⚠️** (CRITICAL) | §7.7 ε1 "delete lines 213-454" is IMPRECISE | The range is INTERLEAVED with shared helpers used by modern solver-context API: **`nogood-explanation` struct at line 364** (modern API call at line 659) + **`greedy-hitting-set` function at line 423** (modern API call at line 877). Retirement must be SURGICAL (BY FUNCTION NAME), not by line-range deletion. Sister gap pattern to §8.7 F11 (audit narrative vs pipeline.md function-coverage). |
+| **F15** (NEW) | Additional retirement candidates beyond §7.7 | `supported-value` struct (line 144) — used ONLY by deprecated `atms-read-cell` + `atms-write-cell`; `tms-cell` struct (line 149) — used ONLY by deprecated `atms-read-cell` + `atms-write-cell` + `atms-empty` init. ZERO modern API usage in both. **Scope expansion (user-confirmed)**: include in retirement. |
+| **F16** (NEW) | `assumption-id-hash` decision | Defined line 168; exported line 63; **ZERO callers** (internal + external). Options: retire (audit-grounded) OR preserve (utility helper). **User decision**: RETIRE (one-line; unused; trivial to recreate if future caller needs equivalent). |
+| **F17** (NEW) | Comprehensive PRESERVE list | Beyond `nogood-explanation` + `greedy-hitting-set` (F14), preserve also: `assumption-id` struct (134; used by both), `assumption` struct (139; deprecated at 215 + modern at 543), `cartesian-product` (178; deprecated at 342 + modern at 829), `aids->set` (189; deprecated at 346 + modern at 833), `hash-subset?` (172; used extensively by both — deprecated at 243/302/385/411/457; modern at 678/734/872). |
+
+**Refined ε1 scope (audit-grounded, user-confirmed; supersedes §7.7 ε1 framing)**:
+
+**RETIRE (by function/struct NAME, not by line-range)**:
+
+| Site | Line | Reason |
+|---|---|---|
+| `atms-assume` function | 213 | Deprecated |
+| `atms-retract` function | 225 | Deprecated |
+| `atms-add-nogood` function | 235 | Deprecated |
+| `atms-consistent?` function | 241 | Deprecated |
+| `atms-with-worldview` function | 251 | Deprecated |
+| `atms-amb` function | 264 | Deprecated |
+| `atms-read-cell` function | 295 | Deprecated |
+| `atms-write-cell` function | 310 | Deprecated |
+| `atms-solve-all` function | 333 | Deprecated |
+| `atms-explain-hypothesis` function | 370 | Deprecated |
+| `atms-explain` function | 383 | Deprecated |
+| `atms-minimal-diagnoses` function | 408 | Deprecated |
+| `atms-conflict-graph` function | 454 | Deprecated |
+| `atms` struct (+ atms-believed field + auto-accessors) | 159 | Deprecated |
+| `atms-empty` constructor | 198 | Deprecated |
+| `supported-value` struct | 144 | F15: deprecated-only usage |
+| `tms-cell` struct | 149 | F15: deprecated-only usage |
+| `assumption-id-hash` function | 168 | F16: zero callers; user-confirmed retire |
+| Provides cleanup (lines 28-75): 13 fns + (struct-out atms) + atms-empty + (struct-out supported-value) + (struct-out tms-cell) + assumption-id-hash | — | Symmetric with code retirement |
+| `tests/test-atms.rkt` | DELETE | γ1: 469 LoC / 42 cases; coverage preserved across 4 modern test files (F12) |
+| `bench-bsp-le-track2.rkt` | ε2-stub | β1: deprecated-API benchmarks; matches 1C-iv-a ε2 precedent |
+| `bench-ppn-track0.rkt` | ε2-stub | β1: deprecated-API benchmarks |
+| `decision-cell.rkt:13` comment | UPDATE | F13 γ2-extension: atms-amb → solver-amb naming |
+| `elab-speculation.rkt:51` comment | UPDATE | F13 γ2-extension: atms-amb → solver-amb naming |
+
+**PRESERVE (shared with modern solver-context API per F14 + F17)**:
+
+| Site | Line | Reason |
+|---|---|---|
+| `assumption-id` struct | 134 | Used by both deprecated + modern |
+| `assumption` struct | 139 | F17: deprecated at 215; modern at 543 |
+| `hash-subset?` function | 172 | F17: used extensively by both |
+| `cartesian-product` function | 178 | F17: deprecated at 342; modern at 829 |
+| `aids->set` function | 189 | F17: deprecated at 346; modern at 833 |
+| `nogood-explanation` struct | 364 | F14: deprecated at 377/389; modern at 659 (interleaved within retirement range) |
+| `greedy-hitting-set` function | 423 | F14: deprecated at 417; modern at 877 (interleaved within retirement range) |
+| `table-registry-merge` + `table-answer-merge` | 116/126 | Phase 1e-β-ii hoisted; unrelated to deprecated API |
+
+**Updated drift risks**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1A-iii-b-1 (pre-condition gate) | ✅ SATISFIED — 1A-iii-c landed `d9c91f38`; suite GREEN at 8251/118.3s |
+| D-1A-iii-b-2 (hidden callers via dynamic-require/eval/macro) | ✅ RESOLVED — no dynamic-require callers; verified during 1A-iii-c F16 |
+| D-1A-iii-b-3 (modern test coverage gap) | ✅ MITIGATED — 104 tests across 4 modern files validated PASS at 1A-iii-c |
+| D-1A-iii-b-4 (bench retirement git-hash fragility) | ⬜ At-risk — use HEAD `2a0af127` as baseline reference in ε2-stubs |
+| D-1A-iii-b-5 (§3 correction tracking) | ✅ APPLIED at `4061afcb` |
+| **D-1A-iii-b-NEW-1** (F14: line-range vs function-name retirement) | ✅ AUDIT-RESOLVED via refined surgical scope (this section) |
+| **D-1A-iii-b-NEW-2** (F15+F17: scope expansion + comprehensive PRESERVE list) | ✅ AUDIT-RESOLVED via comprehensive enumeration (this section) |
+
+**NEW codification candidate (sister to §8.7's)**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Audit line-range claims need per-function exhaustiveness check for shared helpers within the range** — within-file analog of §8.7's "audit narrative vs pipeline.md function-coverage exhaustiveness" gap | 2 (1A-iii-c F11 file-level gap; 1A-iii-b F14 within-file line-range vs function-name gap; consecutive sub-phases) | **GRADUATION CANDIDATE** — 2 data points across consecutive sub-phases; pattern is graduating. Codification language: "audit findings claiming line-range retirement must enumerate functions/structs within the range and verify each against modern-API usage; line-range framing alone is insufficient when shared helpers may be interleaved." |
+
+**Implementation gate (per refined ε1)**:
+
+*Pre-implementation*:
+- ✅ HEAD `2a0af127`; suite GREEN at 8251/118.3s
+- ✅ 1A-iii-c landed at `d9c91f38`; production callers of deprecated atms-* are GONE
+- ✅ Re-verification confirms F1-F12 hold; F13-F17 surfaced + resolved at user-confirmation
+- ⬜ Re-grep at implementation opening (next step) verifies no drift since this audit update
+
+*Atomic commit contents (refined per §7.9 surgical scope)*:
+
+| File | Action | Estimated LoC |
+|---|---|---|
+| `atms.rkt` | Surgical deletion: 13 deprecated function defs + atms struct + atms-empty + supported-value struct + tms-cell struct + assumption-id-hash + provides cleanup | ~250-300 LoC |
+| `tests/test-atms.rkt` | DELETE (γ1) | -469 LoC |
+| `benchmarks/micro/bench-bsp-le-track2.rkt` | ε2-style stub (β1; reference HEAD `2a0af127`) | -X +50 LoC |
+| `benchmarks/micro/bench-ppn-track0.rkt` | ε2-style stub (β1; reference HEAD `2a0af127`) | -X +50 LoC |
+| `decision-cell.rkt:13` | Update comment text (γ2-extension; atms-amb → solver-amb) | ~1 LoC |
+| `elab-speculation.rkt:51` | Update comment text (γ2-extension; atms-amb → solver-amb) | ~1 LoC |
+
+**Net**: ~300-450 LoC modification + ~469 LoC test deletion + ~bench retirement = **~700-900 LoC delta** (deletion-dominant). Refined upward from §7.7's "~300-450 LoC" due to F15 scope expansion (supported-value + tms-cell structs added) and test/bench retirement counted in scope.
+
+*Close gate*: `raco make driver.rkt` PASS + targeted modern API tests PASS + full suite GREEN + zero remaining production refs to retired names (sweep verification, applying §8.7 codification lesson).
+
+---
 
 ### §7.8 Design doc corrections (per §7.7 audit findings)
 
