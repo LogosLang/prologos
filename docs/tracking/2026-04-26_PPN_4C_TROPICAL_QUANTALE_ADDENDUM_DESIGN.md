@@ -414,7 +414,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-vi (code additions)** | NEW `bench-tropical-fuel.rkt` (~430 LoC; alloc + GC profile + per-cycle cost + M10/M11/M12/R4 + Variant A/B amortized sims); γ3-b unit tests + δ3 regression test in test-tropical-fuel.rkt; γ3-a integration tests in test-elaboration-parity.rkt; closed F5 stub-ref gap + §9.10 capture obligation per η1+δ2 coupling | ✅ ✓ PASS | 8299 tests / 120.9s / 0 failures; commit `aa0bbe4d` |
 | **1C-vi (measurement artifacts)** | 3 captured data files (production C; production-realistic N distribution mean 5.20; probe wall 351.68 ms median +19.2% vs Pre-0); A/B/C report doc with 11-row table + production-realistic-N + probe regression findings; Issue [#63](https://github.com/LogosLang/prologos/issues/63) opened (bench-ab.rkt `--refs` enhancement); MASTER_ROADMAP.org + DEFERRED.md cross-references; D-1B-ii-3 allocation verification complete | ✅ ✓ PASS-WITH-CAVEATS | A/B/C report verdicts: 6 PASS + 3 INVESTIGATE; probe at upper-ceiling boundary of §11.3 (≤ 351 ms); Phase 1V item #1-bis (fuel-cell direct-ref) PROPOSED to close residual gap; commit (this commit) |
 | **1V mini-design + mini-audit** | §11.2 D.4 CANONICAL reframing (α1); microbench scope refresh (β2 — 5 NEW + 6 references); Items #1 + #1-bis + #3 ALL IN SCOPE (γ-all3; user-confirmed Track 2I closed); 3 codifications graduation (δ1); 5-commit sub-phase split (ε-multi); 16 audit findings F1-F16; 6 drift risks D-1V-1/2/3/4/5/6 (5 audit-resolved + 1 deferred); 3 NEW codification candidates | ✅ | §11.X + §11.2 reframed (2026-05-17) |
-| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii unilateral gate revision (~10-20 LoC); re-microbench CW3 | ⬜ | Per §11.3 item #1 + §11.X γ-all3 |
+| **1V Commit 2 mini-design + mini-audit** | α1/β1/γ1/δ1/ε-measurement-driven resolved (17 mini-audit findings F1-F17; F1-F13 ✅ HOLD from FORK CHECKPOINT; F14-F17 NEW from re-audit at fresh HEAD; 6 drift risks D-1V-2-1/2/3/4/5/6; 3 NEW codification candidates); design-doc persistence per user direction (corrects FORK CHECKPOINT's commit-message persistence) | ✅ | §11.X.2 (2026-05-17) |
+| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii unilateral gate revision (~10-15 LoC); re-microbench CW3 + §13.7 gate decision per ε-measurement-driven | ⬜ | Per §11.X.2 + §11.3 item #1 + §11.X γ-all3 |
 | **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; close production-realistic-N gap from 1C-vi A/B/C (~30-60 LoC); ~0.3 ns/cycle savings | ⬜ | Per 1C-vi A/B/C report + §11.X γ-all3 |
 | **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
 | **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
@@ -4214,6 +4215,119 @@ Rationale: matches 1A-iii-b/c + 1B-ii/iii/iv + 1C-ii-a/b/iii/iv/vi precedents �
 - Parity tests GREEN (per 1A-iii-b atms-deprecated-api-parity + 1A-iii-c surface-atms-ast-parity + 1B+1C tropical-fuel-parity)
 - 3 codifications graduated to DEVELOPMENT_LESSONS.org
 - Cross-reference capture in D.3 Phase 3 design verified (Form C scheduled for Phase 3C — verify at this gate)
+
+### §11.X.2 1V Commit 2 — Item #1 merge-fn-caching Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V Commit 2 (Item #1 merge-fn-caching) pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together per Per-Phase Protocol steps 1+2 (co-dependent). **5 resolutions** (α1 / β1 / γ1 / δ1 / ε-measurement-driven) + **17 mini-audit findings F1-F17** (F1-F13 from FORK CHECKPOINT re-verified ✅ HOLD at HEAD `11347129`; F14-F17 NEW) + **6 drift risks D-1V-2-1 through D-1V-2-6** (4 audit-resolved + 2 NEW from this re-audit).
+
+> **Per Stage 4 Per-Phase Protocol step 1 + 2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §7.7 + §7.9 + §8.7 + §10.0.4-7 + §11.X patterns from prior sub-phases). Persists into DESIGN DOC per user direction (corrects FORK CHECKPOINT's "in commit message" decision per Stage 4 methodology mandate "design DECISIONS persist into the DESIGN DOC as new subsections").
+
+**Implementation goal**: Eliminate per-call `champ-lookup` for merge-fn in `net-cell-write` fast path by caching merge-fn directly on `specialized-cell-meta` struct. **Closes the unilateral §13.7 1B-ii gate revision from 1B-iv** (originally ≤ 3 ns/cycle target; unilaterally revised to ≤ 5 ns/cycle).
+
+**Architectural intent** (Cell/Propagator/Scheduler Orthogonality compliant):
+- Optimization lives at the **CELL LAYER** (cell metadata declares storage strategy + fire-on policy + cached merge-fn)
+- NOT at scheduler layer (no BSP-specific piggybacking)
+- Portable across schedulers: Gauss-Seidel, BSP, Zig-LLVM, future runtime all benefit uniformly
+
+**Mini-audit findings (concrete grounding at HEAD `11347129`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | `specialized-cell-meta` struct definition | ✅ HOLDS — `propagator.rkt:295` — 5 fields `(tier storage fires-on on-write-check on-read-check)` |
+| **F2** | Direct constructor sites (pipeline.md New Struct Field discipline) | ✅ HOLDS — **4 sites**: `propagator.rkt:949` (registration in `net-register-specialized-cell`); `specialized-cells.rkt:36` (`make-monotone-counter-meta`); `specialized-cells.rkt:46` (`make-cold-general-meta`); `tests/test-specialized-cells.rkt:41` (test 1) |
+| **F3** | `struct-copy specialized-cell-meta` sites | ✅ HOLDS — **0 sites** |
+| **F4** | Match patterns on `specialized-cell-meta` | ✅ HOLDS — **0 sites** (only predicate uses `specialized-cell-meta?` at 2 test sites; predicate is arity-agnostic) |
+| **F5** | Provides + exports | ✅ HOLDS — `propagator.rkt:90` exports `(struct-out specialized-cell-meta)`; `specialized-cells.rkt:20` re-exports; test imports struct + 4 accessors at lines 27-31 |
+| **F6** | Fast-path champ-lookup site (OPTIMIZATION TARGET) | ✅ HOLDS — `propagator.rkt:1426`: `(define merge-fn (champ-lookup (prop-network-merge-fns net) h cid))` → replace with `(specialized-cell-meta-merge-fn meta)` |
+| **F7** | `net-register-specialized-cell` signature | ✅ HOLDS — `propagator.rkt:936` — `merge-fn` already 3rd positional arg; **just needs to be passed into struct constructor at line 949** |
+| **F8** | `make-monotone-counter-meta` signature | ✅ HOLDS — `specialized-cells.rkt:35-37` — `(define (make-monotone-counter-meta on-write-check) ...)` — needs merge-fn param added |
+| **F9** | `make-cold-general-meta` signature | ✅ HOLDS — `specialized-cells.rkt:45-46` — `(define (make-cold-general-meta) ...)` — needs optional merge-fn param |
+| **F10** | CW3 microbench file | ✅ HOLDS — `bench-tropical-fuel.rkt:254-330` — Variant A (parallel BSP main loop pattern) + Variant B (sequential scheduler pattern) at N=100/N=1000; target ≤ 5 ns/cycle (§13.7 1B-ii gate); spike reference 2.16 ns/cycle from §13.6.A |
+| **F11** | Test file direct constructor | ✅ HOLDS — `tests/test-specialized-cells.rkt:41` — 5-arg constructor; test imports 4 accessors (-tier/-storage/-fires-on/-on-write-check) at lines 27-31; missing `-on-read-check` (already a field but accessor not imported) |
+| **F12** | Slow path UNCHANGED | ✅ HOLDS — `propagator.rkt:1472-1473` — `net-cell-write/slow-path` uses `champ-lookup`; regular cells (meta=#f) take this path |
+| **F13** | Registry preservation rationale | ✅ HOLDS — Registry = source-of-truth (slow path); meta cache = fast-path optimization. Regular cells (meta=#f) take slow path → use registry. **No single code path has redundant access.** |
+| **F14 ⚠️ NEW** | `tropical-fuel-merge-for-cell` is an inlined duplicate of `tropical-fuel-merge` | `propagator.rkt:646-655` — inlined duplicate of `tropical-fuel.rkt:86` (import cycle avoidance; documented warning "future change to tropical-fuel-merge MUST update duplicate" at line 653). This is the merge-fn cached on canonical fuel cells under Item #1. **Implication**: cached value is the DUPLICATE, not the source-of-truth. Warning at line 653 continues to apply post-Item-#1. |
+| **F15 NEW** | Test file accessor imports incomplete | `tests/test-specialized-cells.rkt:27-31` — 4 accessor imports; need to add `specialized-cell-meta-merge-fn` after Item #1 (alongside accessor test) |
+| **F16 ⚠️ NEW + DESIGN-AFFECTING** | `make-monotone-counter-meta` + `make-cold-general-meta` have **ZERO callers** in production or tests | Public API of `specialized-cells.rkt` for future PReduce/OE/SH track usage (per module comment: "Future PReduce / OE / SH Series tracks adding specialized cells extend this module with new convenience constructors without modifying propagator.rkt"). Canonical fuel cells (propagator.rkt:796 + 809) use `net-register-specialized-cell` directly with explicit `#:tier` keywords. **Implication**: updating these constructors per α1+β1 is **prophylactic for future track usage**, not load-bearing for production today. User-confirmed prophylactic update is correct (consistent API surface; prevents future footgun). |
+| **F17 NEW** | `net-register-specialized-cell` caller audit | **All callers already thread merge-fn**: `propagator.rkt:796` (fuel-cost cell — passes `tropical-fuel-merge-for-cell`); `propagator.rkt:809` (fuel-budget cell — passes `tropical-fuel-merge-for-cell`); 5 test sites in `tests/test-specialized-cells.rkt` (lines 70, 89, 106, 133, 147 — all pass `max-merge`). **ZERO caller updates needed** — change is purely INSIDE `net-register-specialized-cell` at line 949 + the struct definition at line 295. |
+
+**Five user-confirmed resolutions**:
+
+| Q | Lean | User-confirmed | Effect |
+|---|---|---|---|
+| **α1** | Append `merge-fn` as 6th field to `specialized-cell-meta` struct | ✅ | `(struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check merge-fn) #:transparent)` |
+| **β1** | `make-cold-general-meta` adds optional `[merge-fn #f]` param | ✅ | Cold+general takes slow path; meta's merge-fn unused there but SYMMETRIC API for future tracks (per F16 prophylactic rationale) |
+| **γ1** | Dual-storage (registry source-of-truth + meta cache for fast path) | ✅ | Minimal surgical change; no redundancy on single code path (per F13) |
+| **δ1** | Single atomic commit | ✅ | ~10-20 LoC; design doc persistence (§11.X.2) IN THIS COMMIT per user direction; implementation in NEXT commit per Stage 4 + prior split pattern (1A-iii-b `4061afcb`+`fef06994`; 1A-iii-c `166a3f02`+`d9c91f38`; 1C-iv `93c1c06f`+`e85638af`+`00f7ce05`) |
+| **ε-measurement-driven** | Post-impl CW3 re-microbench drives §13.7 gate decision | ✅ | Per §13.7 codified decision rule (3 ns ratified / 3-4 ns measurement-driven discussion / >4 ns investigate) |
+
+**Implementation plan (per δ1 atomic + ε-measurement-driven)**:
+
+Single atomic implementation commit (~10-15 LoC; will follow this design-doc persistence commit):
+
+| # | Action | Site | Detail |
+|---|---|---|---|
+| 1 | Add `merge-fn` field to struct | `propagator.rkt:295` | 5 fields → 6 fields |
+| 2 | Pass merge-fn into constructor | `propagator.rkt:949` | Add `merge-fn` as 6th arg |
+| 3 | Replace champ-lookup with cached access | `propagator.rkt:1426` | `(define merge-fn (specialized-cell-meta-merge-fn meta))` |
+| 4 | Add merge-fn param to `make-monotone-counter-meta` | `specialized-cells.rkt:35-37` | Per α1 + F16 prophylactic |
+| 5 | Add optional `[merge-fn #f]` param to `make-cold-general-meta` | `specialized-cells.rkt:45-46` | Per β1 + F16 prophylactic |
+| 6 | Update test direct constructor (6 args; use `max-merge`) + add `-merge-fn` accessor import + add accessor test | `tests/test-specialized-cells.rkt:27-31, 41` | Per F11+F15 |
+| 7 | Re-microbench CW3 via `bench-tropical-fuel.rkt` | — | Capture amortized per-fire ns/cycle at Variant A + Variant B; N=100 + N=1000 |
+| 8 | Targeted tests (test-specialized-cells.rkt + 4 ATMS parity files) | — | Verify behavioral correctness |
+| 9 | Full suite GREEN | — | Regression gate |
+| 10 | **§13.7 gate decision per CW3 result** | — | Per ε-measurement-driven: ≤ 3 → ratify ORIGINAL; 3-4 → escalate to user; > 4 → investigate |
+| 11 | VAG TWO-COLUMN + commit + §3 tracker + dailies | — | Per Stage 4 Per-Phase Protocol step 5 + 7 |
+
+**Pre-implementation gate** (this commit; mini-design persistence):
+
+- ✅ HEAD `11347129`; suite GREEN at 8209/98.4s (per FORK CHECKPOINT; verified test-specialized-cells.rkt 9 tests / 3.5s / PASS at this HEAD)
+- ✅ Re-grep verified F1-F13 line numbers + F14-F17 NEW findings surfaced (this audit)
+- ✅ Caller audit confirms ZERO updates to `net-register-specialized-cell` callers needed (F17)
+
+**Pre-implementation-commit gate** (next commit):
+
+- Re-grep `specialized-cell-meta` callers immediately before implementation to verify no line-number drift since this commit
+- Confirm no NEW callers of `make-monotone-counter-meta` or `make-cold-general-meta` introduced since F16 audit
+
+**Drift risks named at design+audit time (D-1V-2-1 through D-1V-2-6)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-2-1 | pipeline.md New Struct Field exhaustiveness (must update all direct constructor sites) | ✅ AUDIT-RESOLVED — 4 sites identified per F2; ZERO struct-copy + ZERO match patterns per F3+F4 |
+| D-1V-2-2 | merge-fn redundancy (registry + cache) | ✅ AUDIT-RESOLVED — justified by γ1 slow-path/fast-path split per F13; registry is source-of-truth for slow path; cache is fast-path-only |
+| D-1V-2-3 | Gate recovery may not hit ≤ 3 ns/cycle target | ⬜ MITIGATION: ε-measurement-driven decision tree at §13.7 (user-escalation if 3-4 ns; investigate if > 4 ns) |
+| D-1V-2-4 | Cold+general cells' meta-merge-fn unused on slow path | ✅ AUDIT-RESOLVED — β1 symmetric API; meta-merge-fn=#f for slow-path cells; no behavioral impact |
+| **D-1V-2-5 NEW** | `tropical-fuel-merge-for-cell` is inlined duplicate (F14); cached on canonical fuel cells | ✅ AUDIT-RESOLVED — the duplicate IS the production merge-fn for canonical cells (per propagator.rkt:646-655 import-cycle-avoidance rationale); cache stores the duplicate correctly; "future change to tropical-fuel-merge MUST update duplicate" warning at line 653 continues to apply (not Item #1 scope) |
+| **D-1V-2-6 NEW** | Zero-caller convenience constructors (F16) | ✅ AUDIT-RESOLVED — prophylactic update per α1+β1 (consistent API surface for future PReduce/OE/SH tracks); user-confirmed prophylactic correct over minimal-touch alternative |
+
+**Verification sequence at implementation commit**:
+
+```
+1. tools/check-parens.sh on 3 files: propagator.rkt + specialized-cells.rkt + test-specialized-cells.rkt
+2. raco make driver.rkt — catches 5-arg → 6-arg arity drift if any site missed
+3. raco test tests/test-specialized-cells.rkt — verifies struct + accessors + behavioral semantics
+4. racket bench-tropical-fuel.rkt — CW3 measurement (Variant A + Variant B at N=100 + N=1000)
+5. racket tools/run-affected-tests.rkt --tests tests/test-specialized-cells.rkt --tests tests/test-tropical-fuel.rkt
+6. Full suite (regression gate; expect 8209 tests / ~98-100s)
+7. §13.7 gate decision per CW3 result (ε-measurement-driven)
+8. VAG TWO-COLUMN; commit with structured message
+9. §3 tracker update with commit hash + CW3 measurement
+10. Dailies entry with measurement + gate decision
+```
+
+**NEW codification candidates surfaced this audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Re-audit at fresh HEAD before sub-phase implementation surfaces additional findings beyond original mini-design** | 1 (this §11.X.2 re-audit surfaced F14-F17 NEW; F16 design-affecting) | NEW watching list — supplements existing "audit-driven scope refinements" codification (which is graduating at Commit 5) |
+| **Zero-caller public API: prophylactic update vs minimal-touch** | 1 (F16 `make-monotone-counter-meta` + `make-cold-general-meta`) | NEW watching list — design choice when struct refactor surfaces dead API; prophylactic preferred per F16 rationale |
+| **Inlined-duplicate cache hazard**: when caching a value cached on a duplicate (import-cycle workaround), the "future change MUST update duplicate" warning continues to apply post-cache | 1 (F14 + D-1V-2-5) | NEW watching list — relevant for future imports-cycle-breaking duplicates that become cached values |
+
+**Updates to design doc trackers** (this commit):
+
+- §3 Progress Tracker row "1V Commit 2 — Item #1 merge-fn-caching" updates Notes to reference §11.X.2 (this subsection)
+- Status remains ⬜ until implementation commit lands
 
 ---
 
