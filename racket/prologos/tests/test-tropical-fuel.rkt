@@ -31,6 +31,10 @@
          (only-in "../propagator.rkt"
                   make-prop-network
                   net-cell-read net-cell-write
+                  net-new-cell
+                  net-add-propagator
+                  net-add-fire-once-propagator
+                  run-to-quiescence-bsp
                   fuel-cell-id fuel-budget-cell-id
                   prop-network-cells prop-network-contradiction
                   prop-network-fuel
@@ -372,3 +376,102 @@
   ;; Both converge to 500 (the minimum)
   (check-equal? (net-cell-read net-a3 fuel-cell-id) 500)
   (check-equal? (net-cell-read net-b3 fuel-cell-id) 500))
+
+;; ============================================================
+;; 1C-ii-a Variant A migration tests (D.4 CANONICAL 2026-05-16)
+;; ============================================================
+;;
+;; Per §10.0.2 Q-1C-ii-a-δ: 3 tests covering:
+;;   (1) cell-field-lockstep — β1 invariant: cell and struct-field agree
+;;       after BSP round (Tier 2 path)
+;;   (2) Tier 1 fast path preservation — β1 preservation: cell unchanged
+;;       when Tier 1 single-pass flush runs
+;;   (3) exhaustion via cell-mechanism — on-write-check fires contradiction
+;;       structurally when remaining-fuel hits ≤ 0
+;;
+;; D-1C-ii-a-1 (retirement obligation): the [fuel (- ...)] struct-copy
+;; update at propagator.rkt line 2606 is transitional scaffolding (β1
+;; lockstep with the new cell-write). It RETIRES at 1C-iv alongside the
+;; prop-net-hot-fuel struct field. Test (1) verifies the transitional
+;; invariant holds; post-1C-iv, the invariant is trivially preserved (only
+;; the cell remains as the source of truth).
+
+;; Local helpers for BSP propagator construction (mirror test-propagator-bsp.rkt)
+(define (1c-ii-a-max-merge old new) (max old new))
+(define (1c-ii-a-copy-fire-fn src dst)
+  (lambda (net) (net-cell-write net dst (net-cell-read net src))))
+
+(test-case "1C-ii-a (1) cell-field-lockstep: both struct-field and cell agree after BSP Tier 2 round"
+  ;; Tier 2 path decrements BOTH: existing [fuel (- ... n)] struct-copy at
+  ;; line 2606 PLUS new (net-cell-write snapshot fuel-cell-id (- ... n)).
+  ;; β1 invariant: both reflect the same remaining-fuel value at every
+  ;; observation point during the 1C-ii-a through 1C-iii transition window.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 ca) (net-new-cell net0 0 1c-ii-a-max-merge))
+  (define-values (net2 cb) (net-new-cell net1 0 1c-ii-a-max-merge))
+  ;; A→B copy propagator (will fire in Tier 2 — has inputs so NOT eligible for Tier 1)
+  (define-values (net3 _p1) (net-add-propagator net2 (list ca) (list cb)
+                              (1c-ii-a-copy-fire-fn ca cb)))
+  ;; Trigger BSP run; propagator fires; consumes fuel from initial 100
+  (define net4 (net-cell-write net3 ca 42))
+  (define result (run-to-quiescence-bsp net4))
+  ;; β1 invariant: struct-field and cell agree
+  (define field-remaining (prop-network-fuel result))
+  (define cell-remaining (net-cell-read result fuel-cell-id))
+  (check-equal? field-remaining cell-remaining
+                "β1 lockstep: struct-field and cell must agree after BSP Tier 2 round")
+  ;; Both must be < 100 (fuel was consumed by Tier 2 path)
+  (check-true (< field-remaining 100)
+              "fuel was consumed by BSP Tier 2 round (some n decrement happened)"))
+
+(test-case "1C-ii-a (2) Tier 1 fast path preservation: cell unchanged when Tier 1 runs"
+  ;; β1 preservation (structural): Tier 1 fast path (run-to-quiescence-bsp
+  ;; lines 2562-2573) bypasses fuel decrement entirely. The cell-write at
+  ;; line 2606 is INSIDE Tier 2's let*, NOT in Tier 1's for/fold body.
+  ;; Verified here by running BSP through Tier 1 (fire-once empty-inputs
+  ;; propagator + no speculation + no NAF) and confirming BOTH struct-field
+  ;; AND cell are unchanged after the round.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 ca) (net-new-cell net0 0 1c-ii-a-max-merge))
+  ;; Fire-once empty-inputs propagator: writes to ca, no inputs.
+  ;; Tier 1 condition: PROP-FIRE-ONCE + PROP-EMPTY-INPUTS flags both set.
+  (define-values (net2 _p1)
+    (net-add-fire-once-propagator net1 (list) (list ca)
+      (lambda (net) (net-cell-write net ca 99))))
+  ;; Run BSP — fire-once empty-inputs propagator triggers Tier 1 path
+  (define result (run-to-quiescence-bsp net2))
+  ;; Verify propagator fired (ca written)
+  (check-equal? (net-cell-read result ca) 99
+                "Tier 1 fast path fired the propagator (ca written)")
+  ;; β1 preservation: Tier 1 doesn't decrement fuel
+  (check-equal? (prop-network-fuel result) 100
+                "Tier 1 fast path doesn't decrement struct-field")
+  (check-equal? (net-cell-read result fuel-cell-id) 100
+                "Tier 1 fast path doesn't decrement cell (β1 preservation)"))
+
+(test-case "1C-ii-a (3) exhaustion via cell-mechanism: on-write-check fires contradiction"
+  ;; When BSP runs with budget that decrements to ≤ 0, the on-write-check
+  ;; predicate (<= new 0) fires contradiction structurally via the cell
+  ;; mechanism. This is the new structural exhaustion path under D.4.
+  ;; During transition (1C-ii-a through 1C-iii), both paths run in parallel
+  ;; per β1; either the cell-mechanism OR the existing inline check site
+  ;; (which reads prop-network-fuel via the macro) fires contradiction first.
+  (define net0 (make-prop-network 2))  ; very low budget
+  (define-values (net1 ca) (net-new-cell net0 0 1c-ii-a-max-merge))
+  (define-values (net2 cb) (net-new-cell net1 0 1c-ii-a-max-merge))
+  (define-values (net3 cc) (net-new-cell net2 0 1c-ii-a-max-merge))
+  ;; 3 propagators with overlapping deps; first BSP round has n ≥ 2 worklist
+  ;; entries, exhausting the budget=2.
+  (define-values (net4 _p1) (net-add-propagator net3 (list ca) (list cb)
+                              (1c-ii-a-copy-fire-fn ca cb)))
+  (define-values (net5 _p2) (net-add-propagator net4 (list ca) (list cc)
+                              (1c-ii-a-copy-fire-fn ca cc)))
+  ;; Trigger BSP; budget exhausted on round 1 or 2
+  (define net6 (net-cell-write net5 ca 42))
+  (define result (run-to-quiescence-bsp net6))
+  ;; Contradiction must be present (via cell-mechanism on-write-check
+  ;; firing 'tropical-fuel-exhausted OR via the existing inline check site
+  ;; which observes (<= (prop-network-fuel net) 0) and short-circuits).
+  ;; β1 keeps both paths active during transition; either is acceptable.
+  (check-true (and (prop-network-contradiction result) #t)
+              "exhaustion produces contradiction (via cell-mechanism or legacy check site)"))

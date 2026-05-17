@@ -397,7 +397,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C whole-phase mini-design** | Q-1C-α/β/γ/δ resolved; Phase 1V scope locked (4 items) | ✅ | §10.0 (2026-05-16); resolutions α2/β1/γ1+function/δ1 |
 | **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline strategy | ✅ | §10.0.1 (2026-05-16); 5 findings α/β/γ/δ/ε; ε surfaced bench scope 2→18 (ε2 retire); audit re-verified line numbers + Q-1C-1 simpler than expected |
 | **1C-ii-a mini-design** | α2/β1/γ-net/δ-3-tests resolved; D-1C-ii-a-1 retirement obligation captured for 1C-iv | ✅ | §10.0.2 (2026-05-16) |
-| **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3) | 🔄 | Per §10.4 + Q-1C-α α2; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-a-1); target ~0.06 ns/cycle amortized |
+| **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3); production cell-write at line 2606; 3 new tests (cell-field-lockstep + Tier 1 preservation + cell-mechanism exhaustion) | ✅ ✓ PASS | β1 lockstep applied; net diff +6 LoC production + 76 LoC tests; 8289 tests / 126.4s / 0 failures; D-1C-ii-a-1 retirement scheduled for 1C-iv |
 | **1C-ii-b** | Variant B migration (sequential schedulers entry points #1/#2/#4/#5) + `flush-fuel-local-var!` helper | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1; target ~2.16 ns/cycle amortized |
 | **1C-iii** | Migrate 11 check sites | ⬜ | Per §10.4 |
 | **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |

@@ -2607,9 +2607,20 @@
                                  [warm (struct-copy prop-net-warm (prop-network-warm net)
                                          [under-speculation?
                                           (not (zero? (current-worldview-bitmask)))])])]
+                     ;; D.4 1C-ii-a Variant A: ALSO write to fuel-cell-id (lockstep
+                     ;; sync with struct-field above per β1; cell becomes architecturally
+                     ;; PRIMARY at every observation point post-1C-ii-a). The on-write
+                     ;; check (<= new 0) fires contradiction structurally if exhausted.
+                     ;; Option A semantic: cell stores REMAINING fuel; decrement by n.
+                     ;; D-1C-ii-a-1 (retirement obligation): the [fuel (- ...)] update
+                     ;; above RETIRES at 1C-iv alongside the prop-net-hot-fuel struct
+                     ;; field itself; this cell-write becomes the SOLE production update
+                     ;; pattern post-1C-iv.
+                     [snapshot+fuel (net-cell-write snapshot fuel-cell-id
+                                                    (- (net-cell-read net fuel-cell-id) n))]
                      ;; R1: time fire phase
                      [t-fire-start (current-inexact-monotonic-milliseconds)]
-                     [all-writes (executor snapshot pids)]
+                     [all-writes (executor snapshot+fuel pids)]
                      [t-fire-end (current-inexact-monotonic-milliseconds)]
                      ;; R1: time merge phase
                      ;; Phase 2b: tree-reduce for large worklists (hypercube all-reduce).
@@ -2621,9 +2632,9 @@
                      [merged (if (and tree-threshold (>= n tree-threshold))
                                  (let ([combined (tree-reduce-fire-results all-writes #t)])
                                    (if combined
-                                       (bulk-merge-writes snapshot (list combined))
-                                       snapshot))
-                                 (bulk-merge-writes snapshot all-writes))]
+                                       (bulk-merge-writes snapshot+fuel (list combined))
+                                       snapshot+fuel))
+                                 (bulk-merge-writes snapshot+fuel all-writes))]
                      [t-merge-end (current-inexact-monotonic-milliseconds)]
                      ;; Apply deferred propagators
                      [deferred-props (collect-deferred-propagators all-writes)]
@@ -2679,7 +2690,7 @@
                       (for/fold ([acc acc])
                                 ([w (in-list writes)])
                         (cons (cell-diff (car w)
-                                         (net-cell-read snapshot (car w))
+                                         (net-cell-read snapshot+fuel (car w))
                                          (cdr w)
                                          pid)
                               acc))))
