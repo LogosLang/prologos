@@ -48,7 +48,7 @@
 
 ;; A single speculative branch.
 (struct branch
-  (hypothesis-id  ;; assumption-id (from atms-amb)
+  (hypothesis-id  ;; assumption-id (from solver-amb)
    enet           ;; elab-network (forked network for this branch)
    status         ;; 'pending | 'ok | 'contradiction
    contradiction  ;; contradiction-info | #f
