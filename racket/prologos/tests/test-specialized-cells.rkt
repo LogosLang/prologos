@@ -17,11 +17,15 @@
 (require rackunit
          (only-in "../propagator.rkt"
                   make-prop-network
+                  fork-prop-network
                   net-new-cell net-cell-read net-cell-write
+                  net-cell-reset
                   net-register-specialized-cell
                   prop-network-contradiction
                   prop-network-cells prop-network-warm
                   prop-net-warm-under-speculation?
+                  prop-net-warm-fuel-cell-cache
+                  fuel-cell-id
                   prop-cell-meta prop-cell-value
                   cell-id-hash
                   specialized-cell-meta specialized-cell-meta?
@@ -172,3 +176,78 @@
 (test-case "make-prop-network constructs without error (smoke)"
   (define net (make-prop-network 1000))
   (check-not-false net))
+
+;; ----------------------------------------------------------------
+;; Test 10: D.4 1V-3 Item #1-bis — fuel-cell-cache initialized at make-prop-network
+;; ----------------------------------------------------------------
+(test-case "fuel-cell-cache set after make-prop-network registration"
+  (define net (make-prop-network 1000))
+  (define cache (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+  ;; Cache is the prop-cell direct-ref for fuel-cell-id
+  (check-not-false cache)
+  (check-equal? (prop-cell-value cache) 1000)
+  ;; Cache mirrors what champ-lookup would return
+  (define champ-cell (champ-lookup (prop-network-cells net)
+                                    (cell-id-hash fuel-cell-id)
+                                    fuel-cell-id))
+  (check-eq? cache champ-cell))
+
+;; ----------------------------------------------------------------
+;; Test 11: D.4 1V-3 Item #1-bis — fuel-cell-cache updates on net-cell-write
+;; ----------------------------------------------------------------
+(test-case "fuel-cell-cache updates through net-cell-write fast-path (WT-1)"
+  (define net (make-prop-network 1000))
+  ;; Verify read short-circuit returns same value as struct field
+  (check-equal? (net-cell-read net fuel-cell-id) 1000)
+  ;; Decrement: tropical-fuel-merge = min; new value 500 < 1000 → merged = 500
+  (define net2 (net-cell-write net fuel-cell-id 500))
+  (check-equal? (net-cell-read net2 fuel-cell-id) 500)
+  ;; Cache reflects the new prop-cell (its value matches the write)
+  (define cache2 (prop-net-warm-fuel-cell-cache (prop-network-warm net2)))
+  (check-equal? (prop-cell-value cache2) 500)
+  ;; Cache is consistent with champ-lookup result
+  (define champ-cell2 (champ-lookup (prop-network-cells net2)
+                                     (cell-id-hash fuel-cell-id)
+                                     fuel-cell-id))
+  (check-eq? cache2 champ-cell2))
+
+;; ----------------------------------------------------------------
+;; Test 12: D.4 1V-3 Item #1-bis — fuel-cell-cache updates on net-cell-reset (WT-3)
+;; ----------------------------------------------------------------
+(test-case "fuel-cell-cache updates through net-cell-reset (WT-3)"
+  (define net (make-prop-network 1000))
+  ;; Decrement first so cell != initial
+  (define net2 (net-cell-write net fuel-cell-id 500))
+  ;; Reset to fresh budget
+  (define net3 (net-cell-reset net2 fuel-cell-id 2000))
+  (check-equal? (net-cell-read net3 fuel-cell-id) 2000)
+  (define cache3 (prop-net-warm-fuel-cell-cache (prop-network-warm net3)))
+  (check-equal? (prop-cell-value cache3) 2000))
+
+;; ----------------------------------------------------------------
+;; Test 13: D.4 1V-3 Item #1-bis — cache invariant under non-fuel writes (γ1 dual-storage)
+;; ----------------------------------------------------------------
+(test-case "fuel-cell-cache unchanged when writes target other cells"
+  (define net (make-prop-network 1000))
+  (define cache-before (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+  ;; Write to a different cell (allocate a new one; write to it)
+  (define-values (net2 other-cid)
+    (net-new-cell net 0 max-merge))
+  (define net3 (net-cell-write net2 other-cid 42))
+  ;; fuel-cell-cache should be UNCHANGED (cid != fuel-cell-id → inherit prev cache)
+  (define cache-after (prop-net-warm-fuel-cell-cache (prop-network-warm net3)))
+  (check-eq? cache-before cache-after))
+
+;; ----------------------------------------------------------------
+;; Test 14: D.4 1V-3 Item #1-bis — fork-prop-network establishes fresh cache (WT-7)
+;; ----------------------------------------------------------------
+(test-case "fork-prop-network initializes fuel-cell-cache with fresh budget"
+  (define parent (make-prop-network 1000))
+  (define parent2 (net-cell-write parent fuel-cell-id 500))
+  ;; Fork: sub-net gets fresh fuel budget = 750 (passed as arg)
+  (define forked (fork-prop-network parent2 750))
+  (check-equal? (net-cell-read forked fuel-cell-id) 750)
+  (define cache (prop-net-warm-fuel-cell-cache (prop-network-warm forked)))
+  (check-equal? (prop-cell-value cache) 750)
+  ;; Parent's cache unaffected (parent2 still has 500)
+  (check-equal? (net-cell-read parent2 fuel-cell-id) 500))

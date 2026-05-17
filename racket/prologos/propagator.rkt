@@ -393,7 +393,14 @@
 ;; specialized cells must be scheduler-state cells (written by scheduler
 ;; at round/phase boundaries, not by fire functions inside a speculation
 ;; parameterize block). See DESIGN_PRINCIPLES.org § Scheduler-State Cells.
-(struct prop-net-warm (cells contradiction under-speculation?) #:transparent)
+;; D.4 1V-3 Item #1-bis (§11.X.3 α1/β1): fuel-cell-cache — cached prop-cell
+;; direct-ref for fuel-cell-id (id=11). Bypasses cells-map CHAMP traversal for
+;; the well-known fuel cell on hot read/write paths (precedent: under-speculation?
+;; cache from 1B-ii). Write-through at 8 sites (WT-1..WT-8 per §11.X.3 + §11.X.3.1).
+;; Value: prop-cell? at runtime (set post fuel-cell registration); #f before
+;; registration / under early-init state. Cells-map CHAMP remains source-of-truth
+;; (γ1 dual-storage rationale + F13 from §11.X.2).
+(struct prop-net-warm (cells contradiction under-speculation? fuel-cell-cache) #:transparent)
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
                        cell-decomps pair-decomps cell-dirs
@@ -769,7 +776,8 @@
                                                   (cons cir-h (cons cir-cid cir-cell))))])
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   #f   ;; contradiction
-                  #f)  ;; under-speculation? (D.4 1B-ii; scheduler refreshes at BSP round entry)
+                  #f   ;; under-speculation? (D.4 1B-ii; scheduler refreshes at BSP round entry)
+                  #f)  ;; fuel-cell-cache (D.4 1V-3 Item #1-bis; set post fuel-cell registration below)
    (prop-net-cold (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid decomp-request-merge))
                                                   (cons wv-h (cons wv-cid worldview-cache-merge))
@@ -820,7 +828,14 @@
     (error 'make-prop-network
            "fuel-budget-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
            fuel-budget-cell-id actual-budget-cid))
-  net2)
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
+  ;; The fuel cell is now registered (net2); look it up once and cache the
+  ;; prop-cell direct-ref. Write-through at 8 sites maintains consistency.
+  (let* ([fc-h (cell-id-hash fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net2) fc-h fuel-cell-id)])
+    (struct-copy prop-network net2
+      [warm (struct-copy prop-net-warm (prop-network-warm net2)
+              [fuel-cell-cache fc-cell])])))
 
 ;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
 ;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
@@ -848,7 +863,7 @@
      ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells via
      ;; net-cell-reset below (γ1; D-1C-iv-1).
      (prop-net-hot '())                                   ;; fresh worklist
-     (prop-net-warm (prop-network-cells net) #f #f)       ;; shared cells, no contradiction, no speculation (D.4 1B-ii)
+     (prop-net-warm (prop-network-cells net) #f #f #f)    ;; shared cells, no contradiction, no speculation (D.4 1B-ii), fuel-cell-cache=#f (set post-reset; D.4 1V-3 Item #1-bis)
      (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
   ;; Reset both fuel cells to new fuel value (γ1; D-1C-iv-1 mitigation).
   ;; Use net-cell-reset (NOT net-cell-write): the merge function is `min`
@@ -858,7 +873,15 @@
   ;; merge and writes the value directly, which is the correct semantic for
   ;; "reset to fresh budget at fork boundary."
   (define forked+cell (net-cell-reset forked fuel-cell-id fuel))
-  (net-cell-reset forked+cell fuel-budget-cell-id fuel))
+  (define forked+both (net-cell-reset forked+cell fuel-budget-cell-id fuel))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 5): set fuel-cell-cache on prop-net-warm
+  ;; after fork-reset. The fuel cell is now updated (forked+both has the new value
+  ;; under WT-3 via net-cell-reset); look up the fresh prop-cell and cache it.
+  (let* ([fc-h (cell-id-hash fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells forked+both) fc-h fuel-cell-id)])
+    (struct-copy prop-network forked+both
+      [warm (struct-copy prop-net-warm (prop-network-warm forked+both)
+              [fuel-cell-cache fc-cell])])))
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;
@@ -1148,8 +1171,16 @@
 ;; Falls back to TMS-transparent read for backward compatibility during migration.
 ;; Errors on unknown cell-id.
 (define (net-cell-read net cid)
-  (define cell (champ-lookup (prop-network-cells net)
-                              (cell-id-hash cid) cid))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 6): fuel-cell-id short-circuit.
+  ;; Use cached prop-cell direct-ref on prop-net-warm; bypasses cells-map CHAMP
+  ;; traversal for the well-known fuel cell. Falls back to champ-lookup if
+  ;; cache is #f (early init pre-fuel-registration) OR cid != fuel-cell-id.
+  ;; The `and` short-circuits the cache access when cid != fuel-cell-id.
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (champ-lookup (prop-network-cells net)
+                      (cell-id-hash cid) cid)))
   (if (eq? cell 'none)
       (error 'net-cell-read "unknown cell: ~a" cid)
       (let ([v (prop-cell-value cell)])
@@ -1337,9 +1368,16 @@
   (when (eq? cell 'none)
     (error 'net-cell-reset "unknown cell: ~a" cid))
   (define new-cell (prop-cell new-val (prop-cell-dependents cell) (prop-cell-meta cell)))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-3): cache update on cell-reset.
+  ;; Inherits old cache if cid != fuel-cell-id. WT-5 (promote-cell-to-tagged)
+  ;; + WT-7 (fork-prop-network) inherit through this path.
   (struct-copy prop-network net
     [warm (struct-copy prop-net-warm (prop-network-warm net)
-            [cells (champ-insert cells h cid new-cell)])]))
+            [cells (champ-insert cells h cid new-cell)]
+            [fuel-cell-cache
+             (if (eq? cid fuel-cell-id)
+                 new-cell
+                 (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))
 
 ;; BSP-LE Track 2 Phase 5.9b: Promote a cell to tagged-cell-value.
 ;; The current value becomes the base; entries start empty.
@@ -1378,9 +1416,16 @@
              [ph (prop-id-hash pid)]
              [new-deps (champ-delete deps ph pid)]
              [new-cell (prop-cell (prop-cell-value cell) new-deps (prop-cell-meta cell))])
+        ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-6a): cache update on dependents update.
+        ;; Cell's value unchanged but dependents CHAMP changed → new prop-cell;
+        ;; cache holds the prop-cell reference, so it needs updating.
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
-                  [cells (champ-insert cells h cid new-cell)])]))))
+                  [cells (champ-insert cells h cid new-cell)]
+                  [fuel-cell-cache
+                   (if (eq? cid fuel-cell-id)
+                       new-cell
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))))
 
 ;; Track 4B Phase 6b P3: Clear all dependents from a cell.
 ;; The cell RETAINS its value — only the dependents CHAMP is emptied.
@@ -1395,16 +1440,29 @@
   (if (eq? cell 'none)
       net  ;; unknown cell — no-op (defensive)
       (let ([new-cell (prop-cell (prop-cell-value cell) champ-empty (prop-cell-meta cell))])
+        ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-6b): cache update on clear-dependents.
+        ;; Same as WT-6a: cell value unchanged but dependents changed → new prop-cell.
         (struct-copy prop-network net
           [warm (struct-copy prop-net-warm (prop-network-warm net)
-                  [cells (champ-insert cells h cid new-cell)])]))))
+                  [cells (champ-insert cells h cid new-cell)]
+                  [fuel-cell-cache
+                   (if (eq? cid fuel-cell-id)
+                       new-cell
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))))
 
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.
 (define (net-cell-write net cid new-val)
   (define cells (prop-network-cells net))
   (define h (cell-id-hash cid))
-  (define cell (champ-lookup cells h cid))
+  ;; D.4 1V-3 Item #1-bis (§11.X.3 step 7): fuel-cell-id short-circuit.
+  ;; Use cached prop-cell direct-ref; bypasses cells-map CHAMP traversal for
+  ;; the well-known fuel cell. Cells map STILL needed for the subsequent
+  ;; champ-insert (write-through to source-of-truth per γ1).
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (champ-lookup cells h cid)))
   (when (eq? cell 'none)
     (error 'net-cell-write "unknown cell: ~a" cid))
   ;; B2f Phase 0: count every write attempt
@@ -1447,10 +1505,16 @@
             (cond
               [contradicted?
                ;; Structural contradiction — record cell-id on prop-net-warm
+               ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-1a): cache update on fast-path
+               ;; contradicted branch. Inherits old cache if cid != fuel-cell-id.
                (struct-copy prop-network net
                  [warm (struct-copy prop-net-warm (prop-network-warm net)
                          [cells new-cells]
-                         [contradiction cid])])]
+                         [contradiction cid]
+                         [fuel-cell-cache
+                          (if (eq? cid fuel-cell-id)
+                              new-cell
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])])]
               [else
                ;; Apply fire-on policy
                (define fire-on (specialized-cell-meta-fires-on meta))
@@ -1465,9 +1529,15 @@
                     (define deps-champ (prop-cell-dependents cell))
                     (append (champ-keys deps-champ)
                             (prop-network-worklist net))]))
+               ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-1b): cache update on fast-path
+               ;; non-contradicted branch. Inherits old cache if cid != fuel-cell-id.
                (struct-copy prop-network net
                  [warm (struct-copy prop-net-warm (prop-network-warm net)
-                         [cells new-cells])]
+                         [cells new-cells]
+                         [fuel-cell-cache
+                          (if (eq? cid fuel-cell-id)
+                              new-cell
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
                  [hot (struct-copy prop-net-hot (prop-network-hot net)
                         [worklist new-wl])])]))]))]
     [else
@@ -1561,9 +1631,15 @@
              [contradicted?
               (and (not (eq? cfn 'none))   ;; cell has a contradicts? fn
                    (cfn merged))]          ;; the merged value is contradictory
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-2 per §11.X.3.1 F14): cache update
+             ;; on slow-path main struct-copy (contradicted branch inherits from net*).
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -1597,9 +1673,16 @@
              [contradicted?
               (and (not (eq? cfn 'none))
                    (cfn new-val))]
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-8 per §11.X.3.1 F15): defensive
+             ;; cache update in net-cell-replace (S(-1) retraction). Fuel-cell not
+             ;; typically retracted; invariant preservation in case of future use.
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -3336,9 +3419,16 @@
              [contradicted?
               (and (not (eq? cfn 'none))
                    (cfn final-val))]
+             ;; D.4 1V-3 Item #1-bis (§11.X.3 WT-4): defensive cache update in
+             ;; net-cell-write-widen. Fuel-cell isn't typically a widening cell;
+             ;; invariant preservation for future scope expansion.
              [net* (struct-copy prop-network net
                      [warm (struct-copy prop-net-warm (prop-network-warm net)
-                             [cells new-cells])]
+                             [cells new-cells]
+                             [fuel-cell-cache
+                              (if (eq? cid fuel-cell-id)
+                                  new-cell
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?

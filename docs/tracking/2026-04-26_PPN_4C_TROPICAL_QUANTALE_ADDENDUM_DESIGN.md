@@ -418,8 +418,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; eliminate per-call champ-lookup in net-cell-write fast path (~22 LoC across propagator.rkt + specialized-cells.rkt + tests/test-specialized-cells.rkt); CW3 re-microbench: **Var-A N=100 7.56 → 5.78 ns/cycle (-1.78 ns; -23.5% recovery)**; ≤ 5 ns gate NOT met; **§13.7 gate decision DEFERRED to Commit 3 combined measurement per Option (d)** + conditional Item #1-ter (F18 NEW + decision-tree-gap NEW codification candidate) | ✅ ✓ PARTIAL-RECOVERY | `b07d8f87` (impl) + `e6308cb6` (mini-design §11.X.2 + §11.X.2.1); per §11.X.2 + §11.X.2.1 (2026-05-17) |
 | **1V Commit 3 mini-design + mini-audit** | α1/β1/γ-combined/δ1/ε1 resolved (12 mini-audit findings F1-F12 at HEAD `b07d8f87`; F12 disambiguation singular vs plural cache scope; F10 `under-speculation?` cache precedent from 1B-ii); 7 write-through paths enumerated (WT-1 through WT-7); 6 drift risks D-1V-3-1 through D-1V-3-6 (4 audit-resolved + 2 needing impl audit); 3 NEW codification candidates; design-doc persistence per Stage 4 methodology | ✅ | §11.X.3 (2026-05-17) |
 | **1V Commit 3 pre-impl audit extension** | D-1V-3-3 ✅ AUDIT-RESOLVED (snapshot semantics flow through WT-1/WT-2 via standard primitives — no new site); D-1V-3-5 ✅ AUDIT-RESOLVED (external files inherit via struct-copy); F13 NEW pre-existing arity bug at elab-network-types.rkt:108 (dead-code; out of scope); F14 NEW (WT-2 has 1 explicit site; contradicted branch inherits); F15 NEW (WT-8 added: net-cell-replace defensive); **Item #1-ter format planned**: 5 candidates + decision tree (5-6 ns → candidate 2 only; 6-7 ns → candidates 1+2; > 7 ns → architectural escalation); 4 NEW codification candidates | ✅ | §11.X.3.1 (2026-05-17) |
-| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 7 mutation sites (WT-1 through WT-7); ~50-80 LoC across propagator.rkt + tests; combined Item #1+#1-bis projected ~5.48 ns/cycle (Var-A N=100); **triggers Item #1-ter scope decision at Commit 3 close** per Option (d) | ⬜ | Per §11.X.3 + 1C-vi A/B/C report + §11.X.2.1 Option (d) |
-| **1V Commit 3.5 — Item #1-ter (CONDITIONAL)** | Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle; scope TBD at Commit 3 close mini-design (candidates: worldview-cache caching, other champ-lookup sites per F18, CHAMP/dispatch reductions) | ⬜ CONDITIONAL | Per §11.X.2.1 Option (d) (forward-captured 2026-05-17) |
+| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 8 mutation sites (WT-1 through WT-8); ~185 LoC across propagator.rkt + tests; **CW3 actual measurement: Var-A N=100 5.78 → 3.96 ns/cycle (-1.82 ns; -31.5% recovery; 6× projected savings)**; **§13.7 ≤ 5 ns gate MET (3.96 < 5)**; in §13.7 measurement-driven discussion range (3-4 ns); **Item #1-ter NOT triggered per Option (d)** (3.96 < 5 ns trigger threshold); combined Item #1+#1-bis = -3.60 ns / -47.6% vs Pre-Item-#1 baseline | ✅ ✓ GATE-MET | Per §11.X.3 + §11.X.3.1 + 1C-vi A/B/C report + §11.X.2.1 Option (d); commit hash TBD |
+| ~~**1V Commit 3.5 — Item #1-ter (CONDITIONAL)**~~ | ~~Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle~~ | ❌ NOT TRIGGERED — Commit 3 measurement 3.96 < 5 ns gate threshold | Per §11.X.3.2 (post-Commit-3 close) |
 | **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
 | **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
 
@@ -4666,6 +4666,105 @@ post-Commit-3b CW3 Var-A N=100:
 - ✅ D-1V-3-5 resolved (external files inherit unchanged)
 - ✅ Item #1-ter format planned with explicit decision tree per Option (d)
 - ⬜ Capture pre-Item-#1-bis baseline CW3 reference (current HEAD's measurement from Commit 2b: Var-A N=100 = 5.78 ns/cycle)
+
+### §11.X.3.2 Implementation Results + §13.7 Gate Analysis (2026-05-17, post-implementation Commit 3b)
+
+> **Status**: Item #1-bis (fuel-cell direct-ref caching) implementation **COMPLETE**. **§13.7 ≤ 5 ns gate MET** at production-realistic Var-A N=100 (3.96 ns/cycle). **6× projected savings** for Item #1-bis alone (-1.82 ns vs projected -0.3 ns). Combined Item #1+#1-bis: -3.60 ns/-47.6% vs Pre-Item-#1 baseline. **Item #1-ter NOT triggered per Option (d)** (3.96 < 5 ns trigger threshold).
+
+**CW3 re-microbench results** (HEAD post-implementation; bench-tropical-fuel.rkt):
+
+| Variant + N | Pre-Item-#1 (1C-vi 2026-05-16) | Post-Item-#1 (Commit 2b `b07d8f87`) | Post-Item-#1+#1-bis (this HEAD) | Δ vs Pre-Item-#1 | §13.7 gate |
+|---|---|---|---|---|---|
+| **Var-A N=100** (§13.7 PRIMARY gate) | 7.56 ns/cycle | 5.78 ns/cycle | **3.96 ns/cycle** | **-3.60 (-47.6%)** | **✓ MET ≤ 5 ns** (3-4 ns "measurement-driven discussion" range vs ≤ 3 ns original) |
+| Var-A N=1000 | 1.80 ns/cycle | 1.64 ns/cycle | **1.32 ns/cycle** | -0.48 (-26.7%) | ✓ Met ≤ 3 ns original at long-round |
+| Var-B N=100 (sequential) | 7.78 ns/cycle | 7.24 ns/cycle | **4.92 ns/cycle** | -2.86 (-36.8%) | ✓ MET ≤ 5 ns |
+| Var-B N=1000 | 3.04 ns/cycle | 2.94 ns/cycle | **2.62 ns/cycle** | -0.42 (-13.8%) | ✓ Met ≤ 3 ns at long-round |
+
+**Item #1-bis isolated contribution** (Post-Item-#1 → Post-Item-#1+#1-bis):
+
+| Variant + N | Item #1-bis Δ | vs §11.3 projected (~0.3 ns) |
+|---|---|---|
+| Var-A N=100 | **-1.82 ns** | **~6× projected** |
+| Var-A N=1000 | -0.32 ns | ~1× projected |
+| Var-B N=100 | -2.32 ns | ~8× projected |
+| Var-B N=1000 | -0.32 ns | ~1× projected |
+
+**Critical insight (NEW codification candidate)**: Item #1-bis saves dramatically more at N=100 (~2 ns/cycle) than at N=1000 (~0.3 ns/cycle). The savings concentrate on the per-round cell-write+cell-read pair (W2a-O13 + W2b-O13) which fires ONCE per round; at N=1000 the per-fire cost dominates; at N=100 the per-round cost dominates. **Item #1-bis is a production-realistic-N optimization** (matching 1C-vi A/B/C's identified "production-realistic-N gap" target).
+
+**Auxiliary measurements** (per bench-tropical-fuel.rkt output):
+
+| Metric | Pre-Item-#1 (Commit 2b) | Post-Item-#1-bis (this) | Δ |
+|---|---|---|---|
+| C-M7 cell-write per-call (informational) | 416.0 ns/call | 275.4 ns/call | -140.6 (-33.8%) |
+| C-M8 check-site per-call | 76.9 ns/call | 10.7 ns/call | -66.2 (-86.1%) |
+| C-M13 cell-read per-call | 74.3 ns/call | 10.9 ns/call | -63.4 (-85.3%) |
+| ALLOC at 100k decrements | 32852.5 KB | 34413.5 KB | +1561 KB (+4.7%; well within R3 baseline) |
+| GC profile at 100k decrements | 0 major-GC | **0 major-GC** | UNCHANGED ✓ (R3 baseline preserved) |
+
+**Cell-read + check-site dramatic improvement** (~85% reduction): Item #1-bis's eq?-short-circuit at `net-cell-read` for fuel-cell-id avoids both CHAMP traversal AND the tagged-cell-value branch under no-speculation. This is the BSP convergence check's hot path (line 2670: `(> (net-cell-read net fuel-cell-id) 0)`); the savings compound across every BSP iteration.
+
+**§13.7 ε-measurement-driven decision tree analysis** (Var-A N=100 = 3.96 ns/cycle):
+
+| §13.7 outcome | Range | Action | Result fit? |
+|---|---|---|---|
+| Original ≤ 3 ns ratified | CW3 ≤ 3 ns | Revert unilateral revision | ❌ NOT achieved (3.96 > 3.0) |
+| Measurement-driven discussion | 3.5-4 ns/cycle | **Escalate to user** | **✓ IN RANGE (3.96 ns)** |
+| No measurable recovery → investigate | ~no Δ | Halt; investigate | ❌ NOT applicable (Δ -47.6%) |
+
+**Per §13.7 codified discipline**: Item #1-bis result lands in the **"measurement-driven gate discussion" range** (3.5-4 ns). The §13.7 1B-ii gate decision is **NOT unilateral**:
+
+- **Option A**: Accept ≤ 5 ns unilateral revision as the OFFICIAL gate (post-Item-#1+#1-bis reality; close to ratification). Discuss whether the unilateral revision becomes accepted.
+- **Option B**: Investigate further optimizations (per §11.X.3.1 Item #1-ter candidates 1+2 — worldview-cache caching + net-cell-read fast-path) targeting ≤ 3 ns/cycle. But: candidates 4-5 are OUT-OF-SCOPE for Phase 1V; the remaining gap (3.96 - 3.0 = 0.96 ns) is structurally close to the CHAMP dispatch floor.
+- **Option C**: Document the post-Item-#1+#1-bis reality as a new measurement-driven target (~4 ns/cycle), updating §13.7 with a calibrated gate based on production overhead breakdown (§13.6.A MOCK 2.16 ns + production CHAMP dispatch 1.8 ns ≈ 4 ns/cycle structural floor).
+
+**Per Option (d) Item #1-ter trigger criteria** (from §11.X.3.1):
+- ≤ 5 ns → Item #1-ter NOT triggered; gate met; proceed to Commit 4
+- 5-6 ns → TRIGGERS candidate 2
+- 6-7 ns → TRIGGERS candidates 1+2
+- > 7 ns → escalate (architectural floor)
+
+**Result: 3.96 ns is in ≤ 5 ns range → Item #1-ter NOT TRIGGERED**. Proceed to Commit 4 (Item #3 SRE property-sweep) per ε-multi.
+
+**Drift risk D-1V-2-3 + D-1V-3-3/5 final status update**:
+
+- D-1V-2-3 (Item #1's "gate recovery may not hit ≤ 3 ns target"): **PARTIALLY RESOLVED** — Var-A N=100 = 3.96 ns; ≤ 5 ns gate met; ≤ 3 ns target NOT met but close. Discussion pending per §13.7 measurement-driven discipline.
+- D-1V-3-3 (snapshot semantics): ✅ FULLY RESOLVED — implementation walked snapshot path; cache flowed through standard primitives correctly (full suite GREEN + 5 cache consistency tests pass).
+- D-1V-3-5 (external files): ✅ FULLY RESOLVED — bilattice.rkt + elab-network-types.rkt structc-copies inherit cache unchanged; full suite confirms no regression.
+- D-1V-3-6 (eq? branching overhead): ✅ NOT MATERIALIZED — full suite at 96.2s (well WITHIN §11.3 118-127s variance band; actually FASTER than baseline by ~22s, likely warm-cache benefit; no regression in non-fuel-cell paths).
+
+**VAG TWO-COLUMN for Commit 3b**:
+
+**(a) On-network?**
+- *Catalogue*: ✓ Cache lives at network layer (prop-net-warm `fuel-cell-cache` field; precedent: 1B-ii `under-speculation?` cache); cells map remains source-of-truth; write-through preserves persistent semantics per γ1
+- *Challenge*: did we cache only where it matters? **Yes** — 8 explicit WT-* sites (per audit enumeration ε1); 2 inherited via delegation (WT-5+WT-7); non-fuel-cell paths unchanged (eq? short-circuits via `and` form). F14 `tropical-fuel-merge-for-cell` inlined duplicate still applies (cached value IS the duplicate; warning at propagator.rkt:653 continues) — flagged as D-1V-2-5; not Item #1-bis scope to retire.
+
+**(b) Complete?**
+- *Catalogue*: ✓ Struct field added; ✓ 2 direct constructors updated; ✓ make-prop-network + fork-prop-network cache lookups added post-registration; ✓ short-circuit reads + writes; ✓ 8 explicit WT-* sites updated; ✓ 5 NEW cache consistency tests pass (test 10-14); ✓ targeted (specialized-cells + tropical-fuel + propagator-bsp) 67 tests pass; ✓ full suite GREEN 8209/96.2s
+- *Challenge*: did the perf claim land? **6× projected** at Var-A N=100 (-1.82 ns vs projected -0.3 ns). §13.7 ≤ 5 ns gate **MET**. Microbench-claim verification: claim was "close part of the gap"; actual closed ~93% of the gap from 5.78 → 5.0 ns. **Substantially exceeded projection.**
+
+**(c) Vision-advancing?**
+- *Catalogue*: ✓ Cell-layer optimization compliant with Cell/Propagator/Scheduler Orthogonality principle; ✓ scheduler-agnostic (cache + write-through pattern works under Gauss-Seidel, BSP, Zig-LLVM, future runtimes); ✓ framework reusable (F10 codification: under-speculation? → fuel-cell-cache precedent extends to future track caches)
+- *Challenge*: did inherited patterns persist without challenge? F14 (inlined duplicate) preserved per import-cycle rationale; F18 (other champ-lookup sites at propagator.rkt:1172 + 3289) out-of-scope per γ1 (those are non-fast-path; registry source-of-truth). Both honest framings — not preserving for laziness; preserving because the architectural rationale holds.
+
+**(d) Drift-risks-cleared?**
+- *Catalogue*: D-1V-3-1/2/3/5/6 ✅ RESOLVED (full suite + cache consistency tests); D-1V-3-4 ✅ MITIGATED via 8 WT-* explicit enumeration; D-1V-2-3 (carried from Item #1) ✅ PARTIALLY RESOLVED (≤ 5 ns met; ≤ 3 ns not met but close).
+- *Challenge*: did named risks cover correctness + perf? Both axes covered (correctness via cache consistency tests + full suite; perf via CW3 re-microbench). Did Item #1-ter trigger? **NO** (3.96 < 5 ns); proceed to Commit 4 per Option (d).
+
+**Tracker updates** (this commit — Commit 3b implementation):
+
+- §3 Progress Tracker row "1V Commit 3 — Item #1-bis fuel-cell direct-ref caching" → **✅ ✓ GATE-MET** with commit hash + measurement summary
+- §3 Progress Tracker row "~~1V Commit 3.5 — Item #1-ter (CONDITIONAL)~~" → **❌ NOT TRIGGERED** (3.96 < 5 ns)
+- §3 Progress Tracker NEXT: "1V Commit 4 — Item #3 SRE property-sweep" remains ⬜ (next sub-phase per ε-multi)
+
+**§13.7 gate decision DEFERRED to user discussion** per measurement-driven discipline (3.96 ns is in the 3.5-4 ns range; not unilateral).
+
+**NEW codification candidates surfaced this commit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Item #N-bis dramatically exceeds projected savings when caching well-known hot reads** — Item #1-bis projected 0.3 ns/cycle savings; actual was 1.82 ns (~6×). Cause: the projection accounted for write-side savings only; the read-side optimization (BSP convergence check fires every iteration) was unmodeled | 1 (this Item #1-bis result) | NEW watching list — methodology refinement: projections should model both read-side AND write-side savings independently |
+| **Production-realistic-N optimization concentrates savings at low N** — Item #1-bis saves 6× more at N=100 than at N=1000; production-realistic N is in the 3-5 range per 1C-vi A/B/C; the win compounds in production | 1 (this measurement) | NEW watching list |
+| **3.5-4 ns "measurement-driven discussion" range as honest gate-decision protocol** — §13.7's measurement-driven range now has a 1st instance triggering user discussion (not unilateral) | 1 (this 3.96 ns result) | NEW watching list — methodology validation |
 
 ---
 
