@@ -254,3 +254,45 @@
   (check-parity-equal? 'error-provenance-chain
                        "[int+ \"a\" 3]"
                        #:expected-type 'type-top))
+
+;; ========================================
+;; Phase 1C-vi — tropical-fuel-counter-parity (D.4 reframed; §15 axis)
+;; ========================================
+;;
+;; Per §15 (D.4 CANONICAL): tropical-fuel-counter-parity axis.
+;; "OLD counter exhaustion (struct-field-based) vs NEW cell exhaustion (on-write
+;; predicate at cell layer) at equivalent points for representative workloads."
+;;
+;; Under D.4 + 1C-iv-b retirement: OLD struct-field counter is RETIRED. "Parity"
+;; reframes to regression-vs-historical-baseline (per §10.0.7 F9 + γ3-a
+;; resolution): elaboration outputs for representative workloads should match
+;; pre-Phase-1 baseline behavior, demonstrating that the cell-API substrate +
+;; on-write predicate produce equivalent semantics to what the OLD counter +
+;; inline-check produced.
+;;
+;; The Pre-0 S4 probe baseline (data/benchmarks/tropical-pre0-baseline-2026-04-26.txt
+;; §S4) captured 28 commands across the probe workload. The probe is now run
+;; under D.4 production code; if its output matches the baseline output, the
+;; tropical-fuel-counter-parity axis holds.
+;;
+;; These tests assert SMALL representative elaboration outputs (single
+;; expressions; NOT the full 28-command probe — that's handled at 1C-vi
+;; Commit 2's probe + acceptance run). They demonstrate the on-network cell-
+;; mechanism produces correct outputs across workloads that previously stressed
+;; the OLD struct-field counter exhaustion path.
+
+(parity-test 'tropical-fuel-simple-arithmetic "Phase 1C-vi"
+             "[int+ 2 3]"
+  (check-parity-equal? 'tropical-fuel-simple-arithmetic
+                       "[int+ 2 3]"
+                       #:expected '5))
+
+(parity-test 'tropical-fuel-polymorphic-id "Phase 1C-vi"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity application — exercises type-meta resolution
+  ;; (per axis 5 baseline); inheritable fuel-consumption pattern. Under
+  ;; D.4: cell-API decrement at every reduce-step; on-write predicate
+  ;; ensures exhaustion routes through cell layer if budget exceeded.
+  (check-parity-equal? 'tropical-fuel-polymorphic-id
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))

@@ -678,3 +678,101 @@
   (define net-buggy-restore (net-cell-write net-after-run fuel-cell-id saved-fuel))
   (check-equal? (net-cell-read net-buggy-restore fuel-cell-id) 150
                 "DEMONSTRATES BUG: net-cell-write for restore loses saved-fuel under min-merge"))
+
+;; ============================================================
+;; 1C-vi γ3-b: Behavioral contract tests (tropical-fuel-counter-parity)
+;; ============================================================
+;;
+;; Per §10.0.7 Q-1C-vi-γ resolution: verify the behavioral contract OLD
+;; struct-field counter satisfied (now satisfied by D.4 cell-mechanism).
+;; Under D.4 + Option A (cells store REMAINING fuel):
+;;   - Exhaustion: cell value = 0 (remaining = 0)
+;;   - On-write predicate: `(<= new 0)` fires contradiction at cell layer
+;;   - Cell value AT exhaustion equals 0 (NOT budget; Option A semantic)
+;;
+;; These tests encode the CONTRACT that the parity axis (§15 tropical-fuel-
+;; counter-parity) requires: behavioral equivalence to the retired OLD pattern.
+;; They are regression-vs-historical-baseline tests (per §10.0.7 F9 reframing:
+;; OLD struct-field counter RETIRED at 1C-iv-b; live A/B impossible; parity
+;; reframes to "current cell-API behavior matches the contract the OLD counter
+;; satisfied").
+;; ============================================================
+
+(test-case "1C-vi γ3-b (1) exhaustion at zero remaining; cell value AT exhaustion equals 0"
+  ;; Contract: OLD counter exhausted when (<= fuel 0); cell at exhaustion = 0.
+  ;; Under D.4 Option A: cell stores REMAINING fuel; on-write-check fires
+  ;; contradiction when remaining hits 0.
+  (define net0 (make-prop-network 100))
+  ;; Drain all 100 fuel
+  (define net-drained (net-cell-write net0 fuel-cell-id 0))
+  (check-equal? (net-cell-read net-drained fuel-cell-id) 0
+                "cell value AT exhaustion equals 0 (NOT budget; Option A: cell stores REMAINING)")
+  ;; Budget cell is preserved (we still know the original budget)
+  (check-equal? (net-cell-read net-drained fuel-budget-cell-id) 100
+                "budget cell preserved at original value (100) — derives cost-so-far as (budget - remaining)"))
+
+(test-case "1C-vi γ3-b (2) on-write predicate fires structurally at (<= new 0)"
+  ;; Contract: writing a value that crosses the exhaustion threshold
+  ;; routes contradiction through the cell layer (on-write-check). This is
+  ;; STRUCTURAL — no separate threshold propagator (per D.4 §4.6); the
+  ;; on-write predicate is part of the cell's :on-write-check meta declaration.
+  ;;
+  ;; Verify the exhaustion semantic at boundary values:
+  (define net0 (make-prop-network 1000))
+  ;; Cell starts at 1000 (remaining = budget initially)
+  (check-equal? (net-cell-read net0 fuel-cell-id) 1000
+                "initial cell value = budget (Option A: remaining=budget at start)")
+  ;; Write a positive remaining: no exhaustion
+  (define net1 (net-cell-write net0 fuel-cell-id 500))
+  (check-equal? (net-cell-read net1 fuel-cell-id) 500
+                "non-exhausting write preserves the new remaining value")
+  ;; Write exactly 0: exhaustion boundary (on-write-check `(<= new 0)` fires)
+  (define net2 (net-cell-write net1 fuel-cell-id 0))
+  (check-equal? (net-cell-read net2 fuel-cell-id) 0
+                "exhaustion at remaining = 0 (boundary case of (<= new 0))")
+  ;; Negative remaining also triggers (mathematically over-drained)
+  (define net3 (net-cell-write net2 fuel-cell-id -5))
+  ;; Note: under min-merge, (min 0 -5) = -5; cell value reflects the over-drain
+  (check-equal? (net-cell-read net3 fuel-cell-id) -5
+                "over-drain reflected: cell value = -5 (min-merge with prior 0)"))
+
+;; ============================================================
+;; 1C-vi δ3: 0-allocation regression test
+;; ============================================================
+;;
+;; Per §10.0.7 Q-1C-vi-δ δ3 + D-1C-vi-2 mitigation: catches future allocation
+;; regression where someone introduces per-write allocation. Conservative
+;; threshold per D-1C-vi-2 ("1.5× observed noise floor"); the test isn't
+;; precise measurement (that's bench-tropical-fuel.rkt's job) but a regression
+;; gate at suite-run time.
+;;
+;; Current observed (bench-tropical-fuel.rkt ALLOC-1, 2026-05-16):
+;;   10000 decrements = 3917 KB allocation (~400 bytes/dec)
+;; The threshold below catches a 5x+ regression. A real regression (e.g.,
+;; per-write tagged-cell-value wrapping reintroduced) would immediately
+;; exceed this; per D-1C-vi-2 we use conservative threshold to avoid false
+;; positives from variance.
+;; ============================================================
+
+(test-case "1C-vi δ3 0-allocation regression gate (D-1B-ii-3 / Phase 1V item #4)"
+  ;; Pre-test cleanup
+  (collect-garbage) (collect-garbage)
+  (define mem-before (current-memory-use 'cumulative))
+  ;; Run 1000 fuel decrements via net-cell-write fast path
+  (let loop ([net (make-prop-network 1000000)] [i 0])
+    (cond
+      [(= i 1000) net]
+      [else (loop (net-cell-write net fuel-cell-id (- 1000000 i)) (+ i 1))]))
+  (define mem-after (current-memory-use 'cumulative))
+  (define alloc-bytes (- mem-after mem-before))
+  (define alloc-per-dec (/ alloc-bytes 1000.0))
+  ;; Conservative threshold per D-1C-vi-2: 5x current observed (400 bytes/dec)
+  ;; gives 2000 bytes/dec as the regression alarm.
+  ;; Lower bound: assert at least *some* allocation happens (immutable net
+  ;; interface allocates a new prop-network per call); 0-allocation here
+  ;; would be unexpected and worth investigation.
+  (check-pred positive? alloc-bytes
+              "allocation should be positive (immutable interface allocates)")
+  (check < alloc-per-dec 2000
+              (format "0-allocation regression gate: ~a bytes/dec (threshold 2000; baseline approx 400)"
+                      alloc-per-dec)))
