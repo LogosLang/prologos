@@ -415,8 +415,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-vi (measurement artifacts)** | 3 captured data files (production C; production-realistic N distribution mean 5.20; probe wall 351.68 ms median +19.2% vs Pre-0); A/B/C report doc with 11-row table + production-realistic-N + probe regression findings; Issue [#63](https://github.com/LogosLang/prologos/issues/63) opened (bench-ab.rkt `--refs` enhancement); MASTER_ROADMAP.org + DEFERRED.md cross-references; D-1B-ii-3 allocation verification complete | ✅ ✓ PASS-WITH-CAVEATS | A/B/C report verdicts: 6 PASS + 3 INVESTIGATE; probe at upper-ceiling boundary of §11.3 (≤ 351 ms); Phase 1V item #1-bis (fuel-cell direct-ref) PROPOSED to close residual gap; commit (this commit) |
 | **1V mini-design + mini-audit** | §11.2 D.4 CANONICAL reframing (α1); microbench scope refresh (β2 — 5 NEW + 6 references); Items #1 + #1-bis + #3 ALL IN SCOPE (γ-all3; user-confirmed Track 2I closed); 3 codifications graduation (δ1); 5-commit sub-phase split (ε-multi); 16 audit findings F1-F16; 6 drift risks D-1V-1/2/3/4/5/6 (5 audit-resolved + 1 deferred); 3 NEW codification candidates | ✅ | §11.X + §11.2 reframed (2026-05-17) |
 | **1V Commit 2 mini-design + mini-audit** | α1/β1/γ1/δ1/ε-measurement-driven resolved (17 mini-audit findings F1-F17; F1-F13 ✅ HOLD from FORK CHECKPOINT; F14-F17 NEW from re-audit at fresh HEAD; 6 drift risks D-1V-2-1/2/3/4/5/6; 3 NEW codification candidates); design-doc persistence per user direction (corrects FORK CHECKPOINT's commit-message persistence) | ✅ | §11.X.2 (2026-05-17) |
-| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; eliminate per-call champ-lookup in net-cell-write fast path (~22 LoC across propagator.rkt + specialized-cells.rkt + tests/test-specialized-cells.rkt); CW3 re-microbench: **Var-A N=100 7.56 → 5.78 ns/cycle (-1.78 ns; -23.5% recovery)**; ≤ 5 ns gate NOT met; **§13.7 gate decision DEFERRED to Commit 3 combined measurement per Option (d)** + conditional Item #1-ter (F18 NEW + decision-tree-gap NEW codification candidate) | ✅ ✓ PARTIAL-RECOVERY | Per §11.X.2 + §11.X.2.1 (2026-05-17) |
-| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; close production-realistic-N gap from 1C-vi A/B/C (~30-60 LoC); ~0.3 ns/cycle savings projected; combined Item #1+#1-bis projected ~5.48 ns/cycle (Var-A N=100); **triggers Item #1-ter scope decision at Commit 3 close** per Option (d) | ⬜ | Per 1C-vi A/B/C report + §11.X γ-all3 + §11.X.2.1 Option (d) |
+| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; eliminate per-call champ-lookup in net-cell-write fast path (~22 LoC across propagator.rkt + specialized-cells.rkt + tests/test-specialized-cells.rkt); CW3 re-microbench: **Var-A N=100 7.56 → 5.78 ns/cycle (-1.78 ns; -23.5% recovery)**; ≤ 5 ns gate NOT met; **§13.7 gate decision DEFERRED to Commit 3 combined measurement per Option (d)** + conditional Item #1-ter (F18 NEW + decision-tree-gap NEW codification candidate) | ✅ ✓ PARTIAL-RECOVERY | `b07d8f87` (impl) + `e6308cb6` (mini-design §11.X.2 + §11.X.2.1); per §11.X.2 + §11.X.2.1 (2026-05-17) |
+| **1V Commit 3 mini-design + mini-audit** | α1/β1/γ-combined/δ1/ε1 resolved (12 mini-audit findings F1-F12 at HEAD `b07d8f87`; F12 disambiguation singular vs plural cache scope; F10 `under-speculation?` cache precedent from 1B-ii); 7 write-through paths enumerated (WT-1 through WT-7); 6 drift risks D-1V-3-1 through D-1V-3-6 (4 audit-resolved + 2 needing impl audit); 3 NEW codification candidates; design-doc persistence per Stage 4 methodology | ✅ | §11.X.3 (2026-05-17) |
+| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 7 mutation sites (WT-1 through WT-7); ~50-80 LoC across propagator.rkt + tests; combined Item #1+#1-bis projected ~5.48 ns/cycle (Var-A N=100); **triggers Item #1-ter scope decision at Commit 3 close** per Option (d) | ⬜ | Per §11.X.3 + 1C-vi A/B/C report + §11.X.2.1 Option (d) |
 | **1V Commit 3.5 — Item #1-ter (CONDITIONAL)** | Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle; scope TBD at Commit 3 close mini-design (candidates: worldview-cache caching, other champ-lookup sites per F18, CHAMP/dispatch reductions) | ⬜ CONDITIONAL | Per §11.X.2.1 Option (d) (forward-captured 2026-05-17) |
 | **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
 | **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
@@ -4406,6 +4407,141 @@ Total: 8-10 commits (8 if Item #1-ter not triggered; 10 if triggered). Consisten
 
 - §3 Progress Tracker row "1V Commit 2 — Item #1 merge-fn-caching" → **✅ ✓ PARTIAL-RECOVERY** with commit hash + measurement summary
 - §3 Progress Tracker NEW conditional row (forward-captured): "1V Commit 3.5 — Item #1-ter (conditional)" ⬜ (per Option (d); triggers if Commit 3 measurement insufficient)
+
+### §11.X.3 1V Commit 3 — Item #1-bis Fuel-Cell Direct-Ref Caching Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V Commit 3 (Item #1-bis fuel-cell direct-ref caching) pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together per Per-Phase Protocol steps 1+2 (co-dependent). **5 resolutions** (α1 / β1 / γ-combined / δ1 / ε1) + **12 mini-audit findings F1-F12** + **6 drift risks D-1V-3-1 through D-1V-3-6**.
+
+> **Per Stage 4 Per-Phase Protocol step 1 + 2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §7.7 + §7.9 + §8.7 + §10.0.4-7 + §11.X + §11.X.2 patterns from prior sub-phases). Persists into DESIGN DOC per user direction (Stage 4 methodology mandate).
+
+**Implementation goal**: Cache the fuel-cost-cell's `prop-cell` direct reference as a struct field on `prop-net-warm`, bypassing the cells-map CHAMP lookup for fuel-cell-id specifically. **Closes part of the production-realistic-N gap from 1C-vi A/B/C report** (~0.3 ns/cycle projected savings; ~20-40 ns/call CHAMP traversal eliminated for fuel-cell access).
+
+**Architectural intent** (Cell/Propagator/Scheduler Orthogonality compliant):
+- Cache lives at the **NETWORK layer** (prop-net-warm struct field; same precedent as `under-speculation?` cached field added at 1B-ii)
+- The cache IS a projection of the persistent CHAMP state (the cells map remains source-of-truth; cache mirrors a specific entry)
+- Scheduler-agnostic: any scheduler that calls net-cell-read/write/reset benefits uniformly
+- Write-through semantics: every code path that mutates the fuel cell updates the cache atomically with the cells-map update
+
+**Architectural rationale — why this is principled, not scaffolding**:
+- F18 (from Item #1 audit, NEW codification candidate): fast-path caching surfaces additional caching opportunities at non-fast-path sites — Item #1-bis IS the next layer of cell-layer optimization
+- Per F11 + §5.2 of 1C-vi A/B/C report: the 1B-ii `under-speculation?` cache established the precedent for caching well-known network-level state on prop-net-warm. Item #1-bis extends to fuel-cell direct-ref (still well-known; still network-level)
+- The cells-map CHAMP remains the source-of-truth (per F13 / γ1 dual-storage rationale from Item #1); the cache is a fast-path optimization
+- No off-network state added: cache mirrors persistent CHAMP state via write-through
+
+**Mini-audit findings (concrete grounding at HEAD `b07d8f87`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | `prop-net-warm` struct definition | `propagator.rkt:396` — 3 fields `(cells contradiction under-speculation?)` (under-speculation? cache added at 1B-ii) |
+| **F2** | Direct constructor sites (pipeline.md New Struct Field) | **2 sites**: `propagator.rkt:758` (make-prop-network) + `propagator.rkt:851` (fork-prop-network) |
+| **F3** | `struct-copy prop-net-warm` sites | **~25 sites** across propagator.rkt + bilattice.rkt:176 + elab-network-types.rkt:109. Per F4 these INHERIT unchanged fields; only sites that touch fuel-cell-id need updating |
+| **F4** | Match patterns on `prop-net-warm` | **0 sites** |
+| **F5** | fuel-cell-id read sites (HOT) | `propagator.rkt:2108` (`init-fuel-local-var!`); `propagator.rkt:2670` (BSP convergence check — every iteration); `propagator.rkt:2745-2746` (snapshot save); `propagator.rkt:3239` (public `prop-network-fuel-remaining`); `typing-propagators.rkt:2282` (bounded-run save); 2 test files |
+| **F6** | fuel-cell-id write sites (rarer under Option 13) | `propagator.rkt:2126` (`flush-fuel-local-var!`); `propagator.rkt:2173/2215` (Variant B exit/cons); `propagator.rkt:2745` (snapshot write); `propagator.rkt:860-861` (fork-prop-network reset); `typing-propagators.rkt:2283/2286` (bounded-run reset/restore) |
+| **F7** | `net-cell-read` function | `propagator.rkt:1150-1195` — unconditional champ-lookup at line 1151-1152 (no fast-path branch); branches on `tagged-cell-value?` for worldview filtering |
+| **F8** | `net-cell-write` function | `propagator.rkt:1404-1474` — unconditional champ-lookup at lines 1405-1407; Item #1 fast-path added AFTER lookup at lines 1421-1472; slow-path at line 1479+ |
+| **F9** | `net-cell-reset` function | `propagator.rkt:1333-1342` — unconditional champ-lookup; uses `struct-copy prop-net-warm` at line 1341 |
+| **F10** | `under-speculation?` cache precedent (1B-ii) | Field at struct definition (line 396); set at `propagator.rkt:772` in make-prop-network; refreshed at `propagator.rkt:2743` in BSP fire-and-collect-writes (`[under-speculation? ...]` struct-copy); read at `propagator.rkt:1426` in net-cell-write fast-path. **This is the cache pattern Item #1-bis extends** — same shape, different cache content |
+| **F11** | 1C-vi A/B/C §5.2 projected savings | "Cache fuel-cell + fuel-budget-cell as direct struct fields on prop-net-warm... bypasses cells-map CHAMP for these well-known cells. ~20-40 ns/call → ~0.3 ns/cycle amortized at N=100"; "Together (item #1 + #1-bis): ~50-80 ns/call savings → ~0.6 ns/cycle amortized" |
+| **F12 ⚠️ DISAMBIGUATION** | §11.3 says singular fuel-cost-cell; §5.2 says BOTH fuel-cell + fuel-budget-cell | §5.2 plural was the original proposal; §11.3 narrowed to singular. **Decision per α1 (this mini-design)**: just fuel-cell-id (id=11). Rationale: fuel-budget-cell (id=12) is COLD — only read for cost-so-far derivation; not on hot convergence/init/flush paths. YAGNI applies. If future fuel-budget access becomes hot, add fuel-budget-cell-cache then (mini-design extension; not now). |
+
+**Cache write-through paths** (audit-grounded list of all code paths that mutate the fuel cell):
+
+| # | Code path | Function | Site | Cache update needed |
+|---|---|---|---|---|
+| WT-1 | Fast-path | `net-cell-write` | propagator.rkt:1450-1453 (contradicted? branch) + 1468-1471 (else branch) | YES — `[fuel-cell-cache (if (eq? cid fuel-cell-id) new-cell prev)]` in both struct-copies |
+| WT-2 | Slow-path | `net-cell-write/slow-path` | propagator.rkt:1479+ (need detailed audit of struct-copy sites within slow-path body) | YES — same pattern; slow-path is hit under speculation; fuel-cell may be written under speculation at snapshot save (line 2745) |
+| WT-3 | Reset | `net-cell-reset` | propagator.rkt:1341 | YES — `[fuel-cell-cache (if (eq? cid fuel-cell-id) new-cell prev)]` |
+| WT-4 | Widening write | `net-cell-write-widen` | propagator.rkt:3279-3290+ (separate function; per Item #1 F18 NOT in fast-path scope, but DOES touch prop-net-warm) | YES — same pattern; fuel-cell SHOULDN'T be a widening cell, but defensive update for correctness |
+| WT-5 | Tagged promotion | `promote-cell-to-tagged` | propagator.rkt:1348-1364 (calls net-cell-reset internally) | INHERITS via WT-3 (delegates to net-cell-reset) |
+| WT-6 | Dependents updates | `net-clear-dependents` + `net-remove-propagator-from-dependents` | propagator.rkt:1391-1400, 1371+ | YES — these create new prop-cell with same value but different dependents; cache needs the new prop-cell (otherwise read paths would see old dependents) |
+| WT-7 | Fork reset | `fork-prop-network` | propagator.rkt:860-861 (calls net-cell-reset twice) | INHERITS via WT-3 — fresh net-cell-reset at fork creates new cell + updates cache |
+
+**Five user-confirmable resolutions (proposed)**:
+
+| Q | Lean | Effect |
+|---|---|---|
+| **α1** | Cache ONLY fuel-cell-id (not fuel-budget) | Per F12 disambiguation: fuel-budget is COLD; minimal scope; YAGNI. If future hot path emerges, extend then. |
+| **β1** | Cache shape: `prop-cell` direct-ref | Bypasses cells-map CHAMP entirely; matches "direct-ref" language in §11.3 + §5.2; ~20-40 ns/call savings per F11 |
+| **γ-combined** | Short-circuit READS (eq? check at top of net-cell-read; use cached cell) + write-through UPDATES (inline conditional in all 7 WT-* sites) | Cleanest separation: non-fuel-cell paths unchanged; fuel-cell paths bypass CHAMP for reads + write-through for writes |
+| **δ1** | Single atomic commit (~50-80 LoC) | Matches §11.3 estimate (~30-60 LoC) + Item #1's atomic pattern; mini-design persistence in PREVIOUS commit (this one); implementation in NEXT commit per prior split pattern |
+| **ε1** | Explicit WT-1 through WT-7 audit list IS the drift mitigation | Each write-through site explicitly enumerated in this mini-design; implementation verifies each is updated; tests verify cache consistency after various operation sequences |
+
+**Implementation plan (per δ1 atomic + γ-combined)**:
+
+Single atomic implementation commit (~50-80 LoC across 1 production file + 1 test file):
+
+| # | Action | Site | Detail |
+|---|---|---|---|
+| 1 | Add `fuel-cell-cache` field to prop-net-warm struct | `propagator.rkt:396` | 3 fields → 4 fields; field 4 is `(or/c prop-cell? #f)` — `#f` before fuel-cell registered; prop-cell after |
+| 2 | Update direct constructor at make-prop-network | `propagator.rkt:758` | Pass `#f` initially; cache set post-registration |
+| 3 | Add cache set after fuel-cell registration | `propagator.rkt:~822` (post fuel-cell-id verification) | Lookup fuel-cell once via champ-lookup; struct-copy prop-net-warm with `[fuel-cell-cache ...]` |
+| 4 | Update direct constructor at fork-prop-network | `propagator.rkt:851` | Pass `#f` initially; cache set post-fork-cell-reset |
+| 5 | Add cache set after fork's net-cell-reset | `propagator.rkt:~861` (post forked+cell construction) | Lookup fuel-cell once; struct-copy with `[fuel-cell-cache ...]` |
+| 6 | Short-circuit `net-cell-read` for fuel-cell-id | `propagator.rkt:1150-1152` | `(if (eq? cid fuel-cell-id) (prop-net-warm-fuel-cell-cache (prop-network-warm net)) (champ-lookup ...))` — use cached cell directly; continue with value-extraction logic |
+| 7 | Short-circuit `net-cell-write` for fuel-cell-id | `propagator.rkt:1405-1407` | Same eq? branch; use cached cell |
+| 8 | Update fast-path struct-copies (WT-1) | `propagator.rkt:1451 + 1469` | `[fuel-cell-cache (if (eq? cid fuel-cell-id) new-cell (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]` |
+| 9 | Update slow-path struct-copies (WT-2) | `propagator.rkt:1479+` (audit struct-copies within slow-path body) | Same pattern |
+| 10 | Update `net-cell-reset` struct-copy (WT-3) | `propagator.rkt:1341` | Same pattern |
+| 11 | Update `net-cell-write-widen` struct-copy (WT-4) | `propagator.rkt:3289+` | Same pattern (defensive; fuel-cell shouldn't be widening) |
+| 12 | Update `net-clear-dependents` struct-copy (WT-6) | `propagator.rkt:1399` | Same pattern |
+| 13 | Update `net-remove-propagator-from-dependents` struct-copy (WT-6 cont.) | `propagator.rkt:1371+` | Same pattern |
+| 14 | Add tests to `test-specialized-cells.rkt` OR new test file | TBD at impl | Cache consistency tests: (a) after write returns updated cell; (b) survives fork; (c) survives reset; (d) survives tagged promotion; (e) read after write returns correct value |
+| 15 | Re-microbench CW3 via bench-tropical-fuel.rkt | — | Capture Var-A + Var-B at N=100 + N=1000 |
+| 16 | §13.7 gate decision per Option (d) at Commit 3 close | — | Combined Item #1 + Item #1-bis measurement; trigger Item #1-ter decision |
+
+**Drift risks named at design+audit time (D-1V-3-1 through D-1V-3-6)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-3-1 | pipeline.md New Struct Field exhaustiveness (2 direct constructor sites; ~25 struct-copy sites; 0 match patterns) | ✅ AUDIT-RESOLVED per F2/F3/F4 enumeration |
+| D-1V-3-2 | Cache invalidation under speculation (`tagged-cell-value` promotion via `promote-cell-to-tagged`) | ✅ AUDIT-RESOLVED — WT-5 delegates to net-cell-reset (WT-3); cache update inherited |
+| D-1V-3-3 | Cache stale-ness across snapshot save/restore in BSP fire-and-collect-writes | ⬜ NEEDS IMPL AUDIT — snapshot mechanism at propagator.rkt:2728-2746 needs detailed walk-through; potential extra cache-update site if snapshot restore creates new prop-cell |
+| D-1V-3-4 | Write-through completeness — every cache update site enumerated | ✅ MITIGATED via WT-1 through WT-7 explicit enumeration (per ε1); implementation verifies each |
+| D-1V-3-5 | External files with `struct-copy prop-net-warm` (bilattice.rkt:176; elab-network-types.rkt:109) | ⬜ NEEDS IMPL AUDIT — these files don't touch fuel-cell directly, so cache stays valid via struct-copy inheritance; verify at implementation |
+| D-1V-3-6 | Performance regression at NON-fuel-cell paths (eq? branching added to net-cell-read + net-cell-write hot path) | ⬜ MEASUREMENT — eq? branch is ~1 ns/call; cells-map CHAMP traversal is ~20-40 ns/call; net win expected. Verify post-impl: targeted suite + full suite + CW3 microbench |
+
+**Verification sequence at implementation commit**:
+
+```
+1. tools/check-parens.sh on edited files (propagator.rkt; possibly test files)
+2. raco make driver.rkt — catches 3-arg → 4-arg arity drift at the 2 direct constructor sites
+3. raco test tests/test-specialized-cells.rkt — verifies basic struct + accessors
+4. Add new tests: cache consistency after write/reset/fork/promote/dependents-update
+5. Targeted: specialized-cells + tropical-fuel + propagator-bsp + elaboration-parity + solver-context
+6. Full suite (--force-rerun) — regression gate (expect 8209 / ~98-120s)
+7. CW3 re-microbench: capture Var-A + Var-B at N=100 + N=1000
+8. §13.7 Option (d) gate decision: combined Item #1+#1-bis measurement
+   - If Var-A N=100 ≤ 5 ns: gate met; ratify (revert unilateral revision if also ≤ 3 ns; otherwise discuss)
+   - If Var-A N=100 > 5 ns: trigger Item #1-ter scope decision (Commit 3.5)
+9. VAG TWO-COLUMN; commit + §3 tracker + dailies
+```
+
+**NEW codification candidates surfaced this audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Cache write-through with persistent CHAMP**: when caching a well-known CHAMP entry, every site that mutates that entry must update the cache; the audit list IS the drift mitigation | 1 (this Item #1-bis WT-1 through WT-7) | NEW watching list — generalizes to future caches of well-known CHAMP entries |
+| **Cache scope plural vs singular disambiguation across design docs**: §5.2 said "fuel-cell + fuel-budget"; §11.3 said singular fuel-cost; mini-design disambiguates with YAGNI rationale | 1 (this Q-1V-3-α F12) | NEW watching list — sister to "design doc scope inflation" patterns from prior sub-phases |
+| **Existing cache field as precedent for new cache field**: `under-speculation?` (1B-ii) is the structural precedent for fuel-cell-cache (Item #1-bis); same shape, different content | 1 (this Item #1-bis builds on 1B-ii pattern) | NEW watching list — pattern reuse signal |
+
+**Updates to design doc trackers** (this commit — Commit 3a mini-design persistence):
+
+- §3 Progress Tracker NEW row "1V Commit 3 mini-design + mini-audit" ✅ §11.X.3 (2026-05-17)
+- §3 Progress Tracker row "1V Commit 3 — Item #1-bis fuel-cell direct-ref caching" updates Notes to reference §11.X.3
+- Status remains ⬜ until implementation commit lands (Commit 3b)
+
+**Pre-implementation gate** (this commit; mini-design persistence):
+
+- ✅ HEAD `b07d8f87`; suite GREEN at 8209/118.4s (per Commit 2b)
+- ✅ Re-grep verified F1-F12 line numbers at fresh HEAD
+- ✅ Cache write-through paths WT-1 through WT-7 enumerated; ε1 mitigation
+
+**Pre-implementation-commit gate** (next commit, Commit 3b):
+
+- Re-grep prop-net-warm + fuel-cell-id sites immediately before implementation to verify no line-number drift since this commit
+- Verify D-1V-3-3 (snapshot semantics) + D-1V-3-5 (external files) at implementation walk-through
+- Capture pre-Item-#1-bis baseline (current HEAD's CW3 measurement) as comparison reference
 
 ---
 
