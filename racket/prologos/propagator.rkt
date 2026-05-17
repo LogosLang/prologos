@@ -62,7 +62,7 @@
  prop-network-worklist
  prop-network-next-cell-id
  prop-network-next-prop-id
- prop-network-fuel
+ ;; prop-network-fuel — RETIRED at 1C-iv-b (macro retired alongside struct field)
  prop-network-contradiction
  prop-network-merge-fns
  prop-network-contradiction-fns
@@ -375,7 +375,11 @@
 ;; Hot: mutated every worklist iteration (worklist, fuel)
 ;; Warm: mutated per cell-write (cells, contradiction)
 ;; Cold: mutated only at allocation/setup time (all other fields)
-(struct prop-net-hot (worklist fuel) #:transparent)
+;; D.4 1C-iv-b RETIREMENT: `fuel` field retired (was: (worklist fuel)).
+;; Cell-as-canonical under D.4 specialized cell type framework: fuel-cell-id
+;; in `(prop-net-warm cells ...)` IS the live state. Macro `prop-network-fuel`
+;; retired in this same commit. All consumers migrated to cell-API at 1C-iv-a.
+(struct prop-net-hot (worklist) #:transparent)
 ;; D.4 1B-ii: under-speculation? — scheduler-maintained cache of speculation
 ;; state for specialized cell fast-path dispatch (per §9.2.0.5 Q-1B-ii-α A2).
 ;; #f = no speculation; #t = under speculation (current-worldview-bitmask non-zero).
@@ -447,8 +451,10 @@
 ;; the hot/warm/cold inner struct layout. 18 files use these accessors.
 (define-syntax-rule (prop-network-worklist net)
   (prop-net-hot-worklist (prop-network-hot net)))
-(define-syntax-rule (prop-network-fuel net)
-  (prop-net-hot-fuel (prop-network-hot net)))
+;; D.4 1C-iv-b RETIREMENT (2026-05-16): `prop-network-fuel` macro retired
+;; alongside the `fuel` field of prop-net-hot struct. All consumers migrated
+;; to cell-API (net-cell-read net fuel-cell-id) at 1C-iv-a. Cell IS the live
+;; state under D.4 specialized cell type framework.
 (define-syntax-rule (prop-network-cells net)
   (prop-net-warm-cells (prop-network-warm net)))
 (define-syntax-rule (prop-network-contradiction net)
@@ -741,7 +747,9 @@
   ;; Below, we extend with canonical tropical fuel cells (ids 11+12).
   (define base-net
    (prop-network
-   (prop-net-hot '() fuel)
+   ;; D.4 1C-iv-b RETIREMENT: prop-net-hot now 1-arg (fuel field retired).
+   ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells below.
+   (prop-net-hot '())
    (prop-net-warm (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid req-cell))
                                                   (cons wv-h (cons wv-cid wv-cell))
@@ -831,7 +839,10 @@
   ;; test-tropical-fuel.rkt.
   (define forked
     (prop-network
-     (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
+     ;; D.4 1C-iv-b RETIREMENT: prop-net-hot now 1-arg (fuel field retired);
+     ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells via
+     ;; net-cell-reset below (γ1; D-1C-iv-1).
+     (prop-net-hot '())                                   ;; fresh worklist
      (prop-net-warm (prop-network-cells net) #f #f)       ;; shared cells, no contradiction, no speculation (D.4 1B-ii)
      (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
   ;; Reset both fuel cells to new fuel value (γ1; D-1C-iv-1 mitigation).
@@ -2099,13 +2110,12 @@
 ;; contradiction structurally if remaining-fuel reaches zero — no separate
 ;; exhaustion check needed in the helper.
 (define (flush-fuel-local-var! net local-fuel-box)
+  ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1): struct-field write retired alongside
+  ;; the `fuel` field of prop-net-hot. Helper now writes ONLY the cell (which IS
+  ;; the live state under D.4). On-write-check fires contradiction structurally
+  ;; if final-fuel ≤ 0 (Option A exhaustion semantic).
   (define final-fuel (unbox local-fuel-box))
-  ;; Cell write first (on-write-check may fire contradiction here).
-  (define net+cell (net-cell-write net fuel-cell-id final-fuel))
-  ;; Struct-field write (β1 transitional; retires at 1C-iv per D-1C-ii-b-1).
-  (struct-copy prop-network net+cell
-    [hot (struct-copy prop-net-hot (prop-network-hot net+cell)
-           [fuel final-fuel])]))
+  (net-cell-write net fuel-cell-id final-fuel))
 
 ;; Inner loop: no tracing.
 ;; BSP-LE Track 0 Phase 3c: mutable worklist/fuel drain pattern.
@@ -2138,24 +2148,20 @@
   ;; net-cell-write appends new dependents to the network's own worklist field;
   ;; we drain those into the box after each fire.
   (define net0 (struct-copy prop-network net
-                 [hot (prop-net-hot '() 0)]))
+                 [hot (prop-net-hot '())]))   ;; D.4 1C-iv-b: 1-arg prop-net-hot
   (define (finalize n)
     ;; B2f Phase 0: emit stats if non-trivial
     (define wc (unbox write-count))
     (define cc (unbox change-count))
     (when (> wc 0)
       (perf-record-quiescence-writes! wc cc))
-    ;; Reconstitute the hot fields from the mutable boxes.
-    ;; D.4 1C-ii-b (#1 finalize per §10.0.4 F3 Option A): existing struct-copy
-    ;; below sets struct-field fuel alongside worklist. Add cell-write after
-    ;; for β1 lockstep. NOT using flush-fuel-local-var! here (helper is
-    ;; symmetric only where there's no worklist interleaving; see §10.0.4 F3 +
-    ;; D-1C-ii-b-6 for the asymmetry rationale).
+    ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1; D-1C-ii-b-6 asymmetry retired):
+    ;; struct-field fuel write retired alongside the field itself. Finalize
+    ;; reconstitutes worklist via struct-copy (1-arg prop-net-hot); cell-write
+    ;; for fuel state. β1 lockstep retires; cell IS the sole live state.
     (define n*
       (struct-copy prop-network n
-        [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
-    ;; D-1C-ii-b-1: cell-write becomes SOLE update at 1C-iv when struct field
-    ;; retires. Until then, β1 lockstep via struct-copy above + cell-write here.
+        [hot (prop-net-hot (unbox wl))]))   ;; 1-arg
     (net-cell-write n* fuel-cell-id (unbox remaining-fuel)))
   (parameterize ([current-quiescence-write-counter write-count]
                  [current-quiescence-change-counter change-count])
@@ -2181,7 +2187,7 @@
                  (set-box! wl (append new-wl-entries (unbox wl))))
                ;; Clear net*'s worklist so it doesn't accumulate across iterations.
                (loop (struct-copy prop-network net*
-                       [hot (prop-net-hot '() 0)]))))]))))
+                       [hot (prop-net-hot '())]))))]))))   ;; D.4 1C-iv-b: 1-arg
 
 ;; Inner loop with tracing: returns (cons final-net fired-pids-list).
 ;; Same mutable worklist/fuel drain pattern as run-to-quiescence-inner.
@@ -2190,14 +2196,14 @@
   ;; D.4 1C-ii-b (#2 init per §10.0.4 F3 Option A): helper read from cell.
   (define remaining-fuel (init-fuel-local-var! net))
   (define net0 (struct-copy prop-network net
-                 [hot (prop-net-hot '() 0)]))
+                 [hot (prop-net-hot '())]))   ;; D.4 1C-iv-b: 1-arg
   (define (finalize n fired)
-    ;; D.4 1C-ii-b (#2 finalize per §10.0.4 F3 Option A): existing struct-copy
-    ;; writes fuel-field + worklist together; add cell-write after for β1
-    ;; lockstep (D-1C-ii-b-1: cell-write becomes sole update at 1C-iv).
+    ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-b-1; mirrors run-to-quiescence-drain):
+    ;; struct-field fuel write retired alongside the field itself. Cell IS the
+    ;; sole live state.
     (define n*
       (struct-copy prop-network n
-        [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+        [hot (prop-net-hot (unbox wl))]))   ;; 1-arg
     (cons (net-cell-write n* fuel-cell-id (unbox remaining-fuel))
           (reverse fired)))
   (let loop ([net net0] [fired '()])
@@ -2218,7 +2224,7 @@
              (unless (null? new-wl-entries)
                (set-box! wl (append new-wl-entries (unbox wl))))
              (loop (struct-copy prop-network net*
-                     [hot (prop-net-hot '() 0)])
+                     [hot (prop-net-hot '())])   ;; D.4 1C-iv-b: 1-arg
                    (cons pid fired))))])))
 
 ;; ========================================
@@ -2716,22 +2722,18 @@
                      ;; cache for specialized cell fast-path dispatch (per §9.2.0.5
                      ;; Q-1B-ii-α A2-scheduler-refresh). Constraint: fresh per BSP
                      ;; round entry; specialized cells must be scheduler-state cells.
+                     ;; D.4 1C-iv-b RETIREMENT (D-1C-ii-a-1): the [fuel (- ...)]
+                     ;; struct-field clause retired alongside the prop-net-hot fuel
+                     ;; field itself. Cell-write below is now the SOLE production
+                     ;; update pattern (cell IS the live state under D.4). The
+                     ;; on-write-check (<= new 0) fires contradiction structurally
+                     ;; if exhausted. Option A semantic: cell stores REMAINING fuel.
                      [snapshot (struct-copy prop-network net
                                  [hot (struct-copy prop-net-hot (prop-network-hot net)
-                                        [worklist '()]
-                                        [fuel (- (prop-network-fuel net) n)])]
+                                        [worklist '()])]
                                  [warm (struct-copy prop-net-warm (prop-network-warm net)
                                          [under-speculation?
                                           (not (zero? (current-worldview-bitmask)))])])]
-                     ;; D.4 1C-ii-a Variant A: ALSO write to fuel-cell-id (lockstep
-                     ;; sync with struct-field above per β1; cell becomes architecturally
-                     ;; PRIMARY at every observation point post-1C-ii-a). The on-write
-                     ;; check (<= new 0) fires contradiction structurally if exhausted.
-                     ;; Option A semantic: cell stores REMAINING fuel; decrement by n.
-                     ;; D-1C-ii-a-1 (retirement obligation): the [fuel (- ...)] update
-                     ;; above RETIRES at 1C-iv alongside the prop-net-hot-fuel struct
-                     ;; field itself; this cell-write becomes the SOLE production update
-                     ;; pattern post-1C-iv.
                      [snapshot+fuel (net-cell-write snapshot fuel-cell-id
                                                     (- (net-cell-read net fuel-cell-id) n))]
                      ;; R1: time fire phase

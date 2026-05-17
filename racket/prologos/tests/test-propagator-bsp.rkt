@@ -141,9 +141,9 @@
   (define-values (net3 pid) (net-add-propagator net2 (list ca) (list cb)
                               (make-copy-fire-fn ca cb)))
   ;; Manually add pid to worklist twice
+  ;; D.4 1C-iv-b: prop-net-hot now 1-arg (fuel field retired)
   (define net4 (struct-copy prop-network net3
-                 [hot (prop-net-hot (list pid pid pid)
-                                    (net-cell-read net3 fuel-cell-id))]))
+                 [hot (prop-net-hot (list pid pid pid))]))
   (define result (run-to-quiescence-bsp net4))
   ;; Dedup should reduce 3 → 1, so fuel cost is 1 for this round
   (check-true (net-quiescent? result))
