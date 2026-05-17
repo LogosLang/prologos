@@ -396,7 +396,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1B-iv** | Cell registration via framework + tests + close (shadow mode) | ✅ ✓ PASS | fuel-cell-id (11) + fuel-budget-cell-id (12) registered in make-prop-network; surfaced merge-fn correctness bug in 1B-ii fast-path (fixed); 29 tropical-fuel tests + 9 cell-registration tests + C4/C5 axioms; 8286 tests / 127.4s / 0 failures |
 | **1C whole-phase mini-design** | Q-1C-α/β/γ/δ resolved; Phase 1V scope locked (4 items) | ✅ | §10.0 (2026-05-16); resolutions α2/β1/γ1+function/δ1 |
 | **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline strategy | ✅ | §10.0.1 (2026-05-16); 5 findings α/β/γ/δ/ε; ε surfaced bench scope 2→18 (ε2 retire); audit re-verified line numbers + Q-1C-1 simpler than expected |
-| **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3) | ⬜ | Per §10.4 + Q-1C-α α2; target ~0.06 ns/cycle amortized |
+| **1C-ii-a mini-design** | α2/β1/γ-net/δ-3-tests resolved; D-1C-ii-a-1 retirement obligation captured for 1C-iv | ✅ | §10.0.2 (2026-05-16) |
+| **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3) | 🔄 | Per §10.4 + Q-1C-α α2; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-a-1); target ~0.06 ns/cycle amortized |
 | **1C-ii-b** | Variant B migration (sequential schedulers entry points #1/#2/#4/#5) + `flush-fuel-local-var!` helper | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1; target ~2.16 ns/cycle amortized |
 | **1C-iii** | Migrate 11 check sites | ⬜ | Per §10.4 |
 | **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
@@ -1854,6 +1855,72 @@ Estimated scope: ~5-10 LoC + 1-2 new test cases. Architecturally significant (fi
 
 ---
 
+### §10.0.2 1C-ii-a Mini-Design Resolutions (D.4 CANONICAL 2026-05-16)
+
+> **Status**: 1C-ii-a mini-design conversation 2026-05-16. Four implementation-level questions (α/β/γ/δ); all resolved with user. Implementation per per-phase protocol follows.
+
+**Q-1C-ii-a-α — Cell-write timing relative to struct-copy snapshot — RESOLVED α2 (AFTER snapshot)**
+
+Build snapshot with existing struct field decrement first (unchanged), then `net-cell-write` to the snapshot as an additive new line. Rationale: cleanest additive diff; preserves existing struct-copy logic verbatim for code-review traceability. α1 (cell-write before struct-copy) would restructure the order of operations for no semantic gain. Note: α doesn't involve retirement — retirement of struct field happens at 1C-iv; α2 just keeps the diff localized.
+
+**Q-1C-ii-a-β — Lockstep sync transition — RESOLVED β1 (update BOTH field AND cell) + RETIREMENT OBLIGATION CAPTURED**
+
+During 1C-ii-a through 1C-iii: both struct field (line 2606 existing) AND cell (new line) update in lockstep. Cell-value EQUALS struct-field-value at every observation point. Preserves all-tests-green across sub-phases per `workflow.md` "All tests green before moving on."
+
+**RETIREMENT OBLIGATION (1C-iv)**: The lockstep sync is transitional scaffolding. At 1C-iv (macro + struct field retirement), the existing `[fuel (- ...)]` field update at line 2606 retires alongside the `prop-net-hot-fuel` struct field itself. The `(net-cell-write snapshot fuel-cell-id ...)` becomes the SOLE update.
+
+Captured as **D-1C-ii-a-1** (drift risk; see below) and as an explicit obligation in §10.4 1C-iv sub-phase scope. Per `workflow.md` "Belt-and-suspenders is a blocking red flag" — the dual update is acceptable ONLY as transitional sync between 1C-ii-a (when cell becomes live) and 1C-iv (when field retires). Not a permanent dual-write pattern.
+
+**Q-1C-ii-a-γ — Cell-value read source — RESOLVED γ-net (read from `net`, the pre-round network)**
+
+`(net-cell-read net fuel-cell-id)` returns the same value as `(net-cell-read snapshot fuel-cell-id)` (cold isn't modified by struct-copy). Lean γ-net for semantic clarity: "decrement by n from the pre-round remaining-fuel value." Mirrors how `(prop-network-fuel net)` reads on the same line.
+
+**Q-1C-ii-a-δ — Testing approach — RESOLVED δ-3-tests**
+
+Three new tests in `test-tropical-fuel.rkt`:
+1. **Cell-field-lockstep**: after BSP run with K fires consumed, `(net-cell-read result fuel-cell-id) = (prop-network-fuel result) = (- initial-fuel K)` (verifies β1 lockstep invariant)
+2. **Tier 1 fast path preservation (β1)**: a Tier 1 workload (single-pass flush; fire-once empty-inputs) leaves both struct field AND cell unchanged across the round (verifies §10.3.A β1 note)
+3. **Exhaustion via cell-mechanism**: when new-fuel hits 0, on-write-check fires contradiction; `(net-contradiction? result 'tropical-fuel-exhausted)` returns `#t` (verifies on-write-predicate routes through cell layer in production)
+
+§13.7 1C-ii row's microbench validation (Variant A ~0.06 ns/cycle target) deferred to 1C-vi A/B/C comparison report (the §13.6.A spike already established the target; one-time validation at close avoids redundant measurement work in early sub-phases).
+
+**Drift risks named (1C-ii-a)**:
+
+- **D-1C-ii-a-1** (β1 lockstep retirement obligation; LOAD-BEARING): the dual field+cell update at line 2606 is transitional scaffolding. 1C-iv retirement scope MUST include the line 2606 `[fuel (- ...)]` field update alongside the macro + struct field retirement. Without this, 1C-iv leaves dead code (struct-copy clause updating a non-existent field — compile error) OR worse, a partial retirement (field gone but code still references it via macro). Cross-reference: §10.4 1C-iv sub-phase scope.
+- D-1C-ii-a-2: snapshot+fuel threading downstream — must ensure all uses of `snapshot` after line 2606 (e.g., `executor snapshot pids` at line 2612) become `executor snapshot+fuel pids`. Grep verification before commit.
+- D-1C-ii-a-3: on-write-check fires when `(<= new 0)`; if new-fuel is exactly 0, contradiction fires. Verify this matches the existing check-site semantic `(<= (prop-network-fuel net) 0)` (which also includes 0). Boundary case test in δ test #3.
+- D-1C-ii-a-4: Tier 1 fast path at lines 2562-2573 must NOT call `net-cell-write` (β1 preservation). Verify no inadvertent cell-write added to Tier 1 during implementation. δ test #2 covers this.
+
+**Implementation sketch (confirmed; pending impl commit)**:
+
+```racket
+;; D.4 1C-ii-a Variant A migration at line 2606 region:
+[else
+ (let* ([raw-pids (dedup-pids (prop-network-worklist net))]
+        [pids (filter ... raw-pids)]
+        [n (length pids)]
+        [snapshot (struct-copy prop-network net
+                    [hot (struct-copy prop-net-hot (prop-network-hot net)
+                           [worklist '()]
+                           [fuel (- (prop-network-fuel net) n)])]    ; KEEP — β1 lockstep
+                    [warm (struct-copy prop-net-warm (prop-network-warm net)
+                            [under-speculation? (not (zero? (current-worldview-bitmask)))])])]
+        ;; D.4 1C-ii-a: ALSO write to fuel-cell-id (lockstep sync per β1).
+        ;; On-write check (<= new 0) fires contradiction structurally if exhausted.
+        ;; D-1C-ii-a-1: this update RETIRES at 1C-iv when struct field retires;
+        ;; line 2606's [fuel (- ...)] also retires then. Single update (cell only)
+        ;; becomes the production pattern post-1C-iv.
+        [snapshot+fuel (net-cell-write snapshot fuel-cell-id
+                          (- (net-cell-read net fuel-cell-id) n))]
+        ;; ... rest of round uses snapshot+fuel ...
+        [all-writes (executor snapshot+fuel pids)]
+        ...
+```
+
+Net diff: ~3-5 LoC added (`snapshot+fuel` binding + threading downstream uses). Pre-existing `snapshot` is replaced by `snapshot+fuel` in subsequent uses within the `let*`.
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
 **Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
@@ -2205,9 +2272,11 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - **Per §13.7: re-microbench check-site cost; target unchanged ~6 ns**
   - Targeted test: full suite (these check sites are widely distributed)
 
-- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
-  - Retire `prop-network-fuel` macro (propagator.rkt:399)
+- **1C-iv** — Retire macro + struct field + 1C-ii-a lockstep + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
+  - Retire `prop-network-fuel` macro (propagator.rkt:445)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
+  - **Retire 1C-ii-a β1 lockstep sync at line 2606** (per D-1C-ii-a-1 retirement obligation): the existing `[fuel (- (prop-network-fuel net) n)]` struct field update inside the snapshot's `struct-copy prop-net-hot` retires alongside the field itself. Post-1C-iv, only `(net-cell-write snapshot fuel-cell-id ...)` remains; the dual update transitional scaffolding fully retires.
+  - **Retire 1C-ii-b β1 lockstep sync** (analogous for Variant B sites; if 1C-ii-b adopts a similar lockstep pattern at #1/#2 finalize + #4/#5 struct-copy decrements, those retire here too)
   - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value)
   - Migrate typing-propagators.rkt:2269 saved-fuel handling — per Q-1C-β β1 1C-i audit outcome: speculation forks at round/phase boundaries see cell value naturally (Variant A); for Variant B mid-phase forks, `flush-fuel-local-var!` runs BEFORE fork (sub-fork starts with current cell value, reads at sub-init via `init-fuel-local-var!`)
   - Update pretty-print display
