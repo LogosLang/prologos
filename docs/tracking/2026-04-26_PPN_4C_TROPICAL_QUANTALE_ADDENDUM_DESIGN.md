@@ -417,6 +417,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 2 mini-design + mini-audit** | α1/β1/γ1/δ1/ε-measurement-driven resolved (17 mini-audit findings F1-F17; F1-F13 ✅ HOLD from FORK CHECKPOINT; F14-F17 NEW from re-audit at fresh HEAD; 6 drift risks D-1V-2-1/2/3/4/5/6; 3 NEW codification candidates); design-doc persistence per user direction (corrects FORK CHECKPOINT's commit-message persistence) | ✅ | §11.X.2 (2026-05-17) |
 | **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; eliminate per-call champ-lookup in net-cell-write fast path (~22 LoC across propagator.rkt + specialized-cells.rkt + tests/test-specialized-cells.rkt); CW3 re-microbench: **Var-A N=100 7.56 → 5.78 ns/cycle (-1.78 ns; -23.5% recovery)**; ≤ 5 ns gate NOT met; **§13.7 gate decision DEFERRED to Commit 3 combined measurement per Option (d)** + conditional Item #1-ter (F18 NEW + decision-tree-gap NEW codification candidate) | ✅ ✓ PARTIAL-RECOVERY | `b07d8f87` (impl) + `e6308cb6` (mini-design §11.X.2 + §11.X.2.1); per §11.X.2 + §11.X.2.1 (2026-05-17) |
 | **1V Commit 3 mini-design + mini-audit** | α1/β1/γ-combined/δ1/ε1 resolved (12 mini-audit findings F1-F12 at HEAD `b07d8f87`; F12 disambiguation singular vs plural cache scope; F10 `under-speculation?` cache precedent from 1B-ii); 7 write-through paths enumerated (WT-1 through WT-7); 6 drift risks D-1V-3-1 through D-1V-3-6 (4 audit-resolved + 2 needing impl audit); 3 NEW codification candidates; design-doc persistence per Stage 4 methodology | ✅ | §11.X.3 (2026-05-17) |
+| **1V Commit 3 pre-impl audit extension** | D-1V-3-3 ✅ AUDIT-RESOLVED (snapshot semantics flow through WT-1/WT-2 via standard primitives — no new site); D-1V-3-5 ✅ AUDIT-RESOLVED (external files inherit via struct-copy); F13 NEW pre-existing arity bug at elab-network-types.rkt:108 (dead-code; out of scope); F14 NEW (WT-2 has 1 explicit site; contradicted branch inherits); F15 NEW (WT-8 added: net-cell-replace defensive); **Item #1-ter format planned**: 5 candidates + decision tree (5-6 ns → candidate 2 only; 6-7 ns → candidates 1+2; > 7 ns → architectural escalation); 4 NEW codification candidates | ✅ | §11.X.3.1 (2026-05-17) |
 | **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 7 mutation sites (WT-1 through WT-7); ~50-80 LoC across propagator.rkt + tests; combined Item #1+#1-bis projected ~5.48 ns/cycle (Var-A N=100); **triggers Item #1-ter scope decision at Commit 3 close** per Option (d) | ⬜ | Per §11.X.3 + 1C-vi A/B/C report + §11.X.2.1 Option (d) |
 | **1V Commit 3.5 — Item #1-ter (CONDITIONAL)** | Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle; scope TBD at Commit 3 close mini-design (candidates: worldview-cache caching, other champ-lookup sites per F18, CHAMP/dispatch reductions) | ⬜ CONDITIONAL | Per §11.X.2.1 Option (d) (forward-captured 2026-05-17) |
 | **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
@@ -4542,6 +4543,129 @@ Single atomic implementation commit (~50-80 LoC across 1 production file + 1 tes
 - Re-grep prop-net-warm + fuel-cell-id sites immediately before implementation to verify no line-number drift since this commit
 - Verify D-1V-3-3 (snapshot semantics) + D-1V-3-5 (external files) at implementation walk-through
 - Capture pre-Item-#1-bis baseline (current HEAD's CW3 measurement) as comparison reference
+
+### §11.X.3.1 Pre-Implementation Audit Extension (2026-05-17; resolves D-1V-3-3 + D-1V-3-5 + plans Item #1-ter format per user direction)
+
+> **Status**: Pre-implementation audit extension ✅ COMPLETE (this commit). User-directed deep-audit of D-1V-3-3 (snapshot semantics) + D-1V-3-5 (external files) BEFORE implementation. Item #1-ter format planned per Option (d) decision criteria + 5 candidate optimization list. **3 NEW findings F13-F15** + WT-8 candidate identified. Both deferred drift risks now ✅ AUDIT-RESOLVED.
+
+**D-1V-3-3 ✅ AUDIT-RESOLVED — snapshot save/restore semantics**
+
+Walk-through of `fire-and-collect-writes` at propagator.rkt:2720-2800 (BSP fire-and-collect-writes):
+
+| Line | Operation | Cache impact |
+|---|---|---|
+| 2739-2744 | `snapshot = struct-copy prop-network net [hot ...] [warm (struct-copy prop-net-warm [under-speculation? ...])]` | `fuel-cell-cache` inherits unchanged from net's prop-net-warm (struct-copy semantics) ✅ |
+| 2745 | `snapshot+fuel = (net-cell-write snapshot fuel-cell-id (- ... n))` | Triggers WT-1 (fast-path; if not under-speculation) OR WT-2 (slow-path; if under-speculation). **WT-* sites must update fuel-cell-cache.** ✅ flowed through standard primitives |
+| 2749 | `all-writes = (executor snapshot+fuel pids)` | Executor invokes propagator fire functions; results are accumulated write-sets (no direct cache touch) |
+| 2761-2763 | `merged = bulk-merge-writes snapshot+fuel ...` | bulk-merge-writes calls net-cell-write internally per write → flows through WT-1/WT-2 → cache updates correctly ✅ |
+| 2767-2771 | Deferred propagator application | Uses standard primitives → cache flows through standard paths ✅ |
+| 2775-2793 | fire-once self-clearing | Uses net-remove-propagator-from-dependents → WT-6 → cache updates correctly ✅ |
+
+**Conclusion**: snapshot path uses STANDARD PRIMITIVES (net-cell-write, bulk-merge-writes, net-remove-propagator-from-dependents). Cache maintenance flows through WT-1/WT-2/WT-6 correctly. **No additional cache-update site needed** beyond the WT-1 through WT-7 enumeration. The subtle case: if `under-speculation?` flips from #f to #t at line 2742-2744 BEFORE the write at line 2745, the write at 2745 takes the slow-path (WT-2). WT-2 implementation must correctly update the cache.
+
+**D-1V-3-5 ✅ AUDIT-RESOLVED — external struct-copy files**
+
+| File | Site | Touches fuel-cell? | Cache impact |
+|---|---|---|---|
+| `bilattice.rkt:176` | `struct-copy prop-net-warm [contradiction lower-cid]` | NO — only sets contradiction | `fuel-cell-cache` inherits unchanged ✅ |
+| `elab-network-types.rkt:109` | `struct-copy prop-net-warm [contradiction #f]` (in `reset-elab-network-command-state`) | NO — only sets contradiction | `fuel-cell-cache` inherits unchanged ✅ |
+
+**Conclusion**: external struct-copy sites don't mutate fuel-cell; cache inherits unchanged via struct-copy semantics. **No external-file changes needed for Item #1-bis.**
+
+**F13 NEW ⚠️ UNRELATED PRE-EXISTING ARITY BUG (out of Item #1-bis scope)**:
+
+`elab-network-types.rkt:108` — `(prop-net-hot '() fuel)` calls `prop-net-hot` with 2 args, but `prop-net-hot` is 1-arg `(struct prop-net-hot (worklist) ...)` post-1C-iv-b retirement. `reset-elab-network-command-state` is provided but no production callers found (driver.rkt:2574 comment: "callback REMOVED by Track 7 Phase 6"). LATENT bug — code path not exercised in suite (full suite GREEN at 8209/118.4s confirms). **Out of Item #1-bis scope** (predates this work; not affected by adding fuel-cell-cache field; doesn't block Phase 1V). Flag for separate cleanup at Phase 1 close or future track.
+
+**F14 NEW — WT-2 struct-copy site enumeration** (refines WT-2 from §11.X.3):
+
+`net-cell-write/slow-path` at propagator.rkt:1479-1573 has TWO struct-copy sites:
+- Line 1564-1568 (main, non-contradicted): the primary struct-copy that sets `[cells new-cells]` + `[worklist new-wl]`. **THIS SITE needs the conditional fuel-cell-cache update.**
+- Line 1570-1572 (contradicted, nested wrapping): wraps `net*` (already cache-updated from line 1564-1568) with `[contradiction cid]`. **No additional update needed** — `fuel-cell-cache` inherits from `net*` via struct-copy semantics.
+
+**Conclusion**: WT-2 has ONE explicit cache-update site (line 1564-1568); contradicted branch inherits.
+
+**F15 NEW — net-cell-replace audit (WT-8 candidate)**:
+
+`net-cell-replace` at propagator.rkt:1583-1609 is used by S(-1) retraction (stratification — bypasses merge-fn). Structure mirrors net-cell-write/slow-path:
+- Line 1600-1604: main struct-copy (non-contradicted)
+- Line 1606-1608: contradicted wrapping (inherits)
+
+Fuel-cell is NOT an S(-1) retracted cell (retraction targets narrowing cells, not fuel monotone counter). However, **defensive cache update at line 1600-1604** preserves invariant correctness in case future use cases reach this path.
+
+**Recommendation**: ADD WT-8 to write-through path list — line 1600 conditional update. Defensive; ~3 LoC; no behavior change today; future-proofs against scope expansion.
+
+**Updated write-through paths (per F14 + F15)**:
+
+| # | Site | Function | Cache update |
+|---|---|---|---|
+| WT-1 | propagator.rkt:1450-1452 + 1469-1471 | net-cell-write fast-path (2 struct-copies; both need update) | YES (2 sites) |
+| WT-2 | propagator.rkt:1564-1568 | net-cell-write/slow-path (main; contradicted branch inherits per F14) | YES (1 site) |
+| WT-3 | propagator.rkt:1341 | net-cell-reset | YES |
+| WT-4 | propagator.rkt:3289+ | net-cell-write-widen | YES (defensive) |
+| WT-5 | propagator.rkt:1348-1364 | promote-cell-to-tagged | INHERITS via WT-3 |
+| WT-6 | propagator.rkt:1397-1400 + 1371+ | net-clear-dependents + net-remove-propagator-from-dependents | YES (2 sites) |
+| WT-7 | propagator.rkt:860-861 | fork-prop-network | INHERITS via WT-3 (×2) |
+| **WT-8 NEW** | propagator.rkt:1600-1604 | net-cell-replace (S(-1) retraction; defensive) | YES (1 site) |
+
+Total explicit cache-update sites: **8** (WT-1×2 + WT-2 + WT-3 + WT-4 + WT-6×2 + WT-8 = 8 inline conditional updates). WT-5 + WT-7 inherit via delegation.
+
+**Item #1-ter format plan (per user direction at this commit; Option (d) decision criteria)**:
+
+**Trigger criteria** (post-Commit-3b CW3 measurement):
+- **Original ≤ 3 ns target**: Item #1-ter NOT triggered (rare; both Items combined unlikely to recover to this floor without architectural redesign)
+- **≤ 5 ns unilateral target**: Item #1-ter NOT triggered; ratify ≤ 5 ns gate (the unilateral revision becomes accepted)
+- **5 < CW3 ≤ 6 ns**: **Item #1-ter TRIGGERS** — sub-scope candidate 2 only (net-cell-read fast-path)
+- **6 < CW3 ≤ 7 ns**: **Item #1-ter TRIGGERS** — sub-scope candidates 1 + 2 combined
+- **CW3 > 7 ns**: Item #1-ter NOT triggered; escalate to architectural conversation (likely floor; Phase 4 CHAMP retirement OR PReduce / SH Series territory)
+
+**Candidate optimization list (5 candidates per F18 from Item #1's audit; in-scope for Phase 1V vs out-of-scope per A/B/C report §5.3-§5.4)**:
+
+| # | Candidate | Estimated savings | In Phase 1V scope? | Item #1-ter sub-scope? |
+|---|---|---|---|---|
+| **1** | **Worldview-cache caching on prop-net-warm** — cache worldview-cache-cell value/reference; eliminates the champ-lookup at net-cell-read line 1168-1170 + net-cell-write/slow-path line 1500-1502 | ~5-15 ns/call under speculation paths; rare on fast path | ✅ YES | YES (if 5 < CW3 ≤ 7 ns) |
+| **2** | **net-cell-read fast-path** — mirror Item #1's net-cell-write fast-path for reads; eq?(cid fuel-cell-id) short-circuit at net-cell-read:1150-1152; bypasses champ-lookup AND tagged-cell-value branch when not under-speculation | ~20-40 ns/call (matches Item #1-bis estimate) | ✅ YES | YES (primary; smallest scope) |
+| **3** | CHAMP traversal reduction — hardcode traversal for fuel-cell-id (compile-time constant cell-id-hash) | Unclear; possibly 5-10 ns | ✅ YES (in principle) | NO (high implementation risk; brittle) |
+| **4** | **Mutable scheduler-state intermediate** (per A/B/C §5.4) — eliminate 3-level nested struct-copy | ~100-200 ns/call (~20-40× Item #1-bis savings) | ❌ NO — multi-month effort; speculation-rollback incompatibility | Future architectural concern |
+| **5** | **CHAMP-to-vector replacement** (per A/B/C §5.3) — replace cells-map CHAMP with vector indexing | ~30-70 ns/call | ❌ NO — multi-week effort; Phase 4 territory | Future-track consideration |
+
+**Item #1-ter scope decision-tree** (executed at Commit 3b close per Option (d)):
+
+```
+post-Commit-3b CW3 Var-A N=100:
+├─ ≤ 5 ns → ✅ §13.7 gate ratified (or measurement-driven discussion if 3 < x ≤ 4)
+│           → Item #1-ter NOT triggered
+│           → proceed to Commit 4 (Item #3 SRE property-sweep)
+├─ 5-6 ns → ⚠️ Item #1-ter TRIGGERS (candidate 2 only: net-cell-read fast-path; ~30-60 LoC)
+│           → Commit 3.5 mini-design opening per §11.X.3.5 (to be drafted)
+├─ 6-7 ns → ⚠️ Item #1-ter TRIGGERS (candidates 1 + 2 combined: worldview-cache + net-cell-read fast-path; ~60-100 LoC)
+│           → Commit 3.5 mini-design opening
+└─ > 7 ns → ❌ ESCALATE — Item #1-ter unlikely to close gap; architectural conversation
+            → Phase 1V atomic close acknowledges remaining gap as structural
+            → Future tracks (Phase 4 CHAMP retirement / PReduce / SH Series) address
+```
+
+**Implementation order under Option (d) trigger**:
+- If candidate 2 only: ~30-60 LoC; ~1 hour implementation; CW3 re-microbench triggers Commit 3.5 close decision
+- If candidates 1+2: ~60-100 LoC; ~2 hour implementation; same CW3 cadence
+
+**NEW codification candidates surfaced this pre-impl audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Snapshot semantics naturally flow through write-through cache discipline** — when caching is via write-through at standard primitives, snapshot/save-restore via standard primitives needs NO additional cache-update site; this generalizes the WT-* enumeration discipline | 1 (this D-1V-3-3 resolution) | NEW watching list |
+| **External struct-copy of an extended struct inherits new fields cleanly** — adding a 4th field to prop-net-warm doesn't require external-file changes; struct-copy semantics preserve unchanged fields | 1 (this D-1V-3-5 resolution) | NEW watching list — relevant for future struct extension audits |
+| **Post-retirement dead-code arity bugs survive cache invalidation discipline** — F13 `reset-elab-network-command-state` has 2-arg prop-net-hot call but is dead code; survived 1C-iv-b retirement because never executed | 1 (this F13) | NEW watching list — codification candidate for "dead-code grep" discipline at struct field retirements |
+| **Item #N-ter conditional scope planning via measurement-driven decision tree** — Item #1-ter scope determined POST-measurement, not pre-planned in detail; matches Option (d) gate-chasing discipline | 1 (this Item #1-ter format plan) | NEW watching list — methodology refinement for "conditional sub-phase scope" |
+
+**Updated pre-implementation-commit gate** (refines prior version):
+
+- ✅ HEAD `b138bca7`; suite GREEN at 8209/118.4s
+- ✅ Re-grep verified F1-F15 + WT-8 sites at fresh HEAD
+- ✅ Cache write-through paths WT-1 through WT-8 enumerated (8 explicit + 2 inherited)
+- ✅ D-1V-3-3 resolved (snapshot semantics flow through WT-* via standard primitives)
+- ✅ D-1V-3-5 resolved (external files inherit unchanged)
+- ✅ Item #1-ter format planned with explicit decision tree per Option (d)
+- ⬜ Capture pre-Item-#1-bis baseline CW3 reference (current HEAD's measurement from Commit 2b: Var-A N=100 = 5.78 ns/cycle)
 
 ---
 
