@@ -413,9 +413,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-vi mini-design + mini-audit** | α3/β3+dual-surface/γ3-slim/δ2+δ3/ε1-reframed/ζ1/η1 resolved; sub-sub-phase split into Commit 1 (code additions) + Commit 2 (measurement artifacts); 5 drift risks named (D-1C-vi-1/2/3/4/5); 2 NEW codification candidates on watching list (multi-surface tracking; bench-file gap-closure coupling) | ✅ | §10.0.7 (2026-05-16) |
 | **1C-vi (code additions)** | NEW `bench-tropical-fuel.rkt` (~430 LoC; alloc + GC profile + per-cycle cost + M10/M11/M12/R4 + Variant A/B amortized sims); γ3-b unit tests + δ3 regression test in test-tropical-fuel.rkt; γ3-a integration tests in test-elaboration-parity.rkt; closed F5 stub-ref gap + §9.10 capture obligation per η1+δ2 coupling | ✅ ✓ PASS | 8299 tests / 120.9s / 0 failures; commit `aa0bbe4d` |
 | **1C-vi (measurement artifacts)** | 3 captured data files (production C; production-realistic N distribution mean 5.20; probe wall 351.68 ms median +19.2% vs Pre-0); A/B/C report doc with 11-row table + production-realistic-N + probe regression findings; Issue [#63](https://github.com/LogosLang/prologos/issues/63) opened (bench-ab.rkt `--refs` enhancement); MASTER_ROADMAP.org + DEFERRED.md cross-references; D-1B-ii-3 allocation verification complete | ✅ ✓ PASS-WITH-CAVEATS | A/B/C report verdicts: 6 PASS + 3 INVESTIGATE; probe at upper-ceiling boundary of §11.3 (≤ 351 ms); Phase 1V item #1-bis (fuel-cell direct-ref) PROPOSED to close residual gap; commit (this commit) |
-| **1V merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii gate gap (per Phase 1V scope item #1) | ⬜ | Per §11.3; measurement-driven gate decision if needed |
-| **1V SRE property-sweep** | Conditional on Track 2I infrastructure readiness (per Phase 1V scope item #3) | ⬜ | Per §11.3; defer to sister track if infrastructure not ready |
-| **1V** | Vision Alignment Gate Phase 1 atomic close (1A + 1B + 1C) | ⬜ | Per §11 |
+| **1V mini-design + mini-audit** | §11.2 D.4 CANONICAL reframing (α1); microbench scope refresh (β2 — 5 NEW + 6 references); Items #1 + #1-bis + #3 ALL IN SCOPE (γ-all3; user-confirmed Track 2I closed); 3 codifications graduation (δ1); 5-commit sub-phase split (ε-multi); 16 audit findings F1-F16; 6 drift risks D-1V-1/2/3/4/5/6 (5 audit-resolved + 1 deferred); 3 NEW codification candidates | ✅ | §11.X + §11.2 reframed (2026-05-17) |
+| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii unilateral gate revision (~10-20 LoC); re-microbench CW3 | ⬜ | Per §11.3 item #1 + §11.X γ-all3 |
+| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; close production-realistic-N gap from 1C-vi A/B/C (~30-60 LoC); ~0.3 ns/cycle savings | ⬜ | Per 1C-vi A/B/C report + §11.X γ-all3 |
+| **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
+| **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
 - **1A-iii-c MUST land before 1A-iii-b** (per §7.7 α audit finding F4: production callers of deprecated functions in parser.rkt + surface-syntax.rkt — surface AST scope — only stop calling once 1A-iii-c retires the surface forms; attempting 1A-iii-b first breaks compile). Original "any order or in parallel" claim CORRECTED per F4 audit (2026-05-17).
@@ -4011,25 +4013,33 @@ Under hybrid, Phase 1C is dominated by SUBSTRATE setup, not migration. Sub-phase
 
 Adversarial TWO-COLUMN VAG (per `9f7c0b82` codification) on all of Phase 1: 1A-iii-b + 1A-iii-c + 1B + 1C closure together. Closes Phase 1 entirely.
 
-### §11.2 VAG structure (per Stage 4 Per-Phase Protocol Step 5)
+### §11.2 VAG structure (D.4 CANONICAL — per §11.X α1 reframing 2026-05-17)
+
+> **D.4 reframing note**: §11.2 catalogue/challenge questions reframed from D.3 hybrid pivot framing to D.4 CANONICAL reality per §11.X α1 (Phase 1V mini-design opening). D.3 hybrid framing preserved at bottom of this subsection under "§11.2 (D.3 historical)" for traceability.
 
 Four questions × TWO-COLUMN catalogue vs challenge:
 
 **Question (a) On-network?**
-- Catalogue: tropical fuel substrate fully on-network; ATMS deprecated APIs + surface AST retired (no off-network deprecated state)
-- Challenge: are there any remaining off-network references to retired APIs? Defensive guards "for safety" preserved? Run pipeline.md "Two-Context Audit" to verify both elaboration + module-loading contexts.
+- Catalogue: D.4 CANONICAL realized — cell IS the live state for fuel (struct field + macro retired at 1C-iv-b); specialized cell type framework + on-write-check predicate replace threshold propagator; modern solver-context becomes SOLE hypothetical-reasoning substrate (deprecated atms-* internal API + surface ATMS AST entirely retired); tropical fuel quantale + Cell/Propagator/Scheduler Orthogonality principle codified
+- Challenge: are there any remaining off-network references to retired APIs? Did the §8.7 codification lesson (audit narrative vs pipeline.md function-coverage exhaustiveness) hold across all sub-phases? Run final sweep at Phase 1V close. Verify scaffolding-hides-truth pattern not present (no "for safety" / "for backward-compat" / inherited defensive guards). Are the cell mechanism's :tier 'hot + :storage 'monotone-counter + :fires-on 'threshold-crossing + :on-write-check declarations PRINCIPLED at the cell layer (not piggybacked on scheduler-specific machinery)?
 
 **Question (b) Complete?**
-- Catalogue: 1A-iii-b retirement complete (13 functions + struct + atms-believed); 1A-iii-c retirement complete (14-file pipeline); 1B primitive shipped + tested; 1C substrate setup complete (cell-id 11/12 allocated; threshold propagator installed; struct-field + macro + decrement/check sites preserved per hybrid pivot)
-- Challenge: did Pre-0 microbenchmark perf claims land? Re-microbench M7+M8+M13 at close per microbench-claim verification rule (Pre-0 plan §12.6 cross-reference); per-decrement cycle should remain ~30-40 ns. Did any quantale property declarations remain speculative (capture-gap risk; M10/M12/R4/A12 captured at §9.10 Phase 1B implementation checklist)? Under hybrid: did the decomplection of fast-path + cell substrate genuinely deliver, or did edge cases force per-decrement cell writes (architectural failure)?
+- Catalogue: 1A-iii-b retirement complete (`fef06994`; surgical-by-name; 13 functions + atms struct + atms-empty + supported-value + tms-cell + assumption-id-hash); 1A-iii-c retirement complete (`d9c91f38`; surface ATMS AST 14-file pipeline); 1B substrate shipped (cell-meta framework + tropical-fuel.rkt + C1+C2+C3 axioms verified); 1C cell-as-canonical realized (`ee5010c1`; macro + struct field retired in lockstep at 1C-iv-b); Option 13 deferred-write architecture shipped (2.16 ns/cycle; 2.4× faster than struct-copy)
+- Challenge: did Pre-0 microbench perf claims land per microbench-claim verification rule? Per §11.X β2: 3 of 11 original microbenches measure RETIRED patterns under D.4 (M7 struct-copy / M8 inline check / M13 prop-network-fuel macro) — replaced with references to existing post-D.4 measurements (§13.6 W1-W5; §13.6.A Option 13 spike; 1C-vi A/B/C report); 5 NEW Phase 1V re-runs (A7.1-3 + A9 + E8). Did the §10.0.7 1C-vi probe wall regression (+19.2% vs Pre-0) hold within §11.3 ≤ 351 ms ceiling? Did the 1B-iv unilateral §13.7 gate revision (3→5 ns/cycle) get measurement-driven closure via Item #1 merge-fn-caching (Phase 1V sub-phase)? Did the production-realistic-N finding (median 3 fires/round, not synthetic N=100) inform the merge-fn-caching + fuel-cell-direct-ref-caching optimizations?
 
 **Question (c) Vision-advancing?**
-- Catalogue: first optimization-quantale instantiation in production; tropical fuel substrate; multi-quantale composition NTT; Phase 3C cross-reference capture; hybrid pivot's empirically-grounded decomplection
-- Challenge: is the residuation operator load-bearing (Form A test passes) or speculative? Does the multi-quantale NTT actually compose with TypeFacet quantale, or is it parallel co-existence only? Is OE Series Track 0/1/2 first landing recognized? Under hybrid: is preserving the struct field + macro genuinely "fast-path needed for performance" or "scaffolding preserved for safety" (workflow.md belt-and-suspenders red flag — D.3 lens P scrutiny target)?
+- Catalogue: First optimization-quantale instantiation in production (tropical quantale); on-network specialized cell type framework establishes pattern for future PReduce + OE Series consumers; Cell/Propagator/Scheduler Orthogonality principle codified prophylactically; multi-quantale composition NTT model declares forward-compatibility with quantaloids (post-PReduce); ATMS substrate consolidation (deprecated internal API + surface AST retired; modern solver-context becomes sole substrate); ~2649 LoC removed across Phase 1A retirement
+- Challenge: is the residuation operator load-bearing (Form A C1+C2+C3 verified at 1B-iii) or speculative? Does the multi-quantale NTT actually compose with TypeFacet quantale, or is it parallel co-existence only (deferred per S3 + S4 to Phase 3C consumer)? Did D.4 specialized cell type framework deliver the perf claims from §13.6 spike (W1 ≤ 30 ns + W3 = 0 major-GC + W4 ≤ 15 ns)? Under Option 13: did the per-cycle amortized cost meet the §13.7 gate (3 ns target or post-revision 5 ns)? Did the §7.9 + §8.7 codification candidate ("audit narrative vs pipeline.md function-coverage") achieve graduation (3 data points by 1A-iii-b — pattern is prophylactically valuable)?
 
 **Question (d) Drift-risks-cleared?**
-- Catalogue: drift risks named per §7.4, §8.4, §9.8, §10.5 (D-1C-1 through D-1C-6 under hybrid) all addressed
-- Challenge: did the named risks cover both correctness AND perf-vs-design-target axes? Were any inherited patterns (deprecated APIs, surface AST scaffolding) preserved without challenge? Under hybrid specifically: D-1C-5 (per-decrement perf regression) is the load-bearing perf gate — verify M7+M8+M13 stay within Pre-0 variance at 1V close.
+- Catalogue: All drift risks named at sub-phase mini-designs MITIGATED per their close. 1B sub-phase drift risks (D-1B-i through D-1B-iv); 1C sub-phase drift risks (D-1C-i through D-1C-vi); 1A-iii-b drift risks (D-1A-iii-b-1 through 7); 1A-iii-c drift risks (D-1A-iii-c-1 through 7). All audit-grounded.
+- Challenge: did the named risks cover both correctness AND perf-vs-design-target axes? Were any inherited patterns (deprecated APIs, surface AST scaffolding, struct-field substitution at typing-propagators per D-1C-iii-5) preserved without challenge? Did the Option 13 deferred-write pattern under speculation (A9 spec rollback) correctly handle local-var flush before fork + sub-fork starts with current cell value? Did §7.9's PROPHYLACTIC application of §8.7 codification lesson PREVENT the same drift class in 1A-iii-b (ZERO sites missed by post-impl sweep vs 1A-iii-c's 4 missed sites)?
+
+---
+
+> **§11.2 (D.3 historical)** — preserved for traceability:
+>
+> The above §11.2 reframed the original D.3 hybrid pivot framing at Phase 1V opening per §11.X α1. Original D.3 framing referenced "hybrid pivot's empirically-grounded decomplection" + "struct-field + macro + decrement/check sites preserved per hybrid pivot" + "M7+M8+M13 at close" + "Under hybrid: did the decomplection of fast-path + cell substrate genuinely deliver" + "(D-1C-1 through D-1C-6 under hybrid) all addressed" + "Under hybrid: D-1C-5 (per-decrement perf regression) is the load-bearing perf gate". Under D.4 + Option 13 CANONICAL these are RETIRED — the cell IS the live state; struct-field + macro + inline-check sites are retired; D-1C-5 is replaced by Option 13 amortization gates.
 
 ### §11.3 Phase 1V exit criteria
 
@@ -4075,6 +4085,135 @@ The 1B-iv close surfaced 4 follow-up items deferred from 1B sub-phases. Items #1
 **Unilateral gate revision flag** (per §10.0): the §13.7 1B-ii gate revision was unilateral; Phase 1V item #1 (merge-fn-caching) is the path to close the gap. If the optimization doesn't fully recover, the gate revision decision is re-opened with measurement data in hand — discussed with user, not made unilaterally.
 
 > **D.3 hybrid pivot gates** (RETIRED-PER-D.4-CANONICAL): the previous "Hybrid pivot performance gate" / "architectural gate" / "reconsideration gate" tracked the hybrid pivot's behavior; under D.4 + Option 13, those gates are superseded by the gates above. Preserved here for traceability: the D.3 gates were `per-decrement cycle ≤ 5% regression`, `prop_firings ≤ 1× per file BSP-barrier-equivalent`, and `post-impl reconsider if cell-write ≤ 50% of struct-copy + R3 zero major-GC`.
+
+### §11.X Phase 1V Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V pre-execution mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together (Per-Phase Protocol steps 1+2; co-dependent). **5 resolutions** (α1 / β2 / γ-all3 / δ1 / ε-multi) + **§11.2 reframed for D.4 CANONICAL** + **16 mini-audit findings F1-F16** + **6 drift risks D-1V-1/2/3/4/5/6** (5 audit-resolved + 1 deferred to atomic close). Per ε-multi atomicity, **Phase 1V lands as a MULTI-COMMIT atomic close sequence** (this commit + 4 sub-phase commits + atomic close commit = 5 commits total).
+
+**Per Stage 4 Per-Phase Protocol steps 1+2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §7.7 + §7.9 + §8.7 + §10.0.4-7 patterns from prior sub-phases).
+
+**Mini-audit findings (concrete grounding at HEAD `53aa14ad`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | **State verification**: all 4 sub-phases ✅ COMPLETE | 1A-iii-b ✅ `fef06994`; 1A-iii-c ✅ `d9c91f38`; 1B ✅ `c83dd78e`; 1C ✅ `ee5010c1` |
+| **F2** | **Suite state at fresh HEAD** | 8209 tests / 98.4s / 0 failures (within S1 baseline 119.288s ± variance; on LOW end at -16.8% from cumulative cleanup) |
+| **F3** | **Sweep CLEAN for deprecated atms-* in production** | ZERO production refs (only atms.rkt itself preserving shared helpers + phase1d-registrations.rkt false-positive `'atms-assumptions` SRE domain name) |
+| **F4** | **Sweep CLEAN for surface ATMS AST** | ZERO production refs (1A-iii-c retirement complete) |
+| **F5 ⚠️** | **§11.2 VAG framing out of date** | All 4 catalogue sections referenced D.3 hybrid pivot (e.g., "tropical fuel substrate fully on-network; ATMS deprecated APIs + surface AST retired" — partially obsolete given hybrid was REPLACED by D.4 CANONICAL). **Reframing applied per α1 (this commit).** |
+| **F6 ⚠️** | **§11.3 microbench re-run list partially obsolete** | M7 (struct-copy decrement) + M8 (inline check) + M13 (prop-network-fuel access) measure RETIRED patterns. M10/M11/M12/R4 + A7/A9 + E7/E8 remain RELEVANT. 3 of 11 obsolete. **Reframed per β2 (this commit).** |
+| **F7** | **Probe file present** | `examples/2026-04-22-1A-iii-probe.prologos` — 28 commands per S4 baseline reference |
+| **F8** | **Codifications graduation candidates** | **2 READY (5+ data points)** + **1 at 3 data points (graduation candidate)** + ~10 watching list items |
+| **F9** | **Item #1 (merge-fn-caching) status** | NAMED as Phase 1V sub-phase per §11.3; closes the unilateral gate revision from 1B-iv (§13.7 3→5 ns/cycle). NOT yet implemented. **In scope per γ-all3.** |
+| **F10** | **Item #1-bis (fuel-cell direct-ref caching) status** | PROPOSED at 1C-vi A/B/C report (~30-60 LoC; ~0.3 ns/cycle amortized savings at production-realistic N). NOT yet implemented. **In scope per γ-all3.** |
+| **F11** | **Item #2 (§10 doc cleanup) status** | MOVED to 1C-i; mechanical sed-replace landed there. Phase 1V verification: grep for stale §10 doc refs to confirm clean. |
+| **F12 ✅** | **Item #3 (SRE property-sweep) status** | CONDITIONAL on Track 2I readiness. **USER CONFIRMED Track 2I is CLOSED AND COMPLETE** (status update vs MASTER_ROADMAP.org's 🔄 marker which is stale). **In scope per γ-all3.** |
+| **F13** | **Item #4 (D-1B-ii-3) status** | ✅ COMPLETED at 1C-vi (allocation verification) |
+| **F14** | **Phase 1V Commit 5 NEW microbench runs needed** | Per β2: 5 NEW runs (A7.1/A7.2/A7.3 + A9 + E8) + 6 references to existing post-D.4 measurements (M10/M11/M12 from 1B-iii close; R4 from 1C-vi; E7 from 1C-vi A/B/C; §13.6 W1-W5; §13.6.A Option 13 spike) |
+| **F15** | **Probe baseline data presence** | Pre-0 S4 captured in `data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`: 28 commands; cell_allocs ≈1181; prop_firings 0; prop_allocs 0; specific wall + counters per command. Available for comparison. |
+| **F16** | **Combined Phase 1A LoC removed** | ~2649 LoC removed across 1A-iii-b + 1A-iii-c |
+
+**Five architectural questions resolved (Q-1V-α through Q-1V-ε)**:
+
+**Q-1V-α — VAG framing update — RESOLVED α1 (this commit)**
+
+§11.2 VAG questions reframed from D.3 hybrid pivot framing to D.4 CANONICAL reality. D.3 framing preserved at bottom of §11.2 as "§11.2 (D.3 historical)" for traceability.
+
+Rationale: design doc must reflect current truth at the moment VAG is applied. D.3 hybrid framing references retired mechanisms (struct field, macro, M7/M8/M13 microbenches) that no longer exist in production. Phase 1V VAG applied with reframed questions is HONEST; with original D.3 framing would be measuring against obsolete reality.
+
+**Q-1V-β — Microbench re-run scope — RESOLVED β2 (this commit)**
+
+Replace 3 OBSOLETE microbenches (M7 struct-copy / M8 inline check / M13 prop-network-fuel access) with references to existing post-D.4 measurements:
+
+| Obsolete (D.3 era) | D.4 equivalent (REFERENCE existing) |
+|---|---|
+| M7 (struct-copy decrement) | §13.6 W1 (specialized cell-write, no-spec, no-threshold-crossing) |
+| M8 (inline check) | §13.6.A Option 13 deferred-write per-cycle amortized (W3-O13) |
+| M13 (prop-network-fuel macro access) | §13.6 W4 (specialized cell-read direct-counter access) |
+
+Phase 1V Commit 5 microbench coverage:
+- **5 NEW runs** at Phase 1V close: A7.1 + A7.2 + A7.3 (1k/10k/100k decrements; GC profile under D.4 cell-write) + A9 (speculation rollback) + E8 (50-deep id composition)
+- **6 references to existing measurements**: M10 + M11 + M12 (1B-iii close per §9.10); R4 (1C-vi commit 2); E7 (1C-vi A/B/C report: 351.68 ms median vs Pre-0 295.06 = +19.2%); §13.6 W1-W5 spike; §13.6.A Option 13 spike; 1C-vi A/B/C 11-row report
+
+Total verification: **5 NEW + 6 reference = 11 verifications** (matches §11.3's "11 microbench re-runs" framing structurally; β2 reframes execution to leverage existing data where measured).
+
+**Q-1V-γ — Phase 1V sub-phase items — RESOLVED γ-all3 (Items #1 + #1-bis + #3 ALL IN SCOPE)**
+
+User confirmed Track 2I is CLOSED AND COMPLETE (Item #3 unblocked):
+
+| Item | Description | Scope | Sub-phase commit |
+|---|---|---|---|
+| **#1 merge-fn-caching** | Cache merge-fn directly on specialized-cell-meta struct; closes unilateral §13.7 gate revision from 1B-iv | ~10-20 LoC | Commit 2 |
+| **#1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; saves ~0.3 ns/cycle at production-realistic N (per 1C-vi A/B/C) | ~30-60 LoC | Commit 3 |
+| **#3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations (commutative-quantale, integral-quantale, residuated, etc.) hold against generated samples | ~scope TBD at Commit 4 mini-design opening | Commit 4 |
+
+Item #2 (§10 doc cleanup): VERIFIED clean at Commit 5 via grep (mechanical sed-replace landed at 1C-i).
+Item #4 (D-1B-ii-3): ✅ COMPLETED at 1C-vi.
+
+Rationale: Track 2I readiness now confirmed (per user); all 3 actionable items advance Phase 1 capability. Item #1 closes the unilateral gate revision flag (load-bearing per §10.0); Item #1-bis closes the production-realistic-N gap from 1C-vi; Item #3 empirically verifies the algebraic property declarations shipped at 1B-iii.
+
+**Q-1V-δ — Codifications graduation count — RESOLVED δ1 (graduate 3 codifications)**
+
+Three codifications graduate to DEVELOPMENT_LESSONS.org at Phase 1V atomic close (Commit 5):
+
+| # | Pattern | Data points | Graduation language |
+|---|---|---|---|
+| **1** | Audit-driven scope refinements propagate into §10.4 estimates pre-next-sub-phase | 5 (1C-i ε; 1C-ii-b α; 1C-ii-b F3; 1C-iii audit; 1C-iv δ2) | "Mini-audit step is materially load-bearing for scope precision; mini-design's helper-usage assumptions can be off when existing code structure has interleaved fields. Audit findings propagate INTO design-doc estimates before next sub-phase opens." |
+| **2** | Transitional dual-write/substitution patterns require explicit retirement obligation at destination sub-phase | 5 (D-1C-ii-a-1; D-1C-ii-b-1; D-1C-iii-5; D-1C-iv-1; D-1C-iv-2) | "When a sub-phase introduces transitional dual-write/substitution (e.g., struct-field PLUS cell-write under β1 lockstep), the destination sub-phase that retires the off-network mechanism MUST be named with a NUMBERED RETIREMENT OBLIGATION (D-X-N) in the source sub-phase's drift risks. Without the named obligation, the transitional scaffolding can persist indefinitely." |
+| **3** | Audit narrative-vs-pipeline.md function-coverage exhaustiveness gap | 3 (1A-iii-c F11 discovered; 1A-iii-b §7.9 F14 surfaced preemptively; 1A-iii-b `fef06994` impl validated) | "Audit findings claiming line-range retirement must enumerate functions/structs within the range and verify each against modern-API usage. Line-range framing alone is insufficient when shared helpers may be interleaved. Apply pipeline.md per-function exhaustiveness check (whnf + nf; zonk + zonk-at-depth + default-metas; shift + subst; infer + check + is-type + infer-level; pp-expr + uses-bvar0?) per file, NOT just file enumeration." |
+
+The 3rd codification has 3 data points across consecutive sub-phases AND a PROPHYLACTIC validation (1A-iii-b sweep found ZERO missed sites under the preemptive application). Strong evidence — graduate.
+
+**Q-1V-ε — Atomicity — RESOLVED ε-multi (5-commit sub-phase split)**
+
+Phase 1V atomic close lands as **5 commits** matching Per-Phase Protocol pattern from prior sub-phases:
+
+| Commit | Scope | Status |
+|---|---|---|
+| **Commit 1** (this) | §11.2 reframing + §11.X mini-design + audit + §3 tracker + dailies | ⬜ THIS COMMIT |
+| **Commit 2** | Item #1 (merge-fn-caching ~10-20 LoC); re-microbench CW3 to verify §13.7 gate recovery | ⬜ |
+| **Commit 3** | Item #1-bis (fuel-cell direct-ref caching ~30-60 LoC); re-microbench amortized-per-cycle | ⬜ |
+| **Commit 4** | Item #3 (SRE property-sweep wiring + verification; scope confirmed at Commit 4 mini-design opening) | ⬜ |
+| **Commit 5** | Atomic VAG (4 questions × TWO-COLUMN per reframed §11.2) + 5 NEW microbench runs + 3 codifications graduation to DEVELOPMENT_LESSONS.org + Item #2/#4 verification + probe diff = 0 check + suite GREEN gate + §3 tracker (Phase 1V ✅) + dailies + Phase 1 atomic close | ⬜ |
+
+Rationale: matches 1A-iii-b/c + 1B-ii/iii/iv + 1C-ii-a/b/iii/iv/vi precedents — each sub-phase gets its own focused commit for bisectability. 3 implementation commits (#1, #1-bis, #3) + 1 atomic close commit (#5) = 4 substantive commits + 1 mini-design persistence (#1) = 5 total.
+
+**Drift risks named at design+audit time (D-1V-1 through D-1V-6)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-1 | VAG framing rot (§11.2 D.3 hybrid catalogue) | ✅ AUDIT-RESOLVED via α1 (this commit) |
+| D-1V-2 | Obsolete microbenches (M7/M8/M13 retired patterns) | ✅ AUDIT-RESOLVED via β2 reference-to-existing plan |
+| D-1V-3 | Sub-phase scope (Items #1 + #1-bis + #3) | ✅ AUDIT-RESOLVED via γ-all3 (Track 2I closed per user) |
+| D-1V-4 | Codifications graduation count (2 vs 3) | ✅ AUDIT-RESOLVED via δ1 (3 graduations) |
+| D-1V-5 | Probe diff vs Pre-0 baseline (semantic 0-diff gate) | ⬜ DEFERRED to Commit 5 (run probe + diff at atomic close) |
+| D-1V-6 | PIR scheduling | ⬜ DEFERRED to user — PIR likely; user will call explicitly per Q-1V-η |
+
+**NEW codification candidates surfaced this opening**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **§11.X-style mini-design opening for Phase V (vision-alignment gate)** — VAG closure itself follows Per-Phase Protocol like implementation sub-phases | 1 (this Phase 1V opening) | NEW watching list — confirms VAG closure is itself a Per-Phase Protocol-compliant sub-phase |
+| **Multi-commit Phase V close (vs single atomic)** — Phase V closures with sub-phase remaining work (Items #1/#1-bis/#3) split into commits per item + atomic close | 1 (this Phase 1V's 5-commit structure) | NEW watching list — pattern for future Phase V closures with sub-phase items |
+| **Track 2I status update vs MASTER_ROADMAP marker staleness** — user-confirmed Track 2I closed despite roadmap showing 🔄; codification candidate "MASTER_ROADMAP status markers may lag user knowledge; cross-check with user at Phase V opening" | 1 (1V F12) | NEW watching list |
+
+**Implementation gate (per refined ε-multi)**:
+
+*Pre-Phase-1V-Commit-2 gate*: this commit (mini-design persistence) + suite GREEN at 8209/98.4s → unblocks Commit 2 (Item #1).
+
+*Pre-Phase-1V-Commit-3 gate*: Commit 2 lands + Item #1 perf gate verified (§13.7 recovery to ≤ 3 ns/cycle OR measurement-driven gate discussion if 3.5-4 ns) → unblocks Commit 3 (Item #1-bis).
+
+*Pre-Phase-1V-Commit-4 gate*: Commit 3 lands + suite GREEN → unblocks Commit 4 (Item #3). Commit 4 mini-design opening will confirm Track 2I `all-sweep-properties` wiring path.
+
+*Pre-Phase-1V-Commit-5 gate*: Commits 2-4 all landed + suite GREEN per commit → unblocks Commit 5 (atomic VAG + verifications + codifications + close).
+
+*Phase 1V close gate (Commit 5)*: ALL of:
+- 4 VAG questions PASS under adversarial framing per §11.2 reframed
+- Probe diff = 0 semantically vs Pre-0 S4 baseline
+- Full suite GREEN within 118-127s variance band (S1 reference: 119.288s) — may be lower per cumulative cleanup
+- Parity tests GREEN (per 1A-iii-b atms-deprecated-api-parity + 1A-iii-c surface-atms-ast-parity + 1B+1C tropical-fuel-parity)
+- 3 codifications graduated to DEVELOPMENT_LESSONS.org
+- Cross-reference capture in D.3 Phase 3 design verified (Form C scheduled for Phase 3C — verify at this gate)
 
 ---
 
