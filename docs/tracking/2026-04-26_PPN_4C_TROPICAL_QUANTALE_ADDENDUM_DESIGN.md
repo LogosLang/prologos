@@ -399,8 +399,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-ii-a mini-design** | α2/β1/γ-net/δ-3-tests resolved; D-1C-ii-a-1 retirement obligation captured for 1C-iv | ✅ | §10.0.2 (2026-05-16) |
 | **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3); production cell-write at line 2606; 3 new tests (cell-field-lockstep + Tier 1 preservation + cell-mechanism exhaustion) | ✅ ✓ PASS | β1 lockstep applied; net diff +6 LoC production + 76 LoC tests; 8289 tests / 126.4s / 0 failures; D-1C-ii-a-1 retirement scheduled for 1C-iv |
 | **1C-ii-b mini-design** | α2/β1/γ1/δ-3-tests resolved (α load-bearing: box pattern at #4+#5 matches Variant B canonical; preempts 1C-iii migration for 2 check sites); D-1C-ii-b-1/2 retirement+scope obligations captured | ✅ | §10.0.3 (2026-05-16) |
-| **1C-ii-b** | Variant B migration (sequential schedulers #1/#2/#4/#5) + `init-fuel-local-var!` + `flush-fuel-local-var!` helpers + recursive→box refactor at #4+#5 | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1 + Q-1C-ii-b-α α2; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-b-1); revised scope ~115-205 LoC; target ~2.16 ns/cycle amortized |
-| **1C-iii** | Migrate **9** check sites (REDUCED from 11; lines 3217 + 3270 PREEMPTED by 1C-ii-b α2 per D-1C-ii-b-2) | ⬜ | Per §10.4 |
+| **1C-ii-b mini-audit** | Line drift confirmed (+11 at #4/#5/wrapper); F3 helper-usage refinement at #1+#2 finalize (helper init-only; cell-write ADD after existing struct-copy); D-1C-ii-b-6/7 drift risks named; revised scope ~106-167 LoC | ✅ | §10.0.4 (2026-05-16) |
+| **1C-ii-b** | Variant B migration (sequential schedulers #1/#2/#4/#5) + `init-fuel-local-var!` + `flush-fuel-local-var!` helpers + recursive→box refactor at #4+#5; F3 audit refinement applied | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1 + Q-1C-ii-b-α α2 + §10.0.4 F3; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-b-1); revised scope **~106-167 LoC**; target ~2.16 ns/cycle amortized |
+| **1C-iii** | Migrate **9** check sites (REDUCED from 11; lines **3228 + 3281** PREEMPTED by 1C-ii-b α2 per D-1C-ii-b-2; line drift caught at §10.0.4 F1) | ⬜ | Per §10.4 |
 | **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
 | **1C-v** | Migrate 13 test sites + 2 bench sites (single mechanical batch) | ⬜ | Per §10.4 + Q-1C-δ δ1 (after §10 cleanup at 1C-i) |
 | **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
@@ -2047,6 +2048,186 @@ Similar refactor for `run-narrow-phase`.
 
 Single 1C-ii-b commit (per Q-1C-α α2 atomicity at variant level, not further split). Estimated implementation time ~45-90 min.
 
+> **Audit refinement (2026-05-16)**: 1C-ii-b mini-audit (§10.0.4) refined the helper usage pattern at #1+#2 finalize (F3) — existing struct-copy writes BOTH worklist + fuel-field together, so helper replaces init only; cell-write ADDED after finalize struct-copy. Revised scope: **~106-167 LoC** (tighter due to F3). See §10.0.4 for full audit findings.
+
+---
+
+### §10.0.4 1C-ii-b Mini-Audit Findings (D.4 CANONICAL 2026-05-16, audit re-run pre-implementation)
+
+> **Status**: 1C-ii-b pre-implementation audit ✅ COMPLETE (this commit). Re-verified line numbers against current `propagator.rkt` at commit `122a3a8a` (D-1C-i-1 drift risk materialized — +11 line shift at #4/#5 + widen wrapper since 1C-i audit). Refined helper usage pattern at #1+#2 finalize based on actual code structure (F3 design refinement to §10.0.3). 5 findings (F1-F5) + 3 structural confirmations (F6-F8); 2 new drift risks named (D-1C-ii-b-6/7); revised scope ~106-167 LoC.
+
+**Per Stage 4 Per-Phase Protocol step 2 (Mini-audit codebase)**: read the actual code; do not work from memory or §10.0.3 sketch assumptions. The audit cycle co-depends with mini-design step 1 (which landed at §10.0.3); refinements from this audit are integrated below + forward-pointer added to §10.0.3 implementation sketch.
+
+**F1 — Line drift confirmed (D-1C-i-1 materialized)**
+
+Current line numbers (re-verified 2026-05-16 against `propagator.rkt` at commit `122a3a8a`):
+
+| # | Function / site | Line (current) | Line (per §10.0.3) | Drift |
+|---|---|---|---|---|
+| #1 outer | `run-to-quiescence-inner` | 2030 | 2030 | 0 |
+| #1 outer guard check site | `(<= (prop-network-fuel net) 0)` | 2034 | (not migrated at 1C-ii-b; 1C-iii scope) | 0 |
+| #1 drain entry | `run-to-quiescence-drain` | 2039 | 2039 (per F2) | 0 |
+| #1 drain box init | `(box (prop-network-fuel net))` | 2041 | 2041 | 0 |
+| #1 drain finalize | finalize fn (writes wl + fuel via struct-copy) | 2050-2058 | 2058 | 0 |
+| #1 drain box check | `(<= (unbox remaining-fuel) 0)` | 2064 | (inside box pattern) | 0 |
+| #1 drain decrement | `(set-box! remaining-fuel (sub1 ...))` | 2069 | 2069 | 0 |
+| #2 outer | `run-to-quiescence-inner/traced` | 2087 | 2087 | 0 |
+| #2 box init | `(box (prop-network-fuel net))` | 2089 | 2089 | 0 |
+| #2 finalize | finalize fn (writes wl + fuel via struct-copy) | 2092-2095 | (similar to #1) | 0 |
+| #2 box check | `(<= (unbox remaining-fuel) 0)` | 2099 | (inside box pattern) | 0 |
+| #2 decrement | `(set-box! remaining-fuel (sub1 ...))` | 2104 | 2104 | 0 |
+| #4 outer | `run-widen-phase` | **3225** | 3214 | **+11** |
+| #4 entry guard check | `(<= (prop-network-fuel net) 0)` | **3228** | 3217 | **+11** |
+| #4 decrement | `[fuel (sub1 (prop-network-fuel net))]` | **3236** | (inside cond [else ...]) | **+11** |
+| #5 outer | `run-narrow-phase` | **3278** | 3267 | **+11** |
+| #5 entry guard check | `(<= (prop-network-fuel net) 0)` | **3281** | 3270 | **+11** |
+| #5 decrement | `[fuel (sub1 (prop-network-fuel net))]` | **3289** | (inside cond [else ...]) | **+11** |
+| wrapper | `run-to-quiescence-widen` | **3364** | 3353 | **+11** |
+| wrapper check sites | 3368, 3371, 3378 | (3368, 3371, 3378 drifted from 3357, 3360, 3367) | **+11** |
+
+**D-1C-ii-b-2 preempted-check-site line numbers UPDATED**: the §10.0.3 mini-design + §10.4 1C-iii row reference lines **3217 + 3270**. Per audit re-verification, the correct current lines are **3228 + 3281**. §3 Progress Tracker note + §10.4 1C-iii scope description should reference 3228 + 3281 (line numbers continue to drift between sub-phase boundaries; 1C-iii mini-audit re-verifies again before 1C-iii edits).
+
+**F2 — #1 is split between two functions (clarification, not scope change)**
+
+`run-to-quiescence-inner` (line 2030) is an OUTER guard with a 4-line cond (2032-2036) that short-circuits when there's no work to do. The box pattern lives in `run-to-quiescence-drain` (line 2039), called from line 2036's `[else (run-to-quiescence-drain net)]`. The 1C-i finding α's framing ("#1 already has partial Variant B pattern") is correct but referred to the drain function's internals.
+
+**Implication for 1C-ii-b**:
+- The outer check site at line 2034 (`(<= (prop-network-fuel net) 0)`) is **NOT** migrated at 1C-ii-b. It's a top-level guard before any decrement happens; it belongs to 1C-iii's check-site migration scope (alongside the other 8 1C-iii check sites). This is consistent with §10.4 1C-iii scope.
+- Migration affects only `run-to-quiescence-drain`'s internals (init + finalize per F3 refinement).
+
+No scope expansion; just precise scoping confirmation.
+
+**F3 — Helper usage pattern refinement at #1+#2 finalize (DESIGN REFINEMENT to §10.0.3)**
+
+§10.0.3 mini-design sketch said for #1+#2: "init source `(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`; finalize flush (line 2058) → `flush-fuel-local-var! net local-fuel-box`."
+
+**Audit reality**: the existing finalize at #1 (line 2050-2058) writes BOTH worklist AND fuel-field via a single struct-copy:
+
+```racket
+;; #1 drain finalize at lines 2057-2058 (current)
+(struct-copy prop-network n
+  [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+```
+
+Same pattern at #2 (lines 2092-2095). Replacing this with `flush-fuel-local-var!` (which writes cell + fuel-field but NOT worklist) would lose the worklist flush.
+
+**Three options considered**:
+- **Option A**: keep existing struct-copy verbatim + ADD `(net-cell-write n* fuel-cell-id ...)` after it. β1 lockstep via two adjacent operations. Helper used at INIT only for #1+#2.
+- **Option B**: helper handles fuel (cell + field); restructure finalize to set worklist via separate struct-copy first. Helper used at INIT + FINALIZE for #1+#2. Two struct-copies at finalize (one for wl, one for fuel via helper).
+- **Option C**: extend helper to accept worklist box too. Overspecializes helper.
+
+**Resolution Option A** (clean + minimal diff + helper preserved generic):
+- Finalize keeps existing struct-copy (it already does β1 lockstep for field correctly; the only gap is cell-write)
+- Adding `(net-cell-write n* fuel-cell-id (unbox remaining-fuel))` after the struct-copy is the smallest possible diff
+- The helper signature (`flush-fuel-local-var!` writes BOTH cell + field) remains generic for #4+#5 where there's no worklist interleaving
+- Asymmetry (helper used at init+flush for #4+#5; init-only for #1+#2) is documented inline
+
+**Refined #1 finalize (post-Option-A)**:
+```racket
+(define (finalize n)
+  ;; B2f Phase 0: emit stats if non-trivial (unchanged)
+  (define wc (unbox write-count))
+  (define cc (unbox change-count))
+  (when (> wc 0)
+    (perf-record-quiescence-writes! wc cc))
+  ;; Reconstitute the hot fields from the mutable boxes (existing struct-copy).
+  ;; D.4 1C-ii-b β1 lockstep: struct-field set here; cell-write added below.
+  (define n*
+    (struct-copy prop-network n
+      [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+  ;; D.4 1C-ii-b β1 lockstep: cell write to fuel-cell-id. Pairs with struct-field
+  ;; update in the struct-copy above; β1 invariant holds at this observation point.
+  ;; D-1C-ii-b-1: this cell-write becomes the SOLE update at 1C-iv when the
+  ;; struct field retires. Per F3 audit refinement, we don't use
+  ;; flush-fuel-local-var! here because the existing struct-copy already handles
+  ;; the fuel-field part (alongside worklist); the helper is symmetric only
+  ;; where there's no worklist interleaving (i.e., #4 + #5).
+  (net-cell-write n* fuel-cell-id (unbox remaining-fuel)))
+```
+
+Same pattern at #2 finalize.
+
+**Why this refinement is principled**:
+- §10.0.3 design intent — β1 lockstep at observation points — is **preserved** (cell + field agree at finalize/flush points)
+- Helper signature (`flush-fuel-local-var!` writes BOTH cell + field) is **unchanged**
+- Application mechanism **differs per-site based on existing code structure** (init+flush at #4+#5 where helper fits cleanly; init-only at #1+#2 where existing struct-copy is preserved)
+- This is exactly the kind of refinement Stage 4 audit is designed to catch — design intent stays; mechanism gets tighter
+
+**Effective scope refinement for #1+#2 redirect**:
+- Init: 2 lines changed (one per #1 + #2; `(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`)
+- Finalize: 2 lines added (one per #1 + #2; cell-write after existing struct-copy)
+- Total: ~6-8 LoC (down from §10.0.3's ~10-20 LoC estimate)
+
+**F4 — `run-to-quiescence-widen` wrapper unchanged (1C-iii scope confirmation)**
+
+Wrapper at line 3364 has check sites at 3368 (`(<= (prop-network-fuel widened) 0)`), 3371 (same), 3378 (same). None of these are in the box pattern; they're outer guards on the result of `run-widen-phase` and the narrowing loop.
+
+**All three migrate at 1C-iii** (check-site migration scope), NOT at 1C-ii-b. This matches §10.0.3's scope confinement; the audit just confirms 1C-ii-b doesn't accidentally creep into widen wrapper.
+
+**F5 — `net-fuel-remaining` accessor (1C-iv scope confirmation)**
+
+Public accessor at lines 3109-3111:
+
+```racket
+(define (net-fuel-remaining net)
+  (prop-network-fuel net))
+```
+
+This is a public read-as-value site. Per §10.4 1C-iv scope ("migrate read-as-value sites"), it migrates at 1C-iv to `(net-cell-read net fuel-cell-id)`. **Not 1C-ii-b scope**; just confirming we don't accidentally touch it now.
+
+**F6 — Helper placement (γ1 inline in propagator.rkt; concrete location)**
+
+Best location: immediately BEFORE `run-to-quiescence-inner` at line ~2025-2029. The existing comment block at lines 2025-2029 already introduces the mutable worklist/fuel drain pattern (context-setting for why box helpers exist). Placing helpers right before `run-to-quiescence-inner` (their first user) maximizes locality + readability.
+
+**F7 — Helpers don't exist yet (clean introduction)**
+
+Verified via grep: neither `init-fuel-local-var!` nor `flush-fuel-local-var!` are defined anywhere in `propagator.rkt` or tests. Clean introduction; no naming conflict.
+
+**F8 — 1C-ii-a tests as mirror template (test-tropical-fuel.rkt:381-475)**
+
+The 3 existing 1C-ii-a tests establish a template:
+- Test (1) lockstep at observation point — verifies cell = struct-field after a round
+- Test (2) preservation invariant (fast-path) — verifies neither cell nor field changes when the migration-target path isn't exercised
+- Test (3) exhaustion via cell-mechanism — verifies on-write-check fires contradiction structurally
+
+For 1C-ii-b, the 3 new tests mirror this structure but exercise sequential schedulers:
+- **Test (1) 1C-ii-b cell-field-lockstep at sequential exit**: `run-to-quiescence-bsp` with `sequential-fire-all` executor (OR direct test of `run-widen-phase`); verify cell = struct-field after run
+- **Test (2) 1C-ii-b helper correctness**: directly call `init-fuel-local-var!` (returns box with cell value) + `flush-fuel-local-var!` (writes BOTH cell + field); verify mutation behavior
+- **Test (3) 1C-ii-b exhaustion at sequential scheduler**: low-budget workload through `run-widen-phase` (struct-copy decrement path); verify contradiction fires
+
+**Mirror discipline keeps test structure uniform → easier maintenance + audit; full suite GREEN broadens coverage to all 4 sequential entry points via existing tests (test-widen-narrow, test-abstract-interpretation-e2e, test-propagator-bsp).**
+
+---
+
+**Drift risks named at audit time (additive to D-1C-ii-b-1/2 from mini-design)**:
+
+- **D-1C-ii-b-6**: helper used at INIT but not at FINALIZE for #1+#2 (per F3 refinement) — future maintainers might wonder why the helper isn't symmetric across all 4 sequential entry points. Mitigation: inline comment at #1+#2 finalize naming the asymmetry + reference to §10.0.4 F3 audit finding.
+- **D-1C-ii-b-7**: line 2034 (#1 outer guard) + lines 3368/3371/3378 (widen wrapper) are check sites NOT in 1C-ii-b scope. Risk: inadvertent migration during refactor. Mitigation: 1C-ii-b commit message explicit scope statement + §10.0.4 F4 explicit "stays 1C-iii scope."
+
+**Revised scope estimate (audit-driven; tighter than §10.0.3's ~115-205 LoC)**:
+
+| Component | §10.0.3 sketch | Audit refinement | Source |
+|---|---|---|---|
+| Helpers `init-fuel-local-var!` + `flush-fuel-local-var!` | ~15-25 LoC | ~10-15 LoC | F6 + F7 |
+| #1 + #2 redirect | ~10-20 LoC | ~6-8 LoC | F3 (Option A; init only + finalize cell-write add) |
+| #4 + #5 recursive→box refactor | ~40-60 LoC | ~40-60 LoC | unchanged |
+| Tests (3 new) | ~50-100 LoC | ~50-80 LoC | F8 (mirror template) |
+| **Total** | **~115-205 LoC** | **~106-167 LoC** | tighter by ~10-40 LoC |
+
+**Audit ↔ mini-design ↔ implementation cycle observation**: this audit refinement is a textbook example of the co-dependent mini-design + mini-audit relationship per DESIGN_METHODOLOGY § Stage 4 Implementation Protocol. §10.0.3 sketched the helper as symmetric across all 4 sequential entry points; the audit revealed worklist interleaving at #1+#2 finalize that makes asymmetric application principled. Without the audit step, implementation would have either (a) restructured #1+#2 finalize unnecessarily, OR (b) silently called the helper at finalize and ended up with redundant struct-copies. Audit catches this BEFORE code writes.
+
+**Codification candidate watching list update**: "Audit-driven helper-usage refinement: when a helper is applied across structurally-similar but mechanically-distinct sites, the helper signature may stay generic while application mechanism varies per-site based on existing code structure (e.g., interleaved fields)." 1 data point (this F3 refinement); watching for more.
+
+---
+
+**Next: 1C-ii-b implementation per §10.0.4-refined scope** (~106-167 LoC):
+1. Helpers at line ~2027-2029 (~10-15 LoC; per F6)
+2. #1 + #2 redirect (~6-8 LoC; per F3 Option A; init only + cell-write after existing finalize)
+3. #4 + #5 recursive→box refactor (~40-60 LoC; per §10.0.3 sketch)
+4. 3 new tests at end of test-tropical-fuel.rkt (~50-80 LoC; per F8 mirror)
+
+Targeted tests + full suite GREEN + VAG + commit + tracker + dailies per Stage 4 Per-Phase Protocol step 5+.
+
 ---
 
 ### §10.1 Scope and rationale (D.4)
@@ -2385,7 +2566,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - **Per 1C-i α finding + Q-1C-ii-b-α α2 resolution**:
     - **#1 + #2 simple redirect (~10-20 LoC total)**: existing box-mutation pattern (lines 2041, 2069, 2089) PRESERVED; init source `(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`; finalize flush (line 2058) → `flush-fuel-local-var! net local-fuel-box`
     - **#4 + #5 recursive→box refactor (~40-60 LoC total per Q-1C-ii-b-α α2)**: `run-widen-phase` + `run-narrow-phase` refactor from recursive `define` + per-fire struct-copy to loop-style with box init at entry + per-fire box decrement + flush at exit. Box pattern matches §10.3.A Variant B canonical design + achieves §13.6.A spike's ~2.16 ns/cycle target.
-  - **Check sites at lines 3217 + 3270 MIGRATE at 1C-ii-b** (per Q-1C-ii-b-α α2 preemption): `(<= (prop-network-fuel net) 0)` → `(<= (unbox local-fuel) 0)` (per-iteration box check). **D-1C-ii-b-2 1C-iii scope reduction**: 1C-iii migrates only 9 check sites (was 11), since lines 3217 + 3270 are migrated at 1C-ii-b.
+  - **Check sites at lines 3228 + 3281 MIGRATE at 1C-ii-b** (per Q-1C-ii-b-α α2 preemption; line numbers refreshed at §10.0.4 F1 from §10.0.3's 3217+3270 reference): `(<= (prop-network-fuel net) 0)` → `(<= (unbox local-fuel) 0)` (per-iteration box check). **D-1C-ii-b-2 1C-iii scope reduction**: 1C-iii migrates only 9 check sites (was 11), since lines 3228 + 3281 are migrated at 1C-ii-b.
   - At each sequential phase entry: `init-fuel-local-var!` reads fuel-cell-id into local-var box
   - Per fire (inline in loop body): decrement local-var + threshold check (`(<= (unbox local-fuel) 0)` — Option A)
   - At each sequential phase exit/contradiction/fork: `flush-fuel-local-var!` flushes local-var → BOTH cell-write AND struct-field-write (β1 lockstep; D-1C-ii-b-1 retirement at 1C-iv)
@@ -2397,7 +2578,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
 
 - **1C-iii** (REFINED per D-1C-ii-b-2 preemption) — Migrate **9** check sites (REDUCED from 11):
   - Original 11 check sites at propagator.rkt:1817, 2366, 2373, 2329, 2992, 3045, 3132, 3135, 3142, 65, 399 (line numbers as of 2026-04-26 audit; subject to drift; re-verify at 1C-iii mini-audit)
-  - **2 sites PREEMPTED by 1C-ii-b** per Q-1C-ii-b-α α2: lines 3217 (run-widen-phase entry check) + 3270 (run-narrow-phase entry check) migrate at 1C-ii-b alongside the box pattern introduction
+  - **2 sites PREEMPTED by 1C-ii-b** per Q-1C-ii-b-α α2 + §10.0.4 F1 line refresh: lines **3228** (run-widen-phase entry check) + **3281** (run-narrow-phase entry check) migrate at 1C-ii-b alongside the box pattern introduction
   - **Remaining 9 sites at 1C-iii**: line numbers TBD at 1C-iii mini-audit (line drift expected; re-verify against current code)
   - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)` (or equivalent observer of contradicted state)
   - Most check sites are AFTER round boundary OR within BSP fire loop (where local-var is current); semantic equivalence preserved
