@@ -407,7 +407,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-iv-a** | All migrations (6 production sites + 8 test files + bench-alloc + bench-ppn-track4c ε2 retirement + 2 new tests for fork-cell-reset + typing-substitution); full β2 at BSP sites 2+3 (D-1C-iii-5 retirement); ~100-180 LoC across ~15 files | ✅ ✓ PASS | 8289 tests / 128.9s / 0 failures; commit `e85638af` |
 | **1C-iv-b** | Retirements (provide + macro + struct field + 1C-ii-a/b lockstep + 8 constructor updates + 1 test-propagator-bsp constructor fix); D-1C-ii-a-1 + D-1C-ii-b-1 retirement obligations honored | ✅ ✓ PASS | **8294 tests / 100.9s / 0 failures**; **-28s perf improvement vs 1C-iv-a baseline** (dual-write elimination); cell IS sole live state under D.4 |
 | ~~**1C-v**~~ | ~~Migrate 13 test sites + 2 bench sites~~ | ABSORBED into 1C-iv-a per Q-1C-iv-δ δ2 | §10.0.6 δ2 |
-| **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
+| **1C-vi mini-design + mini-audit** | α3/β3+dual-surface/γ3-slim/δ2+δ3/ε1-reframed/ζ1/η1 resolved; sub-sub-phase split into Commit 1 (code additions) + Commit 2 (measurement artifacts); 5 drift risks named (D-1C-vi-1/2/3/4/5); 2 NEW codification candidates on watching list (multi-surface tracking; bench-file gap-closure coupling) | ✅ | §10.0.7 (2026-05-16) |
+| **1C-vi (code additions)** | NEW `bench-tropical-fuel.rkt` (~100-200 LoC; allocation verification + GC profile + per-cycle production cost + M10/M11/M12/R4 captures per §9.10); γ3-b unit tests in test-tropical-fuel.rkt; γ3-a integration tests in test-elaboration-parity.rkt; δ3 0-allocation regression test; closes F5 stub-reference gap | ⬜ | Per §10.0.7 + §10.4 1C-vi |
+| **1C-vi (measurement artifacts)** | probe + acceptance run + capture; production C measurements; A/B/C report doc with 11-row per-measurement table; GitHub Issue (bench-ab.rkt `--refs` enhancement); MASTER_ROADMAP.org + DEFERRED.md cross-references; D-1B-ii-3 allocation verification result | ⬜ | Per §10.0.7 + §11.3 |
 | **1V merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii gate gap (per Phase 1V scope item #1) | ⬜ | Per §11.3; measurement-driven gate decision if needed |
 | **1V SRE property-sweep** | Conditional on Track 2I infrastructure readiness (per Phase 1V scope item #3) | ⬜ | Per §11.3; defer to sister track if infrastructure not ready |
 | **1V** | Vision Alignment Gate Phase 1 atomic close (1A + 1B + 1C) | ⬜ | Per §11 |
@@ -2536,6 +2538,202 @@ Pattern: `(prop-network-fuel X)` → `(net-cell-read X fuel-cell-id)`. Sed-style
 |---|---|---|
 | Audit-driven scope refinements propagate into §10.4 estimates pre-next-sub-phase | 5 (1C-i ε; 1C-ii-b α; 1C-ii-b F3; 1C-iii audit; **1C-iv δ2 1C-v absorption**) | **5+ data points; READY TO CODIFY** at 1C-iv close |
 | Transitional dual-write/substitution patterns require explicit retirement obligation at destination sub-phase | 4 (D-1C-ii-a-1; D-1C-ii-b-1; D-1C-iii-5; **D-1C-iv-1 fork-reset + D-1C-iv-2 typing-substitution + D-1C-iv-5 full-β2-completion**) | **4+ data points; READY TO CODIFY** at 1C-iv close |
+
+---
+
+### §10.0.7 1C-vi Mini-Design + Mini-Audit Resolutions (D.4 CANONICAL 2026-05-16, combined)
+
+> **Status**: 1C-vi pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together (audit-grounded design questions; questions clarified what audit needed to verify). **Seven resolutions** (α3 / β3+dual-surface / γ3-slim / δ2+δ3 / ε1-reframed / ζ1 / η1) + **five drift risks** (D-1C-vi-1 through D-1C-vi-5) + **two new codification candidates** on watching list. Per α3 atomicity decision, 1C-vi splits into **1C-vi (code additions)** + **1C-vi (measurement artifacts)** as two atomic commits — ~180-300 LoC total across 3 source files + new bench file + report document + 3 tracking surfaces. **Final 1C sub-phase**; Phase 1V atomic close follows after 1A-iii-b + 1A-iii-c land separately.
+
+**Per Stage 4 Per-Phase Protocol steps 1+2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §10.0.4 1C-ii-b + §10.0.5 1C-iii + §10.0.6 1C-iv pattern).
+
+**Mini-audit findings (concrete grounding at post-1C-iv-b state, commit `00f7ce05` / FORK CHECKPOINT `1b8e16ae`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | Parity test infrastructure: `tests/test-elaboration-parity.rkt` | ✅ EXISTS (256 lines; approach C expected-output assertions; per-phase enablement table — γ3-a wires here) |
+| **F2** | Probe file: `examples/2026-04-22-1A-iii-probe.prologos` | ✅ EXISTS (S4 baseline reference; 28 commands per Pre-0 §12.5) |
+| **F3** | A/B/C tooling: `racket/prologos/tools/bench-ab.rkt` | ✅ EXISTS (Mann-Whitney U; supports `--ref HEAD~1` for A/B); **does NOT support `--refs` for A/B/C** — small tool enhancement per §13.7; deferred per β3 |
+| **F4** | Baseline data captured: `data/benchmarks/tropical-*` | ✅ 5 files: `tropical-pre0-baseline-2026-04-26.txt` (A); `tropical-spike-d4-2026-05-14.txt` (B reference §13.6); `tropical-spike-d4-option13-2026-05-15.txt` (C spike reference §13.6.A); `tropical-1b-i/ii-cell-meta-2026-05-15.txt` (Phase 1B framework) |
+| **F5** | bench-ppn-track4c.rkt status | 53-line retirement stub references `bench-tropical-fuel.rkt` — **but that file does NOT exist** (gap; closed by η1) |
+| **F6** | `bench-specialized-cell-spike.rkt` | EXISTS (717 lines); throwaway spike per §13.6 header; should NOT be home for production C measurement |
+| **F7** | `test-tropical-fuel.rkt` fuel-cell behavior | ~10 sites verified (specialized-cell-meta assertions; fork-cell-reset; typing-substitution; cell-value invariants from 1B-iv + 1C-ii-a/b/iv) |
+| **F8** | Suite + commit state | HEAD `1b8e16ae`; 8294 / 100.9s / 0 failures; pre-existing user-managed working-tree changes only |
+| **F9** | OLD counter parity baseline reality | OLD struct-field counter RETIRED at 1C-iv-b — cannot run live A/B; "parity" reframes to **regression-vs-historical-baseline** (per γ3 resolution) |
+
+**Seven architectural questions resolved (Q-1C-vi-α through Q-1C-vi-η)**:
+
+**Q-1C-vi-α (LOAD-BEARING) — Sub-sub-phase atomicity — RESOLVED α3 (2 commits BY KIND)**
+
+Split into **(1) code additions** + **(2) measurement artifacts** as two atomic commits.
+
+Rationale:
+- α1 (single commit) too large (~180-300 LoC + report); harder to bisect; mixes code-additions + verification-artifacts + measurement-reports
+- α2 (4 commits per deliverable: probe / A/B/C / allocation / parity) over-splits — probe+A/B/C are both verification artifacts sharing execution context; parity+allocation are both test code
+- α4 (3 commits: code / run / report) extra commit for "run" feels artificial when execution is fast
+- α3 mirrors 1C-iv's pattern (migrations vs retirements split by semantic work-unit); naturally bisectable; each commit ~30-60 min; clean handoff to Phase 1V
+
+**Q-1C-vi-β — A/B/C comparison report tool + format — RESOLVED β3 (markdown report) + dual-surface tracking for bench-ab.rkt --refs follow-up**
+
+A/B/C report as a **markdown document** comparing existing baseline data files + new production C measurement. No bench-ab.rkt tool change at this addendum.
+
+Rationale (β3):
+- A baseline measurement requires CODE THAT NO LONGER EXISTS (OLD struct-field counter RETIRED at 1C-iv-b) — live A re-measurement is structurally impossible; A must come from captured historical data
+- A and B data files already exist (per F4); only C needs new measurement
+- Honest framing: report explicitly says "A = pre-D.4 baseline from `tropical-pre0-baseline-2026-04-26.txt` (struct-copy + inline check measured 2026-04-26)" rather than pretend it's a live measurement
+- Cheapest correct answer; report is the easiest input for Phase 1V VAG question (b) "did Pre-0 microbench perf claims land?"
+- β1 (extend bench-ab.rkt with `--refs`) has merit but is out of scope for THIS A/B/C; future tracks with all 3 variants live could benefit — captured as dual-surface follow-up
+
+**Dual-surface tracking for bench-ab.rkt `--refs` enhancement** (per user direction "all three surfaces with cross-references"):
+
+| Surface | Content | Purpose |
+|---|---|---|
+| **GitHub Issue** (Primary) | "Extend `bench-ab.rkt` with `--refs` for multi-way A/B/C+ comparison" | Queryable; linkable from PRs; surfaces in repo dashboards; gets an ID |
+| **MASTER_ROADMAP.org** | Forward-references at OE Series Track 1 + PReduce Track 4 entries citing Issue ID | Future track designers find the enhancement when planning their multi-variant comparison work |
+| **DEFERRED.md** | Entry citing Issue ID + cross-referencing roadmap entries | Backup surface; cross-referenced to others |
+
+All three surfaces explicitly cite the Issue ID + each other. When any surface gets updated/closed, the cross-references let any other surface get updated by following links. Pattern mirrors Issue #55's four-surface tracking but with stronger cross-reference discipline.
+
+**Q-1C-vi-γ — tropical-fuel-counter-parity test (§15) form — RESOLVED γ3-slim**
+
+Both integration-level + unit-level parity:
+
+- **γ3-a** (integration; `test-elaboration-parity.rkt` per §15 explicit wire): 1-2 test cases asserting representative workload exhausts at the same point under cell-API as Pre-0 baseline data
+- **γ3-b** (unit; `test-tropical-fuel.rkt`): 1-2 test cases covering behavioral contract OLD counter satisfied (now satisfied by new mechanism): exhaustion at zero remaining; on-write predicate fires at `(<= new 0)`; cell value AT exhaustion equals 0 (Option A: cells store REMAINING)
+
+Rationale:
+- §15 explicit wire ("wires into `tests/test-elaboration-parity.rkt`") requires γ1 minimum
+- Unit-level behavioral invariants already partially exist (per F7); γ3-b adds the specific contract-equivalence assertions
+- γ4 alone (probe-diff-only) doesn't provide suite-regression-gate; §15 codifies test discipline
+- γ3-slim is comprehensive but minimal (~30-50 LoC across both files)
+
+**Under D.4 reframing**: OLD counter RETIRED → "parity" = regression-vs-historical-baseline (not live A/B). Test fixtures encode expected values from Pre-0 captures; current cell-API behavior asserted to match.
+
+**Q-1C-vi-δ — D-1B-ii-3 allocation verification approach — RESOLVED δ2+δ3 (bench file + regression test)**
+
+Create new bench file + complementary regression test:
+
+- **δ2**: NEW `racket/prologos/benchmarks/micro/bench-tropical-fuel.rkt` (~100-200 LoC):
+  - Allocation verification section: bench-mem on N=10000 fuel decrements in `(make-prop-network 100000)` context; verify allocation = 0 bytes/decrement (or within tiny constant for the fixnum on-write-check closure)
+  - GC profile section: bench-gc on 5×100k decrements; verify ZERO major-GC
+  - Per-cycle production cost section: actual production cell-write cost at fast path (becomes C measurement for A/B/C report; covers both Variant A and Variant B contexts)
+  - **M10 + M11 + M12 + R4 captures per §9.10 Phase 1B implementation checklist** (closes the §9.10 capture gap; residuation operator + tropical tensor + SRE registration + cell layout)
+- **δ3**: NEW regression test in `test-tropical-fuel.rkt` (~10-15 LoC):
+  - Snapshot `current-memory-use` before/after N=10000 cell-writes; assert delta within conservative threshold (catches future regression where someone introduces per-write allocation)
+  - Conservative threshold (1.5× observed noise floor; per D-1C-vi-2)
+
+Rationale:
+- δ1 (extend spike file) conflates throwaway spike data with production data
+- δ2 makes `bench-tropical-fuel.rkt` the CANONICAL home for tropical-fuel production microbenches (matches stub reference in `bench-ppn-track4c.rkt`)
+- δ3 provides regression gate at suite-run time (bench is for measurement; test is for "did we lose 0-allocation property")
+- Coupling with η: δ2 + η1 collapse to one action (create the file once; serves both purposes) — good coupling
+
+**Q-1C-vi-ε — 11 Phase 1V microbench re-runs: timing — RESOLVED ε1 reframed (11 microbenches ARE the A/B/C report's substance)**
+
+The 11 microbenches per §11.3 = the A/B/C report's per-measurement rows. Done once at 1C-vi; serves both §13.7 1C-vi gate AND §11.3 Phase 1V exit criteria via handoff (Phase 1V reads the report).
+
+**Per-measurement decomposition** (11 rows in A/B/C report; ALL captured at 1C-vi):
+
+| # | Measurement | A baseline source | B reference source | C production source |
+|---|---|---|---|---|
+| 1 | M7 (decrement cost) | Pre-0 24 ns | §13.6 W1+ 6.4 ns | bench-tropical-fuel.rkt cell-write |
+| 2 | M8 (check site cost) | Pre-0 6 ns | n/a (β2 retired pattern) | bench-tropical-fuel.rkt `net-contradiction?` |
+| 3 | M10 (residuation operator) | n/a | n/a | bench-tropical-fuel.rkt (per §9.10) |
+| 4 | M11 (tropical tensor) | Pre-0 ~1 ns | n/a | bench-tropical-fuel.rkt |
+| 5 | M12 (SRE registration) | n/a | n/a | bench-tropical-fuel.rkt (per §9.10) |
+| 6 | M13 (cell-read cost) | Pre-0 6 ns macro | §13.6 W4 0.8 ns | bench-tropical-fuel.rkt cell-read |
+| 7 | A7 (high-freq decrement scaling) | Pre-0 62.5 bytes/dec | n/a | bench-tropical-fuel.rkt (5x100k) |
+| 8 | A9 (speculation rollback) | Pre-0 543 KB / 100 cycles | n/a | bench-tropical-fuel.rkt (100 spec cycles) |
+| 9 | E7 (probe full file) | Pre-0 295 ms / 826 MB | n/a | probe run capture |
+| 10 | E8 (50-deep id composition) | Pre-0 236 ms / 628 MB | n/a | probe-equivalent capture |
+| 11 | R4 (cell layout cost) | n/a | n/a | bench-tropical-fuel.rkt (per §9.10) |
+
+Each row: PASS/FAIL/INVESTIGATE verdict per §11.3 targets.
+
+Rationale:
+- ε1 (reframed) satisfies §13.7 1C-vi row literally; satisfies §11.3 Phase 1V exit criteria via handoff
+- Avoids redundancy: A/B/C report's C measurements ARE the 11 microbench re-runs; doing them twice would be wasteful
+- Phase 1V opens with rich measurement input; VAG can focus on adversarial framing
+- Honest framing: retired patterns (M7/M8/M13) "re-runs" mean "current production cell-API equivalent compared to Pre-0 baseline data" — not literal re-execution of retired code
+
+**Q-1C-vi-ζ — Coordination with 1A-iii-b + 1A-iii-c — RESOLVED ζ1 (1C-vi narrow)**
+
+1C-vi stays scope-narrow (1C-only — closes Phase 1C). 1A-iii-b + 1A-iii-c land as separate sub-phase commits BEFORE Phase 1V. Phase 1V opens with all 4 sub-phases complete and runs atomic close VAG.
+
+Rationale:
+- Conversational cadence discipline (max ~1h or 1 phase boundary): ATMS retirement is substantial (~850-1400 LoC deletion across 14 files); bundling with 1C-vi's measurement work blurs scope
+- Per-phase mini-design+audit discipline: 1A-iii-b/c each warrant own mini-design conversations (drift risks D-b-1...D-b-4 + D-c-1...D-c-5 non-trivial)
+- Atomicity for 1C closure: 1C-vi is logically "close Phase 1C"; mixing with 1A scope obscures
+- §3 Progress Tracker phrasing "can land in any order or in parallel" affirms independence; doesn't suggest bundling
+- Phase 1V atomic VAG benefits from completed substrate: opening with all 4 sub-phases done lets question (a)/(b)/(c)/(d) cover everything at once
+
+**Q-1C-vi-η — bench-tropical-fuel.rkt gap (F5 mini-audit finding) — RESOLVED η1 (create the file; coupled with δ2)**
+
+Create `bench-tropical-fuel.rkt` as canonical home for post-D.4 tropical-fuel production microbenches.
+
+Rationale:
+- η1 + δ2 collapse to one action (create the file once; serves allocation verification + M10/M12/R4 captures + production C measurement)
+- η2 (fix stub reference to spike file) conflates throwaway spike with production bench; wrong direction
+- η3 (defer to Phase 1V) leaves F5 gap open; closing now is cheap
+
+**Drift risks named at design+audit time**:
+
+- **D-1C-vi-1**: A/B/C report's C measurements diverge from §13.6.A spike numbers (production overhead vs mock). Mitigation: §13.7 1C-vi row decision rule is "investigate if difference > 2 ns"; can re-measure or investigate cell-meta dispatch overhead at production scale.
+- **D-1C-vi-2**: 0-allocation regression test threshold too strict (false positives under variance) or too loose (misses regressions). Mitigation: bench-mem at multiple N values to characterize variance; set threshold conservatively at 1.5× observed noise floor.
+- **D-1C-vi-3**: Pre-0 baseline data for parity tests (γ3-a) may not include exact workload outputs needed — Pre-0 captured probe/acceptance run aggregates, not per-expression exhaustion counts. Mitigation: γ3-a tests reference S4 probe-baseline aggregate metrics + cell-level invariants from γ3-b; if exact per-expression baselines needed, audit Pre-0 captures OR establish current cell-API behavior as the new baseline (regression-from-here-forward).
+- **D-1C-vi-4**: `bench-tropical-fuel.rkt` is new infrastructure; risk of incorrect benchmark patterns (e.g., not exercising actual hot path; pre-allocating wrong fixtures). Mitigation: model after `bench-specialized-cell-spike.rkt`'s patterns (uses same `bench-mem`/`bench-gc` macros); cross-check with 1B-iv test fixtures.
+- **D-1C-vi-5**: GitHub Issue + roadmap + DEFERRED.md cross-references drift apart over time. Mitigation: each surface explicitly cites others by ID/section; Phase 1V VAG question (d) verifies cross-reference integrity as a drift-risk-clearance check.
+
+**Implementation plan**:
+
+**Commit 1 — 1C-vi code additions** (~150-250 LoC; estimated 45-90 min):
+
+*New bench file*:
+1. `racket/prologos/benchmarks/micro/bench-tropical-fuel.rkt` (~100-200 LoC; per δ2 + η1):
+   - Allocation verification (bench-mem on N=10k decrements)
+   - GC profile (bench-gc on 5×100k decrements)
+   - Per-cycle production cost (cell-read + cell-write fast path; Variant A + Variant B contexts)
+   - M10 (residuation) + M11 (tensor) + M12 (SRE registration) + R4 (cell layout) per §9.10
+
+*Test additions*:
+2. `racket/prologos/tests/test-tropical-fuel.rkt`:
+   - γ3-b: 1-2 unit tests for behavioral contract (~15-25 LoC)
+   - δ3: 1 0-allocation regression test (~10-15 LoC)
+3. `racket/prologos/tests/test-elaboration-parity.rkt`:
+   - γ3-a: 1-2 integration tests for fuel exhaustion vs baseline (~25-40 LoC)
+
+*Close gate*: full suite GREEN; commit.
+
+**Commit 2 — 1C-vi measurement artifacts** (~no production code; report + data + tracking; estimated 30-60 min):
+
+1. Run probe via `process-file examples/2026-04-22-1A-iii-probe.prologos`; capture output diff vs S4 baseline
+2. Run acceptance file via `process-file`; capture output
+3. Run `bench-tropical-fuel.rkt`; capture production C measurements
+4. Capture all measurement results: `racket/prologos/data/benchmarks/tropical-1c-vi-production-{date}.txt`
+5. Write A/B/C report: `docs/tracking/{date}_TROPICAL_1C_VI_ABC_REPORT.md`:
+   - Per-measurement table (11 rows per ε1 decomposition above)
+   - PASS/FAIL/INVESTIGATE verdict per row vs §11.3 targets
+   - Honest framing: which numbers came from live re-runs vs historical captures
+   - Cross-references to baseline data files
+   - Forward-handoff to Phase 1V VAG question (b)
+6. Open GitHub Issue: "Extend `bench-ab.rkt` with `--refs` for multi-way A/B/C+ comparison" (cross-references this addendum §13.7 + roadmap + DEFERRED.md)
+7. Update `docs/tracking/MASTER_ROADMAP.org`: OE Series Track 1 + PReduce Track 4 forward-references citing Issue ID
+8. Update `docs/tracking/DEFERRED.md`: entry citing Issue ID + cross-referencing roadmap entries
+9. Update §3 Progress Tracker (1C-vi → ✅ PASS with hash + summary)
+10. Append dailies entry
+
+*Close gate*: A/B/C verdicts PASS or INVESTIGATE-with-rationale; commit.
+
+**Estimated total time**: ~75-150 min split across 2 sub-sub-phase commits.
+
+**Codification candidate watching list update**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| Audit-driven scope refinements propagate into §10.4 estimates pre-next-sub-phase | 5 (1C-i ε; 1C-ii-b α; 1C-ii-b F3; 1C-iii audit; 1C-iv δ2) — **plus possibly +1 here if 1C-vi audit refines scope** | READY TO CODIFY at Phase 1V |
+| Transitional dual-write/substitution patterns require explicit retirement obligation at destination sub-phase | 5 (D-1C-ii-a-1; D-1C-ii-b-1; D-1C-iii-5; D-1C-iv-1; D-1C-iv-2) | READY TO CODIFY at Phase 1V |
+| **Multi-surface tracking with cross-references is more durable than DEFERRED.md alone** (NEW) | 1 (1C-vi bench-ab.rkt `--refs` follow-up: Issue + MASTER_ROADMAP + DEFERRED.md with explicit cross-references between all three) | **NEW watching list** — graduate after 1-2 more uses |
+| **Bench-file creation coupled with mini-audit gap-closure** (NEW) | 1 (1C-vi `bench-tropical-fuel.rkt` closing F5 stub-reference gap + §9.10 M10/M12/R4 capture obligation + δ allocation verification in one commit) | **NEW watching list** |
 
 ---
 
