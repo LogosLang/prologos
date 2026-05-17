@@ -403,8 +403,10 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-ii-b** | Variant B migration (sequential schedulers #1/#2/#4/#5) + `init-fuel-local-var!` + `flush-fuel-local-var!` helpers + recursive→box refactor at #4+#5; F3 audit refinement applied; convergence-check filter for scheduler-state cells (D-1C-ii-b-8 new invariant) | ✅ ✓ PASS | 350 LoC propagator.rkt + 118 LoC tests; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-b-1); **8292 tests / 113.7s / 0 failures** (+3 from 1C-ii-a baseline 8289); microbench validation deferred to 1C-vi |
 | **1C-iii mini-design + mini-audit** | α1/β2/γ3/δ resolved; scope refreshed from 9 → **6 check sites** (audit revealed original Q-Audit-1 count of 11 included 2 non-check entries + drift since); line numbers refreshed: 2095, 2663, 2670, 3477, 3480, 3487; γ3 deferred to 1C-iv (BSP Tier 1 positive check at line 2626) | ✅ | §10.0.5 (2026-05-16) |
 | **1C-iii** | Migrate 6 check sites — **partial β2** per D-1C-iii-5: 4 sites (#1, #4, #5, #6) full β2 (clauses removed); 2 sites (BSP outer + inner at 2663, 2670) keep struct-field check as TRANSITIONAL until 1C-iv migrates typing-propagators substitution (which violates β1 lockstep mid-bounded-run). Surfaced during impl: full β2 caused 3 test TIMEOUTS (typing-bounded paths). Partial β2 preserves correctness; full β2 completes at 1C-iv per retirement obligation in §10.4 1C-iv scope. | ✅ ✓ PASS | net -12 LoC propagator.rkt; **8292 tests / 114.1s / 0 failures** (unchanged from 1C-ii-b baseline; -0.4s wall variance) |
-| **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
-| **1C-v** | Migrate 13 test sites + 2 bench sites (single mechanical batch) | ⬜ | Per §10.4 + Q-1C-δ δ1 (after §10 cleanup at 1C-i) |
+| **1C-iv mini-design + mini-audit** | α2/β1/γ1/δ2/ε1 resolved; sub-sub-phase split into 1C-iv-a (migrations) + 1C-iv-b (retirements); δ2 absorbs 1C-v scope into 1C-iv-a; 2 new tests planned; 5 drift risks named (D-1C-iv-1/2/3/4/5) | ✅ | §10.0.6 (2026-05-16) |
+| **1C-iv-a** | All migrations (6 production sites + 8 test files + bench-alloc + bench-ppn-track4c ε2 retirement + 2 new tests for fork-cell-reset + typing-substitution); full β2 at BSP sites 2+3 (D-1C-iii-5 retirement); ~100-180 LoC across ~15 files | ⬜ | Per §10.0.6 + §10.4 1C-iv-a |
+| **1C-iv-b** | Retirements (macro + struct field + 1C-ii-a/b lockstep + 7 constructor updates); ~30-60 LoC in propagator.rkt only; D-1C-ii-a-1 + D-1C-ii-b-1 retirement obligations honored | ⬜ | Per §10.0.6 + §10.4 1C-iv-b (atomic close) |
+| ~~**1C-v**~~ | ~~Migrate 13 test sites + 2 bench sites~~ | ABSORBED into 1C-iv-a per Q-1C-iv-δ δ2 | §10.0.6 δ2 |
 | **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
 | **1V merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii gate gap (per Phase 1V scope item #1) | ⬜ | Per §11.3; measurement-driven gate decision if needed |
 | **1V SRE property-sweep** | Conditional on Track 2I infrastructure readiness (per Phase 1V scope item #3) | ⬜ | Per §11.3; defer to sister track if infrastructure not ready |
@@ -2401,6 +2403,142 @@ Sites WITHOUT adjacent contradiction check (need α1 migration to `(net-contradi
 
 ---
 
+### §10.0.6 1C-iv Mini-Design + Mini-Audit Resolutions (D.4 CANONICAL 2026-05-16, combined)
+
+> **Status**: 1C-iv pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together (audit grounded design questions; questions clarified what audit needed to verify). 5 resolutions (α2/β1/γ1/δ2/ε1) + 5 drift risks. **Largest 1C sub-phase**: ~130-240 LoC across ~15 files; split into 1C-iv-a (migrations) + 1C-iv-b (retirements) per α2 atomicity decision.
+
+**Per Stage 4 Per-Phase Protocol steps 1+2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §10.0.4 1C-ii-b + §10.0.5 1C-iii pattern).
+
+**Audit findings (comprehensive enumeration; post-1C-iii state at commit `bc9bc79a`)**:
+
+`grep -rn "prop-network-fuel\|prop-net-hot-fuel"` across racket/prologos/ reveals:
+
+| Category | Files | Refs | Action |
+|---|---|---|---|
+| **Production migrations** | 3 (propagator.rkt + pretty-print.rkt + typing-propagators.rkt) | 8 distinct sites | 1C-iv-a |
+| **Test migrations** | 8 test files | ~15-20 refs | 1C-iv-a (batched) |
+| **bench-alloc migrations** | 1 (bench-alloc.rkt) | 2 sites | 1C-iv-a (mechanical) |
+| **bench-ppn-track4c ε2 retirement** | 1 (bench-ppn-track4c.rkt) | 23 refs (16-18 direct `prop-net-hot-fuel`; rest in M13 strings/printf) | 1C-iv-a (comment-out + annotation; absorbed from 1C-v per δ2) |
+| **Retirements + constructor updates** | 1 (propagator.rkt) | 11 items (provide line 65, macro lines 450-451, struct field line 378, 7 constructor calls) | 1C-iv-b (atomic close) |
+
+**Critical ordering dependency**: macro + struct-field retirement breaks compile if tests/benches still reference `prop-network-fuel` or `prop-net-hot-fuel`. **All migrations must complete in 1C-iv-a BEFORE retirements in 1C-iv-b.**
+
+**Five architectural questions resolved (Q-1C-iv-α through Q-1C-iv-ε)**:
+
+**Q-1C-iv-α (LOAD-BEARING) — Atomicity / sub-sub-phase structure — RESOLVED α2 (2 sub-sub-phases)**
+
+Split into **1C-iv-a (migrations) + 1C-iv-b (retirements)** as two atomic commits. Each commit leaves suite compilable + GREEN; conceptual split matches "migrate everything, then retire."
+
+Rationale: α1 single-commit (~130-240 LoC across ~15 files) is too large to bisect under regression; α3 three-sub-phase (production/tests/retirement) over-splits without conceptual gain. α2 balances atomicity (2 commits) with safe ordering (migrations first; retirements last).
+
+**Q-1C-iv-β — γ3 final decision from §10.0.5 — RESOLVED β1 (γ1 precise cell-read)**
+
+For BSP Tier 1 positive check at line 2628: migrate `(> (prop-network-fuel net) 0)` → `(> (net-cell-read net fuel-cell-id) 0)`.
+
+γ2 alternative (`(not (net-contradiction? net))`) was rejected: at Tier 1 check point, the outer cond has ALREADY checked `(prop-network-contradiction net)`, so γ2 would be trivially #t (useless precondition). γ1 preserves the precise "fuel positive" semantic which matches the existing fuel-precondition role.
+
+**Q-1C-iv-γ — `fork-prop-network` cell-reset semantic — RESOLVED γ1 (reset BOTH cells)**
+
+When `fork-prop-network` is called with a new `fuel` arg (e.g., for a sub-network with fresh budget), reset BOTH `fuel-cell-id` and `fuel-budget-cell-id` to the new fuel value.
+
+Current impl (line 816-820): fresh `prop-net-hot '() fuel` (worklist + struct-field fuel); cells SHARED via `(prop-network-cells net)` (CHAMP structural sharing). Sub-network inherits parent's cell values — VIOLATES β1 lockstep at fork boundary (cell stays at parent's value while struct-field is fresh `fuel`).
+
+Resolution γ1: explicit `(net-cell-write net0 fuel-cell-id fuel)` + `(net-cell-write net1 fuel-budget-cell-id fuel)` after the prop-network construction. Sub-network sees fresh budget + fresh remaining (both = new fuel). Preserves β1 lockstep at fork boundary.
+
+γ2 (reset only fuel-cell-id) was rejected: asymmetric semantic; weird. γ3 (no reset) was rejected: same class of bug as typing-propagators substitution — violates β1 lockstep at fork.
+
+**Q-1C-iv-δ — 1C-v scope adjustment — RESOLVED δ2 (absorb 1C-v into 1C-iv-a)**
+
+Under α2 (migrations before retirements), 1C-v's test+bench migration scope must run as part of 1C-iv-a. Resolution δ2: **absorb all of 1C-v into 1C-iv-a**:
+- 13 test sites mechanical migration
+- 2 bench-alloc.rkt sites mechanical migration
+- 16-18 bench-ppn-track4c.rkt ε2 retirement (comment-out + annotation per §10.0.1 Q-1C-ε ε2)
+
+§10.4 1C-v row drops (work fully absorbed). 1C-iv-a becomes the comprehensive migration commit; 1C-iv-b stays focused on macro+field+lockstep retirement.
+
+Trade-off accepted: 1C-iv-a grows (~100-180 LoC) but the ε2 retirement is conceptually related to bench-alloc migration (same "tests + benches now use cell-API or are commented-out as historical").
+
+**Q-1C-iv-ε — Tests for 1C-iv — RESOLVED ε1 (2 new tests)**
+
+Add 2 new tests in test-tropical-fuel.rkt (alongside existing 1C-ii-a/b tests):
+
+1. **1C-iv (1) fork-prop-network cell-reset**: verify `(fork-prop-network net new-fuel)` produces a forked net with `fuel-cell-id = new-fuel` AND `fuel-budget-cell-id = new-fuel`. Covers Q-1C-iv-γ γ1 + D-1C-iv-1.
+
+2. **1C-iv (2) typing-propagators cell-API substitution**: verify the cell-API substitution pattern works — `(net-cell-write net fuel-cell-id TYPING-FUEL-LIMIT)` + bounded run + `(net-cell-write result fuel-cell-id saved-fuel)` produces correct exhaustion at TYPING-FUEL-LIMIT under cell-API. Covers D-1C-iii-5 retirement + D-1C-iv-2.
+
+Plus migrated existing tests (8 files; mechanical `(prop-network-fuel X)` → `(net-cell-read X fuel-cell-id)`).
+
+ε2 (no new tests) was rejected: both fork-reset and typing-substitution introduce NEW behaviors (cells now participate in fork; cells now substitute in typing-propagators bounded run). Targeted small tests verify the invariants explicitly. ε3 (only fork test) was rejected: typing-substitution is the D-1C-iii-5 retirement validation — explicit test prevents regression.
+
+**Drift risks named at design+audit time**:
+
+- **D-1C-iv-1** (NEW; from γ1): `fork-prop-network` cell-reset must reset BOTH cells; missing one would leak parent's value into forked sub-run. Mitigation: test (1) verifies both cells reset.
+
+- **D-1C-iv-2** (NEW; from D-1C-iii-5 retirement at 1C-iv-a): typing-propagators cell-API substitution must include restore step (post-bounded-run, write saved-fuel back to fuel-cell-id). Without restore, the bounded run consumes from the main fuel budget visible to subsequent elaboration. Mitigation: test (2) verifies restore correctness.
+
+- **D-1C-iv-3** (NEW; ordering invariant): macro + struct-field retirement at 1C-iv-b breaks all consumers; 1C-iv-a ordering (migrations BEFORE retirement) is load-bearing. Mitigation: 1C-iv-a full suite GREEN gate before 1C-iv-b can run; sub-phase boundary commit enforces.
+
+- **D-1C-iv-4** (NEW; ε2 retirement preservation): bench-ppn-track4c.rkt 16-site ε2 comment-out preserves Pre-0 historical baselines in source comments. The actual baseline DATA persists in `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`. Mitigation: verify the data file is intact + annotations reference it for historical access.
+
+- **D-1C-iv-5** (CARRYING from D-1C-iii-5): full β2 at BSP sites 2+3 (lines 2676 + 2684) happens AT 1C-iv-a (after typing-propagators migration eliminates β1 lockstep violation). Macro retirement at 1C-iv-b CANNOT happen before full β2 is applied. Mitigation: 1C-iv-a includes full β2 (D-1C-iii-5 retirement); 1C-iv-b's `prop-network-fuel` retirement requires all 6 check sites already migrated/removed.
+
+**Implementation plan**:
+
+**1C-iv-a — Migrations** (~100-180 LoC; estimated 60-120 min):
+
+*Production migrations*:
+1. propagator.rkt:2628 `(> (prop-network-fuel net) 0)` → `(> (net-cell-read net fuel-cell-id) 0)` (γ1)
+2. propagator.rkt:3204-3205 `(define (net-fuel-remaining net) (prop-network-fuel net))` → `(define (net-fuel-remaining net) (net-cell-read net fuel-cell-id))`
+3. pretty-print.rkt:463 display: `(prop-network-fuel v)` → `(net-cell-read v fuel-cell-id)`
+4. typing-propagators.rkt:2269 substitution: replace struct-copy `[fuel TYPING-FUEL-LIMIT]` with `(net-cell-write net2w fuel-cell-id TYPING-FUEL-LIMIT)`; restore via `(net-cell-write net3 fuel-cell-id saved-fuel)` (D-1C-iii-5 retirement; D-1C-iv-2 mitigation)
+5. propagator.rkt: full β2 at BSP sites 2 + 3 (lines 2676 + 2684) — REMOVE the kept-transitional `[(<= (prop-network-fuel net) 0) net]` clauses (D-1C-iii-5 retirement; depends on #4 typing-propagators migration)
+6. propagator.rkt:816-820 `fork-prop-network` add cell-reset for both cells (γ1; D-1C-iv-1 mitigation)
+
+*Test migrations* (8 files; mechanical):
+- test-abstract-interpretation-e2e.rkt: 4 sites
+- test-cross-domain-propagator.rkt: 1 site
+- test-infra-cell-atms-01.rkt: 1 site
+- test-propagator-bsp.rkt: 1 site
+- test-tabling.rkt: 1 site
+- test-trait-resolution-bridge.rkt: 3 sites
+- test-tropical-fuel.rkt: ~10 sites (also update import block at line 43 to remove `prop-network-fuel`)
+- test-widening-fixpoint.rkt: 2 sites
+
+Pattern: `(prop-network-fuel X)` → `(net-cell-read X fuel-cell-id)`. Sed-style discipline: verify on 1 file, then batch.
+
+*Bench migrations*:
+- bench-alloc.rkt: 2 sites mechanical (same pattern as tests)
+- bench-ppn-track4c.rkt: 23 references (16-18 direct + others in M13 printf) — RETIRE per ε2: comment-out with annotation pointing to `tropical-pre0-baseline-2026-04-26.txt` for historical baseline data (D-1C-iv-4 mitigation)
+
+*New tests*:
+- 1C-iv (1) fork-prop-network cell-reset (verifies γ1 + D-1C-iv-1)
+- 1C-iv (2) typing-propagators cell-API substitution (verifies D-1C-iii-5 retirement + D-1C-iv-2)
+
+1C-iv-a close gate: full suite GREEN before 1C-iv-b proceeds.
+
+**1C-iv-b — Retirements** (~30-60 LoC; estimated 30-45 min):
+
+*Macro + field + lockstep retirement*:
+1. propagator.rkt: remove `prop-network-fuel` from provide list (line 65)
+2. propagator.rkt: retire macro definition (lines 450-451)
+3. propagator.rkt: retire `fuel` field from `prop-net-hot` struct (line 378) → `(struct prop-net-hot (worklist) #:transparent)`
+4. propagator.rkt: retire 1C-ii-a β1 lockstep at line 2700 (`[fuel (- ...)]` clause in BSP Tier 2 struct-copy) — D-1C-ii-a-1 retirement obligation
+5. propagator.rkt: retire 1C-ii-b β1 lockstep at lines 2081-2083 (`flush-fuel-local-var!` struct-field write) — D-1C-ii-b-1 retirement obligation
+6. propagator.rkt: update 7 constructor calls `(prop-net-hot wl fuel)` → `(prop-net-hot wl)` at lines 744, 818, 2116, 2131, 2159, 2168, 2175 (post-field-retirement struct-arity correction)
+
+1C-iv-b close gate: full suite GREEN; adversarial VAG; commit + tracker + dailies.
+
+**Estimated total time**: ~90-165 min split across 2 sub-sub-phase commits.
+
+**Codification candidate watching list update**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| Audit-driven scope refinements propagate into §10.4 estimates pre-next-sub-phase | 5 (1C-i ε; 1C-ii-b α; 1C-ii-b F3; 1C-iii audit; **1C-iv δ2 1C-v absorption**) | **5+ data points; READY TO CODIFY** at 1C-iv close |
+| Transitional dual-write/substitution patterns require explicit retirement obligation at destination sub-phase | 4 (D-1C-ii-a-1; D-1C-ii-b-1; D-1C-iii-5; **D-1C-iv-1 fork-reset + D-1C-iv-2 typing-substitution + D-1C-iv-5 full-β2-completion**) | **4+ data points; READY TO CODIFY** at 1C-iv close |
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
 **Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
@@ -2756,7 +2894,27 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - Per §10.0.5 δ-tests-2: no new tests; full suite GREEN as regression gate (mechanical refactor with zero behavioral change — the on-write-check semantic is already test-validated at 1B-iv + 1C-ii-a/b).
   - Targeted test: full suite (check sites are widely distributed across schedulers)
 
-- **1C-iv** — Retire macro + struct field + 1C-ii-a lockstep + 1C-ii-b lockstep + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
+- **1C-iv** (SPLIT into 1C-iv-a + 1C-iv-b per §10.0.6 α2; 1C-v ABSORBED per §10.0.6 δ2) — Migrations + Retirements (~130-240 LoC total across ~15 files):
+
+- **1C-iv-a — All migrations** (per §10.0.6; ~100-180 LoC; full β2 at BSP sites 2+3 included per D-1C-iii-5 retirement):
+  - **Production migrations** (6 sites in propagator.rkt + pretty-print.rkt + typing-propagators.rkt):
+    1. `(> (prop-network-fuel net) 0)` at propagator.rkt:**2628** → `(> (net-cell-read net fuel-cell-id) 0)` (γ1 per §10.0.5 + §10.0.6)
+    2. `net-fuel-remaining` accessor at propagator.rkt:**3204-3205** → `(net-cell-read net fuel-cell-id)`
+    3. `pretty-print.rkt:463` display: `(prop-network-fuel v)` → `(net-cell-read v fuel-cell-id)`
+    4. `typing-propagators.rkt:2269` substitution: `(struct-copy ... [fuel TYPING-FUEL-LIMIT])` → `(net-cell-write net2w fuel-cell-id TYPING-FUEL-LIMIT)`; restore via `(net-cell-write net3 fuel-cell-id saved-fuel)` (D-1C-iii-5 retirement; D-1C-iv-2 mitigation)
+    5. **Full β2 at BSP sites 2+3 (D-1C-iii-5 retirement)**: propagator.rkt:**2676 + 2684** — REMOVE the kept-transitional `[(<= (prop-network-fuel net) 0) net]` clauses. Depends on #4 completion (typing-propagators substitution now writes cell-API, so on-write-check fires structurally; full β2 applies).
+    6. `fork-prop-network` cell-reset at propagator.rkt:**816-820**: add `(net-cell-write net1 fuel-cell-id fuel)` + `(net-cell-write net1 fuel-budget-cell-id fuel)` after the prop-network construction (γ1; D-1C-iv-1 mitigation)
+  - **Test migrations** (8 files; mechanical via sed-style discipline):
+    - test-abstract-interpretation-e2e.rkt: 4 sites; test-cross-domain-propagator.rkt: 1 site; test-infra-cell-atms-01.rkt: 1 site; test-propagator-bsp.rkt: 1 site; test-tabling.rkt: 1 site; test-trait-resolution-bridge.rkt: 3 sites; test-tropical-fuel.rkt: ~10 sites (also update import block to remove `prop-network-fuel`); test-widening-fixpoint.rkt: 2 sites
+    - Pattern: `(prop-network-fuel X)` → `(net-cell-read X fuel-cell-id)`
+  - **bench-alloc.rkt migration**: 2 sites (lines 262, 357) mechanical
+  - **bench-ppn-track4c.rkt ε2 RETIREMENT** (per §10.0.1 Q-1C-ε ε2): 16-18 sites — comment-out with annotations pointing to `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt` for historical baseline data (D-1C-iv-4 mitigation)
+  - **New tests** (per ε1):
+    - **1C-iv (1) fork-prop-network cell-reset**: verify both cells reset on fork with new fuel (γ1; D-1C-iv-1)
+    - **1C-iv (2) typing-propagators cell-API substitution**: verify bounded run exhausts at TYPING-FUEL-LIMIT via cell-API substitute + restore (D-1C-iii-5 retirement; D-1C-iv-2)
+  - 1C-iv-a CLOSE GATE: full suite GREEN before 1C-iv-b proceeds (D-1C-iv-3 ordering enforcement)
+
+- **1C-iv-b — Macro + struct field + lockstep retirement** (per §10.0.6 α2; ~30-60 LoC in propagator.rkt only; atomic close):
   - Retire `prop-network-fuel` macro (propagator.rkt:450; line refreshed from prior 445)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
   - **Retire 1C-ii-a β1 lockstep sync at line 2686** (per D-1C-ii-a-1 retirement obligation; line refreshed from prior 2606): the existing `[fuel (- (prop-network-fuel net) n)]` struct field update inside the snapshot's `struct-copy prop-net-hot` retires alongside the field itself. Post-1C-iv, only `(net-cell-write snapshot fuel-cell-id ...)` remains; the dual update transitional scaffolding fully retires.
@@ -2777,13 +2935,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - Verify no orphan callers (grep verification)
   - ✅ **Option 14 (macro specialization) RESOLVED via §13.6.A spike (commit `77daf81c`): SKIP** — measured savings 0.02 ns/cycle, far below 1 ns threshold. Function-call pattern is sufficient.
 
-- **1C-v** — Migrate 13 test sites + 2 bench-alloc sites + RETIRE 16 bench-ppn-track4c historical sites (per 1C-i Q-1C-ε ε2):
-  - Batch mechanical migration via 2-pass sed pattern per workflow.md (single-file verification before batch)
-  - Tests' `(prop-network-fuel result)` assertions become `(net-cell-read result fuel-cell-id)` directly (Option A: cell stores REMAINING fuel)
-  - bench-alloc.rkt 2 sites: same mechanical pattern
-  - **bench-ppn-track4c.rkt 16 sites (per 1C-i Q-1C-ε)**: RETIRE-PER-D.4-CANONICAL with annotations + comment-out — these are Pre-0 historical M7/A7 microbench sections that specifically measured the struct-copy decrement cost. Under D.4 retirement of `prop-net-hot-fuel` field, the accessor goes away. Baseline data preserved in `tropical-pre0-baseline-2026-04-26.txt`; new post-D.4 benches (CM1-CM5, CW1-CW3) measure the new pattern.
-  - Full suite verification post-batch
-  - Post-impl bench captures the D.4 numbers for A/B/C comparison vs Pre-0 baseline (per §13.7)
+- ~~**1C-v**~~ — ABSORBED into 1C-iv-a per §10.0.6 Q-1C-iv-δ δ2. All test migrations (13 sites across 8 test files), bench-alloc.rkt 2-site migration, and bench-ppn-track4c.rkt 16-18 site ε2 retirement now consolidated in 1C-iv-a's migration scope. Rationale: macro+field retirement at 1C-iv-b breaks compile if any consumer still references `prop-network-fuel`/`prop-net-hot-fuel`; absorbing test+bench migration into 1C-iv-a ensures all consumers are migrated BEFORE retirement. Cleaner 2-commit structure (1C-iv-a + 1C-iv-b) vs 3-commit (1C-iv + 1C-v + retirement).
 
 - **1C-vi** — Verification + close + D-1B-ii-3 allocation verification:
   - Probe + acceptance file + full suite
