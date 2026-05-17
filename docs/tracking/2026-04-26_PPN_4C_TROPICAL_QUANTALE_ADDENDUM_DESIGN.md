@@ -398,8 +398,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline strategy | ✅ | §10.0.1 (2026-05-16); 5 findings α/β/γ/δ/ε; ε surfaced bench scope 2→18 (ε2 retire); audit re-verified line numbers + Q-1C-1 simpler than expected |
 | **1C-ii-a mini-design** | α2/β1/γ-net/δ-3-tests resolved; D-1C-ii-a-1 retirement obligation captured for 1C-iv | ✅ | §10.0.2 (2026-05-16) |
 | **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3); production cell-write at line 2606; 3 new tests (cell-field-lockstep + Tier 1 preservation + cell-mechanism exhaustion) | ✅ ✓ PASS | β1 lockstep applied; net diff +6 LoC production + 76 LoC tests; 8289 tests / 126.4s / 0 failures; D-1C-ii-a-1 retirement scheduled for 1C-iv |
-| **1C-ii-b** | Variant B migration (sequential schedulers entry points #1/#2/#4/#5) + `flush-fuel-local-var!` helper | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1; target ~2.16 ns/cycle amortized |
-| **1C-iii** | Migrate 11 check sites | ⬜ | Per §10.4 |
+| **1C-ii-b mini-design** | α2/β1/γ1/δ-3-tests resolved (α load-bearing: box pattern at #4+#5 matches Variant B canonical; preempts 1C-iii migration for 2 check sites); D-1C-ii-b-1/2 retirement+scope obligations captured | ✅ | §10.0.3 (2026-05-16) |
+| **1C-ii-b** | Variant B migration (sequential schedulers #1/#2/#4/#5) + `init-fuel-local-var!` + `flush-fuel-local-var!` helpers + recursive→box refactor at #4+#5 | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1 + Q-1C-ii-b-α α2; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-b-1); revised scope ~115-205 LoC; target ~2.16 ns/cycle amortized |
+| **1C-iii** | Migrate **9** check sites (REDUCED from 11; lines 3217 + 3270 PREEMPTED by 1C-ii-b α2 per D-1C-ii-b-2) | ⬜ | Per §10.4 |
 | **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
 | **1C-v** | Migrate 13 test sites + 2 bench sites (single mechanical batch) | ⬜ | Per §10.4 + Q-1C-δ δ1 (after §10 cleanup at 1C-i) |
 | **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
@@ -1921,6 +1922,133 @@ Net diff: ~3-5 LoC added (`snapshot+fuel` binding + threading downstream uses). 
 
 ---
 
+### §10.0.3 1C-ii-b Mini-Design Resolutions (D.4 CANONICAL 2026-05-16)
+
+> **Status**: 1C-ii-b mini-design conversation 2026-05-16. Four questions (α/β/γ/δ); one (α) architecturally load-bearing. All resolved with user. Implementation pending in fresh session (fork checkpoint).
+>
+> **Scope adjustment**: §10.4's original ~40-60 LoC estimate for 1C-ii-b assumed simple redirect across all 4 sequential entry points. The 1C-i α finding revealed that #1 + #2 ARE simple redirect (~5-10 LoC each) but #4 + #5 (`run-widen-phase` + `run-narrow-phase`) use a RECURSIVE function structure with per-fire struct-copy decrement — not the box pattern. Under α2 (matches Variant B design), #4 + #5 require recursive→box refactor (~20-30 LoC each). Revised total: ~115-205 LoC including tests.
+
+**Q-1C-ii-b-α — LOAD-BEARING: Per-fire pattern at #4 + #5 (recursive functions) — RESOLVED α2 (box pattern; matches Variant B design)**
+
+The choice between two patterns at #4 + #5:
+
+- **α1** (per-fire lockstep, NOT chosen): keep existing recursive `[fuel (sub1 ...)]` struct-copy + ADD per-fire `(net-cell-write ...)`. Preserves check sites + sub-phase boundaries. Per-fire cell-write cost ~6-250 ns; deviates from §10.3.A Variant B canonical design; doesn't achieve §13.6.A spike's ~2.16 ns/cycle target.
+- **α2** (box pattern; matches Variant B canonical design): refactor recursive structure to init + box decrement + flush at phase exit. The check sites at lines 3217 + 3270 MIGRATE to read the box (`(<= (unbox local-fuel) 0)`) — they become per-iteration box checks. **β1 lockstep at flush points only** (mid-recursion the struct field is stale; this matches #1 + #2's existing pattern). Achieves §13.6.A spike target.
+
+Resolution: **α2** — matches §10.3.A Variant B design intent + §13.6.A perf target + architectural consistency with #1 + #2.
+
+**1C-iii scope reduction**: lines 3217 + 3270 check sites MIGRATE at 1C-ii-b (preempted from 1C-iii); 1C-iii scope reduces from 11 to 9 check sites.
+
+**β1 lockstep observation point model** (consistent across 1C-ii-a + 1C-ii-b):
+- Cell-value EQUALS struct-field-value at OBSERVATION POINTS
+- For Variant A (1C-ii-a): observation point = each BSP round boundary
+- For Variant B (1C-ii-b): observation point = each sequential-phase flush (entry/exit/contradiction/fork)
+- Between observations, both can be stale (box has live value); external callers observing post-function state see synchronized field + cell
+
+**Q-1C-ii-b-β — Helper signature style — RESOLVED β1 (set-box! mutation)**
+
+```racket
+(init-fuel-local-var! net) -> box        ; returns mutable box with current cell value
+(flush-fuel-local-var! net box) -> net   ; writes box value to BOTH cell + struct field; returns updated net
+```
+
+Matches §10.3.A Variant B pseudocode + #1 + #2 existing set-box! idiom + perf (mutation avoids per-fire allocation; set-box! is what §13.6.A spike measured).
+
+**Q-1C-ii-b-γ — Helper placement — RESOLVED γ1 (inline in propagator.rkt)**
+
+Helpers are tightly coupled to BSP scheduler code; ~15-25 LoC doesn't justify a separate module. γ3 (add to specialized-cells.rkt) would mix concerns — specialized-cells.rkt is for cell-meta convenience constructors, not scheduler helpers.
+
+**Q-1C-ii-b-δ — Testing approach — RESOLVED δ-3-tests**
+
+Three new tests in test-tropical-fuel.rkt (mirror 1C-ii-a pattern):
+
+1. **1C-ii-b cell-field-lockstep at sequential phase exit**: after `run-to-quiescence-inner` (or `run-widen-phase`) with N fires, verify `(prop-network-fuel result) = (net-cell-read result fuel-cell-id) = (- initial N)` (β1 invariant at flush point)
+2. **1C-ii-b helper correctness**: `(init-fuel-local-var! net)` returns box with current cell value; `(flush-fuel-local-var! net box)` writes box value to BOTH cell and struct field
+3. **1C-ii-b exhaustion via cell-mechanism at sequential scheduler**: run-widen-phase with low budget; verify contradiction fires (either via box exhaustion check or via cell on-write-check)
+
+Per-entry-point coverage (#1 vs #2 vs #4 vs #5) via full suite GREEN gate. Existing tests in test-widen-narrow.rkt, test-abstract-interpretation-e2e.rkt, test-propagator-bsp.rkt cover sequential scheduler semantics broadly.
+
+**Drift risks named (1C-ii-b)**:
+
+- **D-1C-ii-b-1** (LOAD-BEARING; retirement obligation): β1 lockstep retirement at 1C-iv. The `flush-fuel-local-var!` helper writes to BOTH cell AND struct field during 1C-ii-b through 1C-iii. At 1C-iv, the struct-field write retires alongside the `prop-net-hot-fuel` field itself; only cell-write remains. Captured in §10.4 1C-iv scope as explicit obligation (mirrors D-1C-ii-a-1).
+- **D-1C-ii-b-2** (LOAD-BEARING; 1C-iii scope reduction): α2 preempts 1C-iii migration for check sites at lines 3217 + 3270. **1C-iii scope reduces from 11 to 9 check sites**. Captured in §10.4 1C-iii sub-phase scope so 1C-iii doesn't double-migrate.
+- D-1C-ii-b-3: widen/narrow phases used by abstract interpretation (test-abstract-interpretation-e2e.rkt + test-widen-narrow.rkt). Full suite GREEN catches any semantic regression from the recursive→box refactor.
+- D-1C-ii-b-4: pre-existing partial Variant B at #1 + #2 — verify redirect preserves the inner-loop's set-box! pattern (don't accidentally introduce a closure or break the existing finalize closure at line 2050).
+- D-1C-ii-b-5: recursive→box refactor for #4 + #5 — mechanical mistake risk. The recursive structure has check + decrement + fire + recursive-call; the box version has check + decrement + fire + LOOP. Loop variable threading must preserve net + box flow correctly.
+
+**Implementation sketch (confirmed; pending impl commit)**:
+
+Helpers in `propagator.rkt` (somewhere alongside BSP scheduler definitions):
+
+```racket
+;; D.4 1C-ii-b: helpers for Variant B local-var pattern
+;; (sequential schedulers: run-to-quiescence-inner, /traced, run-widen-phase,
+;; run-narrow-phase). Per Q-1C-γ γ1+function + Q-1C-ii-b-β β1 set-box! style.
+;;
+;; D-1C-ii-b-1: flush helper writes to BOTH cell AND struct field per β1 lockstep
+;; during 1C-ii-b through 1C-iii transition. At 1C-iv the struct-field write
+;; retires alongside the prop-net-hot-fuel field itself.
+
+(define (init-fuel-local-var! net)
+  ;; Returns mutable box with current cell value (Option A: remaining fuel)
+  (box (net-cell-read net fuel-cell-id)))
+
+(define (flush-fuel-local-var! net local-fuel-box)
+  ;; Writes box value to BOTH cell AND struct field (β1 lockstep)
+  ;; Triggers on-write-check (<= new 0) at cell layer if exhausted
+  (define final-fuel (unbox local-fuel-box))
+  (define net+cell (net-cell-write net fuel-cell-id final-fuel))
+  ;; β1 transitional: also update struct field
+  ;; D-1C-ii-b-1: struct-field write RETIRES at 1C-iv
+  (struct-copy prop-network net+cell
+    [hot (struct-copy prop-net-hot (prop-network-hot net+cell)
+           [fuel final-fuel])]))
+```
+
+For #1 + #2 (`run-to-quiescence-inner` + `/traced`) — simple redirect:
+- Line 2041: `(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`
+- Line 2089: same
+- Line 2058 finalize: `[hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]` augmented with cell-write OR replaced by `flush-fuel-local-var!` + worklist setup
+
+For #4 + #5 (`run-widen-phase` + `run-narrow-phase`) — recursive→box refactor:
+```racket
+(define (run-widen-phase net)
+  (define local-fuel (init-fuel-local-var! net))
+  (let loop ([net net])
+    (cond
+      [(prop-network-contradiction net) (flush-fuel-local-var! net local-fuel)]
+      [(<= (unbox local-fuel) 0) (flush-fuel-local-var! net local-fuel)]
+      [(null? (prop-network-worklist net)) (flush-fuel-local-var! net local-fuel)]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              ;; Per-fire box decrement (replaces struct-copy [fuel (sub1 ...)])
+              [_ (set-box! local-fuel (sub1 (unbox local-fuel)))]
+              [net* (struct-copy prop-network net
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest])])]    ; no fuel update; box has it
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net*)
+             (let* ([result-net (fire-propagator prop net*)]
+                    ;; ... existing diff + apply-via-widen ...
+                    [net** ...])
+               (loop net**))))])))
+```
+
+Similar refactor for `run-narrow-phase`.
+
+**Scope estimate (revised)**: ~115-205 LoC total
+- Helpers (init + flush): ~15-25 LoC
+- #1 + #2 redirect: ~10-20 LoC
+- #4 + #5 refactor: ~40-60 LoC
+- Tests: ~50-100 LoC
+
+Single 1C-ii-b commit (per Q-1C-α α2 atomicity at variant level, not further split). Estimated implementation time ~45-90 min.
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
 **Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
@@ -2252,31 +2380,36 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - Targeted tests: test-propagator + test-tropical-fuel
   - Variant A is structurally simpler (one site, one line replacement); ships first to validate the production hot path before Variant B touches 4 sequential schedulers
 
-- **1C-ii-b** (NEW per Q-1C-α split) — Migrate Variant B: sequential schedulers (entry points #1, #2, #4, #5):
-  - Implement `flush-fuel-local-var!` + `init-fuel-local-var!` helper functions (per Q-1C-γ resolution γ1+function); ~5-10 LoC each in propagator.rkt or a bsp-helpers.rkt module
-  - **Per 1C-i α finding**: entry points #1 + #2 ALREADY have partial Variant B (box-mutation pattern + per-fire decrement + finalize flush; flushes to struct-field currently). Migration simplifies to source/sink redirect (~5-10 LoC each).
-  - **Per 1C-i α finding**: entry points #4 + #5 need full Variant B introduction (no box pattern currently; struct-copy `[fuel (sub1 ...)]` per-fire). Helper introduces the pattern (~15-20 LoC each).
+- **1C-ii-b** (per Q-1C-α split; REFINED per §10.0.3 1C-ii-b mini-design) — Migrate Variant B: sequential schedulers (entry points #1, #2, #4, #5):
+  - Implement `flush-fuel-local-var!` + `init-fuel-local-var!` helper functions inline in propagator.rkt (per Q-1C-γ γ1+function + Q-1C-ii-b-γ γ1); ~15-25 LoC for helpers
+  - **Per 1C-i α finding + Q-1C-ii-b-α α2 resolution**:
+    - **#1 + #2 simple redirect (~10-20 LoC total)**: existing box-mutation pattern (lines 2041, 2069, 2089) PRESERVED; init source `(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`; finalize flush (line 2058) → `flush-fuel-local-var! net local-fuel-box`
+    - **#4 + #5 recursive→box refactor (~40-60 LoC total per Q-1C-ii-b-α α2)**: `run-widen-phase` + `run-narrow-phase` refactor from recursive `define` + per-fire struct-copy to loop-style with box init at entry + per-fire box decrement + flush at exit. Box pattern matches §10.3.A Variant B canonical design + achieves §13.6.A spike's ~2.16 ns/cycle target.
+  - **Check sites at lines 3217 + 3270 MIGRATE at 1C-ii-b** (per Q-1C-ii-b-α α2 preemption): `(<= (prop-network-fuel net) 0)` → `(<= (unbox local-fuel) 0)` (per-iteration box check). **D-1C-ii-b-2 1C-iii scope reduction**: 1C-iii migrates only 9 check sites (was 11), since lines 3217 + 3270 are migrated at 1C-ii-b.
   - At each sequential phase entry: `init-fuel-local-var!` reads fuel-cell-id into local-var box
-  - Per fire (inline in loop body): decrement local-var + threshold check (`(<= remaining 0)` — Option A)
-  - At each sequential phase exit: `flush-fuel-local-var!` flushes local-var → cell-write
-  - On exhaustion (rare): immediate flush + contradiction-write (via cell-mechanism on-write check)
+  - Per fire (inline in loop body): decrement local-var + threshold check (`(<= (unbox local-fuel) 0)` — Option A)
+  - At each sequential phase exit/contradiction/fork: `flush-fuel-local-var!` flushes local-var → BOTH cell-write AND struct-field-write (β1 lockstep; D-1C-ii-b-1 retirement at 1C-iv)
   - Cost target: ~2.16 ns/cycle amortized (per §13.6.A spike + §13.7 gate)
-  - Atomic commit; 4 entry points share the helper pattern; total ~40-60 LoC
-  - **Per §13.7 1C-ii row**: re-microbench Variant B achieves ~2.16 ns/cycle amortized at production scale
-  - Targeted tests: test-widen-narrow + test-propagator (sequential paths)
+  - Atomic commit per Q-1C-α α2 atomicity (4 entry points share helpers; not further split per-entry-point)
+  - Revised total scope: **~115-205 LoC** (helpers ~15-25 + #1+#2 redirect ~10-20 + #4+#5 refactor ~40-60 + tests ~50-100); larger than original §10.4 estimate due to recursive→box refactor at #4 + #5
+  - **Per §13.7 1C-ii row**: re-microbench Variant B achieves ~2.16 ns/cycle amortized at production scale (deferred to 1C-vi A/B/C report per spike already validating feasibility)
+  - Targeted tests: test-tropical-fuel (3 new tests per Q-1C-ii-b-δ) + test-widen-narrow + test-propagator + test-propagator-bsp + test-abstract-interpretation-e2e (sequential paths broadly exercised)
 
-- **1C-iii** — Migrate 11 check sites:
-  - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)`
+- **1C-iii** (REFINED per D-1C-ii-b-2 preemption) — Migrate **9** check sites (REDUCED from 11):
+  - Original 11 check sites at propagator.rkt:1817, 2366, 2373, 2329, 2992, 3045, 3132, 3135, 3142, 65, 399 (line numbers as of 2026-04-26 audit; subject to drift; re-verify at 1C-iii mini-audit)
+  - **2 sites PREEMPTED by 1C-ii-b** per Q-1C-ii-b-α α2: lines 3217 (run-widen-phase entry check) + 3270 (run-narrow-phase entry check) migrate at 1C-ii-b alongside the box pattern introduction
+  - **Remaining 9 sites at 1C-iii**: line numbers TBD at 1C-iii mini-audit (line drift expected; re-verify against current code)
+  - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)` (or equivalent observer of contradicted state)
   - Most check sites are AFTER round boundary OR within BSP fire loop (where local-var is current); semantic equivalence preserved
   - Verify exhaustion semantics: representative workloads exhaust at correct points
-  - **Per §13.7: re-microbench check-site cost; target unchanged ~6 ns**
+  - **Per §13.7**: re-microbench check-site cost; target unchanged ~6 ns
   - Targeted test: full suite (these check sites are widely distributed)
 
-- **1C-iv** — Retire macro + struct field + 1C-ii-a lockstep + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
+- **1C-iv** — Retire macro + struct field + 1C-ii-a lockstep + 1C-ii-b lockstep + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
   - Retire `prop-network-fuel` macro (propagator.rkt:445)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
   - **Retire 1C-ii-a β1 lockstep sync at line 2606** (per D-1C-ii-a-1 retirement obligation): the existing `[fuel (- (prop-network-fuel net) n)]` struct field update inside the snapshot's `struct-copy prop-net-hot` retires alongside the field itself. Post-1C-iv, only `(net-cell-write snapshot fuel-cell-id ...)` remains; the dual update transitional scaffolding fully retires.
-  - **Retire 1C-ii-b β1 lockstep sync** (analogous for Variant B sites; if 1C-ii-b adopts a similar lockstep pattern at #1/#2 finalize + #4/#5 struct-copy decrements, those retire here too)
+  - **Retire 1C-ii-b β1 lockstep sync (per D-1C-ii-b-1)**: the `flush-fuel-local-var!` helper's `struct-copy prop-net-hot [fuel final-fuel]` write retires alongside the `prop-net-hot-fuel` struct field itself. Post-1C-iv, `flush-fuel-local-var!` only writes the cell; the helper signature stays the same but the implementation simplifies. Affects all 4 sequential schedulers (#1/#2/#4/#5) since they share the helper.
   - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value)
   - Migrate typing-propagators.rkt:2269 saved-fuel handling — per Q-1C-β β1 1C-i audit outcome: speculation forks at round/phase boundaries see cell value naturally (Variant A); for Variant B mid-phase forks, `flush-fuel-local-var!` runs BEFORE fork (sub-fork starts with current cell value, reads at sub-init via `init-fuel-local-var!`)
   - Update pretty-print display
