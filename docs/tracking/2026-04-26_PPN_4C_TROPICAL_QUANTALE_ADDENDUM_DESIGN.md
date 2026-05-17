@@ -401,7 +401,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-ii-b mini-design** | α2/β1/γ1/δ-3-tests resolved (α load-bearing: box pattern at #4+#5 matches Variant B canonical; preempts 1C-iii migration for 2 check sites); D-1C-ii-b-1/2 retirement+scope obligations captured | ✅ | §10.0.3 (2026-05-16) |
 | **1C-ii-b mini-audit** | Line drift confirmed (+11 at #4/#5/wrapper); F3 helper-usage refinement at #1+#2 finalize (helper init-only; cell-write ADD after existing struct-copy); D-1C-ii-b-6/7 drift risks named; revised scope ~106-167 LoC | ✅ | §10.0.4 (2026-05-16) |
 | **1C-ii-b** | Variant B migration (sequential schedulers #1/#2/#4/#5) + `init-fuel-local-var!` + `flush-fuel-local-var!` helpers + recursive→box refactor at #4+#5; F3 audit refinement applied; convergence-check filter for scheduler-state cells (D-1C-ii-b-8 new invariant) | ✅ ✓ PASS | 350 LoC propagator.rkt + 118 LoC tests; β1 lockstep transitional (retires at 1C-iv per D-1C-ii-b-1); **8292 tests / 113.7s / 0 failures** (+3 from 1C-ii-a baseline 8289); microbench validation deferred to 1C-vi |
-| **1C-iii** | Migrate **9** check sites (REDUCED from 11; lines **3228 + 3281** PREEMPTED by 1C-ii-b α2 per D-1C-ii-b-2; line drift caught at §10.0.4 F1) | ⬜ | Per §10.4 |
+| **1C-iii mini-design + mini-audit** | α1/β2/γ3/δ resolved; scope refreshed from 9 → **6 check sites** (audit revealed original Q-Audit-1 count of 11 included 2 non-check entries + drift since); line numbers refreshed: 2095, 2663, 2670, 3477, 3480, 3487; γ3 deferred to 1C-iv (BSP Tier 1 positive check at line 2626) | ✅ | §10.0.5 (2026-05-16) |
+| **1C-iii** | Migrate **6** check sites (REFRESHED from §10.4's prior 9 per §10.0.5 audit); β2 REMOVE redundant clauses (upstream `prop-network-contradiction` check covers fuel exhaustion via cell on-write-check writing contradiction structurally); estimated ~-15 to -25 LoC NET | ⬜ | Per §10.0.5 + §10.4 |
 | **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
 | **1C-v** | Migrate 13 test sites + 2 bench sites (single mechanical batch) | ⬜ | Per §10.4 + Q-1C-δ δ1 (after §10 cleanup at 1C-i) |
 | **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
@@ -2230,6 +2231,170 @@ Targeted tests + full suite GREEN + VAG + commit + tracker + dailies per Stage 4
 
 ---
 
+### §10.0.5 1C-iii Mini-Design + Mini-Audit Resolutions (D.4 CANONICAL 2026-05-16, combined)
+
+> **Status**: 1C-iii pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit were done together (audit produced the data that grounded the design questions; design questions surfaced what the audit needed to verify). 4 resolutions (α/β/γ/δ); audit refreshed line numbers (D-1C-i-1 line drift materialized post-1C-ii-b helper insertions); scope confirmed at 6 actual check sites (NOT 9 as §10.4 prior estimate).
+
+**Per Stage 4 Per-Phase Protocol steps 1+2 (co-dependent mini-design + mini-audit)**: audit-grounded the design questions; design questions clarified what the audit needed to verify. Following the co-dependent cycle, combined into single subsection.
+
+**1C-iii Mini-Audit findings (line-drift refresh + scope correction)**:
+
+Post-1C-ii-b commit `ea1aaafc` (helper insertions + box pattern), line numbers have drifted from §10.4 prior estimates. Per `grep "prop-network-fuel" propagator.rkt`, the 14 references categorize as:
+
+| Line (current) | Type | Scope |
+|---|---|---|
+| 65 | provide export | 1C-iv (macro retirement) |
+| 450 | macro definition | 1C-iv (macro retirement) |
+| 636 | comment | (informational) |
+| 2060 | comment in 1C-ii-b helper | (informational) |
+| **2095** | check site (run-to-quiescence-inner outer guard) | **1C-iii SITE 1** |
+| **2626** | `(> ... 0)` BSP Tier 1 precondition (POSITIVE form) | **γ3 DEFERRED to 1C-iv** (read-as-value batch) |
+| **2663** | check site (run-to-quiescence-bsp guard) | **1C-iii SITE 2** |
+| **2670** | check site (run-to-quiescence-bsp nested guard) | **1C-iii SITE 3** |
+| 2686 | struct-copy decrement (1C-ii-a Variant A lockstep) | 1C-iv (retires per D-1C-ii-a-1) |
+| 3191 | `net-fuel-remaining` accessor | 1C-iv (read-as-value) |
+| 3308 | comment in 1C-ii-b code | (informational) |
+| **3477** | check site (run-to-quiescence-widen wrapper) | **1C-iii SITE 4** |
+| **3480** | check site (run-to-quiescence-widen wrapper duplicate) | **1C-iii SITE 5** |
+| **3487** | check site (run-to-quiescence-widen narrow loop) | **1C-iii SITE 6** |
+
+**Production count: 6 check sites for 1C-iii** (vs §10.4's prior estimate of 9). Discrepancy explanation: original Q-Audit-1 count of 11 included 2 non-check entries (provide + macro def at lines 65 + 450) plus 2 preempted by 1C-ii-b α2; remaining 7 reduced to 6 by drift/refactor consolidation since the original audit.
+
+**Other production files (1C-iv + 1C-v scope; NOT 1C-iii)**:
+- `pretty-print.rkt:463`: display format (1C-iv pretty-print update)
+- `typing-propagators.rkt:2269`: saved-fuel substitution (1C-iv per Q-1C-1 / §10.0.1 δ resolution)
+- `bench-alloc.rkt:262, 357`: bench migration (1C-v mechanical batch)
+- `bench-ppn-track4c.rkt` 18 sites: bench retirement (1C-v per Q-1C-ε ε2)
+
+**Four architectural questions resolved (Q-1C-iii-α through Q-1C-iii-δ)**:
+
+**Q-1C-iii-α — Replacement pattern for check sites — RESOLVED α1 (`net-contradiction?` 1-arg)**
+
+Replace `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net)` (existing 1-arg API). The cell on-write-check writes contradiction-cell-id `'tropical-fuel-exhausted` on exhaustion via the cell mechanism; `net-contradiction?` observes the contradiction-state.
+
+Rationale: structural alignment with D.4 (contradiction is the structural signal under specialized cell type framework); aligns with the convergence-filter insight from 1C-ii-b (scheduler-state cells write contradiction structurally; observers read the contradiction state). The 2-arg form `(net-contradiction? net 'tropical-fuel-exhausted)` sketched in §10.4 doesn't exist; 1-arg is the actual API.
+
+α2 (direct cell read) was rejected: more keystrokes; less aligned with the "structural exit on contradiction" pattern; preserves "fuel-specific" semantic that ALREADY duplicates the upstream `prop-network-contradiction` check at each cond.
+
+α3 (hybrid) was rejected: γ3 already separates BSP Tier 1 positive check (`(> ... 0)`) to 1C-iv scope; no need for hybrid within 1C-iii.
+
+**Q-1C-iii-β — Handling redundancy with adjacent contradiction checks — RESOLVED β2 (REMOVE redundant clauses)**
+
+Under α1, each migrated check is structurally redundant with the line above. E.g., `run-to-quiescence-inner` currently has:
+
+```racket
+(cond
+  [(prop-network-contradiction net) net]        ; pre-existing — covers ALL contradictions
+  [(<= (prop-network-fuel net) 0) net]          ; 1C-iii target — α1 → (net-contradiction? net) = REDUNDANT
+  [(null? (prop-network-worklist net)) net]
+  [else ...])
+```
+
+Under β1 (keep both), the migrated form has 2 redundant clauses. Under β2, the redundant clause is REMOVED entirely; the upstream `prop-network-contradiction` check covers it.
+
+Rationale: β2 is DRYer + cleaner; the contradiction check above ALREADY covers fuel exhaustion (cell on-write-check writes contradiction on exhaustion → upstream check catches it). The "exit on fuel exhaustion" semantic is preserved via the cell mechanism's structural contradiction-write.
+
+**Effective scope under β2**: 6 check sites → 6 cond clauses REMOVED (not 6 lines migrated). Net diff: ~-12 LoC (removed) instead of ~+6 LoC (migrated). LoC reduction is principled (less code, same semantic).
+
+**Q-1C-iii-γ — BSP Tier 1 positive check (line 2626) — RESOLVED γ3 (DEFER to 1C-iv)**
+
+Special case: `(> (prop-network-fuel net) 0)` inside BSP Tier 1 fast-path eligibility `(and ...)` — NOT an exit guard; precondition for selecting Tier 1.
+
+Resolution γ3: defer to 1C-iv read-as-value batch. Aligns with §10.4 1C-iv scope which already includes "Migrate 3 read-as-value sites." The Tier 1 precondition is structurally a read-as-value (predicating fast-path selection on cell-fuel state), not an exit guard.
+
+**Captured for 1C-iv** (per user request to ensure persistence): §10.4 1C-iv row updated to include line 2626 in read-as-value migration. The decision point at 1C-iv: γ1 (`(> (net-cell-read net fuel-cell-id) 0)` direct cell read, precise semantic) vs γ2 (`(not (net-contradiction? net))` structural alignment with α1). γ1 likely the right pick at 1C-iv (precise semantic; matches existing fuel-precondition role); γ2 alternative if 1C-iv mini-audit surfaces structural-alignment value.
+
+**Q-1C-iii-δ — Scope confirmation + tests — RESOLVED δ-scope (6 sites) + δ-tests-2 (full suite as regression gate)**
+
+δ-scope: refresh §10.4 + §3 Progress Tracker to **6 check sites** (down from §10.4's prior 9). Line numbers refreshed: 2095, 2663, 2670, 3477, 3480, 3487.
+
+δ-tests-2: no new tests added in 1C-iii. The migration is structurally mechanical (cond clause removal; no new behavior introduced). Existing tests + full-suite GREEN serve as regression gate. The on-write-check semantic was already test-validated at 1B-iv (29 tropical-fuel tests including on-write contradiction firing) + 1C-ii-a tests (cell-field-lockstep + exhaustion via cell-mechanism) + 1C-ii-b tests (sequential lockstep + exhaustion at sequential scheduler).
+
+Rationale: per `workflow.md` "Test coverage" — pure refactor (clause removal) with zero behavioral change qualifies for "no tests: refactor with zero behavioral change" framing. The structural exhaustion path (cell on-write-check → contradiction-cell-id) is already tested.
+
+**Drift risks named (1C-iii specific)**:
+
+- **D-1C-iii-1**: line drift between this audit and implementation. The 1C-ii-b commit added ~50 LoC of helpers + restructured #4/#5 — total ~+350 LoC shift in propagator.rkt. Implementation must use the line numbers from THIS audit (2095, 2663, 2670, 3477, 3480, 3487), NOT the §10.4 prior estimates. Mitigation: implementation reads each site by grep before edit; commit verifies via `tools/check-parens.sh`.
+
+- **D-1C-iii-2**: BSP Tier 1 precondition (line 2626) carrying forward to 1C-iv MUST be picked up at 1C-iv mini-audit. Risk: if 1C-iv mini-audit doesn't see this captured, line 2626 stays at `prop-network-fuel` after 1C-iv struct-field retirement → compile error. Mitigation: §10.4 1C-iv scope updated with explicit reference to §10.0.5 γ3 (this commit).
+
+- **D-1C-iii-3**: under β2 (clause removal), the existing tests' assertion patterns that verify "scheduler exits when fuel exhausted" should STILL pass — because the contradiction-cell-id is written when cell-on-write-check fires, and the upstream `(prop-network-contradiction net)` check observes it. If any test asserts the scheduler exited "due to fuel" SPECIFICALLY (vs "due to contradiction" generically), it might fail. Mitigation: full suite GREEN catches any such specific test.
+
+- **D-1C-iii-4**: the migrated check pattern works ONLY because of 1B-iv's cell on-write-check writing `'tropical-fuel-exhausted` to contradiction-cell-id. If 1B-iv's cell registration ever changes (e.g., on-write-check returns #f), the fuel exhaustion mechanism breaks. Tests at 1B-iv cover this; no immediate mitigation needed.
+
+**Implementation sketch (confirmed; pending impl commit)**:
+
+For each of the 6 check sites, REMOVE the cond clause `[(<= (prop-network-fuel net) 0) net]`. The upstream `[(prop-network-contradiction net) net]` clause covers the fuel-exhaustion case via structural contradiction-write.
+
+Sites with adjacent contradiction check (β2 clause removal applies):
+- Line 2095 in `run-to-quiescence-inner` (upstream check at line 2094)
+- Line 2663 in `run-to-quiescence-bsp` (upstream check at line 2662)
+- Line 2670 in `run-to-quiescence-bsp` (upstream check at line 2669)
+- Line 3487 in `run-to-quiescence-widen` narrow loop (upstream check at line 3486)
+
+Sites WITHOUT adjacent contradiction check (need α1 migration to `(net-contradiction? net)` — these are NOT inside conds with pre-existing contradiction checks):
+- Lines 3477 + 3480 in `run-to-quiescence-widen` wrapper — these are inside `(or ... (<= ... 0))` and `(if (or ... (<= ... 0)) ...)` patterns. Migration: replace `(<= (prop-network-fuel widened) 0)` with `(net-contradiction? widened)`.
+
+**Actual diff per site**:
+
+```racket
+;; SITE 1 (line 2095, run-to-quiescence-inner):
+;; BEFORE:
+(cond
+  [(prop-network-contradiction net) net]
+  [(<= (prop-network-fuel net) 0) net]    ; REMOVE
+  [(null? (prop-network-worklist net)) net]
+  [else ...])
+;; AFTER:
+(cond
+  [(prop-network-contradiction net) net]
+  [(null? (prop-network-worklist net)) net]
+  [else ...])
+
+;; SITES 2 + 3 (lines 2663 + 2670, run-to-quiescence-bsp):
+;; Similar — remove the (<= fuel 0) clause; upstream contradiction check covers
+
+;; SITES 4 + 5 (lines 3477 + 3480, run-to-quiescence-widen wrapper):
+;; BEFORE (line 3477):
+(when (or (prop-network-contradiction widened)
+          (<= (prop-network-fuel widened) 0))
+  (void))
+;; AFTER:
+(when (or (prop-network-contradiction widened)
+          (net-contradiction? widened))
+  (void))
+;; Note: this is now (or X (net-contradiction? widened) where X is also a contradiction check.
+;; Both check contradiction state; second is redundant. Better: just remove the (<= ...) clause.
+;; BEFORE simplification:
+(when (or (prop-network-contradiction widened)
+          (<= (prop-network-fuel widened) 0))
+  (void))
+;; AFTER simplification (β2 — drop the redundant clause):
+(when (prop-network-contradiction widened)
+  (void))
+
+;; Line 3480 — similar simplification.
+
+;; SITE 6 (line 3487, run-to-quiescence-widen narrow loop):
+;; BEFORE:
+(cond
+  [(>= rounds max-rounds) net]
+  [(prop-network-contradiction net) net]
+  [(<= (prop-network-fuel net) 0) net]    ; REMOVE
+  [else ...])
+;; AFTER:
+(cond
+  [(>= rounds max-rounds) net]
+  [(prop-network-contradiction net) net]
+  [else ...])
+```
+
+**Scope estimate**: ~-15 to -25 LoC NET (removals + simplifications minus inline comments).
+
+**Estimated implementation time**: ~10-20 min. Mechanical removal; verified by full suite GREEN.
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
 **Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
@@ -2576,22 +2741,25 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - **Per §13.7 1C-ii row**: re-microbench Variant B achieves ~2.16 ns/cycle amortized at production scale (deferred to 1C-vi A/B/C report per spike already validating feasibility)
   - Targeted tests: test-tropical-fuel (3 new tests per Q-1C-ii-b-δ) + test-widen-narrow + test-propagator + test-propagator-bsp + test-abstract-interpretation-e2e (sequential paths broadly exercised)
 
-- **1C-iii** (REFINED per D-1C-ii-b-2 preemption) — Migrate **9** check sites (REDUCED from 11):
-  - Original 11 check sites at propagator.rkt:1817, 2366, 2373, 2329, 2992, 3045, 3132, 3135, 3142, 65, 399 (line numbers as of 2026-04-26 audit; subject to drift; re-verify at 1C-iii mini-audit)
-  - **2 sites PREEMPTED by 1C-ii-b** per Q-1C-ii-b-α α2 + §10.0.4 F1 line refresh: lines **3228** (run-widen-phase entry check) + **3281** (run-narrow-phase entry check) migrate at 1C-ii-b alongside the box pattern introduction
-  - **Remaining 9 sites at 1C-iii**: line numbers TBD at 1C-iii mini-audit (line drift expected; re-verify against current code)
-  - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)` (or equivalent observer of contradicted state)
-  - Most check sites are AFTER round boundary OR within BSP fire loop (where local-var is current); semantic equivalence preserved
-  - Verify exhaustion semantics: representative workloads exhaust at correct points
-  - **Per §13.7**: re-microbench check-site cost; target unchanged ~6 ns
-  - Targeted test: full suite (these check sites are widely distributed)
+- **1C-iii** (REFINED per §10.0.5 mini-design+audit) — Migrate **6** check sites (REFRESHED from §10.4's prior estimate of 9; per §10.0.5 audit, original Q-Audit-1 count of 11 included 2 non-check entries + drift since left 6):
+  - **6 actual check sites** (line numbers per §10.0.5 audit at post-1C-ii-b state, commit `ea1aaafc`): propagator.rkt:**2095** (run-to-quiescence-inner outer guard) + **2663** (BSP guard) + **2670** (BSP nested guard) + **3477** (run-to-quiescence-widen wrapper) + **3480** (wrapper duplicate) + **3487** (narrow loop guard)
+  - **2 sites previously PREEMPTED by 1C-ii-b** (now inside box pattern at #4/#5; not in 1C-iii scope per Q-1C-ii-b-α α2)
+  - **α1 + β2 pattern (per §10.0.5)**: REMOVE the redundant `[(<= (prop-network-fuel net) 0) net]` clause entirely; upstream `[(prop-network-contradiction net) net]` clause covers fuel-exhaustion case via cell on-write-check writing contradiction-cell-id structurally. For sites 4+5 (wrapper `or`-clauses, no adjacent contradiction check): simplify to drop the `(<= ...)` disjunct (the existing `(prop-network-contradiction widened)` already in the `or` covers fuel exhaustion).
+  - Atomic commit; net diff ~-15 to -25 LoC (β2 clause removal/simplification; less code, same semantic)
+  - **γ3 DEFERRED to 1C-iv** (per §10.0.5): BSP Tier 1 positive check at propagator.rkt:**2626** `(> (prop-network-fuel net) 0)` is a precondition for fast-path eligibility, NOT an exit guard. Treated as read-as-value site; migrates at 1C-iv per existing scope. Decision point at 1C-iv: γ1 `(> (net-cell-read net fuel-cell-id) 0)` (precise; matches existing semantic) vs γ2 `(not (net-contradiction? net))` (structural alignment). γ1 likely the right pick.
+  - Per §10.0.5 δ-tests-2: no new tests; full suite GREEN as regression gate (mechanical refactor with zero behavioral change — the on-write-check semantic is already test-validated at 1B-iv + 1C-ii-a/b).
+  - Targeted test: full suite (check sites are widely distributed across schedulers)
 
 - **1C-iv** — Retire macro + struct field + 1C-ii-a lockstep + 1C-ii-b lockstep + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
-  - Retire `prop-network-fuel` macro (propagator.rkt:445)
+  - Retire `prop-network-fuel` macro (propagator.rkt:450; line refreshed from prior 445)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
-  - **Retire 1C-ii-a β1 lockstep sync at line 2606** (per D-1C-ii-a-1 retirement obligation): the existing `[fuel (- (prop-network-fuel net) n)]` struct field update inside the snapshot's `struct-copy prop-net-hot` retires alongside the field itself. Post-1C-iv, only `(net-cell-write snapshot fuel-cell-id ...)` remains; the dual update transitional scaffolding fully retires.
+  - **Retire 1C-ii-a β1 lockstep sync at line 2686** (per D-1C-ii-a-1 retirement obligation; line refreshed from prior 2606): the existing `[fuel (- (prop-network-fuel net) n)]` struct field update inside the snapshot's `struct-copy prop-net-hot` retires alongside the field itself. Post-1C-iv, only `(net-cell-write snapshot fuel-cell-id ...)` remains; the dual update transitional scaffolding fully retires.
   - **Retire 1C-ii-b β1 lockstep sync (per D-1C-ii-b-1)**: the `flush-fuel-local-var!` helper's `struct-copy prop-net-hot [fuel final-fuel]` write retires alongside the `prop-net-hot-fuel` struct field itself. Post-1C-iv, `flush-fuel-local-var!` only writes the cell; the helper signature stays the same but the implementation simplifies. Affects all 4 sequential schedulers (#1/#2/#4/#5) since they share the helper.
-  - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value)
+  - Migrate **4** read-as-value sites (was 3; γ3 from §10.0.5 adds BSP Tier 1 precondition at line 2626): these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value
+    - **γ3 from §10.0.5 (DEFERRED from 1C-iii)**: BSP Tier 1 positive check at line **2626** `(> (prop-network-fuel net) 0)` — precondition for fast-path eligibility, NOT an exit guard. 1C-iv mini-audit decision point: γ1 `(> (net-cell-read net fuel-cell-id) 0)` (precise; preserves "fuel positive" semantic; lean) vs γ2 `(not (net-contradiction? net))` (structural alignment with α1 from 1C-iii). γ1 likely right pick (precise semantic; matches existing fuel-precondition role). **CAPTURED HERE per user direction at §10.0.5 to ensure 1C-iv mini-audit picks this up.**
+    - propagator.rkt:**3191** (`net-fuel-remaining` accessor)
+    - propagator.rkt:2041 (#1 drain init — already migrated to `init-fuel-local-var!` at 1C-ii-b; helper retires here? actually helper stays, but init now reads cell-API natively post-macro-retirement; no change needed)
+    - propagator.rkt:2089 (#2 init — same as above)
   - Migrate typing-propagators.rkt:2269 saved-fuel handling — per Q-1C-β β1 1C-i audit outcome: speculation forks at round/phase boundaries see cell value naturally (Variant A); for Variant B mid-phase forks, `flush-fuel-local-var!` runs BEFORE fork (sub-fork starts with current cell value, reads at sub-init via `init-fuel-local-var!`)
   - Update pretty-print display
   - `fork-prop-network` cell-reset: when forking with a new `fuel` arg, reset fuel-cell-id + fuel-budget-cell-id to the new fuel value (deferred from 1B-iv per Q-1B-iv-δ)
