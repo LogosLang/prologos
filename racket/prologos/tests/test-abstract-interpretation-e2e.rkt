@@ -53,7 +53,7 @@
   ;; a-cell should be true (alpha(42) = true)
   (check-equal? (net-cell-read result a-cell) #t)
   ;; Should converge (fuel not exhausted)
-  (check-true (> (prop-network-fuel result) 50)))
+  (check-true (> (net-cell-read result fuel-cell-id) 50)))
 
 (test-case "e2e: widenable cell widening prevents divergence with cross-domain"
   ;; Self-incrementing propagator on a widenable cell + cross-domain link.
@@ -80,7 +80,7 @@
   ;; Should converge to +inf.0 (widened) and a-cell = true
   (check-equal? (net-cell-read result a-cell) #t)
   ;; Fuel should not be exhausted
-  (check-true (> (prop-network-fuel result) 100)))
+  (check-true (> (net-cell-read result fuel-cell-id) 100)))
 
 ;; ========================================
 ;; 2. Multi-Domain Diamond (Racket level)
@@ -110,7 +110,7 @@
   ;; c-cell = max(42, gamma(true), identity(a2)) = +inf.0
   (check-equal? (net-cell-read result c-cell) +inf.0)
   ;; Converges quickly
-  (check-true (> (prop-network-fuel result) 200)))
+  (check-true (> (net-cell-read result fuel-cell-id) 200)))
 
 ;; ========================================
 ;; 3. Chain: C1 → A1 → C2 → A2
@@ -275,4 +275,4 @@
     (check-equal? (net-cell-read result (vector-ref cells-vec i)) 42
                   (format "cell ~a should be 42" i)))
   ;; Should converge quickly (10 propagators fire once each)
-  (check-true (> (prop-network-fuel result) 400)))
+  (check-true (> (net-cell-read result fuel-cell-id) 400)))

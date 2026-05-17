@@ -143,7 +143,7 @@
   ;; Manually add pid to worklist twice
   (define net4 (struct-copy prop-network net3
                  [hot (prop-net-hot (list pid pid pid)
-                                    (prop-network-fuel net3))]))
+                                    (net-cell-read net3 fuel-cell-id))]))
   (define result (run-to-quiescence-bsp net4))
   ;; Dedup should reduce 3 → 1, so fuel cost is 1 for this round
   (check-true (net-quiescent? result))

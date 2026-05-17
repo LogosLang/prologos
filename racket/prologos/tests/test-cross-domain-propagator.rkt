@@ -78,7 +78,7 @@
   (check-equal? (net-cell-read result a-cell) #t)
   (check-equal? (net-cell-read result c-cell) +inf.0)
   ;; Should not exhaust fuel (converges quickly)
-  (check-true (> (prop-network-fuel result) 50)))
+  (check-true (> (net-cell-read result fuel-cell-id) 50)))
 
 ;; ========================================
 ;; 4. No-Change Guard

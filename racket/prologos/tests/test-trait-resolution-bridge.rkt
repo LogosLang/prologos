@@ -113,8 +113,8 @@
 ;; ========================================
 
 (define (firings-used net-before net-after)
-  (- (prop-network-fuel net-before)
-     (prop-network-fuel net-after)))
+  (- (net-cell-read net-before fuel-cell-id)
+     (net-cell-read net-after fuel-cell-id)))
 
 ;; ========================================
 ;; §A — Depth 1: Single Trait Resolution
@@ -352,4 +352,4 @@
   (define net5 (net-cell-write net4 cell-a 1))
   (define result (run-to-quiescence net5))
   ;; Should exhaust fuel, not hang
-  (check-equal? (prop-network-fuel result) 0))
+  (check-equal? (net-cell-read result fuel-cell-id) 0))

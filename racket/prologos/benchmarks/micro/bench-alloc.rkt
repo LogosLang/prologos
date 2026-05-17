@@ -259,7 +259,7 @@
         (for/fold ([n net]) ([i (in-range 10000)])
           (struct-copy prop-network n
             [hot (prop-net-hot (cons (prop-id i) (prop-network-worklist n))
-                               (prop-network-fuel n))]))))))
+                               (net-cell-read n fuel-cell-id))]))))))   ;; D.4 1C-iv-a: cell-API
 
 ;; ============================================================
 ;; Direct Timing (sub-ms precision via multi-sample averaging)
@@ -354,7 +354,7 @@
       (for/fold ([n net]) ([i (in-range 50000)])
         (struct-copy prop-network n
           [hot (prop-net-hot (cons (prop-id i) (prop-network-worklist n))
-                             (prop-network-fuel n))])))))
+                             (net-cell-read n fuel-cell-id))])))))   ;; D.4 1C-iv-a: cell-API
 
 ;; Change ratio measurement
 (measure-change-ratio)

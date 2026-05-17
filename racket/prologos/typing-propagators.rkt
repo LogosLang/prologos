@@ -2266,17 +2266,24 @@
         (make-warning-collection-fire-fn tm-cid warning-output-cid) tm-cid
         #:component-paths (list (cons tm-cid #f))))
     ;; 4. Run to quiescence with fuel limit (save/restore for main network)
-    (define saved-fuel (prop-network-fuel net2w))
-    (define net2-limited
-      (struct-copy prop-network net2w
-        [hot (struct-copy prop-net-hot (prop-network-hot net2w)
-               [fuel TYPING-FUEL-LIMIT])]))
+    ;; D.4 1C-iv-a (§10.0.6 D-1C-iii-5 retirement obligation; D-1C-iv-2 mitigation):
+    ;; migrated from struct-copy substitution to cell-API. Pre-migration: writes
+    ;; STRUCT-FIELD via struct-copy [fuel TYPING-FUEL-LIMIT] WITHOUT cell-write
+    ;; → β1 lockstep VIOLATED mid-bounded-run → BSP sites 2+3 needed transitional
+    ;; struct-field check (D-1C-iii-5). Post-migration: writes cell directly via
+    ;; net-cell-reset (bypasses merge; same semantic as fork-prop-network init);
+    ;; β1 lockstep preserved at boundary (cell IS the live state).
+    ;;
+    ;; net-cell-reset is the correct primitive: under tropical-fuel-merge (=min),
+    ;; net-cell-write would (min current TYPING-FUEL-LIMIT) and the smaller wins —
+    ;; if current < TYPING-FUEL-LIMIT, we'd inherit a smaller budget than intended.
+    ;; net-cell-reset bypasses merge: the bounded run gets exactly TYPING-FUEL-LIMIT
+    ;; budget regardless of current.
+    (define saved-fuel (net-cell-read net2w fuel-cell-id))
+    (define net2-limited (net-cell-reset net2w fuel-cell-id TYPING-FUEL-LIMIT))
     (define net3 (run-to-quiescence-bsp net2-limited))
-    ;; Restore fuel
-    (define net3-restored
-      (struct-copy prop-network net3
-        [hot (struct-copy prop-net-hot (prop-network-hot net3)
-               [fuel saved-fuel])]))
+    ;; Restore fuel (cell-API; bypass merge to write saved-fuel directly).
+    (define net3-restored (net-cell-reset net3 fuel-cell-id saved-fuel))
     ;; 5. Read results
     (define root-type (type-map-read net3-restored tm-cid expr))
     (define meta-solutions (net-cell-read net3-restored output-cid))

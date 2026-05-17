@@ -814,10 +814,35 @@
 ;; Resets hot state (worklist, fuel) and contradiction.
 ;; O(1): two struct allocations. All data shared until child writes (CoW).
 (define (fork-prop-network net [fuel 1000000])
-  (prop-network
-   (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
-   (prop-net-warm (prop-network-cells net) #f #f)       ;; shared cells, no contradiction, no speculation (D.4 1B-ii)
-   (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
+  ;; D.4 1C-iv-a (§10.0.6 γ1): fork-prop-network cell-reset.
+  ;; Sub-network gets fresh worklist + new fuel budget. Cells are SHARED with
+  ;; parent via CHAMP structural sharing (prop-network-cells net) — under D.4,
+  ;; this would leak parent's fuel-cell-id + fuel-budget-cell-id values into
+  ;; the sub-run, VIOLATING β1 lockstep at fork boundary (sub-run sees stale
+  ;; cell values relative to fresh struct-field fuel).
+  ;;
+  ;; Fix: explicitly reset BOTH fuel-cell-id and fuel-budget-cell-id to the new
+  ;; fuel value via net-cell-write (which triggers on-write-check if fuel ≤ 0
+  ;; — same semantic as initial allocation). Sub-network's cells now reflect
+  ;; the fresh budget at fork boundary; β1 lockstep preserved.
+  ;;
+  ;; D-1C-iv-1 (drift risk): missing one cell-write would leak parent's value
+  ;; — covered by test "1C-iv (1) fork-prop-network cell-reset" in
+  ;; test-tropical-fuel.rkt.
+  (define forked
+    (prop-network
+     (prop-net-hot '() fuel)                              ;; fresh worklist + fuel
+     (prop-net-warm (prop-network-cells net) #f #f)       ;; shared cells, no contradiction, no speculation (D.4 1B-ii)
+     (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
+  ;; Reset both fuel cells to new fuel value (γ1; D-1C-iv-1 mitigation).
+  ;; Use net-cell-reset (NOT net-cell-write): the merge function is `min`
+  ;; (tropical-fuel-merge); under merge, (min parent-remaining new-fuel) wins
+  ;; the lower value — so net-cell-write would LEAK parent's possibly-lower
+  ;; remaining value into the forked sub-network. net-cell-reset bypasses
+  ;; merge and writes the value directly, which is the correct semantic for
+  ;; "reset to fresh budget at fork boundary."
+  (define forked+cell (net-cell-reset forked fuel-cell-id fuel))
+  (net-cell-reset forked+cell fuel-budget-cell-id fuel))
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;
@@ -2625,7 +2650,10 @@
     [(and (zero? worldview)
           (pair? (prop-network-worklist net))
           (not (prop-network-contradiction net))
-          (> (prop-network-fuel net) 0)
+          ;; D.4 1C-iv-a (§10.0.6 β1 γ1): migrated `(> (prop-network-fuel net) 0)`
+          ;; → cell-API direct read. Preserves "fuel positive" precondition for
+          ;; Tier 1 fast-path eligibility (per §10.0.5 γ3 deferred → §10.0.6 β1 γ1).
+          (> (net-cell-read net fuel-cell-id) 0)
           ;; No pending NAF/stratum requests
           (let ([naf-p (net-cell-read net naf-pending-cell-id)])
             (or (not naf-p) (and (hash? naf-p) (hash-empty? naf-p))))
@@ -2660,28 +2688,22 @@
      (let ([fired-set (make-hasheq)])
       ;; Outer loop: value stratum → topology stratum → repeat
       (let outer-loop ([net net] [outer-round 0])
-       ;; D.4 1C-iii (§10.0.5 α1 + partial β2 per D-1C-iii-5):
-       ;; This BSP path is invoked DIRECTLY by typing-propagators.rkt:2269 with a
-       ;; net whose STRUCT-FIELD has been substituted to TYPING-FUEL-LIMIT (e.g., 200)
-       ;; WITHOUT corresponding cell-write — β1 lockstep is VIOLATED by typing-
-       ;; propagators substitution (1C-iv scope per §10.4). Until 1C-iv migrates
-       ;; typing-propagators to update cell alongside struct-field, the cell stays
-       ;; at saved-fuel (≈999800) while struct-field bounded by TYPING-FUEL-LIMIT.
-       ;; The struct-field check `(<= (prop-network-fuel net) 0)` is the only way
-       ;; to catch typing-propagators bounded exhaustion before 1C-iv lands.
-       ;; β2 (removal) deferred to 1C-iv per D-1C-iii-5; retirement obligation
-       ;; captured at §10.4 1C-iv scope.
+       ;; D.4 1C-iv-a (§10.0.6 D-1C-iii-5 retirement; FULL β2):
+       ;; typing-propagators.rkt:2269 migrated to cell-API at 1C-iv-a → β1
+       ;; lockstep restored at substitution boundary → upstream
+       ;; `(prop-network-contradiction net)` now covers fuel exhaustion via
+       ;; cell on-write-check writing 'tropical-fuel-exhausted contradiction-cell-id
+       ;; structurally. The transitional struct-field check at this site (kept
+       ;; at 1C-iii partial β2) is no longer load-bearing; full β2 applies.
        (cond
          [(prop-network-contradiction net) net]
-         [(<= (prop-network-fuel net) 0) net]  ; D-1C-iii-5: retires at 1C-iv
          [else
           ;; VALUE STRATUM: BSP inner loop with fire-once optimization
           (define value-result
             (let inner-loop ([net net] [round-number 0])
-              ;; D.4 1C-iii: same D-1C-iii-5 rationale as outer-loop above.
+              ;; D.4 1C-iv-a: same full β2 (D-1C-iii-5 retirement) as outer.
               (cond
                 [(prop-network-contradiction net) net]
-                [(<= (prop-network-fuel net) 0) net]  ; D-1C-iii-5: retires at 1C-iv
                 [(null? (prop-network-worklist net)) net]
              [else
               (let* ([raw-pids (dedup-pids (prop-network-worklist net))]
@@ -3201,8 +3223,10 @@
   (null? (prop-network-worklist net)))
 
 ;; How much fuel remains?
+;; D.4 1C-iv-a: migrated to cell-API per §10.0.6 (was `(prop-network-fuel net)`).
+;; Reads directly from fuel-cell-id (Option A: cell stores REMAINING fuel).
 (define (net-fuel-remaining net)
-  (prop-network-fuel net))
+  (net-cell-read net fuel-cell-id))
 
 ;; ========================================
 ;; Widening Support (Phase 6a)

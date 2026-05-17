@@ -460,7 +460,7 @@
     [(expr-net-type) "PropNetwork"]
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
-    [(expr-prop-network v) (format "#<prop-network ~a>" (prop-network-fuel v))]
+    [(expr-prop-network v) (format "#<prop-network ~a>" (net-cell-read v fuel-cell-id))]  ;; D.4 1C-iv-a: cell-API
     [(expr-cell-id v) (format "#<cell-id ~a>" (cell-id-n v))]
     [(expr-prop-id v) (format "#<prop-id ~a>" (prop-id-n v))]
     [(expr-net-new fuel) (format "[net-new ~a]" (pp-expr fuel names))]

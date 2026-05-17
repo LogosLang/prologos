@@ -38,9 +38,12 @@
                   run-to-quiescence-widen   ;; 1C-ii-b tests (exercises #4 + #5)
                   init-fuel-local-var!      ;; 1C-ii-b helper correctness test
                   flush-fuel-local-var!     ;; 1C-ii-b helper correctness test
+                  fork-prop-network         ;; D.4 1C-iv-a (1): fork-cell-reset test
+                  net-cell-reset            ;; D.4 1C-iv-a (2): cell-API substitution test
                   fuel-cell-id fuel-budget-cell-id
                   prop-network-cells prop-network-contradiction
-                  prop-network-fuel
+                  prop-network-fuel         ;; transitional — used by 1C-iv-a (1) lockstep check;
+                                            ;; check + import RETIRE at 1C-iv-b alongside macro
                   prop-cell-meta prop-cell-value
                   cell-id-hash cell-id
                   specialized-cell-meta-tier
@@ -346,7 +349,7 @@
   ;; Phase 1C migrates consumers; until then, prop-net-hot.fuel stays as the
   ;; live production fuel source.
   (define net (make-prop-network 1000))
-  (check-equal? (prop-network-fuel net) 1000))
+  (check-equal? (net-cell-read net fuel-cell-id) 1000))
 
 ;; ============================================================
 ;; C4 + C5: deferred to 1B-iv per §9.2.0.6 Q-1B-iii-γ (now exercised)
@@ -419,7 +422,7 @@
   (define net4 (net-cell-write net3 ca 42))
   (define result (run-to-quiescence-bsp net4))
   ;; β1 invariant: struct-field and cell agree
-  (define field-remaining (prop-network-fuel result))
+  (define field-remaining (net-cell-read result fuel-cell-id))
   (define cell-remaining (net-cell-read result fuel-cell-id))
   (check-equal? field-remaining cell-remaining
                 "β1 lockstep: struct-field and cell must agree after BSP Tier 2 round")
@@ -447,7 +450,7 @@
   (check-equal? (net-cell-read result ca) 99
                 "Tier 1 fast path fired the propagator (ca written)")
   ;; β1 preservation: Tier 1 doesn't decrement fuel
-  (check-equal? (prop-network-fuel result) 100
+  (check-equal? (net-cell-read result fuel-cell-id) 100
                 "Tier 1 fast path doesn't decrement struct-field")
   (check-equal? (net-cell-read result fuel-cell-id) 100
                 "Tier 1 fast path doesn't decrement cell (β1 preservation)"))
@@ -535,7 +538,7 @@
   ;; widening/narrowing path; calls run-widen-phase then narrow loop)
   (define result (run-to-quiescence-widen net4))
   ;; β1 invariant at flush observation point
-  (define field-remaining (prop-network-fuel result))
+  (define field-remaining (net-cell-read result fuel-cell-id))
   (define cell-remaining (net-cell-read result fuel-cell-id))
   (check-equal? field-remaining cell-remaining
                 "β1 lockstep: struct-field and cell must agree after sequential phase exit (flush observation point)")
@@ -563,7 +566,7 @@
   (define net1 (flush-fuel-local-var! net0 b))
   (check-equal? (net-cell-read net1 fuel-cell-id) 42
                 "flush-fuel-local-var! writes box value to cell")
-  (check-equal? (prop-network-fuel net1) 42
+  (check-equal? (net-cell-read net1 fuel-cell-id) 42
                 "flush-fuel-local-var! writes box value to struct-field (β1 transitional; D-1C-ii-b-1)"))
 
 (test-case "1C-ii-b (3) exhaustion via cell-mechanism at sequential scheduler"
@@ -591,5 +594,89 @@
   (check-true (<= cell-remaining 0)
               "exhaustion at sequential scheduler: cell remaining ≤ 0 after flush")
   ;; Lockstep at flush point — even at exhaustion
-  (check-equal? (prop-network-fuel result) cell-remaining
+  (check-equal? (net-cell-read result fuel-cell-id) cell-remaining
                 "β1 lockstep preserved at exhaustion flush point"))
+
+;; ============================================================
+;; 1C-iv-a NEW tests (D.4 CANONICAL 2026-05-16)
+;; ============================================================
+;;
+;; Per §10.0.6 Q-1C-iv-ε ε1: 2 new tests verifying behaviors introduced in
+;; 1C-iv-a — fork-prop-network cell-reset (γ1; D-1C-iv-1) + typing-propagators-
+;; style cell-API substitution pattern (D-1C-iii-5 retirement; D-1C-iv-2).
+;;
+;; These tests verify NEW behaviors (cells now participate in fork; cells now
+;; substitute in bounded-run patterns). They're stable post-1C-iv-b (don't
+;; reference struct-field or macro).
+
+(test-case "1C-iv-a (1) fork-prop-network cell-reset (γ1; D-1C-iv-1)"
+  ;; Verify fork-prop-network with a new fuel arg resets BOTH fuel-cell-id and
+  ;; fuel-budget-cell-id to the new fuel value. Without the reset, the forked
+  ;; sub-network would inherit parent's cell values via CHAMP structural sharing
+  ;; — violating β1 lockstep at fork boundary (cell stale relative to fresh
+  ;; struct-field fuel).
+  ;;
+  ;; Implementation: net-cell-reset (bypasses min-merge) at fork-prop-network
+  ;; (propagator.rkt:818-825); net-cell-write would (min parent new-fuel) and
+  ;; pick the lower value, leaking parent's lower remaining into forked.
+  (define parent (make-prop-network 1000))
+  ;; Decrement parent's cell to simulate parent has consumed some fuel
+  (define parent-consumed
+    (net-cell-write parent fuel-cell-id 500))   ; min(1000, 500) = 500
+  (check-equal? (net-cell-read parent-consumed fuel-cell-id) 500
+                "parent cell decremented to 500")
+  ;; Fork with NEW fuel = 2000. Forked cells should be 2000, NOT 500
+  ;; (CHAMP-shared parent value).
+  (define forked (fork-prop-network parent-consumed 2000))
+  (check-equal? (net-cell-read forked fuel-cell-id) 2000
+                "forked fuel-cell-id reset to new fuel=2000 (NOT leaked parent's 500)")
+  (check-equal? (net-cell-read forked fuel-budget-cell-id) 2000
+                "forked fuel-budget-cell-id reset to new fuel=2000")
+  ;; Verify struct-field also reflects new fuel (β1 lockstep at fork boundary)
+  ;; via the existing accessor (still uses prop-network-fuel until 1C-iv-b retires it)
+  (check-equal? (prop-network-fuel forked) 2000
+                "forked struct-field also at new fuel=2000 (β1 lockstep at fork)")
+  ;; Fork with default fuel = 1000000
+  (define forked-default (fork-prop-network parent-consumed))
+  (check-equal? (net-cell-read forked-default fuel-cell-id) 1000000
+                "forked with default fuel: cell at 1000000")
+  (check-equal? (net-cell-read forked-default fuel-budget-cell-id) 1000000
+                "forked with default fuel: budget cell at 1000000"))
+
+(test-case "1C-iv-a (2) cell-API substitution pattern (D-1C-iii-5 retirement; D-1C-iv-2)"
+  ;; Verify the cell-API substitute + restore pattern works for bounded-run
+  ;; semantics (used by typing-propagators.rkt:2269 to give the typing run a
+  ;; bounded fuel budget). Pattern:
+  ;;   1. Read current cell value (saved-fuel)
+  ;;   2. net-cell-reset to LIMIT for bounded run
+  ;;   3. Run with bounded budget
+  ;;   4. net-cell-reset to saved-fuel (restore)
+  ;;
+  ;; Critical: use net-cell-reset (NOT net-cell-write) — under min-merge,
+  ;; net-cell-write would (min saved-fuel LIMIT) and pick the smaller; if
+  ;; LIMIT < saved-fuel, we'd get LIMIT (correct); but at restore,
+  ;; net-cell-write (min current saved-fuel) would pick current (smaller)
+  ;; — INCORRECT (loses the restore semantic).
+  (define net0 (make-prop-network 1000))
+  ;; Simulate some prior consumption (cell at 800)
+  (define net1 (net-cell-write net0 fuel-cell-id 800))
+  (check-equal? (net-cell-read net1 fuel-cell-id) 800)
+  ;; Save current; substitute with bounded LIMIT
+  (define saved-fuel (net-cell-read net1 fuel-cell-id))
+  (define LIMIT 200)
+  (define net-bounded (net-cell-reset net1 fuel-cell-id LIMIT))
+  (check-equal? (net-cell-read net-bounded fuel-cell-id) LIMIT
+                "cell-reset bypasses merge: cell at LIMIT regardless of saved-fuel")
+  ;; Simulate bounded run consuming some fuel (cell drops to 150)
+  (define net-after-run (net-cell-write net-bounded fuel-cell-id 150))
+  (check-equal? (net-cell-read net-after-run fuel-cell-id) 150
+                "bounded run consumed 50 fuel (cell at 150)")
+  ;; Restore via net-cell-reset (bypass merge to write saved-fuel back)
+  (define net-restored (net-cell-reset net-after-run fuel-cell-id saved-fuel))
+  (check-equal? (net-cell-read net-restored fuel-cell-id) 800
+                "cell-reset restore: cell back at saved-fuel=800 (NOT min(150, 800)=150)")
+  ;; Verify the bug-class: if we tried net-cell-write instead of net-cell-reset
+  ;; for restore, we'd get (min 150 800) = 150 — wrong.
+  (define net-buggy-restore (net-cell-write net-after-run fuel-cell-id saved-fuel))
+  (check-equal? (net-cell-read net-buggy-restore fuel-cell-id) 150
+                "DEMONSTRATES BUG: net-cell-write for restore loses saved-fuel under min-merge"))
