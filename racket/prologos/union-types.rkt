@@ -64,8 +64,6 @@
     [(expr-cell-id-type) "0:CellId"]
     [(expr-prop-id-type) "0:PropId"]
     [(expr-uf-type) "0:UnionFind"]
-    [(expr-atms-type) "0:ATMS"]
-    [(expr-assumption-id-type) "0:AssumptionId"]
     [(expr-table-store-type) "0:TableStore"]
     [(expr-solver-type) "0:Solver"]
     [(expr-goal-type) "0:Goal"]

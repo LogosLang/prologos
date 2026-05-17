@@ -159,10 +159,6 @@
    (test-dep '(effect-executor.rkt effect-ordering.rkt effect-position.rkt io-bridge.rkt processes.rkt propagator.rkt session-lattice.rkt session-runtime.rkt sessions.rkt syntax.rkt) #f)
    'test-arity-checking.rkt
    (test-dep '(driver.rkt elaborator.rkt errors.rkt global-env.rkt macros.rkt metavar-store.rkt namespace.rkt parser.rkt prelude.rkt pretty-print.rkt source-location.rkt surface-syntax.rkt syntax.rkt) #t)
-   'test-atms-integration.rkt
-   (test-dep '(driver.rkt errors.rkt global-env.rkt prelude.rkt pretty-print.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
-   'test-atms-types.rkt
-   (test-dep '(atms.rkt global-env.rkt prelude.rkt pretty-print.rkt propagator.rkt qtt.rkt reduction.rkt substitution.rkt syntax.rkt typing-core.rkt) #f)
    'test-atms.rkt
    (test-dep '(atms.rkt propagator.rkt) #f)
    'test-auto-implicits.rkt

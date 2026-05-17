@@ -7,7 +7,7 @@
 ;;;
 ;;; These tests verify ARCHITECTURE (information flow paths), not just BEHAVIOR
 ;;; (correct answers). The behavioral parity tests are in the migrated test files
-;;; (test-atms-types, test-elab-speculation, test-infra-cell-atms-01, test-capability-05b).
+;;; (test-elab-speculation, test-infra-cell-atms-01, test-capability-05b).
 
 (require rackunit
          rackunit/text-ui

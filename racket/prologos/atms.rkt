@@ -688,7 +688,8 @@
 ;;
 ;; Convenience wrapper that mirrors the old atms calling convention
 ;; (take state, return state) for easy migration. The solver-state
-;; is what gets stored in expr-atms-store — it replaces the atms struct.
+;; replaces the atms struct as the canonical hypothetical-reasoning
+;; substrate (surface ATMS AST retired in 1A-iii-c).
 ;;
 ;; ctx: solver-context (immutable phone book)
 ;; net: prop-network (the computation substrate, evolves with each operation)

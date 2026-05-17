@@ -90,8 +90,6 @@
     [(expr-cell-id-type) "CellId"]
     [(expr-prop-id-type) "PropId"]
     [(expr-uf-type) "UnionFind"]
-    [(expr-atms-type) "ATMS"]
-    [(expr-assumption-id-type) "AssumptionId"]
     [(expr-table-store-type) "TableStore"]
     [(expr-solver-type) "Solver"]
     [(expr-goal-type) "Goal"]

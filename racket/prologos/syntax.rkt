@@ -198,14 +198,6 @@
  (struct-out expr-uf-empty) (struct-out expr-uf-make-set)
  (struct-out expr-uf-find) (struct-out expr-uf-union)
  (struct-out expr-uf-value)
- ;; ATMS (persistent assumption-based truth maintenance)
- (struct-out expr-atms-type) (struct-out expr-assumption-id-type)
- (struct-out expr-atms-store) (struct-out expr-assumption-id-val)
- (struct-out expr-atms-new) (struct-out expr-atms-assume)
- (struct-out expr-atms-retract) (struct-out expr-atms-nogood)
- (struct-out expr-atms-amb) (struct-out expr-atms-solve-all)
- (struct-out expr-atms-read) (struct-out expr-atms-write)
- (struct-out expr-atms-consistent) (struct-out expr-atms-worldview)
  ;; Tabling (SLG-style memoization)
  (struct-out expr-table-store-type) (struct-out expr-table-store-val)
  (struct-out expr-table-new) (struct-out expr-table-register)
@@ -746,26 +738,6 @@
 ;; ATMS (persistent assumption-based truth maintenance, de Kleer 1986)
 ;; ========================================
 
-;; Type constructors
-(struct expr-atms-type () #:transparent)                          ; ATMS : Type 0
-(struct expr-assumption-id-type () #:transparent)                 ; AssumptionId : Type 0
-
-;; Runtime wrappers (opaque Racket values from atms.rkt)
-(struct expr-atms-store (store-value) #:transparent)              ; wrapped atms
-(struct expr-assumption-id-val (aid-value) #:transparent)         ; wrapped assumption-id
-
-;; Operations
-(struct expr-atms-new (network) #:transparent)                    ; PropNetwork -> ATMS
-(struct expr-atms-assume (atms name datum) #:transparent)         ; ATMS -> Keyword -> A -> [ATMS * AssumptionId]
-(struct expr-atms-retract (atms aid) #:transparent)               ; ATMS -> AssumptionId -> ATMS
-(struct expr-atms-nogood (atms aids) #:transparent)               ; ATMS -> List AssumptionId -> ATMS
-(struct expr-atms-amb (atms alternatives) #:transparent)          ; ATMS -> List A -> [ATMS * List AssumptionId]
-(struct expr-atms-solve-all (atms goal) #:transparent)            ; ATMS -> CellId -> List _
-(struct expr-atms-read (atms cell) #:transparent)                 ; ATMS -> CellId -> _ (type-unsafe)
-(struct expr-atms-write (atms cell val support) #:transparent)    ; ATMS -> CellId -> A -> List AssumptionId -> ATMS
-(struct expr-atms-consistent (atms aids) #:transparent)           ; ATMS -> List AssumptionId -> Bool
-(struct expr-atms-worldview (atms aids) #:transparent)            ; ATMS -> List AssumptionId -> ATMS
-
 ;; ---- Tabling (SLG-style memoization) ----
 ;; Type constructor
 (struct expr-table-store-type () #:transparent)                           ; TableStore
@@ -1132,8 +1104,6 @@
       (expr-net-add-prop? x) (expr-net-run? x)
       (expr-net-snapshot? x) (expr-net-contradiction? x)
       (expr-uf-type? x) (expr-uf-store? x)
-      (expr-atms-type? x) (expr-assumption-id-type? x)
-      (expr-atms-store? x) (expr-assumption-id-val? x)
       (expr-table-store-type? x) (expr-table-store-val? x)
       (expr-solver-type? x) (expr-goal-type? x) (expr-derivation-type? x)
       (expr-schema-type? x) (expr-answer-type? x) (expr-relation-type? x)

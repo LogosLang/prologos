@@ -623,7 +623,7 @@ matrix[2][0]
 ;; §I — ATMS MULTI-CLAUSE EXPLORATION
 ;; ========================================================================
 ;;
-;; Tests the core Multiverse Multiplexer: atms-amb over clause alternatives.
+;; Tests the core Multiverse Multiplexer: solver-state speculation over clause alternatives.
 
 ;; --- I1: Multi-clause relation (baseline — already works via DFS) ---
 
