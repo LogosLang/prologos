@@ -292,7 +292,12 @@
 ;; Storage strategy + fire-on policy enums initially shipped: 'general +
 ;; 'monotone-counter; 'any-change + 'threshold-crossing. Future tracks
 ;; extend per "Let pain drive design."
-(struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check)
+;; D.4 1V-2 Item #1 (§11.X.2 α1): merge-fn cached on cell-meta to eliminate
+;; per-call champ-lookup in net-cell-write fast path. Closes §13.7 1B-ii
+;; unilateral gate revision (≤ 3 ns/cycle target). Registry remains
+;; source-of-truth for slow path (regular cells; meta=#f); meta cache is
+;; fast-path-only. No redundancy on single code path (per γ1 + F13).
+(struct specialized-cell-meta (tier storage fires-on on-write-check on-read-check merge-fn)
   #:transparent)
 
 ;; BSP-LE Track 2 Phase 2: Dependent entry with component-path + assumption tag.
@@ -946,7 +951,8 @@
   (define local-id (prop-network-next-cell-id net))
   (define id (cell-id (if (zero? ns) local-id
                           (+ (arithmetic-shift ns 32) local-id))))
-  (define meta (specialized-cell-meta tier storage fires-on on-write-check on-read-check))
+  ;; D.4 1V-2 Item #1: pass merge-fn into struct (cached for fast-path use)
+  (define meta (specialized-cell-meta tier storage fires-on on-write-check on-read-check merge-fn))
   (define cell (prop-cell initial-value champ-empty meta))
   (define h (cell-id-hash id))
   (define resolved-domain
@@ -1423,7 +1429,9 @@
      ;; Apply merge fn per §9.2.B sketch — preserves CALM-safety (merge=min
      ;; for tropical-fuel; min ensures the lowest value wins under concurrent
      ;; writes, matching the Lawvere join semantic).
-     (define merge-fn (champ-lookup (prop-network-merge-fns net) h cid))
+     ;; D.4 1V-2 Item #1 (§11.X.2 α1/γ1): use cached merge-fn from cell-meta
+     ;; instead of per-call champ-lookup. Closes §13.7 1B-ii gate.
+     (define merge-fn (specialized-cell-meta-merge-fn meta))
      (let* ([old-val (prop-cell-value cell)]
             [merged (merge-fn old-val new-val)])
        (cond

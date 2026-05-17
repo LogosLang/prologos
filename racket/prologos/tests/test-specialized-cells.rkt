@@ -28,7 +28,8 @@
                   specialized-cell-meta-tier
                   specialized-cell-meta-storage
                   specialized-cell-meta-fires-on
-                  specialized-cell-meta-on-write-check)
+                  specialized-cell-meta-on-write-check
+                  specialized-cell-meta-merge-fn)
          (only-in "../champ.rkt" champ-lookup))
 
 ;; Standard merge: max for monotone counter
@@ -38,15 +39,22 @@
 ;; Test 1: cell-meta struct + accessors
 ;; ----------------------------------------------------------------
 (test-case "cell-meta struct construction + accessors"
+  ;; D.4 1V-2 Item #1 (§11.X.2 α1): 6th field merge-fn cached for fast path
   (define m (specialized-cell-meta 'hot 'monotone-counter 'threshold-crossing
                                    (lambda (o n net) (>= n 100))
-                                   #f))
+                                   #f
+                                   max-merge))
   (check-true (specialized-cell-meta? m))
   (check-eq? (specialized-cell-meta-tier m) 'hot)
   (check-eq? (specialized-cell-meta-storage m) 'monotone-counter)
   (check-eq? (specialized-cell-meta-fires-on m) 'threshold-crossing)
   (check-equal? ((specialized-cell-meta-on-write-check m) 0 100 'fake-net) #t)
-  (check-equal? ((specialized-cell-meta-on-write-check m) 0 50 'fake-net) #f))
+  (check-equal? ((specialized-cell-meta-on-write-check m) 0 50 'fake-net) #f)
+  ;; D.4 1V-2 Item #1: merge-fn accessor returns the cached function;
+  ;; verify it composes correctly (max-merge: pick larger value)
+  (check-eq? (specialized-cell-meta-merge-fn m) max-merge)
+  (check-equal? ((specialized-cell-meta-merge-fn m) 3 5) 5)
+  (check-equal? ((specialized-cell-meta-merge-fn m) 7 2) 7))
 
 ;; ----------------------------------------------------------------
 ;; Test 2: Backward compatibility — regular cell (meta=#f)

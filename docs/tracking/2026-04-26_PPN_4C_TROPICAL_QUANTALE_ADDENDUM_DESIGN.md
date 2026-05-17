@@ -415,8 +415,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1C-vi (measurement artifacts)** | 3 captured data files (production C; production-realistic N distribution mean 5.20; probe wall 351.68 ms median +19.2% vs Pre-0); A/B/C report doc with 11-row table + production-realistic-N + probe regression findings; Issue [#63](https://github.com/LogosLang/prologos/issues/63) opened (bench-ab.rkt `--refs` enhancement); MASTER_ROADMAP.org + DEFERRED.md cross-references; D-1B-ii-3 allocation verification complete | ✅ ✓ PASS-WITH-CAVEATS | A/B/C report verdicts: 6 PASS + 3 INVESTIGATE; probe at upper-ceiling boundary of §11.3 (≤ 351 ms); Phase 1V item #1-bis (fuel-cell direct-ref) PROPOSED to close residual gap; commit (this commit) |
 | **1V mini-design + mini-audit** | §11.2 D.4 CANONICAL reframing (α1); microbench scope refresh (β2 — 5 NEW + 6 references); Items #1 + #1-bis + #3 ALL IN SCOPE (γ-all3; user-confirmed Track 2I closed); 3 codifications graduation (δ1); 5-commit sub-phase split (ε-multi); 16 audit findings F1-F16; 6 drift risks D-1V-1/2/3/4/5/6 (5 audit-resolved + 1 deferred); 3 NEW codification candidates | ✅ | §11.X + §11.2 reframed (2026-05-17) |
 | **1V Commit 2 mini-design + mini-audit** | α1/β1/γ1/δ1/ε-measurement-driven resolved (17 mini-audit findings F1-F17; F1-F13 ✅ HOLD from FORK CHECKPOINT; F14-F17 NEW from re-audit at fresh HEAD; 6 drift risks D-1V-2-1/2/3/4/5/6; 3 NEW codification candidates); design-doc persistence per user direction (corrects FORK CHECKPOINT's commit-message persistence) | ✅ | §11.X.2 (2026-05-17) |
-| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii unilateral gate revision (~10-15 LoC); re-microbench CW3 + §13.7 gate decision per ε-measurement-driven | ⬜ | Per §11.X.2 + §11.3 item #1 + §11.X γ-all3 |
-| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; close production-realistic-N gap from 1C-vi A/B/C (~30-60 LoC); ~0.3 ns/cycle savings | ⬜ | Per 1C-vi A/B/C report + §11.X γ-all3 |
+| **1V Commit 2 — Item #1 merge-fn-caching** | Cache merge-fn on specialized-cell-meta; eliminate per-call champ-lookup in net-cell-write fast path (~22 LoC across propagator.rkt + specialized-cells.rkt + tests/test-specialized-cells.rkt); CW3 re-microbench: **Var-A N=100 7.56 → 5.78 ns/cycle (-1.78 ns; -23.5% recovery)**; ≤ 5 ns gate NOT met; **§13.7 gate decision DEFERRED to Commit 3 combined measurement per Option (d)** + conditional Item #1-ter (F18 NEW + decision-tree-gap NEW codification candidate) | ✅ ✓ PARTIAL-RECOVERY | Per §11.X.2 + §11.X.2.1 (2026-05-17) |
+| **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm; close production-realistic-N gap from 1C-vi A/B/C (~30-60 LoC); ~0.3 ns/cycle savings projected; combined Item #1+#1-bis projected ~5.48 ns/cycle (Var-A N=100); **triggers Item #1-ter scope decision at Commit 3 close** per Option (d) | ⬜ | Per 1C-vi A/B/C report + §11.X γ-all3 + §11.X.2.1 Option (d) |
+| **1V Commit 3.5 — Item #1-ter (CONDITIONAL)** | Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle; scope TBD at Commit 3 close mini-design (candidates: worldview-cache caching, other champ-lookup sites per F18, CHAMP/dispatch reductions) | ⬜ CONDITIONAL | Per §11.X.2.1 Option (d) (forward-captured 2026-05-17) |
 | **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
 | **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
 
@@ -4328,6 +4329,83 @@ Single atomic implementation commit (~10-15 LoC; will follow this design-doc per
 
 - §3 Progress Tracker row "1V Commit 2 — Item #1 merge-fn-caching" updates Notes to reference §11.X.2 (this subsection)
 - Status remains ⬜ until implementation commit lands
+
+### §11.X.2.1 Implementation Results + §13.7 Gate Analysis (2026-05-17, post-implementation commit)
+
+> **Status**: Item #1 (merge-fn-caching) implementation **COMPLETE**. Measurable recovery achieved; **§13.7 ≤ 5 ns gate NOT met** at production-realistic N=100 (5.78 ns/cycle). Per user direction (**Option (d)** in this commit's checkpoint review): defer combined gate decision to Commit 3 (Item #1-bis) measurement; **conditional Item #1-ter** triggers if combined recovery still leaves Var-A N=100 > 5 ns/cycle.
+
+**CW3 re-microbench results** (HEAD post-implementation; bench-tropical-fuel.rkt):
+
+| Variant + N | Pre-Item-#1 (1C-vi 2026-05-16) | Post-Item-#1 (this HEAD) | Δ ns/cycle | Δ % | §13.7 gate |
+|---|---|---|---|---|---|
+| **Var-A N=100** (§13.7 PRIMARY gate; production-realistic parallel BSP) | 7.56 ns/cycle | **5.78 ns/cycle** | **-1.78** | **-23.5%** | NOT met (≤ 5 unilateral; ≤ 3 original) |
+| Var-A N=1000 | 1.80 ns/cycle | 1.64 ns/cycle | -0.16 | -8.9% | (≤ 3 original; met at N=1000) |
+| Var-B N=100 (sequential scheduler) | 7.78 ns/cycle | 7.24 ns/cycle | -0.54 | -6.9% | NOT met |
+| Var-B N=1000 | 3.04 ns/cycle | 2.94 ns/cycle | -0.10 | -3.3% | (≤ 3 ratified at N=1000) |
+
+**§13.7 ε-measurement-driven decision tree analysis** (Var-A N=100):
+
+| §13.7 outcome | Range | Action | Result fit? |
+|---|---|---|---|
+| Original ≤ 3 ns ratified | CW3 ≤ 3 ns | Revert unilateral revision | ❌ NOT achieved (5.78 ns) |
+| Measurement-driven discussion | 3.5-4 ns/cycle | Escalate to user | ❌ NOT in range |
+| No measurable recovery → investigate | ~no Δ | Halt; investigate CW2 production path | ❌ NOT applicable (Δ -23.5%) |
+
+**The Item #1 result (5.78 ns/cycle) falls in an UNCOVERED range** between "measurement-driven discussion" (≤ 4 ns) and "no measurable recovery" (~no Δ). The decision tree has a gap for the case where recovery IS substantial but still doesn't hit either target. **NEW codification candidate**: "Gate decision tree gaps surface when measurements fall between named ranges; original tree assumed recovery would land in one of 3 ranges; production reality landed in a 4th (4-6 ns substantial-but-insufficient)."
+
+**Production overhead breakdown** (per 1C-vi A/B/C report + Item #1 measurement):
+- §13.6.A MOCK spike baseline: 2.16 ns/cycle (CHAMP-free dispatch)
+- Production CHAMP cell-meta dispatch overhead: irreducible ~3.5 ns at N=100
+- Item #1 saves: ~1.78 ns (champ-lookup for merge-fn → cached struct-field access)
+- Remaining gap: production has structural CHAMP/worldview-cache overhead the MOCK didn't model
+
+**Option (d) decision (per user 2026-05-17)**:
+1. **Commit Item #1's partial recovery now** (Commit 2) — measurable -23.5% improvement; documented; §3 tracker → ✅ ✓ PARTIAL-RECOVERY
+2. **Land Item #1-bis next** (Commit 3) — fuel-cell direct-ref caching; projected ~0.3 ns/cycle savings per 1C-vi A/B/C; combined projected ~5.48 ns/cycle
+3. **Conditional Item #1-ter** (CONTINGENT Commit ~3.5; mini-design at Commit 3 close):
+   - **Trigger**: IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle
+   - **Scope**: TBD at Commit 3 close; candidates include caching the worldview-cache lookup, eliminating other per-call champ-lookups (F18: lines 1172 + 3289), or other CHAMP/dispatch reductions
+   - **Out of scope NOW**: Item #1-ter design awaits Commit 3 measurement; no speculative design before data
+
+**Phase 1V commit count under Option (d)** (revised from §11.X ε-multi 5-commit / dailies 8-commit plan):
+- Commit 1 ✅ `2535c886` (§11.X overall mini-design + §11.2 reframing)
+- Commit 2a ✅ `e6308cb6` (§11.X.2 design-doc persistence)
+- **Commit 2b** (this implementation commit; pending) — Item #1 merge-fn-caching + measurement + Option (d) decision
+- Commit 3a + 3b: §11.X.3 + Item #1-bis implementation + measurement
+- **Conditional Item #1-ter** (if Commit 3 measurement triggers): §11.X.3.5 + impl
+- Commit 4a + 4b: §11.X.4 + Item #3 implementation
+- Commit 5: Atomic VAG + close (gate decision finalized with all measurements in hand)
+
+Total: 8-10 commits (8 if Item #1-ter not triggered; 10 if triggered). Consistent with prior sub-phase split patterns + Option (d) gate-chasing escape valve.
+
+**Drift risk D-1V-2-3 status update**:
+- Risk: "Gate recovery may not hit ≤ 3 ns/cycle target"
+- Status at Commit 2b: **MATERIALIZED** — recovery achieved (-23.5%) but only to 5.78 ns; below original ≤ 3 ns and unilateral ≤ 5 ns
+- Mitigation: ε-measurement-driven decision tree HAD A GAP (NEW codification candidate); Option (d) covers the gap by deferring to Commit 3 combined measurement + conditional Item #1-ter
+- Effect: D-1V-2-3 partially mitigated by Item #1 (substantial recovery); remaining mitigation via Item #1-bis (Commit 3) + Item #1-ter (conditional)
+
+**VAG TWO-COLUMN for Commit 2b**:
+
+**(a) On-network?**
+- *Catalogue*: ✓ cell-meta cache lives at cell layer (specialized-cell-meta-merge-fn accessor; cached at registration time); scheduler-agnostic; orthogonality-compliant
+- *Challenge*: did we cache only at fast path (avoid redundancy per γ1)? **VERIFIED**: F13 dual-storage rationale holds; slow path uses registry; fast path uses cache. F18 (NEW): 2 other champ-lookup sites exist at propagator.rkt:1172 (net-cell-read tagged-cell-value domain-merge extraction) + propagator.rkt:3289 (net-cell-write-widen) — they're NOT fast-path; per γ1 they stay on registry source-of-truth. No new redundancy introduced. Item #1 is genuinely surgical.
+
+**(b) Complete?**
+- *Catalogue*: ✓ all 4 direct constructor sites updated (F2); ✓ 5 accessor imports updated + new accessor test added; ✓ targeted tests PASS (108 / 5.4s across 5 files); ✓ full suite GREEN (8209 / 118.4s); ✓ CW3 re-measured
+- *Challenge*: did the perf claim land per §13.7 gate? **MEASURABLE RECOVERY achieved (-23.5%)** but ≤ 5 ns gate NOT met (5.78 ns). Per microbench-claim verification rule: claim was "close the gap"; partial close achieved. Per Option (d): full gate decision DEFERRED to Commit 3 combined measurement. Honest framing: Item #1 alone is INSUFFICIENT; Item #1-bis + conditional Item #1-ter are queued. **Not pretending Item #1 closes the gate.**
+
+**(c) Vision-advancing?**
+- *Catalogue*: ✓ cell-layer optimization (orthogonality compliant per §3.7); ✓ merge-fn cached on cell-meta per §11.X.2 α1; ✓ scheduler-neutral (Gauss-Seidel + BSP + Zig-LLVM + future runtime all benefit)
+- *Challenge*: did inherited patterns persist without challenge? **F14 (NEW)**: `tropical-fuel-merge-for-cell` is inlined duplicate (import cycle avoidance); cached on canonical fuel cells means cache stores the DUPLICATE — "future change MUST update duplicate" warning at propagator.rkt:653 continues to apply. Not Item #1 scope to retire; flagged as D-1V-2-5 audit-resolved. **F18 (NEW)**: 2 other champ-lookup sites left on registry — could be similar caching opportunities; OUT of Item #1 scope but flagged as watching list. Both are honest framings + future-track-aware.
+
+**(d) Drift-risks-cleared?**
+- *Catalogue*: D-1V-2-1/2/4/5/6 audit-resolved; D-1V-2-3 mitigation **TRIGGERED** (this is the measurement-driven discussion moment)
+- *Challenge*: did the mitigation actually work? D-1V-2-3 risk was "gate recovery may not hit ≤ 3 ns/cycle target" — risk **MATERIALIZED** (recovery to 5.78 ns, not ≤ 3 nor ≤ 5). Mitigation was "ε-measurement-driven decision tree at §13.7"; the tree HAD A GAP (uncovered range 4-6 ns substantial-but-insufficient) — surfaced as NEW codification candidate. Per Option (d), mitigation extends to "defer to Commit 3 combined measurement + conditional Item #1-ter". **Drift surfaced honestly; gate decision deferred per protocol; no unilateral resolution attempt.**
+
+**Updates to design doc trackers** (Commit 2b — implementation commit):
+
+- §3 Progress Tracker row "1V Commit 2 — Item #1 merge-fn-caching" → **✅ ✓ PARTIAL-RECOVERY** with commit hash + measurement summary
+- §3 Progress Tracker NEW conditional row (forward-captured): "1V Commit 3.5 — Item #1-ter (conditional)" ⬜ (per Option (d); triggers if Commit 3 measurement insufficient)
 
 ---
 

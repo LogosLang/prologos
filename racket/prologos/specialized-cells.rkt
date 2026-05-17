@@ -25,6 +25,10 @@
 ;; Convenience constructor for hot+monotone-counter cells with an on-write
 ;; check (e.g., the fuel-cost-cell pattern: cost crosses budget → contradiction).
 ;;
+;; merge-fn: (old new → merged) — the merge function for this cell's lattice
+;;   value. Cached on the meta struct (per D.4 1V-2 Item #1 / §11.X.2 α1) for
+;;   fast-path dispatch in net-cell-write (eliminates per-call champ-lookup).
+;;   Per F17: callers must pass merge-fn explicitly (no longer optional).
 ;; on-write-check: (old new net → boolean) — predicate that runs inline at
 ;;   write-time; if returns truthy, contradiction is written structurally
 ;;   (the cell-id becomes the network's contradiction cell).
@@ -32,15 +36,21 @@
 ;; fires-on defaults to 'threshold-crossing — dependent propagators are
 ;; notified only when on-write-check fires (signaling threshold crossed).
 ;; Skips dep enqueuing on the common case (cost grows but doesn't cross).
-(define (make-monotone-counter-meta on-write-check)
+(define (make-monotone-counter-meta merge-fn on-write-check)
   (specialized-cell-meta 'hot 'monotone-counter 'threshold-crossing
                          on-write-check
-                         #f))
+                         #f
+                         merge-fn))
 
 ;; Convenience constructor for cold+general cells (write-rarely, no
 ;; specialized dispatch needed; e.g., fuel-budget-cell). The cell takes
 ;; the existing slow path of net-cell-write (no fast-path optimization)
 ;; — the meta exists so the cell is registered as a specialized cell in
 ;; the framework's accounting, but dispatch falls through unchanged.
-(define (make-cold-general-meta)
-  (specialized-cell-meta 'cold 'general 'any-change #f #f))
+;;
+;; merge-fn: optional (defaults to #f) — for symmetry with monotone-counter
+;; meta and forward-compatibility with future specialized cell patterns. On
+;; the slow path, the registry is the source-of-truth (per γ1 dual-storage
+;; rationale + F13); meta's merge-fn is unused for cold+general cells today.
+(define (make-cold-general-meta [merge-fn #f])
+  (specialized-cell-meta 'cold 'general 'any-change #f #f merge-fn))
