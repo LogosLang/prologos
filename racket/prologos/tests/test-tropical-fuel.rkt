@@ -26,7 +26,21 @@
                   sre-domain-merge-registry sre-domain-meet-registry
                   sre-domain-contradicts? sre-domain-bot-value
                   sre-domain-top-value sre-domain-name
-                  prop-confirmed))
+                  prop-confirmed)
+         ;; 1B-iv: canonical fuel cell registration tests
+         (only-in "../propagator.rkt"
+                  make-prop-network
+                  net-cell-read net-cell-write
+                  fuel-cell-id fuel-budget-cell-id
+                  prop-network-cells prop-network-contradiction
+                  prop-network-fuel
+                  prop-cell-meta prop-cell-value
+                  cell-id-hash cell-id
+                  specialized-cell-meta-tier
+                  specialized-cell-meta-storage
+                  specialized-cell-meta-fires-on
+                  specialized-cell-meta-on-write-check)
+         (only-in "../champ.rkt" champ-lookup))
 
 ;; ============================================================
 ;; Lattice constants
@@ -258,3 +272,103 @@
   ;;  is informational — the verification is at registration time and
   ;;  the absence of registration errors is the load-bearing check.)
   (check-not-false d "tropical-fuel domain must be registered"))
+
+;; ============================================================
+;; 1B-iv: Canonical fuel cell registration via make-prop-network
+;; ============================================================
+;; Cells are SHADOW MODE in Phase 1B — registered + initialized to budget;
+;; production fuel decrements continue using prop-net-hot.fuel until Phase 1C
+;; migration. These tests verify the cells exist + cell-meta is correctly
+;; attached + initial values are correct + on-write-check semantics work.
+
+(test-case "1B-iv: fuel-cell-id and fuel-budget-cell-id are cell-id 11 and 12"
+  (define net (make-prop-network 1000))
+  ;; Cell-ids are well-known per §4.3
+  (check-not-false net)
+  ;; Verify by looking up the cells exist
+  (check-not-false (champ-lookup (prop-network-cells net)
+                                  (cell-id-hash fuel-cell-id)
+                                  fuel-cell-id)))
+
+(test-case "1B-iv: fuel-cell initial value = budget parameter (Option A: remaining-fuel)"
+  (define net (make-prop-network 1000))
+  (check-equal? (net-cell-read net fuel-cell-id) 1000)
+  (check-equal? (net-cell-read net fuel-budget-cell-id) 1000))
+
+(test-case "1B-iv: fuel-cell initial value defaults to 1000000"
+  (define net (make-prop-network))
+  (check-equal? (net-cell-read net fuel-cell-id) 1000000)
+  (check-equal? (net-cell-read net fuel-budget-cell-id) 1000000))
+
+(test-case "1B-iv: fuel-cell has specialized-cell-meta with hot+monotone-counter+threshold-crossing"
+  (define net (make-prop-network 1000))
+  (define cell (champ-lookup (prop-network-cells net)
+                              (cell-id-hash fuel-cell-id)
+                              fuel-cell-id))
+  (define meta (prop-cell-meta cell))
+  (check-not-false meta)
+  (check-eq? (specialized-cell-meta-tier meta) 'hot)
+  (check-eq? (specialized-cell-meta-storage meta) 'monotone-counter)
+  (check-eq? (specialized-cell-meta-fires-on meta) 'threshold-crossing)
+  (check-not-false (specialized-cell-meta-on-write-check meta)))
+
+(test-case "1B-iv: fuel-budget-cell has cold+general+any-change meta"
+  (define net (make-prop-network 1000))
+  (define cell (champ-lookup (prop-network-cells net)
+                              (cell-id-hash fuel-budget-cell-id)
+                              fuel-budget-cell-id))
+  (define meta (prop-cell-meta cell))
+  (check-not-false meta)
+  (check-eq? (specialized-cell-meta-tier meta) 'cold)
+  (check-eq? (specialized-cell-meta-storage meta) 'general)
+  (check-eq? (specialized-cell-meta-fires-on meta) 'any-change))
+
+(test-case "1B-iv: fuel-cell on-write-check fires at remaining ≤ 0 (Option A exhaustion)"
+  (define net (make-prop-network 1000))
+  ;; Decrement to 1 — not yet exhausted
+  (define net2 (net-cell-write net fuel-cell-id 1))
+  (check-equal? (net-cell-read net2 fuel-cell-id) 1)
+  (check-eq? (prop-network-contradiction net2) #f)
+  ;; Decrement to 0 — operational exhaustion; on-write-check fires
+  (define net3 (net-cell-write net2 fuel-cell-id 0))
+  (check-equal? (net-cell-read net3 fuel-cell-id) 0)
+  (check-equal? (prop-network-contradiction net3) fuel-cell-id))
+
+(test-case "1B-iv: shadow mode — make-prop-network with new cells doesn't break prop-net-hot.fuel"
+  ;; The existing native fuel mechanism MUST still work in Phase 1B-iv.
+  ;; Phase 1C migrates consumers; until then, prop-net-hot.fuel stays as the
+  ;; live production fuel source.
+  (define net (make-prop-network 1000))
+  (check-equal? (prop-network-fuel net) 1000))
+
+;; ============================================================
+;; C4 + C5: deferred to 1B-iv per §9.2.0.6 Q-1B-iii-γ (now exercised)
+;; ============================================================
+
+(test-case "C4 — Module-theory: cell-write applies merge correctly under specialized dispatch"
+  ;; Q-module action: net-cell-write on the fuel-cell uses tropical-fuel-merge-for-cell
+  ;; (= min) under specialized dispatch. Writing a value >= current is a no-op (min
+  ;; selects the lower). Writing a value < current updates (the lower wins).
+  (define net (make-prop-network 1000))
+  ;; Writing higher value than current → min selects current; no change
+  (define net2 (net-cell-write net fuel-cell-id 2000))
+  (check-equal? (net-cell-read net2 fuel-cell-id) 1000)  ;; min(1000, 2000) = 1000
+  ;; Writing lower value → min selects the lower; cell updates
+  (define net3 (net-cell-write net fuel-cell-id 500))
+  (check-equal? (net-cell-read net3 fuel-cell-id) 500))
+
+(test-case "C5 — CALM-safety: order-independent fixpoint under specialized dispatch"
+  ;; Writes are commutative + idempotent under min-merge. Multiple writes in any
+  ;; order converge to the same final value.
+  (define base (make-prop-network 1000))
+  ;; Order 1: 800 → 500 → 700
+  (define net-a (net-cell-write base fuel-cell-id 800))
+  (define net-a2 (net-cell-write net-a fuel-cell-id 500))
+  (define net-a3 (net-cell-write net-a2 fuel-cell-id 700))
+  ;; Order 2: 700 → 500 → 800
+  (define net-b (net-cell-write base fuel-cell-id 700))
+  (define net-b2 (net-cell-write net-b fuel-cell-id 500))
+  (define net-b3 (net-cell-write net-b2 fuel-cell-id 800))
+  ;; Both converge to 500 (the minimum)
+  (check-equal? (net-cell-read net-a3 fuel-cell-id) 500)
+  (check-equal? (net-cell-read net-b3 fuel-cell-id) 500))

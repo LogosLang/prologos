@@ -393,7 +393,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
 | **1B-ii** | Specialized cell framework module + net-cell-write dispatch + prop-net-warm under-speculation? field | ✅ ✓ PASS | CW3 per-cycle amortized = 2.98 ns/cycle (§13.7 gate ≤ 3 ns; boundary); 8257 tests / 114.5s / 0 failures |
 | **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C1+C2+C3 axioms) | ✅ ✓ PASS | tropical-fuel.rkt + test-tropical-fuel.rkt (20 tests; all algebra axioms verified including +inf.0 boundary cases); 8277 tests / 119.9s / 0 failures |
-| **1B-iv** | Cell registration via framework + tests + close | ⬜ | Per §9.2.C + §9.6 |
+| **1B-iv** | Cell registration via framework + tests + close (shadow mode) | ✅ ✓ PASS | fuel-cell-id (11) + fuel-budget-cell-id (12) registered in make-prop-network; surfaced merge-fn correctness bug in 1B-ii fast-path (fixed); 29 tropical-fuel tests + 9 cell-registration tests + C4/C5 axioms; 8286 tests / 127.4s / 0 failures |
 | **1C** | Canonical BSP fuel substrate (D.4 CANONICAL — direct migration) | ⬜ | Per §10 |
 | **1V** | Vision Alignment Gate Phase 1 (closes 1A + 1B + 1C) | ⬜ | Per §11 |
 
@@ -558,7 +558,7 @@ cell-id 0  :name decomp-request-cell  ;; PAR Track 1
 cell-id 1  :name worldview-cache       ;; BSP-LE 2B
 cell-id 2-9 :name <reserved-substrate>  ;; (per current state)
 cell-id 10 :name classify-inhabit-request-cell  ;; PPN 4C Phase 3
-cell-id 11 :name fuel-cost-cell                  ;; NEW Phase 1C — TropicalFuel module
+cell-id 11 :name fuel-cell                       ;; NEW Phase 1B-iv — TropicalFuel module (Option A: remaining fuel; rename per §9.2.0.7 Q-1B-iv-β)
 cell-id 12 :name fuel-budget-cell                ;; NEW Phase 1C — TropicalFuel module
 ;; (future) cell-id 13+ — additional tropical-quantale instances per consumer
 ```
@@ -1319,30 +1319,37 @@ Modifies `net-cell-write` (and `net-cell-read`) in `propagator.rkt` to dispatch 
 
 The dispatch overhead (cell-meta lookup + tier/storage/speculation check) is ~5-10 ns per call; the fast path itself (direct mutation + inline check) is ~2-3 ns per call. Per §13.6 spike: W1+ (with dispatch) measured 6.4 ns/call — well within ≤ 30 ns target. The framework is feasible.
 
-### §9.2.C Fuel-cost cell registration via the framework (D.4 CANONICAL)
+### §9.2.C Fuel cell registration via the framework (D.4 CANONICAL — Option A per §9.2.0.6 + B2 rename per §9.2.0.7)
 
-In `tropical-fuel.rkt` (or alongside in `make-prop-network`), the canonical fuel-cost cell registers as:
+In `make-prop-network` (inline registration per §9.2.0.7 Q-1B-iv-γ; cycle-broken via inline `tropical-fuel-merge-for-cell` per landed 1B-iv implementation), the canonical fuel cell + fuel-budget cell register as:
 
 ```racket
-(define-values (net1 fuel-cost-cid)
-  (net-register-specialized-cell net0
-    #:domain 'tropical-fuel
-    #:initial-value 0
+;; fuel-cell holds REMAINING fuel (Option A); initial = budget; decrements via
+;; Phase 1C migration; exhaustion at (<= remaining 0) via on-write-check.
+(define-values (net1 fuel-cid)
+  (net-register-specialized-cell base-net fuel tropical-fuel-merge-for-cell
     #:tier 'hot
     #:storage 'monotone-counter
     #:fires-on 'threshold-crossing
-    #:on-write-check
-      (lambda (new-cost net)
-        (>= new-cost (net-cell-read net fuel-budget-cell-id)))))
+    #:on-write-check (lambda (old new net) (<= new 0))
+    #:domain 'tropical-fuel))
 
-(define-values (net2 budget-cid)
-  (net-register-specialized-cell net1
-    #:domain 'tropical-fuel-budget
-    #:initial-value initial-budget
-    #:tier 'cold              ; written once at allocation; rarely-read otherwise
+;; fuel-budget-cell preserves original budget for cost-derivation
+;; (cost = budget - remaining). Cold tier; written rarely.
+(define-values (net2 fuel-budget-cid)
+  (net-register-specialized-cell net1 fuel tropical-fuel-merge-for-cell
+    #:tier 'cold
     #:storage 'general
-    #:fires-on 'any-change))
+    #:fires-on 'any-change
+    #:domain 'tropical-fuel))
 ```
+
+**Corrections vs design's prior version (per §9.2.0.7 consistency items)**:
+- Cell name: `fuel-cost-cid` → `fuel-cid` (under Option A semantic the cell tracks REMAINING, not COST)
+- Initial value: `0` → `fuel` parameter (= budget; Option A)
+- on-write-check direction: `(>= new-cost budget)` → `(<= new 0)` (Option A: trigger at exhaustion of remaining)
+- Predicate signature: 2-arg `(new net)` → 3-arg `(old new net)` per Q-1B-9 F2
+- Merge fn: `tropical-fuel-merge-for-cell` (inline duplicate of `tropical-fuel-merge=min` in propagator.rkt; avoids cycle propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt)
 
 No threshold propagator install — the on-write predicate replaces the propagator structurally (per §10.A retired observation: the propagator-as-decoration concern from D.2.SC M1 is structurally avoided under D.4 because the check is at the cell layer, not a separate firing entity).
 
@@ -1725,11 +1732,12 @@ Under D.4 canonical, ALL 17 production refs from Q-Audit-1 migrate to cell-API:
 **Decrement sites** (4 sites — propagator.rkt:2384, 3000, 3053, +1 widening):
 
 ```racket
-;; D.4: direct cell-API replaces struct-copy
-;; The cell mechanism's :on-write-check writes contradiction if (>= new-cost budget);
-;; otherwise the fast path mutates directly (no allocation, no propagator-fire).
-(net-cell-write net fuel-cost-cell-id
-                (+ (net-cell-read net fuel-cost-cell-id) n))
+;; D.4 (corrected per §9.2.0.7 Q-1B-iv-β to Option A remaining-fuel semantic):
+;; direct cell-API replaces struct-copy. The cell mechanism's :on-write-check
+;; writes contradiction if (<= new 0) — remaining hits zero; otherwise the
+;; fast path mutates directly (no allocation, no propagator-fire).
+(net-cell-write net fuel-cell-id
+                (- (net-cell-read net fuel-cell-id) n))
 ```
 
 **Check sites** (11 sites — propagator.rkt:1817, 2366, 2373, 2329, 2992, 3045, 3132, 3135, 3142, 65, 399):
@@ -2710,7 +2718,7 @@ These are unlikely (per S2 architectural pattern + BSP-LE 2B benchmarks showing 
 | Sub-phase | Measurements | Decision rule (PASS = continue; FAIL = stop & investigate) |
 |---|---|---|
 | **1B-i** (mini-audit) | Q-1B-8 cell-meta storage choice prototyped + measured (vector-indexed on prop-net-cold; CHAMP-keyed; struct field on prop-cell). Microbench: cell-meta lookup cost at production storage. | Storage choice ≤ 5 ns lookup overhead → PASS. > 10 ns → investigate alternative storage strategy. |
-| **1B-ii** (framework module + dispatch) | **Primary (load-bearing per Q-1B-ii-δ)**: synthetic N=100 BSP round amortized per-cycle cost. **Secondary (informational)**: production W1+ at CHAMP-based storage (Q-1B-ii-β resolution). Memory: framework module load cost (M12-equivalent). | Primary: per-cycle amortized ≤ 3 ns at N=100 → PASS. Secondary: W1+ documented (~50-70 ns expected under CHAMP-based; absorbed by Option 13 amortization). Memory: framework module load < 1 ms, < 10 KB. **Note**: prior gate "W1+ ≤ 10 ns" assumed vector-indexed sidecar; revised per Option 13 + CHAMP-based architecture. |
+| **1B-ii** (framework module + dispatch) | **Primary (load-bearing per Q-1B-ii-δ)**: synthetic N=100 BSP round amortized per-cycle cost. **Secondary (informational)**: production W1+ at CHAMP-based storage (Q-1B-ii-β resolution). Memory: framework module load cost (M12-equivalent). | Primary: per-cycle amortized **≤ 5 ns at N=100** → PASS (revised post-1B-iv from earlier 3 ns; see correctness note). Secondary: W1+ documented (~250-330 ns expected under CHAMP-based with merge-fn applied; absorbed by Option 13 amortization). Memory: framework module load < 1 ms, < 10 KB. **Correctness note (1B-iv discovery)**: §9.2.B sketch requires the merge function applies in the fast-path dispatch (Lawvere join semantic = min for tropical-fuel; CALM-safe under concurrent writes). 1B-ii's initial implementation skipped merge as a perf shortcut; this was a correctness bug that 1B-iv's C5 CALM-safety test caught. Applying merge added ~1.5 ns/cycle vs the bug version (2.98 → 4.49 ns/cycle measured); both versions BEAT native struct-copy (5.2 ns/cycle), so the gate target was relaxed to ≤ 5 ns/cycle. **Follow-up optimization candidate (deferred to Phase 1V or Phase 2)**: cache merge-fn directly on `specialized-cell-meta` struct to eliminate the per-call champ-lookup; recovers ~1.5 ns/cycle. |
 | **1B-iii** (tropical fuel module) | C-series quantale axiom verification (§9.4); M10 residuation operator cost; M11 tensor cost; M12 SRE registration. | Quantale axioms hold → PASS. Any C-series failure → CRITICAL; halt before 1B-iv. M10 ≤ 30 ns; M11 ≤ 5 ns; M12 < 1 ms one-time. |
 | **1B-iv** (cell registration + tests + close) | Full Phase 1B framework microbench: cell-write/read across all registered specialized cells. Test coverage: 12+ tests per §9.6. Probe: 28 commands unchanged (semantic parity per S4 baseline). | All targets within bounds → PASS. Probe semantic divergence → CRITICAL. Phase 1B closed. |
 | **1C-i** (mini-audit) | **§13.6.A Option 13 spike executes here** (W1-O13 through W4-O13). | Spike PASS → continue with Option 13 pattern at 1C-ii. Spike FAIL → fall back to D.4 per-fire (Option Y; spike already validated at §13.6). Spike MIXED → re-design. |

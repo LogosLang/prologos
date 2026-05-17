@@ -89,6 +89,10 @@
  ;; D.4 1B-ii: specialized cell type framework (per §9.2.A Shape 2)
  (struct-out specialized-cell-meta)
  net-register-specialized-cell
+ ;; D.4 1B-iv: canonical tropical fuel cells (shadow mode in Phase 1B;
+ ;; Phase 1C migrates consumers to use them)
+ fuel-cell-id
+ fuel-budget-cell-id
  net-remove-propagator-from-dependents  ;; Track 4B P2: remove ONE propagator from cell dependents
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
@@ -611,6 +615,34 @@
 ;; actions per §6.15.8 Q2. Phase 9 joint design item (§6.15.6): narrowing
 ;; requests gain worldview assumption-id overlay later.
 (define classify-inhabit-request-cell-id (cell-id 10))
+
+;; D.4 1B-iv: canonical tropical fuel cells (per §4.3 + §9.2.0.7 Q-1B-iv-β).
+;; fuel-cell-id holds REMAINING fuel (Option A per §9.2.0.6 Q-1B-iii-α);
+;; initial value = budget (the `fuel` parameter to make-prop-network).
+;; Decrements via (- current n) under Phase 1C migration; operational
+;; exhaustion at (<= remaining 0) via cell on-write-check.
+;; fuel-budget-cell-id preserves the original budget for cost-so-far
+;; derivation: cost = budget - remaining.
+;;
+;; SHADOW MODE during Phase 1B-iv: cells are registered + initialized
+;; to budget; production fuel decrements continue using prop-net-hot.fuel
+;; (the existing native mechanism). Phase 1C migrates production
+;; consumers to read/write the cells; at that point prop-net-hot.fuel +
+;; the prop-network-fuel macro RETIRE.
+(define fuel-cell-id (cell-id 11))
+(define fuel-budget-cell-id (cell-id 12))
+
+;; D.4 1B-iv: inline tropical-fuel-merge duplicate to avoid the import cycle
+;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt.
+;; The canonical algebraic primitive lives in tropical-fuel.rkt; this
+;; inline duplicate is the merge-fn used when REGISTERING the cell at
+;; make-prop-network time. Under shadow mode (Phase 1B), the function
+;; is never invoked (no production code writes the cell); under Phase
+;; 1C the cell starts being written and this merge IS invoked. Any
+;; future change to tropical-fuel-merge MUST update this duplicate too.
+;; The duplication is principled (cycle break) + named explicitly here.
+(define (tropical-fuel-merge-for-cell a b) (min a b))
+
 (define (classify-inhabit-request-merge old new)
   (if (hash? old)
       (if (hash? new)
@@ -700,7 +732,10 @@
   (define cir-cid classify-inhabit-request-cell-id)
   (define cir-h (cell-id-hash cir-cid))
   (define cir-cell (prop-cell (hasheq) champ-empty #f))  ;; empty hasheq, no dependents
-  (prop-network
+  ;; D.4 1B-iv: bare network with 11 well-known pre-allocated cells (ids 0-10).
+  ;; Below, we extend with canonical tropical fuel cells (ids 11+12).
+  (define base-net
+   (prop-network
    (prop-net-hot '() fuel)
    (prop-net-warm (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid req-cell))
@@ -738,7 +773,36 @@
                   champ-empty        ;;   cell-decomps
                   champ-empty        ;;   pair-decomps
                   champ-empty        ;;   cell-dirs
-                  champ-empty)))     ;;   cell-domains (PPN 4C Phase 1c)
+                  champ-empty)))     ;;   cell-domains (PPN 4C Phase 1c) — closes: prop-net-cold, prop-network, (define base-net
+  ;; D.4 1B-iv: register canonical tropical fuel cells (shadow mode per §9.2.0.7
+  ;; Q-1B-iv-α; nothing in production reads/writes these until Phase 1C migrates).
+  ;; fuel-cell holds REMAINING fuel (Option A per §9.2.0.6 Q-1B-iii-α);
+  ;; initial = `fuel` parameter (= budget); decrements via Phase 1C migration;
+  ;; operational exhaustion at (<= remaining 0) via on-write-check predicate.
+  (define-values (net1 actual-fuel-cid)
+    (net-register-specialized-cell base-net fuel tropical-fuel-merge-for-cell
+      #:tier 'hot
+      #:storage 'monotone-counter
+      #:fires-on 'threshold-crossing
+      #:on-write-check (lambda (old new net) (<= new 0))
+      #:domain 'tropical-fuel))
+  (unless (equal? actual-fuel-cid fuel-cell-id)
+    (error 'make-prop-network
+           "fuel-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
+           fuel-cell-id actual-fuel-cid))
+  ;; fuel-budget-cell preserves the original budget for cost derivation
+  ;; (cost = budget - remaining). Cold tier; written rarely (only at allocation).
+  (define-values (net2 actual-budget-cid)
+    (net-register-specialized-cell net1 fuel tropical-fuel-merge-for-cell
+      #:tier 'cold
+      #:storage 'general
+      #:fires-on 'any-change
+      #:domain 'tropical-fuel))
+  (unless (equal? actual-budget-cid fuel-budget-cell-id)
+    (error 'make-prop-network
+           "fuel-budget-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
+           fuel-budget-cell-id actual-budget-cid))
+  net2)
 
 ;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
 ;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
@@ -1315,16 +1379,21 @@
          (not (prop-net-warm-under-speculation? (prop-network-warm net)))))
   (cond
     [fast-path?
-     (let ([old-val (prop-cell-value cell)])
+     ;; Apply merge fn per §9.2.B sketch — preserves CALM-safety (merge=min
+     ;; for tropical-fuel; min ensures the lowest value wins under concurrent
+     ;; writes, matching the Lawvere join semantic).
+     (define merge-fn (champ-lookup (prop-network-merge-fns net) h cid))
+     (let* ([old-val (prop-cell-value cell)]
+            [merged (merge-fn old-val new-val)])
        (cond
-         [(or (eq? new-val old-val) (equal? new-val old-val))
+         [(or (eq? merged old-val) (equal? merged old-val))
           net]  ;; No change — return same network (critical for termination)
          [else
           (define on-write (specialized-cell-meta-on-write-check meta))
-          (define contradicted? (and on-write (on-write old-val new-val net)))
+          (define contradicted? (and on-write (on-write old-val merged net)))
           (define cc (current-quiescence-change-counter))
           (when cc (set-box! cc (add1 (unbox cc))))
-          (let* ([new-cell (struct-copy prop-cell cell [value new-val])]
+          (let* ([new-cell (struct-copy prop-cell cell [value merged])]
                  [new-cells (champ-insert cells h cid new-cell)])
             (cond
               [contradicted?
