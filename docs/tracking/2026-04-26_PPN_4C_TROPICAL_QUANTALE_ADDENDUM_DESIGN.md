@@ -394,8 +394,17 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1B-ii** | Specialized cell framework module + net-cell-write dispatch + prop-net-warm under-speculation? field | ✅ ✓ PASS | CW3 per-cycle amortized = 2.98 ns/cycle (§13.7 gate ≤ 3 ns; boundary); 8257 tests / 114.5s / 0 failures |
 | **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C1+C2+C3 axioms) | ✅ ✓ PASS | tropical-fuel.rkt + test-tropical-fuel.rkt (20 tests; all algebra axioms verified including +inf.0 boundary cases); 8277 tests / 119.9s / 0 failures |
 | **1B-iv** | Cell registration via framework + tests + close (shadow mode) | ✅ ✓ PASS | fuel-cell-id (11) + fuel-budget-cell-id (12) registered in make-prop-network; surfaced merge-fn correctness bug in 1B-ii fast-path (fixed); 29 tropical-fuel tests + 9 cell-registration tests + C4/C5 axioms; 8286 tests / 127.4s / 0 failures |
-| **1C** | Canonical BSP fuel substrate (D.4 CANONICAL — direct migration) | ⬜ | Per §10 |
-| **1V** | Vision Alignment Gate Phase 1 (closes 1A + 1B + 1C) | ⬜ | Per §11 |
+| **1C whole-phase mini-design** | Q-1C-α/β/γ/δ resolved; Phase 1V scope locked (4 items) | ✅ | §10.0 (2026-05-16); resolutions α2/β1/γ1+function/δ1 |
+| **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline capture | ⬜ | Per §10.4 (refined) |
+| **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3) | ⬜ | Per §10.4 + Q-1C-α α2; target ~0.06 ns/cycle amortized |
+| **1C-ii-b** | Variant B migration (sequential schedulers entry points #1/#2/#4/#5) + `flush-fuel-local-var!` helper | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1; target ~2.16 ns/cycle amortized |
+| **1C-iii** | Migrate 11 check sites | ⬜ | Per §10.4 |
+| **1C-iv** | Retire macro + struct field + read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset | ⬜ | Per §10.4 |
+| **1C-v** | Migrate 13 test sites + 2 bench sites (single mechanical batch) | ⬜ | Per §10.4 + Q-1C-δ δ1 (after §10 cleanup at 1C-i) |
+| **1C-vi** | Verification + close + D-1B-ii-3 allocation verification + A/B/C report | ⬜ | Per §10.4 + Phase 1V scope item #4 |
+| **1V merge-fn-caching** | Cache merge-fn on specialized-cell-meta; close §13.7 1B-ii gate gap (per Phase 1V scope item #1) | ⬜ | Per §11.3; measurement-driven gate decision if needed |
+| **1V SRE property-sweep** | Conditional on Track 2I infrastructure readiness (per Phase 1V scope item #3) | ⬜ | Per §11.3; defer to sister track if infrastructure not ready |
+| **1V** | Vision Alignment Gate Phase 1 atomic close (1A + 1B + 1C) | ⬜ | Per §11 |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
 - 1A-iii-b and 1A-iii-c can land in any order or in parallel (independent of tropical work)
@@ -1653,6 +1662,70 @@ This subsection is the SINGLE SOURCE OF TRUTH for "what post-Phase-1B benchmarks
 
 > **D.4 CANONICAL status (2026-05-14)**: §13.6 Pre-0 spike PASSED (commit `7b681b9e`); D.4 architecture is canonical. The specialized cell type framework (§4.6) provides a fast-path with 6.4 ns/call (with realistic dispatch overhead) — well within the ≤ 30 ns target — and structurally guaranteed zero major-GC pressure. The hybrid pivot from D.3 has been retired before shipping; D.3 historical content preserved below with RETIRED-PER-D.4-CANONICAL annotations.
 
+### §10.0 Whole-Phase 1C Mini-Design Resolutions (D.4 CANONICAL 2026-05-16)
+
+> **Status**: Whole-phase 1C mini-design conversation opened 2026-05-16 at Phase 1B SUBSTRATE END-OF-PHASE summary fork checkpoint. Following the 1B whole-phase mini-design pattern (which resolved Q-1B-8 through Q-1B-14 on 2026-05-15), this section captures Phase 1C architectural questions resolved before sub-phase implementation begins. Sub-phase mini-designs (1C-i mini-audit, 1C-ii-a/b mini-design, etc.) follow per Per-Phase Protocol as each sub-phase opens.
+
+**What's at play (1C scope)**: 5 scheduler entry points with Variant A/B matrix (§10.3.A); 17 production refs migration; macro + struct field retirement; `fork-prop-network` cell-reset; 13 test sites + 2 bench-alloc sites mechanical batch.
+
+**What does 1C want to be**: the explicit deployment phase — Phase 1B substrate gets EXERCISED in production. Cells become production-canonical (shadow mode → deployed per D-1B-iv-5). §13.6.A spike's amortization predictions get validated at scale via §13.7 measurement gates. The §4.6 framework graduates from "validated, registered, not exercised" → "production deployed at all hot paths."
+
+**What does 1C forward-enable**: Phase 3C consumers build against the production cell-API (UC1/UC2/UC3 grounded); future PReduce/OE tracks inherit the deployed deferred-write template; Phase 1V atomically closes with measurable wins from the architecture's stated targets.
+
+**Four load-bearing architectural questions resolved (Q-1C-α through Q-1C-δ)**:
+
+**Q-1C-α — Sub-phase atomicity for 1C-ii (per-variant) — RESOLVED α2 (split per-variant)**
+
+1C-ii splits into **1C-ii-a (Variant A migration; parallel BSP main loop entry point #3)** + **1C-ii-b (Variant B migration; sequential schedulers entry points #1/#2/#4/#5)** as two atomic commits.
+
+Rationale: the two variants are architecturally distinct (Variant A is single round-entry cell-write at `run-to-quiescence-bsp` line 2384's equivalent; Variant B is local-var + flush pattern at 4 sequential sites). Different patterns require different per-variant microbench validations per §13.6.A (Variant A's ~0.06 ns/cycle target vs Variant B's ~2.16 ns/cycle target). Cleaner bisect under regression. α3 (per-entry-point, 5 commits) over-splits: the 4 Variant B sites share the `flush-fuel-local-var!` helper pattern (per γ resolution below).
+
+**Q-1C-β — Q-1C-1 saved-fuel rollback semantics under speculation — RESOLVED β1 (defer to 1C-i audit)**
+
+Audit `typing-propagators.rkt:2269` saved-fuel rollback at **1C-i mini-audit** with code in hand.
+
+Lean per §10.7 Q-1C-1: "yes, existing speculation-rollback handles cell value at fork boundary" — but unverified at code level. β1 defers verification to per-phase audit step (per Per-Phase Protocol audit-precedes-implementation discipline). The audit will be sharper with actual migration code patterns in view. If 1C-i audit surfaces an architectural issue (e.g., Variant A speculation forks have different semantics than Variant B mid-phase forks), whole-phase mini-design re-opens.
+
+Lean-confirmation outcome: typing-propagators saved-fuel handling reframes per Q-1B-iv-δ + cell-snapshot via worldview-bitmask (NOT struct-copy of fuel field); no explicit save needed.
+
+**Q-1C-γ — Local-var flush timing for Variant B (Q-1C-K) — RESOLVED γ1 + function (single helper, function form)**
+
+Single helper **`flush-fuel-local-var!` function** (paired with `init-fuel-local-var!`) invoked at each flush boundary:
+- Phase entry (paired init: cell → local-var)
+- Phase exit (flush: local-var → cell)
+- Contradiction detection (immediate flush + contradiction-write)
+- Speculation fork (immediate flush before fork; sub-fork reads from cell)
+- External snapshot/restore boundary (immediate flush)
+
+Rationale: helper centralizes the flush invariant (~5-10 LoC helper vs ~20-30 LoC inline at 4 Variant B sites); easier audit ("every flush site uses the same protocol"). Function (not macro) because per-cycle cost is dominated by box-mutation; helper fires only at flush boundaries (rare events); function-call overhead negligible vs macro complexity. Cleaner debugging via stack frames.
+
+If Phase 1V microbench shows helper call overhead is non-negligible at flush sites, post-hoc macro-expansion is low-risk (few call sites; pattern-uniform).
+
+**Q-1C-δ — Test + bench migration strategy + §10 doc cleanup ordering — RESOLVED δ1 (single batch after §10 cleanup at 1C-i)**
+
+1C-i fixes §10.3 examples (the D-1B-iii-4 carryover cleanup) → 1C-v applies mechanical batch via 2-pass sed → single commit for 13 tests + 2 bench-alloc sites.
+
+Migration pattern under Option A (remaining-fuel per Q-1B-iii-α): existing `(prop-network-fuel result)` (read remaining-fuel from struct field) → `(net-cell-read result fuel-cell-id)` (read remaining-fuel from cell directly; cell stores REMAINING).
+
+**Sub-question deferred to 1C-i**: audit for test sites asserting struct-field presence (e.g., `(prop-net-hot-fuel ...)`) — those need DELETION, not migration. Lean: almost certainly none (macro hides struct/cell distinction at call sites), but verify before batching to avoid silent test deletion vs migration.
+
+Rationale per workflow.md "Sed-Deletion" discipline: verify on 1 file copy first; if pattern uniform, batch rest. The remaining-fuel semantic + Option A direction makes migration template uniform after §10 cleanup. δ2 (split test/bench into 2 commits) + δ3 (per-test-file, 15 commits) inflate commit count without semantic benefit.
+
+---
+
+**Phase 1V scope lock-in (2026-05-16 from 1B fork checkpoint)**:
+
+The 1B-iv close surfaced 4 follow-up items deferred from 1B sub-phases. Per the 2026-05-16 conversation, these lock in to Phase 1V scope (not Phase 2; defers-to-Phase-2 is anti-pattern per "Validated ≠ Deployed" — see §11.3 for exit-criteria detail):
+
+1. **Merge-fn-caching optimization** → Phase 1V sub-phase before atomic VAG close. ~10-20 LoC: cache `merge-fn` directly on `specialized-cell-meta` to eliminate per-call `champ-lookup`. Re-microbench CW3; recovery determines whether the original 3 ns/cycle gate is hit.
+2. **§10 doc cleanup (D-1B-iii-4)** → moved to **1C-i** (quick mechanical sed; needed BEFORE 1C-v batch so migration template is correct).
+3. **SRE property-sweep verification (Q-1B-iii-β)** → Phase 1V if Track 2I `all-sweep-properties` infrastructure readily wireable to tropical-fuel domain; otherwise sister track (not Phase 2 — too vague). Decide at Phase 1V opening.
+4. **D-1B-ii-3 allocation verification** → **1C-vi** (post-fuel-cost-cell registration in production, where verification covers actual production code path); results persist to Phase 1V close.
+
+**Unilateral gate revision flag**: §13.7 1B-ii gate was unilaterally revised from "≤ 3 ns/cycle" to "≤ 5 ns/cycle" at 1B-iv close on rationale "still beats native (5.2 ns)." This shifted the success criterion from "matches Option 13 spike (2.16 ns/cycle + headroom)" to "beats current native struct-copy" without explicit measurement-driven re-justification. **Phase 1V item #1 (merge-fn-caching) closes the gap created by this revision; if optimization doesn't fully close it, measurement-driven gate revision discussed at Phase 1V — not another unilateral call.**
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
 **Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cost-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
@@ -1948,9 +2021,11 @@ This is a **clean architectural category** that the D.4 design implicitly assume
 
 We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sites, eliminating function-call overhead entirely. Shaves another ~0.5-1 ns per cycle. Probably worth doing if Phase 1V close microbenches show the deferred-write pattern still has measurable overhead vs ideal native. Deferred to Phase 1C-iv mini-design with code in hand.
 
-### §10.4 Sub-phase plan (6 sub-phases under D.4 — REFINED for Option 13)
+### §10.4 Sub-phase plan (7 sub-phases under D.4 — REFINED for Option 13 + Q-1C-α split)
 
-- **1C-i** — Pre-implementation audit + mini-design:
+> **Revision (2026-05-16, per Q-1C-α resolution α2)**: 1C-ii splits into **1C-ii-a (Variant A)** + **1C-ii-b (Variant B)** as two atomic commits. Total sub-phases grows from 6 to 7. The split honors the architectural distinctness of the two variants (different microbench gates per §13.6.A; different code patterns at different scheduler entry points).
+
+- **1C-i** — Pre-implementation audit + mini-design + §10 doc cleanup:
   - Verify §9 framework implementation (Phase 1B) lands cleanly; cell registration API stable
   - ✅ **§13.6.A Option 13 spike executed** (commit `77daf81c`) — Variant B amortized 2.16 ns/cycle (sequential schedulers); Variant A amortized ~0.06 ns/cycle (parallel BSP); Option 14 SKIPPED
   - Re-verify §13.6 spike measurements at scale (probe + targeted-test runs)
@@ -1963,14 +2038,28 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
     - #4 `run-widen-phase` (2989+): Variant B (sequential; struct-copy → local-var pattern)
     - #5 `run-narrow-phase` (3042+): Variant B (sequential; struct-copy → local-var pattern)
   - **Per §13.7 measurement plan: capture A baseline (current implementation per-entry-point) microbench data for A/B/C comparison at 1C-vi close**
+  - **§10 doc cleanup (D-1B-iii-4 carryover; per Q-1C-δ resolution)**: mechanical sed-replace stale `fuel-cost-cell` references in §10 historical sections → `fuel-cell`; verify wrong-direction `(+ current n)` patterns are corrected to `(- current n)` under Option A remaining-fuel semantic. Needed BEFORE 1C-v mechanical batch so migration template is well-defined.
+  - **Q-1C-β audit (per resolution β1)**: audit `typing-propagators.rkt:2269` saved-fuel rollback semantics with code in hand. Lean: existing speculation-rollback inherits cell value at fork boundary; no explicit save needed. If audit surfaces architectural issue, whole-phase mini-design re-opens.
+  - **Q-1C-δ sub-question audit**: scan test sites for `(prop-net-hot-fuel ...)` assertions (would need DELETION, not migration). Lean: none exist.
 
-- **1C-ii** — Migrate 5 scheduler entry points to Option 13 deferred-write pattern (per-variant):
-  - **Variant A migration (entry point #3, parallel BSP main loop)**: replace line 2384's `[fuel (- (prop-network-fuel net) n)]` in struct-copy with a `net-cell-write` of `(+ current n)` to fuel-cost-cell, BEFORE workers spin up. Main thread sequential; workers don't touch fuel-cost. Single cell-write per BSP round. Cost: ~6 ns/round (amortized ~0.06 ns/cycle at N=100).
-  - **Variant B migration (entry points #1, #2, #4, #5, sequential schedulers)**: at phase entry, read fuel-cost cell into local-var box; per-fire decrement local-var + threshold check inline; at phase exit, flush local-var → cell-write. Cost: ~2.16 ns/cycle amortized.
-  - On exhaustion (any variant; rare): flush + contradiction-write (via cell-mechanism on-write check).
-  - Atomic commit per variant (Variant A as one commit; Variant B sites as one commit OR split per entry point if scope-warranted).
-  - **Per §13.7**: re-microbench BOTH variants; verify Variant A achieves ~0.06 ns/cycle amortized + Variant B achieves ~2.16 ns/cycle amortized (matches §13.6.A spike targets).
-  - Targeted tests: test-propagator + test-tropical-fuel + test-widen-narrow.
+- **1C-ii-a** (NEW per Q-1C-α split) — Migrate Variant A: parallel BSP main loop (entry point #3):
+  - Replace `run-to-quiescence-bsp` line 2384's `[fuel (- (prop-network-fuel net) n)]` in struct-copy with a `net-cell-write` of the new remaining-fuel value to fuel-cell-id, BEFORE workers spin up. Main thread sequential; workers don't touch fuel-cell. Single cell-write per BSP round.
+  - Cost target: ~6 ns/round (amortized ~0.06 ns/cycle at N=100; per §13.6.A spike + §13.7 gate)
+  - Atomic commit; this is the production hot path
+  - **Per §13.7 1C-ii row**: re-microbench Variant A achieves ~0.06 ns/cycle amortized at production scale
+  - Targeted tests: test-propagator + test-tropical-fuel
+  - Variant A is structurally simpler (one site, one line replacement); ships first to validate the production hot path before Variant B touches 4 sequential schedulers
+
+- **1C-ii-b** (NEW per Q-1C-α split) — Migrate Variant B: sequential schedulers (entry points #1, #2, #4, #5):
+  - Implement `flush-fuel-local-var!` + `init-fuel-local-var!` helper functions (per Q-1C-γ resolution γ1+function); ~5-10 LoC each in propagator.rkt or a bsp-helpers.rkt module
+  - At each sequential phase entry: `init-fuel-local-var!` reads fuel-cell-id into local-var box
+  - Per fire (inline in loop body): decrement local-var + threshold check (`(<= remaining 0)`)
+  - At each sequential phase exit: `flush-fuel-local-var!` flushes local-var → cell-write
+  - On exhaustion (rare): immediate flush + contradiction-write (via cell-mechanism on-write check)
+  - Cost target: ~2.16 ns/cycle amortized (per §13.6.A spike + §13.7 gate)
+  - Atomic commit; 4 entry points share the helper pattern
+  - **Per §13.7 1C-ii row**: re-microbench Variant B achieves ~2.16 ns/cycle amortized at production scale
+  - Targeted tests: test-widen-narrow + test-propagator (sequential paths)
 
 - **1C-iii** — Migrate 11 check sites:
   - Atomic commit; each site replaces `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)`
@@ -1979,12 +2068,13 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - **Per §13.7: re-microbench check-site cost; target unchanged ~6 ns**
   - Targeted test: full suite (these check sites are widely distributed)
 
-- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print:
+- **1C-iv** — Retire macro + struct field + migrate read-as-value + typing-propagators + pretty-print + fork-prop-network cell-reset:
   - Retire `prop-network-fuel` macro (propagator.rkt:399)
   - Retire `prop-net-hot-fuel` struct field (propagator.rkt prop-net-hot definition)
   - Migrate 3 read-as-value sites (these now read the cell directly; cell value is current at consumer-fire boundaries; Variant A's main BSP path has cell written at round entry, so reads-during-round see the post-decrement value)
-  - Migrate typing-propagators.rkt:2269 saved-fuel handling — speculation forks at round/phase boundaries see the cell value naturally; for Variant B mid-phase forks, local-var flushes BEFORE fork (sub-fork starts with current cell value)
+  - Migrate typing-propagators.rkt:2269 saved-fuel handling — per Q-1C-β β1 1C-i audit outcome: speculation forks at round/phase boundaries see cell value naturally (Variant A); for Variant B mid-phase forks, `flush-fuel-local-var!` runs BEFORE fork (sub-fork starts with current cell value, reads at sub-init via `init-fuel-local-var!`)
   - Update pretty-print display
+  - `fork-prop-network` cell-reset: when forking with a new `fuel` arg, reset fuel-cell-id + fuel-budget-cell-id to the new fuel value (deferred from 1B-iv per Q-1B-iv-δ)
   - Verify no orphan callers (grep verification)
   - ✅ **Option 14 (macro specialization) RESOLVED via §13.6.A spike (commit `77daf81c`): SKIP** — measured savings 0.02 ns/cycle, far below 1 ns threshold. Function-call pattern is sufficient.
 
@@ -1994,7 +2084,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - Full suite verification post-batch
   - Post-impl bench captures the D.4 numbers for A/B/C comparison vs Pre-0 baseline (per §13.7)
 
-- **1C-vi** — Verification + close:
+- **1C-vi** — Verification + close + D-1B-ii-3 allocation verification:
   - Probe + acceptance file + full suite
   - Tropical-fuel-counter-parity test (per §15): exhaustion semantics equivalent before/after at round-boundary observation points
   - **Per §13.7: full A/B/C comparison report**:
@@ -2003,6 +2093,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
     - C = Option 13 deferred-write (this design; the actual production landing)
     - Confirm C ≤ A on per-cycle cost; confirm C matches §13.6.A spike's ~2 ns/cycle target
   - Performance verification: per-decrement cycle ≤ 5 ns amortized (Option 13 target; vs ≤ 45 ns per-fire which we no longer implement)
+  - **D-1B-ii-3 allocation verification (per §10.0 Phase 1V scope item #4)**: bench-mem on the registered fuel-cell + fuel-budget-cell in production code path; verify on-write-check closure is 0-allocation under fixnum comparison. Results persist to Phase 1V close.
   - Re-microbench Phase 1V exit criteria (per §11.3; 11 microbenches refined for Option 13)
 
 ### §10.5 Drift risks (D.4)
@@ -2494,6 +2585,20 @@ The list is comprehensive for the "did the perf claims land" verification. ~30-6
 - **Cell observability gate**: probe + acceptance file workflows that read fuel-cost cell at consumer-fire boundaries see correct values (round-boundary granularity is sufficient for Phase 3C UC patterns).
 - **Speculation correctness gate**: A9 microbench (100 spec cycles save+write+restore) shows correct rollback under deferred-write (local-var flushes before fork; sub-fork starts with current cell value).
 - **Macro-specialization decision gate** (Option 14 from §10.3.A): measure deferred-write at production fire sites with/without macro-expansion; apply Option 14 if saves ≥ 1 ns/cycle.
+
+**Phase 1V scope additions (2026-05-16 lock-in from 1B fork checkpoint per §10.0)**:
+
+The 1B-iv close surfaced 4 follow-up items deferred from 1B sub-phases. Items #1 + #3 land at Phase 1V as named sub-phases before the atomic VAG close. Items #2 + #4 land elsewhere in the bundle (1C-i and 1C-vi respectively); their results persist to Phase 1V close.
+
+1. **Merge-fn-caching optimization sub-phase** (~10-20 LoC): cache `merge-fn` directly on `specialized-cell-meta` struct to eliminate per-call `champ-lookup` in `net-cell-write`'s fast path. **Closes the gap created by 1B-iv's unilateral §13.7 gate revision (3 → 5 ns/cycle)**. Re-microbench CW3 post-fix. Decision rule:
+   - If recovery hits original ≤ 3 ns/cycle target → gate ratifies as intended; no revision needed
+   - If recovery to ~3.5-4 ns/cycle → **measurement-driven gate discussion** with user (not unilateral); decide whether to accept revised reality or investigate further optimizations
+   - If no measurable recovery → investigate why (likely an unaccounted-for cost in CW2 production path) before Phase 1V close
+2. **§10 doc cleanup (D-1B-iii-4)** → moved to **1C-i** (not Phase 1V; mechanical sed-replace needed before 1C-v batch — see §10.0 Q-1C-δ resolution + §10.4 sub-phase 1C-i description). Results land in 1C-i commit; Phase 1V verifies no stale references remain via grep.
+3. **SRE property-sweep verification (Q-1B-iii-β)** — sub-phase **conditional on Track 2I infrastructure readiness**. If Track 2I `all-sweep-properties` is readily wireable to the tropical-fuel domain (assess at Phase 1V opening), run the sweep to empirically verify quantale property declarations (commutative-quantale, integral-quantale, residuated, etc.) hold against generated samples. If infrastructure not readily wireable, defer to a sister track (not "Phase 2" — too vague; pick a specific track or open one).
+4. **D-1B-ii-3 allocation verification** → at **1C-vi** (not Phase 1V; post-fuel-cost-cell registration in production code path, where verification is meaningful). Bench-mem on the registered cells confirms on-write-check closure is 0-allocation under fixnum comparison. Results persist to Phase 1V close as part of the comprehensive memory profile.
+
+**Unilateral gate revision flag** (per §10.0): the §13.7 1B-ii gate revision was unilateral; Phase 1V item #1 (merge-fn-caching) is the path to close the gap. If the optimization doesn't fully recover, the gate revision decision is re-opened with measurement data in hand — discussed with user, not made unilaterally.
 
 > **D.3 hybrid pivot gates** (RETIRED-PER-D.4-CANONICAL): the previous "Hybrid pivot performance gate" / "architectural gate" / "reconsideration gate" tracked the hybrid pivot's behavior; under D.4 + Option 13, those gates are superseded by the gates above. Preserved here for traceability: the D.3 gates were `per-decrement cycle ≤ 5% regression`, `prop_firings ≤ 1× per file BSP-barrier-equivalent`, and `post-impl reconsider if cell-write ≤ 50% of struct-copy + R3 zero major-GC`.
 
