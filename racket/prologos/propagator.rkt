@@ -2090,9 +2090,11 @@
 ;; per iteration for worklist/fuel management.
 (define (run-to-quiescence-inner net)
   ;; Fast path: nothing to do — return same object (eq? identity).
+  ;; D.4 1C-iii (§10.0.5 α1+β2): removed redundant [(<= (prop-network-fuel net) 0) net]
+  ;; clause; upstream contradiction check covers fuel exhaustion via cell on-write-check
+  ;; writing 'tropical-fuel-exhausted contradiction-cell-id structurally.
   (cond
     [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
     [(null? (prop-network-worklist net)) net]
     [else (run-to-quiescence-drain net)]))
 
@@ -2658,16 +2660,28 @@
      (let ([fired-set (make-hasheq)])
       ;; Outer loop: value stratum → topology stratum → repeat
       (let outer-loop ([net net] [outer-round 0])
+       ;; D.4 1C-iii (§10.0.5 α1 + partial β2 per D-1C-iii-5):
+       ;; This BSP path is invoked DIRECTLY by typing-propagators.rkt:2269 with a
+       ;; net whose STRUCT-FIELD has been substituted to TYPING-FUEL-LIMIT (e.g., 200)
+       ;; WITHOUT corresponding cell-write — β1 lockstep is VIOLATED by typing-
+       ;; propagators substitution (1C-iv scope per §10.4). Until 1C-iv migrates
+       ;; typing-propagators to update cell alongside struct-field, the cell stays
+       ;; at saved-fuel (≈999800) while struct-field bounded by TYPING-FUEL-LIMIT.
+       ;; The struct-field check `(<= (prop-network-fuel net) 0)` is the only way
+       ;; to catch typing-propagators bounded exhaustion before 1C-iv lands.
+       ;; β2 (removal) deferred to 1C-iv per D-1C-iii-5; retirement obligation
+       ;; captured at §10.4 1C-iv scope.
        (cond
          [(prop-network-contradiction net) net]
-         [(<= (prop-network-fuel net) 0) net]
+         [(<= (prop-network-fuel net) 0) net]  ; D-1C-iii-5: retires at 1C-iv
          [else
           ;; VALUE STRATUM: BSP inner loop with fire-once optimization
           (define value-result
             (let inner-loop ([net net] [round-number 0])
+              ;; D.4 1C-iii: same D-1C-iii-5 rationale as outer-loop above.
               (cond
                 [(prop-network-contradiction net) net]
-                [(<= (prop-network-fuel net) 0) net]
+                [(<= (prop-network-fuel net) 0) net]  ; D-1C-iii-5: retires at 1C-iv
                 [(null? (prop-network-worklist net)) net]
              [else
               (let* ([raw-pids (dedup-pids (prop-network-worklist net))]
@@ -3473,18 +3487,20 @@
 (define (run-to-quiescence-widen net #:max-rounds [max-rounds 100])
   ;; Phase 1: widen to quiescence
   (define widened (run-widen-phase net))
-  (when (or (prop-network-contradiction widened)
-            (<= (prop-network-fuel widened) 0))
+  ;; D.4 1C-iii (§10.0.5 α1+β2): simplified or-disjuncts — removed redundant
+  ;; `(<= (prop-network-fuel widened) 0)` disjunct; the adjacent
+  ;; `(prop-network-contradiction widened)` already covers fuel exhaustion
+  ;; via cell on-write-check writing contradiction-cell-id structurally.
+  (when (prop-network-contradiction widened)
     (void))  ;; early exit conditions handled by return below
-  (if (or (prop-network-contradiction widened)
-          (<= (prop-network-fuel widened) 0))
+  (if (prop-network-contradiction widened)
       widened
       ;; Phase 2: narrowing iterations
       (let loop ([net widened] [rounds 0])
+        ;; D.4 1C-iii (§10.0.5 α1+β2): removed redundant fuel check clause.
         (cond
           [(>= rounds max-rounds) net]
           [(prop-network-contradiction net) net]
-          [(<= (prop-network-fuel net) 0) net]
           [else
            ;; Re-fire all propagators to see if narrowing produces changes
            ;; Schedule all propagators that have widening-point outputs
