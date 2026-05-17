@@ -1104,6 +1104,66 @@ Resolutions per Q-1B-1 / Q-1B-2 / Q-1B-4 (deferred to 1B-iii from earlier mini-d
 - D-1B-iii-4: 1B-iv consistency item — §10.3 D.4 `(+ current n)` examples are wrong under Option A; must correct at 1B-iv cell registration
 - D-1B-iii-5: SRE property-test sweep on the new domain — deferred to 1B-iv close or Phase 1V if Track 2I infrastructure ready
 
+### §9.2.0.7 1B-iv mini-design resolutions (D.4 CANONICAL 2026-05-16)
+
+Conversational mini-design + codebase audit opened 1B-iv (canonical fuel cell registration via the framework). Four architectural questions resolved.
+
+**Q-1B-iv-α — Shadow vs replace (the load-bearing decision)**
+
+Two framings considered:
+
+| Option | What ships in 1B-iv | What Phase 1C does |
+|---|---|---|
+| A (shadow) | Cells registered; `prop-net-hot.fuel` UNCHANGED; nothing reads/writes cells in production | Migrates decrement/check/read sites to cells; retires fuel field + macro |
+| B (replace) | Cells registered + ALL decrement/check/read sites migrated + fuel field retired | (Phase 1C work absorbed into 1B-iv) |
+
+**Resolution: Option A (shadow)**. Justified by §1.2 substrate-vs-migration phasing (Phase 1C IS the explicit deployment phase, sub-phased + scheduled — not deferred indefinitely). Smaller 1B-iv scope; cleaner review; reversible if Phase 1C surfaces issues.
+
+**Discharging the "Validated ≠ Deployed" concern**: the anti-pattern is when the new path is validated but deployment is deferred indefinitely with a switch defaulting to OLD. Our case is structurally different — Phase 1C is the explicit deployment phase, immediately following 1B-iv. The cells are pre-deployment substrate ready for the next sub-phase. **Discipline commitment**: 1B-iv close commits to Phase 1C as the immediate next sub-phase (no drift to other tracks first). If Phase 1C is delayed, the cells DO become "validated not deployed" — flagged as D-1B-iv-5.
+
+**Q-1B-iv-β — Cell naming under Option A semantic**
+
+Under Option A (remaining-fuel), the cell tracks REMAINING, not COST. Design's `fuel-cost-cell-id` (per §4.3, §9.2.C, §10.3 D.4) is misleading. Three options considered.
+
+**Resolution: B2 — rename to `fuel-cell-id`** (concise, semantically neutral). Together with `fuel-budget-cell-id` they form "the fuel state on the network." The cost framing remains a derived concept (`cost = budget - remaining`); cells themselves don't carry the "cost" label.
+
+**Cross-section consistency items** (drift risks D-1B-iv-3 + D-1B-iv-4 — apply in impl commit):
+- §4.3 cell-id allocation table: `fuel-cost-cell` → `fuel-cell`
+- §9.2.C cell registration example: variable name + example direction (Option A: initial=budget, on-write-check uses `<=` on remaining)
+- §10.3 D.4 patterns: `(net-cell-write net fuel-cost-cell-id (+ current n))` → `(net-cell-write net fuel-cell-id (- current n))`
+- §9.2.C predicate signature: 2-arg `(new net)` → 3-arg `(old new net)` per Q-1B-9 F2
+
+**Q-1B-iv-γ — Where the cell registration happens**
+
+Two options considered:
+
+| | Option | Cycle risk |
+|---|---|---|
+| **γ1** | **Inline in `make-prop-network`**; propagator.rkt requires tropical-fuel.rkt for `tropical-fuel-merge` | NO (one-way: propagator.rkt → tropical-fuel.rkt) |
+| γ2 | Helper function exported from tropical-fuel.rkt; tropical-fuel.rkt requires propagator.rkt for `net-register-specialized-cell` + `cell-id` | YES (cycle: propagator.rkt ↔ tropical-fuel.rkt) |
+
+**Resolution: γ1 (inline registration)**. γ2 creates a cycle. γ1's import direction is one-way; cycle risk verified absent by audit (tropical-fuel.rkt requires only sre-core.rkt + merge-fn-registry.rkt; neither imports propagator.rkt).
+
+**Q-1B-iv-δ — `fork-prop-network` behavior under shadow mode**
+
+`fork-prop-network` currently shares warm cells + creates fresh hot state with new `fuel` arg. Under shadow:
+- Cells inherited (initial = budget, unchanged in Phase 1B since unused)
+- prop-net-hot.fuel = new fuel arg (potentially different from cell value at fork time)
+- Mismatch is HARMLESS in Phase 1B (cells unused by production)
+
+**Resolution: leave `fork-prop-network` unchanged in 1B-iv**. Phase 1C will update `fork-prop-network` to also reset the cell to the new fuel value as part of its migration scope. Outside 1B-iv.
+
+**Drift risks named for 1B-iv**:
+- D-1B-iv-1: Cell initial value must be `fuel` parameter (NOT 0; Option A initial = budget). Both fuel-cell + fuel-budget-cell start at the same `fuel` parameter.
+- D-1B-iv-2: On-write-check predicate signature `(old new net)` per Q-1B-9 F2.
+- D-1B-iv-3: D-1B-iii-4 consistency — correct §10.3 D.4 + §9.2.C examples in impl commit.
+- D-1B-iv-4: Cell name rename `fuel-cost-cell-id` → `fuel-cell-id` — propagate through design doc.
+- D-1B-iv-5: 1B-iv close commits to Phase 1C as immediate next sub-phase (Validated≠Deployed discipline).
+- D-1B-iv-6: cell-id 11/12 allocation order — verify at registration time via assertion.
+- D-1B-iv-7: SRE property-sweep verification (Q-1B-iii-β) — verify post-impl if Track 2I infrastructure applies.
+
+**Implementation plan summary**: ~30-50 LoC code + ~80-120 LoC tests + design corrections. Detailed steps in dailies + impl commit.
+
 **Q-1B-ii-β — Specialized cell value storage location (NEW)**
 
 The 1B-ii audit of `net-cell-write` (propagator.rkt:1205-1303) surfaced that the existing path does substantial work per call: 2 CHAMP lookups (cells + merge-fns) + tagged-cell-value wrapping + struct-copy prop-cell + CHAMP insert + dependent filtering + 2 struct-copy prop-network ≈ 140 ns total. The §13.6 spike's W1+ of 6.4 ns measured a vector-indexed sidecar mock that bypassed CHAMP entirely. Two architectures available:
