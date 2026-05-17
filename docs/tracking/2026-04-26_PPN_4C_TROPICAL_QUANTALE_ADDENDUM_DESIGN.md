@@ -390,7 +390,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **Stage 3 D.4 CANONICAL** | Full §9 + §10 + §15 revisions; D.3 historical sections RETIRED-PER-D.4-CANONICAL | 🔄 | THIS commit + next |
 | **1A-iii-b mini-design + mini-audit** | α1+α3/β1/γ1/δ-audit-resolved/ε1 resolved (12 mini-audit findings F1-F12; 5 drift risks D-1A-iii-b-1/2/3/4/5; 3 design doc corrections at §3 + §7.2 + §8.2; 3 codification candidates surfaced); inverted §3 ordering claim (1A-iii-c MUST precede 1A-iii-b); single atomic commit ε1 | ✅ | §7.7 (2026-05-17) |
 | **1A-iii-b (atomic retirement; BLOCKED on 1A-iii-c)** | 13 deprecated functions + atms struct + atms-believed + atms-empty + provides cleanup + test-atms.rkt DELETE + 2 bench retirements (ε2-style stubs) | ⬜ | Per §7 + §7.7 (BLOCKED on 1A-iii-c per α1+α3 ordering) |
-| **1A-iii-c** | Tier 3 surface ATMS AST 14-file pipeline retirement | ⬜ | Per §8 |
+| **1A-iii-c mini-design + mini-audit** | α1/β1/γ2/δ-audit-resolved/ε1/ζ1/η1 resolved (18 mini-audit findings F1-F18; 7 drift risks D-1A-iii-c-1/2/3/4/5/6/7; **8 non-optional design doc corrections** at §3 + §8.2 (×5) + §8.3 + §8.6; 4 NEW codification candidates surfaced); confirmed 1A-iii-b ordering inversion (already corrected at §7.7); **§8.2 dependency cleanup scope corrected (6 files → 2 files; typing-errors + capability-inference are false positives)**; pnet-serialize.rkt has NO atms registrations (F11); trace-serialize atms-event:* PRESERVE (F12 + ε1); single atomic commit ζ1+η1 | ✅ | §8.7 + §8.8 (2026-05-17) |
+| **1A-iii-c (atomic retirement)** | 14 surface AST structs + parse rules + elaboration + 3-fn zonk + shift+subst + pp-expr + uses-bvar0? + typing-core + qtt rules + qtt subtype + union-types tags + trait-resolution mappings + test-atms-integration.rkt DELETE + test-atms-types.rkt DELETE + examples comment cleanup; ~675 LoC modification + ~400 LoC test deletion = ~1075 LoC delta | ⬜ | Per §8 + §8.7 (atomic single commit per ζ1+η1) |
 | **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
 | **1B-ii** | Specialized cell framework module + net-cell-write dispatch + prop-net-warm under-speculation? field | ✅ ✓ PASS | CW3 per-cycle amortized = 2.98 ns/cycle (§13.7 gate ≤ 3 ns; boundary); 8257 tests / 114.5s / 0 failures |
 | **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C1+C2+C3 axioms) | ✅ ✓ PASS | tropical-fuel.rkt + test-tropical-fuel.rkt (20 tests; all algebra axioms verified including +inf.0 boundary cases); 8277 tests / 119.9s / 0 failures |
@@ -1024,50 +1025,71 @@ These corrections are NON-OPTIONAL — they reflect audit-grounded reality (not 
 
 Retire the surface ATMS AST 14-file pipeline. The user-facing surface ATMS expressions (e.g., `(atms-new (net-new 1000))`, `(atms-assume atms :h0 true)`) are scaffolding from a pre-solver-state era. Modern solver-state-driven approach replaces; surface AST retirement removes the 14-file maintenance burden per the AST node pipeline checklist (`.claude/rules/pipeline.md`).
 
-### §8.2 Audit-grounded scope (Q-Audit-2 findings)
+### §8.2 Audit-grounded scope (Q-Audit-2 findings; refreshed by §8.7 mini-audit at HEAD `4061afcb`)
 
-**Per `.claude/rules/pipeline.md` "New AST Node" checklist applied IN REVERSE** (retirement):
+**Per `.claude/rules/pipeline.md` "New AST Node" checklist applied IN REVERSE** (retirement). Line numbers below are AUDIT-VERIFIED at HEAD `4061afcb` per §8.7 F1-F18; original D.3 §7.5.7 numbers may differ post-PM-10 drift.
 
 **Core pipeline (always touched)**:
-1. `syntax.rkt:202-208` — 14 surface AST struct exports
-2. `syntax.rkt:750-767` — 14 struct definitions
-3. `substitution.rkt` — verify shift/subst cases for atms-* (likely exists; remove)
-4. `zonk.rkt:358-1258` — surface atms traversal (~50 lines per D.3 §7.5.7)
-5. `reduction.rkt:2842-3635` — surface atms evaluation (~100 lines)
-6. `pretty-print.rkt:506-521` — surface atms display
-7. `pretty-print.rkt:1142-1146` — uses-bvar0?
-8. `pnet-serialize.rkt` — verify reg0!/reg1!/regN! for auto-cache (likely retire)
-9. `typing-core.rkt` — surface atms type-check
-10. `qtt.rkt:1773-1839` — surface atms type rules
+1. `syntax.rkt:202-208` — 14 surface AST struct provides (F1)
+2. `syntax.rkt:750-767` — 14 struct definitions (F1)
+3. `syntax.rkt:1135-1136` — **predicate composition retirement** (`(or (expr-atms-type? x) (expr-assumption-id-type? x) (expr-atms-store? x) (expr-assumption-id-val? x) ...)`) — NEW per §8.7 F1 (missing from original §8.2)
+4. `substitution.rkt:347-362` (shift) + `:806-820+` (subst) — 14 cases each function (F7)
+5. `zonk.rkt:354-367` (zonk) + `:806-821` (zonk-at-depth) + `:1253-1258+` (default-metas) — 3 functions × 14 cases (F6)
+6. `reduction.rkt:1391` (trivially-whnf? type detection) + `:2836-2958` (whnf cases for all 14 structs) — F5; ALL cases wrap modern `solver-state-*` API (clean retirement; modern API unaffected)
+7. `pretty-print.rkt:497-522` (pp-expr; **`atms?` reference at line 502 inside `expr-atms-store` case retires here per §7.7 F7**) + `:1137-1150` (uses-bvar0?) — F8
+8. `pnet-serialize.rkt` — **NO ATMS REGISTRATIONS EXIST** per §8.7 F11. Surface ATMS structs were never registered with reg0!/reg1!/regN! (intentional: runtime state in atms-store wrapper makes them non-serializable). **NO 1A-iii-c WORK NEEDED for pnet-serialize.**
+9. `typing-core.rkt:1888-1959+` — type-check cases for all 14 structs (F9)
+10. `qtt.rkt:1758-1854+` (type rules) + `:2421-2422` (subtype/binder cases for `((expr-atms-store _) (expr-atms-type))` + assumption-id-val variant — retire with structs) — F10
 
 **User-facing surface syntax**:
-11. `surface-syntax.rkt:925-933` — 10 surf-atms-* structs (per D.3 §7.5.7)
-12. `parser.rkt:2531-2607` — surface atms parse rules (~80 lines)
-13. `elaborator.rkt:2438-2466` — surface atms elaboration
+11. `surface-syntax.rkt:279-283` (provides) + `:922-933` (12 surf-atms-* struct definitions; no surf-atms-store/surf-assumption-id-val because those are runtime-only wrappers) — F2
+12. `parser.rkt:542` (ATMS type keyword) + `:2548-2641` (11 operation parse rules: atms-new, atms-assume, atms-retract, atms-nogood, atms-amb, atms-solve-all, atms-read, atms-write, atms-consistent?, atms-worldview) — F3
+13. `elaborator.rkt:2514-2588` — 12 surf→expr elaboration cases (F4)
 
-**Dependency cleanup** (per D.3 §7.5.7):
-- `typing-errors.rkt`, `substitution.rkt`, `qtt.rkt`, `trait-resolution.rkt`, `capability-inference.rkt`, `union-types.rkt` — grep + remove references
+**Dependency cleanup** (AUDIT-CORRECTED scope per §8.7 F13; 6 files → 2 files):
+- `union-types.rkt:67-68` — 2 tag-mapping lines (`"0:ATMS"` / `"0:AssumptionId"`)
+- `trait-resolution.rkt:93-94` — 2 pretty-print mapping lines (`"ATMS"` / `"AssumptionId"`)
+- **NO REFERENCES** in `typing-errors.rkt` + `capability-inference.rkt` (false positives in original §8.2; correction per §8.7 F13)
+- `substitution.rkt` + `qtt.rkt` are CORE PIPELINE scope (above), not "dependency cleanup"
 
-**Tests**:
-- `tests/test-atms.rkt` — DELETE (full surface AST exercise)
-- `tests/test-atms-integration.rkt` — DELETE (~100 test cases per audit observation)
-- `tests/test-atms-types.rkt` — DELETE
+**Tests** (corrected per §7.8 #3 + §8.7 F17):
+- `tests/test-atms-integration.rkt` — DELETE (96 LoC / ~14 cases; pure surface AST integration test)
+- `tests/test-atms-types.rkt` — DELETE (303 LoC / 37 cases; pure surface AST type-level test)
+- `test-elab-speculation.rkt` PRESERVED — uses surface forms but provides modern-API parity coverage per §7.7 F12 (will retire surface-form usage when those forms parse-error post-1A-iii-c; verify at implementation)
+- `test-atms.rkt` is **1A-iii-b scope** (per §7.7 F10 + γ1 + §7.8 correction #3), NOT 1A-iii-c
 
-**Trace/serialize**:
-- `trace-serialize.rkt:75-89` — atms-event:* references (these are EVENT types, not the atms struct; verify if they reference deprecated state — they may stay if event types remain valid)
+**Trace/serialize** (PRESERVE; Q-1A-iii-c-1 ✅ RESOLVED ε1):
+- `trace-serialize.rkt:75-89` — atms-event:assume + atms-event:retract + atms-event:nogood are **DIFFERENT struct family** (BSP scheduler trace events; NOT surface ATMS AST). Preserve unchanged per §7.7 F8 + §8.7 F12. **NO 1A-iii-c ACTION.**
 
-### §8.3 Sub-phase plan (14-file pipeline retirement ordering)
+**Examples/lib** (per Q-1A-iii-c-2 + Q-1A-iii-c-3 ✅ RESOLVED γ2 + δ):
+- `examples/2026-03-20-punify-p3-acceptance.prologos:626` — **ONE comment line** mentioning `atms-amb` (not actual surface code); γ2 update comment text
+- `lib/` — ZERO callers per §8.7 F15
 
-Per pipeline.md retirement protocol (REVERSE of "New AST Node"):
+### §8.3 Sub-phase plan (D.4 CANONICAL per §8.7 ζ1 — single atomic commit)
 
-- **1A-iii-c-i** — Pre-implementation audit (mini-audit): grep every file in pipeline.md checklist; verify all 14 structs are in scope; identify any external callers in lib/ or examples/; classify trace-serialize references
-- **1A-iii-c-ii** — Surface forms retirement (parse + elaboration): parser.rkt + elaborator.rkt + surface-syntax.rkt — surface forms can no longer be parsed
-- **1A-iii-c-iii** — Pipeline core retirement (substitution + zonk + reduction + pretty-print): cores can no longer process them
-- **1A-iii-c-iv** — Type rules retirement (typing-core + qtt): type-checker can no longer type them
-- **1A-iii-c-v** — Struct definition retirement (syntax.rkt): structs no longer exist
-- **1A-iii-c-vi** — Test deletion (3 test files; ~100+ test cases)
-- **1A-iii-c-vii** — Dependency cleanup (typing-errors + substitution + qtt + trait-resolution + capability-inference + union-types) + trace-serialize verification
-- **1A-iii-c-viii** — Verification + close: probe + targeted suite + full suite + parity test
+Per §8.7 ζ1 resolution: 1A-iii-c lands as a **single atomic commit** (~675 LoC modification + ~400 LoC test deletion = ~1075 LoC delta) mirroring §7.7 ε1 precedent for 1A-iii-b. The original 8-step plan is MOOT per audit (pure deletion across 14 files in different code regions; no per-step verification value within a single deletion).
+
+Single atomic commit contents (per §8.7 η1 table):
+1. `syntax.rkt`: provides (202-208) + struct defs (750-767) + predicate composition (1135-1136)
+2. `surface-syntax.rkt`: provides (279-283) + struct defs (922-933)
+3. `parser.rkt`: ATMS keyword (542) + op rules (2548-2641)
+4. `elaborator.rkt`: surf→expr cases (2514-2588)
+5. `reduction.rkt`: trivially-whnf? (1391) + whnf cases (2836-2958)
+6. `zonk.rkt`: 14 × 3 = 42 cases across zonk + zonk-at-depth + default-metas
+7. `substitution.rkt`: 14 × 2 = 28 cases across shift + subst
+8. `pretty-print.rkt`: pp-expr (497-522, including atms? at 502) + uses-bvar0? (1137-1150)
+9. `typing-core.rkt`: type-check cases (1888-1959+)
+10. `qtt.rkt`: type rules (1758-1854+) + subtype cases (2421-2422)
+11. `union-types.rkt:67-68` (2 lines)
+12. `trait-resolution.rkt:93-94` (2 lines)
+13. `tests/test-atms-integration.rkt` — DELETE (96 LoC)
+14. `tests/test-atms-types.rkt` — DELETE (303 LoC)
+15. `examples/2026-03-20-punify-p3-acceptance.prologos:626` — update comment text (γ2)
+16. **NO changes**: `pnet-serialize.rkt` (F11), `trace-serialize.rkt` (F12 + ε1), `typing-errors.rkt` + `capability-inference.rkt` (F13 false positives), `lib/` (F15)
+
+*Pre-implementation gate*: confirm HEAD `4061afcb` + suite GREEN 8299/120.9s; re-grep at implementation opening to verify no drift.
+
+*Close gate*: probe diff = 0 semantically; full suite GREEN; commit.
 
 ### §8.4 Drift risks
 
@@ -1082,11 +1104,156 @@ Per pipeline.md retirement protocol (REVERSE of "New AST Node"):
 - Termination: deletion phase; trivially terminates
 - Parity: "surface-ATMS-AST-elaboration parity" — pre-retirement: surface forms parse + elaborate + type-check + reduce; post-retirement: surface forms parse error (correct behavior — forms no longer exist)
 
-### §8.6 Open questions (deferred to per-phase mini-design+audit)
+### §8.6 Open questions (all RESOLVED at §8.7 mini-design+audit)
 
-- Q-1A-iii-c-1: trace-serialize.rkt atms-event:* — retire with surface AST or preserve for solver-state events?
-- Q-1A-iii-c-2: examples/ files using surface ATMS — migrate to solver-state OR delete entirely?
-- Q-1A-iii-c-3: lib/ files using surface ATMS — extent of migration impact
+- Q-1A-iii-c-1: trace-serialize.rkt atms-event:* — retire with surface AST or preserve for solver-state events? ✅ **RESOLVED ε1 PRESERVE** per §8.7 F12 + §7.7 F8 (atms-event:* is DIFFERENT struct family — BSP scheduler trace events, not surface ATMS AST)
+- Q-1A-iii-c-2: examples/ files using surface ATMS — migrate to solver-state OR delete entirely? ✅ **RESOLVED γ2 UPDATE COMMENT** per §8.7 F14 (only 1 reference: comment line at `2026-03-20-punify-p3-acceptance.prologos:626` mentioning atms-amb; not actual surface code; γ2 cleans up the dated comment text)
+- Q-1A-iii-c-3: lib/ files using surface ATMS — extent of migration impact ✅ **RESOLVED BY AUDIT** per §8.7 F15 (ZERO lib/ callers; no action needed)
+
+### §8.7 1A-iii-c Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: 1A-iii-c pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together (audit-grounded design questions; questions clarified what audit needed to verify). **Five resolutions** (α1 / β1 / γ2 / δ-audit-resolved / ε1) + **two refinements** (ζ1 atomicity / η1 commit contents) + **eight design doc corrections** (§3 + §8.2 ×5 + §8.3 + §8.6) + **four codification candidates surfaced**. Per ζ1+η1 atomicity, **1A-iii-c lands as a SINGLE atomic commit** as the unblocking commit for 1A-iii-b (per §7.7 α1+α3 ordering).
+
+**Per Stage 4 Per-Phase Protocol steps 1+2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §10.0.4/§10.0.5/§10.0.6/§10.0.7 from Phase 1C and §7.7 from 1A-iii-b).
+
+**Mini-audit findings** (concrete grounding at HEAD `4061afcb`):
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | `syntax.rkt` provides + defs + **predicate composition at 1135-1136** | 14 struct provides at 202-208; 14 struct defs at 750-767; **predicate composition at 1135-1136** (`(or (expr-atms-type? x) (expr-assumption-id-type? x) (expr-atms-store? x) (expr-assumption-id-val? x) ...)`) — additional retirement site not in original §8.2 |
+| **F2** | `surface-syntax.rkt` provides + defs | 12 surf-atms-* provides at 279-283; 12 struct defs at 922-933 (no surf-atms-store/surf-assumption-id-val — those are runtime-only wrappers, not parsed surface forms) |
+| **F3** | `parser.rkt` parse rules | Line 542 (`ATMS` type keyword → `surf-atms-type`); lines 2548-2641 (11 operation parse rules: atms-new, atms-assume, atms-retract, atms-nogood, atms-amb, atms-solve-all, atms-read, atms-write, atms-consistent?, atms-worldview) |
+| **F4** | `elaborator.rkt` elaboration | Lines 2514-2588 (12 surf→expr cases) |
+| **F5** | `reduction.rkt` whnf cases | Line 1391 (trivially-whnf? type detection); lines 2836-2958 (whnf cases for all 14 structs — **ALL cases wrap modern `solver-state-*` API**; surface forms are ALREADY thin wrappers around the modern API — clean retirement; modern API unaffected) |
+| **F6** | `zonk.rkt` traversal | 3 zonk functions × ~14 cases each: `zonk` (354-367), `zonk-at-depth` (806-821), `default-metas` (1253-1258+) — pipeline.md exhaustiveness compliant |
+| **F7** | `substitution.rkt` cases | `shift` (347-362) + `subst` (806-820+) — 14 cases each function |
+| **F8** | `pretty-print.rkt` | `pp-expr` (497-522, **including 502 `atms?` reference inside `expr-atms-store` case** per §7.7 F7); `uses-bvar0?` (1137-1150) — 14 cases each function |
+| **F9** | `typing-core.rkt` | Lines 1888-1959+ (type-check cases for all 14 structs) |
+| **F10** | `qtt.rkt` | Lines 1758-1854+ (type rules) + **lines 2421-2422** (subtype/binder cases `((expr-atms-store _) (expr-atms-type))` + assumption-id-val variant; retire with structs) |
+| **F11 ⚠️** | `pnet-serialize.rkt` | **NO atms registrations exist** — none of the 14 surface ATMS structs are registered with reg0!/reg1!/regN! macros. Either intentional (runtime state in atms-store wrapper makes them non-serializable) or original pipeline.md exhaustiveness gap. **No 1A-iii-c work needed for pnet-serialize.** Codification candidate watching: "pnet-serialize gap intentional vs accidental." |
+| **F12 ✅** | `trace-serialize.rkt` atms-event:* (Q-1A-iii-c-1) | atms-event:assume + atms-event:retract + atms-event:nogood are **DIFFERENT struct family** (BSP scheduler trace events; preserve unchanged per §7.7 F8). Resolves Q-1A-iii-c-1 ε1. |
+| **F13 ⚠️** | Dependency cleanup (§8.2 listed 6 files) | **AUDIT-CORRECTED scope**: only 2 files have refs — `union-types.rkt:67-68` (2 lines: tag strings `"0:ATMS"` / `"0:AssumptionId"`) + `trait-resolution.rkt:93-94` (2 lines: pretty-print mappings `"ATMS"` / `"AssumptionId"`). `typing-errors.rkt` + `capability-inference.rkt` are **FALSE POSITIVES** in §8.2. `substitution.rkt` + `qtt.rkt` are already core pipeline (not "dependency cleanup"). |
+| **F14 ✅** | `examples/` files (Q-1A-iii-c-2) | ONLY 1 reference: `2026-03-20-punify-p3-acceptance.prologos:626` — **a comment line** mentioning `atms-amb` as comparison point (not actual code). γ2 cleans up dated comment text. |
+| **F15 ✅** | `lib/` files (Q-1A-iii-c-3) | **ZERO callers**. Clean. Resolves Q-1A-iii-c-3 directly. |
+| **F16** | Hidden callers (dynamic-require/eval/macro-expansion) | **ZERO production references**. test-atms-integration.rkt has `eval "(atms-new ...)"` patterns but those are TEST code (string-mode eval of surface forms), not Racket-level dynamic dispatch. ZERO `dynamic-require` callers; ZERO macro-expansion callers in production. |
+| **F17** | Test scope | `test-atms-integration.rkt` (**96 LoC / ~14 cases**; §8.2 originally said "~100 test cases" — overcount); `test-atms-types.rkt` (303 LoC / 37 cases per timings.jsonl). Both pure surface AST exercises. **399 total LoC** (smaller than §8.2 anticipated). `test-elab-speculation.rkt` also uses surface forms but provides modern-API parity coverage per §7.7 F12 — **preserved**. |
+| **F18** | Other pipeline files (unify, macros, foreign, typing-propagators, sre-core) | ZERO references — clean. |
+
+**Five architectural questions resolved (Q-1A-iii-c-α through Q-1A-iii-c-ε)**:
+
+**Q-1A-iii-c-α — Coordination with 1A-iii-b — RESOLVED α1 (inherited from §7.7)**
+
+1A-iii-c lands BEFORE 1A-iii-b per §7.7 α1+α3 (already in §3 Progress Tracker post-correction). No additional coordination decision needed. **1A-iii-c is the unblocking commit for 1A-iii-b.**
+
+**Q-1A-iii-c-β — Test fate (test-atms-integration.rkt + test-atms-types.rkt) — RESOLVED β1 (DELETE both)**
+
+DELETE both files entirely (399 LoC total).
+
+Rationale (per F17 audit):
+- test-atms-integration.rkt (96 LoC / ~14 cases): pure surface AST integration test (parser → elaborator → type-check → reduce → pretty-print). Retires with surface forms.
+- test-atms-types.rkt (303 LoC / 37 cases): pure surface AST type-level test. Retires with surface forms.
+- Modern parity coverage preserved in test-elab-speculation.rkt + test-solver-context.rkt + test-infra-cell-atms-01.rkt per §7.7 F12.
+- Matches §7.7 γ1 precedent (test-atms.rkt DELETE under 1A-iii-b) — same pattern: surface-API tests retire with the surface API.
+- β2 (migrate to modern API) REJECTED — would create duplicate coverage with already-preserved files.
+
+**Q-1A-iii-c-γ — examples/ files (Q-1A-iii-c-2 carried from §8.6) — RESOLVED γ2 (update comment text)**
+
+Per F14: only `2026-03-20-punify-p3-acceptance.prologos:626` references `atms-amb` — and it's a **comment line** ("Tests the core Multiverse Multiplexer: atms-amb over clause alternatives."), not actual surface code.
+
+- γ1 Leave as-is — historical reference; no behavioral impact
+- **γ2 Update comment text** — LEAN; user-confirmed; matches "Completeness over deferral" + clean prose
+- γ3 Delete the file — REJECTED (file is PUnify P3 acceptance file; atms-amb is just a comparison mention)
+
+**Q-1A-iii-c-δ — lib/ files (Q-1A-iii-c-3 carried from §8.6) — RESOLVED BY AUDIT F15 (no action)**
+
+Per F15: ZERO lib/ callers. Q-1A-iii-c-3 closes without work.
+
+**Q-1A-iii-c-ε — trace-serialize.rkt disposition (Q-1A-iii-c-1 carried from §8.6) — RESOLVED ε1 (PRESERVE)**
+
+Per F12 + §7.7 F8: `atms-event:assume` / `atms-event:retract` / `atms-event:nogood` are BSP scheduler trace event structs — DIFFERENT struct family from surface ATMS AST. Preserve unchanged. **No 1A-iii-c action.**
+
+**Two refinements (atomicity + commit contents)**:
+
+**Q-1A-iii-c-ζ — Sub-phase atomicity within 1A-iii-c — RESOLVED ζ1 (single atomic commit)**
+
+1A-iii-c lands as a **single atomic commit** (~675 LoC modification + ~400 LoC test deletion = ~1075 LoC delta across ~14 files).
+
+Rationale:
+- Pure DELETION is naturally atomic — surface forms can't exist without core pipeline support; deleting all together is the only compile-safe path
+- Matches §7.7 ε1 precedent (1A-iii-b's 5-step plan → 1 atomic commit; same uniform-deletion property)
+- F5 finding: surface forms are ALREADY thin wrappers around modern `solver-state-*` API; retiring them doesn't disturb the modern API
+- Suite-level GREEN is the obvious gate; no per-step verification value within deletion
+- Original §8.3 8-sub-phase plan is MOOT per audit — most steps are mechanical deletions in different files; sub-phase coordination overhead exceeds value
+- Alternative ζ2 (two-commit split: surface forms + everything else) was considered — REJECTED, no incremental verification value since modern API is unaffected
+
+Scope: ~1075 LoC delta across ~14 files; well within bisectable range (1A-iii-b at ~300-450 LoC was atomic; this is ~2-3× — still manageable). User-confirmed lean.
+
+**Q-1A-iii-c-η — Atomic commit contents (per ζ1) — DEFINED η1**
+
+Single atomic commit covering (LoC estimates):
+
+| File | Retire | Estimated LoC |
+|---|---|---|
+| `syntax.rkt` | provides (202-208); 14 struct defs (750-767); predicate composition (1135-1136) | ~25 LoC |
+| `surface-syntax.rkt` | provides (279-283); 12 surf-atms-* struct defs (922-933) | ~20 LoC |
+| `parser.rkt` | ATMS keyword (542); 11 op parse rules (2548-2641) | ~100 LoC |
+| `elaborator.rkt` | 12 surf→expr cases (2514-2588) | ~80 LoC |
+| `reduction.rkt` | trivially-whnf? entry (1391); 14 whnf cases (2836-2958) | ~125 LoC |
+| `zonk.rkt` | 14 × 3 = 42 cases across zonk + zonk-at-depth + default-metas | ~50 LoC |
+| `substitution.rkt` | 14 × 2 = 28 cases across shift + subst | ~40 LoC |
+| `pretty-print.rkt` | pp-expr (497-522); uses-bvar0? (1137-1150); `atms?` at 502 retires inside expr-atms-store case | ~40 LoC |
+| `typing-core.rkt` | 14 type-check cases (1888-1959+) | ~80 LoC |
+| `qtt.rkt` | 14 type-rule cases (1758-1854+); 2 subtype cases (2421-2422) | ~110 LoC |
+| `union-types.rkt` | 2 tag mapping lines (67-68) | 2 LoC |
+| `trait-resolution.rkt` | 2 pretty-print lines (93-94) | 2 LoC |
+| `tests/test-atms-integration.rkt` | DELETE (96 LoC) | -96 LoC |
+| `tests/test-atms-types.rkt` | DELETE (303 LoC) | -303 LoC |
+| `examples/2026-03-20-punify-p3-acceptance.prologos` | Update comment at line 626 (γ2) | ~1 LoC |
+| **NO CHANGES**: `pnet-serialize.rkt` (F11), `trace-serialize.rkt` (F12+ε1), `typing-errors.rkt` + `capability-inference.rkt` (F13 false positives), `lib/` (F15) | — | 0 LoC |
+
+**Net**: ~675 LoC modification + ~400 LoC test deletion = **~1075 LoC delta** (deletion-dominant; matches §8 estimated "~600-1000 LoC" range adjusted with audit-revealed `syntax.rkt:1135-1136` site).
+
+**Pre-condition for 1A-iii-c commit**: HEAD at `4061afcb` (1A-iii-b mini-design persisted); suite GREEN at 8299/120.9s. Re-grep at implementation opening verifies no drift.
+
+**Drift risks named at design+audit time (D-1A-iii-c-1 through D-1A-iii-c-7)**:
+
+| # | Risk | Status |
+|---|---|---|
+| **D-1A-iii-c-1** | Pipeline.md exhaustiveness — 14-file coverage | ✅ AUDIT-VERIFIED (all 14 files enumerated; pnet-serialize finding F11 is a non-issue) |
+| **D-1A-iii-c-2** | Hidden parser callers via macro expansion / dynamic-require / eval | ✅ AUDIT-RESOLVED per F16 (zero production callers) |
+| **D-1A-iii-c-3** | lib/ references would break elaboration post-retirement | ✅ AUDIT-RESOLVED per F15 (zero lib/ callers) |
+| **D-1A-iii-c-4** | examples/ files migration | ✅ NEAR-RESOLVED per F14 + γ2 (1 comment update; no code migration) |
+| **D-1A-iii-c-5** | trace-serialize atms-event:* disposition | ✅ AUDIT-RESOLVED per F12 + ε1 (preserve unchanged) |
+| **D-1A-iii-c-6** | Test deletion (test-atms-integration.rkt + test-atms-types.rkt) may surface test isolation issues | ⬜ REMAINS AT RISK (verify shared-fixture pattern at implementation; full suite GREEN is gate) |
+| **D-1A-iii-c-7** | Original 8-step §8.3 plan vs audit-pruned atomic | ✅ RESOLVED per ζ1 (single atomic per audit pattern) |
+
+**NEW drift risks surfaced by audit**:
+- **D-1A-iii-c-NEW-1**: `union-types.rkt:67-68` + `trait-resolution.rkt:93-94` tag/mapping lines retire silently — if any unforeseen consumer reads these strings ("0:ATMS" / "ATMS"), might surface as missing handler. Mitigation: full suite catches; these are pretty-print/serialization helpers, not load-bearing.
+- **D-1A-iii-c-NEW-2**: `qtt.rkt:2421-2422` subtype cases retire with structs — only matters for code constructing `(expr-atms-store ...)` and checking against `(expr-atms-type)`. Such code only exists in surface ATMS context which retires entirely. No impact.
+
+**Codification candidate watching list update**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **§8.2 "dependency cleanup" scope inflation** — original lists files that have NO references (typing-errors + capability-inference here) | 1 (1A-iii-c F13 corrected scope; precedent for "anticipated dependencies that audit doesn't confirm") | **NEW watching list** |
+| **pnet-serialize gap intentional vs accidental** — original implementation didn't register surface ATMS structs; under pipeline.md it's a violation, but under runtime-state semantics it was correct | 1 (1A-iii-c F11; needs investigation if pattern recurs with other runtime-stateful surface forms) | **NEW watching list** |
+| **Test-line-count overestimates in original design doc** — §8.2 said "~100 cases" for test-atms-integration.rkt; audit found 96 LoC / 14 cases total | 1 (1A-iii-c F17; complements 1A-iii-b F10's similar overcount pattern) | **NEW watching list** |
+| **Single-comment-mention examples don't require code migration** — γ2 pattern for examples/ cleanup when references are documentation-only | 1 (1A-iii-c F14 + γ2) | **NEW watching list** |
+
+### §8.8 Design doc corrections (per §8.7 audit findings; NON-OPTIONAL)
+
+Per §7.8 precedent (audit-grounded corrections are not preferences). The following corrections land in THIS commit (the §8.7 mini-design persistence):
+
+1. **§3 Progress Tracker** — ADD new row for 1A-iii-c mini-design + mini-audit (✅ at §8.7); UPDATE 1A-iii-c row Notes to reference §8.7 ζ1+η1 atomic plan
+2. **§8.2 "Core pipeline"** — ADD `syntax.rkt:1135-1136` predicate composition retirement (missing from original list per §8.7 F1); AUDIT-VERIFY line numbers (F1-F10 refresh original D.3 §7.5.7 numbers at HEAD `4061afcb`); ADD note that `pnet-serialize.rkt` has NO atms registrations per F11 (no work needed there)
+3. **§8.2 "Dependency cleanup"** — CORRECT from 6 files (`typing-errors.rkt`, `substitution.rkt`, `qtt.rkt`, `trait-resolution.rkt`, `capability-inference.rkt`, `union-types.rkt`) to 2 files (`union-types.rkt:67-68` + `trait-resolution.rkt:93-94`); annotate typing-errors + capability-inference as FALSE POSITIVES; note substitution + qtt are CORE PIPELINE (not dependency cleanup) — per §8.7 F13
+4. **§8.2 "Tests"** — APPLY §7.8 #3 correction (was declared but never applied to §8.2 location): REMOVE `tests/test-atms.rkt` from 1A-iii-c deletion list (it's 1A-iii-b scope per §7.7 F10 + γ1); UPDATE test-atms-integration.rkt + test-atms-types.rkt line counts per §8.7 F17 audit; ADD note about test-elab-speculation.rkt PRESERVATION
+5. **§8.2 "Trace/serialize"** — STRENGTHEN to explicit PRESERVE per Q-1A-iii-c-1 ε1 resolution: "trace-serialize.rkt:75-89 atms-event:* — PRESERVE unchanged; DIFFERENT struct family per §7.7 F8 + §8.7 F12"
+6. **§8.2 ADD "Examples/lib"** subsection — per Q-1A-iii-c-2 γ2 + Q-1A-iii-c-3 δ resolutions (audit-grounded; no migration needed)
+7. **§8.3 sub-phase plan** — REPLACE 8 sub-sub-phase plan with single atomic commit per §8.7 ζ1+η1
+8. **§8.6 open questions** — MARK all three Q-1A-iii-c-1/2/3 as ✅ RESOLVED with reference to §8.7 resolutions
+
+These corrections are NON-OPTIONAL — they reflect audit-grounded reality (not preference). Reverting them would re-introduce the design errors. Same discipline as §7.8 for 1A-iii-b.
 
 ---
 
