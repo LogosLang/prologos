@@ -1,0 +1,99 @@
+PERF-COUNTERS:{"cell_allocs":1295,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":55,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":317,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":65,"zonk_steps":244}
+PHASE-TIMINGS:{"elaborate_ms":50,"parse_ms":0,"qtt_ms":43,"reduce_ms":94,"trait_resolve_ms":0,"type_check_ms":71,"zonk_ms":2}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":76,"mem_after_bytes":147574848,"mem_before_bytes":144215464,"mem_retained_bytes":3359384}
+CELL-METRICS:{"cells":56,"propagators":0}
+'("p1-x : Int defined."
+  "42 : Int"
+  "p1-y : String defined."
+  "\"hello\" : String"
+  "p1-z : Int defined."
+  "10 : Int"
+  "p1-inc : Int -> Int defined."
+  "42 : Int"
+  "p2-double : Int -> Int defined."
+  "42 : Int"
+  "p2-compose : [Int -> Int] [Int -> Int] Int -> Int defined."
+  "21 : Int"
+  "p3-my-map : [Map Keyword Open] defined."
+  "{:name \"alice\", :age 30} : [Map Keyword Open]"
+  "\"alice\" : Open"
+  "30 : Open"
+  "p4-nested : [Map Keyword Open] defined."
+  "{:data {:y \"two\", :x 1}, :flag true} : [Map Keyword Open]"
+  "p5-list : [prologos::data::list::List Int] defined."
+  "'[1 2 3 4 5] : [prologos::data::list::List Int]"
+  "[prologos::data::option::some Int 1] : [prologos::data::option::Option Int]"
+  "[prologos::data::option::some [prologos::data::list::List Int] '[2 3 4 5]] : [prologos::data::option::Option [prologos::data::list::List Int]]"
+  "p5-chain : Int defined."
+  "16 : Int"
+  "p6-id : [Pi [x :0 <[Type 0]>] x -> x] defined."
+  "99 : Int"
+  "\"world\" : String"
+  "true : Bool")
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":101,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":336,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":77,"zonk_steps":244}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":35,"reduce_ms":75,"trait_resolve_ms":0,"type_check_ms":87,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":63,"mem_after_bytes":147696208,"mem_before_bytes":147641704,"mem_retained_bytes":54504}
+CELL-METRICS:{"cells":56,"propagators":0}
+'("p1-x : Int defined."
+  "42 : Int"
+  "p1-y : String defined."
+  "\"hello\" : String"
+  "p1-z : Int defined."
+  "10 : Int"
+  "p1-inc : Int -> Int defined."
+  "42 : Int"
+  "p2-double : Int -> Int defined."
+  "42 : Int"
+  "p2-compose : [Int -> Int] [Int -> Int] Int -> Int defined."
+  "21 : Int"
+  "p3-my-map : [Map Keyword Open] defined."
+  "{:name \"alice\", :age 30} : [Map Keyword Open]"
+  "\"alice\" : Open"
+  "30 : Open"
+  "p4-nested : [Map Keyword Open] defined."
+  "{:data {:y \"two\", :x 1}, :flag true} : [Map Keyword Open]"
+  "p5-list : [prologos::data::list::List Int] defined."
+  "'[1 2 3 4 5] : [prologos::data::list::List Int]"
+  "[prologos::data::option::some Int 1] : [prologos::data::option::Option Int]"
+  "[prologos::data::option::some [prologos::data::list::List Int] '[2 3 4 5]] : [prologos::data::option::Option [prologos::data::list::List Int]]"
+  "p5-chain : Int defined."
+  "16 : Int"
+  "p6-id : [Pi [x :0 <[Type 0]>] x -> x] defined."
+  "99 : Int"
+  "\"world\" : String"
+  "true : Bool")
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":160,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":348,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":90,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":35,"reduce_ms":77,"trait_resolve_ms":0,"type_check_ms":67,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":60,"mem_after_bytes":152415920,"mem_before_bytes":152345976,"mem_retained_bytes":69944}
+CELL-METRICS:{"cells":56,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":160,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":348,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":90,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":35,"reduce_ms":75,"trait_resolve_ms":0,"type_check_ms":67,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":58,"mem_after_bytes":152514592,"mem_before_bytes":152484776,"mem_retained_bytes":29816}
+CELL-METRICS:{"cells":56,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":160,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":348,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":90,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":36,"reduce_ms":77,"trait_resolve_ms":0,"type_check_ms":68,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":59,"mem_after_bytes":152612608,"mem_before_bytes":152584712,"mem_retained_bytes":27896}
+CELL-METRICS:{"cells":56,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":160,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":348,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":90,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":33,"parse_ms":0,"qtt_ms":36,"reduce_ms":80,"trait_resolve_ms":0,"type_check_ms":69,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":60,"mem_after_bytes":152647520,"mem_before_bytes":152618480,"mem_retained_bytes":29040}
+CELL-METRICS:{"cells":56,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":1531,"constraint_count":0,"constraint_retries":0,"elaborate_steps":119,"infer_steps":160,"meta_created":16,"meta_solved":15,"prop_allocs":0,"prop_firings":0,"reduce_steps":348,"resolution_cycles":15,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":90,"zonk_steps":254}
+PHASE-TIMINGS:{"elaborate_ms":32,"parse_ms":0,"qtt_ms":34,"reduce_ms":77,"trait_resolve_ms":0,"type_check_ms":69,"zonk_ms":1}
+PROVENANCE-STATS:{"atms_hypothesis_count":5,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":58,"mem_after_bytes":152744528,"mem_before_bytes":152717512,"mem_retained_bytes":27016}
+CELL-METRICS:{"cells":56,"propagators":0}
+PROBE WALL TIMES (warmed; n=5):
+  Sample 1: 351.675048828125 ms
+  Sample 2: 349.52294921875 ms
+  Sample 3: 353.9990234375 ms
+  Sample 4: 358.923828125 ms
+  Sample 5: 350.255126953125 ms
+Median: 351.675048828125 ms
+vs Pre-0 E7 baseline (295.062 ms): 56.61304882812499 ms (19.18683152290874%)

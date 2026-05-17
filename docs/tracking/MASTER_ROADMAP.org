@@ -498,7 +498,7 @@ trajectory.
 | Track | Description | Status | Touches |
 |-------+-------------+--------+---------|
 | 0 | Tropical semiring lattice design + cell product enrichment | ⬜ | All series (cross-cutting) |
-| 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2 |
+| 1 | Weighted parsing (Goodman semiring framework on PPN) | ⬜ | PPN Track 2; *measurement tooling*: when this track ships with multiple cost-extraction variants to compare, benefits from [[https://github.com/LogosLang/prologos/issues/63][Issue #63 (bench-ab.rkt --refs for multi-way A/B/C+ comparison)]] — surfaced by PPN 4C tropical addendum 1C-vi A/B/C report (2026-05-16); cross-referenced from DEFERRED.md |
 | 2 | Cost-weighted rewriting (tropical extraction on e-graphs) | ⬜ → consumed by PReduce Series | First instantiation in PPN 4C tropical addendum (Phase 1B); PReduce Track 4 inherits |
 | 3 | Cost-bounded exploration (replace fuel limits with tropical thresholds) | ⬜ | BSP-LE, NTT stratification |
 | 4 | Weighted constraint solving (tropical enrichment on LE/NF-Narrowing) | ⬜ | BSP-LE, FL-Narrowing |
@@ -532,7 +532,7 @@ function) that plugs into PPN, PM, SRE, or BSP-LE.
 | 1 | E-class cell substrate — cell type + hashcons + union-find on cells | ⬜ | PPN 4C Phase 1B + Track 0.1 |
 | 2 | First IN-fragment rewrite-rule kind (β-reduction) | ⬜ | Track 1 |
 | 3 | First adhesive-DPO rewrite-rule kind (ι/case-selection, structural) | ⬜ | Track 1 |
-| 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | Track 1 + PPN 4C Phase 1B residuation operator |
+| 4 | Cost-guided extraction — tropical-quantale residuation on e-class poset | ⬜ | Track 1 + PPN 4C Phase 1B residuation operator; *measurement tooling*: when this track ships with multiple cost-extraction strategies to compare, benefits from [[https://github.com/LogosLang/prologos/issues/63][Issue #63 (bench-ab.rkt --refs for multi-way A/B/C+ comparison)]] — surfaced by PPN 4C tropical addendum 1C-vi A/B/C report (2026-05-16); cross-referenced from DEFERRED.md |
 | 5 | Persistence — content-addressed e-class storage + ~.pnet~ round-trip | ⬜ | Track 1 + Track 0.3 |
 | 6 | Speculative reduction — cost-bounded ATMS branching | ⬜ | Track 1 + BSP-LE 2B |
 | 7 | Effect-stratum boundary protocol — opaque cells for FFI + effects | ⬜ | Track 1 + Architecture AD |

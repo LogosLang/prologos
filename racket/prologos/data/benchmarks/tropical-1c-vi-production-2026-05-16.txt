@@ -1,0 +1,109 @@
+
+============================================================
+SECTION 1: M10 — Residuation operator cost (pure function)
+============================================================
+  M10.1 (tropical-left-residual 0 0): 2.1 ns/call (50000 calls)
+  M10.2 (tropical-left-residual 5 10): 2.3 ns/call (50000 calls)
+  M10.3 (tropical-left-residual 10 5) overspend: 2.4 ns/call (50000 calls)
+  M10.4 (tropical-left-residual 5 +inf.0): 10.5 ns/call (50000 calls)
+  M10.5 (tropical-left-residual +inf.0 5) vacuous: 6.2 ns/call (50000 calls)
+
+============================================================
+SECTION 2: M11 — Tropical tensor (cost composition)
+============================================================
+  M11.1 (tropical-fuel-tensor 3 5) small fixnum: 0.8 ns/call (50000 calls)
+  M11.2 (tropical-fuel-tensor 0 5) identity: 0.9 ns/call (50000 calls)
+  M11.3 (tropical-fuel-tensor +inf.0 5) absorbing: 0.9 ns/call (50000 calls)
+
+============================================================
+SECTION 3: M12 — SRE domain registration / lookup overhead
+============================================================
+  M12.1 (lookup-domain 'tropical-fuel): 8.5 ns/call (50000 calls)
+  M12.mem 10000 lookups alloc+retain: wall=0.085 ms  alloc=0.2 KB  retain=0.2 KB  (n=10)
+
+============================================================
+SECTION 4: Production cell-API costs (C measurements)
+============================================================
+  C-M13 (net-cell-read net fuel-cell-id): 81.4 ns/call (50000 calls)
+  C-M7 (net-cell-write net fuel-cell-id n) fast path: 464.4 ns/call (50000 calls)
+  C-M8 cell-read + (<= remaining 0) check: 70.9 ns/call (50000 calls)
+
+============================================================
+SECTION 4.5: Option 13 deferred-write AMORTIZED cost
+(production-context Variant A + Variant B simulations)
+Target: amortized per-fire ≤ 5 ns/cycle at N=100 (§13.7 1B-ii gate)
+Spike reference: §13.6.A W3-O13a.2 = 2.16 ns/cycle (MOCK)
+============================================================
+  C-Var-A.1 round of N=100: 1 cell-write + N no-op fires: 755.9 ns/call (500 calls)
+  C-Var-A.2 round of N=1000: 1 cell-write + N no-op fires: 1801.8 ns/call (50 calls)
+
+  Variant A amortized per-fire:
+    N=100:   7.56 ns/cycle
+    N=1000:  1.80 ns/cycle
+  C-Var-B.1 phase of N=100: init + N decrements + flush: 777.8 ns/call (500 calls)
+  C-Var-B.2 phase of N=1000: init + N decrements + flush: 3042.0 ns/call (50 calls)
+
+  Variant B amortized per-fire (uses REAL production helpers):
+    N=100:   7.78 ns/cycle
+    N=1000:  3.04 ns/cycle
+
+============================================================
+SECTION 5: Allocation verification (D-1B-ii-3 / Phase 1V item #4)
+Target: 0-allocation per write under fixnum on-write-check
+============================================================
+  ALLOC-1 10000 fuel decrements alloc+retain: wall=3.362 ms  alloc=3917.4 KB  retain=-1.0 KB  (n=10)
+  ALLOC-2 100000 fuel decrements alloc+retain: wall=33.222 ms  alloc=39113.2 KB  retain=-10.1 KB  (n=5)
+
+============================================================
+SECTION 6: GC profile (R3-equivalent; target: ZERO major-GC at 100k)
+============================================================
+  GC-1 100k fuel decrements GC profile: wall=33.250 ms  gc=0.000 ms (0.0%)  (n=5)
+
+============================================================
+SECTION 7: A7-equivalent — high-frequency decrement scaling
+============================================================
+  C-A7.1 1000 decrements (Pre-0: 62.7 bytes/dec): wall=0.351 ms  alloc=398.1 KB  retain=-0.1 KB  (n=50)
+  C-A7.2 10000 decrements (Pre-0: 62.5 bytes/dec): wall=3.321 ms  alloc=3917.4 KB  retain=-1.0 KB  (n=20)
+  C-A7.3 100000 decrements (Pre-0: 62.5 bytes/dec): wall=33.314 ms  alloc=39113.2 KB  retain=-10.2 KB  (n=5)
+
+============================================================
+SECTION 8: R4 — Cell layout cost (specialized cell representation)
+============================================================
+  R4.1 make-prop-network fresh allocation: wall=0.024 ms  alloc=7.6 KB  retain=-0.1 KB  (n=50)
+  R4.2 500 fresh prop-network allocations: wall=1.355 ms  alloc=3646.7 KB  retain=-1.0 KB  (n=5)
+
+============================================================
+SUMMARY (1C-vi production C measurements)
+============================================================
+
+Algebra primitives (read-time pure functions):
+  M10 residuation operator       2.1 ns/call (boundary case)
+  M11 tropical tensor            0.8 ns/call (3 cases)
+  M12 SRE domain lookup          8.5 ns/call
+
+Cell-API per-call cost (single net-cell-write/read; informational):
+  C-M7 cell-write per-call       464.4 ns/call  (A: 24 ns struct-copy; B ref §13.6: 6.4 ns mock)
+  C-M8 check-site per-call       70.9 ns/call  (A: 6 ns inline check)
+  C-M13 cell-read per-call       81.4 ns/call  (A: 6 ns macro; B ref §13.6: 0.8 ns mock)
+
+Option 13 deferred-write AMORTIZED cost (apples-to-apples with §13.6.A spike):
+  C-Var-A round amortized N=100  7.56 ns/cycle (parallel BSP; 1 cell-write/round)
+  C-Var-A round amortized N=1000 1.80 ns/cycle
+  C-Var-B phase amortized N=100  7.78 ns/cycle (sequential; init+N×box+flush)
+  C-Var-B phase amortized N=1000 3.04 ns/cycle
+  Spike reference: §13.6.A W3-O13a.2 = 2.16 ns/cycle (MOCK; CHAMP-free dispatch)
+  Production overhead = amortized - 2.16 ns (CHAMP cell-meta lookup; immutable interface)
+
+Allocation + GC:
+ALLOC-1 10k decrements       alloc=3917.4 KB  (Pre-0 A7.2: 625.2 KB)
+ALLOC-2 100k decrements      alloc=39113.2 KB  (Pre-0 A7.3: 6251.0 KB)
+GC-1 100k decrements         gc=0.000 ms     (Pre-0 R3.1: 0.000 ms)
+
+Cross-references:
+  A baseline:  data/benchmarks/tropical-pre0-baseline-2026-04-26.txt
+  B reference: data/benchmarks/tropical-spike-d4-2026-05-14.txt
+  Option 13:   data/benchmarks/tropical-spike-d4-option13-2026-05-15.txt
+  Design:      docs/tracking/2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md
+               §10.0.7 (1C-vi mini-design+audit), §13.7 (per-phase measurement plan)
+
+(Production C measurements complete. A/B/C report follows in 1C-vi commit 2.)
