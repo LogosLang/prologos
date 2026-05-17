@@ -93,6 +93,11 @@
  ;; Phase 1C migrates consumers to use them)
  fuel-cell-id
  fuel-budget-cell-id
+ ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
+ ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
+ ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
+ init-fuel-local-var!
+ flush-fuel-local-var!
  net-remove-propagator-from-dependents  ;; Track 4B P2: remove ONE propagator from cell dependents
  net-clear-dependents  ;; Track 4B Phase 6b P3: remove all dependents from a cell
  ;; Propagator operations
@@ -2021,6 +2026,62 @@
                                      (prop-network-contradiction final) '())))
               final)))))
 
+;; ============================================================
+;; 1C-ii-b Variant B local-var fuel helpers (D.4 CANONICAL 2026-05-16)
+;; ============================================================
+;;
+;; Per §10.3.A Variant B + §10.0.3 + §10.0.4 (audit-refined):
+;; sequential schedulers use a local-var box pattern that defers cell-write to
+;; phase boundaries. The cell IS the live state at every observation point;
+;; the local-var box is the scheduler's internal SCRATCH register (not a cache
+;; of off-network state).
+;;
+;; Used by:
+;;   - run-to-quiescence-drain (#1; init only per §10.0.4 F3 Option A;
+;;     cell-write ADDED after existing finalize struct-copy)
+;;   - run-to-quiescence-inner/traced (#2; same pattern as #1)
+;;   - run-widen-phase (#4; init + flush at phase exit/contradiction/exhaustion)
+;;   - run-narrow-phase (#5; same pattern as #4)
+;;
+;; Per §10.0.4 F3 Option A: helper is used at init for all 4 sequential
+;; schedulers. Helper is also used at flush for #4 + #5 (no worklist
+;; interleaving). For #1 + #2, the existing finalize struct-copy already
+;; sets fuel-field alongside worklist; the helper is NOT called at finalize
+;; — instead, a `(net-cell-write n* fuel-cell-id (unbox remaining-fuel))`
+;; is added after the existing struct-copy for β1 lockstep with the cell.
+;;
+;; β1 lockstep retirement obligation (D-1C-ii-b-1): the struct-field write
+;; inside `flush-fuel-local-var!` retires at 1C-iv alongside the
+;; prop-net-hot-fuel struct field itself. Post-1C-iv, the helper will only
+;; write the cell.
+
+;; Initialize a local-var box from the cell. Returns mutable box with the
+;; current remaining-fuel value (Option A semantic: cell stores REMAINING).
+;; Read source is the cell (NOT prop-network-fuel macro) — under β1 lockstep
+;; both equal each other; cell-read is the architecturally-correct read source
+;; under D.4. At 1C-iv (field retirement), this reads from the only live state.
+(define (init-fuel-local-var! net)
+  (box (net-cell-read net fuel-cell-id)))
+
+;; Flush a local-var box to BOTH the cell AND the struct-field (β1 lockstep).
+;; Used at sequential-phase boundaries (entry+exit for #4+#5; exhaustion path
+;; for all 4). Returns updated net.
+;;
+;; D-1C-ii-b-1 (retirement obligation): the struct-field write retires at
+;; 1C-iv. Post-1C-iv, this helper will only call net-cell-write.
+;;
+;; The on-write check at the cell layer ((<= new 0) per Option A) fires
+;; contradiction structurally if remaining-fuel reaches zero — no separate
+;; exhaustion check needed in the helper.
+(define (flush-fuel-local-var! net local-fuel-box)
+  (define final-fuel (unbox local-fuel-box))
+  ;; Cell write first (on-write-check may fire contradiction here).
+  (define net+cell (net-cell-write net fuel-cell-id final-fuel))
+  ;; Struct-field write (β1 transitional; retires at 1C-iv per D-1C-ii-b-1).
+  (struct-copy prop-network net+cell
+    [hot (struct-copy prop-net-hot (prop-network-hot net+cell)
+           [fuel final-fuel])]))
+
 ;; Inner loop: no tracing.
 ;; BSP-LE Track 0 Phase 3c: mutable worklist/fuel drain pattern.
 ;; Strip hot fields into mutable boxes before the loop. Propagator fire
@@ -2038,7 +2099,11 @@
 ;; Mutable drain loop — only entered when there IS work to do.
 (define (run-to-quiescence-drain net)
   (define wl (box (prop-network-worklist net)))
-  (define remaining-fuel (box (prop-network-fuel net)))
+  ;; D.4 1C-ii-b (#1 init): read source migrated from struct-field to cell.
+  ;; Per §10.0.4 F3 Option A: helper used at init only for #1+#2 (finalize
+  ;; struct-copy below already writes fuel-field together with worklist;
+  ;; cell-write added after for β1 lockstep).
+  (define remaining-fuel (init-fuel-local-var! net))
   ;; B2f Phase 0: cell-write instrumentation
   (define write-count (box 0))
   (define change-count (box 0))
@@ -2054,8 +2119,17 @@
     (when (> wc 0)
       (perf-record-quiescence-writes! wc cc))
     ;; Reconstitute the hot fields from the mutable boxes.
-    (struct-copy prop-network n
-      [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+    ;; D.4 1C-ii-b (#1 finalize per §10.0.4 F3 Option A): existing struct-copy
+    ;; below sets struct-field fuel alongside worklist. Add cell-write after
+    ;; for β1 lockstep. NOT using flush-fuel-local-var! here (helper is
+    ;; symmetric only where there's no worklist interleaving; see §10.0.4 F3 +
+    ;; D-1C-ii-b-6 for the asymmetry rationale).
+    (define n*
+      (struct-copy prop-network n
+        [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+    ;; D-1C-ii-b-1: cell-write becomes SOLE update at 1C-iv when struct field
+    ;; retires. Until then, β1 lockstep via struct-copy above + cell-write here.
+    (net-cell-write n* fuel-cell-id (unbox remaining-fuel)))
   (parameterize ([current-quiescence-write-counter write-count]
                  [current-quiescence-change-counter change-count])
     (let loop ([net net0])
@@ -2086,12 +2160,18 @@
 ;; Same mutable worklist/fuel drain pattern as run-to-quiescence-inner.
 (define (run-to-quiescence-inner/traced net)
   (define wl (box (prop-network-worklist net)))
-  (define remaining-fuel (box (prop-network-fuel net)))
+  ;; D.4 1C-ii-b (#2 init per §10.0.4 F3 Option A): helper read from cell.
+  (define remaining-fuel (init-fuel-local-var! net))
   (define net0 (struct-copy prop-network net
                  [hot (prop-net-hot '() 0)]))
   (define (finalize n fired)
-    (cons (struct-copy prop-network n
-            [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))])
+    ;; D.4 1C-ii-b (#2 finalize per §10.0.4 F3 Option A): existing struct-copy
+    ;; writes fuel-field + worklist together; add cell-write after for β1
+    ;; lockstep (D-1C-ii-b-1: cell-write becomes sole update at 1C-iv).
+    (define n*
+      (struct-copy prop-network n
+        [hot (prop-net-hot (unbox wl) (unbox remaining-fuel))]))
+    (cons (net-cell-write n* fuel-cell-id (unbox remaining-fuel))
           (reverse fired)))
   (let loop ([net net0] [fired '()])
     (cond
@@ -3222,37 +3302,55 @@
 ;; Internal: run one phase of widening fixpoint iteration.
 ;; Uses net-cell-write-widen instead of net-cell-write for propagator output.
 ;; Returns network at quiescence (or contradiction/fuel exhaustion).
+;;
+;; D.4 1C-ii-b Variant B (per §10.3.A + §10.0.3 + §10.0.4): recursive → loop
+;; refactor with box-pattern fuel tracking. The entry guard check at the
+;; former line `(<= (prop-network-fuel net) 0)` migrates to box check
+;; `(<= (unbox local-fuel) 0)` — preempted from 1C-iii per Q-1C-ii-b-α α2 +
+;; D-1C-ii-b-2. β1 lockstep at flush points only (mid-loop struct-field is
+;; stale; observation-point invariant). Cell IS canonical source for init
+;; per §10.0.4 F3.
 (define (run-widen-phase net)
-  (cond
-    [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
-    [(null? (prop-network-worklist net)) net]
-    [else
-     (let* ([pid (car (prop-network-worklist net))]
-            [rest (cdr (prop-network-worklist net))]
-            [net* (struct-copy prop-network net
-                    [hot (struct-copy prop-net-hot (prop-network-hot net)
-                           [worklist rest]
-                           [fuel (sub1 (prop-network-fuel net))])])]
-            [prop (champ-lookup (prop-network-propagators net*)
-                                (prop-id-hash pid) pid)])
-       (if (eq? prop 'none)
-           (run-widen-phase net*)
-           ;; Fire propagator, but capture writes and apply via net-cell-write-widen
-           (let* ([result-net (fire-propagator prop net*)]  ;; PPN 4C Phase 1.5
-                  ;; Diff output cells to find changes
-                  [writes (for/fold ([ws '()])
-                                    ([cid (in-list (propagator-outputs prop))])
-                            (let ([old (net-cell-read net* cid)]
-                                  [new (net-cell-read result-net cid)])
-                              (if (equal? old new)
-                                  ws
-                                  (cons (cons cid new) ws))))]
-                  ;; Apply writes via widening-aware writer
-                  [net** (for/fold ([n net*])
-                                   ([w (in-list writes)])
-                           (net-cell-write-widen n (car w) (cdr w)))])
-             (run-widen-phase net**))))]))
+  ;; Init local-var box from cell (β1 lockstep — at this observation point
+  ;; the cell value equals the struct-field value under post-1C-ii-a
+  ;; invariant).
+  (define local-fuel (init-fuel-local-var! net))
+  (let loop ([net net])
+    (cond
+      [(prop-network-contradiction net) (flush-fuel-local-var! net local-fuel)]
+      ;; Preempted check site (from 1C-iii scope per D-1C-ii-b-2): box check.
+      [(<= (unbox local-fuel) 0) (flush-fuel-local-var! net local-fuel)]
+      [(null? (prop-network-worklist net)) (flush-fuel-local-var! net local-fuel)]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              ;; Per-fire box decrement (replaces struct-copy [fuel (sub1 ...)]).
+              ;; β1 lockstep transitional: struct-field is NOT updated per-fire
+              ;; (mid-loop staleness; flush at exit restores lockstep).
+              [_ (set-box! local-fuel (sub1 (unbox local-fuel)))]
+              ;; Worklist update via struct-copy; fuel field NOT touched mid-loop.
+              [net* (struct-copy prop-network net
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest])])]
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net*)
+             ;; Fire propagator, but capture writes and apply via net-cell-write-widen
+             (let* ([result-net (fire-propagator prop net*)]  ;; PPN 4C Phase 1.5
+                    ;; Diff output cells to find changes
+                    [writes (for/fold ([ws '()])
+                                      ([cid (in-list (propagator-outputs prop))])
+                              (let ([old (net-cell-read net* cid)]
+                                    [new (net-cell-read result-net cid)])
+                                (if (equal? old new)
+                                    ws
+                                    (cons (cons cid new) ws))))]
+                    ;; Apply writes via widening-aware writer
+                    [net** (for/fold ([n net*])
+                                     ([w (in-list writes)])
+                             (net-cell-write-widen n (car w) (cdr w)))])
+               (loop net**))))])))
 
 ;; Internal: create a snapshot for narrow-phase firing.
 ;; Widening-point cells get a passthrough merge: (lambda (old new) new)
@@ -3275,81 +3373,92 @@
 ;; Strategy: fire propagators against a snapshot where widening-point cells
 ;; have passthrough merge, so we capture the raw transfer function output.
 ;; Then apply narrow(old, raw_new) at widening points.
+;;
+;; D.4 1C-ii-b Variant B (mirrors run-widen-phase per §10.3.A + §10.0.3 +
+;; §10.0.4): recursive → loop refactor with box-pattern fuel tracking. Entry
+;; guard check migrates to box check (preempted from 1C-iii per
+;; Q-1C-ii-b-α α2 + D-1C-ii-b-2). β1 lockstep at flush points only.
 (define (run-narrow-phase net)
-  (cond
-    [(prop-network-contradiction net) net]
-    [(<= (prop-network-fuel net) 0) net]
-    [(null? (prop-network-worklist net)) net]
-    [else
-     (let* ([pid (car (prop-network-worklist net))]
-            [rest (cdr (prop-network-worklist net))]
-            [net* (struct-copy prop-network net
-                    [hot (struct-copy prop-net-hot (prop-network-hot net)
-                           [worklist rest]
-                           [fuel (sub1 (prop-network-fuel net))])])]
-            [prop (champ-lookup (prop-network-propagators net*)
-                                (prop-id-hash pid) pid)])
-       (if (eq? prop 'none)
-           (run-narrow-phase net*)
-           ;; Fire propagator against a snapshot with passthrough merge for widen cells
-           (let* ([snapshot (make-narrow-snapshot net*)]
-                  [result-net (fire-propagator prop snapshot)]  ;; PPN 4C Phase 1.5
-                  ;; Diff output cells — snapshot has passthrough merge, so
-                  ;; we see the raw transfer function output
-                  [writes (for/fold ([ws '()])
-                                    ([cid (in-list (propagator-outputs prop))])
-                            (let ([old (net-cell-read net* cid)]
-                                  [new (net-cell-read result-net cid)])
-                              (if (equal? old new)
-                                  ws
-                                  (cons (cons cid new) ws))))]
-                  ;; Apply writes: at widen-points use narrow-fn, otherwise merge
-                  [net** (for/fold ([n net*])
-                                   ([w (in-list writes)])
-                           (let* ([cid (car w)]
-                                  [new-val (cdr w)]
-                                  [h (cell-id-hash cid)]
-                                  [wentry (champ-lookup
-                                           (prop-network-widen-fns n) h cid)])
-                             (if (eq? wentry 'none)
-                                 ;; Normal cell: use standard write
-                                 (net-cell-write n cid new-val)
-                                 ;; Widening point: apply narrow(old, raw_new)
-                                 (let* ([cell (champ-lookup
-                                               (prop-network-cells n) h cid)]
-                                        [old-val (prop-cell-value cell)]
-                                        [narrowed ((cdr wentry) old-val new-val)])
-                                   (if (equal? narrowed old-val)
-                                       n
-                                       (let* ([new-cell
-                                               (struct-copy prop-cell cell
-                                                 [value narrowed])]
-                                              [new-cells
-                                               (champ-insert
-                                                (prop-network-cells n)
-                                                h cid new-cell)]
-                                              [deps (champ-keys
-                                                     (prop-cell-dependents cell))]
-                                              [new-wl
-                                               (append deps
-                                                       (prop-network-worklist n))]
-                                              [cfn (champ-lookup
-                                                    (prop-network-contradiction-fns n)
-                                                    h cid)]
-                                              [contradicted?
-                                               (and (not (eq? cfn 'none))
-                                                    (cfn narrowed))]
-                                              [n* (struct-copy prop-network n
-                                                    [warm (struct-copy prop-net-warm (prop-network-warm n)
-                                                            [cells new-cells])]
-                                                    [hot (struct-copy prop-net-hot (prop-network-hot n)
-                                                           [worklist new-wl])])])
-                                         (if contradicted?
-                                             (struct-copy prop-network n*
-                                               [warm (struct-copy prop-net-warm (prop-network-warm n*)
-                                                       [contradiction cid])])
-                                             n*)))))))])
-             (run-narrow-phase net**))))]))
+  ;; Init local-var box from cell (β1 lockstep at observation point).
+  (define local-fuel (init-fuel-local-var! net))
+  (let loop ([net net])
+    (cond
+      [(prop-network-contradiction net) (flush-fuel-local-var! net local-fuel)]
+      ;; Preempted check site (from 1C-iii scope per D-1C-ii-b-2): box check.
+      [(<= (unbox local-fuel) 0) (flush-fuel-local-var! net local-fuel)]
+      [(null? (prop-network-worklist net)) (flush-fuel-local-var! net local-fuel)]
+      [else
+       (let* ([pid (car (prop-network-worklist net))]
+              [rest (cdr (prop-network-worklist net))]
+              ;; Per-fire box decrement (replaces struct-copy [fuel (sub1 ...)]).
+              [_ (set-box! local-fuel (sub1 (unbox local-fuel)))]
+              ;; Worklist update via struct-copy; fuel field NOT touched mid-loop.
+              [net* (struct-copy prop-network net
+                      [hot (struct-copy prop-net-hot (prop-network-hot net)
+                             [worklist rest])])]
+              [prop (champ-lookup (prop-network-propagators net*)
+                                  (prop-id-hash pid) pid)])
+         (if (eq? prop 'none)
+             (loop net*)
+             ;; Fire propagator against a snapshot with passthrough merge for widen cells
+             (let* ([snapshot (make-narrow-snapshot net*)]
+                    [result-net (fire-propagator prop snapshot)]  ;; PPN 4C Phase 1.5
+                    ;; Diff output cells — snapshot has passthrough merge, so
+                    ;; we see the raw transfer function output
+                    [writes (for/fold ([ws '()])
+                                      ([cid (in-list (propagator-outputs prop))])
+                              (let ([old (net-cell-read net* cid)]
+                                    [new (net-cell-read result-net cid)])
+                                (if (equal? old new)
+                                    ws
+                                    (cons (cons cid new) ws))))]
+                    ;; Apply writes: at widen-points use narrow-fn, otherwise merge
+                    [net** (for/fold ([n net*])
+                                     ([w (in-list writes)])
+                             (let* ([cid (car w)]
+                                    [new-val (cdr w)]
+                                    [h (cell-id-hash cid)]
+                                    [wentry (champ-lookup
+                                             (prop-network-widen-fns n) h cid)])
+                               (if (eq? wentry 'none)
+                                   ;; Normal cell: use standard write
+                                   (net-cell-write n cid new-val)
+                                   ;; Widening point: apply narrow(old, raw_new)
+                                   (let* ([cell (champ-lookup
+                                                 (prop-network-cells n) h cid)]
+                                          [old-val (prop-cell-value cell)]
+                                          [narrowed ((cdr wentry) old-val new-val)])
+                                     (if (equal? narrowed old-val)
+                                         n
+                                         (let* ([new-cell
+                                                 (struct-copy prop-cell cell
+                                                   [value narrowed])]
+                                                [new-cells
+                                                 (champ-insert
+                                                  (prop-network-cells n)
+                                                  h cid new-cell)]
+                                                [deps (champ-keys
+                                                       (prop-cell-dependents cell))]
+                                                [new-wl
+                                                 (append deps
+                                                         (prop-network-worklist n))]
+                                                [cfn (champ-lookup
+                                                      (prop-network-contradiction-fns n)
+                                                      h cid)]
+                                                [contradicted?
+                                                 (and (not (eq? cfn 'none))
+                                                      (cfn narrowed))]
+                                                [n* (struct-copy prop-network n
+                                                      [warm (struct-copy prop-net-warm (prop-network-warm n)
+                                                              [cells new-cells])]
+                                                      [hot (struct-copy prop-net-hot (prop-network-hot n)
+                                                             [worklist new-wl])])])
+                                           (if contradicted?
+                                               (struct-copy prop-network n*
+                                                 [warm (struct-copy prop-net-warm (prop-network-warm n*)
+                                                         [contradiction cid])])
+                                               n*)))))))])
+               (loop net**))))])))
 
 ;; Run the network to quiescence with widening/narrowing.
 ;;
@@ -3386,10 +3495,23 @@
                [hot (struct-copy prop-net-hot (prop-network-hot net)
                       [worklist all-prop-ids])]))
            (define narrowed (run-narrow-phase net-with-wl))
-           ;; Check if narrowing changed anything by comparing cell values
-           (if (equal? (prop-network-cells narrowed)
-                       (prop-network-cells net))
-               narrowed  ;; No change — converged
+           ;; Check if narrowing changed anything by comparing DATA cell values.
+           ;;
+           ;; D.4 1C-ii-b: exclude scheduler-state cells (fuel-cell-id +
+           ;; fuel-budget-cell-id) from the convergence comparison. Per Cell/
+           ;; Propagator/Scheduler Orthogonality, the fuel cell IS scheduler-
+           ;; state — its value changes per narrow round (every flush updates
+           ;; it). If we included it in the equal? check, the convergence
+           ;; signal would never fire (cells map always differs by cell-11
+           ;; between rounds), exhausting fuel even when data cells stabilized.
+           (define (data-cells-only cells)
+             (champ-delete
+              (champ-delete cells
+                            (cell-id-hash fuel-cell-id) fuel-cell-id)
+              (cell-id-hash fuel-budget-cell-id) fuel-budget-cell-id))
+           (if (equal? (data-cells-only (prop-network-cells narrowed))
+                       (data-cells-only (prop-network-cells net)))
+               narrowed  ;; Data cells converged — no semantic change
                (loop narrowed (+ rounds 1)))]))))
 
 ;; ========================================

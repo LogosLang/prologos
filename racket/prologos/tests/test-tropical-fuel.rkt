@@ -35,6 +35,9 @@
                   net-add-propagator
                   net-add-fire-once-propagator
                   run-to-quiescence-bsp
+                  run-to-quiescence-widen   ;; 1C-ii-b tests (exercises #4 + #5)
+                  init-fuel-local-var!      ;; 1C-ii-b helper correctness test
+                  flush-fuel-local-var!     ;; 1C-ii-b helper correctness test
                   fuel-cell-id fuel-budget-cell-id
                   prop-network-cells prop-network-contradiction
                   prop-network-fuel
@@ -475,3 +478,118 @@
   ;; β1 keeps both paths active during transition; either is acceptable.
   (check-true (and (prop-network-contradiction result) #t)
               "exhaustion produces contradiction (via cell-mechanism or legacy check site)"))
+
+;; ============================================================
+;; 1C-ii-b Variant B migration tests (D.4 CANONICAL 2026-05-16)
+;; ============================================================
+;;
+;; Per §10.0.3 Q-1C-ii-b-δ + §10.0.4 F8 (mirror 1C-ii-a template): 3 tests
+;; covering sequential schedulers (run-to-quiescence-inner / run-widen-phase
+;; per Q-1C-α α2 splitting Variant B into 4 entry points #1/#2/#4/#5 that
+;; share the helpers `init-fuel-local-var!` + `flush-fuel-local-var!`):
+;;
+;;   (1) cell-field-lockstep at sequential phase exit — β1 invariant: cell and
+;;       struct-field agree after sequential scheduler returns (helper flushes
+;;       both at phase exit)
+;;   (2) helper correctness — direct test of init-fuel-local-var! (returns box
+;;       with cell value) + flush-fuel-local-var! (writes BOTH cell and field)
+;;   (3) exhaustion via cell-mechanism at sequential scheduler — on-write-check
+;;       fires contradiction structurally when remaining-fuel hits ≤ 0 during
+;;       sequential execution
+;;
+;; D-1C-ii-b-1 (retirement obligation): the struct-field write inside
+;; flush-fuel-local-var! is transitional scaffolding. It RETIRES at 1C-iv
+;; alongside the prop-net-hot-fuel struct field. Post-1C-iv, the helper only
+;; writes the cell; Test (1) becomes trivially true (only cell remains as
+;; source of truth).
+;;
+;; D-1C-ii-b-6 (asymmetry rationale per §10.0.4 F3): for #1 + #2 the helper
+;; is used at INIT only (existing finalize struct-copy already writes
+;; fuel-field alongside worklist; cell-write added after). For #4 + #5 the
+;; helper is used at BOTH init AND flush (no worklist interleaving). Tests
+;; below cover both patterns via the schedulers they exercise.
+
+;; Local helpers for sequential scheduler tests
+(define (1c-ii-b-max-merge old new) (max old new))
+(define (1c-ii-b-copy-fire-fn src dst)
+  (lambda (net) (net-cell-write net dst (net-cell-read net src))))
+
+(test-case "1C-ii-b (1) cell-field-lockstep at sequential phase exit (run-to-quiescence-widen)"
+  ;; Sequential scheduler #4 (run-widen-phase) + #5 (run-narrow-phase) use the
+  ;; box pattern: init from cell at phase entry, decrement box per fire, flush
+  ;; BOTH cell + field at phase exit. After return, β1 invariant: cell-value
+  ;; EQUALS struct-field value at the post-flush observation point.
+  ;;
+  ;; Exercises #4 + #5 via the exported wrapper run-to-quiescence-widen
+  ;; (which calls run-widen-phase then loops on run-narrow-phase). The 4
+  ;; sequential entry points #1/#2/#4/#5 share the helpers; this test covers
+  ;; the widening path; full suite GREEN broadens coverage to others.
+  (define net0 (make-prop-network 100))
+  (define-values (net1 ca) (net-new-cell net0 0 1c-ii-b-max-merge))
+  (define-values (net2 cb) (net-new-cell net1 0 1c-ii-b-max-merge))
+  ;; Add a propagator that will fire (1 worklist entry → 1 fire → 1 decrement)
+  (define-values (net3 _p1) (net-add-propagator net2 (list ca) (list cb)
+                              (1c-ii-b-copy-fire-fn ca cb)))
+  (define net4 (net-cell-write net3 ca 42))
+  ;; Run via run-to-quiescence-widen (exported wrapper for sequential
+  ;; widening/narrowing path; calls run-widen-phase then narrow loop)
+  (define result (run-to-quiescence-widen net4))
+  ;; β1 invariant at flush observation point
+  (define field-remaining (prop-network-fuel result))
+  (define cell-remaining (net-cell-read result fuel-cell-id))
+  (check-equal? field-remaining cell-remaining
+                "β1 lockstep: struct-field and cell must agree after sequential phase exit (flush observation point)")
+  ;; Both must be < 100 (fuel was consumed by the fire)
+  (check-true (< field-remaining 100)
+              "fuel was consumed during sequential widen/narrow phase (box decrement → flush)"))
+
+(test-case "1C-ii-b (2) helper correctness: init reads cell; flush writes BOTH cell and field"
+  ;; Direct test of the helpers without exercising a scheduler. Verifies:
+  ;;   - init-fuel-local-var! returns a box containing the cell's current value
+  ;;   - flush-fuel-local-var! writes the box value to BOTH cell and struct-field
+  ;;   - β1 lockstep is preserved by the helper's two-write pattern
+  ;;
+  ;; The struct-field write inside flush-fuel-local-var! is D-1C-ii-b-1
+  ;; transitional scaffolding (retires at 1C-iv). This test will need to be
+  ;; updated then to verify only the cell write.
+  (define net0 (make-prop-network 100))
+  ;; init-fuel-local-var! reads cell into box
+  (define b (init-fuel-local-var! net0))
+  (check-equal? (unbox b) 100
+                "init-fuel-local-var! returns box with current cell value")
+  ;; Mutate the box (simulating loop decrement)
+  (set-box! b 42)
+  ;; flush writes box value to BOTH cell and struct-field
+  (define net1 (flush-fuel-local-var! net0 b))
+  (check-equal? (net-cell-read net1 fuel-cell-id) 42
+                "flush-fuel-local-var! writes box value to cell")
+  (check-equal? (prop-network-fuel net1) 42
+                "flush-fuel-local-var! writes box value to struct-field (β1 transitional; D-1C-ii-b-1)"))
+
+(test-case "1C-ii-b (3) exhaustion via cell-mechanism at sequential scheduler"
+  ;; Low budget through run-to-quiescence-widen (which exercises #4 + #5);
+  ;; verify exhaustion semantics. Under D.4 specialized cell, the on-write-check
+  ;; `(<= new 0)` fires contradiction structurally at the flush point (when
+  ;; remaining hits 0). The box check `(<= (unbox local-fuel) 0)` in the loop
+  ;; ALSO exits when the box decrements to 0 — either path produces a flushed
+  ;; result with cell ≤ 0 (exhausted).
+  (define net0 (make-prop-network 2))  ; very low budget
+  (define-values (net1 ca) (net-new-cell net0 0 1c-ii-b-max-merge))
+  (define-values (net2 cb) (net-new-cell net1 0 1c-ii-b-max-merge))
+  (define-values (net3 cc) (net-new-cell net2 0 1c-ii-b-max-merge))
+  ;; 3 propagators to exhaust budget=2
+  (define-values (net4 _p1) (net-add-propagator net3 (list ca) (list cb)
+                              (1c-ii-b-copy-fire-fn ca cb)))
+  (define-values (net5 _p2) (net-add-propagator net4 (list ca) (list cc)
+                              (1c-ii-b-copy-fire-fn ca cc)))
+  ;; net-cell-write of ca adds dependents to worklist (fires propagators)
+  (define net6 (net-cell-write net5 ca 42))
+  ;; Run via run-to-quiescence-widen; box exhausts (or contradiction fires)
+  (define result (run-to-quiescence-widen net6))
+  ;; After exhaustion + flush, remaining-fuel ≤ 0 in cell
+  (define cell-remaining (net-cell-read result fuel-cell-id))
+  (check-true (<= cell-remaining 0)
+              "exhaustion at sequential scheduler: cell remaining ≤ 0 after flush")
+  ;; Lockstep at flush point — even at exhaustion
+  (check-equal? (prop-network-fuel result) cell-remaining
+                "β1 lockstep preserved at exhaustion flush point"))
