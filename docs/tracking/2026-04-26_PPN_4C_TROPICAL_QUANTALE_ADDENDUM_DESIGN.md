@@ -268,7 +268,7 @@ This addendum ships:
 **Phase 1C — Canonical BSP fuel substrate (D.4 CANONICAL — direct migration)** (~150-250 LoC; per §10 + D.1 §10.4 original framing; spike-validated)
 
 Under D.4 canonical (per §10), Phase 1C is direct migration of ALL 17 production refs to the cell-API:
-- Migrate 4 decrement sites: `(struct-copy prop-net-hot ... [fuel (- ... n)])` → `(net-cell-write net fuel-cost-cell-id ...)`: ~30-50 LoC
+- Migrate 4 decrement sites: `(struct-copy prop-net-hot ... [fuel (- ... n)])` → `(net-cell-write net fuel-cell-id ...)`: ~30-50 LoC
 - Migrate 11 check sites: `(<= (prop-network-fuel net) 0)` → `(net-contradiction? net 'tropical-fuel-exhausted)`: ~30-50 LoC
 - Migrate 3 read-as-value sites + typing-propagators.rkt:2269 + pretty-print.rkt:463: ~20-40 LoC
 - Retire `prop-network-fuel` macro + `prop-net-hot-fuel` struct field: ~5-10 LoC (deletions)
@@ -395,7 +395,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1B-iii** | Tropical fuel module (merge/tensor/residuation + SRE registration + C1+C2+C3 axioms) | ✅ ✓ PASS | tropical-fuel.rkt + test-tropical-fuel.rkt (20 tests; all algebra axioms verified including +inf.0 boundary cases); 8277 tests / 119.9s / 0 failures |
 | **1B-iv** | Cell registration via framework + tests + close (shadow mode) | ✅ ✓ PASS | fuel-cell-id (11) + fuel-budget-cell-id (12) registered in make-prop-network; surfaced merge-fn correctness bug in 1B-ii fast-path (fixed); 29 tropical-fuel tests + 9 cell-registration tests + C4/C5 axioms; 8286 tests / 127.4s / 0 failures |
 | **1C whole-phase mini-design** | Q-1C-α/β/γ/δ resolved; Phase 1V scope locked (4 items) | ✅ | §10.0 (2026-05-16); resolutions α2/β1/γ1+function/δ1 |
-| **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline capture | ⬜ | Per §10.4 (refined) |
+| **1C-i** | Pre-impl audit + §10 doc cleanup + Q-1C-β audit + §13.7 A-baseline strategy | ✅ | §10.0.1 (2026-05-16); 5 findings α/β/γ/δ/ε; ε surfaced bench scope 2→18 (ε2 retire); audit re-verified line numbers + Q-1C-1 simpler than expected |
 | **1C-ii-a** | Variant A migration (parallel BSP main loop entry point #3) | ⬜ | Per §10.4 + Q-1C-α α2; target ~0.06 ns/cycle amortized |
 | **1C-ii-b** | Variant B migration (sequential schedulers entry points #1/#2/#4/#5) + `flush-fuel-local-var!` helper | ⬜ | Per §10.4 + Q-1C-α α2 + Q-1C-γ γ1; target ~2.16 ns/cycle amortized |
 | **1C-iii** | Migrate 11 check sites | ⬜ | Per §10.4 |
@@ -1001,7 +1001,7 @@ This is the substrate that Phase 1C (direct migration of decrement/check sites),
 - **~30 construction sites** in `propagator.rkt` use the 2-arg constructor `(prop-cell init-val champ-empty)` — all need updating to `(prop-cell init-val champ-empty #f)` in 1B-ii. Backward compat via `meta = #f` default for regular cells.
 - **`struct-copy` sites** for `prop-cell` (~5 sites) preserve unspecified fields automatically — no changes needed beyond the struct definition itself.
 - **Accessors** `prop-cell-value`, `prop-cell-dependents` unchanged. `prop-cell-meta` becomes the new accessor for specialized-cell dispatch.
-- **Cell-id allocation**: production `make-prop-network` (lines 621-660) allocates 11 well-known cells (cell-ids 0-10: req-cell, wv-cell, rs-cell, cfg-cell, naf-cell, pc-cell, cp-cell, elab-cell, narr-cell, sre-cell, cir-cell). Cell-ids 11/12 (fuel-cost-cell + fuel-budget-cell per §4.3) are the next slots — no conflict (resolves D-1C-3).
+- **Cell-id allocation**: production `make-prop-network` (lines 621-660) allocates 11 well-known cells (cell-ids 0-10: req-cell, wv-cell, rs-cell, cfg-cell, naf-cell, pc-cell, cp-cell, elab-cell, narr-cell, sre-cell, cir-cell). Cell-ids 11/12 (fuel-cell + fuel-budget-cell per §4.3, renamed 1B-iv per Q-1B-iv-β) are the next slots — no conflict (resolves D-1C-3).
 
 **Microbench results (CM1-CM5)** — 50000 iterations per measurement; mock structs mimic A2's layout; DCE defeated via mutable-box accumulator:
 
@@ -1518,7 +1518,7 @@ Phase 1B implementation **MUST run C-series** ([Pre-0 plan §5](2026-04-26_TROPI
 
 **Specialized fuel-cost cell (integration; D.4)** (4+ tests):
 - *Registration*: `make-prop-network` allocates fuel-cost (cell-id 11) + fuel-budget (cell-id 12) via `net-register-specialized-cell`; verify both cell-ids + initial values
-- *Per-decrement write*: `(net-cell-write net fuel-cost-cell-id (+ current 1))` mutates directly (no allocation); verify W3-equivalent zero-GC at 10k decrements
+- *Per-decrement write*: `(net-cell-write net fuel-cell-id (- current 1))` mutates directly (no allocation; Option A remaining-fuel decrement); verify W3-equivalent zero-GC at 10k decrements
 - *Exhaustion semantics*: writing a value `>= budget` triggers on-write predicate; `(net-contradiction? net 'tropical-fuel-exhausted)` returns `#t` after the write; per-decrement loop terminates correctly
 - *Speculation*: under `with-speculative-rollback`, fuel-cost cell uses tagged-cell-value fallback; rollback restores pre-speculation cost correctly
 
@@ -1720,15 +1720,143 @@ The 1B-iv close surfaced 4 follow-up items deferred from 1B sub-phases. Per the 
 1. **Merge-fn-caching optimization** → Phase 1V sub-phase before atomic VAG close. ~10-20 LoC: cache `merge-fn` directly on `specialized-cell-meta` to eliminate per-call `champ-lookup`. Re-microbench CW3; recovery determines whether the original 3 ns/cycle gate is hit.
 2. **§10 doc cleanup (D-1B-iii-4)** → moved to **1C-i** (quick mechanical sed; needed BEFORE 1C-v batch so migration template is correct).
 3. **SRE property-sweep verification (Q-1B-iii-β)** → Phase 1V if Track 2I `all-sweep-properties` infrastructure readily wireable to tropical-fuel domain; otherwise sister track (not Phase 2 — too vague). Decide at Phase 1V opening.
-4. **D-1B-ii-3 allocation verification** → **1C-vi** (post-fuel-cost-cell registration in production, where verification covers actual production code path); results persist to Phase 1V close.
+4. **D-1B-ii-3 allocation verification** → **1C-vi** (post-fuel-cell registration in production, where verification covers actual production code path); results persist to Phase 1V close.
 
 **Unilateral gate revision flag**: §13.7 1B-ii gate was unilaterally revised from "≤ 3 ns/cycle" to "≤ 5 ns/cycle" at 1B-iv close on rationale "still beats native (5.2 ns)." This shifted the success criterion from "matches Option 13 spike (2.16 ns/cycle + headroom)" to "beats current native struct-copy" without explicit measurement-driven re-justification. **Phase 1V item #1 (merge-fn-caching) closes the gap created by this revision; if optimization doesn't fully close it, measurement-driven gate revision discussed at Phase 1V — not another unilateral call.**
 
 ---
 
+### §10.0.1 1C-i Mini-Audit Findings (D.4 CANONICAL 2026-05-16)
+
+> **Status**: 1C-i pre-implementation audit ✅ COMPLETE (this commit). Five findings surfaced (α/β/γ/δ/ε); all resolutions confirmed with user. §10 doc cleanup (D-1B-iii-4 carryover) applied in this commit. Q-1C-β audit closes Q-1C-1 with simpler resolution than expected (fuel-substitution, not speculation rollback). ε surfaced bench scope expansion (2 → 18 sites); addressed via ε2 (retire obsolete bench sections in `bench-ppn-track4c.rkt`).
+
+**Scheduler entry point line-number drift (2026-05-16 re-audit)**:
+
+The 2026-05-15 audit's line numbers drifted with Phase 1B's struct extensions (prop-cell + prop-net-warm) + BSP scheduler refresh code. Current state:
+
+| # | Function | OLD (2026-05-15) | NEW (2026-05-16) | Decrement site | Variant |
+|---|---|---|---|---|---|
+| 1 | `run-to-quiescence-inner` | 1835-1866 | **2030-2036** + drain at **2039** | box+set-box! at 2041/2069 | **B (partial pre-existing per α)** |
+| 2 | `run-to-quiescence-inner/traced` | 1870-1898 | **2087-2104** | box+set-box! at 2089 (same pattern as #1) | **B (partial pre-existing per α)** |
+| 3 | `run-to-quiescence-bsp` Tier 2 | 2315+ | **2532+**; snapshot at **2606** | struct-copy `[fuel (- ... n)]` at 2606 | **A (target)** |
+| 4 | `run-widen-phase` | 2989+ | **3214+** | struct-copy `[fuel (sub1 ...)]` at 3225 | **B (full introduction)** |
+| 5 | `run-narrow-phase` | 3042+ | **3267+** | struct-copy `[fuel (sub1 ...)]` at 3278 | **B (full introduction)** |
+| (6) | `run-to-quiescence-widen` | (NEW finding) | **3353** | wrapper; check sites only at 3357/3360/3367 | **N/A (1C-iii check site migration only)** |
+
+**Five findings (α through ε)**:
+
+**α — Entry points #1 + #2 already have partial Variant B pattern (informational; simplifies 1C-ii-b for these sites)**
+
+`run-to-quiescence-inner` (drain at line 2039) and `/traced` (line 2087) ALREADY use the local-var box + per-fire decrement + finalize-flush pattern:
+- `(box (prop-network-fuel net))` — local-var init (lines 2041, 2089)
+- `(<= (unbox remaining-fuel) 0)` — check on box inside loop (lines 2064, 2099)
+- `(set-box! remaining-fuel (sub1 ...))` — per-fire decrement (line 2069)
+- `finalize` patches struct via `[hot (prop-net-hot wl remaining-fuel)]` — flush to struct-field
+
+Variant B migration for #1 + #2 simplifies to: redirect init source (`(box (prop-network-fuel net))` → `(init-fuel-local-var! net)`) + redirect finalize sink (struct-field write → `(flush-fuel-local-var! net box)`). The helpers (per Q-1C-γ γ1+function) apply UNIFORMLY across all 4 sequential schedulers — for #1+#2 the helpers replace existing finalize logic; for #4+#5 the helpers introduce the box pattern.
+
+Implication: 1C-ii-b scope is slightly smaller than design assumed for #1+#2 (~5-10 LoC each redirect) but the same for #4+#5 (~15-20 LoC each introduction). Total ~40-60 LoC for 1C-ii-b.
+
+**β — Tier 1 BSP fast path doesn't decrement fuel (RESOLVED β1: preserve current semantic)**
+
+`run-to-quiescence-bsp`'s Tier 1 path (lines 2562-2573) — single-pass flush when no speculation + no NAF + all fire-once empty-inputs propagators — BYPASSES fuel decrement entirely. Current production semantic: Tier 1 fires propagators without consuming fuel.
+
+**Resolution β1**: preserve current behavior — Tier 1 does NOT call `net-cell-write` under D.4 migration. Cell value after a Tier 1 round equals cell value before. Rationale: Tier 1 is deterministic single-pass with no budget-bounding concern; preserving the no-decrement semantic maintains equivalence with current production. Phase 3C consumers reading the cell after a Tier 1 round see unchanged cell value (consistent with current).
+
+**γ — `run-to-quiescence-widen` is a wrapper with check sites only (RESOLVED: not a 6th entry point)**
+
+Line 3353 wrapper has 3 check sites at lines 3357, 3360, 3367. No decrement. Migrates under 1C-iii (check site migration) — same pattern as the 11 production check sites. Not a 6th scheduler entry point.
+
+Scheduler matrix stays at 5 entry points.
+
+**δ — `typing-propagators.rkt:2269` is fuel-SUBSTITUTION, NOT speculation rollback (RESOLVED: Q-1C-1 closes simpler than expected)**
+
+The pattern at lines 2269-2279:
+```racket
+(define saved-fuel (prop-network-fuel net2w))               ; save current fuel
+(define net2-limited (struct-copy ... [fuel TYPING-FUEL-LIMIT]))   ; substitute with bounded limit
+(define net3 (run-to-quiescence-bsp net2-limited))          ; run with limit
+(define net3-restored (struct-copy ... [fuel saved-fuel]))         ; restore
+```
+
+This is **fuel-budget-substitution-for-bounded-typing-run**, NOT a speculation/rollback mechanism. Q-1C-1's "speculation rollback handles it" framing was incorrect; the actual mechanism is simpler.
+
+D.4 migration (straightforward cell-API; no helper needed):
+```racket
+(define saved-fuel (net-cell-read net2w fuel-cell-id))
+(define net2-limited (net-cell-write net2w fuel-cell-id TYPING-FUEL-LIMIT))
+(define net3 (run-to-quiescence-bsp net2-limited))
+(define net3-restored (net-cell-write net3 fuel-cell-id saved-fuel))
+```
+
+Q-1C-1 closes with simpler resolution than expected. fuel-budget-cell-id stays unchanged; only fuel-cell-id substitutes (on-write predicate is hardcoded `(<= remaining 0)` so budget doesn't affect predicate firing).
+
+**ε — Bench migration scope is 18 sites, NOT 2 (RESOLVED ε2: retire obsolete sections)**
+
+Q-Audit-1's "2 bench refs" only counted `bench-alloc.rkt` (lines 262, 357 — both `(prop-network-fuel n)` via macro). **`bench-ppn-track4c.rkt` has 16 ADDITIONAL sites** directly accessing `prop-net-hot-fuel`:
+
+| File | Sites | Pattern | Migration approach |
+|---|---|---|---|
+| `bench-alloc.rkt` | 2 (lines 262, 357) | `(prop-network-fuel n)` via macro | δ1 mechanical batch: `(net-cell-read n fuel-cell-id)` |
+| `bench-ppn-track4c.rkt` | 16 (lines 211, 215, 219, 229, 367, 409, 416, 423, 440, 475, 488, 495, 503, 512, 653) | direct `(prop-net-hot-fuel (prop-network-hot net))` access | **ε2: RETIRED-PER-D.4-CANONICAL with annotations** |
+
+These 16 sites are Pre-0 microbench sections (M7.1/M7.2/M7.3 + A7 family) that specifically measured the struct-copy decrement cost. Under D.4 retirement of `prop-net-hot-fuel` struct field (1C-iv), these benches break at compile.
+
+**Resolution ε2** (rationale per "Let pain drive design"):
+- Historical data preserved in `racket/prologos/data/benchmarks/tropical-pre0-baseline-2026-04-26.txt`
+- New post-D.4 measurement targets are CM1-CM5 (1B-i) + CW1-CW3 (1B-ii) already in same bench file measuring new pattern
+- §13.7 A/B/C plan's "A baseline" is a historical reference from data file, not a runnable bench
+- ε1 (migrate to cell-API) would create semantic confusion — sections named "M7 struct-copy decrement" would silently measure cell-write cost
+- ε3 (selective) not justified — the 16 sites are uniformly Pre-0 baselines that share the same retirement rationale
+
+1C-v scope expansion: single commit handles both mechanical migration (13 tests + 2 bench-alloc.rkt sites) AND ε2 retirement (16 bench-ppn-track4c.rkt sites with annotations). The two operations share the trigger event (`prop-net-hot-fuel` field retirement at 1C-iv).
+
+---
+
+**§10 doc cleanup applied (D-1B-iii-4 carryover, per Q-1C-δ resolution)**:
+
+Mechanical sed-replace + targeted edits applied in D.4 sections (D.3 historical sections RETIRED-PER-D.4-CANONICAL + §9.2.0.7 rename-history preserved unchanged):
+
+| Pattern | Replacement | Sections affected |
+|---|---|---|
+| `fuel-cost-cell-id` | `fuel-cell-id` | §1.2, §9.6, §10.0, §10.2, §10.3, §10.3.A, §10.4, §10.6 |
+| `fuel-cost-cell` (descriptive) | `fuel-cell` | §9.2.0, §10.1, §10.2 |
+| `(+ current n)` (wrong direction) | `(- current n)` (Option A: remaining-fuel decrement) | §10.2, §10.3.A Variant A pseudocode |
+| `(+ (net-cell-read ...) n)` (wrong direction) | `(- (net-cell-read ...) n)` | §10.2, §10.3.A |
+| `cost=...` display field | `remaining=...` display field | §10.3 pretty-print example |
+| `current-fuel-cost / new-cost / local-fuel-cost` (cost framing) | `current-remaining / new-remaining / local-remaining-fuel` | §10.3.A Variant B pseudocode |
+
+Remaining references to `fuel-cost-cell` in D.4 sections are intentional preservation (rename history at §9.2.0.7 + cleanup task description at §10.0).
+
+**A baseline capture strategy (§13.7 1C-i row)**:
+
+Decision: rely on existing Pre-0 baseline data + §13.6.A spike measurements rather than introduce new per-entry-point microbench. Cross-references:
+
+- **A baseline (current struct-copy)**: Pre-0 M7.1/M7.2/M7.3 = 24 ns/call (`tropical-pre0-baseline-2026-04-26.txt`); §13.6.A spike B.M7.2 nested struct-copy = 5.7 ns/call (closer to per-entry-point reality)
+- **B reference (D.4 per-fire cell-write; NOT implemented)**: §13.6 spike W1+ = 6.4 ns/call
+- **C target (Option 13 deferred-write; production)**: §13.6.A spike Variant B amortized = 2.16 ns/cycle at N=100; Variant A amortized = 0.06 ns/cycle at N=100
+
+1C-vi A/B/C comparison report: use these reference numbers + run existing CW3 measurement at production scale to confirm C achieves target. No new microbench needed for A baseline at 1C-i.
+
+**Drift risks named (1C-i specific)**:
+
+- D-1C-i-1: scheduler entry point line numbers may drift further before 1C-ii implementation; 1C-ii-a + 1C-ii-b mini-audits re-verify line numbers before edit
+- D-1C-i-2: typing-propagators.rkt:2269 line number may drift; 1C-iv mini-audit re-verifies before migration
+- D-1C-i-3: `prop-net-hot-fuel` accessor retirement may have hidden callers not caught by grep; 1C-iv full-suite GREEN catches any orphan references
+
+---
+
+**Next sub-phase: 1C-ii-a (Variant A migration)**
+
+Per Q-1C-α α2 (per-variant split). 1C-ii-a is the production hot path: replace line 2606's `[fuel (- (prop-network-fuel net) n)]` in BSP Tier 2 snapshot construction with a `net-cell-write` to fuel-cell-id, BEFORE workers spin up. Cost target ~0.06 ns/cycle amortized at N=100 per §13.6.A spike. Targeted tests: test-propagator + test-tropical-fuel + verify Tier 1 fast path unchanged (β1).
+
+Estimated scope: ~5-10 LoC + 1-2 new test cases. Architecturally significant (first production deployment of cell as live state); structurally tiny.
+
+---
+
 ### §10.1 Scope and rationale (D.4)
 
-**Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cost-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
+**Phase 1C is the direct migration phase**: replaces the imperative `(fuel 1000000)` decrementing counter pattern with on-network fuel-cell semantics via the specialized cell type framework (§4.6). The cell IS the live state. The struct-field `prop-net-hot-fuel` and macro `prop-network-fuel` RETIRE per D.1 §10.3 original framing.
 
 **Architectural commitments** (validated by §13.6 spike):
 - **The cell IS the live state** — no off-network struct-field carve-out; no staleness contract
@@ -1751,52 +1879,50 @@ The D.3 hybrid pivot's empirical motivation (R-19 extrapolation: "full cell-migr
 
 Under D.4 canonical, ALL 17 production refs from Q-Audit-1 migrate to cell-API:
 
-**Allocation in `make-prop-network`**:
+**Allocation in `make-prop-network`** (per landed 1B-iv implementation; Option A remaining-fuel semantic per Q-1B-iii-α):
 ```racket
 (define (make-prop-network [fuel 1000000])
   ;; ... existing allocations (cell-ids 0-10) ...
 
-  ;; Phase 1C — canonical tropical fuel cells via §4.6 specialized framework
-  ;; The cell registration declares :tier 'hot + :storage 'monotone-counter
-  ;; + :fires-on 'threshold-crossing + :on-write-check; cell mechanism dispatches.
-  (define-values (net1 fuel-cost-cid)
-    (net-register-specialized-cell net0
-      #:domain 'tropical-fuel
-      #:initial-value 0
+  ;; Phase 1B-iv (shadow) → Phase 1C (production): canonical fuel cells
+  ;; via §4.6 specialized framework. The cell registration declares
+  ;; :tier 'hot + :storage 'monotone-counter + :fires-on 'threshold-crossing
+  ;; + :on-write-check; cell mechanism dispatches.
+  (define-values (net1 fuel-cid)
+    (net-register-specialized-cell net0 fuel tropical-fuel-merge-for-cell
       #:tier 'hot
       #:storage 'monotone-counter
       #:fires-on 'threshold-crossing
-      #:on-write-check (lambda (new-cost net)
-                         (>= new-cost (net-cell-read net fuel-budget-cell-id)))))
-  ;; (verify cell-id allocated as 11 — well-known position per §4.3)
+      #:on-write-check (lambda (old new net) (<= new 0))   ; Option A: exhausted at zero
+      #:domain 'tropical-fuel))
+  ;; (verify cell-id allocated as 11 — well-known position per §4.3; D-1B-iv-6 assertion)
 
-  (define-values (net2 budget-cid)
-    (net-register-specialized-cell net1
-      #:domain 'tropical-fuel-budget
-      #:initial-value fuel
-      #:tier 'cold       ; written once at allocation; rarely-read otherwise
+  (define-values (net2 fuel-budget-cid)
+    (net-register-specialized-cell net1 fuel tropical-fuel-merge-for-cell
+      #:tier 'cold
       #:storage 'general
-      #:fires-on 'any-change))
+      #:fires-on 'any-change
+      #:domain 'tropical-fuel))
   ;; (verify cell-id allocated as 12)
 
   ;; NO threshold propagator install — the on-write check is at the cell layer.
-  ;; NO struct-field 'fuel' in prop-net-hot — cell IS the live state.
+  ;; Phase 1C: NO struct-field 'fuel' in prop-net-hot — cell IS the live state.
   ;; ...
 )
 ```
 
-**Export well-known cell-ids**: `fuel-cost-cell-id = 11`, `fuel-budget-cell-id = 12` per §4.3.
+**Export well-known cell-ids**: `fuel-cell-id = 11`, `fuel-budget-cell-id = 12` per §4.3 (renamed at 1B-iv per Q-1B-iv-β B2; cells track REMAINING under Option A).
 
 **Production scope under D.4 (FULL migration)**:
-- **Decrement sites** (4): MIGRATE — replace `(struct-copy prop-net-hot ... [fuel (- ... n)])` with `(net-cell-write net fuel-cost-cell-id (+ (net-cell-read net fuel-cost-cell-id) n))` (or the equivalent specialized cell-API surface)
-- **Check sites** (11): MIGRATE — replace `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)` (the on-write predicate writes contradiction when cost crosses budget; check sites just observe contradiction)
-- **Read-as-value sites** (3): MIGRATE to `(net-cell-read net fuel-cost-cell-id)` (architecturally-consistent; no staleness concern under D.4)
+- **Decrement sites** (4): MIGRATE — replace `(struct-copy prop-net-hot ... [fuel (- ... n)])` with `(net-cell-write net fuel-cell-id (- (net-cell-read net fuel-cell-id) n))` (Option A: decrement remaining-fuel) or the equivalent specialized cell-API surface
+- **Check sites** (11): MIGRATE — replace `(<= (prop-network-fuel net) 0)` with `(net-contradiction? net 'tropical-fuel-exhausted)` (the on-write predicate writes contradiction when remaining hits zero; check sites just observe contradiction)
+- **Read-as-value sites** (3): MIGRATE to `(net-cell-read net fuel-cell-id)` (architecturally-consistent; no staleness concern under D.4)
 - **Macro `prop-network-fuel`**: RETIRE (no struct-field accessor needed)
 - **Struct field `prop-net-hot-fuel`**: RETIRE (no fuel field in prop-net-hot)
-- **typing-propagators saved-fuel** (1): MIGRATE to cell-mediated semantics (cell snapshot via worldview-bitmask, NOT struct-copy)
+- **typing-propagators saved-fuel** (1): MIGRATE to cell-API (fuel-budget-substitution-for-bounded-typing-run per 1C-i Q-1C-β/δ audit — NOT speculation rollback as Q-1C-1 originally framed); straightforward `net-cell-read` + `net-cell-write` substitute + restore
 - **pretty-print** (1): UPDATE to display cell value + budget
-- **Test sites** (13): MIGRATE — replace `(prop-network-fuel result)` assertions with `(net-cell-read result fuel-cost-cell-id)` (mechanical batch via sed-style discipline per workflow.md)
-- **Bench sites** (2): MIGRATE — `bench-alloc.rkt` now measures cell-write cost; this is the post-impl A/B baseline
+- **Test sites** (13): MIGRATE — replace `(prop-network-fuel result)` assertions with `(net-cell-read result fuel-cell-id)` (mechanical batch via sed-style discipline per workflow.md)
+- **Bench sites** (18 — REVISED per 1C-i Q-1C-ε): `bench-alloc.rkt` 2 sites MIGRATE to cell-API; `bench-ppn-track4c.rkt` 16 sites RETIRE-PER-D.4-CANONICAL with annotations (Pre-0 historical benchmarks; baseline data preserved in `tropical-pre0-baseline-2026-04-26.txt`)
 
 **Total migration scope**: ~150-250 LoC across propagator.rkt + typing-propagators.rkt + pretty-print.rkt + 13 test files + 2 bench files (per D.1 §10.4 original framing).
 
@@ -1823,23 +1949,23 @@ Under D.4 canonical, ALL 17 production refs from Q-Audit-1 migrate to cell-API:
 
 The pattern is uniform: the on-write predicate handles the exhaustion semantics structurally; check sites observe the result. **No imperative dispatch** — the exhaustion decision emerges from cell state, not from per-decrement-site control flow.
 
-**Read-as-value sites** (3 sites — propagator.rkt:1824, 1872, 2875):
+**Read-as-value sites** (3 sites — propagator.rkt:2041, 2089, 3100; line drift from original audit):
 
 ```racket
-;; D.4: direct cell-read
+;; D.4: direct cell-read (Option A: cell stores REMAINING fuel directly)
 (define remaining-fuel
-  (box (- (net-cell-read net fuel-budget-cell-id)
-          (net-cell-read net fuel-cost-cell-id))))
+  (box (net-cell-read net fuel-cell-id)))
 ```
 
-**typing-propagators.rkt:2269** (saved-fuel rollback):
+**typing-propagators.rkt:2269** (fuel-budget-substitution-for-bounded-typing-run per 1C-i Q-1C-β/δ audit; NOT speculation rollback as Q-1C-1 originally framed):
 
 ```racket
-;; D.4: cell snapshot via worldview-bitmask (NOT struct-copy of fuel field)
-;; The cell mechanism's speculation-fallback path uses tagged-cell-value;
-;; rollback narrows worldview, restoring pre-speculation cell value.
-;; No saved-fuel value capture — the network IS the snapshot.
-;; (existing speculation rollback mechanism handles this uniformly)
+;; D.4: direct cell-API substitute + restore (straightforward; no helper needed).
+;; Save current fuel, substitute with TYPING-FUEL-LIMIT for bounded run, restore.
+(define saved-fuel (net-cell-read net2w fuel-cell-id))
+(define net2-limited (net-cell-write net2w fuel-cell-id TYPING-FUEL-LIMIT))
+(define net3 (run-to-quiescence-bsp net2-limited))
+(define net3-restored (net-cell-write net3 fuel-cell-id saved-fuel))
 ```
 
 **pretty-print.rkt:463** (display):
@@ -1847,36 +1973,33 @@ The pattern is uniform: the on-write predicate handles the exhaustion semantics 
 ```racket
 ;; D.4
 [(expr-prop-network v)
- (format "#<prop-network cost=~a budget=~a>"
-         (net-cell-read v fuel-cost-cell-id)
+ (format "#<prop-network remaining=~a budget=~a>"
+         (net-cell-read v fuel-cell-id)
          (net-cell-read v fuel-budget-cell-id))]
 ```
 
-**Macro `prop-network-fuel` (propagator.rkt:399)** — RETIRE:
+**Macro `prop-network-fuel` (propagator.rkt:445)** — RETIRE:
 
 ```racket
-;; D.4: macro RETIRES; callers use (net-cell-read net fuel-cost-cell-id) or
-;; (- (net-cell-read net fuel-budget-cell-id) (net-cell-read net fuel-cost-cell-id))
-;; for remaining-fuel calculations.
+;; D.4: macro RETIRES; callers use (net-cell-read net fuel-cell-id)
+;; directly (Option A: cell stores REMAINING fuel; matches macro's prior semantic).
 ```
 
 **Struct field `prop-net-hot-fuel` (propagator.rkt prop-net-hot struct)** — RETIRE:
 
 ```racket
 ;; D.4: struct field RETIRES; prop-net-hot no longer has 'fuel' field.
-;; Cell-id 11 (fuel-cost-cell) IS the live state.
+;; Cell-id 11 (fuel-cell) IS the live state.
 ```
 
-**Test migrations** (13 sites — batch mechanical):
+**Test migrations** (13 sites — batch mechanical per Q-1C-δ δ1):
 
 ```racket
 ;; BEFORE (D.3 / pre-D.4)
 (check-equal? (prop-network-fuel result) expected-fuel)
 
-;; AFTER (D.4)
-(check-equal? (- (net-cell-read result fuel-budget-cell-id)
-                 (net-cell-read result fuel-cost-cell-id))
-              expected-fuel)
+;; AFTER (D.4; Option A: cell directly stores remaining-fuel)
+(check-equal? (net-cell-read result fuel-cell-id) expected-fuel)
 ```
 
 Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" discipline — verified on 1 file copy before batch.
@@ -1909,7 +2032,8 @@ Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" d
 **Variant A — Round-entry batch decrement (parallel BSP main loop; production default)**:
 
 ```racket
-;; Inside the BSP outer loop (run-to-quiescence-bsp at line 2376+):
+;; Inside the BSP outer loop (run-to-quiescence-bsp Tier 2 at line 2606 equivalent;
+;; per 1C-i audit re-verification — line drift since 2026-05-15 audit):
 (define raw-pids (dedup-pids (prop-network-worklist net)))
 (define pids (filter (lambda (pid) (not (hash-has-key? fired-set pid))) raw-pids))
 (define n (length pids))
@@ -1917,44 +2041,55 @@ Use 2-pass sed pattern per workflow.md "Sed-Deletion of Parameterize Bindings" d
 ;; Round-entry batch decrement: ONE cell-write per BSP round, on main thread,
 ;; BEFORE parallel workers spin up. Workers see the post-decrement value in the
 ;; snapshot but don't write fuel.
-(define new-fuel-cost (+ (net-cell-read net fuel-cost-cell-id) n))
+;; Option A: cell stores REMAINING fuel; decrement by n.
+(define new-fuel (- (net-cell-read net fuel-cell-id) n))
 (define snapshot
   (struct-copy prop-network net
     [hot (struct-copy prop-net-hot (prop-network-hot net)
-           [worklist '()])]))
-;; D.4: net-cell-write replaces the old [fuel (- ...)] field in struct-copy
+           [worklist '()])]
+    [warm (struct-copy prop-net-warm (prop-network-warm net)
+            [under-speculation?                            ; D.4 1B-ii cache refresh
+             (not (zero? (current-worldview-bitmask)))])]))
+;; D.4: net-cell-write replaces the old [fuel (- (prop-network-fuel net) n)] field in struct-copy
 (define snapshot+fuel
-  (net-cell-write snapshot fuel-cost-cell-id new-fuel-cost))
-;; The cell's on-write predicate runs here; if exhausted, contradiction is
-;; written structurally and worker dispatch is short-circuited.
+  (net-cell-write snapshot fuel-cell-id new-fuel))
+;; The cell's on-write predicate runs here ((<= new 0) per Option A); if exhausted,
+;; contradiction is written structurally and worker dispatch is short-circuited.
 
 ;; Workers fire pids against snapshot+fuel (sequentially per-thread; parallel
-;; across threads). Workers don't touch fuel-cost cell during fire.
+;; across threads). Workers don't touch fuel-cell during fire.
 (define all-writes (executor snapshot+fuel pids))
 ;; ... bulk-merge proceeds as before
 ```
 
+> **Tier 1 fast path (lines 2562-2573) — preserved unchanged per 1C-i Q-1C-β β1**: the BSP Tier 1 path (single-pass flush when no speculation + no NAF + all fire-once empty-inputs propagators) bypasses fuel decrement entirely. Current production semantic preserved under D.4 — no `net-cell-write` to fuel-cell in Tier 1; cell value at end of Tier 1 round = cell value at start.
+
 Cost: ~6 ns per BSP round (one cell-write); amortized over N=100 fires per round = **~0.06 ns/cycle**. The dominant per-fire cost is the propagator-fire itself, NOT the fuel update.
 
-**Variant B — Local-var + cell-write at phase boundaries (sequential schedulers)**:
+**Variant B — Local-var + cell-write at phase boundaries (sequential schedulers; Option A remaining-fuel semantic)**:
 
 ```racket
 ;; At sequential-phase entry (e.g., run-to-quiescence-inner, run-widen-phase):
-(define local-fuel-cost (box (net-cell-read net fuel-cost-cell-id)))
-(define budget (net-cell-read net fuel-budget-cell-id))
+;; Use the init-fuel-local-var! helper (per Q-1C-γ γ1+function).
+(define local-remaining-fuel (init-fuel-local-var! net))   ; reads cell into box
 
 ;; Per fire (inline, in the sequential loop body):
-(define new-cost (+ (unbox local-fuel-cost) 1))
-(set-box! local-fuel-cost new-cost)
-(when (>= new-cost budget)
+(define new-remaining (sub1 (unbox local-remaining-fuel)))
+(set-box! local-remaining-fuel new-remaining)
+(when (<= new-remaining 0)
   ;; Flush + contradict (rare; on exhaustion only)
-  (set! net (net-cell-write net fuel-cost-cell-id new-cost))
+  (set! net (flush-fuel-local-var! net local-remaining-fuel))
   ;; The on-write check at the cell layer routes contradiction structurally
+  ;; via the (<= new 0) predicate
   (return-from-sequential-phase net))
 
 ;; At sequential-phase exit (no exhaustion):
-(set! net (net-cell-write net fuel-cost-cell-id (unbox local-fuel-cost)))
+(set! net (flush-fuel-local-var! net local-remaining-fuel))
 ```
+
+For entry points #1 + #2 (`run-to-quiescence-inner` + `/traced` per 1C-i Q-1C-α finding): the box-mutation pattern is ALREADY pre-existing in production at lines 2041 + 2089. Variant B migration for these is just redirecting init source (`(box (prop-network-fuel net))` → `init-fuel-local-var!`) + finalize sink (struct-field write → `flush-fuel-local-var!`); the box + per-fire decrement + check inside the loop are already correct. Simpler ~5-10 LoC redirect per site.
+
+For entry points #4 + #5 (`run-widen-phase` + `run-narrow-phase`): the box pattern is INTRODUCED via the helpers; ~15-20 LoC per site (struct-copy `[fuel (sub1 ...)]` replaced with box mutation + per-fire decrement + finalize flush via helpers).
 
 Cost: ~2.16 ns/cycle amortized (per §13.6.A spike); applies to sequential schedulers (#1, #2, #4, #5).
 
@@ -2038,7 +2173,7 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
     - #4 `run-widen-phase` (2989+): Variant B (sequential; struct-copy → local-var pattern)
     - #5 `run-narrow-phase` (3042+): Variant B (sequential; struct-copy → local-var pattern)
   - **Per §13.7 measurement plan: capture A baseline (current implementation per-entry-point) microbench data for A/B/C comparison at 1C-vi close**
-  - **§10 doc cleanup (D-1B-iii-4 carryover; per Q-1C-δ resolution)**: mechanical sed-replace stale `fuel-cost-cell` references in §10 historical sections → `fuel-cell`; verify wrong-direction `(+ current n)` patterns are corrected to `(- current n)` under Option A remaining-fuel semantic. Needed BEFORE 1C-v mechanical batch so migration template is well-defined.
+  - **§10 doc cleanup (D-1B-iii-4 carryover; per Q-1C-δ resolution)**: ✅ APPLIED at 1C-i (this commit) — mechanical sed-replace of stale `fuel-cost-cell-id` → `fuel-cell-id` references in D.4 sections (§1.2, §9.2.0, §9.6, §10.0/§10.1/§10.2/§10.3/§10.3.A/§10.4/§10.6); wrong-direction `(+ current n)` patterns corrected to `(- current n)` under Option A remaining-fuel semantic (§10.2 + §10.3.A Variant A/B pseudocode). D.3 historical sections (§10.1.A, §10.A, §10.B RETIRED-PER-D.4-CANONICAL) preserved unchanged; §9.2.0.7 (describes rename history) also preserved.
   - **Q-1C-β audit (per resolution β1)**: audit `typing-propagators.rkt:2269` saved-fuel rollback semantics with code in hand. Lean: existing speculation-rollback inherits cell value at fork boundary; no explicit save needed. If audit surfaces architectural issue, whole-phase mini-design re-opens.
   - **Q-1C-δ sub-question audit**: scan test sites for `(prop-net-hot-fuel ...)` assertions (would need DELETION, not migration). Lean: none exist.
 
@@ -2052,12 +2187,14 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
 
 - **1C-ii-b** (NEW per Q-1C-α split) — Migrate Variant B: sequential schedulers (entry points #1, #2, #4, #5):
   - Implement `flush-fuel-local-var!` + `init-fuel-local-var!` helper functions (per Q-1C-γ resolution γ1+function); ~5-10 LoC each in propagator.rkt or a bsp-helpers.rkt module
+  - **Per 1C-i α finding**: entry points #1 + #2 ALREADY have partial Variant B (box-mutation pattern + per-fire decrement + finalize flush; flushes to struct-field currently). Migration simplifies to source/sink redirect (~5-10 LoC each).
+  - **Per 1C-i α finding**: entry points #4 + #5 need full Variant B introduction (no box pattern currently; struct-copy `[fuel (sub1 ...)]` per-fire). Helper introduces the pattern (~15-20 LoC each).
   - At each sequential phase entry: `init-fuel-local-var!` reads fuel-cell-id into local-var box
-  - Per fire (inline in loop body): decrement local-var + threshold check (`(<= remaining 0)`)
+  - Per fire (inline in loop body): decrement local-var + threshold check (`(<= remaining 0)` — Option A)
   - At each sequential phase exit: `flush-fuel-local-var!` flushes local-var → cell-write
   - On exhaustion (rare): immediate flush + contradiction-write (via cell-mechanism on-write check)
   - Cost target: ~2.16 ns/cycle amortized (per §13.6.A spike + §13.7 gate)
-  - Atomic commit; 4 entry points share the helper pattern
+  - Atomic commit; 4 entry points share the helper pattern; total ~40-60 LoC
   - **Per §13.7 1C-ii row**: re-microbench Variant B achieves ~2.16 ns/cycle amortized at production scale
   - Targeted tests: test-widen-narrow + test-propagator (sequential paths)
 
@@ -2078,9 +2215,11 @@ We can go FURTHER: macro-expand the deferred-write pattern at the 4 BSP fire sit
   - Verify no orphan callers (grep verification)
   - ✅ **Option 14 (macro specialization) RESOLVED via §13.6.A spike (commit `77daf81c`): SKIP** — measured savings 0.02 ns/cycle, far below 1 ns threshold. Function-call pattern is sufficient.
 
-- **1C-v** — Migrate 13 test sites + 2 bench sites:
+- **1C-v** — Migrate 13 test sites + 2 bench-alloc sites + RETIRE 16 bench-ppn-track4c historical sites (per 1C-i Q-1C-ε ε2):
   - Batch mechanical migration via 2-pass sed pattern per workflow.md (single-file verification before batch)
-  - Tests' `(prop-network-fuel result)` assertions become `(- (net-cell-read result fuel-budget-cell-id) (net-cell-read result fuel-cost-cell-id))` for remaining-fuel, OR direct cell-read for cost-tracking
+  - Tests' `(prop-network-fuel result)` assertions become `(net-cell-read result fuel-cell-id)` directly (Option A: cell stores REMAINING fuel)
+  - bench-alloc.rkt 2 sites: same mechanical pattern
+  - **bench-ppn-track4c.rkt 16 sites (per 1C-i Q-1C-ε)**: RETIRE-PER-D.4-CANONICAL with annotations + comment-out — these are Pre-0 historical M7/A7 microbench sections that specifically measured the struct-copy decrement cost. Under D.4 retirement of `prop-net-hot-fuel` field, the accessor goes away. Baseline data preserved in `tropical-pre0-baseline-2026-04-26.txt`; new post-D.4 benches (CM1-CM5, CW1-CW3) measure the new pattern.
   - Full suite verification post-batch
   - Post-impl bench captures the D.4 numbers for A/B/C comparison vs Pre-0 baseline (per §13.7)
 
@@ -2118,7 +2257,7 @@ Risks named at design time; verified at implementation:
 - **Parity** (per §15 — tropical-fuel-counter-parity axis):
   - For representative workloads, OLD counter and NEW cell produce IDENTICAL exhaustion semantics (cost == budget triggers contradiction in both cases)
   - The cell value AT exhaustion equals the budget (the on-write predicate fires when `(>= new-cost budget)`)
-  - V-tier post-impl validates: existing tests' `(prop-network-fuel result)` assertions migrate to `(net-cell-read result fuel-cost-cell-id)` and PASS with equivalent semantics
+  - V-tier post-impl validates: existing tests' `(prop-network-fuel result)` assertions migrate to `(net-cell-read result fuel-cell-id)` (Option A) and PASS with equivalent semantics
 
 ### §10.7 Open questions (D.4)
 
