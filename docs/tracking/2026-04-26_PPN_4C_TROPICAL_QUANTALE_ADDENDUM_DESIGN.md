@@ -251,7 +251,7 @@ This addendum ships:
 - `qtt.rkt:1773-1839` — surface atms type rules
 - `typing-core.rkt` — surface atms type-check
 - Dependency cleanup per D.3 §7.5.7: `typing-errors.rkt`, `substitution.rkt`, `qtt.rkt`, `trait-resolution.rkt`, `capability-inference.rkt`, `union-types.rkt`
-- Test deletions: `tests/test-atms.rkt`, `tests/test-atms-integration.rkt`, `tests/test-atms-types.rkt` (full surface AST exercise — coverage replaced by solver-state-driven tests if any gap surfaces)
+- Test deletions: `tests/test-atms-integration.rkt`, `tests/test-atms-types.rkt` (full surface AST exercise — coverage replaced by solver-state-driven tests if any gap surfaces). **Note**: test-atms.rkt previously listed here is CORRECTED to §7 (1A-iii-b scope) per §7.7 F10 audit (test-atms.rkt tests INTERNAL deprecated API, not surface AST); §7.2 now lists it as DELETE under 1A-iii-b per §7.7 γ1 resolution.
 
 **Phase 1B — Tropical fuel primitive + SRE registration** (~150-250 LoC new module + tests)
 - New module `racket/prologos/tropical-fuel.rkt`: cell factory + budget cell + threshold propagator + residuation operator
@@ -388,7 +388,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **Stage 3 D.4 scaffolding** | §4.6 specialized cell framework NTT + §13.6 spike plan + supersession notes | ✅ | `45181c07` |
 | **§13.6 Pre-0 spike** | Falsification test for D.4: W1+W2+W3+W4+W5 measurements | ✅ ✓ PASS | `7b681b9e` (6.4 ns/call W1+; 0 major-GC W3; 0.8 ns W4; ~4× under all targets) |
 | **Stage 3 D.4 CANONICAL** | Full §9 + §10 + §15 revisions; D.3 historical sections RETIRED-PER-D.4-CANONICAL | 🔄 | THIS commit + next |
-| **1A-iii-b** | Tier 2 deprecated ATMS internal API retirement | ⬜ | Per §7 |
+| **1A-iii-b mini-design + mini-audit** | α1+α3/β1/γ1/δ-audit-resolved/ε1 resolved (12 mini-audit findings F1-F12; 5 drift risks D-1A-iii-b-1/2/3/4/5; 3 design doc corrections at §3 + §7.2 + §8.2; 3 codification candidates surfaced); inverted §3 ordering claim (1A-iii-c MUST precede 1A-iii-b); single atomic commit ε1 | ✅ | §7.7 (2026-05-17) |
+| **1A-iii-b (atomic retirement; BLOCKED on 1A-iii-c)** | 13 deprecated functions + atms struct + atms-believed + atms-empty + provides cleanup + test-atms.rkt DELETE + 2 bench retirements (ε2-style stubs) | ⬜ | Per §7 + §7.7 (BLOCKED on 1A-iii-c per α1+α3 ordering) |
 | **1A-iii-c** | Tier 3 surface ATMS AST 14-file pipeline retirement | ⬜ | Per §8 |
 | **1B-i** | Mini-audit + cell-meta storage gate (Q-1B-8 A2 validation; ≤ 5 ns) | ✅ ✓ PASS | CM2.2 = 4.06 ns/call; §9.2.0; surfaced 1B-ii param-ref finding |
 | **1B-ii** | Specialized cell framework module + net-cell-write dispatch + prop-net-warm under-speculation? field | ✅ ✓ PASS | CW3 per-cycle amortized = 2.98 ns/cycle (§13.7 gate ≤ 3 ns; boundary); 8257 tests / 114.5s / 0 failures |
@@ -415,7 +416,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V** | Vision Alignment Gate Phase 1 atomic close (1A + 1B + 1C) | ⬜ | Per §11 |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
-- 1A-iii-b and 1A-iii-c can land in any order or in parallel (independent of tropical work)
+- **1A-iii-c MUST land before 1A-iii-b** (per §7.7 α audit finding F4: production callers of deprecated functions in parser.rkt + surface-syntax.rkt — surface AST scope — only stop calling once 1A-iii-c retires the surface forms; attempting 1A-iii-b first breaks compile). Original "any order or in parallel" claim CORRECTED per F4 audit (2026-05-17).
 - 1B must complete before 1C (1C consumes 1B's primitive)
 - 1V closes everything atomically
 
@@ -853,7 +854,7 @@ Retire the deprecated `atms.rkt` internal API (13 functions + struct + atms-beli
 - `stratified-eval.rkt:206`: `[(atms) #t]` symbol case — verify no longer reachable post-Tier-2 retirement; remove or migrate
 
 **Tests**:
-- `tests/test-atms.rkt` — pre-migration audit: which tests verify deprecated APIs vs modern solver-state? Decision: migrate tests to use `solver-state` API where coverage gap exists; delete tests that verify only-deprecated behavior
+- `tests/test-atms.rkt` — **DELETE entirely** (per §7.7 γ1 resolution; audit-grounded; coverage preserved across 4 modern files — test-solver-context.rkt + test-elab-speculation.rkt + test-infra-cell-atms-01.rkt + test-capability-05b.rkt; ~1575 lines / ~88 cases). Original "pre-migration audit + migrate-or-delete" framing superseded by §7.7 audit which found no salvage candidates.
 
 ### §7.3 Sub-phase plan
 
@@ -878,8 +879,142 @@ Risks named at design time; verified at implementation:
 
 ### §7.6 Open questions (deferred to per-phase mini-design+audit per user's workflow)
 
-- Q-1A-iii-b-1: Test migration vs deletion criteria — needs audit of test coverage gap
-- Q-1A-iii-b-2: pretty-print.rkt `atms?` removal — does this surface dead code or active state we should preserve via solver-state?
+- Q-1A-iii-b-1: Test migration vs deletion criteria — needs audit of test coverage gap ✅ **RESOLVED at §7.7 (γ1: DELETE; coverage preserved across 4 modern files)**
+- Q-1A-iii-b-2: pretty-print.rkt `atms?` removal — does this surface dead code or active state we should preserve via solver-state? ✅ **RESOLVED by §7.7 mini-audit F7 (reference is inside expr-atms-store pretty-print case; retires naturally with 1A-iii-c; no 1A-iii-b action needed)**
+
+### §7.7 1A-iii-b Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: 1A-iii-b pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together (audit-grounded design questions; questions clarified what audit needed to verify). **Five resolutions** (α1+α3 / β1 / γ1 / δ-audit-resolved / ε1) + **three design doc corrections** (§3 ordering claim; §7.2 add test-atms.rkt; §8.2 remove test-atms.rkt) + **3 codification candidates surfaced**. Per ε1 atomicity, **1A-iii-b lands as a SINGLE atomic commit** AFTER 1A-iii-c lands first (per α resolution inverting §3's "any order" claim).
+
+**Per Stage 4 Per-Phase Protocol steps 1+2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §10.0.4/§10.0.5/§10.0.6/§10.0.7 pattern from Phase 1C).
+
+**Mini-audit findings (concrete grounding at HEAD `ee5010c1`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | atms.rkt structure verified | 13 deprecated functions at lines 213-454; atms struct at 159; atms-empty at 198; atms-believed referenced 6× internally only |
+| **F2** | Provides block (lines 28-75) | All 13 deprecated functions + struct-out atms + atms-empty still exported |
+| **F3 ⚠️** | **Production callers of deprecated functions** | EXCLUSIVELY in parser.rkt + surface-syntax.rkt (5 functions; surface ATMS AST scope = 1A-iii-c) + 2 bench files + 1 test file (test-atms-integration.rkt; 1A-iii-c scope per §8.2) |
+| **F4 ⚠️⚠️** | **§3 Progress Tracker ordering claim INVERTED** | Original: "1A-iii-b and 1A-iii-c can land in any order or in parallel" — **FALSE per audit**. parser.rkt + surface-syntax.rkt only stop calling deprecated functions once surface AST retires. **1A-iii-c MUST land BEFORE 1A-iii-b** (or together as a single supercommit). Design doc correction below. |
+| **F5** | atms-empty external callers (8 calls) | Only in 2 bench files: bench-bsp-le-track2.rkt (4 calls) + bench-ppn-track0.rkt (4 calls). No production callers. |
+| **F6** | atms-believed external callers | **ZERO** outside atms.rkt — retires cleanly with the struct |
+| **F7 ✅** | atms? external callers (1) | Only at `pretty-print.rkt:502` within `expr-atms-store v` pretty-print case — **surface AST scope; retires naturally with 1A-iii-c**. **Resolves Q-1A-iii-b-2 directly: no 1A-iii-b action needed.** |
+| **F8** | (struct-out atms) external callers | **ZERO** for the atms struct. The `(struct-out atms-event*)` in propagator.rkt is a DIFFERENT struct family (trace events; per §8.6 Q-1A-iii-c-1 preserved). |
+| **F9** | stratified-eval.rkt:206 drift | Per §7.2 was "[(atms) #t] symbol case". Audit: line is now strategy-keyword dispatch `[(atms) #t]` for `'atms` strategy selection — **UNRELATED to deprecated API; preserve unchanged**. |
+| **F10** | test-atms.rkt audit | **469 lines; 42 test cases**; THE canonical test file for the deprecated API. Tests atms-empty, atms-assume, atms-retract, atms-add-nogood, atms-consistent?, atms-amb, atms-read-cell, atms-write-cell, atms-solve-all, explanation/diagnosis, persistence, performance. **Note**: §8.2 incorrectly listed test-atms.rkt under 1A-iii-c deletion scope — per audit it tests INTERNAL API and belongs to 1A-iii-b scope. §8.2 correction below. |
+| **F11** | Bench file scope NOT mentioned in §7.2 | bench-bsp-le-track2.rkt + bench-ppn-track0.rkt use deprecated API extensively (measured legacy ATMS internal patterns); these benches break compile if functions retire without handling |
+| **F12** | Modern test coverage audit | 4 modern parity test files preserve behavioral coverage AFTER test-atms.rkt deletion: test-solver-context.rkt (392 lines / 25 cases; architecture) + test-elab-speculation.rkt (388 lines / 18 cases) + test-infra-cell-atms-01.rkt (273 lines / 21 cases) + test-capability-05b.rkt (522 lines / 24 cases) = **1575 lines / ~88 cases preserved**. Coverage gap analysis (test-atms.rkt's 42 cases mapped to modern coverage): all behavioral categories covered EXCEPT explanation/diagnosis (11 cases; test functions with ZERO external callers — retiring infrastructure) + persistence properties (2 cases; pre-PUnify semantics; modern API uses different persistence model) + performance (1 case; superseded by modern bench files). **No salvage candidates**. |
+
+**Five architectural questions resolved (Q-1A-iii-b-α through Q-1A-iii-b-ε)**:
+
+**Q-1A-iii-b-α (LOAD-BEARING) — Coordination with 1A-iii-c (per F3+F4 inversion) — RESOLVED α1+α3**
+
+**1A-iii-c MUST land BEFORE 1A-iii-b** as separate sub-phases (not parallel; not combined supercommit). §3 Progress Tracker note + ordering claim get corrected (see "Design doc corrections" below).
+
+Rationale:
+- α1 (separate sub-phases; sequential ordering): honors per-phase mini-design+audit discipline; each gets its own focused conversation; cleaner bisectability
+- α2 (combined supercommit): rejected — would be ~1000-1700 LoC across many files; harder to bisect; mixes two distinct retirement concerns (surface AST vs internal API)
+- α3 (correct design doc claim): essential regardless — the original "any order or in parallel" was wrong per F4
+
+**Q-1A-iii-b-β — Bench file fate (NEW from F11) — RESOLVED β1 (retire with ε2-style annotations)**
+
+Retire BOTH bench-bsp-le-track2.rkt + bench-ppn-track0.rkt with retirement stubs (~30-50 LoC each) pointing to current measurement homes + git history reference at `ee5010c1`. Matches 1C-iv-a's ε2 precedent for `bench-ppn-track4c.rkt`.
+
+Rationale:
+- BSP-LE Track 2 + PPN Track 0 both COMPLETE; benches measured legacy ATMS internal patterns from pre-solver-context era; obsolete-pattern-only
+- "Let pain drive design" + "Completeness over deferral": keeping legacy benches is debt without value
+- Modern tracks already have current benches in modern API; duplication risk if migrated
+- β2 (migrate) would be ~50-100 LoC per bench without consumer asking for measurements
+- β3 (selective) adds decision overhead without clear win — both benches share fate
+
+**Q-1A-iii-b-γ (CARRIED from §7.6 Q-1A-iii-b-1) — test-atms.rkt fate — RESOLVED γ1 (DELETE entirely)**
+
+DELETE tests/test-atms.rkt entirely (469 lines / 42 cases of deprecated API).
+
+Rationale (per F12 audit):
+- Behavioral parity coverage PRESERVED across 4 modern files (~1575 lines / ~88 cases)
+- Explanation/diagnosis test cases (11) test functions with ZERO external callers — pure retiring infrastructure
+- Persistence test cases (2) assume pre-PUnify semantics that don't apply to modern API
+- Performance test case (1) superseded by modern bench infrastructure
+- γ2 (migrate) would create duplicate coverage with test-infra-cell-atms-01 + test-elab-speculation + test-solver-context — no new value
+- γ3 (salvage subset) in practice degenerates to γ1 (audit found no unique invariants worth keeping)
+- Matches established retirement patterns (PPN Track 4C / SRE Track 2 / BSP-LE Track 2 all retired test files of deprecated APIs as coverage moved to modern test files)
+
+**Q-1A-iii-b-δ (CARRIED from §7.6 Q-1A-iii-b-2) — pretty-print.rkt:502 `atms?` removal — RESOLVED BY AUDIT F7 (no 1A-iii-b action)**
+
+Per F7: pretty-print.rkt:502 `atms?` reference is INSIDE the `expr-atms-store v` pretty-print case (surface AST scope). It retires naturally with 1A-iii-c. **No 1A-iii-b action needed.** Q-1A-iii-b-2 closes without additional work.
+
+**Q-1A-iii-b-ε — Sub-phase atomicity within 1A-iii-b — RESOLVED ε1 (single atomic commit)**
+
+1A-iii-b lands as a **single atomic commit** covering:
+- 13 deprecated function retirements (atms.rkt:213-454; ~240 LoC)
+- atms struct + atms-believed field retirement (atms.rkt:159+; ~5 LoC)
+- atms-empty constructor retirement (atms.rkt:198-213; ~15 LoC)
+- Provides cleanup (lines 28-75; ~15 LoC)
+- test-atms.rkt DELETION (-469 LoC)
+- bench-bsp-le-track2.rkt ε2-style retirement stub (~-X +50 LoC net)
+- bench-ppn-track0.rkt ε2-style retirement stub (~-X +50 LoC net)
+
+Net: ~300-450 LoC deletion-dominant.
+
+Rationale:
+- Pure DELETION is naturally atomic — nothing "lands then builds on it"
+- Compile dependency forces atomicity: bench files reference retired functions; can't land bench retirements first without function retirements (would be pre-emptive removal of callers) or vice versa (would not compile)
+- Mirrors 1C-iv-b precedent (single atomic retirement commit covering macro + struct field + lockstep retirement + constructor updates + 1 test fix)
+- Scope appropriate for single commit (~300-450 LoC across ~4-5 files; well within bisectable range)
+- Verification is suite-level: full suite GREEN is the obvious gate; no per-step verification needed for pure deletion
+- §7.3's 5 sub-sub-phase plan (i pre-impl audit / ii function retirement / iii internal consumer cleanup / iv test migration-or-deletion / v verification) is MOOT per audit (iii cleanup has nothing to clean up per F7+F9; iv folds into γ1 decision; v is suite gate; effectively 2-3 things bundled atomically)
+- ε2/ε3/ε4 require pre-emptive sequencing or break compile partway through — not honest separable work units
+
+**Pre-condition for 1A-iii-b commit**: 1A-iii-c MUST land first (per Q-1A-iii-b-α α1+α3). 1A-iii-b waits in queue until 1A-iii-c lands; mini-design persistence (this commit) precedes both.
+
+**Drift risks named at design+audit time (D-1A-iii-b-1 through D-1A-iii-b-5)**:
+
+- **D-1A-iii-b-1** (CRITICAL — pre-condition gate): 1A-iii-b commit BLOCKED until 1A-iii-c lands; if attempted earlier, compile breaks (parser.rkt + surface-syntax.rkt reference deprecated functions). Mitigation: explicit pre-condition check at 1A-iii-b implementation opening (verify §3 Progress Tracker shows 1A-iii-c ✅; OR re-grep to verify no production callers remain).
+- **D-1A-iii-b-2**: Hidden callers not caught by audit grep (e.g., `dynamic-require`, `eval`, callback-resolved). Mitigation: re-grep at 1A-iii-b implementation opening (post-1A-iii-c landing); full suite GREEN catches dynamic resolution surprises.
+- **D-1A-iii-b-3**: Modern test coverage gap surfaces during/after 1A-iii-b (test-atms.rkt deletion exposes uncovered behavior). Mitigation: per F12 audit, no salvage candidates identified; if gap surfaces, add targeted test to test-infra-cell-atms-01.rkt OR test-solver-context.rkt (modern API home; not test-atms.rkt revival).
+- **D-1A-iii-b-4**: Bench retirement preserves data references but git history is fragile (commit `ee5010c1` could become hard to find years later). Mitigation: retirement stubs include the commit hash AND link to baseline data files; matches ε2 precedent which has held since 1C-iv-a.
+- **D-1A-iii-b-5**: §3 Progress Tracker ordering correction (α3) might be missed during 1A-iii-b commit if not explicitly tracked. Mitigation: §3 update lands in THIS mini-design persistence commit (this commit), not deferred to 1A-iii-b implementation commit.
+
+**Implementation plan (per ε1 + α-pre-condition)**:
+
+**1A-iii-c lands first** (separate sub-phase; own mini-design+audit conversation).
+
+**1A-iii-b commit** (~300-450 LoC deletion-dominant; estimated 60-90 min):
+
+*Pre-implementation gate*:
+- Verify 1A-iii-c committed + suite GREEN
+- Re-grep deprecated functions for any post-1A-iii-c production callers (expect: only bench-bsp-le-track2.rkt + bench-ppn-track0.rkt; if more, investigate before proceeding)
+
+*Atomic commit contents*:
+1. `racket/prologos/atms.rkt`:
+   - Retire 13 deprecated function definitions (lines 213-454)
+   - Retire atms struct (line 159) + atms-believed field
+   - Retire atms-empty constructor (lines 198-213)
+   - Provides cleanup (remove 13 functions + struct-out atms + atms-empty from lines 28-75)
+2. `racket/prologos/tests/test-atms.rkt`: DELETE entirely (per γ1)
+3. `racket/prologos/benchmarks/micro/bench-bsp-le-track2.rkt`: replace body with ε2-style retirement stub (per β1)
+4. `racket/prologos/benchmarks/micro/bench-ppn-track0.rkt`: replace body with ε2-style retirement stub (per β1)
+
+*Close gate*: full suite GREEN; commit.
+
+**Codification candidate watching list update**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Original design doc's "independence" claims need audit re-verification** (claims about sub-phase ordering, scope membership, etc.) | 2 (1A-iii-b α inverted "any order" claim; 1A-iii-b γ corrected §8.2 test-atms.rkt scope membership) | **NEW watching list** |
+| **Audit grep with proper regex escaping** (early audit missed atms? caller due to `?` regex confusion) | 1 (1A-iii-b grep iteration) | NEW watching list |
+| **Original design's sub-phase plans get pruned by audit reality** (e.g., §7.3's 5 sub-sub-phases became 1 atomic per ε1) | 1 (1A-iii-b ε1 collapsing §7.3's 5-step plan) | NEW watching list |
+
+### §7.8 Design doc corrections (per §7.7 audit findings)
+
+Per F4 + F10 audit findings, the following corrections land in THIS commit (the §7.7 mini-design persistence):
+
+1. **§3 Progress Tracker "Sub-phase ordering" note** — current text claims "1A-iii-b and 1A-iii-c can land in any order or in parallel (independent of tropical work)" — **CORRECT to**: "1A-iii-c MUST land before 1A-iii-b (per §7.7 α audit finding F4: production callers of deprecated functions in parser.rkt + surface-syntax.rkt — surface AST scope — only stop calling once 1A-iii-c retires the surface forms; attempting 1A-iii-b first breaks compile)."
+2. **§7.2 "Tests" subsection** — current text says "tests/test-atms.rkt — pre-migration audit: which tests verify deprecated APIs vs modern solver-state? Decision: migrate tests to use `solver-state` API where coverage gap exists; delete tests that verify only-deprecated behavior" — **CORRECT to**: "tests/test-atms.rkt — DELETE entirely (per §7.7 γ1 resolution; audit-grounded; coverage preserved across 4 modern files — test-solver-context.rkt + test-elab-speculation.rkt + test-infra-cell-atms-01.rkt + test-capability-05b.rkt; ~1575 lines / ~88 cases)".
+3. **§8.2 "Tests" subsection** — current text incorrectly lists test-atms.rkt in 1A-iii-c deletion scope — **CORRECT to**: REMOVE test-atms.rkt from §8.2's deletion list (it's 1A-iii-b scope per §7.7 F10 audit + γ1 resolution); keep test-atms-integration.rkt + test-atms-types.rkt (those are surface AST scope; deletion remains in 1A-iii-c).
+
+These corrections are NON-OPTIONAL — they reflect audit-grounded reality (not preference). Reverting them would re-introduce the design errors.
 
 ---
 
