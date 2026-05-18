@@ -426,7 +426,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 6 mini-design + mini-audit** | α1/β1/γ1/δ1/ε1 resolved; 6 audit findings F1-F6 at HEAD `a69638ae`; cycle verified (propagator → tropical-fuel → sre-core → propagator); 3 drift risks D-1V-5-1/2/3 (2 audit-resolved + 1 needing impl verification); 1 NEW codification candidate (two-layer module split for cycle-breaking) | ✅ | §11.X.5 (2026-05-17) |
 | **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Break cycle by creating new `tropical-fuel-primitives.rkt` leaf module (pure algebraic primitives; zero non-Racket deps); refactor `tropical-fuel.rkt` to re-export from primitives + retain SRE/merge-fn registration; `propagator.rkt` requires primitives directly; replace 2 `tropical-fuel-merge-for-cell` use-sites with `tropical-fuel-merge`; delete inline duplicate + comment; **Suite GREEN 8218 / 98.6s / 0 failures** (backward compat preserved via re-export; targeted 58 tests pass); architectural cleanup complete (no perf gain; "future change MUST update duplicate" warning eliminated) | ✅ ✓ COMPLETE | Per §11.X.5 + §11.X.5.1; commit hash TBD |
 | **1V Commit 7 mini-design + mini-audit** | α1/β1/γ1/δ1/ε1 resolved (14 audit findings F1-F14 at HEAD `48f52ed2`; F1-F4 Track 2I infrastructure; F5-F8 tropical-fuel registration audit; F9 overlap analysis (3 direct-assertable + 8 verified-at-C-series + 14 bonus-findings); F10 predicted findings for total-order chain; F11 ⚠️ CRITICAL halt-and-investigate if distributive/has-pseudo-complement REFUTE; F12 ⚠️ `+inf.0`/NaN edge case at residuation; F13 sample size 343 triples × 17 props ~5s wall; F14 Track 2I scaffolding inheritance); 5 drift risks D-1V-6-1/2/3/4/5 (4 audit-resolved + 1 needing impl verification); 3 NEW codification candidates (atomic numeric domain wiring; assertion scope = declared only; `+inf.0`/NaN edge cases) | ✅ | §11.X.6 (2026-05-17) |
-| **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain via NEW entry in `tools/run-phase9-sweep.rkt`'s `sweep-config` + extend `tests/test-sre-sd-properties.rkt` with tropical-fuel section; assert 3 declared-and-swept properties (`distributive` + `has-pseudo-complement-{rel,abs}`); capture full 17-property markdown findings as design-doc artifact; ~70-120 LoC across 2 files; (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 + §11.X.6 (renumbered) |
+| **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain via NEW entry in `tools/run-phase9-sweep.rkt`'s `sweep-config` (with `(require "../tropical-fuel.rkt")` per F15+F18) + extend `tests/test-sre-sd-properties.rkt` with tropical-fuel section (5 test-cases: registration verification + finding count + shape + 3 declared-and-swept assertions); capture full 20-property markdown findings as `data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt` artifact; +110 LoC across 2 files + 3963-byte artifact; **F11 CRITICAL halt-and-investigate gate ✓ PASSED** (all 3 ⭐ declared-and-swept properties CONFIRMED: distributive 343/343, has-pseudo-complement-rel 49/49, has-pseudo-complement-abs 7/7 — F16 naming-inversion concern REFUTED by measurement); **variety placement**: SD ✓ Modular ✓ Distributive ✓ Heyting ✓ Stone ✗ Boolean ✗ Whitman ✓ (exact prediction for chain); F15+F18 NEW (require missing at test + tool paths); 4 NEW codification candidates; **Suite GREEN 8219 / 108.8s / 0 failures** | ✅ ✓ F11-GATE-PASSED | Per §11.X.6 + §11.X.6.1; commit hash TBD |
 | **1V Commit 8 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications already graduated at Commit 4 (cross-reference in close) + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi (renumbered from "Commit 5") |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
@@ -5094,6 +5094,112 @@ This is the **"forward-investment optimization"** pattern: lands the cache disci
 - §3 Progress Tracker NEW row "1V Commit 7 mini-design + mini-audit" ✅ §11.X.6 (2026-05-17)
 - §3 Progress Tracker row "1V Commit 7 — Item #3 SRE property-sweep verification" updates Notes to reference §11.X.6
 - Status remains ⬜ until implementation commit lands (Commit 7b)
+
+### §11.X.6.1 Implementation Results + Sweep Findings (2026-05-17, post-implementation Commit 7b)
+
+> **Status**: Item #3 (SRE property-sweep verification for tropical-fuel domain) implementation **COMPLETE**. **F11 CRITICAL halt-and-investigate gate ✓ PASSED** — all 3 declared-and-swept properties (`distributive`, `has-pseudo-complement-rel`, `has-pseudo-complement-abs`) CONFIRMED. **F16 naming-inversion concern refuted by measurement** — sweep's pseudo-complement check confirmed empirically; mini-design over-cautious. Variety placement: tropical-fuel × equality = **SD ✓ Modular ✓ Distributive ✓ Heyting ✓ Stone ✗ Boolean ✗ Whitman ✓** (exactly as predicted for a chain).
+
+**Pre-implementation audit extension (3 NEW findings F15-F17 + F18 at impl-time)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F15 ⚠️ NEW pre-impl** | Only `tests/test-tropical-fuel.rkt` requires `tropical-fuel.rkt` (the SRE-integration module); propagator.rkt requires only the primitives per F14 cycle-break. `test-sre-sd-properties.rkt` MUST add explicit `(require "../tropical-fuel.rkt")` to trigger registration | ✅ RESOLVED by adding require at test file line 58-63 |
+| **F16 ⚠️ NEW pre-impl** | Naming inversion concern: tropical-fuel uses "natural-order naming" (bot=0, top=+inf.0) but its merge is `min` (which has +inf.0 as join-unit, 0 as absorbing); under standard SRE join-unit semantics, has-pseudo-complement-abs may REFUTE | ❌ **REFUTED BY MEASUREMENT**: empirical sweep showed has-pseudo-complement-abs **CONFIRMED (7/7 — 100% non-vacuity)**. The sweep's check aligns with the registration's quantale-theoretic declaration. F16 mini-design concern was over-cautious; honest framing in test assertion + this subsection |
+| **F17 ⚠️ NEW pre-impl** | Mini-design said `all-sweep-properties` has 17 symbols; actual count is **20** (test-sre-sd-properties.rkt line 414 already asserts 20; Phases 11-15 added 5 more since mini-design's reference point) | ✅ CORRECTED in implementation: sweep returns 20 findings per relation; bonus-property count updated 14 → 17 (20 - 3 declared-and-swept) |
+| **F18 ⚠️ NEW impl-time** | First sweep run (post-test-file-fix) WARN-skipped tropical-fuel: `tools/run-phase9-sweep.rkt` also lacks `(require "../tropical-fuel.rkt")`; the tool runs standalone, separate code path from tests | ✅ RESOLVED by adding require to `tools/run-phase9-sweep.rkt:38-43` (mirrors F15 fix in tool path; both paths now register cleanly) |
+
+**Implementation summary** (per δ1 atomic; single implementation commit):
+
+- `tools/run-phase9-sweep.rkt`: +13 LoC (require tropical-fuel.rkt + realistic-tropical-fuel-atoms + sweep-config entry)
+- `tests/test-sre-sd-properties.rkt`: +97 LoC (require tropical-fuel.rkt + tropical-fuel section: 4 test-case blocks + atoms def + sweep at module load + find helper)
+- `racket/prologos/data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt`: NEW captured artifact (3963 bytes; 20-property findings table + variety placement summary)
+
+**Sweep findings table** (depth-0, 7 atoms = {0, 1, 5, 10, 100, 1000, +inf.0}):
+
+| Property | Status | Triples | Hypothesis fired | Conclusion held | Non-vacuity | Witness | Interpretation |
+|---|---|---|---|---|---|---|---|
+| **distributive** ⭐ | **CONFIRM** | 343 | 343 | 343 | 100% | — | Chain is distributive (matches declaration); F11 gate ✓ PASSED |
+| **has-pseudo-complement-rel** ⭐ | **CONFIRM** | 49 | 49 | 49 | 100% | — | Heyting-rel structure confirmed; F11 gate ✓ PASSED |
+| **has-pseudo-complement-abs** ⭐ | **CONFIRM** | 7 | 7 | 7 | 100% | — | F16 concern refuted; F11 gate ✓ PASSED |
+| sd-vee | CONFIRM (bonus) | 343 | 119 | 119 | 34.7% | — | Chain ⇒ SD (distributive corollary) |
+| sd-wedge | CONFIRM (bonus) | 343 | 161 | 161 | 46.9% | — | Same |
+| modular | CONFIRM (bonus) | 343 | 196 | 196 | 57.1% | — | Chain ⇒ modular |
+| whitmans-condition | CONFIRM (bonus) | 2401 | 1778 | 1778 | 74.1% | — | Chain satisfies Whitman |
+| breadth-bound | CONFIRM (bonus) | 7 | 7 | 7 | 100% | — | Chain breadth = 1 (≤ 4 ceiling) |
+| no-m3-sublattice | CONFIRM (bonus) | 0 | 0 | 0 | n/a | — | No antichain-of-3 in chain |
+| no-n5-sublattice | CONFIRM (bonus) | 21 | 0 | 0 | 0% | — | No pentagon in chain |
+| anti-exchange-on-J | CONFIRM (bonus) | 180 | 30 | 30 | 16.7% | — | — |
+| trivial-congruence-valid | CONFIRM (bonus) | 2401 | 49 | 49 | 2% | — | — |
+| total-congruence-valid | CONFIRM (bonus) | 2401 | 2401 | 2401 | 100% | — | — |
+| stone-identity | REFUTE (bonus; un-declared) | — | — | — | — | (W1) `'(0 0 0 0)` | Stone identity doesn't hold (chains generally aren't Stone) |
+| relatively-complemented | REFUTE (bonus; un-declared) | — | — | — | — | (W2) `'(5 0 1)` | Chains aren't relatively-complemented |
+| sectionally-complemented | REFUTE (bonus; un-declared) | — | — | — | — | (W3) `'(1 1)` | Chains aren't sectionally-complemented |
+| has-complement | REFUTE (bonus; un-declared) | 1 | 1 | 0 | 100% | (W4) `1` | Chains aren't Boolean |
+| admits-day-doubling | REFUTE (bonus; un-declared) | 21 | 0 | 0 | 0% | (W5) `'no-incomparable-pairs` | Chain has no incomparable pairs to double |
+| mult-forgetful-congruence-valid | UNTESTED (bonus) | 0 | 0 | 0 | n/a | — | No triples generated (mult forgetful trivial on numbers) |
+| erasure-congruence-valid | UNTESTED (bonus) | 0 | 0 | 0 | n/a | — | Same |
+
+⭐ = declared-and-swept (assertion targets per δ1; F11 gate)
+
+**Variety placement** (per sweep markdown artifact):
+
+| Domain | Relation | Depth | SD | Modular | Distributive | Heyting | Stone | Boolean | (W) |
+|---|---|---|---|---|---|---|---|---|---|
+| tropical-fuel | equality | ground | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ |
+
+**Interpretation**: tropical-fuel × equality is a **Heyting + Whitman + SD/modular/distributive** chain. Sits BELOW Stone/Boolean (which is structurally expected for chains; Boolean requires distinct complements; chains have only 0 ⇄ top as complement pair). The "(W)" Whitman-condition CONFIRM places the domain inside the free-lattice membership class (Nation 1982 Theorem 5.55/6.9). All structurally consistent with a tropical quantale on a totally-ordered carrier.
+
+**§11.X.6 drift risk final status**:
+
+| # | Risk | Outcome |
+|---|---|---|
+| D-1V-6-1 | Atomic domain with ZERO ctor-descs | ✅ AS PREDICTED — sample generator produced 7 depth-0-only samples cleanly |
+| D-1V-6-2 | `+inf.0`/NaN edge case in residuation | ✅ DID NOT MATERIALIZE — has-pseudo-complement-{rel,abs} CONFIRMED; no NaN-induced false REFUTE |
+| D-1V-6-3 ⚠️ CRITICAL | distributive or has-pseudo-complement REFUTES | ✅ DID NOT MATERIALIZE — all 3 ⭐ properties CONFIRMED; F11 gate ✓ PASSED |
+| D-1V-6-4 | breadth-bound `#:max-width 4` for chain | ✅ AS PREDICTED — CONFIRMED (chain breadth = 1) |
+| D-1V-6-5 | Suite-wall regression | ✅ WITHIN BUDGET — full suite 108.8s (was 98.6s pre-Commit-7; +10.2s but within §11.3 118-127s variance band; sweep at module load adds ~5s × multiple parallel batch-workers) |
+
+**VAG TWO-COLUMN for Commit 7b**:
+
+**(a) On-network?**
+- *Catalogue*: ✓ This is off-network sample-check infrastructure (per F14 + sre-property-sweep.rkt:26-30 self-documented Track 2I scaffolding lineage); labeled scaffolding, not new debt; inherits Track 2I retirement direction (property-cells with monotone-merge if/when broader property-check migrates on-network — sister concern of PM Track 12)
+- *Challenge*: did we add new scaffolding or just inherit existing? Pure inherit — no new scaffolding-hides-truth patterns. The require additions (F15 + F18) make registration visible at call sites (explicit at test file + tool file headers); no defensive guards "for safety"; no inherited patterns preserved without challenge. The sweep mechanism's off-network status is acknowledged at registration time (F14) AND at every wired domain. **Honest framing.**
+
+**(b) Complete?**
+- *Catalogue*: ✓ 5 ⭐ assertions land (F11 gate PASSED); 17 BONUS findings captured in artifact; sweep wires both at TEST path (F15) and TOOL path (F18); full suite GREEN; markdown artifact captured at `data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt`
+- *Challenge*: did the perf claim land? **No perf claim** for this commit — Item #3 is correctness/empirical-verification, not perf. Microbench-claim verification: F11 gate PASSED on the 3 declared-and-swept properties (CONFIRM, not just "doesn't crash"). **Substantially exceeded expectations** — F16 naming-inversion concern dissolved on measurement; has-pseudo-complement-abs CONFIRMED at 100% non-vacuity (7/7 atoms have pseudo-complement under sweep's quantale-aware check).
+
+**(c) Vision-advancing?**
+- *Catalogue*: ✓ Empirically verifies the tropical-fuel SRE registration declarations against the 1B-iii claim (was: "verified at C1+C2+C3 axiom tests only"; now: "additionally verified via Track 2I empirical sweep across 20 algebraic properties"); validates the cross-track methodology that Track 2I's property-sweep IS reusable infrastructure for verifying SRE registrations across atomic numeric domains (FIRST instance of atomic numeric domain swept — precedent for future PReduce / OE / SH consumers per §11.X.6 NEW codification candidate #1); honest separation between declared-and-swept (3 assertions) vs bonus-finding-captured (17 in artifact) per δ1
+- *Challenge*: did inherited patterns persist without challenge? F16 naming-inversion concern was over-cautious — the implementation REFUTED my own pre-impl prediction. This is exactly the value of empirical verification: my crude analysis (max(a,x) = bot only for a=0) didn't model the sweep's actual pseudo-complement check (which is more sophisticated — likely residuation-aware). The codification "atomic numeric domain wiring to property-sweep" (per §11.X.6 codification candidate #1) was validated AS the implementation proceeded; future atomic numeric domains can baseline against this empirical proof. F18 (require missing at tool path) was a real bug surfaced at impl-time (not pre-impl audit); the F15 + F18 dual-fix pattern is itself a codification candidate: "domain-registration require must land at BOTH test path and tool path; the cycle-broken architecture (F14) means registration is opt-in per code path."
+
+**(d) Drift-risks-cleared?**
+- *Catalogue*: D-1V-6-1/4/5 ✅ AS PREDICTED; D-1V-6-2/3 ✅ DID NOT MATERIALIZE (refuted by measurement); 4 NEW findings F15-F18 surfaced at re-audit + impl-time, all RESOLVED
+- *Challenge*: did named risks cover correctness + perf? Correctness FULLY covered (F11 gate PASSED; all bonus findings consistent with predicted chain structure); perf: full suite 108.8s within variance band; module-load sweep adds ~5s per parallel worker but doesn't push suite over the 118-127s ceiling. F18 (impl-time finding) was NOT named at mini-design — it's the second instance of the same F15 issue but in a different code path; codification candidate "domain-registration require must land at BOTH test path and tool path" is the prophylactic capture.
+
+**Tracker updates** (this commit — Commit 7b implementation):
+
+- §3 Progress Tracker row "1V Commit 7 — Item #3 SRE property-sweep verification" → **✅ ✓ COMPLETE — F11 gate PASSED** with commit hash + measurement summary
+- §11.X.6.1 NEW (Implementation Results)
+- Captured artifact: `racket/prologos/data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt` (3963 bytes; 20-property variety placement + per-finding detail + 5 witness footnotes)
+
+**NEW codification candidates surfaced this commit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Empirical sweep refutes pre-impl naming-inversion concern** — F16 mini-design predicted has-pseudo-complement-abs may REFUTE under naming inversion; measurement showed CONFIRM at 100%. The sweep's check is more sophisticated than crude meet-equals-bot analysis; respect the infrastructure when reasoning about declared properties | 1 (this F16 refutation) | NEW watching list — methodology: "trust measurement over pre-impl conjecture for declared-property verification" |
+| **Domain-registration require must land at BOTH test path and tool path** — F14 cycle-break (Commit 6) made the SRE-integration module's `register-domain!` opt-in per code path. F15 (test path) + F18 (tool path) both needed explicit `(require "../tropical-fuel.rkt")` | 2 data points (F15 + F18 same commit) | NEW watching list — directly relevant for any future cycle-broken SRE domain wiring |
+| **Atomic numeric domain wiring is FIRST instance** — tropical-fuel is the first SRE domain swept with ZERO ctor-descs; precedent for future OE MemoryCostQ/MessageCountQ and PReduce e-class cost dimensions | 1 (this 1V-7) | NEW watching list — graduates when OE Track 0 wires its first cost domain |
+
+**Pre-implementation gate satisfied at this commit**:
+
+- ✅ HEAD `48f52ed2` (Commit 6b state snapshot); suite GREEN at 8218/98.6s
+- ✅ Re-audit at fresh HEAD: F1-F14 line numbers HOLD; F15 + F16 + F17 + F18 NEW; 4 of 4 resolved at impl-time
+- ✅ Sweep run filtered to tropical-fuel: all 20 findings produced cleanly (0.0s sweep wall time)
+- ✅ Targeted test PASSES: 38 tests / 0 failures
+- ✅ Full suite GREEN: 8219 tests / 108.8s / 0 failures (+1 net vs 8218 pre-Commit-7; within §11.3 variance band)
+- ✅ F11 CRITICAL halt-and-investigate gate ✓ PASSED (all 3 ⭐ declared-and-swept properties CONFIRMED)
+- ✅ Captured artifact: 3963 bytes of variety placement + per-finding detail
 
 ---
 

@@ -35,6 +35,12 @@
          "../syntax.rkt"
          "../sessions.rkt"
          "../surface-rewrite.rkt"
+         "../tropical-fuel.rkt"   ;; Phase 1V Commit 7 (§11.X.6 F15/F18): tropical-fuel
+                                   ;; SRE domain registration only fires when this
+                                   ;; module is required (propagator.rkt requires
+                                   ;; only the primitives per F14 cycle-break);
+                                   ;; lookup-domain 'tropical-fuel resolves cleanly
+                                   ;; after this require
          (only-in "../form-cells.rkt"
                   form-cell-bot
                   spec-cell-bot
@@ -83,6 +89,14 @@
         (spec-cell-value 'bar 'mock-Int-surf #f #f)
         (spec-cell-value #f #f #f #t)))  ;; collision-top
 
+;; Tropical-fuel atoms (Phase 1V Commit 7 / §11.X.6 α1).
+;; Atomic numeric domain: extended-real [0, +inf.0] under Lawvere natural-order
+;; naming (bot=0, top=+inf.0; merge=min is the Lawvere join). Sweep adds bot/top
+;; via include-bot-top?=#t at the sweep-config entry below; here the base atoms
+;; span small/medium/large finite values to exercise residuation boundaries.
+(define realistic-tropical-fuel-atoms
+  '(1 5 10 100 1000))
+
 ;; ============================================================================
 ;; Domain configuration table
 ;; ============================================================================
@@ -115,7 +129,17 @@
           realistic-spec-cell-atoms
           (hasheq)
           ;; spec-cell atoms already include explicit bot + top.
-          #f)))
+          #f)
+    (list 'tropical-fuel
+          '(equality)
+          realistic-tropical-fuel-atoms
+          (hasheq)
+          ;; Phase 1V Commit 7 (§11.X.6 β1): tropical-fuel bot=0 and top=+inf.0
+          ;; are valid numeric lattice elements (not breaking-the-merge sentinels
+          ;; like form-cell's #f). Include them so the sweep covers the full
+          ;; chain [0, +inf.0]. Atomic numeric domain (ZERO ctor-descs) produces
+          ;; depth-0-only samples (7 total: 5 finite atoms + bot + top).
+          #t)))
 
 ;; ============================================================================
 ;; Sweep runner

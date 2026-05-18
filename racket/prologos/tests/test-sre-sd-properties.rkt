@@ -55,6 +55,12 @@
          "../syntax.rkt"
          "../sessions.rkt"        ;; Phase 7c: sess-end, sess-svar for session sweep
          "../surface-rewrite.rkt"  ;; Phase 8: form-pipeline-value, form-pipeline-meet
+         "../tropical-fuel.rkt"   ;; Phase 1V Commit 7 (§11.X.6 F15): tropical-fuel
+                                  ;; SRE domain registration only fires when this
+                                  ;; module is required (propagator.rkt requires
+                                  ;; only the primitives per F14 cycle-break);
+                                  ;; lookup-domain 'tropical-fuel resolves cleanly
+                                  ;; after this require
          (only-in "../form-cells.rkt"
                   form-cell-bot form-cell-merge-fn form-cell-meet-fn
                   spec-cell-bot spec-cell-merge-fn spec-cell-meet-fn
@@ -404,6 +410,130 @@
     (check-true (sd-finding? f))
     (check-eq? (sd-finding-domain-name f) 'spec-cell)
     (check-eq? (sd-finding-relation f) 'equality)))
+
+;; ============================================================================
+;; PPN 4C Tropical Quantale Addendum — Phase 1V Commit 7 (§11.X.6):
+;; tropical-fuel domain sweep tests
+;; ============================================================================
+;;
+;; Wires Track 2I's `all-sweep-properties` infrastructure to the tropical-fuel
+;; SRE domain. Empirically verifies the DECLARED algebraic properties at the
+;; 1B-iii registration site (`tropical-fuel.rkt:99-113`) against generated
+;; samples. Closes the §11.3 item #3 obligation (Track 2I now closed per user).
+;;
+;; tropical-fuel is an atomic numeric domain (extended-real [0, +inf.0]) with
+;; ZERO ctor-descs (no constructor decomposition). Sample generator produces
+;; depth-0-only samples (bot + top + base-values), which is exactly what we
+;; want for a numeric chain. Mirrors form-cell + spec-cell patterns (Phase 8c/d)
+;; in using depth-0 + hand-picked atoms; differs in including bot/top as valid
+;; lattice elements (numeric chain, not bounded-below #f-sentinel).
+;;
+;; Lawvere natural-order naming (per tropical-fuel.rkt:88-121):
+;; - bot = 0 (natural-order smallest; Lawvere lattice TOP)
+;; - top = +inf.0 (natural-order largest; Lawvere lattice BOT — algebraic
+;;   contradiction)
+;; - merge = min (Lawvere join, ⊕) — has +inf.0 as join-unit, 0 as absorbing
+;; - meet = max (Lawvere meet, ⋀) — has 0 as meet-unit, +inf.0 as absorbing
+;;
+;; Per §11.X.6 F16: this naming inverts relative to standard SRE join-unit
+;; semantics (where bot is the join-unit). The sweep may surface this as
+;; REFUTE for some Boolean-flavored properties (has-pseudo-complement-abs,
+;; relatively-/sectionally-/has-complement) — chains aren't Boolean. Those
+;; refutations are STRUCTURALLY EXPECTED for a chain and are NOT assertion
+;; targets per δ1 (only declared-and-swept properties get assertions).
+
+(define realistic-tropical-fuel-atoms
+  ;; §11.X.6 α1: 5 finite representatives + bot (0) + top (+inf.0) via
+  ;; include-bot-top?=#t → 7 atoms at depth-0; spans small/medium/large.
+  '(1 5 10 100 1000))
+
+(define tropical-fuel-domain-for-sweep (lookup-domain 'tropical-fuel))
+
+;; depth-0: bot (0) + top (+inf.0) + 5 base atoms = 7 samples
+;; 7^3 = 343 triples per property × 20 properties × 1 relation ≈ 6860 checks.
+;; Expected wall: < 5 sec (per §11.X.6 F13).
+(define phase1v-tropical-fuel-findings
+  (run-sd-sweep tropical-fuel-domain-for-sweep
+                '(equality)
+                realistic-tropical-fuel-atoms
+                #:max-depth 0
+                #:include-bot-top #t))
+
+(test-case "Phase 1V (§11.X.6): tropical-fuel-sre-domain registered + has merge-registry"
+  ;; F15 verification: domain registers cleanly when tropical-fuel.rkt is required.
+  (check-not-false tropical-fuel-domain-for-sweep)
+  (check-eq? (sre-domain-name tropical-fuel-domain-for-sweep) 'tropical-fuel)
+  ;; tropical-fuel.rkt:69-79: both merge + meet registries defined for 'equality
+  (define merge-fn
+    ((sre-domain-merge-registry tropical-fuel-domain-for-sweep) 'equality))
+  (define meet-fn (sre-domain-meet tropical-fuel-domain-for-sweep 'equality))
+  (check-not-false merge-fn)
+  (check-not-false meet-fn))
+
+(test-case "Phase 1V (§11.X.6): tropical-fuel sweep returns 20 findings (len all-sweep-properties × 1 relation)"
+  (check-equal? (length phase1v-tropical-fuel-findings)
+                (length all-sweep-properties)))
+
+(test-case "Phase 1V (§11.X.6): each tropical-fuel finding has correct shape"
+  (for ([f (in-list phase1v-tropical-fuel-findings)])
+    (check-true (sd-finding? f))
+    (check-eq? (sd-finding-domain-name f) 'tropical-fuel)
+    (check-eq? (sd-finding-relation f) 'equality)
+    (check-not-false (memq (sd-finding-property f) all-sweep-properties))
+    (check-true (positive? (sd-finding-sample-count f)))))
+
+;; --- Assertable confirmations (δ1: only on DECLARED-AND-SWEPT properties) ---
+;; Per §11.X.6 F9 overlap analysis: 3 of tropical-fuel's 11 declared properties
+;; (distributive + has-pseudo-complement-rel + has-pseudo-complement-abs) are
+;; directly covered by the sweep. The other 8 declared properties (commutative-
+;; /associative-/idempotent-join + has-meet + quantale family + residuated)
+;; are verified at 1B-iii via C1+C2+C3 axiom tests in test-tropical-fuel.rkt.
+;; The 17 bonus swept properties (modular, sd-vee, sd-wedge, etc.) are
+;; FINDINGS for the captured artifact (data/benchmarks/...) — NOT assertion
+;; targets, since refutations for un-declared properties (e.g., chains aren't
+;; relatively-complemented) are structurally expected.
+
+(define (find-tropical-fuel-finding prop)
+  (findf (lambda (f)
+           (and (eq? (sd-finding-relation f) 'equality)
+                (eq? (sd-finding-property f) prop)))
+         phase1v-tropical-fuel-findings))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality is distributive (CONFIRM declared)"
+  ;; tropical-fuel.rkt:106 declares `'distributive prop-confirmed`.
+  ;; Chains are structurally distributive (min/max over a total order).
+  ;; F11 critical halt-and-investigate if this REFUTES.
+  (define f (find-tropical-fuel-finding 'distributive))
+  (check-not-false f)
+  (check-true (axiom-confirmed? (sd-finding-evidence f))
+              "tropical-fuel × equality MUST be distributive per registration + chain structure"))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality has-pseudo-complement-rel (CONFIRM declared)"
+  ;; tropical-fuel.rkt:113 declares `'has-pseudo-complement prop-confirmed`.
+  ;; The RELATIVE pseudo-complement (exists x: a ⊓ x ≤ b) — for a chain under
+  ;; meet=max, ALWAYS exists (x=top always works, since max(a, top) = top ≥ b).
+  (define f (find-tropical-fuel-finding 'has-pseudo-complement-rel))
+  (check-not-false f)
+  (check-true (or (axiom-confirmed? (sd-finding-evidence f))
+                  ;; pc-rel-evidence: detailed variant — confirmed status
+                  (and (pc-rel-evidence? (sd-finding-evidence f))
+                       (eq? (pc-rel-evidence-status (sd-finding-evidence f)) 'confirmed)))
+              "tropical-fuel × equality has-pseudo-complement-rel should CONFIRM per registration"))
+
+(test-case "Phase 1V (§11.X.6 δ1): tropical-fuel × equality has-pseudo-complement-abs (CONFIRM declared)"
+  ;; tropical-fuel.rkt:113 declares `'has-pseudo-complement prop-confirmed`.
+  ;; Empirical surface (§11.X.6.1 — initial F16 concern about naming-inversion
+  ;; refuted by measurement): the SRE sweep's has-pseudo-complement-abs check
+  ;; CONFIRMS for all 7 atoms (7/7 — 100% non-vacuity). The sweep's check
+  ;; aligns with the registration's quantale-theoretic declaration even under
+  ;; Lawvere natural-order naming (bot=0, top=+inf.0). F16 mini-design concern
+  ;; was over-cautious — the implementation validates the declaration empirically.
+  (define f (find-tropical-fuel-finding 'has-pseudo-complement-abs))
+  (check-not-false f)
+  (check-true (or (axiom-confirmed? (sd-finding-evidence f))
+                  (and (pc-rel-evidence? (sd-finding-evidence f))
+                       (eq? (pc-rel-evidence-status (sd-finding-evidence f)) 'confirmed)))
+              "tropical-fuel × equality has-pseudo-complement-abs should CONFIRM per registration"))
 
 ;; ============================================================================
 ;; Phase 9a: extended sweep harness — all 10 properties + untested-reason +
