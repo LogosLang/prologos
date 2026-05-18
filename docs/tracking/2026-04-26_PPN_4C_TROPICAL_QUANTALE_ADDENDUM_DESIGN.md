@@ -425,7 +425,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 5 — Item #1-quater worldview-cache caching** | Cache worldview-cache-cell direct-ref on prop-net-warm (5th field; parallel to fuel-cell-cache pattern); ~150 LoC across propagator.rkt + tests; γ-B Approach (top-of-function short-circuit + 3 inline champ-lookups replaced + WT-* parallel updates); **CW3 ~flat (3.96 → 3.94 ns/cycle; expected since speculation paths not exercised in current bench)**; **suite GREEN 8213 / 97.2s / 0 failures**; 4 NEW cache consistency tests pass; **pattern reuse claim validated** (2nd instance of well-known direct-ref cache lands w/ 0 impl surprises beyond audit); forward-investment for Phase 3A speculation-heavy paths | ✅ ✓ FORWARD-INVESTMENT | Per §11.X.4 + §11.X.4.1; commit hash TBD |
 | **1V Commit 6 mini-design + mini-audit** | α1/β1/γ1/δ1/ε1 resolved; 6 audit findings F1-F6 at HEAD `a69638ae`; cycle verified (propagator → tropical-fuel → sre-core → propagator); 3 drift risks D-1V-5-1/2/3 (2 audit-resolved + 1 needing impl verification); 1 NEW codification candidate (two-layer module split for cycle-breaking) | ✅ | §11.X.5 (2026-05-17) |
 | **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Break cycle by creating new `tropical-fuel-primitives.rkt` leaf module (pure algebraic primitives; zero non-Racket deps); refactor `tropical-fuel.rkt` to re-export from primitives + retain SRE/merge-fn registration; `propagator.rkt` requires primitives directly; replace 2 `tropical-fuel-merge-for-cell` use-sites with `tropical-fuel-merge`; delete inline duplicate + comment; **Suite GREEN 8218 / 98.6s / 0 failures** (backward compat preserved via re-export; targeted 58 tests pass); architectural cleanup complete (no perf gain; "future change MUST update duplicate" warning eliminated) | ✅ ✓ COMPLETE | Per §11.X.5 + §11.X.5.1; commit hash TBD |
-| **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (renumbered) |
+| **1V Commit 7 mini-design + mini-audit** | α1/β1/γ1/δ1/ε1 resolved (14 audit findings F1-F14 at HEAD `48f52ed2`; F1-F4 Track 2I infrastructure; F5-F8 tropical-fuel registration audit; F9 overlap analysis (3 direct-assertable + 8 verified-at-C-series + 14 bonus-findings); F10 predicted findings for total-order chain; F11 ⚠️ CRITICAL halt-and-investigate if distributive/has-pseudo-complement REFUTE; F12 ⚠️ `+inf.0`/NaN edge case at residuation; F13 sample size 343 triples × 17 props ~5s wall; F14 Track 2I scaffolding inheritance); 5 drift risks D-1V-6-1/2/3/4/5 (4 audit-resolved + 1 needing impl verification); 3 NEW codification candidates (atomic numeric domain wiring; assertion scope = declared only; `+inf.0`/NaN edge cases) | ✅ | §11.X.6 (2026-05-17) |
+| **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain via NEW entry in `tools/run-phase9-sweep.rkt`'s `sweep-config` + extend `tests/test-sre-sd-properties.rkt` with tropical-fuel section; assert 3 declared-and-swept properties (`distributive` + `has-pseudo-complement-{rel,abs}`); capture full 17-property markdown findings as design-doc artifact; ~70-120 LoC across 2 files; (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 + §11.X.6 (renumbered) |
 | **1V Commit 8 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications already graduated at Commit 4 (cross-reference in close) + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi (renumbered from "Commit 5") |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
@@ -4983,6 +4984,116 @@ This is the **"forward-investment optimization"** pattern: lands the cache disci
 - §3 Progress Tracker NEW row "1V Commit 6 mini-design + mini-audit" ✅ §11.X.5 (2026-05-17)
 - §3 Progress Tracker row "1V Commit 6 — F14 retirement" updates Notes to reference §11.X.5
 - Status remains ⬜ until implementation commit lands (Commit 6b)
+
+### §11.X.6 1V Commit 7 — Item #3 SRE Property-Sweep Verification Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V Commit 7 (Item #3 SRE property-sweep verification for the tropical-fuel domain) pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together per Per-Phase Protocol steps 1+2 (co-dependent). **5 resolutions** (α1 / β1 / γ1 / δ1 / ε1) + **14 mini-audit findings F1-F14** + **5 drift risks D-1V-6-1 through D-1V-6-5** (4 audit-resolved + 1 needing impl verification).
+
+> **Per Stage 4 Per-Phase Protocol step 1 + 2**: co-dependent mini-design + mini-audit combined into one subsection (consistent with §7.7 + §7.9 + §8.7 + §10.0.4-7 + §11.X / §11.X.2 / §11.X.3 / §11.X.4 / §11.X.5 patterns from prior sub-phases). Persists into DESIGN DOC per user direction (Stage 4 methodology mandate).
+
+**Implementation goal**: Wire Track 2I's `all-sweep-properties` infrastructure (per [`sre-property-sweep.rkt`](../../racket/prologos/sre-property-sweep.rkt)) to the tropical-fuel SRE domain. Empirically verify the **declared algebraic properties** at the 1B-iii registration site (`tropical-fuel.rkt:99-113`) against generated samples. Closes the [§11.3 item #3 + §11.X γ-all3 obligation](#§113-phase-1v-exit-criteria) (item moved from "conditional on Track 2I readiness" to "in scope" at Phase 1V opening after user confirmed Track 2I CLOSED AND COMPLETE).
+
+**Architectural intent** (validates declared properties via empirical sampling):
+- This is an **off-network sample-check** (per existing Track 2I scaffolding lineage; `sre-property-sweep.rkt:26-30` self-documented as "off-network sample-check infrastructure")
+- Sweep produces `sd-finding` records: declared properties get **assertable confirmations**; structurally-implied properties get **bonus findings** captured for the design-doc artifact
+- **Validates the algebraic claims** at the tropical-fuel SRE registration site (`tropical-fuel.rkt:88-121`) — analogous to how SRE Track 2H's property-sweep surfaced the F7 distributivity-on-binders disproof for the type domain
+
+**Mini-audit findings (concrete grounding at HEAD `48f52ed2`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | Track 2I `sre-property-sweep.rkt` exists + `all-sweep-properties` exported | `racket/prologos/sre-property-sweep.rkt` (562 LoC); `all-sweep-properties` = 17 property symbols (lines 78-94): `distributive sd-vee sd-wedge modular has-pseudo-complement-rel has-pseudo-complement-abs stone-identity whitmans-condition relatively-complemented sectionally-complemented breadth-bound has-complement no-m3-sublattice no-n5-sublattice anti-exchange-on-J trivial-congruence-valid total-congruence-valid mult-forgetful-congruence-valid erasure-congruence-valid admits-day-doubling`. (Original "11 properties" count in §11.3 + dailies preview is stale — Phases 11-15 added more.) |
+| **F2** | `run-sd-sweep` API | `(run-sd-sweep domain relations base-atoms #:max-depth #:per-ctor-count #:cross-domain-atoms #:include-bot-top #:properties)` → flat list of `sd-finding` records; default properties = `all-sweep-properties` |
+| **F3** | Canonical wiring pattern | `tools/run-phase9-sweep.rkt:91-118` defines `sweep-config` as list of `(domain-name relations atoms cross-domain-atoms include-bot-top?)`. 4 domains currently wired: type, session, form-cell, spec-cell |
+| **F4** | Canonical test pattern | `tests/test-sre-sd-properties.rkt`: shared fixture at module load (single sweep cached), `find-finding` helper, individual `test-case` per assertable confirmation. Depth-0 for ~2s wall budget. |
+| **F5** | tropical-fuel SRE domain registration (already shipped at 1B-iii / 1B-iv) | `tropical-fuel.rkt:88-121` declares **11 properties under `'equality` relation**: `commutative-join associative-join idempotent-join has-meet distributive quantale commutative-quantale unital-quantale integral-quantale residuated has-pseudo-complement`. Domain registered via `register-domain!` at line 123; merge-fn registered via `register-merge-fn!/lattice` at line 124 |
+| **F6** | tropical-fuel has ZERO ctor-descs (atomic numeric domain) | No `register-ctor-desc!` calls for `'tropical-fuel`. `(all-ctor-descs #:domain 'tropical-fuel)` returns `'()` (per `ctor-registry.rkt:302-310`: empty domain-table → empty hash-values list). Sample generator handles this cleanly per F7 |
+| **F7** | Sample generator behavior with empty ctor-descs | Per `sre-sample-generator.rkt:107-131`: depth-0 = `bot ∪ top ∪ base-values ∪ nullary-ctor-inhabitants`. For tropical-fuel: `nullary-ctor-inhabitants` = `'()` (no ctors). Depth>0 returns `'()` via `compound-ctor-inhabitants` empty fold. **Atomic domain produces ONLY depth-0 samples** — exactly what we want for a numeric chain |
+| **F8** | Both `tropical-fuel-merge-registry` and `tropical-fuel-meet-registry` defined for `'equality` only | `tropical-fuel.rkt:69-79`: both return their respective fn for `'equality`, `#f` for other relations. Sweep base-untested-reason logic at `sre-property-sweep.rkt:161-166` will correctly handle (relations passed as `'(equality)` only) |
+| **F9** | Overlap analysis: tropical-fuel's 11 declared vs sweep's 17 swept | **DIRECT-ASSERTABLE (3)**: `distributive` (1:1); `has-pseudo-complement` → splits into `has-pseudo-complement-rel` + `has-pseudo-complement-abs` (1:2). **NOT-IN-SWEEP-BUT-VERIFIED-AT-C-SERIES (8)**: `commutative-join`, `associative-join`, `idempotent-join`, `has-meet`, `quantale`, `commutative-quantale`, `unital-quantale`, `integral-quantale`, `residuated` — verified at 1B-iii via C1+C2+C3 axiom tests in `test-tropical-fuel.rkt`. **BONUS (14)**: 14 swept properties not declared (sd-vee, sd-wedge, modular, stone-identity, whitmans-condition, relatively-complemented, sectionally-complemented, breadth-bound, has-complement, no-m3-sublattice, no-n5-sublattice, anti-exchange-on-J, 4 congruences, admits-day-doubling) — sweep produces findings as captured artifact, not assertion targets |
+| **F10** | Predicted findings for a TOTAL ORDER chain `[0, +∞]` | **CONFIRM expected**: `distributive` (chains are distributive); `sd-vee`, `sd-wedge` (distributive ⇒ SD); `modular` (chains are modular); `has-pseudo-complement-{rel,abs}` (residuation provides Heyting-like structure); `whitmans-condition` (chains satisfy Whitman); `breadth-bound` (chain has breadth = 1); `no-m3-sublattice`, `no-n5-sublattice` (chains have no antichain-of-3 or pentagon); `admits-day-doubling`. **REFUTE expected** (un-declared; chains aren't Boolean): `relatively-complemented`, `sectionally-complemented`, `has-complement`. **UNKNOWN**: `stone-identity`, `anti-exchange-on-J`, 4 congruences |
+| **F11 ⚠️ CRITICAL** | If `distributive` or `has-pseudo-complement-{rel,abs}` REFUTE | Would invalidate the tropical-fuel registration at `tropical-fuel.rkt:99-113`. Halt-and-investigate gate at Commit 7b close. Most likely cause: `+inf.0` arithmetic edge case (F12) |
+| **F12 ⚠️ EDGE CASE** | `+inf.0` arithmetic: `(- +inf.0 +inf.0) = +nan.0` | Surfaces in `tropical-left-residual` when both args = `+inf.0`. The current code at `tropical-fuel-primitives.rkt:105-106`: `(if (>= b a) (- b a) 0)` — for `(a=+inf.0, b=+inf.0)`, `(>= +inf.0 +inf.0) = #t`, then `(- +inf.0 +inf.0) = +nan.0`. **This may surface in sweep checks** that use residuation (has-pseudo-complement-rel/abs). Verify at implementation; may need defensive `(if (and (= a +inf.0) (= b +inf.0)) 0 ...)` guard. **Not Commit 7a (mini-design) scope** — surface as D-1V-6-2 for impl-time verification |
+| **F13** | Sample size estimate for tropical-fuel sweep | Atoms candidate: `'(1 5 10 100 1000)` (5 finite representatives) + bot (0) + top (+inf.0) = **7 atoms** at depth-0. Triples per property = 7³ = 343. 17 properties × 1 relation × 343 triples ≈ 5800 checks. Estimated wall: < 5 sec (well under shared-fixture 30s convention) |
+| **F14** | Track 2I scaffolding nature | Per `sre-property-sweep.rkt:26-30`: "off-network sample-check infrastructure (existing Track 2G scaffolding lineage). Labeled scaffolding, NOT new debt. Retirement direction: would migrate to property-cells with monotone-merge if/when broader property-check infrastructure migrates on-network." Phase 1V Commit 7 INHERITS this scaffolding stance — not a new debt; aligns with existing Track 2I framing |
+
+**Five user-confirmable resolutions (proposed)**:
+
+| Q | Lean | Effect |
+|---|---|---|
+| **α1** | **Atom selection**: `'(1 5 10 100 1000)` representative finite values + bot (0) + top (+inf.0) via `include-bot-top? = #t` | 7 atoms at depth-0; spans small/medium/large; tests residuation boundaries via mixed-magnitude pairs; ~5 sec wall budget |
+| **β1** | **Sweep wiring**: NEW entry in `tools/run-phase9-sweep.rkt`'s `sweep-config` for `'tropical-fuel`: relations = `'(equality)`, atoms = `realistic-tropical-fuel-atoms`, cross-domain-atoms = `(hasheq)`, include-bot-top? = `#t` | Atomic numeric domain has no cross-domain ctors; bot/top are valid lattice elements (not breaking-the-merge sentinels like form-cell's `#f`) |
+| **γ1** | **Test wiring**: EXTEND `tests/test-sre-sd-properties.rkt` with a tropical-fuel section (NOT a new file) | Maintains existing "one sweep file, multiple domains" pattern; shared fixture at module load; depth-0 to honor suite-wall budget; 3 assertable `test-case`s |
+| **δ1** | **Assertion scope**: assert ONLY on the 3 sweep-covered declared properties (`distributive`, `has-pseudo-complement-rel`, `has-pseudo-complement-abs`); 14 bonus properties captured as design-doc artifact (no assertions) | Honest separation: assertable = "validates the declared properties at registration"; non-asserted bonus = "additional empirical evidence about structural lattice character." Avoids over-binding on un-declared properties whose result (especially REFUTES) is expected for a chain |
+| **ε1** | **Atomicity**: single mini-design commit (THIS commit; persists §11.X.6); implementation in NEXT commit | Matches Items #1/#1-bis/#1-quater/F14 pattern; mini-design persistence atomic per Stage 4 + prior split discipline (1B-iv/1A-iii-c/1C-iv/1V-2/3/3a-ext/5/6 all followed this) |
+
+**Implementation plan** (per δ1 atomic; implementation in NEXT commit, Commit 7b; ~70-120 LoC across 2 files + optional design-doc captured-artifact subsection):
+
+| # | Action | Site | Detail |
+|---|---|---|---|
+| 1 | Add `realistic-tropical-fuel-atoms` definition | `tools/run-phase9-sweep.rkt:~46` (after `realistic-type-atoms`) | `(define realistic-tropical-fuel-atoms '(1 5 10 100 1000))` |
+| 2 | Add tropical-fuel entry to `sweep-config` | `tools/run-phase9-sweep.rkt:~118` (end of `sweep-config` list) | `(list 'tropical-fuel '(equality) realistic-tropical-fuel-atoms (hasheq) #t)` |
+| 3 | Import `lookup-domain` for tropical-fuel in test file | `tests/test-sre-sd-properties.rkt:~50-60` (require block) | `tropical-fuel-sre-domain` is registered via `driver.rkt` chain at module load → `lookup-domain 'tropical-fuel` will resolve cleanly. Confirm by inspecting driver.rkt's require chain at impl |
+| 4 | Add tropical-fuel section to test file | `tests/test-sre-sd-properties.rkt` (after existing domain sections) | Define `realistic-tropical-fuel-atoms`, run sweep at module load (shared fixture), 3 `test-case` blocks: `distributive` confirms; `has-pseudo-complement-rel` confirms; `has-pseudo-complement-abs` confirms |
+| 5 | Verify `+inf.0` edge case in residuation (per F12 + D-1V-6-2) | Inspect post-impl sweep output | If `(tropical-left-residual +inf.0 +inf.0) = +nan.0` surfaces as REFUTE in `has-pseudo-complement-{rel,abs}`, add defensive guard at `tropical-fuel-primitives.rkt:105-106` AND re-verify (atomic refinement within same commit OR follow-up; decide at impl-time) |
+| 6 | Optional: capture `racket tools/run-phase9-sweep.rkt 'tropical-fuel` markdown output | `data/benchmarks/tropical-fuel-phase9-sweep-{date}.txt` (sister artifact to Pre-0 baseline) | Captures the full 17-property × 343-triple findings table for the tropical-fuel domain — design-doc artifact for §11.X.6.1 implementation-results subsection |
+| 7 | Targeted tests + full suite GREEN | — | Regression gate (expect 8218 + 4 tests ≈ 8222 / ~99-110s) |
+| 8 | VAG TWO-COLUMN + commit + §3 tracker + dailies | — | Per Stage 4 Per-Phase Protocol step 5 + 7 |
+
+**Drift risks named at design+audit time (D-1V-6-1 through D-1V-6-5)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-6-1 | Atomic domain with ZERO ctor-descs may surface sample-generator edge case | ✅ AUDIT-RESOLVED per F7 (`compound-ctor-inhabitants` returns `'()` for empty `ctor-descs`; depth>0 acc remains `'()`). Sample generator handles atomic domains cleanly by construction |
+| D-1V-6-2 | `+inf.0` arithmetic edge cases (NaN from `(- +inf.0 +inf.0)`) may surface false REFUTES in has-pseudo-complement-{rel,abs} | ⬜ NEEDS IMPL VERIFICATION per F12 — inspect post-impl sweep output; if NaN surfaces, add defensive guard at residuation site |
+| D-1V-6-3 | If `distributive` or `has-pseudo-complement-{rel,abs}` REFUTES against declared property — **CRITICAL correctness bug** | ⬜ HALT-AND-INVESTIGATE gate at Commit 7b close per F11; would invalidate tropical-fuel registration; analogous to Track 2H F7 distributivity-on-binders disproof. NOT expected (chains are distributive + Heyting-like via residuation); if it happens, likely cause is F12 |
+| D-1V-6-4 | `breadth-bound` test uses `#:max-width 4` default — does it produce meaningful result for chain (breadth = 1)? | ✅ AUDIT-RESOLVED per F10 (chains have breadth 1; `#:max-width 4` is a ceiling — the test confirms `breadth ≤ 4` which holds trivially); the BONUS finding will confirm |
+| D-1V-6-5 | Suite-wall regression from new test addition | ✅ AUDIT-RESOLVED per F13 — depth-0 with 7 atoms ~5 sec wall budget; well under §11.3 118-127s variance band |
+
+**Verification sequence at implementation commit (Commit 7b)**:
+
+```
+1. tools/check-parens.sh on edited files (tools/run-phase9-sweep.rkt + tests/test-sre-sd-properties.rkt)
+2. raco make driver.rkt — recompiles transitively (catches require-chain drift)
+3. raco test tests/test-sre-sd-properties.rkt — verify tropical-fuel section runs + 3 assertable confirmations pass
+4. racket tools/run-phase9-sweep.rkt 'tropical-fuel > /tmp/tropical-fuel-sweep.md — capture markdown output
+5. Inspect markdown for unexpected REFUTES (per F11 + D-1V-6-3 halt-and-investigate)
+6. If F12 NaN surfaces in has-pseudo-complement-{rel,abs}: add defensive guard + re-run sweep + verify CONFIRM
+7. Targeted tests: test-sre-sd-properties + test-tropical-fuel + test-specialized-cells
+8. Full suite GREEN (regression gate; expect 8222 tests / ~100s)
+9. (Optional) Capture sweep markdown to data/benchmarks/ as artifact
+10. VAG TWO-COLUMN; commit with structured message; §3 tracker update; dailies entry
+```
+
+**NEW codification candidates surfaced this audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Atomic numeric domain wiring to property-sweep** — first instance of a domain with ZERO ctor-descs being swept; precedent for future atomic-scalar domains in OE (MemoryCostQ, MessageCountQ), PReduce (e-class cost dimensions) | 1 (this 1V-7) | NEW watching list — directly relevant for OE Series Track 0/1/2 first-production-landing |
+| **Assertion scope = declared properties only; bonus findings as captured artifact** — honest separation between "validates the declaration" (test assertions) and "additional empirical evidence about structural character" (markdown artifact); avoids over-binding on un-declared properties whose REFUTES are structurally expected | 1 (this δ1) | NEW watching list — relevant methodology for any future domain-sweep wiring |
+| **`+inf.0`/NaN edge cases in tropical algebra surface at residuation boundary** — declared property may fail empirically due to floating-point arithmetic; defensive guards at primitives module level | 1 (potential D-1V-6-2 materialization at impl) | NEW watching list — relevant for any tropical-quantale-flavored future domain |
+
+**Pre-implementation gate** (this commit; mini-design persistence):
+
+- ✅ HEAD `48f52ed2`; suite GREEN at 8218/98.6s (per Commit 6b state snapshot)
+- ✅ Track 2I infrastructure verified: `sre-property-sweep.rkt` + `sre-sample-generator.rkt` exist; API + sweep-config patterns confirmed
+- ✅ tropical-fuel SRE registration verified: 11 declared properties at `tropical-fuel.rkt:99-113`; merge + meet registries at lines 69-79
+- ✅ Empty-ctor-descs path verified clean per F7 (atomic domain produces depth-0-only samples)
+- ✅ Overlap analysis complete per F9 (3 direct-assertable + 8 verified-at-C-series + 14 bonus-findings)
+- ✅ 5 drift risks named; 4 audit-resolved; 1 (D-1V-6-2) flagged for impl verification
+
+**Pre-implementation-commit gate** (next commit, Commit 7b):
+
+- Re-grep `sweep-config` + `realistic-*-atoms` patterns at fresh HEAD to verify no line-number drift since this commit
+- Verify D-1V-6-2 (`+inf.0` edge case) at implementation walk-through; if NaN surfaces, defensive guard at residuation site
+- Targeted test run before full suite gate
+- Capture sweep markdown output for design-doc artifact (per impl plan step 6)
+
+**Updates to design doc trackers** (this commit — Commit 7a mini-design persistence):
+
+- §3 Progress Tracker NEW row "1V Commit 7 mini-design + mini-audit" ✅ §11.X.6 (2026-05-17)
+- §3 Progress Tracker row "1V Commit 7 — Item #3 SRE property-sweep verification" updates Notes to reference §11.X.6
+- Status remains ⬜ until implementation commit lands (Commit 7b)
 
 ---
 
