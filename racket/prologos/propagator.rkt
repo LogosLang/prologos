@@ -3872,16 +3872,20 @@
 
 ;; Resolve effective worldview bitmask for a pnet-level read. Per-prop
 ;; bitmask (non-zero) takes priority; otherwise read worldview-cache cell
-;; for network-wide committed bitmask. Defensive against missing cache
-;; cell (early init or test contexts).
+;; for network-wide committed bitmask.
+;;
+;; worldview-cache-cell-id is structurally always allocated by
+;; make-prop-network (cell-id 1; see line 732). The previous
+;; with-handlers wrapper guarded a structurally-impossible failure and
+;; cost ~127 ns/call. Retired per Move B+ pattern (PPN 4C S2.c-iii
+;; precedent).
 (define (resolve-worldview-bitmask/pnet pnet)
   (define per-prop-wv (current-worldview-bitmask))
   (cond
     [(and per-prop-wv (not (zero? per-prop-wv))) per-prop-wv]
     [else
-     (with-handlers ([exn:fail? (lambda (_) 0)])
-       (define v (net-cell-read pnet worldview-cache-cell-id))
-       (if (number? v) v 0))]))
+     (define v (net-cell-read pnet worldview-cache-cell-id))
+     (if (number? v) v 0)]))
 
 ;; compound-cell-component-ref/pnet pnet cell-id component-key [default]
 ;; Read a component's UNWRAPPED value from a compound cell. Returns
