@@ -1087,8 +1087,31 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
           | some payload ->
               bs-append-pending-out [listener-notify-bytes resolver payload] st
 
+;; Phase 53: captp-incoming-with-state's match arms are the
+;; concrete realization of the `CapTPSession` session type
+;; (see `prologos::ocapn::protocols`):
+;;
+;;   session CapTPSession
+;;     ? String       ; peer's op:start-session  ← op-start-session arm
+;;     ! String       ; our op:start-session     ← bridge-state-with-our-session
+;;     rec
+;;       &>
+;;         | :deliver           -> ? String -> rec  ← op-deliver
+;;         | :deliver-to-answer -> ? String -> rec  ← op-deliver-to-answer
+;;         | :deliver-only      -> ? String -> rec  ← op-deliver-only
+;;         | :listen            -> ? String -> rec  ← op-listen
+;;         | :gc-export         -> ? String -> rec  ← op-gc-export
+;;         | :gc-answer         -> ? String -> rec  ← op-gc-answer
+;;         | :abort             -> ? String -> end  ← op-abort
+;;
+;; Each match arm consumes one inbound op (the `? String` step) and
+;; updates (Vat, BridgeState). The dispatcher loops (via the
+;; recursive `&>`), except for op-abort which transitions to `end`
+;; — `connection-step` sets `aborted?` and subsequent inbound ops
+;; become no-ops, faithfully implementing the protocol's
+;; "transition to end" semantics.
 spec captp-incoming-with-state CapTPOp Vat BridgeState -> BridgeStep
-  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 + 34b."
+  :doc "Apply an inbound CapTPOp to (Vat, BridgeState). Phase 14 + 15 + 25 + 34b. Implements the responder side of CapTPSession (prologos::ocapn::protocols, Phase 53)."
 defn captp-incoming-with-state
   | [op-deliver tgt args ap _rm] v st ->
       ;; Phase 34b: inbound args may contain refrs peer is sharing

@@ -1,0 +1,174 @@
+ns prologos::ocapn::protocols :no-prelude
+
+;; ========================================
+;; OCapN protocol session types — Phase 53
+;; ========================================
+;;
+;; The OCapN spec defines several stateful message exchanges between
+;; peers; this module captures each as a session type. These serve
+;; three roles:
+;;
+;;   1. SPECIFICATION — the canonical statement of what messages
+;;      flow in what order between peers. The bridge's handler
+;;      code (`captp-incoming-with-state`, `pump-outbound`, etc.)
+;;      should be reviewable against these protocols: each handler
+;;      branch corresponds to a session step.
+;;
+;;   2. DUALITY CHECK — every session type has a dual; the
+;;      `test-ocapn-protocols.rkt` test suite verifies dual-of-dual
+;;      is identity (the dual round-trip), confirming the
+;;      protocols are well-formed.
+;;
+;;   3. FUTURE RUNTIME WIRING — a later phase can replace ad-hoc
+;;      BridgeState dispatch with session-typed channels driven by
+;;      the propagator network (cf. `io-bridge.rkt` /
+;;      `session-runtime.rkt`'s pattern for FileRead/FileWrite).
+;;
+;; Each session here is written from ONE peer's perspective —
+;; typically the LOCAL peer. The remote peer follows the DUAL.
+
+;; ----------------------------------------
+;; Payload types
+;; ----------------------------------------
+;;
+;; All op-level messages are SyrupValue on the wire. Concrete
+;; semantic types (CapTPOp, Refr, etc.) live in
+;; `prologos::ocapn::{message, refr}`. For session-type purposes
+;; we use String — every encoded op fits in a String when serialised
+;; (newline-framed). A future revision can refine the payload type
+;; to `CapTPOp` once the cross-module session-elaboration story
+;; supports user-defined data types in session positions.
+;;
+;; For now: think of `! String` as "send one op:* on the wire" and
+;; `? String` as "receive one op:* from the wire."
+
+;; ========================================
+;; 1. Handshake (Phase 25)
+;; ========================================
+;;
+;; Both peers MUST exchange op:start-session before any other op
+;; flows. From OUR perspective: we send first, then receive peer's.
+;; (In practice the bridge pre-queues OUR session in pending-out and
+;; expects peer's to be the first inbound op; the handlers are
+;; `bridge-state-with-our-session` + the `op-start-session` arm in
+;; `captp-incoming-with-state`.)
+session Handshake
+  ! String
+  ? String
+  end
+
+;; ========================================
+;; 2. Question-Answer (Phase 25 questioner-side)
+;; ========================================
+;;
+;; The atomic request/reply pair: we send `op:deliver` with an
+;; answer-pos, peer eventually replies with
+;; `op:deliver-to-answer`. Bridge handler:
+;; `bridge-send-question` (emit) + `dispatch-incoming-answer`
+;; (receive + resolve local promise).
+;;
+;; The reply MAY carry a broken-promise <Error _> as the payload;
+;; from the protocol's perspective it's just "a String" — the
+;; bridge interprets the payload's shape.
+session QuestionAnswer
+  ! String
+  ? String
+  end
+
+;; ========================================
+;; 3. Pipelined-question (Phase 38-49)
+;; ========================================
+;;
+;; After we've sent a question, we may pipeline additional deliveries
+;; targeting the question's answer-pos BEFORE the answer arrives.
+;; Peer queues them on the local promise; on resolution, peer
+;; forwards them to the resolved refr (Phase 41/44) or errors them
+;; out (Phase 45/46). From OUR perspective the loop is internal
+;; choice (we decide each turn whether to pipeline more or wait):
+session PipelinedQuestion
+  ! String
+  rec
+    +>
+      | :pipeline -> ! String -> rec
+      | :await -> ? String -> end
+
+;; ========================================
+;; 4. Listen (Phase 48)
+;; ========================================
+;;
+;; Register a one-shot notification on a target promise; eventually
+;; receive `op:deliver` to our resolver-pos when the promise
+;; settles. Bridge handler: `bs-add-listener` + `listener-notify-loop`
+;; in pump-outbound (or `bs-handle-listen-with-late-fire` for the
+;; already-settled case — Phase 51).
+session ListenProtocol
+  ! String
+  ? String
+  end
+
+;; ========================================
+;; 5. GC export (Phase 34e / 50)
+;; ========================================
+;;
+;; One-way notification: we dropped k references to peer's export N.
+;; No reply expected; peer decrements their refcount.
+;; Bridge handler: `release-import` (imperative) or
+;; `connection-queue-release-import` (declarative, Phase 50).
+session GcExport
+  ! String
+  end
+
+;; ========================================
+;; 6. Gift handoff — recipient-to-exporter (Phase 52+)
+;; ========================================
+;;
+;; The OCapN three-vat handoff has multiple legs. This session is
+;; from the RECIPIENT's perspective dialing the exporter: send
+;; `op:withdraw-gift`, await the capability delivery.
+;;
+;; Phase 52 ships only the gift-table scaffolding
+;; (`bs-add-gift`/`bs-lookup-gift`); op:deposit-gift and
+;; op:withdraw-gift wire encoding + bridge dispatch + netlayer-tcp
+;; outbound dialing are deferred to subsequent phases.
+session GiftWithdraw
+  ! String
+  ? String
+  end
+
+;; ========================================
+;; 7. Gift handoff — gifter-to-exporter (Phase 52+, deferred)
+;; ========================================
+;;
+;; One-way: gifter notifies exporter "I deposited a gift for the
+;; recipient at gift-id G."
+session GiftDeposit
+  ! String
+  end
+
+;; ========================================
+;; 8. The whole CapTP session — responder view
+;; ========================================
+;;
+;; From the RESPONDER's perspective: receive peer's session bytes,
+;; respond with our own, then enter the main loop offering each
+;; possible inbound op. The loop only ends on op:abort.
+;;
+;; This is the protocol against which `captp-incoming-with-state`'s
+;; dispatch should be reviewed: every offered branch corresponds
+;; to one of its match arms. The bridge HANDLES each op without
+;; producing the analogous wire reply — for symmetry with the
+;; CapTPOp constructors, we model the inbound side as `?` and
+;; outbound responses as separate sessions (Question/Listen/etc.
+;; cover the responses).
+session CapTPSession
+  ? String
+  ! String
+  rec
+    &>
+      | :deliver           -> ? String -> rec
+      | :deliver-to-answer -> ? String -> rec
+      | :deliver-only      -> ? String -> rec
+      | :listen            -> ? String -> rec
+      | :gc-export         -> ? String -> rec
+      | :gc-answer         -> ? String -> rec
+      | :abort             -> ? String -> end

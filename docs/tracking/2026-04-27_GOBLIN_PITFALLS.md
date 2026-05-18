@@ -1788,6 +1788,150 @@ pitfalls multiple times:
   `let` values). Both classes of bug have the same workaround:
   inline to one line.
 
+---
+
+### #39 — `rackunit`'s `check-true` is strict for `#t`, NOT truthy (2026-05-18, real ergonomics gotcha)
+
+**Symptom.** Wrote tests like
+
+```racket
+(check-true (assq ':pipeline branches) "Choice has :pipeline branch")
+```
+
+This fails with `FAILURE: params: (list (cons ':pipeline ...))` even
+though `assq` clearly returned the matching pair `(:pipeline . send...)`,
+which is a truthy value in Racket.
+
+**Root cause.** `rackunit/check-true` requires the value to be exactly
+`#t`. A non-`#f` value that isn't `#t` (e.g., a pair, a string, a
+struct) is treated as a failure. The standard Racket idiom of relying
+on truthy/falsy doesn't apply.
+
+**Workaround.** Either use `check-not-false`, or coerce to bool:
+
+```racket
+;; (a) preferred — semantically clear:
+(check-not-false (assq ':pipeline branches) "Choice has :pipeline branch")
+
+;; (b) coerce — works but obscures intent:
+(check-true (and (assq ':pipeline branches) #t) "Choice has :pipeline branch")
+```
+
+**Diagnosis.** The failure report shows `params: <the-value>` which
+*looks* like the value should be truthy. A reader who doesn't know
+rackunit's strictness assumes the value is somehow #f and goes
+searching for a bug in the code under test. The bug is in the test
+infrastructure choice.
+
+**Discovered.** OCapN protocols (Phase 53, 2026-05-18). Cost
+~5 minutes after staring at the params display thinking the assq
+itself was returning a malformed list. Resolved by switching to
+`(and (assq ...) #t)` pattern (matches existing `test-io-session-02`
+and `test-session-throws-01` conventions in this repo).
+
+**Verdict.** This is documented rackunit behaviour, not a Racket /
+Prologos bug. Recording it here because it's surprising for anyone
+coming from a check-truthy framework. Pattern to remember: when
+your `check-true` fails with the params display showing a clearly-
+truthy value, switch to `check-not-false`.
+
+---
+
+### #40 — `prelude-module-registry` + `current-multi-defn-registry` aren't auto-exported with `test-support.rkt` (2026-05-18, real ergonomics)
+
+**Symptom.** Wrote a new test file modelled after existing fixture
+patterns. Got two cascading errors:
+
+```
+prelude-module-registry: unbound identifier
+;; ... add (require "test-support.rkt") ...
+current-multi-defn-registry: unbound identifier
+```
+
+Even with `(require "test-support.rkt")`, `current-multi-defn-registry`
+wasn't found. Both identifiers are needed by the canonical
+`parameterize`-everything fixture pattern that
+`test-ocapn-bridge.rkt`, `test-ocapn-pipeline-forwarding-interop.rkt`,
+etc. use.
+
+**Root cause.** `prelude-module-registry` IS exported by
+`test-support.rkt`. `current-multi-defn-registry` is exported by
+`multi-dispatch.rkt`. They live in different modules and you have
+to require both. Failing to require either gives the unbound-
+identifier message.
+
+**Workaround.** Always include both requires:
+
+```racket
+(require rackunit
+         racket/list
+         "test-support.rkt"
+         "../driver.rkt"
+         "../errors.rkt"
+         "../sessions.rkt"
+         "../macros.rkt"
+         "../global-env.rkt"
+         "../namespace.rkt"
+         "../metavar-store.rkt"
+         "../multi-dispatch.rkt")   ;; ← easy to miss
+```
+
+The existing fixture pattern (test-ocapn-bridge.rkt and friends)
+imports both; copying the require block as-is from a known-good test
+sidesteps this.
+
+**Discovered.** OCapN protocols (Phase 53, 2026-05-18). Cost
+~3 minutes following the cascade of "unbound identifier" errors.
+
+**Verdict.** Not a bug per se, but a discoverability gap.
+`test-support.rkt` could re-export `current-multi-defn-registry`
+to make the import list shorter, OR there could be a
+`tests/test-fixture.rkt` umbrella that re-exports the entire
+canonical fixture surface so new test files just need one import.
+Filed as ergonomic improvement, low priority.
+
+---
+
+### #41 — WS-mode session bodies need `! T -> end` chained right, not parenthesised (2026-05-18, ergonomics)
+
+**Observation.** WS-mode session syntax (`! T -> ? T -> end`)
+desugars left-to-right via `->`:
+
+```
+! String -> ? String -> end
+;; parses as (Send String (Recv String End)), which is correct.
+```
+
+This works perfectly for linear sessions. But for nested choice
+branches each branch body is also a `->`-chain:
+
+```prologos
++>
+  | :read-all  -> ? String -> end
+  | :read-line -> ? String -> rec
+  | :close     -> end
+```
+
+The first `->` is the label-to-body separator; subsequent `->`s
+are session chaining within the body. This works because the parser
+treats `:label ->` specially.
+
+What can go wrong: putting EXTRA spaces inside a branch line to
+align labels visually (`| :pipeline  -> ! ...` vs
+`| :await    -> ? ...`) — this is fine and parses identically.
+The extra whitespace is purely cosmetic.
+
+What canNOT work: trying to use parens to group a branch body
+explicitly (`| :foo -> (! T -> end)`) — Prologos sessions don't
+support parenthesised inner expressions; the `->` chain is implicit.
+
+**Verdict.** Not a bug. Documenting because the syntax is
+unfamiliar to those coming from `pi-calculus`-style ASCII session
+notation. The full grammar is in `racket/prologos/macros.rkt`
+around line 1306+ (`parse-session-body`).
+
+
+
 
 
 
