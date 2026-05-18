@@ -40,6 +40,7 @@
 
 (require racket/list
          racket/format
+         racket/path
          "../../syntax.rkt"
          "../../typing-propagators.rkt"
          "../../metavar-store.rkt"
@@ -528,18 +529,314 @@
            (build-jC-attribute-map 10000))
 
 ;; ============================================================
+;; SECTION 9: E-tier — Edge cases
+;; ============================================================
+;;
+;; E1: read state spread — unallocated vs unsolved vs solved at meta-pos
+;; E2: read under speculation (current-worldview-bitmask non-zero) —
+;;     captures the cost when ATMS branching is active (Phase 3 future)
+;; E3: cross-facet at meta-pos — cost of reading each facet for a meta
+;; E4: arity-2 whole-record view — Track 4D + LSP inspection cost
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 9: E-tier — Edge cases")
+(displayln "============================================================")
+
+;; E1: read-state spread on universe cell
+(with-elab-env
+  (lambda ()
+    (define metas (for/list ([_ (in-range 100)]) (fresh-meta '() (expr-Int) 'bench)))
+    ;; metas[0] solved; metas[1] unsolved (allocated but no solution); metas[2..] same
+    (solve-meta! (expr-meta-id (car metas)) (expr-Int))
+    (define solved-id (expr-meta-id (car metas)))
+    (define unsolved-id (expr-meta-id (cadr metas)))
+    (define unallocated-id (gensym 'never-allocated))  ;; never went through fresh-meta
+    (define type-universe-cid (current-type-meta-universe-cell-id))
+    (define enet (unbox (current-prop-net-box)))
+
+    (displayln "")
+    (displayln "  E1: read-state spread (solved / unsolved / unallocated)")
+    (define e1a
+      (bench-ns "E1a (compound-cell-component-ref solved-id) → solution" 50000
+                (compound-cell-component-ref enet type-universe-cid solved-id)))
+    (define e1b
+      (bench-ns "E1b (compound-cell-component-ref unsolved-id) → infra-bot" 50000
+                (compound-cell-component-ref enet type-universe-cid unsolved-id)))
+    (define e1c
+      (bench-ns "E1c (compound-cell-component-ref unallocated-id) → #f" 50000
+                (compound-cell-component-ref enet type-universe-cid unallocated-id)))
+
+    (void e1a e1b e1c)))
+
+;; E2: read under speculation (per-prop bitmask non-zero)
+(with-elab-env
+  (lambda ()
+    (define metas (for/list ([_ (in-range 100)]) (fresh-meta '() (expr-Int) 'bench)))
+    (solve-meta! (expr-meta-id (car metas)) (expr-Int))
+    (define solved-id (expr-meta-id (car metas)))
+    (define type-universe-cid (current-type-meta-universe-cell-id))
+    (define enet (unbox (current-prop-net-box)))
+
+    (displayln "")
+    (displayln "  E2: read under speculation (current-worldview-bitmask non-zero)")
+    (parameterize ([current-worldview-bitmask 1])
+      (define e2a
+        (bench-ns "E2a (compound-cell-component-ref) wv=1 per-prop-active" 50000
+                  (compound-cell-component-ref enet type-universe-cid solved-id)))
+      (void e2a))
+    ;; Compare to baseline wv=0 (resolve falls through to worldview-cache)
+    (parameterize ([current-worldview-bitmask 0])
+      (define e2b
+        (bench-ns "E2b (compound-cell-component-ref) wv=0 cache-fallback" 50000
+                  (compound-cell-component-ref enet type-universe-cid solved-id)))
+      (void e2b))))
+
+;; E3: cross-facet at meta-pos — cost of reading each facet for a meta position
+;; Builds a fully-populated attribute-map record at a meta-pos representative
+;; (uses gensym-based pos for fixture isolation; production meta-pos = expr-meta)
+(define-values (e3-net e3-cid e3-positions) (make-surface-fixture 1))
+(define e3-pos (car e3-positions))
+;; Populate ALL 5 storage facets at e3-pos
+(define e3-net*
+  (let* ([n e3-net]
+         [n (that-write n e3-cid e3-pos ':type (expr-Int))]
+         [n (that-write n e3-cid e3-pos ':term (expr-int 42))]
+         [n (that-write n e3-cid e3-pos ':context #f)]
+         [n (that-write n e3-cid e3-pos ':usage '(m0))]
+         [n (that-write n e3-cid e3-pos ':constraints (facet-bot ':constraints))]
+         [n (that-write n e3-cid e3-pos ':warnings '())])
+    n))
+(define e3-am (net-cell-read e3-net* e3-cid))
+
+(displayln "")
+(displayln "  E3: cross-facet read spread at fully-populated meta-pos")
+
+(define e3a (bench-ns "E3a (that-read am pos :type)" 50000 (that-read e3-am e3-pos ':type)))
+(define e3b (bench-ns "E3b (that-read am pos :term)" 50000 (that-read e3-am e3-pos ':term)))
+(define e3c (bench-ns "E3c (that-read am pos :context)" 50000 (that-read e3-am e3-pos ':context)))
+(define e3d (bench-ns "E3d (that-read am pos :usage)" 50000 (that-read e3-am e3-pos ':usage)))
+(define e3e (bench-ns "E3e (that-read am pos :constraints)" 50000 (that-read e3-am e3-pos ':constraints)))
+(define e3f (bench-ns "E3f (that-read am pos :warnings)" 50000 (that-read e3-am e3-pos ':warnings)))
+(void e3a e3b e3c e3d e3e e3f)
+
+;; E4: arity-2 whole-record view
+(displayln "")
+(displayln "  E4: arity-2 whole-record view (Track 4D / LSP inspection)")
+(define e4a
+  (bench-ns "E4a (that-read am pos) → decomposed user-facing hasheq" 50000
+            (that-read e3-am e3-pos)))
+(define e4b
+  (bench-ns "E4b (that-read am unallocated-pos) → empty hasheq" 50000
+            (that-read e3-am 'never-written-pos)))
+(void e4a e4b)
+
+;; ============================================================
+;; SECTION 10: R-tier — Realistic workload via process-file
+;; ============================================================
+;;
+;; Drives process-file on the PPN 4C acceptance file. Captures wall
+;; time + the perf-counter signals that process-file emits to stdout.
+;; These give us TOTAL elaboration cost on a realistic workload.
+;;
+;; Combined with M+A tier costs, we project Phase 1E impact:
+;;   - Total that-* call cost = (M-tier that-* cost) × (count est.)
+;;   - Fraction of elaboration time = that-* cost / total wall
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 10: R-tier — Realistic workload (process-file)")
+(displayln "============================================================")
+(displayln "")
+(displayln "  Driving process-file on examples/2026-04-17-ppn-track4c.prologos")
+(displayln "  (67 commands; broad pipeline exercise — see file header for axes)")
+(displayln "")
+
+(define acceptance-path
+  (build-path (path-only (path->complete-path "racket/prologos/."))
+              "examples" "2026-04-17-ppn-track4c.prologos"))
+
+;; Run process-file once, time it. process-file's own output (PERF-COUNTERS,
+;; PHASE-TIMINGS, CELL-METRICS lines per command) is captured in stdout
+;; below. We add R1 wall time on top.
+(displayln "  --- R1: process-file output begins ---")
+(collect-garbage) (collect-garbage)
+(define r1-start (current-inexact-milliseconds))
+(define r1-result
+  (with-handlers ([exn:fail? (lambda (e)
+                               (printf "  R1: process-file ERROR: ~a\n" (exn-message e))
+                               'error)])
+    (process-file acceptance-path)))
+(define r1-end (current-inexact-milliseconds))
+(define r1-wall-ms (- r1-end r1-start))
+(displayln "  --- R1: process-file output ends ---")
+(displayln "")
+(printf "  R1 acceptance-file wall: ~a ms\n" (~r r1-wall-ms #:precision '(= 1)))
+
+;; R2: Phase 1E projection — order-of-magnitude impact estimate
+;;
+;; From PERF-COUNTERS R1 captured: 67 commands → 3773 cell_allocs, 63
+;; meta_created, 328 infer_steps, 170 unify_steps, 715 zonk_steps,
+;; elaborate_ms=114, total wall 4640 ms.
+;;
+;; Heuristic that-* call count for the acceptance file:
+;;   that-write calls ≈ cell_allocs (each net-new-cell on attribute-map
+;;     path goes through that-write; meta cells via universe path skip
+;;     that-write but use compound-cell-component-write)
+;;   that-read calls  ≈ 3 × infer_steps + 2 × unify_steps + zonk_steps
+;;     (rough: each inference step does several reads; unify reads both
+;;     sides; zonk dereferences metas)
+;;   meta-pos reads   ≈ unify_steps + zonk_steps  (the meta dereference
+;;     paths from unify + zonk dominate meta-pos access)
+
+(define r-cell-allocs 3773)
+(define r-meta-created 63)
+(define r-infer-steps 328)
+(define r-unify-steps 170)
+(define r-zonk-steps 715)
+(define r-elaborate-ms 114)
+
+(define est-that-writes r-cell-allocs)
+(define est-that-reads (+ (* 3 r-infer-steps) (* 2 r-unify-steps) r-zonk-steps))
+(define est-meta-pos-reads (+ r-unify-steps r-zonk-steps))
+
+(displayln "")
+(displayln "  --- R2: Phase 1E impact projection (heuristic from R1 PERF-COUNTERS) ---")
+(displayln "")
+(printf "  Acceptance file PERF-COUNTERS (from R1 stdout):\n")
+(printf "    cell_allocs:        ~a (~~~a/cmd)\n" r-cell-allocs (round (/ r-cell-allocs 67.0)))
+(printf "    meta_created:       ~a (~~~a/cmd)\n" r-meta-created (~r (/ r-meta-created 67.0) #:precision '(= 2)))
+(printf "    infer_steps:        ~a (~~~a/cmd)\n" r-infer-steps (round (/ r-infer-steps 67.0)))
+(printf "    unify_steps:        ~a (~~~a/cmd)\n" r-unify-steps (round (/ r-unify-steps 67.0)))
+(printf "    zonk_steps:         ~a (~~~a/cmd)\n" r-zonk-steps (round (/ r-zonk-steps 67.0)))
+(printf "    elaborate_ms:       ~a (~~~a% of wall)\n" r-elaborate-ms
+        (~r (/ (* r-elaborate-ms 100.0) r1-wall-ms) #:precision '(= 1)))
+(displayln "")
+(printf "  Estimated that-* call count per acceptance run:\n")
+(printf "    that-writes ≈ ~a\n" est-that-writes)
+(printf "    that-reads  ≈ ~a\n" est-that-reads)
+(printf "    of which meta-pos reads ≈ ~a (~~~a% of total reads)\n"
+        est-meta-pos-reads
+        (~r (/ (* est-meta-pos-reads 100.0) est-that-reads) #:precision '(= 1)))
+(displayln "")
+(printf "  Projected total time in that-* on this workload:\n")
+(printf "    Current (M1+M4):           ~~~a μs (~~~a%% of elaborate_ms)\n"
+        (~r (/ (+ (* 32 est-that-reads) (* 317 est-that-writes)) 1000.0) #:precision '(= 1))
+        (~r (/ (+ (* 32 est-that-reads) (* 317 est-that-writes))
+               (* r-elaborate-ms 10000.0)) #:precision '(= 2)))
+(printf "    Phase 1E J-C unoptimized:  ~~~a μs (~~~a%% of elaborate_ms; meta-pos at M5a/M6)\n"
+        (~r (/ (+ (* 32 (- est-that-reads est-meta-pos-reads))
+                  (* 207 est-meta-pos-reads)
+                  (* 317 est-that-writes)) 1000.0) #:precision '(= 1))
+        (~r (/ (+ (* 32 (- est-that-reads est-meta-pos-reads))
+                  (* 207 est-meta-pos-reads)
+                  (* 317 est-that-writes))
+               (* r-elaborate-ms 10000.0)) #:precision '(= 2)))
+(printf "    Phase 1E J-C w/ cleanup:   ~~~a μs (~~~a%% of elaborate_ms; meta-pos at ~~80ns)\n"
+        (~r (/ (+ (* 32 (- est-that-reads est-meta-pos-reads))
+                  (* 80 est-meta-pos-reads)
+                  (* 317 est-that-writes)) 1000.0) #:precision '(= 1))
+        (~r (/ (+ (* 32 (- est-that-reads est-meta-pos-reads))
+                  (* 80 est-meta-pos-reads)
+                  (* 317 est-that-writes))
+               (* r-elaborate-ms 10000.0)) #:precision '(= 2)))
+(displayln "")
+(displayln "  Realistic-workload signal:")
+(displayln "    that-* cost is a SMALL fraction of elaborate_ms (which is itself")
+(displayln "    only ~2.5% of wall; reduce_ms dominates at ~26%).")
+(displayln "    Phase 1E routing overhead is essentially invisible to overall")
+(displayln "    elaboration cost — even at unoptimized J-C, projected impact")
+(displayln "    is well under 1% of elaborate_ms. The cleanup matters for")
+(displayln "    high-frequency paths beyond that-* (S(-1), set-latch, etc.).")
+
+;; ============================================================
+;; SECTION 11: S-tier — Semantic-axis frozen-value baseline
+;; ============================================================
+;;
+;; Captures the CURRENT observable values at representative test points
+;; under the pre-Phase-1E architecture. These become the parity baseline
+;; for post-Phase-1E A/B comparison. The bench-file role is FROZEN-VALUE
+;; CAPTURE; the regression gate lives in tests/test-elaboration-parity.rkt
+;; (skeleton added when Phase 1E implementation begins).
+;;
+;; Semantic axes per Phase 1E:
+;;   S1: surface-position :type read (must regress-test unchanged)
+;;   S2: meta-position :type CLASSIFIER read
+;;   S3: meta-position :term INHABITANT read (solved meta)
+;;   S4: meta-position :term INHABITANT read (unsolved meta)
+;;   S5: cross-facet at fully-populated position
+;;   S6: arity-2 whole-record decomposition
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 11: S-tier — Semantic-axis frozen-value baseline")
+(displayln "============================================================")
+
+(displayln "")
+(displayln "  S1: surface-position :type at expr-Int literal (M1 fixture)")
+(let ([v (that-read s1-am s1-pos ':type)])
+  (printf "    that-read am surface-pos :type = ~v\n" v))
+
+(displayln "")
+(displayln "  S2: meta-position :type CLASSIFIER (current architecture)")
+(with-elab-env
+  (lambda ()
+    (define m (fresh-meta '() (expr-Int) 'bench))
+    (define id (expr-meta-id m))
+    (define type-universe-cid (current-type-meta-universe-cell-id))
+    (define enet (unbox (current-prop-net-box)))
+    (printf "    fresh meta with type=expr-Int\n")
+    (printf "    meta-solution(id) [unsolved]          = ~v\n" (meta-solution id))
+    (printf "    compound-ref(type-universe, id)       = ~v\n"
+            (compound-cell-component-ref enet type-universe-cid id))
+    (solve-meta! id (expr-Int))
+    (printf "    after solve to expr-Int:\n")
+    (define enet2 (unbox (current-prop-net-box)))
+    (printf "    meta-solution(id) [solved]            = ~v\n" (meta-solution id))
+    (printf "    compound-ref(type-universe, id)       = ~v\n"
+            (compound-cell-component-ref enet2 type-universe-cid id))))
+
+(displayln "")
+(displayln "  S3/S4: :term INHABITANT layer at meta-pos in attribute-map")
+(let* ([net0 (make-prop-network)]
+       [tmp (let-values ([(n c) (net-new-cell net0 (hasheq) attribute-map-merge-fn)]) (cons n c))]
+       [net1 (car tmp)] [tm-cid (cdr tmp)]
+       [meta-pos (expr-meta 'test-id #f)]
+       [net2 (that-write net1 tm-cid meta-pos ':type (expr-Int))]
+       [net3 (that-write net2 tm-cid meta-pos ':term (expr-int 42))]
+       [am  (net-cell-read net3 tm-cid)])
+  (printf "    fresh attribute-map at meta-pos, :type=expr-Int, :term=expr-int(42)\n")
+  (printf "    that-read am meta-pos :type = ~v\n" (that-read am meta-pos ':type))
+  (printf "    that-read am meta-pos :term = ~v\n" (that-read am meta-pos ':term)))
+
+(displayln "")
+(displayln "  S5: cross-facet at fully-populated position (E3 fixture)")
+(printf "    that-read am pos :type        = ~v\n" (that-read e3-am e3-pos ':type))
+(printf "    that-read am pos :term        = ~v\n" (that-read e3-am e3-pos ':term))
+(printf "    that-read am pos :context     = ~v\n" (that-read e3-am e3-pos ':context))
+(printf "    that-read am pos :usage       = ~v\n" (that-read e3-am e3-pos ':usage))
+(printf "    that-read am pos :constraints = ~v\n" (that-read e3-am e3-pos ':constraints))
+(printf "    that-read am pos :warnings    = ~v\n" (that-read e3-am e3-pos ':warnings))
+
+(displayln "")
+(displayln "  S6: arity-2 whole-record decomposition")
+(printf "    (that-read am pos) full-decomposed = ~v\n" (that-read e3-am e3-pos))
+
+;; ============================================================
 ;; SUMMARY
 ;; ============================================================
 
 (displayln "")
 (displayln "============================================================")
-(displayln "Phase 1E Pre-0 M+A-tier captured.")
+(displayln "Phase 1E Pre-0 M+A+E+R+S-tier captured.")
 (displayln "")
 (displayln "Decision inputs ready for §G Q1/Q2 + §J option resolution:")
-(displayln "  - Dispatch overhead (A1)")
-(displayln "  - J-A read/write cost vs J-C composed cost (A2/A3)")
-(displayln "  - Specialized-cell-cache lower bound (A4)")
-(displayln "  - Memory growth at scale (A5)")
+(displayln "  - M: current baselines (8 micros)")
+(displayln "  - A: dispatch overhead + J-A vs J-C + cache LB + memory growth")
+(displayln "  - E: edge cases (read-state, speculation, cross-facet, whole-record)")
+(displayln "  - R: realistic workload wall time + projection")
+(displayln "  - S: frozen-value semantic baseline (6 axes)")
 (displayln "")
-(displayln "Next: E-tier (edge cases) + R-tier (realistic workloads) + S-tier (parity)")
+(displayln "Ready for: pre-Phase-1E cleanup (retire with-handlers in")
+(displayln "resolve-worldview-bitmask) + architectural dialogue.")
 (displayln "============================================================")

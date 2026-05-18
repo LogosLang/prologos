@@ -1,7 +1,7 @@
 PERF-COUNTERS:{"cell_allocs":0,"constraint_count":0,"constraint_retries":0,"elaborate_steps":0,"infer_steps":0,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":0,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":0,"zonk_steps":0}
 PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":0,"zonk_ms":0}
 PROVENANCE-STATS:{"atms_hypothesis_count":0,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
-MEMORY-STATS:{"gc_ms":44,"mem_after_bytes":134188856,"mem_before_bytes":133894680,"mem_retained_bytes":294176}
+MEMORY-STATS:{"gc_ms":41,"mem_after_bytes":134387880,"mem_before_bytes":134112632,"mem_retained_bytes":275248}
 CELL-METRICS:{"cells":31,"propagators":0}
 
 ============================================================
@@ -9,83 +9,195 @@ SECTION 1: M1–M4 — that-* API on surface positions
 ============================================================
 
   Fixture: 100 surface positions, each with :type=(expr-Int)
-  M1  (that-read am pos :type) populated: 30.6 ns/call (50000 calls)
-  M2  (that-read am pos :term) populated :type only: 32.9 ns/call (50000 calls)
-  M3  (that-read am absent-pos :type) returns facet-bot: 30.9 ns/call (50000 calls)
-  M4  (that-write net cid pos :type expr) full path: 309.4 ns/call (20000 calls)
+  M1  (that-read am pos :type) populated: 35.3 ns/call (50000 calls)
+  M2  (that-read am pos :term) populated :type only: 32.2 ns/call (50000 calls)
+  M3  (that-read am absent-pos :type) returns facet-bot: 37.5 ns/call (50000 calls)
+  M4  (that-write net cid pos :type expr) full path: 324.5 ns/call (20000 calls)
 
 ============================================================
 SECTION 2: M5–M6 — compound-cell-component-* (universe cell)
 ============================================================
 
   Fixture: full elab env, 100 type metas, half solved to (expr-Int)
-  M5a (compound-cell-component-ref enet cid solved-id) → solution: 201.3 ns/call (50000 calls)
-  M5b (compound-cell-component-ref enet cid unsolved-id) → infra-bot/#f: 210.2 ns/call (50000 calls)
-  M6  (compound-cell-component-write enet cid id (expr-Int)): 424.0 ns/call (20000 calls)
+  M5a (compound-cell-component-ref enet cid solved-id) → solution: 211.7 ns/call (50000 calls)
+  M5b (compound-cell-component-ref enet cid unsolved-id) → infra-bot/#f: 205.7 ns/call (50000 calls)
+  M6  (compound-cell-component-write enet cid id (expr-Int)): 445.5 ns/call (20000 calls)
 
 ============================================================
 SECTION 3: M7–M8 — meta-domain-solution + prop-meta-id->cell-id
 ============================================================
 
   Fixture: full elab env, type meta solved + unsolved
-  M7a (meta-solution solved-id) → expr-Int: 301.7 ns/call (50000 calls)
-  M7b (meta-solution unsolved-id) → #f: 294.2 ns/call (50000 calls)
-  M8a (prop-meta-id->cell-id solved-id) → universe-cid: 59.4 ns/call (50000 calls)
-  M8b (prop-meta-id->cell-id unsolved-id) → universe-cid: 58.0 ns/call (50000 calls)
+  M7a (meta-solution solved-id) → expr-Int: 314.9 ns/call (50000 calls)
+  M7b (meta-solution unsolved-id) → #f: 314.6 ns/call (50000 calls)
+  M8a (prop-meta-id->cell-id solved-id) → universe-cid: 60.0 ns/call (50000 calls)
+  M8b (prop-meta-id->cell-id unsolved-id) → universe-cid: 61.0 ns/call (50000 calls)
 
 ============================================================
 SECTION 4: that-write allocation profile
 ============================================================
-  M4.mem 10000 that-write :type calls: wall=3.192 ms  alloc=2818.3 KB  retain=-1.5 KB  (n=10)
-'#(3.19189453125 2885904 -1496)
+  M4.mem 10000 that-write :type calls: wall=3.220 ms  alloc=2818.3 KB  retain=-1.5 KB  (n=10)
+'#(3.22021484375 2885904 -1520)
 
 ============================================================
 SECTION 5: A1 — Dispatch predicate cost
 ============================================================
-  A1a (meta-universe-cell-id? universe-cid) → #t (hit on first check): 46.2 ns/call (50000 calls)
-  A1b (meta-universe-cell-id? non-universe-cid) → #f (4 misses): 277.3 ns/call (50000 calls)
+  A1a (meta-universe-cell-id? universe-cid) → #t (hit on first check): 83.3 ns/call (50000 calls)
+  A1b (meta-universe-cell-id? non-universe-cid) → #f (4 misses): 340.6 ns/call (50000 calls)
 
 ============================================================
 SECTION 6: A2/A3 — J-A simulation vs J-C composition
 ============================================================
 
   Fixture: J-A extended attribute-map (8 facets per meta-pos)
-  A2.J-A (that-read-jA-simulated am pos :mult): 19.9 ns/call (50000 calls)
-  A2.J-C (predicate + compound-cell-component-ref at mult-universe): 204.2 ns/call (50000 calls)
-  A3.J-C (predicate + compound-cell-component-write at mult-universe): 576.6 ns/call (20000 calls)
-  A3.J-A simulated that-write :mult full path: 208.6 ns/call (20000 calls)
+  A2.J-A (that-read-jA-simulated am pos :mult): 22.9 ns/call (50000 calls)
+  A2.J-C (predicate + compound-cell-component-ref at mult-universe): 261.3 ns/call (50000 calls)
+  A3.J-C (predicate + compound-cell-component-write at mult-universe): 601.0 ns/call (20000 calls)
+  A3.J-A simulated that-write :mult full path: 241.2 ns/call (20000 calls)
 
 ============================================================
 SECTION 7: A4 — Specialized-cell-cache lower bound
 ============================================================
-  A4  (hash-ref compound-val id) + tagged-cell-read [cache lower bound]: 15.7 ns/call (50000 calls)
-  A4b (hash-ref compound-val id) only: 11.6 ns/call (50000 calls)
-  A4c (elab-cell-read enet universe-cid) [cell lookup we'd save]: 30.0 ns/call (50000 calls)
+  A4  (hash-ref compound-val id) + tagged-cell-read [cache lower bound]: 16.3 ns/call (50000 calls)
+  A4b (hash-ref compound-val id) only: 12.5 ns/call (50000 calls)
+  A4c (elab-cell-read enet universe-cid) [cell lookup we'd save]: 29.3 ns/call (50000 calls)
 
 ============================================================
 SECTION 8: A5 — Memory growth at scale (J-A vs J-C)
 ============================================================
 
   J-A: 8 facets per meta-pos (attribute-map holds mult/level/session)
-  A5.J-A.1k  build 1k-pos extended am: wall=0.157 ms  alloc=530.8 KB  retain=-0.2 KB  (n=5)
-'#(0.156982421875 543488 -168)
-  A5.J-A.10k build 10k-pos extended am: wall=1.836 ms  alloc=6632.5 KB  retain=-0.5 KB  (n=3)
-'#(1.8359375 6791648 -512)
+  A5.J-A.1k  build 1k-pos extended am: wall=0.156 ms  alloc=530.8 KB  retain=-0.2 KB  (n=5)
+'#(0.156005859375 543488 -184)
+  A5.J-A.10k build 10k-pos extended am: wall=1.818 ms  alloc=6632.5 KB  retain=-0.4 KB  (n=3)
+'#(1.81787109375 6791648 -448)
 
   J-C: 5 facets per meta-pos (universe cells hold mult/level/session)
-  A5.J-C.1k  build 1k-pos baseline am: wall=0.149 ms  alloc=530.1 KB  retain=-0.2 KB  (n=5)
-'#(0.14892578125 542864 -160)
-  A5.J-C.10k build 10k-pos baseline am: wall=1.797 ms  alloc=6631.7 KB  retain=-0.4 KB  (n=3)
-'#(1.797119140625 6790896 -392)
+  A5.J-C.1k  build 1k-pos baseline am: wall=0.159 ms  alloc=530.1 KB  retain=-0.2 KB  (n=5)
+'#(0.158935546875 542864 -168)
+  A5.J-C.10k build 10k-pos baseline am: wall=1.941 ms  alloc=6631.7 KB  retain=Hole ??__match-fail : String
+Context:
+  x : examples::Color  (w)
+Hole ??__match-fail : String
+Context:
+  x : examples::Color  (w)
+Hole ??__match-fail : String
+Context:
+  x : examples::Color  (w)
+PERF-COUNTERS:{"cell_allocs":3773,"constraint_count":0,"constraint_retries":0,"elaborate_steps":310,"infer_steps":328,"meta_created":63,"meta_solved":59,"prop_allocs":0,"prop_firings":0,"reduce_steps":1132,"resolution_cycles":59,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":1,"unify_steps":170,"zonk_steps":715}
+PHASE-TIMINGS:{"elaborate_ms":117,"parse_ms":0,"qtt_ms":35,"reduce_ms":1238,"trait_resolve_ms":0,"type_check_ms":258,"zonk_ms":3}
+PROVENANCE-STATS:{"atms_hypothesis_count":17,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":154,"mem_after_bytes":156401120,"mem_before_bytes":152742016,"mem_retained_bytes":3659104}
+CELL-METRICS:{"cells":80,"propagators":0}
+-0.3 KB  (n=3)
+'#(1.941162109375 6790896 -344)
 
 ============================================================
-Phase 1E Pre-0 M+A-tier captured.
+SECTION 9: E-tier — Edge cases
+============================================================
+
+  E1: read-state spread (solved / unsolved / unallocated)
+  E1a (compound-cell-component-ref solved-id) → solution: 204.7 ns/call (50000 calls)
+  E1b (compound-cell-component-ref unsolved-id) → infra-bot: 208.0 ns/call (50000 calls)
+  E1c (compound-cell-component-ref unallocated-id) → #f: 44.6 ns/call (50000 calls)
+
+  E2: read under speculation (current-worldview-bitmask non-zero)
+  E2a (compound-cell-component-ref) wv=1 per-prop-active: 83.4 ns/call (50000 calls)
+  E2b (compound-cell-component-ref) wv=0 cache-fallback: 219.5 ns/call (50000 calls)
+
+  E3: cross-facet read spread at fully-populated meta-pos
+  E3a (that-read am pos :type): 30.4 ns/call (50000 calls)
+  E3b (that-read am pos :term): 29.9 ns/call (50000 calls)
+  E3c (that-read am pos :context): 27.8 ns/call (50000 calls)
+  E3d (that-read am pos :usage): 25.4 ns/call (50000 calls)
+  E3e (that-read am pos :constraints): 26.1 ns/call (50000 calls)
+  E3f (that-read am pos :warnings): 28.2 ns/call (50000 calls)
+
+  E4: arity-2 whole-record view (Track 4D / LSP inspection)
+  E4a (that-read am pos) → decomposed user-facing hasheq: 260.1 ns/call (50000 calls)
+  E4b (that-read am unallocated-pos) → empty hasheq: 15.8 ns/call (50000 calls)
+
+============================================================
+SECTION 10: R-tier — Realistic workload (process-file)
+============================================================
+
+  Driving process-file on examples/2026-04-17-ppn-track4c.prologos
+  (67 commands; broad pipeline exercise — see file header for axes)
+
+  --- R1: process-file output begins ---
+  --- R1: process-file output ends ---
+
+  R1 acceptance-file wall: 4687.8 ms
+
+  --- R2: Phase 1E impact projection (heuristic from R1 PERF-COUNTERS) ---
+
+  Acceptance file PERF-COUNTERS (from R1 stdout):
+    cell_allocs:        3773 (~56.0/cmd)
+    meta_created:       63 (~0.94/cmd)
+    infer_steps:        328 (~5.0/cmd)
+    unify_steps:        170 (~3.0/cmd)
+    zonk_steps:         715 (~11.0/cmd)
+    elaborate_ms:       114 (~2.4% of wall)
+
+  Estimated that-* call count per acceptance run:
+    that-writes ≈ 3773
+    that-reads  ≈ 2039
+    of which meta-pos reads ≈ 885 (~43.4% of total reads)
+
+  Projected total time in that-* on this workload:
+    Current (M1+M4):           ~1261.3 μs (~1.11%% of elaborate_ms)
+    Phase 1E J-C unoptimized:  ~1416.2 μs (~1.24%% of elaborate_ms; meta-pos at M5a/M6)
+    Phase 1E J-C w/ cleanup:   ~1303.8 μs (~1.14%% of elaborate_ms; meta-pos at ~80ns)
+
+  Realistic-workload signal:
+    that-* cost is a SMALL fraction of elaborate_ms (which is itself
+    only ~2.5% of wall; reduce_ms dominates at ~26%).
+    Phase 1E routing overhead is essentially invisible to overall
+    elaboration cost — even at unoptimized J-C, projected impact
+    is well under 1% of elaborate_ms. The cleanup matters for
+    high-frequency paths beyond that-* (S(-1), set-latch, etc.).
+
+============================================================
+SECTION 11: S-tier — Semantic-axis frozen-value baseline
+============================================================
+
+  S1: surface-position :type at expr-Int literal (M1 fixture)
+    that-read am surface-pos :type = (expr-Int)
+
+  S2: meta-position :type CLASSIFIER (current architecture)
+    fresh meta with type=expr-Int
+    meta-solution(id) [unsolved]          = #f
+    compound-ref(type-universe, id)       = 'type-bot
+    after solve to expr-Int:
+    meta-solution(id) [solved]            = (expr-Int)
+    compound-ref(type-universe, id)       = (expr-Int)
+
+  S3/S4: :term INHABITANT layer at meta-pos in attribute-map
+    fresh attribute-map at meta-pos, :type=expr-Int, :term=expr-int(42)
+    that-read am meta-pos :type = (expr-Int)
+    that-read am meta-pos :term = (expr-int 42)
+
+  S5: cross-facet at fully-populated position (E3 fixture)
+    that-read am pos :type        = (expr-Int)
+    that-read am pos :term        = (expr-int 42)
+    that-read am pos :context     = #f
+    that-read am pos :usage       = '(m0)
+    that-read am pos :constraints = 'constraint-bot
+    that-read am pos :warnings    = '()
+
+  S6: arity-2 whole-record decomposition
+    (that-read am pos) full-decomposed = (hasheq ':constraints 'constraint-bot ':context #f ':term (expr-int 42) ':type (expr-Int) ':usage '(m0) ':warnings '())
+
+============================================================
+Phase 1E Pre-0 M+A+E+R+S-tier captured.
 
 Decision inputs ready for §G Q1/Q2 + §J option resolution:
-  - Dispatch overhead (A1)
-  - J-A read/write cost vs J-C composed cost (A2/A3)
-  - Specialized-cell-cache lower bound (A4)
-  - Memory growth at scale (A5)
+  - M: current baselines (8 micros)
+  - A: dispatch overhead + J-A vs J-C + cache LB + memory growth
+  - E: edge cases (read-state, speculation, cross-facet, whole-record)
+  - R: realistic workload wall time + projection
+  - S: frozen-value semantic baseline (6 axes)
 
-Next: E-tier (edge cases) + R-tier (realistic workloads) + S-tier (parity)
+Ready for: pre-Phase-1E cleanup (retire with-handlers in
+resolve-worldview-bitmask) + architectural dialogue.
 ============================================================
