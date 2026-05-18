@@ -4,7 +4,7 @@
 #+DATE: 2026-03-21
 #+OPTIONS: toc:nil
 
-*Last updated*: 2026-05-14 (PPN 4C tropical addendum D.4 CANONICAL — §13.6 Pre-0 spike PASS commit ~7b681b9e~; D.3 hybrid pivot scaffolding retired before shipping; OE Series caveat refined to specialized cell type framework as the canonical pattern; Issue #55 closed)
+*Last updated*: 2026-05-17 (PPN 4C tropical addendum Phase 1 ATOMIC CLOSE commit ~b8405dfb~; PIR landed at [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md]] — both deliveries documented: foreseen tropical quantale primitive + unforeseen specialized cell type framework + Cell/Propagator/Scheduler Orthogonality principle as cross-track template for PReduce + OE + SH + PM 12 + PPN 4D)
 
 * Purpose
 
@@ -458,7 +458,7 @@ UCS sits between SRE/PRN (the rewriting substrate) and BSP-LE (the search infras
 | 3.5 | Grammar Form research + speculative design | ⬜ | [[file:../research/2026-03-26_GRAMMAR_TOPLEVEL_FORM.md][Grammar form research]]. Multi-view spec, DPO structural preservation. Can interleave with Track 4. |
 | 4A | Elaboration as attribute evaluation — typing on-network | ✅ [[file:2026-04-04_PPN_TRACK4_DESIGN.md][Design D.4]] [[file:2026-04-04_PPN_TRACK4_PIR.md][PIR]] | 46% on-network typing, ephemeral PU, SRE typing domain (~150 entries) |
 | 4B | Full attribute evaluation — typing + constraints + mult + warnings | ✅ [[file:2026-04-05_PPN_TRACK4B_DESIGN.md][Design D.2]] [[file:2026-04-07_PPN_TRACK4B_PIR.md][PIR]] | All 5 attribute domains on-network, 7578 tests GREEN, 6 imperative bridges as scaffolding |
-| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.4 CANONICAL]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. Tropical fuel cell + specialized cell type framework + multi-quantale composition. Pre-0 100% complete; §13.6 spike PASS (commit ~7b681b9e~); D.4 canonical full revisions complete; Stage 4 implementation ready (Phase 1B first per Q-Open-4). |
+| 4C | Elaboration completely on-network — 9 axes | 🔄 [[file:2026-04-17_PPN_TRACK4C_AUDIT.md][Audit]] [[file:2026-04-17_PPN_TRACK4C_DESIGN.md][Design D.1]] + [[file:2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md][Tropical Addendum D.4 CANONICAL]] + [[file:2026-05-17_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_PIR.md][Tropical Addendum PIR]] | Mantra north star, NTT guiderails, BSP-LE 2+2B substrate. **Tropical Addendum Phase 1 ATOMIC CLOSE 2026-05-17** (commit ~b8405dfb~; 26 days, ~64 commits, +310 tests, −4.6s wall, 4 codifications graduated, Cell/Propagator/Scheduler Orthogonality principle codified, cross-track template for PReduce + OE + SH + PM 12 + PPN 4D). Phase 1E + Phase 2 + Phase 3 + Phase V + parent CHAMP retirement remain. |
 | 4D | *Attribute Grammar Substrate Unification* | ⬜ | [[file:../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md][Vision Research]]. Collapse fragmented typing/elaboration/reduction subsystems. Prereq: 4C complete + T-3 landed + PM Track 12. Multi-month scope. |
 | 5 | Type-directed disambiguation | ⬜ | Track 4. Backward type→parse via Galois bridges. Bilattice (gfp/elimination). |
 | 6 | Error recovery as lattice repair (OE) | ⬜ | Track 3. Tropical semiring optimization. |
