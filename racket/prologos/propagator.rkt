@@ -38,6 +38,10 @@
          "decision-cell.rkt"  ;; BSP-LE Track 2: commitment cell + nogood lattice
          "merge-fn-registry.rkt"  ;; PPN 4C Phase 1c: Tier 3 domain inheritance
          "source-location.rkt"  ;; PPN 4C Phase 1.5: current-source-loc for on-network srcloc
+         "tropical-fuel-primitives.rkt"  ;; D.4 1V-6 F14 retirement (§11.X.5):
+                                          ;; algebraic primitives leaf module
+                                          ;; (cycle-safe; tropical-fuel.rkt re-exports
+                                          ;; for backward compat with other consumers)
          racket/future         ;; for future, touch, processor-count
          racket/set            ;; PAR Track 1: set-union for decomp-request cell
          racket/async-channel  ;; Phase 2d: buffered channel for streaming results
@@ -663,16 +667,13 @@
 (define fuel-cell-id (cell-id 11))
 (define fuel-budget-cell-id (cell-id 12))
 
-;; D.4 1B-iv: inline tropical-fuel-merge duplicate to avoid the import cycle
-;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt.
-;; The canonical algebraic primitive lives in tropical-fuel.rkt; this
-;; inline duplicate is the merge-fn used when REGISTERING the cell at
-;; make-prop-network time. Under shadow mode (Phase 1B), the function
-;; is never invoked (no production code writes the cell); under Phase
-;; 1C the cell starts being written and this merge IS invoked. Any
-;; future change to tropical-fuel-merge MUST update this duplicate too.
-;; The duplication is principled (cycle break) + named explicitly here.
-(define (tropical-fuel-merge-for-cell a b) (min a b))
+;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
+;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
+;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt
+;; is broken by extracting algebraic primitives to the leaf module
+;; tropical-fuel-primitives.rkt (zero non-Racket deps). propagator.rkt
+;; now requires tropical-fuel-primitives.rkt directly and uses
+;; tropical-fuel-merge at the canonical fuel cell registration sites.
 
 (define (classify-inhabit-request-merge old new)
   (if (hash? old)
@@ -815,7 +816,7 @@
   ;; initial = `fuel` parameter (= budget); decrements via Phase 1C migration;
   ;; operational exhaustion at (<= remaining 0) via on-write-check predicate.
   (define-values (net1 actual-fuel-cid)
-    (net-register-specialized-cell base-net fuel tropical-fuel-merge-for-cell
+    (net-register-specialized-cell base-net fuel tropical-fuel-merge
       #:tier 'hot
       #:storage 'monotone-counter
       #:fires-on 'threshold-crossing
@@ -828,7 +829,7 @@
   ;; fuel-budget-cell preserves the original budget for cost derivation
   ;; (cost = budget - remaining). Cold tier; written rarely (only at allocation).
   (define-values (net2 actual-budget-cid)
-    (net-register-specialized-cell net1 fuel tropical-fuel-merge-for-cell
+    (net-register-specialized-cell net1 fuel tropical-fuel-merge
       #:tier 'cold
       #:storage 'general
       #:fires-on 'any-change
