@@ -400,7 +400,15 @@
 ;; Value: prop-cell? at runtime (set post fuel-cell registration); #f before
 ;; registration / under early-init state. Cells-map CHAMP remains source-of-truth
 ;; (γ1 dual-storage rationale + F13 from §11.X.2).
-(struct prop-net-warm (cells contradiction under-speculation? fuel-cell-cache) #:transparent)
+;;
+;; D.4 1V-5 Item #1-quater (§11.X.4 α1/β1/γ-B): worldview-cache-cache — cached
+;; prop-cell direct-ref for worldview-cache-cell-id (id=1). Second instance of
+;; the "well-known direct-ref cache on prop-net-warm" pattern (validates the
+;; "Specialized Cell Type Framework as Cross-Track Template" codification from
+;; Commit 4). Bypasses cells-map CHAMP traversal for worldview-cache reads on
+;; speculation paths + tagged-cell-value branches. Same WT-* enumeration as
+;; fuel-cell-cache (8 explicit + 2 inherited per §11.X.3.1).
+(struct prop-net-warm (cells contradiction under-speculation? fuel-cell-cache worldview-cache-cache) #:transparent)
 (struct prop-net-cold (merge-fns contradiction-fns widen-fns
                        propagators next-cell-id next-prop-id
                        cell-decomps pair-decomps cell-dirs
@@ -777,7 +785,8 @@
                     (champ-insert acc (car pair) (cadr pair) (cddr pair)))
                   #f   ;; contradiction
                   #f   ;; under-speculation? (D.4 1B-ii; scheduler refreshes at BSP round entry)
-                  #f)  ;; fuel-cell-cache (D.4 1V-3 Item #1-bis; set post fuel-cell registration below)
+                  #f   ;; fuel-cell-cache (D.4 1V-3 Item #1-bis; set post fuel-cell registration below)
+                  #f)  ;; worldview-cache-cache (D.4 1V-5 Item #1-quater; set below after worldview-cache-cell registration)
    (prop-net-cold (for/fold ([acc champ-empty])
                             ([pair (in-list (list (cons req-h (cons req-cid decomp-request-merge))
                                                   (cons wv-h (cons wv-cid worldview-cache-merge))
@@ -829,13 +838,18 @@
            "fuel-budget-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
            fuel-budget-cell-id actual-budget-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
-  ;; The fuel cell is now registered (net2); look it up once and cache the
-  ;; prop-cell direct-ref. Write-through at 8 sites maintains consistency.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
+  ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
+  ;; look up each once and cache the prop-cell direct-refs. Write-through at
+  ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net2) fc-h fuel-cell-id)])
+         [fc-cell (champ-lookup (prop-network-cells net2) fc-h fuel-cell-id)]
+         [wv-h (cell-id-hash worldview-cache-cell-id)]
+         [wv-cell (champ-lookup (prop-network-cells net2) wv-h worldview-cache-cell-id)])
     (struct-copy prop-network net2
       [warm (struct-copy prop-net-warm (prop-network-warm net2)
-              [fuel-cell-cache fc-cell])])))
+              [fuel-cell-cache fc-cell]
+              [worldview-cache-cache wv-cell])])))
 
 ;; Track 10 Phase 3: Fork a prop-network for subnetwork isolation.
 ;; Shares all CHAMP fields (cells, propagators, registries) via structural sharing.
@@ -863,7 +877,7 @@
      ;; fuel arg is written to fuel-cell-id / fuel-budget-cell-id cells via
      ;; net-cell-reset below (γ1; D-1C-iv-1).
      (prop-net-hot '())                                   ;; fresh worklist
-     (prop-net-warm (prop-network-cells net) #f #f #f)    ;; shared cells, no contradiction, no speculation (D.4 1B-ii), fuel-cell-cache=#f (set post-reset; D.4 1V-3 Item #1-bis)
+     (prop-net-warm (prop-network-cells net) #f #f #f #f) ;; shared cells, no contradiction, no speculation (D.4 1B-ii), fuel-cell-cache=#f (set post-reset; D.4 1V-3 Item #1-bis), worldview-cache-cache=#f (set post-fork; D.4 1V-5 Item #1-quater)
      (prop-network-cold net)))                            ;; shared: merge-fns, propagators, etc.
   ;; Reset both fuel cells to new fuel value (γ1; D-1C-iv-1 mitigation).
   ;; Use net-cell-reset (NOT net-cell-write): the merge function is `min`
@@ -877,11 +891,17 @@
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 5): set fuel-cell-cache on prop-net-warm
   ;; after fork-reset. The fuel cell is now updated (forked+both has the new value
   ;; under WT-3 via net-cell-reset); look up the fresh prop-cell and cache it.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 5): set worldview-cache-cache too.
+  ;; The worldview-cache-cell is SHARED with parent (cells map shared via
+  ;; structural sharing); the cached prop-cell ref is the same as parent's.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells forked+both) fc-h fuel-cell-id)])
+         [fc-cell (champ-lookup (prop-network-cells forked+both) fc-h fuel-cell-id)]
+         [wv-h (cell-id-hash worldview-cache-cell-id)]
+         [wv-cell (champ-lookup (prop-network-cells forked+both) wv-h worldview-cache-cell-id)])
     (struct-copy prop-network forked+both
       [warm (struct-copy prop-net-warm (prop-network-warm forked+both)
-              [fuel-cell-cache fc-cell])])))
+              [fuel-cell-cache fc-cell]
+              [worldview-cache-cache wv-cell])])))
 
 ;; Track 10 Phase 3b: Ergonomic fork macro for test isolation.
 ;;
@@ -1172,13 +1192,17 @@
 ;; Errors on unknown cell-id.
 (define (net-cell-read net cid)
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 6): fuel-cell-id short-circuit.
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 6): worldview-cache-cell-id short-circuit
+  ;; (parallel to fuel-cell-id; mirrors Item #1-bis pattern).
   ;; Use cached prop-cell direct-ref on prop-net-warm; bypasses cells-map CHAMP
-  ;; traversal for the well-known fuel cell. Falls back to champ-lookup if
-  ;; cache is #f (early init pre-fuel-registration) OR cid != fuel-cell-id.
-  ;; The `and` short-circuits the cache access when cid != fuel-cell-id.
+  ;; traversal for these well-known cells. Falls back to champ-lookup if the
+  ;; respective cache is #f (early init) OR cid is neither well-known.
+  ;; The `and` forms short-circuit the cache access when cid doesn't match.
   (define cell
     (or (and (eq? cid fuel-cell-id)
              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
         (champ-lookup (prop-network-cells net)
                       (cell-id-hash cid) cid)))
   (if (eq? cell 'none)
@@ -1192,14 +1216,16 @@
            ;; not entries from sibling clauses. Without this, all propagators sharing
            ;; a network would see the same (cache cell) bitmask, destroying isolation.
            ;; Fallback: worldview cache cell (for network-wide worldview).
+           ;; D.4 1V-5 Item #1-quater (§11.X.4 step 9 / F2 PRIMARY): use cached
+           ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
+           ;; Defensive #f-check per D-1V-4-3: cache may be #f if uninitialized
+           ;; (early init pre-make-prop-network completion).
            (define per-prop-wv (current-worldview-bitmask))
            (define wv-bitmask
              (if (not (zero? per-prop-wv))
                  per-prop-wv
-                 (let ([wv-cell (champ-lookup (prop-network-cells net)
-                                              (cell-id-hash worldview-cache-cell-id)
-                                              worldview-cache-cell-id)])
-                   (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+                 (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+                   (if wv-cell (prop-cell-value wv-cell) 0))))
            ;; Phase 11: extract domain merge from cell's merge-fn for
            ;; same-specificity entry merging (e.g., union type Nat+Bool→Type 0).
            ;; The merge-fn is make-tagged-merge(domain-merge). When called with
@@ -1225,8 +1251,16 @@
 ;; Used for commit operations and provenance inspection where
 ;; the full tms-cell-value tree is needed.
 (define (net-cell-read-raw net cid)
-  (define cell (champ-lookup (prop-network-cells net)
-                              (cell-id-hash cid) cid))
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 8 / F9): fuel-cell-id +
+  ;; worldview-cache-cell-id short-circuits (symmetric to net-cell-read).
+  ;; Bypasses cells-map CHAMP traversal for these well-known cells.
+  (define cell
+    (or (and (eq? cid fuel-cell-id)
+             (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+        (champ-lookup (prop-network-cells net)
+                      (cell-id-hash cid) cid)))
   (if (eq? cell 'none)
       (error 'net-cell-read-raw "unknown cell: ~a" cid)
       (prop-cell-value cell)))
@@ -1377,7 +1411,13 @@
             [fuel-cell-cache
              (if (eq? cid fuel-cell-id)
                  new-cell
-                 (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))
+                 (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+            ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+            ;; worldview-cache-cache update at the same write-through site.
+            [worldview-cache-cache
+             (if (eq? cid worldview-cache-cell-id)
+                 new-cell
+                 (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))
 
 ;; BSP-LE Track 2 Phase 5.9b: Promote a cell to tagged-cell-value.
 ;; The current value becomes the base; entries start empty.
@@ -1425,7 +1465,13 @@
                   [fuel-cell-cache
                    (if (eq? cid fuel-cell-id)
                        new-cell
-                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))))
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+               ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+               ;; worldview-cache-cache update at the same write-through site.
+               [worldview-cache-cache
+                   (if (eq? cid worldview-cache-cell-id)
+                       new-cell
+                       (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))))
 
 ;; Track 4B Phase 6b P3: Clear all dependents from a cell.
 ;; The cell RETAINS its value — only the dependents CHAMP is emptied.
@@ -1448,7 +1494,13 @@
                   [fuel-cell-cache
                    (if (eq? cid fuel-cell-id)
                        new-cell
-                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]))))
+                       (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+               ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+               ;; worldview-cache-cache update at the same write-through site.
+               [worldview-cache-cache
+                   (if (eq? cid worldview-cache-cell-id)
+                       new-cell
+                       (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]))))
 
 ;; Otherwise: updates the cell, enqueues dependent propagators, and
 ;; optionally checks the contradiction predicate.
@@ -1456,12 +1508,15 @@
   (define cells (prop-network-cells net))
   (define h (cell-id-hash cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 7): fuel-cell-id short-circuit.
-  ;; Use cached prop-cell direct-ref; bypasses cells-map CHAMP traversal for
-  ;; the well-known fuel cell. Cells map STILL needed for the subsequent
-  ;; champ-insert (write-through to source-of-truth per γ1).
+  ;; D.4 1V-5 Item #1-quater (§11.X.4 step 7): worldview-cache-cell-id short-circuit.
+  ;; Use cached prop-cell direct-refs; bypass cells-map CHAMP traversal for
+  ;; well-known cells. Cells map STILL needed for the subsequent champ-insert
+  ;; (write-through to source-of-truth per γ1).
   (define cell
     (or (and (eq? cid fuel-cell-id)
              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+        (and (eq? cid worldview-cache-cell-id)
+             (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
         (champ-lookup cells h cid)))
   (when (eq? cell 'none)
     (error 'net-cell-write "unknown cell: ~a" cid))
@@ -1514,7 +1569,13 @@
                          [fuel-cell-cache
                           (if (eq? cid fuel-cell-id)
                               new-cell
-                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])])]
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                      ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                      ;; worldview-cache-cache update at the same write-through site.
+                      [worldview-cache-cache
+                          (if (eq? cid worldview-cache-cell-id)
+                              new-cell
+                              (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])])]
               [else
                ;; Apply fire-on policy
                (define fire-on (specialized-cell-meta-fires-on meta))
@@ -1537,7 +1598,13 @@
                          [fuel-cell-cache
                           (if (eq? cid fuel-cell-id)
                               new-cell
-                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
+                              (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                      ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                      ;; worldview-cache-cache update at the same write-through site.
+                      [worldview-cache-cache
+                          (if (eq? cid worldview-cache-cell-id)
+                              new-cell
+                              (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                  [hot (struct-copy prop-net-hot (prop-network-hot net)
                         [worklist new-wl])])]))]))]
     [else
@@ -1563,14 +1630,14 @@
        ;; concurrently, each sees its own bitmask, writes are tagged distinctly.
        ;; Fallback: read worldview cache cell (for network-wide worldview, e.g.,
        ;; elab-speculation-bridge sequential speculation).
+       ;; D.4 1V-5 Item #1-quater (§11.X.4 step 11 / F2 PRIMARY): use cached
+       ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
        (define per-prop-wv (current-worldview-bitmask))
        (define wv-bitmask
          (if (not (zero? per-prop-wv))
              per-prop-wv
-             (let ([wv-cell (champ-lookup cells
-                                          (cell-id-hash worldview-cache-cell-id)
-                                          worldview-cache-cell-id)])
-               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+             (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+               (if wv-cell (prop-cell-value wv-cell) 0))))
        ;; Wrap as a DELTA tagged-cell-value (base=new-val, entry if worldview non-zero).
        ;; The merge function combines old+delta correctly without entry duplication.
        (if (zero? wv-bitmask)
@@ -1639,7 +1706,13 @@
                              [fuel-cell-cache
                               (if (eq? cid fuel-cell-id)
                                   new-cell
-                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -1682,7 +1755,13 @@
                              [fuel-cell-cache
                               (if (eq? cid fuel-cell-id)
                                   new-cell
-                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?
@@ -3384,14 +3463,14 @@
     (cond
       [(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))
        ;; Same per-propagator bitmask logic as net-cell-write
+       ;; D.4 1V-5 Item #1-quater (§11.X.4 step 13 / F2 PRIMARY): use cached
+       ;; worldview-cache-cache direct-ref instead of inline champ-lookup.
        (define per-prop-wv (current-worldview-bitmask))
        (define wv-bitmask
          (if (not (zero? per-prop-wv))
              per-prop-wv
-             (let ([wv-cell (champ-lookup cells
-                                          (cell-id-hash worldview-cache-cell-id)
-                                          worldview-cache-cell-id)])
-               (if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell)))))
+             (let ([wv-cell (prop-net-warm-worldview-cache-cache (prop-network-warm net))])
+               (if wv-cell (prop-cell-value wv-cell) 0))))
        (if (zero? wv-bitmask)
            (tagged-cell-value new-val '())
            (tagged-cell-value (tagged-cell-value-base old-val)
@@ -3428,7 +3507,13 @@
                              [fuel-cell-cache
                               (if (eq? cid fuel-cell-id)
                                   new-cell
-                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))])]
+                                  (prop-net-warm-fuel-cell-cache (prop-network-warm net)))]
+                          ;; D.4 1V-5 Item #1-quater (§11.X.4 step 15 / WT-* parallel update):
+                          ;; worldview-cache-cache update at the same write-through site.
+                          [worldview-cache-cache
+                              (if (eq? cid worldview-cache-cell-id)
+                                  new-cell
+                                  (prop-net-warm-worldview-cache-cache (prop-network-warm net)))])]
                      [hot (struct-copy prop-net-hot (prop-network-hot net)
                             [worklist new-wl])])])
         (if contradicted?

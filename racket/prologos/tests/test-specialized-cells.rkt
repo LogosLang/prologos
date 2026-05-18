@@ -25,7 +25,9 @@
                   prop-network-cells prop-network-warm
                   prop-net-warm-under-speculation?
                   prop-net-warm-fuel-cell-cache
+                  prop-net-warm-worldview-cache-cache
                   fuel-cell-id
+                  worldview-cache-cell-id
                   prop-cell-meta prop-cell-value
                   cell-id-hash
                   specialized-cell-meta specialized-cell-meta?
@@ -251,3 +253,75 @@
   (check-equal? (prop-cell-value cache) 750)
   ;; Parent's cache unaffected (parent2 still has 500)
   (check-equal? (net-cell-read parent2 fuel-cell-id) 500))
+
+;; ----------------------------------------------------------------
+;; Test 15: D.4 1V-5 Item #1-quater — worldview-cache-cache initialized at make-prop-network
+;; ----------------------------------------------------------------
+(test-case "worldview-cache-cache set after make-prop-network registration"
+  (define net (make-prop-network 1000))
+  (define cache (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+  ;; Cache is the prop-cell direct-ref for worldview-cache-cell-id
+  (check-not-false cache)
+  ;; Cache mirrors what champ-lookup would return
+  (define champ-cell (champ-lookup (prop-network-cells net)
+                                    (cell-id-hash worldview-cache-cell-id)
+                                    worldview-cache-cell-id))
+  (check-eq? cache champ-cell))
+
+;; ----------------------------------------------------------------
+;; Test 16: D.4 1V-5 Item #1-quater — worldview-cache-cache updates on net-cell-write (WT-*)
+;; ----------------------------------------------------------------
+(test-case "worldview-cache-cache updates through net-cell-write"
+  (define net (make-prop-network 1000))
+  ;; Verify read short-circuit returns same value as struct field
+  (check-equal? (net-cell-read net worldview-cache-cell-id) 0)
+  ;; Write bitmask 1 to worldview-cache-cell
+  (define net2 (net-cell-write net worldview-cache-cell-id 1))
+  (check-equal? (net-cell-read net2 worldview-cache-cell-id) 1)
+  ;; Cache reflects the new prop-cell (its value matches the write)
+  (define cache2 (prop-net-warm-worldview-cache-cache (prop-network-warm net2)))
+  (check-equal? (prop-cell-value cache2) 1)
+  ;; Cache is consistent with champ-lookup result
+  (define champ-cell2 (champ-lookup (prop-network-cells net2)
+                                     (cell-id-hash worldview-cache-cell-id)
+                                     worldview-cache-cell-id))
+  (check-eq? cache2 champ-cell2))
+
+;; ----------------------------------------------------------------
+;; Test 17: D.4 1V-5 Item #1-quater — both caches coexist independently
+;; ----------------------------------------------------------------
+(test-case "fuel-cell-cache + worldview-cache-cache coexist independently"
+  (define net (make-prop-network 1000))
+  (define fuel-cache-before (prop-net-warm-fuel-cell-cache (prop-network-warm net)))
+  (define wv-cache-before (prop-net-warm-worldview-cache-cache (prop-network-warm net)))
+  ;; Write to worldview-cache only
+  (define net2 (net-cell-write net worldview-cache-cell-id 5))
+  (define fuel-cache-after-wv-write (prop-net-warm-fuel-cell-cache (prop-network-warm net2)))
+  (define wv-cache-after-wv-write (prop-net-warm-worldview-cache-cache (prop-network-warm net2)))
+  ;; fuel-cell-cache unchanged
+  (check-eq? fuel-cache-before fuel-cache-after-wv-write)
+  ;; worldview-cache-cache updated
+  (check-not-eq? wv-cache-before wv-cache-after-wv-write)
+  (check-equal? (prop-cell-value wv-cache-after-wv-write) 5)
+  ;; Now write to fuel-cell only
+  (define net3 (net-cell-write net2 fuel-cell-id 500))
+  (define fuel-cache-after-fuel-write (prop-net-warm-fuel-cell-cache (prop-network-warm net3)))
+  (define wv-cache-after-fuel-write (prop-net-warm-worldview-cache-cache (prop-network-warm net3)))
+  ;; fuel-cell-cache updated
+  (check-not-eq? fuel-cache-after-wv-write fuel-cache-after-fuel-write)
+  (check-equal? (prop-cell-value fuel-cache-after-fuel-write) 500)
+  ;; worldview-cache-cache unchanged from prior write
+  (check-eq? wv-cache-after-wv-write wv-cache-after-fuel-write))
+
+;; ----------------------------------------------------------------
+;; Test 18: D.4 1V-5 Item #1-quater — fork-prop-network preserves worldview-cache-cache
+;; ----------------------------------------------------------------
+(test-case "fork-prop-network initializes worldview-cache-cache from parent"
+  (define parent (make-prop-network 1000))
+  (define parent2 (net-cell-write parent worldview-cache-cell-id 7))
+  ;; Fork: sub-net shares cells with parent via structural sharing
+  (define forked (fork-prop-network parent2 1000))
+  ;; Forked net's worldview-cache-cache reflects parent's value
+  (check-equal? (net-cell-read forked worldview-cache-cell-id) 7)
+  (define wv-cache (prop-net-warm-worldview-cache-cache (prop-network-warm forked)))
+  (check-equal? (prop-cell-value wv-cache) 7))
