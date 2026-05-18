@@ -45,7 +45,11 @@
          "../../metavar-store.rkt"
          "../../elaborator-network.rkt"
          "../../meta-universe.rkt"
+         (only-in "../../meta-universe.rkt" meta-universe-cell-id?)
          "../../propagator.rkt"
+         (only-in "../../propagator.rkt" current-worldview-bitmask)
+         (only-in "../../decision-cell.rkt"
+                  tagged-cell-value tagged-cell-value? tagged-cell-read)
          "../../type-lattice.rkt"
          "../../classify-inhabit.rkt"
          "../../driver.rkt"
@@ -274,14 +278,268 @@
              (that-write s4-net s4-cid s4-pos ':type (expr-Int))))
 
 ;; ============================================================
+;; SECTION 5: A1 — Dispatch predicate cost in isolation
+;; ============================================================
+;;
+;; Phase 1E will need to dispatch at the top of that-read/that-write:
+;; "is this cell-id a meta-universe cell?". The predicate is
+;; meta-universe-cell-id? (4 parameter reads + 4 equal? checks, worst-case).
+;; This bench isolates the dispatch overhead — needed to subtract from
+;; J-C total cost cleanly.
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 5: A1 — Dispatch predicate cost")
+(displayln "============================================================")
+
+(with-elab-env
+  (lambda ()
+    ;; Trigger lazy init so universe cell-ids are populated
+    (fresh-meta '() (expr-Int) 'bench)
+    (define universe-cid (current-type-meta-universe-cell-id))
+    (define non-universe-cid (current-attribute-map-cell-id))
+
+    (define a1a
+      (bench-ns "A1a (meta-universe-cell-id? universe-cid) → #t (hit on first check)" 50000
+                (meta-universe-cell-id? universe-cid)))
+
+    (define a1b
+      (bench-ns "A1b (meta-universe-cell-id? non-universe-cid) → #f (4 misses)" 50000
+                (meta-universe-cell-id? non-universe-cid)))
+
+    (void a1a a1b)))
+
+;; ============================================================
+;; SECTION 6: A2/A3 — J-A simulation vs J-C composition
+;; ============================================================
+;;
+;; J-A: :mult/:level/:session as additional attribute-map facets.
+;;   Simulated by reading/writing :mult directly via hash-ref/net-cell-write
+;;   on an extended attribute-map record (no production-code changes).
+;;   Cost model: same as that-read/that-write for :type, with one additional
+;;   facet in the record (8 vs 5 → ~60% growth in facet-merge iterations).
+;;
+;; J-C: :mult/:level/:session routes to corresponding universe cell.
+;;   Simulated by composing dispatch predicate + compound-cell-component-ref.
+;;   Cost model: A1 + M5/M6.
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 6: A2/A3 — J-A simulation vs J-C composition")
+(displayln "============================================================")
+
+(displayln "")
+(displayln "  Fixture: J-A extended attribute-map (8 facets per meta-pos)")
+
+;; J-A simulation: build an extended attribute-map with :mult populated
+;; alongside :type/:context/:usage/:constraints/:warnings.
+(define (make-jA-fixture [N 100])
+  (define net0 (make-prop-network))
+  (define-values (net1 cid) (net-new-cell net0 (hasheq) attribute-map-merge-fn))
+  (define positions (for/list ([_ (in-range N)]) (gensym 'meta-pos)))
+  ;; Populate each position with 5 standard facets + 3 simulated (mult/level/session)
+  (define jA-record
+    (hasheq ':type (classifier-only (expr-Int))
+            ':context #f
+            ':usage '()
+            ':constraints (facet-bot ':constraints)
+            ':warnings '()
+            ;; Simulated J-A facets (in production J-A, facet-bot table would
+            ;; have entries for these; for benchmark purposes we read them raw)
+            ':mult 'mult-bot
+            ':level 'unsolved
+            ':session 'unsolved))
+  (define jA-am
+    (for/hasheq ([pos (in-list positions)])
+      (values pos jA-record)))
+  ;; Write the J-A am to the cell once via direct cell-write (bypasses merge —
+  ;; benchmark fixture only, mirrors what J-A facet population would produce)
+  (define net2 (net-cell-write net1 cid jA-am))
+  (values net2 cid positions))
+
+(define-values (jA-net jA-cid jA-positions) (make-jA-fixture 100))
+(define jA-am (net-cell-read jA-net jA-cid))
+(define jA-pos (car jA-positions))
+
+;; Helper: J-A simulated read — what that-read would do post-J-A extension
+(define (that-read-jA-simulated am pos facet)
+  (define record (hash-ref am pos #f))
+  (cond
+    [(not record) 'bot]
+    [else (hash-ref record facet 'bot)]))
+
+;; A2.J-A: simulated that-read :mult at meta-pos (J-A architecture)
+(define a2-jA
+  (bench-ns "A2.J-A (that-read-jA-simulated am pos :mult)" 50000
+            (that-read-jA-simulated jA-am jA-pos ':mult)))
+
+;; A2.J-C: composed dispatch predicate + compound-cell-component-ref
+(with-elab-env
+  (lambda ()
+    (define metas
+      (for/list ([_ (in-range 100)])
+        (fresh-meta '() (expr-Int) 'bench)))
+    (define m (car metas))
+    (define id (expr-meta-id m))
+    (define mult-universe-cid (current-mult-meta-universe-cell-id))
+    (define net-box (current-prop-net-box))
+    (define enet (unbox net-box))
+
+    ;; A2.J-C: dispatch predicate + universe cell read
+    ;; (simulates how Phase 1E would route :mult at meta-pos)
+    (define a2-jC
+      (bench-ns "A2.J-C (predicate + compound-cell-component-ref at mult-universe)" 50000
+                (let ([cid mult-universe-cid])
+                  (cond
+                    [(meta-universe-cell-id? cid)
+                     (compound-cell-component-ref enet cid id)]
+                    [else 'bot]))))
+
+    ;; A3.J-C: dispatch predicate + universe cell write
+    (define a3-jC
+      (bench-ns "A3.J-C (predicate + compound-cell-component-write at mult-universe)" 20000
+                (let ([cid mult-universe-cid])
+                  (cond
+                    [(meta-universe-cell-id? cid)
+                     (compound-cell-component-write enet cid id 'mult-bot)]
+                    [else enet]))))
+
+    (void a2-jC a3-jC)))
+
+;; A3.J-A: simulated that-write :mult at meta-pos
+(define a3-jA
+  (bench-ns "A3.J-A simulated that-write :mult full path" 20000
+            ;; Mirrors what that-write would do for an :mult facet under J-A:
+            ;; build (hasheq pos (hasheq :mult val)) delta + net-cell-write +
+            ;; attribute-map-merge-fn handles per-facet merge
+            (net-cell-write jA-net jA-cid
+                            (hasheq jA-pos (hasheq ':mult 'mult-bot)))))
+
+;; ============================================================
+;; SECTION 7: A4 — Specialized-cell-cache lower bound
+;; ============================================================
+;;
+;; A4 measures the LOWER BOUND on what a §4.6 specialized-cell-cache for
+;; universe-cells could achieve. The current compound-cell-component-ref
+;; does 3 steps:
+;;   1. (elab-cell-read enet cell-id)         — CHAMP cell-lookup
+;;   2. (hash-ref compound-val component-key) — component-lookup
+;;   3. (tagged-cell-read tcv wv)             — worldview-filter
+;;
+;; A direct-ref cache (mirroring fuel-cell-cache / worldview-cache-cache
+;; from Phase 1V) eliminates step 1 by holding a direct ref to the cell.
+;; A4 simulates the cache by reading compound-val ONCE outside the loop;
+;; the per-call cost is just steps 2 + 3. This is the LOWER BOUND (real
+;; cache adds ~5 ns of struct-field access; we measure without that).
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 7: A4 — Specialized-cell-cache lower bound")
+(displayln "============================================================")
+
+(with-elab-env
+  (lambda ()
+    (define metas
+      (for/list ([_ (in-range 100)])
+        (fresh-meta '() (expr-Int) 'bench)))
+    ;; Solve all metas so reads return values
+    (for ([m (in-list metas)])
+      (solve-meta! (expr-meta-id m) (expr-Int)))
+    (define m (car metas))
+    (define id (expr-meta-id m))
+    (define type-universe-cid (current-type-meta-universe-cell-id))
+    (define net-box (current-prop-net-box))
+    (define enet (unbox net-box))
+    ;; Pre-fetch compound-val ONCE — simulates direct-ref cache
+    (define compound-val (elab-cell-read enet type-universe-cid))
+    (define wv 0)  ;; baseline worldview (no speculation active)
+
+    (define a4
+      (bench-ns "A4  (hash-ref compound-val id) + tagged-cell-read [cache lower bound]" 50000
+                (let ([tcv (hash-ref compound-val id #f)])
+                  (cond
+                    [(not tcv) #f]
+                    [(tagged-cell-value? tcv)
+                     (tagged-cell-read tcv wv)]
+                    [else tcv]))))
+
+    ;; A4b: just the hash-ref portion (cache + lookup, no tagged-cell-read)
+    (define a4b
+      (bench-ns "A4b (hash-ref compound-val id) only" 50000
+                (hash-ref compound-val id #f)))
+
+    ;; A4c: elab-cell-read alone (the step we'd skip via cache)
+    (define a4c
+      (bench-ns "A4c (elab-cell-read enet universe-cid) [cell lookup we'd save]" 50000
+                (elab-cell-read enet type-universe-cid)))
+
+    (void a4 a4b a4c)))
+
+;; ============================================================
+;; SECTION 8: A5 — Attribute-map memory growth under J-A vs J-C
+;; ============================================================
+;;
+;; J-A adds 3 facets per meta position to attribute-map CHAMP.
+;; J-C keeps attribute-map size unchanged; universe cell grows by
+;; the per-meta tagged-cell-value entries.
+;; Compare retained memory at scale: 1k and 10k meta positions.
+
+(displayln "")
+(displayln "============================================================")
+(displayln "SECTION 8: A5 — Memory growth at scale (J-A vs J-C)")
+(displayln "============================================================")
+
+(define (build-jA-attribute-map N)
+  (define record-jA
+    (hasheq ':type (classifier-only (expr-Int))
+            ':context #f
+            ':usage '()
+            ':constraints (facet-bot ':constraints)
+            ':warnings '()
+            ':mult 'mult-bot
+            ':level 'unsolved
+            ':session 'unsolved))
+  (for/hasheq ([_ (in-range N)])
+    (values (gensym 'pos) record-jA)))
+
+(define (build-jC-attribute-map N)
+  ;; Same baseline: 5 facets per position. J-C doesn't grow attribute-map.
+  (define record-jC
+    (hasheq ':type (classifier-only (expr-Int))
+            ':context #f
+            ':usage '()
+            ':constraints (facet-bot ':constraints)
+            ':warnings '()))
+  (for/hasheq ([_ (in-range N)])
+    (values (gensym 'pos) record-jC)))
+
+(displayln "")
+(displayln "  J-A: 8 facets per meta-pos (attribute-map holds mult/level/session)")
+(bench-mem "A5.J-A.1k  build 1k-pos extended am" 5
+           (build-jA-attribute-map 1000))
+(bench-mem "A5.J-A.10k build 10k-pos extended am" 3
+           (build-jA-attribute-map 10000))
+
+(displayln "")
+(displayln "  J-C: 5 facets per meta-pos (universe cells hold mult/level/session)")
+(bench-mem "A5.J-C.1k  build 1k-pos baseline am" 5
+           (build-jC-attribute-map 1000))
+(bench-mem "A5.J-C.10k build 10k-pos baseline am" 3
+           (build-jC-attribute-map 10000))
+
+;; ============================================================
 ;; SUMMARY
 ;; ============================================================
 
 (displayln "")
 (displayln "============================================================")
-(displayln "Phase 1E Pre-0 M-tier baselines captured. Compare to:")
-(displayln "  - Retired bench-ppn-track4c.rkt M1a: 26 ns/call (2026-04-17 PRE0)")
-(displayln "  - §7.6.16.4 perf constraint targets")
+(displayln "Phase 1E Pre-0 M+A-tier captured.")
 (displayln "")
-(displayln "Next: A-tier benches for J-A vs J-C comparison + position synthesis variants")
+(displayln "Decision inputs ready for §G Q1/Q2 + §J option resolution:")
+(displayln "  - Dispatch overhead (A1)")
+(displayln "  - J-A read/write cost vs J-C composed cost (A2/A3)")
+(displayln "  - Specialized-cell-cache lower bound (A4)")
+(displayln "  - Memory growth at scale (A5)")
+(displayln "")
+(displayln "Next: E-tier (edge cases) + R-tier (realistic workloads) + S-tier (parity)")
 (displayln "============================================================")
