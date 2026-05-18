@@ -421,7 +421,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 8 mutation sites (WT-1 through WT-8); ~185 LoC across propagator.rkt + tests; **CW3 actual measurement: Var-A N=100 5.78 → 3.96 ns/cycle (-1.82 ns; -31.5% recovery; 6× projected savings)**; **§13.7 ≤ 5 ns gate MET (3.96 < 5)**; in §13.7 measurement-driven discussion range (3-4 ns); **Item #1-ter NOT triggered per Option (d)** (3.96 < 5 ns trigger threshold); combined Item #1+#1-bis = -3.60 ns / -47.6% vs Pre-Item-#1 baseline | ✅ ✓ GATE-MET | Per §11.X.3 + §11.X.3.1 + 1C-vi A/B/C report + §11.X.2.1 Option (d); commit hash TBD |
 | ~~**1V Commit 3.5 — Item #1-ter (CONDITIONAL)**~~ | ~~Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle~~ | ❌ NOT TRIGGERED — Commit 3 measurement 3.96 < 5 ns gate threshold | Per §11.X.3.2 (post-Commit-3 close) |
 | **1V Commit 4 — Option C gate re-calibration + 3 codifications graduation** | §13.7.A NEW (Option C ~4 ns/cycle measurement-driven gate; supersedes ≤5 ns unilateral revision); DEVELOPMENT_LESSONS.org +2 (cache projection methodology; cache write-through enumeration); DESIGN_PRINCIPLES.org +1 (specialized cell type framework as cross-track template) | ✅ | Per user direction 2026-05-17 (Option C confirmed) |
-| **1V Commit 5 — Item #1-quater worldview-cache caching** | Cache worldview-cache-cell direct-ref on prop-net-warm (parallel to fuel-cell-cache pattern); ~30-60 LoC; ~5-15 ns/call savings on speculation paths; net-cell-read tagged-cell-value branch + net-cell-write/slow-path tagged-cell-value branch | ⬜ | Per §11.X.4 (next sub-phase) |
+| **1V Commit 5 mini-design + mini-audit** | α1/β1/γ-B/δ1/ε1 resolved; 9 audit findings F1-F9 at HEAD `90c271fa`; F2 identifies 3 inline champ-lookup sites (PRIMARY targets) within tagged-cell-value branches; F4 enumerates 6 production write sites (all flow through 8 WT-* sites); 5 drift risks D-1V-4-1/2/3/4/5 (3 audit-resolved + 2 needing impl care); 2 NEW codification candidates | ✅ | §11.X.4 (2026-05-17) |
+| **1V Commit 5 — Item #1-quater worldview-cache caching** | Cache worldview-cache-cell direct-ref on prop-net-warm (5th field; parallel to fuel-cell-cache pattern); ~70-100 LoC (γ-B Approach: top-of-function short-circuit + replace 3 inline champ-lookups in tagged-cell-value branches); ~5-15 ns/call savings on speculation paths; second instance of "well-known direct-ref cache" pattern (validates codification claim) | ⬜ | Per §11.X.4 (next sub-phase) |
 | **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Resolve import cycle between propagator.rkt and tropical-fuel.rkt; retire the inlined duplicate at propagator.rkt:646-655; architectural cleanup (no perf gain; eliminates "future change MUST update duplicate" warning) | ⬜ | Per §11.X.5 (next sub-phase) |
 | **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (renumbered) |
 | **1V Commit 8 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications already graduated at Commit 4 (cross-reference in close) + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi (renumbered from "Commit 5") |
@@ -4765,9 +4766,92 @@ post-Commit-3b CW3 Var-A N=100:
 
 | Pattern | Data points | Status |
 |---|---|---|
-| **Item #N-bis dramatically exceeds projected savings when caching well-known hot reads** — Item #1-bis projected 0.3 ns/cycle savings; actual was 1.82 ns (~6×). Cause: the projection accounted for write-side savings only; the read-side optimization (BSP convergence check fires every iteration) was unmodeled | 1 (this Item #1-bis result) | NEW watching list — methodology refinement: projections should model both read-side AND write-side savings independently |
+| **Item #N-bis dramatically exceeds projected savings when caching well-known hot reads** — Item #1-bis projected 0.3 ns/cycle savings; actual was 1.82 ns (~6×). Cause: the projection accounted for write-side savings only; the read-side optimization (BSP convergence check fires every iteration) was unmodeled | 1 (this Item #1-bis result) | ✅ GRADUATED to DEVELOPMENT_LESSONS.org § "Cache Projection Should Model Read-Side + Write-Side Independently" (Commit 4 `90c271fa`) |
 | **Production-realistic-N optimization concentrates savings at low N** — Item #1-bis saves 6× more at N=100 than at N=1000; production-realistic N is in the 3-5 range per 1C-vi A/B/C; the win compounds in production | 1 (this measurement) | NEW watching list |
-| **3.5-4 ns "measurement-driven discussion" range as honest gate-decision protocol** — §13.7's measurement-driven range now has a 1st instance triggering user discussion (not unilateral) | 1 (this 3.96 ns result) | NEW watching list — methodology validation |
+| **3.5-4 ns "measurement-driven discussion" range as honest gate-decision protocol** — §13.7's measurement-driven range now has a 1st instance triggering user discussion (not unilateral) | 1 (this 3.96 ns result) | Resolved via Option C ratification (§13.7.A; Commit 4 `90c271fa`) |
+
+### §11.X.4 1V Commit 5 — Item #1-quater Worldview-Cache Direct-Ref Caching Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V Commit 5 (Item #1-quater worldview-cache direct-ref caching) pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). Mini-design + mini-audit done together per Per-Phase Protocol steps 1+2 (co-dependent). **5 resolutions** (α1 / β1 / γ-B / δ1 / ε1) + **9 mini-audit findings F1-F9** + **5 drift risks D-1V-4-1 through D-1V-4-5**.
+
+**Implementation goal**: Cache the worldview-cache-cell's (cell-id 1) `prop-cell` direct reference as a 5th struct field on `prop-net-warm` (alongside existing `fuel-cell-cache`). Bypasses cells-map CHAMP traversal for worldview-cache-cell access. Mirror of Item #1-bis pattern; second instance of "well-known direct-ref cache on prop-net-warm" template per the codified [Specialized Cell Type Framework as Cross-Track Template](principles/DESIGN_PRINCIPLES.org).
+
+**Architectural intent**: extends the §4.6 specialized cell type framework's well-known-direct-ref caching pattern to a second cell. Validates the pattern's reusability (the codification claim) WITHIN this addendum before future tracks adopt.
+
+**Mini-audit findings (concrete grounding at HEAD `90c271fa`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | `worldview-cache-cell-id` definition | `propagator.rkt:582` — `(cell-id 1)`; provided at line 191 |
+| **F2** | **Inline champ-lookup sites** for worldview-cache-cell-id (PRIMARY optimization targets — 3 sites within tagged-cell-value branches) | `propagator.rkt:1200-1201` (net-cell-read tagged-cell-value branch); `propagator.rkt:1571-1572` (net-cell-write/slow-path tagged-cell-value branch); `propagator.rkt:3392-3393` (net-cell-write-widen tagged-cell-value branch). All three pattern-match: `(champ-lookup cells (cell-id-hash worldview-cache-cell-id) worldview-cache-cell-id)` |
+| **F3** | **Read sites via net-cell-read** (benefit automatically from top-of-function short-circuit) | `propagator.rkt:2745` (BSP scheduler); `propagator.rkt:3797` (some context); `relations.rkt:240, 2153, 2224, 2225, 2679` (5 sites); plus indirect benefits via tagged-cell-value branch optimizations |
+| **F4** | **Write sites via net-cell-write** | `propagator.rkt:1912`; `atms.rkt:281, 468`; `elab-speculation-bridge.rkt:290, 326`; `relations.rkt:242, 2155`. All go through `net-cell-write` → trigger WT-* paths → cache flows correctly via write-through |
+| **F5** | `prop-net-warm` current struct | `propagator.rkt:396` — now 4 fields (post-Item-#1-bis): `cells contradiction under-speculation? fuel-cell-cache` |
+| **F6** | Direct constructor sites (pipeline.md New Struct Field) | 2 sites: `propagator.rkt:758` (make-prop-network; currently 4-arg post-1V-3) + `propagator.rkt:851` (fork-prop-network; currently 4-arg post-1V-3). Need 5th arg for new `worldview-cache-cache` field. |
+| **F7** | `struct-copy prop-net-warm` sites | ~25 sites (same as Item #1-bis audit; inherit unchanged fields via struct-copy semantics) |
+| **F8** | Cache write-through paths (WT-1 through WT-8 from §11.X.3.1; same 8 explicit + 2 inherited) | Each WT-* site already has conditional `[fuel-cell-cache ...]` update; needs PARALLEL conditional `[worldview-cache-cache ...]` update for new field. Total: 16 conditional updates (2 fields × 8 sites). |
+| **F9** | `net-cell-read-raw` audit | `propagator.rkt:1196+` — bypasses tagged-cell-value branch; goes directly to champ-lookup. Should also get the eq?-short-circuit for worldview-cache-cell-id (symmetric to net-cell-read). |
+
+**Five user-confirmable resolutions (proposed)**:
+
+| Q | Lean | Effect |
+|---|---|---|
+| **α1** | Cache shape: `prop-cell` direct-ref (same as Item #1-bis) | Bypasses cells-map CHAMP traversal; matches fuel-cell-cache precedent |
+| **β1** | Add `worldview-cache-cache` as 5th field on prop-net-warm | 4→5 fields; parallel to fuel-cell-cache; precedent reinforces "well-known direct-ref cache" pattern |
+| **γ-B** | Approach B: top-of-function short-circuit at net-cell-read + net-cell-write + net-cell-read-raw + REPLACE 3 inline champ-lookups in tagged-cell-value branches | Captures both external-caller benefit AND internal tagged-cell-value-branch optimization. F2 3 inline sites are PRIMARY optimization targets. |
+| **δ1** | Single atomic implementation commit (~70-100 LoC) | Matches Item #1 / #1-bis pattern; mini-design persistence (this commit); implementation next commit |
+| **ε1** | WT-1 through WT-8 (already enumerated for Item #1-bis) extend to include `worldview-cache-cache` update at each site | Reuses the enumeration discipline + write-through audit list from §11.X.3.1; total 16 conditional updates (2 cache fields × 8 sites) |
+
+**Implementation plan (per δ1 atomic + γ-B)**:
+
+| # | Action | Site | Detail |
+|---|---|---|---|
+| 1 | Add `worldview-cache-cache` field to prop-net-warm struct | propagator.rkt:396 | 4 → 5 fields |
+| 2 | Update make-prop-network direct constructor | propagator.rkt:758-779 | 4-arg → 5-arg; initial value `#f` (set post-registration unnecessary since worldview-cache-cell allocated at construction time) |
+| 3 | Set worldview-cache-cache after worldview-cache-cell allocation in make-prop-network | propagator.rkt:765-780 | Look up wv-cell prop-cell from cells map; set in prop-net-warm |
+| 4 | Update fork-prop-network direct constructor | propagator.rkt:851 | 4-arg → 5-arg |
+| 5 | Set worldview-cache-cache in fork-prop-network | propagator.rkt:866-876 | Inherit from parent (shared cells; same prop-cell ref) |
+| 6 | Short-circuit `net-cell-read` for worldview-cache-cell-id | propagator.rkt:~1150 | Same eq?+and pattern as fuel-cell-cache; or extend to multi-cell check |
+| 7 | Short-circuit `net-cell-write` for worldview-cache-cell-id | propagator.rkt:~1404 | Same pattern |
+| 8 | Short-circuit `net-cell-read-raw` for worldview-cache-cell-id | propagator.rkt:~1196 | Per F9 |
+| 9-10 | Replace inline champ-lookup at propagator.rkt:1200-1201 | net-cell-read tagged-cell-value branch | Use cached `prop-net-warm-worldview-cache-cache` directly |
+| 11-12 | Replace inline champ-lookup at propagator.rkt:1571-1572 | net-cell-write/slow-path tagged-cell-value branch | Same |
+| 13-14 | Replace inline champ-lookup at propagator.rkt:3392-3393 | net-cell-write-widen tagged-cell-value branch | Same |
+| 15 | Update 8 WT-* sites with parallel `worldview-cache-cache` conditional update | propagator.rkt (8 sites with current `fuel-cell-cache` conditionals) | 16 total conditional updates after this step (2 caches × 8 sites) |
+| 16 | Add cache consistency tests | tests/test-specialized-cells.rkt | Verify worldview-cache-cache: initialized at make-prop-network; updates through net-cell-write; survives fork; unchanged when writes target other cells |
+| 17 | Targeted tests + full suite GREEN | — | Regression gate |
+| 18 | Re-microbench (auxiliary; not gate-blocking per Option C ratification) | — | Capture per-call cell-read/write savings under speculation paths |
+| 19 | VAG TWO-COLUMN + commit + §3 tracker + dailies | — | Per Stage 4 Per-Phase Protocol |
+
+**Drift risks named (D-1V-4-1 through D-1V-4-5)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-4-1 | pipeline.md New Struct Field exhaustiveness (4→5 fields; 2 direct constructors; ~25 struct-copies INHERIT) | ✅ AUDIT-RESOLVED per F6 enumeration; inherits Item #1-bis discipline |
+| D-1V-4-2 | Worldview-cache writes happen at speculation enter/exit boundaries; cache must reflect during transitions | ✅ AUDIT-RESOLVED — F4 confirms all writes go through net-cell-write → flow through 8 WT-* sites + write-through updates cache atomically |
+| D-1V-4-3 | F2 3 inline champ-lookup replacements may have subtle semantics (e.g., wv-cell `'none` case) | ⬜ NEEDS IMPL CARE — current code checks `(if (eq? wv-cell 'none) 0 (prop-cell-value wv-cell))`; cache may be `#f` if uninitialized → defensive check needed |
+| D-1V-4-4 | net-cell-read-raw symmetry (F9) | ✅ AUDIT-RESOLVED — add eq?-short-circuit at net-cell-read-raw too per γ-B |
+| D-1V-4-5 | Combined 2-cache write-through doubles conditional update overhead at WT-* sites (16 vs 8 conditional updates) | ⬜ MEASUREMENT — each `(eq? cid <id>)` check is ~1 ns; 2 checks = ~2 ns; net write cost increases ~2 ns/call BUT only on writes (not reads); offset against ~20-40 ns saved per read |
+
+**Expected savings** (per 1C-vi A/B/C §5.2 + Item #1-bis experience):
+- ~5-15 ns/call on speculation paths (worldview-cache reads inside tagged-cell-value branches eliminated)
+- Auxiliary improvement: relations.rkt + atms.rkt + elab-speculation-bridge.rkt worldview reads benefit automatically
+- Smaller than Item #1-bis because speculation paths are rarer in production; but compounds across speculative branches under union-type ATMS (future Phase 3A)
+
+**Item #1-bis pattern reuse validation**: this is the SECOND well-known direct-ref cache (after `under-speculation?` 1B-ii + `fuel-cell-cache` 1V-3). The codification claim "Specialized Cell Type Framework as Cross-Track Template" predicts this pattern reuses cleanly. This implementation validates the prediction.
+
+**NEW codification candidates surfaced this audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Two-cache prop-net-warm doubles conditional update overhead** (~16 conditional updates instead of 8) — manageable; suggests future N-cache extension may benefit from a helper macro to consolidate | 1 (this Item #1-quater) | NEW watching list — useful for PReduce / PM 12 if they add 3+ caches |
+| **Codification claim validation in-track** — codifying the framework "as cross-track template" at Commit 4 makes a prediction; Item #1-quater (Commit 5) is the in-track validation that the pattern reuses | 1 (this validation) | NEW watching list |
+
+**Updates to design doc trackers** (this commit — Commit 5a mini-design persistence):
+
+- §3 Progress Tracker NEW row "1V Commit 5 mini-design + mini-audit" ✅ §11.X.4 (2026-05-17)
+- §3 Progress Tracker row "1V Commit 5 — Item #1-quater worldview-cache caching" updates Notes to reference §11.X.4
+- Status remains ⬜ until implementation commit lands (Commit 5b)
 
 ---
 
