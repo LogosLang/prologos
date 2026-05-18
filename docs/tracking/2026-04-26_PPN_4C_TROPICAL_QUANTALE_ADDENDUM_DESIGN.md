@@ -420,8 +420,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 3 pre-impl audit extension** | D-1V-3-3 ✅ AUDIT-RESOLVED (snapshot semantics flow through WT-1/WT-2 via standard primitives — no new site); D-1V-3-5 ✅ AUDIT-RESOLVED (external files inherit via struct-copy); F13 NEW pre-existing arity bug at elab-network-types.rkt:108 (dead-code; out of scope); F14 NEW (WT-2 has 1 explicit site; contradicted branch inherits); F15 NEW (WT-8 added: net-cell-replace defensive); **Item #1-ter format planned**: 5 candidates + decision tree (5-6 ns → candidate 2 only; 6-7 ns → candidates 1+2; > 7 ns → architectural escalation); 4 NEW codification candidates | ✅ | §11.X.3.1 (2026-05-17) |
 | **1V Commit 3 — Item #1-bis fuel-cell direct-ref caching** | Cache fuel-cost-cell direct-ref on prop-net-warm (4th field; precedent: `under-speculation?` 1B-ii cache); bypass cells-map CHAMP traversal for fuel-cell-id; write-through at 8 mutation sites (WT-1 through WT-8); ~185 LoC across propagator.rkt + tests; **CW3 actual measurement: Var-A N=100 5.78 → 3.96 ns/cycle (-1.82 ns; -31.5% recovery; 6× projected savings)**; **§13.7 ≤ 5 ns gate MET (3.96 < 5)**; in §13.7 measurement-driven discussion range (3-4 ns); **Item #1-ter NOT triggered per Option (d)** (3.96 < 5 ns trigger threshold); combined Item #1+#1-bis = -3.60 ns / -47.6% vs Pre-Item-#1 baseline | ✅ ✓ GATE-MET | Per §11.X.3 + §11.X.3.1 + 1C-vi A/B/C report + §11.X.2.1 Option (d); commit hash TBD |
 | ~~**1V Commit 3.5 — Item #1-ter (CONDITIONAL)**~~ | ~~Triggers IF Commit 3 measurement shows Var-A N=100 > 5 ns/cycle~~ | ❌ NOT TRIGGERED — Commit 3 measurement 3.96 < 5 ns gate threshold | Per §11.X.3.2 (post-Commit-3 close) |
-| **1V Commit 4 — Item #3 SRE property-sweep** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (Track 2I closed per user) |
-| **1V Commit 5 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications graduation to DEVELOPMENT_LESSONS.org + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi |
+| **1V Commit 4 — Option C gate re-calibration + 3 codifications graduation** | §13.7.A NEW (Option C ~4 ns/cycle measurement-driven gate; supersedes ≤5 ns unilateral revision); DEVELOPMENT_LESSONS.org +2 (cache projection methodology; cache write-through enumeration); DESIGN_PRINCIPLES.org +1 (specialized cell type framework as cross-track template) | ✅ | Per user direction 2026-05-17 (Option C confirmed) |
+| **1V Commit 5 — Item #1-quater worldview-cache caching** | Cache worldview-cache-cell direct-ref on prop-net-warm (parallel to fuel-cell-cache pattern); ~30-60 LoC; ~5-15 ns/call savings on speculation paths; net-cell-read tagged-cell-value branch + net-cell-write/slow-path tagged-cell-value branch | ⬜ | Per §11.X.4 (next sub-phase) |
+| **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Resolve import cycle between propagator.rkt and tropical-fuel.rkt; retire the inlined duplicate at propagator.rkt:646-655; architectural cleanup (no perf gain; eliminates "future change MUST update duplicate" warning) | ⬜ | Per §11.X.5 (next sub-phase) |
+| **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (renumbered) |
+| **1V Commit 8 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications already graduated at Commit 4 (cross-reference in close) + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi (renumbered from "Commit 5") |
 
 **Sub-phase ordering** (γ strict sequencing per Q-Open-4):
 - **1A-iii-c MUST land before 1A-iii-b** (per §7.7 α audit finding F4: production callers of deprecated functions in parser.rkt + surface-syntax.rkt — surface AST scope — only stop calling once 1A-iii-c retires the surface forms; attempting 1A-iii-b first breaks compile). Original "any order or in parallel" claim CORRECTED per F4 audit (2026-05-17).
@@ -5012,6 +5015,39 @@ This per-phase plan adds measurement OVERHEAD to Stage 4 implementation — each
 **Codification candidate (post-Phase-1V close)**:
 
 "Per-phase measurement plan with A/B/C structure" pattern — when a design's correctness rests on assumptions about performance (e.g., "Option 13 achieves ~2 ns/cycle amortized"), the implementation plan should EXPLICITLY name the measurements that validate each assumption at each sub-phase boundary. This is stronger than the existing "per-phase microbench" discipline because it names CONCRETE comparisons (A/B/C) and DECISION RULES (PASS/FAIL/INVESTIGATE), rather than ad-hoc per-phase measurements. Watching list: 1 data point (this addendum); ~1-2 more for graduation.
+
+### §13.7.A Option C Gate Re-calibration (2026-05-17; supersedes unilateral §13.7 1B-ii gate)
+
+> **Status**: Per user direction post Phase 1V Commit 3b — re-calibrate §13.7 1B-ii gate to ~4 ns/cycle based on measured production overhead breakdown. Honors the empirical structural floor revealed by Item #1 + Item #1-bis measurements. The "unilateral revision" from 1B-iv (3 → 5 ns/cycle) is SUPERSEDED by this measurement-driven re-calibration.
+
+**Production overhead breakdown** (decomposes the measured 3.96 ns/cycle at Var-A N=100):
+
+| Component | Cost | Source |
+|---|---|---|
+| §13.6.A MOCK spike floor (CHAMP-free dispatch) | 2.16 ns/cycle | §13.6.A spike measurement |
+| Production CHAMP cell-meta dispatch | ~0.8 ns/cycle | Item #1 cached this; remaining is structural |
+| Production CHAMP cells-map traversal (fuel-cell-id) | ~0.8 ns/cycle | Item #1-bis cached this; remaining is in non-fast-path code |
+| Tagged-cell-value branch + worldview-cache (under speculation) | ~0.2 ns/cycle | Speculation-path overhead; rare under no-speculation hot path |
+| **Total structural floor** | **~4.0 ns/cycle** | Post-Item-#1+#1-bis measured: 3.96 ns/cycle ✓ |
+
+The remaining gap to ≤ 3 ns is **architectural**, not optimizable within Phase 1V scope. Closing it requires:
+- Mutable scheduler-state intermediate (~100-200 ns/call savings on cell-API; multi-month effort; speculation-rollback incompatibility)
+- CHAMP-to-vector replacement for cells-map (Phase 4 territory; multi-week)
+- Other CHAMP-dispatch reductions throughout the network layer
+
+**Re-calibrated §13.7 1B-ii gate**: **≤ 4 ns/cycle at Var-A N=100** (production-realistic). Replaces both the original ≤ 3 ns target (MOCK-based; production has CHAMP dispatch overhead the MOCK didn't model) AND the 1B-iv unilateral revision ≤ 5 ns target (which had ~1 ns/cycle margin but was empirically grounded only in the merge-fn correctness discovery).
+
+**Rationale per user direction (2026-05-17)**: "The performance wins are better than our previous implementation, and I'm pleased with that. The architectural demonstration of both a scheduler/compiler specialized cell will be good precedent not only for PReduce, but also PM 12 and others; the tropical algebraic structure serves well as a first test for us to extend towards a multi-dimensional cost optimization for future tracks." — Option C ratifies the measurement-driven reality while preserving the architectural demonstration value.
+
+**Cross-track implications**:
+- Future PReduce / PM 12 tracks adopting the §4.6 specialized cell framework should baseline against ~4 ns/cycle (not ≤ 3 ns MOCK), with ANY further optimization being a NEW track scope item
+- Multi-dimensional cost extensions (MemoryCostQ + MessageCountQ) inherit the same ~4 ns/cycle floor per cost dimension (one cache per dimension on prop-net-warm)
+- The honest gate is measurement-driven; future calibrations follow the same `MOCK + production-CHAMP-overhead` decomposition pattern
+
+**Status note**: §13.7 1B-ii gate as written in the table above (line 4990) referenced "≤ 5 ns/cycle (revised post-1B-iv from earlier 3 ns)" with a follow-up optimization note pointing to merge-fn caching. Both targets have been resolved:
+- ≤ 5 ns unilateral revision: SUPERSEDED by Option C ≤ 4 ns measurement-driven re-calibration
+- Merge-fn caching follow-up: ✓ DELIVERED as Item #1 (1V Commit 2)
+- Additional fuel-cell direct-ref caching: ✓ DELIVERED as Item #1-bis (1V Commit 3)
 
 ---
 

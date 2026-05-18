@@ -1047,3 +1047,122 @@ PReduce, OE, and SH Series tracks.
 - [[../2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][BSP-LE Track 0]] — cell-level hot/cold split (storage strategy at cell layer)
 - [[../../.claude/rules/propagator-design.md][propagator-design.md]] — propagator-level optimization patterns (fire-once, broadcast, set-latch)
 - [[../../.claude/rules/on-network.md][on-network.md]] — the on-network mandate (which this principle extends with the orthogonality requirement)
+
+* Specialized Cell Type Framework as Cross-Track Template
+
+The specialized cell type framework codified in PPN 4C (per the tropical
+quantale addendum design doc §4.6) is a /cross-track template/ for
+cell-layer optimization. It is the practical instantiation of [[*Cell
+/ Propagator / Scheduler Orthogonality][Cell/Propagator/Scheduler
+Orthogonality]] for hot-path cell access — declaring optimization
+properties at the CELL layer, scheduler-agnostic by construction.
+
+** Three layers of the framework
+
+1. *cell-meta declarations* (per-cell properties):
+   - ~:tier 'hot|warm|cold~ — storage tier dispatch (originally BSP-LE
+     Track 0 prop-net hot/cold split, extended to cell-meta)
+   - ~:storage 'monotone-counter|general|...~ — specialized storage
+     strategy (e.g., direct-fixnum-mutation under no-speculation)
+   - ~:fires-on 'threshold-crossing|any-change~ — fire-pattern policy
+     (skip dependent enqueuing when threshold not crossed)
+   - ~:on-write-check predicate~ — inline check at write time (replaces
+     separate threshold propagator)
+   - ~:on-read-check predicate~ — inline check at read time (for derived
+     properties)
+   - ~:merge-fn~ cached — eliminates per-call champ-lookup on fast paths
+     (added by 1V-3 Item #1)
+
+2. *Well-known direct-ref caches on prop-net-warm* (network-layer
+   bookkeeping):
+   - Cached prop-cell direct-refs for well-known cell-ids that are hot
+     on the convergence/init/flush paths
+   - First instance: ~under-speculation?~ (1B-ii; boolean cache of
+     ~current-worldview-bitmask~ for fast-path dispatch)
+   - Second instance: ~fuel-cell-cache~ (1V-3 Item #1-bis; prop-cell
+     direct-ref for fuel-cell-id; bypasses cells-map CHAMP traversal)
+   - Future instances follow the same shape: struct field + write-through
+     at enumerated mutation sites + eq?-short-circuit at read/write entry
+
+3. *Write-through discipline at enumerated mutation sites*:
+   - Every code path that mutates the cached entry updates the cache
+     atomically with the persistent CHAMP update (~struct-copy
+     prop-net-warm [cells new-cells] [<cache> new-cell]~)
+   - The audit list (WT-1, WT-2, ...) is the implementation checklist
+     AND the drift mitigation (per the codified
+     [[file:DEVELOPMENT_LESSONS.org][~"Cache Write-Through With Persistent CHAMP"~]] lesson)
+   - Inherited sites (via delegation, e.g., ~promote-cell-to-tagged~
+     calls ~net-cell-reset~) flow through naturally without separate
+     update
+
+** Why cross-track template
+
+The framework's design rests on three principles that are universal across
+future tracks:
+
+- *Cell/Propagator/Scheduler Orthogonality* — optimization at the CELL
+  layer survives any scheduler (Gauss-Seidel, BSP, Zig-LLVM, future
+  distributed runtime)
+- *Persistent CHAMP source-of-truth* — caches mirror well-known entries;
+  the CHAMP remains primary; dual-storage is principled (γ1)
+- *Forward-compatibility with multi-dimensional cost extensions* —
+  quantale-of-bridges composition (per the addendum §4.2) lets future
+  cost dimensions (MemoryCostQ, MessageCountQ) instantiate as additional
+  Q-modules with their own cache fields on prop-net-warm
+
+** Cross-track applicability
+
+- *PReduce*: e-class cell substrate can adopt ~:tier 'hot~ + specialized
+  storage for e-class-id cells; cost-extraction via tropical-quantale
+  residuation extends the multi-dimensional pattern
+- *PM Track 12* (parameters → cells for module loading): hot module-load
+  cells (module-registry, current-namespace) use the cached-direct-ref
+  pattern on prop-net-warm (or equivalent context-state struct)
+- *OE Series* (Optimization Enrichment / weighted parsing): cost-bounded
+  parsing inherits the cell-meta declaration pattern + multi-dimensional
+  cost composition
+- *SH Series* (Self-Hosting): native-substrate implementation of the
+  framework establishes the runtime contract for LLVM-lowered cells
+
+** Measurement-driven gate discipline (post-Phase-1V Item #1+#1-bis)
+
+The framework's performance characteristics calibrate against a
+production CHAMP-dispatch structural floor (~4 ns/cycle at Var-A N=100
+per PPN 4C 1V-3 measurement-driven gate re-calibration). Future tracks
+adopting the framework baseline against this floor, with further
+optimization gated by track-specific architectural conversations (not
+the framework's responsibility).
+
+The honest reality: cell-layer optimization wins are bounded by the
+network primitives' inherent overhead (CHAMP dispatch + immutable
+struct-copy + worldview filtering under speculation). Optimizations
+beyond this floor require architectural redesign (mutable scheduler-state
+intermediate; CHAMP-to-vector replacement) which is by definition
+out-of-scope for cell-layer work.
+
+** Provenance
+
+Articulated as a cross-track template at user direction (2026-05-17)
+during PPN 4C Tropical Addendum Phase 1V Commit 3b close. The user
+noted: "The architectural demonstration of both a scheduler/compiler
+specialized cell will be good precedent not only for PReduce, but also
+PM 12 and others; the tropical algebraic structure serves well as a
+first test for us to extend towards a multi-dimensional cost optimization
+for future tracks."
+
+Codified as a top-level principle (not just a watching-list candidate)
+because the framework's reusability across PReduce + PM 12 + OE + SH
+Series justifies upfront anchoring. Each future track adopting the
+framework saves the cost of re-deriving the cache discipline + cell-meta
+declarations + write-through enumeration.
+
+** Cross-References
+
+- PPN 4C Tropical Addendum D.4 §4.6 — specialized cell type framework
+  NTT model (canonical source)
+- PPN 4C Tropical Addendum D.4 §11.X.2 + §11.X.3 — Items #1 + #1-bis
+  implementations (cell-meta-merge-fn cache + prop-net-warm fuel-cell-cache)
+- [[file:DEVELOPMENT_LESSONS.org][DEVELOPMENT_LESSONS.org § "Cache Write-Through With Persistent CHAMP"]] — the write-through enumeration discipline
+- [[file:DEVELOPMENT_LESSONS.org][DEVELOPMENT_LESSONS.org § "Cache Projection Should Model Read-Side + Write-Side Independently"]] — projection methodology lesson
+- [[*Cell / Propagator / Scheduler Orthogonality][Cell/Propagator/Scheduler Orthogonality]] — the foundational architectural
+  principle this framework instantiates

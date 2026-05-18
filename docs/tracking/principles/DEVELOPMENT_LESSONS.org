@@ -1330,6 +1330,108 @@ See:
 - [[../../.claude/rules/propagator-design.md][propagator-design.md § Cell / Propagator / Scheduler Orthogonality]] — propagator-level operational rule
 - [[../../.claude/rules/on-network.md][on-network.md § Cell / Propagator / Scheduler Orthogonality]] — on-network constraint extension
 
+** Cache Projection Should Model Read-Side + Write-Side Independently
+
+When projecting performance savings from caching a hot cell or struct
+field, model BOTH read-side AND write-side savings independently based
+on actual access patterns. Don't project one side and assume the other
+contributes similarly — they're often asymmetric, especially under
+deferred-write architectures where reads dominate the hot path.
+
+*The trap*: a projection anchored only on write-side cost (e.g., "we
+save X ns/call on cell-write") undermodels the win when the cell is
+read-heavy on a hot loop. PPN 4C 1V-3 Item #1-bis projected ~0.3 ns/cycle
+savings (write-side only); actual savings were ~1.82 ns/cycle (~6×).
+The unmodeled side: the BSP convergence check at `propagator.rkt:2670`
+fires `(net-cell-read net fuel-cell-id)` every iteration. Auxiliary
+per-call metrics confirmed it: cell-read -85% (74 → 11 ns/call);
+check-site -86% (77 → 11 ns/call) — neither was in the projection.
+
+*The discipline*:
+1. /Enumerate access patterns separately/: how many reads vs writes per
+   representative cycle, and where do they fire on the hot path?
+2. /Project read-side savings/ based on read-call cost reduction
+   (e.g., champ-lookup elimination → ~20-40 ns/call savings × per-cycle
+   read frequency)
+3. /Project write-side savings/ based on write-call cost reduction
+   (rarer under Option-13-style deferred-write architectures)
+4. /Sum independently, don't average/ — read-heavy and write-heavy cases
+   amortize differently at different N
+5. /Verify with auxiliary per-call measurements/ alongside amortized
+   cycle cost — the amortized number can DILUTE per-primitive savings
+
+*Symptom of the trap*: when actual savings exceed projection by >2×,
+suspect the projection over-weighted one side. Under-projecting opens
+the door to "the gate is unreachable; let's relax it" arguments;
+Item #1-bis would have appeared insufficient under the ~0.3 ns/cycle
+projection but is comfortably gate-passing under corrected modeling.
+Honest projections preserve the gate's correctness signal.
+
+*Codification status*: 1 data point (PPN 4C Item #1-bis, 2026-05-17).
+Strong methodological case — the 6× discrepancy is concrete and
+traceable to the specific unmodeled read-side savings.
+
+See:
+- PPN 4C Tropical Addendum D.4 §11.X.3.2 — Item #1-bis implementation
+  results showing the projection-vs-actual breakdown
+- DEVELOPMENT_LESSONS.org § "Microbench-Claim Verification Pays Off
+  Across Sub-Phase Arcs" — companion discipline (re-microbench validates
+  projections post-implementation)
+
+** Cache Write-Through With Persistent CHAMP: Explicit Audit List IS the Drift Mitigation
+
+When adding a struct-field cache that mirrors a persistent CHAMP entry,
+the audit must enumerate ALL mutation sites that update that entry. The
+enumeration list (WT-1, WT-2, ..., WT-N) IS the implementation checklist
+AND the drift mitigation — there's no separate test that catches a
+missed site; the enumeration discipline IS the test.
+
+*The trap*: persistent CHAMP semantics mean writes return a NEW network
+with a NEW cells map. A cached prop-cell reference goes STALE the moment
+any code path updates the entry without also updating the cache. The
+cache invalidation problem is structural; consistency requires
+write-through at EVERY mutation site.
+
+*Pattern* (PPN 4C 1V-3 Item #1-bis, 2026-05-17): the fuel-cell-cache on
+prop-net-warm required write-through at 8 explicit sites + 2 inherited
+via delegation. Explicit: WT-1a/1b (net-cell-write fast-path 2 branches),
+WT-2 (net-cell-write/slow-path), WT-3 (net-cell-reset), WT-4 (net-cell-
+write-widen defensive), WT-6a/6b (net-clear-dependents + net-remove-
+propagator-from-dependents), WT-8 (net-cell-replace defensive).
+Inherited: WT-5 (promote-cell-to-tagged → WT-3), WT-7 (fork-prop-network
+→ WT-3 ×2). Sister precedent: 1B-ii `under-speculation?` cache (simpler
+case; only one WRITE site at BSP fire-and-collect-writes refresh).
+
+*The discipline*:
+1. /Enumerate all code paths that mutate the cached entry/ — grep for
+   `struct-copy <containing-struct>` + the `(<cell-struct> ...)`
+   constructor sites + indirect mutation via delegation
+2. /Classify each site as EXPLICIT or INHERITED/ — explicit sites need
+   inline cache update; inherited sites flow through delegation naturally
+3. /Add the conditional update inline at each EXPLICIT site/ — pattern:
+   `[<cache-field> (if (eq? cid <well-known-id>) new-cell (<accessor> <warm>))]`
+4. /Verify with cache consistency tests/ — read after each mutation kind
+   (write/reset/fork/promote/dependents-change) returns expected value;
+   cache identity matches champ-lookup result for the well-known id
+
+*Why explicit enumeration*: persistent CHAMP write-through is not type-
+checked. A missed site produces silent cache inconsistency (cached value
+doesn't match cells-map source-of-truth). The audit list IS the
+implementation checklist — there's no compiler help here. Pre-implementation
+enumeration is also the drift mitigation against future code paths that
+add new mutation sites without updating the cache; those future paths
+will appear in the next sub-phase's audit as a new WT-N site.
+
+*Codification status*: 1 data point with concrete enumeration discipline.
+Reusable for any future struct-field cache mirroring CHAMP entries —
+PReduce e-class cell-cache, PM 12 module-registry-cache, etc.
+
+See:
+- PPN 4C Tropical Addendum D.4 §11.X.3 + §11.X.3.1 — full enumeration
+  with audit findings (WT-1 through WT-8 + inherited)
+- DESIGN_PRINCIPLES.org § "Specialized Cell Type Framework as
+  Cross-Track Template" — broader pattern Item #1-bis instantiates
+
 ** "Spike Validates Feasibility, Not Optimality" — Distinguish Acceptable from Best
 
 When a Pre-0 spike PASSES its decision criteria, the verdict is "the
