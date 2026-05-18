@@ -423,7 +423,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline.
 | **1V Commit 4 — Option C gate re-calibration + 3 codifications graduation** | §13.7.A NEW (Option C ~4 ns/cycle measurement-driven gate; supersedes ≤5 ns unilateral revision); DEVELOPMENT_LESSONS.org +2 (cache projection methodology; cache write-through enumeration); DESIGN_PRINCIPLES.org +1 (specialized cell type framework as cross-track template) | ✅ | Per user direction 2026-05-17 (Option C confirmed) |
 | **1V Commit 5 mini-design + mini-audit** | α1/β1/γ-B/δ1/ε1 resolved; 9 audit findings F1-F9 at HEAD `90c271fa`; F2 identifies 3 inline champ-lookup sites (PRIMARY targets) within tagged-cell-value branches; F4 enumerates 6 production write sites (all flow through 8 WT-* sites); 5 drift risks D-1V-4-1/2/3/4/5 (3 audit-resolved + 2 needing impl care); 2 NEW codification candidates | ✅ | §11.X.4 (2026-05-17) |
 | **1V Commit 5 — Item #1-quater worldview-cache caching** | Cache worldview-cache-cell direct-ref on prop-net-warm (5th field; parallel to fuel-cell-cache pattern); ~150 LoC across propagator.rkt + tests; γ-B Approach (top-of-function short-circuit + 3 inline champ-lookups replaced + WT-* parallel updates); **CW3 ~flat (3.96 → 3.94 ns/cycle; expected since speculation paths not exercised in current bench)**; **suite GREEN 8213 / 97.2s / 0 failures**; 4 NEW cache consistency tests pass; **pattern reuse claim validated** (2nd instance of well-known direct-ref cache lands w/ 0 impl surprises beyond audit); forward-investment for Phase 3A speculation-heavy paths | ✅ ✓ FORWARD-INVESTMENT | Per §11.X.4 + §11.X.4.1; commit hash TBD |
-| **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Resolve import cycle between propagator.rkt and tropical-fuel.rkt; retire the inlined duplicate at propagator.rkt:646-655; architectural cleanup (no perf gain; eliminates "future change MUST update duplicate" warning) | ⬜ | Per §11.X.5 (next sub-phase) |
+| **1V Commit 6 mini-design + mini-audit** | α1/β1/γ1/δ1/ε1 resolved; 6 audit findings F1-F6 at HEAD `a69638ae`; cycle verified (propagator → tropical-fuel → sre-core → propagator); 3 drift risks D-1V-5-1/2/3 (2 audit-resolved + 1 needing impl verification); 1 NEW codification candidate (two-layer module split for cycle-breaking) | ✅ | §11.X.5 (2026-05-17) |
+| **1V Commit 6 — F14 retirement (tropical-fuel-merge-for-cell inlined-duplicate)** | Break cycle by creating new `tropical-fuel-primitives.rkt` leaf module (pure algebraic primitives; zero non-Racket deps); refactor `tropical-fuel.rkt` to re-export from primitives + retain SRE/merge-fn registration; `propagator.rkt` requires primitives directly; replace 2 `tropical-fuel-merge-for-cell` use-sites with `tropical-fuel-merge`; delete inline duplicate + comment; ~50-80 LoC; architectural cleanup (no perf gain; eliminates "future change MUST update duplicate" warning) | ⬜ | Per §11.X.5 (next sub-phase) |
 | **1V Commit 7 — Item #3 SRE property-sweep verification** | Wire Track 2I `all-sweep-properties` to tropical-fuel domain; empirically verify quantale property declarations (was originally "Commit 4"; renumbered per Commits 4-6 insertion) | ⬜ | Per §11.3 item #3 + §11.X γ-all3 (renumbered) |
 | **1V Commit 8 — atomic VAG + close** | VAG TWO-COLUMN per reframed §11.2 + 5 NEW microbench runs (A7.1-3 + A9 + E8) + 6 references to existing measurements + 3 codifications already graduated at Commit 4 (cross-reference in close) + probe diff = 0 verification + suite GREEN gate + Phase 1V ✅ tracker + Phase 1 atomic close | ⬜ | Per §11.3 + §11.X ε-multi (renumbered from "Commit 5") |
 
@@ -4912,6 +4913,76 @@ This is the **"forward-investment optimization"** pattern: lands the cache disci
 |---|---|---|
 | **Forward-investment optimization at speculation paths** — optimization targets a code path the current bench doesn't exercise; measurement is silent but optimization IS valuable; document explicitly so future maintainers don't conclude "no measured benefit = unnecessary" | 1 (this Item #1-quater) | NEW watching list |
 | **Codified pattern reuses cleanly in-track** — codifying the framework at Commit 4 made a prediction; Item #1-quater (Commit 5) validates it (0 implementation surprises beyond audit) | 1 (this validation) | NEW watching list — methodology validation |
+
+### §11.X.5 1V Commit 6 — F14 Retirement Mini-Design + Mini-Audit Resolutions (2026-05-17, combined)
+
+> **Status**: Phase 1V Commit 6 (F14 retirement — `tropical-fuel-merge-for-cell` inlined-duplicate) pre-implementation mini-design + mini-audit ✅ COMPLETE (this commit). **5 resolutions** (α1 / β1 / γ1 / δ1 / ε1) + **6 mini-audit findings F1-F6** + **3 drift risks D-1V-5-1 through D-1V-5-3**.
+
+**Implementation goal**: retire the inlined-duplicate `tropical-fuel-merge-for-cell` at `propagator.rkt:675` by breaking the import cycle structurally. Architectural cleanup (no perf gain); eliminates the "future change to tropical-fuel-merge MUST update this duplicate too" warning at line 673.
+
+**The cycle (audit-verified at HEAD `a69638ae`)**:
+- `propagator.rkt` does NOT currently require `tropical-fuel.rkt` (good — no cycle today)
+- `tropical-fuel.rkt:33` requires `sre-core.rkt`
+- `sre-core.rkt:23` requires `propagator.rkt` ← would close the cycle IF propagator.rkt added a require to tropical-fuel.rkt
+
+**Mini-audit findings (concrete grounding at HEAD `a69638ae`)**:
+
+| # | Finding | Result |
+|---|---|---|
+| **F1** | Inlined-duplicate definition | `propagator.rkt:675` — `(define (tropical-fuel-merge-for-cell a b) (min a b))` — pure function on numbers; identical body to `tropical-fuel-merge` at `tropical-fuel.rkt:86` |
+| **F2** | Inlined-duplicate uses | `propagator.rkt:818, 831` — both inside make-prop-network as merge-fn arg to net-register-specialized-cell for fuel-cell + fuel-budget-cell |
+| **F3** | Import cycle structure | `propagator.rkt → (hypothetical) tropical-fuel.rkt → sre-core.rkt → propagator.rkt`. Verified: tropical-fuel.rkt:33 requires sre-core.rkt; sre-core.rkt:23 requires propagator.rkt; propagator.rkt:36-45 does NOT require tropical-fuel.rkt or sre-core.rkt. The cycle WOULD form if propagator.rkt added a require to tropical-fuel.rkt directly. |
+| **F4** | tropical-fuel.rkt structure | Pure algebraic primitives (bot/top/contradiction?/merge/meet/tensor/residual) at lines 49-110+ + SRE domain registration at lines 130-181. Requires: `sre-core.rkt` (for `make-sre-domain` + `register-domain!`) + `merge-fn-registry.rkt` (for `register-merge-fn!/lattice`). |
+| **F5** | Algebraic primitives use NO sre-core / merge-fn-registry imports | The pure algebraic functions (`tropical-fuel-merge`, `tropical-fuel-meet`, `tropical-fuel-tensor`, `tropical-left-residual`, plus constants) are pure Racket — only depend on `racket/base` builtin functions (`min`, `max`, `+`, `-`, `>=`, `=`). |
+| **F6** | Existing imports of `tropical-fuel-merge` | `tropical-fuel.rkt` exports it (line 42); imported in test files (e.g., `test-tropical-fuel.rkt:72-77`). Re-export from a new primitives file preserves backward compat. |
+
+**Five user-confirmable resolutions (proposed)**:
+
+| Q | Lean | Effect |
+|---|---|---|
+| **α1** | Create `tropical-fuel-primitives.rkt` (new file) containing pure algebraic primitives | Breaks the cycle by extracting cycle-free primitives to a leaf module |
+| **β1** | Move ALL algebraic primitives to primitives file (not just merge) | Clean two-layer separation: primitives module = pure algebra; tropical-fuel.rkt = SRE-integration. Aligns with existing tropical-fuel.rkt comment intent (line 28-31). |
+| **γ1** | `tropical-fuel.rkt` re-exports primitives from new file + adds SRE/merge-fn registration | Preserves backward compat (existing imports of `tropical-fuel-merge` from tropical-fuel.rkt continue working) |
+| **δ1** | Single atomic commit (~50-80 LoC) | Matches Items #1/#1-bis/#1-quater pattern; mini-design persistence this commit; implementation next commit |
+| **ε1** | `propagator.rkt` requires `tropical-fuel-primitives.rkt`; replace `tropical-fuel-merge-for-cell` with `tropical-fuel-merge` at 2 call sites; delete the inline duplicate + comment | Achieves the F14 retirement goal: no more duplicate; "future change MUST update duplicate" warning eliminated |
+
+**Implementation plan (per δ1 atomic + γ1 re-export)**:
+
+| # | Action | Site | Detail |
+|---|---|---|---|
+| 1 | Create `tropical-fuel-primitives.rkt` | NEW file | Pure algebraic primitives: bot/top/contradiction?/merge/meet/tensor/left-residual. Requires only `racket/base`. ~40-50 LoC. |
+| 2 | `tropical-fuel.rkt` refactor | Existing file | Replace primitive definitions with `(require "tropical-fuel-primitives.rkt")` + re-export. Keep SRE/merge-fn registration. ~10-20 LoC net delta. |
+| 3 | `propagator.rkt` add require | `propagator.rkt:36-45` (require block) | Add `(require (only-in "tropical-fuel-primitives.rkt" tropical-fuel-merge))` |
+| 4 | Delete inline duplicate + comment | `propagator.rkt:666-675` | Remove `(define (tropical-fuel-merge-for-cell a b) (min a b))` + the explanatory comment block |
+| 5 | Replace 2 use-sites | `propagator.rkt:818, 831` | `tropical-fuel-merge-for-cell` → `tropical-fuel-merge` |
+| 6 | Verify backward compat | tests + bench files | Existing imports of `tropical-fuel-merge` from `tropical-fuel.rkt` continue working (via re-export) |
+| 7 | check-parens + raco make + targeted tests + full suite | — | Verification gate |
+| 8 | VAG TWO-COLUMN + commit + §3 tracker + dailies | — | Per Stage 4 Per-Phase Protocol |
+
+**Drift risks named (D-1V-5-1 through D-1V-5-3)**:
+
+| # | Risk | Status |
+|---|---|---|
+| D-1V-5-1 | Existing imports of `tropical-fuel-merge` from `tropical-fuel.rkt` break | ✅ AUDIT-RESOLVED via γ1 (re-export from primitives file preserves backward compat) |
+| D-1V-5-2 | New file naming conflict with existing `tropical-fuel.rkt` | ✅ AUDIT-RESOLVED — `tropical-fuel-primitives.rkt` is a distinct, unused name |
+| D-1V-5-3 | Cycle break verification — adding require in propagator.rkt may trigger module load order issues | ⬜ NEEDS IMPL VERIFICATION — `tropical-fuel-primitives.rkt` is a leaf module (only `racket/base`); should load cleanly before propagator.rkt finishes initializing. Verify via `raco make driver.rkt` post-impl. |
+
+**Expected benefits**:
+- Eliminates the "future change to tropical-fuel-merge MUST update this duplicate too" warning at propagator.rkt:673
+- Architecturally cleaner two-layer separation (matches tropical-fuel.rkt's stated design intent at lines 28-31)
+- Sets a precedent for future algebraic-primitive modules that need to be referenced from both the network layer (propagator.rkt) and the SRE-integration layer (sre-core.rkt-dependent modules)
+
+**NEW codification candidates surfaced this audit**:
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Two-layer module split for cycle-breaking** — when an algebraic primitive needs to be referenced from both the network layer AND from SRE-integration modules, extract the primitive to a leaf module (zero non-Racket deps). Network layer requires the primitive directly; SRE-integration layer requires the primitive + re-exports for backward compat | 1 (this F14 retirement) | NEW watching list — future tracks (PReduce + OE) may face similar cycles |
+
+**Updates to design doc trackers** (this commit — Commit 6a mini-design persistence):
+
+- §3 Progress Tracker NEW row "1V Commit 6 mini-design + mini-audit" ✅ §11.X.5 (2026-05-17)
+- §3 Progress Tracker row "1V Commit 6 — F14 retirement" updates Notes to reference §11.X.5
+- Status remains ⬜ until implementation commit lands (Commit 6b)
 
 ---
 
