@@ -2724,6 +2724,23 @@ Residuation-based error-explanation for all-branch-contradict:
 
 Note: Q-A6 (placement of residuation error-explanation — this track or Phase 11b diagnostic) is a Phase 3C mini-design item (§16.3).
 
+#### §9.5.A Form C cross-reference — Tropical Quantale Addendum forward-capture (added 2026-05-17 at Phase 1V close)
+
+Per [Tropical Quantale Addendum §6.5](2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md) (Form A unit-tested at 1B-iii; Form B UC enumeration at §9.7) + this addendum closes at Phase 1V Commit 8 (2026-05-17): **Phase 3C consumes the tropical residuation operator (`tropical-left-residual`) shipped by Phase 1B + the anticipated Phase 3C UCs enumerated at the addendum's §9.7**:
+
+| UC | Description | Addendum §9.7 reference |
+|---|---|---|
+| **UC1** | Fuel-exhaustion blame attribution via reverse-walk propagator dependency graph + per-step residuation walk | Tropical Addendum §9.7 UC1 |
+| **UC2** | Cost-bounded elaboration via Galois bridge (α: type → cost; γ: budget → elaborable types) | Tropical Addendum §9.7 UC2 |
+| **UC3** | Per-branch cost tracking under union-type ATMS branching (Phase 3A); per-branch tropical fuel cell + residuation walk on contradiction | Tropical Addendum §9.7 UC3 |
+
+When Phase 3C implementation opens, the implementer:
+1. Picks up `tropical-left-residual` from `racket/prologos/tropical-fuel-primitives.rkt` (exported per F14 cycle-break design; tested at `tests/test-tropical-fuel.rkt` C1+C2+C3 axioms)
+2. Implements UC1/UC2/UC3 as proof-of-concept (Form C realization)
+3. References the algebraic property declarations at `racket/prologos/tropical-fuel.rkt:99-113` (quantale + residuated + commutative-quantale + integral-quantale + has-pseudo-complement; **empirically validated** at Phase 1V Commit 7 via Track 2I property-sweep — see `data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt`)
+
+This cross-reference closes the addendum's §6.5 Form C capture-gap: the Phase 3C implementer should find this section when opening Phase 3C work, with explicit pointers to the addendum's deliverables.
+
 ### §9.6 Phase 3V — Vision Alignment Gate
 
 Per 4 VAG questions:
