@@ -74,18 +74,34 @@ fi
 LOCATOR="ocapn://JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ.tcp-testing-only?host=127.0.0.1&port=$PORT"
 
 echo "[run-ocapn-test-suite] running test suite against $LOCATOR"
-echo "[run-ocapn-test-suite] EXPECTED FAILURES until crypto handshake support lands"
+echo "[run-ocapn-test-suite] Phase 58 sends a valid signed start-session;"
+echo "[run-ocapn-test-suite] later tests may hang waiting for op:deliver responses"
+echo "[run-ocapn-test-suite] that need a bridge-level integration (Phase 59+)."
 echo "----------------------------------------------------------------"
 
 cd "$SUITE_DIR"
-# The suite will block waiting for OUR op:start-session reply
-# (the Racket server doesn't yet send one — needs crypto handshake
-# support, gap tracked in MASTER_ROADMAP.org). A 30s timeout is
-# enough for at least the first test's connection to register.
-timeout 60 python3 test_runner.py --captp-version "1.0-prologos-prerelease" "$LOCATOR"
-SUITE_EXIT=$?
-# Exit codes: 0 = all pass, 1 = some failed, 124 = timed out
-# (expected: test suite blocks on absent crypto handshake reply).
+# Just the start-session module for now — others need more bridge
+# integration. CapTP version "1.0" matches what the upstream tests
+# expect to assert on.
+timeout 60 python3 -u test_runner.py \
+  --test-module tests.op_start_session \
+  --captp-version "1.0" \
+  -v "$LOCATOR" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
+SUITE_EXIT=${PIPESTATUS[0]}
+# Exit codes: 0 = all pass, 1 = some failed, 124 = timed out.
+# Phase 58 expects test_captp_remote_version to PASS; other tests
+# in the module are expected to ERROR or hang until Phase 59+
+# bridge integration.
+
+# Count pass/error/fail markers.
+N_PASS=$(grep -c " \.\.\. ok$" /tmp/ocapn-suite-output.txt || echo 0)
+N_ERROR=$(grep -c " \.\.\. ERROR$" /tmp/ocapn-suite-output.txt || echo 0)
+N_FAIL=$(grep -c " \.\.\. FAIL$" /tmp/ocapn-suite-output.txt || echo 0)
+echo ""
+echo "[run-ocapn-test-suite] tests passed: $N_PASS"
+echo "[run-ocapn-test-suite] tests errored: $N_ERROR"
+echo "[run-ocapn-test-suite] tests failed: $N_FAIL"
+echo "[run-ocapn-test-suite] Phase 58 milestone: test_captp_remote_version should PASS."
 
 echo "----------------------------------------------------------------"
 echo "[run-ocapn-test-suite] suite exit code: $SUITE_EXIT"

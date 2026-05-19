@@ -109,11 +109,15 @@ jobs:
           pip3 install --quiet cryptography cffi
           sudo apt-get install -y python3-stem
 
-      - name: Run upstream ocapn-test-suite against Prologos peer (Phase 54 compliance tracker)
-        # EXPECTED-FAILURE gate: the upstream test suite uses 4-field
-        # crypto-signed op:start-session; our bridge currently only
-        # implements the 2-field form. This step runs the suite,
-        # captures diagnostics, but does NOT fail the build. When
-        # crypto handshake support lands, flip continue-on-error off.
-        continue-on-error: true
+      - name: Run upstream ocapn-test-suite against Prologos peer (Phase 58 — handshake passes)
+        # Phase 58 implements the 4-field signed op:start-session via
+        # openssl CLI shellout. The first test in tests.op_start_session
+        # (test_captp_remote_version) PASSES; subsequent tests need
+        # more bridge integration (Phase 59+). Until then, the
+        # orchestrator only runs the op_start_session module and
+        # accepts the pass-count it produces. Build does NOT fail on
+        # this step yet because the orchestrator's exit-0 reflects "we
+        # ran the suite," not "all tests pass." When bridge integration
+        # for the full suite lands, the orchestrator can be tightened
+        # to exit non-zero on any FAIL/ERROR.
         run: bash tools/interop/run-ocapn-test-suite.sh 22045
