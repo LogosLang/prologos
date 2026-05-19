@@ -1,6 +1,7 @@
 ns prologos::ocapn::protocols :no-prelude
 
 require [prologos::ocapn::message :refer [CapTPOp]]
+        [prologos::ocapn::syrup   :refer [SyrupValue]]
 
 ;; ========================================
 ;; OCapN protocol session types — Phase 53 + 53.a
@@ -71,10 +72,16 @@ session Handshake
 ;; `bridge-send-question` (emit) + `dispatch-incoming-answer`
 ;; (receive + resolve local promise).
 ;;
-;; The reply MAY carry a broken-promise <Error _> as the payload;
-;; from the protocol's perspective it's just "a String" — the
-;; bridge interprets the payload's shape.
-session QuestionAnswer
+;; The reply MAY carry a broken-promise <Error _> as the payload.
+;; Phase 53.d: this is encoded as `:throws SyrupValue` — the
+;; session elaborator wraps each step in
+;; `sess-offer ((:ok step) (:error (sess-send SyrupValue (sess-end))))`
+;; so the protocol formally accepts an error transition at any
+;; step. The bridge's existing wire-out path (Phase 17 + 45 +
+;; pump-outbound) already produces `<Error r>` byte-strings; this
+;; refinement closes the gap between the imperative implementation
+;; and the protocol spec.
+session QuestionAnswer :throws SyrupValue
   ! CapTPOp
   ? CapTPOp
   end
@@ -89,7 +96,7 @@ session QuestionAnswer
 ;; forwards them to the resolved refr (Phase 41/44) or errors them
 ;; out (Phase 45/46). From OUR perspective the loop is internal
 ;; choice (we decide each turn whether to pipeline more or wait):
-session PipelinedQuestion
+session PipelinedQuestion :throws SyrupValue
   ! CapTPOp
   rec
     +>
@@ -105,7 +112,7 @@ session PipelinedQuestion
 ;; settles. Bridge handler: `bs-add-listener` + `listener-notify-loop`
 ;; in pump-outbound (or `bs-handle-listen-with-late-fire` for the
 ;; already-settled case — Phase 51).
-session ListenProtocol
+session ListenProtocol :throws SyrupValue
   ! CapTPOp
   ? CapTPOp
   end
@@ -134,7 +141,7 @@ session GcExport
 ;; (`bs-add-gift`/`bs-lookup-gift`); op:deposit-gift and
 ;; op:withdraw-gift wire encoding + bridge dispatch + netlayer-tcp
 ;; outbound dialing are deferred to subsequent phases.
-session GiftWithdraw
+session GiftWithdraw :throws SyrupValue
   ! CapTPOp
   ? CapTPOp
   end

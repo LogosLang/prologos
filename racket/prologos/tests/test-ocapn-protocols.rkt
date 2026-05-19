@@ -130,40 +130,67 @@
   (check-true (sess-send? (sess-recv-cont peer)) "peer-side then Send")
   (check-true (sess-end? (sess-send-cont (sess-recv-cont peer)))))
 
-(test-case "QuestionAnswer: ! ? end shape"
-  (define s (session-type 'QuestionAnswer))
-  (check-true (sess-send? s))
-  (check-true (sess-recv? (sess-send-cont s)))
-  (check-true (sess-end? (sess-recv-cont (sess-send-cont s)))))
+;; Phase 53.d: protocols that can produce a broken-promise outcome
+;; are wrapped in `:throws SyrupValue`, which makes the top-level
+;; shape `sess-offer((:ok step)(:error Send SyrupValue End))`. The
+;; `unwrap-ok` helper steps past the :throws wrap to inspect the
+;; underlying protocol structure.
 
-(test-case "PipelinedQuestion: starts with Send, then Mu(Choice)"
+(define (unwrap-ok s)
+  ;; If s is sess-offer with :ok + :error branches, return the :ok
+  ;; step. Otherwise return s unchanged.
+  (cond
+    [(and (sess-offer? s)
+          (assq ':ok (sess-offer-branches s)))
+     (cdr (assq ':ok (sess-offer-branches s)))]
+    [else s]))
+
+(test-case "QuestionAnswer: :throws wrapping + ! ? end shape (Phase 53.d)"
+  (define s (session-type 'QuestionAnswer))
+  ;; Top-level should be the :throws wrapper.
+  (check-true (sess-offer? s) "QuestionAnswer top-level is :throws Offer")
+  (define inner (unwrap-ok s))
+  ;; Under :ok, the original ! step. EVERY step is also wrapped, so
+  ;; unwrap again at each level.
+  (check-true (sess-send? inner))
+  (define after-send (unwrap-ok (sess-send-cont inner)))
+  (check-true (sess-recv? after-send))
+  (check-true (sess-end? (sess-recv-cont after-send))))
+
+(test-case "PipelinedQuestion: :throws wrap + Send-Mu(Choice) shape (Phase 53.d)"
   (define s (session-type 'PipelinedQuestion))
-  (check-true (sess-send? s) "PipelinedQuestion starts with !")
-  (define rec-body (sess-send-cont s))
+  (check-true (sess-offer? s) "PipelinedQuestion top-level is :throws Offer")
+  (define inner (unwrap-ok s))
+  (check-true (sess-send? inner) "under :ok, starts with !")
+  (define rec-body (sess-send-cont inner))
   (check-true (sess-mu? rec-body) "after the initial !, body is mu(...)")
   (check-true (sess-choice? (sess-mu-body rec-body))
               "mu's body is a Choice (we drive the pipelining loop)"))
 
-(test-case "PipelinedQuestion: choice has :pipeline and :await branches"
+(test-case "PipelinedQuestion: choice has :pipeline and :await branches (Phase 53.d)"
   (define s (session-type 'PipelinedQuestion))
-  (define choice (sess-mu-body (sess-send-cont s)))
+  (define inner (unwrap-ok s))
+  (define choice (sess-mu-body (sess-send-cont inner)))
   (define branches (sess-choice-branches choice))
   (check-true (and (assq ':pipeline branches) #t) "Choice has :pipeline branch")
   (check-true (and (assq ':await branches) #t) "Choice has :await branch")
-  ;; :pipeline → Send String SVar(0)
-  (define p (cdr (assq ':pipeline branches)))
-  (check-true (sess-send? p))
-  (check-true (sess-svar? (sess-send-cont p)))
-  ;; :await → Recv String End
-  (define a (cdr (assq ':await branches)))
-  (check-true (sess-recv? a))
-  (check-true (sess-end? (sess-recv-cont a))))
+  ;; :pipeline step is itself :throws-wrapped (every step gets wrapped).
+  (define p-step (unwrap-ok (cdr (assq ':pipeline branches))))
+  (check-true (sess-send? p-step))
+  (check-true (sess-svar? (sess-send-cont p-step)))
+  ;; :await step also :throws-wrapped.
+  (define a-step (unwrap-ok (cdr (assq ':await branches))))
+  (check-true (sess-recv? a-step))
+  (check-true (sess-end? (sess-recv-cont a-step))))
 
-(test-case "ListenProtocol: ! ? end shape"
+(test-case "ListenProtocol: :throws wrap + ! ? end shape (Phase 53.d)"
   (define s (session-type 'ListenProtocol))
-  (check-true (sess-send? s))
-  (check-true (sess-recv? (sess-send-cont s)))
-  (check-true (sess-end? (sess-recv-cont (sess-send-cont s)))))
+  (check-true (sess-offer? s) "ListenProtocol top-level is :throws Offer")
+  (define inner (unwrap-ok s))
+  (check-true (sess-send? inner))
+  (define after-send (unwrap-ok (sess-send-cont inner)))
+  (check-true (sess-recv? after-send))
+  (check-true (sess-end? (sess-recv-cont after-send))))
 
 (test-case "GcExport: ! end (one-way)"
   (define s (session-type 'GcExport))
@@ -175,11 +202,14 @@
   (check-true (sess-send? s))
   (check-true (sess-end? (sess-send-cont s))))
 
-(test-case "GiftWithdraw: ! ? end"
+(test-case "GiftWithdraw: :throws wrap + ! ? end (Phase 53.d)"
   (define s (session-type 'GiftWithdraw))
-  (check-true (sess-send? s))
-  (check-true (sess-recv? (sess-send-cont s)))
-  (check-true (sess-end? (sess-recv-cont (sess-send-cont s)))))
+  (check-true (sess-offer? s) "GiftWithdraw top-level is :throws Offer")
+  (define inner (unwrap-ok s))
+  (check-true (sess-send? inner))
+  (define after-send (unwrap-ok (sess-send-cont inner)))
+  (check-true (sess-recv? after-send))
+  (check-true (sess-end? (sess-recv-cont after-send))))
 
 (test-case "CapTPSession: ? ! rec(Offer) shape (responder)"
   (define s (session-type 'CapTPSession))
@@ -223,10 +253,18 @@
 ;; offering :pipeline (Recv) or :await (Send). The dual of
 ;; an internal choice is an external offer.
 
-(test-case "PipelinedQuestion peer view: Recv-Mu(Offer)"
+(test-case "PipelinedQuestion peer view: dual of :throws-wrapped (Phase 53.d)"
+  ;; PipelinedQuestion is :throws-wrapped. Its dual flips the top
+  ;; Offer to a Choice (the peer's side of the :ok/:error split).
   (define s (dual (session-type 'PipelinedQuestion)))
-  (check-true (sess-recv? s))
-  (define rec-body (sess-recv-cont s))
+  (check-true (sess-choice? s) "peer-view top is Choice (dual of :throws Offer)")
+  ;; Under :ok (the peer's :ok branch == OUR :ok wrap dualled), the
+  ;; original peer-view shape: Recv-Mu(Offer).
+  (define ok-branch (assq ':ok (sess-choice-branches s)))
+  (check-not-false ok-branch)
+  (define inner (cdr ok-branch))
+  (check-true (sess-recv? inner))
+  (define rec-body (sess-recv-cont inner))
   (check-true (sess-mu? rec-body))
   (check-true (sess-offer? (sess-mu-body rec-body))
               "peer offers what we choose"))
@@ -253,13 +291,13 @@
                (format "expected CapTPOp recv payload (not String); got ~v" recv-ty)))
 
 (test-case "QuestionAnswer payload is CapTPOp (Phase 53.a)"
-  (define s (session-type 'QuestionAnswer))
+  (define s (unwrap-ok (session-type 'QuestionAnswer)))
   (define send-ty (sess-send-type s))
   (check-false (expr-String? send-ty)
                (format "expected CapTPOp payload; got ~v" send-ty)))
 
 (test-case "ListenProtocol payload is CapTPOp (Phase 53.a)"
-  (define s (session-type 'ListenProtocol))
+  (define s (unwrap-ok (session-type 'ListenProtocol)))
   (define send-ty (sess-send-type s))
   (check-false (expr-String? send-ty)
                (format "expected CapTPOp payload; got ~v" send-ty)))
@@ -270,7 +308,7 @@
                (format "expected CapTPOp payload; got ~v" (sess-send-type s))))
 
 (test-case "GiftWithdraw payload is CapTPOp (Phase 53.a)"
-  (define s (session-type 'GiftWithdraw))
+  (define s (unwrap-ok (session-type 'GiftWithdraw)))
   (check-false (expr-String? (sess-send-type s))
                (format "expected CapTPOp payload; got ~v" (sess-send-type s))))
 
@@ -278,3 +316,53 @@
   (define s (session-type 'GiftDeposit))
   (check-false (expr-String? (sess-send-type s))
                (format "expected CapTPOp payload; got ~v" (sess-send-type s))))
+
+;; ========================================
+;; Group 6: :throws-wrapped protocols carry SyrupValue error type (Phase 53.d)
+;; ========================================
+;;
+;; QuestionAnswer / PipelinedQuestion / ListenProtocol /
+;; GiftWithdraw all carry an error path via `:throws SyrupValue`.
+;; Each protocol step wraps to `Offer((:ok step)(:error Send
+;; SyrupValue End))`. These tests verify the :error branch's
+;; payload type is the expected error type, not something else.
+
+(define (error-payload-type s)
+  ;; s is sess-offer with :ok + :error. Extract :error → sess-send
+  ;; whose type field is the error type.
+  (define branches (sess-offer-branches s))
+  (define err-step (cdr (assq ':error branches)))
+  (sess-send-type err-step))
+
+(test-case "QuestionAnswer :error branch carries SyrupValue (Phase 53.d)"
+  (define s (session-type 'QuestionAnswer))
+  (define err-ty (error-payload-type s))
+  (check-false (expr-String? err-ty)
+               (format "expected SyrupValue (not String) error payload; got ~v" err-ty)))
+
+(test-case "PipelinedQuestion :error branch carries SyrupValue (Phase 53.d)"
+  (define s (session-type 'PipelinedQuestion))
+  (check-true (sess-offer? s))
+  (define err-ty (error-payload-type s))
+  (check-false (expr-String? err-ty)))
+
+(test-case "ListenProtocol :error branch carries SyrupValue (Phase 53.d)"
+  (define s (session-type 'ListenProtocol))
+  (check-true (sess-offer? s))
+  (define err-ty (error-payload-type s))
+  (check-false (expr-String? err-ty)))
+
+(test-case "GiftWithdraw :error branch carries SyrupValue (Phase 53.d)"
+  (define s (session-type 'GiftWithdraw))
+  (check-true (sess-offer? s))
+  (define err-ty (error-payload-type s))
+  (check-false (expr-String? err-ty)))
+
+(test-case "non-throws protocols stay non-Offer at top (Phase 53.d regression)"
+  ;; Sanity: protocols WITHOUT :throws keep their original top-level
+  ;; shape. Phase 53.d should NOT have added :throws to handshake,
+  ;; gc-export, gift-deposit, or captp-session.
+  (check-true (sess-send? (session-type 'Handshake)))
+  (check-true (sess-send? (session-type 'GcExport)))
+  (check-true (sess-send? (session-type 'GiftDeposit)))
+  (check-true (sess-recv? (session-type 'CapTPSession))))
