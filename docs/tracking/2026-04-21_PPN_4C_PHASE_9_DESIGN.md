@@ -164,7 +164,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **Step 2 S2.e-iv-b (champ-fallback + legacy-fn cleanup)** | Retire 6 dead functions (3 mult/level/sess champ-fallback + 3 legacy-X-fn) + simplify meta-domain-info table + simplify meta-domain-solution dispatch | ✅ | 1 commit `6efb709e` (2026-04-25). Per D.3 §7.5.15.2 (Category C). 6 function deletions + meta-domain-info table cleanup + meta-domain-solution simplification. **+54 / -150 LoC** (96 net deletion). KEPT: type-champ-fallback (still active reading current-prop-meta-info-box; Phase 4 retires alongside meta-info CHAMP). Table simplified: `'universe-active?` (4 entries) + `'legacy-fn` (3 entries) + `'champ-fallback` for mult/level/sess (3 entries) all removed. meta-domain-solution: outer cond on `'universe-active?` retired (always #t); pure universe dispatch with defensive `(hash-ref info 'champ-fallback (lambda (_id) #f))` for type-only fallback. The architectural intent "universe cell as single source of truth" now FULLY REALIZED in dispatch core. **Verification**: probe diff = 0; 10 targeted tests / 217 cases GREEN in 10.8s; **full suite 7920 / 123.0s / 0 failures** within 118-127s variance. |
 | **Step 2 S2.e-v (Wide retirement: 6 test-only/dead-code mult-cell + bridge surfaces + test migration)** | Retire 6 functions in elaborator-network.rkt: elab-fresh-mult-cell + elab-mult-cell-read + elab-mult-cell-write + elab-add-type-mult-bridge + elab-fresh-level-cell + elab-fresh-sess-cell. Migrate test-mult-propagator.rkt to use net-add-cross-domain-propagator + type->mult-alpha directly. | ✅ | 1 commit `118ab57a` (2026-04-25). Per D.3 §7.5.14.3 + audit-driven scope expansion (capture-gap pattern, 3rd data point this session — graduation-ready). Audit revealed 6 surfaces (vs design's named 2). User-directed Wide + Migrate. **+91 / -130 LoC** (39 net deletion across 2 files). Test migration: helper inlines mult cell allocation (mirrors retired elab-fresh-mult-cell pattern) + direct primitive bridge install + 6 elab-mult-cell-read → elab-cell-read + bridge/gamma-noop test retired (γ retired in S2.c-iv → test premise no longer valid). 13 bridge tests preserved (was 14). **Verification**: probe diff = 0 (cell_allocs=1181 IDENTICAL; all 28 result strings match baseline); acceptance file 0 errors; 109 targeted tests across 6 files GREEN in 6.1s; **full suite 7914 / 119.3s / 0 failures** within 118-127s variance (-1 from gamma-noop; -5 from test-properties.rkt counting variance — passes 13 individually, batch counts as 8; not a regression). Adversarial VAG TWO-COLUMN passed; the Wide-vs-Narrow scope decision IS the adversarial finding (capture-gap caught the 4 surfaces the design's narrow framing missed). |
 | **Step 2 S2.e-vi (final §5 measurement + honest hypothesis reframing + 6 codifications graduation)** | Re-run bench-meta-lifecycle full sequence; honestly reframe §5 hypothesis per §7.5.14.4 (per-command transients dominate cell_allocs, NOT persistent metas); graduate 6 watching-list patterns to DEVELOPMENT_LESSONS.org. THE most important S2 deliverable beyond the architecture. | ✅ | 1 commit (this commit, 2026-04-25). Bench results: 3 of 6 §5 micro criteria MET (fresh-meta 2.367 μs ✓; solve-meta! 7.832 μs ✓ — partial-state regression UNWOUND past baseline; meta-solution 0.368 μs ✓); 2 transitional (cells=54, cell_allocs=1181) honestly reframed per §7.5.14.4 — **§5 hypothesis was framed for the wrong bottleneck** (per-command transients ~1100 of 1181 dominate; persistent meta consolidation worked as charter); full suite 7914/119.3s within variance. Section F Move B+ benefit MAINTAINED through 5 sub-phases (Path 4 still dominates Path 1 by 28-46 ns across 3 workloads). STEP2_BASELINE.md §12.5 added with full data + honest D4 reframing + 6 codification graduation list. DEVELOPMENT_LESSONS.org extended with 6 entries: (1) Pipeline.md per-domain universe migration prophylactic; (2) Capture-gap pattern (3 data points this session); (3) Partial-state regression unwinds when architecture completes (3 data points); (4) Audit-first methodology prevents under-scoped implementation (4 data points); (5) Audit-driven scope expansion Wide vs Narrow decision point (NEW codification, 2 data points); (6) Sed-deletion 2-pass operational rule (1 high-confidence data point); (7) Microbench-claim verification pays off across sub-phase arcs (3 data points extending workflow.md rule). Per-command transient consolidation captured as Track 4D scope per D.3 §7.5.14.4 + Track 4D research §5.4 + DEFERRED.md "Future Track 4D Scope". |
-| **Phase 1E** | **`that-*` Storage Unification (NEW 2026-04-23)** | ⬜ | New phase sequenced between Step 2 and Phase 1B per architectural dialogue 2026-04-23. Storage-layer unification: route `that-*` (position-keyed user-facing API) to universe-cell component reads when position is a meta-position. Preserves 27ns `that-read` fast path (per PRE0). Prelude to Track 4D storage unification; not replacement. See §7.6.16 for implementation notes. |
+| **Phase 1D** | **Meta-Solution Canonical Store Consolidation (NEW 2026-05-18)** | ⬜ | Phase 1E precursor. Resolves the dual-store inconsistency where trait-resolution + meta-feedback writes go to attribute-map `:type` INHABITANT but solve-meta! writes to universe cell — currently `(that-read am type-meta-pos :term)` returns bot for type-unification metas even when solved. **Post-Qc resolution (2026-05-18)**: user-asserted INHABITANTs via Track 7 `that x :term V` are FIRST-CLASS writes with full provenance + worldview semantics; user assertions + solver derivations must converge in ONE canonical store via merge (Role B equality-enforce). Three architectures evaluated (§7.6.16.12): **A** (attribute-map canonical + universe cell as worldview projection via bridge) is leading lean; **B** (universe-cell extended classify-inhabit-value) + **C** (attribute-map worldview-tagged extension) tracked as alternatives. Architecture decision pending mini-design dialogue. Sub-phase partition defined post-architecture. See §7.6.16.13 for full scope. |
+| **Phase 1E** | **`that-*` Storage Routing Extension (REVISED 2026-05-18; was "Storage Unification" 2026-04-23)** | ⬜ | Re-scoped post-Phase-1D consolidation. With canonical store resolved by 1D, 1E becomes pure SURFACE EXTENSION: add `:mult` / `:level` / `:session` magic keywords on `that-*`; dispatch via `(expr-meta? pos)` (~1.6 ns, validated this session); route to corresponding universe cells (or canonical store per 1D resolution); 4th specialized-cell-cache instance (§4.6 framework). `:type` / `:term` semantics unchanged (Realization B preserved per D.3 §6.1 + §7.6.16.11 research). Sub-phases: **1E.a** routing extension (~200-300 LoC); **1E.b** specialized-cell-cache (~200-300 LoC); **1E.c** cleanup + A/B + parity wiring (~100-200 LoC); **1E-VAG** adversarial gate. Pre-0 M+A+E+R+S baseline captured this session at `data/benchmarks/attribute-record-pre0-baseline-2026-05-17.txt` + post-cleanup A/B at `attribute-record-post-cleanup-2026-05-18.txt`. See §7.6.16.10-13 for full Stage 2 audit findings, research, reframe, and Phase 1D scope. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | Follows Phase 1E per revised 2026-04-23 sequence. |
@@ -2560,6 +2561,203 @@ Default: 1E opens immediately after Step 2 close. Dedicated mini-design + Stage 
 - Attribute grammar research: [`2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md`](../research/2026-04-05_ATTRIBUTE_GRAMMARS_RESEARCH.md) §7.5 `that` operation as AG query
 - PPN 4C Phase 3 delivery: D.3 §6.15 + tracker row "Phase 3" — the `that-*` API shipped
 - PPN 4C Phase 3e classification + `#:component-paths` enforcement: foundation for meta-position component paths
+
+#### §7.6.16.10 Stage 2 audit findings (2026-05-17/18, this session)
+
+Per §7.6.16.6 TODO, Stage 2 audit executed in two arcs this session.
+
+**Pre-0 measurement build-out** (commits `13d8f7d6` → `88da1b8c` → `e0fe1aa0`):
+
+New durable bench file: [`racket/prologos/benchmarks/micro/bench-attribute-record.rkt`](../../racket/prologos/benchmarks/micro/bench-attribute-record.rkt) — harness survives Phase 1E close; Track 4D inherits when adding `:whnf`/`:reduce`/`:surface` facets. Five tiers:
+
+- **M-tier (8 micros)**: current baselines for `that-*` + `compound-cell-component-*` + meta-domain dispatch + id-map walk
+- **A-tier (5 micros)**: J-A simulated vs J-C composition + dispatch predicate + specialized-cell-cache LB + memory growth (1k/10k positions)
+- **E-tier (12 micros)**: read-state spread (solved/unsolved/unallocated) + speculation-active vs cache-fallback + cross-facet at fully-populated meta-pos + arity-2 whole-record decomposition
+- **R-tier**: process-file on `examples/2026-04-17-ppn-track4c.prologos` (67 commands, 4674 ms wall, 114 ms elaborate (~2.4% of wall), 1203 ms reduce (~26% dominant))
+- **S-tier**: 6 frozen-value semantic axes captured at [`data/benchmarks/attribute-record-pre0-baseline-2026-05-17.txt`](../../racket/prologos/data/benchmarks/attribute-record-pre0-baseline-2026-05-17.txt)
+
+**Pre-Phase-1E cleanup** (commit `1340aec8`): retired `with-handlers` wrappers in `resolve-worldview-bitmask` — enet variant at `meta-universe.rkt:288`, pnet variant at `propagator.rkt:3877`. Both guarded a structurally-impossible failure (worldview-cache-cell-id is cell-id 1, always allocated by `make-prop-network`). Move B+ pattern, 2nd instance (S2.c-iii was 1st).
+
+**A/B impact** (captured at [`attribute-record-post-cleanup-2026-05-18.txt`](../../racket/prologos/data/benchmarks/attribute-record-post-cleanup-2026-05-18.txt)):
+
+| Bench | Pre-cleanup | Post-cleanup | Δ |
+|---|---:|---:|---:|
+| M5a `compound-cell-component-ref` solved | 207 ns | **78.5 ns** | **−62%** |
+| M5b ref unsolved | 208 ns | **77.9 ns** | **−63%** |
+| M7a `meta-solution` full dispatch | 328 ns | **173 ns** | **−47%** |
+| E2b wv=0 cache-fallback | 209 ns | **89.8 ns** | **−57%** |
+| Full suite (8224 tests) | 114.7s | **110.9s** | **−3.8s (3.3%)** |
+
+E2 axis confirmed the diagnosis empirically: pre-cleanup E2a (81.9, no with-handlers branch) vs E2b (209.4, with-handlers branch) differed by 127 ns. Post-cleanup both paths ~90 ns. The 127 ns matched the predicted continuation-marker overhead.
+
+**Dispatch primitive cost validated** (spike in `/tmp/bench-expr-meta-pred.rkt`, run 2026-05-18):
+- `(expr-meta? meta) → #t`: **1.61 ns**
+- `(expr-meta? literal/app/Pi) → #f`: **0.97-1.38 ns**
+- `(expr-meta-id meta)`: **0.99 ns**
+
+Position-keyed dispatch via `expr-meta?` + extraction is **~1.5-2 ns total** — essentially free. Substantially cheaper than cell-id-keyed `meta-universe-cell-id?` (53-257 ns per A1 measurement) which fights the natural data flow.
+
+**R-tier projection signal** (heuristic that-* call counting from PERF-COUNTERS):
+- Estimated calls per acceptance run: ~3773 writes + ~2039 reads (~43% at meta positions)
+- Projected `that-*` total time (post-cleanup):
+  - Current path: ~1268 μs (~1.11% of `elaborate_ms`)
+  - Phase 1E J-C unoptimized: ~1227 μs (~1.08% of `elaborate_ms`)
+  - **J-C is cheaper than current J-A-like surface API post-cleanup**
+
+Architecturally: Phase 1E routing cost is **essentially invisible at the macro level** (<0.005% of total wall). The architectural decision is no longer a perf trade-off — correctness + principle alignment dominate.
+
+#### §7.6.16.11 Research findings + Qc resolution (2026-05-18)
+
+Initial Phase 1E framing (pre-2026-05-18) assumed the INHABITANT layer in attribute-map's `:type` facet was scaffolding mirroring universe-cell `solve-meta!` writes — initial recommendation was retirement. User pushback (this session) required studying the original design intent before recommending changes.
+
+**Module Theory Realization B is deliberate, not scaffolding** (per D.3 §6.1):
+
+> "There is one universe hierarchy; Nat, Type(0), Type(1), etc. are all terms at adjacent levels. 'Type' and 'term' are a **layer distinction, not a lattice distinction**. Attempting to separate them into two lattices in D.1 duplicates the carrier... The duplication is the scent."
+>
+> "**User-visible surface is preserved**: `that-read pos :type` reads CLASSIFIER-tagged entries; `that-read pos :term` reads INHABITANT-tagged entries. The tag distinction is implementation — :type and :term **remain distinct surface names with distinct semantics**."
+>
+> "**Naming precedent**: Coq's `evar_map` has `concl` (goal type) and `body` (optional solution) as separate fields — but Coq stores them in one meta-info record per meta, not two independent stores. Agda/Idris/Lean follow similar patterns. **Realization B matches how elaboration with metavariables is done in the reference systems, rendered in propagator-network terms**."
+
+**Provenance is first-class** (per D.3 §6.1.1): each tagged entry carries `(propagator-id, assumption-id, source-loc)` for first-class compiler + error features — supporting Track 7 and Phase 11b.
+
+**Dual-store discovery** (uncovered during research):
+
+Currently TWO distinct write paths produce "the meta is solved" state:
+
+| Meta class | Solution write path | Where stored |
+|---|---|---|
+| Trait dict meta | `(that-write net tm-cid dict-meta-pos ':term dict-expr)` → magic-keyword routes to attribute-map `:type` INHABITANT layer | attribute-map |
+| Type-unification meta | `solve-meta!` (from unification propagators) | universe cell |
+
+This means `(that-read am type-meta-pos :term)` returns bot even when the meta is solved (because `solve-meta!` doesn't write through to attribute-map INHABITANT). NOT consistent across meta classes.
+
+**Qc resolution** (user-confirmed 2026-05-18):
+
+> "I do believe the intent is a user-defined assertion/extension. The hope is to have an easily-usable attribute grammar that is extendable by user grammars, with as much expressivity and power as we as the language implementers would have."
+
+Track 7 `that x :term V` is intended as **user-asserted-inhabitant**. User assertions are FIRST-CLASS WRITES to the same store solver-derivation writes to. They:
+- Participate in elaboration network like solver writes (provenance, contradiction-on-mismatch, worldview-aware)
+- Converge on ONE canonical store via merge (Role B equality-enforce)
+- Carry provenance distinguishing source (user assertion vs solver derivation)
+
+This collapses the "dual-store conundrum" into **single-store-with-multiple-writers + provenance + projection**. The architectural question becomes: **where is the canonical store, and what role does any other store play?**
+
+#### §7.6.16.12 Architectural reframe — 3 architectures (post-Qc)
+
+Pre-Qc framing (Z1/Z2/ZA) treated the question as "consolidate stores." Post-Qc, the framing is **single canonical store + worldview-tagged projection + multi-writer provenance**. Three architectures evaluated:
+
+##### Architecture A — attribute-map canonical, universe cell as worldview projection
+
+**Design**:
+- attribute-map `:type` CLASSIFIER × INHABITANT = single source of truth (Realization B preserved)
+- All writes (`solve-meta!`, trait-resolution, future user-`that` assertions) converge on attribute-map
+- Universe cell = derived projection (worldview-tagged) maintained by bridge propagator
+- Bridge fires on attribute-map `:type` INHABITANT writes at meta-pos → updates universe cell projection
+- Speculation hot paths (zonk, unify worldview-filtered reads) consume universe cell projection
+- `(that-read am pos :type/:term)` reads attribute-map directly (unchanged from current behavior)
+- `(meta-solution id)` reads universe cell projection (existing API; sees worldview-filtered solver value)
+
+**Estimated scope**: ~600-900 LoC. Migrate `solve-meta!` to write attribute-map (directly or via reflective bridge); add bridge propagator for universe-cell projection; audit consumer paths.
+
+**Principle alignment**:
+- **Decomplection** ✓✓ — position-keyed substrate uniform across metas + non-metas
+- **Single Source of Truth** ✓✓ — attribute-map canonical; universe cell is derived
+- **Realization B** ✓✓ — fully preserved (Coq/Agda/Idris/Lean precedent matched)
+- **Most Generalizable Interface** ✓✓ — `that-*` uniform API
+- **First-Class by Default** ✓✓ — user `that` assertions natural
+
+**Concerns**:
+- Universe cell becomes derived; speculation paths must consume the projection
+- Bridge propagator must maintain consistency under speculation branches (each worldview's bridge update is per-branch worldview-tagged)
+
+##### Architecture B — universe cell canonical for metas, classify-inhabit-value shape extended
+
+**Design**:
+- Universe cell value shape changes: `(hasheq meta-id → tagged-cell-value(classify-inhabit-value(CLASSIFIER, INHABITANT)))`
+- Universe cell holds BOTH tag layers per meta, worldview-tagged
+- attribute-map `:type` at meta-pos = retired (universe cell takes over for metas)
+- attribute-map `:type` at non-meta-pos = unchanged (classify-inhabit-value as currently)
+- `(that-read am pos :type/:term)` dispatches by `(expr-meta? pos)` (~1.6 ns) — meta-pos routes to universe cell
+- All meta writes converge in universe cell layered-tagged store
+
+**Estimated scope**: ~1500-2200 LoC. Universe cell value-shape change + write-path partitioning by tag + read routing + merge function rework (compound-tagged-merge over classify-inhabit-value per meta-id).
+
+**Principle alignment**:
+- **Decomplection** ✓ — meta state in one place per concept
+- **Single Source of Truth** ✓✓ — universe cell canonical for metas
+- **Realization B** ✓✓ — preserved via universe cell layered shape
+
+**Concerns**:
+- Largest of the three migrations; universe-cell merge becomes nested compound
+- Splits meta vs non-meta architectures (different value shapes for the same conceptual data)
+
+##### Architecture C — attribute-map extended with worldview-tagging
+
+**Design**:
+- attribute-map facets (or `:type` only) extended to support tagged-cell-value worldview-tagging natively
+- Universe cells retired for metas (attribute-map handles everything)
+- Single store + worldview-tagging + Realization B + uniform across metas + non-metas
+
+**Estimated scope**: ~2000-3000+ LoC. Worldview-tagging cascade across attribute-map facets.
+
+**Principle alignment**: maximum uniformity but at the cost of touching infrastructure outside the meta-store concern.
+
+**Concerns**: largest migration; touches `:context`, `:usage`, `:constraints`, `:warnings` (may not need worldview-tagging); inverts the Phase 9 substrate purpose for universe cells.
+
+##### Lean: Architecture A (pending mini-design dialogue)
+
+Smallest delta with maximum principle gain. Preserves Realization B (matches Coq/Agda/Idris/Lean reference). Keeps universe cells in their designed role (worldview-tag optimization for speculation paths). Track 7 user-`that` assertions land naturally on the canonical store. Post-cleanup measurements show `that-*` cost is invisible at macro level (<0.005% of wall), so the bridge's cost is also invisible — A optimizes for correctness + principle alignment, not micro-perf.
+
+Push-back consideration: Architecture B keeps universe cells central, which means speculation paths get direct access without bridge cost. If Phase 3 ATMS union-type branching turns out speculation-heavy at the macro level, B might pay back its larger migration cost. However: R-tier projection shows `that-*` cost is <0.005% of wall — speculation-heavy or not, the bridge cost in A is below measurable.
+
+**Decision pending mini-design dialogue** in Phase 1D opening.
+
+#### §7.6.16.13 Phase 1D scope — Meta-Solution Canonical Store Consolidation
+
+**Purpose**: resolve the dual-store inconsistency for "meta solution" (§7.6.16.11) by choosing a canonical store and (for non-canonical) defining its derived role. Precedes Phase 1E because:
+- 1E's mult/level/session magic-keyword routing should target a single canonical store, not two
+- The dispatch design (`(expr-meta? pos)` routing) is informed by which store is canonical
+- Once 1D resolves the canonical-store question, 1E becomes a pure surface extension (routing + cache + cleanup + A/B)
+
+**Architecture**: TBD per §7.6.16.12. Lean is Architecture A; final decision in 1D mini-design dialogue.
+
+**Sub-phase partition**: TBD, defined post-architecture in 1D mini-design.
+
+**Mini-audit scope** (Stage-2-style, to be executed at 1D mini-audit step per Stage 4 Per-Phase Protocol):
+
+- Inventory `solve-meta!` call sites + write paths (universe-cell-write trace)
+- Inventory `that-write :term` / `term-map-write` call sites (attribute-map `:type` INHABITANT writes)
+- Inventory `meta-solution` + `(that-read am pos :term)` consumer reads (which consumers care about which store)
+- Bridge propagator design (under Arch A): topology, fire-on-write semantics, worldview-tagging integration
+- Speculation interaction: how solver writes during speculative branches integrate with attribute-map (under Arch A) vs universe cell layered (under Arch B)
+- Compatibility with Phase 3 ATMS branching (forthcoming Phase 3A in this addendum)
+- Phase 11b provenance integration: per Realization B, each tagged entry carries `(propagator-id, assumption-id, source-loc)` — verify chosen architecture preserves this
+
+**Drift risks**:
+- Backward-compat with existing consumers of `meta-solution` / `(that-read am pos :term)`
+- Worldview-tagging semantics under bridge updates (Arch A) — bridge must preserve per-worldview projection
+- Migration cost: Arch A is smallest but still requires audit-driven migration of `solve-meta!` call sites
+
+**Performance constraints**:
+- No suite-level regression (post-cleanup baseline: 110.9s / 8224 tests / 0 failures)
+- Validation via post-1D A/B re-run against post-cleanup baseline at [`attribute-record-post-cleanup-2026-05-18.txt`](../../racket/prologos/data/benchmarks/attribute-record-post-cleanup-2026-05-18.txt)
+- M5a / M7a should NOT regress materially (current 78.5 / 173 ns)
+
+**Phase 1E re-scoped post-1D** (per tracker row):
+- **1E.a**: `that-*` magic-keyword routing extension (`:mult` / `:level` / `:session`) via `(expr-meta? pos)` dispatch (~200-300 LoC)
+- **1E.b**: Universe-cell specialized-cell-cache — 4th §4.6 framework instance (~200-300 LoC)
+- **1E.c**: Cleanup + post-implementation A/B + parity wiring in [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) (~100-200 LoC)
+- **1E-VAG**: Adversarial gate
+
+Per-phase estimated scope (post-Arch-A 1D):
+
+| Phase | Estimated LoC | Notes |
+|---|---:|---|
+| 1D | 600-900 | Architecture A baseline; B variant ~1500-2200; C variant ~2000-3000+ |
+| 1E.a | 200-300 | Routing extension; `expr-meta?` dispatch + magic keywords |
+| 1E.b | 200-300 | Specialized-cell-cache (§4.6 framework 4th instance) |
+| 1E.c | 100-200 | Cleanup + tests + A/B + parity wiring |
+| 1E-VAG | — | Adversarial gate |
 
 ### §7.7 Phase 1B deliverables
 
