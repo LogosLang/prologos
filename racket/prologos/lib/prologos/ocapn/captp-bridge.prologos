@@ -52,14 +52,6 @@ defn incoming-captp-op
       ;; outbound-questions table). The stateless variant can't do it;
       ;; no-op here, the state-aware dispatcher handles it. Phase 25.
       v
-  | [op-deposit-gift _gid _refr] v ->
-      ;; Phase 52b: stateless variant is a no-op; the gift table
-      ;; lives in BridgeState. State-aware dispatcher handles it.
-      v
-  | [op-withdraw-gift _gid _resolver] v ->
-      ;; Phase 52b: stateless variant is a no-op for the same reason
-      ;; (lookup needs the gift table).
-      v
 
 ;; ===========================================================
 ;; Wire-OUT bridge — Phase 12
@@ -1004,20 +996,196 @@ defn bs-incr-imports
   | nil           st -> st
   | [cons r rest] st -> [bs-incr-imports rest [bs-incr-import-by-refr r st]]
 
-;; dispatch-deliver: route an op:deliver based on whether the
-;; answer-pos is `some <remote>` or `none`.
+;; ===========================================================
+;; Phase 41/52b: syrup-shape inspectors (moved up to support
+;; both build-forward-effect AND the Phase 52b gift dispatch)
+;; ===========================================================
+
+;; Extract the Nat from a syrup-nat OR a non-negative syrup-int (the
+;; wire decoder produces syrup-int for `N+` literals — both shapes
+;; need to be handled). Reuses captp-wire's wire-nat which does the
+;; syrup-int → Nat conversion when the int is non-negative.
+spec tagged-payload-as-nat SyrupValue -> [Option Nat]
+defn tagged-payload-as-nat [p]
+  wire-nat p
+
+;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
+;; None for any other shape (including desc:answer, plain value, list,
+;; etc). 2-deep match (sidesteps pitfall #18).
+spec syrup-as-export-target SyrupValue -> [Option Nat]
+defn syrup-as-export-target
+  | syrup-null       -> [none Nat]
+  | syrup-bool _     -> [none Nat]
+  | syrup-nat _      -> [none Nat]
+  | syrup-int _      -> [none Nat]
+  | syrup-string _   -> [none Nat]
+  | syrup-symbol _   -> [none Nat]
+  | syrup-list _     -> [none Nat]
+  | syrup-refr _     -> [none Nat]
+  | syrup-bytes _    -> [none Nat]
+  | syrup-promise _  -> [none Nat]
+  | syrup-tagged tag p ->
+      match [str::eq tag "desc:export"]
+        | true  -> tagged-payload-as-nat p
+        | false -> [none Nat]
+
+;; ===========================================================
+;; Phase 52b (revised 2026-05-18): gift-handoff bootstrap dispatch
+;; ===========================================================
+;;
+;; OCapN's canonical model dispatches gift handoff as METHOD CALLS
+;; on the bootstrap object (export 0), inside the normal op:deliver
+;; flow. See `@endo/ocapn/src/client/ocapn.js:528+`:
+;;
+;;   E(bootstrap)['deposit-gift'](giftId, gift)
+;;   E(bootstrap)['withdraw-gift'](...) -> gift
+;;
+;; The wire shape is plain op:deliver — there are NO dedicated wire
+;; ops for the gift handoff. Recognition is done here, in
+;; `maybe-bootstrap-method`, based on (target=0,
+;; args[0]=method-symbol). Falling through returns None and lets
+;; the normal dispatch path run.
+;;
+;; An earlier revision (commit 6d10c58) added dedicated CapTPOp
+;; variants `op-deposit-gift` / `op-withdraw-gift` — those were
+;; reverted because they didn't interop with the canonical model.
+
+;; Helper: extract a syrup-list's elements, or return nil if the
+;; SyrupValue isn't a list. Used as a 1-arg shape filter so the
+;; caller can avoid 11-arm match enumeration inline.
+spec syrup-list-or-nil SyrupValue -> [List SyrupValue]
+defn syrup-list-or-nil
+  | syrup-list xs    -> xs
+  | syrup-null       -> [nil SyrupValue]
+  | syrup-bool _     -> [nil SyrupValue]
+  | syrup-nat _      -> [nil SyrupValue]
+  | syrup-int _      -> [nil SyrupValue]
+  | syrup-string _   -> [nil SyrupValue]
+  | syrup-symbol _   -> [nil SyrupValue]
+  | syrup-tagged _ _ -> [nil SyrupValue]
+  | syrup-refr _     -> [nil SyrupValue]
+  | syrup-bytes _    -> [nil SyrupValue]
+  | syrup-promise _  -> [nil SyrupValue]
+
+;; Helper: extract a syrup-symbol's name (Some s), or None if the
+;; SyrupValue isn't a symbol.
+spec syrup-symbol-name SyrupValue -> [Option String]
+defn syrup-symbol-name
+  | syrup-symbol s   -> some s
+  | syrup-null       -> [none String]
+  | syrup-bool _     -> [none String]
+  | syrup-nat _      -> [none String]
+  | syrup-int _      -> [none String]
+  | syrup-string _   -> [none String]
+  | syrup-list _     -> [none String]
+  | syrup-tagged _ _ -> [none String]
+  | syrup-refr _     -> [none String]
+  | syrup-bytes _    -> [none String]
+  | syrup-promise _  -> [none String]
+
+;; Innermost: deposit-gift's gid + refr already extracted.
+spec do-deposit-gift Nat Nat Vat BridgeState -> BridgeStep
+defn do-deposit-gift [gid xid v st]
+  bridge-step v [bs-add-gift gid xid st]
+
+;; Extract xid from refr-syrup; record gift if shape is desc:export.
+spec deposit-with-gid Nat SyrupValue Vat BridgeState -> BridgeStep
+defn deposit-with-gid [gid gift-refr v st]
+  match [syrup-as-export-target gift-refr]
+    | none -> bridge-step v st
+    | some xid -> do-deposit-gift gid xid v st
+
+;; Innermost-2: gid known + rest = (refr-syrup ...). Extract refr.
+spec dispatch-deposit-with-refr Nat [List SyrupValue] Vat BridgeState -> BridgeStep
+defn dispatch-deposit-with-refr [gid rest v st]
+  match rest
+    | nil -> bridge-step v st
+    | cons refr-syr _ -> deposit-with-gid gid refr-syr v st
+
+;; Inner: rest = (gid-syrup refr-syrup ...). Extract Nat gid + refr.
+spec dispatch-deposit-gift-rest [List SyrupValue] Vat BridgeState -> BridgeStep
+defn dispatch-deposit-gift-rest [rest v st]
+  match rest
+    | nil -> bridge-step v st
+    | cons gid-syr rest1 ->
+        match [wire-nat gid-syr]
+          | none -> bridge-step v st
+          | some gid -> dispatch-deposit-with-refr gid rest1 v st
+
+;; Innermost: ap (peer's answer-pos) is known; xid is the resolved
+;; gift's exported-id. Queue the op:deliver-to-answer reply bytes.
+spec do-withdraw-reply Nat Nat Vat BridgeState -> BridgeStep
+defn do-withdraw-reply [ans xid v st]
+  bridge-step v
+    [bs-append-pending-out
+      [outbound-deliver-bytes ans [syrup-tagged "desc:export" [syrup-nat xid]]]
+      st]
+
+spec withdraw-with-gid Nat [Option Nat] Vat BridgeState -> BridgeStep
+defn withdraw-with-gid [gid ap v st]
+  match [bs-lookup-gift gid st]
+    | none -> bridge-step v st
+    | some xid ->
+        match ap
+          | none -> bridge-step v st
+          | some ans -> do-withdraw-reply ans xid v st
+
+;; Inner: rest = (gid-syrup ...).
+spec dispatch-withdraw-gift-rest [List SyrupValue] [Option Nat] Vat BridgeState -> BridgeStep
+defn dispatch-withdraw-gift-rest [rest ap v st]
+  match rest
+    | nil -> bridge-step v st
+    | cons gid-syr _ ->
+        match [wire-nat gid-syr]
+          | none -> bridge-step v st
+          | some gid -> withdraw-with-gid gid ap v st
+
+;; Match the method-name; dispatch to deposit / withdraw.
+;; Returns Some BridgeStep iff method-name is recognised.
+spec dispatch-bootstrap-method-name String [List SyrupValue] [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn dispatch-bootstrap-method-name [name rest ap v st]
+  match [str::eq name "deposit-gift"]
+    | true  -> some [dispatch-deposit-gift-rest rest v st]
+    | false ->
+        match [str::eq name "withdraw-gift"]
+          | true  -> some [dispatch-withdraw-gift-rest rest ap v st]
+          | false -> [none BridgeStep]
+
+;; Gateway: if target == bootstrap (export 0) and args is a list
+;; starting with a recognised method-symbol, dispatch to gift
+;; handler; otherwise return None (fall through to normal
+;; op-deliver dispatch).
+spec maybe-bootstrap-method Nat SyrupValue [Option Nat] Vat BridgeState -> [Option BridgeStep]
+defn maybe-bootstrap-method [tgt args ap v st]
+  match [nat-eq? tgt zero]
+    | false -> [none BridgeStep]
+    | true ->
+        let xs := [syrup-list-or-nil args]
+          match xs
+            | nil -> [none BridgeStep]
+            | cons head rest ->
+                match [syrup-symbol-name head]
+                  | none -> [none BridgeStep]
+                  | some name -> dispatch-bootstrap-method-name name rest ap v st
+
+;; dispatch-deliver: route an op:deliver. Phase 52b adds a pre-check
+;; for bootstrap-method calls (target = 0, args[0] = method-symbol);
+;; falling through goes to the normal answer-pos routing:
 ;;   none  → pass-through (no promise needed)
 ;;   some  → if remote is in question table, reuse local;
 ;;           else allocate fresh local + record mapping
 spec dispatch-deliver Nat SyrupValue [Option Nat] Vat BridgeState -> BridgeStep
 defn dispatch-deliver [tgt args ap v st]
-  match ap
+  match [maybe-bootstrap-method tgt args ap v st]
+    | some step -> step
     | none ->
-        bridge-step [enqueue-msg [vmsg-deliver tgt args [none Nat]] v] st
-    | some remote ->
-        match [bs-lookup-question remote st]
-          | some local -> deliver-with-fresh-pid tgt args local v st
-          | none       -> deliver-allocate tgt args remote v st
+        match ap
+          | none ->
+              bridge-step [enqueue-msg [vmsg-deliver tgt args [none Nat]] v] st
+          | some remote ->
+              match [bs-lookup-question remote st]
+                | some local -> deliver-with-fresh-pid tgt args local v st
+                | none       -> deliver-allocate tgt args remote v st
 
 ;; Phase 38: wire-level promise pipelining (responder side).
 ;;
@@ -1095,89 +1263,6 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
           | some payload ->
               bs-append-pending-out [listener-notify-bytes resolver payload] st
 
-;; ===========================================================
-;; Phase 41/52b: syrup-shape inspectors (moved up from Phase 41
-;; position to support Phase 52b's gift handlers)
-;; ===========================================================
-
-;; Extract the Nat from a syrup-nat OR a non-negative syrup-int (the
-;; wire decoder produces syrup-int for `N+` literals — both shapes
-;; need to be handled). Reuses captp-wire's wire-nat which does the
-;; syrup-int → Nat conversion when the int is non-negative.
-spec tagged-payload-as-nat SyrupValue -> [Option Nat]
-defn tagged-payload-as-nat [p]
-  wire-nat p
-
-;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
-;; None for any other shape (including desc:answer, plain value, list,
-;; etc). 2-deep match (sidesteps pitfall #18).
-spec syrup-as-export-target SyrupValue -> [Option Nat]
-defn syrup-as-export-target
-  | syrup-null       -> [none Nat]
-  | syrup-bool _     -> [none Nat]
-  | syrup-nat _      -> [none Nat]
-  | syrup-int _      -> [none Nat]
-  | syrup-string _   -> [none Nat]
-  | syrup-symbol _   -> [none Nat]
-  | syrup-list _     -> [none Nat]
-  | syrup-refr _     -> [none Nat]
-  | syrup-bytes _    -> [none Nat]
-  | syrup-promise _  -> [none Nat]
-  | syrup-tagged tag p ->
-      match [str::eq tag "desc:export"]
-        | true  -> tagged-payload-as-nat p
-        | false -> [none Nat]
-
-;; ===========================================================
-;; Phase 52b: gift-handoff dispatch
-;; ===========================================================
-;;
-;; Two new CapTPOp variants:
-;;   op:deposit-gift gid refr           — gifter→exporter (one-way)
-;;   op:withdraw-gift gid resolver-pos  — recipient→exporter (replies via op:deliver)
-;;
-;; We're always the EXPORTER in these handlers (we receive the
-;; deposit AND fulfil the withdraw). The gifter/recipient roles
-;; are played by other vats; their wire-out logic is symmetric and
-;; deferred to Phase 54+ (multi-connection state).
-;;
-;; Only desc:export-shaped gifts are accepted; richer gifts
-;; (desc:answer / desc:import-object) need typed gift entries
-;; (deferred to a follow-up).
-
-;; Build the wire bytes for the gift-reply op:deliver:
-;;   <op:deliver <desc:export resolver> <desc:export xid> false false>
-;; resolver is the recipient's chosen export-pos to receive the
-;; capability; xid is the exported-pos we originally got via deposit.
-spec gift-reply-bytes Nat Nat -> String
-defn gift-reply-bytes [resolver xid]
-  wire::encode-record "op:deliver"
-    [cons [syrup-tagged "desc:export" [syrup-nat resolver]]
-      [cons [syrup-tagged "desc:export" [syrup-nat xid]]
-        [cons [syrup-bool false]
-          [cons [syrup-bool false] nil]]]]
-
-;; Handle op:deposit-gift. Extract the export-pos from the gift's
-;; refr; if it's a desc:export refr, record the (gid → xid) entry.
-;; Other refr shapes silently drop (deferred enrichment).
-spec handle-deposit-gift Nat SyrupValue Vat BridgeState -> BridgeStep
-defn handle-deposit-gift [gid gift-refr v st]
-  match [syrup-as-export-target gift-refr]
-    | none -> bridge-step v st
-    | some xid -> bridge-step v [bs-add-gift gid xid st]
-
-;; Handle op:withdraw-gift. Look up the gift; if found, queue the
-;; reply bytes on pending-out for flush by next pump. Gift remains
-;; in the table (not removed — gifts in our model are multi-use;
-;; spec compliance for one-shot semantics would require an
-;; explicit remove here).
-spec handle-withdraw-gift Nat Nat Vat BridgeState -> BridgeStep
-defn handle-withdraw-gift [gid resolver v st]
-  match [bs-lookup-gift gid st]
-    | none -> bridge-step v st
-    | some xid ->
-        bridge-step v
-          [bs-append-pending-out [gift-reply-bytes resolver xid] st]
 
 ;; Phase 53: captp-incoming-with-state's match arms are the
 ;; concrete realization of the `CapTPSession` session type
@@ -1260,23 +1345,6 @@ defn captp-incoming-with-state
       ;; record the queued deliver's answer-pos for break-forwarding.
       dispatch-incoming-answer qpos args ap v
         [bs-incr-imports [extract-refrs-from-args args] st]
-  | [op-deposit-gift gid gift-refr] v st ->
-      ;; Phase 52b: peer (the gifter) is depositing a capability for
-      ;; recipient. We're the EXPORTER in the three-vat handoff —
-      ;; we store the gift so recipient can later withdraw it.
-      ;; Currently only desc:export refrs are stored; richer refrs
-      ;; (desc:answer / desc:import-object) need a typed gift table
-      ;; (deferred). Unknown shape = silent drop.
-      ;; NB: bound name MUST NOT be `refr` — that's a data
-      ;; constructor in the Refr type and would shadow as a pattern
-      ;; (see pitfall #42).
-      handle-deposit-gift gid gift-refr v st
-  | [op-withdraw-gift gid resolver] v st ->
-      ;; Phase 52b: peer (the recipient) is asking for the gift at
-      ;; gid. If we have it, queue an op:deliver to peer's
-      ;; <desc:export resolver> carrying the gifted refr. Unknown
-      ;; gid = silent drop (peer protocol error; conservative).
-      handle-withdraw-gift gid resolver v st
 
 ;; ===========================================================
 ;; Phase 41: resolution-value inspection + forwarding
@@ -2016,8 +2084,6 @@ defn op-is-abort?
   | op-gc-export _ _   -> false
   | op-gc-answer _     -> false
   | op-deliver-to-answer _ _ _ _ -> false
-  | op-deposit-gift _ _  -> false
-  | op-withdraw-gift _ _ -> false
 
 ;; Once-aborted bool: was-aborted OR op-is-abort.
 spec or-bool Bool Bool -> Bool

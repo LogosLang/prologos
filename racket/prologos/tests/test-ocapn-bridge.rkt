@@ -2167,137 +2167,147 @@
    "3N"))
 
 ;; ========================================
-;; Phase 52b: gift-handoff wire ops + dispatch
+;; Phase 52b (revised): gift-handoff via bootstrap-method dispatch
 ;; ========================================
 ;;
-;; Phase 52 shipped the gift-table state machinery; this phase ships
-;; the op:deposit-gift / op:withdraw-gift wire codes + dispatch.
+;; The OCapN canonical model dispatches gift handoff as METHOD CALLS
+;; on the bootstrap object (export 0), not via dedicated wire ops.
+;; The wire shape is plain op:deliver; recognition happens in the
+;; bridge based on (target=0, args[0]=method-symbol). These tests
+;; exercise the bootstrap-method dispatch path:
+;;   - target=0 + args starts with symbol "deposit-gift" → store gift
+;;   - target=0 + args starts with symbol "withdraw-gift" → look up,
+;;     reply via op:deliver-to-answer at the op:deliver's ap
 
-;; CapTPOp variant sanity
-
-(test-case "message/op-deposit-gift predicates (Phase 52b)"
+(test-case "bridge/deposit-gift via op:deliver to bootstrap records the gift (Phase 52b)"
+  ;; op:deliver target=0 args=((symbol deposit-gift) gid=2 <desc:export 7>) ap=false rm=false
+  ;; bs-gifts should grow to length 1 with (2 → 7) recorded.
   (check-contains
    (run-last
-    "(eval (deliver? (op-deposit-gift (suc zero) (syrup-tagged \"desc:export\" (syrup-nat (suc zero))))))")
-   "false"))
-
-(test-case "message/op-withdraw-gift carries resolver via deliver-resolver (Phase 52b)"
-  (check-contains
-   (run-last
-    "(eval (deliver-resolver (op-withdraw-gift (suc (suc zero)) (suc (suc (suc zero))))))")
-   "some")
-  (check-contains
-   (run-last
-    "(eval (deliver-resolver (op-withdraw-gift (suc (suc zero)) (suc (suc (suc zero))))))")
-   "3N"))
-
-;; Wire round-trip
-
-(test-case "wire/op-deposit-gift encode → decode round-trips (Phase 52b)"
-  ;; Encode then decode; the result should be the same op.
-  (check-contains
-   (run-last
-    "(eval (let (op  (op-deposit-gift (suc (suc zero)) (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc zero))))))))
-                  bs  (encode-op op))
-              (decode-op bs)))")
-   "op-deposit-gift"))
-
-(test-case "wire/op-withdraw-gift encode → decode round-trips (Phase 52b)"
-  (check-contains
-   (run-last
-    "(eval (let (op (op-withdraw-gift (suc (suc (suc zero))) (suc (suc (suc (suc zero)))))
-                  bs (encode-op op))
-              (decode-op bs)))")
-   "op-withdraw-gift"))
-
-(test-case "wire/op-deposit-gift encoded shape carries op:deposit-gift tag (Phase 52b)"
-  (define got
-    (extract-value-bytes
-     (run-last
-      "(eval (encode-op (op-deposit-gift (suc zero) (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc zero))))))))")))
-  (check-true (regexp-match? #rx"op:deposit-gift" got)
-              (format "expected op:deposit-gift tag; got: ~s" got))
-  (check-true (regexp-match? #rx"desc:export" got)
-              (format "expected desc:export in payload; got: ~s" got)))
-
-;; Bridge dispatch
-
-(test-case "bridge/op-deposit-gift handler records the gift (Phase 52b)"
-  ;; Send op-deposit-gift gid=2 refr=<desc:export 7> through the
-  ;; state-aware dispatcher. bs-gifts should grow to length 1 with
-  ;; (2 → 7) recorded.
-  (check-contains
-   (run-last
-    "(eval (let (step (captp-incoming-with-state
-                        (op-deposit-gift (suc (suc zero))
-                          (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero)))))))))) ;; xid=7
-                        empty-vat
-                        bridge-state-empty))
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                                    (cons (syrup-nat (suc (suc zero)))
+                                      (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
               (length (bs-gifts (bridge-step-state step)))))")
    "1N"))
 
-(test-case "bridge/op-deposit-gift records correct gid→xid mapping (Phase 52b)"
+(test-case "bridge/deposit-gift records correct gid→xid mapping (Phase 52b)"
   (check-contains
    (run-last
-    "(eval (let (step (captp-incoming-with-state
-                        (op-deposit-gift (suc (suc zero))
-                          (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))))
-                        empty-vat
-                        bridge-state-empty))
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                                    (cons (syrup-nat (suc (suc zero)))
+                                      (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
               (bs-lookup-gift (suc (suc zero)) (bridge-step-state step))))")
    "7N"))
 
-(test-case "bridge/op-deposit-gift with non-export refr is silent drop (Phase 52b)"
-  ;; Refr that ISN'T desc:export shape (use desc:answer instead).
-  ;; bs-gifts stays empty.
+(test-case "bridge/deposit-gift with non-export refr is silent drop (Phase 52b)"
+  ;; Gift refr is desc:answer instead of desc:export → drop.
   (check-contains
    (run-last
-    "(eval (let (step (captp-incoming-with-state
-                        (op-deposit-gift (suc (suc zero))
-                          (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero))))))
-                        empty-vat
-                        bridge-state-empty))
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                                    (cons (syrup-nat (suc (suc zero)))
+                                      (cons (syrup-tagged \"desc:answer\" (syrup-nat (suc (suc (suc zero))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
               (length (bs-gifts (bridge-step-state step)))))")
    "0N"))
 
-(test-case "bridge/op-withdraw-gift looks up gift and queues reply bytes (Phase 52b)"
-  ;; Pre-load gift (gid=2 → xid=7), then withdraw with resolver=4.
-  ;; pending-out should contain 1 byte-string.
+(test-case "bridge/withdraw-gift via op:deliver looks up and queues reply (Phase 52b)"
+  ;; Pre-load gift (gid=2 → xid=7), then op:deliver target=0
+  ;; args=((symbol withdraw-gift) gid=2) ap=4 rm=false.
+  ;; Reply queued on pending-out.
   (check-contains
    (run-last
     "(eval (let (st0  (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty)
+                  args (syrup-list (cons (syrup-symbol \"withdraw-gift\")
+                                    (cons (syrup-nat (suc (suc zero))) nil)))
                   step (captp-incoming-with-state
-                         (op-withdraw-gift (suc (suc zero)) (suc (suc (suc (suc zero)))))
+                         (op-deliver zero args (some Nat (suc (suc (suc (suc zero))))) (none Nat))
                          empty-vat
                          st0))
               (length (bs-pending-out (bridge-step-state step)))))")
    "1N"))
 
-(test-case "bridge/op-withdraw-gift on unknown gift-id is a silent drop (Phase 52b)"
-  ;; No gift registered; withdraw should produce no pending bytes.
+(test-case "bridge/withdraw-gift on unknown gift-id is silent drop (Phase 52b)"
   (check-contains
    (run-last
-    "(eval (let (step (captp-incoming-with-state
-                        (op-withdraw-gift (suc (suc (suc (suc (suc zero))))) (suc (suc (suc (suc zero)))))
-                        empty-vat
-                        bridge-state-empty))
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"withdraw-gift\")
+                                    (cons (syrup-nat (suc (suc (suc (suc (suc zero)))))) nil)))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (some Nat (suc (suc (suc (suc zero))))) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
               (length (bs-pending-out (bridge-step-state step)))))")
    "0N"))
 
-(test-case "bridge/op-withdraw-gift reply bytes target peer's resolver with desc:export gift (Phase 52b)"
-  ;; Verify the reply wire shape: <op:deliver <desc:export 4> <desc:export 7> false false>.
+(test-case "bridge/withdraw-gift with no answer-pos is silent drop (Phase 52b)"
+  ;; No ap → no reply channel; gift can't be delivered.
+  (check-contains
+   (run-last
+    "(eval (let (st0  (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty)
+                  args (syrup-list (cons (syrup-symbol \"withdraw-gift\")
+                                    (cons (syrup-nat (suc (suc zero))) nil)))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         st0))
+              (length (bs-pending-out (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "bridge/withdraw-gift reply wire shape: op:deliver to desc:answer with desc:export gift (Phase 52b)"
+  ;; Verify: <op:deliver <desc:answer 4> <desc:export 7> false false>
   (define got
     (extract-value-bytes
      (run-last
       "(eval (let (st0  (bs-add-gift (suc (suc zero)) (suc (suc (suc (suc (suc (suc (suc zero))))))) bridge-state-empty)
+                    args (syrup-list (cons (syrup-symbol \"withdraw-gift\")
+                                      (cons (syrup-nat (suc (suc zero))) nil)))
                     step (captp-incoming-with-state
-                           (op-withdraw-gift (suc (suc zero)) (suc (suc (suc (suc zero)))))
+                           (op-deliver zero args (some Nat (suc (suc (suc (suc zero))))) (none Nat))
                            empty-vat
                            st0))
                 (framed-concat (bs-pending-out (bridge-step-state step)))))")))
   (check-true (regexp-match? #rx"op:deliver" got)
               (format "expected op:deliver reply; got: ~s" got))
-  (check-true (regexp-match? #rx"desc:export4" got)
-              (format "expected desc:export 4 (resolver); got: ~s" got))
+  (check-true (regexp-match? #rx"desc:answer4" got)
+              (format "expected desc:answer 4 (peer's ap); got: ~s" got))
   (check-true (regexp-match? #rx"desc:export7" got)
               (format "expected desc:export 7 (xid); got: ~s" got)))
+
+(test-case "bridge/op:deliver to NON-bootstrap target with method-symbol falls through (Phase 52b)"
+  ;; target = 5 (not bootstrap), args = ((symbol "deposit-gift") ...).
+  ;; The bootstrap-dispatch should NOT fire; the op enters the normal
+  ;; deliver path (vmsg enqueued in vat, no gift recorded).
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"deposit-gift\")
+                                    (cons (syrup-nat (suc (suc zero)))
+                                      (cons (syrup-tagged \"desc:export\" (syrup-nat (suc (suc (suc (suc (suc (suc (suc zero))))))))) nil))))
+                  step (captp-incoming-with-state
+                         (op-deliver (suc (suc (suc (suc (suc zero))))) args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))
+
+(test-case "bridge/op:deliver to bootstrap with UNKNOWN method symbol falls through (Phase 52b)"
+  ;; target = 0, args[0] = (symbol "unknown-method"). The
+  ;; bootstrap-dispatch returns None; op enters normal deliver path.
+  (check-contains
+   (run-last
+    "(eval (let (args (syrup-list (cons (syrup-symbol \"unknown-method\") nil))
+                  step (captp-incoming-with-state
+                         (op-deliver zero args (none Nat) (none Nat))
+                         empty-vat
+                         bridge-state-empty))
+              (length (bs-gifts (bridge-step-state step)))))")
+   "0N"))

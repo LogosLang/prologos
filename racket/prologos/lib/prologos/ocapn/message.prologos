@@ -64,22 +64,16 @@ data CapTPOp
   ;; answers when the chained promise breaks.
   ;;   our-question-pos args answer-pos resolver
   op-deliver-to-answer : Nat -> SyrupValue -> [Option Nat] -> [Option Nat]
-  ;; op:deposit-gift — Phase 52b. Gifter notifies exporter that it has
-  ;; "deposited a gift" addressed to recipient. Wire form:
-  ;;   <op:deposit-gift gift-id refr>
-  ;; gift-id is a fresh Nat the gifter allocates; refr is the
-  ;; capability being deposited (typically a <desc:export N> shape).
-  ;; One-way — exporter does not reply. Recipient later sends
-  ;; op:withdraw-gift with the same gift-id to fetch the capability.
-  op-deposit-gift : Nat -> SyrupValue
-  ;; op:withdraw-gift — Phase 52b. Recipient asks exporter for the
-  ;; capability deposited at gift-id. Wire form:
-  ;;   <op:withdraw-gift gift-id resolver-pos>
-  ;; resolver-pos is the export-id (on recipient's side) where
-  ;; exporter should deliver the capability. Exporter's reply is a
-  ;; plain op:deliver to <desc:export resolver-pos>.
-  ;;   gift-id resolver-pos
-  op-withdraw-gift : Nat -> Nat
+  ;;
+  ;; (Phase 52b note: an earlier revision added dedicated
+  ;; `op-deposit-gift` and `op-withdraw-gift` CapTPOp variants.
+  ;; Those were reverted on 2026-05-18: the OCapN canonical model
+  ;; — see `@endo/ocapn/src/client/ocapn.js:528+` — dispatches gift
+  ;; handoff as METHOD CALLS on the bootstrap object (export 0)
+  ;; rather than as new wire ops. The gift TABLE infrastructure
+  ;; from Phase 52 stays; the wire surface is handled inside the
+  ;; existing op-deliver dispatch by recognising specific method
+  ;; names ("deposit-gift" / "withdraw-gift") when target = 0.)
 
 ;; ========================================
 ;; Constructors (smart wrappers)
@@ -114,8 +108,6 @@ defn deliver?
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-deliver-to-answer _ _ _ _ -> true
-  | op-deposit-gift _ _    -> false
-  | op-withdraw-gift _ _   -> false
 
 spec deliver-only? CapTPOp -> Bool
 defn deliver-only?
@@ -127,8 +119,6 @@ defn deliver-only?
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-deliver-to-answer _ _ _ _ -> false
-  | op-deposit-gift _ _    -> false
-  | op-withdraw-gift _ _   -> false
 
 spec listen? CapTPOp -> Bool
 defn listen?
@@ -140,8 +130,6 @@ defn listen?
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-deliver-to-answer _ _ _ _ -> false
-  | op-deposit-gift _ _    -> false
-  | op-withdraw-gift _ _   -> false
 
 spec abort? CapTPOp -> Bool
 defn abort?
@@ -153,8 +141,6 @@ defn abort?
   | op-gc-export _ _       -> false
   | op-gc-answer _         -> false
   | op-deliver-to-answer _ _ _ _ -> false
-  | op-deposit-gift _ _    -> false
-  | op-withdraw-gift _ _   -> false
 
 ;; ========================================
 ;; Selectors
@@ -170,8 +156,6 @@ defn deliver-target
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-deliver-to-answer t _ _ _ -> some t
-  | op-deposit-gift _ _    -> none
-  | op-withdraw-gift _ _   -> none
 
 spec deliver-args CapTPOp -> Option SyrupValue
 defn deliver-args
@@ -183,8 +167,6 @@ defn deliver-args
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-deliver-to-answer _ a _ _ -> some a
-  | op-deposit-gift _ refr -> some refr
-  | op-withdraw-gift _ _   -> none
 
 spec deliver-answer-pos CapTPOp -> Option Nat
 defn deliver-answer-pos
@@ -196,8 +178,6 @@ defn deliver-answer-pos
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-deliver-to-answer _ _ ap _ -> ap
-  | op-deposit-gift _ _    -> none
-  | op-withdraw-gift _ _   -> none
 
 spec deliver-resolver CapTPOp -> Option Nat
 defn deliver-resolver
@@ -209,5 +189,3 @@ defn deliver-resolver
   | op-gc-export _ _       -> none
   | op-gc-answer _         -> none
   | op-deliver-to-answer _ _ _ rm -> rm
-  | op-deposit-gift _ _    -> none
-  | op-withdraw-gift _ r   -> some r
