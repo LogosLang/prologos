@@ -100,3 +100,20 @@ jobs:
 
       - name: Run bootstrap-gift wire-shape test (Phase 52b — gift handoff bootstrap-method dispatch cross-impl)
         run: cd racket/prologos && raco test tests/test-ocapn-bootstrap-gift-interop.rkt
+
+      - name: Install Python deps for OCapN test suite
+        run: |
+          # The ocapn-test-suite needs cryptography, cffi, and stem.
+          # cryptography + cffi via pip; stem via apt (avoids wheel
+          # build failure on cffi-less environments).
+          pip3 install --quiet cryptography cffi
+          sudo apt-get install -y python3-stem
+
+      - name: Run upstream ocapn-test-suite against Prologos peer (Phase 54 compliance tracker)
+        # EXPECTED-FAILURE gate: the upstream test suite uses 4-field
+        # crypto-signed op:start-session; our bridge currently only
+        # implements the 2-field form. This step runs the suite,
+        # captures diagnostics, but does NOT fail the build. When
+        # crypto handshake support lands, flip continue-on-error off.
+        continue-on-error: true
+        run: bash tools/interop/run-ocapn-test-suite.sh 22045

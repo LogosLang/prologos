@@ -696,6 +696,7 @@ runtime artifacts remain. Listed in dependency order:
 | 55 | PENDING | Outbound dial. ~tcp-testing.prologos~ has ~dial~, but the bridge doesn't *use* it. Recipient must dial the exporter on receipt of ~desc:import-object~. Wires netlayer into bridge state. |
 | 56 | PENDING | ~desc:import-object~ resolution. When recipient gets a ~desc:import-object N~, look up the gift's locator, dial the exporter via netlayer-tcp, send ~op:withdraw-gift~, await reply, register the resulting refr in the recipient's import table. |
 | 57 | PENDING | Three-process interop test (Racket gifter + Racket recipient + Racket exporter, or with Node in one role). End-to-end validation of the full message dance. |
+| 58 | PENDING (priority) | **Crypto handshake**: implement 4-field ~op:start-session~ (~ver pubkey loc loc-sig~) with Ed25519 signing. Required to pass the upstream ~ocapn-test-suite~ (Python). Until this lands, our 2-field handshake is rejected by ~@endo/ocapn~'s test runner. CI workflow has a ~continue-on-error: true~ gate that runs the upstream suite as a compliance tracker (~tools/interop/run-ocapn-test-suite.sh~); flip the flag off when this phase lands. |
 
 *** Session-types outstanding work (Phase 53 follow-ups)
 
