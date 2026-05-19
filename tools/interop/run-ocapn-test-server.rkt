@@ -38,18 +38,26 @@
          racket/tcp
          racket/list
          "ocapn-crypto.rkt"
-         "ocapn-handshake.rkt")
+         "ocapn-handshake.rkt"
+         "ocapn-framing.rkt")
 
 (define port-arg (make-parameter 22045))
 (define version-arg (make-parameter "1.0"))
+(define framing-arg (make-parameter 'raw-syrup))
 
 (command-line
  #:program "run-ocapn-test-server"
  #:once-each
  [("--port") p "TCP port to listen on (default: 22045)"
              (port-arg (string->number p))]
- [("--captp-version") v "CapTP version to advertise (default: 1.0-prologos-prerelease)"
-                      (version-arg v)])
+ [("--captp-version") v "CapTP version to advertise (default: 1.0)"
+                      (version-arg v)]
+ [("--framing") f "Wire framing: 'raw-syrup' (default; OCapN spec) or 'newline' (Prologos cross-impl tests)"
+                (framing-arg (string->symbol f))])
+
+(unless (framing-strategy? (framing-arg))
+  (error 'run-ocapn-test-server "unknown framing: ~v (expected raw-syrup or newline)" (framing-arg)))
+(current-framing-strategy (framing-arg))
 
 ;; Generate keypair once at startup.
 (file-stream-buffer-mode (current-output-port) 'line)
@@ -86,22 +94,32 @@
   (with-handlers ([exn:fail? (lambda (e)
                                (printf "ocapn-test-server: handler exn: ~a~n"
                                        (exn-message e)))])
-    (printf "ocapn-test-server: connection accepted, sending start-session~n")
+    (printf "ocapn-test-server: connection accepted, sending start-session (framing=~v)~n"
+            (current-framing-strategy))
     ;; Send our handshake immediately. The Python test suite waits
     ;; for our start-session before issuing any other ops.
-    (write-bytes start-session-bytes cout)
-    (flush-output cout)
+    (write-frame cout start-session-bytes)
     (printf "ocapn-test-server: sent ~a bytes; reading peer frames~n"
             (bytes-length start-session-bytes))
-    ;; Drain whatever the peer sends. Raw Syrup framing means we
-    ;; can't easily delimit frames without a full decoder; for now
-    ;; just count bytes read until EOF.
+    ;; Read incoming frames. Each frame is one Syrup value (under
+    ;; 'raw-syrup) or one newline-terminated bytes-string (under
+    ;; 'newline). We don't yet dispatch frames through the
+    ;; captp-core bridge — frame counting + logging is the integration
+    ;; point for Phase 59.
     (let loop ([n 0])
-      (define b (read-byte cin))
+      (define frame (with-handlers ([exn:fail?
+                                     (lambda (e)
+                                       (printf "ocapn-test-server: read-frame exn after ~a frames: ~a~n"
+                                               n (exn-message e))
+                                       #f)])
+                      (read-frame cin)))
       (cond
-        [(eof-object? b)
-         (printf "ocapn-test-server: peer closed after ~a bytes~n" n)]
-        [else (loop (+ n 1))])))
+        [(or (eof-object? frame) (not frame))
+         (printf "ocapn-test-server: peer closed after ~a frames~n" n)]
+        [else
+         (printf "ocapn-test-server: received frame ~a (~a bytes)~n"
+                 (+ n 1) (bytes-length frame))
+         (loop (+ n 1))])))
   (close-input-port cin)
   (close-output-port cout))
 

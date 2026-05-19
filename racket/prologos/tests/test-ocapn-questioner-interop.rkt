@@ -77,7 +77,7 @@
 (imports (prologos::ocapn::syrup :refer-all))
 (imports (prologos::ocapn::syrup-wire :refer-all))
 (imports (prologos::ocapn::captp-wire :refer-all))
-(imports (prologos::ocapn::bridge-interop-helpers :refer-all))
+(imports (prologos::ocapn::captp-interop-helpers :refer-all))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 ")
 

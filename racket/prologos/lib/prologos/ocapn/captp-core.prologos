@@ -1,4 +1,4 @@
-ns prologos::ocapn::captp-bridge
+ns prologos::ocapn::captp-core
 
 ;; ===========================================================
 ;; CapTP ↔ Vat bridge — Phase 11 of OCapN interop

@@ -73,7 +73,7 @@ require [prologos::ocapn::behavior :refer-all]
 require [prologos::ocapn::vat :refer-all]
 
 ;; --- CapTP bridge (networked questioner + responder) ---
-require [prologos::ocapn::captp-bridge :refer-all]
+require [prologos::ocapn::captp-core :refer-all]
 
 ;; ========================================
 ;; Convenience aliases that read like Goblins

@@ -167,7 +167,7 @@ sock.on('data', d => {
   while (tryConsumeFrame()) { /* keep going */ }
   // CapTP requires both peers to exchange op:start-session as part
   // of the handshake. Racket's bridge synthesizes its own session
-  // reply via prologos::ocapn::captp-bridge#our-session-bytes, then
+  // reply via prologos::ocapn::captp-core#our-session-bytes, then
   // dispatches the deliver via drive-echo-bridge-from-bytes. We
   // gate summarize() on having received BOTH frames to fully
   // verify the handshake + deliver round-trip.

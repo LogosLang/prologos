@@ -17,7 +17,7 @@
 ;;;
 ;;; Implementation choice: the bridge chain (decode-op +
 ;;; captp-incoming-with-state + drain + pump-outbound + first-bytes)
-;;; lives in a *.prologos library (`prologos::ocapn::bridge-interop-helpers`)
+;;; lives in a *.prologos library (`prologos::ocapn::captp-interop-helpers`)
 ;;; that raco make compiles to .pnet once. The test invokes
 ;;; `drive-echo-bridge-from-bytes` via a single function call in
 ;;; process-string, sidestepping the deep let-chain inference issue
@@ -89,7 +89,7 @@
   "(ns test-ocapn-bridge-interop)
 (imports (prologos::ocapn::core :refer-all))
 (imports (prologos::ocapn::message :refer-all))
-(imports (prologos::ocapn::bridge-interop-helpers :refer-all))
+(imports (prologos::ocapn::captp-interop-helpers :refer-all))
 (imports (prologos::data::list :refer (List nil cons)))
 (imports (prologos::data::option :refer (Option some none unwrap-or)))
 ")

@@ -1,4 +1,4 @@
-ns prologos::ocapn::bridge-interop-helpers
+ns prologos::ocapn::captp-interop-helpers
 
 ;; ========================================
 ;; Helpers for Phase 24 bridge-driven interop tests.
@@ -19,7 +19,7 @@ ns prologos::ocapn::bridge-interop-helpers
 require [prologos::ocapn::core   :refer-all]
         [prologos::ocapn::message :refer-all]
         [prologos::ocapn::captp-wire :refer-all]
-        [prologos::ocapn::captp-bridge :refer-all]
+        [prologos::ocapn::captp-core :refer-all]
         [prologos::ocapn::promise :refer [PromiseState pst-unresolved pst-fulfilled pst-broken]]
         [prologos::ocapn::syrup :refer [SyrupValue syrup-list syrup-nat syrup-symbol syrup-tagged]]
         [prologos::data::list  :refer [List nil cons append]]
