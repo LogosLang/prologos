@@ -132,8 +132,11 @@
 ;; Prologos-visible operations
 ;; ========================================
 
-(define (crypto-gen-keypair)
-  "Generate a fresh Ed25519 keypair; store it in the table; return its handle."
+(define (crypto-gen-keypair [_unit #f])
+  "Generate a fresh Ed25519 keypair; store it in the table; return its handle.
+   The optional _unit argument is accepted so callers can invoke this from
+   Prologos with a unit value (Prologos zero-arg foreign functions accept
+   one dummy argument)."
   (define-values (r pk sk) (crypto-sign-keypair-raw))
   (unless (= r 0)
     (error 'crypto-gen-keypair "crypto_sign_keypair failed: ~a" r))

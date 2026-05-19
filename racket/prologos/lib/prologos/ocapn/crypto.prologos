@@ -28,25 +28,25 @@ require [prologos::core::capabilities :refer (CryptoCap)]
 ;; Generate a fresh Ed25519 keypair. Returns an opaque handle to a
 ;; (pubkey, secret-key) pair stored in the FFI's handle table.
 ;; The caller must release via crypto-close-keypair when done.
-foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
-  [crypto-gen-keypair :as gen-keypair-raw : Nat]
+foreign racket "crypto-ffi.rkt"
+  [crypto-gen-keypair :as gen-keypair-raw : Unit -> Nat]
 
 ;; Extract the 32-byte raw Ed25519 public key for a keypair handle.
 ;; Returned as a Latin-1 String (32 chars, each char = 1 byte).
-foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+foreign racket "crypto-ffi.rkt"
   [crypto-pubkey :as pubkey-raw : Nat -> String]
 
 ;; Sign a message (Latin-1 bytes-as-string) with the keypair's
 ;; private key. Returns the 64-byte detached signature as a
 ;; Latin-1 String.
-foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+foreign racket "crypto-ffi.rkt"
   [crypto-sign :as sign-raw : Nat -> String -> String]
 
 ;; Verify an Ed25519 signature. All three arguments are Latin-1
 ;; Strings of raw bytes: (public-key, message, signature).
-foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+foreign racket "crypto-ffi.rkt"
   [crypto-verify :as verify-raw : String -> String -> String -> Bool]
 
 ;; Release a keypair handle. Returns true if the handle was present.
-foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+foreign racket "crypto-ffi.rkt"
   [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]
