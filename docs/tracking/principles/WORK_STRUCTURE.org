@@ -126,6 +126,31 @@ Tracks are subdivided into *Phases* (numbered: 0, 1, 2, ...) and
   too large for a single pass. Sub-phases within a Phase share a goal
   but produce distinct testable artifacts.
 
+*** Reference Naming Convention
+
+When citing a Track or Phase in commit messages, dailies, design docs,
+tracking artifacts, or any cross-document reference, *always include
+the Series prefix to disambiguate*. Track numbers overlap across Series
+(PPN, SRE, BSP-LE, PM, CIU, PAR, PTF, PRN, OE, PReduce, SH, FFI, NTT,
+UCS, ...) — bare ~2I~ or ~Phase 1D~ is ambiguous when more than one
+Series may be in scope.
+
+Required format:
+- *Track*: ~<Series> <Track>~ — e.g., ~SRE 2I~, ~BSP-LE 2B~, ~PPN 4C~,
+  ~PM 8F~
+- *Phase*: ~<Series> <Track>, Phase <Phase>~ — e.g., ~SRE 2I, Phase 2~,
+  ~PPN 4C, Phase 1D~
+- *Sub-phase*: ~<Series> <Track>, Phase <Phase>.<Sub>~ — e.g.,
+  ~PPN 4C, Phase 1D.a~, ~SRE 2H, Phase 6~
+
+*Exception*: when a single document context is unambiguously one Series
+throughout (e.g., the PPN 4C addendum design doc referencing its own
+internal phases), bare references may be used. But for cross-doc
+references, commit messages, and dailies (which span Series), always
+prefix.
+
+When in doubt, prefix.
+
 *** Parts
 
 When a Track's scope grows beyond what one design document can hold
