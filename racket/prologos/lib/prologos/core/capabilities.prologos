@@ -30,6 +30,7 @@ capability AppendCap
 capability StatCap
 capability HttpCap
 capability StdioCap
+capability CryptoCap
 
 ;; --- Composite capabilities (grouped authority) ---
 capability FsCap
@@ -49,3 +50,4 @@ subtype FsCap IOCap
 subtype NetCap IOCap
 subtype StdioCap IOCap
 subtype IOCap SysCap
+subtype CryptoCap SysCap

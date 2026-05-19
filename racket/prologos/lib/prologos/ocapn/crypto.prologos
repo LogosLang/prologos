@@ -1,0 +1,52 @@
+ns prologos::ocapn::crypto
+
+;; ========================================
+;; Ed25519 cryptographic operations — Phase 58.b
+;; ========================================
+;;
+;; Foreign-function bridge into libsodium via crypto-ffi.rkt.
+;; Provides the Ed25519 primitives needed to build OCapN's
+;; signed op:start-session handshake.
+;;
+;; ALL FFI bindings carry a `:requires (CryptoCap)` annotation.
+;; A function using these primitives must be in scope of CryptoCap
+;; (or any supertype: SysCap). Keypair handles are opaque Nats;
+;; bytes payloads (signature, pubkey, message) are carried as
+;; Latin-1-encoded Strings — the same convention used by
+;; `syrup-bytes` in the wire codec.
+;;
+;; Wire shapes built ON TOP of these primitives (gcrypt-style
+;; s-expressions for pubkey + signature, signed location payload)
+;; live in `captp-core.prologos`'s session-bytes builder.
+
+require [prologos::core::capabilities :refer (CryptoCap)]
+
+;; ----------------------------------------
+;; Primitive FFI bindings
+;; ----------------------------------------
+
+;; Generate a fresh Ed25519 keypair. Returns an opaque handle to a
+;; (pubkey, secret-key) pair stored in the FFI's handle table.
+;; The caller must release via crypto-close-keypair when done.
+foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+  [crypto-gen-keypair :as gen-keypair-raw : Nat]
+
+;; Extract the 32-byte raw Ed25519 public key for a keypair handle.
+;; Returned as a Latin-1 String (32 chars, each char = 1 byte).
+foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+  [crypto-pubkey :as pubkey-raw : Nat -> String]
+
+;; Sign a message (Latin-1 bytes-as-string) with the keypair's
+;; private key. Returns the 64-byte detached signature as a
+;; Latin-1 String.
+foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+  [crypto-sign :as sign-raw : Nat -> String -> String]
+
+;; Verify an Ed25519 signature. All three arguments are Latin-1
+;; Strings of raw bytes: (public-key, message, signature).
+foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+  [crypto-verify :as verify-raw : String -> String -> String -> Bool]
+
+;; Release a keypair handle. Returns true if the handle was present.
+foreign racket "crypto-ffi.rkt" :requires (CryptoCap)
+  [crypto-close-keypair :as close-keypair-raw : Nat -> Bool]
