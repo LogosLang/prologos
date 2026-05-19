@@ -2748,9 +2748,15 @@ Key audit data:
 
 Total estimated scope: **~300-500 LoC** net.
 
-##### Drift risks (named at 1D opening)
+##### Drift risks (named at 1D opening; ① RESOLVED via spike 2026-05-18)
 
-1. **Speculation-aware bridge firing** — the bridge watches universe cell at component-key=meta-id, which carries worldview-tagged values. Under speculation (current-worldview-bitmask non-zero), the bridge must read the universe-cell value worldview-filtered to its installation-time worldview (typically base). The BSP scheduler is expected to restore the propagator's installation worldview at fire time; this means bridge sees base-committed values only, not branch-tagged ones. Risk: verify this BSP behavior; if not automatic, bridge needs explicit `current-worldview-bitmask = 0` skip-guard.
+**① Speculation-aware bridge firing — RESOLVED VIA SPIKE 2026-05-18** (see §7.6.16.14)
+
+Initial framing assumed: bridge installed at base would fire at base worldview only; speculation guard (skip if `current-worldview-bitmask != 0`) would defer; post-speculation, BSP would re-fire the bridge at base for committed values.
+
+**Spike falsified this**: bridge fires at the WRITING worldview, not at install worldview. Under speculation (wv=1), bridge fires with current-worldview-bitmask=1. Post-speculation parameterize exit does NOT re-fire the bridge. If guarded, speculatively-solved metas would never reflect to attribute-map.
+
+**Resolved design**: NO speculation guard. Bridge writes attribute-map regardless of wv. Rollback safety provided by `with-speculative-rollback`'s elab-net snapshot/restore at the speculation boundary — same pattern as the existing app-fire-fn `term-map-write` at typing-propagators.rkt:1210/1215 (which writes attribute-map under speculation without worldview-tagging; snapshot handles rollback).
 
 2. **Bridge fire-pattern + dependent firing precision** — bridge must declare `:component-paths (list (cons type-meta-universe-cell-id meta-id))` so it fires only when THIS meta's universe-cell component changes, not when sibling components change. Phase 1f enforcement applies.
 
@@ -2775,7 +2781,7 @@ Per-phase scope (post-confirmation):
 
 | Phase | Est. LoC | Notes |
 |---|---:|---|
-| 1D.a | 150-250 | Reverse-bridge install |
+| 1D.a | 150-250 | Reverse-bridge install (no speculation guard per §7.6.16.14 spike) |
 | 1D.b | 50-100 | Convergence tests |
 | 1D.c | 50-100 | Provenance integration |
 | 1D.d | 50 | A/B + baseline capture |
@@ -2784,6 +2790,69 @@ Per-phase scope (post-confirmation):
 | 1E.b | 200-300 | Specialized-cell-cache (§4.6 4th instance) |
 | 1E.c | 100-200 | Cleanup + tests + A/B |
 | 1E-VAG | — | Adversarial gate |
+
+#### §7.6.16.14 Phase 1D.a BSP-firing spike (2026-05-18)
+
+Mini-design surfaced drift risk #1 (speculation-aware bridge firing). Spike executed before 1D.a implementation to verify BSP behavior empirically — the speculation guard pattern hinged on whether BSP re-fires dependents on speculation-exit (parameterize end + worldview-cache update).
+
+**Spike file**: `/tmp/spike-1d-bsp-firing.rkt` (throwaway).
+
+**Setup**: fresh elab-network → init-meta-universes! → create meta m1 → install observation propagator watching universe cell at component-key=m1's meta-id.
+
+**Findings**:
+
+| Test | Action | Bridge fires? | At wv? | Sol observed |
+|---|---|---|---:|---|
+| 1 | `solve-meta!(m1.id, expr-Int)` at base (wv=0) | ✓ | 0 | (expr-Int) |
+| 2 | direct universe-cell write under speculation (wv=1) with (expr-Bool) | ✓ | **1** | (expr-Bool) |
+| 3 | post-speculation observation (no new writes) | ✗ no firings | — | — |
+| 4 | post-speculation read at wv=0 vs wv=1 | — | — | wv=0: `'type-top`; wv=1: (expr-Bool) |
+
+**Critical architectural finding**: bridge fires at the WRITING worldview, not at install worldview. Under speculation (wv=1), bridge fires with current-worldview-bitmask=1. Post-speculation parameterize exit does NOT re-fire the bridge. This **invalidates** the "speculation guard + re-fire post-commit" pattern proposed in mini-design.
+
+**Resolved design**: NO speculation guard. Bridge follows the same pattern as existing `app-fire-fn term-map-write` at lines 1210/1215 — writes attribute-map regardless of wv; rollback safety via `with-speculative-rollback`'s elab-net snapshot/restore at the speculation boundary.
+
+Test 4 anomaly note: post-speculation read at wv=0 returns `'type-top` because the test mixed `solve-meta!` (which writes via the full meta-solve path including `meta-info` CHAMP) with direct `compound-cell-component-write/pnet` (which bypasses solve-meta!). Production flows always go through `solve-meta!`, which handles already-solved + contradiction-detection within its body. The 'type-top reading is an artifact of the synthetic test, not a production concern.
+
+**Updated 1D.a bridge factory**:
+
+```racket
+(define (make-meta-solution-attribute-reflect-fire-fn tm-cid meta-pos meta-id type-universe-cid)
+  (lambda (net)
+    (define sol (compound-cell-component-ref/pnet net type-universe-cid meta-id))
+    (cond
+      [(not sol) net]
+      [(eq? sol 'infra-bot) net]
+      [(eq? sol 'type-bot) net]           ;; expr-meta-bot-placeholder
+      [(prop-type-bot? sol) net]
+      [(prop-type-top? sol) net]          ;; contradiction
+      [(expr-meta? sol) net]              ;; still a meta — deferred resolution
+      [else
+       (that-write net tm-cid meta-pos ':term sol)])))
+```
+
+**Install** (at typing-propagators.rkt:1786, between meta-solution-output and residuation):
+
+```racket
+;; PPN 4C Phase 1D.a — reverse-bridge: reflect universe-cell solver writes
+;; to attribute-map :type INHABITANT layer. Closes the dual-store inconsistency
+;; per §7.6.16.13 + spike §7.6.16.14.
+(define type-universe-cid (current-type-meta-universe-cell-id))
+(define net-rb
+  (if type-universe-cid
+      (let-values ([(n _) (net-add-propagator net-b
+                            (list type-universe-cid) (list tm-cid)
+                            (make-meta-solution-attribute-reflect-fire-fn
+                             tm-cid e id type-universe-cid)
+                            #:component-paths
+                            (list (cons type-universe-cid id)))])
+        n)
+      net-b))
+```
+
+**Always-on (`net-add-propagator` not fire-once)** per mini-design decision: a meta might be solved multiple times under refinement; fire-once would prevent reflecting refinement. Idempotent cycles terminate via attribute-map-merge-fn α-equiv strict (line 422 `(equal? old-val val) → rec`) — same-value writes are no-ops.
+
+**Spike codification candidate** (1 data point; watch for graduation): "When a mini-design hinges on assumed BSP scheduler behavior, run a small spike to verify empirically before implementing. Spike data falsified the speculation-guard pattern here, redirecting the design from a 'principled but wrong' approach to the established 'snapshot/restore at speculation boundary' precedent."
 
 ### §7.7 Phase 1B deliverables
 
