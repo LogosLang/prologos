@@ -97,3 +97,6 @@ jobs:
 
       - name: Run break + plain-value test (Phase 49 — break-forwarding + plain-value-as-error cross-impl)
         run: cd racket/prologos && raco test tests/test-ocapn-break-plain-interop.rkt
+
+      - name: Run bootstrap-gift wire-shape test (Phase 52b — gift handoff bootstrap-method dispatch cross-impl)
+        run: cd racket/prologos && raco test tests/test-ocapn-bootstrap-gift-interop.rkt
