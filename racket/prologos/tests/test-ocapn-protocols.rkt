@@ -21,6 +21,7 @@
          "../driver.rkt"
          "../errors.rkt"
          "../sessions.rkt"
+         "../syntax.rkt"
          "../macros.rkt"
          "../global-env.rkt"
          "../namespace.rkt"
@@ -229,3 +230,51 @@
   (check-true (sess-mu? rec-body))
   (check-true (sess-offer? (sess-mu-body rec-body))
               "peer offers what we choose"))
+
+;; ========================================
+;; Group 5: payload type refinement (Phase 53.a)
+;; ========================================
+;;
+;; Phase 53 used `String` as the payload (the wire-byte
+;; representation). Phase 53.a refines to `CapTPOp` (the semantic
+;; type from prologos::ocapn::message). These tests verify the
+;; refinement landed: each session's Send / Recv payload should now
+;; be the CapTPOp type, not String.
+
+(test-case "Handshake payload is CapTPOp (Phase 53.a)"
+  ;; Handshake: ! CapTPOp -> ? CapTPOp -> end
+  ;; Check that the sent-type and recv-type are NOT expr-String.
+  (define s (session-type 'Handshake))
+  (define send-ty (sess-send-type s))
+  (define recv-ty (sess-recv-type (sess-send-cont s)))
+  (check-false (expr-String? send-ty)
+               (format "expected CapTPOp payload (not String); got ~v" send-ty))
+  (check-false (expr-String? recv-ty)
+               (format "expected CapTPOp recv payload (not String); got ~v" recv-ty)))
+
+(test-case "QuestionAnswer payload is CapTPOp (Phase 53.a)"
+  (define s (session-type 'QuestionAnswer))
+  (define send-ty (sess-send-type s))
+  (check-false (expr-String? send-ty)
+               (format "expected CapTPOp payload; got ~v" send-ty)))
+
+(test-case "ListenProtocol payload is CapTPOp (Phase 53.a)"
+  (define s (session-type 'ListenProtocol))
+  (define send-ty (sess-send-type s))
+  (check-false (expr-String? send-ty)
+               (format "expected CapTPOp payload; got ~v" send-ty)))
+
+(test-case "GcExport payload is CapTPOp (Phase 53.a)"
+  (define s (session-type 'GcExport))
+  (check-false (expr-String? (sess-send-type s))
+               (format "expected CapTPOp payload; got ~v" (sess-send-type s))))
+
+(test-case "GiftWithdraw payload is CapTPOp (Phase 53.a)"
+  (define s (session-type 'GiftWithdraw))
+  (check-false (expr-String? (sess-send-type s))
+               (format "expected CapTPOp payload; got ~v" (sess-send-type s))))
+
+(test-case "GiftDeposit payload is CapTPOp (Phase 53.a)"
+  (define s (session-type 'GiftDeposit))
+  (check-false (expr-String? (sess-send-type s))
+               (format "expected CapTPOp payload; got ~v" (sess-send-type s))))

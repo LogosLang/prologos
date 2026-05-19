@@ -706,7 +706,7 @@ the runtime is still imperative. To close the gap:
 
 | Sub-phase | Status | Description |
 |-----------+--------+-------------|
-| 53.a | PENDING | Refine payload types from ~String~ to ~CapTPOp~. Currently every session uses ~String~ as the payload (the wire-byte representation). Refining requires cross-module session-elaboration support — needs to verify Prologos's elaborator can handle ~CapTPOp~ (imported from ~prologos::ocapn::message~) as a session payload type. |
+| 53.a | DONE (commit ~TBD~) | Refined payload types from ~String~ to ~CapTPOp~. Session-elaborator handles cross-module imports cleanly: ~require [prologos::ocapn::message :refer [CapTPOp]]~ + per-session ~! CapTPOp~ / ~? CapTPOp~ steps. Tests verify payload type is no longer ~expr-String~. |
 | 53.b | PENDING | Wire ~CapTPSession~ as the runtime contract for ~captp-incoming-with-state~. Replace ad-hoc match dispatch with a session-typed channel driven by the propagator network. Pattern to follow: ~io-bridge.rkt~ + ~session-runtime.rkt~'s ~FileRead~/~FileWrite~ implementation. Larger refactor: changes the bridge's runtime shape from "match-on-CapTPOp" to "step a session-typed channel." |
 | 53.c | PENDING | Add session-typed Question/Answer + PipelinedQuestion runtime. Same pattern as 53.b but for the questioner side. Requires connections to expose session-typed endpoints. |
 | 53.d | PENDING | Use ~:throws~ on protocols with broken-promise outcomes (e.g., ~QuestionAnswer~ should be ~:throws ErrorReason~ — Phase 17/45/46 already produce ~<Error r>~). Test infrastructure: ~test-session-throws-01.rkt~ already validates ~:throws~ desugaring. |

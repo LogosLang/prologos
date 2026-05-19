@@ -1,7 +1,9 @@
 ns prologos::ocapn::protocols :no-prelude
 
+require [prologos::ocapn::message :refer [CapTPOp]]
+
 ;; ========================================
-;; OCapN protocol session types — Phase 53
+;; OCapN protocol session types — Phase 53 + 53.a
 ;; ========================================
 ;;
 ;; The OCapN spec defines several stateful message exchanges between
@@ -28,19 +30,21 @@ ns prologos::ocapn::protocols :no-prelude
 ;; typically the LOCAL peer. The remote peer follows the DUAL.
 
 ;; ----------------------------------------
-;; Payload types
+;; Payload types (Phase 53.a)
 ;; ----------------------------------------
 ;;
-;; All op-level messages are SyrupValue on the wire. Concrete
-;; semantic types (CapTPOp, Refr, etc.) live in
-;; `prologos::ocapn::{message, refr}`. For session-type purposes
-;; we use String — every encoded op fits in a String when serialised
-;; (newline-framed). A future revision can refine the payload type
-;; to `CapTPOp` once the cross-module session-elaboration story
-;; supports user-defined data types in session positions.
+;; Each session carries `CapTPOp` values — the semantic type from
+;; `prologos::ocapn::message`. This is one refinement step beyond
+;; the original Phase 53 design which used `String` (the wire-byte
+;; representation). `CapTPOp` is more honest about what each step
+;; represents: a structured operation, not a serialised blob.
 ;;
-;; For now: think of `! String` as "send one op:* on the wire" and
-;; `? String` as "receive one op:* from the wire."
+;; Future refinement (Phase 53.a-2): replace `CapTPOp` with per-op
+;; constructor-witnessed types so the session-typed channel can
+;; reject mis-typed ops at compile time (e.g., a session step
+;; declared `! Deliver` should reject sending an `op-listen`).
+;; This requires constructor-as-type support in Prologos's session
+;; elaborator; deferred.
 
 ;; ========================================
 ;; 1. Handshake (Phase 25)
@@ -53,8 +57,8 @@ ns prologos::ocapn::protocols :no-prelude
 ;; `bridge-state-with-our-session` + the `op-start-session` arm in
 ;; `captp-incoming-with-state`.)
 session Handshake
-  ! String
-  ? String
+  ! CapTPOp
+  ? CapTPOp
   end
 
 ;; ========================================
@@ -71,8 +75,8 @@ session Handshake
 ;; from the protocol's perspective it's just "a String" — the
 ;; bridge interprets the payload's shape.
 session QuestionAnswer
-  ! String
-  ? String
+  ! CapTPOp
+  ? CapTPOp
   end
 
 ;; ========================================
@@ -86,11 +90,11 @@ session QuestionAnswer
 ;; out (Phase 45/46). From OUR perspective the loop is internal
 ;; choice (we decide each turn whether to pipeline more or wait):
 session PipelinedQuestion
-  ! String
+  ! CapTPOp
   rec
     +>
-      | :pipeline -> ! String -> rec
-      | :await -> ? String -> end
+      | :pipeline -> ! CapTPOp -> rec
+      | :await -> ? CapTPOp -> end
 
 ;; ========================================
 ;; 4. Listen (Phase 48)
@@ -102,8 +106,8 @@ session PipelinedQuestion
 ;; in pump-outbound (or `bs-handle-listen-with-late-fire` for the
 ;; already-settled case — Phase 51).
 session ListenProtocol
-  ! String
-  ? String
+  ! CapTPOp
+  ? CapTPOp
   end
 
 ;; ========================================
@@ -115,7 +119,7 @@ session ListenProtocol
 ;; Bridge handler: `release-import` (imperative) or
 ;; `connection-queue-release-import` (declarative, Phase 50).
 session GcExport
-  ! String
+  ! CapTPOp
   end
 
 ;; ========================================
@@ -131,8 +135,8 @@ session GcExport
 ;; op:withdraw-gift wire encoding + bridge dispatch + netlayer-tcp
 ;; outbound dialing are deferred to subsequent phases.
 session GiftWithdraw
-  ! String
-  ? String
+  ! CapTPOp
+  ? CapTPOp
   end
 
 ;; ========================================
@@ -142,7 +146,7 @@ session GiftWithdraw
 ;; One-way: gifter notifies exporter "I deposited a gift for the
 ;; recipient at gift-id G."
 session GiftDeposit
-  ! String
+  ! CapTPOp
   end
 
 ;; ========================================
@@ -161,14 +165,14 @@ session GiftDeposit
 ;; outbound responses as separate sessions (Question/Listen/etc.
 ;; cover the responses).
 session CapTPSession
-  ? String
-  ! String
+  ? CapTPOp
+  ! CapTPOp
   rec
     &>
-      | :deliver           -> ? String -> rec
-      | :deliver-to-answer -> ? String -> rec
-      | :deliver-only      -> ? String -> rec
-      | :listen            -> ? String -> rec
-      | :gc-export         -> ? String -> rec
-      | :gc-answer         -> ? String -> rec
-      | :abort             -> ? String -> end
+      | :deliver           -> ? CapTPOp -> rec
+      | :deliver-to-answer -> ? CapTPOp -> rec
+      | :deliver-only      -> ? CapTPOp -> rec
+      | :listen            -> ? CapTPOp -> rec
+      | :gc-export         -> ? CapTPOp -> rec
+      | :gc-answer         -> ? CapTPOp -> rec
+      | :abort             -> ? CapTPOp -> end
