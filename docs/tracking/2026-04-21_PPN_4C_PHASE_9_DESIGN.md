@@ -164,7 +164,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **Step 2 S2.e-iv-b (champ-fallback + legacy-fn cleanup)** | Retire 6 dead functions (3 mult/level/sess champ-fallback + 3 legacy-X-fn) + simplify meta-domain-info table + simplify meta-domain-solution dispatch | ✅ | 1 commit `6efb709e` (2026-04-25). Per D.3 §7.5.15.2 (Category C). 6 function deletions + meta-domain-info table cleanup + meta-domain-solution simplification. **+54 / -150 LoC** (96 net deletion). KEPT: type-champ-fallback (still active reading current-prop-meta-info-box; Phase 4 retires alongside meta-info CHAMP). Table simplified: `'universe-active?` (4 entries) + `'legacy-fn` (3 entries) + `'champ-fallback` for mult/level/sess (3 entries) all removed. meta-domain-solution: outer cond on `'universe-active?` retired (always #t); pure universe dispatch with defensive `(hash-ref info 'champ-fallback (lambda (_id) #f))` for type-only fallback. The architectural intent "universe cell as single source of truth" now FULLY REALIZED in dispatch core. **Verification**: probe diff = 0; 10 targeted tests / 217 cases GREEN in 10.8s; **full suite 7920 / 123.0s / 0 failures** within 118-127s variance. |
 | **Step 2 S2.e-v (Wide retirement: 6 test-only/dead-code mult-cell + bridge surfaces + test migration)** | Retire 6 functions in elaborator-network.rkt: elab-fresh-mult-cell + elab-mult-cell-read + elab-mult-cell-write + elab-add-type-mult-bridge + elab-fresh-level-cell + elab-fresh-sess-cell. Migrate test-mult-propagator.rkt to use net-add-cross-domain-propagator + type->mult-alpha directly. | ✅ | 1 commit `118ab57a` (2026-04-25). Per D.3 §7.5.14.3 + audit-driven scope expansion (capture-gap pattern, 3rd data point this session — graduation-ready). Audit revealed 6 surfaces (vs design's named 2). User-directed Wide + Migrate. **+91 / -130 LoC** (39 net deletion across 2 files). Test migration: helper inlines mult cell allocation (mirrors retired elab-fresh-mult-cell pattern) + direct primitive bridge install + 6 elab-mult-cell-read → elab-cell-read + bridge/gamma-noop test retired (γ retired in S2.c-iv → test premise no longer valid). 13 bridge tests preserved (was 14). **Verification**: probe diff = 0 (cell_allocs=1181 IDENTICAL; all 28 result strings match baseline); acceptance file 0 errors; 109 targeted tests across 6 files GREEN in 6.1s; **full suite 7914 / 119.3s / 0 failures** within 118-127s variance (-1 from gamma-noop; -5 from test-properties.rkt counting variance — passes 13 individually, batch counts as 8; not a regression). Adversarial VAG TWO-COLUMN passed; the Wide-vs-Narrow scope decision IS the adversarial finding (capture-gap caught the 4 surfaces the design's narrow framing missed). |
 | **Step 2 S2.e-vi (final §5 measurement + honest hypothesis reframing + 6 codifications graduation)** | Re-run bench-meta-lifecycle full sequence; honestly reframe §5 hypothesis per §7.5.14.4 (per-command transients dominate cell_allocs, NOT persistent metas); graduate 6 watching-list patterns to DEVELOPMENT_LESSONS.org. THE most important S2 deliverable beyond the architecture. | ✅ | 1 commit (this commit, 2026-04-25). Bench results: 3 of 6 §5 micro criteria MET (fresh-meta 2.367 μs ✓; solve-meta! 7.832 μs ✓ — partial-state regression UNWOUND past baseline; meta-solution 0.368 μs ✓); 2 transitional (cells=54, cell_allocs=1181) honestly reframed per §7.5.14.4 — **§5 hypothesis was framed for the wrong bottleneck** (per-command transients ~1100 of 1181 dominate; persistent meta consolidation worked as charter); full suite 7914/119.3s within variance. Section F Move B+ benefit MAINTAINED through 5 sub-phases (Path 4 still dominates Path 1 by 28-46 ns across 3 workloads). STEP2_BASELINE.md §12.5 added with full data + honest D4 reframing + 6 codification graduation list. DEVELOPMENT_LESSONS.org extended with 6 entries: (1) Pipeline.md per-domain universe migration prophylactic; (2) Capture-gap pattern (3 data points this session); (3) Partial-state regression unwinds when architecture completes (3 data points); (4) Audit-first methodology prevents under-scoped implementation (4 data points); (5) Audit-driven scope expansion Wide vs Narrow decision point (NEW codification, 2 data points); (6) Sed-deletion 2-pass operational rule (1 high-confidence data point); (7) Microbench-claim verification pays off across sub-phase arcs (3 data points extending workflow.md rule). Per-command transient consolidation captured as Track 4D scope per D.3 §7.5.14.4 + Track 4D research §5.4 + DEFERRED.md "Future Track 4D Scope". |
-| **Phase 1D** | **Meta-Solution Canonical Store Consolidation (NEW 2026-05-18)** | ⬜ | Phase 1E precursor. Resolves the dual-store inconsistency where trait-resolution + meta-feedback writes go to attribute-map `:type` INHABITANT but solve-meta! writes to universe cell — currently `(that-read am type-meta-pos :term)` returns bot for type-unification metas even when solved. **Post-Qc resolution (2026-05-18)**: user-asserted INHABITANTs via Track 7 `that x :term V` are FIRST-CLASS writes with full provenance + worldview semantics; user assertions + solver derivations must converge in ONE canonical store via merge (Role B equality-enforce). Three architectures evaluated (§7.6.16.12): **A** (attribute-map canonical + universe cell as worldview projection via bridge) is leading lean; **B** (universe-cell extended classify-inhabit-value) + **C** (attribute-map worldview-tagged extension) tracked as alternatives. Architecture decision pending mini-design dialogue. Sub-phase partition defined post-architecture. See §7.6.16.13 for full scope. |
+| **Phase 1D** | **Meta-Solution Canonical Store Consolidation (NEW 2026-05-18)** | ⬜ | Phase 1E precursor. Resolves the dual-store inconsistency where trait-resolution + meta-feedback writes go to attribute-map `:type` INHABITANT but `solve-meta!` writes to universe cell — currently `(that-read am type-meta-pos :term)` returns bot for type-unification metas even when solved. **Post-Qc resolution (2026-05-18)**: user-asserted INHABITANTs via Track 7 `that x :term V` are FIRST-CLASS writes with full provenance + worldview semantics; user assertions + solver derivations must converge in ONE canonical store via merge (Role B equality-enforce). **Architecture: A (CONFIRMED 2026-05-18)** — attribute-map canonical, universe cell as worldview-tagged projection via reverse-bridge propagator. Refined per audit findings: bridge install-time wiring is reusable; meta-pos synthesis is free under universe-active path (`(expr-meta id #f)` uniform). Sub-phases: **1D.a** install reverse-bridge (~150-250 LoC); **1D.b** convergence tests (~50-100); **1D.c** provenance integration (~50-100); **1D.d** A/B + baseline (~50); **1D-VAG** adversarial gate. Total ~300-500 LoC. See §7.6.16.13 for full scope, drift risks, perf constraints. |
 | **Phase 1E** | **`that-*` Storage Routing Extension (REVISED 2026-05-18; was "Storage Unification" 2026-04-23)** | ⬜ | Re-scoped post-Phase-1D consolidation. With canonical store resolved by 1D, 1E becomes pure SURFACE EXTENSION: add `:mult` / `:level` / `:session` magic keywords on `that-*`; dispatch via `(expr-meta? pos)` (~1.6 ns, validated this session); route to corresponding universe cells (or canonical store per 1D resolution); 4th specialized-cell-cache instance (§4.6 framework). `:type` / `:term` semantics unchanged (Realization B preserved per D.3 §6.1 + §7.6.16.11 research). Sub-phases: **1E.a** routing extension (~200-300 LoC); **1E.b** specialized-cell-cache (~200-300 LoC); **1E.c** cleanup + A/B + parity wiring (~100-200 LoC); **1E-VAG** adversarial gate. Pre-0 M+A+E+R+S baseline captured this session at `data/benchmarks/attribute-record-pre0-baseline-2026-05-17.txt` + post-cleanup A/B at `attribute-record-post-cleanup-2026-05-18.txt`. See §7.6.16.10-13 for full Stage 2 audit findings, research, reframe, and Phase 1D scope. |
 | 1A-iii-b | Tier 2: Deprecated `atms` struct + `atms-believed` + deprecated internal API retirement | ⬜ | Independent of Path T; can proceed in parallel |
 | 1A-iii-c | Tier 3: Surface ATMS AST retirement (14-file pipeline) | ⬜ | Independent of Path T; can proceed in parallel |
@@ -2714,49 +2714,75 @@ Push-back consideration: Architecture B keeps universe cells central, which mean
 
 #### §7.6.16.13 Phase 1D scope — Meta-Solution Canonical Store Consolidation
 
-**Purpose**: resolve the dual-store inconsistency for "meta solution" (§7.6.16.11) by choosing a canonical store and (for non-canonical) defining its derived role. Precedes Phase 1E because:
+**Purpose**: resolve the dual-store inconsistency for "meta solution" (§7.6.16.11) by establishing attribute-map `:type` INHABITANT as the canonical store and adding a reverse-bridge propagator that reflects universe-cell solver writes back to it. Precedes Phase 1E because:
 - 1E's mult/level/session magic-keyword routing should target a single canonical store, not two
 - The dispatch design (`(expr-meta? pos)` routing) is informed by which store is canonical
 - Once 1D resolves the canonical-store question, 1E becomes a pure surface extension (routing + cache + cleanup + A/B)
 
-**Architecture**: TBD per §7.6.16.12. Lean is Architecture A; final decision in 1D mini-design dialogue.
+**Architecture**: **A (CONFIRMED 2026-05-18)** — attribute-map canonical, universe cell as worldview-tagged projection. Refined per audit findings: bridge install-time wiring is reusable; meta-pos synthesis is free under universe-active path (`(expr-meta id #f)` uniform). Scope estimate dropped from 600-900 to ~300-500 LoC. See §7.6.16.10 mini-audit findings + §7.6.16.12 architecture comparison.
 
-**Sub-phase partition**: TBD, defined post-architecture in 1D mini-design.
+**Mini-audit findings persisted** (executed 2026-05-18):
 
-**Mini-audit scope** (Stage-2-style, to be executed at 1D mini-audit step per Stage 4 Per-Phase Protocol):
+Inventory:
+- `solve-meta!` family — ~20 call sites across `unify.rkt`, `resolution.rkt`, `trait-resolution.rkt`, `qtt.rkt`, `typing-sessions.rkt`. All write to universe cells (+ meta-info CHAMP).
+- `that-write :term` — 3 production sites (typing-propagators.rkt:768, 1210, 1215). All write to attribute-map `:type` INHABITANT.
+- `that-read :term` — 2 production sites (typing-propagators.rkt:766, 907). Latter is `make-meta-solution-output-fire-fn` — the existing bridge from attribute-map → output cell.
 
-- Inventory `solve-meta!` call sites + write paths (universe-cell-write trace)
-- Inventory `that-write :term` / `term-map-write` call sites (attribute-map `:type` INHABITANT writes)
-- Inventory `meta-solution` + `(that-read am pos :term)` consumer reads (which consumers care about which store)
-- Bridge propagator design (under Arch A): topology, fire-on-write semantics, worldview-tagging integration
-- Speculation interaction: how solver writes during speculative branches integrate with attribute-map (under Arch A) vs universe cell layered (under Arch B)
-- Compatibility with Phase 3 ATMS branching (forthcoming Phase 3A in this addendum)
-- Phase 11b provenance integration: per Realization B, each tagged entry carries `(propagator-id, assumption-id, source-loc)` — verify chosen architecture preserves this
+Key audit data:
+- Type metas DUAL-WRITTEN today: network propagator path (app-fire-fn → attribute-map → output cell → resolution loop → `solve-meta!` → universe cell) AND imperative paths (`solve-meta!` directly from unify/resolution/etc.). The asymmetry: network path closes loop; imperative path doesn't update attribute-map.
+- Mult/level/session metas: single-stored in universe cells (no attribute-map facet today).
+- `expr-meta` struct shape: `(struct expr-meta (id cell-id))`. Under universe-active path (production post-S2.d), `cell-id = #f` uniformly. **Implication**: meta-pos = `(expr-meta id #f)` synthesizable from meta-id alone (`equal?`-compatible).
+- Existing bridge (`make-meta-solution-output-fire-fn`) is per-meta, install-time-wired at typing-propagators.rkt:1778 with `(tm-cid meta-pos meta-id output-cid)` already in closure.
 
-**Drift risks**:
-- Backward-compat with existing consumers of `meta-solution` / `(that-read am pos :term)`
-- Worldview-tagging semantics under bridge updates (Arch A) — bridge must preserve per-worldview projection
-- Migration cost: Arch A is smallest but still requires audit-driven migration of `solve-meta!` call sites
+**Decision**: Reverse-bridge propagator can be co-installed alongside existing bridge at line 1778, with `(tm-cid meta-pos meta-id)` captured at install time. No runtime meta-pos lookup needed. Scope simplifies materially.
 
-**Performance constraints**:
+##### Sub-phase partition (confirmed)
+
+| Sub-phase | Scope | Est. LoC |
+|---|---|---:|
+| **1D.a** | Co-install reverse-bridge propagator per type meta at `install-typing-network:1778`. Bridge watches universe cell at component-key=meta-id (worldview-tagged via `tagged-cell-value`). On universe-cell write, bridge reads value (worldview-filtered) and writes via `that-write net tm-cid meta-pos ':term value`. Closure captures `(tm-cid e id)` at install time. | 150-250 |
+| **1D.b** | Convergence verification — targeted tests for type metas solved via `solve-meta!` from imperative paths (unify, resolution, trait-resolution, qtt, sessions). Verify `(that-read am type-meta-pos :term)` returns the solution post-1D.a regardless of write path. Per Stage 4 methodology: tests required because the phase adds behavior (the reverse-bridge closure). | 50-100 |
+| **1D.c** | Provenance integration — bridge writes attribute-map `:term` with provenance source `'bridge-from-solver` (distinguishable from `'network-propagator` and future `'user-assertion`). Aligns with D.3 §6.1.1 provenance infrastructure for Phase 11b. | 50-100 |
+| **1D.d** | Post-implementation A/B + bench validation — re-run `bench-attribute-record.rkt`; compare to post-cleanup baseline ([`attribute-record-post-cleanup-2026-05-18.txt`](../../racket/prologos/data/benchmarks/attribute-record-post-cleanup-2026-05-18.txt)); verify no suite-level regression vs 110.9s. Capture new baseline file. | 50 |
+| **1D-VAG** | Adversarial gate (TWO-COLUMN catalogue-vs-challenge per workflow.md). Verify drift risks cleared. | — |
+
+Total estimated scope: **~300-500 LoC** net.
+
+##### Drift risks (named at 1D opening)
+
+1. **Speculation-aware bridge firing** — the bridge watches universe cell at component-key=meta-id, which carries worldview-tagged values. Under speculation (current-worldview-bitmask non-zero), the bridge must read the universe-cell value worldview-filtered to its installation-time worldview (typically base). The BSP scheduler is expected to restore the propagator's installation worldview at fire time; this means bridge sees base-committed values only, not branch-tagged ones. Risk: verify this BSP behavior; if not automatic, bridge needs explicit `current-worldview-bitmask = 0` skip-guard.
+
+2. **Bridge fire-pattern + dependent firing precision** — bridge must declare `:component-paths (list (cons type-meta-universe-cell-id meta-id))` so it fires only when THIS meta's universe-cell component changes, not when sibling components change. Phase 1f enforcement applies.
+
+3. **Cascade with existing bridge** — the new reverse-bridge could trigger an idempotent cycle: solve-meta! → universe cell write → reverse-bridge → attribute-map :term write → existing meta-solution-output-fire-fn fires → output cell append → resolution loop reads output cell → calls solve-meta!. The cycle terminates because the value is idempotent (same solution; merge is α-equiv strict no-op when identical). Verify empirically in 1D.b tests.
+
+4. **Backward compat for `(that-read am type-meta-pos :term)` consumers** — currently returns bot for imperatively-solved metas. Post-1D.a, returns the actual solution. Audit for tests/consumers that ASSERT bot expecting imperative solve hasn't reached attribute-map; update or remove.
+
+##### Performance constraints
+
 - No suite-level regression (post-cleanup baseline: 110.9s / 8224 tests / 0 failures)
-- Validation via post-1D A/B re-run against post-cleanup baseline at [`attribute-record-post-cleanup-2026-05-18.txt`](../../racket/prologos/data/benchmarks/attribute-record-post-cleanup-2026-05-18.txt)
-- M5a / M7a should NOT regress materially (current 78.5 / 173 ns)
+- M5a / M7a / E2 axis numbers should not regress materially (current 78.5 / 173 / 89.8 ns)
+- Bridge fire cost amortized over all type meta solves — projected impact <0.005% of total wall per R-tier framing
 
-**Phase 1E re-scoped post-1D** (per tracker row):
-- **1E.a**: `that-*` magic-keyword routing extension (`:mult` / `:level` / `:session`) via `(expr-meta? pos)` dispatch (~200-300 LoC)
+##### Phase 1E re-scoped post-1D (unchanged from §7.6.16.13 earlier framing)
+
+- **1E.a**: `that-*` magic-keyword routing extension (`:mult` / `:level` / `:session`) via `(expr-meta? pos)` dispatch (~200-300 LoC). Mult/level/session route directly to universe cells; no attribute-map facet involved (no Realization B story for these dimensions today; revisit if Track 4D introduces).
 - **1E.b**: Universe-cell specialized-cell-cache — 4th §4.6 framework instance (~200-300 LoC)
 - **1E.c**: Cleanup + post-implementation A/B + parity wiring in [`tests/test-elaboration-parity.rkt`](../../racket/prologos/tests/test-elaboration-parity.rkt) (~100-200 LoC)
 - **1E-VAG**: Adversarial gate
 
-Per-phase estimated scope (post-Arch-A 1D):
+Per-phase scope (post-confirmation):
 
-| Phase | Estimated LoC | Notes |
+| Phase | Est. LoC | Notes |
 |---|---:|---|
-| 1D | 600-900 | Architecture A baseline; B variant ~1500-2200; C variant ~2000-3000+ |
-| 1E.a | 200-300 | Routing extension; `expr-meta?` dispatch + magic keywords |
-| 1E.b | 200-300 | Specialized-cell-cache (§4.6 framework 4th instance) |
-| 1E.c | 100-200 | Cleanup + tests + A/B + parity wiring |
+| 1D.a | 150-250 | Reverse-bridge install |
+| 1D.b | 50-100 | Convergence tests |
+| 1D.c | 50-100 | Provenance integration |
+| 1D.d | 50 | A/B + baseline capture |
+| 1D-VAG | — | Adversarial gate |
+| 1E.a | 200-300 | Routing extension |
+| 1E.b | 200-300 | Specialized-cell-cache (§4.6 4th instance) |
+| 1E.c | 100-200 | Cleanup + tests + A/B |
 | 1E-VAG | — | Adversarial gate |
 
 ### §7.7 Phase 1B deliverables
