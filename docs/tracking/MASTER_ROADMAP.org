@@ -679,6 +679,39 @@ any Series.
 | BSP-LE Track 0 | 2026-03-21 | [[file:2026-03-21_BSP_LE_TRACK0_ALLOCATION_EFFICIENCY_DESIGN.md][Design]] | [[file:2026-03-21_BSP_LE_TRACK0_PIR.md][PIR]] | hot/warm/cold struct split, mutable worklist, batch API. GC eliminated on hot path; wall-time neutral. |
 | CHAMP Performance | 2026-03-21 | [[file:2026-03-21_CHAMP_PERFORMANCE_DESIGN.md][Design]] | [[file:2026-03-21_CHAMP_PERFORMANCE_PIR.md][PIR]] | Owner-ID transients (16× faster at N=2), eq?-first, value-only fast path. Track 0 Phase 5 rehabilitated. |
 | OCapN Interop | 2026-05-04 | [[file:2026-04-29_OCAPN_INTEROP_DESIGN.md][Design]], [[file:2026-04-27_GOBLIN_PITFALLS.md][Pitfalls]] | [[file:2026-05-04_OCAPN_INTEROP_PIR.md][PIR]] | Phase 0 port + Phases 1–21 wire interop & vat bridge. 25 test files / 225 cases. Cross-impl CI gate against ~@endo/ocapn~ (JS). Phases 22+23 DEFERRED (language blockers). [[https://github.com/LogosLang/prologos/pull/28][PR #28]]. |
+| OCapN Pipelining + GC (Phases 37–53) | 2026-05-18 | [[file:2026-04-27_GOBLIN_PITFALLS.md][Pitfalls]] | TODO PIR | Branch ~claude/ocapn-prologos-implementation-auLxZ~. Phases 37–46 (pipelining state machine: senders/receivers + wire-out forwarding + break-forwarding + plain-value-as-error + cross-impl gates). 47 (pipelined-msgs GC). 48 (op:listen notification). 49 (break/plain-value interop). 50 (declarative release queue). 51 (late op:listen + ordering). 52 (gift-table state scaffolding). 53 (OCapN protocols as session types — specification + duality). 188 bridge/pipelining/etc. tests + 23 protocol tests + 3 interop tests all green. Three-vat handoff TRACK in flight: 52b (wire ops) + 54 (multi-conn state) + 55 (outbound dial) + 56 (desc:import-object resolution) + 57 (three-process interop) PENDING. |
+
+** Outstanding work on the OCapN branch
+
+The OCapN branch (~claude/ocapn-prologos-implementation-auLxZ~) ships
+specification and scaffolding for the three-vat handoff, but several
+runtime artifacts remain. Listed in dependency order:
+
+*** Three-vat handoff track (gating: each phase unlocks the next)
+
+| Phase | Status | Description |
+|-------+--------+-------------|
+| 52b | PENDING | Add ~op-deposit-gift~ + ~op-withdraw-gift~ as ~CapTPOp~ variants. Encoder + decoder. Bridge dispatch through ~captp-incoming-with-state~. ~50-site surgery (all predicates / selectors / encoder / decoder). |
+| 54 | PENDING (was "53" before session-types took that slot) | Multi-connection state. A bridge today owns ONE ~BridgeState~ for ONE peer; three-vat handoff routes between TWO peer connections (recipient↔gifter and recipient↔exporter). Need a connection registry keyed by locator. Design questions: shared vat? cross-connection refr scoping? |
+| 55 | PENDING | Outbound dial. ~tcp-testing.prologos~ has ~dial~, but the bridge doesn't *use* it. Recipient must dial the exporter on receipt of ~desc:import-object~. Wires netlayer into bridge state. |
+| 56 | PENDING | ~desc:import-object~ resolution. When recipient gets a ~desc:import-object N~, look up the gift's locator, dial the exporter via netlayer-tcp, send ~op:withdraw-gift~, await reply, register the resulting refr in the recipient's import table. |
+| 57 | PENDING | Three-process interop test (Racket gifter + Racket recipient + Racket exporter, or with Node in one role). End-to-end validation of the full message dance. |
+
+*** Session-types outstanding work (Phase 53 follow-ups)
+
+Phase 53 (commit ~c0efdd5~) defines 8 OCapN protocols as session
+types in ~lib/prologos/ocapn/protocols.prologos~ and verifies them
+via duality + structural tests. The protocols are SPECIFICATIONS;
+the runtime is still imperative. To close the gap:
+
+| Sub-phase | Status | Description |
+|-----------+--------+-------------|
+| 53.a | PENDING | Refine payload types from ~String~ to ~CapTPOp~. Currently every session uses ~String~ as the payload (the wire-byte representation). Refining requires cross-module session-elaboration support — needs to verify Prologos's elaborator can handle ~CapTPOp~ (imported from ~prologos::ocapn::message~) as a session payload type. |
+| 53.b | PENDING | Wire ~CapTPSession~ as the runtime contract for ~captp-incoming-with-state~. Replace ad-hoc match dispatch with a session-typed channel driven by the propagator network. Pattern to follow: ~io-bridge.rkt~ + ~session-runtime.rkt~'s ~FileRead~/~FileWrite~ implementation. Larger refactor: changes the bridge's runtime shape from "match-on-CapTPOp" to "step a session-typed channel." |
+| 53.c | PENDING | Add session-typed Question/Answer + PipelinedQuestion runtime. Same pattern as 53.b but for the questioner side. Requires connections to expose session-typed endpoints. |
+| 53.d | PENDING | Use ~:throws~ on protocols with broken-promise outcomes (e.g., ~QuestionAnswer~ should be ~:throws ErrorReason~ — Phase 17/45/46 already produce ~<Error r>~). Test infrastructure: ~test-session-throws-01.rkt~ already validates ~:throws~ desugaring. |
+| 53.e | PENDING | Cross-impl session-type verification: encode the OCapN spec's session types in a JS-readable form and verify our derived session types' duality matches ~@endo/ocapn~'s expectation. Open question whether @endo/ocapn has any formal session-type spec to cross-check against. |
+| 53.f | DEFERRED | Replace bridge ~BridgeState~ struct with cells on the propagator network keyed by session-type position. Would close the "bridge state on-network" gap raised in DEVELOPMENT_LESSONS and align OCapN with the design mantra. Larger architectural rework. |
 
 * Standalone Design Documents (Not Yet Implemented / Future Scope)
 
