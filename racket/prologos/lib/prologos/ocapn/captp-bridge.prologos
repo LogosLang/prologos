@@ -52,6 +52,14 @@ defn incoming-captp-op
       ;; outbound-questions table). The stateless variant can't do it;
       ;; no-op here, the state-aware dispatcher handles it. Phase 25.
       v
+  | [op-deposit-gift _gid _refr] v ->
+      ;; Phase 52b: stateless variant is a no-op; the gift table
+      ;; lives in BridgeState. State-aware dispatcher handles it.
+      v
+  | [op-withdraw-gift _gid _resolver] v ->
+      ;; Phase 52b: stateless variant is a no-op for the same reason
+      ;; (lookup needs the gift table).
+      v
 
 ;; ===========================================================
 ;; Wire-OUT bridge — Phase 12
@@ -1087,6 +1095,90 @@ defn bs-handle-listen-with-late-fire [tgt resolver v st]
           | some payload ->
               bs-append-pending-out [listener-notify-bytes resolver payload] st
 
+;; ===========================================================
+;; Phase 41/52b: syrup-shape inspectors (moved up from Phase 41
+;; position to support Phase 52b's gift handlers)
+;; ===========================================================
+
+;; Extract the Nat from a syrup-nat OR a non-negative syrup-int (the
+;; wire decoder produces syrup-int for `N+` literals — both shapes
+;; need to be handled). Reuses captp-wire's wire-nat which does the
+;; syrup-int → Nat conversion when the int is non-negative.
+spec tagged-payload-as-nat SyrupValue -> [Option Nat]
+defn tagged-payload-as-nat [p]
+  wire-nat p
+
+;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
+;; None for any other shape (including desc:answer, plain value, list,
+;; etc). 2-deep match (sidesteps pitfall #18).
+spec syrup-as-export-target SyrupValue -> [Option Nat]
+defn syrup-as-export-target
+  | syrup-null       -> [none Nat]
+  | syrup-bool _     -> [none Nat]
+  | syrup-nat _      -> [none Nat]
+  | syrup-int _      -> [none Nat]
+  | syrup-string _   -> [none Nat]
+  | syrup-symbol _   -> [none Nat]
+  | syrup-list _     -> [none Nat]
+  | syrup-refr _     -> [none Nat]
+  | syrup-bytes _    -> [none Nat]
+  | syrup-promise _  -> [none Nat]
+  | syrup-tagged tag p ->
+      match [str::eq tag "desc:export"]
+        | true  -> tagged-payload-as-nat p
+        | false -> [none Nat]
+
+;; ===========================================================
+;; Phase 52b: gift-handoff dispatch
+;; ===========================================================
+;;
+;; Two new CapTPOp variants:
+;;   op:deposit-gift gid refr           — gifter→exporter (one-way)
+;;   op:withdraw-gift gid resolver-pos  — recipient→exporter (replies via op:deliver)
+;;
+;; We're always the EXPORTER in these handlers (we receive the
+;; deposit AND fulfil the withdraw). The gifter/recipient roles
+;; are played by other vats; their wire-out logic is symmetric and
+;; deferred to Phase 54+ (multi-connection state).
+;;
+;; Only desc:export-shaped gifts are accepted; richer gifts
+;; (desc:answer / desc:import-object) need typed gift entries
+;; (deferred to a follow-up).
+
+;; Build the wire bytes for the gift-reply op:deliver:
+;;   <op:deliver <desc:export resolver> <desc:export xid> false false>
+;; resolver is the recipient's chosen export-pos to receive the
+;; capability; xid is the exported-pos we originally got via deposit.
+spec gift-reply-bytes Nat Nat -> String
+defn gift-reply-bytes [resolver xid]
+  wire::encode-record "op:deliver"
+    [cons [syrup-tagged "desc:export" [syrup-nat resolver]]
+      [cons [syrup-tagged "desc:export" [syrup-nat xid]]
+        [cons [syrup-bool false]
+          [cons [syrup-bool false] nil]]]]
+
+;; Handle op:deposit-gift. Extract the export-pos from the gift's
+;; refr; if it's a desc:export refr, record the (gid → xid) entry.
+;; Other refr shapes silently drop (deferred enrichment).
+spec handle-deposit-gift Nat SyrupValue Vat BridgeState -> BridgeStep
+defn handle-deposit-gift [gid gift-refr v st]
+  match [syrup-as-export-target gift-refr]
+    | none -> bridge-step v st
+    | some xid -> bridge-step v [bs-add-gift gid xid st]
+
+;; Handle op:withdraw-gift. Look up the gift; if found, queue the
+;; reply bytes on pending-out for flush by next pump. Gift remains
+;; in the table (not removed — gifts in our model are multi-use;
+;; spec compliance for one-shot semantics would require an
+;; explicit remove here).
+spec handle-withdraw-gift Nat Nat Vat BridgeState -> BridgeStep
+defn handle-withdraw-gift [gid resolver v st]
+  match [bs-lookup-gift gid st]
+    | none -> bridge-step v st
+    | some xid ->
+        bridge-step v
+          [bs-append-pending-out [gift-reply-bytes resolver xid] st]
+
 ;; Phase 53: captp-incoming-with-state's match arms are the
 ;; concrete realization of the `CapTPSession` session type
 ;; (see `prologos::ocapn::protocols`):
@@ -1168,6 +1260,23 @@ defn captp-incoming-with-state
       ;; record the queued deliver's answer-pos for break-forwarding.
       dispatch-incoming-answer qpos args ap v
         [bs-incr-imports [extract-refrs-from-args args] st]
+  | [op-deposit-gift gid gift-refr] v st ->
+      ;; Phase 52b: peer (the gifter) is depositing a capability for
+      ;; recipient. We're the EXPORTER in the three-vat handoff —
+      ;; we store the gift so recipient can later withdraw it.
+      ;; Currently only desc:export refrs are stored; richer refrs
+      ;; (desc:answer / desc:import-object) need a typed gift table
+      ;; (deferred). Unknown shape = silent drop.
+      ;; NB: bound name MUST NOT be `refr` — that's a data
+      ;; constructor in the Refr type and would shadow as a pattern
+      ;; (see pitfall #42).
+      handle-deposit-gift gid gift-refr v st
+  | [op-withdraw-gift gid resolver] v st ->
+      ;; Phase 52b: peer (the recipient) is asking for the gift at
+      ;; gid. If we have it, queue an op:deliver to peer's
+      ;; <desc:export resolver> carrying the gifted refr. Unknown
+      ;; gid = silent drop (peer protocol error; conservative).
+      handle-withdraw-gift gid resolver v st
 
 ;; ===========================================================
 ;; Phase 41: resolution-value inspection + forwarding
@@ -1183,33 +1292,11 @@ defn captp-incoming-with-state
 ;; for now — desc:answer chaining (resolve-to-promise) and local-actor
 ;; forwarding are deferred to a future phase.
 
-;; Extract the Nat from a syrup-nat OR a non-negative syrup-int (the
-;; wire decoder produces syrup-int for `N+` literals — both shapes
-;; need to be handled). Reuses captp-wire's wire-nat which does the
-;; syrup-int → Nat conversion when the int is non-negative.
-spec tagged-payload-as-nat SyrupValue -> [Option Nat]
-defn tagged-payload-as-nat [p]
-  wire-nat p
-
-;; Inspect a SyrupValue. Returns Some K if it's `<desc:export K>`;
-;; None for any other shape (including desc:answer, plain value, list,
-;; etc). 2-deep match (sidesteps pitfall #18).
-spec syrup-as-export-target SyrupValue -> [Option Nat]
-defn syrup-as-export-target
-  | syrup-null       -> [none Nat]
-  | syrup-bool _     -> [none Nat]
-  | syrup-nat _      -> [none Nat]
-  | syrup-int _      -> [none Nat]
-  | syrup-string _   -> [none Nat]
-  | syrup-symbol _   -> [none Nat]
-  | syrup-list _     -> [none Nat]
-  | syrup-refr _     -> [none Nat]
-  | syrup-bytes _    -> [none Nat]
-  | syrup-promise _  -> [none Nat]
-  | syrup-tagged tag p ->
-      match [str::eq tag "desc:export"]
-        | true  -> tagged-payload-as-nat p
-        | false -> [none Nat]
+;; Moved up to Phase 52b position; was here previously to support
+;; build-forward-effect (which still uses them, just later in file).
+;; tagged-payload-as-nat + syrup-as-export-target / -answer-target
+;; now live near bs-handle-listen-with-late-fire so the Phase 52b
+;; gift handlers can use syrup-as-export-target without forward-ref.
 
 ;; Phase 44: same inspection for desc:answer chained-answer resolution.
 ;; Returns Some M if shape is `<desc:answer M>`, else none.
@@ -1929,6 +2016,8 @@ defn op-is-abort?
   | op-gc-export _ _   -> false
   | op-gc-answer _     -> false
   | op-deliver-to-answer _ _ _ _ -> false
+  | op-deposit-gift _ _  -> false
+  | op-withdraw-gift _ _ -> false
 
 ;; Once-aborted bool: was-aborted OR op-is-abort.
 spec or-bool Bool Bool -> Bool

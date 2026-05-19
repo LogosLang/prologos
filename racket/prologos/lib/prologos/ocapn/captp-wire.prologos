@@ -125,6 +125,13 @@ defn encode-op
           [cons args
             [cons [opt-pos ap]
               [cons [opt-pos rm] nil]]]]
+  ;; Phase 52b: gift-handoff messages.
+  | op-deposit-gift gid refr ->
+      wire::encode-record "op:deposit-gift"
+        [cons [syrup-nat gid] [cons refr nil]]
+  | op-withdraw-gift gid resolver ->
+      wire::encode-record "op:withdraw-gift"
+        [cons [syrup-nat gid] [cons [desc-export resolver] nil]]
 
 ;; ===========================================================
 ;; Decoder
@@ -426,6 +433,62 @@ defn dispatch-start-session
   | syrup-bytes _ -> none
   | syrup-promise _ -> none
 
+;; Phase 52b: gift dispatch.
+spec dispatch-deposit-gift-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-deposit-gift-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some gid ->
+        match [wire-nat gid]
+          | none -> none
+          | some gid-n ->
+              match [list-2nd xs]
+                | none -> none
+                | some refr -> some [op-deposit-gift gid-n refr]
+
+spec dispatch-deposit-gift SyrupValue -> [Option CapTPOp]
+defn dispatch-deposit-gift
+  | syrup-list xs -> dispatch-deposit-gift-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-bytes _ -> none
+  | syrup-promise _ -> none
+
+spec dispatch-withdraw-gift-args [List SyrupValue] -> [Option CapTPOp]
+defn dispatch-withdraw-gift-args [xs]
+  match [list-fst xs]
+    | none -> none
+    | some gid ->
+        match [wire-nat gid]
+          | none -> none
+          | some gid-n ->
+              match [list-2nd xs]
+                | none -> none
+                | some res ->
+                    match [unwrap-desc res]
+                      | none -> none
+                      | some r -> some [op-withdraw-gift gid-n r]
+
+spec dispatch-withdraw-gift SyrupValue -> [Option CapTPOp]
+defn dispatch-withdraw-gift
+  | syrup-list xs -> dispatch-withdraw-gift-args xs
+  | syrup-null     -> none
+  | syrup-bool _   -> none
+  | syrup-nat _    -> none
+  | syrup-int _    -> none
+  | syrup-string _ -> none
+  | syrup-symbol _ -> none
+  | syrup-tagged _ _ -> none
+  | syrup-refr _   -> none
+  | syrup-bytes _ -> none
+  | syrup-promise _ -> none
+
 ;; ===========================================================
 ;; Tag dispatcher
 ;; ===========================================================
@@ -452,7 +515,13 @@ defn dispatch-op [tag payload]
                                   | false ->
                                       match [str::eq tag "op:start-session"]
                                         | true  -> dispatch-start-session payload
-                                        | false -> none
+                                        | false ->
+                                            match [str::eq tag "op:deposit-gift"]
+                                              | true  -> dispatch-deposit-gift payload
+                                              | false ->
+                                                  match [str::eq tag "op:withdraw-gift"]
+                                                    | true  -> dispatch-withdraw-gift payload
+                                                    | false -> none
 
 spec syrup-to-op SyrupValue -> [Option CapTPOp]
 defn syrup-to-op

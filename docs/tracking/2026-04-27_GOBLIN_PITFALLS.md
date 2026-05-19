@@ -1930,6 +1930,93 @@ unfamiliar to those coming from `pi-calculus`-style ASCII session
 notation. The full grammar is in `racket/prologos/macros.rkt`
 around line 1306+ (`parse-session-body`).
 
+---
+
+### #42 — Variable name in pattern silently shadows a data constructor (2026-05-18, real bug, **dangerous**)
+
+**Symptom.** Wrote a match arm that takes a `SyrupValue` and binds
+it as `refr`:
+
+```
+| [op-deposit-gift gid refr] v st ->
+    handle-deposit-gift gid refr v st
+```
+
+Looked fine. Compiled without error. Function got "defined." But at
+runtime, `handle-deposit-gift` always received `prologos::ocapn::captp-bridge::refr`
+(the data constructor itself, not the bound value).
+
+**Root cause.** `refr` is the constructor of the `Refr` data type
+(defined elsewhere in the same module). In Prologos's pattern
+elaborator, when a name is in scope as a constructor, using it in
+PATTERN position resolves to the constructor — NOT as a fresh
+variable binding. The result for `[op-deposit-gift gid refr]`
+is a NESTED pattern: op-deposit-gift's 2nd field is matched
+against `refr`-the-constructor's shape, with no fields bound.
+
+The elaborator output for the broken arm:
+```
+| op-deposit-gift a b -> [reduce b | refr c d -> [...]]
+```
+
+i.e., it took the 2nd field and pattern-matched against
+`refr c d` (the 2-arg Refr constructor). The body then referenced
+`prologos::ocapn::captp-bridge::refr` because the symbol `refr` in
+the BODY resolves to the constructor too (no fresh binding from
+the broken pattern).
+
+**Diagnosis is hard:**
+- Compile succeeds.
+- Runtime call doesn't error — `handle-deposit-gift` just receives
+  the constructor function value as its 2nd argument.
+- Downstream call to `syrup-as-export-target refr` matches NONE of
+  the `syrup-*` arms (constructor is not a SyrupValue) and either
+  errors weirdly OR silently produces the wrong path.
+
+**Workaround.** RENAME the pattern variable to anything that
+doesn't collide with a constructor:
+
+```
+| [op-deposit-gift gid gift-refr] v st ->
+    handle-deposit-gift gid gift-refr v st
+```
+
+The convention in the codebase already avoids `refr` as a
+parameter name in this module — body parameters use `r` (short),
+`tgt-refr`, etc. New code should follow.
+
+**Why this hadn't been hit earlier.** The `refr` constructor was
+introduced in Phase 34a (single-constructor wrapping refr-kind +
+id). Until Phase 52b, no handler pattern needed to bind a
+SyrupValue field named `refr` — most CapTPOp variants use `args`,
+`tgt`, `payload`, `pos`, etc.
+
+**Discovered.** OCapN Phase 52b (2026-05-18). Cost ~10 minutes
+diagnosing via elaborator-output trace inspection (the printed
+`[reduce b | refr c d -> ...]` was the smoking gun).
+
+**Verdict.** Real elaborator behaviour, possibly bug. The shadow
+direction is arguably backwards — patterns SHOULD bind fresh
+names by default and require explicit syntactic marker to invoke
+a constructor (e.g., uppercase, or sigil). Languages that do
+this right include Standard ML (variable names that happen to be
+constructors silently bind — same hazard) vs Haskell (constructor
+names MUST start with uppercase — disambiguates). Prologos's
+choice to resolve names as constructors-when-available is a
+silent footgun.
+
+**Suggested mitigation.** Elaborator could WARN when a pattern
+variable matches a constructor name in scope; the user explicitly
+suppresses with a sigil or by uppercasing.
+
+**Codify-it ask.** Any new handler arm should grep for existing
+constructor names in the module(s) it imports and pick variable
+names that don't collide. For OCapN: avoid `refr`, `listener`,
+`q-entry`, `pipe-msg`, `bridge-state`, `bridge-step`, `conn-state`,
+`conn-step`, `conn-ask`, `conn-release`, `pump-result`,
+`gc-export-req`, `forward-effect`. Use `r`, `r-syrup`, `l`,
+`q`, `pm`, `bs`, `cs`, `cr`, `pr`, etc.
+
 
 
 
