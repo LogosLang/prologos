@@ -691,7 +691,8 @@ runtime artifacts remain. Listed in dependency order:
 
 | Phase | Status | Description |
 |-------+--------+-------------|
-| 52b | PENDING | Add ~op-deposit-gift~ + ~op-withdraw-gift~ as ~CapTPOp~ variants. Encoder + decoder. Bridge dispatch through ~captp-incoming-with-state~. ~50-site surgery (all predicates / selectors / encoder / decoder). |
+| 52b | DONE-BUT-NONCANONICAL | Added ~op-deposit-gift~ + ~op-withdraw-gift~ as dedicated ~CapTPOp~ variants + wire encoder/decoder + bridge dispatch. **NOTE: ~@endo/ocapn~ DOES NOT use dedicated wire ops for gift handoff — it dispatches via method calls on the bootstrap object (export 0) with signed ~HandoffReceive~ envelopes (~ocapn.js:528+~).** Our wire ops are a Prologos-extension that won't interop with canonical peers. Decision pending whether to (a) revert + redesign as bootstrap method calls, or (b) keep as fast-path + add bootstrap-method-call code path alongside. |
+| 52c | PENDING (was 52b interop) | Cross-impl gate against ~@endo/ocapn~. Requires (a) deciding whether 52b's wire ops are kept or replaced; (b) IF replaced, implementing the bootstrap-method-call dispatch path. |
 | 54 | PENDING (was "53" before session-types took that slot) | Multi-connection state. A bridge today owns ONE ~BridgeState~ for ONE peer; three-vat handoff routes between TWO peer connections (recipient↔gifter and recipient↔exporter). Need a connection registry keyed by locator. Design questions: shared vat? cross-connection refr scoping? |
 | 55 | PENDING | Outbound dial. ~tcp-testing.prologos~ has ~dial~, but the bridge doesn't *use* it. Recipient must dial the exporter on receipt of ~desc:import-object~. Wires netlayer into bridge state. |
 | 56 | PENDING | ~desc:import-object~ resolution. When recipient gets a ~desc:import-object N~, look up the gift's locator, dial the exporter via netlayer-tcp, send ~op:withdraw-gift~, await reply, register the resulting refr in the recipient's import table. |

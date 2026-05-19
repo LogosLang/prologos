@@ -2017,6 +2017,94 @@ names that don't collide. For OCapN: avoid `refr`, `listener`,
 `gc-export-req`, `forward-effect`. Use `r`, `r-syrup`, `l`,
 `q`, `pm`, `bs`, `cs`, `cr`, `pr`, etc.
 
+---
+
+### #43 — Wire-format invented before checking peer reference impl (2026-05-18, methodology bug, **costly**)
+
+**Symptom.** Phase 52b shipped dedicated `op:deposit-gift` and
+`op:withdraw-gift` wire ops with full encoder/decoder/dispatch
+infrastructure (~50-site CapTPOp surgery). Cross-impl gate check
+revealed that `@endo/ocapn` does NOT use those wire ops — gift
+handoff in the canonical implementation is a METHOD CALL on the
+bootstrap object (export 0):
+
+```javascript
+// from @endo/ocapn/src/client/ocapn.js
+return Far(`${label}:bootstrap`, {
+    'fetch': ...
+    'deposit-gift': (giftId, gift) => {...},
+    'withdraw-gift': signedHandoffReceive => {...},
+});
+```
+
+i.e., gifts are exchanged as:
+```
+<op:deliver <desc:export 0> [(symbol deposit-gift) gift-id gift] <desc:answer N> false>
+```
+
+NOT as:
+```
+<op:deposit-gift gift-id gift>
+```
+
+Our wire ops are a Prologos-extension that won't interop with
+canonical peers.
+
+**Root cause.** Phase 52b's design was derived from the high-level
+gift-handoff CONCEPT (deposit / withdraw operations) and assumed
+the wire format would mirror the conceptual operations — same
+shape as `op:gc-export`, `op:listen`, etc. Skipped the step of
+checking how `@endo/ocapn` actually encodes the handoff over the
+wire. The skipped check is the workflow rule:
+"External cross-impl gates are mandatory test infrastructure for
+protocol ports" — every wire-out behavior facing peer should
+round-trip through the foreign reference at least once.
+
+**The proximate cost.** ~50-site `CapTPOp` extension across
+`message.prologos`, `captp-wire.prologos`, `captp-bridge.prologos`,
+plus 11 new tests. ~30 minutes implementation + 5 minutes
+diagnosis when the cross-impl check finally happened.
+
+**The deeper cost.** The pitfall_FIX_ requires deciding between:
+(a) revert Phase 52b entirely — `BridgeState`'s gift-table
+    accessors stay (they're useful regardless), but the wire ops
+    + dispatch get removed; redesign handoff as bootstrap-method
+    call dispatch in the existing `op-deliver` arm.
+(b) keep Phase 52b as a Prologos-extension fast-path; add
+    bootstrap-method-call dispatch alongside for spec compat.
+(c) document the deviation and defer the cross-impl decision.
+
+Both (a) and (b) require Phase 52 (the gift TABLE) to stay; only
+the WIRE-LEVEL surface is in question.
+
+**Workflow rule violated.** From `.claude/rules/workflow.md`:
+> External cross-impl gates are mandatory test infrastructure for
+> protocol ports. Pattern: write a generator script that runs
+> inside the foreign implementation, commit its output as a
+> fixture, add a CI step `git diff --exit-code` on the fixture.
+> Hand-written wire vectors are a last-resort substitute.
+
+Phase 52b's tests were entirely hand-written internal round-trips.
+No `@endo/ocapn` peer was consulted. The cross-impl check should
+have been the FIRST step of Phase 52b, not the last.
+
+**Prevention.** For ANY phase adding wire-level surface area to a
+ported protocol: Phase 0 of that phase is "search the reference
+implementation for the OP code (or feature) and confirm the wire
+shape." If the reference uses a different model, that's the
+design input, not an after-the-fact correction.
+
+**Discovered.** OCapN Phase 52b post-implementation check
+(2026-05-18). The Phase 52b commit (`6d10c58`) is now flagged as
+DONE-BUT-NONCANONICAL in MASTER_ROADMAP.org pending the (a)/(b)/(c)
+decision.
+
+**Verdict.** Methodology bug, not a Prologos bug. The technical
+infrastructure (Prologos's data-extension support, the wire codec
+mechanism) all worked correctly — the failure was upstream of code.
+Codifying here so the next protocol-port phase starts with the
+foreign-impl check before designing the wire surface.
+
 
 
 
