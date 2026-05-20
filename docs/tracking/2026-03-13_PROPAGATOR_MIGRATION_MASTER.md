@@ -596,6 +596,55 @@ All three flow from the same architectural act: making cells primary (retiring p
 
 ---
 
+### Track 13: Stratum-Handler Mechanism + Scheduler State as On-Network Cells
+
+**Goal**: Migrate the stratum-handler registry (currently `stratum-handlers` box at `propagator.rkt:2827`, off-network) and broader scheduler state onto the propagator network as specialized scheduler-state cells. Frames propagator networks + scheduler as **compiler technology in their own right** — networks are first-class IR (per SH Series Track 1's `.pnet`); scheduler state should be IR-native, not Racket-box bookkeeping.
+
+**Origin** (2026-05-20): surfaced during PPN 4C Addendum Phase 2A.b mini-design dialogue. User pushback on the handler-approach in general — "handlers/scaffolding hiding behavior" + side-effecting nature concerned — crystallized the operational principle: **"anything that is not on-network is scaffolding."** Off-network ≡ scaffolding by definition; every off-network mechanism is a retirement candidate.
+
+**Scope** (Stage 0 — pending Stage 1 research):
+
+Primary:
+- `stratum-handlers` box (`propagator.rkt:2827`) → specialized scheduler-state cell (per `DESIGN_PRINCIPLES.org` §10.3.A taxonomy: third cell category alongside propagator-state and topology-state)
+- `register-stratum-handler!` becomes functional cell-write
+- BSP outer-loop's value/topology-tier processing reads cells, not box
+
+Affected handlers (7+ registered as of 2A.a, more incoming):
+- 4 topology-tier handlers (constraint-propagators / elaborator / narrowing / sre)
+- `process-naf-request` (relations.rkt:116)
+- classify-inhabit handler (typing-propagators.rkt)
+- `process-retraction` (PPN 4C Addendum 2A.a, landed 2026-05-20)
+- `process-resolution` (PPN 4C Addendum 2A.b, in flight)
+
+**Independent concern (NOT in PM 13's scope)**: handler BODY side-effects (off-network state mutation within handler bodies — `current-prop-net-box`, `current-resolution-executor-pure`, `set-box!` on enet). These are addressed by **PPN 4C Parent Phase 4** (CHAMP→cell) + **PM Track 12** (parameter→cell). PM 13 addresses the REGISTRY + INVOCATION MECHANISM only.
+
+**Research questions** (Stage 0/1):
+1. Is handler registry truly scheduler-state, or topology-state? (Registration ≈ adding computation to network)
+2. Per-network vs network-wide scope? (Current: box is global; cells could be per-network or scope-walked)
+3. Handler representation: opaque procedure-in-cell (Option α — small refactor) vs declarative cell+propagator graph (Option β — deeper redesign; aligns with NTT vision + `.pnet` serialization)
+4. Interaction with `.pnet` IR (SH Series Track 1) — handlers must serialize cleanly
+5. Generalization: worklist, fuel-cost, worldview-cache already on-network; ALL scheduler state migrates piecemeal?
+
+**Sequencing dependencies**:
+- After PM Track 12 (scope primitive informs registry scope semantics)
+- After PPN 4C Parent Phase 4 (CHAMP retirements clear the way for clean cell representation)
+- Coordinates with SH Series Track 1 (`.pnet` IR constraints)
+- Potentially absorbed by NTT implementation (if NTT's stratification syntax (`:fiber`) covers handler dispatch declaratively)
+
+**Anti-gating signals**:
+- If NTT design absorbs stratification, PM 13 may dissolve into NTT implementation
+- If PM 12 + Parent Phase 4 retire all handler-body side-effects, "handler-as-scaffolding" intuition may be met structurally without registry migration
+
+**Implementation note**: [`docs/tracking/2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md) — Stage 0 SEED note capturing the dialogue framing, compiler-technology vision, affected sites, research questions, cross-track relationships. **Stage 0/1 research conversation required before Stage 3 design.**
+
+**Codification candidate when PM 13 lands**: "Off-network ≡ scaffolding" as operational principle (3+ data points observed: PPN 4C box-bridges, PM 12 parameter snapshots, PM 13 handler registry). Codify in `.claude/rules/on-network.md` after PM 13's research validates the framing.
+
+**Risk**: Medium-High. Touches the BSP outer-loop's stratum dispatch (core scheduler machinery). Migration must preserve 7+ handler semantics. SH Series Track 1's `.pnet` IR constraints may force Option β (handler-as-data) which is foundational redesign.
+
+**Design document**: TBD (Stage 1 research → Stage 2 audit → Stage 3 design cycle pending).
+
+---
+
 ## Track Dependency Graph
 
 ```

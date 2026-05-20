@@ -174,7 +174,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2A | Register S(-1), L2 as stratum handlers (L1 already cell-based per S2.b-iv) | 🔄 | Mini-design + audit 2026-05-19 (§8.7); revised scope: 2 cells, not 3 (cell-ids 13+14); §4.6 framework declarations. Sub-phases below. |
 | 2A.0 | Precursor — allocate cell-ids 13+14 in make-prop-network with §4.6 declarations; no behavior change | ✅ | commit `a8ef9e3f` (2026-05-19) — Cell-id 13: retraction-stratum-request (set-union merge); cell-id 14: resolution-stratum-request (list-append merge). Added `make-warm-general-meta` to specialized-cells.rkt (4th §4.6 framework instance; first warm-tier usage). Suite: 8224 tests / 107.3s / 0 failures. Cells dormant pending 2A.a + 2A.b handler wiring. |
 | 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.a (2026-05-20). Approach C (refined Option d): pure handler on prop-net (scoped cells only); meta-info + id-map retraction deferred to Parent Phase 4 via worldview-filtering at read time; 6 UNSAFE reader sites migrated to worldview-aware lookups; 4 STUB callbacks retired as dead code (`current-prop-id-map-read/set` + `current-prop-meta-info-read/set`); `record-assumption-retraction` pure function replaces bang version; tests migrated (process-retraction direct + record-assumption-retraction API surface + integration via run-to-quiescence); `retraction-parity` axis added to test-elaboration-parity. **Full suite: 8228 tests / 109.1s / 0 failures.** Adversarial VAG passed. |
-| 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | ⬜ | |
+| 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | 🔄 | Mini-design + mini-audit persisted at §8.7.b (2026-05-20). Handler-as-scaffolding architectural concern surfaced during mini-design dialogue; deeper concern captured as **NEW PM Master Track 13** ([`2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md)). 2A.b proceeds with Option A (handler approach matching established prior art for 6 existing + 2A.a's process-retraction); box-bridge body side-effects captured back into Parent Design Doc Phase 4 row item (viii). Operational principle codified: "Anything that is not on-network is scaffolding." |
 | 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ⬜ | |
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
 | 2V | Vision Alignment Gate Phase 2 | ⬜ | |
@@ -3413,6 +3413,248 @@ If parity tests reveal coordination issues, the resolution surfaces at test time
 - **Adversarial three-column framing at every mini-design + mini-audit** (not just VAG gate close): catalogue / challenge / status. Catalogue is rationalization; challenge is where drift surfaces. Codification candidate (1 data point this session, watching for next instance): "The adversarial framing must be actively forced at EVERY application of P/R/M/S — Stage 4 mini-design, mini-audit, mid-flight principles challenge, VAG. The catalogue→challenge transition is NEVER natural; without explicit two-column or three-column discipline, the gate catalogues and misses drift."
 - **STUB-labeled dead code IS code smell** (Track 8 B2b STUB parameters survived since the callback retirement): "Each pass that touches a file should leave it cleaner than it found it. STUB labels with no consumers should be retired when the next touching pass occurs, not left as inertia." Watching-list candidate.
 - **Pure functional API beats imperative-bang API** when state is on-network: `record-assumption-retraction` (no bang) is more aligned than `record-assumption-retraction!` (with bang implying box mutation). The pure function lets callers commit at their existing imperative boundaries.
+
+### §8.7.b Phase 2A.b Mini-design + Mini-audit (2026-05-20)
+
+Per Stage 4 Per-Phase Protocol: opening mini-design + mini-audit cycle for Phase 2A.b (`process-resolution` handler + `add-readiness-set-latch!` migration + `current-ready-queue-cell-id` parameter retirement). Outcomes persist into this design doc per refined Stage 4 methodology.
+
+Charter: register L2 resolution as BSP value-tier stratum handler on `resolution-stratum-request-cell-id` (cell 14, allocated in 2A.0); migrate readiness propagators to write cell-14 instead of `ready-queue` parameter cell; retire `current-ready-queue-cell-id` parameter (small PM 12 contribution directly tied to 2A's charter per §8.7.3).
+
+#### §8.7.b.1 Architectural reframing: handler approach surfaces as scaffolding concern
+
+During mini-design dialogue 2026-05-20, user-direction surfaced a **deeper architectural concern about the handler approach itself** (not specific to 2A.b — affects all 7+ shipped/proposed stratum handlers including 2A.a's `process-retraction`). The concern: handlers/scaffolding hiding behavior; side-effecting nature inside handler bodies; the `stratum-handlers` box at `propagator.rkt:2827` is off-network.
+
+**Operational principle crystallized**:
+> *"Anything that is not on-network is scaffolding."*
+
+This is the mantra in its sharpest form. Off-network ≡ scaffolding by definition; every off-network mechanism is a retirement candidate with an explicit retirement plan attached.
+
+**Two distinct levels of concern** identified:
+
+1. **Handler body side-effects** — `current-prop-net-box` read + `current-resolution-executor-pure` read + `set-box! net-box` mutation inside handler. **Structural until PPN 4C Parent Phase 4 + PM Track 12 land** — actions inherently touch enet state.
+2. **Handler registration/invocation mechanism** — `stratum-handlers` box + BSP outer-loop's imperative dispatch. **Separate architectural concern**; affects ALL 7+ handlers (4 topology + classify-inhabit + S1 NAF + process-retraction (2A.a) + process-resolution (2A.b)).
+
+**Decision**: 2A.b proceeds with handler approach (Option A from dialogue) — matches established prior art (6 existing handlers + 2A.a's process-retraction shipped this week); completes Phase 2 charter (orchestration unification: BSP outer-loop iterates registered handlers); introducing a different mechanism mid-charter would create heterogeneity within the addendum.
+
+**Level 2 concern captured as NEW PM Track 13** — Stratum-Handler Mechanism + Scheduler State as On-Network Cells. See [`2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md) (Stage 0 SEED note; pending Stage 1 research). Track 13 row added to PM Master.
+
+**Level 1 concern (body side-effects) captured back into PPN 4C Parent Design Doc Phase 4 row** — see [`2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) §2 row "Phase 4" item (viii). The handler's box-bridge pattern is the same scaffolding as `with-speculative-rollback`; same Phase 4 (CHAMP→cell) + PM 12 (parameter→cell) retirement path.
+
+#### §8.7.b.2 Mini-audit findings (codebase grounding)
+
+**Affected sites** (grep-verified 2026-05-20):
+
+| Site | File:Line | Role | Migration |
+|---|---|---|---|
+| `add-readiness-set-latch!` rq-cid lookup | metavar-store.rkt:443 + threshold write at :565 | Writes latch threshold output to ready-queue | Change `rq-cid` from `(current-ready-queue-cell-id)` → well-known `resolution-stratum-request-cell-id` |
+| `read-ready-queue-actions` rq-cid lookup | metavar-store.rkt:2245 | Reads tagged-entry-wrapped actions; consumer of L1/L2 in `run-stratified-resolution-pure` | Change `rq-cid` similarly. Becomes effectively no-op post-2A.b (handler drains during BSP); 2B retires entirely. |
+| `current-ready-queue-cell-id` parameter | metavar-store.rkt:1706 (defn) + :1370 (with-fresh-meta-env reset) + :2967 (reset-meta-store! allocation) + :221 (provide) + batch-worker.rkt:259 (test scaffolding) | Per-command cell-id holder | **RETIRE** entirely (well-known cell-14 replaces) |
+| `test-readiness-propagator.rkt` | :271, :281, :307, :316 (5 sites) | Tests directly reference `current-ready-queue-cell-id` | Migrate to cell-14 reads |
+
+**Action shape preserved** (per §7.5.12.9 step 5):
+- `add-readiness-set-latch!` writes `(list (tagged-entry (action-thunk) aid))` to rq-cid
+- merge: list-append accumulates across multiple latches
+- `read-ready-queue-actions` unwraps tagged-entries before dispatch
+- Cell-14 uses same shape: list-append merge + initial `'()` (per `resolution-stratum-merge` at propagator.rkt:699-704)
+
+**Executor parameters audit**:
+- `current-resolution-executor` (metavar-store.rkt:1145) — imperative `(action) → void`; used by `execute-resolution-actions!` (line 1151) called only from `run-stratified-resolution!` (line 2174, dead code path per checkpoint)
+- `current-resolution-executor-pure` (metavar-store.rkt:1148) — pure `(enet × action) → enet*`; used by `run-stratified-resolution-pure` line 2229 (production path)
+- Both installed at driver.rkt:2705 + 2707
+
+**`resolution-execute-action-pure` signature** (resolution.rkt:286): `(enet × action) → enet*`. Fundamentally operates on **elab-network** (calls `read-constraint-by-cid-pure`, `write-constraint-to-store-pure`, `retry-unify-constraint-pure`, `resolve-trait-constraint-pure`, `resolve-hasmethod-constraint-pure`, `solve-meta-core-pure`). All touch enet state.
+
+**Per-command lifecycle preservation**: ready-queue is per-command (allocated in reset-meta-store!). Cell-14 is network-wide. `reset-meta-store!` creates fresh elab-network on each command via `(make-elaboration-network)` → fresh prop-net → cell-14 initialized to `'()`. **Per-command semantic preserved structurally** ✓.
+
+#### §8.7.b.3 Architectural honesty — 2A.b CANNOT achieve zero-scaffolding cut
+
+2A.a's `process-retraction` was pure on prop-net via Option (d) — scoped-cell retraction operates entirely on prop-net cells; meta-info + id-map CHAMP retraction deferred to Parent Phase 4 via worldview-filtering. **2A.b cannot replicate this**: actions invoke `resolution-execute-action-pure (enet × action) → enet*` — fundamentally needs enet access (meta-info CHAMP, id-map, scoped cells via solve-meta-core-pure).
+
+The box-bridge is required scaffolding for this phase, labeled with explicit retirement to **Parent Phase 4** (CHAMP→cell promotion dissolves enet/pnet boundary; the handler's `(elab-network-rewrap (unbox net-box) net)` + `set-box! net-box enet*` pattern dissolves) + **PM Track 12** (parameter→cell module loading retires `current-prop-net-box` + `current-resolution-executor-pure` parameter reads).
+
+#### §8.7.b.4 Deliverables
+
+1. **`process-resolution` handler** in metavar-store.rkt:
+
+```racket
+;; PPN 4C 2A.b (2026-05-20): L2 resolution stratum as BSP value-tier handler.
+;; Registered on resolution-stratum-request-cell-id (cell 14). Reads
+;; tagged-entry-wrapped action descriptors written by readiness propagators
+;; (via add-readiness-set-latch! migrated to write cell-14); invokes pure
+;; resolution executor (current-resolution-executor-pure) on each action;
+;; BSP outer-loop auto-clears cell to '() via #:reset-value after handler.
+;; If actions cascade more S0 work (e.g., solve-meta cascade), BSP outer-loop's
+;; restart-from-outer-loop fires S0 → readiness latches → cell-14 fills again.
+;;
+;; Scaffolding: box-bridge via current-prop-net-box + current-resolution-executor-pure
+;; parameter. Box-bridge labeled scaffolding for Parent Phase 4 (CHAMP→cell)
+;; + PM Track 12 (parameter→cell). Cannot be retired in 2A.b because
+;; resolution-execute-action-pure fundamentally operates on elab-network
+;; (meta-info CHAMP, id-map, scoped cells).
+;;
+;; Handler approach itself surfaced as architectural concern during 2A.b
+;; mini-design (2026-05-20); captured as PM Master Track 13 for separate
+;; research + design cycle. See §8.7.b.1 + PM 13 implementation note.
+;;
+;; See D.3 §8.7.b for full mini-design + audit (incl. architectural-honesty
+;; trade-off vs 2A.a's pure handler).
+(define (process-resolution net pending-actions)
+  (cond
+    [(null? pending-actions) net]
+    [else
+     (define net-box (current-prop-net-box))
+     (define executor (current-resolution-executor-pure))
+     (cond
+       [(or (not net-box) (not executor)) net]
+       [else
+        ;; Rewrap elab-net with BSP's net so executor's writes cascade on it
+        (define enet (elab-network-rewrap (unbox net-box) net))
+        ;; Unwrap tagged-entry actions; thread enet through for/fold
+        (define enet*
+          (for/fold ([e enet]) ([entry (in-list pending-actions)])
+            (define action (if (tagged-entry? entry) (tagged-entry-value entry) entry))
+            (executor e action)))
+        ;; Update box for elab-net side consumers; return updated prop-net
+        (set-box! net-box enet*)
+        (elab-network-prop-net enet*)])]))
+
+(register-stratum-handler! resolution-stratum-request-cell-id
+                            process-resolution
+                            #:tier 'value
+                            #:reset-value '())
+```
+
+2. **`add-readiness-set-latch!` rq-cid migration** — change line 443 from `(define rq-cid (current-ready-queue-cell-id))` to `(define rq-cid resolution-stratum-request-cell-id)`. Threshold write at line 565 unchanged (same shape).
+
+3. **`read-ready-queue-actions` rq-cid migration** — change line 2245 similarly. Function becomes effectively no-op post-2A.b (cell drained by handler before this reads); 2B retires entirely with `run-stratified-resolution-pure`.
+
+4. **`current-ready-queue-cell-id` parameter RETIREMENT**:
+   - Delete parameter definition (metavar-store.rkt:1706)
+   - Delete `with-fresh-meta-env` reset binding (metavar-store.rkt:1370)
+   - Delete per-command allocation in `reset-meta-store!` (metavar-store.rkt:2967)
+   - Delete provide (metavar-store.rkt:221)
+   - Delete `batch-worker.rkt:259` parameterize binding
+   - Delete `test-readiness-propagator.rkt` direct references (5 sites) — migrate to cell-14 reads
+
+5. **`test-readiness-propagator.rkt` migration** — ~25-40 LoC across 5 test sites; mirror 2A.a's test migration approach (test against `resolution-stratum-request-cell-id` reads instead of `current-ready-queue-cell-id` parameter).
+
+6. **`resolution-parity` axis** in `test-elaboration-parity.rkt` — 2-3 live integration smoke tests verifying readiness latch → cell-14 → handler → execution end-to-end.
+
+7. **Driver-side `current-retracted-assumptions` parameter init** (driver.rkt:467-468) — STILL DEFERRED to 2B (per Q3 in 2A.a dialogue; alongside `run-stratified-resolution-pure` retirement).
+
+#### §8.7.b.5 Scaffolding retirement targets — explicit captures
+
+Per workflow.md "scaffolding with named retirement plan" discipline + user direction 2026-05-20 ("Any retirement work that is put on PPN 4C Parent Phase 4, should be captured back into the Parent Design document"):
+
+**Retiring in 2A.b (this phase)**:
+
+| Item | Where in code | Reason |
+|---|---|---|
+| `current-ready-queue-cell-id` parameter + per-command alloc + provides + with-fresh-meta-env binding + batch-worker.rkt:259 binding | metavar-store.rkt:1706, 1370, 2967, 221 + batch-worker.rkt:259 | Per-command cell replaced by well-known cell-14 (small PM 12 contribution directly tied to 2A's charter; § §8.7.3 user-direction "don't add legacy-shaped cells for PM 12 to migrate") |
+
+**Deferred to PPN 4C Addendum Phase 2B** (per §8.4):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `read-ready-queue-actions` function | metavar-store.rkt:2244 | Becomes no-op post-handler-drain; retire alongside `run-stratified-resolution-pure` orchestrator |
+| `current-resolution-executor` imperative parameter + `execute-resolution-actions!` | metavar-store.rkt:1145 + :1151 | Only used by dead `run-stratified-resolution!` path; retire with orchestrator |
+| `run-stratified-resolution-pure` orchestrator | metavar-store.rkt:2200 | Replaced by BSP outer-loop's value-tier iteration (handlers from 2A.a + 2A.b) |
+
+**Deferred to PPN 4C Parent Phase 4** (CHAMP retirement; **captured back into parent design doc §2 row "Phase 4" item (viii)** per user direction 2026-05-20):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `set-box! net-box enet*` in handler body | new code (this phase) | Bridge dissolves post-CHAMP-promotion; enet/pnet boundary becomes single cell-network |
+| `(elab-network-rewrap (unbox net-box) net)` pattern | new code | Same — rewrap pattern unnecessary when meta-info + id-map are cells |
+
+**Deferred to PM Track 12** (per `docs/tracking/2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 12 row):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `current-prop-net-box` parameter read in handler | new code (this phase) | Parameter→cell migration retires the box-bridge |
+| `current-resolution-executor-pure` parameter read in handler | new code (this phase) | Parameter→cell migration (or PPN 4C Parent Phase 4 if executor migrates with CHAMP retirement — TBD per PM 12/Phase 4 mini-design coordination) |
+
+**Captured for PM Track 13** (NEW track, added 2026-05-20 — see [`2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md)):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `stratum-handlers` box | propagator.rkt:2827 | Off-network registry. Affects ALL 7+ handlers (4 topology + classify-inhabit + S1 NAF + process-retraction + process-resolution). Stage 0 SEED; pending Stage 1 research. |
+| `register-stratum-handler!` imperative API | propagator.rkt:2829 | Becomes functional cell-write after PM 13 migration |
+| BSP outer-loop's imperative handler dispatch | propagator.rkt:3061 | Reads registry cell instead of box after PM 13 |
+| Handler-as-procedure vs handler-as-data design question | architectural | Stage 1 research decides (Option α: opaque procedure in cell; Option β: declarative transition graph) |
+
+#### §8.7.b.6 Mantra check (adversarial three-column)
+
+| Word | Catalogue | Adversarial challenge | Status |
+|---|---|---|---|
+| All-at-once | ✓ Cell-14 accumulates ALL ready actions via list-append merge | Could merge be more structured? List-append preserves ORDER which may matter for resolution sequencing. Genuine. | ✓ |
+| All in parallel | ✓ Readiness latches fire in parallel during S0; handler executes via for/fold | Could handler EXECUTE actions in parallel? Actions touch enet state (solve-meta cascades); sequential is existing semantic; parallel would race. Sequential within-handler is correct. | ✓ |
+| Structurally emergent | ✓ Cell-14's non-empty state IS readiness signal; BSP value-tier iteration drives handler | Are we keeping any imperative pull-from-queue pattern? `read-ready-queue-actions` in `run-stratified-resolution-pure` stays — but reads empty cell-14 post-handler-drain → no-op. NOT a parallel-mechanism violation. | ✓ |
+| Information flow | ✓ Cell write → handler read → executor invocation → cell writes cascade | **VIOLATION**: handler reads `current-prop-net-box` parameter (PM 12 scope); handler reads `current-resolution-executor-pure` parameter (PM 12 scope); handler `set-box!`-es elab-net (Parent Phase 4 scope). **Labeled scaffolding; captured in §8.7.b.5 retirement table + Parent Design Doc §2 row "Phase 4" item (viii).** | ◐ |
+| ON-NETWORK | ✓ Cell-14 on-network; per-command parameter retires | **VIOLATION**: box-bridge for enet state coupling — UNAVOIDABLE because actions touch elab-net. Same scaffolding pattern as `with-speculative-rollback`. Labeled scaffolding with explicit Parent Phase 4 + PM 12 retirement. Additional MECHANISM concern (handlers themselves as scaffolding) captured as PM 13 (new). | ◐ |
+
+**Honest verdict**: 2 mantra word VIOLATIONS, both labeled scaffolding with explicit retirement plans (Parent Phase 4 + PM 12). This is structural — 2A.b's mechanism inherently bridges to elab-net until those phases land. **The deeper handler-mechanism concern is captured as PM 13** (separate track; doesn't gate 2A.b).
+
+#### §8.7.b.7 Principles check (adversarial three-column)
+
+| Principle | Catalogue | Adversarial challenge | Status |
+|---|---|---|---|
+| Stratified Propagator Networks | ✓ L2 resolution joins existing BSP value-tier strata | Genuinely aligned. | ✓ |
+| Correct by Construction | ✓ BSP auto-clear via `#:reset-value '()` is structural | Cell-clear is structural; box-bridge `set-box!` is discipline-maintained. Acknowledged scaffolding. | ◐ |
+| Cell/Propagator/Scheduler Orthogonality | ✓ Cell + handler + scheduler clean at boundary | **VIOLATION**: handler reads off-network parameters (current-prop-net-box, current-resolution-executor-pure). Would NOT survive a scheduler that doesn't run on Racket parameters (e.g., Zig+LLVM lowering). Labeled Parent Phase 4 + PM 12 + PM 13 scope. | ◐ |
+| Decomplection | ✓ Trigger (readiness latch) / accumulation (cell) / execution (handler) decoupled | Genuinely aligned. | ✓ |
+| Propagator-First Infrastructure | ✓ Cell replaces per-command parameter (ready-queue → cell-14) | Box-bridge in handler retains off-network coupling for executor + enet access. Acknowledged. | ◐ |
+
+**Honest verdict**: 2A.b's handler has **acknowledged scaffolding violations** that 2A.a's didn't. The violations are STRUCTURAL — actions touch enet; until Parent Phase 4 + PM 12 + PM 13 land, the box-bridge is required. Labeling these with explicit retirement paths is the honest framing.
+
+#### §8.7.b.8 Drift risks
+
+1. **D1 — Action duplicate execution**: process-resolution drains cell-14 inside BSP value-tier; `run-stratified-resolution-pure`'s L1 reads AFTER BSP returns. Cell-14 should be EMPTY at that point (BSP auto-clears via `#:reset-value '()`). Verify: parity test exercises both paths to confirm no double execution.
+2. **D2 — Empty `pending-actions` short-circuit**: handler returns net unchanged (eq?) if pending list is empty. Confirmed in design.
+3. **D3 — Tagged-entry shape preservation**: cell-14 value is list of tagged-entries (per add-readiness-set-latch! threshold write at line 565); handler unwraps before passing to executor. Mirrors `read-ready-queue-actions` behavior.
+4. **D4 — Executor parameter race**: handler reads `current-resolution-executor-pure` at fire time. If not installed (test contexts), handler is no-op. Same pattern as `execute-resolution-actions!` (line 1151-1155).
+5. **D5 — Reader/writer site coordination**: `add-readiness-set-latch!` writes cell-14; `read-ready-queue-actions` reads cell-14; both migrate atomically in same commit.
+6. **D6 — Test impact**: `test-readiness-propagator.rkt` directly references `current-ready-queue-cell-id` (5 sites). Migration to cell-14 reads required.
+7. **D7 — Per-command cell init**: BSP auto-clear handles inter-round; per-command init via `(make-elaboration-network)` in reset-meta-store! creates fresh prop-net with cell-14 = `'()`. Structurally preserved ✓.
+8. **D8 — Coordination with S(-1) retraction (2A.a)**: process-retraction registered value-tier in 2A.a; process-resolution registers value-tier in 2A.b. Module load order: metavar-store loads before relations — value-tier iteration order = [S(-1) retraction, L2 resolution, S1 NAF, classify-inhabit]. Confirm correctness preserved (S(-1)'s POST-S0 timing is §8.7.4 drift risk addressed in 2A.c).
+
+#### §8.7.b.9 Sub-steps + LoC estimate
+
+| Step | Deliverable | Est. LoC |
+|---|---|---|
+| 1 | Add `process-resolution` handler + `register-stratum-handler!` call (metavar-store.rkt) | ~30 |
+| 2 | Migrate `add-readiness-set-latch!` rq-cid lookup (metavar-store.rkt:443) | ~5 |
+| 3 | Migrate `read-ready-queue-actions` rq-cid lookup (metavar-store.rkt:2245) | ~3 |
+| 4 | Retire `current-ready-queue-cell-id` parameter + provide + per-command alloc + with-fresh-meta-env reset + batch-worker.rkt:259 | ~15 (deletions) |
+| 5 | Migrate `test-readiness-propagator.rkt` (~5 sites) | ~25-40 |
+| 6 | Add `resolution-parity` axis to test-elaboration-parity.rkt | ~15 |
+| 7 | Validation: delimiter + raco make + targeted + probe + acceptance + full suite | — |
+| 8 | Commit + tracker + dailies | — |
+
+**Total: ~95-110 LoC** (within §8.7.6 estimate of 80-150).
+
+#### §8.7.b.10 Completion criteria
+
+- Probe diff = 0 (semantic identical to baseline 8228/109.1s)
+- Acceptance file 0 errors
+- `test-readiness-propagator.rkt` GREEN with migrated assertions
+- `resolution-parity` axis GREEN
+- Full suite: 8228+ tests / ≤110.9s / 0 failures
+- Adversarial mantra check + principles check applied with three-column framing
+- Tracker row 2A.b marked ✅ with commit hash + key result
+- Dailies entry per phase-completion protocol
+
+#### §8.7.b.11 Codifications captured during this mini-design
+
+- **Operational principle codified**: "Anything that is not on-network is scaffolding." Off-network ≡ scaffolding; every off-network mechanism is a retirement candidate. This is the mantra in its sharpest form. Candidate for `.claude/rules/on-network.md` codification after PM 13 research validates the framing (3+ data points: PPN 4C box-bridges, PM 12 parameter snapshots, PM 13 handler registry).
+- **Compiler-technology framing for propagator networks + scheduler**: networks are first-class IR (per SH Series Track 1's `.pnet`); scheduler is interpreter; specialized cell type framework is IR vocabulary. Scheduler state (registry, worklist, fuel) should be IR-native, not Racket-box bookkeeping. Captured in PM 13 implementation note.
+- **Retirement-target capture discipline**: per user direction 2026-05-20, retirement work assigned to Parent Phase 4 must be captured back into the Parent Design Document's Phase 4 row (so that Phase 4's mini-design absorbs the scope items). Applied retroactively to 2A.a retirements + prospectively to 2A.b. Codification candidate (1 data point, watching).
+
+#### §8.7.b.12 Cross-track references
+
+- **PM Master Track 13** — [`2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md): NEW PM track capturing handler-mechanism architectural concern. Stage 0 SEED; pending Stage 1 research.
+- **PPN 4C Parent Design Doc** — [`2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) §2 row "Phase 4" item (viii): 2A.b's box-bridge body side-effects captured here as Phase 4 scope items.
+- **PM Master Track 12** — parameter→cell migration; absorbs `current-prop-net-box` + `current-resolution-executor-pure` parameter retirements.
 
 ---
 
