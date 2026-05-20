@@ -2562,14 +2562,13 @@
    (define-values (pnet* pid) (net-add-propagator pnet input-ids output-ids fire-fn))
    (values (struct-copy elab-network enet [prop-net pnet*]) pid)))
 
-;; Track 6 Phase 1a: Install id-map access callbacks.
-(current-prop-id-map-read elab-network-id-map)
-(current-prop-id-map-set elab-network-id-map-set)
-
-;; Track 6 Phase 5a: Install meta-info access callbacks.
-;; Meta-info CHAMP now lives in elab-network struct → captured with network snapshot.
-(current-prop-meta-info-read elab-network-meta-info)
-(current-prop-meta-info-set elab-network-meta-info-set)
+;; PPN 4C 2A.a (2026-05-20): STUB callback installs RETIRED.
+;; `current-prop-id-map-read/set` + `current-prop-meta-info-read/set` were STUB
+;; parameters (Track 8 B2b migration) with zero production consumers. The
+;; parameters themselves + these installs are retired in 2A.a. Direct struct
+;; accessors `elab-network-id-map`/`elab-network-id-map-set` +
+;; `elab-network-meta-info`/`elab-network-meta-info-set` are the canonical API.
+;; See D.3 §8.7.a.3 deliverable 5.
 
 ;; Track 6 Phase 6: reset-elab-network-command-state callback REMOVED by Track 7 Phase 6.
 ;; current-persistent-base-network was never activated; Track 7's persistent

@@ -167,8 +167,9 @@
  current-prop-net-box
  current-prop-id-map-box
  current-prop-meta-info-box
- current-prop-meta-info-read
- current-prop-meta-info-set
+ ;; PPN 4C 2A.a (2026-05-20): current-prop-meta-info-read/set RETIRED (STUB
+ ;; callbacks; zero production consumers since Track 8 B2b). Direct accessors
+ ;; elab-network-meta-info + elab-network-meta-info-set are the canonical API.
  prop-meta-id-hash
  ;; Phase B: Auxiliary meta CHAMP boxes
  ;; PPN 4C S2.e-iv-c (2026-04-25): champ-box provides RETIRED. Parameters
@@ -193,8 +194,15 @@
  ;; Track 7 Phase 4: Assumption tagging for scoped cells
  current-speculation-assumption
  ;; Track 7 Phase 5: S(-1) retraction stratum
+ ;; PPN 4C 2A.a (2026-05-20): `record-assumption-retraction!` bang version
+ ;; RETIRED (off-network box mutation); replaced by pure `record-assumption-retraction`
+ ;; which writes to retraction-stratum-request-cell-id. `process-retraction`
+ ;; BSP value-tier handler processes the cell. `current-retracted-assumptions`
+ ;; parameter + `run-retraction-stratum!` legacy function preserved until 2B
+ ;; retires `run-stratified-resolution-pure` orchestrator (per D.3 §8.7.a + §8.4).
  current-retracted-assumptions
- record-assumption-retraction!
+ record-assumption-retraction
+ process-retraction
  run-retraction-stratum!
  retract-hasheq-entries
  retract-hasheq-list-entries
@@ -214,9 +222,9 @@
  current-prop-add-propagator  ;; STUB — Track 8 B2: replaced by direct elab-add-propagator
  ;; Track 7 Phase 8b: Ready-queue consumption
  read-ready-queue-actions
- ;; Track 6 Phase 1a: id-map access callbacks
- current-prop-id-map-read
- current-prop-id-map-set
+ ;; PPN 4C 2A.a (2026-05-20): current-prop-id-map-read/set RETIRED (STUB
+ ;; callbacks; zero production consumers since Track 8 B2b). Direct accessors
+ ;; elab-network-id-map + elab-network-id-map-set are the canonical API.
  current-constraint-cell-id
  read-constraint-store
  read-trait-constraints
@@ -612,15 +620,16 @@
       ;; Track 8 B2d: direct elab-cell-write.
       (set-box! tc-net-box (elab-cell-write (unbox tc-net-box) tw-cid tw-delta))))
   ;; P3a: Record cell-ids for type-arg metas for cell-state-driven resolution.
-  ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-  (define id-map (if tc-net-box
-                     (elab-network-id-map (unbox tc-net-box))
-                     champ-empty))
+  ;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
+  ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4). Stale tagged
+  ;; entries from retracted assumptions invisible under correct worldview.
   (define cell-ids
-    (for*/list ([ta-id (in-list type-arg-metas)]
-                [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
-                #:when (not (eq? cid 'none)))
-      cid))
+    (if tc-net-box
+        (for*/list ([ta-id (in-list type-arg-metas)]
+                    [cid (in-value (elab-id-map-read-worldview (unbox tc-net-box) ta-id))]
+                    #:when (and cid (not (eq? cid 'none))))
+          cid)
+        '()))
   ;; Phase 7b: Cell-only write for trait-cell-map (removed dual-write to parameter).
   (when (not (null? cell-ids))
     (define tcm-cid (current-trait-cell-map-cell-id))
@@ -651,12 +660,14 @@
     ;; The dict-meta's cell receives the resolved dict expression.
     (define dict-cell-id (prop-meta-id->cell-id meta-id))
     (when dict-cell-id
+      ;; PPN 4C 2A.a (2026-05-20): worldview-aware lookup via
+      ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4).
       ;; Build dep-pairs: each (cons cell-id meta-id) for type-arg metas in
       ;; declaration order (preserved from type-arg-metas list).
       (define dep-pairs
         (for*/list ([ta-id (in-list type-arg-metas)]
-                    [cid (in-value (champ-lookup id-map (prop-meta-id-hash ta-id) ta-id))]
-                    #:when (not (eq? cid 'none)))
+                    [cid (in-value (elab-id-map-read-worldview (unbox tc-net-box) ta-id))]
+                    #:when (and cid (not (eq? cid 'none))))
           (cons cid ta-id)))
       ;; input-cids: unique cell-ids from dep-pairs (dedupe — under universe,
       ;; multiple type metas share universe-cid; under per-cell legacy, each
@@ -759,13 +770,13 @@
       (set-box! hm-net-box (elab-cell-write (unbox hm-net-box) hw-cid hw-delta))))
   ;; Track 2 Phase 6: Record cell-ids for dependency metas (cell-state-driven resolution).
   ;; Mirrors trait-cell-map pattern: enables collect-ready-hasmethods-via-cells.
-  ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
+  ;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
+  ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4).
   (when hm-net-box
-    (define id-map (elab-network-id-map (unbox hm-net-box)))
     (define cell-ids
       (for*/list ([dep-id (in-list all-dep-metas)]
-                  [cid (in-value (champ-lookup id-map (prop-meta-id-hash dep-id) dep-id))]
-                  #:when (not (eq? cid 'none)))
+                  [cid (in-value (elab-id-map-read-worldview (unbox hm-net-box) dep-id))]
+                  #:when (and cid (not (eq? cid 'none))))
         cid))
     (when (not (null? cell-ids))
       (define hcm-cid (current-hasmethod-cell-map-cell-id))
@@ -788,13 +799,15 @@
   ;; per-cell via meta-component-{read,write}.
   (define hm-bridge-fn (current-hasmethod-resolution-bridge-fn))
   (when (and hm-bridge-fn hm-net-box)
-    (define id-map-br (elab-network-id-map (unbox hm-net-box)))
+    ;; PPN 4C 2A.a (2026-05-20): worldview-aware lookup via
+    ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4). Stale cell-id
+    ;; entries from retracted assumptions invisible under correct worldview.
     ;; Build dep-pairs: each (cons cell-id meta-id) for all dep metas in
     ;; their original order (trait-var metas then type-arg metas).
     (define dep-pairs
       (for*/list ([dep-id (in-list all-dep-metas)]
-                  [cid (in-value (champ-lookup id-map-br (prop-meta-id-hash dep-id) dep-id))]
-                  #:when (not (eq? cid 'none)))
+                  [cid (in-value (elab-id-map-read-worldview (unbox hm-net-box) dep-id))]
+                  #:when (and cid (not (eq? cid 'none))))
         (cons cid dep-id)))
     (when (pair? dep-pairs)
       ;; The hasmethod meta's cell receives the projected method expression.
@@ -959,17 +972,18 @@
     (if (and net-box add-unify-fn)
         (let ()
           (define enet (unbox net-box))
-          ;; Track 8 B2b: direct elab-network-id-map instead of current-prop-id-map-read callback.
-          (define id-map (elab-network-id-map enet))
+          ;; PPN 4C 2A.a (2026-05-20): worldview-aware lookup via
+          ;; elab-id-map-read-worldview (per D.3 §8.7.a.3 deliverable 4).
           (define lhs-metas (extract-shallow-meta-ids lhs))
           (define rhs-metas (extract-shallow-meta-ids rhs))
           (define enet*
             (for*/fold ([net enet])
                        ([lm (in-list lhs-metas)]
                         [rm (in-list rhs-metas)])
-              (define lcid (champ-lookup id-map (prop-meta-id-hash lm) lm))
-              (define rcid (champ-lookup id-map (prop-meta-id-hash rm) rm))
-              (if (and (not (eq? lcid 'none)) (not (eq? rcid 'none))
+              (define lcid (elab-id-map-read-worldview enet lm))
+              (define rcid (elab-id-map-read-worldview enet rm))
+              (if (and lcid rcid
+                       (not (eq? lcid 'none)) (not (eq? rcid 'none))
                        (not (equal? lcid rcid)))
                   (let-values ([(net* _pid) (add-unify-fn net lcid rcid)])
                     net*)
@@ -981,10 +995,11 @@
           ;; the set-latch readiness pattern. cell-ids may collapse under
           ;; universe model (multiple type metas → same universe-cid →
           ;; remove-duplicates leaves 1); meta-ids preserves identity.
+          ;; PPN 4C 2A.a (2026-05-20): worldview-aware lookup.
           (define all-cell-ids
             (for*/list ([mid (in-list meta-ids)]
-                        [cid (in-value (champ-lookup id-map (prop-meta-id-hash mid) mid))]
-                        #:when (not (eq? cid 'none)))
+                        [cid (in-value (elab-id-map-read-worldview enet mid))]
+                        #:when (and cid (not (eq? cid 'none))))
               cid))
           (struct-copy constraint c0
                        [cell-ids (remove-duplicates all-cell-ids eq?)]
@@ -1391,13 +1406,11 @@
 ;; Track 6 Phase 5a: DEPRECATED — meta-info CHAMP moves into elab-network struct.
 ;; Retained for fallback in contexts without a network (test isolation).
 (define current-prop-meta-info-box (make-parameter #f))
-;; Track 8 B2b: current-prop-meta-info-read and current-prop-meta-info-set REPLACED
-;; by direct calls to elab-network-meta-info (struct accessor) and
-;; elab-network-meta-info-set (functional setter), both available via cell-ops.rkt
-;; → elab-network-types.rkt. No circular dependency — types module has no transitive deps.
-;; Parameters retained as stubs to avoid breaking driver.rkt installs until those are cleaned.
-(define current-prop-meta-info-read (make-parameter #f))  ;; STUB — no longer consulted
-(define current-prop-meta-info-set (make-parameter #f))   ;; STUB — no longer consulted
+;; Track 8 B2b retirement (PPN 4C 2A.a, 2026-05-20):
+;; `current-prop-meta-info-read` + `current-prop-meta-info-set` parameters RETIRED
+;; (were STUB — zero production consumers since Track 8 B2b migration). Driver
+;; installs at driver.rkt:2571+2572 also retired. Direct accessors
+;; `elab-network-meta-info` + `elab-network-meta-info-set` are the canonical API.
 
 ;; Phase B: Auxiliary meta CHAMP boxes (level, mult, session).
 ;; Each stores id → 'unsolved | solution. Included in save/restore for
@@ -1472,11 +1485,28 @@
 ;; run-retraction-stratum! consumes and clears it.
 (define current-retracted-assumptions (make-parameter #f))  ;; #f | (box (seteq))
 
-;; Record that an assumption was retracted (called from elab-speculation-bridge).
-(define (record-assumption-retraction! assumption-id)
-  (define box-val (current-retracted-assumptions))
-  (when (and box-val assumption-id)
-    (set-box! box-val (set-add (unbox box-val) assumption-id))))
+;; PPN 4C 2A.a (2026-05-20): pure function — `(enet × aid) → enet*`. Writes
+;; the assumption-id to `retraction-stratum-request-cell-id` (cell 13, allocated
+;; in 2A.0). Caller commits the returned enet via `set-box!` at its existing
+;; imperative boundary (with-speculative-rollback's retract branch already
+;; touches box at lines 318/327). Zero off-network state in the function body.
+;;
+;; The cell accumulates retracted aids via `set-union` merge across multiple
+;; writes within a BSP fire round. The `process-retraction` handler (registered
+;; below) reads the accumulated set during BSP outer-loop's value-tier
+;; processing and applies non-monotone retraction to scoped cells. The BSP
+;; outer-loop auto-clears the cell to `(set)` via `#:reset-value` after the
+;; handler runs.
+;;
+;; See D.3 §8.7.a for full mini-design + audit.
+(define (record-assumption-retraction enet assumption-id)
+  (cond
+    [(not assumption-id) enet]
+    [else
+     (define pnet (elab-network-prop-net enet))
+     (define pnet* (net-cell-write pnet retraction-stratum-request-cell-id
+                                    (seteq assumption-id)))
+     (elab-network-rewrap enet pnet*)]))
 
 ;; The 14 scoped cell-id parameters. Populated at command start by reset-meta-store!.
 ;; S(-1) iterates these to filter retracted entries.
@@ -1584,12 +1614,51 @@
         (unless (equal? id-champ cleaned-id)
           (set-box! net-box (elab-network-id-map-set (unbox net-box) cleaned-id)))))))
 
-;; Track 8 B2b: current-prop-id-map-read and current-prop-id-map-set REPLACED
-;; by direct calls to elab-network-id-map (struct accessor) and
-;; elab-network-id-map-set (functional setter), both available via cell-ops.rkt.
-;; Parameters retained as stubs to avoid breaking driver.rkt installs until those are cleaned.
-(define current-prop-id-map-read (make-parameter #f))   ;; STUB — no longer consulted
-(define current-prop-id-map-set (make-parameter #f))    ;; STUB — no longer consulted
+;; PPN 4C 2A.a (2026-05-20): `process-retraction` BSP value-tier stratum handler.
+;; Registered on `retraction-stratum-request-cell-id` (cell 13). Reads the
+;; accumulated set of retracted aids written by `record-assumption-retraction`;
+;; applies non-monotone retraction to scoped cells (the 11 cell-ids enumerated
+;; by `(scoped-cell-ids)`) via `net-cell-replace` (bypasses merge; enqueues
+;; dependents — BSP outer-loop's restart-from-outer-loop fires S0 on the
+;; cascade).
+;;
+;; Architecture: PURE on prop-net. `meta-info` CHAMP + `id-map` CHAMP retraction
+;; is deferred to PPN 4C Parent Phase 4 (A2 CHAMP retirement; parent design doc
+;; §2 tracker row "Phase 4") via worldview-filtering at read time — the
+;; post-S2.e-iv-a structural pattern. The 6 UNSAFE readers of those CHAMPs
+;; were migrated to worldview-aware lookups in 2A.a (this commit).
+;;
+;; Memory bounds: stale tagged entries in meta-info/id-map are bounded
+;; per-command by `reset-meta-store!` (sets fresh elab-network on each command).
+;;
+;; See D.3 §8.7.a for full mini-design + audit (incl. coordination concern §8.7.a.8).
+(define (process-retraction net retracted-set)
+  (cond
+    [(set-empty? retracted-set) net]
+    [else
+     (for/fold ([n net]) ([cid (in-list (scoped-cell-ids))])
+       (define val (net-cell-read n cid))
+       (cond
+         [(not (hash? val)) n]
+         [else
+          (define cleaned
+            (if (and (positive? (hash-count val))
+                     (let ([sample (for/first ([(k v) (in-hash val)]) v)])
+                       (list? sample)))
+                (retract-hasheq-list-entries val retracted-set)
+                (retract-hasheq-entries val retracted-set)))
+          (if (equal? val cleaned) n (net-cell-replace n cid cleaned))]))]))
+
+(register-stratum-handler! retraction-stratum-request-cell-id
+                            process-retraction
+                            #:tier 'value
+                            #:reset-value (seteq))
+
+;; Track 8 B2b retirement (PPN 4C 2A.a, 2026-05-20):
+;; `current-prop-id-map-read` + `current-prop-id-map-set` parameters RETIRED
+;; (were STUB — zero production consumers since Track 8 B2b migration). Driver
+;; installs at driver.rkt:2566+2567 also retired. Direct accessors
+;; `elab-network-id-map` + `elab-network-id-map-set` are the canonical API.
 
 ;; Phase 1a: Cell ID for the constraint store cell (set by reset-meta-store!).
 ;; When #f, falls back to legacy parameter-based storage.
@@ -2355,29 +2424,38 @@
 ;; Unlike meta-solved? (which reads the propagator cell), this reads the CHAMP status.
 ;; Used by punify-bridge-cell-solves! to detect metas that were solved by propagators
 ;; but not yet reflected in the meta-info CHAMP (and thus haven't triggered resolution).
-;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
+;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
+;; `elab-meta-info-read-worldview` (per D.3 §8.7.a.3 deliverable 4). Stale tagged
+;; entries from retracted assumptions are invisible under correct worldview;
+;; structural correctness pattern (post-S2.e-iv-a). Parent Phase 4 promotes
+;; meta-info CHAMP → cell; the explicit `worldview-visible?` check dissolves.
 (define (meta-info-solved? id)
   (define net-box (current-prop-net-box))
-  (define mi-champ
-    (cond
-      [net-box (elab-network-meta-info (unbox net-box))]
-      [else (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))]))
-  (and mi-champ
-       (let ([v (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash id) id))])
-         (and v (eq? (meta-info-status v) 'solved)))))
+  (cond
+    [net-box
+     (let ([v (unwrap-meta-info
+               (elab-meta-info-read-worldview (unbox net-box) id))])
+       (and v (eq? (meta-info-status v) 'solved)))]
+    [else
+     (let ([b (current-prop-meta-info-box)])
+       (and b (let ([v (unwrap-meta-info
+                        (champ-lookup (unbox b) (prop-meta-id-hash id) id))])
+                (and v (eq? (meta-info-status v) 'solved)))))]))
 
 ;; Retrieve the full meta-info struct, or #f if unknown.
 ;; Track 6 Phase 5a: reads from elab-network meta-info when available, else box.
-;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
+;; PPN 4C 2A.a (2026-05-20): migrated to worldview-aware lookup via
+;; `elab-meta-info-read-worldview` (per D.3 §8.7.a.3 deliverable 4). Stale tagged
+;; entries from retracted assumptions are invisible under correct worldview.
 (define (meta-lookup id)
   (define net-box (current-prop-net-box))
-  (define mi-champ
-    (if net-box
-        (elab-network-meta-info (unbox net-box))
-        (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
-  (if (not mi-champ) #f
-      ;; Track 8 A1: unwrap tagged-entry
-      (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash id) id))))
+  (cond
+    [net-box
+     (unwrap-meta-info (elab-meta-info-read-worldview (unbox net-box) id))]
+    [else
+     (let ([b (current-prop-meta-info-box)])
+       (and b (unwrap-meta-info
+               (champ-lookup (unbox b) (prop-meta-id-hash id) id))))]))
 
 ;; ========================================
 ;; Sprint 6: Universe level metavariables
@@ -2957,28 +3035,30 @@
 (define (all-unsolved-metas)
   (define um-cid (current-unsolved-metas-cell-id))
   (define net-box (current-prop-net-box))
-  ;; Track 6 Phase 5a: read meta-info from elab-network when available
-  ;; Track 8 B2b: direct elab-network-meta-info instead of current-prop-meta-info-read callback.
-  (define mi-champ
-    (if net-box
-        (elab-network-meta-info (unbox net-box))
-        (let ([b (current-prop-meta-info-box)]) (and b (unbox b)))))
-  (if (and um-cid net-box)
-      ;; Cell path: read the tracking hash, filter for #t (unsolved)
-      (let ([um-hash (elab-cell-read (unbox net-box) um-cid)])
-        (for/list ([(mid unsolved?) (in-hash um-hash)]
-                   #:when unsolved?)
-          ;; Track 8 A1: unwrap tagged-entry
-          (unwrap-meta-info (champ-lookup mi-champ (prop-meta-id-hash mid) mid))))
-      ;; Fallback: CHAMP scan (legacy, pre-initialization)
-      ;; Track 8 A1: unwrap tagged entries during scan
-      (champ-fold mi-champ
-                  (lambda (k v acc)
-                    (define info (if (tagged-entry? v) (tagged-entry-value v) v))
-                    (if (and (meta-info? info) (eq? (meta-info-status info) 'unsolved))
-                        (cons info acc)
-                        acc))
-                  '())))
+  ;; PPN 4C 2A.a (2026-05-20): worldview-aware lookup via
+  ;; elab-meta-info-read-worldview at the per-meta lookup (cell path). Fallback
+  ;; CHAMP scan path retains raw access (no network = no worldview to filter by).
+  (cond
+    [(and um-cid net-box)
+     ;; Cell path: read the tracking hash, filter for #t (unsolved)
+     (let ([um-hash (elab-cell-read (unbox net-box) um-cid)]
+           [enet (unbox net-box)])
+       (for/list ([(mid unsolved?) (in-hash um-hash)]
+                  #:when unsolved?)
+         (unwrap-meta-info (elab-meta-info-read-worldview enet mid))))]
+    [else
+     ;; Fallback: CHAMP scan (legacy, pre-initialization — no network context,
+     ;; so no worldview to filter by; raw scan is correct here).
+     (define mi-champ
+       (let ([b (current-prop-meta-info-box)]) (and b (unbox b))))
+     (if (not mi-champ) '()
+         (champ-fold mi-champ
+                     (lambda (k v acc)
+                       (define info (if (tagged-entry? v) (tagged-entry-value v) v))
+                       (if (and (meta-info? info) (eq? (meta-info-status info) 'unsolved))
+                           (cons info acc)
+                           acc))
+                     '()))]))
 
 ;; ========================================
 ;; Sprint 9: Noise filtering for error display

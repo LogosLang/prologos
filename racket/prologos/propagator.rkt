@@ -882,7 +882,11 @@
   ;; until 2A.a + 2A.b wire handlers, cells exist as empty accumulators
   ;; (no behavior change vs pre-2A.0).
   (define-values (net3 actual-retraction-cid)
-    (net-register-specialized-cell net2 (set) retraction-stratum-merge
+    ;; PPN 4C 2A.a (2026-05-20): cell init + merge use seteq (eq-based) to
+    ;; match the assumption-id (gensym) convention. Prior box-based mechanism
+    ;; (metavar-store.rkt:1473 current-retracted-assumptions) used (box (seteq));
+    ;; aligning the cell preserves that convention.
+    (net-register-specialized-cell net2 (seteq) retraction-stratum-merge
       #:tier 'warm
       #:storage 'general
       #:fires-on 'any-change))

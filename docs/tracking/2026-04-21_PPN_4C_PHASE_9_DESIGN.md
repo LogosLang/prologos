@@ -173,7 +173,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
 | 2A | Register S(-1), L2 as stratum handlers (L1 already cell-based per S2.b-iv) | 🔄 | Mini-design + audit 2026-05-19 (§8.7); revised scope: 2 cells, not 3 (cell-ids 13+14); §4.6 framework declarations. Sub-phases below. |
 | 2A.0 | Precursor — allocate cell-ids 13+14 in make-prop-network with §4.6 declarations; no behavior change | ✅ | commit `a8ef9e3f` (2026-05-19) — Cell-id 13: retraction-stratum-request (set-union merge); cell-id 14: resolution-stratum-request (list-append merge). Added `make-warm-general-meta` to specialized-cells.rkt (4th §4.6 framework instance; first warm-tier usage). Suite: 8224 tests / 107.3s / 0 failures. Cells dormant pending 2A.a + 2A.b handler wiring. |
-| 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ⬜ | |
+| 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.a (2026-05-20). Approach C (refined Option d): pure handler on prop-net (scoped cells only); meta-info + id-map retraction deferred to Parent Phase 4 via worldview-filtering at read time; 6 UNSAFE reader sites migrated to worldview-aware lookups; 4 STUB callbacks retired as dead code (`current-prop-id-map-read/set` + `current-prop-meta-info-read/set`); `record-assumption-retraction` pure function replaces bang version; tests migrated (process-retraction direct + record-assumption-retraction API surface + integration via run-to-quiescence); `retraction-parity` axis added to test-elaboration-parity. **Full suite: 8228 tests / 109.1s / 0 failures.** Adversarial VAG passed. |
 | 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | ⬜ | |
 | 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ⬜ | |
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
@@ -3167,6 +3167,252 @@ Estimated 2A total: **~210-400 LoC** across propagator.rkt + specialized-cells.r
 | Cell/Propagator/Scheduler Orthogonality | Cells declare framework properties (§4.6); handlers are propagator-layer; BSP outer-loop iteration is scheduler concern; clean separation |
 | Specialized Cell Type Framework as Cross-Track Template | Follows §4.6 declarations on the 2 new cells; consistent with Phase 1 framework instances; adds `make-warm-general-meta` constructor (new pattern for cross-track use) |
 | Stratified Propagator Networks | Concrete instantiation: elaborator's S(-1) + L2 join existing topology + S1-NAF + classify-inhabit strata; ONE unified mechanism across both networks |
+
+### §8.7.a Phase 2A.a Mini-design + Mini-audit (2026-05-20)
+
+Per Stage 4 Per-Phase Protocol: opening mini-design + mini-audit cycle for Phase 2A.a (process-retraction handler + record-assumption-retraction migration). Outcomes persist into this design doc per refined Stage 4 methodology.
+
+Charter: register S(-1) retraction as BSP value-tier stratum handler; migrate `record-assumption-retraction!` from imperative box (`current-retracted-assumptions` parameter) to cell write (`retraction-stratum-request-cell-id`). Cell allocated in 2A.0 (`bf025224`).
+
+#### §8.7.a.1 Pre-design audit: reader-audit for Option (d) viability
+
+Initial mini-design proposed an Option (a) "box-bridge" handler — handler reads `current-prop-net-box` to access elab-net state (meta-info CHAMP + id-map) and writes back via `set-box!`. Adversarial principles framework challenge surfaced TWO violations: (1) handler reads off-network parameter (`current-prop-net-box`); (2) Cell/Propagator/Scheduler Orthogonality violated by parameter-touch at handler layer.
+
+User-directed audit: investigate Option (d) — pure handler on prop-net (only scoped cells); defer meta-info + id-map retraction by relying on worldview-filtering at read time (the same pattern S2.e-iv-a established for mult/level/session universe cells).
+
+**Audit method**: grep all raw consumers of `elab-network-meta-info` + `elab-network-id-map` struct accessors. Categorize by safety class.
+
+**Categorization (grep-verified)**:
+
+| Category | Sites | Verdict |
+|---|---|---|
+| SAFE-1 — Structural reflow (constructor pass-through) | elaborator-network.rkt:156, 237, 253; elab-speculation.rkt:107-108; unify.rkt:335-336, 386-387, 426-427; elab-network-types.rkt:119-164 | No migration needed |
+| SAFE-2 — Inside worldview-aware reader impl | cell-ops.rkt:112, 118 | No migration needed |
+| SAFE-3 — Raw read followed by explicit `worldview-visible?` check | metavar-store.rkt:1700 (uses `champ-lookup-worldview`); :1935-1948 (`solve-meta!`); :2004-2014 (`solve-meta-core-pure`) | Already worldview-aware at use |
+| **UNSAFE — Bare `champ-lookup` without worldview filter** | metavar-store.rkt:2363 (`meta-info-solved?`); :2376 (`meta-lookup`); :2957 (`all-unsolved-metas`); :617-623, :764, :791, :963-971 (id-map readers in trait/hasmethod/unify paths) | **6 sites need migration to worldview-aware lookups** |
+| WRITE-PATH — Read for `champ-insert` | metavar-store.rkt:1804, 1832, 2439, 2569, 2703 | Not a read concern; new writes tag with current worldview |
+| CALLBACK-INSTALLER — STUB params | driver.rkt:2566, 2571 + metavar-store.rkt:1399, 1591 | **Pure dead code** — params explicitly labeled "STUB — no longer consulted" (Track 8 B2b retirement); ZERO production consumers |
+
+**Memory bounds check**: `reset-meta-store!` (metavar-store.rkt:2827) line 2840 (`(set-box! mi-box champ-empty)`) + line 2852 (`(make-elaboration-network)` fresh enet on callback wire-up) confirms meta-info CHAMP + id-map reset per-command. Stale tagged entries from un-retracted speculations are bounded by one command's lifetime. Memory growth: negligible.
+
+**Audit verdict**: Option (d) is viable with a small reader migration (~25 LoC across 6 UNSAFE sites). Alignment: post-S2.e-iv-a pattern (worldview-filtering at read time replaces explicit retraction). Sets up Parent Phase 4 cleanly (meta-info CHAMP + id-map → cells with tagged-cell-value; cell mechanism's native worldview filtering supersedes the explicit `worldview-visible?` checks).
+
+#### §8.7.a.2 Architecture decision: Approach C (refined Option d) — pure handler + reader migration + dead-code retirement
+
+Selected approach delivers handler with **ZERO scaffolding labels** at the new code surface. Adversarial mantra check + principles check ALL pass without violations.
+
+**Trade-offs analyzed**:
+
+| Aspect | Option (a) Box-bridge | Option (d) Pure handler + reader migration |
+|---|---|---|
+| Handler purity | Off-network bridge (`current-prop-net-box` + `set-box!`) | Pure on prop-net |
+| Mantra/Principles | 2 violations (labeled scaffolding) | Zero violations |
+| Retraction completeness | Full (scoped + meta-info + id-map) | Partial (scoped only; meta-info/id-map invisible via worldview-filtering) |
+| Memory compaction | Yes | No (stale entries until Parent Phase 4); per-command bounded |
+| Reader migration cost | None | ~25 LoC (6 sites) |
+| Parent Phase 4 setup | Box-bridge dissolves later | CHAMP→cell promotion is the structural retirement |
+
+#### §8.7.a.3 Deliverables
+
+1. **`process-retraction` handler** in metavar-store.rkt — pure on prop-net; only scoped cells:
+
+```racket
+;; PPN 4C 2A.a (2026-05-20): S(-1) retraction stratum as BSP value-tier handler.
+;; Registered on retraction-stratum-request-cell-id (cell 13).
+;; Cell accumulates retracted assumption-ids via record-assumption-retraction
+;; during with-speculative-rollback failures. BSP outer-loop processes between
+;; rounds; cell auto-clears via #:reset-value (set). If retraction enqueues
+;; worklist (via net-cell-replace cascades), BSP restarts S0.
+;;
+;; Architecture: pure on prop-net. Meta-info CHAMP + id-map retraction is
+;; deferred to Parent Phase 4 (A2 CHAMP retirement) — worldview-filtering at
+;; read time (the post-S2.e-iv-a pattern) makes stale tagged entries invisible.
+;; Memory bounds: per-command reset via reset-meta-store!.
+(define (process-retraction net retracted-set)
+  (cond
+    [(set-empty? retracted-set) net]
+    [else
+     (for/fold ([n net]) ([cid (in-list (scoped-cell-ids))])
+       (define val (net-cell-read n cid))
+       (cond
+         [(not (hash? val)) n]
+         [else
+          (define cleaned
+            (if (and (positive? (hash-count val))
+                     (let ([sample (for/first ([(k v) (in-hash val)]) v)])
+                       (list? sample)))
+                (retract-hasheq-list-entries val retracted-set)
+                (retract-hasheq-entries val retracted-set)))
+          (if (equal? val cleaned) n (net-cell-replace n cid cleaned))]))]))
+
+(register-stratum-handler! retraction-stratum-request-cell-id
+                            process-retraction
+                            #:tier 'value
+                            #:reset-value (set))
+```
+
+2. **`record-assumption-retraction`** pure functional `(enet aid) → enet*` (no bang):
+
+```racket
+;; PPN 4C 2A.a (2026-05-20): writes assumption-id to retraction-stratum-request-cell-id.
+;; Pure function — no off-network state touched. Caller commits via set-box!
+;; at the existing imperative boundary (with-speculative-rollback's retract branch).
+(define (record-assumption-retraction enet assumption-id)
+  (cond
+    [(not assumption-id) enet]
+    [else
+     (define pnet (elab-network-prop-net enet))
+     (define pnet* (net-cell-write pnet retraction-stratum-request-cell-id
+                                    (set assumption-id)))
+     (elab-network-rewrap enet pnet*)]))
+```
+
+3. **Caller migration at elab-speculation-bridge.rkt:329** — direct functional call:
+
+```racket
+;; Before:
+(record-assumption-retraction! hyp-id)
+
+;; After — direct call + set-box! consolidated at existing speculation boundary
+;; (the surrounding retract branch already touches box at lines 318, 327):
+(when (and elab-net-box hyp-id)
+  (set-box! elab-net-box
+            (record-assumption-retraction (unbox elab-net-box) hyp-id)))
+```
+
+4. **6 reader migrations** — Category UNSAFE → worldview-aware lookups:
+
+| Site | Migration |
+|---|---|
+| metavar-store.rkt:2359 (`meta-info-solved?`) | Use `elab-meta-info-read-worldview` instead of bare `champ-lookup` on `elab-network-meta-info` |
+| metavar-store.rkt:2372 (`meta-lookup`) | Same pattern |
+| metavar-store.rkt:2957 (`all-unsolved-metas`) | Same pattern |
+| metavar-store.rkt:617 (trait dispatcher cell-id extract) | Use `elab-id-map-read-worldview` |
+| metavar-store.rkt:764 (hasmethod cell-id extract) | Same pattern |
+| metavar-store.rkt:791 (hasmethod cell-id extract) | Same pattern |
+| metavar-store.rkt:963 (`add-unify-constraint` lhs/rhs cell-id extract) | Same pattern |
+
+5. **Dead-code retirement** — STUB callbacks (~10 LoC deletion):
+   - `current-prop-id-map-read` parameter + install (driver.rkt:2566, metavar-store.rkt:1591, provide block)
+   - `current-prop-meta-info-read` parameter + install (driver.rkt:2571, metavar-store.rkt:1399, provide block)
+   - Comments at metavar-store.rkt:1387, 1394, 1395, 1587, 1588 updated to reflect cleanup
+
+6. **Test file migration** — `tests/test-retraction-stratum.rkt`:
+   - Direct tests on `process-retraction` (handler logic correctness — set processing, cell reads/replaces)
+   - Tests on `record-assumption-retraction` pure function (enet × aid → enet* semantics; cell observation via `net-cell-read`)
+   - Retire box-based test scaffolding (parameterize `current-retracted-assumptions`); replace with cell-based scaffolding (allocate network, write to cell, observe)
+
+7. **`retraction-parity` axis** in `tests/test-elaboration-parity.rkt` (integration-level):
+   - Write aid via `record-assumption-retraction` → run quiescence → observe scoped cells cleaned
+   - Verify pre-2A.a behavior preserved for representative workloads
+
+8. **`current-retracted-assumptions` parameter + box + driver.rkt:467-468 init** — DEFERRED to 2B (alongside `run-stratified-resolution-pure` retirement; per discussion 2026-05-20).
+
+#### §8.7.a.4 Scaffolding retirement targets — explicit captures
+
+Per workflow.md "scaffolding with named retirement plan" discipline:
+
+**Retiring in 2A.a (this phase)**:
+
+| Item | Where in code | Reason |
+|---|---|---|
+| `current-prop-id-map-read` parameter | metavar-store.rkt:1591 (defn), driver.rkt:2566 (install), metavar-store.rkt:218 (provide) | STUB; zero production consumers post-Track-8-B2b |
+| `current-prop-meta-info-read` parameter | metavar-store.rkt:1399 (defn), driver.rkt:2571 (install), metavar-store.rkt:170 (provide) | Same — STUB |
+
+**Deferred to PPN 4C Addendum Phase 2B** (this addendum, §8.4):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `current-retracted-assumptions` parameter + box | metavar-store.rkt:1473 | Becomes dead post-2A.a (no writers/readers); retire alongside `run-stratified-resolution-pure` orchestrator |
+| driver.rkt:467-468 init block | driver.rkt | Same — dead per-command init |
+| `run-retraction-stratum!` function (legacy box-reader) | metavar-store.rkt:1532 | No-op post-2A.a; retire with `run-stratified-resolution-pure` |
+
+**Deferred to PPN 4C Parent Phase 4** (CHAMP retirement; parent design doc §2 tracker row "Phase 4"):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `elab-network-meta-info` CHAMP struct field | elab-network-types.rkt | Promoted to cell with tagged-cell-value; native worldview filtering replaces explicit `worldview-visible?` checks at consumers |
+| `elab-network-id-map` CHAMP struct field | elab-network-types.rkt | Same |
+| Worldview-aware reader migration sites (6 from §8.7.a.3 item 4) | metavar-store.rkt | Become trivial cell reads; explicit `worldview-visible?` checks dissolve |
+
+**Deferred to PM Track 12** (per `docs/tracking/2026-03-13_PROPAGATOR_MIGRATION_MASTER.md` Track 12 row):
+
+| Item | Where in code | Retirement note |
+|---|---|---|
+| `current-prop-net-box` parameter | metavar-store.rkt + driver.rkt + callers | Parameter→cell module-loading migration; bridge dissolves |
+| Scoped-cell-id parameters (constraint, trait-constraint, wakeup, etc.) | metavar-store.rkt | Same — parameter→registry-cell |
+| `with-speculative-rollback`'s elab-net snapshot + set-box! | elab-speculation-bridge.rkt | Speculation infrastructure retires alongside meta-info CHAMP (Phase 4) + parameter retirement (PM 12) |
+
+#### §8.7.a.5 Mantra check (adversarial three-column)
+
+| Word | Catalogue | Adversarial challenge | Status |
+|---|---|---|---|
+| All-at-once | ✓ Set-union merge accumulates aids; handler processes set in one call | Could merge be more granular per-aid? No — set semantics already optimal for accumulation | ✓ Aligned |
+| All in parallel | ✓ Handler invocations parallel via BSP; within-handler `for/fold` over scoped cells sequential | Could within-handler parallelize? Race on `net-cell-replace` (non-monotone). Sequential within-handler is correct. | ✓ Aligned |
+| Structurally emergent | ✓ BSP stratum iteration; aid identified structurally via speculation's `hyp-id` | Could aid identification be more structural? hyp-id IS the assumption's structural identity. | ✓ Aligned |
+| Information flow | ✓ Cell-write → handler-read; pure function takes enet returns enet* | Did we eliminate ALL parameter-based info flow in new code? Yes — handler reads `net` (BSP arg); `record-assumption-retraction` reads `enet` (caller arg). | ✓ Aligned |
+| ON-NETWORK | ✓ All new code on-network | Did we add ANY off-network state? No — handler pure; pure record- function; reader migrations toward on-network filtering. Existing `set-box!` in caller is pre-existing speculation scaffolding (PM 12 + Phase 4 scope), not introduced. | ✓ Aligned |
+
+#### §8.7.a.6 Principles check (adversarial three-column)
+
+| Principle | Catalogue | Adversarial challenge | Status |
+|---|---|---|---|
+| Decomplection | ✓ Trigger/execution/storage decoupled (cell write / handler / scoped cells) | Could `record-assumption-retraction` split further? Over-engineering for 1-cell-write. | ✓ Aligned |
+| Propagator-First Infrastructure | ✓ Imperative box-state → on-network cell | Did we leave ANY imperative paths in new code? No. Caller's box-touch is existing scaffolding, not new code. | ✓ Aligned |
+| Correct by Construction | ✓ BSP auto-clear + pure function + worldview-aware reads | Are there discipline-maintained invariants? Auto-clear is structural; reader-migration toward worldview-aware filtering is structural pattern (post-S2.e-iv-a). | ✓ Aligned |
+| Cell/Propagator/Scheduler Orthogonality | ✓ Handler is pure prop-net; cell on cell layer; BSP outer-loop is scheduler concern | Would handler work under Gauss-Seidel / Zig+LLVM? Pure function, cell-write portable. Zero scheduler-specific machinery. | ✓ Aligned |
+| Stratified Propagator Networks | ✓ S(-1) joins existing strata | Could merge with another stratum? S(-1) has distinct (non-monotone) semantics; separate handler correct. | ✓ Aligned |
+| Specialized Cell Type Framework as Cross-Track Template | ✓ Cell 13 uses §4.6 declarations (warm + general + any-change) — landed in 2A.0 | Could cell metadata be richer? `make-warm-general-meta` is the 4th template instance; framework holds up under usage. | ✓ Aligned |
+
+#### §8.7.a.7 Drift risks (for mid-flight scrutiny)
+
+1. **D1 — Pure function purity**: ensure `record-assumption-retraction` doesn't accidentally re-introduce `current-prop-net-box` touch in the body. Audit the implementation; the body should ONLY touch `enet` argument + `assumption-id` argument.
+2. **D2 — Caller migration completeness**: only ONE production caller (elab-speculation-bridge.rkt:329). Test callers in test-retraction-stratum.rkt are scoped to test migration. No hidden callers (grep-verified).
+3. **D3 — Reader migration completeness**: 6 sites identified in audit. Any additional UNSAFE sites discovered during implementation must be migrated atomically.
+4. **D4 — STUB callback retirement**: provides/exports/installs/definitions must all be removed atomically; partial retirement (e.g., delete defn but leave install) would error.
+5. **D5 — `(scoped-cell-ids)` correctness post-handler**: the function returns a list of cell-ids based on parameter values. Under the handler, these parameters must be set (per-command lifecycle via `reset-meta-store!`). If the handler is called in a context where parameters are unset (`#f`), `(scoped-cell-ids)` returns empty list — handler is no-op. SAFE (no error case).
+6. **D6 — Test fixture handling**: test files using `parameterize current-retracted-assumptions` must migrate to cell-based fixtures. Risk: test file may reference scaffolding that changes; bulk-edit + careful read.
+7. **D7 — Parity test coverage**: `retraction-parity` axis must cover at least: single retraction; multiple aids in one set; retraction after speculation; retraction triggers worklist enqueue (via `net-cell-replace` cascades).
+
+#### §8.7.a.8 Coordination concern (verification item, not blocker)
+
+`record-assumption-retraction` is called from `with-speculative-rollback`'s retract branch, which can run during BSP fire rounds (elaboration is propagator-driven post-Phase-4A). The cell-write goes through `elab-net-box`'s prop-net; BSP's intra-round `net` snapshot is a separate copy.
+
+**This is the same coordination pattern with-speculative-rollback already uses for worldview-cache writes** (elab-speculation-bridge.rkt:326). It works in production. Our retraction cell-write follows the same path. Parity tests verify the integration (write aid → run quiescence → observe scoped cells cleaned).
+
+If parity tests reveal coordination issues, the resolution surfaces at test time. Existing speculation-bridge scaffolding is already labeled with retirement plan (Parent Phase 4 + PM 12); any coordination fix would land alongside that retirement.
+
+#### §8.7.a.9 Sub-steps + completion criteria
+
+| Step | Deliverable | Est. LoC |
+|---|---|---|
+| 1 | Add `process-retraction` handler + `register-stratum-handler!` call (metavar-store.rkt) | ~35 |
+| 2 | Add `record-assumption-retraction` pure function (metavar-store.rkt) + update provides | ~12 |
+| 3 | Migrate caller at elab-speculation-bridge.rkt:329 | ~3 |
+| 4 | Migrate 6 reader sites (metavar-store.rkt) to worldview-aware lookups | ~25 |
+| 5 | Retire STUB callbacks (driver.rkt + metavar-store.rkt) | ~10 (delete) |
+| 6 | Migrate `tests/test-retraction-stratum.rkt` (both `process-retraction` direct + `record-assumption-retraction` API surface tests) | ~75-125 |
+| 7 | Add `retraction-parity` axis to `tests/test-elaboration-parity.rkt` | ~25 |
+| 8 | Validation: delimiter check + targeted tests + probe + acceptance + full suite | — |
+| 9 | Commit + tracker update + dailies entry per phase-completion protocol | — |
+
+**Total LoC**: ~178-228 (with test migration the largest component).
+
+**Completion criteria**:
+- Probe diff = 0 (semantic identical to baseline)
+- Acceptance file 0 errors
+- `tests/test-retraction-stratum.rkt` GREEN with migrated assertions
+- `retraction-parity` axis GREEN
+- Full suite: 8224 tests / ≤110.9s (pre-2A.0 baseline) / 0 failures
+- Adversarial mantra check + principles check all pass
+- Tracker row 2A.a marked ✅ with commit hash + key result
+- Dailies entry per phase-completion protocol
+
+#### §8.7.a.10 Codifications captured during this mini-design
+
+- **Adversarial three-column framing at every mini-design + mini-audit** (not just VAG gate close): catalogue / challenge / status. Catalogue is rationalization; challenge is where drift surfaces. Codification candidate (1 data point this session, watching for next instance): "The adversarial framing must be actively forced at EVERY application of P/R/M/S — Stage 4 mini-design, mini-audit, mid-flight principles challenge, VAG. The catalogue→challenge transition is NEVER natural; without explicit two-column or three-column discipline, the gate catalogues and misses drift."
+- **STUB-labeled dead code IS code smell** (Track 8 B2b STUB parameters survived since the callback retirement): "Each pass that touches a file should leave it cleaner than it found it. STUB labels with no consumers should be retired when the next touching pass occurs, not left as inertia." Watching-list candidate.
+- **Pure functional API beats imperative-bang API** when state is on-network: `record-assumption-retraction` (no bang) is more aligned than `record-assumption-retraction!` (with bang implying box mutation). The pure function lets callers commit at their existing imperative boundaries.
 
 ---
 

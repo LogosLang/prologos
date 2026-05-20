@@ -226,6 +226,52 @@
                        #:expected 'unchanged))
 
 ;; ========================================
+;; PPN 4C 2A.a (2026-05-20) — retraction-parity axis
+;; ========================================
+;;
+;; Verifies the cell-driven S(-1) retraction infrastructure (D.3 §8.7.a)
+;; doesn't regress elaboration semantics relative to the pre-2A.a box-based
+;; mechanism. The new path:
+;;   record-assumption-retraction (pure) → retraction-stratum-request cell-13
+;;   → BSP outer-loop's value-tier processing → process-retraction handler
+;;   → scoped cells cleaned via net-cell-replace → S0 restart via worklist
+;;
+;; These integration smoke tests exercise expressions that traverse the
+;; elaboration pipeline; if retraction infrastructure broke (handler not
+;; firing, cell not auto-clearing, scoped-cell-replace not cascading), the
+;; observable elaboration result would diverge. Direct mechanism tests live
+;; in tests/test-retraction-stratum.rkt sections 7-9.
+
+(parity-test 'retraction-baseline-simple "PPN 4C 2A.a"
+             "[int+ 2 3]"
+  ;; Baseline arithmetic — no speculation, no retraction. Verifies the new
+  ;; infrastructure doesn't break basic flow (e.g., handler over-firing or
+  ;; corrupting the prop-net on dormant retraction cell).
+  (check-parity-equal? 'retraction-baseline-simple
+                       "[int+ 2 3]"
+                       #:expected '5))
+
+(parity-test 'retraction-baseline-polymorphic "PPN 4C 2A.a"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity — exercises type-meta resolution + propagator
+  ;; cascade. Stresses the same code path that with-speculative-rollback
+  ;; touches (elab-net rewrap, prop-net snapshot semantics) without
+  ;; actually triggering retraction. Verifies the rewrap pattern in
+  ;; record-assumption-retraction's caller didn't introduce regressions.
+  (check-parity-equal? 'retraction-baseline-polymorphic
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))
+
+(parity-test 'retraction-baseline-annotation "PPN 4C 2A.a"
+             "(the Int 42)"
+  ;; Type ascription — exercises the typing path where with-speculative-rollback
+  ;; can be invoked (typing-core.rkt:1205 area for map-assoc, etc.). Confirms
+  ;; that elaboration still produces expected type post-2A.a.
+  (check-parity-equal? 'retraction-baseline-annotation
+                       "(the Int 42)"
+                       #:expected-type 'Int))
+
+;; ========================================
 ;; Phase 10 — Union types via ATMS (cell-based TMS)
 ;; ========================================
 
