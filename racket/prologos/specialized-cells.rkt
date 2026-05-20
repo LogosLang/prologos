@@ -20,7 +20,8 @@
  (struct-out specialized-cell-meta)
  net-register-specialized-cell
  make-monotone-counter-meta
- make-cold-general-meta)
+ make-cold-general-meta
+ make-warm-general-meta)  ;; PPN 4C Phase 2A.0 (2026-05-19)
 
 ;; Convenience constructor for hot+monotone-counter cells with an on-write
 ;; check (e.g., the fuel-cost-cell pattern: cost crosses budget → contradiction).
@@ -54,3 +55,26 @@
 ;; rationale + F13); meta's merge-fn is unused for cold+general cells today.
 (define (make-cold-general-meta [merge-fn #f])
   (specialized-cell-meta 'cold 'general 'any-change #f #f merge-fn))
+
+;; PPN 4C Phase 2A.0 (2026-05-19) — warm+general cells for stratum-request
+;; accumulators (S(-1) retraction, L2 resolution). These cells accumulate
+;; work via writes from propagators during BSP rounds; the corresponding
+;; stratum handler reads + processes between rounds; BSP outer-loop
+;; auto-clears via the handler's `#:reset-value`.
+;;
+;; Tier 'warm: not hot like fuel-cell-id (no direct-ref cache on prop-net-warm);
+;; not cold like fuel-budget-cell-id (written more than once-per-init).
+;; Storage 'general: hashmap/set/list value, not specialized fixnum.
+;; Fires-on 'any-change: handler runs whenever pending state is non-empty
+;; (no threshold-crossing optimization; standard cell-write notification).
+;;
+;; merge-fn: callers must pass explicitly (set-union, list-append, hash-union, etc.).
+;; Cached on the meta struct per §4.6 framework + D.4 1V-2 Item #1 pattern.
+;;
+;; Forward-compatibility: if a stratum-request cell becomes hot (e.g.,
+;; PReduce e-class extraction work-queue), promote to `make-monotone-counter-meta`
+;; pattern OR allocate a direct-ref cache on prop-net-warm (4th+ instance
+;; of cross-track template per §4.6 framework). Cell-meta declaration is
+;; the upgrade vocabulary; no caller-API change.
+(define (make-warm-general-meta merge-fn)
+  (specialized-cell-meta 'warm 'general 'any-change #f #f merge-fn))

@@ -97,6 +97,11 @@
  ;; Phase 1C migrates consumers to use them)
  fuel-cell-id
  fuel-budget-cell-id
+ ;; PPN 4C Phase 2A.0 (2026-05-19): stratum-request cells + merges
+ retraction-stratum-request-cell-id
+ resolution-stratum-request-cell-id
+ retraction-stratum-merge
+ resolution-stratum-merge
  ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
  ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
  ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
@@ -667,6 +672,37 @@
 (define fuel-cell-id (cell-id 11))
 (define fuel-budget-cell-id (cell-id 12))
 
+;; PPN 4C Phase 2A.0 (2026-05-19): stratum-request cells for orchestration
+;; unification. Per addendum design §8.7. These cells accumulate work from
+;; propagator writes during BSP rounds; the corresponding stratum handler
+;; (process-retraction, process-resolution) reads + processes between rounds;
+;; BSP outer-loop auto-clears via the handler's #:reset-value.
+;;
+;; Allocated as §4.6 specialized cells (tier 'warm + storage 'general +
+;; fires-on 'any-change) via make-warm-general-meta in specialized-cells.rkt.
+;;
+;; Handlers register in metavar-store.rkt (loads before relations.rkt per
+;; driver.rkt require order). Resulting value-tier iteration order:
+;; [S(-1) retraction, L2 resolution, S1 NAF, classify-inhabit] — see §8.7.1.
+(define retraction-stratum-request-cell-id (cell-id 13))
+(define resolution-stratum-request-cell-id (cell-id 14))
+
+;; Merges for the 2A.0 stratum-request cells. Local definitions per
+;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
+;; topology-request-merge at line 686). Defined locally because
+;; propagator.rkt cannot require infra-cell.rkt (circular dependency —
+;; infra-cell.rkt depends on propagator.rkt).
+(define (retraction-stratum-merge old new)
+  ;; Set-valued accumulator of retracted assumption-ids. Set-union is
+  ;; commutative, associative, idempotent — CALM-safe.
+  (set-union old new))
+(define (resolution-stratum-merge old new)
+  ;; List-valued accumulator of resolution action descriptors. Append is
+  ;; associative but NOT commutative; for resolution actions, order may
+  ;; carry intent (e.g., trait-dispatch before usage-finalization).
+  ;; Same shape as the retired current-ready-queue-cell-id merge.
+  (append old new))
+
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
 ;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
 ;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt
@@ -838,17 +874,42 @@
     (error 'make-prop-network
            "fuel-budget-cell-id allocation drift: expected ~a, got ~a (D-1B-iv-6)"
            fuel-budget-cell-id actual-budget-cid))
+  ;; PPN 4C Phase 2A.0 (2026-05-19): register stratum-request cells.
+  ;; cell-id 13: retraction-stratum-request (S(-1) handler input). Set-valued.
+  ;; cell-id 14: resolution-stratum-request (L2 handler input). List-valued.
+  ;; Per §8.7.3 §4.6 framework declarations (warm + general + any-change).
+  ;; Handlers register in metavar-store.rkt + invoke from BSP outer-loop;
+  ;; until 2A.a + 2A.b wire handlers, cells exist as empty accumulators
+  ;; (no behavior change vs pre-2A.0).
+  (define-values (net3 actual-retraction-cid)
+    (net-register-specialized-cell net2 (set) retraction-stratum-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-retraction-cid retraction-stratum-request-cell-id)
+    (error 'make-prop-network
+           "retraction-stratum-request-cell-id allocation drift: expected ~a, got ~a"
+           retraction-stratum-request-cell-id actual-retraction-cid))
+  (define-values (net4 actual-resolution-cid)
+    (net-register-specialized-cell net3 '() resolution-stratum-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-resolution-cid resolution-stratum-request-cell-id)
+    (error 'make-prop-network
+           "resolution-stratum-request-cell-id allocation drift: expected ~a, got ~a"
+           resolution-stratum-request-cell-id actual-resolution-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
   ;; look up each once and cache the prop-cell direct-refs. Write-through at
   ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net2) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net4) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net2) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net2
-      [warm (struct-copy prop-net-warm (prop-network-warm net2)
+         [wv-cell (champ-lookup (prop-network-cells net4) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net4
+      [warm (struct-copy prop-net-warm (prop-network-warm net4)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 

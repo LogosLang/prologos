@@ -171,7 +171,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 1B | Tropical fuel primitive + SRE registration | ⬜ | Follows Phase 1E per revised 2026-04-23 sequence. |
 | 1C | Canonical BSP fuel instance migration | ⬜ | A/B bench required |
 | 1V | Vision Alignment Gate Phase 1 | ⬜ | |
-| 2A | Register S(-1), L1, L2 as stratum handlers | ⬜ | |
+| 2A | Register S(-1), L2 as stratum handlers (L1 already cell-based per S2.b-iv) | 🔄 | Mini-design + audit 2026-05-19 (§8.7); revised scope: 2 cells, not 3 (cell-ids 13+14); §4.6 framework declarations. Sub-phases below. |
+| 2A.0 | Precursor — allocate cell-ids 13+14 in make-prop-network with §4.6 declarations; no behavior change | ✅ | commit `a8ef9e3f` (2026-05-19) — Cell-id 13: retraction-stratum-request (set-union merge); cell-id 14: resolution-stratum-request (list-append merge). Added `make-warm-general-meta` to specialized-cells.rkt (4th §4.6 framework instance; first warm-tier usage). Suite: 8224 tests / 107.3s / 0 failures. Cells dormant pending 2A.a + 2A.b handler wiring. |
+| 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ⬜ | |
+| 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | ⬜ | |
+| 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ⬜ | |
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
 | 2V | Vision Alignment Gate Phase 2 | ⬜ | |
 | 3A | Fork-on-union basic mechanism | ⬜ | |
@@ -269,10 +273,12 @@ parameter current-worldview-bitmask :type Bitmask
 
 ### §4.3 Stratum handler topology post-unification (Phase 2 delivery)
 
-Per NTT §7 (Level 5: Stratification) — `stratification` with `:fiber` forms:
+Per NTT §7 (Level 5: Stratification) — `stratification` with `:fiber` forms.
+
+**Revised 2026-05-19 per Phase 2A mini-design + mini-audit (§8.7)**: handler count is 8, not 9. L1 readiness is already structurally emergent post-S2.b-iv (readiness propagators write to `ready-queue` cell during S0 BSP rounds); no L1 stratum handler needed. Phase 2A adds 2 handlers (S(-1) retraction + L2 resolution), not 3.
 
 ```ntt
-;; 9 registered stratum handlers post-Phase-2 (was 6 pre-Phase-2)
+;; 8 registered stratum handlers post-Phase-2 (was 6 pre-Phase-2; +2 from Phase 2A)
 
 stratum-handlers := [
   ;; Topology tier (4, unchanged)
@@ -281,17 +287,37 @@ stratum-handlers := [
   (narrowing-topology-cell-id               :tier 'topology)
   (sre-topology-cell-id                     :tier 'topology)
 
-  ;; Value tier (5, +3 from Phase 2)
+  ;; Value tier (4, +2 from Phase 2A)
+  (retraction-stratum-request-cell-id       :tier 'value)   ;; NEW Phase 2A; cell-id 13
+  (resolution-stratum-request-cell-id       :tier 'value)   ;; NEW Phase 2A; cell-id 14
   (naf-pending-cell-id                      :tier 'value)
   (classify-inhabit-request-cell-id         :tier 'value)
-  (retraction-stratum-request-cell-id       :tier 'value)   ;; NEW Phase 2
-  (readiness-stratum-request-cell-id        :tier 'value)   ;; NEW Phase 2
-  (resolution-stratum-request-cell-id       :tier 'value)   ;; NEW Phase 2
 ]
 
+;; Registration order (= iteration order within tier; module-load determined):
+;;   metavar-store.rkt loads BEFORE relations.rkt (driver.rkt lines 37 + 45)
+;;   → S(-1) retraction + L2 resolution register first (value-tier)
+;;   → S1 NAF (relations.rkt) registers after
+;;   → classify-inhabit-request (typing-propagators.rkt) registers after relations.rkt
+
+;; §4.6 framework declarations for NEW cells (Phase 2A):
+cell retraction-stratum-request
+  :tier 'warm
+  :storage 'general
+  :fires-on 'any-change
+  :merge-fn merge-set-union   ;; cached on specialized-cell-meta
+  :reset-value (set)
+
+cell resolution-stratum-request
+  :tier 'warm
+  :storage 'general
+  :fires-on 'any-change
+  :merge-fn merge-list-append   ;; cached on specialized-cell-meta
+  :reset-value '()
+
 ;; BSP scheduler's outer loop iterates all handlers per tier
-;; Retired: run-stratified-resolution-pure (sequential orchestrator)
-;; Retired: run-stratified-resolution! (dead code)
+;; Retired by Phase 2B: run-stratified-resolution-pure (sequential orchestrator)
+;; Retired by Phase 2B: run-stratified-resolution! (dead code)
 ```
 
 ### §4.4 Union-type branching via ATMS (Phase 3 delivery)
@@ -2955,7 +2981,9 @@ Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 r
 - **Phase 2B — Retire orchestrators** (~50-100 LoC)
 - **Phase 2V — Vision Alignment Gate**
 
-### §8.3 Phase 2A deliverables
+### §8.3 Phase 2A deliverables (ORIGINAL — superseded by §8.7 mini-design 2026-05-19)
+
+**Note**: this list represents the original D.3 design. §8.7 below revises it per Phase 2A mini-design + mini-audit (2026-05-19). Key revisions: 3 cells → 2 cells (L1 already cell-based per S2.b-iv); cell-id 14 → cell-id 14 for resolution (since readiness retired); `collect-ready-constraints-via-cells` reference is stale (was retired in S2.b-iv). Refer to §8.7 for the current design.
 
 1. Introduce 3 new request-accumulator cells in `make-prop-network`:
    - `retraction-stratum-request-cell-id` (cell-id 13; set-valued, set-union merge)
@@ -2970,7 +2998,7 @@ Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 r
    - L1 / L2 completion signals: write to respective cells
 4. Handler functions wrap existing logic:
    - `process-retraction net request-set` wraps `run-retraction-stratum!`
-   - `process-readiness net pending-hash` wraps `collect-ready-constraints-via-cells`
+   - `process-readiness net pending-hash` wraps `collect-ready-constraints-via-cells`  ← STALE: retired in S2.b-iv
    - `process-resolution net actions` wraps `execute-resolution-actions!`
 5. Invariant: handler behavior observationally equivalent to sequential orchestrator (parity axis)
 
@@ -2992,6 +3020,153 @@ Phase 2 consolidates the elaborator strata (S(-1) retraction, L1 readiness, L2 r
 ### §8.6 Phase 2 parity-test strategy
 
 Axis: orchestration parity. Confirm elaboration results identical pre-Phase-2 and post-Phase-2 for representative workloads. Parity tests wire into `test-elaboration-parity.rkt`.
+
+### §8.7 Phase 2A Mini-design + Mini-audit (2026-05-19)
+
+Per Stage 4 Per-Phase Protocol: mini-design + mini-audit cycle before implementation. Outcomes persist into this design doc per DESIGN_METHODOLOGY refined Stage 4 methodology.
+
+#### §8.7.1 Mini-audit findings (codebase grounding)
+
+**Cell-id allocation (post-Tropical-Addendum)**:
+
+```
+cell-id 0  decomp-request-cell-id
+cell-id 1  worldview-cache-cell-id
+cell-id 2  relation-store-cell-id
+cell-id 3  config-cell-id
+cell-id 4  naf-pending-cell-id              (S1 NAF — value tier)
+cell-id 5  pool-config-cell-id
+cell-id 6  constraint-propagators-topology  (topology tier)
+cell-id 7  elaborator-topology              (topology tier)
+cell-id 8  narrowing-topology               (topology tier)
+cell-id 9  sre-topology                     (topology tier)
+cell-id 10 classify-inhabit-request-cell-id (value tier; Phase 3c-iii)
+cell-id 11 fuel-cell-id                     (Tropical Addendum)
+cell-id 12 fuel-budget-cell-id              (Tropical Addendum)
+─── next available: cell-id 13 ───
+```
+
+**`register-stratum-handler!` API** (propagator.rkt:2768-2775):
+- Signature: `(request-cell-id handler-fn #:tier [tier 'value] #:reset-value [reset-value (hasheq)])`
+- Handler signature: `(net pending) → net`
+- BSP outer-loop auto-clears via `(net-cell-reset processed req-cid reset-val)` after handler runs (propagator.rkt:3017) — handlers don't clear manually
+
+**BSP outer loop structure** (propagator.rkt:2990-3046) — confirmed multi-pass fixpoint pattern:
+```
+outer-loop:
+  S0 quiescence (BSP fire rounds)
+  process topology-tier handlers; restart-from-outer-loop on worklist
+  process value-tier handlers (in registration order); restart on worklist
+  if no progress → done
+```
+
+**Critical finding — §8.3 stale reference**: §8.3 deliverable 4 says `process-readiness wraps collect-ready-constraints-via-cells`. But `collect-ready-constraints-via-cells` was **RETIRED in PPN 4C S2.b-iv** (commit `bddfc3e3`, 2026-04-24) per the codification: vestigial Track-7-Phase-8a polling mechanism, replaced by readiness propagators (set-latch + threshold) that write to `ready-queue` cell directly during S0. Post-S2.b-iv, **L1 readiness is structurally emergent**; no L1 stratum handler needed.
+
+**Module load order** (driver.rkt:37 + 45): `metavar-store.rkt` loads BEFORE `relations.rkt`. Metavar-store doesn't transitively require relations. If S(-1) + L2 handlers register in metavar-store, they register before S1 NAF (in relations.rkt). Resulting value-tier iteration order: **[S(-1) retraction, L2 resolution, S1 NAF, classify-inhabit]**.
+
+**Current sequential resolution loop** (metavar-store.rkt:2131-2169):
+```racket
+(define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
+  (let loop ([fuel ...] [meta-id ...] [current-enet enet])
+    (let* (;; S(-1): Retraction — run imperatively for now (reads/writes box)
+           ;; TODO: purify retraction stratum in Phase 8   ← THIS IS PHASE 2 WORK
+           [_ (run-retraction-stratum!)]
+           ;; S0: Type propagation (quiescence) — pure on prop-net
+           [enet-s0 ((current-quiescence-scheduler) ...)]
+           ;; S1/L1: read ready-queue (already populated by readiness propagators)
+           [queue-actions (read-ready-queue-actions enet-s0)]
+           ;; S2: Resolution commitment — for/fold over actions
+           [enet-s2 (for/fold ([e enet-s0]) ([action (in-list queue-actions)])
+                      (resolution-executor e action))])
+      (if (eq? enet-s2 enet-s0) enet-s2 (loop ...)))))
+```
+
+#### §8.7.2 Design revisions to §8.3
+
+| §8.3 original | §8.7 revised | Why |
+|---|---|---|
+| 3 new cells (13/14/15) | **2 new cells (13/14)** | L1 readiness already structurally emergent post-S2.b-iv |
+| readiness-stratum-request | **REMOVED** | Readiness propagators already write `ready-queue` cell during S0 |
+| resolution-stratum-request cell-id 15 | **resolution-stratum-request cell-id 14** | Cell-id reused (no readiness cell to allocate) |
+| Bare cell allocations | **§4.6 specialized cell type framework declarations** | Per Phase 1 framework precedent + user direction (don't add legacy-shaped cells for PM 12 to migrate) |
+
+#### §8.7.3 §4.6 framework declarations for the 2 new cells
+
+| Cell | `:tier` | `:storage` | `:fires-on` | `:merge-fn` | `:reset-value` |
+|---|---|---|---|---|---|
+| retraction-stratum-request (cell-id 13) | `'warm` | `'general` | `'any-change` | `merge-set-union` | `(set)` |
+| resolution-stratum-request (cell-id 14) | `'warm` | `'general` | `'any-change` | `merge-list-append` | `'()` |
+
+No `:on-write-check` or `:on-read-check` (no inline gating). No direct-ref cache on prop-net-warm (not hot path yet). Forward-compatible: if benchmarking shows these become hot, can promote to `:tier 'hot` + add cache (4th+ instance of cross-track template pattern).
+
+**Implementation**: adds `make-warm-general-meta` convenience constructor to `specialized-cells.rkt` (small extension following the existing `make-monotone-counter-meta` + `make-cold-general-meta` precedents). Both new cells allocate via `net-register-specialized-cell` in `make-prop-network` (post-fuel-cell registration).
+
+**Resolution-stratum cell retires `current-ready-queue-cell-id` parameter**: per user direction (use specialized cells; don't expand PM 12 scope), the new well-known resolution-stratum-request cell SUBSUMES the per-command ready-queue cell's role. Sites that currently write `ready-queue` (the readiness propagators via `add-readiness-set-latch!`) migrate to write resolution-stratum-request. Single source of truth; small (1-parameter) PM 12 contribution directly tied to 2A's charter.
+
+#### §8.7.4 Subtler finding — S(-1) timing semantic change
+
+Under current sequential loop, S(-1) runs **BEFORE** S0 fires (pre-S0 cleanup):
+```
+loop: cleanup → S0 fires on cleaned state → L2 → ...
+```
+
+Under Phase 2A BSP outer-loop, S(-1) runs **AFTER** S0 quiescence (as value-tier handler):
+```
+outer-loop: S0 fires on potentially-stale state → S(-1) cleans → restart-from-outer-loop → S0 fires on cleaned state
+```
+
+The 2A model adds one "extra round" of S0 firing on pre-cleanup state per outer-loop iteration.
+
+**Correctness analysis**: probably preserved via worldview-filtering of cell reads. `(net-cell-read net cid)` filters by `current-worldview-bitmask`; propagators firing under a worldview that excludes retracted assumption bits don't see stale entries. Stale entries exist in the cell but are invisible to correct-worldview reads. S(-1)'s subsequent cleanup removes them entirely (compaction, not correctness).
+
+**Needs empirical verification** on retraction-heavy workloads — see drift risk #7-bis. Parity test axis "orchestration-parity" should explicitly cover retraction scenarios (speculative branch failure, contradiction-driven retraction).
+
+**If verification surfaces real issues**: escalate to `#:priority` extension to `register-stratum-handler!` API (handlers within tier sorted by priority; S(-1) gets high priority for pre-everything execution within value-tier). Out of scope for 2A.0; revisit in 2A.c if needed.
+
+#### §8.7.5 Drift risks (mid-implementation tripwires)
+
+1. **Stale design references** — §8.3's `collect-ready-constraints-via-cells` reference. Resolved by §8.7 revisions; §8.3 marked superseded.
+2. **L1 readiness already done** — design simplification (2 cells, not 3). Resolved.
+3. **Per-command ready-queue retirement** — directly tied to 2A's charter. Acceptable per user guidance ("don't add legacy-shaped cells for PM 12").
+4. **Handler iteration order** — module-load order (driver.rkt:37 before :45) naturally puts S(-1) + L2 before S1 NAF. Verified.
+5. **Auto-clearing via `#:reset-value`** — BSP outer-loop calls `(net-cell-reset processed req-cid reset-val)` after handler. Handlers don't need to clear. Verified at propagator.rkt:3017.
+6. **Outer-loop fuel** — BSP outer-loop has 20-round iteration bound (propagator.rkt:3033). Should be sufficient for elaboration workloads; verify via parity tests.
+7. **`run-stratified-resolution-pure` callers** — line 1889 calls it from solve-meta-core!'s caller chain. After 2B retires it, the caller chain needs entry point that triggers BSP outer-loop directly. Mechanical migration.
+8. **`record-assumption-retraction!`** at line 1476 currently writes to imperative state (box). Migration: writes to retraction-stratum-request cell via net-cell-write. Confirm all callers have net access.
+9. **(7-bis) S(-1) timing semantic change** — under 2A, S(-1) runs post-S0 (was pre-S0). Worldview-filtering should preserve correctness; needs empirical verification on retraction-heavy workloads. Parity test axis covers this.
+10. **Behavioral parity invariant** — handler behavior MUST be observationally equivalent to sequential orchestrator. Add to test-elaboration-parity.rkt orchestration-parity axis as 2A.c deliverable.
+
+#### §8.7.6 Sub-phase partition
+
+| Sub-phase | Scope | Est. LoC |
+|---|---|---|
+| **2A.0** | Precursor: allocate cell-ids 13 + 14 in `make-prop-network` with §4.6 framework declarations. Adds `make-warm-general-meta` to specialized-cells.rkt. NO BEHAVIOR CHANGE (cells exist but unused). Verifies suite GREEN unchanged. | ~30-50 |
+| **2A.a** | Define `process-retraction` handler wrapping `run-retraction-stratum!` logic; register value-tier; migrate `record-assumption-retraction!` at line 1476 to write retraction-stratum-request cell instead of imperative state. | ~50-100 |
+| **2A.b** | Define `process-resolution` handler wrapping for/fold + `resolution-executor` logic; register value-tier; migrate readiness propagators (`add-readiness-set-latch!`) to write resolution-stratum-request cell. Retire `current-ready-queue-cell-id` parameter. | ~80-150 |
+| **2A.c** | Orchestration parity verification (probe + acceptance + full suite). Add orchestration-parity axis to `test-elaboration-parity.rkt` with retraction-heavy + composition test cases. Verify no regression vs 110.9s baseline. | ~50-100 (mostly test code) |
+
+Estimated 2A total: **~210-400 LoC** across propagator.rkt + specialized-cells.rkt + metavar-store.rkt + resolution.rkt + tests. At the upper end of original §8.2 estimate (~75-125), reflecting the §4.6 framework declarations + ready-queue retirement adds.
+
+#### §8.7.7 Mantra check (per word)
+
+| Word | Verdict |
+|---|---|
+| All-at-once | ✓ All stratum handlers iterated in one BSP outer-loop pass per tier |
+| All in parallel | ✓ Handlers can run in parallel within a tier (BSP scheduler decides); state coordinated via cells |
+| Structurally emergent | ✓ Ordering from BSP outer-loop's stratum iteration + worklist progress detection; no imperative sequencing |
+| Information flow | ✓ Through request cells (writes from propagators) → handlers (reads from cells) → back to network state |
+| ON-NETWORK | ✓ All state in cells; handlers are pure functions `(net, pending) → net`; auto-clearing via BSP outer-loop reset |
+
+#### §8.7.8 Principles in play
+
+| Principle | How 2A serves it |
+|---|---|
+| Decomplection | Separates orchestration concern (BSP outer-loop) from resolution-step concern (handlers) |
+| Propagator-First Infrastructure | Request cells + handlers replace imperative sequential calls |
+| Correct by Construction | BSP outer-loop's auto-clear via `#:reset-value` makes request-cell-clearing structural, not discipline-maintained |
+| Cell/Propagator/Scheduler Orthogonality | Cells declare framework properties (§4.6); handlers are propagator-layer; BSP outer-loop iteration is scheduler concern; clean separation |
+| Specialized Cell Type Framework as Cross-Track Template | Follows §4.6 declarations on the 2 new cells; consistent with Phase 1 framework instances; adds `make-warm-general-meta` constructor (new pattern for cross-track use) |
+| Stratified Propagator Networks | Concrete instantiation: elaborator's S(-1) + L2 join existing topology + S1-NAF + classify-inhabit strata; ONE unified mechanism across both networks |
 
 ---
 
