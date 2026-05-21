@@ -420,11 +420,46 @@
 ;; Phase 10 — Union types via ATMS (cell-based TMS)
 ;; ========================================
 
-(parity-test-skip 'union-narrow-by-constraint "Phase 10"
-                  "let x := (the <Int | String> 0) in [eq? x 0]"
-  (check-parity-equal? 'union-narrow-by-constraint
-                       "let x := (the <Int | String> 0) in [eq? x 0]"
-                       #:expected-type 'Int))
+;; PPN 4C Phase 3A.c (2026-05-22): RENAMED from 'union-narrow-by-constraint
+;; to 'union-inhabitation-fork per OQ1 non-committing inhabitation semantics
+;; (per addendum §9.3.1.3 + §9.3.5.3).
+;;
+;; Original test (skip-gated, Phase 10): "let x := (the <Int | String> 0) in
+;; [eq? x 0]" with #:expected-type 'Int. The expected-type was either pre-
+;; existing wrong (the whole let-in expression returns Bool, not Int) or
+;; assumed downstream narrowing that doesn't apply under non-committing
+;; semantics — narrowing happens in PPN Track 5 occurrence typing, NOT at
+;; check-time.
+;;
+;; Revised input: "(the <Int | String> 0)" — exercises the explicit-annotation
+;; fork-on-union path without the wrapping `let ... in [eq? x 0]` narrowing
+;; assumption. Per OQ1: the CLASSIFIER is preserved as union after check
+;; (multi-success branches coexist via worldview tagging; failed branches
+;; narrowed out of worldview-cache).
+;;
+;; Expected outcome under Phase 3A.b + 3A.c integration:
+;;   - Install-time pre-write to cell-15 (per §9.3.5.1 + §9.3.5.2)
+;;   - process-fork-on-union handler allocates 2 aids (one per union component)
+;;   - Branch propagators fire: Int branch passes (0 <: Int), String fails
+;;   - String branch's contradiction watcher writes aid to cell-16
+;;   - process-fork-contradiction handler narrows String's bit from worldview
+;;   - Final: classifier preserved as `Int | String` (per non-committing);
+;;     only Int's branch bit remains in worldview-cache (failed branches
+;;     structurally retracted via worldview narrowing)
+;;
+;; **D-3A-filter-correctness empirically validated** by this axis (per
+;; §9.3.5.4): the full path from install pre-write through process-fork-on-
+;; union → branch propagators → contradiction watchers → narrowing handler
+;; produces a result whose printed type matches `Int | String`.
+;;
+;; (Phase 10 → renamed to 3A per addendum partitioning §9.2.)
+(parity-test 'union-inhabitation-fork
+             "Phase 3A.c"
+             "(the <Int | String> 0)"
+  (check-parity-equal? 'union-inhabitation-fork
+                       "(the <Int | String> 0)"
+                       ;; Non-committing: classifier preserved as union per OQ1.
+                       #:expected-type "Int | String"))
 
 ;; ========================================
 ;; Phase 9b — γ hole-fill inhabitant synthesis

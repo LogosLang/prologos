@@ -184,7 +184,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A.a | Wire `process-fork-on-union` handler body + `make-branch-check-fire-fn` factory; per-position request entries → N aids → worldview-cache init → N branch check propagators installed; new test file `tests/test-union-types-atms.rkt` with 8 tests (unit + E2E with stubbed classifier-watcher) | ✅ `f3597fbb` | Mini-design + mini-audit + implementation persisted at §9.3.3 (2026-05-22). **+~110 LoC typing-propagators.rkt (factory + handler body) + ~245 LoC new test file**. D-3A.a-stratum-tier RESOLVED in implementation (value tier works for stratum handlers — CALM topology guard only active during BSP fire rounds, not between rounds). Per-command aid scope via `current-command-atms` verified (driver.rkt:464 init pattern). Probe semantic diff = 0; full suite **8240 tests / 108.3s / 0 failures** (+8 tests / −1.0s wall vs pre-3A.a). Adversarial 3-column VAG passed all 4 questions. Methodology data point: stratum-handler tests must use `run-to-quiescence` to drive invocation (not direct calls) to avoid double-invocation when followed by BSP iteration. **Next: Phase 3A.b** (B2-broadcast contradiction watcher + `process-fork-contradiction` body — atomic worldview-cache narrowing on aid-set). | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
 | **3A.b mini-design revised (Option E)** | Audit + BSP-LE 2/2B research + mempalace search surfaced `promote-cell-to-tagged` (propagator.rkt:1579) as the missing step. Pattern used at 5 production sites in relations.rkt (NAF, guard, fact-row, multi-clause concurrent). Cell-Based TMS 2026-04-06 design note's original intent confirmed via mempalace. Q1-Q5 user-resolved. | ✅ `44b434ed` | Persisted at §9.3.4. Replaces prior 4-option matrix (A/B/C/D) with **Option E: lazy `promote-cell-to-tagged` at fork-on-union entry**. Updates §9.3.1.2 (Realization B narrative) + §9.3 deliverables (added step 2.5 promote + step 5a helper). Codification graduation (3rd data point) to DEVELOPMENT_LESSONS.org. |
 | 3A.b | N fire-once contradiction watchers wrapped per-branch wv + `process-fork-contradiction` body (atomic narrowing via bitwise-AND-with-NOT-mask) + `promote-cell-to-tagged` insertion at fork-on-union entry + `tagged-attribute-map-read-with-base-merge` defensive helper for Phase 9b cross-position reads | ✅ `44b434ed` | Per §9.3.4 (Option E). +~125 LoC production (typing-propagators.rkt) + ~+150 LoC tests (test-union-types-atms +7 unit/E2E + 2 updated 3A.a; test-tagged-cell-value +3 substrate parity). **Methodology refinement**: §9.3.4.6 step 3's "B2-broadcast" framing imprecise; net-add-broadcast-propagator reads inputs ONCE per fire, not per-item — used N fire-once propagators wrapped per branch wv (matches relations.rkt:2487-2510 fact-row pattern, parallel-decomposable). Probe semantic diff = 0; acceptance 0 errors; targeted 141/141; full suite **8251 tests / 117.1s / 0 failures** (vs pre-3A.b 8240 / 108.3s; +11 tests; wall +8.8s within 118-127s variance). Adversarial 3-column VAG passed all 4 questions (persisted at §9.3.4.11). Originally-failing E2E ("Int succeeds + String fails → 1 bit") NOW PASSES. |
-| 3A.c | Integration with check propagator chain + classifier-watcher install at typing-propagators (per OQ5 implementation audit); update test-elaboration-parity.rkt 'union-narrow-by-constraint axis → 'union-inhabitation-fork (rename + expectation revision per OQ1 non-committing) | ⬜ | |
+| 3A.c | Integration via install-time pre-write at expr-ann (OQ5 resolution: no watcher needed — annotation is structurally known at install time); parity axis 'union-narrow-by-constraint → 'union-inhabitation-fork (rename + revise input + revise expectation per OQ1 non-committing); D-3A.c-filter-correctness empirically validated end-to-end | ✅ `<TBD>` | Per §9.3.5 mini-design + audit. **OQ5 resolution simpler than original framing**: install-time pre-write at expr-ann (~25 LoC in typing-propagators.rkt) replaces the hypothesized "classifier-watcher per-position" (~100+ LoC). Annotation is known at install; pre-write directly to cell-15; no watcher infrastructure. Watcher approach is correct for INFERRED unions (D-3A.c-non-ann-unions deferred); pre-write is correct for ANNOTATED unions (common case post-T-2 Open by Design). Parity axis empirically validates: `Int \| String` substring-match in `(the <Int \| String> 0)` result requires all 8 mechanism steps (install pre-write → handler decomposes → branch propagators fire → Int passes / String contradicts → watcher writes aid → handler narrows → classifier preserved as union per non-committing). Adversarial 3-column VAG passed all 4 questions (§9.3.5.7). Probe diff = 0; full suite **8251 tests / 109.7s / 0 failures** (-8.2s vs 3A.b cleanup baseline 117.9s; +1 active parity axis). |
 | 3A.d | Q-A4 disposition — retire `elab-speculation.rkt` orchestrators (speculation-begin/try-branch/commit/speculate-first-success); retain `solver-state-amb` primitive; migrate or retire 2 test files | ⬜ | |
 | 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ⬜ | |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
@@ -4722,6 +4722,175 @@ Per Stage 4 implementation plan (§9.3.4.6) — all 4 deliverables landed atomic
 - D.3 §9.3.1.2 + §9.3 + this §9.3.4 updated to cite lazy-promotion pattern + relations.rkt × 5 production sites
 - Probe + acceptance + targeted + full suite all GREEN
 - Ready for **Phase 3A.c** (integration with check propagator chain + classifier-watcher install at typing-propagators per OQ5 implementation audit + parity axis rename `'union-narrow-by-constraint` → `'union-inhabitation-fork`)
+
+### §9.3.5 Phase 3A.c — Integration mini-design + mini-audit (2026-05-22)
+
+Mini-design + mini-audit per Stage 4 Per-Phase Protocol. 3A.c integrates the fork-on-union mechanism (3A.0 cells + 3A.a handler + 3A.b watchers + narrowing) with the user-facing typing pipeline, resolving OQ5 (install pattern) and renaming the parity axis per OQ1.
+
+#### §9.3.5.1 OQ5 resolution — install-time pre-write at `expr-ann` case
+
+**Audit finding** (typing-propagators.rkt:2311-2338 + 2092 install-typing-network):
+
+The original OQ5 mini-design (§9.3.1.4) anticipated a "classifier-watcher propagator installed per-position." Audit revealed a **simpler architectural hook**: `install-typing-network`'s `expr-ann` case already KNOWS the annotation at install time. When the annotation is `expr-union`, the term's classifier WILL be the union (the annotation propagates downward via `type-map-write-unified` at line 2323). We can pre-write the cell-15 request AT INSTALL TIME — no watcher needed.
+
+**Why the watcher approach was unnecessarily complex**:
+
+A classifier-watcher installed per-position would face a structural re-fire problem:
+- Watcher fires when `:type` facet changes (per `:component-paths`)
+- Watcher reads the classifier; if `expr-union`, writes request to cell-15
+- Handler decomposes, installs branch propagators
+- Branch propagators write to `:type` facet (contradiction sentinels under branch wv)
+- These writes TRIGGER THE WATCHER AGAIN (component-path match)
+- Watcher reads classifier under OUTER wv (its own scope, unwrapped) — sees the same union
+- Writes to cell-15 AGAIN → handler re-decomposes → infinite loop OR wasteful re-allocation
+
+To prevent re-fire, the watcher approach needs EITHER:
+- (a) Fire-once propagator — but might miss the union write if other `:type` writes happen first
+- (b) A `decomposed-positions` guard cell (new well-known cell-17) — adds infrastructure + cell-id cascade
+- (c) Two-stage delayed install — install a classifier-watcher only when classifier IS already a union
+
+**Install-time pre-write eliminates all these complications**:
+- Hook: install-typing-network's `expr-ann` case
+- Trigger: `(expr-union? type-expr)` check at install time (synchronous, no propagator overhead)
+- Action: flatten union via `flatten-union`, write to cell-15 with request-info
+- Idempotence: trivial — install-typing-network runs once per expr-ann position per command; per-command via `current-command-atms` analog; hash-union merge dedups within a round even if (hypothetically) called twice
+
+**Coverage caveat** (D-3A.c-non-ann-unions): positions whose type becomes a union via INFERENCE (not explicit annotation) would not trigger fork-on-union via this hook. Post-T-2 Open by Design, inferred unions are rare (heterogeneous maps use Open; explicit unions arise primarily from annotations). Document as known limitation for 3A.c; future inference patterns that produce unions (e.g., trait dispatch returning a union, multi-arm pattern matches with divergent arm types) can extend the install hook similarly. **Phase 3A.c handles the explicit-annotation case**; broader inference coverage is a future extension.
+
+#### §9.3.5.2 Implementation plan
+
+Hook in `install-typing-network`'s `expr-ann` case (typing-propagators.rkt:2311+):
+
+```racket
+[(expr-ann term type-expr)
+  ;; ... existing install + type-map-write-unified ...
+  (define net4 (type-map-write-unified net3 tm-cid term type-expr))
+  ;; PPN 4C Phase 3A.c (2026-05-22): fork-on-union install-time pre-write.
+  ;; If annotation is expr-union, register the fork-on-union decomposition request
+  ;; for `term` position at install time. The handler decomposes at the next BSP
+  ;; round (allocates aids, sets branch bits, promotes carrier, installs branch
+  ;; propagators + watchers). No classifier-watcher needed — install-time
+  ;; knowledge of the annotation IS the trigger (per §9.3.5.1).
+  (define net4b
+    (cond
+      [(expr-union? type-expr)
+       (define components (flatten-union type-expr))
+       (define request-info
+         (hasheq 'components components 'tm-cid tm-cid))
+       (define current (net-cell-read net4 fork-on-union-request-cell-id))
+       (net-cell-write net4 fork-on-union-request-cell-id
+                       (hash-set current term request-info))]
+      [else net4]))
+  ;; ... rest of expr-ann case continues with net4b ...
+]
+```
+
+#### §9.3.5.3 Parity axis revision — `'union-narrow-by-constraint` → `'union-inhabitation-fork`
+
+Current axis at `test-elaboration-parity.rkt:423-427`:
+```racket
+(parity-test-skip 'union-narrow-by-constraint "Phase 10"
+                  "let x := (the <Int | String> 0) in [eq? x 0]"
+  (check-parity-equal? 'union-narrow-by-constraint
+                       "let x := (the <Int | String> 0) in [eq? x 0]"
+                       #:expected-type 'Int))
+```
+
+**Issues with current expectation**:
+- Test input wraps `(the <Int | String> 0)` in `let ... in [eq? x 0]`. The WHOLE expression returns Bool (eq? is comparison), not Int. The `#:expected-type 'Int` was either pre-existing wrong or assumed downstream narrowing that doesn't apply under non-committing semantics.
+- Per OQ1 non-committing: the classifier IS preserved as union after check; narrowing happens downstream (PPN Track 5 occurrence typing). `[eq? x 0]` doesn't narrow the type of x; it produces a Bool result.
+
+**Revised axis** (per OQ1 non-committing + 3A.c scope):
+```racket
+(check-parity-equal? 'union-inhabitation-fork
+                     "(the <Int | String> 0)"
+                     #:expected-type 'Int | String)
+```
+
+Simpler input (no narrowing wrapper). Expected: the classifier `Int | String` IS preserved per non-committing semantics. Result-str will contain ` : Int | String` (formatted per pretty-print). Substring match succeeds.
+
+**Empirical validation gate for D-3A.c-filter-correctness**: this parity axis exercises the full path:
+1. `expr-ann` install-time pre-write to cell-15
+2. process-fork-on-union handler decomposes
+3. branch check propagators fire under their worldviews
+4. contradiction watchers detect (Int branch passes; String branch fails — `0` inhabits Int, NOT String)
+5. process-fork-contradiction narrows worldview-cache (clears String's bit; Int's bit remains)
+6. final type at outer wv = classifier preserved as union per non-committing
+
+Filter correctness verified empirically: if `Int | String` substring-match succeeds, the classifier survived the fork-on-union cycle as the design intended.
+
+#### §9.3.5.4 Drift risks named (per Stage 4 mini-design discipline)
+
+- **D-3A.c-pre-write-idempotence**: install-typing-network may be called multiple times for the same expr-ann across re-elaboration scenarios. Pre-write idempotently overwrites cell-15 (hash-union keyed by position). Handler processes once per round. **Risk MITIGATED structurally** by hash-key dedup + handler #:reset-value.
+- **D-3A.c-non-ann-unions**: positions whose type becomes a union via INFERENCE (not annotation) are not currently covered. **Documented as known 3A.c limitation**; future inference patterns producing unions extend the install hook. Not a regression vs pre-3A.c (pre-3A.c didn't handle these either; sexp infer fallback caught them).
+- **D-3A.c-filter-correctness**: Level 1 termination claim depends on worldview filter correctness. The new parity axis IS the empirical validator. **Risk gated by parity axis green**.
+- **D-3A.c-handler-allocation-cascade**: pre-writing at install time means cell-15 has entries BEFORE first BSP round. Handler runs at first round, allocates aids, sets bits, installs propagators. If the handler runs DURING the first round (not after), allocations might happen mid-elaboration and disrupt other propagators. **Mitigated**: stratum handlers run BETWEEN BSP rounds (verified at 2A.a + 3A.a + 3A.b). First-round behavior: handler runs after the initial BSP round drains; allocations happen between round 1 and round 2.
+- **D-3A.c-elab-speculation-disposition** (deferred to 3A.d per tracker): Q-A4 disposition of `elab-speculation.rkt` orchestrators is 3A.d scope, not 3A.c. 3A.c lands the integration; 3A.d retires the orchestrators.
+
+#### §9.3.5.5 Q-A4 explicit deferral to 3A.d
+
+Per addendum §9.3.1.6 sub-phase partition: Phase 3A.d handles `elab-speculation.rkt` orchestrator retirement (Q-A4). 3A.c lands the on-network REPLACEMENT (the install-time pre-write + the full 3A.0/3A.a/3A.b chain) without touching the orchestrators. After 3A.c proves the integration works, 3A.d audits + retires the now-redundant orchestrator surfaces.
+
+This sequencing keeps 3A.c scope minimal (integration + parity axis); 3A.d is its own atomic cleanup.
+
+#### §9.3.5.6 Implementation deliverables (CLOSE 2026-05-22)
+
+**typing-propagators.rkt** `expr-ann` case (line 2311+, ~+25 LoC):
+- Added `net4b` step between the `type-map-write-unified` (Role B equality enforcement) and the contradiction-detection propagator install
+- If `type-expr` is `expr-union`: extract components via `flatten-union`, build request-info hasheq, write to `fork-on-union-request-cell-id` via `(net-cell-write net4 ... (hash-set current term request-info))`
+- Else: pass through unchanged (net4b = net4)
+- Subsequent install continues from net4b
+- Doc-string at the hook explains the install-time-pre-write rationale (no watcher needed; one install per expr-ann; structural fire-once)
+
+**tests/test-elaboration-parity.rkt** axis rename + revision (~+30 LoC):
+- Renamed `'union-narrow-by-constraint` → `'union-inhabitation-fork`
+- Replaced skip-gated `parity-test-skip` with active `parity-test` (axis enabled)
+- Revised input: `"(the <Int | String> 0)"` (was `"let x := (the <Int | String> 0) in [eq? x 0]"`)
+- Revised expectation: `#:expected-type "Int | String"` (was `'Int`; pre-existing wrong per OQ1 non-committing analysis at §9.3.5.3)
+- Documentation comments explain the rename rationale + the empirical validation gate for D-3A.c-filter-correctness
+
+#### §9.3.5.7 Post-implementation adversarial 3-column VAG (CLOSE 2026-05-22)
+
+| Q | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| (a) On-network? | ✓ Install-time pre-write is a `net-cell-write` to cell-15 — on-network. The handler reads cell-15 + writes worldview-cache — all on-network. The branch propagators + watchers (3A.a/b deliverables) — all on-network. | Is install-time write "off-network" in the sense that it happens during install (not during BSP firing)? Installation is structurally distinct from firing. | **No — install-time IS on-network.** All `net-cell-write` operations are on-network regardless of WHEN they're invoked (install vs fire). The cell-15 entry written at install becomes the trigger for the handler in the FIRST BSP round. Same `net-cell-write` mechanism as branch propagator writes. **NOT a fresh on-network violation.** Pattern is structurally identical to install-time meta cell allocations + initial type-map writes already done throughout install-typing-network (e.g., line 2316 `type-map-write net2 tm-cid e type-expr` is also install-time). |
+| (b) Complete? | ✓ The expr-ann case detects expr-union annotations + writes the request. The parity axis `'union-inhabitation-fork` empirically validates the full chain (install → handler → branch propagators → watchers → narrowing → classifier-preserved-as-union). 25 tests pass, +1 enabled axis. | Does the install-time pre-write actually trigger fork-on-union for the parity axis? Could the test pass without the pre-write firing? | **The test PASSES — `Int | String` substring-match succeeds in result-str.** This requires: (a) install-time pre-write fired (writing to cell-15); (b) handler decomposed (allocated 2 aids); (c) branch propagators installed under their worldviews; (d) Int branch succeeded (`0 <: Int`); (e) String branch contradicted (`0 NOT <: String`); (f) String watcher detected + wrote to cell-16; (g) process-fork-contradiction narrowed String's bit from worldview-cache; (h) outer-wv read of classifier returned `Int | String` (preserved per non-committing). All 8 steps verified by the single substring assertion — D-3A.c-filter-correctness is **empirically validated end-to-end**. |
+| (c) Vision-advancing? | ✓ Closes 3A.c integration scope without introducing the OQ5 mini-design's watcher complexity. The install-time pre-write hook is a 25-line addition vs the watcher approach's hypothesized 100+ lines (watcher propagator + factory + guard cell + cell-id cascade + handler idempotence). Cleaner, fewer mechanisms, same correctness. | Are we PRESERVING an architectural mismatch by hooking pre-write at install-typing-network's expr-ann case instead of installing a proper classifier-watcher per-position? Is install-time pre-write a "shortcut" that bypasses the propagator model? | **No — install-time pre-write IS structurally the right architecture for explicit annotations.** The annotation IS the trigger; it's KNOWN at install time. Installing a watcher to re-discover the union at fire time would be redundant — we'd be polling for information we already have. Per Hyperlattice Conjecture + Data Orientation: information that is structurally known should be written DIRECTLY, not derived from polling. Watcher approach is correct for INFERRED unions (D-3A.c-non-ann-unions); pre-write is correct for ANNOTATED unions. Future extension can add the same pre-write at OTHER install-time-known union sites (trait dispatch returning union, multi-arm pattern matches with divergent arms). |
+| (d) Drift-risks-cleared? | ✓ D-3A.c-pre-write-idempotence: install runs once per expr-ann; hash-union dedups within rounds; cell-15 #:reset-value resets across rounds. D-3A.c-filter-correctness: parity axis empirically validates. D-3A.c-handler-allocation-cascade: stratum handler runs between rounds (verified at 2A.a + 3A.a + 3A.b). D-3A.c-elab-speculation-disposition: explicitly deferred to 3A.d per §9.3.5.5. | What about D-3A.c-non-ann-unions? Did we leave an unfixed gap? | **Documented as a known limitation, NOT a regression.** Pre-3A.c, the sexp infer fallback caught inferred-union cases (typing-core.rkt:459 `[else]` branch). Post-3A.c, that fallback STILL exists for inference-time unions. The 3A.c hook ADDS coverage for the explicit-annotation case (the common case post-T-2 Open by Design). Future extension covers inference cases. **3A.c is additive — no regression**. Adversarial check: probe diff = 0 confirms no semantic regression at the probe's command set (28 commands, no `(the <union> ...)` annotations); full suite 8251/0 confirms no regression elsewhere. |
+
+**All 4 questions pass under adversarial framing.**
+
+#### §9.3.5.8 Validation results
+
+| Measurement | Value | vs Baseline |
+|---|---|---|
+| Probe `examples/2026-04-22-1A-iii-probe.prologos` semantic diff | 0 (28 numbered results identical to 3A.a/b baseline; pre-existing `[Map ...]` formatting + `#t` line drift unrelated to 3A.c — same diffs as 3A.b) | ✓ no semantic regression |
+| Acceptance `examples/2026-04-17-ppn-track4c.prologos` | 0 errors | ✓ |
+| **`'union-inhabitation-fork` parity axis** | **PASSES** — `Int \| String` substring-matched in `"(the <Int \| String> 0)"` elaboration result | ✓ D-3A.c-filter-correctness empirically validated end-to-end |
+| Targeted test (test-elaboration-parity) | 25/25 PASS (was 24/24 + 1 skip pre-3A.c; now 25 active — 'union-inhabitation-fork enabled) | +1 active axis |
+| Full suite | **8251 tests / 109.7s / 0 failures** | -8.2s vs 3A.b cleanup baseline (117.9s); within 109-127s variance band — note WALL IMPROVEMENT (perhaps variance, perhaps install-time pre-write skips watcher install overhead) |
+
+#### §9.3.5.9 Methodology data points captured
+
+1. **Audit catalyst** (extends the just-graduated codification): the OQ5 mini-design framed the install pattern as "classifier-watcher propagator installed per-position" — a propagator-based approach. Audit at install-typing-network surfaced that `expr-ann` case ALREADY knows the annotation at install time. Pre-write eliminates the propagator entirely. **Lesson**: when a mini-design names a "watcher propagator" for state that's structurally known at install time, audit FIRST whether install-time pre-write is sufficient. Codification candidate (1 data point; watching list): *"Install-time pre-write for structurally-known state beats install-time-watcher install. Watcher approach is correct for state that emerges at fire time (inference, derivation); install-time pre-write is correct for state that's known when the install runs (annotations, AST shape)."*
+
+2. **Test design simplification**: the original parity axis test wrapped `(the <Int | String> 0)` in `let ... in [eq? x 0]` — adding narrowing-via-equality complexity. Removing the wrapper made the test:
+   - Easier to understand (just exercise the fork-on-union path; not the narrowing path)
+   - More architecturally focused (validates the 3A.b/c mechanism specifically, not narrowing semantics)
+   - Aligned with non-committing semantics (no narrowing-by-equality assumption; classifier preserved as union)
+   **Lesson**: test inputs should isolate the MECHANISM under test, not bundle multiple concerns. Watching list candidate.
+
+3. **Validation gate at one test**: D-3A.c-filter-correctness is validated by the SINGLE 'union-inhabitation-fork parity axis. The single substring assertion (`Int | String` in result-str) validates 8 sequential mechanism steps (per §9.3.5.7 question (b) adversarial breakdown). High-leverage testing — one assertion proves end-to-end correctness because the result-str format inherently shows the elaborated type at all relevant points.
+
+#### §9.3.5.10 Status
+
+- **Phase 3A.c COMPLETE** at this commit (TBD hash)
+- OQ5 RESOLVED via install-time pre-write at expr-ann (no watcher needed; cleaner than original mini-design)
+- Parity axis `'union-narrow-by-constraint` → `'union-inhabitation-fork` renamed + revised + enabled
+- D-3A.c-filter-correctness empirically validated by the active parity axis
+- All 5 named drift risks cleared or explicitly deferred to 3A.d
+- Probe + acceptance + targeted + full suite all GREEN (full suite 8251 / 109.7s / 0 failures)
+- Ready for **Phase 3A.d** (Q-A4: elab-speculation.rkt orchestrator retirement — speculation-begin / try-branch / commit / speculate-first-success retire; retain `solver-state-amb` primitive)
 
 ### §9.4 Phase 3B deliverables
 
