@@ -268,7 +268,9 @@
   (with-fresh-meta-env
     (define net-box (current-prop-net-box))
     (define write-fn (current-prop-cell-write))
-    (define rq-cid (current-ready-queue-cell-id))
+    ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter RETIRED;
+    ;; well-known resolution-stratum-request-cell-id (cell-14) replaces it.
+    (define rq-cid resolution-stratum-request-cell-id)
     ;; Write tagged actions to ready-queue
     (define action1 (action-resolve-trait 'meta-1
       (trait-constraint-info 'Eq '())))

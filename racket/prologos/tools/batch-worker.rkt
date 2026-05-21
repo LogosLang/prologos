@@ -256,7 +256,9 @@
          [current-hasmethod-cell-map-cell-id   #f]
          [current-constraint-status-cell-id    #f]
          [current-error-descriptor-cell-id     #f]
-         [current-ready-queue-cell-id          #f]
+         ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter
+         ;; RETIRED — replaced by well-known resolution-stratum-request-cell-id
+         ;; (cell-14, allocated in make-prop-network).
          ;; Track 4B Phase 6b: global attribute-map cell — reset per file
          [current-attribute-map-cell-id       #f]
          ;; errors.rkt — emit formatted errors to stderr for failure logs

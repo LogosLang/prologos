@@ -272,6 +272,70 @@
                        #:expected-type 'Int))
 
 ;; ========================================
+;; PPN 4C 2A.b (2026-05-20) — resolution-parity axis
+;; ========================================
+;;
+;; Verifies the cell-driven L2 resolution infrastructure (D.3 §8.7.b)
+;; doesn't regress elaboration semantics relative to the pre-2A.b ready-queue
+;; mechanism. The new path:
+;;   readiness latch → resolution-stratum-request cell-14 (was per-command param)
+;;   → BSP outer-loop's value-tier processing → process-resolution handler
+;;   → executor (current-resolution-executor-pure) invokes resolution actions
+;;   on enet via box-bridge → updated state in box
+;;
+;; Architectural-honesty framing (§8.7.b.3): unlike 2A.a's pure process-retraction,
+;; this handler MUST box-bridge to elab-net. Parity tests verify the bridge
+;; preserves semantics; box-bridge retirement gated on Parent Phase 4 + PM 12.
+;;
+;; FALSIFICATION COVERAGE: this axis intentionally uses only language-primitive
+;; baseline cases (run-ns-last harness binds an empty prelude env, so prelude
+;; functions like eq-check are unbound at the symbol-table layer). End-to-end
+;; falsification — verifying process-resolution actually fires + the handler
+;; reaches the executor + dict-meta solves + elaboration completes — is covered
+;; by:
+;;   (a) tests/test-readiness-propagator.rkt line 291 integration test —
+;;       solves a dep meta and verifies actions appear in cell-14 via
+;;       read-ready-queue-actions (exercises the full readiness latch → cell-14
+;;       chain end-to-end at the API level).
+;;   (b) tests/test-trait-resolution.rkt — broad trait dispatch coverage that
+;;       inherently exercises process-resolution because trait resolution
+;;       cascades through readiness latches.
+;;   (c) The full suite — many tests exercise trait dispatch via process-string-ws
+;;       which DOES bind the prelude env (unlike run-ns-last).
+;; If process-resolution misfires (handler not registered, cell-14 not drained,
+;; executor unset), (a) + (b) + (c) all fail visibly.
+
+(parity-test 'resolution-baseline-arithmetic "PPN 4C 2A.b"
+             "[int+ 1 2]"
+  ;; Baseline arithmetic — primitive int+, no trait dispatch. Confirms the new
+  ;; handler infrastructure doesn't break basic elaboration flow (e.g., handler
+  ;; over-firing, polluting prop-net on dormant resolution cell, or causing
+  ;; spurious value-tier work for non-trait-using expressions).
+  (check-parity-equal? 'resolution-baseline-arithmetic
+                       "[int+ 1 2]"
+                       #:expected '3))
+
+(parity-test 'resolution-baseline-polymorphic "PPN 4C 2A.b"
+             "[(fn [x] x) 3N]"
+  ;; Polymorphic identity — exercises type-meta resolution + propagator cascade.
+  ;; Stresses the same elaboration codepath that constraint readiness latches
+  ;; build atop, without requiring prelude-bound trait methods. Verifies the
+  ;; resolution-stratum-request cell (cell-14) doesn't cause spurious value-tier
+  ;; work on dormant constraints.
+  (check-parity-equal? 'resolution-baseline-polymorphic
+                       "[(fn [x] x) 3N]"
+                       #:expected '3N))
+
+(parity-test 'resolution-baseline-annotation "PPN 4C 2A.b"
+             "(the Int 42)"
+  ;; Type ascription — exercises check-path where readiness latches can fire
+  ;; for inferred constraints. Confirms elaboration produces expected type
+  ;; post-2A.b (mirror of retraction-baseline-annotation, axis above).
+  (check-parity-equal? 'resolution-baseline-annotation
+                       "(the Int 42)"
+                       #:expected-type 'Int))
+
+;; ========================================
 ;; Phase 10 — Union types via ATMS (cell-based TMS)
 ;; ========================================
 

@@ -700,7 +700,8 @@
   ;; List-valued accumulator of resolution action descriptors. Append is
   ;; associative but NOT commutative; for resolution actions, order may
   ;; carry intent (e.g., trait-dispatch before usage-finalization).
-  ;; Same shape as the retired current-ready-queue-cell-id merge.
+  ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter
+  ;; RETIRED — this cell IS its replacement. Same shape (list with append).
   (append old new))
 
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
@@ -3073,9 +3074,20 @@
                  (define reset-val (stratum-handler-reset-val entry))
                  (define pending (net-cell-read net req-cid))
                  (cond
+                   ;; PPN 4C 2A.b (2026-05-20): empty-list check added for
+                   ;; list-merge stratum-request cells (e.g., resolution-stratum-
+                   ;; request, cell-14). Without this guard, a list-valued
+                   ;; request cell at its initial '() state would still fire
+                   ;; the handler (returning net unchanged) AND trigger
+                   ;; net-cell-reset, breaking eq? identity for callers that
+                   ;; rely on "no-op when nothing pending" semantics
+                   ;; (e.g., test-readiness-propagator.rkt:469
+                   ;; "eq? identity: run-to-quiescence returns same network when
+                   ;; already quiescent"). Pattern mirrors hash/set empty checks.
                    [(or (not pending)
                         (and (hash? pending) (hash-empty? pending))
-                        (and (set? pending) (set-empty? pending)))
+                        (and (set? pending) (set-empty? pending))
+                        (and (list? pending) (null? pending)))
                     (process net (cdr remaining))]
                    [else
                     (define processed (handler-fn net pending))
