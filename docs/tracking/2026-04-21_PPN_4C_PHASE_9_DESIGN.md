@@ -176,7 +176,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.a (2026-05-20). Approach C (refined Option d): pure handler on prop-net (scoped cells only); meta-info + id-map retraction deferred to Parent Phase 4 via worldview-filtering at read time; 6 UNSAFE reader sites migrated to worldview-aware lookups; 4 STUB callbacks retired as dead code (`current-prop-id-map-read/set` + `current-prop-meta-info-read/set`); `record-assumption-retraction` pure function replaces bang version; tests migrated (process-retraction direct + record-assumption-retraction API surface + integration via run-to-quiescence); `retraction-parity` axis added to test-elaboration-parity. **Full suite: 8228 tests / 109.1s / 0 failures.** Adversarial VAG passed. |
 | 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.b (2026-05-20); implementation landed at commit `014944a5`. Option A: handler approach matching 2A.a precedent; box-bridge to elab-net labeled scaffolding (Parent Phase 4 + PM 12 retire). `process-resolution` registered value-tier on cell-14 with `#:reset-value '()`. `add-readiness-set-latch!` (line 443) + `read-ready-queue-actions` (line 2245) rq-cid migrated from parameter read to well-known constant. `current-ready-queue-cell-id` parameter RETIRED at 5 sites (defn + reset + alloc + provide + batch-worker binding). Stale comment at propagator.rkt:703 updated. **Bonus scheduler fix**: empty-pending guard in `process-tier` (propagator.rkt:3077-3090) extended to recognize `null?` empty list — required for list-merge stratum cells to preserve eq? identity in run-to-quiescence (caught by test-readiness-propagator.rkt:469). `test-readiness-propagator.rkt:271` migrated (1 direct param read; 4 indirect calls via `read-ready-queue-actions` continue to work). `resolution-parity` axis added (3 baseline tests + falsification-coverage NOTE pointing to integration test in test-readiness-propagator.rkt:291 + test-trait-resolution.rkt + full suite, since run-ns-last binds empty prelude env making eq-check unbound). **Full suite: 8231 tests / 121.1s / 0 failures** (within 118-127s variance band). Adversarial 3-column VAG passed all 4 questions with honest scaffolding labels. PM Track 13 handler-mechanism concern remains orthogonal (separate track; does not gate). |
 | 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ✅ | Mini-design persisted at §8.7.c (2026-05-20); implementation landed at commit `2b4bd5a8`. **Empirical falsification of §8.7.4's "S(-1) runs POST-S0" timing concern** — 3 retraction-heavy parity tests pass: `orchestration-union-no-retraction` (Int branch succeeds first), `orchestration-union-with-retraction` (Int fails → retract → String succeeds — THE falsification case), `orchestration-union-flipped-with-retraction` (asymmetry check). All exercise `with-speculative-rollback` at `typing-core.rkt:2385` → `record-assumption-retraction` writes cell-13 → process-retraction fires POST-S0 → restart-from-outer-loop → S0 fires on cleaned state → correct branch succeeds. `(ns t)` bootstrap pattern works in `run-ns-last` harness (D1 risk verified, no fallback needed). **Full suite: 8234 tests / 116.3s / 0 failures** (vs 8231/121.1s pre-2A.c; +3 tests; wall -4.8s within variance). Adversarial 3-column VAG passed all 4 questions. Empirical confirmation that worldview-filtering preserves correctness — S(-1)'s POST-S0 timing produces equivalent results to pre-S0 sequential cleanup. **2A group COMPLETE** — ready for 2B (retire `run-stratified-resolution-pure` orchestrator). |
-| 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
+| 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | 🔄 | Mini-design + mini-audit persisted at §8.8 (2026-05-20). Charter: completion of Phase 2's orchestration-unification (the wrapper is now structurally redundant post-2A.a+b; BSP outer-loop is sole orchestration). Retirements enumerated: 5 functions (`run-stratified-resolution-pure`, `run-stratified-resolution!`, `execute-resolution-actions!`, `read-ready-queue-actions`, `run-retraction-stratum!`) + 3 parameters (`current-resolution-executor`, `current-retracted-assumptions`, `current-in-stratified-resolution?`) + driver.rkt installs at :467-468 + :2705 (KEEP :2707 — `current-resolution-executor-pure` is load-bearing for process-resolution). `solve-meta!` body simplifies from 3-branch cond to 2-branch (no executor check, no re-entry guard, inline quiesce). Est. ~150-200 LoC net DELETION. 8 drift risks (D1 re-entry guard; D2 BSP 20-iter vs 100-fuel; D3-D4 test migrations; D5 handler order codification; D6-D8 hygiene + atomic-commit discipline). PM Track 13 mechanism concern remains orthogonal (doesn't gate). |
 | 2V | Vision Alignment Gate Phase 2 | ⬜ | |
 | 3A | Fork-on-union basic mechanism | ⬜ | |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
@@ -3752,6 +3752,270 @@ None NEW for 2A.c. All scaffolding inherited from 2A.a/b already captured. 2A.c 
 
 - **PPN 4C Parent Design Doc Phase 4 row item (viii)** — retirement targets already captured per 2A.a/b commits; no new captures from 2A.c.
 - **2B sub-phase** — `run-stratified-resolution-pure` orchestrator retirement is the natural next phase. 2A.c is the verification gate before 2B can land safely.
+
+### §8.8 Phase 2B Mini-design + Mini-audit (2026-05-20)
+
+Per Stage 4 Per-Phase Protocol: opening mini-design + mini-audit cycle for Phase 2B (orchestrator retirement). Outcomes persist into this design doc per refined Stage 4 methodology.
+
+Charter: retire the sequential `run-stratified-resolution-pure` orchestrator now that 2A.0+2A.a+2A.b have moved its responsibilities (S(-1) retraction + S0 quiescence + L1/L2 resolution drain) onto the BSP outer-loop's value-tier strata. Simplify `solve-meta!` to call `(current-quiescence-scheduler)` directly. Retire the dead `run-stratified-resolution!` (R3 external critique finding) + supporting helpers + Racket-parameter scaffolding. Phase 2 charter ("one orchestration mechanism") completes here.
+
+#### §8.8.1 Architectural reframing — what 2A made redundant
+
+Post-2A.a+2A.b, the wrapper `run-stratified-resolution-pure` (metavar-store.rkt:2266) has become a pass-through:
+- **S(-1) retraction** — `process-retraction` BSP value-tier handler (2A.a) does the work. The wrapper's `run-retraction-stratum!` call (line 2277) is belt-and-suspenders since 2A.a landed.
+- **S0 quiescence** — the wrapper calls `(current-quiescence-scheduler)`, which IS the BSP outer-loop. Same call path.
+- **L1 readiness + L2 resolution** — `process-resolution` BSP value-tier handler (2A.b) drains cell-14 inside the BSP outer-loop. The wrapper's subsequent `read-ready-queue-actions` (line 2295) returns `'()` since cell-14 was already drained. The wrapper's `(for/fold ... resolution-executor)` (line 2297-2299) runs on the empty list = no-op.
+- **Progress detection + fuel** — BSP outer-loop has its own progress detection (`(when (pair? (prop-network-worklist after-value-tier)))` at propagator.rkt:3109) and 20-iteration safety limit (line 3088). The wrapper's 100-iteration fuel + `(eq? enet-s2 enet-s0)` check duplicate this.
+
+**Verdict**: `run-stratified-resolution-pure` is now structurally redundant. `solve-meta!`'s call to the wrapper can collapse to a direct BSP outer-loop invocation.
+
+`run-stratified-resolution!` (imperative, line 2214) was already "mostly dead code" per the Track 8 A5 comment; grep confirms ZERO production callers. R3 external critique flagged this in 2026-04-18.
+
+#### §8.8.2 Mini-audit findings (codebase grounding)
+
+**Functions to retire** (grep-verified 2026-05-20):
+
+| Function | File:Line | Production callers | Rationale |
+|---|---|---|---|
+| `run-stratified-resolution!` | metavar-store.rkt:2214 | ZERO (dead code per Track 8 A5; R3 critique 2026-04-18) | Imperative variant superseded by `-pure`; never reached |
+| `run-stratified-resolution-pure` | metavar-store.rkt:2266 | 1 internal (solve-meta!:2024) | Body now pass-through over BSP outer-loop; retire by inlining at solve-meta! |
+| `execute-resolution-actions!` | metavar-store.rkt:1155 | 1 (run-stratified-resolution! only) | Dead with run-stratified-resolution! |
+| `read-ready-queue-actions` | metavar-store.rkt:2316 | 2 (run-stratified-resolution! :2240 + run-stratified-resolution-pure :2295) | Both dead post-retirement; function obsolete |
+| `run-retraction-stratum!` | metavar-store.rkt:1566 | 2 (run-stratified-resolution! :2227 + run-stratified-resolution-pure :2277) | Dead post-retirement; process-retraction handler does the work |
+
+**Parameters to retire**:
+
+| Parameter | File:Line | Consumers | Rationale |
+|---|---|---|---|
+| `current-resolution-executor` | metavar-store.rkt:1149 | execute-resolution-actions! + run-stratified-resolution! (both dead) + driver.rkt:2705 install + test-constraint-postponement.rkt:60 | Imperative-path parameter; only used by retiring functions + 1 test (migrate) |
+| `current-retracted-assumptions` | metavar-store.rkt:1490 | run-retraction-stratum! (retiring) + record-assumption-retraction + driver.rkt:467-468 init | Box-based retracted-aid set; superseded by cell-13 (retraction-stratum-request) per 2A.a |
+| `current-in-stratified-resolution?` | metavar-store.rkt:1995 | solve-meta!:2020 (re-entry guard) + run-stratified-resolution!:2216 | Re-entry guard becomes vestigial: resolution-execute-action-pure uses solve-meta-core-pure (NOT solve-meta!), no re-entry path post-retirement |
+| `current-resolution-executor-pure` | metavar-store.rkt:1152 | process-resolution handler (2A.b) + driver.rkt:2707 install | **KEEP** — load-bearing for process-resolution handler; PM 12 retires |
+
+**Solve-meta! simplification** (metavar-store.rkt:2016-2033):
+
+The 3-branch cond becomes a 2-branch cond:
+```racket
+;; BEFORE (post-2A.b, pre-2B):
+(define (solve-meta! id solution)
+  (define net-box (current-prop-net-box))
+  (define executor (current-resolution-executor-pure))
+  (cond
+    [(and net-box executor (not (current-in-stratified-resolution?)))
+     (define enet (unbox net-box))
+     (define-values (enet* _) (solve-meta-core-pure enet id solution))
+     (define enet** (run-stratified-resolution-pure enet* id executor))
+     (set-box! net-box enet**)]
+    [net-box
+     (define enet (unbox net-box))
+     (define-values (enet* _) (solve-meta-core-pure enet id solution))
+     (set-box! net-box enet*)]
+    [else
+     (solve-meta-core! id solution)]))
+
+;; AFTER (post-2B):
+(define (solve-meta! id solution)
+  (define net-box (current-prop-net-box))
+  (cond
+    [net-box
+     (define enet (unbox net-box))
+     (define-values (enet* _) (solve-meta-core-pure enet id solution))
+     ;; Quiesce via BSP outer-loop — handles retraction + resolution +
+     ;; constraint propagators via registered value-tier handlers
+     ;; (process-retraction + process-resolution + classify-inhabit + S1 NAF).
+     (define pnet (elab-network-prop-net enet*))
+     (define pnet** ((current-quiescence-scheduler) pnet))
+     (set-box! net-box (elab-network-rewrap enet* pnet**))]
+    [else
+     (solve-meta-core! id solution)]))
+```
+
+**Driver.rkt sites**:
+
+| Site | File:Line | Action |
+|---|---|---|
+| `current-retracted-assumptions` init | driver.rkt:467-468 | DELETE (parameter retired) |
+| Comment about `run-stratified-resolution-pure` | driver.rkt:2624 | UPDATE — point to BSP outer-loop instead |
+| `(current-resolution-executor resolution-execute-action!)` | driver.rkt:2705 | DELETE (parameter retired) |
+| `(current-resolution-executor-pure resolution-execute-action-pure)` | driver.rkt:2707 | **KEEP** — load-bearing for process-resolution |
+
+**Provides to retire** (metavar-store.rkt):
+
+| Line | Provide |
+|---|---|
+| 203 | `current-retracted-assumptions` |
+| 206 | `run-retraction-stratum!` |
+| 211 | `current-resolution-executor` |
+| 217 | `run-stratified-resolution-pure` |
+| 226 | `read-ready-queue-actions` |
+| 272 | `execute-resolution-actions!` |
+| (also `current-in-stratified-resolution?` if it's provided — check) |
+
+**Tests** (3 sites needing migration):
+
+| Site | File:Line | Migration |
+|---|---|---|
+| `current-resolution-executor #f` | test-constraint-postponement.rkt:60 | Replace with `current-resolution-executor-pure #f` — process-resolution handler short-circuits on unset executor (same disable semantic) |
+| Two "read-ready-queue-actions" unit tests | test-readiness-propagator.rkt:261-265 + 267-287 | RETIRE — these tested the retired helper's behavior; obsolete post-2B |
+| "integration: trait constraint readiness fires when dep meta solved" | test-readiness-propagator.rkt:293-321 | MIGRATE — replace `read-ready-queue-actions` observation with direct `elab-cell-read enet resolution-stratum-request-cell-id` + tagged-entry unwrap (inline 2-3 lines) |
+
+**performance-counters.rkt:137**: comment "iterations of run-stratified-resolution! loop" — update to reflect BSP outer-loop iterations.
+
+**propagator.rkt:888**: comment reference to `current-retracted-assumptions` — update or remove.
+
+#### §8.8.3 Architectural honesty — 2B is the clean cut 2A.b couldn't make
+
+Unlike 2A.b's box-bridge that had to ship as scaffolding, 2B's retirement IS the clean cut. The orchestrator wrapper has become structurally redundant; deleting it reveals the principled architecture underneath: `solve-meta!` writes a solution pure-functionally, then the BSP outer-loop drives convergence via registered handlers. One mechanism. No wrapper.
+
+The remaining off-network scaffolding in `solve-meta!` is `current-prop-net-box` + `set-box!` + `(elab-network-rewrap ...)` — the same box-bridge family 2A.b labeled for Parent Phase 4 + PM 12 retirement. 2B doesn't make this worse; it doesn't fix it either. Phase 4 / PM 12 are the clean cut for that family.
+
+#### §8.8.4 Deliverables
+
+1. **Simplify `solve-meta!` body** (metavar-store.rkt:2016-2033, ~20 LoC) — 3-branch cond → 2-branch cond per §8.8.2 sketch. Drop executor parameter read, re-entry guard, run-stratified-resolution-pure call. Inline the quiesce step.
+
+2. **Delete `run-stratified-resolution-pure`** (metavar-store.rkt:2266-2304, ~40 LoC).
+
+3. **Delete `run-stratified-resolution!`** (metavar-store.rkt:2214-2249, ~36 LoC).
+
+4. **Delete `execute-resolution-actions!`** (metavar-store.rkt:1155 + body, ~10-15 LoC). NOTE: line 1073 also has a `(define executor (current-resolution-executor))` — check what function that's in; likely also dead.
+
+5. **Delete `read-ready-queue-actions`** (metavar-store.rkt:2304-2320, ~17 LoC).
+
+6. **Delete `run-retraction-stratum!`** (metavar-store.rkt:1566 + body, ~30-50 LoC). NOTE: also removes the imperative side-effect path on `current-retracted-assumptions` box.
+
+7. **Delete parameters**:
+   - `current-resolution-executor` (metavar-store.rkt:1149 + provides + driver init at :2705)
+   - `current-retracted-assumptions` (metavar-store.rkt:1490 + provides + driver init at :467-468 + use at :1567)
+   - `current-in-stratified-resolution?` (metavar-store.rkt:1995 + use at :2020 — already retired by solve-meta! simplification)
+
+8. **Update comments**:
+   - performance-counters.rkt:137 (`resolution-cycles` counter doc)
+   - propagator.rkt:888 (current-retracted-assumptions reference)
+   - driver.rkt:2624 (run-stratified-resolution-pure mention)
+
+9. **Test migrations**:
+   - test-constraint-postponement.rkt:60 — `current-resolution-executor #f` → `current-resolution-executor-pure #f`
+   - test-readiness-propagator.rkt — retire the 2 unit tests for `read-ready-queue-actions`; migrate the 1 integration test to direct cell read
+
+10. **Update provides** in metavar-store.rkt (retire 6 entries; keep `current-resolution-executor-pure`).
+
+#### §8.8.5 Scaffolding retirement targets — explicit captures
+
+**Retiring in 2B (this phase)**:
+
+| Item | Where | Retirement note |
+|---|---|---|
+| `run-stratified-resolution-pure` | metavar-store.rkt:2266 | Structurally redundant post-2A.a+b; BSP outer-loop is sole orchestration |
+| `run-stratified-resolution!` | metavar-store.rkt:2214 | Dead code (ZERO production callers); R3 external critique 2026-04-18 |
+| `execute-resolution-actions!` | metavar-store.rkt:1155 | Dead with run-stratified-resolution! |
+| `read-ready-queue-actions` | metavar-store.rkt:2304 | No-op post-2A.b; obsolete post-2B |
+| `run-retraction-stratum!` | metavar-store.rkt:1566 | process-retraction (2A.a) is the canonical mechanism |
+| `current-resolution-executor` parameter | metavar-store.rkt:1149 + driver.rkt:2705 | Imperative path retired |
+| `current-retracted-assumptions` parameter | metavar-store.rkt:1490 + driver.rkt:467-468 | Cell-13 is the canonical mechanism (2A.a) |
+| `current-in-stratified-resolution?` parameter | metavar-store.rkt:1995 | Vestigial re-entry guard (no re-entry path post-retirement) |
+
+**Deferred to PPN 4C Parent Phase 4** (already captured in parent design doc §2 row "Phase 4" item (viii) per 2A.a/b commits):
+
+| Item | Where | Retirement note |
+|---|---|---|
+| `set-box! net-box` + `(elab-network-rewrap ...)` in `solve-meta!` | metavar-store.rkt (simplified body) | Same box-bridge pattern as 2A.b's process-resolution; CHAMP→cell retirement dissolves the rewrap pattern |
+| `current-prop-net-box` parameter reads in solve-meta! + process-resolution | metavar-store.rkt | PM Track 12 (parameter→cell module loading) |
+
+**Deferred to PM Track 13** (NEW track per 2A.b mini-design):
+
+| Item | Where | Retirement note |
+|---|---|---|
+| Stratum-handler mechanism (registry + dispatch) | propagator.rkt:2827+ | Orthogonal handler-mechanism concern; doesn't gate 2B |
+
+#### §8.8.6 Mantra check (adversarial three-column)
+
+| Word | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| All-at-once | ✓ Single quiesce call after solve-core; BSP outer-loop runs all strata simultaneously | Could solve-meta-core-pure + BSP quiesce be co-scheduled (fused)? Probably not — they're different concerns (write vs propagate) | **What if multiple solve-meta! calls happen in quick succession during elaboration cascade?** Each invocation drains the worklist to fixpoint. If cascade work needs another solve, that call's BSP cycles. Pattern is: solve → quiesce → solve → quiesce... Each pair atomic. No "all-at-once" violation, but also no batching. Genuine. |
+| All in parallel | ✓ BSP outer-loop fires propagators per round in parallel; value-tier handlers iterate sequentially per BSP design | Could process-retraction + process-resolution + S1 NAF fire in parallel within the same value-tier round? BSP currently iterates them sequentially. Genuine question for PAR Series; doesn't affect 2B's charter | **Are there ordering dependencies among value-tier handlers?** process-retraction runs first (module load order); process-resolution runs second; S1 NAF + classify-inhabit run after. If process-resolution's actions trigger retraction (via solve cascade), the retraction request goes to cell-13 → next outer-round picks up. Correct. |
+| Structurally emergent | ✓ solve-meta! is a 2-branch cond on net-box presence — no orchestration logic; BSP outer-loop is the implicit fixpoint loop | Even simpler: could solve-meta! collapse to a single line `(set-box! net-box ((current-quiescence-scheduler) (solve-meta-core-pure enet id solution)))`? Sketch-wise yes; clarity-wise prefer named bindings | **The simplified solve-meta! still has off-network state (net-box). Is the off-network surface honestly captured?** Yes — Parent Phase 4 + PM 12 retirements. Same scaffolding family as 2A.b. No new scaffolding introduced by 2B; 2B reduces by ~200 LoC of retired wrapper. |
+| Information flow | ✓ Solution → enet* → pnet* → enet** → box. Linear chain, no orchestration callbacks | The `(elab-network-rewrap ...)` pattern is the elab-net/prop-net boundary scaffolding. Same captured-as-Parent-Phase-4. | **Did 2B retain any information-flow path that bypasses cells?** No — `current-resolution-executor-pure` is the parameter retained (process-resolution reads it). All resolution actions go through cells (cell-14 → handler → executor pure path). |
+| ON-NETWORK | ✓ BSP outer-loop is on-network; value-tier handlers operate on cells; solution + resolution writes go through solve-meta-core-pure (pure cell write) | Off-network: box-bridge in solve-meta! + handler. Same scaffolding family as 2A.b; not introduced by 2B. | **Is there any path where solve-meta-core-pure writes get LOST between BSP outer-loop iterations?** No — solve-meta-core-pure writes to enet (immutable struct); BSP outer-loop sees the new enet via the box-update; subsequent rounds operate on the updated state. The box-bridge IS the seam but writes propagate correctly across it. |
+
+**Honest verdict**: 2B does NOT introduce new scaffolding; it REMOVES ~200 LoC of orchestrator + helpers. The remaining off-network state (box-bridge family) is unchanged from 2A.b's level — Parent Phase 4 + PM 12 retire that family. PASS.
+
+#### §8.8.7 Principles check (adversarial three-column)
+
+| Principle | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| Stratified Propagator Networks | ✓ S(-1) + S0 + L1 + L2 unified onto BSP outer-loop; one orchestration mechanism (Phase 2 charter complete) | The "strata" concept now lives ENTIRELY in registration order (module-load order = value-tier iteration order). Is that order-by-load-order principled? | **What if module load order changes (e.g., refactor that splits/merges files)?** Current order: metavar-store loads before relations → [S(-1), L2 resolution, S1 NAF, classify-inhabit]. If relations were loaded first, S1 NAF would interleave with retraction. Is that a correctness issue? Per BSP-LE 2B PIR + stratification.md, S1 NAF requires S0 fixpoint before evaluating — handled by BSP outer-loop's tier iteration. Within value-tier, order matters only for handlers that interact through cells. process-retraction's cleanup is independent of process-resolution's executor invocation. Order-dependence is bounded. Captured as drift risk. |
+| Correct by Construction | ✓ Removing dead code; simpler solve-meta! is harder to misuse | Re-entry guard removal: am I sure no path post-2B calls solve-meta! recursively? | **What about future tracks (Phase 7 parametric resolution, Phase 9b γ hole-fill) that might introduce new resolution paths?** If those new paths use the pure executor pattern (solve-meta-core-pure inside fire functions), no re-entry. If they introduce solve-meta! callers from inside the BSP outer-loop, the guard would be needed again. Codification candidate: when introducing new resolution mechanisms, audit for solve-meta! callers from inside BSP fire chains. Watching list. |
+| Cell/Propagator/Scheduler Orthogonality | ✓ Solve-meta! at elaboration layer; BSP outer-loop at scheduler layer; handlers at cell+propagator layer. Clean separation | Still box-bridge across elab/pnet (captured) | **Did 2B introduce any new scheduler-coupling?** No — the quiesce call uses `(current-quiescence-scheduler)` parameter, which is the same scheduler interface 2A.a+b used. Different schedulers (Gauss-Seidel, BSP, Zig+LLVM) plug in here. The Orthogonality principle is preserved. |
+| Decomplection | ✓ Separates "write solution" (pure) from "drive convergence" (BSP). Wrapper conflated these | Could solve-meta-core-pure and the quiesce step be further decomplected (e.g., write-only API + separate quiesce-now API)? Possible refactor; not needed for 2B's charter | **What if a caller wants to write a solution WITHOUT quiescing immediately?** Currently solve-meta! is the SOLE entry point and always quiesces. If a caller wanted batched writes (write N solutions, then quiesce once), they'd need a new API. Not currently a use case; YAGNI for 2B. |
+| Propagator-First Infrastructure | ✓ BSP outer-loop is propagator-first; handlers + cells are the propagator-first orchestration | Box-bridge remains (Parent Phase 4) | **Is there a code path that writes meta solutions BYPASSING the propagator network?** solve-meta-core! (legacy bang version) is still around for the no-network fallback. Used only when net-box is #f (rare test contexts). The fallback path doesn't trigger propagators. Captured as scaffolding tied to network availability; PM 12 / Phase 4 retire when the fallback is no longer needed. |
+
+**Honest verdict**: 2B advances the Phase 2 charter (one orchestration mechanism) cleanly. Adversarial column surfaces order-dependence within value-tier as a real concern (watching for future tracks); module-load-order is principled per stratification.md but bounded by handler independence within the tier.
+
+#### §8.8.8 Drift risks
+
+1. **D1 — Re-entry guard removal**: dropping `current-in-stratified-resolution?` assumes no path post-2B calls solve-meta! recursively from inside BSP outer-loop. Verified via grep: only `resolution-execute-action-pure` (used by process-resolution) calls solve-meta-core-pure (NOT solve-meta!). The imperative `resolution-execute-action!` (which DID call solve-meta! recursively) is dead with `run-stratified-resolution!` retirement. **Falsification gate**: full suite passes — if any path still calls solve-meta! recursively during BSP, infinite recursion would manifest as stack overflow.
+
+2. **D2 — BSP 20-iteration limit vs orchestrator 100-fuel**: BSP outer-loop's safety bound is stricter (20 vs 100). Both are sentinels for "possible infinite loop", not fuel budgets. In practice both should be far above typical convergence (~3-10 iterations). **Falsification gate**: any production workload that hit the 100-fuel previously would now error at 20. Suite-level regression test catches.
+
+3. **D3 — Test migration: read-ready-queue-actions retirement**: 2 unit tests test the retiring helper's behavior; 1 integration test uses it as observer. Migration plan: retire 2 unit tests (obsolete); migrate integration test to direct cell read. **Risk**: integration test misses a regression that the unit tests would have caught. **Mitigation**: the integration test already verifies the end-to-end chain (latch → cell-14 → solve cascade); the unit-level coverage of the helper's unwrap logic moves into the inline test code.
+
+4. **D4 — `current-resolution-executor` parameter in test-constraint-postponement.rkt**: test parameterizes to `#f` to disable resolution. Post-2B, equivalent is `current-resolution-executor-pure #f` (process-resolution handler short-circuits on unset executor). **Verification**: rerun test post-migration to confirm same disable semantic preserved.
+
+5. **D5 — Value-tier handler order dependence**: 2B finalizes module-load-order as the value-tier iteration order. Future tracks introducing new value-tier handlers must understand this. **Codification candidate** (watching): "Value-tier handler order is determined by module load order (driver.rkt require order); document the canonical sequence when adding new value-tier handlers."
+
+6. **D6 — Comment hygiene at retirement**: propagator.rkt:888 + driver.rkt:2624 + performance-counters.rkt:137 reference retiring functions/parameters. Need full comment sweep. **Risk**: stale comments survive retirement and mislead future readers. **Mitigation**: grep + manual review in commit; followup commit acceptable if missed.
+
+7. **D7 — Tests pass with retired functions still imported**: a test that requires `read-ready-queue-actions` would get unbound-identifier at import time. **Verification**: targeted test run catches this immediately.
+
+8. **D8 — Driver.rkt re-test path**: driver.rkt loads the parameter installs at startup. With param retired, the install line fails. **Atomic commit discipline**: ALL retirements + driver.rkt cleanups land in same commit.
+
+#### §8.8.9 Sub-steps + LoC estimate
+
+| Step | Deliverable | Est. LoC |
+|---|---|---|
+| 1 | Simplify `solve-meta!` body (3-branch → 2-branch; inline quiesce) | ~20 (net: -10) |
+| 2 | Delete `run-stratified-resolution-pure` | ~40 deletion |
+| 3 | Delete `run-stratified-resolution!` + supporting comments | ~36 deletion |
+| 4 | Delete `execute-resolution-actions!` + line 1073 audit (likely dead) | ~10-15 deletion |
+| 5 | Delete `read-ready-queue-actions` | ~17 deletion |
+| 6 | Delete `run-retraction-stratum!` | ~30-50 deletion |
+| 7 | Delete 3 parameters + `(set-box! ...)` mutation in `record-assumption-retraction` if applicable | ~15 deletion |
+| 8 | Driver.rkt cleanups (3 sites: 467-468 delete + 2624 comment + 2705 delete; 2707 KEEP) | ~6 deletion + 1-2 comment edit |
+| 9 | Provides cleanup (6 entries retired) | ~6 deletion |
+| 10 | Comment updates (perf-counters.rkt:137 + propagator.rkt:888) | ~2-4 edits |
+| 11 | Test migrations (test-constraint-postponement + test-readiness-propagator) | ~10-20 net (retire 2 tests + migrate 1) |
+| 12 | Validation: delimiter + raco make + targeted + probe + acceptance + full suite | — |
+| 13 | Commit + tracker + dailies | — |
+
+**Total: ~150-200 LoC net DELETION** (mostly retirements; net negative — first net-deletion sub-phase in addendum's Phase 2).
+
+#### §8.8.10 Completion criteria
+
+- `solve-meta!` simplified body lands cleanly; targeted tests for solve cascade pass
+- All 5 functions + 3 parameters deleted (no dead-code stubs remaining)
+- Driver.rkt installs cleaned up; only `current-resolution-executor-pure` install survives (line 2707)
+- Provides updated; no orphan exports
+- Test migrations preserve disable-resolution + integration-test semantics
+- Comments hygiene applied (perf-counters + propagator.rkt + driver.rkt:2624)
+- Probe (`examples/2026-04-22-1A-iii-probe.prologos`): 0 errors; semantic output preserved
+- Acceptance (`examples/2026-04-17-ppn-track4c.prologos`): 0 errors
+- Full suite: 8231+ tests / ≤127s wall (within 118-127s variance band) / 0 failures
+- Adversarial 3-column VAG applied with two-column catalogue/challenge + third adversarial column
+- Tracker row 2B marked ✅ with commit hash
+- Dailies entry per phase-completion protocol
+
+#### §8.8.11 Codifications captured during this mini-design
+
+- **D5 codification candidate (watching)**: "Value-tier handler order is determined by module load order; document the canonical sequence when adding new value-tier handlers." 1 data point this session — graduate when next handler addition surfaces order-dependence.
+- **D1 codification candidate (watching)**: "When introducing new resolution-cascade mechanisms, audit for solve-meta! callers from inside BSP fire chains; the re-entry guard's retirement assumes no such callers exist." 1 data point — graduate when next resolution-mechanism addition triggers the audit.
+- **Architectural pattern**: orchestrator retirement is the natural completion of an orchestration-unification phase. 2A introduces the new mechanism (handlers on BSP); 2B retires the old mechanism (wrapper). Same pattern likely applies to addendum Phase 4 (process-command retirement after top-level orchestration handlers ship).
+
+#### §8.8.12 Cross-track references
+
+- **PPN 4C Parent Design Doc Phase 4 row item (viii)** — box-bridge + `(elab-network-rewrap ...)` pattern in simplified `solve-meta!` body inherits Parent Phase 4 retirement target (already captured per 2A.a/b commits; no new captures).
+- **PM Master Track 12** — `current-prop-net-box` retirement absorbs the box-bridge in solve-meta!.
+- **PM Master Track 13** — orthogonal (stratum-handler mechanism); doesn't gate 2B.
+- **Phase 2V** — Vision Alignment Gate for Phase 2 immediately follows 2B (the addendum Phase 2 charter completes at 2B's close).
 
 ---
 
