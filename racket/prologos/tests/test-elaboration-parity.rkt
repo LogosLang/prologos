@@ -336,6 +336,87 @@
                        #:expected-type 'Int))
 
 ;; ========================================
+;; PPN 4C 2A.c (2026-05-20) — orchestration-parity axis
+;; ========================================
+;;
+;; Verifies the BSP outer-loop's value-tier orchestration (2A.a's
+;; process-retraction + 2A.b's process-resolution + S1 NAF + classify-inhabit)
+;; is observationally equivalent to the pre-2A sequential orchestrator
+;; (run-stratified-resolution-pure) for RETRACTION-HEAVY workloads.
+;;
+;; THE FALSIFICATION TEST for D.3 §8.7.4's "S(-1) runs POST-S0" timing concern:
+;;
+;;   Pre-2A sequential loop:      cleanup → S0 → L2 → ...
+;;                                (S(-1) runs BEFORE S0)
+;;
+;;   Post-2A BSP outer-loop:      S0 fires on potentially-stale state →
+;;                                S(-1) cleans → restart-from-outer-loop →
+;;                                S0 fires on cleaned state → ...
+;;                                (S(-1) runs AFTER S0 quiescence)
+;;
+;; The 2A model adds one "extra round" of S0 firing on pre-cleanup state per
+;; outer-loop iteration. Correctness argument (§8.7.4): worldview-filtering at
+;; `net-cell-read` should hide stale entries from propagators firing under a
+;; retracted assumption bitmask. S(-1)'s subsequent cleanup is COMPACTION (not
+;; correctness). If worldview-filtering DOESN'T preserve correctness, these
+;; tests fail because the "wrong" branch's stale entries contaminate the
+;; correct branch's elaboration result.
+;;
+;; The retraction trigger: `def x : <T1 | T2> := value` invokes
+;; `check ctx value (expr-union T1 T2)` at typing-core.rkt:2385, which uses
+;; `with-speculative-rollback` to try T1 (registering hyp-id, writing under
+;; hyp-bitmask), and on failure calls `record-assumption-retraction` (which
+;; writes to cell-13 → process-retraction handler fires → S(-1) cleanup runs
+;; POST-S0 per the 2A model). Then T2 is tried.
+;;
+;; Falsification posture: if the `(ns t)` bootstrap pattern works in the
+;; run-ns-last harness, these tests serve as direct falsification of §8.7.4.
+;; If not, the axis falls back to baseline + this NOTE pointing to
+;; tests/test-punify-integration.rkt:228 (uses local run-last that DOES
+;; bootstrap correctly; exercises `(def x : <Int | Bool> := "hello")`
+;; contradiction-driven retraction path end-to-end).
+
+(parity-test 'orchestration-union-no-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <Int | String> := 42) x"
+  ;; Baseline: Int branch of <Int | String> succeeds first; no retraction.
+  ;; Confirms the union-check + speculation path produces correct elaboration
+  ;; under 2A.b's handler-based orchestration without exercising the post-S0
+  ;; S(-1) timing concern. (Compare with -with-retraction below.)
+  (check-parity-equal? 'orchestration-union-no-retraction
+                       "(ns t) (def x : <Int | String> := 42) x"
+                       #:expected '42))
+
+(parity-test 'orchestration-union-with-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <Int | String> := \"hello\") x"
+  ;; FALSIFICATION CASE for §8.7.4: Int branch fails (assigning "hello" to Int)
+  ;; → `with-speculative-rollback` calls `record-assumption-retraction` (writes
+  ;; to cell-13) → BSP outer-loop's value-tier processes process-retraction
+  ;; AFTER S0 quiescence → restart-from-outer-loop → S0 fires again with
+  ;; retracted bits filtered out via worldview → String branch succeeds.
+  ;;
+  ;; If S(-1) post-S0 timing is wrong (worldview-filtering doesn't hide stale
+  ;; entries from the failed Int branch), the String branch elaboration could:
+  ;;   - Pick up contaminating type information from the retracted Int hyp
+  ;;   - Produce wrong final type for `x` (e.g., type-top contradiction)
+  ;;   - Fail entirely with "type mismatch" error
+  ;; Expected: `"hello"` value with String component of union type retained.
+  (check-parity-equal? 'orchestration-union-with-retraction
+                       "(ns t) (def x : <Int | String> := \"hello\") x"
+                       #:expected "hello"))
+
+(parity-test 'orchestration-union-flipped-with-retraction "PPN 4C 2A.c"
+             "(ns t) (def x : <String | Int> := 42) x"
+  ;; Symmetric variant of above: union order flipped so left branch is String
+  ;; (fails for value 42) and right branch is Int (succeeds). Verifies the
+  ;; retraction path doesn't have a left/right asymmetry. Together with the
+  ;; pair above, this triangulates the BSP outer-loop's value-tier behavior
+  ;; under retraction: works for both branch orderings, both successful and
+  ;; retracted cases.
+  (check-parity-equal? 'orchestration-union-flipped-with-retraction
+                       "(ns t) (def x : <String | Int> := 42) x"
+                       #:expected '42))
+
+;; ========================================
 ;; Phase 10 — Union types via ATMS (cell-based TMS)
 ;; ========================================
 

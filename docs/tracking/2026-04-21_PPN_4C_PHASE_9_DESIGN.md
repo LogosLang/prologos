@@ -175,7 +175,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2A.0 | Precursor — allocate cell-ids 13+14 in make-prop-network with §4.6 declarations; no behavior change | ✅ | commit `a8ef9e3f` (2026-05-19) — Cell-id 13: retraction-stratum-request (set-union merge); cell-id 14: resolution-stratum-request (list-append merge). Added `make-warm-general-meta` to specialized-cells.rkt (4th §4.6 framework instance; first warm-tier usage). Suite: 8224 tests / 107.3s / 0 failures. Cells dormant pending 2A.a + 2A.b handler wiring. |
 | 2A.a | Define `process-retraction` handler; migrate `record-assumption-retraction!` to write cell-id 13; register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.a (2026-05-20). Approach C (refined Option d): pure handler on prop-net (scoped cells only); meta-info + id-map retraction deferred to Parent Phase 4 via worldview-filtering at read time; 6 UNSAFE reader sites migrated to worldview-aware lookups; 4 STUB callbacks retired as dead code (`current-prop-id-map-read/set` + `current-prop-meta-info-read/set`); `record-assumption-retraction` pure function replaces bang version; tests migrated (process-retraction direct + record-assumption-retraction API surface + integration via run-to-quiescence); `retraction-parity` axis added to test-elaboration-parity. **Full suite: 8228 tests / 109.1s / 0 failures.** Adversarial VAG passed. |
 | 2A.b | Define `process-resolution` handler; migrate readiness propagators to write cell-id 14 (retiring `current-ready-queue-cell-id`); register handler value-tier | ✅ | Mini-design + mini-audit persisted at §8.7.b (2026-05-20); implementation landed at commit `014944a5`. Option A: handler approach matching 2A.a precedent; box-bridge to elab-net labeled scaffolding (Parent Phase 4 + PM 12 retire). `process-resolution` registered value-tier on cell-14 with `#:reset-value '()`. `add-readiness-set-latch!` (line 443) + `read-ready-queue-actions` (line 2245) rq-cid migrated from parameter read to well-known constant. `current-ready-queue-cell-id` parameter RETIRED at 5 sites (defn + reset + alloc + provide + batch-worker binding). Stale comment at propagator.rkt:703 updated. **Bonus scheduler fix**: empty-pending guard in `process-tier` (propagator.rkt:3077-3090) extended to recognize `null?` empty list — required for list-merge stratum cells to preserve eq? identity in run-to-quiescence (caught by test-readiness-propagator.rkt:469). `test-readiness-propagator.rkt:271` migrated (1 direct param read; 4 indirect calls via `read-ready-queue-actions` continue to work). `resolution-parity` axis added (3 baseline tests + falsification-coverage NOTE pointing to integration test in test-readiness-propagator.rkt:291 + test-trait-resolution.rkt + full suite, since run-ns-last binds empty prelude env making eq-check unbound). **Full suite: 8231 tests / 121.1s / 0 failures** (within 118-127s variance band). Adversarial 3-column VAG passed all 4 questions with honest scaffolding labels. PM Track 13 handler-mechanism concern remains orthogonal (separate track; does not gate). |
-| 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ⬜ | |
+| 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ✅ | Mini-design persisted at §8.7.c (2026-05-20); implementation landed at commit `<TBD>`. **Empirical falsification of §8.7.4's "S(-1) runs POST-S0" timing concern** — 3 retraction-heavy parity tests pass: `orchestration-union-no-retraction` (Int branch succeeds first), `orchestration-union-with-retraction` (Int fails → retract → String succeeds — THE falsification case), `orchestration-union-flipped-with-retraction` (asymmetry check). All exercise `with-speculative-rollback` at `typing-core.rkt:2385` → `record-assumption-retraction` writes cell-13 → process-retraction fires POST-S0 → restart-from-outer-loop → S0 fires on cleaned state → correct branch succeeds. `(ns t)` bootstrap pattern works in `run-ns-last` harness (D1 risk verified, no fallback needed). **Full suite: 8234 tests / 116.3s / 0 failures** (vs 8231/121.1s pre-2A.c; +3 tests; wall -4.8s within variance). Adversarial 3-column VAG passed all 4 questions. Empirical confirmation that worldview-filtering preserves correctness — S(-1)'s POST-S0 timing produces equivalent results to pre-S0 sequential cleanup. **2A group COMPLETE** — ready for 2B (retire `run-stratified-resolution-pure` orchestrator). |
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ⬜ | |
 | 2V | Vision Alignment Gate Phase 2 | ⬜ | |
 | 3A | Fork-on-union basic mechanism | ⬜ | |
@@ -3655,6 +3655,103 @@ Per workflow.md "scaffolding with named retirement plan" discipline + user direc
 - **PM Master Track 13** — [`2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md`](2026-05-20_PM_TRACK13_IMPLEMENTATION_NOTE.md): NEW PM track capturing handler-mechanism architectural concern. Stage 0 SEED; pending Stage 1 research.
 - **PPN 4C Parent Design Doc** — [`2026-04-17_PPN_TRACK4C_DESIGN.md`](2026-04-17_PPN_TRACK4C_DESIGN.md) §2 row "Phase 4" item (viii): 2A.b's box-bridge body side-effects captured here as Phase 4 scope items.
 - **PM Master Track 12** — parameter→cell migration; absorbs `current-prop-net-box` + `current-resolution-executor-pure` parameter retirements.
+
+### §8.7.c Phase 2A.c Mini-design + Mini-audit (2026-05-20)
+
+Per Stage 4 Per-Phase Protocol: opening mini-design + mini-audit cycle for Phase 2A.c (orchestration parity verification + critical §8.7.4 retraction-heavy empirical test). Outcomes persist into this design doc.
+
+Charter: validate that the BSP outer-loop's value-tier orchestration (2A.a's `process-retraction` + 2A.b's `process-resolution`) is observationally equivalent to the pre-2A sequential orchestrator (`run-stratified-resolution-pure`) for retraction-heavy workloads. The empirical test is the falsification gate for §8.7.4's "S(-1) runs POST-S0" timing concern.
+
+#### §8.7.c.1 The semantic change to verify
+
+Per §8.7.4 + drift risk #9: under 2A, S(-1) retraction runs AFTER S0 quiescence (as value-tier handler), not BEFORE S0 (as the sequential loop did). The 2A model adds one "extra round" of S0 firing on pre-cleanup state per outer-loop iteration.
+
+Correctness argument (§8.7.4): worldview-filtering at `net-cell-read` should hide stale entries from propagators firing under a retracted assumption bitmask. S(-1)'s cleanup is COMPACTION (not correctness). Empirical verification on retraction-heavy workloads is the load-bearing check.
+
+#### §8.7.c.2 Mini-audit findings (codebase grounding)
+
+**Production callers of `with-speculative-rollback`** (the speculation trigger):
+- `qtt.rkt:2329` — union checkQ left branch
+- `typing-core.rkt:2385` — union check left branch (THE canonical retraction trigger)
+- `typing-core.rkt:1307` + `:1344` — checking-context variants (map-related, narrower scope)
+- `typing-errors.rkt:78` — error handler speculation
+
+**Existing retraction test coverage**:
+- `test-retraction-stratum.rkt` — unit-level mechanism (record-assumption-retraction + process-retraction + tagged-entry primitives). Comprehensive at unit level. Does NOT exercise post-S0 timing because tests directly invoke handler on prop-net.
+- `retraction-parity` axis (test-elaboration-parity.rkt:228-272, added 2A.a) — BASELINE-only smoke (arithmetic, polymorphic, type annotation). Doesn't trigger retraction.
+- `test-punify-integration.rkt:228` — `(ns t) (def x : <Int | Bool> := "hello")` exercises contradiction-driven retraction (both branches fail). Uses local `run-last` helper.
+
+**Retraction-triggering workload pattern** (from test-punify-integration precedent): `"(ns t) (def x : <Type | Type> := value) x"`. `(ns t)` bootstraps namespace context + prelude. `def x : <T1 | T2> := value` triggers `check ctx value (expr-union T1 T2)` → `with-speculative-rollback` tries T1, on failure retracts hyp-id and tries T2.
+
+**`run-ns-last` harness compatibility**: needs verification that `(ns t)` bootstrap works in the parity harness. `process-string` (used by `run-ns-last`) processes multi-form input. The `<Int | String>` syntax reads as `($angle-type Int $pipe String)` in sexp mode (per test-sexp-reader-parity:105-107); preparse converts to `expr-union`.
+
+#### §8.7.c.3 Deliverables
+
+1. **`orchestration-parity` axis** in `test-elaboration-parity.rkt` — distinct from `retraction-parity` (baseline-only smoke) and `resolution-parity` (baseline). Targets the post-S0 timing semantic specifically.
+
+2. **Test cases** (mirror existing axis style):
+   - `orchestration-union-no-retraction` — `(ns t) (def x : <Int | String> := 42) x` — Int branch succeeds first, no retraction. Baseline confirmation that union check path works under 2A.
+   - `orchestration-union-with-retraction` — `(ns t) (def x : <Int | String> := "hello") x` — **THE FALSIFICATION CASE for §8.7.4**: Int branch fails → `with-speculative-rollback` invokes `record-assumption-retraction` (writes to cell-13) → BSP outer-loop's value-tier processes S(-1) AFTER S0 quiescence → restart-from-outer-loop → S0 fires again with retracted bits filtered out → String branch succeeds. If worldview-filtering doesn't hide stale entries from the failed Int branch, String branch elaboration could pick up contaminating type information OR get wrong type.
+   - `orchestration-union-flipped-with-retraction` — `(ns t) (def x : <String | Int> := 42) x` — same as above but with String branch first; verifies the retraction path doesn't have a left/right asymmetry.
+
+3. **Fallback if `(ns t)` pattern doesn't work in `run-ns-last`** (analogous to 2A.b's parity harness reframing): drop to baseline cases + add falsification-coverage NOTE pointing to `test-punify-integration.rkt:228` (existing retraction-driven contradiction test in different harness).
+
+#### §8.7.c.4 Scaffolding retirement targets
+
+None NEW for 2A.c. All scaffolding inherited from 2A.a/b already captured. 2A.c is verification-only (no production code changes beyond test additions).
+
+#### §8.7.c.5 Mantra check (adversarial three-column)
+
+| Word | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| All-at-once | ✓ Parity tests exercise the BSP outer-loop's "all stratum-handlers iterated in one pass" property | Could axis test more strata simultaneously? | **What if one stratum handler's writes get clobbered by another's reset in the same outer-loop iteration?** D8 (2A.b's coordination concern) names module-load order [S(-1) retraction, L2 resolution, S1 NAF, classify-inhabit]. Worth a specific test asserting both retraction AND resolution can fire in same outer-loop iteration without interference. Not in 2A.c scope — separate stratification concern. |
+| All in parallel | N/A (parity = correctness check, not parallelism check) | — | — |
+| Structurally emergent | ✓ Parity verifies emergent ordering preserves semantics vs imposed sequential | — | — |
+| Information flow | ✓ Test asserts post-elaboration result preserves correct flow through the value-tier handlers | — | — |
+| ON-NETWORK | ✓ All retraction state in cell-13; speculation via worldview-tagged writes | — | — |
+
+#### §8.7.c.6 Principles check (adversarial three-column)
+
+| Principle | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| Correct by Construction | ✓ Parity tests are structural regression gates | Tests as RUNTIME checks, not STATIC structural property | **Is there a structural property of the BSP outer-loop that makes the post-S0 timing provably equivalent to pre-S0?** Worldview-filtering at read-time is the structural argument. A property test (not a unit test) would verify the invariant "any read at worldview W ignores entries tagged with retracted bits in W" — that's the load-bearing property. Out of 2A.c scope (would require dedicated property-test infrastructure); empirical workload tests are sufficient confidence here. |
+| Stratified Propagator Networks | ✓ Tests exercise the stratification mechanism via real Prologos expressions | — | — |
+| Cell/Propagator/Scheduler Orthogonality | ✓ Tests don't couple to specific scheduler (BSP outer-loop is one implementation; same network would work under Gauss-Seidel) | — | — |
+
+#### §8.7.c.7 Drift risks
+
+1. **D1 — `(ns t)` bootstrap may not work in `run-ns-last`**: harness sets `current-ns-context #f` and `current-prelude-env (hasheq)`. The `(ns t)` form should trigger namespace setup but needs empirical verification. **Mitigation**: if tests fail with "unbound" errors, fall back to baseline-only axis + falsification-coverage NOTE pointing to `test-punify-integration.rkt:228` (existing run-last harness that DOES bootstrap correctly).
+2. **D2 — Multi-form parsing**: `process-string` claims to process ALL forms but `run-ns-last` returns LAST result. Verify that the final `x` expression's type/value comes through correctly.
+3. **D3 — Pretty-print of `<Int | String>`**: output format may use `[Int | String]` brackets vs `<Int | String>` angle. Use `string-contains?` substring matching (the existing harness pattern) to be format-agnostic. Or check value only (`#:expected 42`), not type annotation.
+4. **D4 — Wall-time impact**: 3 new parity tests add ~3-5s suite time. Within variance band.
+5. **D5 — Test framework: `parity-test` vs `parity-test-skip`**: if tests fail due to harness limitation, use `parity-test-skip` with explicit phase pointer ("Phase 10 ATMS branching" or similar) — honest framing per 2A.b's reframing precedent.
+
+#### §8.7.c.8 Sub-steps + LoC estimate
+
+| Step | Deliverable | Est. LoC |
+|---|---|---|
+| 1 | Add `orchestration-parity` axis to `test-elaboration-parity.rkt` (3 test cases) | ~40-60 |
+| 2 | Run targeted (test-elaboration-parity + test-retraction-stratum); confirm parity tests pass | — |
+| 3 | If `(ns t)` pattern doesn't work: fall back to baseline + falsification NOTE | ~10-20 (alternative path) |
+| 4 | Run probe + acceptance | — |
+| 5 | Run full suite (regression gate) | — |
+| 6 | Adversarial 3-column VAG; commit; tracker; dailies | — |
+
+**Total: ~40-80 LoC** (mostly test code).
+
+#### §8.7.c.9 Completion criteria
+
+- `orchestration-parity` axis ships with falsification coverage (either via working `(ns t)` cases OR with explicit pointer to test-punify-integration if reframed)
+- Probe diff = 0 semantically
+- Acceptance file 0 errors
+- Full suite: 8231+ tests / within 118-127s variance band / 0 failures
+- Adversarial 3-column VAG passed all 4 questions
+- Tracker row 2A.c marked ✅ with commit hash
+
+#### §8.7.c.10 Cross-track references
+
+- **PPN 4C Parent Design Doc Phase 4 row item (viii)** — retirement targets already captured per 2A.a/b commits; no new captures from 2A.c.
+- **2B sub-phase** — `run-stratified-resolution-pure` orchestrator retirement is the natural next phase. 2A.c is the verification gate before 2B can land safely.
 
 ---
 
