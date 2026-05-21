@@ -36,13 +36,17 @@ from netlayers.testing_only_tcp import TestingOnlyTCPNetlayer
 #
 # Phase 58.c/58.d: the test server validates an inbound op:start-session
 # and aborts on an unsupported CapTP version or an invalid location
-# signature. The crossed-hellos tests need Phase 59+ (a swiss-num
-# object registry and outbound connections).
+# signature, and on an op:abort sent before the handshake completes.
+# The crossed-hellos / op:deliver / op:gc / op:listen tests need the
+# server to drive captp-core with a swiss-num object registry (Phase 59+).
 SELECTED = [
     ("tests.op_start_session", "OpStartSessionTest", [
         "test_captp_remote_version",
         "test_start_session_with_invalid_version",
         "test_start_session_with_invalid_signature",
+    ]),
+    ("tests.op_abort", "OpAbortTest", [
+        "test_abort_before_setup",
     ]),
 ]
 
