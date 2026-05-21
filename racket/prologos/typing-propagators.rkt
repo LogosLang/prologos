@@ -2321,47 +2321,13 @@
        ;; the contradiction-detection propagator below reliably fires under
        ;; post-T-3 Commit B set-union merge semantics.
        (define net4 (type-map-write-unified net3 tm-cid term type-expr))
-       ;; PPN 4C Phase 3A.c (2026-05-22): fork-on-union install-time pre-write.
-       ;;
-       ;; If the annotation is `expr-union`, register the fork-on-union
-       ;; decomposition request for the `term` position by writing to
-       ;; `fork-on-union-request-cell-id` (cell-15) at INSTALL TIME. The
-       ;; process-fork-on-union handler (registered at 3A.0; body at 3A.a)
-       ;; consumes the request at the next BSP round, allocating per-branch
-       ;; aids, setting worldview-cache branch bits, promoting the attribute-
-       ;; map carrier to tagged-cell-value, and installing N branch check
-       ;; propagators + N contradiction watchers.
-       ;;
-       ;; Why install-time pre-write instead of a classifier-watcher (per
-       ;; §9.3.5.1 OQ5 resolution): the annotation IS known at install time;
-       ;; the term's classifier WILL be the union (propagated downward via
-       ;; type-map-write-unified above). A watcher approach faces re-fire
-       ;; on subsequent :type writes from branch propagators; install-time
-       ;; pre-write is structurally fire-once (one install per expr-ann,
-       ;; hash-union dedup if hypothetically called twice).
-       ;;
-       ;; Coverage caveat (D-3A.c-non-ann-unions per §9.3.5.4): inferred
-       ;; unions (not explicit annotations) are not covered by this hook.
-       ;; Post-T-2 Open by Design, inferred unions are rare. Future extension
-       ;; can add the same pre-write at other AST positions producing unions
-       ;; (trait dispatch, multi-arm pattern matches with divergent arms).
-       (define net4b
-         (cond
-           [(expr-union? type-expr)
-            (define components (flatten-union type-expr))
-            (define request-info
-              (hasheq 'components components 'tm-cid tm-cid))
-            (define current (net-cell-read net4 fork-on-union-request-cell-id))
-            (net-cell-write net4 fork-on-union-request-cell-id
-                            (hash-set current term request-info))]
-           [else net4]))
        ;; Quick shape check: if annotation is non-Pi and term is lambda, → contradiction.
        ;; Lambda requires Pi annotation. Non-Pi annotations on lambdas are always errors.
        (if (and (expr-lam? term) (not (expr-Pi? type-expr)))
-           (type-map-write net4b tm-cid e type-top)
+           (type-map-write net4 tm-cid e type-top)
            ;; Contradiction detection propagator: watches term for type-top
            (let-values ([(net5 _check-pid)
-                         (net-add-fire-once-propagator net4b (list tm-cid) (list tm-cid)
+                         (net-add-fire-once-propagator net4 (list tm-cid) (list tm-cid)
                            (lambda (net)
                              (define term-type (type-map-read net tm-cid term))
                              (if (type-top? term-type)
