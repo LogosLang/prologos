@@ -178,9 +178,10 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2A.c | Orchestration parity verification (probe + acceptance + full suite); add orchestration-parity axis to test-elaboration-parity | ✅ | Mini-design persisted at §8.7.c (2026-05-20); implementation landed at commit `2b4bd5a8`. **Empirical falsification of §8.7.4's "S(-1) runs POST-S0" timing concern** — 3 retraction-heavy parity tests pass: `orchestration-union-no-retraction` (Int branch succeeds first), `orchestration-union-with-retraction` (Int fails → retract → String succeeds — THE falsification case), `orchestration-union-flipped-with-retraction` (asymmetry check). All exercise `with-speculative-rollback` at `typing-core.rkt:2385` → `record-assumption-retraction` writes cell-13 → process-retraction fires POST-S0 → restart-from-outer-loop → S0 fires on cleaned state → correct branch succeeds. `(ns t)` bootstrap pattern works in `run-ns-last` harness (D1 risk verified, no fallback needed). **Full suite: 8234 tests / 116.3s / 0 failures** (vs 8231/121.1s pre-2A.c; +3 tests; wall -4.8s within variance). Adversarial 3-column VAG passed all 4 questions. Empirical confirmation that worldview-filtering preserves correctness — S(-1)'s POST-S0 timing produces equivalent results to pre-S0 sequential cleanup. **2A group COMPLETE** — ready for 2B (retire `run-stratified-resolution-pure` orchestrator). |
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ✅ | Mini-design + mini-audit persisted at §8.8 (2026-05-20); implementation landed at commit `c24cbae6`. **6 functions retired** (5 design-enumerated + `retry-constraints-for-meta!` surfaced as also dead during audit): run-stratified-resolution-pure, run-stratified-resolution!, execute-resolution-actions!, read-ready-queue-actions, run-retraction-stratum!, retry-constraints-for-meta!. **3 parameters retired**: current-resolution-executor (imperative), current-retracted-assumptions (cell-13 supersedes), current-in-stratified-resolution? (re-entry guard vestigial — D1 verified). solve-meta! simplified 3-branch → 2-branch. **Surfaced + fixed**: test-speculation-bridge.rkt had 2 `run-retraction-stratum!` callsites the §8.8.2 audit missed; migrated to `maybe-flush-network!` (BSP outer-loop driver — same semantic). 5 stale comment-hygiene sites updated. Driver.rkt: deleted init at :467-468 + install at :2705; updated comment at :2624 (re BSP outer-loop progress detection). Test migrations: test-constraint-postponement.rkt:60 migrated to `current-resolution-executor-pure #f`; test-readiness-propagator.rkt retired 2 unit tests for `read-ready-queue-actions` + migrated integration test to direct cell-14 read via test-local `read-resolution-actions-cell` helper. **Full suite: 8232 tests / 109.2s / 0 failures — −11.9s wall vs 2A.b (121.1s) confirming retired wrapper's redundant work was real**. Adversarial 3-column VAG passed all 4 questions with honest scaffolding labels. **First net-deletion sub-phase of addendum Phase 2** — net ~−200 LoC + perf win. Phase 2 charter "one orchestration mechanism" COMPLETE. |
 | 2V | Vision Alignment Gate Phase 2 | ✅ | Cross-arc adversarial 3-column VAG persisted at §8.9 (2026-05-20). All 4 questions PASS with honest scaffolding labels across the full 2A.0 → 2A.a → 2A.b → 2A.c → 2B arc. **Cumulative metrics**: +8 tests / −1.7s wall / ~−200 LoC production retired / 6 functions + 3 parameters + 7 provides retired / 2 new BSP stratum cells + handlers / 3 parity axes added. **Charter complete**: BSP outer-loop is sole orchestration for in-form work; ~200 LoC scaffolding retired. **Patterns surfaced** (§8.9.4): adversarial 3-column framing matures across arc; PM 13 spin-off was right call; audit-driven scope expansion is consistent (4 data points — graduation-ready at addendum PIR); first net-deletion phase in addendum; wall delta of −1.7s validates wrapper's overhead approximately equaled new handler overhead. **2 codifications graduation-ready at addendum PIR** (adversarial 3-column + audit-driven scope expansion). **Cross-track captures consolidated** (§8.9.6) for Phase 3 / Phase 4 / PM 12 / PM 13. **Phase 3 readiness gate** ALL PREREQUISITES MET (§8.9.7) — ready to open. |
-| 3A | Fork-on-union basic mechanism | ⬜ | |
+| Phase 3 mini-design + mini-audit | OQ1-OQ4 resolved via conversational dialogue; outcomes persisted at §9.3.1 | ✅ (this commit) | **Architectural pivot**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier) over S1 NAF fork-and-rejoin. **OQ1**: non-committing inhabitation semantics — classifier preserved as union after check; multi-success branches coexist via worldview tagging; type-theory unanimous (Castagna semantic subtyping; TypeScript bidirectional; Scala 3 hard unions; Typed Racket occurrence typing). **OQ2**: per-command bit scope; ≤30 bits gate; no reclaim within command. **OQ3**: stratum handler (B3) + B2-broadcast watcher; unification primitives stay PURE (decomplection preserved). **OQ4**: Level 1 (Tarski) — simpler than original §9.7 Level 2. **Cells**: cell-15 (fork-on-union-request), cell-16 (fork-contradiction-request) for 3A.0. **Parity axis**: 'union-narrow-by-constraint renamed → 'union-inhabitation-fork; expectation updated for type-theoretic correctness. |
+| 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | ⬜ | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
-| 3C | Residuation error-explanation | ⬜ | |
+| 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
@@ -4203,17 +4204,157 @@ Phase 3 ships union types via ATMS branching (D.3 §6.10), exploiting already-im
 - **Phase 3C — Residuation error-explanation** (~75-150 LoC)
 - **Phase 3V — Vision Alignment Gate**
 
-### §9.3 Phase 3A deliverables
+### §9.3 Phase 3A deliverables (revised post-§9.3.1 mini-design)
 
-1. Fork-on-union propagator: watches `:type` facet (classifier layer) per position; when classifier is a ⊕ compound, SRE ctor-desc decomposes into components
-2. For each component: fresh assumption-id via ATMS, tag worldview, elaborate per-branch with worldview-filtered reads
-3. Per-branch cost tracking: allocate per-branch fuel cell via tropical primitive (Phase 1 dependency)
-4. Contradiction in branch → nogood on main network worldview-cache (S1 NAF handler pattern)
-5. All branches contradict → fall through to error-explanation (Phase 3C)
-6. Winning branch → commit (worldview narrows; tagged entries become authoritative)
-7. Tests (`tests/test-union-types-atms.rkt`): axis union parity
+**Architectural model**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier). NOT fork-and-rejoin. See §9.3.1 for rationale + dialogue outcomes.
 
-Note: `elab-speculation.rkt` disposition (Q-A4) is a Phase 3A mini-design item (§16.3).
+1. **Fork-on-union request propagator** — watches `:type` facet's CLASSIFIER layer per position; threshold-fires once when classifier becomes `(expr-union l r)`; writes decomposition request to cell-15 (`fork-on-union-request-cell-id`). Threshold-fire-once per (position, decomposition) pair.
+2. **`process-fork-on-union` stratum handler** (cell-15) — per request entry: flatten union via `flatten-union` to N components (N-ary flat decomposition; not nested binary); allocate N fresh aids via `solver-state-amb`; initialize worldview-cache by setting all N branch bits (`(bitwise-ior worldview-cache (bits-of branch-aids))`); install N branch check propagators wrapped at branch worldviews (via `wrap-with-worldview(aid-bit)`); install branch contradiction watcher (see #4).
+3. **Branch check propagators**: per branch, the existing check propagator chain elaborates `e` against the X-th component under wv = (outer | X-bit). Per-branch metas/writes tag automatically via `current-worldview-bitmask`. Per-branch cost tracking (if needed for Phase 3C UC3) via worldview-tagged writes to canonical fuel-cost cell (cell-11) — shared budget; per-branch accumulation via tagged-cell-value.
+4. **Branch contradiction watcher (B2-broadcast realization)** — ONE propagator installed per fork-on-union firing, items = N branch aids; for each item, reads e's :type cell at branch worldview, detects contradiction sentinel (type-top or 'classify-inhabit-contradiction), produces `(seteq aid)` on detection else `(seteq)`; result-merge-fn = set-union; writes to cell-16 (`fork-contradiction-request-cell-id`). **Unification primitives (`type-unify-or-top`, `merge-classify-inhabit`) STAY PURE** — no integrated detection (per OQ3 decomplection).
+5. **`process-fork-contradiction` stratum handler** (cell-16) — consumes accumulated aid-set per BSP round; narrows worldview-cache atomically: `worldview-cache &= ~(bits-of contradicted-aids)`. Mirrors 2A.a `process-retraction` pattern. `#:reset-value (seteq)`.
+6. **Non-committing inhabitation semantics** (per OQ1) — after BSP convergence: classifier preserved as `(expr-union l r)` at outer worldview; surviving branches' bits remain set in worldview-cache; failed branches' bits cleared. Outer-wv reads see classifier=union, INHABITANT=branch-witnesses (multi-success entries coexist; `tagged-cell-read` with optional `domain-merge` joins if needed).
+7. **All branches contradict** → worldview-cache narrows to NOT include any branch bits → fall through to error-explanation (Phase 3C).
+8. **Tests** (`tests/test-union-types-atms.rkt`): axis `'union-inhabitation-fork` (renamed from `'union-narrow-by-constraint` at `test-elaboration-parity.rkt:423`); expected behavior: classifier preserves union after check; inhabitant matches synthesized type; multi-success branches coexist under non-committing semantics.
+
+**Cell allocations** (next available after cell-14):
+- **Cell-15**: `fork-on-union-request-cell-id` — merge: hash-union (request hash); handler: `process-fork-on-union` (one-shot per entry); `#:tier 'value`, `#:reset-value (hasheq)`
+- **Cell-16**: `fork-contradiction-request-cell-id` — merge: set-union (aid set); handler: `process-fork-contradiction` (atomic narrowing per BSP round); `#:tier 'value`, `#:reset-value (seteq)`
+
+**Q-A4 resolved** (per §9.3.1): `elab-speculation.rkt` orchestrators (`speculation-begin`/`try-branch`/`commit`/`speculate-first-success`) retire — replaced by stratum-handler architecture. `solver-state-amb` primitive retained (still load-bearing for aid generation). Test consumers (test-elab-speculation.rkt + test-speculation-bridge.rkt) audit at 3A close — retire or migrate.
+
+### §9.3.1 Phase 3 mini-design + mini-audit (2026-05-22 — conversational opening of Phase 3A)
+
+Mini-design + mini-audit opened in fresh session post-Phase-2 ATOMIC CLOSE (commit `5d838c00`, 2026-05-20). Phase 3 readiness gate met (§8.9.7 — all 9 prerequisites). Outcomes persisted per Stage 4 methodology (mini-design + mini-audit findings persist to design doc, not parallel files / dailies-only).
+
+#### §9.3.1.1 Audit findings — building-against survey
+
+Audited Phase 3A's compositional substrate (existing infrastructure 3A integrates with):
+
+| Layer | What's available |
+|---|---|
+| **AST** | `expr-union (left right)` (syntax.rkt:973) — binary right-associated; `flatten-union` (union-types.rkt:30) for N-ary decomposition; `build-union-type` for canonical ACI construction |
+| **Existing union infer-time** | `make-union-fire-fn` (typing-propagators.rkt:1289) — infer-time TYPE-of-union (universe-level); NOT branching. Phase 3A's check-time fork is ORTHOGONAL. |
+| **Canonical union check (sexp)** | `typing-core.rkt:2384-2389` — `(or (with-speculative-rollback ...))` first-success pattern. Phase 3A's on-network REPLACEMENT target. 4 additional `with-speculative-rollback` callers (qtt.rkt:2329, typing-core.rkt:1307+1344, typing-errors.rkt:78). |
+| **ATMS API** | `solver-state-amb` (atms.rkt:67/440) — fresh-aid allocation via counter cell; one aid-group per call. `solver-state-add-nogood`, `solver-amb-groups`. |
+| **Worldview substrate** | `worldview-cache-cell-id` (cell-1); `current-worldview-bitmask` parameter (per-propagator override); `wrap-with-worldview(bit-pos)` wrapper. |
+| **Tagged-cell-value** | `(struct tagged-cell-value (base entries))` (decision-cell.rkt:397); `tagged-cell-read tcv wv [domain-merge]` with most-specific subset match + optional domain-merge for multi-success join. |
+| **Hypercube primitives** | `hamming-distance`, `hasse-adjacent?`, `subcube-member?`, `popcount`, `decision-bitmask` (decision-cell.rkt:342-373) — Phase 3B integration target; all pre-existing. |
+| **Fork primitive (reference, NOT used by 3A)** | `fork-prop-network` (propagator.rkt:924) — D.4-aware; S1 NAF pattern. Phase 3A does NOT use this (in-place tagging instead). |
+| **Phase 1 substrate** | `net-new-tropical-fuel-cell`, `net-new-tropical-budget-cell`, `make-tropical-fuel-threshold-propagator`, `tropical-left-residual`. SRE domain `'tropical-fuel`. `make-monotone-counter-meta` / `make-cold-general-meta` / `make-warm-general-meta` (§4.6 framework). |
+| **Phase 2 substrate** | Cell-13 (retraction) + cell-14 (resolution) + handlers (process-retraction at metavar-store.rkt:1598; process-resolution at :1655). `register-stratum-handler!` API. Phase 3A allocates cell-15 + cell-16 following this pattern. |
+| **S1 NAF handler precedent** | `process-naf-request` (relations.rkt:116-243) — fork-and-rejoin pattern. Phase 3A rejects this pattern (see §9.3.1.2). |
+| **classify-inhabit substrate** | `classify-inhabit-value` struct; pure `merge-classify-inhabit (v×v→v)` (load-bearing per classify-inhabit.rkt:142-143); SRE domain 'classify-inhabit classified 'structural; cross-tag residuation propagator (3c-iii) at `classify-inhabit-request-cell-id` (cell-10). |
+| **`(ns t)` bootstrap** | Discovered at 2A.c; enables full parity-axis falsification in `run-ns-last` harness for Phase 3A. |
+| **Existing test coverage** | test-union-types.rkt (264 lines; AST + WS, NO branching); test-elab-speculation.rkt (388); test-tagged-cell-value.rkt (358); test-solver-context.rkt (392); test-elaboration-parity.rkt — `'union-narrow-by-constraint` skip-gated at line 423. **`test-union-types-atms.rkt` does NOT exist yet** (Phase 3A target). |
+| **Cell-id allocation** | Next available: cell-15. Phase 3A allocates cell-15 + cell-16. |
+
+**Concrete Phase 3A consumer-of-substrate**: items 1-7 of revised §9.3 above are EACH a specific consumption of an audit-listed primitive. No new infrastructure outside cell-15/cell-16 + their handlers + the watcher propagator.
+
+#### §9.3.1.2 Architectural pivot — Realization B over fork-and-rejoin
+
+Original §9.3 (pre-revision) framed fork-on-union via the S1 NAF pattern (fork-prop-network + per-branch quiescence + nogood-on-main-net). Mini-design dialogue surfaced that **BSP-LE 2/2B Realization B is the architecturally-correct precedent**, NOT S1 NAF.
+
+**Why S1 NAF is the wrong precedent**: NAF's inner goal lives in a genuinely separate scope (separate logic variables, separate success criterion). Union check is fundamentally different — each branch checks the SAME expression `e` against a DIFFERENT component of the SAME union, in the SAME elaboration context, touching the SAME meta vars. Branches share carrier; they only need to differ in worldview tagging.
+
+**Why Realization B is correct**: BSP-LE Track 2B's PIR (§6.3, §12.2) and `structural-thinking.md` § "Module Theory of Lattices" established that speculation is structurally **"tag writes on the shared carrier cell with the worldview bitmask"** — NOT "fork the network and rejoin." This applies directly to union check. The bridge-collapse failure mode that motivated BSP-LE 2B's D.9/D.10/D.11 iterations IS the failure mode Phase 3A would inherit under fork-and-rejoin.
+
+**Mantra alignment** (in-place vs fork-and-rejoin):
+
+| Axis | Fork-and-rejoin (S1 NAF) | In-place tagging (Realization B) |
+|---|---|---|
+| All-at-once | ~ (per-branch sequential in handler) | ✓ N branches install simultaneously |
+| All in parallel | ✗ Branches in for/fold | ✓ Branches fire in parallel BSP rounds |
+| Structurally emergent | ✓ Handler triggered by request cell | ✓ Tagged-cell-read with worldview filtering |
+| Info-flow through cells | ~ Main↔fork via parameters | ✓ Tagged-cell-value carries per-branch state |
+| ON-NETWORK | ~ Fork's network on-network; orchestration in handler | ✓ Everything on-network |
+
+#### §9.3.1.3 Resolved design questions (OQ1-OQ4)
+
+| OQ | Question | Resolution | Type / source |
+|---|---|---|---|
+| **OQ1** | Branch commit policy: first-success vs non-committing? | **Non-committing inhabitation semantics**. Classifier preserved as union after check. Multi-success branches coexist via worldview tagging. Narrowing is downstream concern (PPN Track 5, occurrence typing). | Design choice; type-theory unanimous |
+| **OQ2** | Worldview bit allocation strategy + bit-space limits? | **Per-command bit scope** (default; reset via `reset-meta-store!`); **no reclaim within command** (subcube-member? correctness); **≤30 bits gate at 3A close**; **PERF-COUNTERS observability** for `max-aids-per-command`; bignum fallback if exceeded. | Design choice + measurement obligation |
+| **OQ3** | Contradiction detection mechanism? | **Stratum handler (B3) + B2-broadcast watcher**. Cell-16 (`fork-contradiction-request`) accumulates aid set via set-union merge per BSP round; `process-fork-contradiction` handler atomically narrows worldview-cache. Watcher propagator (1 broadcast per fork firing; N items = N branch aids; per-item read+check+set-union into aid-set). **Unification primitives STAY PURE** — no integrated detection. | Design choice; decomplection challenge surfaced via adversarial 3-column |
+| **OQ4** | Termination argument under in-place model? | **Level 1 (Tarski) — simpler than original §9.7 Level 2**. Per-branch monotone refinement under finite cell lattice; cross-branch isolation via worldview filter (empirically validated at 2A.c; 3A parity axis extends validation); monotone worldview narrowing; tropical fuel safety-net. **CONDITIONAL on worldview filter correctness** — load-bearing assumption, validated via 3A's parity axis. | Restatement (was Level 2; now Level 1) |
+
+**Type-theory citations for OQ1** (per type-theoretic foundations):
+- Frisch, Castagna, Benzaken — *Semantic Subtyping* (JACM 2008): types as sets; `e : A | B` is set membership; no commit semantic
+- Castagna — *Programming with Union, Intersection, and Negation Types* (2022): set-theoretic semantics; expression's type is the annotated union
+- Reconstructing TypeScript Part 4 (Donham 2021): bidirectional per-arm check; "checker does NOT commit to a specific arm — accepts the expression if any arm matches"; resulting type IS the union
+- Scala 3 spec: hard unions PRESERVED as union; soft unions widened to visible join (inference-only)
+- Tobin-Hochstadt, Felleisen — *Logical Types for Untyped Languages* (ICFP 2010): occurrence typing narrows via predicates DOWNSTREAM of check; check preserves union
+
+**Type-theory conclusion**: "first-success commit" in our sexp `or` is an algorithmic shortcut, not a type-theoretic obligation. Non-committing aligns with semantic subtyping + bidirectional check + Scala 3 + Typed Racket. **This is the architecturally correct semantic for Prologos under SRE Track 2H quantale + Path T-3 set-union merge.**
+
+#### §9.3.1.4 Implementation-time audit obligations (deferred from mini-design)
+
+These are not open design questions — they are concrete audit tasks to run at Phase 3A.0 / 3A.a implementation start:
+
+- **OQ5 — fork-on-union install site**: Phase 3A.0's mini-audit must verify the install pattern. Likely a **classifier-watcher propagator** installed per-position (or once at network init, fired per-position on classifier writes that match `expr-union`). Audit `classify-inhabit-request` stratum handler (3c-iii precedent at `classify-inhabit-request-cell-id` = cell-10) — symmetric trigger architecture, different decomposition.
+- **solver-context counter scope verification**: confirm that `solver-context` (atms.rkt:215+) is allocated per elab-network (reset per command via `reset-meta-store!`) vs persistent across commands. If per-command, OQ2's "per-command bit scope" is structurally enforced. If persistent, need to design explicit per-command counter scoping.
+- **worldview-cache merge function audit**: confirm worldview-cache's merge supports atomic bitwise-AND-with-NOT-mask narrowing. process-fork-contradiction handler writes via this; needs structurally-correct merge for accumulated narrowing.
+- **Watcher scope**: per OQ3 sub-question, the contradiction watcher's `:component-paths` covers e's :type cell minimum. Implementation audit determines whether sub-expression :type cells need additional watcher coverage (contradictions in sub-expressions during branch elaboration; may propagate up via existing mechanisms OR may need explicit per-sub-position watchers).
+
+#### §9.3.1.5 Drift risks named (per Stage 4 mini-design discipline)
+
+To be re-verified at Phase 3A close (drift-risks-cleared question in 3V VAG):
+
+- **D-3A-bit-budget**: max aids per command post-3A may approach fixnum (62) boundary, especially with Phase 9b multi-candidate consideration. Pre-0 instrumentation captures baseline; Phase 3A close gate: ≤30 bits per command (half fixnum, leaves Phase 9b headroom). If exceeded → surface to mini-design for corrective.
+- **D-3A-watcher-scope**: contradiction watcher's `:component-paths` scope. Minimum (e's :type only) may miss contradictions in sub-expressions; maximum (recursive walk) is expensive. Implementation-time audit determines scope.
+- **D-3A-filter-correctness**: Level 1 termination claim depends on worldview-filter correctness. 3A parity axis MUST exercise the new filter usage patterns (in-place tagging with multiple simultaneously-active branches at outer worldview after non-committing commit). Empirical validation; 2A.c is precedent but not coverage.
+- **D-3A-meta-divergence**: branches solving same meta to different values produces outer-wv contradiction via tagged-cell-read domain-merge. Expected behavior (correctness preserved; static error signal). Diagnostic message clarity deferred to Phase 3C.
+- **D-3A-recursion-safety**: fork-on-union watcher must threshold-fire-once per (position, decomposition) to avoid re-triggering on subsequent classifier writes. Following 3c-iii residuation propagator's threshold-fire pattern.
+
+#### §9.3.1.6 Refined sub-phase partition
+
+Per the resolved architecture:
+
+| Sub-phase | Scope | Est. LoC | Key gate |
+|---|---|---|---|
+| **3A.0** | Cell-15 + cell-16 allocations via §4.6 framework (`make-warm-general-meta`); register `process-fork-on-union` + `process-fork-contradiction` stratum handlers; OQ5 implementation audit (classifier-watcher install pattern); worldview-cache merge audit | ~80-120 | Cells allocated; handlers registered (no-op until 3A.a); allocation-drift assertions pass |
+| **3A.a** | `process-fork-on-union` handler — request-entry processing: flatten-union; aid generation via `solver-state-amb`; initial worldview-cache write (set branch bits); install branch check propagators wrapped at branch worldviews | ~150-200 | Single-union-component check works end-to-end at branch worldview; targeted test in test-union-types-atms.rkt |
+| **3A.b** | Branch contradiction watcher (B2-broadcast) + `process-fork-contradiction` handler — narrowing on contradiction. Watcher per-fork-firing, N items broadcast, set-union-merge to cell-16. Handler atomic narrowing. | ~100-150 | Single-branch contradiction → worldview-cache narrowing correctly; multi-branch independence (one contradicts, other succeeds); targeted tests |
+| **3A.c** | Integration with check propagator chain + classifier-watcher install at typing-propagators (per OQ5 implementation audit). Update test-elaboration-parity.rkt 'union-narrow-by-constraint axis → 'union-inhabitation-fork (rename + expectation revision per OQ1 non-committing). | ~80-120 | parity axis green; acceptance file 0 errors; full suite GREEN; D-3A-filter-correctness empirically validated |
+| **3A.d** | Q-A4 disposition — retire `elab-speculation.rkt` orchestrators (speculation-begin/try-branch/commit/speculate-first-success); retain `solver-state-amb` primitive; migrate or retire 2 test files (test-elab-speculation.rkt, test-speculation-bridge.rkt) | ~-200 to -300 (net deletion) | elab-speculation.rkt minimal (primitives only); tests retired or migrated; full suite GREEN |
+| **3A-VAG** | Adversarial 3-column VAG; verify all drift risks D-3A-*; restate §9.7 termination if not done; bit-budget measurement gate | doc-heavy | All 4 VAG questions pass under adversarial framing; bit budget ≤ 30 |
+
+Total Phase 3A estimate: **~210-490 LoC** (net + retirements). Plus per-phase regression discipline (probe + acceptance + full suite after each sub-phase per `workflow.md`).
+
+#### §9.3.1.7 Cross-track captures
+
+**Phase 3C** (residuation error-explanation): inherits worldview/contradiction infrastructure from 3A. Form C UC1/UC2/UC3 (per §9.5.A) consume tropical-left-residual + per-branch contradiction signals. Phase 3A's cell-16 contradiction signal IS the diagnostic chain anchor.
+
+**Phase 9b** (multi-candidate γ hole-fill): inherits Phase 3A's fork-on-union pattern. N candidate inhabitants for a hole → N branches via same mechanism. **D-9b-bit-budget**: N candidates may exceed bit budget (large N>30). 9b mini-design will need budget-management mechanism (per-fork sub-context with nested counter, or candidate-pruning at fork-time). Cross-phase capture for 9b's eventual mini-design.
+
+**Parent Phase 4** (CHAMP retirement): Phase 3A delivers on-network REPLACEMENT for `with-speculative-rollback` union path. 4 callers of `with-speculative-rollback` (qtt.rkt:2329, typing-core.rkt:1307+1344+2385, typing-errors.rkt:78). Phase 3A retires the canonical site (typing-core.rkt:2385); remaining 4 callers retire as parent Phase 4 / PM 12 scope (per dailies §1310).
+
+**PM Track 12** (parameter→cell module loading): `solver-context`'s counter cell scope (per-command vs per-session) is a PM 12-adjacent concern. If OQ5 implementation audit reveals per-session scope, capture as PM 12 input.
+
+**Parity axis revision**: `test-elaboration-parity.rkt:423` `'union-narrow-by-constraint` → `'union-inhabitation-fork`. Old expectation (`#:expected-type 'Int` for `(the <Int | String> 0)` narrowed by `[eq? x 0]`) was protecting a sexp implementation artifact (first-success commit). New expectation: classifier preserved as union; narrowing happens via downstream constraint propagation, not via check-time commit. Phase 3A.c lands the axis revision.
+
+#### §9.3.1.8 Methodology notes — adversarial 3-column gate captures
+
+Two real drift catches during mini-design dialogue:
+
+1. **OQ3 integrated detection** — first-pass recommendation was to push contradiction emission INTO `type-unify-or-top` (rationalized as "structurally aligned at propagator-fire boundary"). Adversarial column (user external challenge) surfaced that this conflated **levels**: `type-unify-or-top` is a PURE function called by fire functions, NOT a fire function itself. Pushing side effects into pure primitives violates the documented `(v × v → v)` purity pattern (classify-inhabit.rkt:142-143). Reversed to separate watcher + stratum handler. **Decomplection preserved.**
+
+2. **OQ1 first-success commit** — original framing leaned toward first-success "for parity preservation." Adversarial column (challenge to type-theoretic correctness) prompted research lookup; type-theory literature unanimous against commit. Reversed to non-committing inhabitation. **Lattice correctness preserved (T-3 set-union semantics composes naturally).**
+
+**Codification candidate (graduation-ready at addendum PIR — 3+ data points)**: *"Pure-vs-effectful layer audit on architectural decisions involving cell writes."* Three data points across the addendum:
+- S2.c-iii drift (with-handlers wrapper preserved; missed perf claim) — 2026-04-24
+- 2A.b handler-as-scaffolding (PM 13 spin-off) — 2026-05-20
+- OQ3 integrated detection (this commit) — 2026-05-22
+
+All three: external user challenge caught what internal application missed. **Adversarial 3-column discipline is necessary but not sufficient — external review IS the load-bearing gate for design decisions.** Capture as DEVELOPMENT_LESSONS.org candidate.
+
+#### §9.3.1.9 Status
+
+- Mini-design + mini-audit COMPLETE — OQ1-OQ4 resolved
+- Implementation-time obligations enumerated (OQ5 + sub-questions)
+- Drift risks named (D-3A-*)
+- Sub-phase partition refined (3A.0 / 3A.a / 3A.b / 3A.c / 3A.d / 3A-VAG)
+- Ready for Phase 3A.0 implementation opening
 
 ### §9.4 Phase 3B deliverables
 
@@ -4254,23 +4395,75 @@ When Phase 3C implementation opens, the implementer:
 
 This cross-reference closes the addendum's §6.5 Form C capture-gap: the Phase 3C implementer should find this section when opening Phase 3C work, with explicit pointers to the addendum's deliverables.
 
-### §9.6 Phase 3V — Vision Alignment Gate
+### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 
-Per 4 VAG questions:
-- **On-network?** — branching via fork-prop-network (O(1) CHAMP share); tagged-cell-value worldview; residuation via on-network dep graph.
-- **Complete?** — union types work end-to-end; hypercube optimizations active; error-explanation ships.
-- **Vision-advancing?** — union types via ATMS is exactly the Track 4B blocked feature; hypercube + tropical + ATMS compose naturally per Hyperlattice Conjecture.
-- **Drift-risks-cleared?** — named at Phase 3 mini-design start.
+Per 4 VAG questions under adversarial 3-column framing (catalogue / challenge / adversarial):
 
-### §9.7 Phase 3 termination arguments
+- **On-network?** — branching via **in-place worldview tagging on shared carrier** (Realization B; NOT fork-prop-network); tagged-cell-value with bitmask filter; cell-15 (request) + cell-16 (contradiction) + worldview-cache narrowing. Unification primitives PURE (no integrated detection — OQ3). Residuation (Phase 3C) is read-time function on dep graph.
+- **Complete?** — union types check end-to-end via non-committing inhabitation (OQ1); hypercube optimizations active (3B); error-explanation ships (3C). Parity axis revised to type-theoretic semantic. Q-A4 elab-speculation.rkt orchestrators retired.
+- **Vision-advancing?** — non-committing inhabitation aligns with type theory (Castagna semantic subtyping; bidirectional check; Scala 3 hard unions; Typed Racket occurrence typing); Realization B is structurally simpler than fork-and-rejoin; mantra-aligned at multiple layers (all-at-once branch installation, all-in-parallel BSP rounds, structurally emergent via worldview filter, info-flow through tagged-cell-value cells, ON-NETWORK including stratum handlers); composes cleanly with future tracks (Phase 9b inherits N-ary pattern; Phase 3C residuation consumes cell-16 contradiction signal; Parent Phase 4 + PM 12 inherit on-network replacement for `with-speculative-rollback`).
+- **Drift-risks-cleared?** — D-3A-bit-budget (≤30 bits gate; PERF-COUNTERS observability); D-3A-watcher-scope (audit at 3A.0); D-3A-filter-correctness (3A parity axis empirically validates); D-3A-meta-divergence (expected; diagnostic deferred to 3C); D-3A-recursion-safety (threshold-fire-once per (position, decomposition)). All named at §9.3.1.5.
 
-- Fork-on-union propagator — Level 2: branch count bounded by union component count; per-branch cost-bounded via tropical fuel primitive.
-- Gray-code traversal — finite permutation of finite branch set.
-- Residuation walk — finite dependency graph; walk terminates when all deps traversed.
+### §9.7 Phase 3 termination arguments (revised — Level 1 under Realization B)
 
-### §9.8 Phase 3 parity-test strategy
+Original §9.7 (pre-§9.3.1) framed termination as Level 2 under fork-and-rejoin model. Under non-committing in-place Realization B (per OQ4), the termination story simplifies to **Level 1 (Tarski) across all components**:
 
-Axes: union (per D.3 §9.1); error-provenance-chain (added). Parity: pre-Phase-3 union-type elaboration currently fails (not supported); post-Phase-3 succeeds. Parity tests verify narrow-by-constraint cases (`<Int | String>` narrowed by `eq?` to `Int`) per D.3 §9 §9.1.
+| Component | Level | Measure |
+|---|---|---|
+| Fork-on-union request propagator (watches `:type` CLASSIFIER for `expr-union`) | **1 (Tarski)** | Fire-once per (position, union-decomposition) via threshold-fire; bounded by finite positions × finite expr-union structures per command |
+| `process-fork-on-union` stratum handler (cell-15) | **1** | Bounded request entries per BSP round (finite per command) |
+| Branch check propagators (per branch, per position) | **1 (Tarski)** | Finite cell value lattice + monotone tagged-cell-value entry accumulation under worldview filter |
+| Branch contradiction watcher (B2-broadcast) | **1** | Threshold-fire; reads per active branch; finite branches × finite reads |
+| `process-fork-contradiction` stratum handler (cell-16) | **1** | Monotone worldview-cache narrowing; bounded by branch count |
+| Worldview-cache narrowing | **1 (Tarski)** | Monotone (bits only clear after fork-on-union firing); bounded by total aids per command (≤30 per OQ2 gate) |
+| Gray-code traversal (Phase 3B) | finite | Finite permutation of finite branch set |
+| Subcube pruning (Phase 3B) | finite | O(1) bitmask check per nogood |
+| Residuation walk (Phase 3C) | finite | Finite dependency graph; one pass |
+| Tropical fuel | Scheduler safety-net | Per-command budget bounds total propagator fires |
+| **Overall** | **Level 1 with fuel safety-net** | Composition of finite bounds |
+
+**Key insight (recorded for future tracks): Realization B is simpler than fork-and-rejoin for termination.** No cross-stratum well-founded measure needed — branches don't interact (worldview-filter isolates); worldview narrowing is monotone; no fixpoint feedback across forks. Phase 3A becomes Level 1 instead of Level 2.
+
+**Conditional on worldview filter correctness** — Phase 3A's parity axis (`'union-inhabitation-fork`) empirically validates filter usage patterns specific to in-place tagging (multiple simultaneously-active branches at outer worldview after non-committing commit). 2A.c established precedent for retraction-axis filter validation; 3A extends.
+
+**Note on meta divergence**: branches solving same meta to different values produces outer-worldview contradiction via tagged-cell-read's domain-merge (`compound-tagged-merge(type-unify-or-top)`). This is a STATIC error signal at outer wv (not termination concern). Diagnostic message clarity is Phase 3C scope.
+
+**Phase 9b forward-compat**: γ hole-fill multi-candidate inherits Level 1 + bit-budget constraint. Large-N candidate handling deferred to 9b mini-design (D-9b-bit-budget; cross-phase capture per §9.3.1.7).
+
+### §9.8 Phase 3 parity-test strategy (revised — type-theoretic semantics)
+
+**Axes**:
+- `'union-inhabitation-fork` (renamed from `'union-narrow-by-constraint` at `test-elaboration-parity.rkt:423`) — Phase 3A; type-theoretic non-committing semantic: classifier preserved as union after check; inhabitant matches synthesized type; multi-success branches coexist
+- `'union-multi-success` (new) — Phase 3A; multiple branches succeed simultaneously; outer-wv read sees multi-tagged entries; classifier still union
+- `'union-all-contradict-error` (new) — Phase 3A; all branches fail; outer-wv narrows to base; diagnostic surfaces (3C delivers full chain)
+- `'union-meta-divergence` (new) — Phase 3A edge case: branches solve same meta to incompatible values → outer-wv contradiction via domain-merge (expected static signal)
+- `'hypercube-structural-sharing` — Phase 3B; CHAMP reuse improvement under Gray code (microbench-backed)
+- `'error-provenance-chain` — Phase 3C; `derivation-chain-for` output shape for all-branch-contradict (residuation walk via tropical-left-residual)
+
+**Parity expectation revision** (Phase 3A.c scope): old `'union-narrow-by-constraint` test at line 423 of test-elaboration-parity.rkt was protecting a sexp implementation artifact (first-success commit). Renamed + revised:
+
+```racket
+;; OLD (pre-3A — preserved sexp first-success semantic):
+(parity-test-skip 'union-narrow-by-constraint "Phase 10"
+                  "let x := (the <Int | String> 0) in [eq? x 0]"
+  (check-parity-equal? 'union-narrow-by-constraint
+                       "let x := (the <Int | String> 0) in [eq? x 0]"
+                       #:expected-type 'Int))
+
+;; NEW (post-3A — type-theoretic non-committing semantic):
+(parity-test 'union-inhabitation-fork
+             "let x := (the <Int | String> 0) in [eq? x 0]"
+  (check-parity-equal? 'union-inhabitation-fork
+                       "let x := (the <Int | String> 0) in [eq? x 0]"
+                       ;; x's classifier remains <Int | String>; narrowing happens
+                       ;; via subsequent [eq? x 0] constraint propagation, not
+                       ;; check-time commit. Exact expected value resolved at
+                       ;; Phase 3A.c implementation (depends on Path T-3 subtype
+                       ;; behavior for the integer literal under union annotation).
+                       #:expected-behavior 'classifier-preserved-as-union))
+```
+
+The exact `#:expected-*` form will be resolved at Phase 3A.c implementation (depends on how subtype + non-committing interact for the specific literal). The PRINCIPLE is: classifier preserves union; narrowing is downstream of check.
 
 ---
 
