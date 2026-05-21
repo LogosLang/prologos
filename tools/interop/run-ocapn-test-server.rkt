@@ -1,45 +1,53 @@
 #lang racket/base
 
 ;;;
-;;; run-ocapn-test-server.rkt — Phase 58 (crypto handshake).
+;;; run-ocapn-test-server.rkt — Phase 58.b-3 (consolidated).
 ;;;
 ;;; Long-running Racket TCP server that accepts incoming OCapN
 ;;; connections from the upstream ocapn-test-suite (Python) and
 ;;; responds with a valid signed op:start-session.
 ;;;
+;;; CONSOLIDATION: the signed start-session bytes are now produced
+;;; by the canonical Prologos implementation
+;;; (`prologos::ocapn::handshake` → `mk-handshake-bytes`), not by a
+;;; parallel Racket-side fixture. This server is a thin TCP shell:
+;;; it loads the Prologos modules once, calls `mk-handshake-bytes`
+;;; via `process-string`, and serves the resulting bytes. Crypto
+;;; (libsodium FFI) and Syrup encoding both live inside Prologos.
+;;;
 ;;; What this server does:
+;;;   1. Load the OCapN Prologos modules at startup.
+;;;   2. Call mk-handshake-bytes to build the signed start-session.
+;;;   3. Listen on a TCP port.
+;;;   4. For each connection: send the start-session bytes (via the
+;;;      configurable framing), read peer frames, log, close.
 ;;;
-;;;   1. On startup, generate an ephemeral Ed25519 keypair via
-;;;      openssl CLI.
-;;;   2. Listen on a TCP port.
-;;;   3. For each incoming connection:
-;;;      a. Send our 4-field signed op:start-session (the canonical
-;;;         OCapN handshake) as raw Syrup bytes (no newline framing).
-;;;      b. Read whatever the peer sends, drop on the floor.
-;;;      c. Stay connected until peer closes.
-;;;
-;;; Limitations:
-;;;
-;;;   - The server does NOT yet drive the Prologos bridge. It
-;;;     responds to the handshake correctly but doesn't dispatch
-;;;     subsequent ops. Subsequent test-suite tests will block
-;;;     waiting for op:deliver responses we don't yet generate.
-;;;   - The server does NOT verify peer's incoming signature. The
-;;;     Python suite generates its own valid signature and sends
-;;;     it; we just drop it. Adding verification is straightforward
-;;;     (call ed25519-verify) but not needed for the upstream test
-;;;     to pass its handshake check.
-;;;   - Only ONE swiss-num-addressed object is exposed (none yet).
-;;;     The full suite expects Car Factory, Echo GC, Greeter, etc.
-;;;     — those are Phase 59+.
+;;; Limitation: the server does NOT yet dispatch post-handshake
+;;; frames through captp-core's connection-step. The full
+;;; ocapn-test-suite needs swiss-num-addressed objects + op:deliver
+;;; dispatch — that's Phase 59.
 
-(require racket/base
-         racket/cmdline
+(require racket/cmdline
          racket/tcp
          racket/list
-         "ocapn-crypto.rkt"
-         "ocapn-handshake.rkt"
-         "ocapn-framing.rkt")
+         racket/string
+         (only-in racket/format ~a)
+         "ocapn-framing.rkt"
+         "../../racket/prologos/tests/test-support.rkt"
+         "../../racket/prologos/macros.rkt"
+         "../../racket/prologos/prelude.rkt"
+         "../../racket/prologos/syntax.rkt"
+         "../../racket/prologos/source-location.rkt"
+         "../../racket/prologos/surface-syntax.rkt"
+         "../../racket/prologos/errors.rkt"
+         "../../racket/prologos/metavar-store.rkt"
+         "../../racket/prologos/parser.rkt"
+         "../../racket/prologos/elaborator.rkt"
+         "../../racket/prologos/pretty-print.rkt"
+         "../../racket/prologos/global-env.rkt"
+         "../../racket/prologos/driver.rkt"
+         "../../racket/prologos/namespace.rkt"
+         "../../racket/prologos/multi-dispatch.rkt")
 
 (define port-arg (make-parameter 22045))
 (define version-arg (make-parameter "1.0"))
@@ -59,32 +67,82 @@
   (error 'run-ocapn-test-server "unknown framing: ~v (expected raw-syrup or newline)" (framing-arg)))
 (current-framing-strategy (framing-arg))
 
-;; Generate keypair once at startup.
 (file-stream-buffer-mode (current-output-port) 'line)
-(printf "ocapn-test-server: generating Ed25519 keypair~n") (flush-output)
-(define our-keypair (make-ed25519-keypair))
-(define our-pubkey (ed25519-pubkey-bytes our-keypair))
-(printf "ocapn-test-server: our pubkey (hex) = ~a~n"
-        (string-join
-         (for/list ([b (in-bytes our-pubkey)])
-           (~a #:width 2 #:pad-string "0" #:align 'right
-               (number->string b 16))) ""))
-(flush-output)
 
-;; Pre-build the start-session bytes once. The signature is
-;; pinned to (this version, this address, this keypair); we can
-;; reuse the same bytes for every incoming connection.
+;; ========================================
+;; Load the Prologos OCapN modules once
+;; ========================================
+
+(define preamble
+  "(ns ocapn-test-server)
+(imports (prologos::ocapn::handshake :refer-all))
+")
+
+(printf "ocapn-test-server: loading Prologos OCapN modules~n") (flush-output)
+
+(define-values (g-env g-ns g-mods g-traits g-impls g-pimpls g-ctors g-tmeta)
+  (parameterize ([current-prelude-env (hasheq)]
+                 [current-module-definitions-content (hasheq)]
+                 [current-ns-context #f]
+                 [current-module-registry prelude-module-registry]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry prelude-preparse-registry]
+                 [current-ctor-registry (current-ctor-registry)]
+                 [current-type-meta (current-type-meta)]
+                 [current-trait-registry prelude-trait-registry]
+                 [current-impl-registry prelude-impl-registry]
+                 [current-param-impl-registry prelude-param-impl-registry]
+                 [current-multi-defn-registry (current-multi-defn-registry)]
+                 [current-spec-store (hasheq)])
+    (install-module-loader!)
+    (process-string preamble)
+    (values (current-prelude-env)
+            (current-ns-context)
+            (current-module-registry)
+            (current-trait-registry)
+            (current-impl-registry)
+            (current-param-impl-registry)
+            (current-ctor-registry)
+            (current-type-meta))))
+
+(define (run-prologos s)
+  (parameterize ([current-prelude-env g-env]
+                 [current-ns-context g-ns]
+                 [current-module-registry g-mods]
+                 [current-lib-paths (list prelude-lib-dir)]
+                 [current-preparse-registry (current-preparse-registry)]
+                 [current-trait-registry g-traits]
+                 [current-impl-registry g-impls]
+                 [current-param-impl-registry g-pimpls]
+                 [current-ctor-registry g-ctors]
+                 [current-type-meta g-tmeta])
+    (process-string s)))
+
+;; ========================================
+;; Build the signed start-session via Prologos
+;; ========================================
+;;
+;; mk-handshake-bytes produces a Latin-1 String of wire bytes. The
+;; process-string result is pretty-printed as `"...." : String`;
+;; `read` recovers the Racket string, which we convert to bytes.
+
+(define (extract-latin1-bytes prologos-result)
+  (define m (regexp-match #px"^(\".*\") : String$" prologos-result))
+  (unless m
+    (error 'extract-latin1-bytes "couldn't extract String from: ~s" prologos-result))
+  (string->bytes/latin-1 (read (open-input-string (cadr m)))))
+
 (define start-session-bytes
-  (let-values ([(bs _kp _pub)
-                (make-signed-start-session-bytes
-                 (version-arg) "127.0.0.1" (port-arg))])
-    bs))
-(printf "ocapn-test-server: pre-built start-session is ~a bytes~n"
+  (extract-latin1-bytes
+   (last
+    (run-prologos
+     (format "(eval (mk-handshake-bytes ~s \"tcp-testing-only\" \"0123456789abcdef0123456789abcdef\" \"127.0.0.1\" ~s))"
+             (version-arg)
+             (number->string (port-arg)))))))
+
+(printf "ocapn-test-server: built signed start-session (~a bytes) via prologos::ocapn::handshake~n"
         (bytes-length start-session-bytes))
 (flush-output)
-
-(require (only-in racket/format ~a)
-         (only-in racket/string string-join))
 
 ;; ========================================
 ;; Connection handler
@@ -96,16 +154,12 @@
                                        (exn-message e)))])
     (printf "ocapn-test-server: connection accepted, sending start-session (framing=~v)~n"
             (current-framing-strategy))
-    ;; Send our handshake immediately. The Python test suite waits
-    ;; for our start-session before issuing any other ops.
     (write-frame cout start-session-bytes)
     (printf "ocapn-test-server: sent ~a bytes; reading peer frames~n"
             (bytes-length start-session-bytes))
-    ;; Read incoming frames. Each frame is one Syrup value (under
-    ;; 'raw-syrup) or one newline-terminated bytes-string (under
-    ;; 'newline). We don't yet dispatch frames through the
-    ;; captp-core bridge — frame counting + logging is the integration
-    ;; point for Phase 59.
+    ;; Read incoming frames. We don't yet dispatch through
+    ;; captp-core's connection-step — frame counting + logging is
+    ;; the integration point for Phase 59.
     (let loop ([n 0])
       (define frame (with-handlers ([exn:fail?
                                      (lambda (e)

@@ -5,145 +5,184 @@ ns prologos::ocapn::handshake
 ;; ========================================
 ;;
 ;; Build the canonical 4-field signed `op:start-session` wire bytes
-;; using captp-core's syrup codec + crypto FFI. Replaces the
-;; parallel Racket-side fixture (`tools/interop/ocapn-handshake.rkt`)
-;; whose syrup encoder duplicated work already done by
-;; `prologos::ocapn::syrup-wire`.
+;; using captp-core's syrup codec + crypto FFI. This is the SINGLE
+;; client implementation of the handshake — an earlier revision had
+;; a parallel Racket-side fixture whose syrup encoder duplicated
+;; `prologos::ocapn::syrup-wire`; that fixture was deleted in
+;; Phase 58.b-3 once this module subsumed it.
 ;;
 ;; Wire shape:
 ;;
 ;;   <op:start-session ver pubkey-sexpr location sig-sexpr>
 ;;
-;;   pubkey-sexpr = (public-key (ecc (curve Ed25519) (flags eddsa) (q PK_BYTES)))
-;;   sig-sexpr    = (sig-val (eddsa (r R_BYTES) (s S_BYTES)))
-;;   location     = <ocapn-peer 'tcp-testing-only ADDRESS {host=H port=P}>
+;;   pubkey-sexpr = (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))
+;;   sig-sexpr    = (sig-val (eddsa (r R) (s S)))
+;;   location     = <ocapn-peer 'tcp-testing-only ADDRESS HINTS>
 ;;
 ;; Signature is over the syrup-encoded `<my-location LOC>`.
+;;
+;; IMPLEMENTATION NOTE — why bytes-level assembly:
+;;
+;; Prologos's `SyrupValue` models a record as `syrup-tagged label
+;; payload` with a SINGLE payload — `encode` of that gives the
+;; WRONG shape `<label [a b c]>` for a multi-arg record. The OCapN
+;; spec (and the Python ocapn-test-suite) needs `<label a b c>`
+;; with N direct args. So records are assembled at the BYTES level
+;; here: each arg is pre-encoded, then concatenated between
+;; `<label` and `>`.
+;;
+;; Likewise, crypto byte-payloads (pubkey, sig halves) are
+;; Latin-1-encoded Strings where 1 char == 1 wire byte. The
+;; generic `syrup-bytes` encoder uses `str::bytes-length` (UTF-8
+;; byte count) which over-counts chars 128-255. We build the
+;; bytes-atoms directly with `str::length` (char count == Latin-1
+;; byte count).
 
 require [prologos::ocapn::syrup    :refer [SyrupValue syrup-list syrup-symbol
                                             syrup-bytes syrup-string syrup-tagged]]
-        [prologos::ocapn::syrup-wire :as wire :refer [encode]]
+        [prologos::ocapn::syrup-wire :as wire :refer [encode encode-record]]
         [prologos::ocapn::crypto   :refer [gen-keypair-raw pubkey-raw sign-raw verify-raw]]
         [prologos::data::list      :refer [List nil cons]]
         [prologos::data::string    :as str :refer []]
 
 ;; ----------------------------------------
-;; gcrypt-style s-expressions
+;; Bytes-level assembly primitives
+;; ----------------------------------------
+
+spec concat-strings [List String] -> String
+defn concat-strings
+  | nil          -> ""
+  | cons hd tl   -> str::append hd [concat-strings tl]
+
+spec list-bytes [List String] -> String
+  :doc "Assemble `[item-bytes...]` from already-encoded element byte-strings."
+defn list-bytes [item-bytes]
+  str::append "[" [str::append [concat-strings item-bytes] "]"]
+
+spec record-bytes String [List String] -> String
+  :doc "Assemble `<label arg-bytes...>` from a label + already-encoded arg byte-strings."
+defn record-bytes [label arg-bytes]
+  str::append "<"
+    [str::append [wire::encode [syrup-symbol label]]
+      [str::append [concat-strings arg-bytes] ">"]]
+
+;; A Syrup `bstr` atom is `<byte-count>:<bytes>`. For Latin-1
+;; byte-strings, the byte count == the char count (str::length).
+spec bytes-atom String -> String
+  :doc "Encode a Latin-1 byte-string as a Syrup bstr: <char-count>:<chars>."
+defn bytes-atom [b]
+  str::append [str::from-int [str::length b]] [str::append ":" b]
+
+;; ----------------------------------------
+;; gcrypt-style s-expressions (bytes-level)
 ;; ----------------------------------------
 ;;
-;; The OCapN spec encodes pubkeys + signatures in gcrypt's s-expr
-;; format. These are plain syrup-lists where each "sub-form" is
-;; itself a syrup-list whose head is a name-symbol. Example:
-;;
-;;   (public-key (ecc (curve Ed25519) (flags eddsa) (q ...)))
-;;
-;; ↓ Becomes the SyrupValue ↓
-;;
-;;   syrup-list
-;;     [ syrup-symbol "public-key"
-;;     ; syrup-list
-;;       [ syrup-symbol "ecc"
-;;       ; syrup-list [syrup-symbol "curve"; syrup-symbol "Ed25519"]
-;;       ; syrup-list [syrup-symbol "flags"; syrup-symbol "eddsa"]
-;;       ; syrup-list [syrup-symbol "q"     ; syrup-bytes PUBKEY] ]]
+;; gcrypt s-exprs are nested syrup-lists whose head is a name-
+;; symbol. Lists encode as `[items]` with no length prefix, so the
+;; list structure is fine — but the q/r/s payloads are crypto
+;; bytes-atoms needing the Latin-1-correct length.
 
-spec gcrypt-pair String SyrupValue -> SyrupValue
-  :doc "Build a gcrypt-style (key VALUE) sub-form."
-defn gcrypt-pair [key value]
-  syrup-list [cons [syrup-symbol key] [cons value nil]]
+spec gcrypt-pair-sym-bytes String String -> String
+  :doc "Wire bytes for a gcrypt (key SYMBOL) sub-form."
+defn gcrypt-pair-sym-bytes [key sym]
+  list-bytes
+    [cons [wire::encode [syrup-symbol key]]
+      [cons [wire::encode [syrup-symbol sym]] nil]]
 
-spec gcrypt-pair-sym String String -> SyrupValue
-  :doc "Build a gcrypt-style (key SYMBOL-VALUE) sub-form."
-defn gcrypt-pair-sym [key sym]
-  gcrypt-pair key [syrup-symbol sym]
+spec gcrypt-pair-str-bytes String String -> String
+  :doc "Wire bytes for a gcrypt (key STRING) sub-form."
+defn gcrypt-pair-str-bytes [key value]
+  list-bytes
+    [cons [wire::encode [syrup-symbol key]]
+      [cons [wire::encode [syrup-string value]] nil]]
 
-spec gcrypt-pubkey-sexpr String -> SyrupValue
-  :doc "Build (public-key (ecc (curve Ed25519) (flags eddsa) (q PK_BYTES))). pk-bytes is a Latin-1 String of raw key bytes."
-defn gcrypt-pubkey-sexpr [pk-bytes]
-  syrup-list
-    [cons [syrup-symbol "public-key"]
-      [cons [syrup-list
-              [cons [syrup-symbol "ecc"]
-                [cons [gcrypt-pair-sym "curve" "Ed25519"]
-                  [cons [gcrypt-pair-sym "flags" "eddsa"]
-                    [cons [gcrypt-pair "q" [syrup-bytes pk-bytes]] nil]]]]]
+spec gcrypt-pair-bytes-atom String String -> String
+  :doc "Wire bytes for a gcrypt (key BYTES-ATOM) sub-form."
+defn gcrypt-pair-bytes-atom [key payload]
+  list-bytes
+    [cons [wire::encode [syrup-symbol key]]
+      [cons [bytes-atom payload] nil]]
+
+spec gcrypt-pubkey-bytes String -> String
+  :doc "Wire bytes for (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))."
+defn gcrypt-pubkey-bytes [pk]
+  list-bytes
+    [cons [wire::encode [syrup-symbol "public-key"]]
+      [cons [list-bytes
+              [cons [wire::encode [syrup-symbol "ecc"]]
+                [cons [gcrypt-pair-sym-bytes "curve" "Ed25519"]
+                  [cons [gcrypt-pair-sym-bytes "flags" "eddsa"]
+                    [cons [gcrypt-pair-bytes-atom "q" pk] nil]]]]]
         nil]]
 
-spec gcrypt-sig-sexpr String String -> SyrupValue
-  :doc "Build (sig-val (eddsa (r R) (s S))). r and s are 32-byte Latin-1 Strings."
-defn gcrypt-sig-sexpr [r s]
-  syrup-list
-    [cons [syrup-symbol "sig-val"]
-      [cons [syrup-list
-              [cons [syrup-symbol "eddsa"]
-                [cons [gcrypt-pair "r" [syrup-bytes r]]
-                  [cons [gcrypt-pair "s" [syrup-bytes s]] nil]]]]
+spec gcrypt-sig-bytes String String -> String
+  :doc "Wire bytes for (sig-val (eddsa (r R) (s S)))."
+defn gcrypt-sig-bytes [r s]
+  list-bytes
+    [cons [wire::encode [syrup-symbol "sig-val"]]
+      [cons [list-bytes
+              [cons [wire::encode [syrup-symbol "eddsa"]]
+                [cons [gcrypt-pair-bytes-atom "r" r]
+                  [cons [gcrypt-pair-bytes-atom "s" s] nil]]]]
         nil]]
 
 ;; ----------------------------------------
 ;; Location: <ocapn-peer transport address hints>
 ;; ----------------------------------------
 
-spec ocapn-peer-record String String String String -> SyrupValue
-  :doc "Build <ocapn-peer 'TRANSPORT ADDRESS {host=H port=P}>. transport is bare-symbol name (e.g. 'tcp-testing-only'). hints aren't truly a dict here — we model them as a syrup-list of alternating key/value for simplicity. A future revision can lift to a real dict when Prologos's syrup model gains one."
-defn ocapn-peer-record [transport address host port]
-  syrup-tagged "ocapn-peer"
-    [syrup-list
-      [cons [syrup-symbol transport]
-        [cons [syrup-string address]
-          [cons [syrup-list
-                  [cons [gcrypt-pair-sym "host" host]
-                    [cons [gcrypt-pair "port" [syrup-string port]] nil]]]
-            nil]]]]
+spec ocapn-peer-bytes String String String String -> String
+  :doc "Build the wire bytes for <ocapn-peer 'TRANSPORT ADDRESS HINTS>. HINTS is modelled as a syrup-list of (host H) (port P) sub-lists — a future revision can lift to a real syrup dict once the SyrupValue model gains one. transport/host/port are ASCII so the generic encoder is fine for them."
+defn ocapn-peer-bytes [transport address host port]
+  record-bytes "ocapn-peer"
+    [cons [wire::encode [syrup-symbol transport]]
+      [cons [wire::encode [syrup-string address]]
+        [cons [list-bytes
+                [cons [gcrypt-pair-str-bytes "host" host]
+                  [cons [gcrypt-pair-str-bytes "port" port] nil]]]
+          nil]]]
 
 ;; ----------------------------------------
-;; my-location envelope: <my-location LOC>
+;; my-location envelope + signing
 ;; ----------------------------------------
 ;;
-;; The OCapN spec mandates that the signature is over the syrup-
-;; encoded `<my-location LOC>` envelope, not over LOC directly.
-;; This prevents a captured signature from being replayed as a
-;; bare location.
+;; The OCapN spec mandates the signature is over the syrup-encoded
+;; `<my-location LOC>` envelope, not over LOC directly — this
+;; prevents a captured signature being replayed as a bare location.
 
-spec my-location-envelope SyrupValue -> SyrupValue
-defn my-location-envelope [location]
-  syrup-tagged "my-location" location
+spec my-location-envelope-bytes String -> String
+  :doc "Wrap pre-encoded location bytes in <my-location LOC>."
+defn my-location-envelope-bytes [location-bytes]
+  record-bytes "my-location" [cons location-bytes nil]
 
-;; ----------------------------------------
-;; Sign a location
-;; ----------------------------------------
-
-spec sign-location Nat SyrupValue -> String
-  :doc "Given a keypair handle + location SyrupValue, return the 64-byte signature (Latin-1 String) over the encoded my-location envelope."
-defn sign-location [kp location]
-  sign-raw kp [wire::encode [my-location-envelope location]]
+spec sign-location Nat String -> String
+  :doc "Given a keypair handle + pre-encoded location bytes, return the 64-byte Ed25519 signature over the my-location envelope."
+defn sign-location [kp location-bytes]
+  sign-raw kp [my-location-envelope-bytes location-bytes]
 
 ;; ----------------------------------------
 ;; Build the signed op:start-session bytes
 ;; ----------------------------------------
 
-spec start-session-bytes String Nat SyrupValue -> String
-  :doc "Build the 4-field signed <op:start-session ver pubkey loc sig> wire bytes given (captp-version, keypair-handle, location-syrup)."
-defn start-session-bytes [ver kp location]
+spec start-session-bytes String Nat String -> String
+  :doc "Build the 4-field signed <op:start-session ver pubkey loc sig> wire bytes given (captp-version, keypair-handle, pre-encoded-location-bytes). 4 DIRECT record args."
+defn start-session-bytes [ver kp location-bytes]
   let pk := [pubkey-raw kp]
-    let sig := [sign-location kp location]
+    let sig := [sign-location kp location-bytes]
       let r := [str::slice sig 0 32]
         let s := [str::slice sig 32 64]
-          [wire::encode
-            [syrup-tagged "op:start-session"
-              [syrup-list
-                [cons [syrup-string ver]
-                  [cons [gcrypt-pubkey-sexpr pk]
-                    [cons location
-                      [cons [gcrypt-sig-sexpr r s] nil]]]]]]]
+          [record-bytes "op:start-session"
+            [cons [wire::encode [syrup-string ver]]
+              [cons [gcrypt-pubkey-bytes pk]
+                [cons location-bytes
+                  [cons [gcrypt-sig-bytes r s] nil]]]]]
 
 ;; ----------------------------------------
-;; Convenience: build the full handshake (keypair + bytes) in one call
+;; Convenience: build the full handshake in one call
 ;; ----------------------------------------
 
 spec mk-handshake-bytes String String String String String -> String
-  :doc "Generate a fresh Ed25519 keypair and build the signed op:start-session bytes for (ver, transport, address, host, port). Returns the wire bytes; the keypair handle is held by the FFI's table and can be retrieved via gen-keypair-raw + sign-location for subsequent verification."
+  :doc "Generate a fresh Ed25519 keypair and build the signed op:start-session bytes for (ver, transport, address, host, port)."
 defn mk-handshake-bytes [ver transport address host port]
   let kp := [gen-keypair-raw unit]
-    let location := [ocapn-peer-record transport address host port]
-      start-session-bytes ver kp location
+    let location-bytes := [ocapn-peer-bytes transport address host port]
+      start-session-bytes ver kp location-bytes

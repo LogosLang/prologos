@@ -61,10 +61,23 @@ racket "$SERVER_SCRIPT" --port "$PORT" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 trap "kill $SERVER_PID 2>/dev/null; rm -f $SERVER_LOG" EXIT
 
-# Give the server a moment to bind.
-sleep 3
-if ! kill -0 $SERVER_PID 2>/dev/null; then
-  echo "[run-ocapn-test-suite] server failed to start. log:" >&2
+# Wait for the server to bind. It loads the Prologos OCapN modules
+# at startup (process-string of the handshake preamble), which
+# takes ~15-25s. Poll the log for the "listening" line rather than
+# a fixed sleep.
+SERVER_READY=
+for i in $(seq 1 60); do
+  if grep -q "listening on" "$SERVER_LOG" 2>/dev/null; then
+    SERVER_READY=1
+    break
+  fi
+  if ! kill -0 $SERVER_PID 2>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+if [ -z "$SERVER_READY" ]; then
+  echo "[run-ocapn-test-suite] server failed to start / bind. log:" >&2
   cat "$SERVER_LOG" >&2
   exit 1
 fi
