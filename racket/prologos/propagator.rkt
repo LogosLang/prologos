@@ -762,6 +762,38 @@
   ;; assumption-id structs).
   (set-union old new))
 
+;; PPN 4C Phase 3A.b cleanup (2026-05-22): SRE Tier 2 registrations.
+;;
+;; The retraction-stratum-merge + fork-contradiction-request-merge merges
+;; are structurally `merge-set-union` (defined in infra-cell.rkt). Both
+;; implement the `'monotone-set` SRE domain (registered at
+;; infra-cell-sre-registrations.rkt:130-142 with `merge-set-union` as its
+;; equality merge). We define them locally here because propagator.rkt
+;; cannot require infra-cell.rkt (cycle: infra-cell requires propagator).
+;;
+;; The Tier 2 reverse-lookup registry links function-object identity
+;; (eq?) to domain name; registering BOTH local merges with `'monotone-set`
+;; gives cell-13 + cell-16 Tier 3 domain inheritance — the cells get
+;; classified as `'monotone-set` at allocation, gaining:
+;;   - SRE-validated algebraic properties (comm + assoc + idem)
+;;   - Structural classification for `:component-paths` enforcement
+;;   - Architectural alignment with the set-latch fan-in pattern
+;;     (propagator-design.md § Set-Latch for Fan-In Readiness)
+;;
+;; Note (Phase 3A.b post-implementation cleanup): in 3A.0, cell-16's merge
+;; was defined inline without Tier 2 registration — a "check codebase for
+;; existing helpers" miss per the just-graduated codification
+;; (DEVELOPMENT_LESSONS.org). Same gap pre-existed for cell-13. This block
+;; closes both gaps without changing behavior.
+;;
+;; Architectural follow-up: PM Track 12 (parameters → cells) will retire
+;; merge-fn-registry; merge-fn-domain linkage will then flow through SRE
+;; directly. Until then, this duplicate-registration pattern (one merge fn
+;; per consumer site, all registered to the same `'monotone-set` domain)
+;; is the principled bridge.
+(register-merge-fn!/lattice retraction-stratum-merge #:for-domain 'monotone-set)
+(register-merge-fn!/lattice fork-contradiction-request-merge #:for-domain 'monotone-set)
+
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
 ;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
 ;; propagator.rkt → tropical-fuel.rkt → sre-core.rkt → propagator.rkt

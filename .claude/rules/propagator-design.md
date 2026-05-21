@@ -121,6 +121,43 @@ Both apply at different conceptual layers. The architecturally-aligned fan-in us
 
 Codified 2026-04-24 after PPN 4C S2.b-iii + full-suite measurement surfaced the compound-cell incompatibility of the pre-existing fan-ins. Refined 2026-04-24 post-mini-audit to specify broadcast realization at the install layer (per the user prompt: "is this also parallel ready according to the all-at-once, all in parallel part of our propagator mantra?") and document the complementary relationship with broadcast. Promoted to "prime design pattern" status — whenever a fan-in is contemplated, this pattern is the default answer, not an optimization to consider.
 
+### Watcher realization variants (3rd added 2026-05-22 from PPN 4C Phase 3A.b)
+
+The watcher-layer realization has three known variants — pick the one matching your input topology:
+
+| Variant | Input topology | Realization |
+|---|---|---|
+| **(A) Universe sub-set** (codified 2026-04-24) | N inputs as components of ONE compound cell (e.g., universe-cell with hasheq of meta-id → tagged-cell-value) | ONE `net-add-broadcast-propagator` with `:component-paths`, items = component keys, item-fn reads per-component from input-vals |
+| **(B) Per-cell legacy sub-set** (codified 2026-04-24) | N inputs across N separate cells (pre-shared-carrier migration) | N `net-add-fire-once-propagator` calls, one per input cell |
+| **(C) N-worldview sub-set** (NEW 2026-05-22) | ONE cell × N **worldview-filtered views** (per-branch isolation under speculation) | N `net-add-fire-once-propagator` calls, each wrapped at branch wv via `wrap-with-worldview(branch-bit)`; each reads the SAME cell under its own bitmask via tagged-cell-value subset filtering |
+
+**Variant (C) origin** — PPN 4C Phase 3A.b (D.3 §9.3.4): fork-on-union branches share the attribute-map carrier; each branch's read needs to filter to its own worldview's tagged entries. Variants (A) and (B) don't fit this topology — (A) requires component-keyed compound cells (worldview tagging is orthogonal to component keying); (B) requires N separate cells (we have ONE cell with N worldview-filtered views).
+
+**Carrier prerequisite for Variant (C)**: the carrier cell must be `tagged-cell-value`-aware. For carriers created plain (like the attribute-map), call `promote-cell-to-tagged net cid` at fork-installation time to lazy-promote — the 5-production-site canonical pattern from `relations.rkt` (NAF :2034, guard :2079, fact-row :2481, multi-clause :2564, :2944). Skipping this step breaks per-branch isolation structurally; tagged-wrapping in `net-cell-write` is gated by `(tagged-cell-value? old-val)` and silently merges plain. (PPN 4C Phase 3A.b prior-session diagnostic point.)
+
+**Mantra alignment for Variant (C)**: N independent fire-once propagators wrapped at distinct worldviews = N parallel watchers under BSP scheduling; each watches its own worldview-filtered view of the shared carrier; per-branch isolation is structurally emergent from `tagged-cell-read`'s subset semantics. All-at-once + all-in-parallel preserved at the install layer; structurally-emergent contradiction signal at the read layer; information flow via tagged-cell-value entries written to cells.
+
+### Threshold-consumer realization variants (3rd added 2026-05-22 from PPN 4C Phase 3A.b)
+
+The latch + watcher composition feeds a threshold-gated action emission. Two realizations exist; pick by atomicity requirement:
+
+| Variant | Mechanism | Atomicity | When to use |
+|---|---|---|---|
+| **Within-round (threshold propagator)** | `net-add-threshold` / `make-threshold-fire-fn` watches the latch cell; fires action-thunk when threshold predicate holds; runs DURING BSP rounds when latch changes | Incremental — fires as soon as predicate becomes true, may fire multiple times as latch accumulates (depending on threshold semantics) | Readiness fan-in: "are all N inputs ground?" → fire-as-soon-as-ready makes the consumer responsive |
+| **Between-round (stratum handler)** (NEW 2026-05-22) | `register-stratum-handler!` on the latch (which doubles as a stratum-request cell); the handler runs BETWEEN BSP rounds; reads the full accumulated set once per round; emits the action once per round atomically; auto-resets via `#:reset-value` | Atomic per round — exactly one fire per round; all in-round writes batched | Narrowing-style actions: "atomic worldview narrowing on contradicted branches" → between-round atomicity prevents partial narrowing visible mid-round to sibling branches |
+
+**Between-round origin** — PPN 4C Phase 3A.b (D.3 §9.3.4) `process-fork-contradiction` handler: accumulated branch aids in cell-16 → handler reads set once → atomic `worldview-cache &= ~(bits-of contradicted-aids)`. The narrowing must be atomic per round; otherwise mid-round partial narrowing could prematurely retract a branch before sibling branches' watchers fire. Mirrors PPN 4C Phase 2A.a `process-retraction` pattern.
+
+**Mantra alignment for between-round variant**: all-at-once at the action layer (one narrowing per round, batched across all in-round watcher writes); structurally-emergent (the action consumes the round's accumulated state, not individual events); information flow via cell-15/16-style request accumulator cells; on-network (latch cell + stratum-handler registration + cell-narrowing-write all on-network).
+
+**Anti-pattern**: don't use within-round threshold propagator for narrowing-style actions where partial mid-round narrowing would be visible to sibling propagators in the same round. The cascade can prematurely-retract correct branches whose watchers haven't fired yet. Stratum handler IS the architecturally-correct mechanism for round-atomic actions; threshold propagator IS the architecturally-correct mechanism for incremental-readiness actions. Different domains, different consumers.
+
+### Tier 2 SRE registration for latch cells (added 2026-05-22 from PPN 4C Phase 3A.b cleanup)
+
+The latch cell SHOULD be SRE-registered to the `'monotone-set` domain (`infra-cell-sre-registrations.rkt:130-142`). The canonical merge is `merge-set-union` (proper join-semilattice over set-union). For modules that cannot require `infra-cell.rkt` (e.g., `propagator.rkt` due to the propagator → infra-cell cycle), define the merge LOCALLY with the same semantic and call `register-merge-fn!/lattice local-merge-fn #:for-domain 'monotone-set` to link to the existing domain via Tier 2 reverse-lookup.
+
+Why this matters: SRE classification gives the latch cell architectural alignment with the set-latch pattern, structural classification for `:component-paths` enforcement, and SRE-validated algebraic property declarations (commutative, associative, idempotent). Skipping the registration drift is the "check codebase for existing helpers" miss codified in `DEVELOPMENT_LESSONS.org` § "Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers."
+
 ## Component Indexing
 
 **MANDATORY**: Any propagator watching a compound cell (hasheq, scope-cell, decisions-state, commitments-state) MUST declare `#:component-paths` specifying which components it watches.
