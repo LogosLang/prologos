@@ -32,6 +32,7 @@
          racket/list
          racket/string
          (only-in racket/format ~a)
+         (only-in file/sha1 bytes->hex-string)
          "ocapn-framing.rkt"
          "../../racket/prologos/tests/test-support.rkt"
          "../../racket/prologos/macros.rkt"
@@ -145,6 +146,30 @@
 (flush-output)
 
 ;; ========================================
+;; Inbound start-session validation
+;; ========================================
+;;
+;; The decision logic lives in `prologos::ocapn::handshake`
+;; (`check-incoming-start-session`). The server hex-encodes the
+;; inbound frame, passes it through, and gets back either the empty
+;; string (accept) or op:abort wire bytes (reject).
+
+(define validate-sema (make-semaphore 1))
+
+(define (validate-incoming frame-bytes)
+  ;; `process-string` shares elaborator state across calls; serialise
+  ;; per-connection validation so concurrent connections cannot race.
+  (call-with-semaphore
+   validate-sema
+   (lambda ()
+     (extract-latin1-bytes
+      (last
+       (run-prologos
+        (format "(eval (check-incoming-start-session ~s ~s))"
+                (version-arg)
+                (bytes->hex-string frame-bytes))))))))
+
+;; ========================================
 ;; Connection handler
 ;; ========================================
 
@@ -155,25 +180,43 @@
     (printf "ocapn-test-server: connection accepted, sending start-session (framing=~v)~n"
             (current-framing-strategy))
     (write-frame cout start-session-bytes)
-    (printf "ocapn-test-server: sent ~a bytes; reading peer frames~n"
+    (printf "ocapn-test-server: sent ~a bytes; reading peer start-session~n"
             (bytes-length start-session-bytes))
-    ;; Read incoming frames. We don't yet dispatch through
-    ;; captp-core's connection-step — frame counting + logging is
-    ;; the integration point for Phase 59.
-    (let loop ([n 0])
-      (define frame (with-handlers ([exn:fail?
-                                     (lambda (e)
-                                       (printf "ocapn-test-server: read-frame exn after ~a frames: ~a~n"
-                                               n (exn-message e))
-                                       #f)])
-                      (read-frame cin)))
-      (cond
-        [(or (eof-object? frame) (not frame))
-         (printf "ocapn-test-server: peer closed after ~a frames~n" n)]
-        [else
-         (printf "ocapn-test-server: received frame ~a (~a bytes)~n"
-                 (+ n 1) (bytes-length frame))
-         (loop (+ n 1))])))
+    (define first-frame
+      (with-handlers ([exn:fail? (lambda (e)
+                                   (printf "ocapn-test-server: read-frame exn: ~a~n"
+                                           (exn-message e))
+                                   #f)])
+        (read-frame cin)))
+    (cond
+      [(or (eof-object? first-frame) (not first-frame))
+       (printf "ocapn-test-server: peer closed before sending start-session~n")]
+      [else
+       (define abort-reply (validate-incoming first-frame))
+       (cond
+         [(zero? (bytes-length abort-reply))
+          (printf "ocapn-test-server: inbound start-session accepted; reading further frames~n")
+          ;; We don't yet dispatch through captp-core's
+          ;; connection-step — frame counting + logging is the
+          ;; integration point for Phase 59.
+          (let loop ([n 1])
+            (define frame (with-handlers ([exn:fail?
+                                           (lambda (e)
+                                             (printf "ocapn-test-server: read-frame exn after ~a frames: ~a~n"
+                                                     n (exn-message e))
+                                             #f)])
+                            (read-frame cin)))
+            (cond
+              [(or (eof-object? frame) (not frame))
+               (printf "ocapn-test-server: peer closed after ~a frames~n" n)]
+              [else
+               (printf "ocapn-test-server: received frame ~a (~a bytes)~n"
+                       (+ n 1) (bytes-length frame))
+               (loop (+ n 1))]))]
+         [else
+          (printf "ocapn-test-server: inbound start-session REJECTED (~a bytes); sending op:abort~n"
+                  (bytes-length abort-reply))
+          (write-frame cout abort-reply)])]))
   (close-input-port cin)
   (close-output-port cout))
 

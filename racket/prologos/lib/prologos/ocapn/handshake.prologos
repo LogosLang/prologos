@@ -44,6 +44,14 @@ require [prologos::ocapn::syrup    :refer [SyrupValue syrup-list syrup-symbol
         [prologos::ocapn::crypto   :refer [gen-keypair-raw pubkey-raw sign-raw verify-raw]]
         [prologos::data::list      :refer [List nil cons]]
         [prologos::data::string    :as str :refer []]
+        [prologos::data::option    :refer [Option some none]]
+
+;; Hex-decode inbound frame bytes. The conversion is an FFI call
+;; rather than a Prologos loop because the tree-walking reducer is
+;; far too slow at incremental byte-string assembly — see
+;; ocapn-frame-ffi.rkt.
+foreign racket "ocapn-frame-ffi.rkt"
+  [ocapn-hex-decode :as hex-to-bytes : String -> String]
 
 ;; ----------------------------------------
 ;; Bytes-level assembly primitives
@@ -186,3 +194,80 @@ defn mk-handshake-bytes [ver transport address host port]
   let kp := [gen-keypair-raw unit]
     let location-bytes := [ocapn-peer-bytes transport address host port]
       start-session-bytes ver kp location-bytes
+
+;; ----------------------------------------
+;; Incoming handshake validation — Phase 58.c
+;; ----------------------------------------
+;;
+;; The OCapN spec requires the receiver of an op:start-session to
+;; reject it (with op:abort) when the CapTP version is unsupported.
+;; The decision logic lives HERE, in the core implementation — the
+;; test server is a thin TCP shell that only frames bytes.
+;;
+;; Inbound wire bytes reach this module HEX-ENCODED: embedding
+;; arbitrary Latin-1 bytes in a Prologos string literal (the server's
+;; only channel into a Prologos call) is fragile, so the server
+;; hex-encodes the frame and `hex-to-bytes` (FFI) recovers it here.
+
+;; --- op:abort builder ---
+
+spec abort-bytes String -> String
+  :doc "Build the <op:abort reason> wire bytes for a reason string."
+defn abort-bytes [reason]
+  record-bytes "op:abort" [cons [wire::encode [syrup-string reason]] nil]
+
+;; --- record-header / version-field parse ---
+;;
+;; Only the first two fields of the inbound record are touched —
+;; the label (a symbol) and the CapTP version (a string). Both are
+;; flat atoms, so this never descends into the pubkey / location /
+;; signature sub-structures (whose decoding is Phase 58.d work).
+
+spec is-start-session-label? SyrupValue -> Bool
+defn is-start-session-label? [v]
+  match v
+    | syrup-symbol s -> [str::eq s "op:start-session"]
+    | _              -> false
+
+spec syrup-string-value SyrupValue -> [Option String]
+defn syrup-string-value [v]
+  match v
+    | syrup-string s -> [some s]
+    | _              -> none
+
+spec version-after-label String SyrupValue Int -> [Option String]
+defn version-after-label [frame label off]
+  match [is-start-session-label? label]
+    | false -> none
+    | true  ->
+        match [wire::decode-at frame off]
+          | none   -> none
+          | some d -> [syrup-string-value [wire::d-value d]]
+
+spec parse-incoming-version String -> [Option String]
+  :doc "Extract the CapTP version from an inbound op:start-session frame."
+defn parse-incoming-version [frame]
+  match [int-lt [str::length frame] 2]
+    | true  -> none
+    | false ->
+        match [wire::decode-at frame 1]
+          | none   -> none
+          | some d -> [version-after-label frame [wire::d-value d] [wire::d-consumed d]]
+
+;; --- top-level decision ---
+
+spec decide-incoming String [Option String] -> String
+defn decide-incoming [expected-ver mv]
+  match mv
+    | none   -> [abort-bytes "expected op:start-session"]
+    | some v ->
+        match [str::eq v expected-ver]
+          | true  -> ""
+          | false -> [abort-bytes "unsupported CapTP version"]
+
+spec check-incoming-start-session String String -> String
+  :doc "Validate an inbound op:start-session frame (hex-encoded wire
+        bytes). Returns the empty string when the handshake is
+        acceptable, or op:abort wire bytes to send before closing."
+defn check-incoming-start-session [expected-ver hex-frame]
+  decide-incoming expected-ver [parse-incoming-version [hex-to-bytes hex-frame]]

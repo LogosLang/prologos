@@ -56,3 +56,7 @@ racket/prologos/data/cache/
 # MemPalace per-project files (issue #185)
 mempalace.yaml
 entities.json
+
+# Python bytecode cache (OCapN interop test runner)
+__pycache__/
+*.pyc

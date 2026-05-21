@@ -4,12 +4,12 @@
 # run the upstream `ocapn-test-suite` (Python) against it, capture
 # results.
 #
-# The upstream test suite expects 4-field crypto-signed
-# op:start-session frames; our current bridge implements only the
-# 2-field shape. Until crypto handshake support lands, every test
-# is expected to FAIL — this script's exit code does NOT reflect
-# pass/fail; the CI gate is "we can run the suite at all, and we
-# capture the diagnostics for future work."
+# The Racket OCapN test server speaks the canonical 4-field
+# crypto-signed op:start-session handshake (Phase 58.b) and validates
+# the inbound op:start-session, aborting on an unsupported CapTP
+# version (Phase 58.c). This script runs the SELECTED subset of the
+# upstream suite (see tools/interop/ocapn-run-tests.py) — the tests
+# the current implementation targets — and gates CI on them passing.
 #
 # Usage:
 #   tools/interop/run-ocapn-test-suite.sh [PORT] [TEST_SUITE_DIR]
@@ -21,9 +21,9 @@
 #   OCAPN_TEST_PORT       — TCP port for the Racket server (default 22045)
 #
 # Exit:
-#   0 — suite ran (even with failures); diagnostics captured.
-#   1 — suite failed to run (server didn't start, suite not present,
-#       dependency missing). Non-pass-related setup errors.
+#   0 — the milestone tests passed.
+#   1 — a milestone test failed, or setup failed (server didn't
+#       start, suite not present, dependency missing).
 
 set -uo pipefail
 
@@ -86,25 +86,24 @@ fi
 # suite README. The host/port are how the test suite reaches us.
 LOCATOR="ocapn://JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ.tcp-testing-only?host=127.0.0.1&port=$PORT"
 
-echo "[run-ocapn-test-suite] running test suite against $LOCATOR"
-echo "[run-ocapn-test-suite] Phase 58 sends a valid signed start-session;"
-echo "[run-ocapn-test-suite] later tests may hang waiting for op:deliver responses"
-echo "[run-ocapn-test-suite] that need a bridge-level integration (Phase 59+)."
+# Phase 58.c milestone: this many of the selected tests must pass.
+#   test_captp_remote_version              — valid signed start-session
+#   test_start_session_with_invalid_version — abort on bad version
+# test_start_session_with_invalid_signature is Phase 58.d (signature
+# verification) — not yet gated.
+EXPECTED_PASS=2
+
+echo "[run-ocapn-test-suite] running selected tests against $LOCATOR"
+echo "[run-ocapn-test-suite] milestone: >= $EXPECTED_PASS of the selected tests must pass"
 echo "----------------------------------------------------------------"
 
-cd "$SUITE_DIR"
-# Just the start-session module for now — others need more bridge
-# integration. CapTP version "1.0" matches what the upstream tests
-# expect to assert on.
-timeout 60 python3 -u test_runner.py \
-  --test-module tests.op_start_session \
-  --captp-version "1.0" \
-  -v "$LOCATOR" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
+# The selective runner (ocapn-run-tests.py) lives in this repo; it
+# chdir's into the suite dir itself. CapTP version "1.0" matches what
+# the upstream tests assert on.
+OCAPN_TEST_SUITE_DIR="$SUITE_DIR" timeout 90 python3 -u \
+  "$REPO_ROOT/tools/interop/ocapn-run-tests.py" \
+  "$LOCATOR" "1.0" 2>&1 | tee /tmp/ocapn-suite-output.txt || true
 SUITE_EXIT=${PIPESTATUS[0]}
-# Exit codes: 0 = all pass, 1 = some failed, 124 = timed out.
-# Phase 58 expects test_captp_remote_version to PASS; other tests
-# in the module are expected to ERROR or hang until Phase 59+
-# bridge integration.
 
 # Count pass/error/fail markers.
 N_PASS=$(grep -c " \.\.\. ok$" /tmp/ocapn-suite-output.txt || echo 0)
@@ -114,13 +113,16 @@ echo ""
 echo "[run-ocapn-test-suite] tests passed: $N_PASS"
 echo "[run-ocapn-test-suite] tests errored: $N_ERROR"
 echo "[run-ocapn-test-suite] tests failed: $N_FAIL"
-echo "[run-ocapn-test-suite] Phase 58 milestone: test_captp_remote_version should PASS."
 
 echo "----------------------------------------------------------------"
-echo "[run-ocapn-test-suite] suite exit code: $SUITE_EXIT"
+echo "[run-ocapn-test-suite] runner exit code: $SUITE_EXIT"
 echo "[run-ocapn-test-suite] server log tail:"
 tail -20 "$SERVER_LOG"
 
-# Exit 0: we ran the suite. Pass/fail is captured in output above
-# but doesn't determine our exit code — see header comment.
-exit 0
+if [ "$N_PASS" -ge "$EXPECTED_PASS" ]; then
+  echo "[run-ocapn-test-suite] milestone met ($N_PASS >= $EXPECTED_PASS passed)"
+  exit 0
+else
+  echo "[run-ocapn-test-suite] MILESTONE NOT MET ($N_PASS < $EXPECTED_PASS passed)" >&2
+  exit 1
+fi
