@@ -892,6 +892,59 @@
 (register-stratum-handler! classify-inhabit-request-cell-id
                            process-classify-inhabit-request)
 
+;; ============================================================
+;; PPN 4C Phase 3A.0 (2026-05-22): Fork-on-Union Stratum Handlers
+;; ============================================================
+;;
+;; Per addendum design §9.3.1.6 + §9.3.2. Stratum handlers for fork-on-union
+;; orchestration cells (cell-15 fork-on-union-request, cell-16
+;; fork-contradiction-request). Bodies are no-op stubs at 3A.0; full bodies
+;; wire at 3A.a (process-fork-on-union) + 3A.b (process-fork-contradiction).
+;;
+;; 3A.0 charter: establish the registration SHAPE without behavior change vs
+;; pre-3A.0 baseline. Drift risk D-3A.0-handler-no-op-leak — stubs MUST
+;; return net unchanged. Verified via probe diff = 0 vs baseline.
+;;
+;; Architectural model (per §9.3.1.2): BSP-LE 2/2B Realization B — in-place
+;; worldview tagging on shared carrier; NOT fork-and-rejoin (S1 NAF style).
+
+;; cell-15 handler: process-fork-on-union — stub at 3A.0.
+;; Future body (3A.a): consume request entries (per-position fork-on-union
+;; decomposition records); for each entry, flatten union via flatten-union;
+;; allocate N aids via solver-state-amb; initialize worldview-cache branch
+;; bits (set all branch bits); install N branch check propagators wrapped at
+;; branch worldviews (via wrap-with-worldview(aid-bit)); install branch
+;; contradiction watcher (B2-broadcast realization writing to cell-16).
+(define (process-fork-on-union net pending-hash)
+  ;; 3A.0 stub: no-op. Returns net unchanged.
+  net)
+
+;; cell-16 handler: process-fork-contradiction — stub at 3A.0.
+;; Future body (3A.b): consume accumulated aid-set (contradicted branches);
+;; atomic bitwise-AND-with-NOT-mask narrowing on worldview-cache:
+;;   worldview-cache &= ~(bits-of contradicted-aids)
+;; Mirrors 2A.a process-retraction pattern (one-pass over set per BSP round;
+;; BSP outer-loop #:reset-value clears the cell post-handler).
+(define (process-fork-contradiction net contradiction-aid-set)
+  ;; 3A.0 stub: no-op. Returns net unchanged.
+  net)
+
+;; Register handlers at module load. Per addendum design §9.3 deliverable 2
+;; (cell-15) + deliverable 5 (cell-16). #:tier 'value places them in the
+;; BSP outer-loop's value-tier stratum iteration alongside other elaboration
+;; concerns (process-classify-inhabit-request, process-retraction,
+;; process-resolution). #:reset-value matches each cell's initial value type
+;; (hasheq for cell-15; seteq for cell-16) — BSP outer-loop auto-clears after
+;; the handler returns, preparing for the next BSP round's accumulation.
+(register-stratum-handler! fork-on-union-request-cell-id
+                           process-fork-on-union
+                           #:tier 'value
+                           #:reset-value (hasheq))
+(register-stratum-handler! fork-contradiction-request-cell-id
+                           process-fork-contradiction
+                           #:tier 'value
+                           #:reset-value (seteq))
+
 ;; Meta-solution output propagator: watches one meta's :term facet
 ;; (INHABITANT layer — the meta's SOLUTION per §6.15.8 Q6). Writes
 ;; (meta-id . solution) to the output cell when resolved.

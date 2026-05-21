@@ -102,6 +102,11 @@
  resolution-stratum-request-cell-id
  retraction-stratum-merge
  resolution-stratum-merge
+ ;; PPN 4C Phase 3A.0 (2026-05-22): fork-on-union stratum-request cells + merges
+ fork-on-union-request-cell-id
+ fork-contradiction-request-cell-id
+ fork-on-union-request-merge
+ fork-contradiction-request-merge
  ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
  ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
  ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
@@ -687,6 +692,32 @@
 (define retraction-stratum-request-cell-id (cell-id 13))
 (define resolution-stratum-request-cell-id (cell-id 14))
 
+;; PPN 4C Phase 3A.0 (2026-05-22): stratum-request cells for fork-on-union
+;; orchestration. Per addendum design §9.3.1.6 + §9.3.2. These cells accumulate
+;; work from propagator writes during BSP rounds; the corresponding stratum
+;; handler (process-fork-on-union, process-fork-contradiction) reads + processes
+;; between rounds; BSP outer-loop auto-clears via the handler's #:reset-value.
+;;
+;; cell-id 15: fork-on-union-request — hash-union merge; per-position
+;;   fork-on-union firing requests written by per-position classifier-watcher
+;;   (installed at 3A.c). Handler `process-fork-on-union` (stub at 3A.0; body
+;;   at 3A.a) consumes requests, decomposes via flatten-union, allocates N aids
+;;   via solver-state-amb, initializes worldview-cache branch bits, installs
+;;   N branch check propagators wrapped at branch worldviews.
+;;
+;; cell-id 16: fork-contradiction-request — set-union merge; aid-set
+;;   accumulator for branch contradictions written by branch contradiction
+;;   watcher (installed at 3A.b). Handler `process-fork-contradiction` (stub at
+;;   3A.0; body at 3A.b) atomically narrows worldview-cache per BSP round.
+;;
+;; Mirrors 2A.0 pattern (retraction-stratum-request-cell-id + resolution-
+;; stratum-request-cell-id at cell-id 13/14). Allocated as §4.6 specialized
+;; cells (warm + general + any-change) via net-register-specialized-cell.
+;; Handlers register in typing-propagators.rkt (close to 3c-iii
+;; process-classify-inhabit-request precedent).
+(define fork-on-union-request-cell-id (cell-id 15))
+(define fork-contradiction-request-cell-id (cell-id 16))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -703,6 +734,33 @@
   ;; PPN 4C 2A.b (2026-05-20): current-ready-queue-cell-id parameter
   ;; RETIRED — this cell IS its replacement. Same shape (list with append).
   (append old new))
+
+;; PPN 4C Phase 3A.0 (2026-05-22): merges for fork-on-union stratum-request
+;; cells. Local definitions per 2A.0 pattern (cf. retraction-stratum-merge +
+;; resolution-stratum-merge above). Defined locally because propagator.rkt
+;; cannot require infra-cell.rkt (circular dependency).
+
+(define (fork-on-union-request-merge old new)
+  ;; Hash-union: per-position fork-on-union requests keyed by expression
+  ;; position. Multiple positions can have pending fork-on-union work in the
+  ;; same BSP round; each is a separate entry. Within a position, the
+  ;; threshold-fire-once classifier-watcher (installed at 3A.c) ensures one
+  ;; request per (position, decomposition) — so per-key merge is "new wins"
+  ;; (idempotent for the typical case where the entry's value doesn't change
+  ;; once written). CALM-safe under monotone hash-union for distinct keys.
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(k v) (in-hash new)])
+       (hash-set acc k v))]))
+
+(define (fork-contradiction-request-merge old new)
+  ;; Set-valued accumulator of contradicted branch aids. Set-union is
+  ;; commutative, associative, idempotent — CALM-safe. Mirrors
+  ;; retraction-stratum-merge (eq-based seteq since aids are gensym-keyed
+  ;; assumption-id structs).
+  (set-union old new))
 
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
 ;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
@@ -903,17 +961,50 @@
     (error 'make-prop-network
            "resolution-stratum-request-cell-id allocation drift: expected ~a, got ~a"
            resolution-stratum-request-cell-id actual-resolution-cid))
+  ;; PPN 4C Phase 3A.0 (2026-05-22): register fork-on-union stratum-request
+  ;; cells. Per addendum design §9.3.1.6 + §9.3.2. cell-id 15:
+  ;; fork-on-union-request (per-position decomposition requests; hash-union
+  ;; merge). cell-id 16: fork-contradiction-request (aid-set accumulator for
+  ;; branch contradictions; set-union merge). Handlers register in
+  ;; typing-propagators.rkt (process-fork-on-union, process-fork-contradiction
+  ;; — stubs at 3A.0, bodies wired at 3A.a + 3A.b). Until handlers wire bodies,
+  ;; cells exist as empty accumulators (no behavior change vs pre-3A.0).
+  (define-values (net5 actual-fork-on-union-cid)
+    (net-register-specialized-cell net4 (hasheq) fork-on-union-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-fork-on-union-cid fork-on-union-request-cell-id)
+    (error 'make-prop-network
+           "fork-on-union-request-cell-id allocation drift: expected ~a, got ~a"
+           fork-on-union-request-cell-id actual-fork-on-union-cid))
+  (define-values (net6 actual-fork-contradiction-cid)
+    ;; Cell init + merge use seteq (eq-based) to match the assumption-id
+    ;; (gensym) convention. Mirrors retraction-stratum cell.
+    (net-register-specialized-cell net5 (seteq) fork-contradiction-request-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-fork-contradiction-cid fork-contradiction-request-cell-id)
+    (error 'make-prop-network
+           "fork-contradiction-request-cell-id allocation drift: expected ~a, got ~a"
+           fork-contradiction-request-cell-id actual-fork-contradiction-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
   ;; look up each once and cache the prop-cell direct-refs. Write-through at
   ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
+  ;; 3A.0: latest cells CHAMP is net6 (after fork-on-union + fork-contradiction
+  ;; cell allocations); the cached fuel + worldview-cache prop-cells were
+  ;; allocated earlier (fuel at net2; worldview-cache at base-net) — shared
+  ;; via CHAMP structural sharing into net6's cells map. Direct-refs lookup
+  ;; from net6's cells CHAMP retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net4) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net6) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net4) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net4
-      [warm (struct-copy prop-net-warm (prop-network-warm net4)
+         [wv-cell (champ-lookup (prop-network-cells net6) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net6
+      [warm (struct-copy prop-net-warm (prop-network-warm net6)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 

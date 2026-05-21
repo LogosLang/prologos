@@ -179,7 +179,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ✅ | Mini-design + mini-audit persisted at §8.8 (2026-05-20); implementation landed at commit `c24cbae6`. **6 functions retired** (5 design-enumerated + `retry-constraints-for-meta!` surfaced as also dead during audit): run-stratified-resolution-pure, run-stratified-resolution!, execute-resolution-actions!, read-ready-queue-actions, run-retraction-stratum!, retry-constraints-for-meta!. **3 parameters retired**: current-resolution-executor (imperative), current-retracted-assumptions (cell-13 supersedes), current-in-stratified-resolution? (re-entry guard vestigial — D1 verified). solve-meta! simplified 3-branch → 2-branch. **Surfaced + fixed**: test-speculation-bridge.rkt had 2 `run-retraction-stratum!` callsites the §8.8.2 audit missed; migrated to `maybe-flush-network!` (BSP outer-loop driver — same semantic). 5 stale comment-hygiene sites updated. Driver.rkt: deleted init at :467-468 + install at :2705; updated comment at :2624 (re BSP outer-loop progress detection). Test migrations: test-constraint-postponement.rkt:60 migrated to `current-resolution-executor-pure #f`; test-readiness-propagator.rkt retired 2 unit tests for `read-ready-queue-actions` + migrated integration test to direct cell-14 read via test-local `read-resolution-actions-cell` helper. **Full suite: 8232 tests / 109.2s / 0 failures — −11.9s wall vs 2A.b (121.1s) confirming retired wrapper's redundant work was real**. Adversarial 3-column VAG passed all 4 questions with honest scaffolding labels. **First net-deletion sub-phase of addendum Phase 2** — net ~−200 LoC + perf win. Phase 2 charter "one orchestration mechanism" COMPLETE. |
 | 2V | Vision Alignment Gate Phase 2 | ✅ | Cross-arc adversarial 3-column VAG persisted at §8.9 (2026-05-20). All 4 questions PASS with honest scaffolding labels across the full 2A.0 → 2A.a → 2A.b → 2A.c → 2B arc. **Cumulative metrics**: +8 tests / −1.7s wall / ~−200 LoC production retired / 6 functions + 3 parameters + 7 provides retired / 2 new BSP stratum cells + handlers / 3 parity axes added. **Charter complete**: BSP outer-loop is sole orchestration for in-form work; ~200 LoC scaffolding retired. **Patterns surfaced** (§8.9.4): adversarial 3-column framing matures across arc; PM 13 spin-off was right call; audit-driven scope expansion is consistent (4 data points — graduation-ready at addendum PIR); first net-deletion phase in addendum; wall delta of −1.7s validates wrapper's overhead approximately equaled new handler overhead. **2 codifications graduation-ready at addendum PIR** (adversarial 3-column + audit-driven scope expansion). **Cross-track captures consolidated** (§8.9.6) for Phase 3 / Phase 4 / PM 12 / PM 13. **Phase 3 readiness gate** ALL PREREQUISITES MET (§8.9.7) — ready to open. |
 | Phase 3 mini-design + mini-audit | OQ1-OQ4 resolved via conversational dialogue; outcomes persisted at §9.3.1 | ✅ `d13be339` | **Architectural pivot**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier) over S1 NAF fork-and-rejoin. **OQ1**: non-committing inhabitation semantics — classifier preserved as union after check; multi-success branches coexist via worldview tagging; type-theory unanimous (Castagna semantic subtyping; TypeScript bidirectional; Scala 3 hard unions; Typed Racket occurrence typing). **OQ2**: per-command bit scope; ≤30 bits gate; no reclaim within command. **OQ3**: stratum handler (B3) + B2-broadcast watcher; unification primitives stay PURE (decomplection preserved). **OQ4**: Level 1 (Tarski) — simpler than original §9.7 Level 2. **Cells**: cell-15 (fork-on-union-request), cell-16 (fork-contradiction-request) for 3A.0. **Parity axis**: 'union-narrow-by-constraint renamed → 'union-inhabitation-fork; expectation updated for type-theoretic correctness. |
-| 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | ⬜ | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
+| 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | 🔄 | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
+| 3A.0 | Allocate fork-on-union stratum-request cells (cell-15 + cell-16) via §4.6 framework; register no-op handler stubs in typing-propagators.rkt; cell-id cascade test fixes (3c-iii precedent) | ✅ (this commit) | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
@@ -4355,6 +4356,85 @@ All three: external user challenge caught what internal application missed. **Ad
 - Drift risks named (D-3A-*)
 - Sub-phase partition refined (3A.0 / 3A.a / 3A.b / 3A.c / 3A.d / 3A-VAG)
 - Ready for Phase 3A.0 implementation opening
+
+### §9.3.2 Phase 3A.0 — Cell allocations + handler stubs (CLOSE 2026-05-22)
+
+Mini-design + mini-audit + implementation per Stage 4 Per-Phase Protocol. 3A.0 establishes the infrastructure SHAPE for fork-on-union orchestration; bodies wire at 3A.a + 3A.b.
+
+#### §9.3.2.1 Implementation deliverables
+
+**propagator.rkt** (+~70 LoC):
+- Provides extended: `fork-on-union-request-cell-id`, `fork-contradiction-request-cell-id`, `fork-on-union-request-merge`, `fork-contradiction-request-merge`
+- Cell-id constants (lines after 2A.0's cell-13/14): `(define fork-on-union-request-cell-id (cell-id 15))` + `(define fork-contradiction-request-cell-id (cell-id 16))`
+- Local merge functions (after 2A.0 merges):
+  - `fork-on-union-request-merge` — hash-union (per-position request keyed by position; CALM-safe under monotone hash-union for distinct keys)
+  - `fork-contradiction-request-merge` — set-union (eq-based seteq for aid-set; mirrors retraction-stratum-merge)
+- Allocations in `make-prop-network` (after 2A.0's cell-13/14 allocations) via `net-register-specialized-cell` with `#:tier 'warm #:storage 'general #:fires-on 'any-change` (per §4.6 framework `make-warm-general-meta` pattern)
+- Drift assertions per 2A.0 precedent — `(unless (equal? actual-cid expected-cell-id) (error ...))` for both cells
+- Updated `let*` block at end of make-prop-network to use `net6` (latest cells CHAMP) instead of `net4` for the prop-net-warm fuel-cell-cache + worldview-cache-cache direct-ref lookups
+
+**typing-propagators.rkt** (+~45 LoC):
+- Stub handlers `process-fork-on-union` + `process-fork-contradiction` — return net unchanged (no-op at 3A.0; bodies wire at 3A.a + 3A.b)
+- Registered at module load with `register-stratum-handler! #:tier 'value #:reset-value <empty>` (mirrors 2A.0's metavar-store.rkt:1615/1675 pattern)
+
+**Test fixes (cell-id cascade per 3c-iii precedent — `cell-id 10→11 cascade` analog at `cell-id 14→17`)**:
+- `tests/test-propagator.rkt:42, 72, 79, 199, 237` — hardcoded next-cell-id expectations 15→17; user-cell base 15→17; batch sequence `(15 16 17)→(17 18 19)`
+- `tests/test-observatory-01.rkt:307-309` — cell-meta-label "cell-15"→"cell-17" (+ siblings)
+- `tests/test-trace-serialize.rkt:110, 124` — totalCells 15→17 + 17→19
+
+#### §9.3.2.2 Cell-id allocation map (post-3A.0)
+
+| Cell-id | Cell | Source |
+|---|---|---|
+| 0 | decomp-request | PAR Track 1 |
+| 1 | worldview-cache | BSP-LE Track 2 Phase 4 |
+| 2 | relation-store | BSP-LE Track 2B Phase R1 |
+| 3 | config | BSP-LE Track 2B Phase R1 |
+| 4 | naf-pending | BSP-LE Track 2B Phase R4 |
+| 5 | pool-config | (Phase 2c) |
+| 6-9 | topology requests | (constraint-propagators, elaborator, narrowing, sre) |
+| 10 | classify-inhabit-request | PPN 4C Phase 3c-iii |
+| 11 | fuel-cost | Tropical Quantale Addendum 1B-iv |
+| 12 | fuel-budget | Tropical Quantale Addendum 1B-iv |
+| 13 | retraction-stratum-request | PPN 4C Phase 2A.0 |
+| 14 | resolution-stratum-request | PPN 4C Phase 2A.0 |
+| **15** | **fork-on-union-request** | **PPN 4C Phase 3A.0 (this commit)** |
+| **16** | **fork-contradiction-request** | **PPN 4C Phase 3A.0 (this commit)** |
+| 17+ | User cells (formerly 15+) | First user-allocated cell |
+
+#### §9.3.2.3 Verification (adversarial 3-column VAG)
+
+| Q | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| (a) On-network? | ✓ Cells on prop-network; handlers stratum-registered; merges defined; no off-network parameters added | Is `register-stratum-handler!` itself off-network (module-load imperative call mutating a box)? | Module-init scaffolding parallel to ALL SRE registrations + 2A.0 registrations + 3c-iii classify-inhabit registration. PM Track 13 captures the handler-mechanism concern for separate research. **NOT a fresh violation** — inherited from existing pattern; labeled as scaffolding with retirement plan tied to PM 13. Pass. |
+| (b) Complete? | ✓ All §9.3.1.6 3A.0 scope items landed (cell allocations, drift assertions, stub handlers, registrations, implementation-time audits embedded in §9.3.1.4) | Did 3A.0 implement OQ5 + worldview-cache merge audits, or defer them? | Worldview-cache merge audit DONE (line 732-733 = `(if (= old new) old new)` replacement; atomicity preserved by stratum-handler architecture — cell-16 accumulates set-union; handler narrows once between rounds). OQ5 (classifier-watcher install) correctly DEFERRED to 3A.c per §9.3.1.4 — 3A.0 does NOT install watchers. Pass. |
+| (c) Vision-advancing? | ✓ Infrastructure cells allocated; ready for 3A.a body wiring | Is 3A.0 just bureaucratic preparation, or does it commit to the architecture? | The SHAPE of 3A.0 (cells + stub handlers) IS the architectural commitment to Realization B. No alternative architecture can sneak in at 3A.a/b once cells exist. **The SHAPE is load-bearing.** Pass. |
+| (d) Drift-risks-cleared? | ✓ D-3A.0-allocation-drift cleared (assertions land); D-3A.0-handler-no-op-leak cleared (probe diff = 0 semantically); D-3A.0-cell-init-merge-shape cleared (hash-union + set-union mirror precedent) | Are there unanticipated drifts? | 3 cell-id cascade test failures (test-propagator + test-observatory + test-trace-serialize) — EXPECTED per 3c-iii precedent; mechanical fixes. No semantic regression. Probe wall + GC numbers slightly improved (likely GC variance). Pass. |
+
+**All 4 questions pass under adversarial framing.**
+
+#### §9.3.2.4 Validation results
+
+| Measurement | Value | vs Baseline |
+|---|---|---|
+| Probe `examples/2026-04-22-1A-iii-probe.prologos` semantic diff | 0 (all 28 elaboration outputs identical) | ✓ no semantic change |
+| Probe `cells` counter | 59 (was 57) | +2 (exactly cell-15 + cell-16) |
+| Probe `cell_allocs` counter | 1495 (was 1381) | +114 (per-command transient overhead; ~4/command for 28 commands) |
+| Probe semantic outputs | 28 / 0 errors | identical to baseline |
+| Targeted tests (4 files) | 96/96 PASS in 5.0s | baseline preservation |
+| Full suite (post-fixes) | **8232 tests / 109.3s / 0 failures** | identical to pre-3A.0 baseline (8232/109.2s) |
+| Cell-id cascade test fixes | 3 files updated (test-propagator, test-observatory-01, test-trace-serialize) | precedent: 3c-iii's `cell-id 10→11 cascade` |
+
+#### §9.3.2.5 Status
+
+- Phase 3A.0 **COMPLETE** at this commit
+- Cell-15 + cell-16 allocated with drift assertions
+- Stub handlers registered as no-ops (bodies wire at 3A.a + 3A.b)
+- Test cell-id cascade applied to 3 affected test files
+- Probe + acceptance + full suite all GREEN (no semantic change vs pre-3A.0)
+- Ready for **Phase 3A.a** (process-fork-on-union body — handler consumes cell-15 requests, allocates aids, initializes worldview-cache, installs branch propagators)
+
+**Methodology**: mini-audit cycle reached design clarity in one pass; no surprises during implementation beyond the expected cell-id cascade (3c-iii precedent). Adversarial 3-column passed all 4 VAG questions.
 
 ### §9.4 Phase 3B deliverables
 
