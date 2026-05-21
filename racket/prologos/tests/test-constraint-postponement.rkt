@@ -57,7 +57,10 @@
 
 (test-case "constraint-store/collect-meta-ids-follows-solved"
   (with-fresh-meta-env
-    (parameterize ([current-resolution-executor #f])  ;; Track 7 Phase 7a: disable resolution
+    ;; PPN 4C 2B (2026-05-20): migrated from `current-resolution-executor` (imperative
+    ;; param, retired) to `current-resolution-executor-pure`. process-resolution
+    ;; handler short-circuits on unset pure executor — same disable semantic.
+    (parameterize ([current-resolution-executor-pure #f])
       (define m1 (fresh-meta ctx-empty (expr-hole) "a"))
       (define m2 (fresh-meta ctx-empty (expr-hole) "b"))
       ;; Solve m1 to contain m2

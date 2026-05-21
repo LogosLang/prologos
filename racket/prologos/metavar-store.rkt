@@ -197,24 +197,25 @@
  ;; PPN 4C 2A.a (2026-05-20): `record-assumption-retraction!` bang version
  ;; RETIRED (off-network box mutation); replaced by pure `record-assumption-retraction`
  ;; which writes to retraction-stratum-request-cell-id. `process-retraction`
- ;; BSP value-tier handler processes the cell. `current-retracted-assumptions`
- ;; parameter + `run-retraction-stratum!` legacy function preserved until 2B
- ;; retires `run-stratified-resolution-pure` orchestrator (per D.3 §8.7.a + §8.4).
- current-retracted-assumptions
+ ;; BSP value-tier handler processes the cell.
+ ;; PPN 4C 2B (2026-05-20): `current-retracted-assumptions` + `run-retraction-stratum!`
+ ;; RETIRED — the parameter had no writers post-2A.a (legacy bang fn was the sole
+ ;; writer); the function read an always-empty box. Per D.3 §8.8.
  record-assumption-retraction
  process-retraction
- run-retraction-stratum!
  retract-hasheq-entries
  retract-hasheq-list-entries
  scoped-cell-ids
- ;; Track 7 Phase 7a: Resolution executor (replaces 3 callback params)
- current-resolution-executor
  ;; Track 7 Phase 7b: Pure write functions (enet → enet*)
+ ;; PPN 4C 2B (2026-05-20): `current-resolution-executor` (imperative)
+ ;; + `run-stratified-resolution-pure` orchestrator + `read-ready-queue-actions`
+ ;; + `execute-resolution-actions!` RETIRED — post-2A.a+2A.b the BSP outer-loop
+ ;; is the sole orchestration mechanism (process-retraction + process-resolution
+ ;; handlers handle all stratified work). Per D.3 §8.8.
  write-constraint-to-store-pure
  write-constraint-status-cell-pure
  write-error-descriptor-pure
  solve-meta-core-pure
- run-stratified-resolution-pure
  read-constraint-by-cid-pure
  current-resolution-executor-pure
  ;; Track 7 Phase 8a: Ready-queue + propagator infrastructure
@@ -222,8 +223,6 @@
  ;; resolution-stratum-request-cell-id (cell-14) from propagator.rkt replaces
  ;; the per-command parameter. Per D.3 §8.7.b.4 deliverable 4.
  current-prop-add-propagator  ;; STUB — Track 8 B2: replaced by direct elab-add-propagator
- ;; Track 7 Phase 8b: Ready-queue consumption
- read-ready-queue-actions
  ;; PPN 4C 2A.a (2026-05-20): current-prop-id-map-read/set RETIRED (STUB
  ;; callbacks; zero production consumers since Track 8 B2b). Direct accessors
  ;; elab-network-id-map + elab-network-id-map-set are the canonical API.
@@ -255,9 +254,10 @@
  current-error-descriptor-cell-id
  read-error-descriptors
  write-error-descriptor!
- ;; Track 2 Phase 3: Stratified resolution (progress box is internal)
- current-in-stratified-resolution?
- ;; Track 8 A5: current-stratified-progress-box removed (dead code)
+ ;; PPN 4C 2B (2026-05-20): `current-in-stratified-resolution?` re-entry guard
+ ;; RETIRED — no re-entry path exists post-orchestrator-retirement (resolution-
+ ;; execute-action-pure uses solve-meta-core-pure, not solve-meta!).
+ ;; Per D.3 §8.8 drift risk D1.
  ;; Track 2 Phase 4: Action descriptors
  (struct-out action-retry-constraint)
  (struct-out action-resolve-trait)
@@ -268,8 +268,6 @@
  collect-ready-constraints-for-meta
  collect-ready-traits-for-meta
  collect-ready-hasmethods-for-meta
- ;; Track 7 Phase 7a: execute-resolution-action! moved to resolution.rkt
- execute-resolution-actions!
  ;; P5b: Multiplicity cell callbacks
  ;; PPN 4C S2.e-ii (2026-04-25): current-prop-mult-cell-write RETIRED.
  ;; PPN 4C S2.e-iii (2026-04-25): current-prop-fresh-{mult,level,sess}-cell
@@ -373,9 +371,10 @@
 ;; ========================================
 ;; Track 2 Phase 4: Resolution Action Descriptors
 ;; ========================================
-;; Data-oriented descriptions of resolution actions. Produced by S1 (readiness
-;; scan), consumed by S2 (resolution commitment). The interpreter loop in
-;; run-stratified-resolution! processes these as a worklist.
+;; Data-oriented descriptions of resolution actions. Produced by readiness
+;; latches (cell-14 writes), consumed by `process-resolution` BSP value-tier
+;; handler (PPN 4C 2A.b). The BSP outer-loop iterates value-tier handlers
+;; as part of its standard convergence cycle.
 ;;
 ;; This is the free monad pattern: instead of executing effects inline,
 ;; resolution functions return data describing what should happen.
@@ -1064,19 +1063,11 @@
 (define (get-wakeup-constraints meta-id)
   (hash-ref (read-wakeup-registry) meta-id '()))
 
-;; Retry postponed constraints that mention the given meta.
-;; Uses 'retrying guard to prevent infinite re-entrant loops.
-;; Track 6 Phase 1c: functional status updates via write-constraint-to-store!.
-;; Track 7 Phase 7a: uses resolution executor instead of callback.
-(define (retry-constraints-for-meta! meta-id)
-  (perf-inc-constraint-retry!)
-  (define executor (current-resolution-executor))
-  (when executor
-    (define constraints (get-wakeup-constraints meta-id))
-    (for ([c (in-list constraints)])
-      (define current-c (read-constraint-by-cid (constraint-cid c)))
-      (when (and current-c (eq? (constraint-status current-c) 'postponed))
-        (executor (action-retry-constraint current-c))))))
+;; PPN 4C 2B (2026-05-20): `retry-constraints-for-meta!` RETIRED. Dead code
+;; surfaced by Phase 2B audit (D.3 §8.8.2) — zero production callers across
+;; the codebase. Was the imperative-path constraint-retry mechanism using
+;; `current-resolution-executor` (also retired in 2B); superseded by readiness
+;; latches + cell-14 + process-resolution handler since 2A.b.
 
 ;; ========================================
 ;; PPN 4C S2.b-iv (2026-04-24): Scan Functions Retired
@@ -1096,9 +1087,10 @@
 ;; Under the set-latch + broadcast realization (steps 5-7), readiness
 ;; emerges event-driven via:
 ;;   - Per-input watcher (broadcast item-fn or fire-once) → latch cell
-;;   - Threshold fire-once → action descriptor written to ready-queue cell
-;;   - run-stratified-resolution-pure reads ready-queue (Stratum 1) and
-;;     dispatches via current-resolution-executor (Stratum 2)
+;;   - Threshold fire-once → action descriptor written to cell-14
+;;     (resolution-stratum-request)
+;;   - process-resolution BSP value-tier handler drains cell-14 and invokes
+;;     resolution-execute-action-pure via current-resolution-executor-pure
 ;;
 ;; This is the architecture DESIGN_PRINCIPLES.org § Stratified Propagator
 ;; Networks specifies: "Scan loops that iterate constraint stores to find
@@ -1143,20 +1135,24 @@
 ;; Consumes action descriptors produced by S1 and executes them.
 ;; Each action may produce new cell writes that feed back to S0.
 
-;; Track 7 Phase 7a: Resolution action execution via resolution.rkt dispatcher.
-;; Callback parameter replaces 3 individual callbacks (breaks circular dep:
-;; metavar-store → resolution → unify/trait-resolution → metavar-store).
-(define current-resolution-executor (make-parameter #f))
-;; Track 7 Phase 7b: Pure resolution executor (enet action → enet*).
-;; Used by solve-meta! for the pure resolution chain.
-(define current-resolution-executor-pure (make-parameter #f))
+;; PPN 4C 2B (2026-05-20): `current-resolution-executor` RETIRED. Imperative
+;; executor parameter; used only by retired functions (`retry-constraints-for-
+;; meta!` + `execute-resolution-actions!` + `run-stratified-resolution!`) and
+;; one test (test-constraint-postponement.rkt:60 migrated to
+;; `current-resolution-executor-pure #f` for the same disable-resolution
+;; semantic; process-resolution short-circuits on unset pure executor).
+;;
+;; `execute-resolution-actions!` RETIRED — consumer of retired
+;; `current-resolution-executor`; only called by dead `run-stratified-
+;; resolution!`. Per D.3 §8.8.2 + §8.8.4 deliverable 4.
 
-;; Execute a batch of action descriptors.
-(define (execute-resolution-actions! actions)
-  (define executor (current-resolution-executor))
-  (when executor
-    (for ([a (in-list actions)])
-      (executor a))))
+;; Track 7 Phase 7b: Pure resolution executor (enet action → enet*).
+;; PPN 4C 2A.b (2026-05-20): consumed by `process-resolution` BSP value-tier
+;; handler at metavar-store.rkt:1692. Parameter retains because it's the
+;; bridge from process-resolution (in metavar-store) to
+;; resolution-execute-action-pure (in resolution.rkt) breaking the cycle.
+;; PM Track 12 retires when parameter→cell module loading lands.
+(define current-resolution-executor-pure (make-parameter #f))
 
 ;; ========================================
 ;; Cell-Primary Read Accessors
@@ -1482,12 +1478,16 @@
   (if (not (zero? bm)) bm #f))
 
 ;; Track 7 Phase 5: S(-1) Retraction Stratum.
-;; Tracks retracted assumptions and cleans scoped cell entries on demand.
-
-;; Accumulates assumption-ids that have been retracted since the last S(-1) run.
-;; with-speculative-rollback adds to this set on failure.
-;; run-retraction-stratum! consumes and clears it.
-(define current-retracted-assumptions (make-parameter #f))  ;; #f | (box (seteq))
+;;
+;; PPN 4C 2B (2026-05-20): `current-retracted-assumptions` parameter RETIRED.
+;; The box was a per-command accumulator written by the legacy bang version
+;; `record-assumption-retraction!` (retired 2A.a in favor of the pure
+;; `record-assumption-retraction` that writes to cell-13). Post-2A.a the box
+;; had NO writers — only `run-retraction-stratum!` read it (also retired in
+;; 2B). The driver init at driver.rkt:467-468 is also retired.
+;;
+;; The S(-1) retraction stratum lives on as `process-retraction` (BSP
+;; value-tier handler at line ~1635) registered on cell-13.
 
 ;; PPN 4C 2A.a (2026-05-20): pure function — `(enet × aid) → enet*`. Writes
 ;; the assumption-id to `retraction-stratum-request-cell-id` (cell 13, allocated
@@ -1560,63 +1560,22 @@
                   v))
         (if (null? filtered) acc (hash-set acc k filtered)))))
 
-;; S(-1) retraction stratum: clean scoped cells of retracted entries.
-;; Runs at the START of each run-stratified-resolution! iteration, before S0.
-;; Depth-0 fast path: if no assumptions have been retracted, returns immediately.
-(define (run-retraction-stratum!)
-  (define box-val (current-retracted-assumptions))
-  (when box-val
-    (define retracted (unbox box-val))
-    (unless (set-empty? retracted)
-      ;; Clear the retracted set before processing (prevents re-entrant loops)
-      (set-box! box-val (seteq))
-      ;; Clean all scoped cells
-      ;; Track 8 B2d: direct elab-cell-read/elab-cell-replace instead of callbacks.
-      ;; Track 7 post-fix: use cell-replace (bypass merge) for retraction.
-      ;; Retraction is non-monotone — writing a cleaned value via merge-based
-      ;; write would union it back with the old value, restoring retracted entries.
-      ;; cell-replace sets the cell value directly, enqueuing dependents.
-      (define net-box (current-prop-net-box))
-      (when net-box
-        (for ([cid (in-list (scoped-cell-ids))])
-          (define val (elab-cell-read (unbox net-box) cid))
-          (when (hash? val)
-            ;; Determine cell type: hasheq-list (wakeup) vs hasheq (constraint/status)
-            ;; Wakeup cells have list values; constraint cells have tagged-entry or plain values
-            (define cleaned
-              (if (and (positive? (hash-count val))
-                       (let ([sample (for/first ([(k v) (in-hash val)]) v)])
-                         (list? sample)))
-                  ;; Wakeup cell: filter list elements
-                  (retract-hasheq-list-entries val retracted)
-                  ;; Constraint cell: filter hash values
-                  (retract-hasheq-entries val retracted)))
-            (unless (equal? val cleaned)
-              (set-box! net-box (elab-cell-replace (unbox net-box) cid cleaned)))))
-        ;; Track 8 Phase A1: Also retract tagged meta-info entries from elab-network.
-        ;; meta-info is a struct field (not a cell), so we operate on the elab-network directly.
-        ;; Track 8 B2b: direct elab-network-meta-info / elab-network-meta-info-set instead of callbacks.
-        (define enet-a1 (unbox net-box))
-        (define mi-champ (elab-network-meta-info enet-a1))
-        (define cleaned-mi (retract-hasheq-entries mi-champ retracted))
-        (unless (equal? mi-champ cleaned-mi)
-          (set-box! net-box (elab-network-meta-info-set (unbox net-box) cleaned-mi)))
-        ;; PPN 4C S2.e-iv-a (2026-04-25): champ-box retraction blocks RETIRED
-        ;; per D.3 §7.5.15.2. Post-S2.e-iv-a (status migration), mult/level/
-        ;; sess champ-boxes are no longer written. Universe cells (4 domains)
-        ;; handle speculation rollback via tagged-cell-value worldview filtering
-        ;; at read time — the same pattern type-meta universe has used since
-        ;; S2.b-iii without explicit retraction. Note: type-meta-info CHAMP
-        ;; (line 1564-1567 above) and id-map (line 1592-1596 below) still
-        ;; require explicit retraction; both are Phase 4 scope.
-        ;; Track 8 Phase A4b: Retract tagged id-map entries.
-        ;; id-map is a struct field of elab-network, not a cell.
-        ;; Track 8 B2b: direct elab-network-id-map / elab-network-id-map-set instead of callbacks.
-        (define enet-a4b (unbox net-box))
-        (define id-champ (elab-network-id-map enet-a4b))
-        (define cleaned-id (retract-hasheq-entries id-champ retracted))
-        (unless (equal? id-champ cleaned-id)
-          (set-box! net-box (elab-network-id-map-set (unbox net-box) cleaned-id)))))))
+;; PPN 4C 2B (2026-05-20): `run-retraction-stratum!` RETIRED.
+;; Post-2A.a the bang-version `record-assumption-retraction!` was retired
+;; in favor of the pure `record-assumption-retraction` (writes to cell-13);
+;; consequently `current-retracted-assumptions` box had NO writers, so this
+;; function read an always-empty set and never did anything. Truly dead
+;; post-2A.a; 2B retires the function definition.
+;;
+;; The function also performed meta-info CHAMP + id-map CHAMP retraction
+;; (which would have been load-bearing if any writers remained). That
+;; cleanup is now belt-and-suspenders since 2A.a's 6 UNSAFE bare-champ-
+;; lookup reader sites were migrated to worldview-aware lookups —
+;; readers structurally filter stale tagged entries. Memory bounds are
+;; preserved by `reset-meta-store!` creating a fresh elab-network per
+;; command. Per D.3 §8.8.2 + parent design doc §2 row "Phase 4" item (viii)
+;; (CHAMP retirement absorbs the worldview-aware-readers + reset-bounded
+;; storage into a single mechanism).
 
 ;; PPN 4C 2A.a (2026-05-20): `process-retraction` BSP value-tier stratum handler.
 ;; Registered on `retraction-stratum-request-cell-id` (cell 13). Reads the
@@ -1989,51 +1948,62 @@
 ;; definition is `(define type-bot 'type-bot)` — the value IS the symbol.
 (define (expr-meta-bot-placeholder) 'type-bot)
 
-;; Track 2 Phase 3: Stratified resolution flag.
-;; When #t, solve-meta! only writes the solution (core) and defers retries
-;; to the outer stratified loop. Prevents recursive re-entrancy.
-(define current-in-stratified-resolution? (make-parameter #f))
-
-;; Track 8 Phase A5: current-stratified-progress-box REMOVED.
-;; The pure variant (run-stratified-resolution-pure) uses eq? identity
-;; detection instead. The imperative variant that used this box is dead code.
-
-;; Track 2 Phase 3: Maximum iterations for the S0→S1→S2 loop.
-;; The CALM theorem guarantees convergence for monotone operations, but
-;; Stratum 2 (resolution commitment) is a non-monotone barrier — fuel is
-;; the safety net. Replaces the per-constraint `retrying` guard.
-(define stratified-resolution-fuel 100)
+;; PPN 4C 2B (2026-05-20): `current-in-stratified-resolution?` parameter
+;; RETIRED. Was the re-entry guard for solve-meta!: when set to #t, solve-meta!
+;; (legacy 3-branch cond) would short-circuit to solve-meta-core! to prevent
+;; recursive re-entry from `resolution-execute-action!` (which called
+;; solve-meta! to solve dict-metas). Post-2B retirement of `resolution-execute-
+;; action!` + `run-stratified-resolution!` + simplified 2-branch solve-meta!,
+;; no re-entry path exists. The current pure executor (`resolution-execute-
+;; action-pure`, used by process-resolution handler) calls solve-meta-core-pure
+;; directly. Per D.3 §8.8.2 drift risk D1 (verified).
+;;
+;; `stratified-resolution-fuel` RETIRED. Was the 100-iteration safety net for
+;; the retired `run-stratified-resolution-pure` outer loop. BSP outer-loop's
+;; 20-outer-round limit at propagator.rkt:3088 replaces this safety net.
+;; Per D.3 §8.8.2 drift risk D2.
 
 ;; Assign a solution to a metavariable. Errors if already solved.
-;; Track 2 Phase 3: After solving, enters a stratified resolution loop
-;; (if not already inside one). Recursive solve-meta! calls from within
-;; retries only write the solution — the outer loop handles further rounds.
-;; Hash removal: Always reads/writes CHAMP meta-info store.
 ;; Track 7 Phase 7b: solve-meta! is the SOLE box-writing entry point.
 ;; Unboxes enet, calls pure chain, reboxes. The rest of the codebase
 ;; (elaboration, type-checking) calls this — it's the interface between
 ;; the sequential elaborator and the functional network.
+;;
+;; PPN 4C 2B (2026-05-20): simplified from 3-branch cond to 2-branch.
+;; Per D.3 §8.8: post-2A.a+2A.b the BSP outer-loop is the sole orchestration
+;; mechanism — value-tier handlers (process-retraction + process-resolution
+;; + S1 NAF + classify-inhabit) handle all stratified work registered on
+;; their request cells. The pre-2B wrapper `run-stratified-resolution-pure`
+;; was structurally redundant (its S(-1) call duplicated process-retraction;
+;; its S0 call invoked the BSP outer-loop directly; its L1/L2 drain ran on
+;; an already-drained cell-14). Wrapper retired in 2B; solve-meta!
+;; invokes the BSP outer-loop directly via `current-quiescence-scheduler`.
+;;
+;; The `current-in-stratified-resolution?` re-entry guard retired with 2B:
+;; resolution-execute-action-pure (used by process-resolution handler) calls
+;; solve-meta-core-pure, NOT solve-meta!. No re-entry path post-retirement.
+;;
+;; Box-bridge scaffolding (current-prop-net-box + set-box! + elab-network-
+;; rewrap) inherits Parent Phase 4 + PM Track 12 retirement plans per
+;; D.3 §8.8.5 + parent design doc §2 "Phase 4" item (viii).
 (define (solve-meta! id solution)
   (define net-box (current-prop-net-box))
-  (define executor (current-resolution-executor-pure))
   (cond
-    [(and net-box executor (not (current-in-stratified-resolution?)))
-     ;; Full pure chain: solve + stratified resolution
-     (define enet (unbox net-box))
-     (define-values (enet* _) (solve-meta-core-pure enet id solution))
-     (define enet** (run-stratified-resolution-pure enet* id executor))
-     (set-box! net-box enet**)]
     [net-box
-     ;; Inside stratified resolution — just solve core (pure), rebox
      (define enet (unbox net-box))
      (define-values (enet* _) (solve-meta-core-pure enet id solution))
-     (set-box! net-box enet*)]
+     ;; Quiesce via BSP outer-loop — handles retraction + resolution +
+     ;; constraint propagators via registered value-tier handlers.
+     (define pnet (elab-network-prop-net enet*))
+     (define pnet** ((current-quiescence-scheduler) pnet))
+     (set-box! net-box (elab-network-rewrap enet* pnet**))]
     [else
-     ;; Fallback: legacy path (no network)
+     ;; Fallback: legacy path (no network — rare test contexts)
      (solve-meta-core! id solution)]))
 
 ;; Core of solve-meta!: write solution to CHAMP + propagator cell.
-;; No retry logic — that lives in run-stratified-resolution!.
+;; PPN 4C 2B (2026-05-20): retry logic lives in BSP outer-loop's value-tier
+;; (process-resolution handler reads cell-14 + invokes the pure executor).
 ;; PM 8F Phase 0: bvar detection in meta solutions.
 ;; PUnify opens binders before solving, so solutions SHOULD be fvar-based.
 ;; This assertion detects if any solve path produces bvar-containing solutions.
@@ -2207,117 +2177,16 @@
         (if (tagged-entry? v) (tagged-entry-value v) v))
       #f))
 
-;; Imperative variant of the stratified resolution loop.
-;; Track 8 A5: Mostly dead code — superseded by run-stratified-resolution-pure.
-;; Track 8 C4: S0 now includes bridge propagator resolution (C1-C3).
-;; Retained as fallback for test paths that use the imperative executor.
-(define (run-stratified-resolution! trigger-meta-id)
-  (define progress-box (box #f))
-  (parameterize ([current-in-stratified-resolution? #t])
-    (define net-box (current-prop-net-box))
-    ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-    ;; Track 8 B2: direct elab-network-rewrap; removed current-prop-rewrap-net guard.
-    (define has-network? net-box)
-    (let loop ([fuel stratified-resolution-fuel]
-               [meta-id trigger-meta-id])
-      (when (> fuel 0)
-        ;; ── S(-1): Retraction stratum (Track 7 Phase 5) ──
-        ;; Clean scoped cells of entries tagged with retracted assumptions.
-        ;; Depth-0 fast path: no-op when no assumptions have been retracted.
-        (run-retraction-stratum!)
-        ;; ── Stratum 0: Type propagation (quiescence) ──
-        ;; Run the propagator network so type information flows between
-        ;; connected meta cells. This can transitively solve metas.
-        ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net instead of callbacks.
-        ;; Track 8 B2: direct elab-network-rewrap instead of current-prop-rewrap-net callback.
-        (when has-network?
-          (define enet (unbox net-box))
-          (define pnet (elab-network-prop-net enet))
-          (define pnet* ((current-quiescence-scheduler) pnet))
-          (set-box! net-box (elab-network-rewrap enet pnet*)))
-        ;; ── S1/L1: Read ready-queue (Track 7 Phase 8c: scanners removed) ──
-        ;; After S0 quiescence, readiness propagators have populated the ready-queue.
-        (define actions (read-ready-queue-actions (unbox net-box)))
-        ;; ── Stratum 2: Resolution commitment (execute actions) ──
-        ;; Reset progress box. Any solve-meta-core! calls during S2 set it.
-        (set-box! progress-box #f)
-        (execute-resolution-actions! actions)
-        ;; ── Check for progress ──
-        ;; If any new metas were solved during S2, loop for another round.
-        (perf-inc-resolution-cycle!)  ;; Track 7 Phase 0b
-        (when (unbox progress-box)
-          (loop (sub1 fuel) meta-id))))))
-
-;; Track 7 Phase 7b: Pure variant of the stratified resolution loop.
-;; Takes enet, returns enet*. No box reads/writes — all state threaded.
-;;
-;; Track 8 C1-C3: Bridge propagators now resolve traits, hasmethods, and
-;; constraint retries DURING S0 quiescence. The S1→S2 readiness→action path
-;; remains as fallback: if bridges resolved the constraint, the S2 action
-;; finds meta-solved? = #t and is a no-op. The loop naturally terminates
-;; faster (fewer S2-driven state changes → fewer iterations).
-;;
-;; Post-C4 architecture:
-;;   S(-1): retraction (unchanged)
-;;   S0: quiescence — type propagation + bridge propagator resolution
-;;   S1: read ready-queue (verification: bridges should have handled most)
-;;   S2: execute remaining actions (mostly no-ops; only ambiguous cases need S2)
-;;   progress? → loop or done
-(define (run-stratified-resolution-pure enet trigger-meta-id resolution-executor)
-  (define has-network? #t)
-  (let loop ([fuel stratified-resolution-fuel]
-             [meta-id trigger-meta-id]
-             [current-enet enet])
-    (if (<= fuel 0)
-        current-enet
-        (let* (;; S(-1): Retraction — run imperatively for now (reads/writes box)
-               ;; TODO: purify retraction stratum in Phase 8
-               [_ (let ([nb (current-prop-net-box)])
-                    (when nb (set-box! nb current-enet))
-                    (run-retraction-stratum!)
-                    (void))]
-               [enet-post-retract (let ([nb (current-prop-net-box)])
-                                    (if nb (unbox nb) current-enet))]
-               ;; S0: Type propagation (quiescence) — pure on prop-net
-               ;; Track 8 B2b: direct run-to-quiescence and elab-network-prop-net.
-               ;; Track 8 B2: direct elab-network-rewrap instead of rewrap callback.
-               [enet-s0 (if has-network?
-                             (let* ([pnet (elab-network-prop-net enet-post-retract)]
-                                    [pnet* ((current-quiescence-scheduler) pnet)])
-                               (elab-network-rewrap enet-post-retract pnet*))
-                             enet-post-retract)]
-               ;; S1/L1: After S0 quiescence, readiness propagators have fired
-               ;; and populated the ready-queue. Read queue actions.
-               ;; Track 7 Phase 8c: Scanners REMOVED — ready-queue is sole action source.
-               ;; Sync enet to box for ready-queue read (cell reads use box bridge).
-               [_ (let ([nb (current-prop-net-box)])
-                    (when nb (set-box! nb enet-s0)))]
-               [queue-actions (read-ready-queue-actions enet-s0)]
-               ;; S2: Resolution commitment — pure (for/fold over queue actions)
-               [enet-s2 (for/fold ([e enet-s0])
-                                  ([action (in-list queue-actions)])
-                           (resolution-executor e action))])
-          (perf-inc-resolution-cycle!)
-          ;; Detect progress: enet changed?
-          (if (eq? enet-s2 enet-s0)
-              enet-s2  ;; No progress — done
-              (loop (sub1 fuel) meta-id enet-s2))))))
-
-;; Track 7 Phase 8b: Read action descriptors from the ready-queue cell.
-;; Returns a list of unwrapped action descriptors (tagged-entry values).
-;; The ready-queue is a list cell with merge-list-append.
-;; Track 8 B2d: direct elab-cell-read instead of current-prop-cell-read callback.
-;; PPN 4C 2A.b (2026-05-20): cell-id now well-known resolution-stratum-request-cell-id
-;; (cell-14, allocated in make-prop-network via §4.6 framework). Function becomes
-;; effectively no-op post-2A.b — process-resolution handler drains cell-14 during
-;; BSP value-tier processing, so reads here return '() unless invoked outside the
-;; BSP outer-loop. 2B retires this function entirely alongside
-;; run-stratified-resolution-pure orchestrator. Per D.3 §8.7.b.4 deliverable 3.
-(define (read-ready-queue-actions enet)
-  (let ([entries (elab-cell-read enet resolution-stratum-request-cell-id)])
-    (if (list? entries)
-        (map (lambda (e) (if (tagged-entry? e) (tagged-entry-value e) e)) entries)
-        '())))
+;; PPN 4C 2B (2026-05-20): RETIRED orchestrator + readiness-queue helpers.
+;; Per D.3 §8.8: post-2A.a+2A.b the BSP outer-loop is the sole orchestration
+;; mechanism. The wrapper `run-stratified-resolution-pure` was structurally
+;; redundant (S(-1) call duplicated process-retraction handler; S0 call
+;; invoked BSP outer-loop directly; L1/L2 drain ran on already-drained
+;; cell-14). The imperative `run-stratified-resolution!` was already dead
+;; code per Track 8 A5 + R3 external critique 2026-04-18 (zero production
+;; callers). `read-ready-queue-actions` was the readers' bridge to the
+;; per-command parameter ready-queue cell-id (2A.b retired the parameter
+;; in favor of well-known cell-14); 2B retires the function entirely.
 
 ;; P-U3c: Lightweight quiescence flush.
 ;; Runs the propagator network to quiescence if available.

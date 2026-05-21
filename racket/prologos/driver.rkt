@@ -463,9 +463,10 @@
   (when (not (current-command-atms))
     (current-command-atms (box (make-solver-state (make-prop-network)))))
   (init-speculation-tracking!)
-  ;; Track 7 Phase 5: Initialize retraction tracking for S(-1) stratum.
-  (when (not (current-retracted-assumptions))
-    (current-retracted-assumptions (box (seteq))))
+  ;; PPN 4C 2B (2026-05-20): retraction tracking via `current-retracted-assumptions`
+  ;; box RETIRED. S(-1) retraction now uses cell-13 (`retraction-stratum-request-cell-id`)
+  ;; written by `record-assumption-retraction` (pure, 2A.a) and processed by
+  ;; `process-retraction` BSP value-tier handler. Per D.3 §8.8.4 deliverable 8.
   ;; Track 7 Phase 3: macros/warnings/narrow net-box scoping removed — reads/writes
   ;; go directly to the persistent registry network, not through per-command elab-network.
   ;; prelude-env and ns net-boxes still needed for per-definition cells.
@@ -2621,9 +2622,11 @@
 (current-prop-run-quiescence run-to-quiescence)
 (current-prop-unwrap-net elab-network-prop-net)
 ;; Track 7 post-fix: rewrap preserves eq? identity when prop-net unchanged.
-;; Critical for progress detection in run-stratified-resolution-pure, which
-;; uses (eq? enet-s2 enet-s0) to detect whether resolution made progress.
-;; Without this, struct-copy always creates a new struct, breaking eq?.
+;; PPN 4C 2B (2026-05-20): rewrap eq? identity also load-bearing for BSP
+;; outer-loop progress detection — `(pair? (prop-network-worklist after-value-tier))`
+;; + `(not (eq? after-value-tier value-result))` at propagator.rkt:3110. Without
+;; eq? preservation, struct-copy always creates a new struct, breaking the BSP
+;; outer-loop's "no progress" termination signal.
 (current-prop-rewrap-net
  (lambda (enet pnet*)
    (if (eq? pnet* (elab-network-prop-net enet))
@@ -2699,11 +2702,12 @@
             net*)
           net)])))  ;; mult cell not in id-map — skip (test context)
 
-;; Track 7 Phase 7a: Install unified resolution executor from resolution.rkt.
-;; Replaces 3 individual callbacks (trait, hasmethod, constraint retry)
-;; with a single dispatcher that calls resolution functions directly.
-(current-resolution-executor resolution-execute-action!)
-;; Track 7 Phase 7b: Pure resolution executor for solve-meta! pure chain.
+;; PPN 4C 2B (2026-05-20): `current-resolution-executor` (imperative variant)
+;; RETIRED — was the dispatcher used by `run-stratified-resolution!` + the
+;; retired imperative orchestrator path. Sole remaining executor is the pure
+;; variant below (consumed by `process-resolution` BSP value-tier handler).
+;; Per D.3 §8.8.4 deliverable 8.
+;; Track 7 Phase 7b: Pure resolution executor for process-resolution handler.
 (current-resolution-executor-pure resolution-execute-action-pure)
 ;; Track 8D: Pure resolution bridge factories — traits and hasmethods resolve
 ;; during S0 quiescence via pure (pnet → pnet) fire functions. No enet-box.

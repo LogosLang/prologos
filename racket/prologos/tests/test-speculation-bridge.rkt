@@ -174,8 +174,10 @@
          (check-false result)
          ;; Track 8 B1: worldview-aware reads handle CHAMP entries (meta-info, id-map).
          ;; Scoped infrastructure cells (constraint store) still need S(-1) for cleanup.
-         ;; Run S(-1) to clean tagged constraint entries.
-         (run-retraction-stratum!)
+         ;; PPN 4C 2B (2026-05-20): `run-retraction-stratum!` retired; equivalent is
+         ;; `(maybe-flush-network!)` which invokes BSP outer-loop → process-retraction
+         ;; handler reads cell-13 + cleans scoped cells. Same semantic, on-network path.
+         (maybe-flush-network!)
          ;; Phase 4b: constraint store should be clean after S(-1)
          (check-equal? (read-constraint-store) '()
                        "constraint store leaked after failed speculation"))))
@@ -224,7 +226,9 @@
                  values
                  "inner-fail")
                ;; Track 8 B1: run S(-1) for scoped cell cleanup
-               (run-retraction-stratum!)
+               ;; PPN 4C 2B (2026-05-20): retired run-retraction-stratum! →
+               ;; maybe-flush-network! invokes BSP outer-loop's process-retraction handler.
+               (maybe-flush-network!)
                ;; After inner failure + S(-1): only outer constraint remains
                (check-equal? (length (read-constraint-store)) 1)
                #t)  ;; outer succeeds
