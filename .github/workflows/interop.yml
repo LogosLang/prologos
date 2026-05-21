@@ -110,13 +110,13 @@ jobs:
           pip3 install --quiet cryptography cffi
           sudo apt-get install -y python3-stem libsodium23
 
-      - name: Run upstream ocapn-test-suite against Prologos peer (Phase 58.c)
+      - name: Run upstream ocapn-test-suite against Prologos peer (Phase 58.c/58.d)
         # The Racket OCapN test server speaks the canonical 4-field
         # signed op:start-session (libsodium FFI via Prologos) and
         # validates the inbound op:start-session, aborting on an
-        # unsupported CapTP version. run-ocapn-test-suite.sh runs the
-        # selected upstream tests (tools/interop/ocapn-run-tests.py)
-        # and exits non-zero if the milestone (>= 2 selected tests
-        # passing) regresses. Signature validation + the remaining
-        # modules land in Phase 58.d / 59+.
+        # unsupported CapTP version or an invalid location signature.
+        # run-ocapn-test-suite.sh runs the selected upstream tests
+        # (tools/interop/ocapn-run-tests.py) and exits non-zero if the
+        # milestone (>= 3 selected tests passing) regresses. The
+        # remaining modules (op:deliver, op:gc, ...) land in Phase 59+.
         run: bash tools/interop/run-ocapn-test-suite.sh 22045

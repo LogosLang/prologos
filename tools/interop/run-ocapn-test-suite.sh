@@ -86,12 +86,11 @@ fi
 # suite README. The host/port are how the test suite reaches us.
 LOCATOR="ocapn://JadQ0++RzsD4M+40uLxTWVaVqM10DcBJ.tcp-testing-only?host=127.0.0.1&port=$PORT"
 
-# Phase 58.c milestone: this many of the selected tests must pass.
-#   test_captp_remote_version              — valid signed start-session
-#   test_start_session_with_invalid_version — abort on bad version
-# test_start_session_with_invalid_signature is Phase 58.d (signature
-# verification) — not yet gated.
-EXPECTED_PASS=2
+# Phase 58.c/58.d milestone: this many of the selected tests must pass.
+#   test_captp_remote_version               — valid signed start-session
+#   test_start_session_with_invalid_version  — abort on bad version
+#   test_start_session_with_invalid_signature — abort on bad signature
+EXPECTED_PASS=3
 
 echo "[run-ocapn-test-suite] running selected tests against $LOCATOR"
 echo "[run-ocapn-test-suite] milestone: >= $EXPECTED_PASS of the selected tests must pass"

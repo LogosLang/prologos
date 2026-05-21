@@ -34,14 +34,15 @@ from netlayers.testing_only_tcp import TestingOnlyTCPNetlayer
 # (module, class, [method, ...]) — the upstream tests the current
 # Prologos OCapN implementation targets.
 #
-# Phase 58.c: the test server validates an inbound op:start-session
-# and aborts on an unsupported CapTP version. Signature validation
-# (test_start_session_with_invalid_signature) is Phase 58.d; the
-# crossed-hellos tests need Phase 59+.
+# Phase 58.c/58.d: the test server validates an inbound op:start-session
+# and aborts on an unsupported CapTP version or an invalid location
+# signature. The crossed-hellos tests need Phase 59+ (a swiss-num
+# object registry and outbound connections).
 SELECTED = [
     ("tests.op_start_session", "OpStartSessionTest", [
         "test_captp_remote_version",
         "test_start_session_with_invalid_version",
+        "test_start_session_with_invalid_signature",
     ]),
 ]
 

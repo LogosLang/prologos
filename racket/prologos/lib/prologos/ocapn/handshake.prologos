@@ -44,6 +44,7 @@ require [prologos::ocapn::syrup    :refer [SyrupValue syrup-list syrup-symbol
         [prologos::ocapn::crypto   :refer [gen-keypair-raw pubkey-raw sign-raw verify-raw]]
         [prologos::data::list      :refer [List nil cons]]
         [prologos::data::string    :as str :refer []]
+        [prologos::data::char      :as char :refer []]
         [prologos::data::option    :refer [Option some none]]
 
 ;; Hex-decode inbound frame bytes. The conversion is an FFI call
@@ -196,13 +197,14 @@ defn mk-handshake-bytes [ver transport address host port]
       start-session-bytes ver kp location-bytes
 
 ;; ----------------------------------------
-;; Incoming handshake validation — Phase 58.c
+;; Incoming handshake validation — Phase 58.c / 58.d
 ;; ----------------------------------------
 ;;
 ;; The OCapN spec requires the receiver of an op:start-session to
-;; reject it (with op:abort) when the CapTP version is unsupported.
-;; The decision logic lives HERE, in the core implementation — the
-;; test server is a thin TCP shell that only frames bytes.
+;; reject it (with op:abort) when the CapTP version is unsupported
+;; (58.c) or the location signature does not verify (58.d). The
+;; decision logic lives HERE, in the core implementation — the test
+;; server is a thin TCP shell that only frames bytes.
 ;;
 ;; Inbound wire bytes reach this module HEX-ENCODED: embedding
 ;; arbitrary Latin-1 bytes in a Prologos string literal (the server's
@@ -216,18 +218,124 @@ spec abort-bytes String -> String
 defn abort-bytes [reason]
   record-bytes "op:abort" [cons [wire::encode [syrup-string reason]] nil]
 
-;; --- record-header / version-field parse ---
+;; --- Syrup value skipper ---
 ;;
-;; Only the first two fields of the inbound record are touched —
-;; the label (a symbol) and the CapTP version (a string). Both are
-;; flat atoms, so this never descends into the pubkey / location /
-;; signature sub-structures (whose decoding is Phase 58.d work).
+;; `skip-value frame off` returns the offset just past one complete
+;; Syrup value at `off`. Unlike syrup-wire's `decode-at`, it produces
+;; no decoded structure — it is structure-agnostic delimiter / length
+;; counting, so it correctly skips `{}` dicts (which `decode-at` and
+;; the SyrupValue model do not yet handle). Used to slice the raw
+;; bytes of the location field for signature verification.
 
-spec is-start-session-label? SyrupValue -> Bool
-defn is-start-session-label? [v]
+spec is-int-sep? Int -> Bool
+defn is-int-sep? [sep]
+  match [int-eq sep 43]
+    | true  -> true
+    | false -> int-eq sep 45
+
+spec is-atom-sep? Int -> Bool
+defn is-atom-sep? [sep]
+  match [int-eq sep 58]
+    | true  -> true
+    | false ->
+        match [int-eq sep 34]
+          | true  -> true
+          | false -> int-eq sep 39
+
+spec skip-atom-by-sep Int Int Int -> [Option Int]
+defn skip-atom-by-sep [len sep-off sep]
+  match [is-int-sep? sep]
+    | true  -> some [int+ sep-off 1]
+    | false ->
+        match [is-atom-sep? sep]
+          | true  -> some [int+ [int+ sep-off 1] len]
+          | false -> none
+
+spec skip-atom-tail String Int Int -> [Option Int]
+defn skip-atom-tail [frame len sep-off]
+  match [int-lt [str::length frame] [int+ sep-off 1]]
+    | true  -> none
+    | false -> skip-atom-by-sep len sep-off [char::code [str::ref frame sep-off]]
+
+spec skip-atom String Int -> [Option Int]
+defn skip-atom [frame off]
+  let ri := [wire::read-digits frame off]
+    skip-atom-tail frame [wire::ri-value ri] [wire::ri-end ri]
+
+;; n / t / f are 1 byte; F (single float) + 4; D (double) + 8.
+spec skip-flat Int Int -> [Option Int]
+defn skip-flat [cc off]
+  match [int-eq cc 110]
+    | true  -> some [int+ off 1]
+    | false ->
+        match [int-eq cc 116]
+          | true  -> some [int+ off 1]
+          | false ->
+              match [int-eq cc 102]
+                | true  -> some [int+ off 1]
+                | false ->
+                    match [int-eq cc 70]
+                      | true  -> some [int+ off 5]
+                      | false ->
+                          match [int-eq cc 68]
+                            | true  -> some [int+ off 9]
+                            | false -> none
+
+;; Skip composite children until the closing delimiter `close`.
+spec skip-many [String -> Int -> [Option Int]] String Int Int -> [Option Int]
+defn skip-many [skp frame off close]
+  match [int-lt [str::length frame] [int+ off 1]]
+    | true  -> none
+    | false ->
+        match [int-eq [char::code [str::ref frame off]] close]
+          | true  -> some [int+ off 1]
+          | false ->
+              match [skp frame off]
+                | none   -> none
+                | some e -> skip-many skp frame e close
+
+spec skip-value String Int -> [Option Int]
+defn skip-value [frame off]
+  match [int-lt [str::length frame] [int+ off 1]]
+    | true  -> none
+    | false ->
+        let c := [str::ref frame off]
+          let cc := [char::code c]
+            match [wire::digit? c]
+              | true  -> [skip-atom frame off]
+              | false ->
+                  match [int-eq cc 91]
+                    | true  -> [skip-many skip-value frame [int+ off 1] 93]
+                    | false ->
+                        match [int-eq cc 60]
+                          | true  -> [skip-many skip-value frame [int+ off 1] 62]
+                          | false ->
+                              match [int-eq cc 123]
+                                | true  -> [skip-many skip-value frame [int+ off 1] 125]
+                                | false -> [skip-flat cc off]
+
+;; --- syrup-list navigation ---
+
+spec list-nth [List SyrupValue] Int -> [Option SyrupValue]
+defn list-nth [xs n]
+  match xs
+    | nil      -> none
+    | cons h t ->
+        match [int-eq n 0]
+          | true  -> some h
+          | false -> list-nth t [int- n 1]
+
+spec syrup-list-nth SyrupValue Int -> [Option SyrupValue]
+defn syrup-list-nth [v n]
   match v
-    | syrup-symbol s -> [str::eq s "op:start-session"]
-    | _              -> false
+    | syrup-list xs -> list-nth xs n
+    | _             -> none
+
+spec syrup-bytes-value SyrupValue -> [Option String]
+defn syrup-bytes-value [v]
+  match v
+    | syrup-bytes b -> some b
+    | _             -> none
 
 spec syrup-string-value SyrupValue -> [Option String]
 defn syrup-string-value [v]
@@ -235,39 +343,164 @@ defn syrup-string-value [v]
     | syrup-string s -> [some s]
     | _              -> none
 
-spec version-after-label String SyrupValue Int -> [Option String]
-defn version-after-label [frame label off]
+spec is-start-session-label? SyrupValue -> Bool
+defn is-start-session-label? [v]
+  match v
+    | syrup-symbol s -> [str::eq s "op:start-session"]
+    | _              -> false
+
+;; A gcrypt sub-form `[key value]` — return the value's bytes.
+spec pair-elem1-bytes SyrupValue -> [Option String]
+defn pair-elem1-bytes [pr]
+  match [syrup-list-nth pr 1]
+    | none    -> none
+    | some bv -> syrup-bytes-value bv
+
+spec pair-elem1-at SyrupValue Int -> [Option String]
+defn pair-elem1-at [lst n]
+  match [syrup-list-nth lst n]
+    | none    -> none
+    | some pr -> pair-elem1-bytes pr
+
+;; --- gcrypt s-expression extraction ---
+;;
+;; pubkey = (public-key (ecc (curve Ed25519) (flags eddsa) (q PK)))
+;; sig    = (sig-val (eddsa (r R) (s S)))
+
+spec q-from-ecc SyrupValue -> [Option String]
+defn q-from-ecc [ecc]
+  match [syrup-list-nth ecc 3]
+    | none        -> none
+    | some q-pair -> pair-elem1-bytes q-pair
+
+spec extract-pubkey-q SyrupValue -> [Option String]
+  :doc "Pull the 32-byte raw Ed25519 public key from a gcrypt public-key sexpr."
+defn extract-pubkey-q [pubkey-sv]
+  match [syrup-list-nth pubkey-sv 1]
+    | none     -> none
+    | some ecc -> q-from-ecc ecc
+
+spec sig-append-s SyrupValue String -> [Option String]
+defn sig-append-s [eddsa r]
+  match [pair-elem1-at eddsa 2]
+    | none   -> none
+    | some s -> some [str::append r s]
+
+spec sig-from-eddsa SyrupValue -> [Option String]
+defn sig-from-eddsa [eddsa]
+  match [pair-elem1-at eddsa 1]
+    | none   -> none
+    | some r -> sig-append-s eddsa r
+
+spec extract-sig SyrupValue -> [Option String]
+  :doc "Pull the 64-byte signature (r ++ s) from a gcrypt sig-val sexpr."
+defn extract-sig [sig-sv]
+  match [syrup-list-nth sig-sv 1]
+    | none       -> none
+    | some eddsa -> sig-from-eddsa eddsa
+
+;; --- parsed start-session ---
+
+data ParsedSS
+  ;; version, pubkey-q (32 bytes), location-raw-bytes, signature (64 bytes)
+  parsed-ss : String -> String -> String -> String
+
+spec ss-version ParsedSS -> String
+defn ss-version [p]
+  match p
+    | parsed-ss v _ _ _ -> v
+
+spec ss-verify-sig ParsedSS -> Bool
+  :doc "Verify the Ed25519 location signature against the my-location envelope."
+defn ss-verify-sig [p]
+  match p
+    | parsed-ss _ q loc-raw sig -> [verify-raw q [my-location-envelope-bytes loc-raw] sig]
+
+;; --- 4-field parse chain ---
+;;
+;; <op:start-session ver pubkey location sig>. The version / pubkey /
+;; signature fields are decoded with `decode-at` (no dicts inside);
+;; the location is skipped raw with `skip-value` (it carries a `{}`
+;; hints dict) and its byte-slice feeds the my-location envelope.
+
+spec pss-finish String String String SyrupValue -> [Option ParsedSS]
+defn pss-finish [ver q loc-raw sig-sv]
+  match [extract-sig sig-sv]
+    | none     -> none
+    | some sig -> some [parsed-ss ver q loc-raw sig]
+
+spec pss-finish-loc String String String String Int -> [Option ParsedSS]
+defn pss-finish-loc [frame ver q loc-raw e4]
+  match [wire::decode-at frame e4]
+    | none   -> none
+    | some d -> pss-finish ver q loc-raw [wire::d-value d]
+
+spec pss-after-q String String String Int -> [Option ParsedSS]
+defn pss-after-q [frame ver q e3]
+  match [skip-value frame e3]
+    | none    -> none
+    | some e4 -> pss-finish-loc frame ver q [str::slice frame e3 e4] e4
+
+spec pss-after-pubkey String String SyrupValue Int -> [Option ParsedSS]
+defn pss-after-pubkey [frame ver pubkey-sv e3]
+  match [extract-pubkey-q pubkey-sv]
+    | none   -> none
+    | some q -> pss-after-q frame ver q e3
+
+spec pss-after-version String String Int -> [Option ParsedSS]
+defn pss-after-version [frame ver e2]
+  match [wire::decode-at frame e2]
+    | none   -> none
+    | some d -> pss-after-pubkey frame ver [wire::d-value d] [wire::d-consumed d]
+
+spec pss-check-version String SyrupValue Int -> [Option ParsedSS]
+defn pss-check-version [frame ver-sv e2]
+  match [syrup-string-value ver-sv]
+    | none     -> none
+    | some ver -> pss-after-version frame ver e2
+
+spec pss-after-label String SyrupValue Int -> [Option ParsedSS]
+defn pss-after-label [frame label e1]
   match [is-start-session-label? label]
     | false -> none
     | true  ->
-        match [wire::decode-at frame off]
+        match [wire::decode-at frame e1]
           | none   -> none
-          | some d -> [syrup-string-value [wire::d-value d]]
+          | some d -> pss-check-version frame [wire::d-value d] [wire::d-consumed d]
 
-spec parse-incoming-version String -> [Option String]
-  :doc "Extract the CapTP version from an inbound op:start-session frame."
-defn parse-incoming-version [frame]
+spec parse-start-session String -> [Option ParsedSS]
+  :doc "Decode an inbound op:start-session frame into its four fields."
+defn parse-start-session [frame]
   match [int-lt [str::length frame] 2]
     | true  -> none
     | false ->
         match [wire::decode-at frame 1]
           | none   -> none
-          | some d -> [version-after-label frame [wire::d-value d] [wire::d-consumed d]]
+          | some d -> pss-after-label frame [wire::d-value d] [wire::d-consumed d]
 
 ;; --- top-level decision ---
 
-spec decide-incoming String [Option String] -> String
-defn decide-incoming [expected-ver mv]
-  match mv
+spec decide-signature ParsedSS -> String
+defn decide-signature [p]
+  match [ss-verify-sig p]
+    | true  -> ""
+    | false -> [abort-bytes "invalid location signature"]
+
+spec decide-version String ParsedSS -> String
+defn decide-version [expected-ver p]
+  match [str::eq [ss-version p] expected-ver]
+    | true  -> [decide-signature p]
+    | false -> [abort-bytes "unsupported CapTP version"]
+
+spec decide-incoming String [Option ParsedSS] -> String
+defn decide-incoming [expected-ver mp]
+  match mp
     | none   -> [abort-bytes "expected op:start-session"]
-    | some v ->
-        match [str::eq v expected-ver]
-          | true  -> ""
-          | false -> [abort-bytes "unsupported CapTP version"]
+    | some p -> [decide-version expected-ver p]
 
 spec check-incoming-start-session String String -> String
   :doc "Validate an inbound op:start-session frame (hex-encoded wire
         bytes). Returns the empty string when the handshake is
         acceptable, or op:abort wire bytes to send before closing."
 defn check-incoming-start-session [expected-ver hex-frame]
-  decide-incoming expected-ver [parse-incoming-version [hex-to-bytes hex-frame]]
+  decide-incoming expected-ver [parse-start-session [hex-to-bytes hex-frame]]
