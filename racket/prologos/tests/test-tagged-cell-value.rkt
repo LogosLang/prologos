@@ -348,6 +348,97 @@
       ;; Worldview stays at 0 — propagator reads base
       (define net4 (run-to-quiescence net3))
       (check-equal? (net-cell-read net4 dst-cid) 'src-base))
+
+    ;; ============================================================
+    ;; PPN 4C Phase 3A.b (2026-05-22): Per-branch isolation substrate parity
+    ;; ============================================================
+    ;;
+    ;; Per §9.3.4 Q3: substrate-level parity tests for the per-branch isolation
+    ;; PROPERTY itself, independent of Phase 3A's fork-on-union mechanism. These
+    ;; tests verify the load-bearing assumption Option E rests on: under
+    ;; `promote-cell-to-tagged` + `wrap-with-worldview` writes, per-branch
+    ;; tagged entries are correctly isolated by subset filtering on
+    ;; tagged-cell-read.
+    ;;
+    ;; If these tests ever regress, the per-branch isolation guarantee for any
+    ;; downstream consumer (PPN 4C Phase 3A.b fork-on-union, Phase 9b γ
+    ;; hole-fill multi-candidate, PReduce e-class branching) breaks
+    ;; structurally. Empirical tripwire for the substrate property.
+
+    (test-case "per-branch isolation: writes under disjoint worldviews are isolated"
+      (define net0 (make-prop-network))
+      ;; Allocate a plain cell with hash-replace merge (analog of attribute-map)
+      (define (replace-merge old new) new)
+      (define-values (net1 cid) (net-new-cell net0 (hasheq 'pos 'base-value) replace-merge))
+      ;; Promote to tagged-cell-value (mirrors Option E pattern)
+      (define net2 (promote-cell-to-tagged net1 cid))
+      ;; Write under wv=#b01 (branch 1's bitmask)
+      (define net3
+        (parameterize ([current-worldview-bitmask #b01])
+          (net-cell-write net2 cid (hasheq 'pos 'branch-1-value))))
+      ;; Write under wv=#b10 (branch 2's bitmask, disjoint)
+      (define net4
+        (parameterize ([current-worldview-bitmask #b10])
+          (net-cell-write net3 cid (hasheq 'pos 'branch-2-value))))
+      ;; Read under wv=#b01 → sees ONLY branch 1's entry
+      (define v-branch1
+        (parameterize ([current-worldview-bitmask #b01])
+          (net-cell-read net4 cid)))
+      (check-equal? (hash-ref v-branch1 'pos) 'branch-1-value
+                    "Read under wv=#b01 sees branch-1's tagged entry only")
+      ;; Read under wv=#b10 → sees ONLY branch 2's entry
+      (define v-branch2
+        (parameterize ([current-worldview-bitmask #b10])
+          (net-cell-read net4 cid)))
+      (check-equal? (hash-ref v-branch2 'pos) 'branch-2-value
+                    "Read under wv=#b10 sees branch-2's tagged entry only")
+      ;; Read under wv=#b00 (outer/no-speculation) → sees BASE only (not branch entries)
+      (define v-outer
+        (parameterize ([current-worldview-bitmask #b00])
+          (net-cell-read net4 cid)))
+      (check-equal? (hash-ref v-outer 'pos) 'base-value
+                    "Read under wv=#b00 sees base only (per-branch entries hidden)"))
+
+    (test-case "per-branch isolation: failed branch's write does NOT affect sibling branch's read"
+      ;; THE 3A.b correctness property: in the originally-failing scenario,
+      ;; one branch's contradiction must NOT be visible to the sibling branch.
+      (define net0 (make-prop-network))
+      (define (replace-merge old new) new)
+      (define-values (net1 cid) (net-new-cell net0 (hasheq) replace-merge))
+      (define net2 (promote-cell-to-tagged net1 cid))
+      ;; Branch 2 writes "contradiction" sentinel under its wv
+      (define net3
+        (parameterize ([current-worldview-bitmask #b10])
+          (net-cell-write net2 cid (hasheq 'pos 'CONTRADICTION))))
+      ;; Branch 1 reads under wv=#b01 — should NOT see Branch 2's contradiction
+      ;; (the precise bug Option E fixes: pre-promote, this read would see
+      ;; CONTRADICTION in base; post-promote, branches are isolated)
+      (define v-branch1
+        (parameterize ([current-worldview-bitmask #b01])
+          (net-cell-read net3 cid)))
+      (check-false (equal? (hash-ref v-branch1 'pos #f) 'CONTRADICTION)
+                   "Branch 1 (wv=#b01) does NOT see Branch 2's contradiction (wv=#b10)")
+      ;; Branch 2 reads its own contradiction
+      (define v-branch2
+        (parameterize ([current-worldview-bitmask #b10])
+          (net-cell-read net3 cid)))
+      (check-equal? (hash-ref v-branch2 'pos) 'CONTRADICTION
+                    "Branch 2 sees its own contradiction (wv=#b10)"))
+
+    (test-case "per-branch isolation: promote-cell-to-tagged is idempotent"
+      ;; The promote helper should be safely callable multiple times — once
+      ;; tagged, subsequent calls are no-ops. Required for the fork-on-union
+      ;; handler's "one promote per fork firing" pattern to be safe when
+      ;; multiple forks fire across BSP rounds.
+      (define net0 (make-prop-network))
+      (define-values (net1 cid) (net-new-cell net0 'plain (lambda (a b) b)))
+      (define net2 (promote-cell-to-tagged net1 cid))
+      (define net3 (promote-cell-to-tagged net2 cid))  ;; second call
+      ;; Read should give 'plain (the base, no entries written)
+      (check-equal? (parameterize ([current-worldview-bitmask 0])
+                      (net-cell-read net3 cid))
+                    'plain
+                    "Double-promote idempotent — base preserved"))
     ))
 
 ;; ============================================================

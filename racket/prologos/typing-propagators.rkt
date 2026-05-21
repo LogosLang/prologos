@@ -64,6 +64,12 @@
          (only-in "elab-speculation-bridge.rkt" current-command-atms)
          ;; PPN 4C Phase 3A.a (2026-05-22): flatten-union for N-ary decomposition.
          (only-in "union-types.rkt" flatten-union)
+         ;; PPN 4C Phase 3A.b (2026-05-22): tagged-cell-value accessors for the
+         ;; tagged-attribute-map-read-with-base-merge helper. Used to inspect
+         ;; per-branch entries explicitly when reading at branch worldview
+         ;; positions other than the branch's own write position.
+         (only-in "decision-cell.rkt"
+                  tagged-cell-value? tagged-cell-value-base tagged-cell-value-entries)
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -107,6 +113,10 @@
  type-map-read
  type-map-write
  type-map-write-unified  ;; PPN 4C Path T-3 Commit A.2-b: Role B equality-enforce write
+ ;; PPN 4C Phase 3A.b (2026-05-22): defensive helper for branch propagators that
+ ;; need to read attribute-map at positions OTHER than their fork's union position.
+ ;; Staged for Phase 9b multi-candidate γ hole-fill cross-position read need.
+ tagged-attribute-map-read-with-base-merge
  term-map-read
  term-map-write
  ;; PPN 4C Phase 3c-iii: cross-tag residuation infrastructure.
@@ -117,6 +127,7 @@
  ;; Exposed for: (i) test-union-types-atms.rkt direct + E2E testing;
  ;; (ii) future 3A.c classifier-watcher install that writes to cell-15.
  make-branch-check-fire-fn
+ make-branch-contradiction-watcher-fire-fn  ;; PPN 4C Phase 3A.b — per-branch contradiction watcher
  process-fork-on-union
  process-fork-contradiction
  ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
@@ -585,6 +596,81 @@
   (define current (type-map-read net tm-cid position))
   (type-map-write net tm-cid position (type-unify-or-top current expected)))
 
+;; PPN 4C Phase 3A.b (2026-05-22): tagged-attribute-map-read-with-base-merge.
+;;
+;; Defensive helper for branch propagators that need to read attribute-map at
+;; positions OTHER than their fork's union position. Per §9.3.4 Q1 (build the
+;; helper now to design for Phase 9b γ hole-fill multi-candidate need).
+;;
+;; THE PROBLEM the helper closes:
+;; Under Realization B (in-place worldview tagging on shared carrier per
+;; §9.3.1.2), `promote-cell-to-tagged` is called on the attribute-map cell at
+;; fork-on-union entry. Subsequent branch writes (under wrap-with-worldview)
+;; become tagged entries at branch worldviews. The default `net-cell-read` via
+;; `tagged-cell-read` returns the matching entry ALONE — it does NOT merge
+;; with base. For a branch propagator that needs to see "base + my-branch's
+;; delta" semantics at a position the branch did NOT write to, the default
+;; read misses the base content.
+;;
+;; THE FIX:
+;; Read the raw tagged-cell-value (via net-cell-read-raw, bypassing filter),
+;; explicitly merge base with all entries whose bitmask is subset of the
+;; current worldview via attribute-map-merge-fn, then perform standard
+;; that-read on the merged hasheq. Position-local fast path: if the cell holds
+;; a plain hasheq (pre-promote OR no entries match current wv), falls through
+;; to direct hasheq lookup with no overhead.
+;;
+;; USAGE:
+;;   (tagged-attribute-map-read-with-base-merge net tm-cid position facet)
+;;     → value at (position, facet), with base correctly overlaid by branch entries
+;;
+;; CURRENT 3A.b CONSUMERS:
+;; None — `make-branch-check-fire-fn` only reads at the union position (safe under
+;; default tagged-cell-read). The helper is staged DEFENSIVELY for Phase 9b
+;; multi-candidate γ hole-fill, where the candidate-check propagator may need to
+;; read attribute-map at positions other than the hole position. See §9.3.4.8
+;; cross-track captures.
+;;
+;; CONTRACT: callers wrapping at non-zero worldview should use this helper for
+;; reads at positions they did NOT themselves write to. For reads at the same
+;; position the caller writes (3A.a make-branch-check-fire-fn pattern), the
+;; default net-cell-read + that-read suffices because the read targets the
+;; entry the caller wrote.
+(define (tagged-attribute-map-read-with-base-merge net tm-cid position facet)
+  (define raw (net-cell-read-raw net tm-cid))
+  (cond
+    [(tagged-cell-value? raw)
+     ;; Compute current worldview (per-propagator override OR worldview-cache cell)
+     (define per-prop-wv (current-worldview-bitmask))
+     (define wv (if (not (zero? per-prop-wv))
+                    per-prop-wv
+                    (net-cell-read net worldview-cache-cell-id)))
+     (cond
+       [(zero? wv)
+        ;; No active worldview — read base directly (fast path)
+        (define base (tagged-cell-value-base raw))
+        (if (hash? base) (that-read base position facet) (facet-bot facet))]
+       [else
+        ;; Merge base with all entries whose bm is subset of wv,
+        ;; via attribute-map-merge-fn — preserves "base + my-branch delta" semantics
+        (define base (tagged-cell-value-base raw))
+        (define merged
+          (for/fold ([acc base])
+                    ([entry (in-list (tagged-cell-value-entries raw))])
+            (define entry-bm (car entry))
+            (define entry-val (cdr entry))
+            (if (= (bitwise-and entry-bm wv) entry-bm)
+                (cond
+                  [(not (hash? acc)) entry-val]
+                  [(not (hash? entry-val)) acc]
+                  [else (attribute-map-merge-fn acc entry-val)])
+                acc)))
+        (if (hash? merged) (that-read merged position facet) (facet-bot facet))])]
+    [(hash? raw)
+     ;; Plain attribute-map (pre-promote or never branched) — fast path
+     (that-read raw position facet)]
+    [else (facet-bot facet)]))
+
 ;; PPN 4C Phase 3c-ii: term-map-read/write are symmetric helpers for the
 ;; INHABITANT layer. :term routes to the inhabitant layer of the :type facet
 ;; via the that-read/that-write magic keyword dispatch (§6.15.8 Q4).
@@ -1016,26 +1102,139 @@
              (define current-wv (net-cell-read n worldview-cache-cell-id))
              (define n1 (net-cell-write n worldview-cache-cell-id
                                          (bitwise-ior current-wv branch-mask)))
-             ;; Step 3: install N branch check propagators (per branch, wrapped at branch wv)
-             (for/fold ([n2 n1]) ([component (in-list components)] [aid (in-list aids)])
+             ;; Step 2.5 (PPN 4C Phase 3A.b — Option E per §9.3.4):
+             ;; Promote attribute-map cell to tagged-cell-value BEFORE installing
+             ;; branch propagators. This is the LOAD-BEARING step that enables
+             ;; per-branch isolation under wrap-with-worldview. Without it,
+             ;; attribute-map writes under branch worldviews would merge into
+             ;; the plain hasheq base (no tagging), and per-branch contradictions
+             ;; would be globally visible (the bug Phase 3A.b's prior session
+             ;; surfaced via E2E test failure).
+             ;;
+             ;; The pattern mirrors relations.rkt's 5 production sites (NAF :2034,
+             ;; guard :2079, fact-row :2481, multi-clause :2564, additional :2944).
+             ;; `promote-cell-to-tagged` is idempotent (no-op if already tagged)
+             ;; and atomically rewrites the cell's merge-fn to
+             ;; `(make-tagged-merge attribute-map-merge-fn)` — preserving original
+             ;; merge semantics for the both-plain case while enabling tagged
+             ;; entry composition under wrap-with-worldview.
+             (define n2 (promote-cell-to-tagged n1 tm-cid))
+             ;; Step 3: install N branch check propagators (per branch, wrapped at branch wv).
+             ;; Each check writes contradiction sentinel at branch wv under post-Step-2.5
+             ;; promoted tagged-cell-value semantics — entries tagged at branch-bit, isolated
+             ;; from sibling branches.
+             (define n3
+               (for/fold ([acc n2]) ([component (in-list components)] [aid (in-list aids)])
+                 (define bit-pos (assumption-id-n aid))
+                 (define-values (acc* _pid)
+                   (net-add-propagator acc (list tm-cid) (list tm-cid)
+                     (wrap-with-worldview
+                       (make-branch-check-fire-fn tm-cid position component)
+                       bit-pos)
+                     #:component-paths (list (cons tm-cid (cons position ':term)))))
+                 acc*))
+             ;; Step 4 (PPN 4C Phase 3A.b — per §9.3.4.6 step 3):
+             ;; Install N fire-once contradiction watchers (one per branch), each
+             ;; wrapped at its branch worldview. Each watcher reads attribute-map
+             ;; under its branch wv (via tagged-cell-value subset filtering),
+             ;; detects 'classify-inhabit-contradiction sentinel, writes (seteq aid)
+             ;; to cell-16 (fork-contradiction-request-cell-id; set-union merge
+             ;; accumulates aids from all branches that contradicted). The
+             ;; process-fork-contradiction handler then atomically narrows
+             ;; worldview-cache via bitwise-AND-with-NOT-mask.
+             ;;
+             ;; Why N fire-once (not 1 broadcast): broadcast reads inputs ONCE
+             ;; at fire time (no per-item worldview dispatch). N fire-once
+             ;; propagators wrapped at per-branch worldviews matches relations.rkt
+             ;; pattern and enables BSP parallel decomposition.
+             (for/fold ([acc n3]) ([aid (in-list aids)])
                (define bit-pos (assumption-id-n aid))
-               (define-values (n3 _pid)
-                 (net-add-propagator n2 (list tm-cid) (list tm-cid)
+               (define-values (acc* _pid)
+                 (net-add-fire-once-propagator acc
+                   (list tm-cid)
+                   (list fork-contradiction-request-cell-id)
                    (wrap-with-worldview
-                     (make-branch-check-fire-fn tm-cid position component)
+                     (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
                      bit-pos)
-                   #:component-paths (list (cons tm-cid (cons position ':term)))))
-               n3)])]))]))
+                   #:component-paths (list (cons tm-cid (cons position ':type)))
+                   #:assumption aid))
+               acc*)])]))]))
 
-;; cell-16 handler: process-fork-contradiction — stub at 3A.0 (body 3A.b).
-;; Future body (3A.b): consume accumulated aid-set (contradicted branches);
-;; atomic bitwise-AND-with-NOT-mask narrowing on worldview-cache:
-;;   worldview-cache &= ~(bits-of contradicted-aids)
-;; Mirrors 2A.a process-retraction pattern (one-pass over set per BSP round;
-;; BSP outer-loop #:reset-value (seteq) clears cell-16 post-handler).
+;; PPN 4C Phase 3A.b (2026-05-22): per-branch contradiction watcher factory.
+;;
+;; Fire function reads attribute-map at the union position UNDER the branch
+;; worldview (wrap-with-worldview parameterizes current-worldview-bitmask
+;; before fire; net-cell-read filters tagged-cell-value entries by subset
+;; semantics). Detects 'classify-inhabit-contradiction sentinel set by
+;; make-branch-check-fire-fn on incompatible subtype check; emits the
+;; branch aid to cell-16 (fork-contradiction-request-cell-id).
+;;
+;; Per-branch isolation: under branch-i's wv=bit-i, tagged-cell-read returns
+;; entries with bm subset of bit-i. Branch-j's writes (bm=bit-j) have bm
+;; NOT subset of bit-i (disjoint bits) — invisible. Only branch-i's writes
+;; matter. This is the load-bearing correctness property post-Step-2.5
+;; promote-cell-to-tagged.
+;;
+;; Fire-once via net-add-fire-once-propagator: per-branch watcher fires AT MOST
+;; once after the check propagator writes the contradiction. Idempotent under
+;; cell-16's set-union merge (writing the same (seteq aid) twice is a no-op
+;; under set semantics). Self-cleans dependents after firing per fire-once.
+(define (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define record (if (hash? tm) (hash-ref tm position (hasheq)) (hasheq)))
+    (define cinhab-val (if (hash? record)
+                           (hash-ref record ':type classify-inhabit-bot-value)
+                           classify-inhabit-bot-value))
+    (cond
+      [(classify-inhabit-contradiction? cinhab-val)
+       (net-cell-write net fork-contradiction-request-cell-id (seteq aid))]
+      [else net])))
+
+;; cell-16 handler: process-fork-contradiction — PPN 4C Phase 3A.b (2026-05-22).
+;;
+;; Consumes accumulated aid-set (set of branch assumption-ids that the per-branch
+;; contradiction watchers wrote to cell-16 during the prior BSP round). For each
+;; contradicted aid, computes its bit position; atomically narrows the
+;; worldview-cache by bitwise-AND-with-NOT-mask:
+;;
+;;   worldview-cache = worldview-cache & (bitwise-not contradicted-bits)
+;;
+;; This clears the contradicted branches' bits from the active worldview.
+;; Subsequent propagators wrapped at those branches' worldviews will read
+;; worldview-cache and (in conjunction with the per-propagator wrap-with-worldview
+;; bitmask check) become inert — the branches are structurally retracted.
+;;
+;; Mirrors 2A.a process-retraction pattern (atomic narrowing handler that runs
+;; BETWEEN BSP rounds; one-pass over the accumulated set). BSP outer-loop's
+;; #:reset-value (seteq) (registered at 3A.0) clears cell-16 after the handler
+;; returns, preparing for the next BSP round's accumulation.
+;;
+;; Atomicity: stratum handlers run between BSP rounds, NOT during them. The
+;; in-round writes to cell-16 from per-branch watchers all accumulate via
+;; set-union merge; the handler reads the fully-accumulated set once and
+;; performs a single narrowing write. No racing — handler runs atomically
+;; per round.
+;;
+;; Non-committing inhabitation semantics (per OQ1 §9.3.1.3): surviving branches'
+;; bits REMAIN set in worldview-cache after narrowing. Only contradicted
+;; branches' bits clear. Multi-success branches coexist.
 (define (process-fork-contradiction net contradiction-aid-set)
-  ;; 3A.b will fill body. For now no-op stub.
-  net)
+  (cond
+    [(or (not (set? contradiction-aid-set))
+         (set-empty? contradiction-aid-set)) net]
+    [else
+     ;; Compute mask of contradicted bits
+     (define contradicted-bits
+       (for/fold ([mask 0]) ([aid (in-set contradiction-aid-set)])
+         (bitwise-ior mask (arithmetic-shift 1 (assumption-id-n aid)))))
+     ;; Read current worldview, compute narrowed worldview
+     (define current-wv (net-cell-read net worldview-cache-cell-id))
+     (define narrowed-wv (bitwise-and current-wv (bitwise-not contradicted-bits)))
+     ;; Idempotent — no write if no actual narrowing happens
+     (cond
+       [(= current-wv narrowed-wv) net]
+       [else (net-cell-write net worldview-cache-cell-id narrowed-wv)])]))
 
 ;; Register handlers at module load. Per addendum design §9.3 deliverable 2
 ;; (cell-15) + deliverable 5 (cell-16). #:tier 'value places them in the

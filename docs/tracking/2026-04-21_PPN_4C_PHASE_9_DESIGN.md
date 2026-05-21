@@ -182,6 +182,11 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | 🔄 | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
 | 3A.0 | Allocate fork-on-union stratum-request cells (cell-15 + cell-16) via §4.6 framework; register no-op handler stubs in typing-propagators.rkt; cell-id cascade test fixes (3c-iii precedent) | ✅ `b4d8c22b` |
 | 3A.a | Wire `process-fork-on-union` handler body + `make-branch-check-fire-fn` factory; per-position request entries → N aids → worldview-cache init → N branch check propagators installed; new test file `tests/test-union-types-atms.rkt` with 8 tests (unit + E2E with stubbed classifier-watcher) | ✅ `f3597fbb` | Mini-design + mini-audit + implementation persisted at §9.3.3 (2026-05-22). **+~110 LoC typing-propagators.rkt (factory + handler body) + ~245 LoC new test file**. D-3A.a-stratum-tier RESOLVED in implementation (value tier works for stratum handlers — CALM topology guard only active during BSP fire rounds, not between rounds). Per-command aid scope via `current-command-atms` verified (driver.rkt:464 init pattern). Probe semantic diff = 0; full suite **8240 tests / 108.3s / 0 failures** (+8 tests / −1.0s wall vs pre-3A.a). Adversarial 3-column VAG passed all 4 questions. Methodology data point: stratum-handler tests must use `run-to-quiescence` to drive invocation (not direct calls) to avoid double-invocation when followed by BSP iteration. **Next: Phase 3A.b** (B2-broadcast contradiction watcher + `process-fork-contradiction` body — atomic worldview-cache narrowing on aid-set). | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
+| **3A.b mini-design revised (Option E)** | Audit + BSP-LE 2/2B research + mempalace search surfaced `promote-cell-to-tagged` (propagator.rkt:1579) as the missing step. Pattern used at 5 production sites in relations.rkt (NAF, guard, fact-row, multi-clause concurrent). Cell-Based TMS 2026-04-06 design note's original intent confirmed via mempalace. Q1-Q5 user-resolved. | ✅ `<TBD>` | Persisted at §9.3.4. Replaces prior 4-option matrix (A/B/C/D) with **Option E: lazy `promote-cell-to-tagged` at fork-on-union entry**. Updates §9.3.1.2 (Realization B narrative) + §9.3 deliverables (added step 2.5 promote + step 5a helper). Codification graduation (3rd data point) to DEVELOPMENT_LESSONS.org. |
+| 3A.b | B2-broadcast contradiction watcher + `process-fork-contradiction` body (atomic narrowing) + `promote-cell-to-tagged` insertion at fork-on-union entry + `tagged-attribute-map-read-with-base-merge` helper (defensive for Phase 9b cross-position reads) | ⬜ | Per §9.3.4 (Option E). Substrate parity test + 3A.b unit tests + originally-failing E2E test ("Int succeeds, String fails" → 1 bit remaining). |
+| 3A.c | Integration with check propagator chain + classifier-watcher install at typing-propagators (per OQ5 implementation audit); update test-elaboration-parity.rkt 'union-narrow-by-constraint axis → 'union-inhabitation-fork (rename + expectation revision per OQ1 non-committing) | ⬜ | |
+| 3A.d | Q-A4 disposition — retire `elab-speculation.rkt` orchestrators (speculation-begin/try-branch/commit/speculate-first-success); retain `solver-state-amb` primitive; migrate or retire 2 test files | ⬜ | |
+| 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ⬜ | |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
@@ -4208,13 +4213,14 @@ Phase 3 ships union types via ATMS branching (D.3 §6.10), exploiting already-im
 
 ### §9.3 Phase 3A deliverables (revised post-§9.3.1 mini-design)
 
-**Architectural model**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier). NOT fork-and-rejoin. See §9.3.1 for rationale + dialogue outcomes.
+**Architectural model**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier, **realized via lazy `promote-cell-to-tagged` at branch-installation time** — see §9.3.1.2). NOT fork-and-rejoin. See §9.3.1 for rationale + dialogue outcomes; §9.3.4 for 3A.b carrier-promotion mini-design (Option E).
 
 1. **Fork-on-union request propagator** — watches `:type` facet's CLASSIFIER layer per position; threshold-fires once when classifier becomes `(expr-union l r)`; writes decomposition request to cell-15 (`fork-on-union-request-cell-id`). Threshold-fire-once per (position, decomposition) pair.
-2. **`process-fork-on-union` stratum handler** (cell-15) — per request entry: flatten union via `flatten-union` to N components (N-ary flat decomposition; not nested binary); allocate N fresh aids via `solver-state-amb`; initialize worldview-cache by setting all N branch bits (`(bitwise-ior worldview-cache (bits-of branch-aids))`); install N branch check propagators wrapped at branch worldviews (via `wrap-with-worldview(aid-bit)`); install branch contradiction watcher (see #4).
-3. **Branch check propagators**: per branch, the existing check propagator chain elaborates `e` against the X-th component under wv = (outer | X-bit). Per-branch metas/writes tag automatically via `current-worldview-bitmask`. Per-branch cost tracking (if needed for Phase 3C UC3) via worldview-tagged writes to canonical fuel-cost cell (cell-11) — shared budget; per-branch accumulation via tagged-cell-value.
-4. **Branch contradiction watcher (B2-broadcast realization)** — ONE propagator installed per fork-on-union firing, items = N branch aids; for each item, reads e's :type cell at branch worldview, detects contradiction sentinel (type-top or 'classify-inhabit-contradiction), produces `(seteq aid)` on detection else `(seteq)`; result-merge-fn = set-union; writes to cell-16 (`fork-contradiction-request-cell-id`). **Unification primitives (`type-unify-or-top`, `merge-classify-inhabit`) STAY PURE** — no integrated detection (per OQ3 decomplection).
+2. **`process-fork-on-union` stratum handler** (cell-15) — per request entry: flatten union via `flatten-union` to N components (N-ary flat decomposition; not nested binary); allocate N fresh aids via `solver-state-amb`; initialize worldview-cache by setting all N branch bits (`(bitwise-ior worldview-cache (bits-of branch-aids))`); **promote attribute-map cell to tagged-cell-value via `promote-cell-to-tagged` (per §9.3.4 — REQUIRED for per-branch isolation; one promote per fork firing, idempotent)**; install N branch check propagators wrapped at branch worldviews (via `wrap-with-worldview(aid-bit)`); install branch contradiction watcher (see #4).
+3. **Branch check propagators**: per branch, the existing check propagator chain elaborates `e` against the X-th component under wv = (outer | X-bit). Per-branch metas/writes tag automatically via `current-worldview-bitmask` AND the post-promotion tagged-aware attribute-map cell. Per-branch cost tracking (if needed for Phase 3C UC3) via worldview-tagged writes to canonical fuel-cost cell (cell-11) — shared budget; per-branch accumulation via tagged-cell-value.
+4. **Branch contradiction watcher (B2-broadcast realization)** — ONE propagator installed per fork-on-union firing, items = N branch aids; for each item, reads e's :type cell at branch worldview (via `wrap-with-worldview(branch-bit)`), detects contradiction sentinel (`'classify-inhabit-contradiction` or type-top), produces `(seteq aid)` on detection else `(seteq)`; result-merge-fn = set-union; writes to cell-16 (`fork-contradiction-request-cell-id`). **Unification primitives (`type-unify-or-top`, `merge-classify-inhabit`) STAY PURE** — no integrated detection (per OQ3 decomplection).
 5. **`process-fork-contradiction` stratum handler** (cell-16) — consumes accumulated aid-set per BSP round; narrows worldview-cache atomically: `worldview-cache &= ~(bits-of contradicted-aids)`. Mirrors 2A.a `process-retraction` pattern. `#:reset-value (seteq)`.
+5a. **Position-local read constraint helper** (per §9.3.4 Q1, defensive for Phase 9b): `tagged-attribute-map-read-with-base-merge net tm-cid position facet` — explicitly merges tagged branch entry with base via `attribute-map-merge-fn`, returning the requested facet value. Fast path: if cell holds plain hasheq (no entries match worldview), falls through to direct hasheq lookup with no overhead. Used by future branch propagators that need to read attribute-map at positions OTHER than their fork's union position (e.g., Phase 9b γ hole-fill multi-candidate; PReduce e-class branching).
 6. **Non-committing inhabitation semantics** (per OQ1) — after BSP convergence: classifier preserved as `(expr-union l r)` at outer worldview; surviving branches' bits remain set in worldview-cache; failed branches' bits cleared. Outer-wv reads see classifier=union, INHABITANT=branch-witnesses (multi-success entries coexist; `tagged-cell-read` with optional `domain-merge` joins if needed).
 7. **All branches contradict** → worldview-cache narrows to NOT include any branch bits → fall through to error-explanation (Phase 3C).
 8. **Tests** (`tests/test-union-types-atms.rkt`): axis `'union-inhabitation-fork` (renamed from `'union-narrow-by-constraint` at `test-elaboration-parity.rkt:423`); expected behavior: classifier preserves union after check; inhabitant matches synthesized type; multi-success branches coexist under non-committing semantics.
@@ -4260,6 +4266,20 @@ Original §9.3 (pre-revision) framed fork-on-union via the S1 NAF pattern (fork-
 **Why S1 NAF is the wrong precedent**: NAF's inner goal lives in a genuinely separate scope (separate logic variables, separate success criterion). Union check is fundamentally different — each branch checks the SAME expression `e` against a DIFFERENT component of the SAME union, in the SAME elaboration context, touching the SAME meta vars. Branches share carrier; they only need to differ in worldview tagging.
 
 **Why Realization B is correct**: BSP-LE Track 2B's PIR (§6.3, §12.2) and `structural-thinking.md` § "Module Theory of Lattices" established that speculation is structurally **"tag writes on the shared carrier cell with the worldview bitmask"** — NOT "fork the network and rejoin." This applies directly to union check. The bridge-collapse failure mode that motivated BSP-LE 2B's D.9/D.10/D.11 iterations IS the failure mode Phase 3A would inherit under fork-and-rejoin.
+
+**Lazy carrier promotion is the canonical Realization B mechanism** (clarification persisted 2026-05-22 post-3A.b mini-audit per §9.3.4). Realization B does NOT mean "the carrier is tagged-cell-value-aware by design"; it means **"the carrier is lazily promoted to tagged at branch-installation time via `promote-cell-to-tagged` (propagator.rkt:1579)."** This pattern is used at **5 production sites in `relations.rkt`** (lines 2034, 2079, 2481, 2564, 2944) for NAF / guard / fact-row / multi-clause concurrent installations. The canonical install sequence:
+
+```
+1. Allocate aids for each branch (solver-state-amb)
+2. Promote shared carrier cells to tagged via promote-cell-to-tagged
+3. Install branch propagators wrapped at branch bitmask via wrap-with-worldview
+4. Writes through wrap-with-worldview become tagged entries automatically
+5. Reads through current-worldview-bitmask filter correctly via tagged-cell-read
+```
+
+`promote-cell-to-tagged` is idempotent (no-op if already tagged), wraps the current value as `(tagged-cell-value val '())`, and atomically rewrites the cell's merge-fn to `(make-tagged-merge old-merge)`. The 2026-04-06 Cell-Based TMS Design Note explicitly anticipated this as the intended pattern for attribute-map: *"TMS keeps branch values separate within the SHARED attribute-map cell."*
+
+**Downstream consumers should NOT re-derive this pattern.** Phase 9b γ hole-fill multi-candidate, PReduce Track 1 e-class cells, and any future track that introduces fork-style branching on a shared carrier should reference this section directly.
 
 **Mantra alignment** (in-place vs fork-and-rejoin):
 
@@ -4516,6 +4536,192 @@ During implementation, the E2E test initially failed with "expected 2 branch bit
 - 8 new tests including E2E flow with stubbed classifier-watcher
 - Probe + acceptance + full suite all GREEN
 - Ready for **Phase 3A.b** (contradiction watcher + `process-fork-contradiction` body — B2-broadcast watcher reads e's :type at branch worldviews; on contradiction sentinel detection, writes branch aid to cell-16; handler atomically narrows worldview-cache via bitwise-AND-with-NOT-mask)
+
+### §9.3.4 Phase 3A.b — Revised mini-design (Option E: lazy `promote-cell-to-tagged`)
+
+Mini-design opened post-3A.a per Stage 4 Per-Phase Protocol. Initial 3A.b mini-design + implementation HALTED at an architectural finding (prior session, commit `18645783`); working tree reverted to 3A.a baseline (`f933608a`). This sub-section captures the audit + research that produced **Option E** as the architecturally-canonical fix, supersedes the prior 4-option framing, and persists the revised plan.
+
+#### §9.3.4.1 The architectural finding (recap from prior session)
+
+The original 3A.b mini-design assumed Realization B applies at the attribute-map carrier — i.e., the carrier IS tagged-cell-value-aware and per-branch isolation flows automatically under `wrap-with-worldview`. Empirical evidence from a halted E2E test refuted this:
+
+> *E2E "Int branch succeeds; String branch fails" produced 0 added-bits (both narrowed) instead of 1 (Int retained). Tracing: String's contradiction sentinel merged into base attribute-map → Int's watcher (at wv=1) also saw contradiction → both watchers wrote aids → handler cleared both bits.*
+
+Root cause (audit-verified this session):
+- `attribute-map-merge-fn` (typing-propagators.rkt:417-440) is a vanilla two-level pointwise hasheq merge. ZERO awareness of `tagged-cell-value`.
+- `make-branch-check-fire-fn` (typing-propagators.rkt:937-962) writes a plain hasheq `(hasheq position (hasheq ':type 'classify-inhabit-contradiction))`.
+- `net-cell-write`'s tagged-wrapping branch (propagator.rkt:1782) is gated by `(and (tagged-cell-value? old-val) (not (tagged-cell-value? new-val)))`. Since attribute-map is created plain, `old-val` is plain hasheq, so the tagged-wrapping branch NEVER fires, and per-branch isolation collapses.
+
+#### §9.3.4.2 BSP-LE 2/2B audit — the pattern the mini-design missed
+
+**`promote-cell-to-tagged` (propagator.rkt:1579-1599)** is a production helper that wraps a plain cell value as `(tagged-cell-value val '())` AND rewrites its merge-fn to `(make-tagged-merge old-merge)` atomically. It is idempotent (no-op if already tagged). The doc-string explicitly states: *"Must be called BEFORE speculative writes under a non-zero worldview."*
+
+**It is used at 5 production sites in `relations.rkt`** — the EXACT analog of what Phase 3A needed:
+
+| Site | Goal kind | Pattern |
+|---|---|---|
+| relations.rkt:2034 | NAF | Allocate naf-aid → `promote-cell-to-tagged` on outer scope cells → install wrapped propagators |
+| relations.rkt:2079 | Guard | Allocate guard-aid → `promote-cell-to-tagged` on outer scope cells → wrap-with-worldview |
+| relations.rkt:2481 | Fact-row install | Allocate fact-aids → `promote-cell-to-tagged` on shared scope cells → per-row wrapped propagators |
+| relations.rkt:2564 | Multi-clause concurrent | Allocate clause-aids → `promote-cell-to-tagged` on shared scope → install ALL clauses wrapped per-clause |
+| relations.rkt:2944 | (analogous additional site) | Same pattern |
+
+The pattern (canonical Realization B):
+```
+1. Allocate aids for each branch (solver-state-amb or analogous)
+2. Promote shared carrier cells to tagged via promote-cell-to-tagged
+3. Install branch propagators wrapped at branch bitmask via wrap-with-worldview
+4. Writes through wrap-with-worldview become tagged entries
+5. Reads through current-worldview-bitmask filter correctly via tagged-cell-read
+```
+
+**Corrective framing**: Realization B is NOT "the carrier is tagged-aware by design"; it is **"the carrier is lazily promoted to tagged at branch-installation time."** Scope cells in relations.rkt are PLAIN cells that become tagged-aware on-demand at fork time. Phase 3A.a missed the `promote-cell-to-tagged` step.
+
+#### §9.3.4.3 Mempalace search — original architectural intent confirmed
+
+A mempalace semantic search this session surfaced the **2026-04-06 Cell-Based TMS Design Note** which explicitly anticipated Phase 3A's need:
+
+> *"TMS keeps branch values separate within the SHARED attribute-map cell"* ... *"Phase 8 (ATMS union type branching in the attribute PU) DEPENDS on this rearchitecture for the principled implementation."*
+
+The 2026-04-06 design note named the attribute-map cell as the SHARED carrier with TMS branch separation. When 3A's mini-design adopted Realization B framing, it cited BSP-LE 2/2B precedent without checking whether the attribute-map carrier had been prepared per the 2026-04-06 plan — an architectural-lineage gap the audit closed.
+
+**Caveat**: mempalace's vector index is currently broken (97% drawers invisible per its fallback message). Results were BM25 keyword-only. Recommend `mempalace repair` at some point. Despite this limitation, the BM25 search successfully surfaced the load-bearing 2026-04-06 design-intent document.
+
+#### §9.3.4.4 Option E — the architecturally-canonical fix
+
+**Option E**: insert a `promote-cell-to-tagged` call on the attribute-map cell at fork-on-union entry, mirroring relations.rkt's 5 production sites. This is the missing step from Phase 3A.a's implementation of Realization B.
+
+Replaces the prior 4-option matrix (A: full carrier migration / B: combined approach / C: pivot to fork-and-rejoin / D: undefined hybrid). Option E preserves Realization B's narrative literally, preserves watcher/handler decomplection cleanly, preserves Phase 3C diagnostic evidence trail, and is a one-line addition rather than a wholesale migration.
+
+##### Adversarial 3-column VAG of Option E
+
+| Q | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| (a) On-network? | ✓ Promotion is a structural rewrite of cell value + merge-fn; both stay on-network. Branch writes become tagged entries via existing infrastructure. | Is `promote-cell-to-tagged` itself an off-network operation? It mutates merge-fns CHAMP. | **NOT a fresh violation.** It's a structural-rewrite operation on the network value — same kind as `net-cell-reset` / `net-add-propagator`. The CHAMP update returns a new prop-network (pure functional). Inherits 5-site BSP-LE 2/2B precedent. |
+| (b) Complete? | ✓ Restores per-branch isolation; current Phase 3A.b watcher pattern works correctly post-promote. | Does it actually fix the failing E2E test? Have I traced the merge semantics correctly? | **Trace verified**: under Option E, "Int succeeds, String fails" — String's contradiction at wv=String-bit becomes tagged entry; Int's watcher at wv=Int-bit finds NO entries with bm subset of Int-bit (String-bit ⊄ Int-bit) → returns base → no contradiction → Int watcher does NOT write to cell-16. String's watcher correctly fires. Handler narrows only String-bit. Outcome: **1 added bit (Int retained). FIX CONFIRMED ANALYTICALLY.** Empirical verification required pre-commit. |
+| (c) Vision-advancing? | ✓ Preserves Realization B narrative literally; preserves watcher/handler decomplection; preserves Phase 3C evidence trail; 1-line addition. | Are we preserving a flawed framing by accepting "promote when needed"? Is lazy promotion a workaround for not having a tagged-aware carrier by default? | **Lazy promotion IS the architectural pattern**, not a workaround. relations.rkt's 5 sites confirm. The "tagged-aware by default" alternative (Option A) would impose perf cost on the 90%+ of code paths that never branch. **Lazy promotion at branch time is precisely the principled-and-pragmatic balance the substrate was designed for.** |
+| (d) Drift-risks-cleared? | ✓ Surgical scope (1 promote call); pattern already-validated across 5 production sites. | What about branch propagators that need to read attribute-map at positions OTHER than the union position? Under tagged-cell-read, they would see only the branch entry, NOT merged with base. | **Real caveat surfaced**. Current `make-branch-check-fire-fn` only reads at the union position — safe. But Phase 9b multi-candidate γ hole-fill (which inherits this pattern per §9.3.1.7) may need to read other positions. **Mitigation per Q1 user-resolved**: build `tagged-attribute-map-read-with-base-merge` helper NOW defensively, so the constraint doesn't become a Phase 9b footgun. |
+
+All 4 questions pass under adversarial framing.
+
+#### §9.3.4.5 Resolved design questions (Q1–Q5 user-resolved 2026-05-22)
+
+| Q | Question | Resolution |
+|---|---|---|
+| **Q1** | Position-local read constraint for branch propagators: document-only, or build helper now? | **Build helper now defensively.** `tagged-attribute-map-read-with-base-merge` — explicitly merges branch entry with base via attribute-map-merge-fn. Phase 9b inherits it. Rationale: "designing for the need now, so it is properly considered for future need is appropriate." |
+| **Q2** | Promote site: at fork-on-union entry, or per-branch-install? | **At fork-on-union entry** (one promote per fork, mirrors relations.rkt:2031-2034 NAF pattern). Idempotent so per-branch would also be correct, but single promote is cleaner. |
+| **Q3** | Substrate parity test for per-branch isolation property? | **YES** — completeness in testing finds more bugs / preserves correctness. Test: write under wv=1 + wv=2, read each independently, read base under wv=0, verify isolation structural. Added to `test-tagged-cell-value.rkt` (substrate-level) and propagated to `test-union-types-atms.rkt` (3A-specific). |
+| **Q4** | Graduate codification candidate ("check codebase for existing helpers") now or wait for 4th data point? | **Graduate now.** 3 data points sufficient (S2.c-iii with-handlers; 2A.b handler-as-scaffolding; 3A.b promote-cell-to-tagged miss). User direction: *"worth graduating. An important lesson, that I'm sure we'll be encountering again."* See DEVELOPMENT_LESSONS.org for the persisted entry. |
+| **Q5** | Update D.3 §9.3.1.2 (Realization B narrative) to cite lazy-promotion pattern? | **YES.** Updated in this commit to explicitly cite the 5 relations.rkt production sites + `promote-cell-to-tagged` helper, so future Phase 9b implementer + PReduce Track 1 implementer (e-class cells) don't repeat the conflation. |
+
+#### §9.3.4.6 Implementation plan
+
+Per Stage 4 phase completion protocol:
+
+1. **Helper**: `tagged-attribute-map-read-with-base-merge net tm-cid position facet` — returns the requested facet value, merged with base via `attribute-map-merge-fn` if the underlying cell holds tagged-cell-value entries at the current worldview. Added to `typing-propagators.rkt` alongside `that-read` / `type-map-read`. Position-local fast path preserved (if no tagged entries match, falls through to base hasheq direct lookup).
+
+2. **Promotion**: insert `(set! n1 (promote-cell-to-tagged n1 tm-cid))` in `process-fork-on-union` body, AFTER aid allocation + worldview-cache init, BEFORE the branch propagator install loop. One promote per fork firing (idempotent if cell already tagged).
+
+3. **B2-broadcast contradiction watcher install**: in `process-fork-on-union` body, after branch propagator install loop, install ONE broadcast propagator with N items (one per branch aid). Each item-fn reads attribute-map at the union position UNDER ITS BRANCH WORLDVIEW (via `wrap-with-worldview(branch-bit)`), checks for `'classify-inhabit-contradiction` sentinel, returns `(seteq aid)` on detection else `(seteq)`. result-merge-fn = `set-union`. writes to `fork-contradiction-request-cell-id`.
+
+4. **`process-fork-contradiction` body**: consumes accumulated aid-set per BSP round; computes contradicted-bits mask = `(bitwise-ior (arithmetic-shift 1 (assumption-id-n aid))...)`; atomically narrows `worldview-cache-cell-id` via `bitwise-and worldview-cache (bitwise-not contradicted-bits)`. Mirrors 2A.a `process-retraction` pattern. `#:reset-value (seteq)` already in place from 3A.0.
+
+5. **Tests**: per Q3 — substrate parity (per-branch isolation), 3A.b unit (watcher fire correctness, handler narrowing), E2E ("Int succeeds, String fails" → 1 bit remaining).
+
+6. **Verification**: probe diff = 0; targeted tests GREEN; full suite GREEN within 118-127s variance band.
+
+7. **VAG**: adversarial 3-column; persist outcome at §9.3.4.X.
+
+8. **Phase completion**: commit + tracker + dailies.
+
+#### §9.3.4.7 Drift risks named (per Stage 4 mini-design discipline)
+
+- **D-3A.b-promote-perf**: post-promote, attribute-map reads go through tagged-cell-read filtering (slight overhead). Acceptable per relations.rkt precedent. Verify full suite wall time within variance band.
+- **D-3A.b-watcher-fire-pattern**: B2-broadcast watcher must fire when branch writes land on attribute-map. Verify `:component-paths` declarations correctly route firing per-position.
+- **D-3A.b-handler-atomic**: `process-fork-contradiction` must narrow worldview-cache atomically (no intermediate states visible). The handler runs between BSP rounds — atomicity preserved by stratum-handler architecture.
+- **D-3A.b-position-local-reads**: branch propagators must only read at the union position OR via the new `tagged-attribute-map-read-with-base-merge` helper. Document constraint at helper docstring + Phase 9b cross-track capture.
+- **D-3A.b-merge-fn-rewrite**: `promote-cell-to-tagged` rewrites merge-fn to `make-tagged-merge(attribute-map-merge-fn)`. Verify this composes correctly with attribute-map's existing two-level pointwise merge (it should: make-tagged-merge delegates to domain-merge for both-plain case).
+
+#### §9.3.4.8 Cross-track captures
+
+- **Phase 9b γ hole-fill multi-candidate**: inherits the lazy-promotion pattern. **D-9b-cross-position-read**: γ hole-fill may need to read attribute-map at positions OTHER than the hole position — must use `tagged-attribute-map-read-with-base-merge` helper (delivered by 3A.b).
+- **Phase 3C residuation error-explanation**: per-branch contradiction evidence preserved at branch worldview in attribute-map (NOT collapsed into cell-16 set-union signal). Phase 3C's `derivation-chain-for` can walk back from the tagged entry to the branch-specific contradiction with full provenance.
+- **PReduce Track 1 e-class cell substrate**: when e-class cells participate in speculative reduction, the same lazy-promotion pattern applies. Pre-existing 5 sites + this addition = 6 production references at PReduce Track 1 opening; pattern is canonical.
+- **PM Track 12 (parameters → cells)**: `current-worldview-bitmask` parameter scaffolding remains in place; PM 12 retires. No new dependency added by 3A.b.
+
+#### §9.3.4.9 Methodology data points captured
+
+1. **Codification candidate graduated (3rd data point)**: *"Mini-audit must verify the SPECIFIC carrier cell supports the architectural pattern AND check whether the codebase already has a helper for the missing capability."* See DEVELOPMENT_LESSONS.org (graduated this session).
+2. **Adversarial 3-column framing IS necessary but not sufficient** — the original 3A mini-design's 3-column VAG passed cataloguing without challenging the carrier-capability question. **E2E tests are mini-audit power tools** (the prior session's E2E test caught in ~5 minutes what the grep-based mini-audit missed).
+3. **External user direction surfaced the audit-first approach** — *"Let's audit the code that these decisions touch on first, to ground our context to the reality of the codebase."* The audit then surfaced the 5 production-site promote-cell-to-tagged pattern that closed the option matrix conclusively.
+
+#### §9.3.4.10 Implementation deliverables (CLOSE 2026-05-22)
+
+Per Stage 4 implementation plan (§9.3.4.6) — all 4 deliverables landed atomically:
+
+**typing-propagators.rkt** (~+125 LoC production):
+- `tagged-attribute-map-read-with-base-merge` helper (~60 LoC inc. docstring) — defensive read helper for Phase 9b cross-position cases; position-local fast path preserved for plain hasheq carriers; tagged-cell-value path explicitly merges base with all entries whose bitmask is subset of current worldview via attribute-map-merge-fn
+- `promote-cell-to-tagged` insertion in `process-fork-on-union` body Step 2.5 (1 line + comment) — the load-bearing addition; mirrors relations.rkt × 5 production sites
+- N fire-once contradiction watcher installs in `process-fork-on-union` body Step 4 (~20 LoC) — per-branch wrapped via `wrap-with-worldview`; reads attribute-map at union position under branch wv (tagged-cell-value subset filter isolates per-branch); writes `(seteq aid)` to cell-16 on contradiction sentinel detection
+- `make-branch-contradiction-watcher-fire-fn` factory (~20 LoC) — per-branch watcher fire function closing over `tm-cid + position + aid`
+- `process-fork-contradiction` body (~25 LoC) — replaces 3A.0 stub; atomic bitwise-AND-with-NOT-mask narrowing of worldview-cache; idempotent (no write if no actual change); set-empty / non-set defensive checks
+
+**Import additions**:
+- `(only-in "decision-cell.rkt" tagged-cell-value? tagged-cell-value-base tagged-cell-value-entries)` — accessor imports for the helper
+
+**Provide additions**:
+- `tagged-attribute-map-read-with-base-merge` (defensive helper for Phase 9b)
+- `make-branch-contradiction-watcher-fire-fn` (watcher factory, exported for unit tests)
+
+**tests/test-union-types-atms.rkt** (~+150 LoC, +7 new tests, +2 updated):
+- 5 new 3A.b unit tests: watcher writes aid on contradiction; watcher NO emit when no contradiction; handler narrows worldview correctly; handler no-op on empty set; handler defensive no-op on non-set input
+- 3 new E2E tests: "Int succeeds + String fails → 1 bit remaining" (THE original failing scenario, NOW PASSES); "Both branches fail → 0 added bits remain" (all-contradict signal for Phase 3C); "Both branches succeed → both bits remain" (non-committing semantics per OQ1)
+- 2 updated 3A.a tests: propagator count 2→4 (now 2 check + 2 watcher); 3A.a E2E updated for post-3A.b semantics (1 bit instead of 2)
+
+**tests/test-tagged-cell-value.rkt** (~+80 LoC, +3 new substrate parity tests):
+- "per-branch isolation: writes under disjoint worldviews are isolated" — load-bearing substrate property
+- "per-branch isolation: failed branch's write does NOT affect sibling branch's read" — the precise bug Option E fixes
+- "per-branch isolation: promote-cell-to-tagged is idempotent" — handler's safety property
+
+#### §9.3.4.11 Post-implementation adversarial 3-column VAG (CLOSE 2026-05-22)
+
+| Q | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| (a) On-network? | ✓ `promote-cell-to-tagged` lives on prop-network; watcher writes via `net-cell-write` to cell-16; handler reads + writes via `net-cell-write` on worldview-cache; helper uses `net-cell-read-raw` + `net-cell-read` (both on-network). Zero new off-network state added. | Is the `tagged-attribute-map-read-with-base-merge` helper an off-network manual merge that should ideally live inside `tagged-cell-read`? | **Real consideration.** The helper composes existing on-network primitives (`net-cell-read-raw` + `attribute-map-merge-fn` + `that-read`); it doesn't introduce off-network state. But the SEMANTIC ("read with base merge") could conceptually be a tagged-cell-read option. Defer to a future tagged-cell-read API refinement (cross-track capture for PReduce + Phase 9b); for now the helper at the attribute-map-specific layer is appropriate because attribute-map-merge-fn is itself attribute-map-specific (not generic). **NOT a fresh on-network violation.** |
+| (b) Complete? | ✓ All §9.3.4.6 deliverables landed; targeted tests pass (141 in 6 files); acceptance file 0 errors; full suite 8251 / 117.1s / 0 failures (after recompile of test-facet-sre-registration to clear pre-existing batch-worker linklet staleness per dailies §4.4). All 3 E2E test scenarios cover the design's claimed semantic: 1 branch succeeds + 1 fails → 1 bit; both fail → 0 bits; both succeed → 2 bits. Substrate parity tests verify the underlying isolation property independently. | Does the test coverage prove the load-bearing CORRECTNESS argument from §9.3.4.4 adversarial column (analytical trace) is empirically correct? | **Empirically verified** — the "Int succeeds, String fails → 1 bit" E2E test passes; this is THE originally-failing scenario from the prior session checkpoint. The substrate parity test "failed branch's write does NOT affect sibling branch's read" is the precise property the analytical trace claimed. Two independent verifications (substrate-level + E2E-level) of the same property. **The fix IS the architectural property; we measured it directly.** |
+| (c) Vision-advancing? | ✓ Realization B narrative preserved literally (in-place worldview tagging on shared carrier via lazy promotion); pure unification primitives untouched (decomplection preserved); watcher/handler separation preserves Phase 3C diagnostic evidence trail; Phase 9b cross-position read constraint handled DEFENSIVELY (per Q1 user direction "designing for the need now"); D.3 §9.3.1.2 + §9.3 + §9.3.4 all updated so future implementers don't re-derive. | Does the LAZY promotion pattern compose well with Phase 3C's residuation walk, given the residuation walk reads the dep graph backward from contradictions? Will Phase 3C see the right evidence at the right worldviews? | **Yes — Phase 3C is designed to walk dep graphs anchored at contradiction cells. Under Option E, per-branch contradictions live at branch worldviews in the attribute-map cell's tagged entries. Phase 3C's `derivation-chain-for` will read these entries explicitly (per design) — the per-branch isolation is exactly what diagnostic chains need to distinguish "this branch's contradiction came from path X". The vision-alignment is positive: Option E DELIVERS Phase 3C-ready evidence, not just 3A.b correctness.** |
+| (d) Drift-risks-cleared? | ✓ D-3A.b-promote-perf — full suite within 118-127s variance (117.1s); D-3A.b-watcher-fire-pattern — 5 unit tests verify watcher fire correctness across compatible/incompatible/multiple-branch scenarios; D-3A.b-handler-atomic — stratum-handler architecture guarantees atomicity (BSP between-rounds invocation); D-3A.b-position-local-reads — helper delivered defensively for Phase 9b; D-3A.b-merge-fn-rewrite — `make-tagged-merge(attribute-map-merge-fn)` semantics verified via substrate parity tests + E2E. | Are there NEW drift risks the implementation surfaced that weren't anticipated? | **Three observations beyond the named risks**: (i) propagator count assertion in 3A.a `process-fork-on-union: allocates N aids + sets N branch bits` test changed from 2→4 (now includes watchers) — captured as documentation in test; (ii) `make-branch-check-fire-fn` doesn't write contradiction back into the read merge chain (it writes a delta hasheq, which the tagged-cell-value merge wraps as tagged entry — confirmed by the helper's understanding); (iii) **the "broadcast" framing for the watcher in §9.3.4.6 step 3 was slightly imprecise** — net-add-broadcast-propagator reads inputs ONCE outside the per-item loop, so it can't be used for per-branch-worldview reads. Used N fire-once propagators wrapped per branch (mirrors relations.rkt:2487-2510 fact-row pattern; more mantra-aligned: parallel-decomposable). Doc-only refinement; semantic intent preserved. |
+
+**All 4 questions pass under adversarial framing.**
+
+#### §9.3.4.12 Validation results
+
+| Measurement | Value | vs Baseline |
+|---|---|---|
+| Probe `examples/2026-04-22-1A-iii-probe.prologos` semantic diff | 0 (28 numbered results identical to 3A.a baseline; pre-existing `[Map ...]` formatting + `#t` line drift unrelated to 3A.b) | ✓ no semantic regression |
+| Acceptance `examples/2026-04-17-ppn-track4c.prologos` | 0 errors | ✓ |
+| Targeted tests (6 files: union-types-atms + tagged-cell-value + propagator + classify-inhabit + residuation + elaboration-parity) | 141/141 PASS in 6.8s | baseline preservation + new tests |
+| Full suite | **8251 tests / 117.1s / 0 failures** | +11 tests / +8.8s vs pre-3A.b (8240 / 108.3s); within 118-127s variance band |
+| Test deltas | +7 in test-union-types-atms (5 unit + 3 E2E - 1 reformulated existing E2E + 1 updated propagator count assertion = net +7); +3 in test-tagged-cell-value (substrate parity) | +10 net new + 1 from elsewhere |
+
+#### §9.3.4.13 Methodology data points captured during implementation
+
+1. **Helper-API discovery succeeded**: the audit-and-grep approach surfaced `promote-cell-to-tagged` at 5 relations.rkt sites in ~10 minutes. Validates the codified DEVELOPMENT_LESSONS.org "Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers" (just graduated).
+2. **Broadcast vs N-fire-once trade-off**: the "B2-broadcast" framing in §9.3.4.6 step 3 was slightly imprecise — `net-add-broadcast-propagator` reads inputs ONCE per fire (not per-item), so per-branch-worldview reads need N fire-once propagators wrapped per branch. Realization: the broadcast primitive is for "1 propagator × N items × same input snapshot"; the per-branch-worldview pattern is "N propagators × per-branch wv × independent reads." Different design pattern. Doc-only refinement.
+3. **Substrate parity tests revealed the load-bearing property explicitly**: the "failed branch's write does NOT affect sibling branch's read" test is the precise property Option E rests on; making it a standalone substrate test (independent of 3A specifics) creates a tripwire for any future regression in `promote-cell-to-tagged` / tagged-cell-read / `make-tagged-merge` interaction.
+4. **3A.a E2E test update was clean**: the only updates needed were (a) propagator count 2→4 (added watchers), (b) expected bits 2→1 (post-3A.b narrowing). Both updates well-documented in test comments. Indicates 3A.b is an additive enhancement of 3A.a, not a refactor.
+
+#### §9.3.4.14 Status
+
+- **Phase 3A.b COMPLETE** at this commit (TBD hash)
+- Option E (lazy `promote-cell-to-tagged` on attribute-map at fork-on-union entry) delivered
+- `tagged-attribute-map-read-with-base-merge` helper delivered defensively for Phase 9b
+- `make-branch-contradiction-watcher-fire-fn` + `process-fork-contradiction` body delivered
+- 5 new 3A.b unit tests + 3 new E2E tests + 3 new substrate parity tests
+- Codification "Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers" graduated to DEVELOPMENT_LESSONS.org (3 data points)
+- D.3 §9.3.1.2 + §9.3 + this §9.3.4 updated to cite lazy-promotion pattern + relations.rkt × 5 production sites
+- Probe + acceptance + targeted + full suite all GREEN
+- Ready for **Phase 3A.c** (integration with check propagator chain + classifier-watcher install at typing-propagators per OQ5 implementation audit + parity axis rename `'union-narrow-by-constraint` → `'union-inhabitation-fork`)
 
 ### §9.4 Phase 3B deliverables
 

@@ -1146,6 +1146,98 @@ point is explicit at every audit-driven scope expansion.
   re-capture
 - Wide is the principled response that prevents drift
 
+** Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers
+
+When a mini-design cites a precedent or applies an architectural
+pattern (e.g., "Realization B applies here"; "this fits the X
+pattern"; "we use existing primitive Y"), the mini-audit must verify
+TWO independent questions:
+
+1. *Carrier capability*: does the SPECIFIC cell / structure / module
+   in question actually support the architectural pattern being
+   applied? (Not "does the precedent demonstrate the pattern works"
+   — the local carrier may have a different capability profile.)
+2. *Existing helpers*: does the codebase already have a helper /
+   primitive that closes the capability gap? (Not "let's design a
+   new mechanism for this need" — grep for the helper first.)
+
+Either gap, missed at mini-audit time, costs at least one halted
+implementation cycle.
+
+*Pattern observed across 3 data points* (PPN 4C addendum):
+
+1. *S2.c-iii ~with-handlers~ wrapper preservation* (2026-04-24):
+   mini-audit catalogued "all 9 dispatch functions converted ✓" but
+   didn't check whether the inherited ~with-handlers~ wrapper from
+   PM 8F was preventing the option-4 perf claim (~302 ns/call) from
+   landing. Architecture's SHAPE preserved without its BENEFIT.
+   External user challenge surfaced; Move B+ corrected. See
+   ~workflow.md~ "Microbench claim verification" + DESIGN_METHODOLOGY
+   adversarial VAG codification.
+
+2. *2A.b handler-as-scaffolding* (2026-05-20): mini-design
+   recommended an ad-hoc handler-mechanism extension. Audit didn't
+   surface that the deeper concern was the handler-mechanism itself
+   (PM Track 13 spin-off territory). User challenge reframed; new PM
+   track captured the concern at the right level.
+
+3. *3A.b carrier-capability + missed helper* (2026-05-22): mini-design
+   cited "BSP-LE 2/2B Realization B applies" but didn't verify (a)
+   whether the SPECIFIC attribute-map carrier supported
+   ~tagged-cell-value~, AND (b) whether ~promote-cell-to-tagged~
+   (propagator.rkt:1579, used at 5 production sites in relations.rkt)
+   existed. Implementation halted at E2E test failure. Audit surfaced
+   both gaps; Option E fixed. See PPN 4C Phase 9 design §9.3.4.
+
+*The principle*: a precedent demonstrates a pattern WORKS in some
+context. It does NOT demonstrate the pattern APPLIES in the new
+context. Mini-audit must independently verify the LOCAL carrier and
+LOCAL helpers — even when (especially when) confident the pattern
+applies.
+
+*Process discipline*: at mini-audit time, for each cited precedent
+or applied pattern, run TWO grep / Read passes:
+
+1. *Carrier verification*: read the SPECIFIC carrier's merge function,
+   struct definition, and access API. Verify it supports the pattern's
+   capability requirements (e.g., for Realization B: does the carrier
+   support tagged-cell-value, or does it need ~promote-cell-to-tagged~
+   first?).
+2. *Helper enumeration*: grep for primitives / helpers in the
+   ballpark of the capability need. Existing helpers usually have
+   doc-strings naming the precondition ("Must be called BEFORE
+   speculative writes under a non-zero worldview" — propagator.rkt:1581)
+   that name the exact gap the mini-audit might miss.
+
+*Why this matters*: the cost of these two greps is ~5 minutes per
+audit. The cost of missing them is at least one halted
+implementation cycle, one mini-design revision, and one test-run
+diagnostic round (typically 1-2 hours of work + context switching).
+The asymmetry strongly favors running the checks.
+
+*Adversarial 3-column framing IS necessary but not sufficient* —
+all three data points had adversarial framing applied at their
+relevant gate, and all three drifted past it. The adversarial column
+catches drift WHEN the question is asked; the carrier-capability and
+existing-helper questions must be asked EXPLICITLY (catalogue
+question 2 in the mini-audit checklist), not left to general
+adversarial framing.
+
+*E2E tests are mini-audit power tools*: the 3A.b carrier-capability
+gap was caught by an E2E test failure in ~5 minutes. The
+grep-based mini-audit missed it. E2E tests that exercise the
+specific architectural property (per-branch isolation, tagged-aware
+reads, etc.) provide empirical confirmation that mini-audit static
+checks cannot.
+
+*Discovered in*: PPN 4C addendum cross-arc (3 data points across
+S2.c-iii / 2A.b / 3A.b). User-articulated framing during 3A.b audit
+review (2026-05-22): *"Let's audit the code that these decisions
+touch on first, to ground our context to the reality of the
+codebase."* Graduation threshold met (3 data points + user
+direction). Codification here makes the carrier-capability +
+existing-helper checks an explicit mini-audit step.
+
 ** Sed-Deletion of Parameterize Bindings Is Error-Prone for Last-Binding Lines
 
 When sed-deleting parameterize bindings, MUST use 2-pass pattern:
