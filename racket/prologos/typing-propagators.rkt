@@ -52,10 +52,18 @@
          (only-in "typing-core.rkt" numeric-join)  ;; Phase T: generic op return types
          (only-in "warnings.rkt" emit-coercion-warning!)  ;; Phase 9 prep: coercion bridge
          (only-in "trait-resolution.rkt" resolve-trait-constraints!)  ;; Phase 9: parametric bridge
-         ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): imports from
-         ;; atms.rkt (assumption-id, assumption-id-n, solver-state-assume,
-         ;; solver-state?) removed — were only used by the pre-T-3 expr-union
-         ;; install case's worldview-bitmask branching, now retired.
+         ;; Note (PPN 4C Path T-3 Commit A.2-a, 2026-04-22): pre-T-3 expr-union
+         ;; install case's worldview-bitmask branching retired (atms.rkt imports
+         ;; were removed). PPN 4C Phase 3A.a (2026-05-22) re-introduces atms.rkt
+         ;; imports for the on-network fork-on-union mechanism — but for a
+         ;; different (non-imperative) purpose: per-branch worldview tagging on
+         ;; shared carrier (Realization B), not the pre-T-3 imperative branching.
+         (only-in "atms.rkt" assumption-id-n solver-state-amb)
+         ;; PPN 4C Phase 3A.a (2026-05-22): per-command ATMS box for fresh-aid
+         ;; allocation. Per-command scope verified at audit §9.3.2.4 / driver.rkt:464.
+         (only-in "elab-speculation-bridge.rkt" current-command-atms)
+         ;; PPN 4C Phase 3A.a (2026-05-22): flatten-union for N-ary decomposition.
+         (only-in "union-types.rkt" flatten-union)
          "elab-network-types.rkt"
          "errors.rkt"
          "pretty-print.rkt"
@@ -105,6 +113,12 @@
  type-of-expr
  make-classify-inhabit-residuation-fire-fn
  process-classify-inhabit-request
+ ;; PPN 4C Phase 3A.a (2026-05-22): fork-on-union mechanism API.
+ ;; Exposed for: (i) test-union-types-atms.rkt direct + E2E testing;
+ ;; (ii) future 3A.c classifier-watcher install that writes to cell-15.
+ make-branch-check-fire-fn
+ process-fork-on-union
+ process-fork-contradiction
  ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
  net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
@@ -908,25 +922,119 @@
 ;; Architectural model (per §9.3.1.2): BSP-LE 2/2B Realization B — in-place
 ;; worldview tagging on shared carrier; NOT fork-and-rejoin (S1 NAF style).
 
-;; cell-15 handler: process-fork-on-union — stub at 3A.0.
-;; Future body (3A.a): consume request entries (per-position fork-on-union
-;; decomposition records); for each entry, flatten union via flatten-union;
-;; allocate N aids via solver-state-amb; initialize worldview-cache branch
-;; bits (set all branch bits); install N branch check propagators wrapped at
-;; branch worldviews (via wrap-with-worldview(aid-bit)); install branch
-;; contradiction watcher (B2-broadcast realization writing to cell-16).
-(define (process-fork-on-union net pending-hash)
-  ;; 3A.0 stub: no-op. Returns net unchanged.
-  net)
+;; Per-branch check propagator factory (PPN 4C Phase 3A.a, 2026-05-22).
+;;
+;; Structurally parallel to make-classify-inhabit-residuation-fire-fn (line 841)
+;; — but parameterized by branch's COMPONENT (closed over) instead of reading
+;; classifier from cell. Each branch installs ONE of these wrapped via
+;; wrap-with-worldview at the branch's aid-bit-position; fires under branch
+;; worldview; reads e's INHABITANT (synthesized type) via worldview-filtered
+;; read; checks subtype against the branch component; writes contradiction
+;; sentinel tagged at branch wv (via cell merge) if incompatible.
+;;
+;; The contradiction sentinel ('classify-inhabit-contradiction) is what 3A.b's
+;; B2-broadcast contradiction watcher detects to write to cell-16.
+(define (make-branch-check-fire-fn tm-cid position component)
+  (lambda (net)
+    (define tm (net-cell-read net tm-cid))
+    (define record (if (hash? tm) (hash-ref tm position (hasheq)) (hasheq)))
+    ;; Read INHABITANT layer (classify-inhabit-value's inhabitant field).
+    ;; Note: net-cell-read filters tagged entries by current-worldview-bitmask
+    ;; (set by wrap-with-worldview wrapper) — so under branch wv we see
+    ;; branch-tagged inhabitant + outer base inhabitant (most-specific match).
+    (define cinhab-val (if (hash? record) (hash-ref record ':type classify-inhabit-bot-value) classify-inhabit-bot-value))
+    (define inhabitant (classify-inhabit-value-inhabitant-or-bot cinhab-val))
+    (cond
+      [(eq? inhabitant 'bot) net]  ;; defer — inhabitant not yet populated under this wv
+      [(classify-inhabit-contradiction? cinhab-val) net]  ;; already contradicted
+      [else
+       (define inhabitant-type (type-of-expr inhabitant))
+       (cond
+         [(type-bot? inhabitant-type) net]  ;; can't classify locally
+         [(subtype? inhabitant-type component) net]  ;; compatible — branch survives
+         [else
+          ;; Incompatible: inhabitant's type does NOT inhabit branch component.
+          ;; Write contradiction sentinel under branch wv (wrap-with-worldview
+          ;; sets current-worldview-bitmask at fire time → net-cell-write tags
+          ;; the entry at branch wv). 3A.b watcher detects this + writes branch
+          ;; aid to cell-16 → process-fork-contradiction narrows worldview-cache.
+          (net-cell-write net tm-cid
+            (hasheq position (hasheq ':type 'classify-inhabit-contradiction)))])])))
 
-;; cell-16 handler: process-fork-contradiction — stub at 3A.0.
+;; cell-15 handler: process-fork-on-union — PPN 4C Phase 3A.a (2026-05-22).
+;; Consumes per-position fork-on-union decomposition requests written by the
+;; classifier-watcher (3A.c). For each request entry:
+;;   1. Flatten union into N components via flatten-union (N-ary decomp)
+;;   2. Allocate N fresh aids via solver-state-amb (per-command via
+;;      current-command-atms; aids are integer-tagged assumption-id structs)
+;;   3. Initialize worldview-cache (set N branch bits) — bitwise-or with
+;;      current worldview; non-committing semantics retains successful branches
+;;      until 3A.b's contradiction watcher narrows failed branches
+;;   4. Install N branch check propagators (one per component); each wrapped
+;;      at branch worldview via wrap-with-worldview(aid-bit-pos); fires when
+;;      e's INHABITANT changes (via :component-paths); writes contradiction
+;;      sentinel tagged at branch wv if incompatible
+;;
+;; Request entry shape (written by 3A.c classifier-watcher; for now test-stubbed):
+;;   pending-hash : (hasheq position → request-info)
+;;   request-info : (hasheq 'components (listof TypeExpr)
+;;                          'tm-cid CellId
+;;                          'source-loc (or srcloc #f))
+;;
+;; Idempotence: BSP outer-loop's #:reset-value (hasheq) clears cell-15 after
+;; handler runs. Threshold-fire-once at classifier-watcher (3A.c) prevents
+;; duplicate requests per (position, decomposition).
+;;
+;; Per §9.3.1.6 architecture (Realization B — in-place worldview tagging on
+;; shared carrier; NOT fork-and-rejoin). Per OQ4: Level 1 (Tarski) termination
+;; conditional on worldview filter correctness (3A parity axis validates).
+(define (process-fork-on-union net pending-hash)
+  (cond
+    [(or (not (hash? pending-hash)) (zero? (hash-count pending-hash))) net]
+    [else
+     (for/fold ([n net]) ([(position request-info) (in-hash pending-hash)])
+       (define components (hash-ref request-info 'components #f))
+       (define tm-cid (hash-ref request-info 'tm-cid #f))
+       (cond
+         [(or (not components) (not tm-cid) (null? components)) n]  ;; defensive: malformed request
+         [else
+          ;; Step 1: allocate N aids via current-command-atms
+          (define atms-box (current-command-atms))
+          (cond
+            [(not atms-box) n]  ;; defensive: no atms set (shouldn't happen in production)
+            [else
+             (define atms (unbox atms-box))
+             (define labels
+               (for/list ([i (in-naturals)] [_ (in-list components)])
+                 (format "branch-~a-at-~v" i position)))
+             (define-values (atms* aids) (solver-state-amb atms labels))
+             (set-box! atms-box atms*)
+             ;; Step 2: initialize worldview-cache (set all N branch bits)
+             (define branch-mask
+               (for/fold ([mask 0]) ([aid (in-list aids)])
+                 (bitwise-ior mask (arithmetic-shift 1 (assumption-id-n aid)))))
+             (define current-wv (net-cell-read n worldview-cache-cell-id))
+             (define n1 (net-cell-write n worldview-cache-cell-id
+                                         (bitwise-ior current-wv branch-mask)))
+             ;; Step 3: install N branch check propagators (per branch, wrapped at branch wv)
+             (for/fold ([n2 n1]) ([component (in-list components)] [aid (in-list aids)])
+               (define bit-pos (assumption-id-n aid))
+               (define-values (n3 _pid)
+                 (net-add-propagator n2 (list tm-cid) (list tm-cid)
+                   (wrap-with-worldview
+                     (make-branch-check-fire-fn tm-cid position component)
+                     bit-pos)
+                   #:component-paths (list (cons tm-cid (cons position ':term)))))
+               n3)])]))]))
+
+;; cell-16 handler: process-fork-contradiction — stub at 3A.0 (body 3A.b).
 ;; Future body (3A.b): consume accumulated aid-set (contradicted branches);
 ;; atomic bitwise-AND-with-NOT-mask narrowing on worldview-cache:
 ;;   worldview-cache &= ~(bits-of contradicted-aids)
 ;; Mirrors 2A.a process-retraction pattern (one-pass over set per BSP round;
-;; BSP outer-loop #:reset-value clears the cell post-handler).
+;; BSP outer-loop #:reset-value (seteq) clears cell-16 post-handler).
 (define (process-fork-contradiction net contradiction-aid-set)
-  ;; 3A.0 stub: no-op. Returns net unchanged.
+  ;; 3A.b will fill body. For now no-op stub.
   net)
 
 ;; Register handlers at module load. Per addendum design §9.3 deliverable 2

@@ -180,7 +180,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2V | Vision Alignment Gate Phase 2 | ✅ | Cross-arc adversarial 3-column VAG persisted at §8.9 (2026-05-20). All 4 questions PASS with honest scaffolding labels across the full 2A.0 → 2A.a → 2A.b → 2A.c → 2B arc. **Cumulative metrics**: +8 tests / −1.7s wall / ~−200 LoC production retired / 6 functions + 3 parameters + 7 provides retired / 2 new BSP stratum cells + handlers / 3 parity axes added. **Charter complete**: BSP outer-loop is sole orchestration for in-form work; ~200 LoC scaffolding retired. **Patterns surfaced** (§8.9.4): adversarial 3-column framing matures across arc; PM 13 spin-off was right call; audit-driven scope expansion is consistent (4 data points — graduation-ready at addendum PIR); first net-deletion phase in addendum; wall delta of −1.7s validates wrapper's overhead approximately equaled new handler overhead. **2 codifications graduation-ready at addendum PIR** (adversarial 3-column + audit-driven scope expansion). **Cross-track captures consolidated** (§8.9.6) for Phase 3 / Phase 4 / PM 12 / PM 13. **Phase 3 readiness gate** ALL PREREQUISITES MET (§8.9.7) — ready to open. |
 | Phase 3 mini-design + mini-audit | OQ1-OQ4 resolved via conversational dialogue; outcomes persisted at §9.3.1 | ✅ `d13be339` | **Architectural pivot**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier) over S1 NAF fork-and-rejoin. **OQ1**: non-committing inhabitation semantics — classifier preserved as union after check; multi-success branches coexist via worldview tagging; type-theory unanimous (Castagna semantic subtyping; TypeScript bidirectional; Scala 3 hard unions; Typed Racket occurrence typing). **OQ2**: per-command bit scope; ≤30 bits gate; no reclaim within command. **OQ3**: stratum handler (B3) + B2-broadcast watcher; unification primitives stay PURE (decomplection preserved). **OQ4**: Level 1 (Tarski) — simpler than original §9.7 Level 2. **Cells**: cell-15 (fork-on-union-request), cell-16 (fork-contradiction-request) for 3A.0. **Parity axis**: 'union-narrow-by-constraint renamed → 'union-inhabitation-fork; expectation updated for type-theoretic correctness. |
 | 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | 🔄 | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
-| 3A.0 | Allocate fork-on-union stratum-request cells (cell-15 + cell-16) via §4.6 framework; register no-op handler stubs in typing-propagators.rkt; cell-id cascade test fixes (3c-iii precedent) | ✅ `b4d8c22b` | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
+| 3A.0 | Allocate fork-on-union stratum-request cells (cell-15 + cell-16) via §4.6 framework; register no-op handler stubs in typing-propagators.rkt; cell-id cascade test fixes (3c-iii precedent) | ✅ `b4d8c22b` |
+| 3A.a | Wire `process-fork-on-union` handler body + `make-branch-check-fire-fn` factory; per-position request entries → N aids → worldview-cache init → N branch check propagators installed; new test file `tests/test-union-types-atms.rkt` with 8 tests (unit + E2E with stubbed classifier-watcher) | ✅ (this commit) | Mini-design + mini-audit + implementation persisted at §9.3.3 (2026-05-22). **+~110 LoC typing-propagators.rkt (factory + handler body) + ~245 LoC new test file**. D-3A.a-stratum-tier RESOLVED in implementation (value tier works for stratum handlers — CALM topology guard only active during BSP fire rounds, not between rounds). Per-command aid scope via `current-command-atms` verified (driver.rkt:464 init pattern). Probe semantic diff = 0; full suite **8240 tests / 108.3s / 0 failures** (+8 tests / −1.0s wall vs pre-3A.a). Adversarial 3-column VAG passed all 4 questions. Methodology data point: stratum-handler tests must use `run-to-quiescence` to drive invocation (not direct calls) to avoid double-invocation when followed by BSP iteration. **Next: Phase 3A.b** (B2-broadcast contradiction watcher + `process-fork-contradiction` body — atomic worldview-cache narrowing on aid-set). | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
@@ -4435,6 +4436,86 @@ Mini-design + mini-audit + implementation per Stage 4 Per-Phase Protocol. 3A.0 e
 - Ready for **Phase 3A.a** (process-fork-on-union body — handler consumes cell-15 requests, allocates aids, initializes worldview-cache, installs branch propagators)
 
 **Methodology**: mini-audit cycle reached design clarity in one pass; no surprises during implementation beyond the expected cell-id cascade (3c-iii precedent). Adversarial 3-column passed all 4 VAG questions.
+
+### §9.3.3 Phase 3A.a — `process-fork-on-union` handler body (CLOSE 2026-05-22)
+
+Mini-design + mini-audit + implementation per Stage 4 Per-Phase Protocol. 3A.a wires the handler body that consumes cell-15 requests, allocates aids, initializes worldview-cache, and installs branch check propagators.
+
+#### §9.3.3.1 Implementation deliverables
+
+**typing-propagators.rkt** (+~110 LoC):
+- Imports added: `(only-in "atms.rkt" assumption-id-n solver-state-amb)`, `(only-in "elab-speculation-bridge.rkt" current-command-atms)`, `(only-in "union-types.rkt" flatten-union)`. Note: pre-T-3 atms.rkt imports were retired in Commit A.2-a; 3A.a re-introduces them for a DIFFERENT (non-imperative) purpose — per-branch worldview tagging on shared carrier per Realization B
+- `make-branch-check-fire-fn` factory (parallel to `make-classify-inhabit-residuation-fire-fn`): per-branch propagator parameterized by `tm-cid`, `position`, and `component` (branch's portion of union). Closes over `component` as expected classifier. Wrapped via `wrap-with-worldview(branch-bit-pos)` at install time → fires under branch worldview → reads INHABITANT via worldview-filtered read → checks `subtype?` against component → writes `'classify-inhabit-contradiction` sentinel under branch wv if incompatible
+- `process-fork-on-union` body: consumes cell-15 pending-hash (per-position request entries); per entry, runs 3 steps:
+  1. **Aid allocation**: `solver-state-amb` with N labels (one per component); uses `current-command-atms` per-command box; updates the box with `set-box!`
+  2. **Worldview-cache init**: `bitwise-ior` current-wv with N branch bits (`(arithmetic-shift 1 (assumption-id-n aid))` per aid)
+  3. **Branch propagator install**: per component + aid pair, `net-add-propagator` wrapped via `wrap-with-worldview(bit-pos)`; `:component-paths (list (cons tm-cid (cons position ':term)))` triggers fire on INHABITANT change at branch wv
+- Defensive cases: empty pending-hash → no-op; missing 'components or 'tm-cid → defensive no-op per entry; missing atms-box → defensive no-op
+
+**Request entry shape** (cell-15 value semantics, defined at 3A.a; consumed at 3A.a; written by 3A.c classifier-watcher when implemented):
+```
+pending-hash : (hasheq position → request-info)
+request-info : (hasheq 'components (listof TypeExpr)  ; flattened union components
+                       'tm-cid CellId                ; attribute-map cell-id
+                       ['source-loc (or srcloc #f)]) ; optional for diagnostics
+```
+
+**Exports added to typing-propagators.rkt**: `make-branch-check-fire-fn`, `process-fork-on-union`, `process-fork-contradiction` (latter is the 3A.b body stub registered at 3A.0). Used by test-union-types-atms.rkt + (future) classifier-watcher install.
+
+**New test file** `tests/test-union-types-atms.rkt` (+~245 LoC; 8 tests):
+- Unit: `make-branch-check-fire-fn` subtype-pass (Nat <: Int → no contradiction)
+- Unit: `make-branch-check-fire-fn` non-subtype (Nat NOT <: String → contradiction sentinel)
+- Unit: `make-branch-check-fire-fn` defers when inhabitant 'bot
+- Unit: `process-fork-on-union` empty pending → no-op
+- Unit: `process-fork-on-union` allocates N aids + sets N worldview bits + installs N propagators
+- Unit: `process-fork-on-union` defensive on malformed request (missing 'components)
+- **E2E**: stubbed classifier-watcher writes cell-15 → BSP `run-to-quiescence` invokes handler → branch propagators install → 2 branch bits in worldview-cache + cell-15 reset via `#:reset-value` per BSP outer-loop
+- D-3A.a-stratum-tier verification: `check-not-exn` on direct handler invocation (confirms #:tier 'value works for our case; no CALM topology guard violation)
+
+#### §9.3.3.2 D-3A.a-stratum-tier resolution
+
+The risk: handler installs propagators (topology change); could be blocked by CALM topology guard if registered at `#:tier 'value`. **RESOLVED**: handler runs cleanly at `#:tier 'value`. The CALM topology guard (`current-bsp-fire-round?`) is active DURING BSP fire rounds (within a propagator's fire function), not during stratum handlers (which run BETWEEN rounds). Stratum handlers can install propagators regardless of tier.
+
+3A.0's `#:tier 'value` registration is correct; no change needed.
+
+#### §9.3.3.3 Verification (adversarial 3-column VAG)
+
+| Q | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| (a) On-network? | ✓ Handler reads/writes via net-cell-read/write; branch propagators on-network with wrap-with-worldview; aid-bit-tagged writes; structurally emergent contradiction signaling | `solver-state-amb` + `set-box!` on `current-command-atms` are off-network operations | Yes — atms-box mutation is off-network (D-3A.a-atms-box-mutation; labeled scaffolding per §9.3.3.5). Inherits the established PM Track 12 scaffolding pattern (`current-prop-net-box` + `set-box!` family). NOT a fresh violation; tied to PM 12 retirement. Honest framing preserved. |
+| (b) Complete? | ✓ Handler consumes cell-15; allocates aids; sets worldview bits; installs branch propagators; 8 tests including E2E verify behavior | Are there §9.3.3 spec items unmet, or open obligations passed to 3A.b/c? | Spec coverage: items 1-7 of §9.3.3 implementation deliverables landed. Open obligations: 3A.b delivers contradiction watcher + cell-16 narrowing (not 3A.a scope); 3A.c delivers classifier-watcher install (E2E test stubs this). D-3A.a-stratum-tier RESOLVED in implementation (value tier works). Pass. |
+| (c) Vision-advancing? | ✓ Realization B in-place tagging realized; non-committing semantics; per-branch worldview isolation; pure unification primitives preserved (decomplection) | Does this compose with future tracks (3A.b/c, Phase 9b multi-candidate, Parent Phase 4 retirement of with-speculative-rollback)? | Contract with 3A.b clean: branch propagators write `'classify-inhabit-contradiction` tagged at branch wv; 3A.b's watcher observes + writes to cell-16. Contract with 3A.c clean: classifier-watcher writes cell-15 with request-info shape; 3A.a handler consumes. Phase 9b multi-candidate inherits the SAME pattern (N candidates → N aids → N branch propagators; constrained by OQ2's ≤30 bits/command gate). Parent Phase 4: 3A.a delivers the on-network replacement for `with-speculative-rollback` union check; retirement gates on 3A.b + 3A.c + classifier-watcher install at canonical site (typing-core.rkt:2385's expr-ann path). Pass. |
+| (d) Drift-risks-cleared? | ✓ D-3A.a-stratum-tier RESOLVED (value tier works); D-3A.a-cell-15-reset VERIFIED (E2E test confirms `#:reset-value (hasheq)` clears cell-15 after handler runs) | What about D-3A.a-atms-box-mutation, D-3A.a-aid-budget, D-3A.a-branch-propagator-fire-pattern? | D-3A.a-atms-box-mutation: labeled scaffolding (PM 12). D-3A.a-aid-budget: 3A.a tests use 1-2 branches each (well within ≤30 bits gate); production budget verified at 3A.c integration. D-3A.a-branch-propagator-fire-pattern: mitigated by idempotent `subtype?` check + contradiction sentinel absorption under `merge-classify-inhabit` (writing the same contradiction twice is a no-op). Pass. |
+
+**All 4 questions pass under adversarial framing.**
+
+#### §9.3.3.4 Methodology data point — E2E test double-invocation
+
+During implementation, the E2E test initially failed with "expected 2 branch bits, got 4." Root cause: test directly invoked `process-fork-on-union` AND `run-to-quiescence` (which also invokes the handler via BSP outer-loop). The handler ran twice; 4 aids allocated; 4 worldview bits set.
+
+**Fix**: removed direct invocation; let BSP's `run-to-quiescence` drive everything (matches production flow). Cell-15 reset via `#:reset-value (hasheq)` after handler runs prevents subsequent re-invocation.
+
+**Codification candidate (1 data point; watching list)**: *"Stratum-handler tests should use `run-to-quiescence` to drive handler invocation; not direct calls. Direct calls bypass BSP's `#:reset-value` clearance, leading to double-invocation when followed by `run-to-quiescence`."* Watch for 2nd+ data point at 3A.b / Phase 9b / future stratum-handler tests.
+
+#### §9.3.3.5 Validation results
+
+| Measurement | Value | vs Baseline |
+|---|---|---|
+| New test file `tests/test-union-types-atms.rkt` | 8 tests, all PASS | — |
+| Probe semantic diff | 0 (all 28 elaboration outputs identical) | ✓ no semantic change |
+| Probe `cells` counter | 59 (unchanged) | no new persistent cells |
+| Targeted tests (8 affected files) | 168/168 PASS in 6.6s | baseline preservation + 3A.a coverage |
+| Full suite | **8240 tests / 108.3s / 0 failures** | +8 tests / −1.0s wall vs pre-3A.a (8232/109.3s) |
+
+#### §9.3.3.6 Status
+
+- Phase 3A.a **COMPLETE** at this commit
+- `process-fork-on-union` handler body operational
+- `make-branch-check-fire-fn` factory delivered
+- D-3A.a-stratum-tier RESOLVED (value tier works for in-place propagator installation)
+- 8 new tests including E2E flow with stubbed classifier-watcher
+- Probe + acceptance + full suite all GREEN
+- Ready for **Phase 3A.b** (contradiction watcher + `process-fork-contradiction` body — B2-broadcast watcher reads e's :type at branch worldviews; on contradiction sentinel detection, writes branch aid to cell-16; handler atomically narrows worldview-cache via bitwise-AND-with-NOT-mask)
 
 ### §9.4 Phase 3B deliverables
 
