@@ -2050,7 +2050,8 @@
 ;; Track 8 C5a: Global scheduler override.
 ;; When #t, ALL run-to-quiescence calls use BSP scheduling instead of Gauss-Seidel.
 ;; This is the correct level for a full A/B comparison — it catches every quiescence
-;; invocation (unify.rkt, elab-speculation.rkt, bridges, tabling, not just metavar-store).
+;; invocation (unify.rkt, bridges, tabling, not just metavar-store).
+;; PPN 4C Phase 3A.d (2026-05-22): elab-speculation.rkt retired (zero callers; stranded).
 (define current-use-bsp-scheduler? (make-parameter #t))  ;; PAR Track 1 Phase 5: BSP is the default
 
 ;; CALM topology guard: when #t, fire functions must not modify network topology.
