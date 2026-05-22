@@ -179,14 +179,14 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 2B | Retire orchestrators (`run-stratified-resolution-pure` + dead `run-stratified-resolution!`) | ✅ | Mini-design + mini-audit persisted at §8.8 (2026-05-20); implementation landed at commit `c24cbae6`. **6 functions retired** (5 design-enumerated + `retry-constraints-for-meta!` surfaced as also dead during audit): run-stratified-resolution-pure, run-stratified-resolution!, execute-resolution-actions!, read-ready-queue-actions, run-retraction-stratum!, retry-constraints-for-meta!. **3 parameters retired**: current-resolution-executor (imperative), current-retracted-assumptions (cell-13 supersedes), current-in-stratified-resolution? (re-entry guard vestigial — D1 verified). solve-meta! simplified 3-branch → 2-branch. **Surfaced + fixed**: test-speculation-bridge.rkt had 2 `run-retraction-stratum!` callsites the §8.8.2 audit missed; migrated to `maybe-flush-network!` (BSP outer-loop driver — same semantic). 5 stale comment-hygiene sites updated. Driver.rkt: deleted init at :467-468 + install at :2705; updated comment at :2624 (re BSP outer-loop progress detection). Test migrations: test-constraint-postponement.rkt:60 migrated to `current-resolution-executor-pure #f`; test-readiness-propagator.rkt retired 2 unit tests for `read-ready-queue-actions` + migrated integration test to direct cell-14 read via test-local `read-resolution-actions-cell` helper. **Full suite: 8232 tests / 109.2s / 0 failures — −11.9s wall vs 2A.b (121.1s) confirming retired wrapper's redundant work was real**. Adversarial 3-column VAG passed all 4 questions with honest scaffolding labels. **First net-deletion sub-phase of addendum Phase 2** — net ~−200 LoC + perf win. Phase 2 charter "one orchestration mechanism" COMPLETE. |
 | 2V | Vision Alignment Gate Phase 2 | ✅ | Cross-arc adversarial 3-column VAG persisted at §8.9 (2026-05-20). All 4 questions PASS with honest scaffolding labels across the full 2A.0 → 2A.a → 2A.b → 2A.c → 2B arc. **Cumulative metrics**: +8 tests / −1.7s wall / ~−200 LoC production retired / 6 functions + 3 parameters + 7 provides retired / 2 new BSP stratum cells + handlers / 3 parity axes added. **Charter complete**: BSP outer-loop is sole orchestration for in-form work; ~200 LoC scaffolding retired. **Patterns surfaced** (§8.9.4): adversarial 3-column framing matures across arc; PM 13 spin-off was right call; audit-driven scope expansion is consistent (4 data points — graduation-ready at addendum PIR); first net-deletion phase in addendum; wall delta of −1.7s validates wrapper's overhead approximately equaled new handler overhead. **2 codifications graduation-ready at addendum PIR** (adversarial 3-column + audit-driven scope expansion). **Cross-track captures consolidated** (§8.9.6) for Phase 3 / Phase 4 / PM 12 / PM 13. **Phase 3 readiness gate** ALL PREREQUISITES MET (§8.9.7) — ready to open. |
 | Phase 3 mini-design + mini-audit | OQ1-OQ4 resolved via conversational dialogue; outcomes persisted at §9.3.1 | ✅ `d13be339` | **Architectural pivot**: BSP-LE 2/2B Realization B (in-place worldview tagging on shared carrier) over S1 NAF fork-and-rejoin. **OQ1**: non-committing inhabitation semantics — classifier preserved as union after check; multi-success branches coexist via worldview tagging; type-theory unanimous (Castagna semantic subtyping; TypeScript bidirectional; Scala 3 hard unions; Typed Racket occurrence typing). **OQ2**: per-command bit scope; ≤30 bits gate; no reclaim within command. **OQ3**: stratum handler (B3) + B2-broadcast watcher; unification primitives stay PURE (decomplection preserved). **OQ4**: Level 1 (Tarski) — simpler than original §9.7 Level 2. **Cells**: cell-15 (fork-on-union-request), cell-16 (fork-contradiction-request) for 3A.0. **Parity axis**: 'union-narrow-by-constraint renamed → 'union-inhabitation-fork; expectation updated for type-theoretic correctness. |
-| 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | 🔄 | See §9.3.1 for mini-design + mini-audit. Sub-phases 3A.0/3A.a/3A.b/3A.c/3A.d. |
+| 3A | Fork-on-union basic mechanism (in-place tagging per Realization B) | ✅ | **CLOSED 2026-05-22** per §9.3.9 cross-arc VAG. Sub-phases 3A.0 ✅ + 3A.a ✅ + 3A.b ✅ + 3A.c ✅ (cumulative `ba0a2bfd` after 7-commit R7-reframe arc) + 3A.d ✅ (`0e80e120` elab-speculation.rkt retirement) + 3A-VAG ✅ (this commit). Full suite 8232/117.3s/0 failures stable. Union-types via ATMS branching delivered end-to-end. 3 codifications promotion-ready (Stranded high-level abstraction × 3 data points; Multi-axis discriminating coverage × 3 sites; Audit-driven scope refinement × 3 data points). |
 | 3A.0 | Allocate fork-on-union stratum-request cells (cell-15 + cell-16) via §4.6 framework; register no-op handler stubs in typing-propagators.rkt; cell-id cascade test fixes (3c-iii precedent) | ✅ `b4d8c22b` |
 | 3A.a | Wire `process-fork-on-union` handler body + `make-branch-check-fire-fn` factory; per-position request entries → N aids → worldview-cache init → N branch check propagators installed; new test file `tests/test-union-types-atms.rkt` with 8 tests (unit + E2E with stubbed classifier-watcher) | ✅ `f3597fbb` | Mini-design + mini-audit + implementation persisted at §9.3.3 (2026-05-22). **+~110 LoC typing-propagators.rkt (factory + handler body) + ~245 LoC new test file**. D-3A.a-stratum-tier RESOLVED in implementation (value tier works for stratum handlers — CALM topology guard only active during BSP fire rounds, not between rounds). Per-command aid scope via `current-command-atms` verified (driver.rkt:464 init pattern). Probe semantic diff = 0; full suite **8240 tests / 108.3s / 0 failures** (+8 tests / −1.0s wall vs pre-3A.a). Adversarial 3-column VAG passed all 4 questions. Methodology data point: stratum-handler tests must use `run-to-quiescence` to drive invocation (not direct calls) to avoid double-invocation when followed by BSP iteration. **Next: Phase 3A.b** (B2-broadcast contradiction watcher + `process-fork-contradiction` body — atomic worldview-cache narrowing on aid-set). | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
 | **3A.b mini-design revised (Option E)** | Audit + BSP-LE 2/2B research + mempalace search surfaced `promote-cell-to-tagged` (propagator.rkt:1579) as the missing step. Pattern used at 5 production sites in relations.rkt (NAF, guard, fact-row, multi-clause concurrent). Cell-Based TMS 2026-04-06 design note's original intent confirmed via mempalace. Q1-Q5 user-resolved. | ✅ `44b434ed` | Persisted at §9.3.4. Replaces prior 4-option matrix (A/B/C/D) with **Option E: lazy `promote-cell-to-tagged` at fork-on-union entry**. Updates §9.3.1.2 (Realization B narrative) + §9.3 deliverables (added step 2.5 promote + step 5a helper). Codification graduation (3rd data point) to DEVELOPMENT_LESSONS.org. |
 | 3A.b | N fire-once contradiction watchers wrapped per-branch wv + `process-fork-contradiction` body (atomic narrowing via bitwise-AND-with-NOT-mask) + `promote-cell-to-tagged` insertion at fork-on-union entry + `tagged-attribute-map-read-with-base-merge` defensive helper for Phase 9b cross-position reads | ✅ `44b434ed` | Per §9.3.4 (Option E). +~125 LoC production (typing-propagators.rkt) + ~+150 LoC tests (test-union-types-atms +7 unit/E2E + 2 updated 3A.a; test-tagged-cell-value +3 substrate parity). **Methodology refinement**: §9.3.4.6 step 3's "B2-broadcast" framing imprecise; net-add-broadcast-propagator reads inputs ONCE per fire, not per-item — used N fire-once propagators wrapped per branch wv (matches relations.rkt:2487-2510 fact-row pattern, parallel-decomposable). Probe semantic diff = 0; acceptance 0 errors; targeted 141/141; full suite **8251 tests / 117.1s / 0 failures** (vs pre-3A.b 8240 / 108.3s; +11 tests; wall +8.8s within 118-127s variance). Adversarial 3-column VAG passed all 4 questions (persisted at §9.3.4.11). Originally-failing E2E ("Int succeeds + String fails → 1 bit") NOW PASSES. |
 | 3A.c | Classifier-watcher integration (β.1 universal install + FP3 cell-17 guard) + test migration. Production retires sexp typing-core.rkt:2385 union check semantically (code-level retirement Parent Phase 4 / PM 12). Multi-axis parity testing (4 active + 1 skip-gated). | ✅ | **CLOSED 2026-05-22** per §9.3.8 cumulative VAG. Final form via R7 reframe (centralized inline-emit at type-map-write API; commit `0e08e08b` R7.a+b + `a4b33fce` R7.c) post-revert + R8 empirical fuel-test (§9.3.6.8). Sub-steps 3A.c.1-3A.c.6 all ✅. Full suite 8255/117.8s/0 failures pre-3A.d. 6 methodology data points captured (§9.3.8.4). |
 | 3A.d | Wholly retire `elab-speculation.rkt` (188 LoC) + `tests/test-elab-speculation.rkt` (388 LoC). **Audit finding**: orchestrators have ZERO production callers (stranded after prior refactor; only test-elab-speculation.rkt references them). `elab-speculation-bridge.rkt` + test-speculation-bridge.rkt UNCHANGED (alive via 4 remaining w-s-r callers — Parent Phase 4 / PM 12 scope). Codification candidate: "Stranded high-level abstraction after refactor" → 3rd data point on retirement. | ✅ `0e80e120` | **DONE 2026-05-22**. ~576 LoC retirement (188 prod + 388 test) + 4 secondary references cleaned (propagator.rkt comment + tools/dep-graph.rkt × 2 + bench-scheduler-ab.rkt comment). Full suite **8232 tests / 117.3s / 0 failures** (-23 tests = test-elab-speculation.rkt; -1 file). "Stranded high-level abstraction after refactor" codification now has 3 data points (3A.c.2 helpers + elab-speculation.rkt + R7.c retirement; ready for DEVELOPMENT_LESSONS.org graduation). Adversarial 3-column VAG passed all 4 questions. |
-| 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ⬜ | |
+| 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ✅ `<3A-VAG-commit>` | DONE 2026-05-22 per §9.3.9. Cumulative VAG passed all 4 questions adversarially (catalogue / challenge / adversarial × 4). All cross-arc D-3A-* drift risks cleared (fuel-budget via R7; typing-core-2385-residual via empirical grep; bit-budget at 167× headroom; cross-arc mantra via on-network audit; codification-debt noted with promotion candidates). User-facing behavior matrix documented (§9.3.9.2). Handoff to Phase 3B/3C/9b/Parent Phase 4/PM 12/PPN Track 5/Track 4D captured (§9.3.9.5). 3 codifications promotion-ready (§9.3.9.4); graduation deferred to user direction. |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | |
@@ -5541,6 +5541,122 @@ Per §9.3.1.7 + this arc's discoveries, downstream consumers:
 - §9.3.6 (re-approach mini-audit + R8 empirical fuel test)
 - §9.3.7 (R7 mini-design; centralized at type-map-write API)
 - §9.3.8 (this — cumulative close VAG)
+
+### §9.3.9 Phase 3A cross-arc VAG (2026-05-22)
+
+Phase 3A overall close per §3 tracker row 189: adversarial 3-column cross-arc VAG covering the entire 3A arc (3A.0/.a/.b/.c/.d), bit-budget verification, drift-risk verification at cross-arc level, and §3 tracker row 3A → ✅.
+
+#### §9.3.9.1 Phase 3A arc summary
+
+Phase 3A delivered fork-on-union basic mechanism (in-place tagging per Realization B) — union-types via ATMS branching brought to the user-facing typing pipeline. 5 sub-phases:
+
+| Sub-phase | Commit | Description |
+|---|---|---|
+| 3A.0 | `b4d8c22b` | Allocate cell-15 (fork-on-union-request) + cell-16 (fork-contradiction-request) via §4.6 framework + handler stubs registered |
+| 3A.a | `f3597fbb` | `process-fork-on-union` handler body — N branch propagators install per-branch worldview; `make-branch-check-fire-fn` factory |
+| 3A.b | `44b434ed` | N fire-once contradiction watchers wrapped per branch wv + `process-fork-contradiction` handler (atomic narrowing via bitwise-AND-with-NOT-mask) + lazy `promote-cell-to-tagged` insertion at fork-on-union entry |
+| 3A.c | (arc closed `ba0a2bfd` after 7-commit arc) | User-facing integration via R7 reframe (centralized inline-emit at type-map-write API); §9.3.8 cumulative close VAG |
+| 3A.d | `0e80e120` | Wholly retire `elab-speculation.rkt` (188 LoC) + `tests/test-elab-speculation.rkt` (388 LoC); stranded high-level abstraction (3rd codification data point) |
+
+**Total LoC delta across Phase 3A** (rough):
+- Production: ~+450 (3A.0 + 3A.a + 3A.b) + ~+50 (R7.b helper + Part B) + ~-130 (R7.c retirement) + ~-188 (3A.d production retirement) = ~+182 net production additions
+- Test code: ~+400 (3A.a/.b tests + parity axes + speculation-bridge migrations) + ~-388 (3A.d test retirement) = ~+12 net
+- **Net suite delta**: 8200ish → 8232 (within variance band) — small net additions despite substantial retirement
+
+**Total commits**: ~14 across Phase 3A (foundation + sub-step + close commits + docs backfills).
+
+#### §9.3.9.2 User-facing behavior post-3A
+
+Annotated union types work end-to-end via on-network mechanism:
+
+| Input | Output | Property |
+|---|---|---|
+| `(def x : <Int \| String> := 42) x` | `42 : Int \| String` | Single-success branch retains union classifier |
+| `(def x : <String \| Int> := 42) x` | `42 : String \| Int` (source-order preserved) | Branch-order symmetry; pp-expr preserves source order |
+| `(def x : <Nat \| Int> := 0N) x` | `0N : Nat \| Int` | **Multi-success non-committing** — both branches survive |
+| `(def x : <Int \| Bool> := "hello") x` | type error → unbound x | All-fail exhaustion error |
+
+The non-committing semantic is the LOAD-BEARING property: under sexp first-success, `0N : <Nat | Int>` would commit to `Nat` only. R7's mechanism preserves the classifier as the original union. Multi-success axis empirically discriminates.
+
+#### §9.3.9.3 Cumulative adversarial 3-column VAG
+
+**Question (a) On-network?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ All Phase 3A cells (cell-15 fork-on-union-request, cell-16 fork-contradiction-request, cell-17 decomposed-positions-guard) on-network with proper SRE-domain classification + merge functions. All handlers (process-fork-on-union, process-fork-contradiction) registered with BSP scheduler at 'value tier. Branch propagators wrapped per-branch worldview via `wrap-with-worldview`. R7's inline-emit at type-map-write API IS the union-detection mechanism (cell-write event). 3A.d retirement REDUCED off-network surface by 576 LoC. | Any new off-network state introduced across the arc? | (1) **Zero new Racket parameters added** — no `current-*` parameters introduced in any sub-phase. (2) **Zero new mutable boxes** — all state via cells. (3) **R7 helper STATELESS** — all state via net-cell-read/write. (4) **Tagged-cell-value promotion idempotent + lazy** — `promote-cell-to-tagged` only fires when needed; no eager state. (5) **Bridge file (elab-speculation-bridge.rkt) PRESERVED** for legacy with-speculative-rollback callers — labeled scaffolding with Parent Phase 4 / PM 12 retirement plan; HONEST framing (not "permanent"). (6) **Cumulative**: Phase 3A REDUCED off-network surface (3A.d's 576 LoC retirement + R7.c's 130 LoC retirement = ~706 LoC dead code retired vs ~+50 LoC R7 mechanism added). Net REDUCTION in off-network surface. **Pass at cross-arc level.** |
+
+**Question (b) Complete?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ 5 sub-phases all closed (3A.0/.a/.b/.c/.d) with sub-phase adversarial VAGs. 3A.c cumulative VAG passed all 4 questions at §9.3.8. Full suite 8232 / 117.3s / 0 failures stable across arc. Production union annotations work end-to-end (probe + acceptance + 4 parity axes + 6 speculation-bridge migrations all PASS). | Shape OR benefit at the Phase 3A level? | **BOTH delivered**. (1) **Shape**: fork-on-union mechanism (3A.0/.a/.b) + R7 inline-emit (3A.c) + cell-17 guard + branch propagator install per-branch wv + contradiction narrowing via S(-1) — all structurally correct per per-sub-phase VAG verification. (2) **Benefit**: multi-success parity axis EMPIRICALLY DISCRIMINATES non-committing semantics from sexp first-success commit (load-bearing). Production union annotations elaborate correctly with classifier preserved. (3) **Retirement**: 3A.d's stranded elab-speculation.rkt retired (576 LoC); R7.c's 3A.c.2 helpers retired (130 LoC). Codification "Stranded high-level abstraction after refactor" promoted to 3 data points (READY for DEVELOPMENT_LESSONS.org). **Shape + benefit + cleanup all delivered. Pass.** |
+
+**Question (c) Vision-advancing?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ Union-types via ATMS branching delivered (originally blocked at Track 4B). Composition gain via R7's centralization-at-API pattern — Phase 9b γ + Phase 7 trait dispatch + Track 4D attribute grammar rules pick up R7 for free when they write `:type` via type-map-write. Decision 1's principle aggregation (β.1 + FP3) vindicated empirically (R8 fuel test confirmed; R7 reframe preserves architecture + addresses quantitative cost). | Could the arc have been MORE aligned? | (1) **R7 GENERALIZES the original FIRST attempt's "install-time pre-write" pattern** — from install-time-known unions (annotations only; Posture A) to type-write-time-computed unions (any union-producing source; R7). Strict improvement in expressiveness without sacrificing fuel budget. (2) **Realization B (in-place worldview tagging on shared carrier)** chosen over Realization A (separate cells with bridges) — proper Module-Theoretic decomposition; bridges-cause-tag-collapse failure mode avoided structurally (per BSP-LE 2B PIR §6.3 lesson). (3) **3 promotion-ready codifications surfaced** (Stranded high-level abstraction × 3 data points; Principle-aggregation quantitatively insufficient × 2 data points; Multi-axis discriminating coverage × 3 application sites) — strong methodological capital generation across the arc. (4) **Honest framing throughout** — all-fail axis tests downstream symptom (not direct exhaustion error; documented in test docstring); typing-core.rkt:2385 noted as production-dead with Parent Phase 4 / PM 12 retirement plan; 3A.b lazy promote-cell-to-tagged labeled as substrate primitive with explicit reuse from relations.rkt 5 production sites. **Maximally aligned within Phase 3A scope. Pass.** |
+
+**Question (d) Drift-risks-cleared?**
+
+Per-sub-phase D-3A.0-* / D-3A.a-* / D-3A.b-* / D-3A.c-* / D-3A.d-* risks all cleared at respective sub-phase closes (§9.3.2-9.3.8). Cross-arc Phase 3A risks:
+
+| Risk | Status | Adversarial verification |
+|---|---|---|
+| D-3A-fuel-budget | CLEARED via R7 architecture (R7.b adopted) | R7's inline-emit at type-map-write API adds ZERO extra propagator wakes (vs original watcher approach which added 45-100 wakes per polymorphic dispatch). TYPING-FUEL-LIMIT=200 preserved at production threshold. R8 empirical fuel test (§9.3.6.8) confirmed mechanism; R7 reframe (§9.3.7) addresses the cost without sacrificing architecture. |
+| D-3A-typing-core-2385-residual | CLEARED via empirical grep | `with-speculative-rollback` only at qtt.rkt:2329 (Parent Phase 4 territory) + typing-errors.rkt:78 (kept alive per §9.3.5.4). Production goes through on-network via type-map-write → R7 → handler. Parent Phase 4 owns the code-level retirement when sexp paths broadly retire. |
+| D-3A-bit-budget | CLEARED via PROVENANCE-STATS | Probe (28 commands) shows `atms_hypothesis_count: 5` ≈ 0.18 aids/command. 30-bit cap = 167× headroom. No bit-budget concerns at production scale. |
+| D-3A-cross-arc-mantra-violation | CLEARED via cumulative on-network audit (column a above) | Zero new Racket parameters / mutable state / off-network registries across entire arc. R7 helper stateless. Bridge file labeled scaffolding. Net REDUCTION in off-network surface (-706 LoC dead code retired vs +50 LoC mechanism added). |
+| D-3A-codification-debt | NOTED — 3 candidates ready | "Stranded high-level abstraction after refactor" (3 data points; promotion-ready); "Principle-aggregation quantitatively insufficient" (2 data points); "Multi-axis discriminating coverage" (3 application sites). Graduation to DEVELOPMENT_LESSONS.org deferred to user direction (not blocking 3A-VAG close). |
+
+All cross-arc drift risks addressed.
+
+#### §9.3.9.4 Phase 3A codification graduation candidates (status)
+
+The session arc surfaced **6 methodology data points** across 3A.c.6 close (§9.3.8.4) + 3A.d retirement. Status:
+
+| Codification | Data points | Promotion status |
+|---|---|---|
+| **"Stranded high-level abstraction after refactor"** | **3** (elab-speculation.rkt at §9.3.5.4 audit + 3A.c.2 helpers at R7.c + elab-speculation.rkt itself at 3A.d) | **🎯 PROMOTION-READY for DEVELOPMENT_LESSONS.org** |
+| **"Multi-axis parity testing for discriminating coverage"** | 3 application sites (2A.c orchestration-parity + 3A.c.4 union-inhabitation + 3A.c.5 speculation-bridge substring) | **Strong promotion candidate** — refining existing "parity-test as design artifact" codification |
+| **"Audit-driven scope refinement"** | 3 data points this session (R7.a refining R7 implementation pattern from per-fire-fn to centralized-at-API; 3A.b lazy promote-cell-to-tagged discovery; 3A.c.5 migration scope refinement) | **Graduating** — codification candidate ready |
+| "Principle-aggregation architecturally correct yet quantitatively insufficient" | 2 (Tropical Phase 1V Item #1 + R8/R7 arc) | Watching list; promotion at 3rd data point |
+| "R7 generalizes install-time pre-write → type-write-time pre-write composition gain" | 1 (R7 itself) | Watching list; promotion when Phase 9b γ or Phase 7 trait dispatch picks up the pattern |
+| "3-column adversarial framing in concentrated use" | Multiple application sites this session | Validates user-articulated methodology refinement; no new codification, just reinforcement |
+
+**Graduation deferred to user direction**. The cross-arc VAG identifies these as ready; the actual DEVELOPMENT_LESSONS.org graduation is a separate (optional) follow-up.
+
+#### §9.3.9.5 Phase 3A close + handoff
+
+**Phase 3A CLOSED.** All 5 sub-phases ✅; cross-arc VAG passed all 4 questions adversarially; all drift risks cleared.
+
+**Final state**:
+- Full suite: 8232 tests / 117.3s / 0 failures
+- Production net additions: ~+182 LoC (cells + handlers + R7 helper + Part B) net of retirements
+- Test code: ~+12 LoC net (parity axes + speculation-bridge migrations net of test-elab-speculation.rkt retirement)
+- Off-network surface: REDUCED by ~-706 LoC (R7.c + 3A.d retirements net of additions)
+- 3 codifications promotion-ready
+
+**Handoff to next phases**:
+
+| Track | Picks up from Phase 3A |
+|---|---|
+| **Phase 3B** (hypercube primitives) | cell-15/-16/-17 infrastructure + worldview-cache narrowing + branch propagator wrap pattern; integrates Gray code branch ordering + subcube pruning via existing primitives |
+| **Phase 3C** (residuation error-explanation) | worldview/contradiction infrastructure from 3A.b + cell-16 narrowing signal + R7's type-write event as natural derivation-chain anchor + Form C cross-reference (tropical-left-residual operator) |
+| **Phase 9b** (γ hole-fill multi-candidate) | Fork-on-union handler pattern + R7's centralized-at-API insight. Phase 9b's multi-candidate watcher can adopt R7's inline-at-write-API pattern OR resurrect 3A.c.2 helpers from git history |
+| **Parent Phase 4** (CHAMP retirement) | typing-core.rkt:2385 + qtt.rkt:2329 + typing-errors.rkt:78 + 4 with-speculative-rollback callers production-dead; retire when meta-info CHAMP retires + PM 12 + on-network completion |
+| **PM Track 12** (parameters → cells) | `current-prop-net-box` + box-bridge family scaffolding; coordinated retirement |
+| **PPN Track 5** (occurrence typing) | `union-inhabitation-narrowing` skip-gated parity axis points here |
+| **PPN Track 4D** (Attribute Grammar Substrate) | Attribute grammar rules pick up R7 via type-map-write composition for free; no per-rule instrumentation needed |
+
+#### §9.3.9.6 Cross-references
+
+- Phase 3A arc commits: `b4d8c22b` (3A.0) → `f3597fbb` (3A.a) → `44b434ed` (3A.b) → `ba0a2bfd` (3A.c cumulative close after 7-commit arc) → `0e80e120` (3A.d) → this commit (3A-VAG)
+- Sub-phase designs + closes: §9.3.2 (3A.0) + §9.3.3 (3A.a) + §9.3.4 (3A.b) + §9.3.5/6/7/8 (3A.c arc) + §9.3.5.4 (3A.d Q4 resolutions)
+- Decision 1 (β.1 + FP3 architectural target): §9.3.5.3
+- R7 reframe selection rationale: §9.3.6.8 (R8 empirical) + §9.3.7 (mini-design)
+- Cumulative methodology data points: §9.3.8.4 + §9.3.9.4
 
 ### §9.4 Phase 3B deliverables
 
