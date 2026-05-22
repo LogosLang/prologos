@@ -241,45 +241,92 @@
 ;; ========================================
 ;; Suite 3: Union Type Speculation (Integration)
 ;; ========================================
+;;
+;; PPN 4C Phase 3A.c.5 (2026-05-22): assertions migrated to expect
+;; NON-COMMITTING semantics under R7's on-network mechanism.
+;;
+;; Pre-R7 behavior: speculation tried branches sequentially; if first
+;; succeeded, COMMITTED to first-branch type (e.g., (def x <Nat | Bool> 42N)
+;; would commit x : Nat). The prologos-error? assertion held but the
+;; classifier collapsed to the committed branch.
+;;
+;; Post-R7 behavior (per §9.3.7): inline-emit at type-map-write detects
+;; union → handler decomposes into N branch propagators → contradicted
+;; branches narrow via S(-1) → surviving branches' bits remain in
+;; worldview-cache → classifier PRESERVED as union (e.g., x : Nat | Bool).
+;;
+;; Each test below adds a string-contains? assertion verifying the union
+;; substring appears in the result — discriminating R7's non-committing
+;; semantics from any sexp first-success-commit alternative. The original
+;; prologos-error? assertions are PRESERVED (still validate "no error"
+;; structural property per §9.3.5.6 coverage-equivalence requirement).
 
 (define union-tests
   (test-suite
    "Union type speculation"
 
-   (test-case "check e : (A | B) where left succeeds"
+   (test-case "check e : (A | B) where left succeeds — classifier preserved as union"
      (define result (run-ns "(ns test) (def x <Nat | Bool> 42N)"))
-     (check-false (prologos-error? result)))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing discriminator: classifier retained as union
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 3] left-succeeds: expected 'Nat | Bool' in result, got: ~s" result-str)))
 
-   (test-case "check e : (A | B) where left fails, right succeeds"
+   (test-case "check e : (A | B) where left fails, right succeeds — classifier preserved as union"
      (define result (run-ns "(ns test) (def x <Nat | Bool> true)"))
-     (check-false (prologos-error? result)))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing discriminator: Nat branch narrows via S(-1),
+     ;; Bool branch survives, classifier remains union (NOT narrowed to Bool only)
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 3] left-fails-right-succeeds: expected 'Nat | Bool' in result, got: ~s" result-str)))
 
-   (test-case "check e : (A | B) both fail"
-     ;; Use a type that doesn't match either Nat or Bool
+   (test-case "check e : (A | B) both fail — error path (typing-errors.rkt:78)"
+     ;; Use a type that doesn't match either Nat or Bool. (check ...) form
+     ;; goes through typing-errors.rkt:78 path (kept alive per §9.3.5.4;
+     ;; Parent Phase 4 owns retirement). Error assertion unchanged.
      (define result
        (run-simple "(def f : <(x : Nat) -> Nat> (fn [x] x)) (check [f true] <Nat | Bool>)"))
-     ;; Should error (Bool doesn't check against Nat in the fn)
      (check-true (prologos-error? (last result))))
 
-   (test-case "nested union (A | B) | C"
+   (test-case "nested union (A | B) | C — classifier preserved as nested union"
      (define result (run-ns "(ns test) (def x <<Nat | Bool> | (List Nat)> true)"))
-     (check-false (prologos-error? result)))))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing applies recursively at the type-write API. Bool
+     ;; branch succeeds (at inner level); classifier retains nested union
+     ;; structure. pp-expr preserves source order with associativity.
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 3] nested: expected 'Nat | Bool' substring in result, got: ~s" result-str)))))
 
 ;; ========================================
 ;; Suite 4: Map Widening Speculation (Integration)
 ;; ========================================
+;;
+;; PPN 4C Phase 3A.c.5 (2026-05-22): same non-committing migration pattern
+;; as Suite 3. Map value-type with union annotation should retain the union
+;; classifier under R7. Test 1 has no union — assertion unchanged (no
+;; discriminator needed).
 
 (define map-widening-tests
   (test-suite
    "Map widening speculation"
 
    (test-case "map assoc where value fits — no widening"
+     ;; No union in this test; non-committing semantics not exercised
      (define result (run-ns "(ns test) (eval (the (Map Keyword Nat) {:a 1N :b 2N}))"))
      (check-false (prologos-error? result)))
 
-   (test-case "map assoc where value doesn't fit — widen to union"
+   (test-case "map assoc where value doesn't fit — widen to union (R7 non-committing)"
      (define result (run-ns "(ns test) (eval (the (Map Keyword <Nat | Bool>) {:a 1N :b true}))"))
-     (check-false (prologos-error? result)))))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing discriminator: Map's value-type union annotation
+     ;; should propagate through. Mixed values (1N : Nat + true : Bool)
+     ;; both inhabit <Nat | Bool>; classifier preserved.
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 4] union value-type: expected 'Nat | Bool' in result, got: ~s" result-str)))))
 
 ;; ========================================
 ;; Suite 5: QTT Union Speculation (Integration)
@@ -301,6 +348,10 @@
 ;; ========================================
 ;; Suite 6: Full Pipeline Integration
 ;; ========================================
+;;
+;; PPN 4C Phase 3A.c.5 (2026-05-22): same non-committing migration pattern
+;; as Suites 3 + 4. Pipeline-level tests verify R7's mechanism composes
+;; with multi-def programs + polymorphic identity application.
 
 (define pipeline-tests
   (test-suite
@@ -313,7 +364,13 @@
          "(ns test)\n"
          "(def id : <{A : Type} (x : A) -> A> (fn [x] x))\n"
          "(def y <Nat | Bool> [id 42N])\n")))
-     (check-false (prologos-error? result)))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing discriminator: polymorphic id application yields
+     ;; 42N : Nat; y's classifier preserves <Nat | Bool> via inline-emit at
+     ;; the annotation write
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 6] union+polymorphic: expected 'Nat | Bool' in result, got: ~s" result-str)))
 
    (test-case "program with multiple defs compiles"
      (define result
@@ -323,7 +380,12 @@
          "(def a : Nat 1N)\n"
          "(def b : Bool true)\n"
          "(def c <Nat | Bool> 2N)\n")))
-     (check-false (prologos-error? result)))))
+     (check-false (prologos-error? result))
+     ;; R7 non-committing discriminator: multi-def context; c's classifier
+     ;; preserves <Nat | Bool>. result-str shows last def's result.
+     (define result-str (if (string? result) result (format "~a" result)))
+     (check-true (string-contains? result-str "Nat | Bool")
+                 (format "[Suite 6] multi-def: expected 'Nat | Bool' in result, got: ~s" result-str)))))
 
 ;; ========================================
 ;; Suite 7: Error Improvement (Phase 6)
