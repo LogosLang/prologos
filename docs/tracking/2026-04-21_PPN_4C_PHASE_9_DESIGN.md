@@ -4963,13 +4963,13 @@ Per `workflow.md` Conversational Implementation Cadence: each sub-step ends with
 |---|---|---|---|
 | **3A.c.1** ✅ `ffa7149b` | cell-17 allocation infrastructure: propagator.rkt cell-id + merge + provide + allocation + drift assertion + Tier 2 registration + 3 test files cell-id cascade | ~70-90 (actual: +100/-32 = +68 net) | DONE 2026-05-22. Probe: 0 errors; cells +1 (60 vs 59 baseline; cell-17); cell_allocs +57 (cell-17 allocated per make-prop-network; reveals prop-network is created ~2x per command via solver-state-amb forks — inherited from cells 15/16, watching list observation). Targeted 64 tests / 4.2s PASS. Acceptance 0 errors. Full suite **8251 tests / 109.9s / 0 failures** (test count unchanged; wall within 118-127s variance; actually −7.2s vs post-3A.b 117.1s — variance / fresh GC). Adversarial 3-column VAG passed all 4 questions. Mini-audit caught 2 design-doc errors before implementation (#:tier nomenclature + #:reset-value mismatch + Tier 2 registration site) — fixed inline. |
 | **3A.c.2** ✅ `4e8e9ad4` | `make-classifier-watcher-fire-fn` factory + `install-classifier-watcher` helper definitions in typing-propagators.rkt. NO invocations yet (helper added but dead). | ~40 (actual: +128) | DONE 2026-05-22. Helpers added + exported. Probe: cell_allocs 1552 IDENTICAL to 3A.c.1; cells 60 IDENTICAL; propagators 0 IDENTICAL — D-3A.c.2-no-invocation-leak STRUCTURALLY verified. Full suite **8251 / 108.8s / 0 failures** (vs 3A.c.1 8251/109.9s; -1.1s variance). Adversarial 3-column VAG passed all 4 questions. Pattern mirrors 3 precedents (make-branch-check-fire-fn line 1023, make-branch-contradiction-watcher-fire-fn line 1182, classify-inhabit-residuation install line 2158). |
-| **3A.c.3** | **R7 reframe** (post-revert; per §9.3.6 audit + §9.3.7 mini-design): centralized inline-emit at type-map-write API + Part B cell-17 guard write in handler. Replaces original watcher approach. Decision rationale per R8 empirical fuel test (§9.3.6.8). | 🔄 | Sub-steps R7.a ✅ + R7.b ✅ + R7.c ⬜. Original watcher-based 3A.c.3 design (Part A universal install) confirmed structurally correct but quantitatively over-budget under TYPING-FUEL-LIMIT=200. R7 preserves β.1 universal coverage AND TYPING-FUEL-LIMIT divergence-detection signal. |
+| **3A.c.3** | **R7 reframe** (post-revert; per §9.3.6 audit + §9.3.7 mini-design): centralized inline-emit at type-map-write API + Part B cell-17 guard write in handler. Replaces original watcher approach. Decision rationale per R8 empirical fuel test (§9.3.6.8). | ✅ | Sub-steps R7.a ✅ + R7.b ✅ + R7.c ✅. Original watcher-based 3A.c.3 design (Part A universal install) confirmed structurally correct but quantitatively over-budget under TYPING-FUEL-LIMIT=200. R7 preserves β.1 universal coverage AND TYPING-FUEL-LIMIT divergence-detection signal. |
 | **3A.c.3-R7.a** ✅ `0e08e08b` | Mini-audit: :type write sites + type-map-write/-unified API coverage. Persisted at §9.3.7.5 | doc-only | DONE 2026-05-22. 47 production :type writes flow through type-map-write/-unified APIs; 2 direct net-cell-write bypasses write contradiction sentinels (not union types) — R7 correctly skips. No coverage gap; D-R7-direct-write-bypass risk RESOLVED empirically. |
 | **3A.c.3-R7.b** ✅ `0e08e08b` | Implement centralized inline-emit: `maybe-emit-fork-on-union-request` helper + type-map-write modification + Part B (cell-17 write in process-fork-on-union handler Step 5) | ~50 LoC (actual: +49 / -13 = +36 net) | DONE 2026-05-22. Helper checks (expr-union? type-val) + cell-17 guard before emit. type-map-write-unified delegates to type-map-write — picks up emit automatically (one function-pair change covers both API paths per audit). Verification: Probe 0 errors, cell_allocs=1552 IDENTICAL to baseline, 28 results match. Acceptance 0 errors. Targeted 103/103 PASS. Full suite **8246 tests / 108.0s / 0 failures** (vs 3A.c.2 baseline 8246/103.7s; +4.3s within 118-127s variance band). Adversarial 3-column VAG passed all 4 questions. |
 | **3A.c.3-R7.c** ✅ `a4b33fce` | Retire 3A.c.2 classifier-watcher helpers (make-classifier-watcher-fire-fn + install-classifier-watcher; commit 4e8e9ad4); replace with historical-context comment pointing to git + §9.3.5 + §9.3.7 | ~-130 LoC | DONE 2026-05-22. Decision: RETIRE (per principled lean — "Stranded high-level abstraction after refactor" codification 2nd data point; Phase 9b γ multi-candidate watcher can resurrect from git when use case materializes). Helpers deleted; 2 provide exports removed; replaced with 6-line historical-context comment. Full suite **8251 tests / 117.7s / 0 failures**; probe + acceptance clean. Adversarial 3-column VAG passed all 4 questions. |
 | **3A.c.4** ✅ `d5b6bdbf` | test-elaboration-parity.rkt: 4 active union-inhabitation axes + 1 skip-gated (narrowing → PPN Track 5); delete old `'union-narrow-by-constraint` block | ~60-80 (actual: +91 / -9 = +82 net) | DONE 2026-05-22. 4 active axes: preserved, flipped, multi-success (LOAD-BEARING DISCRIMINATOR — sexp first-success would FAIL `"Nat \| Int"` substring), all-fail. 1 skip-gated: narrowing → PPN Track 5. All-fail axis tests downstream unbound-variable symptom (honest framing per §9.3.5.5 — direct exhaustion-error in test-union-types-atms.rkt mechanism tests). Targeted parity tests: 29/29 PASS. Full suite **8255 tests / 117.3s / 0 failures** (+4 net vs R7.c 8251). Adversarial 3-column VAG passed all 4 questions; multi-success discriminator empirically proves on-network non-committing. |
 | **3A.c.5** ✅ `77ea36e4` | test-speculation-bridge.rkt: 6 union test cases migrated with non-committing classifier substring assertions; 2 preserved as-is | ~30-50 (actual: +48 / -7 = +41 net) | DONE 2026-05-22. Suite 3 (Union Type Speculation): 3 migrations (left-succeeds + left-fails-right-succeeds + nested) + 1 preserve (both-fail error path). Suite 4 (Map Widening): 1 migration (union value-type) + 1 preserve (no-union test). Suite 6 (Pipeline): 2 migrations (union+polymorphic + multi-def). QTT (Suite 5) + Error Improvement (Suite 7) UNCHANGED per §9.3.5.6 (Parent Phase 4 territory). All 6 migrated tests add `(string-contains? result-str "Nat \| Bool")` substring assertions as LOAD-BEARING DISCRIMINATOR — would FAIL under sexp first-success commit. Existing prologos-error? assertions PRESERVED. Full suite **8255 / 117.8s / 0 failures**. Adversarial 3-column VAG passed all 4 questions. |
-| **3A.c.6** | Adversarial 3-column VAG + commit + tracker + dailies | doc | All 4 VAG questions PASS under adversarial framing; 3A.c marked ✅ |
+| **3A.c.6** ✅ `<3a.c.6-commit>` | Adversarial 3-column VAG + commit + tracker + dailies (cumulative phase close) | doc | DONE 2026-05-22. All 4 VAG questions pass under cumulative adversarial framing (§9.3.8.2 catalogue/challenge/adversarial columns); all 7 D-3A.c-* drift risks addressed under adversarial verification (§9.3.8.2 row d); §9.3.5.9 completion criteria checklist all ✅ (§9.3.8.3); 6 methodology data points captured (§9.3.8.4). **3A.c CLOSED.** Next: 3A.d (elab-speculation.rkt retirement; §9.3.5.4). |
 
 Total: 6 sub-steps; ~3-5 hours of focused implementation across one or two sessions.
 
@@ -5432,6 +5432,115 @@ Grep for direct writes that bypass type-map-write/type-map-write-unified:
 - cell-17 infrastructure (R7 dependency): commit `ffa7149b`
 - Original §9.3.5 deliberative-design (β.1 + FP3 watcher; R7 supersedes the watcher mechanism, preserves the β.1 + FP3 architectural intent)
 - Phase 9b γ + Phase 7 trait dispatch downstream consumers: §9.3.1.7 + §9.3.5.11
+
+### §9.3.8 Phase 3A.c overall close — cumulative adversarial 3-column VAG (2026-05-22)
+
+Phase 3A.c objective per §9.3.5: integrate the fork-on-union mechanism (3A.0/3A.a/3A.b) with the user-facing typing pipeline via β.1 universal coverage + FP3 idempotence + non-committing inhabitation semantics.
+
+#### §9.3.8.1 Cumulative arc summary
+
+| Sub-step | Commit | Description |
+|---|---|---|
+| 3A.c.1 | `ffa7149b` | cell-17 (decomposed-positions guard) allocation infrastructure + Tier 2 registration + 3 test-file cell-id cascade |
+| 3A.c.2 | `4e8e9ad4` | classifier-watcher helper definitions (subsequently superseded by R7; retired at R7.c) |
+| 3A.c.3-R7.a | `0e08e08b` | Thorough audit (A1-A10) + R8 empirical fuel test confirming H-compound-4 + R7 mini-design |
+| 3A.c.3-R7.b | `0e08e08b` | Centralized inline-emit at type-map-write API (`maybe-emit-fork-on-union-request` helper) + Part B cell-17 write in handler Step 5 |
+| 3A.c.3-R7.c | `a4b33fce` | 3A.c.2 helpers retired (~130 LoC deletion; stranded-abstraction codification 2nd data point) |
+| 3A.c.4 | `d5b6bdbf` | 4 active union-inhabitation parity axes + 1 skip-gated (multi-success LOAD-BEARING DISCRIMINATOR) |
+| 3A.c.5 | `77ea36e4` | 6 test-speculation-bridge cases migrated with non-committing classifier substring assertions + 2 preserved |
+| 3A.c.6 | (this commit) | Phase close: cumulative adversarial 3-column VAG + tracker update + dailies entry |
+
+**Process narrative**: Phase 3A.c had a non-trivial arc — the initial attempt (`de453f69`, "Posture A install-time pre-write at expr-ann") was REVERTED for bypassing deliberative dialogue discipline; the second attempt (deliberative re-do per §9.3.5, "Posture B β.1 universal watcher install") was REVERTED at working-tree level when it broke 11 polymorphic-trait-dispatch tests under TYPING-FUEL-LIMIT=200. The third attempt (R7 reframe, this arc) was the architecturally-strongest answer: centralize the union-detection inline at the type-write API, achieving β.1 universal coverage via Data Orientation (data drives behavior, not via watcher polling) AND preserving TYPING-FUEL-LIMIT divergence-detection signal (zero extra propagator wakes).
+
+The arc captured 4 distinct methodology data points (see §9.3.8.4 below).
+
+#### §9.3.8.2 Cumulative VAG — 4 questions × 3 columns
+
+**Question (a) On-network?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ R7 inline-emit at type-map-write API is on-network (cell-17 read + cell-15 write). Cell-17 guard is on-network (set-union merge). Handler's Part B cell-17 write is on-network. Parity tests assert via run-ns-last (production network). Substring discriminators verify on-network behavior. | Could any 3A.c work have introduced off-network state? | Audit: zero new parameters, registries, or off-network state. Helper `maybe-emit-fork-on-union-request` is STATELESS (all state via net-cell-read/write). 3A.c.2 retirement REMOVED dead code (further reduced off-network surface). Test framework uses production network throughout. **Pass.** |
+
+**Question (b) Complete?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ All 6 sub-steps landed atomically with dialogue checkpoints per Conversational Implementation Cadence. Coverage: 47 production :type write sites flow through type-map-write API; 100% covered by R7. Test coverage: 4 active parity axes + 6 substring-migrated speculation-bridge tests (multi-success discriminator load-bearing). Full suite: 8255 tests / 117.8s / 0 failures (vs pre-arc 8246 baseline; +9 net tests). | Shape OR benefit? Did we ship the architecture AND verify the benefit? | **Both delivered**: (1) Shape — R7 implementation lands at `0e08e08b`; mechanism is correct (per R8 empirical fuel test confirmation). (2) Benefit — multi-success axis empirically proves non-committing semantics work end-to-end (sexp first-success commit would FAIL the "Nat \| Int" substring match; R7 produces it). 6 test-speculation-bridge substring assertions add load-bearing discrimination beyond preserved "no error" coverage. **Shape + benefit both verified. Pass.** |
+
+**Question (c) Vision-advancing?**
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ β.1 universal coverage achieved structurally (every :type write through API picks up R7). FP3 idempotence achieved structurally (cell-17 guard). Decision 1 principle aggregation PRESERVED. TYPING-FUEL-LIMIT divergence-detection signal PRESERVED. 3A.c.2 helpers retired (stranded-abstraction codification 2nd data point). Multi-axis discriminating coverage codification has 3 application sites this session. | Could the arc have been MORE aligned? | (1) R7 generalizes the original FIRST attempt's "install-time pre-write" pattern from install-time-known (annotations only) to type-write-time-computed (any union-producing source) — strict improvement in expressiveness. (2) Composition gain: Phase 9b γ + Phase 7 trait dispatch + Track 4D attribute grammar rules pick up R7's behavior for free when they write :type via the API — no per-track instrumentation needed. (3) Discriminating coverage pattern generalizes beyond parity tests to ANY test framework where assertions must distinguish architectural variants. (4) Honest framing of all-fail axis (downstream symptom; direct exhaustion testing in mechanism tests) IS more aligned than rationalizing — surfaces the test-framework limit explicitly. **Maximally aligned within Phase 3A.c scope. Pass.** |
+
+**Question (d) Drift-risks-cleared?**
+
+| Risk | Status post-arc | Adversarial verification |
+|---|---|---|
+| D-3A.c-install-density | NO LONGER APPLICABLE under R7 | R7 has ZERO extra propagator installs (vs original watcher approach which would have added 15-20 per polymorphic call). The risk presumed watcher approach; R7 architecturally eliminates it. |
+| D-3A.c-cell-17-cascade | CLEARED at 3A.c.1 | cell-id 17 cascade verified across 3 test files (test-propagator + test-observatory-01 + test-trace-serialize); landed at `ffa7149b` |
+| D-3A.c-fire-pattern-soundness | CLEARED via R7 structural idempotence | R7's inline check at type-map-write reads cell-17 BEFORE emit decision (code review verified); cell-17 guard makes re-emission STRUCTURALLY impossible (not flag-guarded, not downstream-deduped) |
+| D-3A.c-typing-core-2385-residual | CLEARED via empirical grep | Grep confirms `with-speculative-rollback` only at qtt.rkt:2329 (Parent Phase 4 territory) + typing-errors.rkt:78 (kept alive per §9.3.5.4). Production goes through on-network via type-map-write → R7 → handler. Parent Phase 4 owns retirement when sexp paths broadly retire. |
+| D-3A.c-axis-confirmation-bias | CLEARED at 3A.c.4 | Multi-success axis (`union-inhabitation-multi-success`) genuinely discriminates: sexp first-success returns `"0N : Nat"` → fails `"Nat \| Int"` substring; R7 non-committing returns `"0N : Nat \| Int"` → passes |
+| D-3A.c-test-speculation-bridge-coverage | CLEARED at 3A.c.5 | All 6 migrated tests KEEP existing prologos-error? assertions AND ADD substring discriminators. Coverage equivalence preserved (no assertion deleted); discrimination added. Per-test-case before/after documented in commit `77ea36e4` message. |
+| D-3A.c-bit-budget | CLEARED via PROVENANCE-STATS | Probe shows atms_hypothesis_count=5 across 28 commands ≈ 0.18 aids/command. Bit budget cap is 30 per command. Headroom: 167×. **No bit-budget concerns.** |
+
+All 7 drift risks addressed under adversarial verification.
+
+#### §9.3.8.3 Completion criteria checklist (§9.3.5.9)
+
+- ✅ All 6 sub-steps landed atomically (each with dialogue checkpoint per Conversational Implementation Cadence)
+- ✅ Probe `examples/2026-04-22-1A-iii-probe.prologos`: semantic outputs match baseline (cell_allocs=1552 IDENTICAL throughout 3A.c arc)
+- ✅ Acceptance file `examples/2026-04-17-ppn-track4c.prologos`: 0 errors
+- ✅ All 4 active parity axes (`union-inhabitation-preserved`, `-flipped`, `-multi-success`, `-all-fail`) PASS
+- ✅ 1 skip-gated axis (`union-inhabitation-narrowing`) present with explicit "PPN Track 5 (occurrence typing)" pointer
+- ✅ test-speculation-bridge.rkt: 6 migrated cases + 2 preserves PASS; QTT (Suite 5) + exhaustion (Suite 7) sections UNCHANGED and still passing
+- ✅ test-union-types-atms.rkt: existing mechanism tests still PASS (no regression to 3A.a/3A.b coverage)
+- ✅ Full suite: 8255 tests / 117.8s / 0 failures (within 118-127s variance band)
+- ✅ Adversarial 3-column VAG passed all 4 questions (this §9.3.8.2)
+- ✅ Tracker row 3A.c marked ✅ with commit hash + key result summary (this commit)
+- ✅ Dailies entry per phase-completion protocol (companion commit)
+- ✅ D-3A.c-* drift risks each addressed in close VAG (§9.3.8.2 row (d))
+
+**Phase 3A.c CLOSED.**
+
+#### §9.3.8.4 Methodology data points graduated to watching list / DEVELOPMENT_LESSONS.org
+
+1. **"Principle-aggregation can be architecturally correct yet quantitatively insufficient"** (2 data points: PPN 4C Tropical Phase 1V Item #1 + 3A.c R8/R7 arc). The diagnostic protocol exists for exactly this case — when principles favor one direction with high confidence yet implementation breaks, the empirical conflict often reveals a missing QUANTITATIVE dimension (here: per-fire fuel cost × per-position write multiplicity), not a wrong-architecture problem. ADOPT THE ARCHITECTURE; ADDRESS THE COST SEPARATELY. **Promotion candidate to DEVELOPMENT_LESSONS.org at 3rd data point.**
+
+2. **"Stranded high-level abstraction after refactor"** (now 2 data points: elab-speculation.rkt at §9.3.5.4 + 3A.c.2 helpers retired at R7.c). When refactoring SUPERSEDES an abstraction (the abstraction's body becomes a direct call to primitives, bypassing its own structure), the abstraction should be RETIRED in the same arc or immediate follow-up — not preserved "for future use." Git history + design doc capture the resurrection path; source code reflects what's CURRENT. **Promotion-eligible to DEVELOPMENT_LESSONS.org.**
+
+3. **"Multi-axis parity testing for discriminating coverage"** (3 application sites this session arc: 2A.c orchestration-parity + 3A.c.4 parity axes + 3A.c.5 substring discriminators). When an architectural change introduces a new semantic property, tests must include assertions that would FAIL under the OLD variant. Single assertions like "no error" preserve coverage equivalence but don't discriminate. Pattern generalizes beyond parity-test framework specifically to ANY test framework where assertions must distinguish architectural variants. **Strong promotion candidate refining the existing "parity-test as design artifact" codification.**
+
+4. **R7 generalizes "install-time pre-write" → "type-write-time pre-write"** — composition gain pattern. The original FIRST attempt's "install-time pre-write at expr-ann" covered install-time-known unions (annotations). R7 centralizes the pattern at the type-write API → covers ANY union-producing source (annotations + T-3 set-union merge + meta refinement + future trait dispatch returns + future grammar rule outputs). This is the "Data Orientation realization of the install-time pattern." **Watching list — promotion candidate when Phase 9b γ or Phase 7 trait dispatch picks up the pattern (3rd data point).**
+
+5. **"3-column adversarial framing in concentrated use"** (catalogued/challenged/adversarial — refinement of 2-column codification). Applied uniformly across A11 synthesis, R7 mini-design, R7.b VAG, R7.c VAG, 3A.c.4 VAG, 3A.c.5 VAG, and this 3A.c.6 cumulative VAG. The adversarial column surfaced concrete drift candidates (Decision 1 reversal implications for R1, fuel-bump band-aid concern for R2, R7's completeness audit burden, all-fail downstream-symptom honest framing, etc.) that catalogue + challenge alone would have missed. **Validates the methodology refinement (user-articulated 3-column framing) at strong scale.**
+
+6. **"Audit-driven scope refinement"** (3 data points this session — graduating). The original R7 sketch was "per-fire-fn enumeration"; R7.a audit revealed type-map-write-unified delegates to type-map-write, making "one function-pair change" structurally cleaner. The audit didn't just verify the design — it REFINED the design at the implementation boundary. This is the codified discipline (Stage 4 Per-Phase Protocol step 1+2 — co-dependent mini-design + mini-audit cycle) working as designed.
+
+#### §9.3.8.5 Cross-track captures (post-3A.c)
+
+Per §9.3.1.7 + this arc's discoveries, downstream consumers:
+
+| Track | Capture |
+|---|---|
+| **Phase 3A.d** | `elab-speculation.rkt` retirement (§9.3.5.4) — sequential after 3A.c. Stranded high-level abstraction (zero production callers); retire whole file (188 LoC) + test (388 LoC). Already designed; ready for implementation. |
+| **Phase 3B** | Hypercube primitives integration (§9.4) — Gray-code branch ordering + subcube pruning. Builds on 3A.b's contradiction watchers + 3A.c's cell-15 + cell-17 + cell-16 infrastructure. |
+| **Phase 3C** | Residuation error-explanation (§9.5) — first downstream consumer of Form C cross-reference (§9.5.A). Consumes worldview/contradiction infrastructure from 3A.b + cell-16 narrowing signal + R7's inline-emit (type-write event provides natural derivation-chain anchor). |
+| **Phase 9b** | γ hole-fill multi-candidate (§15) — inherits fork-on-union handler pattern + R7's centralized-at-API insight. Phase 9b's multi-candidate watcher CAN resurrect the retired 3A.c.2 helper pattern from git if needed, OR can adopt R7's inline-at-write-API pattern (now demonstrated). |
+| **Parent Phase 4** | typing-core.rkt:2385 + qtt.rkt:2329 + typing-errors.rkt:78 + remaining 4 with-speculative-rollback callers — sexp-path retirement when meta-info CHAMP retires + PM 12 + on-network completion. |
+| **PM Track 12** | `current-prop-net-box` + box-bridge family — Racket parameter scaffolding for module loading; out of 3A.c scope. |
+| **PPN Track 5** | Occurrence typing (renamed `union-inhabitation-narrowing` skip-gated parity axis points here) — narrowing of union to single component via constraint propagation. |
+| **PPN Track 4D** | Attribute Grammar Substrate Unification — R7's centralized-at-API pattern composes naturally with grammar-rule compilation (rules write :type via type-map-write → R7 picks up automatically; no per-rule instrumentation). |
+
+#### §9.3.8.6 Cross-references
+
+- 3A.c arc commits: `ffa7149b` (3A.c.1) → `4e8e9ad4` (3A.c.2) → `0e08e08b` (R7.a + R7.b) → `a4b33fce` (R7.c) → `d5b6bdbf` (3A.c.4) → `77ea36e4` (3A.c.5) → this commit (3A.c.6)
+- §9.3.5 (deliberative-design mini-design; superseded by R7 reframe but architectural intent preserved)
+- §9.3.6 (re-approach mini-audit + R8 empirical fuel test)
+- §9.3.7 (R7 mini-design; centralized at type-map-write API)
+- §9.3.8 (this — cumulative close VAG)
 
 ### §9.4 Phase 3B deliverables
 
