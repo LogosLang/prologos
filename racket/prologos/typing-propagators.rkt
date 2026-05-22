@@ -130,14 +130,12 @@
  make-branch-contradiction-watcher-fire-fn  ;; PPN 4C Phase 3A.b — per-branch contradiction watcher
  process-fork-on-union
  process-fork-contradiction
- ;; PPN 4C Phase 3A.c (2026-05-22): classifier-watcher API.
- ;; Per-position watcher that detects union arrival in :type facet
- ;; CLASSIFIER layer and emits fork-on-union request to cell-15.
- ;; β.1 universal install + FP3 guard cell (cell-17) per §9.3.5.3.
- ;; Exposed for: (i) test-union-types-atms.rkt unit + E2E testing;
- ;; (ii) install-typing-network invocation at every expr-* case (3A.c.3).
- make-classifier-watcher-fire-fn
- install-classifier-watcher
+ ;; PPN 4C Phase 3A.c.3-R7 (2026-05-22): union-detection lives inline in
+ ;; type-map-write (helper `maybe-emit-fork-on-union-request`). The earlier
+ ;; classifier-watcher API (make-classifier-watcher-fire-fn + install-
+ ;; classifier-watcher; 3A.c.2 commit 4e8e9ad4) was retired in 3A.c.3-R7.c
+ ;; per addendum §9.3.7. Phase 9b γ multi-candidate watcher (if a use case
+ ;; surfaces) can resurrect the pattern from git history.
  ;; Track 4B Phase 6b: Fire-once propagator pattern (now in propagator.rkt, re-exported)
  net-add-fire-once-propagator
  ;; Phase 2 (D.4): Propagator-native typing
@@ -1313,124 +1311,29 @@
                            #:reset-value (seteq))
 
 ;; ============================================================
-;; PPN 4C Phase 3A.c (2026-05-22): Classifier-Watcher Helpers
+;; PPN 4C Phase 3A.c (2026-05-22): Union-detection at type-write API
 ;; ============================================================
 ;;
-;; Per addendum design §9.3.5.3 (Decision 1 resolution: β.1 universal
-;; install + FP3 guard cell). These helpers wire the fork-on-union
-;; mechanism (3A.0/3A.a/3A.b) into the user-facing typing pipeline.
+;; ARCHITECTURAL HISTORY: Phase 3A.c originally designed a per-position
+;; classifier-watcher propagator (commit `4e8e9ad4`, 3A.c.2) per addendum
+;; §9.3.5.3 Decision 1's β.1 universal install + FP3 guard. The 3A.c.3
+;; attempt to invoke the watchers universally at install-typing-network
+;; broke 11 polymorphic-trait-dispatch tests via fuel exhaustion
+;; (~45-100 watcher wake-ups per polymorphic call consumed
+;; TYPING-FUEL-LIMIT budget that trait-resolution needed).
 ;;
-;; At 3A.c.2 (this sub-step): helper DEFINITIONS only. No invocations
-;; yet. Production behavior unchanged vs 3A.c.1.
+;; R8 empirical fuel test (2026-05-22, §9.3.6.8) confirmed H-compound-4
+;; fuel pressure as the leading mechanism. The architecture (β.1 + FP3)
+;; was correct; the WATCHER MECHANISM was wasteful.
 ;;
-;; At 3A.c.3 (next sub-step): centralized invocation at every expr-*
-;; case in install-typing-network. Each expression position gets a
-;; classifier-watcher propagator installed; watchers fire when :type
-;; facet's classifier becomes union; cell-15 receives the
-;; fork-on-union request; process-fork-on-union (3A.a) decomposes;
-;; branch propagators install (3A.a); branch contradiction watchers
-;; observe (3A.b); process-fork-contradiction narrows worldview (3A.b).
-;;
-;; Architectural model (Realization B + FP3):
-;;   - β.1 universal install: every expression position gets a
-;;     watcher (structural coverage; no enumeration gaps)
-;;   - FP3 guard cell: cell-17 (decomposed-positions, allocated at
-;;     3A.c.1) prevents re-decomposition. Watcher reads guard before
-;;     emitting; handler writes guard after decomposing
-;;   - Plain net-add-propagator (NOT fire-once): the substrate's
-;;     fire-once flag would be consumed on first non-union fire
-;;     (silent reduction to Posture A — Decision 1 §9.3.5.3 FP2 trap)
-;;
-;; Per-position classifier-watcher fire pattern:
-;;   1. Read attribute-map at position e via tm-cid
-;;   2. Extract :type facet's classifier (classify-inhabit-value's
-;;      classifier-or-bot accessor)
-;;   3. If NOT (expr-union? classifier): no-op (the watcher fires on
-;;      ANY :type write at e; only union classifiers trigger emission)
-;;   4. If position is in decomposed-positions guard cell: no-op
-;;      (idempotence; re-fires after decomposition are silent)
-;;   5. Otherwise: write fork-on-union request to cell-15
-;;      (key = e, value = (hasheq 'components flattened 'tm-cid tm-cid))
-;;      BSP outer-loop picks up cell-15; process-fork-on-union handler
-;;      runs; handler writes (seteq e) to cell-17 guard cell
-;;
-;; The decomposed-positions guard write happens in process-fork-on-union
-;; (3A.c.3 wires this); the watcher only READS the guard. Read/write
-;; separation per Cell/Propagator/Scheduler Orthogonality (cell layer
-;; concern: storage; propagator layer concern: behavior).
-
-;; Classifier-watcher fire function factory.
-;;
-;; Returns a fire-fn closure parameterized by tm-cid (attribute-map
-;; cell-id) and e (expression position). The closure captures both
-;; values; the returned function takes a network and returns the
-;; (possibly-updated) network.
-;;
-;; Pattern mirrors make-branch-check-fire-fn (line 1023) and
-;; make-branch-contradiction-watcher-fire-fn (line 1182) for
-;; attribute-map read; mirrors classify-inhabit residuation propagator
-;; install (line 2158) for component-paths declaration.
-(define (make-classifier-watcher-fire-fn tm-cid e)
-  (lambda (net)
-    (define tm (net-cell-read net tm-cid))
-    (define record (if (hash? tm) (hash-ref tm e (hasheq)) (hasheq)))
-    (define cinhab-val (if (hash? record)
-                           (hash-ref record ':type classify-inhabit-bot-value)
-                           classify-inhabit-bot-value))
-    (define classifier (classify-inhabit-value-classifier-or-bot cinhab-val))
-    (cond
-      ;; Most common case: classifier is not a union (or bot/top/concrete
-      ;; type). Watcher fires on ANY :type write at this position; the
-      ;; vast majority of writes won't produce union classifiers. Return
-      ;; net unchanged — no flag consumed (plain net-add-propagator
-      ;; semantics; watcher remains live for subsequent writes).
-      [(not (expr-union? classifier)) net]
-      ;; FP3 guard: position already decomposed → idempotent no-op.
-      ;; process-fork-on-union (3A.a) handler writes (seteq e) to cell-17
-      ;; after decomposing; subsequent watcher fires for the same
-      ;; position see the guard and skip emission. This makes
-      ;; idempotence STRUCTURAL (Correct by Construction) rather than
-      ;; relying on flag-guard semantics or downstream dedup.
-      [(set-member? (net-cell-read net decomposed-positions-cell-id) e) net]
-      ;; Union classifier + not yet decomposed → emit request.
-      ;; Request-info shape per 3A.a §9.3.3.1:
-      ;;   (hasheq 'components (listof TypeExpr) 'tm-cid CellId)
-      ;; Optional 'source-loc could be added for diagnostics (Phase 3C
-      ;; consumer); deferred — 3A.c scope is minimal request shape.
-      [else
-       (define components (flatten-union classifier))
-       (define request-info (hasheq 'components components 'tm-cid tm-cid))
-       (net-cell-write net fork-on-union-request-cell-id
-                       (hasheq e request-info))])))
-
-;; Convenience helper: installs a classifier-watcher propagator at
-;; the given expression position. Wraps net-add-propagator with the
-;; correct :component-paths declaration so the watcher fires ONLY on
-;; :type facet writes at position e (not on writes to other positions
-;; or other facets at e).
-;;
-;; Component-paths shape mirrors 3c-iii residuation propagator install
-;; at line 2158: (list (cons tm-cid (cons e ':type))). The attribute-map
-;; cell is 'structural-classified per Phase 3e; enforce-component-paths!
-;; HARD-ERRORS on reads without declared paths. The :type facet path
-;; precision is what makes β.1 universal install affordable — each
-;; watcher fires only on its position's :type changes, not on every
-;; attribute-map write across all positions.
-;;
-;; Inputs: tm-cid (attribute-map cell) — fires watcher when this cell
-;;   changes at the declared path.
-;; Outputs: fork-on-union-request-cell-id — watcher writes to this on
-;;   union detection.
-;;
-;; Returns: the updated network (single value via let-values pattern).
-(define (install-classifier-watcher net tm-cid e)
-  (define-values (net* _pid)
-    (net-add-propagator net
-                        (list tm-cid)
-                        (list fork-on-union-request-cell-id)
-                        (make-classifier-watcher-fire-fn tm-cid e)
-                        #:component-paths (list (cons tm-cid (cons e ':type)))))
-  net*)
+;; R7 reframe (§9.3.7, this is the implemented form): centralize the
+;; union-detection inline in `type-map-write` (the canonical :type write
+;; API). Zero extra propagator wakes — the predicate check fires inline
+;; with the existing write. See `maybe-emit-fork-on-union-request` helper
+;; at line 585+ (above) for the implementation. The classifier-watcher
+;; helpers (3A.c.2) were retired in 3A.c.3-R7.c as superseded; the pattern
+;; remains available in git history (commit `4e8e9ad4`) for Phase 9b γ
+;; multi-candidate use case if it materializes.
 
 ;; Meta-solution output propagator: watches one meta's :term facet
 ;; (INHABITANT layer — the meta's SOLUTION per §6.15.8 Q6). Writes
