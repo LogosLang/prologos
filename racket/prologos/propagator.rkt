@@ -107,6 +107,11 @@
  fork-contradiction-request-cell-id
  fork-on-union-request-merge
  fork-contradiction-request-merge
+ ;; PPN 4C Phase 3A.c (2026-05-22): decomposed-positions guard cell + merge
+ ;; (FP3 per §9.3.5.3 — idempotence guard for classifier-watcher's fork-on-union
+ ;; request emission; prevents re-decomposition of already-forked positions)
+ decomposed-positions-cell-id
+ decomposed-positions-merge
  ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
  ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
  ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
@@ -718,6 +723,26 @@
 (define fork-on-union-request-cell-id (cell-id 15))
 (define fork-contradiction-request-cell-id (cell-id 16))
 
+;; cell-id 17: decomposed-positions — set-union merge; per-position guard
+;;   tracking which expression positions have ALREADY been decomposed by the
+;;   process-fork-on-union handler. Written by the handler after decomposing
+;;   (one (seteq position) write per fork firing); read by the per-position
+;;   classifier-watcher (installed at 3A.c.3) to gate request emission.
+;;
+;; Per §9.3.5.3 (Decision 1 FP3 resolution): this guard cell makes idempotence
+;; STRUCTURAL — once a position is decomposed, subsequent classifier-watcher
+;; fires for the same position become no-ops (without consuming any fire-once
+;; flag, since the watcher uses plain net-add-propagator). Resolves the
+;; re-decomposition defect that broke FP1 (plain net-add-propagator without
+;; guard) and the silent coverage gap of FP2 (net-add-fire-once-propagator
+;; consumes flag on first non-union fire).
+;;
+;; NOT a stratum-request cell — no handler registered for cell-17; it's a
+;; READ-by-watcher / WRITE-by-handler guard. Persists across BSP rounds within
+;; a command; resets between commands via reset-meta-store! reconstruction.
+;; SRE domain: 'monotone-set (Tier 2 registration below at line 796-block).
+(define decomposed-positions-cell-id (cell-id 17))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -762,6 +787,22 @@
   ;; assumption-id structs).
   (set-union old new))
 
+;; PPN 4C Phase 3A.c (2026-05-22): merge for decomposed-positions guard cell.
+;; Set-valued accumulator of expression positions that the
+;; process-fork-on-union handler has already decomposed. Set-union is
+;; commutative, associative, idempotent — CALM-safe. Eq-based seteq since
+;; positions are eq?-comparable AST expression values.
+;;
+;; Structurally identical to retraction-stratum-merge + fork-contradiction-
+;; request-merge (all 3 implement `'monotone-set` per Tier 2 registration
+;; below) but defined as a separate function so the merge's SEMANTIC role
+;; (decomposed-positions tracking, not retraction or branch contradiction)
+;; is preserved at the call site. Per workflow.md "belt-and-suspenders is a
+;; blocking red flag" + structural-thinking.md cell-allocation efficiency:
+;; separate functions for separate concerns even when bodies are identical.
+(define (decomposed-positions-merge old new)
+  (set-union old new))
+
 ;; PPN 4C Phase 3A.b cleanup (2026-05-22): SRE Tier 2 registrations.
 ;;
 ;; The retraction-stratum-merge + fork-contradiction-request-merge merges
@@ -793,6 +834,8 @@
 ;; is the principled bridge.
 (register-merge-fn!/lattice retraction-stratum-merge #:for-domain 'monotone-set)
 (register-merge-fn!/lattice fork-contradiction-request-merge #:for-domain 'monotone-set)
+;; PPN 4C Phase 3A.c (2026-05-22): cell-17 guard cell's merge.
+(register-merge-fn!/lattice decomposed-positions-merge #:for-domain 'monotone-set)
 
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
 ;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
@@ -1021,22 +1064,43 @@
     (error 'make-prop-network
            "fork-contradiction-request-cell-id allocation drift: expected ~a, got ~a"
            fork-contradiction-request-cell-id actual-fork-contradiction-cid))
+  ;; PPN 4C Phase 3A.c.1 (2026-05-22): register decomposed-positions guard
+  ;; cell. Per addendum design §9.3.5 (Decision 1 FP3 resolution). cell-id 17:
+  ;; decomposed-positions guard (per-position set of already-forked expression
+  ;; positions; set-union merge). Read by classifier-watcher (installed at
+  ;; 3A.c.3) to gate request emission; written by process-fork-on-union
+  ;; handler after decomposing (3A.c.3 wires the write). NOT a stratum-request
+  ;; cell — no handler registered for it. Until 3A.c.3 wires watcher + handler
+  ;; write, cell exists as an empty seteq accumulator (no behavior change vs
+  ;; pre-3A.c.1).
+  (define-values (net7 actual-decomposed-positions-cid)
+    ;; Cell init + merge use seteq (eq-based) to match expression position
+    ;; (AST node) eq? convention. Mirrors retraction-stratum + fork-contradiction
+    ;; cell shapes; SRE-classified as 'monotone-set via Tier 2 registration.
+    (net-register-specialized-cell net6 (seteq) decomposed-positions-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-decomposed-positions-cid decomposed-positions-cell-id)
+    (error 'make-prop-network
+           "decomposed-positions-cell-id allocation drift: expected ~a, got ~a"
+           decomposed-positions-cell-id actual-decomposed-positions-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
   ;; look up each once and cache the prop-cell direct-refs. Write-through at
   ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
-  ;; 3A.0: latest cells CHAMP is net6 (after fork-on-union + fork-contradiction
-  ;; cell allocations); the cached fuel + worldview-cache prop-cells were
-  ;; allocated earlier (fuel at net2; worldview-cache at base-net) — shared
-  ;; via CHAMP structural sharing into net6's cells map. Direct-refs lookup
-  ;; from net6's cells CHAMP retrieves the original prop-cells.
+  ;; 3A.c.1: latest cells CHAMP is net7 (after fork-on-union + fork-contradiction
+  ;; + decomposed-positions cell allocations); the cached fuel + worldview-cache
+  ;; prop-cells were allocated earlier (fuel at net2; worldview-cache at
+  ;; base-net) — shared via CHAMP structural sharing into net7's cells map.
+  ;; Direct-refs lookup from net7's cells CHAMP retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net6) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net7) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net6) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net6
-      [warm (struct-copy prop-net-warm (prop-network-warm net6)
+         [wv-cell (champ-lookup (prop-network-cells net7) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net7
+      [warm (struct-copy prop-net-warm (prop-network-warm net7)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 

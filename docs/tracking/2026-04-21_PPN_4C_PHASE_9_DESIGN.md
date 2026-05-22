@@ -4898,10 +4898,11 @@ The multi-success axis is the LOAD-BEARING discriminator: a sexp first-success c
 
 1. **propagator.rkt** (+~30 LoC):
    - New cell-id constant: `(define decomposed-positions-cell-id (cell-id 17))`
-   - Local merge function: `decomposed-positions-merge` — set-union over seteq
-   - Allocation in `make-prop-network` via §4.6 framework: `#:tier 'value`, `#:reset-value (seteq)`, SRE domain `'monotone-set` (existing)
+   - Local merge function: `decomposed-positions-merge` — set-union over seteq (mirrors `retraction-stratum-merge` + `fork-contradiction-request-merge`; defined locally per propagator.rkt's cycle constraint with infra-cell.rkt)
+   - Allocation in `make-prop-network` via `net-register-specialized-cell` per §4.6 framework: `#:tier 'warm #:storage 'general #:fires-on 'any-change` (mirrors 3A.0's cell-15/16 pattern). **NO `#:reset-value`** — cell-17 is NOT a stratum-request cell (no handler registered for it); it's a guard cell that the watcher READS and the handler WRITES. Persists across BSP rounds within a command; resets between commands via `reset-meta-store!` reconstruction
    - Drift assertion: `(unless (equal? actual-cid decomposed-positions-cell-id) (error ...))`
    - Provide: `decomposed-positions-cell-id`, `decomposed-positions-merge`
+   - Update `let*` block at end of `make-prop-network` to use `net7` (latest cells CHAMP after cell-17 allocation) for fuel-cell-cache + worldview-cache-cache direct-ref lookups
 
 2. **typing-propagators.rkt** (+~50-80 LoC):
    - `make-classifier-watcher-fire-fn tm-cid e` factory:
@@ -4926,10 +4927,13 @@ The multi-success axis is the LOAD-BEARING discriminator: a sexp first-success c
    - Centralized invocation at install-typing-network's expr-* cases (one line per case OR centralized wrapper around the dispatch)
    - `process-fork-on-union` body addition (line 1077+): after decomposition, write `(seteq position)` to decomposed-positions-cell-id
 
-3. **Test cell-id cascade** (3 files, same precedent as 3A.0):
-   - tests/test-propagator.rkt: hardcoded next-cell-id expectations 17→18; batch sequences updated
-   - tests/test-observatory-01.rkt: cell-meta-label "cell-17"→"cell-18" + siblings
-   - tests/test-trace-serialize.rkt: totalCells 17→18 + 18→19
+3. **Test cell-id cascade** (3 files, same precedent as 3A.0's 15+16 cascade per §9.3.2.1):
+   - tests/test-propagator.rkt: hardcoded next-cell-id expectations 17→18; user-cell base 17→18; batch sequence updates per §9.3.2.1 pattern (specific line numbers: 42, 72, 79, 199, 237)
+   - tests/test-observatory-01.rkt: cell-meta-label "cell-17"→"cell-18" + siblings (lines 307-309 precedent)
+   - tests/test-trace-serialize.rkt: totalCells expectations updated (lines 110, 124 precedent)
+
+4. **Tier 2 reverse-lookup registration** in propagator.rkt (at lines 794-795 block; same module as the local merge definition):
+   - `(register-merge-fn!/lattice decomposed-positions-merge #:for-domain 'monotone-set)` — mirrors 3A.b cleanup's cell-13 + cell-16 Tier 2 registration (per propagator.rkt:765-795 block). Gives cell-17 Tier 3 domain inheritance, classified as `'monotone-set` (SRE-validated comm + assoc + idem; structural classification for `:component-paths` enforcement when needed). Note: `register-merge-fn!/lattice` provided by merge-fn-registry.rkt (NOT infra-cell.rkt); propagator.rkt requires it directly, avoiding the propagator → infra-cell cycle.
 
 4. **tests/test-elaboration-parity.rkt** (+~60-80 LoC):
    - Add new section "Phase 3A.c — Union types via ATMS (non-committing inhabitation)"

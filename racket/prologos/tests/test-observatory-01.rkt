@@ -304,9 +304,9 @@
   (check-not-eq? meta-c 'none)
   (check-eq? (cell-meta-subsystem meta-a) 'user)
   (check-eq? (cell-meta-domain meta-a) 'lattice)
-  (check-equal? (cell-meta-label meta-a) "cell-17")  ;; PPN 4C 3A.0: cell-ids 0-16 pre-allocated (0-5 well-known, 6-9 topology, 10 classify-inhabit, 11=fuel, 12=fuel-budget, 13=retraction-stratum, 14=resolution-stratum, 15=fork-on-union-request, 16=fork-contradiction-request)
-  (check-equal? (cell-meta-label meta-b) "cell-18")
-  (check-equal? (cell-meta-label meta-c) "cell-19"))
+  (check-equal? (cell-meta-label meta-a) "cell-18")  ;; PPN 4C 3A.c.1: cell-ids 0-17 pre-allocated (0-5 well-known, 6-9 topology, 10 classify-inhabit, 11=fuel, 12=fuel-budget, 13=retraction-stratum, 14=resolution-stratum, 15=fork-on-union-request, 16=fork-contradiction-request, 17=decomposed-positions)
+  (check-equal? (cell-meta-label meta-b) "cell-19")
+  (check-equal? (cell-meta-label meta-c) "cell-20"))
 
 ;; ========================================
 ;; 11. Multiple captures accumulate
