@@ -184,8 +184,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A.a | Wire `process-fork-on-union` handler body + `make-branch-check-fire-fn` factory; per-position request entries → N aids → worldview-cache init → N branch check propagators installed; new test file `tests/test-union-types-atms.rkt` with 8 tests (unit + E2E with stubbed classifier-watcher) | ✅ `f3597fbb` | Mini-design + mini-audit + implementation persisted at §9.3.3 (2026-05-22). **+~110 LoC typing-propagators.rkt (factory + handler body) + ~245 LoC new test file**. D-3A.a-stratum-tier RESOLVED in implementation (value tier works for stratum handlers — CALM topology guard only active during BSP fire rounds, not between rounds). Per-command aid scope via `current-command-atms` verified (driver.rkt:464 init pattern). Probe semantic diff = 0; full suite **8240 tests / 108.3s / 0 failures** (+8 tests / −1.0s wall vs pre-3A.a). Adversarial 3-column VAG passed all 4 questions. Methodology data point: stratum-handler tests must use `run-to-quiescence` to drive invocation (not direct calls) to avoid double-invocation when followed by BSP iteration. **Next: Phase 3A.b** (B2-broadcast contradiction watcher + `process-fork-contradiction` body — atomic worldview-cache narrowing on aid-set). | Mini-design + mini-audit + implementation persisted at §9.3.2 (2026-05-22). **+~115 LoC production (cells + merges + allocations + stubs) + 5 test fixes (cell-id 14→17 cascade in test-propagator + test-observatory-01 + test-trace-serialize)**. Probe semantic diff = 0; full suite **8232 tests / 109.3s / 0 failures** (identical to pre-3A.0 baseline). Adversarial 3-column VAG passed all 4 questions (on-network, complete, vision-advancing, drift-risks-cleared). D-3A.0-allocation-drift + D-3A.0-handler-no-op-leak + D-3A.0-cell-init-merge-shape all cleared. **Next: Phase 3A.a** (process-fork-on-union body — flatten-union + solver-state-amb + worldview-cache initialization + branch check propagator install). |
 | **3A.b mini-design revised (Option E)** | Audit + BSP-LE 2/2B research + mempalace search surfaced `promote-cell-to-tagged` (propagator.rkt:1579) as the missing step. Pattern used at 5 production sites in relations.rkt (NAF, guard, fact-row, multi-clause concurrent). Cell-Based TMS 2026-04-06 design note's original intent confirmed via mempalace. Q1-Q5 user-resolved. | ✅ `44b434ed` | Persisted at §9.3.4. Replaces prior 4-option matrix (A/B/C/D) with **Option E: lazy `promote-cell-to-tagged` at fork-on-union entry**. Updates §9.3.1.2 (Realization B narrative) + §9.3 deliverables (added step 2.5 promote + step 5a helper). Codification graduation (3rd data point) to DEVELOPMENT_LESSONS.org. |
 | 3A.b | N fire-once contradiction watchers wrapped per-branch wv + `process-fork-contradiction` body (atomic narrowing via bitwise-AND-with-NOT-mask) + `promote-cell-to-tagged` insertion at fork-on-union entry + `tagged-attribute-map-read-with-base-merge` defensive helper for Phase 9b cross-position reads | ✅ `44b434ed` | Per §9.3.4 (Option E). +~125 LoC production (typing-propagators.rkt) + ~+150 LoC tests (test-union-types-atms +7 unit/E2E + 2 updated 3A.a; test-tagged-cell-value +3 substrate parity). **Methodology refinement**: §9.3.4.6 step 3's "B2-broadcast" framing imprecise; net-add-broadcast-propagator reads inputs ONCE per fire, not per-item — used N fire-once propagators wrapped per branch wv (matches relations.rkt:2487-2510 fact-row pattern, parallel-decomposable). Probe semantic diff = 0; acceptance 0 errors; targeted 141/141; full suite **8251 tests / 117.1s / 0 failures** (vs pre-3A.b 8240 / 108.3s; +11 tests; wall +8.8s within 118-127s variance). Adversarial 3-column VAG passed all 4 questions (persisted at §9.3.4.11). Originally-failing E2E ("Int succeeds + String fails → 1 bit") NOW PASSES. |
-| 3A.c | Integration with check propagator chain + classifier-watcher install at typing-propagators (per OQ5 implementation audit); update test-elaboration-parity.rkt 'union-narrow-by-constraint axis → 'union-inhabitation-fork (rename + expectation revision per OQ1 non-committing) | ⬜ | |
-| 3A.d | Q-A4 disposition — retire `elab-speculation.rkt` orchestrators (speculation-begin/try-branch/commit/speculate-first-success); retain `solver-state-amb` primitive; migrate or retire 2 test files | ⬜ | |
+| 3A.c | Classifier-watcher integration (β.1 universal install + FP3 cell-17 guard) + test migration. Production retires sexp typing-core.rkt:2385 union check semantically (code-level retirement Parent Phase 4 / PM 12). Multi-axis parity testing (4 active + 1 skip-gated). | 🔄 | **Mini-design REVISED 2026-05-22 post-revert** per §9.3.5. First implementation attempt `de453f69` reverted (`e267206b` + `a8eed7e2`) for bypassing Stage 4 Per-Phase Protocol (autonomous solo stretch without deliberative dialogue on 4 decision points). Deliberative redo applied 3-column adversarial framing; resolved D1 (β.1 universal install + FP3 cell-17 decomposed-positions guard) + D3 (Posture B confirmed) + D4 (typing-core.rkt:2385 becomes production-dead, code-level retirement deferred) + D2 (4 active parity axes + 1 skip-gated). See §9.3.5. **Implementation pending sub-step partition (6 sub-steps, ~3-5h)**. |
+| 3A.d | Wholly retire `elab-speculation.rkt` (188 LoC) + `tests/test-elab-speculation.rkt` (388 LoC). **Audit finding**: orchestrators have ZERO production callers (stranded after prior refactor; only test-elab-speculation.rkt references them). `elab-speculation-bridge.rkt` + test-speculation-bridge.rkt UNCHANGED (alive via 4 remaining w-s-r callers — Parent Phase 4 / PM 12 scope). Codification candidate: "Stranded high-level abstraction after refactor" (watching list). | ⬜ | Scope clarified via §9.3.5.4 audit. Net retirement: −576 LoC. Sequential 3A.c → 3A.d per Conversational Implementation Cadence. |
 | 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ⬜ | |
 | 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
@@ -4722,6 +4722,298 @@ Per Stage 4 implementation plan (§9.3.4.6) — all 4 deliverables landed atomic
 - D.3 §9.3.1.2 + §9.3 + this §9.3.4 updated to cite lazy-promotion pattern + relations.rkt × 5 production sites
 - Probe + acceptance + targeted + full suite all GREEN
 - Ready for **Phase 3A.c** (integration with check propagator chain + classifier-watcher install at typing-propagators per OQ5 implementation audit + parity axis rename `'union-narrow-by-constraint` → `'union-inhabitation-fork`)
+
+### §9.3.5 Phase 3A.c — Revised mini-design (deliberative dialogue post-revert, 2026-05-22)
+
+Phase 3A.c was initially implemented in a single autonomous session (commit `de453f69`, reverted at `e267206b` + `a8eed7e2`). The implementation may or may not have been architecturally correct — but the PROCESS that produced it bypassed codified Stage 4 Per-Phase Protocol discipline (DESIGN_METHODOLOGY.org Stage 4 step 1+2 + workflow.md "Conversational implementation cadence"). The work went audit → code → tests → adversarial VAG → close in ~1 hour autonomous, without dialogue on the 4 substantive decision points the audit surfaced. The user could not assess the architectural choices because the deliberation never happened.
+
+This section captures the deliberative-dialogue redo, applying principle-guided framing per the codified discipline. It supersedes the reverted §9.3.5 content from `de453f69` (preserved in git history for reference but **must NOT be taken as a starting point**).
+
+#### §9.3.5.1 Methodology context — the cadence violation + corrective
+
+The autonomous implementation drift on 3A.c is the **2nd data point** for a codification candidate that now graduates to DEVELOPMENT_LESSONS.org:
+
+> *Opening a phase ("let's open 3A.x") is an invitation to deliberative dialogue, NOT a green light for solo implementation. The protocol is: audit → present option matrices with adversarial 3-column framing → ask for user direction on each decision → implement on direction → checkpoint per sub-step.*
+
+Data point 1: PPN Track 4 (track-level autonomous drift surfaced post-hoc). Data point 2: this 3A.c sub-phase autonomous drift surfaced at the sub-phase boundary. The pattern shape is the same — codified discipline existed, was bypassed, retrospective "Mini-Design done ✓" was cataloguing rather than challenging.
+
+Also surfaced during the deliberative redo: the user methodology refinement to **3-column adversarial framing** (catalogue / challenge / **adversarial**). The 2-column codification (workflow.md / DESIGN_METHODOLOGY.org § VAG, codified 2026-04-24 from PPN 4C S2.c-iii drift) was too easily satisfied by qualification ("could this be MORE aligned?"); the adversarial column forces rejection-attempt framing ("where does this BREAK? what specifically refutes the claim?"). All 4 decisions below apply this framing throughout.
+
+#### §9.3.5.2 Decision 3 — Inferred-union surface assessment (Posture B confirmed)
+
+**Question**: which classifier-union sources need on-network coverage in 3A.c?
+
+**Audit data** (Section B of the deliberative audit, grep-verified at HEAD `d2c1c8ff`):
+
+| Source | Mechanism | Site | Post-T-2 surface |
+|---|---|---|---|
+| Annotated unions | `expr-ann (expr-union l r)` AST at parse time | typing-propagators.rkt:2311 (install-typing-network's expr-ann case) | 100% covered by install-time hook at expr-ann |
+| **Source A** — emergent classifier-merge | T-3 set-union fallback under `type-unify-or-top` Role A merge | type-lattice.rkt:181 | Triggered when two Role A writes to same `:type` classifier produce incompatible types |
+| Source B — sexp map-op results | `expr-map-get`/`expr-nil-safe-get` over union-typed Maps | typing-core.rkt:1316/1329/1352 | Narrow post-Open-by-Design; requires user-annotated `Map K <V1\|V2>` types |
+| Source C — subtype-lattice-merge internals | Subtype join | subtype-predicate.rkt:275+ | Internal; not in main typing path |
+
+**Two postures**:
+- **Posture A — "narrow enough to defer Source A"**: install-time hook at expr-ann covers ~100% of CURRENT production paths. Source A becomes a watching-list concern.
+- **Posture B — "comprehensive coverage as architectural correctness"**: classifier-watcher covers ALL classifier-union sources by construction.
+
+**Principle-guided resolution**: Posture B.
+
+Adversarial framing exposed Posture A's multi-anti-pattern violations:
+
+| Anti-pattern | How Posture A violates it |
+|---|---|
+| Belt-and-suspenders (workflow.md "blocking red flag") | Keeps OLD `with-speculative-rollback` sexp path at typing-core.rkt:2385 alive for uncovered cases, alongside NEW cell-15 mechanism for annotated cases |
+| "We'll come back to it" (DEVELOPMENT_LESSONS.org § Completeness Over Deferral) | Documents Source A as "D-3A.c-non-ann-unions known limitation"; deferral licit only for genuine dependencies on unbuilt infrastructure (3c-iii precedent shows watcher pattern works) |
+| Validated ≠ Deployed (workflow.md) | Effective state: new mechanism deployed for annotated; old mechanism deployed for everything else |
+
+Posture B's hybrid (γ) collapses to β under audit (watcher catches the same write the pre-write would catch). Multi-site pre-write (δ) approximates β with explicit case-enumeration — exactly the algorithmic shortcut the Hyperlattice Conjecture rejects.
+
+**Q3 sub-questions resolution**:
+- Q3.1 (instrumentation now vs accept grep evidence): MOOT under Posture B — structural coverage regardless of frequency
+- Q3.2 (Phase 7 future Source A): MOOT — future parametric union classifiers flow through the watcher automatically
+- Q3.3 (Sources B + C deferral): UNCHANGED — sexp-path internals, Parent Phase 4 / PM 12 territory
+
+#### §9.3.5.3 Decision 1 — Install pattern (β.1 + FP3 resolution)
+
+**Sub-Question 1: Install Scope**
+
+Eliminated by audit:
+- **β.2 (expr-meta only)**: insufficient — annotated unions arrive at term positions via `type-map-write` (line 2316), NOT at meta positions
+- **β.4 (single global watcher on attribute-map)**: structurally blocked by A8 enforcement (`'attribute-map` SRE domain is `'structural`-classified; `enforce-component-paths!` hard-errors on reads without component-paths; β.4 can't declare them at install time because positions are dynamic per command)
+
+Choice: β.1 (universal install) vs β.3 (targeted).
+
+**Principle-guided resolution**: β.1.
+
+10+ principles point to β.1 with NO principle favoring β.3:
+
+| Principle | Direction |
+|---|---|
+| Correct by Construction | β.1 — coverage is structural property of architecture; β.3 depends on accurate enumeration (auditing burden) |
+| Completeness over Deferral | β.1 — β.3 defers Phase 7 + unknown future sites with "we'll come back to it when needed" |
+| Hyperlattice Conjecture | β.1 — β.3 enumeration is the case-by-case pattern the conjecture explicitly rejects |
+| Most Generalizable Interface | β.1 — one mechanism, uniform behavior |
+| Open Extension, Closed Verification | β.1 — new expr-* cases inherit watcher install via centralized point; β.3 requires enumeration update |
+| Belt-and-suspenders avoidance | β.1 — β.3 enumeration gaps leave sexp fallback live as dual path |
+| "Pragmatic" as rationalization | β.1 — β.3 framed as "pragmatic for current empirical surface" is the explicit anti-pattern phrase |
+| Validated ≠ Deployed | β.1 — β.3 risks deploying partial coverage with sexp fallback retained |
+| First-Class by Default | β.1 (slight) — reifies the watcher as uniform first-class network primitive |
+| Data Orientation | β.1 (slight) — positions are data; uniform behavior |
+
+The single argument for β.3 (empirical-rare for Source A) is the rationalization anti-pattern explicitly named in workflow.md.
+
+**Sub-Question 2: Fire Pattern**
+
+Audit surfaced the re-fire mechanics concretely: watcher reads classifier under outer worldview; branch propagators write contradiction sentinels at branch wv; under outer wv = 0, tagged entries from branch writes are filtered out; watcher continues to read classifier as union; re-fires would re-write same request to cell-15; handler re-allocates aids unboundedly.
+
+Four fire-pattern options:
+
+| Option | Status |
+|---|---|
+| **FP1**: plain net-add-propagator + accept defect | BROKEN — re-decomposition unbounded; aid budget exhausts |
+| **FP2**: net-add-fire-once-propagator + predicate inside fire-fn | SILENT REDUCTION to Posture A — flag consumed on first fire regardless of predicate; never fires when classifier becomes union later in emergent case |
+| **FP3**: plain net-add-propagator + decomposed-positions guard cell (NEW cell-17) | **PRINCIPLED** — idempotence is structural via guard cell |
+| **FP4**: two-stage install (idempotent detector + fire-once actor) | Heavier infrastructure; topology-during-fire concerns (Stage 1's install of Stage 2 during BSP fire round violates CALM topology guard) |
+
+**Principle-guided resolution**: FP3.
+
+| Principle | Direction |
+|---|---|
+| Correct by Construction | FP3 — guard cell makes idempotence structural; FP1 broken, FP2 silently reduces, FP4 has topology-during-fire concerns |
+| First-Class by Default | FP3 — guard cell makes "decomposed-position" state explicit first-class data |
+| Cell/Propagator/Scheduler Orthogonality | FP3 — guard cell at cell layer; watcher at propagator layer; no scheduler coupling |
+| Data Orientation | FP3 — "decomposed" is data in cell-17 (WHAT); handler writes it (WHEN at decomposition) |
+| Stratified Propagator Networks | FP3 — handler+watcher+guard composition mirrors S(-1)/S0/L1/L2 at smaller scale |
+| Cell Allocation Efficiency (propagator-design.md) | FP3 — separate cell for separate concern (decomposed-positions tracking) |
+
+**Substrate gap codification candidate** (1 data point; watching list): FP3 patches at application layer what would be cleaner as substrate primitive ("fire-once-when-predicate-matches" / deferred-flag-consumption). If PReduce Track 1 or Phase 9b γ hole-fill surfaces the same need, promote to substrate addition.
+
+#### §9.3.5.4 Decision 4 — 3A.d scope coupling
+
+**Audit finding (the surprise)**: `elab-speculation.rkt` is already DEAD IN PRODUCTION.
+
+| Probe | Result |
+|---|---|
+| Grep for callers of `speculation-begin`, `speculation-try-branch`, `speculation-commit`, `speculate-first-success`, queries — excluding elab-speculation.rkt itself | **ZERO production callers**; ONLY test-elab-speculation.rkt references them |
+| Grep for `(require ... "elab-speculation.rkt")` — excluding elab-speculation-bridge.rkt | **NO HITS** in production code |
+| `with-speculative-rollback` (elab-speculation-bridge.rkt:200) implementation | Uses `solver-state-assume` from atms.rkt + parameter scaffolding directly; does NOT invoke any speculation orchestrator |
+| test-speculation-bridge.rkt | Requires elab-speculation-bridge.rkt only (NOT elab-speculation.rkt); 0 references to orchestrators |
+
+**Implication**: elab-speculation.rkt was REFACTORED OUT of the call chain at some prior point (likely PPN 4B or earlier) but never code-level retired. The two files are decoupled — bridge stays alive via 5 with-speculative-rollback callers; orchestrators are stranded.
+
+**Principle-guided resolution**:
+
+- **Q4.1 — retirement scope**: wholly retire elab-speculation.rkt (188 LOC) + test-elab-speculation.rkt (388 LOC) in 3A.d. Net: −576 LOC. No principle supports keeping dead code.
+- **Q4.2 — test migration scope** for test-speculation-bridge.rkt's union sections: 8-10 test cases for typing-core.rkt:2385 path MIGRATE in 3A.c (assertion updates to expect non-committing semantics); 7 test cases for qtt.rkt:2329 + typing-errors.rkt:78 paths STAY ALIVE
+- **Q4.3 — sequencing**: sequential 3A.c → 3A.d (codified default per §9.3.1.6 sub-phase partition + Conversational Implementation Cadence)
+- **Q4.4 — codification**: graduate "Stranded high-level abstraction after refactor" to watching list (1 data point — elab-speculation.rkt finding)
+
+Codification candidate text:
+> *When a high-level abstraction is refactored to be implemented via lower-level primitives (the abstraction's body becomes a direct call to primitives, bypassing its own structure), audit whether the abstraction still has external callers. If zero, retire the abstraction immediately — do not leave it stranded as a "reference implementation" or "parallel API." The stranding creates phantom maintenance burden + accumulates dead test coverage.*
+
+**Important clarification on typing-core.rkt:2385**: under β.1 + FP3, the on-network mechanism handles annotated unions via fork-on-union at install-typing-network time, BEFORE typing-core.rkt:check would be called recursively with a union type. Production callers (via `process-string` / `process-file`) go through on-network typing and never reach typing-core.rkt:2385. The line BECOMES production-dead (analogous to elab-speculation.rkt's pre-finding state) — code-level retirement of typing-core.rkt:2385 lands in Parent Phase 4 / PM 12 when sexp paths broadly retire. **3A.c does NOT touch typing-core.rkt:2385 directly**; it deploys the on-network mechanism that bypasses it. The 4 active parity axes (§9.3.5.5) are the load-bearing validation that production uses on-network.
+
+This is principled "production-dead with codified retirement plan" — not anti-pattern, because Parent Phase 4 / PM 12 owns the code-level retirement.
+
+#### §9.3.5.5 Decision 2 — Parity axis structure (D' resolution)
+
+**Reframing**: the reverted 3A.c's option matrix (A/B/C/D) mixed surface-level and mechanism-level testing concerns. The deliberative dialogue separated them:
+- **test-elaboration-parity.rkt**: tests user-facing semantic equivalence through elaboration pipeline at SURFACE level (pretty-printed output via check-parity-equal?)
+- **test-union-types-atms.rkt**: tests MECHANISM specifics (cell-15 writes, worldview bits, branch propagators, contradiction sentinels) — already covers ~8 tests from 3A.a + 3A.b extensions
+
+Under this separation, structural assertions belong in test-union-types-atms.rkt, NOT in test-elaboration-parity.rkt. Decision 2 becomes: which surface properties does test-elaboration-parity.rkt validate?
+
+**Principle-guided resolution**: D' — 4 active axes + 1 skip-gated.
+
+| Principle | Direction |
+|---|---|
+| Correct by Construction | D' — multi-axis discriminates between mechanisms (sexp first-success would FAIL multi-success axis); single axis can't discriminate |
+| Completeness over Deferral | D' — single axis defers coverage of multi-success / isolation / exhaustion properties |
+| Decomplection | D' — separate surface properties tested as separate axes |
+| Confirmation bias avoidance (CRITIQUE_METHODOLOGY.org) | D' — A' (single axis) is the test-matches-implementation pattern user checkpoint explicitly named |
+| Belt-and-suspenders avoidance | NOT C' (structural assertions in parity tests) — creates dual coverage with test-union-types-atms.rkt |
+| Phase scope discipline | NOT B' (restore narrowing) — Track 5 work, out of 3A.c scope |
+| 2A.c precedent | D' — 2A.c added 3 axes for orchestration parity; multi-axis for single architectural delivery is codified pattern |
+
+**The 4 active axes**:
+
+| Axis | Input | Expected | Property tested |
+|---|---|---|---|
+| `union-inhabitation-preserved` | `(ns t) (def x : <Int \| String> := 42) x` | `'42` + `"Int \| String"` | Classifier preserved as union when Int branch succeeds |
+| `union-inhabitation-flipped` | `(ns t) (def x : <String \| Int> := 42) x` | `'42` + `"Int \| String"` (or `"String \| Int"` per pp-expr convention) | Branch ordering symmetry; left-fail-right-succeed |
+| `union-inhabitation-multi-success` | `(ns t) (def x : <Nat \| Int> := 0N) x` | `'0N` + `"Nat \| Int"` | Both branches succeed (0N is both via subtype); multi-success non-committing semantic — classifier preserved (NOT narrowed to first-success) |
+| `union-inhabitation-all-fail` | `(ns t) (def x : <Int \| Bool> := "hello") x` | Type error of union-exhaustion shape | All branches fail produces error (typing-errors.rkt:78 path stays alive) |
+
+**The 1 skip-gated axis** (preserves the original test's narrowing intent for future):
+
+| Axis | Input | Expected | Deferred to |
+|---|---|---|---|
+| `union-inhabitation-narrowing` (renamed from `union-narrow-by-constraint`) | `(ns t) (def x : <Int \| String> := 42) [int+ x 1]` | `'43` (occurrence-typed narrowing via `int+`) | **PPN Track 5 (occurrence typing)** |
+
+The multi-success axis is the LOAD-BEARING discriminator: a sexp first-success commit would return `'Nat` (commits to first branch) and FAIL the `"Nat | Int"` substring match. Only non-committing semantics passes this axis. Without it, the parity test couldn't distinguish on-network from any first-success-commit alternative.
+
+#### §9.3.5.6 Concrete implementation deliverables
+
+**Code changes** (~250-350 LoC across multiple files):
+
+1. **propagator.rkt** (+~30 LoC):
+   - New cell-id constant: `(define decomposed-positions-cell-id (cell-id 17))`
+   - Local merge function: `decomposed-positions-merge` — set-union over seteq
+   - Allocation in `make-prop-network` via §4.6 framework: `#:tier 'value`, `#:reset-value (seteq)`, SRE domain `'monotone-set` (existing)
+   - Drift assertion: `(unless (equal? actual-cid decomposed-positions-cell-id) (error ...))`
+   - Provide: `decomposed-positions-cell-id`, `decomposed-positions-merge`
+
+2. **typing-propagators.rkt** (+~50-80 LoC):
+   - `make-classifier-watcher-fire-fn tm-cid e` factory:
+     ```
+     (lambda (net)
+       (define record (hash-ref (net-cell-read net tm-cid) e (hasheq)))
+       (define cinhab-val (hash-ref record ':type classify-inhabit-bot-value))
+       (define classifier (classify-inhabit-classifier cinhab-val))
+       (cond
+         [(not (expr-union? classifier)) net]
+         [(set-member? (net-cell-read net decomposed-positions-cell-id) e) net]
+         [else
+          (define request-info (hasheq 'components (flatten-union classifier) 'tm-cid tm-cid))
+          (net-cell-write net fork-on-union-request-cell-id (hasheq e request-info))]))
+     ```
+   - `install-classifier-watcher net tm-cid e` helper:
+     ```
+     (net-add-propagator net (list tm-cid) (list fork-on-union-request-cell-id)
+       (make-classifier-watcher-fire-fn tm-cid e)
+       #:component-paths (list (cons tm-cid (cons e ':type))))
+     ```
+   - Centralized invocation at install-typing-network's expr-* cases (one line per case OR centralized wrapper around the dispatch)
+   - `process-fork-on-union` body addition (line 1077+): after decomposition, write `(seteq position)` to decomposed-positions-cell-id
+
+3. **Test cell-id cascade** (3 files, same precedent as 3A.0):
+   - tests/test-propagator.rkt: hardcoded next-cell-id expectations 17→18; batch sequences updated
+   - tests/test-observatory-01.rkt: cell-meta-label "cell-17"→"cell-18" + siblings
+   - tests/test-trace-serialize.rkt: totalCells 17→18 + 18→19
+
+4. **tests/test-elaboration-parity.rkt** (+~60-80 LoC):
+   - Add new section "Phase 3A.c — Union types via ATMS (non-committing inhabitation)"
+   - 4 active `parity-test` axes per §9.3.5.5
+   - 1 `parity-test-skip` axis (`union-inhabitation-narrowing`) pointing to "PPN Track 5 (occurrence typing)"
+   - DELETE the old `parity-test-skip 'union-narrow-by-constraint "Phase 10"` block (lines 423-427)
+
+5. **tests/test-speculation-bridge.rkt** (+~30-50 LoC of assertion updates):
+   - Migrate `union-tests` block (lines 245-274): 4 cases for `check e : (A|B)`. Update assertions to expect non-committing semantics (classifier preserved; not first-success commit)
+   - Migrate map widening (lines 276-281): 2 cases for `(the (Map K <V1|V2>) ...)`. Same migration pattern.
+   - Migrate pipeline integration (lines 309-318): 2 cases. Assertion updates as needed.
+   - KEEP unchanged: QTT union speculation (lines 290-297) — exercises qtt.rkt:2329 (Parent Phase 4)
+   - KEEP unchanged: Union exhaustion error tests (lines 336-380+) — exercises typing-errors.rkt:78 (Parent Phase 4)
+
+**Code NOT touched in 3A.c**:
+- typing-core.rkt:2385 (becomes production-dead per §9.3.5.4; Parent Phase 4 / PM 12 retires)
+- qtt.rkt:2329, typing-errors.rkt:78, typing-core.rkt:1307, typing-core.rkt:1344 (Parent Phase 4)
+- elab-speculation.rkt (3A.d retires entirely)
+- test-elab-speculation.rkt (3A.d retires)
+- elab-speculation-bridge.rkt (keeps alive via 4 remaining w-s-r callers)
+
+#### §9.3.5.7 Sub-step partition for implementation
+
+Per `workflow.md` Conversational Implementation Cadence: each sub-step ends with dialogue checkpoint. Maximum ~1 hour or 1 sub-step before checkpoint.
+
+| Sub-step | Scope | Est. LoC | Checkpoint criterion |
+|---|---|---|---|
+| **3A.c.1** | cell-17 allocation infrastructure: propagator.rkt cell-id + merge + provide + allocation + drift assertion + 3 test files cell-id cascade | ~70-90 | Probe diff = 0 semantically; cell_allocs counter shows +1 cell (cell-17); targeted tests pass |
+| **3A.c.2** | `make-classifier-watcher-fire-fn` factory + `install-classifier-watcher` helper definitions in typing-propagators.rkt. NO invocations yet (helper added but dead). | ~40 | Helper added; production behavior unchanged (no invocations); module compiles |
+| **3A.c.3** | Helper invocation at install-typing-network's expr-* cases + decomposed-positions write in process-fork-on-union handler. Production goes through on-network. | ~30-50 | Probe outputs may change (now uses on-network for annotated unions); empirically validate against acceptance file |
+| **3A.c.4** | test-elaboration-parity.rkt: add 4 active axes + 1 skip-gated; delete old skip-gated `'union-narrow-by-constraint` block | ~60-80 | 4 active parity axes PASS empirically; on-network mechanism validated end-to-end including multi-success discriminator |
+| **3A.c.5** | test-speculation-bridge.rkt: migrate 8-10 union test cases (assertion updates for non-committing semantics) | ~30-50 | All tests in test-speculation-bridge.rkt pass; QTT + exhaustion sections unchanged and still passing |
+| **3A.c.6** | Adversarial 3-column VAG + commit + tracker + dailies | doc | All 4 VAG questions PASS under adversarial framing; 3A.c marked ✅ |
+
+Total: 6 sub-steps; ~3-5 hours of focused implementation across one or two sessions.
+
+#### §9.3.5.8 Drift risks named (for mid-flight principles challenge + close VAG)
+
+- **D-3A.c-install-density**: per-position watcher install cost — measure via probe wall-time + cell_allocs counter at 3A.c.3 close. Expected ~30-50 watchers per command × 28 commands ≈ 1000 extra installs at suite scale; per-install CHAMP overhead ~2-3 μs → ~3 ms suite-wide. Within variance band. If wall regression >5s, investigate.
+- **D-3A.c-cell-17-cascade**: cell-id cascade in 3 test files — mechanical pattern same as 3A.0's 15+16 cascade. Risk: missed test file. Mitigation: targeted-test-runner catches at 3A.c.1 close.
+- **D-3A.c-fire-pattern-soundness**: re-fire concern resolved via guard cell. Verify empirically: under multi-fire scenarios (multiple :type writes to same position; classifier becomes union after multiple writes), watcher fires once decomposition writes guard. Multi-success axis (3A.c.4) exercises this.
+- **D-3A.c-typing-core-2385-residual**: typing-core.rkt:2385 stays alive in sexp test paths. Verify production never reaches it. Risk: hidden recursive caller within typing-core.rkt:check that on-network elaboration triggers. Mitigation: at 3A.c.6 close, grep for `check ctx _ (expr-union _ _)` callers; verify none on the on-network path; if any found, surface as drift requiring scope expansion.
+- **D-3A.c-axis-confirmation-bias**: each new axis should DISCRIMINATE between on-network and sexp first-success. The multi-success axis (`union-inhabitation-multi-success`) specifically does — a sexp first-success commit returns `'Nat` (first branch); non-committing returns `"Nat | Int"`. Mitigation: at 3A.c.4 close, mental check on each axis: "would the OLD mechanism pass this?" If yes for any axis, that axis is non-discriminating — add structural-discriminator language to assertion or replace with different surface property.
+- **D-3A.c-test-speculation-bridge-coverage**: migrated tests must preserve coverage equivalence — what the OLD tests validated structurally should still be validated under non-committing semantics. Risk: migration silently reduces coverage. Mitigation: per-test-case migration with explicit before/after assertion comparison documented in commit message.
+- **D-3A.c-bit-budget**: per OQ2 (§9.3.1.3), max aids per command ≤30 bits. With per-position watchers under β.1, decomposed-positions cell may grow large; but each decomposition still uses N=union-component-count aids (typically 2-3). Verify via PERF-COUNTERS `max-aids-per-command` at 3A.c.6 close.
+
+#### §9.3.5.9 Completion criteria (3A.c close)
+
+- All 6 sub-steps landed atomically (each with dialogue checkpoint per cadence discipline)
+- Probe `examples/2026-04-22-1A-iii-probe.prologos`: semantic outputs match baseline (modulo expected post-3A.c changes for annotated union expressions producing non-committing classifier-preserved results)
+- Acceptance file `examples/2026-04-17-ppn-track4c.prologos`: 0 errors
+- All 4 active parity axes (`union-inhabitation-preserved`, `-flipped`, `-multi-success`, `-all-fail`) PASS
+- 1 skip-gated axis (`union-inhabitation-narrowing`) present with explicit "PPN Track 5 (occurrence typing)" pointer
+- test-speculation-bridge.rkt: 8-10 migrated cases PASS; QTT + exhaustion sections unchanged and still passing
+- test-union-types-atms.rkt: existing mechanism tests still PASS (no regression to 3A.a/3A.b coverage)
+- Full suite: 8251+ tests / within 118-127s variance band / 0 failures
+- Adversarial 3-column VAG passed all 4 questions (catalogue / challenge / **adversarial** for each)
+- Tracker row 3A.c marked ✅ with commit hash + key result summary
+- Dailies entry per phase-completion protocol (steps a-d-e from `workflow.md`)
+- D-3A.c-* drift risks each addressed in close VAG (catalogue ✓ + adversarial cross-check)
+
+#### §9.3.5.10 Codification candidates surfaced during this mini-design
+
+| Pattern | Data points | Status |
+|---|---|---|
+| **Opening a phase is invitation to deliberative dialogue, not solo implementation** | 2 (PPN Track 4 + this 3A.c) | GRADUATE to DEVELOPMENT_LESSONS.org at close |
+| **3-column adversarial framing (catalogue / challenge / adversarial)** | Multiple this session | GRADUATE — refinement of existing 2-column codification (workflow.md, DESIGN_METHODOLOGY.org § VAG, CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging) |
+| **Stranded high-level abstraction after refactor** | 1 (elab-speculation.rkt) | Watching list — graduate at 2nd-3rd data point |
+| **Substrate gap: fire-once-when-predicate-matches (deferred-flag-consumption semantic)** | 1 (FP3 cell-17 guard patches at app layer) | Watching list — graduate when PReduce Track 1 or Phase 9b γ surfaces same gap |
+| **Multi-axis parity testing for discriminating coverage** | 2 (2A.c orchestration parity + 3A.c union-inhabitation) | Watching list — refinement of "parity-test as design artifact" codification |
+| **Centralized helper-invocation at install-typing-network's expr-* cases** | 1 (β.1 classifier-watcher install) | Watching list — pattern reusable for Phase 9b γ multi-candidate watcher; codify if 2nd data point lands |
+
+#### §9.3.5.11 Cross-references
+
+- **Decision 3 audit data**: §B of deliberative dialogue (Section B in the audit pass — preserved in dailies 2026-05-22 session entry)
+- **Decision 1 (install pattern β.1 + FP3)**: §9.3.5.3 of this document
+- **Decision 4 (3A.d scope)**: §9.3.5.4 + addendum §9.3.1.7 (Phase 9b multi-candidate inheritance) + addendum §9.3.5.4 (typing-core.rkt:2385 production-dead reading)
+- **Decision 2 (parity axes)**: §9.3.5.5 + 2A.c orchestration-parity axes precedent (test-elaboration-parity.rkt:380-417)
+- **Cross-track captures** (unchanged from §9.3.1.7):
+  - Phase 3C: residuation error-explanation consumes worldview/contradiction infrastructure from 3A.b + cell-16 narrowing signal
+  - Phase 9b: γ hole-fill multi-candidate inherits fork-on-union pattern + classifier-watcher install template
+  - Parent Phase 4: typing-core.rkt:2385 + remaining 4 with-speculative-rollback callers retirement
+  - PM Track 12: `current-prop-net-box` + box-bridge family retirement
+- **Codifications graduated** (per §9.3.5.10): added to DEVELOPMENT_LESSONS.org alongside the 3A.b graduation ("Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers")
 
 ### §9.4 Phase 3B deliverables
 
