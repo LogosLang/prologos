@@ -582,8 +582,45 @@
   (define tm (net-cell-read net tm-cid))
   (that-read tm position ':type))
 
+;; PPN 4C Phase 3A.c.3-R7 (2026-05-22): inline union-detection helper.
+;;
+;; Centralized at the :type write API (R7 — see addendum §9.3.7). Replaces
+;; the rejected classifier-watcher mechanism (3A.c.2 helpers; see §9.3.7
+;; for retirement decision). When type-val is a union and the position is
+;; not already in the decomposed-positions guard (cell-17), emit a fork-on-
+;; union decomposition request to cell-15. The process-fork-on-union handler
+;; (3A.a) consumes the request between BSP rounds and decomposes via N
+;; branch propagators.
+;;
+;; Data Orientation: the union value IS the trigger; emission happens at
+;; the moment the data is written, NOT via a watcher observing the data
+;; later. Zero extra propagator wakes — predicate check is O(1) struct-tag
+;; check inline with existing write.
+;;
+;; cell-17 guard (FP3 per §9.3.5.3): idempotence is structural. Handler
+;; writes (seteq position) to cell-17 when it decomposes (Step 5 of
+;; process-fork-on-union); subsequent writes to position's :type with a
+;; (possibly refined) union check the guard and skip emission.
+;;
+;; Coverage: per R7.a audit (§9.3.7.5), 47 production :type write sites
+;; flow through type-map-write or type-map-write-unified (which delegates
+;; to type-map-write). The 2 direct net-cell-write bypasses at typing-
+;; propagators.rkt:987 + :1055 write 'classify-inhabit-contradiction
+;; SYMBOL (not expr-union struct); R7's (expr-union? type-val) check
+;; correctly skips them.
+(define (maybe-emit-fork-on-union-request net tm-cid position type-val)
+  (cond
+    [(not (expr-union? type-val)) net]
+    [(set-member? (net-cell-read net decomposed-positions-cell-id) position) net]
+    [else
+     (define components (flatten-union type-val))
+     (define request-info (hasheq 'components components 'tm-cid tm-cid))
+     (net-cell-write net fork-on-union-request-cell-id
+                     (hasheq position request-info))]))
+
 (define (type-map-write net tm-cid position type-val)
-  (that-write net tm-cid position ':type type-val))
+  (define net1 (that-write net tm-cid position ':type type-val))
+  (maybe-emit-fork-on-union-request net1 tm-cid position type-val))
 
 ;; PPN 4C Path T-3 Commit A.2-b (2026-04-22): Role B equality-enforcement write.
 ;;
@@ -1155,18 +1192,33 @@
              ;; at fire time (no per-item worldview dispatch). N fire-once
              ;; propagators wrapped at per-branch worldviews matches relations.rkt
              ;; pattern and enables BSP parallel decomposition.
-             (for/fold ([acc n3]) ([aid (in-list aids)])
-               (define bit-pos (assumption-id-n aid))
-               (define-values (acc* _pid)
-                 (net-add-fire-once-propagator acc
-                   (list tm-cid)
-                   (list fork-contradiction-request-cell-id)
-                   (wrap-with-worldview
-                     (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
-                     bit-pos)
-                   #:component-paths (list (cons tm-cid (cons position ':type)))
-                   #:assumption aid))
-               acc*)])]))]))
+             ;; Step 4 — captured as n4 for Step 5's cell-17 guard write
+             (define n4
+               (for/fold ([acc n3]) ([aid (in-list aids)])
+                 (define bit-pos (assumption-id-n aid))
+                 (define-values (acc* _pid)
+                   (net-add-fire-once-propagator acc
+                     (list tm-cid)
+                     (list fork-contradiction-request-cell-id)
+                     (wrap-with-worldview
+                       (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
+                       bit-pos)
+                     #:component-paths (list (cons tm-cid (cons position ':type)))
+                     #:assumption aid))
+                 acc*))
+             ;; Step 5 (PPN 4C Phase 3A.c.3-R7, 2026-05-22): FP3 guard write.
+             ;;
+             ;; Mark this position as decomposed so subsequent :type writes that
+             ;; happen to yield a union (e.g., refinement from branch propagators
+             ;; OR upstream propagators re-firing) do NOT trigger re-emission of
+             ;; the fork-on-union request via R7's inline check in type-map-write.
+             ;;
+             ;; cell-17 (decomposed-positions-cell-id) is a 'monotone-set domain
+             ;; cell with merge-set-union semantics — writing the same position
+             ;; twice is idempotent. The on-network guard makes R7's idempotence
+             ;; STRUCTURAL (Correct by Construction) rather than relying on
+             ;; flag-guard semantics or downstream dedup.
+             (net-cell-write n4 decomposed-positions-cell-id (seteq position))])]))]))
 
 ;; PPN 4C Phase 3A.b (2026-05-22): per-branch contradiction watcher factory.
 ;;

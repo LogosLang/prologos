@@ -4963,7 +4963,10 @@ Per `workflow.md` Conversational Implementation Cadence: each sub-step ends with
 |---|---|---|---|
 | **3A.c.1** ✅ `ffa7149b` | cell-17 allocation infrastructure: propagator.rkt cell-id + merge + provide + allocation + drift assertion + Tier 2 registration + 3 test files cell-id cascade | ~70-90 (actual: +100/-32 = +68 net) | DONE 2026-05-22. Probe: 0 errors; cells +1 (60 vs 59 baseline; cell-17); cell_allocs +57 (cell-17 allocated per make-prop-network; reveals prop-network is created ~2x per command via solver-state-amb forks — inherited from cells 15/16, watching list observation). Targeted 64 tests / 4.2s PASS. Acceptance 0 errors. Full suite **8251 tests / 109.9s / 0 failures** (test count unchanged; wall within 118-127s variance; actually −7.2s vs post-3A.b 117.1s — variance / fresh GC). Adversarial 3-column VAG passed all 4 questions. Mini-audit caught 2 design-doc errors before implementation (#:tier nomenclature + #:reset-value mismatch + Tier 2 registration site) — fixed inline. |
 | **3A.c.2** ✅ `4e8e9ad4` | `make-classifier-watcher-fire-fn` factory + `install-classifier-watcher` helper definitions in typing-propagators.rkt. NO invocations yet (helper added but dead). | ~40 (actual: +128) | DONE 2026-05-22. Helpers added + exported. Probe: cell_allocs 1552 IDENTICAL to 3A.c.1; cells 60 IDENTICAL; propagators 0 IDENTICAL — D-3A.c.2-no-invocation-leak STRUCTURALLY verified. Full suite **8251 / 108.8s / 0 failures** (vs 3A.c.1 8251/109.9s; -1.1s variance). Adversarial 3-column VAG passed all 4 questions. Pattern mirrors 3 precedents (make-branch-check-fire-fn line 1023, make-branch-contradiction-watcher-fire-fn line 1182, classify-inhabit-residuation install line 2158). |
-| **3A.c.3** | Helper invocation at install-typing-network's expr-* cases + decomposed-positions write in process-fork-on-union handler. Production goes through on-network. | ~30-50 | Probe outputs may change (now uses on-network for annotated unions); empirically validate against acceptance file |
+| **3A.c.3** | **R7 reframe** (post-revert; per §9.3.6 audit + §9.3.7 mini-design): centralized inline-emit at type-map-write API + Part B cell-17 guard write in handler. Replaces original watcher approach. Decision rationale per R8 empirical fuel test (§9.3.6.8). | 🔄 | Sub-steps R7.a ✅ + R7.b ✅ + R7.c ⬜. Original watcher-based 3A.c.3 design (Part A universal install) confirmed structurally correct but quantitatively over-budget under TYPING-FUEL-LIMIT=200. R7 preserves β.1 universal coverage AND TYPING-FUEL-LIMIT divergence-detection signal. |
+| **3A.c.3-R7.a** ✅ `<audit-commit>` | Mini-audit: :type write sites + type-map-write/-unified API coverage. Persisted at §9.3.7.5 | doc-only | DONE 2026-05-22. 47 production :type writes flow through type-map-write/-unified APIs; 2 direct net-cell-write bypasses write contradiction sentinels (not union types) — R7 correctly skips. No coverage gap; D-R7-direct-write-bypass risk RESOLVED empirically. |
+| **3A.c.3-R7.b** ✅ `<commit>` | Implement centralized inline-emit: `maybe-emit-fork-on-union-request` helper + type-map-write modification + Part B (cell-17 write in process-fork-on-union handler Step 5) | ~50 LoC (actual: +49 / -13 = +36 net) | DONE 2026-05-22. Helper checks (expr-union? type-val) + cell-17 guard before emit. type-map-write-unified delegates to type-map-write — picks up emit automatically (one function-pair change covers both API paths per audit). Verification: Probe 0 errors, cell_allocs=1552 IDENTICAL to baseline, 28 results match. Acceptance 0 errors. Targeted 103/103 PASS. Full suite **8246 tests / 108.0s / 0 failures** (vs 3A.c.2 baseline 8246/103.7s; +4.3s within 118-127s variance band). Adversarial 3-column VAG passed all 4 questions. |
+| **3A.c.3-R7.c** | Decide 3A.c.2 classifier-watcher helpers disposition (retire vs defer for Phase 9b γ) | ~-130 (retirement) OR doc-only (defer) | Decision based on R7.b implementation experience |
 | **3A.c.4** | test-elaboration-parity.rkt: add 4 active axes + 1 skip-gated; delete old skip-gated `'union-narrow-by-constraint` block | ~60-80 | 4 active parity axes PASS empirically; on-network mechanism validated end-to-end including multi-success discriminator |
 | **3A.c.5** | test-speculation-bridge.rkt: migrate 8-10 union test cases (assertion updates for non-committing semantics) | ~30-50 | All tests in test-speculation-bridge.rkt pass; QTT + exhaustion sections unchanged and still passing |
 | **3A.c.6** | Adversarial 3-column VAG + commit + tracker + dailies | doc | All 4 VAG questions PASS under adversarial framing; 3A.c marked ✅ |
@@ -5018,6 +5021,417 @@ Total: 6 sub-steps; ~3-5 hours of focused implementation across one or two sessi
   - Parent Phase 4: typing-core.rkt:2385 + remaining 4 with-speculative-rollback callers retirement
   - PM Track 12: `current-prop-net-box` + box-bridge family retirement
 - **Codifications graduated** (per §9.3.5.10): added to DEVELOPMENT_LESSONS.org alongside the 3A.b graduation ("Mini-Audit Must Verify Carrier Capability AND Check For Existing Helpers")
+
+### §9.3.6 Phase 3A.c.3 re-approach mini-audit (post-revert, 2026-05-22)
+
+The 3A.c.3 attempt (Part A universal `install-classifier-watcher` at TOP of `let install` body + Part B cell-17 guard write in `process-fork-on-union`) failed with 11 polymorphic trait-dispatch failures in tests like `test-collection-fns-01.rkt`'s `filter-list-eval` / `reduce-list-eval` / etc. The CHECKPOINT preserved 6 candidate hypotheses (H-compound-1 through H-compound-6) and 3 reframing options (R1/R2/R3). This subsection captures the thorough code audit (A1–A10) that ran before any re-attempt, resolving hypothesis status and surfacing additional reframings.
+
+#### §9.3.6.1 Audit scope and methodology
+
+10 audit items in 3 tiers (per pre-audit scoping dialogue):
+- **Tier 1** (foundational): A1 (install-typing-network structure), A2 (install-from-rule recursion), A3 (recover reverted 3A.c.3 code), A4 (test-collection-fns-01 failure analysis)
+- **Tier 2** (mechanism understanding): A5 (`:type` write sites across compound fire-fns), A6 (component-paths precision), A7 (process-fork-on-union walk-through)
+- **Tier 3** (peripheral signal): A8 (fuel pressure quantification), A9 (classify-inhabit-value edge cases), A10 (outer-entry vs recursive-entry distinction)
+
+Mode: read-only investigation — no code changes; no test runs. Findings persist into this §9.3.6 (not dailies-only) per refined Stage 4 methodology.
+
+#### §9.3.6.2 Tier 1 findings — foundational
+
+**A1 — install-typing-network expr-* cases** (line 2220+):
+
+Structure: `(let install ([net X] [e X] [ctx-pos X]) (match e ...))` at line 2234. The `install` named-let is the recursion entry; watcher install at TOP of `let install` body fires per recursive call.
+
+Cases classified by `:type` write multiplicity:
+- **Atomic** (single immediate write, no propagator): expr-int, expr-nat-val, expr-true, expr-false, expr-Int, expr-Nat, expr-Bool, expr-String, expr-Type, expr-fvar, expr-tycon
+- **Meta** (initial ⊥; refined by meta-bridge): expr-meta
+- **Compound — single-write potential**: expr-ann (direct write of annotation), expr-generic-from-int/rat (direct write of target-type)
+- **Compound — multi-write potential**: expr-app, expr-lam, expr-Pi, expr-reduce, expr-pair, expr-union, expr-bvar (each has fire-fns that write `e`'s `:type` and can fire multiple times as children refine)
+- **Default**: SRE typing-domain dispatch via `install-from-rule` (recurses into install-typing-network for children)
+
+Bisection map (assuming Part A added watcher atop `let install`):
+- PASSING (expr-ann + expr-meta): single-shot `:type` writes; watcher fires once or twice
+- FAILING (compound positions): multi-write `make-app-fire-fn` and similar wake the watcher on every refinement
+
+**A2 — install-from-rule recursion** (lines 1874-1919):
+
+install-from-rule calls install-typing-network recursively on children at lines 1886 (computed return-type path) and 1908 (constant return-type path). Two recursion layers exist:
+1. Inner recursion (`let install`): same lambda, different `e` argument per call
+2. Outer recursion (install-from-rule → install-typing-network): fresh outer entry, fresh root-ctx-pos gensym
+
+**H-compound-3 (duplicate-install at same position) — STRUCTURALLY REFUTED**: ASTs are tree-shaped; each expression node visited exactly ONCE total per outer entry. A watcher install at the top-of-`let-install-body` executes once per recursive call → one watcher per position, NOT duplicates. The recursion is not the problem.
+
+The reframing: not "duplicate installs" but "per-position fire-multiplicity":
+- expr-ann writes `e`'s `:type` ONCE at install (direct `type-map-write`)
+- expr-app does NOT write at install; `make-app-fire-fn` writes MULTIPLE times as func/arg refine
+- Watcher co-installed on `e`'s `:type` wakes on EACH refinement → fuel pressure (A8 dominant finding)
+
+**A3 — Reverted 3A.c.3 code reconstruction**:
+
+The 3A.c.3 attempt was reverted at working-tree level only (never committed). Reconstruction from CHECKPOINT prose + audit:
+
+```racket
+;; Part A: at line 2234+ (top of `let install` body)
+(let install ([net net-with-ctx] [e expr] [ctx-pos root-ctx-pos])
+  (define net (install-classifier-watcher net tm-cid e))   ; ← added line
+  (match e ...))
+
+;; Part B: at line ~1145+ in process-fork-on-union (after watcher install for/fold)
+(net-cell-write n6 decomposed-positions-cell-id (seteq position))
+```
+
+**Major discovery via `git show de453f69`**: The ORIGINAL FIRST 3A.c attempt (Posture A — install-time pre-write at expr-ann) was empirically working (8251 tests / 109.7s / 0 failures), and its commit message **explicitly anticipated the watcher re-fire problem** that bit 3A.c.3:
+
+> *"Watcher approach was unnecessarily complex: Re-fire problem — branch propagator writes to :type trigger watcher again (via component-path match), watcher reads classifier under outer wv (still union), re-writes to cell-15, handler re-decomposes → wasteful or infinite. Mitigations require additional infrastructure: decomposed-positions guard cell (cell-17 + cell-id cascade), or two-stage delayed install, or fire-once with first-write-is-union assumption."*
+
+The deliberative re-do (§9.3.5) REJECTED Posture A on Decision 3 + Decision 1 principle aggregation (10+ principles favoring β.1 + FP3), citing Posture A as multi-anti-pattern (belt-and-suspenders, Validated ≠ Deployed, etc.). It then BUILT exactly the mitigation infrastructure the original author had named as undesirable (cell-17 guard) — which mitigates "re-decomposes" but does NOT mitigate "wasteful fires" (the watcher still wakes on every `:type` write).
+
+**A4 — test-collection-fns-01.rkt failure analysis**:
+
+Failing tests in this file exercise generic collection functions imported from `prologos::core::collections`: filter, reduce, reduce1, length, any?, all?, etc. User-facing call `(filter pos? '[0N 1N 2N 0N 3N])` elaborates to `[filter Nat ?m22716 ?m22717 ?m22721 test::pos? '[0N 1N 2N 0N 3N]]` — six positions, three of which are unsolved metas (trait dictionaries + element type witness).
+
+Trait-resolution must converge by inferring element type from literal → looking up `(Foldable List)`/`(Buildable List)` impls → unifying dictionary metas → substituting through curried Pi chain. Each round writes `:type` at multiple positions as metas refine through the Pi chain.
+
+AST depth: ~6 curried `expr-app` levels × 2-3 sub-positions each = **~15-20 compound positions per failing test**. Adding 15-20 watcher propagators wakes 36-60 times per call → fuel pressure (A8).
+
+#### §9.3.6.3 Tier 2 findings — mechanism understanding
+
+**A5 — `:type` write multiplicity across compound fire-fns**:
+
+| Fire-fn | Writes `e`'s `:type` | Re-fire pattern |
+|---|---|---|
+| `make-app-fire-fn` (1653) | YES + downward `:type` to arg-pos | Multi-fire as func/arg refine |
+| `make-lam-fire-fn` (1737) | YES (Pi assembly) | Multi-fire as dom/body refine |
+| `make-pi-fire-fn` (1752) | YES (Type at lmax) | 1-2 fires |
+| `make-union-fire-fn` (1777) | YES (Type at lmax) | 1-2 fires |
+| `make-app-fire-fn` feedback (1694+) | `term-map-write` to dom | Multi-fire |
+
+Position write-multiplicity classification:
+- Single-write: atomic, expr-fvar/tycon, expr-ann e-position, expr-Pi e-position, expr-union e-position
+- **Multi-write**: expr-app e-position, expr-app arg-position, expr-lam e-position
+
+For polymorphic dispatch `[filter Nat ?m1 ?m2 ?m3 test::pos? '[...]]`:
+- 6 expr-app × 2 positions = 12 multi-write positions
+- ~3-5 `:type` refinements per position during convergence
+- **Watcher wake-ups: 36-60 per polymorphic call**
+
+**A6 — Component-paths precision**:
+
+Watcher declares `:component-paths (list (cons tm-cid (cons e ':type)))`. Verified precise:
+- `pu-value-diff` emits `(cons position facet)` pairs for nested-hasheq attribute-map writes
+- `filter-dependents-by-paths` matches by `equal?` between declared `(cons e ':type)` and changed-set entries
+- Watcher fires ONLY on `:type` writes at position e — NOT siblings, NOT other facets
+
+Residuation propagator (line 2283) has IDENTICAL precision but is installed ONLY at expr-meta positions. **The precision pattern is proven-working**; what differs in 3A.c.3 is **install scope**, not declaration precision.
+
+**A7 — process-fork-on-union walk-through**:
+
+Handler steps:
+1. Allocate N aids via `solver-state-amb`
+2. Initialize worldview-cache (N branch bits)
+3. `promote-cell-to-tagged` on attribute-map (3A.b load-bearing)
+4. Install N branch check propagators (wrapped at branch worldview)
+5. Install N fire-once contradiction watchers (wrapped at branch worldview)
+
+Part B (reverted) would add Step 6: cell-17 guard write. Why Part B alone is harmless: handler runs only when cell-15 has entries; without Part A, no entries are ever written; handler never invoked; cell-17 stays empty.
+
+Handler narrowing pattern is sound and downstream-correct. The problem is purely **install scope** at install-typing-network.
+
+#### §9.3.6.4 Tier 3 findings — peripheral signal
+
+**A8 — Fuel pressure quantification — H-compound-4 CONFIRMED as leading mechanism**:
+
+`TYPING-FUEL-LIMIT = 200` (line 2697). Set per-elaboration via `net-cell-reset` on canonical tropical-fuel cell (Phase 1B); restored at close.
+
+| Test class | Compound positions | Watcher wake-ups | Baseline TR fuel | Total | vs 200 budget |
+|---|---|---|---|---|---|
+| Simple def | 0-2 | 0-2 | ~10-20 | ~10-25 | comfortable |
+| Single-meta dispatch | 3-5 | 6-15 | ~50-80 | ~56-95 | comfortable |
+| **Polymorphic trait dispatch** | **15-20** | **45-100** | **~150-170** | **~195-270** | **AT OR OVER budget** |
+| Deeply curried | 20-30 | 60-150 | ~170-200 | ~230-350 | OVER budget |
+
+Bisection table fits H-compound-4 cleanly. Empirically testable: temporarily bump TYPING-FUEL-LIMIT to 1000 → if failing tests pass, mechanism confirmed.
+
+Even early-returning watcher fires consume fuel — the wake-up itself is the cost, not whether work is produced. This is exactly what the FIRST attempt commit message warned about (3A.c.3 reverted in pure form).
+
+**A9 — classify-inhabit-value edge cases**:
+
+Watcher's early-return logic is correct across all edge cases (uninitialized position, classifier-only, both layers populated, contradiction sentinel, post-decomposition with FP3 guard, tagged-cell under outer/branch worldview). The watcher does NOT produce spurious requests; FP3 guard prevents re-emission after decomposition. Correctness is sound — failure is purely from wake-up frequency consuming fuel.
+
+**A10 — Outer-entry vs recursive-entry**:
+
+install-typing-network is invoked from 2 outer sites (infer-on-network) + 2 recursive sites (install-from-rule lines 1886, 1908). Setup code (root-ctx-pos gensym + that-write) re-executes per outer entry. Inner `let install` recursion is per-sub-expression.
+
+R5 (outer-only install) is NOT VIABLE — would only cover top-level expressions, missing sub-expressions where unions could arrive.
+
+But the structural distinction surfaces R7 (in-rule inline pre-write) — see §9.3.6.6 options matrix.
+
+#### §9.3.6.5 Hypothesis status post-audit
+
+| Hypothesis | Status | Evidence |
+|---|---|---|
+| H-compound-1 (co-write conflict) | **CONTRIBUTING** | Multi-write at compound positions IS the trigger; but the conflict isn't "interaction between propagators" — it's wake-up frequency on multi-write positions |
+| H-compound-2 (timing interference) | UNLIKELY | Watcher's early-return is correct (A9); no timing interference produced — just scheduling overhead |
+| H-compound-3 (duplicate installs) | **REFUTED** | Tree-shaped ASTs; each position visited exactly once; no N² blow-up |
+| **H-compound-4 (fuel pressure)** | **CONFIRMED — leading mechanism** | Wake-up arithmetic (A8) fits bisection table; ORIGINAL FIRST attempt explicitly warned about this |
+| H-compound-5 (install-order coupling) | UNLIKELY | Watcher is installed FIRST in 3A.c.3 attempt; passing/failing pattern follows position write-multiplicity, not order |
+| H-compound-6 (compound-case reader) | UNLIKELY | Watcher writes to cell-15 (not other propagator's input cells); no semantic interference |
+
+**Mechanism summary**: every `:type` write at a watched position wakes the watcher. Multi-write compound positions produce 3-5 wakes each. At ~15-20 compound positions per polymorphic dispatch test, watcher overhead consumes 22-50% of TYPING-FUEL-LIMIT — enough to push trait-resolution over budget for non-trivial inputs.
+
+#### §9.3.6.6 Reframing options matrix (3-column adversarial framing)
+
+Each option presented with TWO+ONE columns: catalogue (does it satisfy?), challenge (could it be more aligned?), **adversarial** (where does it BREAK / what would refute it?).
+
+**R1 — Semantic-distinction β (install at expr-ann + expr-meta only)**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Matches bisection-passing configuration empirically (14/14 PASS). Aligns watcher install with positions where unions can structurally ARRIVE (annotation, meta downward write). |
+| Challenge | "Semantic distinction" still requires case enumeration — what defines "where unions can arrive" structurally? Is this just β.3 dressed up with principle-aligned vocabulary? |
+| **Adversarial** | The Hyperlattice Conjecture explicitly REJECTED case enumeration in Decision 1's principle aggregation. Adopting R1 means **REVERSING Decision 1** — the principles cited then must now be re-evaluated against the empirical finding. Specifically: Correct by Construction (still served if "structural arrival" is structurally defined), Completeness over Deferral (NOT served — Source A inferred unions deferred; same Posture A objection re-emerges), Most Generalizable Interface (NOT served — two semantic categories of positions). If we adopt R1, we're admitting principle-aggregation can be empirically wrong AND the Hyperlattice Conjecture's "no case enumeration" guideline has exceptions tied to mechanism cost. That's a methodology lesson worth codifying. |
+
+**R2 — β.1 with fuel-limit increase**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Simplest fix; preserves principle aggregation from Decision 1 unchanged; TYPING-FUEL-LIMIT is a tunable parameter. |
+| Challenge | Is 200 the "right" limit, or was it the minimum needed pre-3A.c? Increasing to mask watcher overhead is a band-aid for an architectural inefficiency. |
+| **Adversarial** | Raising fuel limit **does not fix** the wasteful-fire pathology — it masks it. Every early-return fire still consumes fuel doing nothing. Future load increases (more complex polymorphic dispatch in user code, Phase 9b γ hole-fill, Track 7 user grammar extensions) compound the inefficiency. The mechanism is fundamentally wasteful; fuel-limit raises move the failure threshold but don't address the cause. Also: TYPING-FUEL-LIMIT was likely tuned for production divergence detection; raising it changes that signal. We'd need to verify no real divergence cases become hidden. |
+
+**R3 — Defer 3A.c entirely**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Safe; doesn't ship anything broken. |
+| Challenge | 3A.c IS the substantial deliverable of Phase 3A; deferring means union-types-via-ATMS doesn't actually reach user-facing typing pipeline. What specifically would change with more design time? |
+| **Adversarial** | We've completed thorough audit (A1-A10) — the mechanism is well-understood. Deferral without a concrete next-design-attempt sets up indefinite punt. R3 should be paired with EITHER a specific design gap to fill OR honest acknowledgment that Phase 3A.c's charter can't be delivered within current architecture (which would be a major reframing affecting Phase 3 entirely). |
+
+**R4 — Hybrid (install-time pre-write at expr-ann + watcher at expr-meta only)**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Two-mechanism for two-source; both principled (install-time pre-write for known unions; watcher for emergent meta unions). Matches bisection-passing configuration. |
+| Challenge | Two mechanisms for what's conceptually one concern (union detection + decomposition request). Is this decomplection (separate sources, separate mechanisms) or over-engineering (one concern doubled up)? |
+| **Adversarial** | The watcher at expr-meta still pays per-meta wake-up cost as the meta's classifier refines. For metas that participate in trait resolution (most metas in failing tests), classifier refinement happens multiple times. If R4's watcher-at-expr-meta-only fires 5-10 times per polymorphic dispatch test, fuel pressure may STILL push budget over the edge for the deepest polymorphic tests. Empirical validation needed before adoption. Also: residuation propagator at expr-meta already exists; would another watcher there be redundant or complementary? |
+
+**R7 — In-rule inline pre-write (zero extra wake-ups)**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Zero extra propagator fires — union-detection happens inline with existing work (make-app-fire-fn, make-pi-fire-fn, T-3 merge-fn, etc.). Matches Data Orientation philosophy: data drives the request. |
+| Challenge | Spreads union-detection across N fire-fns. Decomplection question: is "compute type and write" + "if type is union, also emit cell-15 request" a single concern (type emergence) or two? |
+| **Adversarial** | (1) **Completeness audit burden**: every union-producing type-write needs the check. Missing one site is a latent gap; the audit is empirically rare-to-find. (2) **Coupling concern**: each fire-fn now has TWO outputs — its computed type write AND a side-effect cell-15 write. Violates single-responsibility (debatable; could argue both are "what this propagator emits"). (3) **Sources we need to cover**: app-fire-fn's `(subst 0 arg-pos cod)` result; pi-fire-fn's Type construction (doesn't produce unions); lam-fire-fn's Pi construction (doesn't produce unions); type-lattice-merge's union fallback (Role A path); SRE typing-domain rules with computed return-type. (4) **Future-extension friction**: Phase 7 trait dispatch returning union types would need its own inline check in the trait-resolution propagator. Track 4D's attribute grammar substrate would need to propagate the check across all rule kinds. Watcher approach is uniform; R7 distributes it. |
+
+**R8 — Empirical-fuel-test prerequisite (process step, not architectural option)**:
+
+| Column | Content |
+|---|---|
+| Catalogue | Before committing to R1/R2/R4/R7, EMPIRICALLY validate H-compound-4 by temporarily bumping TYPING-FUEL-LIMIT to 1000 and re-running the failing tests with reverted 3A.c.3 code re-applied. If they PASS → fuel confirmed → choose architectural option with informed data. If they FAIL → another mechanism is contributing (H-compound-2/5 escape); need broader investigation. |
+| Challenge | Adds a session of work before architectural decision. Risks: the temporary bump might mask other latent issues that would surface at the higher budget; the test environment might differ subtly from production paths. |
+| **Adversarial** | If R8 PASSES the fuel test, we have STRONG empirical evidence that the principle-aggregation in Decision 1 missed a quantitative consideration (fuel cost per fire). That's a methodology lesson — principle-guided design alone is insufficient when mechanism overhead has empirical cost. If R8 FAILS the fuel test, we've spent a session on a misdiagnosis — but the audit data still narrows the next investigation. **R8 is a prerequisite, not an option** — without empirical confirmation of mechanism, we'd be choosing R1/R4/R7 based on hypothesis, not data. |
+
+#### §9.3.6.7 Cross-references
+
+- Original FIRST 3A.c attempt: commit `de453f69` (Posture A, install-time pre-write at expr-ann)
+- Revert of original: commit `e267206b` (revert) + `a8eed7e2` (dailies-revert)
+- Deliberative re-do design: §9.3.5 + commit `e6ca1f80`
+- 3A.c.1 cell-17 infrastructure: commit `ffa7149b`
+- 3A.c.2 helper definitions: commit `4e8e9ad4`
+- 3A.c.3 reverted attempt: working-tree only, never committed (CHECKPOINT in dailies preserves design)
+- Audit dialogue: dailies 2026-05-22 (this session)
+
+#### §9.3.6.8 R8 empirical fuel-test result (2026-05-22, working-tree only)
+
+Per the R8 prerequisite from §9.3.6.6 reframing options matrix, the empirical fuel test was executed before architectural commitment:
+
+**Procedure**:
+1. Re-applied 3A.c.3 Part A (universal `install-classifier-watcher` at TOP of `let install` body via `set!`)
+2. Re-applied 3A.c.3 Part B (cell-17 guard write captured as Step 5 of `process-fork-on-union`)
+3. Temporarily bumped `TYPING-FUEL-LIMIT` 200 → 1000
+4. All changes working-tree-only; reverted after measurement
+
+**Results**:
+
+| Configuration | Tests | Wall | Failures | Notes |
+|---|---|---|---|---|
+| 3A.c.2 baseline (no Part A/B; fuel=200) | 8246 | 103.7s | 0 | CHECKPOINT baseline |
+| 3A.c.3 + fuel=200 | — | — | **11** (polymorphic dispatch) | CHECKPOINT diagnostic |
+| **3A.c.3 + fuel=1000** | **8251** | **108.0s** | **0** | R8 result (this measurement) |
+
+Targeted runs as canaries (all PASS under R8):
+- `tests/test-collection-fns-01.rkt`: 14/14 PASS (4.2s)
+- `tests/test-collection-fns-02.rkt`: 15/15 PASS (4.7s)
+- `tests/test-elaboration-parity.rkt`: 25/25 PASS (1.2s)
+
+**Conclusion — H-COMPOUND-4 (FUEL PRESSURE) EMPIRICALLY CONFIRMED as the leading mechanism**:
+
+The architectural design of 3A.c.3 (Part A + Part B with cell-17 guard) is **structurally correct**. All 8251 tests pass under the universal β.1 install + FP3 guard pattern when fuel budget is sufficient. The 11 failures under fuel=200 were exclusively from watcher wake-up overhead consuming budget that polymorphic-trait-dispatch trait-resolution needed for convergence.
+
+This vindicates Decision 1's principle aggregation (β.1 + FP3 IS architecturally sound) while exposing a quantitative axis the aggregation did not consider (per-fire fuel cost on multi-write positions). The principles-vs-reality conflict resolves to: **the principles were correct on the architecture; the missing consideration was mechanism overhead in production polymorphic workloads**.
+
+**Methodology data point** (graduate to DEVELOPMENT_LESSONS.org candidate after one more data point):
+
+> *Principle-aggregation can be architecturally correct yet quantitatively insufficient. When a mechanism is principled but adds per-event overhead at scale, the principles-aggregation framework needs a quantitative-cost lens alongside the structural lens. The diagnostic protocol exists for exactly this case — when principles favor one direction yet implementation breaks, the empirical conflict often reveals a missing quantitative dimension (here: per-fire fuel cost × per-position write multiplicity), not a wrong-architecture problem. Adopt the architecture; address the cost separately.*
+
+Data points to-date for this codification candidate:
+1. PPN 4C Tropical Quantale Addendum Phase 1V's Item #1 (cache miss surfaced via §13.7 gate decision-tree gap; quantitative measurement reshaped architectural choice)
+2. PPN 4C Phase 3A.c.3 R8 (this finding; principle aggregation correct, fuel cost dimension missing)
+
+**Reframing options matrix update** (post-R8 empirical data):
+
+| Option | Status post-R8 |
+|---|---|
+| R1 — Semantic-distinction β | Still viable but ARCHITECTURALLY LESS PRINCIPLED than β.1 was. Adopting R1 means trading architectural completeness for fuel efficiency. Decision 1's principle aggregation stands; R1 would be empirical pragma. |
+| **R2 — β.1 + fuel-limit increase** | Now viable. Empirically validated by R8. Adversarial concern (band-aid) somewhat softened by data: the architecture IS correct; we're funding its mechanism cost. |
+| R3 — Defer 3A.c entirely | NOT NEEDED — R8 shows we have a working architecture. R3 was contingent on no-viable-path; that's refuted. |
+| R4 — Hybrid (pre-write expr-ann + watcher expr-meta) | Still viable but adds complexity vs R2 simplicity OR R7 elegance. Mid-tier option. |
+| **R7 — In-rule inline pre-write** | **STRONGEST architectural choice**. Zero extra wake-ups. Matches Data Orientation (computed type IS the data; emit request inline). Achieves β.1's structural coverage WITHOUT fuel cost. The completeness audit burden is the trade-off (vs R2's simplicity). |
+
+**Cross-track impact of R8 finding**:
+
+The TYPING-FUEL-LIMIT mechanism's purpose is divergence detection at the elaboration boundary. If R2 is chosen (bump to 1000), the divergence detection signal weakens — runaway elaborations now have 5× longer to manifest before fuel triggers. This is acceptable IF:
+- Production polymorphic dispatch needs ≤ 200 fuel under baseline (no watcher)
+- Watcher overhead is ~50 fuel per polymorphic call max
+- Total under R2 is ~250-300 fuel; 1000 limit gives ~3× safety margin
+- Real divergence (e.g., recursive type metas without termination) typically exceeds 1000 fuel by orders of magnitude — still caught
+
+But the divergence-detection-signal-weakening is a real cost. R7 avoids this entirely (zero overhead → keep TYPING-FUEL-LIMIT = 200 — divergence signal preserved at its tuned threshold).
+
+**Recommended decision direction** (presented for user direction):
+- **R7** is the architecturally-strongest answer: preserves both Decision 1's principle aggregation AND TYPING-FUEL-LIMIT's divergence-detection signal
+- **R2** is the simplest answer: 1-line config change + R8's existing 3A.c.3 design + accept fuel-budget shift
+- **R7 → R2-fallback** sequence: attempt R7 first; if completeness-audit-burden exceeds expected scope, fall back to R2 with explicit "Phase 9b γ hole-fill will need a more efficient mechanism anyway" documentation
+
+### §9.3.7 Phase 3A.c.3 R7 mini-design (committed effort, no fallback — 2026-05-22)
+
+User direction post-R8: *"give R7 a committed effort. No fallback. If effort is greater than a session, then we can checkpoint and pick it back up. I like being complete and principally aligned, rather than an expedient implementation shortcut. Language design and implementation needs rigor, resolve, and strong principles."*
+
+R7 selected over R2 (the simpler fuel-bump option) because R7 preserves both Decision 1's principle aggregation (β.1 universal coverage) AND TYPING-FUEL-LIMIT's divergence-detection signal (no per-fire-fn overhead from a watcher mechanism).
+
+#### §9.3.7.1 Implementation pattern — centralized at the type-write API
+
+R7's original sketch was "per-fire-fn enumeration": modify each compound case fire-fn (make-app-fire-fn, etc.) to check if the computed type is a union and emit a cell-15 request inline. The mini-design refined this to a more architecturally aligned variant: **centralize the inline union-detection at the `:type` write API**.
+
+The two type-write API functions in typing-propagators.rkt:
+- `type-map-write` (line 585): writes `type-val` to attribute-map at `(position, :type)`
+- `type-map-write-unified` (line 603): Role B equality-enforce variant; computes `(type-unify-or-top current expected)` then writes via type-map-write
+
+R7's implementation adds at the API layer (not at each caller):
+```racket
+;; After write (in both type-map-write and type-map-write-unified)
+(cond
+  [(expr-union? type-val)
+   (cond
+     [(set-member? (net-cell-read net decomposed-positions-cell-id) position) net]  ; cell-17 guard
+     [else
+      (define components (flatten-union type-val))
+      (define request-info (hasheq 'components components 'tm-cid tm-cid))
+      (net-cell-write net fork-on-union-request-cell-id
+                      (hasheq position request-info))])]
+  [else net])
+```
+
+| Per-fire-fn enumeration (original R7 sketch) | Centralized at type-map-write (refined R7) |
+|---|---|
+| Modify N fire-fns (~5-8 sites) | Modify 2 functions (type-map-write, type-map-write-unified) |
+| Each fire-fn's contract becomes "compute type + maybe emit request" — multi-responsibility | type-map-write contract stays "write the type and emit request if union" — single responsibility at the API layer |
+| Audit completeness burden: did we catch every union-producing fire-fn? | Audit completeness reduces to: does every `:type` write go through these two APIs? |
+| Future tracks (Phase 9b γ, Phase 7 trait dispatch) need their own per-fire-fn checks | Future tracks pick up the behavior for free — any `:type` write through the API gets it |
+
+The centralized variant is the **Data Orientation realization** of the original idea: the type-write API IS the data-driven boundary; the union check happens at the moment the data is written, not when observed (watcher) and not at the propagator level (per-fire-fn).
+
+#### §9.3.7.2 3-column adversarial framing — centralized R7
+
+| Column | Content |
+|---|---|
+| **Catalogue** | One function-pair to modify (type-map-write + type-map-write-unified); inline `(expr-union? type-val)` check + cell-15 emit if guarded by cell-17. Zero extra propagator wakes. Preserves TYPING-FUEL-LIMIT divergence-detection signal. β.1 universal coverage achieved structurally. Composes naturally with Phase 9b γ + Phase 7 trait dispatch (any future write at the API gets the behavior). |
+| **Challenge** | Are we sure ALL `:type` writes go through type-map-write or type-map-write-unified? Direct `net-cell-write` to attribute-map might exist somewhere — would bypass the inline emit. Grep needed (R7.a audit). Also: is type-map-write the natural seam, or is `that-write` (the user-facing API) the higher-leverage seam? |
+| **Adversarial** | (1) **Hidden direct writes**: any `net-cell-write` to attribute-map that constructs a hasheq update at position e's `:type` facet would bypass type-map-write. Need exhaustive grep across production code. (2) **`that-write` higher-leverage?**: `that-write` is the user-facing API; if we centralize at `that-write`, we cover ALL facet writes. But `that-write` is generic; embedding `:type`-specific union-check there violates separation of concerns. **type-map-write IS the right granularity** — facet-specific API for facet-specific behavior. (3) **Re-entry concern**: if type-map-write emits to cell-15, the handler runs between BSP rounds. If during the handler's branch-check propagator installs, those propagators call type-map-write internally, we have re-entry. cell-17 guard prevents re-decomposition but the inline-emit fire might still occur during handler-installed propagator fires. Verify cell-17 guard is checked BEFORE emit decision. (4) **Cost on every :type write**: even non-union writes pay the `(expr-union? type-val)` predicate cost. For ~1000+ :type writes per command, the cost is ~1000 predicate calls — small (O(1) struct-tag check) but non-zero. Trade-off vs no-op watcher fires under the rejected approach. (5) **3A.c.2 helpers become dead code**: `make-classifier-watcher-fire-fn` + `install-classifier-watcher` (commits `4e8e9ad4`) have no use case under R7. They were designed for the watcher approach. Decision deferred to R7.c based on R7.b implementation experience. |
+
+#### §9.3.7.3 Sub-step partition
+
+Per Conversational Implementation Cadence — each sub-step ends with dialogue checkpoint:
+
+| Sub-step | Scope | Est. LoC | Checkpoint criterion |
+|---|---|---|---|
+| **3A.c.3-R7.a** | Mini-audit: grep `:type` write sites; verify all go through type-map-write/type-map-write-unified; identify direct-net-cell-write bypasses. Persist findings here in §9.3.7.5 | doc-only | Comprehensive site enumeration + classification |
+| **3A.c.3-R7.b** | Implement centralized inline-emit in type-map-write + type-map-write-unified. cell-17 guard check inline; cell-15 emit when union detected and not in guard. | ~30-50 | Probe + acceptance + targeted tests PASS; semantic outputs match baseline (with new behavior for annotated union case) |
+| **3A.c.3-R7.c** | Retire OR defer 3A.c.2 classifier-watcher helpers based on R7.b experience | ~-130 (deletions) OR doc-only | Decision documented; if retired, exports cleaned |
+| **3A.c.4** | test-elaboration-parity.rkt: 4 active axes + 1 skip-gated (per §9.3.5.5) | ~60-80 | 4 active parity axes PASS empirically |
+| **3A.c.5** | test-speculation-bridge.rkt: migrate 8-10 union test cases (per §9.3.5.6) | ~30-50 | All bridge tests pass; QTT + exhaustion sections unchanged |
+| **3A.c.6** | Adversarial 3-column VAG + commit + tracker + dailies | doc | All 4 VAG questions PASS under 3-column framing |
+
+Estimated total: 3A.c.3-R7.a-c likely fits one session; 3A.c.4-.6 may extend to second session per cadence discipline.
+
+#### §9.3.7.4 Drift risks named (for mid-flight principles challenge)
+
+| Risk | Mitigation |
+|---|---|
+| **D-R7-direct-write-bypass**: some site directly `net-cell-write`s to attribute-map at :type facet, bypassing type-map-write | R7.a audit; grep for `net-cell-write.*attribute-map\|tm-cid` in all production .rkt files; classify each |
+| **D-R7-cell-17-guard-ordering**: inline-emit must check cell-17 guard BEFORE writing cell-15 | Code review at R7.b commit; cell-17 read happens before cell-15 emit |
+| **D-R7-handler-reentry**: handler's branch-check propagators may write to attribute-map under branch worldview; if type-map-write inline-emits there, we get reentry | Guard cell-17 catches reentry (position already decomposed → skip). Verify under multi-branch test scenario in R7.b |
+| **D-R7-3A.c.2-helpers-dead-code**: classifier-watcher helpers + install-classifier-watcher become unused | R7.c decision; documented either way |
+| **D-R7-perf-on-non-union-writes**: inline `(expr-union? type-val)` check pays predicate cost on every :type write | Predicate is O(1) struct-tag check; should be negligible vs CHAMP write cost. Microbench if concern surfaces in test wall-time |
+| **D-R7-position-knowledge**: type-map-write knows position e (parameter); type-map-write-unified also knows position. cell-17 guard requires set-member? on position. No coverage gap | Verified by API signatures |
+| **D-R7-Tier-2-coverage**: type-map-write and type-map-write-unified are the only :type write APIs — but verify the `that-write` generic API at :type facet doesn't bypass | R7.a audit covers this |
+
+#### §9.3.7.5 R7.a audit findings (2026-05-22)
+
+Comprehensive grep across production code (excluding tests + benchmarks) for `:type` write paths:
+
+**Layer 1 — type-map-write API surface**:
+- `type-map-write` (typing-propagators.rkt:585): `(define (type-map-write net tm-cid position type-val) (that-write net tm-cid position ':type type-val))` — the canonical `:type` write API
+- `type-map-write-unified` (line 603): Role B equality-enforce wrapper: `(type-map-write net tm-cid position (type-unify-or-top current expected))`
+
+**Layer 2 — `:type` write call site enumeration**:
+
+| Site count | Source |
+|---|---|
+| **45** | `type-map-write` call sites in production code (all flow through type-map-write → that-write at `:type`) |
+| **2** | `type-map-write-unified` call sites: line 1676 (make-app-fire-fn arg-pos downward write; Role B equality enforcement); line 2451 (expr-ann case term position; Role B downward annotation enforcement) |
+| **47 total** | through the centralized API pair |
+
+**Layer 3 — Direct bypass audit (potential coverage gaps)**:
+
+Grep for direct writes that bypass type-map-write/type-map-write-unified:
+
+| Pattern | Hits in production | Classification |
+|---|---|---|
+| `(that-write ... ':type ...)` (outside type-map-write's body) | **0** | No direct `that-write` at `:type` bypasses |
+| `(net-cell-write ... tm-cid ...)` direct attribute-map writes | **2** (lines 987-988, 1055-1056) | Both write `'classify-inhabit-contradiction` SYMBOL — NOT `expr-union` struct; R7's `(expr-union? type-val)` check correctly skips |
+| `(net-cell-write attribute-map ...)` or `(that-write attribute-map ...)` (without going through tm-cid binding) | **0** | No alternate-binding bypasses |
+| `current-attribute-map-cell-id` consumers | typing-propagators.rkt (definer + 4 internal) + batch-worker.rkt (test infrastructure) | No production write-bypass paths |
+
+**Coverage conclusion**: R7 centralized at `type-map-write` + `type-map-write-unified` covers **100% of production `:type` writes that could yield union-typed values**. The 2 direct-write bypasses at lines 987-988 + 1055-1056 write contradiction sentinels (`'classify-inhabit-contradiction`), which are symbols not expr-union structs, so R7's inline check correctly does not fire on them — and these writes would NEVER be the right place to emit a fork-on-union request (they're WRITING contradictions discovered during typing, not propagating union annotations).
+
+**No coverage gap. R7's centralized approach is complete.**
+
+**D-R7-direct-write-bypass drift risk RESOLVED**: empirical audit confirms zero union-producing direct writes.
+
+**Adversarial cross-check** (forcing the challenge):
+- *"Are we sure the 2 direct bypasses can NEVER write a union?"* The values written are LITERAL symbols `'classify-inhabit-contradiction`, hardcoded into the source. The Racket constant cannot become an expr-union struct. Refuted as concern.
+- *"Could a future site add a new direct net-cell-write bypassing type-map-write?"* Yes — but R7's coverage holds at TIME OF IMPLEMENTATION. Future bypasses would be a separate audit obligation. Codification candidate: add a lint rule that flags direct `(net-cell-write ... tm-cid ...)` with hash-shape constructing `:type` facet — but this is gold-plating; the current audit is sufficient.
+- *"Is `that-write` at `:type` really only in type-map-write's body?"* Grep confirms exactly one match: line 586, which is type-map-write's definition. No external `that-write` at `:type` exists.
+
+**Test-fixture sites** (intentionally not audited above per "production only" scope): test files may have direct `(hasheq :type ...)` constructions for fixture setup. These would not be affected by R7 because:
+- Test fixtures bypass the production network entirely OR set up isolated networks
+- R7's check fires only when type-map-write is called with the attribute-map cell-id, which test fixtures generally don't do
+- Worst case: test fixture's union-shaped fixture would trigger R7's emit, but the fork-on-union handler would be registered/unregistered with the test's network independently — no crosstalk
+
+**Audit summary for R7.b**:
+- Modify 2 functions (type-map-write at line 585, type-map-write-unified at line 603)
+- Add ~10 lines inline check + cell-15 emit (per function, with cell-17 guard precondition)
+- Total LoC change: ~25-30 lines
+- No callers need modification
+- No tests need modification (parity tests cover the behavior in 3A.c.4)
+
+#### §9.3.7.6 Cross-references
+
+- R7 selection rationale: §9.3.6.8 (R8 empirical result + post-R8 options matrix)
+- 3A.c.2 helpers (R7.c candidate retirement): commit `4e8e9ad4`
+- cell-17 infrastructure (R7 dependency): commit `ffa7149b`
+- Original §9.3.5 deliberative-design (β.1 + FP3 watcher; R7 supersedes the watcher mechanism, preserves the β.1 + FP3 architectural intent)
+- Phase 9b γ + Phase 7 trait dispatch downstream consumers: §9.3.1.7 + §9.3.5.11
 
 ### §9.4 Phase 3B deliverables
 
