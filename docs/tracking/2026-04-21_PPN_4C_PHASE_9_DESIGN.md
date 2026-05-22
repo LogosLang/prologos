@@ -187,9 +187,14 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A.c | Classifier-watcher integration (β.1 universal install + FP3 cell-17 guard) + test migration. Production retires sexp typing-core.rkt:2385 union check semantically (code-level retirement Parent Phase 4 / PM 12). Multi-axis parity testing (4 active + 1 skip-gated). | ✅ | **CLOSED 2026-05-22** per §9.3.8 cumulative VAG. Final form via R7 reframe (centralized inline-emit at type-map-write API; commit `0e08e08b` R7.a+b + `a4b33fce` R7.c) post-revert + R8 empirical fuel-test (§9.3.6.8). Sub-steps 3A.c.1-3A.c.6 all ✅. Full suite 8255/117.8s/0 failures pre-3A.d. 6 methodology data points captured (§9.3.8.4). |
 | 3A.d | Wholly retire `elab-speculation.rkt` (188 LoC) + `tests/test-elab-speculation.rkt` (388 LoC). **Audit finding**: orchestrators have ZERO production callers (stranded after prior refactor; only test-elab-speculation.rkt references them). `elab-speculation-bridge.rkt` + test-speculation-bridge.rkt UNCHANGED (alive via 4 remaining w-s-r callers — Parent Phase 4 / PM 12 scope). Codification candidate: "Stranded high-level abstraction after refactor" → 3rd data point on retirement. | ✅ `0e80e120` | **DONE 2026-05-22**. ~576 LoC retirement (188 prod + 388 test) + 4 secondary references cleaned (propagator.rkt comment + tools/dep-graph.rkt × 2 + bench-scheduler-ab.rkt comment). Full suite **8232 tests / 117.3s / 0 failures** (-23 tests = test-elab-speculation.rkt; -1 file). "Stranded high-level abstraction after refactor" codification now has 3 data points (3A.c.2 helpers + elab-speculation.rkt + R7.c retirement; ready for DEVELOPMENT_LESSONS.org graduation). Adversarial 3-column VAG passed all 4 questions. |
 | 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ✅ `9e8a6c3e` | DONE 2026-05-22 per §9.3.9. Cumulative VAG passed all 4 questions adversarially (catalogue / challenge / adversarial × 4). All cross-arc D-3A-* drift risks cleared (fuel-budget via R7; typing-core-2385-residual via empirical grep; bit-budget at 167× headroom; cross-arc mantra via on-network audit; codification-debt noted with promotion candidates). User-facing behavior matrix documented (§9.3.9.2). Handoff to Phase 3B/3C/9b/Parent Phase 4/PM 12/PPN Track 5/Track 4D captured (§9.3.9.5). 3 codifications promotion-ready (§9.3.9.4); graduation deferred to user direction. |
-| 3B | Hypercube integration (Gray code + subcube) | ⬜ | |
-| 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. |
-| 3V | Vision Alignment Gate Phase 3 | ⬜ | |
+| 3B | Substrate decomplection + hypercube integration (Gray code) — conditional on empirical evidence | 🔄 | **Phase 3B mini-design persisted at §9.4.1** (commit TBD). OQ1 ↔ mutual-exclusion tension surfaced via Phase 3B mini-audit (Phase 3A audit gap); M1 substrate decomplection selected over M0 (safety-patch) and M3 (Track 4D premature); sub-phase structure 3B.0/3B.A/3B.B/3B-VAG refined; pre-committed falsification criteria locked (§9.4.1.6). Original terse §9.4 spec SUPERSEDED. Audit-driven scope refinement codification at **4th data point (PROMOTION-READY)** for DEVELOPMENT_LESSONS.org. `subcube-member?` reclassified as primitive-awaiting-consumer (no Phase 3A consumer under M1). |
+| 3B mini-design + mini-audit | Conversational opening of Phase 3B; surfaced OQ1 ↔ mutual-exclusion semantic tension Phase 3A's mini-design missed; explored M0/M1/M3 with adversarial 3-column; M1 selected; sub-phase partition refined; pre-committed falsification criteria locked | ✅ this commit | Persisted at §9.4.1 per Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc). 11 subsections (§9.4.1.1-§9.4.1.12) covering: audit findings, semantic exploration, architectural decision, sub-phase partition, Phase 3B.0 scope, falsification criteria, drift risks, cross-track captures (5), methodology notes, resolved Q1-Q5, status, cross-references. |
+| 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | ⬜ | **NEXT — opens with conversational mini-design + mini-audit per Stage 4 Per-Phase Protocol + deliberate/discourse turn before confirming implementation approach (per user direction 2026-05-22).** See §9.4.1.5 for full scope. Pre-0 measurement informs 3B.B go/defer decision per §9.4.1.6. |
+| 3B.A | M1 substrate decomplection — separate active-branch-set cell (cell-18 expected) + `union-amb` primitive (alongside `solver-amb`); migrate `process-fork-on-union` (typing-propagators.rkt:1139) from `solver-state-amb` to `union-amb`; `process-fork-contradiction` narrows new cell instead of worldview-cache | ⬜ | Architectural debt resolution — independent of 3B.B in correctness. See §9.4.1.3-4 for rationale + §9.4.1.5 audit task A5/A6 for primitive design. Preserves classical `solver-amb` for downstream classical-ATMS consumers (BSP-LE 2 multi-clause selection, NAF). |
+| 3B.B | Hypercube integration (Gray-code aid ordering at `solver-amb`/`union-amb` aid-allocation layer) — **CONDITIONAL on 3B.0 measurement outcome** per §9.4.1.6 pre-committed falsification criteria | ⬜ | Pre-committed: ≥10% benefit at W4/W5 → implement; 5-10% → investigate before implementing; ±5% → documented-defer with negative finding; slower → defer + flag primitive-keepalive risk. Cell-layer/data-layer optimization (NOT scheduler-coupled per Cell/Propagator/Scheduler Orthogonality). |
+| 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ⬜ | Per §9.4.1.7. 6 drift risks named at mini-design open per Stage 4 discipline. |
+| 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. Under M1: consumes active-branch-set narrowing signal from new cell; can ALSO consume mutex nogoods from OTHER (classical-ATMS) callers if needed for error chains involving classical amb. Phase 3C inherits the architectural separation cleanly. |
+| 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
 
@@ -5658,7 +5663,9 @@ The session arc surfaced **6 methodology data points** across 3A.c.6 close (§9.
 - R7 reframe selection rationale: §9.3.6.8 (R8 empirical) + §9.3.7 (mini-design)
 - Cumulative methodology data points: §9.3.8.4 + §9.3.9.4
 
-### §9.4 Phase 3B deliverables
+### §9.4 Phase 3B deliverables (ORIGINAL TERSE SPEC — superseded by §9.4.1 for implementation planning)
+
+**Note 2026-05-22**: this terse 4-item spec is retained for conceptual framing. Phase 3B's actual implementation plan post-mini-design + mini-audit is at §9.4.1. Specifically: the original spec assumed BSP-LE 2 D.6's fork-and-rejoin CHAMP-sharing framing (item 2); under Phase 3A's Realization B (in-place worldview tagging on shared carrier), the CHAMP-sharing argument does NOT transfer directly — Phase 3B's hypercube integration requires the substrate decomplection (M1) first + empirical falsification (Pre-0 A/B) before the Gray-code integration is justified. §9.4.1 captures the refinement.
 
 Hypercube integration leveraging already-implemented primitives (audit §3.5):
 
@@ -5666,6 +5673,230 @@ Hypercube integration leveraging already-implemented primitives (audit §3.5):
 2. Benefit: successive forks differ by one assumption bit → CHAMP structural sharing maximized
 3. Subcube pruning on contradictions: when branch X contradicts, writes nogood; subsequent branches containing the same nogood-bits skipped via `subcube-member?` check (already implemented in `decision-cell.rkt:368`)
 4. Tests: performance + correctness (structural sharing benefit measurable via heartbeat counters)
+
+### §9.4.1 Phase 3B mini-design + mini-audit (2026-05-22 — conversational opening of Phase 3B)
+
+Mini-design + mini-audit opened post-Phase-3A close (HEAD `105ad18f`, 2026-05-22). **Critical finding**: the conversational mini-audit surfaced an architectural debt missed by Phase 3A's mini-design (§9.3.1) — the **OQ1 ↔ mutual-exclusion semantic tension**. This finding RESHAPED Phase 3B from "wire hypercube primitives" (per §9.4 original spec) into "substrate decomplection FIRST, then hypercube integration conditional on empirical evidence." Outcomes persisted per Stage 4 methodology (mini-design + mini-audit findings persist to design doc, not parallel files / dailies-only).
+
+#### §9.4.1.1 Audit findings — OQ1 ↔ mutual-exclusion tension surfaced
+
+Phase 3A's mini-design (§9.3.1) treated `solver-state-amb` as a contract-less aid allocator (§9.3.1.1 audit row read: *"`solver-state-amb` (atms.rkt:67/440) — fresh-aid allocation via counter cell; one aid-group per call. `solver-state-add-nogood`, `solver-amb-groups`"*). The Phase 3B mini-audit revealed:
+
+**Finding** (atms.rkt:300-320): `solver-amb` writes **N·(N−1)/2 pairwise mutual-exclusion nogoods** as a side effect of every call. The function comment at atms.rkt:302 reads *"records pairwise mutual-exclusion nogoods"*; body at lines 313-319:
+
+```racket
+;; 2. Record mutual exclusion: every pair of hypotheses is a nogood
+(define net2
+  (for*/fold ([n net1])
+             ([i (in-range (length hyps))]
+              [j (in-range (+ i 1) (length hyps))])
+    (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
+                                      (list-ref hyps j) #t))))
+```
+
+**Implication for Phase 3A**: `process-fork-on-union` (typing-propagators.rkt:1139) invokes `solver-state-amb` → `solver-amb` → pairwise nogoods. These nogoods exist in the network's nogood store but are NOT consulted by Phase 3A's mechanism. The mechanism "works" because `wrap-with-worldview`'s single-bit dispatch isolates each branch propagator from observing the nogoods at the global worldview level.
+
+**The deeper SAT distinction**:
+
+| Construct | Logical semantic | Constraint type | ATMS encoding |
+|---|---|---|---|
+| Classical `amb` | EXACTLY ONE of {h_0, ..., h_{N-1}} is true | Disjunction + pairwise mutual exclusion | N aids + N(N−1)/2 pairwise nogoods |
+| Non-committing union | AT LEAST ONE of {h_0, ..., h_{N-1}} is true; multiple may be | Disjunction only | N aids + no mutex nogoods (all-fail-on-zero-active check) |
+
+`solver-amb` encodes classical (exactly-one); non-committing union semantics (per OQ1 type-theory citations: Frisch-Castagna semantic subtyping; Castagna 2022; Tobin-Hochstadt-Felleisen Typed Racket occurrence typing; Scala 3 hard unions) wants AT-LEAST-ONE only.
+
+**worldview-cache role overload**: Phase 3A's `process-fork-on-union` initializes worldview-cache with ALL N branch bits set (typing-propagators.rkt:1146-1147):
+
+```racket
+(define n1 (net-cell-write n worldview-cache-cell-id
+                            (bitwise-ior current-wv branch-mask)))
+```
+
+Under classical ATMS, worldview-cache represents the CURRENT BELIEVED WORLDVIEW — a single point in Q_n. Having multiple branch bits set is structurally a contradiction per the pairwise nogoods. Phase 3A repurposes worldview-cache as an ACTIVE-BRANCH-SET (set of viable branches), a semantic incompatible with the classical interpretation that `solver-amb` enforces via mutex nogoods.
+
+**Pattern classification**: this is the **third "accidentally-load-bearing mechanism" pattern** in the addendum (continuing the lineage from S2.c-iii `with-handlers` wrapper and Path T-3 findings). Phase 3A's mini-audit missed the side effect because the audit row treated solver-state-amb as a contract-less aid allocator — **capture-gap discipline failure at the mini-audit level**.
+
+#### §9.4.1.2 Semantic exploration — three candidate models (adversarial 3-column)
+
+Three approaches surfaced in dialogue:
+
+**Model M0 — Suppress mutex nogoods at solver-amb call site (minimal patch)**
+
+Add `#:mutual-exclusion?` flag to `solver-amb`; Phase 3A passes `#:mutual-exclusion? #f`.
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ Removes inert nogoods; minimal infrastructure change; backward compatible; surgically fixes the immediate inconsistency | Renames the problem without fixing it. The worldview-cache role-overloading remains; future non-committing consumers (Phase 9b γ multi-candidate) will rediscover the same overloading. | **Treats the symptom (inert nogoods being written) without fixing the root cause (two semantic concepts sharing a substrate). Honest framing: M0 is a SAFETY PATCH that closes the open hole, NOT an architectural answer. If we take M0, we ship it explicitly labeled as scaffolding with a Track-4D-shaped retirement plan. We are NOT "done" with the semantic clarification after M0 lands.** |
+
+**Model M1 — Separate active-branch-set cell + new `union-amb` primitive (selected; see §9.4.1.3)**
+
+- New cell (active-branch-set tracker): per-fork-position active-branch bitmask; merge = set-narrowing via bitwise-AND-with-NOT-mask
+- New primitive `union-amb` (alongside `solver-amb`): allocates N aids; writes their bits to the new cell; does NOT write mutual-exclusion nogoods
+- `process-fork-on-union` migrates from `solver-state-amb` to `union-amb`
+- `process-fork-contradiction` narrows new cell (not worldview-cache) on contradicted branch aids
+- `solver-amb` retains classical semantics for downstream classical-ATMS clients (BSP-LE 2 multi-clause selection, NAF, etc.)
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ Real decomplection: two cells with structurally-distinct merge contracts; first-class "active-branch-set" concept; honest naming; Correct-by-Construction at the cell layer | Is this just renaming the same data with a different cell-id? Two cells with similar bitmask shape but different "meaning" could be the failure mode `:set` vs `:point` tag would also exhibit. | **Test the decomplection: do the two cells have GENUINELY DIFFERENT merge semantics? Worldview-cache (classical-ATMS): point-update via decisions-state-bitmask (commit/retract a specific worldview). Active-branch-set: set-narrowing via bitwise-AND-with-NOT-mask (monotone shrinking; CALM-safe). Structurally distinct lattice operations — confirmed decomplection, not renaming. Risk of complexity proliferation: real but bounded — adding ONE new substrate primitive for a previously-conflated concept is canonical decomplection (compare PAR Track 1 stratifying topology vs value cells; same architectural pattern).** |
+
+**Model M3 — First-class classifier-set type-theoretic reification (long-term, Track 4D)**
+
+- Introduce `union-classifier-set` substrate concept (set-of-type-classifiers as first-class lattice value)
+- Per Frisch-Castagna semantic subtyping: `[[e : A | B]] = [[e]] ∈ [[A]] ∪ [[B]]`
+- Composes with attribute-map `:type` facet's classify-inhabit-value CLASSIFIER layer
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ Type-theoretically pure (matches Castagna); composes with classify-inhabit-value; eliminates worldview-cache overload entirely | Big restructuring; conflates type-system semantics with substrate mechanism; possibly Track 4D scope | **Does the type-set abstraction GENUINELY belong at the substrate layer, or is it a type-system-level concept being prematurely pushed down? The substrate (propagator network) is meant to be type-system-agnostic — it provides lattices, cells, propagators. The classifier-set is a TYPE-SYSTEM construct. Reifying it at the substrate creates a Track-4D-shaped coupling (attribute-grammar substrate unification — exactly Track 4D's thesis). Honest framing: M3 is RIGHT but PREMATURE — it should land WITH Track 4D, not BEFORE it. Until then, M1 is the architecturally-correct substrate-level answer.** |
+
+#### §9.4.1.3 Architectural decision — M1
+
+**M1 selected** as the substrate-level answer for Phase 3B's prerequisite work. Rationale:
+- The semantic gap is real (Phase 3A's worldview-cache repurposing is decomplection failure; inert mutex nogoods are architectural debt)
+- M1 properly decomplects (separate cells with structurally-distinct merge contracts)
+- Preserves classical `solver-amb` for downstream classical-ATMS consumers
+- M0 is safety-patch territory (acceptable as emergency stopgap, NOT architecturally final)
+- M3 belongs in Track 4D (premature now; would conflate type-system + substrate)
+
+**Adversarial self-check on M1 selection**:
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ M1 cleanly decomplects per Correct-by-Construction | Am I converging on M1 because it's the most COMFORTABLE answer (adds a cell, no fundamental restructuring)? | **Honest test: M3 requires type-system knowledge in the substrate, violating First-Class-by-Default at the WRONG LAYER (the substrate should be type-system-agnostic; type-system concepts should be defined in terms of substrate, not the other way around). M1 keeps the substrate type-agnostic and lets type-system code (Phase 3A handler, future Track 4D) compose on top. M1 is principled at THIS layer, M3 is principled at the integrated-layer Track 4D will introduce. Different scopes, different right answers. M1 confirmed correct for Phase 3B's prerequisite work.** |
+
+#### §9.4.1.4 Sub-phase partition
+
+| Sub-phase | Type | Purpose |
+|---|---|---|
+| **3B.0** | Measurement + Audit | Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit for M1 substrate decomplection design |
+| **3B.A** | Implementation | M1 substrate decomplection — separate active-branch-set cell + `union-amb` primitive; migrate `process-fork-on-union` from `solver-state-amb` to `union-amb` |
+| **3B.B** | Implementation | Hypercube integration (Gray-code aid ordering) — **conditional on 3B.0 measurement outcome per pre-committed falsification criteria (§9.4.1.6)** |
+| **3B-VAG** | Close | Cross-arc adversarial 3-column VAG |
+
+Independence note: `3B.A` (M1) is independent of `3B.B` (Gray code) in correctness — M1 is architectural debt resolution; 3B.B is a performance/Conjecture-alignment claim. Both are informed by 3B.0's outputs.
+
+**Subcube-member? consumer status under M1**: under M1, mutex nogoods don't exist for fork-on-union, so `subcube-member?` has NO consumer from fork-on-union directly. Real future consumer = downstream nogoods from OTHER paths (Parent Phase 4 CHAMP retirement; Phase 9b multi-candidate; PReduce). Honest answer: **`subcube-member?` stays orphaned for Phase 3B, ships with documentation labeling it as primitive-awaiting-consumer**. The original §9.4 spec's item #3 ("Subcube pruning on contradictions...") is SUPERSEDED by this resolution — moved from Phase 3B scope to "primitive-awaiting-consumer" status.
+
+#### §9.4.1.5 Phase 3B.0 scope (measurement + audit)
+
+**Audit tasks** (for M1 design — outputs persist into §9.4.2+ as findings land):
+
+1. **A1 — `solver-state-amb` caller catalog**: grep `solver-state-amb` + `solver-amb` across racket/prologos/; classify each as classical-ATMS vs non-committing-union; expected: `process-fork-on-union` is sole non-committing caller. Determines migration scope for M1.
+2. **A2 — worldview-cache read/write site catalog**: grep `worldview-cache-cell-id` across racket/prologos/; classify as point-update vs bit-set-update; identifies M1 migration scope at the cell-read/write layer.
+3. **A3 — wrap-with-worldview semantic audit**: read `wrap-with-worldview` body; confirm it parameterizes `current-worldview-bitmask` without depending on worldview-cache reads. Independence enables localized M1 change (M1 doesn't ripple through propagator machinery).
+4. **A4 — Mutex nogood storage + read site verification**: grep `solver-context-nogoods-cid` reads; trace consumers; confirm no Phase-3A path consults the inert nogoods. Validates the safety of M0's "suppress writing" approach as a corollary.
+5. **A5 — `union-amb` primitive design**: cell-id allocation slot (likely 18 = next available after cell-17 decomposed-positions-guard); cell shape (per-position hasheq → bitmask); API signature; migration site count (expected: 1).
+6. **A6 — `process-fork-contradiction` interactions under M1** (added per §9.4.1.10 meta-adversarial): narrowing target changes from `worldview-cache-cell-id` to the new active-branch-set cell; verify handler signature compatibility; verify cell-16 (fork-contradiction-request) → new-cell mapping.
+
+**Measurement tasks** (Pre-0 A/B harness):
+
+A/B variants (per §3.1):
+- **Variant A (control)**: sequential aid allocation `bit 0, 1, 2, ..., N-1` (current `solver-amb` behavior)
+- **Variant B (treatment)**: Gray-code-ordered aid allocation. Parameter `current-gray-code-aid-ordering?` (boolean, default #f). When #t, `solver-amb`'s aid-allocation loop applies `gray-code-order` permutation to bit-position assignment. **Cell-layer/data-layer optimization** (the aid's bit position is data; not scheduler-coupled).
+
+Workloads (per §3.2):
+- **W1** Single binary union: `def x : <Int | String> := 42; x` (2 branches)
+- **W2** Single N-ary union: `def x : <Int | String | Bool | Float> := 42; x` (4 branches)
+- **W3** Nested binary unions: function `<(A1|A2) -> (B1|B2)>` with multiple call sites
+- **W4** Deeply nested adversarial: ~10-15 nested unions; aid count approaches D-3A-bit-budget gate (≤30)
+- **W5** Worst-case adversarial: designed to give Gray code maximum advantage (many forks at varying depths; many touch-points)
+
+W5 is the **adversarial-best-shot workload** — if Gray code provides benefit anywhere under Realization B, W5 should show it. If W5 is negligible, the Conjecture's benefit doesn't transfer to this use case.
+
+Metrics (per §3.3): wall time (median of 10 runs, IQR reported); `cell_allocs` delta; `prop_firings` delta; peak retained memory (KB); `max_aids_per_command` from PERF-COUNTERS; `atms_hypothesis_count` per command; probe semantic diff (sanity, MUST be zero); full suite pass count (sanity, MUST be stable).
+
+Harness location: dedicated file `benchmarks/micro/bench-fork-on-union-gray-code.rkt` (per resolved Q2 in §9.4.1.10).
+
+#### §9.4.1.6 Pre-committed falsification criteria
+
+Per §11.3 measurement-driven gate methodology + S2.c-iii lesson (microbench claim verification) — committed BEFORE measurement to prevent post-hoc rationalization:
+
+| W4/W5 wall time outcome | Interpretation | Phase 3B.B action |
+|---|---|---|
+| Variant B beats A by **≥10%** | Positive evidence: Conjecture's claim transfers to Realization B at this scale | Phase 3B.B = implement Gray-code aid ordering |
+| Variant B beats A by **5-10%** | Suggestive; need microbench isolation to confirm benefit attribution | Investigate before implementing; consider forward-investment label (1V Item #1-quater precedent) |
+| Variants within **±5%** | **Negative**: Conjecture's empirical benefit does NOT transfer under THIS Realization B + workload-set | Phase 3B.B = documented-defer with negative finding (architecturally honest output) |
+| Variant B **slower** than A | Strong negative: dispatch overhead exceeds benefit | Defer + flag as primitive-keepalive risk (workflow.md "preserved for backward-compat" red flag) |
+
+The pre-commitment is itself the discipline. We DO NOT amend the thresholds after seeing the data. If results land between thresholds, the methodology requires re-running with refined workload (not threshold revision).
+
+#### §9.4.1.7 Drift risks named (per Stage 4 mini-design discipline)
+
+To be re-verified at Phase 3B close (drift-risks-cleared question in 3B-VAG):
+
+- **D-3B-shape-without-benefit**: wire up Gray-code without demonstrating measurable benefit (S2.c-iii pattern). **Mitigation**: the falsification criteria (§9.4.1.6) ARE the structural mitigation — Phase 3B.B is conditional on positive evidence, NOT default-on.
+- **D-3B-fork-vs-Realization-B-confusion**: inherited BSP-LE 2 D.6 framing assumes fork-and-rejoin's CHAMP sharing; Realization B has no forks. **Mitigation**: §9.4 supersession note + §9.4.1 explicit re-derivation of benefit under Realization B make this explicit.
+- **D-3B-orphan-primitive-keepalive**: `subcube-member?` stays orphaned post-3B; risk of "preserved for future use" rationalization. **Mitigation**: ship docstring labeling primitive-awaiting-consumer with explicit cross-references to Phase 9b / PReduce / Parent Phase 4 as future consumer candidates (per §9.4.1.8 cross-track captures).
+- **D-3B-scheduler-coupled-optimization**: Cell/Propagator/Scheduler Orthogonality requires optimization at appropriate layer. **Mitigation**: M1's aid bit-position assignment is at CELL/DATA layer (`assumption-id-n` is data); Gray-code permutation is applied to aid allocation, NOT to scheduler iteration order. Risk mitigated structurally by M1's design.
+- **D-3B-subcube-without-consumer**: `subcube-member?` has no consumer in Phase 3A under M1 (mutex nogoods don't exist for fork-on-union). **Mitigation**: explicit "primitive-awaiting-consumer" labeling; honest deferral rather than wiring without consumer.
+- **D-3B-measurement-confound-inert-nogoods**: A/B test on current code (pre-M1) measures variant B with inert-mutex-nogood-writing overhead present. Overhead is constant across variants (cancels in A/B delta). **Mitigation**: documented limitation; re-measure post-M1 if substantial finding emerges.
+
+#### §9.4.1.8 Cross-track captures
+
+**Phase 9b γ multi-candidate**: inherits M1 substrate (active-branch-set cell + `union-amb` primitive). Phase 9b's mini-design picks these up as substrate primitives; **D-9b-bit-budget** (from §9.3.1.7) remains separate concern. If Phase 9b's multi-candidate count exceeds 30 (D-3A-bit-budget gate), the M1 cell may need extension OR Phase 9b may need budget-management mechanism.
+
+**Parent Phase 4** (CHAMP retirement): M1's separate cell allocation must coordinate with Parent Phase 4's broader meta-storage cleanup. If Parent Phase 4 retires `solver-context-nogoods-cid` interactions for fork-on-union path, M1 simplifies further. M1 ships independent of Parent Phase 4; coordination at integration.
+
+**PReduce Track 1** (e-class cell substrate): M1's `union-amb` primitive becomes template for non-committing multi-candidate substrate. PReduce inherits via composition — e-class cells with multi-candidate cost extraction face similar "at-least-one optimal candidate is true" semantic; M1's substrate decomplection is the canonical pattern.
+
+**PPN Track 4D** (Attribute Grammar Substrate): **M3 (long-term) lands here**. M1 → M3 migration is part of 4D's substrate unification thesis. Track 4D scope includes promoting the substrate-level active-branch-set concept into the type-theoretic classifier-set concept.
+
+**Phase 3C** (residuation error-explanation): consumes the active-branch-set narrowing signal from M1's new cell. Can ALSO consume mutex nogoods from OTHER (classical-ATMS) callers if needed for error chains involving classical amb. Phase 3C inherits the architectural separation cleanly.
+
+#### §9.4.1.9 Methodology notes — audit-driven scope refinement (4th data point)
+
+The Phase 3B mini-audit caught a Phase-3A-mini-audit gap (capture-gap pattern at the mini-audit level):
+- Phase 3A audit row (§9.3.1.1) treated `solver-state-amb` as contract-less aid allocator
+- Phase 3B audit revealed `solver-amb` writes pairwise mutex nogoods as side effect
+- The architectural debt this introduced (worldview-cache role overload) became latent in Phase 3A — only surfaced via Phase 3B's audit
+
+This continues the **audit-driven scope refinement** codification (from §9.3.9.4): when post-phase audit refines the prior phase's audit, the design ACCEPTS the refinement and reshapes scope rather than treating it as bug-hunt. Phase 3B's scope is shaped by what Phase 3B's audit revealed about Phase 3A, NOT by what Phase 3A's audit predicted.
+
+**4th data point for this codification**:
+1. R7.a audit refining R7 implementation pattern (from per-fire-fn enumeration to centralized-at-API; §9.3.9.4)
+2. 3A.b lazy `promote-cell-to-tagged` discovery via mempalace search (§9.3.9.4)
+3. 3A.c.5 migration scope refinement (6 active + 2 preserves matches §9.3.5.6 estimate; §9.3.9.4)
+4. **3B.0 audit surfacing OQ1 ↔ mutual-exclusion tension** (this section)
+
+**Promotion to DEVELOPMENT_LESSONS.org NOW WARRANTED** — 4 data points across 2 phases (3A + 3B). Graduation deferred to user direction (per §9.3.9.4 pattern).
+
+**Related methodology note — adversarial 3-column at META level**: adversarial framing applied to the Phase 3B.0 plan itself (§4 of mini-design dialogue, in dailies); identified A6 audit step missing from initial scope; identified measurement-on-current-code confound (D-3B-measurement-confound-inert-nogoods). The meta-application of adversarial framing catches scope gaps at the design-plan layer, not just the architectural-decision layer. Reinforces the **3-column discipline at every gate** lesson (codified across DESIGN_METHODOLOGY/CRITIQUE_METHODOLOGY/workflow.md/MEMORY.md per S2.c-iii arc).
+
+#### §9.4.1.10 Resolved open questions from mini-design dialogue
+
+5 open questions resolved before persistence (per dailies session 2026-05-22):
+
+| Q | Resolution |
+|---|---|
+| **Q1 — Audit scope** (add A6 process-fork-contradiction interactions under M1) | RESOLVED: added A6 to scope per §9.4.1.5. Surfaced via adversarial 3-column at meta level. |
+| **Q2 — A/B harness location** | RESOLVED: dedicated file `benchmarks/micro/bench-fork-on-union-gray-code.rkt`. Clear ownership; doesn't pollute existing harness. |
+| **Q3 — Measurement timing** (current code vs post-M1) | RESOLVED: measure on current code (inert nogoods constant across variants; cancel). Documented limitation D-3B-measurement-confound-inert-nogoods; re-measure post-M1 if substantial finding emerges. |
+| **Q4 — Falsification thresholds** | RESOLVED: ≥10% / 5-10% / ±5% / slower per §9.4.1.6. Tight enough per noise analysis (wall-time noise typically <5% in our suite). |
+| **Q5 — D.3 persistence timing** | RESOLVED: persist NOW (this commit) with audit findings as living subsection; mini-design + mini-audit outcomes persist to design doc per Stage 4 methodology. |
+
+#### §9.4.1.11 Status
+
+- Mini-design + mini-audit COMPLETE — OQ1 ↔ mutual-exclusion semantic resolved (M1 selected)
+- Phase 3B sub-phase structure refined (3B.0 / 3B.A / 3B.B / 3B-VAG)
+- Phase 3B.0 audit + measurement scope defined (§9.4.1.5)
+- Pre-committed falsification criteria locked (§9.4.1.6)
+- Drift risks named (D-3B-*; §9.4.1.7)
+- 5 cross-track captures (Phase 9b, Parent Phase 4, PReduce 1, Track 4D, Phase 3C; §9.4.1.8)
+- Audit-driven scope refinement codification — 4th data point (PROMOTION-READY for DEVELOPMENT_LESSONS.org)
+- 5 open questions resolved (§9.4.1.10)
+- Ready for Phase 3B.0 implementation opening per Stage 4 Per-Phase Protocol — **+ deliberate/discourse turn before confirming implementation approach** per user direction 2026-05-22
+
+#### §9.4.1.12 Cross-references
+
+- Parent Phase 3 mini-design (Realization B pivot): §9.3.1
+- Phase 3A cross-arc VAG: §9.3.9
+- Original Phase 3B terse spec (superseded by this section): §9.4
+- Stage 2 audit findings (hypercube primitives implementation status): [`2026-04-21_PPN_4C_PHASE_9_AUDIT.md`](2026-04-21_PPN_4C_PHASE_9_AUDIT.md) §3.5
+- Hypercube research foundation: [`2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md`](../research/2026-04-08_HYPERCUBE_BSP_LE_DESIGN_ADDENDUM.md)
+- Hyperlattice Conjecture: [`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture + § Cell/Propagator/Scheduler Orthogonality
+- Substrate primitives: `gray-code-order` (relations.rkt:1874); `subcube-member?` (decision-cell.rkt:372); `solver-amb` (atms.rkt:304); `process-fork-on-union` (typing-propagators.rkt:1120)
+- Dialogue context (audit findings + alternate models): dailies 2026-05-17 session entries 2026-05-22 (Phase 3B mini-design)
 
 ### §9.5 Phase 3C deliverables
 
