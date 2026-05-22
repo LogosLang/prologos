@@ -74,9 +74,26 @@
 ;; Load the Prologos OCapN modules once
 ;; ========================================
 
+;; The captp-core dependency tree must be imported as explicit
+;; top-level `imports` in dependency order. Auto-loading a module's
+;; deps transitively (just `(imports captp-core)`) mis-elaborates
+;; `data` constructor matches into `??__match-fail` holes — a known
+;; module-loading-context boundary. This preamble mirrors the proven
+;; import list from tests/test-ocapn-bridge.rkt.
 (define preamble
   "(ns ocapn-test-server)
+(imports (prologos::ocapn::core :refer-all))
+(imports (prologos::ocapn::message :refer-all))
+(imports (prologos::ocapn::captp-wire :refer-all))
+(imports (prologos::ocapn::syrup-wire :refer-all))
+(imports (prologos::ocapn::captp-core :refer-all))
+(imports (prologos::ocapn::pipelining :refer (promise-queue-length)))
+(imports (prologos::ocapn::captp-interop-helpers :refer (framed-concat)))
+(imports (prologos::data::list :refer (List nil cons)))
+(imports (prologos::data::option :refer (Option some none unwrap-or)))
+(imports (prologos::data::string :as str :refer ()))
 (imports (prologos::ocapn::handshake :refer-all))
+(imports (prologos::ocapn::interop-driver :refer-all))
 ")
 
 (printf "ocapn-test-server: loading Prologos OCapN modules~n") (flush-output)
@@ -170,6 +187,56 @@
                 (bytes->hex-string frame-bytes))))))))
 
 ;; ========================================
+;; Post-handshake CapTP dispatch
+;; ========================================
+;;
+;; Once the handshake is accepted the server drives captp-core's
+;; connection-step, one wire frame at a time. Each frame is a separate
+;; `process-string` call (fresh reduction-fuel budget); the
+;; ConnectionState persists in ocapn-conn-ffi.rkt's table keyed by an
+;; integer connection id. `step-connection` returns the concatenated
+;; outbound wire bytes (raw-syrup is self-delimiting).
+
+(define conn-id-box (box 0))
+
+(define (next-conn-id!)
+  (define id (unbox conn-id-box))
+  (set-box! conn-id-box (add1 id))
+  id)
+
+(define (drive-init! cid)
+  (call-with-semaphore validate-sema
+    (lambda ()
+      (run-prologos (format "(eval (init-connection ~a))" cid)))))
+
+;; Returns the outbound wire bytes for one frame, or #"" if the step
+;; produced nothing / failed. A step that errors (e.g. an op captp-core
+;; cannot yet service) must not take down the connection handler.
+(define (drive-step cid frame-bytes)
+  (call-with-semaphore validate-sema
+    (lambda ()
+      (with-handlers ([exn:fail?
+                       (lambda (e)
+                         (printf "ocapn-test-server: step exn (conn ~a): ~a~n"
+                                 cid (exn-message e))
+                         #"")])
+        (define results
+          (run-prologos
+           (format "(eval (step-connection ~a ~s))"
+                   cid (bytes->hex-string frame-bytes))))
+        (define r (and (pair? results) (last results)))
+        (cond
+          [(not (string? r))
+           (printf "ocapn-test-server: step produced no String (conn ~a)~n" cid)
+           #""]
+          [(regexp-match #px"^(\".*\") : String$" r)
+           => (lambda (m)
+                (string->bytes/latin-1 (read (open-input-string (cadr m)))))]
+          [else
+           (printf "ocapn-test-server: step result unparsable (conn ~a): ~a~n" cid r)
+           #""])))))
+
+;; ========================================
 ;; Connection handler
 ;; ========================================
 
@@ -195,10 +262,10 @@
        (define abort-reply (validate-incoming first-frame))
        (cond
          [(zero? (bytes-length abort-reply))
-          (printf "ocapn-test-server: inbound start-session accepted; reading further frames~n")
-          ;; We don't yet dispatch through captp-core's
-          ;; connection-step — frame counting + logging is the
-          ;; integration point for Phase 59.
+          (define cid (next-conn-id!))
+          (drive-init! cid)
+          (printf "ocapn-test-server: inbound start-session accepted (conn ~a); driving captp-core~n"
+                  cid)
           (let loop ([n 1])
             (define frame (with-handlers ([exn:fail?
                                            (lambda (e)
@@ -208,10 +275,13 @@
                             (read-frame cin)))
             (cond
               [(or (eof-object? frame) (not frame))
-               (printf "ocapn-test-server: peer closed after ~a frames~n" n)]
+               (printf "ocapn-test-server: peer closed after ~a frames (conn ~a)~n" n cid)]
               [else
-               (printf "ocapn-test-server: received frame ~a (~a bytes)~n"
-                       (+ n 1) (bytes-length frame))
+               (define out (drive-step cid frame))
+               (printf "ocapn-test-server: conn ~a frame ~a (~a in / ~a out bytes)~n"
+                       cid (+ n 1) (bytes-length frame) (bytes-length out))
+               (when (> (bytes-length out) 0)
+                 (write-frame cout out))
                (loop (+ n 1))]))]
          [else
           (printf "ocapn-test-server: inbound start-session REJECTED (~a bytes); sending op:abort~n"

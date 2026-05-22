@@ -1,0 +1,63 @@
+ns prologos::ocapn::interop-driver
+
+;; ========================================
+;; OCapN interop test-server driver — Phase 59
+;; ========================================
+;;
+;; Glue between the Racket TCP test server and the captp-core
+;; connection machinery. The server reads one wire frame at a time and
+;; calls `step-connection` — one `process-string` per frame, so each
+;; frame gets a fresh reduction-fuel budget. The `ConnectionState`
+;; persists between frames in ocapn-conn-ffi.rkt's table, keyed by an
+;; integer connection id the server assigns. The ConnectionState type
+;; is opaque across the FFI: the foreign mechanism passes through any
+;; type it does not recognise, so the rich ADT crosses unmarshalled.
+
+require [prologos::ocapn::captp-core :refer [ConnectionState empty-connection
+                                              connection-step conn-step-state
+                                              conn-step-outbound]]
+        [prologos::ocapn::captp-wire :refer [decode-op]]
+        [prologos::ocapn::message    :refer [CapTPOp]]
+        [prologos::ocapn::handshake  :refer [hex-to-bytes]]
+        [prologos::data::list        :refer [List nil cons]]
+        [prologos::data::string      :as str :refer []]
+        [prologos::data::option      :refer [Option some none]]
+
+;; Per-connection ConnectionState stash (see ocapn-conn-ffi.rkt).
+foreign racket "ocapn-conn-ffi.rkt"
+  [ocapn-conn-stash :as conn-stash : Nat -> ConnectionState -> Bool]
+foreign racket "ocapn-conn-ffi.rkt"
+  [ocapn-conn-fetch :as conn-fetch : Nat -> ConnectionState]
+
+spec concat-frames [List String] -> String
+  :doc "Concatenate already-encoded outbound wire frames (raw-syrup is self-delimiting, so back-to-back frames need no separator)."
+defn concat-frames
+  | nil        -> ""
+  | cons h t   -> str::append h [concat-frames t]
+
+spec init-connection Nat -> Bool
+  :doc "Set up fresh per-connection captp-core state for connection `cid`."
+defn init-connection [cid]
+  conn-stash cid empty-connection
+
+;; Force the stash side effect — matching the Bool result drives its
+;; evaluation — then return the concatenated outbound bytes.
+spec emit-after-stash Bool [List String] -> String
+defn emit-after-stash [stashed outbound]
+  match stashed
+    | true  -> [concat-frames outbound]
+    | false -> [concat-frames outbound]
+
+spec run-step Nat CapTPOp ConnectionState -> String
+defn run-step [cid op cs]
+  let step := [connection-step op cs]
+    emit-after-stash [conn-stash cid [conn-step-state step]]
+                     [conn-step-outbound step]
+
+spec step-connection Nat String -> String
+  :doc "Process one inbound wire frame (hex-encoded) for connection
+        `cid`. Returns the concatenated outbound wire bytes to send."
+defn step-connection [cid hex-frame]
+  match [decode-op [hex-to-bytes hex-frame]]
+    | none    -> ""
+    | some op -> [run-step cid op [conn-fetch cid]]

@@ -106,25 +106,26 @@ defn op-to-syrup [op]
 ;; the 2-elem case).
 
 spec encode-op CapTPOp -> String
-defn encode-op
-  | op-start-session ver loc  -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
-  | op-abort reason           -> wire::encode [syrup-tagged "op:abort" [syrup-string reason]]
-  | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]
-  | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons args nil]]
-  | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-export resolver] nil]]
-  | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
-  | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
-  ;; Phase 25/44: peer's reply to our question OR pipelining onto
-  ;; their own. Wire form is op:deliver with target=desc:answer N,
-  ;; trailing ap/rm carry the (optional) answer-pos and resolver — for
-  ;; replies these are false; for pipelining peer may set ap to await
-  ;; an answer.
-  | op-deliver-to-answer qpos args ap rm ->
-      wire::encode-record "op:deliver"
-        [cons [desc-answer qpos]
-          [cons args
-            [cons [opt-pos ap]
-              [cons [opt-pos rm] nil]]]]
+defn encode-op [op]
+  match op
+    | op-start-session ver loc  -> wire::encode-record "op:start-session" [cons [syrup-string ver] [cons loc nil]]
+    | op-abort reason           -> wire::encode [syrup-tagged "op:abort" [syrup-string reason]]
+    | op-deliver tgt args ap rm -> wire::encode-record "op:deliver" [cons [desc-export tgt] [cons args [cons [opt-pos ap] [cons [opt-pos rm] nil]]]]
+    | op-deliver-only tgt args  -> wire::encode-record "op:deliver-only" [cons [desc-export tgt] [cons args nil]]
+    | op-listen tgt resolver    -> wire::encode-record "op:listen" [cons [desc-export tgt] [cons [desc-export resolver] nil]]
+    | op-gc-export pos cnt      -> wire::encode-record "op:gc-export" [cons [syrup-nat pos] [cons [syrup-nat cnt] nil]]
+    | op-gc-answer pos          -> wire::encode [syrup-tagged "op:gc-answer" [syrup-nat pos]]
+    ;; Phase 25/44: peer's reply to our question OR pipelining onto
+    ;; their own. Wire form is op:deliver with target=desc:answer N,
+    ;; trailing ap/rm carry the (optional) answer-pos and resolver — for
+    ;; replies these are false; for pipelining peer may set ap to await
+    ;; an answer.
+    | op-deliver-to-answer qpos args ap rm ->
+        wire::encode-record "op:deliver"
+          [cons [desc-answer qpos]
+            [cons args
+              [cons [opt-pos ap]
+                [cons [opt-pos rm] nil]]]]
 
 ;; ===========================================================
 ;; Decoder
