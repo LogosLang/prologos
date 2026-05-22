@@ -417,14 +417,106 @@
                        #:expected '42))
 
 ;; ========================================
-;; Phase 10 — Union types via ATMS (cell-based TMS)
+;; PPN 4C 3A.c.3-R7 (2026-05-22) — union-inhabitation parity axis
 ;; ========================================
+;;
+;; Per addendum §9.3.5.5 Decision 2 (D' resolution: 4 active axes + 1
+;; skip-gated) and §9.3.7 R7 mini-design. Validates the on-network
+;; mechanism's user-facing behavior end-to-end:
+;;
+;;   R7's inline-emit at type-map-write detects union → emits cell-15
+;;   request → process-fork-on-union handler decomposes via N branch
+;;   propagators wrapped at per-branch worldview → contradictions
+;;   narrow worldview-cache via S(-1) per 3A.b → surviving branches'
+;;   bits remain → classifier PRESERVED as the original union
+;;
+;; Non-committing semantics: this is the LOAD-BEARING property. A sexp
+;; first-success commit would return the value with the FIRST branch's
+;; type only — narrowing the classifier away from the union. The R7
+;; mechanism preserves the union as the classifier (only contradicted
+;; branches narrow; multi-success branches coexist).
+;;
+;; Axes:
+;;   - preserved:      single-success branch; classifier retained
+;;   - flipped:        branch-order symmetry (left-fail-right-succeed)
+;;   - multi-success:  LOAD-BEARING DISCRIMINATOR — sexp first-success
+;;                     would FAIL this axis (narrows to first branch)
+;;   - all-fail:       exhaustion produces type error
+;;   - narrowing:      skip-gated → PPN Track 5 (occurrence typing)
 
-(parity-test-skip 'union-narrow-by-constraint "Phase 10"
-                  "let x := (the <Int | String> 0) in [eq? x 0]"
-  (check-parity-equal? 'union-narrow-by-constraint
-                       "let x := (the <Int | String> 0) in [eq? x 0]"
-                       #:expected-type 'Int))
+(parity-test 'union-inhabitation-preserved "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Int | String> := 42) x"
+  ;; Int branch succeeds; non-committing preserves classifier as union.
+  ;; Discriminating: a sexp first-success commit returns "42 : Int" only;
+  ;; this axis requires "Int | String" substring to be present in the
+  ;; pretty-printed type annotation.
+  (check-parity-equal? 'union-inhabitation-preserved
+                       "(ns t) (def x : <Int | String> := 42) x"
+                       #:expected '42
+                       #:expected-type "Int | String"))
+
+(parity-test 'union-inhabitation-flipped "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <String | Int> := 42) x"
+  ;; Branch-order symmetry: left-fail-right-succeed produces same shape.
+  ;; pp-expr preserves SOURCE ORDER (pretty-print.rkt:632-633 emits
+  ;; "~a | ~a" without sorting); expected type substring matches input
+  ;; order "String | Int".
+  (check-parity-equal? 'union-inhabitation-flipped
+                       "(ns t) (def x : <String | Int> := 42) x"
+                       #:expected '42
+                       #:expected-type "String | Int"))
+
+(parity-test 'union-inhabitation-multi-success "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Nat | Int> := 0N) x"
+  ;; LOAD-BEARING DISCRIMINATOR per §9.3.5.5. Value 0N is BOTH Nat (direct
+  ;; literal) AND Int (via subtype Nat <: Int — established at SRE Track 2H).
+  ;; Under R7's non-committing semantics, both branches succeed AND the
+  ;; classifier remains "Nat | Int" (neither branch narrows). A sexp
+  ;; first-success commit returns "0N : Nat" only — FAILS the "Nat | Int"
+  ;; substring match. This axis is what proves on-network non-committing
+  ;; vs any first-success-commit alternative.
+  (check-parity-equal? 'union-inhabitation-multi-success
+                       "(ns t) (def x : <Nat | Int> := 0N) x"
+                       #:expected '0N
+                       #:expected-type "Nat | Int"))
+
+(parity-test 'union-inhabitation-all-fail "PPN 4C 3A.c.3-R7"
+             "(ns t) (def x : <Int | Bool> := \"hello\") x"
+  ;; All branches contradict ("hello" is neither Int nor Bool). Under R7's
+  ;; non-committing semantics, both branch propagators write contradiction
+  ;; sentinels; worldview-cache narrows away both branch bits via S(-1)
+  ;; (3A.b's process-fork-contradiction); union exhaustion produces an
+  ;; error via typing-errors.rkt:78 (the path that stays alive per
+  ;; §9.3.5.4; Parent Phase 4 owns its retirement). x's def doesn't
+  ;; complete; trailing reference surfaces as unbound-variable error
+  ;; (run-ns-last returns the LAST expression's result; union-exhaustion
+  ;; error appears earlier in the stream but is not the final result).
+  ;;
+  ;; The unbound-variable result is the downstream symptom of failed def
+  ;; — IS the parity-test-observable proof that union exhaustion happened.
+  ;; For direct union-exhaustion error-shape testing, see
+  ;; test-union-types-atms.rkt mechanism tests (which assert on cell-16
+  ;; narrowing + worldview-cache state directly, not surface result).
+  (check-parity-equal? 'union-inhabitation-all-fail
+                       "(ns t) (def x : <Int | Bool> := \"hello\") x"
+                       #:expected "Unbound variable"))
+
+;; ========================================
+;; PPN Track 5 (occurrence typing) — narrowing axis (skip-gated)
+;; ========================================
+;;
+;; Originally framed as `union-narrow-by-constraint` at Phase 10. Per
+;; §9.3.5.5 Decision 2 reframing: narrowing of a union to a single
+;; component via constraint propagation (`[int+ x 1]` constraining x to
+;; Int when x : <Int | String>) IS occurrence typing — PPN Track 5
+;; territory, NOT Phase 3A.c scope. The skip-gated entry preserves the
+;; intent and points to the proper track for resurrection.
+
+(parity-test-skip 'union-inhabitation-narrowing "PPN Track 5 (occurrence typing)"
+                  "let x := (the <Int | String> 0) in [int+ x 1]"
+  (check-parity-equal? 'union-inhabitation-narrowing
+                       "let x := (the <Int | String> 0) in [int+ x 1]"
+                       #:expected '1))
 
 ;; ========================================
 ;; Phase 9b — γ hole-fill inhabitant synthesis
