@@ -5996,13 +5996,168 @@ Phase 3B.0 closes when:
 - Ready for audit + harness construction execution
 - **Next**: A1-A6 all-parallel sweep + harness file scaffolding; persist to §9.4.2.7+
 
-#### §9.4.2.7 Audit findings (A1-A4) — TO BE LANDED
+#### §9.4.2.7 Audit findings (A1-A4) — all-parallel sweep results (2026-05-22)
 
-Placeholder for forthcoming all-parallel audit sweep findings (A1-A4).
+##### A1 — `solver-state-amb` / `solver-amb` caller catalog
 
-#### §9.4.2.8 Audit findings (A5-A6) — TO BE LANDED
+| Site | Type | Classification |
+|---|---|---|
+| `atms.rkt:441` `solver-state-amb` | Wrapper for `solver-amb` | Internal |
+| `atms.rkt:304` `solver-amb` | Primitive definition | Internal |
+| `typing-propagators.rkt:1139` `process-fork-on-union` | Production caller | **Non-committing union** (ONLY production non-committing caller) |
+| `tests/test-solver-context.rkt:182, 344` | Test fixtures | Test only |
 
-Placeholder for `union-amb` primitive design + `process-fork-contradiction` M1 interactions audit findings.
+**Conclusion**: process-fork-on-union is the sole non-committing production caller. Migration scope for M1: **1 production site**. Test sites use solver-state-amb for classical-ATMS testing (compound decisions cell behavior) — preserve as classical.
+
+##### A2 — `worldview-cache-cell-id` read/write site catalog
+
+**Writes** (point-update of "set of believed aids" — classical semantic):
+- `atms.rkt:281` — `solver-assume` (writes `(decisions-state-bitmask updated-ds)` — derived from compound decisions cell)
+- `atms.rkt:468` — `solver-state-with-worldview` (writes `wv-bitmask` computed from believed set)
+- `relations.rkt:242, 2155` — NAF handler narrowing (clears specific bits per nogood)
+- `propagator.rkt:2245` — `make-branch-pu` legacy fork (sets forked's wv to single branch bit)
+- `elab-speculation-bridge.rkt:290, 326` — speculation snapshot/restore writes
+- `typing-propagators.rkt:1146` — **`process-fork-on-union` init** (bitwise-or with branch-mask)
+- `typing-propagators.rkt:1295` — **`process-fork-contradiction` narrowing** (bitwise-AND-with-NOT-mask)
+
+**Reads** (filtering / observability):
+- `relations.rkt:240, 2153, 2224-2225, 2679` — NAF + query-result reading
+- `propagator.rkt:1448-1858, 1966, 2015, 3779` — scheduler short-circuits (1V-3 Item #1-quater direct-ref cache pattern)
+- `propagator.rkt:3078, 4151, 4186` — internal worldview reads
+- `elab-speculation-bridge.rkt:287, 323` — speculation snapshot read
+- `typing-propagators.rkt:690` — tagged-cell-read filter context
+- `typing-propagators.rkt:1145, 1290` — Phase 3A `current-wv` reads (before each write)
+
+**CRITICAL FINDING — re-examination of "role overload"**: re-reading `solver-state-with-worldview` (atms.rkt:461-469) reveals worldview-cache is structurally **"set of currently believed aids"** even under CLASSICAL ATMS:
+
+```racket
+(define (solver-state-with-worldview ss new-believed)
+  ;; Compute bitmask from believed set (potentially multiple aids)
+  (define wv-bitmask
+    (for/fold ([bm 0]) ([(aid _) (in-hash new-believed)])
+      (bitwise-ior bm (arithmetic-shift 1 (assumption-id-n aid)))))
+  (define net* (net-cell-write net worldview-cache-cell-id wv-bitmask))
+  ...)
+```
+
+`new-believed` is a `hasheq aid → #t` (multiple aids). The cell stores the bitwise-OR of all believed aids' bits. **Multiple bits set is CORRECT under classical semantic** — it represents the set of currently-believed assumptions, not a "single point in Q_n."
+
+The CONSTRAINT classical ATMS imposes is via the MUTEX NOGOODS: when multiple aids from the same amb-group are believed, that worldview is INCONSISTENT per the pairwise nogoods. The worldview-cache's bitmask shape itself is unchanged; what changes is whether the bitmask represents a CONSISTENT worldview.
+
+**Implication for M0 vs M1**: my §9.4.1 framing of "worldview-cache role overload" was overstated. The ROLE is consistently "set of currently believed aids" across classical + Phase 3A. The actual incompatibility is ONLY between (a) the mutex nogoods (which encode the at-most-one constraint) and (b) Phase 3A's non-committing intent. **M0 (suppress mutex nogoods for non-committing callers) is potentially sufficient.** M1's separate cell may be over-engineering. **This is a load-bearing finding for the discourse turn.**
+
+##### A3 — `wrap-with-worldview` semantic audit
+
+Body at `propagator.rkt:2044-2048`:
+
+```racket
+(define (wrap-with-worldview fire-fn bit-position)
+  (define bitmask (arithmetic-shift 1 bit-position))
+  (lambda (net)
+    (parameterize ([current-worldview-bitmask bitmask])
+      (fire-fn net))))
+```
+
+**Conclusion**: `wrap-with-worldview` ONLY parameterizes `current-worldview-bitmask`. NO read of `worldview-cache-cell-id`. M1 (or M0) cell-mechanism change does NOT ripple into wrap-with-worldview. Localized change confirmed.
+
+##### A4 — Mutex nogood storage + read site verification
+
+**Writes** (atms.rkt:297) — sole writer is `solver-add-nogood` (invoked from `solver-amb` at line 313-319 for pairwise mutex; also from `solver-state-add-nogood` for client nogoods).
+
+**Reads**:
+- `atms.rkt:368` — `solver-explain-hypothesis` (error explanation; iterates nogoods to find which contain a given hyp)
+- `atms.rkt:382` — `solver-explain` (error explanation; iterates nogoods to find violated ones)
+- `atms.rkt:449, 577` — `solver-state-consistent?` (consistency check; `hash-subset?` against believed)
+
+**Conclusion**: nogood READS are exclusively via `solver-explain*` (error diagnosis) and `solver-state-consistent?` (consistency check). **None of these are invoked by Phase 3A's `process-fork-on-union` mechanism**. The pairwise mutex nogoods written by `solver-amb` are **structurally INERT under Phase 3A** — written but never consulted. Confirms M0's safety: suppressing the writes for non-committing callers has zero observable behavior change in Phase 3A.
+
+##### A1-A4 Cross-cutting synthesis
+
+The audit refutes the strongest framing of "worldview-cache role overload" from §9.4.1. The truer characterization:
+
+- worldview-cache's role is **consistently** "set of currently-believed aids" — bitmask shape supports multi-aid sets in both classical + Phase 3A
+- The **structural inconsistency** between classical and Phase 3A is ONLY the **pairwise mutex nogoods** (which encode at-most-one); Phase 3A needs at-least-one + non-committing
+- Phase 3A "works" because the mutex nogoods are inert (no consumer at process-fork-on-union path)
+- M0 (suppress mutex nogoods) is potentially sufficient as architectural fix
+- M1 (separate cell) is decomplection of a role that may NOT actually be overloaded
+
+**The discourse turn must reconcile**: is the conceptual cleanliness of M1 (decomplecting "active-branch-set" as a first-class concept) worth the implementation cost given that the actual semantic issue is narrower than initially framed?
+
+#### §9.4.2.8 Audit findings (A5-A6) — primitive design + handler interactions
+
+##### A5 — `union-amb` primitive design (if M1 selected)
+
+**Cell-id allocation**: cell-id 17 is `decomposed-positions-cell-id` (per propagator.rkt:744). Cell-id 18 is next available.
+
+**Cell shape considerations**:
+- Per-position bitmask: `(hasheq position → bitmask)` — bitmask encodes active-branch bits for that position
+- Per-position aid-set: `(hasheq position → (seteq aid))` — explicit aid set per position; bitmask derivable
+
+**API signature**:
+```racket
+(define (union-amb ctx net alternatives) → (values net* aids))
+  ;; - allocates N fresh aids via solver-assume (preserves decisions-state-bitmask
+  ;;   update + worldview-cache update for visibility)
+  ;; - does NOT write mutual-exclusion nogoods
+  ;; - aids returned in allocation order (Gray-code-ordered iff
+  ;;   current-gray-code-aid-ordering? is #t — Phase 3B.B scaffolding)
+```
+
+**Migration**: 1 production site (typing-propagators.rkt:1139).
+
+##### A6 — `process-fork-contradiction` interactions under M1 — DEEPER FINDING
+
+Current handler (typing-propagators.rkt:1280-1295) reads worldview-cache, computes narrowed bitmask, writes worldview-cache. Migration to new cell requires:
+
+- **Per-position narrowing tracking**: cell-16 (`fork-contradiction-request-cell-id`) currently accumulates `(seteq aid)` across ALL positions in a BSP round. Handler reads accumulated set, narrows worldview-cache globally. Under M1, narrowing must target the NEW cell's per-position entry — but cell-16 doesn't track WHICH position each aid belongs to.
+- **Resolution options**: (a) cell-16 expands to `(hasheq position → (seteq aid))`; (b) maintain `aid → position` reverse index cell; (c) iterate all positions in new cell, clear contradicted aid bits (aids are globally unique, only appear at ONE position — but iteration is O(N positions))
+
+**Deeper finding — branch CHECK propagator registration**:
+
+Looking at typing-propagators.rkt:1173-1177, the BRANCH CHECK propagator is registered WITHOUT `#:assumption aid`:
+
+```racket
+(net-add-propagator acc (list tm-cid) (list tm-cid)
+  (wrap-with-worldview (make-branch-check-fire-fn ...) bit-pos)
+  #:component-paths (list (cons tm-cid (cons position ':term))))
+  ;; ↑ No #:assumption tag!
+```
+
+The contradiction WATCHER (line 1198-1205) IS assumption-tagged with `#:assumption aid`. The auto-retirement via decision-cell narrowing works for the WATCHER but not for the CHECK.
+
+This means under current Phase 3A: the branch check propagator KEEPS FIRING even after its branch contradicts (worldview-cache narrowed). The mechanism "works" because:
+- Branch check's fire writes to tm-cid under wv=bit_i
+- After narrowing, bit_i is cleared from worldview-cache
+- Tagged-cell-read filtering hides entries at bit_i (subset semantics)
+- Effective no-op (wasted work, but correct)
+
+**Under M1**: if we move narrowing to the new active-branch-set cell, **branch check still fires under wv=bit_i parameter**, but tagged-cell-read continues to consult worldview-cache for filtering. Worldview-cache STILL has bit_i set (since we're not narrowing it). Branch check's writes become VISIBLE again — possibly incorrect behavior.
+
+**Resolution options for branch-check viability under M1**:
+- (i) **DUAL-narrowing**: process-fork-contradiction narrows BOTH worldview-cache (for filtering) AND new active-branch-set cell (for tracking). Defeats decomplection.
+- (ii) **Assumption-tag branch checks**: register branch check with `#:assumption aid` for auto-retirement via decision cell. Architecturally aligned but requires decision-cell narrowing (which solver-retract does — possibly more invasive than current Phase 3A pattern).
+- (iii) **Change tagged-cell-read filter source**: consult new cell for filtering instead of worldview-cache. Substantial change to substrate infrastructure (touches all tagged-cell-read paths).
+- (iv) **Accept dual-narrowing as decomplection edge**: M1 separates active-branch-set's TRACKING role; worldview-cache retains tagged-cell-read FILTERING role. Cleaner phrasing of M1.
+
+**This is a load-bearing design question for the discourse turn**: M1 might be MORE INVASIVE than initially scoped, OR M0 might be MORE ADEQUATE than I initially assessed.
+
+##### A5-A6 Cross-cutting synthesis
+
+A6's deeper finding interacts with A2's re-examination. **The integrated picture**:
+
+- Mutex nogoods are the ACTUAL architectural debt (inert under non-committing; misleading + future-misuse risk)
+- worldview-cache's role is NOT actually overloaded — it serves the tagged-cell-read filter consistently
+- Separating "active-branch-set" into a new cell creates a NEW tension (branch check filter source vs branch contradiction tracker)
+
+**Re-evaluation of M0/M1/M3 in light of audit**:
+
+| Model | Original assessment | Audit-refined assessment |
+|---|---|---|
+| **M0** (suppress mutex nogoods) | "Safety patch; treats symptom not root cause" | **Refined**: actually addresses the LOAD-BEARING architectural debt (mutex nogoods). The "root cause" I framed (role overload) is partially mythical. M0 may be the CORRECT minimal architectural fix. |
+| **M1** (separate active-branch-set cell) | "Real decomplection; Correct-by-Construction" | **Refined**: introduces a new architectural tension (branch-check filter source) that requires either dual-narrowing (defeats decomplection), invasive substrate changes, or accepting decomplection-edge. M1's "real decomplection" claim is weakened. |
+| **M3** (first-class classifier-set, Track 4D) | "Premature; conflates type-system + substrate" | **Unchanged**: still Track 4D scope; long-term. |
+
+**Possible re-revised decision**: M0 may be the architecturally-correct minimal answer. M1 may be over-engineered. The discourse turn should reconcile this.
 
 #### §9.4.2.9 A/B measurement results + falsification evaluation — TO BE LANDED
 
