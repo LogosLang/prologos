@@ -1136,7 +1136,15 @@
              (define labels
                (for/list ([i (in-naturals)] [_ (in-list components)])
                  (format "branch-~a-at-~v" i position)))
-             (define-values (atms* aids) (solver-state-amb atms labels))
+             ;; PPN 4C Phase 3B.A M0 (2026-05-22): pass #:mutual-exclusion? #f
+             ;; for non-committing semantic. Union-type inhabitation is at-least-
+             ;; one (any branch that succeeds keeps its inhabitant); classical
+             ;; mutex nogoods (exactly-one) would be semantically wrong and were
+             ;; structurally inert under the prior code path (verified §9.4.3.1
+             ;; A2). Per Q2(b), amb-groups append also skipped — solve-all
+             ;; semantic correctness preserved. See §9.4.3 for full rationale.
+             (define-values (atms* aids)
+               (solver-state-amb atms labels #:mutual-exclusion? #f))
              (set-box! atms-box atms*)
              ;; Step 2: initialize worldview-cache (set all N branch bits)
              (define branch-mask

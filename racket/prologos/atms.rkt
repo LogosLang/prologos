@@ -298,22 +298,25 @@
                   (nogood-add nogood-empty nogood-set)))
 
 ;; Create a choice point with N alternatives.
-;; Creates N assumptions, adds them as components of the compound decisions cell,
-;; records pairwise mutual-exclusion nogoods.
+;; Creates N assumptions, adds them as components of the compound decisions cell.
+;; When #:mutual-exclusion? = #t (default, CLASSICAL ATMS semantic): records
+;; N·(N−1)/2 pairwise mutual-exclusion nogoods (exactly-one-of constraint).
+;; When #:mutual-exclusion? = #f (NON-COMMITTING semantic): NO mutex nogoods
+;; written (at-least-one-of constraint). PPN 4C Phase 3B.A M0 — see §9.4.3
+;; of the addendum design doc for full architectural rationale.
+;; Brief: full M0 documentation block lands at 3B.A.4.
 ;;
-;; Phase 3B.0 NOTE (2026-05-22): an experimental `current-gray-code-aid-ordering?`
-;; parameter + Gray-code permutation branch was added at commit `98cbbc3d` to
-;; A/B test the Hyperlattice Conjecture's CHAMP-sharing claim under Realization B.
-;; Measurement (n=10 × 5 workloads × 2 variants, ~70-100 ms per iter, IQRs ~1-2%)
-;; produced ALL DELTAS WITHIN ±1.5% — falls in §9.4.1.6 documented-defer range.
-;; Per pre-committed Q8 (§9.4.2.1) + falsification outcome (§9.4.2.10): the
-;; scaffolding retires HERE; data preserved at `data/benchmarks/
-;; fork-on-union-gray-code-2026-05-22.txt`; harness deletion is co-temporal.
-;; Future tracks (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) needing
-;; similar A/B work resurrect from git history (commit `98cbbc3d`).
+;; Historical retirement note (Phase 3B.0, 2026-05-22): an experimental
+;; `current-gray-code-aid-ordering?` parameter (commit `98cbbc3d`) A/B tested
+;; the Hyperlattice Conjecture's CHAMP-sharing claim under Realization B; the
+;; n=10 × 5 workloads measurement produced ALL DELTAS WITHIN ±1.5% (per
+;; §9.4.2.10 falsification evaluation). Scaffolding retired at `0eaa9506`;
+;; data at `data/benchmarks/fork-on-union-gray-code-2026-05-22.txt`; resurrect
+;; from `98cbbc3d` if future tracks (Phase 9b under fork-and-rejoin, PReduce,
+;; BSP-LE 6) need similar A/B work under DIFFERENT mechanism.
 ;;
 ;; Returns: (values new-network (listof assumption-id))
-(define (solver-amb ctx net alternatives)
+(define (solver-amb ctx net alternatives #:mutual-exclusion? [mutual-exclusion? #t])
   ;; 1. Create fresh assumptions, one per alternative
   (define-values (net1 hyps-rev)
     (for/fold ([n net] [hs '()])
@@ -322,13 +325,23 @@
       (define-values (n2 hid) (solver-assume ctx n (string->symbol (format "h~a" i)) alt))
       (values n2 (cons hid hs))))
   (define hyps (reverse hyps-rev))
-  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood
+  ;; 2. Record mutual exclusion: every pair of hypotheses is a nogood.
+  ;; PPN 4C Phase 3B.A (2026-05-22): conditional on #:mutual-exclusion?.
+  ;; Under classical (#t, default): pairwise nogoods enforce exactly-one.
+  ;; Under non-committing (#f): mutex nogoods structurally INERT under
+  ;; current Phase 3A architecture (verified §9.4.3.1 A2 — every reader of
+  ;; solver-context-nogoods-cid filters by criteria that exclude Phase 3A
+  ;; branch aids). Suppression is zero-behavior-change for non-committing
+  ;; callers; closes the architectural debt of writing inert nogoods.
   (define net2
-    (for*/fold ([n net1])
-               ([i (in-range (length hyps))]
-                [j (in-range (+ i 1) (length hyps))])
-      (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
-                                        (list-ref hyps j) #t))))
+    (cond
+      [mutual-exclusion?
+       (for*/fold ([n net1])
+                  ([i (in-range (length hyps))]
+                   [j (in-range (+ i 1) (length hyps))])
+         (solver-add-nogood ctx n (hasheq (list-ref hyps i) #t
+                                           (list-ref hyps j) #t)))]
+      [else net1]))
   (values net2 hyps))
 
 ;; Check consistency: are all decision cell components non-empty?
@@ -449,10 +462,28 @@
   (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss) (solver-state-amb-groups ss)))
 
 ;; Amb: returns (values new-solver-state (listof assumption-id))
-(define (solver-state-amb ss alternatives)
-  (define-values (net* hyps) (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives))
+;;
+;; PPN 4C Phase 3B.A (2026-05-22): threads #:mutual-exclusion? to solver-amb.
+;; Per Q2(b) (§9.4.3.2): the amb-groups APPEND is ALSO conditional on the
+;; flag — the two semantics (classical exactly-one-with-mutex vs non-committing
+;; at-least-one-without) ARE coupled. Under non-committing (#f), the amb-group
+;; entry would be semantically misleading for `solver-state-solve-all`'s
+;; cartesian product (which treats each group as pick-one). Skipping the
+;; append keeps solve-all semantically correct for its current (classical-only)
+;; usage; future non-committing callers don't get misleading "pick-one"
+;; enumeration. See §9.4.3.4 D-3B.A-amb-groups-coupling for the drift risk
+;; mitigation discussion.
+(define (solver-state-amb ss alternatives #:mutual-exclusion? [mutual-exclusion? #t])
+  (define-values (net* hyps)
+    (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives
+                #:mutual-exclusion? mutual-exclusion?))
+  (define new-amb-groups
+    (if mutual-exclusion?
+        (append (solver-state-amb-groups ss) (list hyps))
+        ;; Non-committing: skip amb-groups append (per Q2(b)).
+        (solver-state-amb-groups ss)))
   (values (solver-state (solver-state-ctx ss) net* (solver-state-key-map ss)
-                        (append (solver-state-amb-groups ss) (list hyps)))
+                        new-amb-groups)
           hyps))
 
 ;; Consistent?: returns boolean
