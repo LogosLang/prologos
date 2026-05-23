@@ -11,6 +11,7 @@
 
 (require rackunit
          rackunit/text-ui
+         racket/list  ;; PPN 4C Phase 3B.A.5 (2026-05-22): for `last` in non-committing-amb-tests axis 4b
          "../atms.rkt"
          "../propagator.rkt"
          "../decision-cell.rkt")
@@ -381,6 +382,115 @@
 
 
 ;; ============================================================
+;; 7. M0 Non-committing solver-amb semantics — PPN 4C Phase 3B.A (2026-05-22)
+;; ============================================================
+;;
+;; Verifies the #:mutual-exclusion? keyword's semantic dispatch per §9.4.3.2:
+;; - Classical (#t, default): N·(N−1)/2 mutex nogoods + amb-groups append
+;; - Non-committing (#f): NO mutex nogoods, NO amb-groups append
+;;
+;; The 4 axes are DISCRIMINATING (per §9.4.3.2 Q4 + the "multi-axis parity
+;; testing for discriminating coverage" codification from Phase 3A.c.5):
+;; each test MUST FAIL under a hypothetical buggy implementation that ignores
+;; the flag. Single-axis "no error" assertions preserve coverage equivalence
+;; but don't discriminate — these tests EMPIRICALLY PROVE the new semantic
+;; works AND that the default behavior didn't regress.
+
+(define non-committing-amb-tests
+  (test-suite "PPN 4C Phase 3B.A M0: non-committing solver-amb semantics"
+
+    ;; Axis 1 — no-nogoods-write under #:mutual-exclusion? #f
+    ;;
+    ;; Discriminator: a buggy impl that ignores the flag would write
+    ;; N·(N−1)/2 nogoods anyway → assertion fails.
+    (test-case "axis 1 — #:mutual-exclusion? #f produces zero mutex nogoods"
+      (define ss0 (make-solver-state (make-prop-network)))
+      ;; Read nogoods cell BEFORE amb
+      (define nogoods-cid (solver-context-nogoods-cid (solver-state-ctx ss0)))
+      (define ng-before (net-cell-read-raw (solver-state-net ss0) nogoods-cid))
+      ;; Call solver-state-amb with #:mutual-exclusion? #f and N=4 (so N·(N−1)/2 = 6 mutex pairs under classical)
+      (define-values (ss1 hyps) (solver-state-amb ss0 '(a b c d) #:mutual-exclusion? #f))
+      (check-equal? (length hyps) 4)
+      ;; Read nogoods cell AFTER amb — should be EQUAL to before (no growth from this call)
+      (define ng-after (net-cell-read-raw (solver-state-net ss1) nogoods-cid))
+      (check-equal? ng-before ng-after
+                    "non-committing solver-state-amb must NOT grow the nogoods cell"))
+
+    ;; Axis 2 — solver-state-consistent? returns #t for multi-aid proposed-set
+    ;;          under #:mutual-exclusion? #f
+    ;;
+    ;; Discriminator: under classical (#t), the proposed-set (hasheq h_0 #t h_1 #t)
+    ;; would subsume the mutex nogood (h_0, h_1) → consistent? returns #f.
+    ;; Under non-committing (#f), no mutex nogood → consistent? returns #t.
+    ;; A buggy impl that ignores the flag → still writes mutex → fails this axis.
+    (test-case "axis 2 — solver-state-consistent? returns #t for multi-aid set under #f"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define-values (ss1 hyps) (solver-state-amb ss0 '(a b c) #:mutual-exclusion? #f))
+      (define h0 (list-ref hyps 0))
+      (define h1 (list-ref hyps 1))
+      (define h2 (list-ref hyps 2))
+      ;; Under non-committing semantic, multiple branches can coexist.
+      ;; solver-state-consistent? should return #t for ANY subset of the aids.
+      (check-true (solver-state-consistent? ss1 (hasheq h0 #t))
+                  "single aid alone must be consistent")
+      (check-true (solver-state-consistent? ss1 (hasheq h0 #t h1 #t))
+                  "two aids together must be consistent under non-committing")
+      (check-true (solver-state-consistent? ss1 (hasheq h0 #t h1 #t h2 #t))
+                  "all three aids together must be consistent under non-committing"))
+
+    ;; Axis 3 — default #:mutual-exclusion? #t still writes N·(N−1)/2 mutex nogoods
+    ;;          (REGRESSION GATE — protects classical ATMS for downstream consumers)
+    ;;
+    ;; Discriminator: a thinko in the conditional that silently suppresses
+    ;; nogoods even at default #t would break classical ATMS (BSP-LE 2 multi-
+    ;; clause selection, NAF). This is the LOAD-BEARING regression gate.
+    (test-case "axis 3 — default classical still writes N·(N−1)/2 mutex nogoods"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define nogoods-cid (solver-context-nogoods-cid (solver-state-ctx ss0)))
+      ;; Capture initial nogood count (may be non-zero from solver-context init)
+      (define ng-before (net-cell-read-raw (solver-state-net ss0) nogoods-cid))
+      (define n-before (if (list? ng-before) (length ng-before) 0))
+      ;; Default classical with N=4 should add 4·3/2 = 6 nogoods
+      (define-values (ss1 hyps) (solver-state-amb ss0 '(a b c d)))
+      (define ng-after (net-cell-read-raw (solver-state-net ss1) nogoods-cid))
+      (define n-after (if (list? ng-after) (length ng-after) 0))
+      (check-equal? (- n-after n-before) 6
+                    "default classical solver-state-amb with N=4 must add exactly 6 mutex pairs")
+      ;; Semantic check: ANY two of the 4 hyps together must be INCONSISTENT
+      ;; under classical (mutex nogood subsumed by proposed-set).
+      (check-false (solver-state-consistent? ss1
+                     (hasheq (list-ref hyps 0) #t (list-ref hyps 1) #t))
+                   "default classical must reject any two-aid worldview")
+      (check-false (solver-state-consistent? ss1
+                     (hasheq (list-ref hyps 2) #t (list-ref hyps 3) #t))
+                   "default classical must reject any two-aid worldview (different pair)"))
+
+    ;; Axis 4 — amb-groups append conditional per Q2(b)
+    ;;
+    ;; Discriminator: a buggy impl that always appends would grow amb-groups
+    ;; under non-committing → axis 4a fails. A buggy impl that never appends
+    ;; would break classical solve-all → axis 4b fails. Both directions tested.
+    (test-case "axis 4a — #:mutual-exclusion? #f does NOT append to amb-groups"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define groups-before (solver-state-amb-groups ss0))
+      (define-values (ss1 _hyps) (solver-state-amb ss0 '(a b c) #:mutual-exclusion? #f))
+      (define groups-after (solver-state-amb-groups ss1))
+      (check-equal? groups-before groups-after
+                    "non-committing amb must NOT append to amb-groups (per Q2(b))"))
+
+    (test-case "axis 4b — default classical DOES append to amb-groups"
+      (define ss0 (make-solver-state (make-prop-network)))
+      (define groups-before (solver-state-amb-groups ss0))
+      (define-values (ss1 hyps) (solver-state-amb ss0 '(a b c)))
+      (define groups-after (solver-state-amb-groups ss1))
+      (check-equal? (length groups-after) (+ (length groups-before) 1)
+                    "classical amb must append exactly one group entry")
+      (check-equal? (last groups-after) hyps
+                    "appended group must contain the returned hyps"))
+    ))
+
+
+;; ============================================================
 ;; Run all tests
 ;; ============================================================
 
@@ -390,3 +500,4 @@
 (run-tests commitments-tests)
 (run-tests fire-once-tests)
 (run-tests deployed-chain-tests)
+(run-tests non-committing-amb-tests)
