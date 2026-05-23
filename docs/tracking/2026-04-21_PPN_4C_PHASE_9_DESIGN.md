@@ -194,7 +194,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3B.A mini-design + mini-audit | Conversational opening of Phase 3B.A post-3B.0 close; A1-A6 mini-audit verified §9.4.2.9.4 scope + verified A4 inertness claim at deeper level; surfaced Q2 (amb-groups append conditional behavior); 5 Q-decisions resolved | ✅ | Persisted at §9.4.3 per Stage 4 methodology. 7 subsections (§9.4.3.1-§9.4.3.7) covering: audit findings, resolved Q1-Q5, sub-step partition, drift risks, closure criteria, status, cross-references. |
 | 3B.B | Hypercube integration (Gray-code aid ordering) — **DOCUMENTED-DEFER** per 3B.0 falsification (§9.4.2.10) | ✅ (defer) | **DECIDED 2026-05-22**: A/B measurement (n=10 × 5 workloads × 2 variants) showed ALL DELTAS WITHIN ±1.5% (W1 -0.2% / W2 -0.6% / W3 -1.0% / W4 +0.4% / W5 -0.6%); IQRs tight (~1-2% of median). Per pre-committed §9.4.1.6 criteria, ±5% on W4/W5 → DOCUMENTED-DEFER. Falsification narrow: Conjecture's CHAMP-sharing claim does NOT transfer to Realization B's in-place tagging; does NOT refute the Conjecture broadly. Future consumers (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) need separate per-mechanism A/B tests. Variant B scaffolding retired per pre-committed Q8 (§9.4.2.10.5). |
 | 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ✅ | **CLOSED at §9.4.5** (this commit). All 6 D-3B-* parent drift risks verified cleared adversarially. 4 VAG questions × 3 columns (catalogue + challenge + adversarial) all pass. Methodology pattern reusability NEW codification candidate (1 data point — 3B.0 + 3B.A applied IDENTICAL process shape with different content). 3B parent row → ✅. |
-| 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. Under M1: consumes active-branch-set narrowing signal from new cell; can ALSO consume mutex nogoods from OTHER (classical-ATMS) callers if needed for error chains involving classical amb. Phase 3C inherits the architectural separation cleanly. |
+| 3C mini-design + mini-audit | Conversational opening of Phase 3C; 12-task tier-organized audit (A1-A11 + synthesis A12) + Q6.x empirical probe + 10 Q-decisions resolved (Q1-Q10) + 13 D-3C-* drift risks named (D-3C-10 CLEARED pre-implementation) + Propagator-First Diagnostics vision-forward framing (watching-list codification, graduates at Phase 11b second consumer) + cross-track captures (Phase 11b / SH Master Track 1+4 / PPN 8 LSP / PReduce 6 / sexp-as-IR retirement multi-track arc) | ✅ `<forthcoming>` | Persisted at §9.5.1 per Stage 4 methodology. 11 subsections (§9.5.1.1-§9.5.1.11) covering: audit findings, Q6.x empirical reframe, Propagator-First Diagnostics framing, resolved Q1-Q10, sub-phase partition (3C.a/.b/.c/.d + 3C-VAG), drift risks, cross-track captures, methodology notes (6th data point for audit-driven scope refinement + empirical-falsification sub-codification), closure criteria, status, cross-references. Probe artifact at `examples/2026-05-22-3C-Q6x-probe.prologos` (committed concurrently). |
+| 3C | Residuation error-explanation | ⬜ | **Mini-design persisted at §9.5.1.** Phase 3C ships UC3-flavored union-type consumer + reusable `static-reverse-walk` primitive (exported per vision-forward Propagator-First Diagnostics framing); populates the EMPTY `union-exhaustion-error.derivation-chain` field (Q6.x finding: chain field exists but is empty today) for BOTH annotated-union (sexp check/err path) AND inferred-union (on-network process-fork-contradiction path) scenarios. UC1 + UC2 deferred to OE Track 4 / Phase 11b. Sub-phases: 3C.a (foundation) → 3C.b (union-contradict consumer) → 3C.c (union-check consumer) → 3C.d (format + parity) → 3C-VAG. Est. ~430-700 LoC total. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
@@ -6813,7 +6814,7 @@ Both warrant DEVELOPMENT_LESSONS.org promotion at user direction.
 - subcube-member? primitive (decision-cell.rkt:372) — primitive-awaiting-consumer
 - gray-code-order primitive (relations.rkt:1874) — primitive-awaiting-consumer
 
-### §9.5 Phase 3C deliverables
+### §9.5 Phase 3C deliverables (ORIGINAL TERSE SPEC — superseded by §9.5.1 for implementation planning)
 
 Residuation-based error-explanation for all-branch-contradict:
 
@@ -6842,6 +6843,266 @@ When Phase 3C implementation opens, the implementer:
 3. References the algebraic property declarations at `racket/prologos/tropical-fuel.rkt:99-113` (quantale + residuated + commutative-quantale + integral-quantale + has-pseudo-complement; **empirically validated** at Phase 1V Commit 7 via Track 2I property-sweep — see `data/benchmarks/tropical-fuel-phase9-sweep-2026-05-17.txt`)
 
 This cross-reference closes the addendum's §6.5 Form C capture-gap: the Phase 3C implementer should find this section when opening Phase 3C work, with explicit pointers to the addendum's deliverables.
+
+### §9.5.1 Phase 3C mini-design + mini-audit (2026-05-22 — conversational opening of Phase 3C)
+
+Opening conversational mini-design + mini-audit for Phase 3C per Stage 4 Per-Phase Protocol (mini-design + mini-audit are co-dependent activities cycling between design intent and code reality; outcomes persist to the design doc; dailies log the commit story). Context: post-3B-VAG CLOSED at `d81a04fc`; Phase 3C is the THIRD sub-phase of Phase 3 (after 3A union-types via ATMS + 3B hypercube + M0 substrate fix); first Form C downstream consumer per §9.5.A.
+
+Methodology: **3-column adversarial framing** (catalogue / challenge / adversarial) applied throughout per refinement codified during PPN 4C arc. The third column ACTIVELY tries to demolish each lean rather than softly improve it — catalogue→challenge→adversarial is a three-stage cognitive escalation, NOT a two-stage with intensification.
+
+#### §9.5.1.1 Audit findings — 12-task tier-organized survey
+
+12-task structured audit executed pre-mini-design per Stage 4 mini-audit-precedes-implementation discipline. Tasks A1-A11 + synthesis A12 cover integration surface (Tier 1), substrate consumed (Tier 2), dependency-graph + provenance infrastructure (Tier 3), Phase 11b relationship (Tier 4), tests (Tier 5), and R-lens scope sizing (Tier 6).
+
+**Tier 1 — Integration surface (A1 + A2)**:
+
+- **`process-fork-contradiction`** at `typing-propagators.rkt:1288` reads accumulated `aid-set` from cell-16 (set-union merge), computes `contradicted-bits` mask, atomically narrows `worldview-cache-cell-id` via `(bitwise-and current-wv (bitwise-not contradicted-bits))`. Idempotent. The handler does NOT emit user-facing error itself (its purpose is structural narrowing).
+- **Cell-16 writers**: `make-branch-contradiction-watcher-fire-fn` at typing-propagators.rkt:1248 (writes `(seteq aid)`); wrapped at branch worldview via `wrap-with-worldview`.
+- **Existing error infrastructure** (typing-errors.rkt:64-118 + errors.rkt:115-116): `union-exhaustion-error` struct ALREADY EXISTS with `branches + branch-mismatches + expr-str + derivation-chain` fields. `build-derivation-chain` (typing-errors.rkt:127) walks ATMS support sets + `speculation-failure-sub-failures` from `get-latest-speculation-failure`. The struct surface is rich; the chain field is the gap.
+
+**Tier 2 — Substrate consumed (A3 + A4 + A8)**:
+
+- **`tropical-left-residual`** at `tropical-fuel-primitives.rkt:105` (leaf module). Exported. C1+C2+C3 axioms tested at `tests/test-tropical-fuel.rkt:108-247`. Adjunction law verified. ZERO current production consumers — Phase 3C is the first.
+- **Phase 1.5 srcloc infrastructure** fully in place: `propagator` struct `srcloc` field (propagator.rkt:354); `current-source-loc` parameter (source-location.rkt:36); `fire-propagator` wrapper (propagator.rkt:363) parameterizes srcloc per-fire; 21 production install sites with explicit `#:srcloc` kwarg.
+- **§9.7 UC1/UC2/UC3 specs** (from Tropical Quantale Addendum):
+  - **UC1**: Fuel-exhaustion blame attribution via dep-graph reverse walk + per-step residuation
+  - **UC2**: Cost-bounded elaboration via Galois bridge (α: type→cost; γ: budget→elaborable types)
+  - **UC3**: Per-branch cost tracking under union-type ATMS branching
+
+**Tier 3 — Dependency graph + provenance infrastructure (A5 + A6 + A7)**:
+
+| Structure | Direction | Cost |
+|---|---|---|
+| `prop-cell.dependents` (champ) | Forward: cell → propagators waiting | Always-on, on-network |
+| `propagator.outputs` (list) | Reverse derivable: scan all propagators by `(member cid outputs)` | O(N) scan, on-network |
+| `cell-diff.source-propagator` (prop-id) | Dynamic: prop-id that caused each diff | Only when observer set |
+| `prop-network-contradiction-fns` (champ cell-id → contradiction-fn) | Static reactive | Always-on |
+| `prop-trace.rounds` (`bsp-round` list) | Dynamic firing history | Only when observer set |
+
+`current-bsp-observer` defaults `#f` (zero cost in production); production setters are `prop-observatory.rkt` + `tools/measure-production-n.rkt`. **Static reverse walk over `propagator.outputs` is feasible without observer set** — preserves Cell/Propagator/Scheduler Orthogonality.
+
+ATMS assumption tagging: `assumption-id` struct = `(struct assumption-id (n))`; `solver-state-assumptions` returns `aid → assumption` with `name` + `datum` metadata; `tagged-cell-value.entries = (listof (cons bitmask value))` carries per-write aid bitmasks. **The chain can decode aid → human-readable label from on-network state.**
+
+**Tier 4 — Phase 11b relationship (A9)**:
+
+Phase 11b (parent D.3 §6.1.1 + Phase 11b tracker row): `derivation-chain-for(position, tag)` as READ-TIME function over propagator-firing dep graph. Three structural sources: ATMS assumption tagging + `:trace :structural` mode + source-location registry. M4 external-critique lean: read-time derivation (option b). Research input: trace monoidal category theory. **Phase 11b is sequenced AFTER addendum's Phase 2 (DONE) → technically unblocked.** Phase 11b is PARENT-track scope, broader than union-type contradict.
+
+**Tier 5 — Tests / parity skeletons (A10)**:
+
+`test-elaboration-parity.rkt:535` has skip-gated `'error-provenance-chain` for "Phase 11b" — scenario `[int+ "a" 3]` (non-union type-mismatch). Phase 3C's natural axis is NEW: `'union-all-contradict-error` per §9.8 lines 2886-2887.
+
+**Tier 6 — R-lens scope sizing (A11)**:
+
+- 1336 production refs to error structs / `prologos-error?` / `net-contradiction`
+- 21 propagator install sites with explicit `#:srcloc`
+- 41 `(current-source-loc)` references
+- 16 error struct types in `errors.rkt`
+- 1 current producer of `union-exhaustion-error` (typing-errors.rkt:98; sexp path only)
+- 2 active observer sites in production (observer-off is production default)
+
+#### §9.5.1.2 Q6.x empirical probe finding — architectural reframe
+
+During dialogue, original A2 audit identified that `process-fork-contradiction` does ONLY narrowing — concluded "no user-facing error surface for on-network union all-branch-contradict." This raised Q6.x: what CURRENTLY happens to elaboration output when worldview-cache narrows under Phase 3A's mechanism?
+
+**Empirical probe** at `racket/prologos/examples/2026-05-22-3C-Q6x-probe.prologos` (3 scenarios: `def x <Nat | Bool> "hello"` + `def y <Int | Bool> "world"` + `def z <<Nat | Bool> | String> 3.14`) run via `process-file` with `current-emit-error-diagnostics` enabled.
+
+**Findings**:
+
+| Counter | Value | Meaning |
+|---|---|---|
+| `prop_allocs` | **0** | **Phase 3A's on-network mechanism did NOT fire** for these annotated-union scenarios |
+| `prop_firings` | **0** | No propagators fired |
+| `propagators` | **0** | No propagators installed |
+| `speculation_count` | 11 | sexp `with-speculative-rollback` fired |
+| `atms_hypothesis_count` | 14 | ATMS active in sexp path |
+| `atms_nogood_count` | 11 | nogoods recorded |
+| `provenance_chain_count` | **0** | **`build-derivation-chain` produced ZERO chains** |
+
+**User-facing output (already rich)**:
+```
+error[E1006]: expression does not match any branch of union type
+  tried Nat — type mismatch (got: String)
+  tried Bool — type mismatch (got: String)
+  in expression: "hello"
+  = help: expression must match at least one branch of Nat | Bool
+```
+
+**Returned `union-exhaustion-error` struct shows `derivation-chain = '(() ())`** — field exists but EMPTY per-branch.
+
+**Architectural reframe**:
+
+Two distinct union-error paths exist:
+
+| Scenario | Path | User-facing today | Chain today |
+|---|---|---|---|
+| Annotated union (`def x : <T1\|T2> := e`) | sexp `check/err` + `with-speculative-rollback` | ✓ `union-exhaustion-error` rich | ❌ EMPTY |
+| Inferred union (on-network type-map-write detects union classifier) | Phase 3A `process-fork-on-union` → narrowing | ⚠️ unknown for user-facing scenarios; Phase 3A mechanism doesn't fire for annotated cases | ⚠️ no chain mechanism wired |
+
+**Phase 3C value proposition — REFRAMED**:
+- NOT "establish user-facing error surface for on-network union all-branch-contradict" (sexp does that already for annotated case)
+- IS "populate the EMPTY `derivation-chain` field on `union-exhaustion-error` with rich on-network walk data for BOTH paths (annotated + inferred)"
+- The chain mechanism becomes AUTHORITATIVE; sexp `build-derivation-chain` retires for union cases; non-union cases continue using `build-derivation-chain` until Phase 11b extends.
+
+#### §9.5.1.3 Vision-forward framing — Propagator-First Diagnostics
+
+User-articulated framing (2026-05-22 dialogue): on-network error reporting via propagator-network provenance is a primary value proposition of propagator-based compilers ("Logos Hyperlattice Compiler" / LHC vision). Phase 3C is the FIRST user-facing instance of this; subsequent tracks consume the same architectural shape:
+
+| Downstream consumer | What it consumes from Phase 3C |
+|---|---|
+| **Phase 11b** (parent D.3) | `static-reverse-walk` primitive + `derivation-chain` struct; extends with non-union diagnostics + LSP hooks |
+| **PPN Track 8** (LSP integration) | `derivation-chain` struct (transparent + serializable) → LSP diagnostic payload via `format-error` |
+| **SH Series Track 1** (`.pnet` network-as-value) | `derivation-chain` shape becomes part of `.pnet` IR; cross-session error reporting |
+| **SH Series Track 4** (production LLVM substrate / LHC) | `static-reverse-walk` is the runtime diagnostic primitive; chain struct becomes part of LHC ABI |
+| **PReduce Track 6** (speculative reduction) | Emission pattern (stratum handler integration) for cost-bounded ATMS branching errors |
+
+**Sexp-as-IR retirement target** (multi-track, multi-quarter): coordinated across PM Track 12 (parameters → cells) + PPN Track 4D (Attribute Grammar Substrate Unification) + downstream tracks. Phase 3C contributes by making on-network chain the AUTHORITATIVE diagnostic for union cases; sexp `build-derivation-chain`'s union-type path retires in Phase 3C; non-union paths retire later as on-network typing coverage expands.
+
+**Adversarial check on framing — is this vision-forward or speculative?**
+
+| Catalogue | Challenge | Adversarial |
+|---|---|---|
+| Multi-track consumers named in active design; Hyperlattice Conjecture supports compiler-IS-network; Specialized Cell Type Framework precedent for vision-forward design | Could "vision-aligned" be MORE specific? Are consumers TRULY going to consume same shape, or am I assuming alignment? | Specialized Cell Type Framework was codified AS Cross-Track Template AFTER 3 empirical instances landed IN-ARC. Phase 3C has ONE consumer; Phase 11b not designed; PPN 8 / SH Track 4 years out. **Pre-codification as Cross-Track Template VIOLATES empirical-precedent discipline.** Synthesis: ship vision-forward API surface NOW (exported `static-reverse-walk` primitive; transparent structs); codification as Cross-Track Template GRADUATES at Phase 11b second consumer. Middle path. |
+
+**Outcome**: vision-forward IS warranted; pre-codification as Cross-Track Template is NOT. Codification lives at watching-list until empirical second instance.
+
+#### §9.5.1.4 Resolved design questions (Q1-Q10)
+
+| Q | Question | LOCKED Lean | Rationale |
+|---|---|---|---|
+| **Q1 (= Q-A6)** | Phase 3C placement: ship all UC1/UC2/UC3 OR defer to Phase 11b OR share | **(c)-refinement** — Phase 3C ships UC3-flavored union-type consumer + reusable static-walk primitives (exported per vision-forward framing); Phase 11b extends with non-union diagnostics + LSP hooks | (a) UC1/UC2 scope creep; UC1 requires DYNAMIC trace (observer-coupling violation) OR new on-network cumulative-cost cell (workflow.md "build for future use"); UC2 has zero current consumer. (b) addendum charter unmet; silent UX regression. (d) §9.5 deliverable (1) "new module" missing. (c) preserves Completeness + Decomplection + Most Generalizable Interface. |
+| **Q2** | `derivation-chain-for` API signature | `(derivation-chain-for/union-contradict net aid-set request-info)` + sibling `(derivation-chain-for/union-check net branches-info expr)` (post-Q6.x extension) | request-info carries position + tm-cid + components (the union-decomposition context); cleaner than packing into assumption-datum (which would be orthogonality violation: assumption ↔ branch identity ≠ type structure). |
+| **Q3** | Walk mechanism STATIC vs DYNAMIC | **STATIC** — reads `propagator.outputs`, `propagator.srcloc`, `tagged-cell-value.entries`, `solver-state-assumptions`; NO `current-bsp-observer` activation | Observer-set is scheduler coupling (Orthogonality violation per `6a628bc7`). Static walk gives STRUCTURAL chain ("these N propagators participate"); for union-type error messages structural is sufficient. UC1 fuel-blame WOULD need dynamic info → reinforces UC1 deferral. |
+| **Q4** | Per-branch fuel cells | **NO per-branch fuel cells** — UC3 reframes to "per-step cost annotation via `tropical-left-residual` against canonical fuel-cost-cell at chain-build time" | §9.7 UC3 spec written before Phase 3A's mechanism settled; "per-branch fuel cell" assumes fork-and-rejoin or budget-bounded branches. Phase 3A's Realization B uses subtype-check, not fuel-exhaustion. Adding per-branch fuel cells = shape-without-benefit (workflow.md). Honest Form B → Form C reframe documented. |
+| **Q5** | Module location + dependencies | `racket/prologos/error-explanation.rkt` as leaf-ish module; depends on errors + atms + propagator + tropical-fuel-primitives + source-location | Symmetric with `tropical-fuel-primitives.rkt` + `tropical-fuel.rkt` Phase 1 two-layer pattern. No cycles (typing-propagators.rkt requires error-explanation; error-explanation depends only on leaves). |
+| **Q6** | Integration hook (post-Q6.x) | **(γ) BOTH integration points sharing static-walk primitive** — `process-fork-contradiction` for inferred unions + `check/err` for annotated unions; one chain mechanism, two callers | Q6.x revealed annotated cases dominate user-facing scenarios and go through sexp `check/err`. Wiring only to `process-fork-contradiction` (α) would deliver infrastructure that doesn't fire for the dominant user case (Validated ≠ Deployed). |
+| **Q7** | UC1 scope | **DEFERRED** to OE Track 4 + Phase 11b cooperative scope | Q3's STATIC lean confirms structural chain insufficient for cost-share attribution. UC1 requires cumulative-cost infrastructure that's not in Phase 1's substrate. Building it now = workflow.md anti-pattern. |
+| **Q8** | LSP integration hooks | Ship transparent `(struct derivation-chain (steps))` + `(struct derivation-step ...)` — struct shape IS LSP-ready data; LSP wiring deferred to PPN Track 8 | `format-error` already handles structured records; transparency means LSP can serialize directly. Forward-compat preserved (field additions allowed; field-semantics changes treated as breaking). |
+| **Q9** | Unification with sexp chain | **REPLACE** empty chain in `union-exhaustion-error.derivation-chain` for union cases — Phase 3C is the authoritative source for union chain; sexp `build-derivation-chain` retires for union-type cases; non-union cases continue using sexp `build-derivation-chain` until Phase 11b extends | Q6.x revealed sexp chain is EMPTY today for union cases (no dual-mechanism actually exists in production). Replacement is honest (we're not preserving sexp's chain; we're filling an empty field). |
+| **Q10** | Parity axis name + scope | **`'union-all-contradict-error` with 4-axis discriminating coverage**: `/chain-shape` (non-empty + expected step count) + `/branch-attribution` (each branch's chain references its assumption-name) + `/srcloc-presence` (≥1 step has non-#f srcloc) + `/non-union-no-chain` (negative: chain ABSENT under sexp non-union error). Existing skip-gated `'error-provenance-chain` stays Phase 11b. | Multi-axis discriminating per PROMOTION-READY codification (5 sites precedent). Negative axis (no-chain-under-non-union) DISCRIMINATES against accidentally-running 3C's mechanism for non-union errors. |
+
+**Vision-forward API exports** (per §9.5.1.3 framing — exported per first-class-by-default discipline; codification at watching-list):
+
+```racket
+;; === Core data types ===
+(struct derivation-chain (steps) #:transparent)
+(struct derivation-step
+  (propagator-id srcloc assumption-id assumption-name residual-cost-or-#f)
+  #:transparent)
+
+;; === Static walk primitive (load-bearing for Phase 11b + LSP + LHC) ===
+(provide static-reverse-walk)
+
+;; === Phase 3C-specific consumers ===
+(provide derivation-chain-for/union-contradict)
+(provide derivation-chain-for/union-check)
+
+;; === Formatting (consumed by errors.rkt format-error) ===
+(provide format-derivation-chain)
+```
+
+#### §9.5.1.5 Sub-phase partition
+
+| Sub-phase | Description | Est. LoC | Key gate |
+|---|---|---|---|
+| **3C.a** | Foundation — `error-explanation.rkt` module + structs + `static-reverse-walk` primitive + primitive tests | ~150-200 | Static walk produces correct (propagator-id, srcloc, assumption-id) triples for synthetic dep-graph |
+| **3C.b** | Union-contradict consumer (on-network path) — `derivation-chain-for/union-contradict` + integration in `process-fork-contradiction`; tests for inferred-union scenarios | ~80-150 | Inferred-union all-branch-contradict scenarios populate `union-exhaustion-error.derivation-chain` |
+| **3C.c** | Union-check consumer (sexp-bridge path) — `derivation-chain-for/union-check` + integration in `check/err` (typing-errors.rkt:64); replace empty-chain construction for union cases | ~80-150 | Annotated-union scenarios (probe baseline) populate same chain field with same struct shape |
+| **3C.d** | Format integration + 4-axis discriminating parity tests + Q6.x probe diff verification | ~100-150 | `'union-all-contradict-error/*` axes pass; probe diff shows chain populated; suite stable |
+| **3C-VAG** | Cross-arc adversarial 3-column VAG; Phase 3C close | docs | All 4 VAG questions pass under adversarial framing |
+
+Estimated total: **~430-700 LoC** + docs across 4 sub-phases + 1 VAG close.
+
+#### §9.5.1.6 Drift risks named (per Stage 4 mini-design discipline)
+
+13 drift risks named at mini-design open; D-3C-10 CLEARED pre-implementation by Q6.x empirical probe.
+
+| # | Risk | Mitigation |
+|---|---|---|
+| **D-3C-1** | shape-without-benefit — ship API but chain doesn't actually improve diagnostic value vs current empty-chain output | Pre-write 1-2 expected user-facing error messages BEFORE implementation; verify improvement empirically |
+| **D-3C-2** | observer-coupling — tempted to set `current-bsp-observer` for richer trace → Cell/Propagator/Scheduler Orthogonality violation | Q3 lean LOCKS static walk only; observer-set is anti-pattern for production-default 3C |
+| **D-3C-3** | dual-path-permanence — reframed by Q6.x: sexp's chain was empty, so 3C REPLACES (not supplements); see D-3C-11 for the residual concern | Q9 lean LOCKS replacement for union cases; non-union sexp chain continues until Phase 11b |
+| **D-3C-4** | uc1-scope-creep — tempted to ship UC1 fuel-blame since `tropical-left-residual` is right there | Q7 lean LOCKS UC1 deferral; 3C charter is union all-branch-contradict only |
+| **D-3C-5** | residuation-walk-formal-gap — trace monoidal category theory research named in §6.1.1 as Phase 11b input; 3C might land before consulting | Mini-design at sub-phase open: CONSULT IF 3C scope expands toward UC1/UC2; SKIP if scope stays union-only |
+| **D-3C-6** | error-emission-double-firing — if integration hook is both `process-fork-contradiction` augmentation AND downstream "worldview=0" detection, duplicate errors | Idempotence guard at emission point; one emission per all-branch-contradict event; verify via parity tests |
+| **D-3C-7** | srcloc-coverage-gap — only 21 sites with explicit `#:srcloc`; chain steps may have `srcloc=#f` for non-explicit installs | Audit during 3C.a implementation: do chain-relevant propagators have srcloc? If not, document graceful degradation (chain shows "<unknown>" for those steps) |
+| **D-3C-8** | bit-budget — Phase 3A's ≤30-bit assumption-id bitmask; large unions could exceed | Inherited from Phase 3A; observe via PERF-COUNTERS heartbeats; 3C is not responsible to fix |
+| **D-3C-9** | test-discriminating-power — parity tests must DISCRIMINATE (would fail if chain mechanism broken), not just preserve | Q10 lean LOCKS 4-axis with negative axis ('non-union-no-chain) for discrimination |
+| **D-3C-10** | Q6.x unknown-fallback — what currently happens with elaboration output | **CLEARED 2026-05-22** by empirical probe; see §9.5.1.2 |
+| **D-3C-11** | form-B-reframing-honesty — UC3 §9.7 spec ("per-branch tropical fuel cell") doesn't match Phase 3A's actual mechanism | Q4 lean documents explicit Form B → Form C reframe; persistence captures the reframe (this subsection) |
+| **D-3C-12** | build-derivation-chain-co-existence — Phase 3C populates union-type chain; `build-derivation-chain` still populates `type-mismatch-error` (non-union) chain. If `build-derivation-chain` is later extended to cover union cases in parallel, drift returns | Audit during 3C.c: ensure `build-derivation-chain`'s union-type code paths (typing-errors.rkt lines 70-104) are RETIRED for union cases (replaced by Phase 3C); non-union paths remain until Phase 11b |
+| **D-3C-13** | vision-aligned-overreach — pre-codifying `static-reverse-walk` as Cross-Track Template before empirical second consumer = workflow.md anti-pattern | Lean LOCKS: ship API surface NOW; codification GRADUATES at Phase 11b second instance. Watching-list entry "Propagator-First Diagnostics" captures the candidate. |
+
+#### §9.5.1.7 Cross-track captures (forward-pointers)
+
+Per vision-forward framing (§9.5.1.3), Phase 3C deliverables are foundational for downstream tracks. Cross-track captures persist as forward-pointer notes; concrete updates to other tracker docs land during the implementation arc opportunistically OR as separate commits.
+
+**Forward-pointer notes**:
+
+1. **Phase 11b (parent D.3 §6.1.1 + tracker row)**: extends Phase 3C's `static-reverse-walk` primitive + `derivation-chain` struct; general `derivation-chain-for(position, tag)` becomes second consumer of the primitive (not a refactor); covers non-union diagnostics + LSP hooks + trace-monoidal-category-theory framing per M4 critique.
+
+2. **SH Master (Track 1: `.pnet` network-as-value + Track 4: production LLVM substrate / LHC)**: chain struct shape becomes part of `.pnet` IR for cross-session error reporting; `static-reverse-walk` is the runtime diagnostic primitive at LHC ABI; LLVM lowering interprets transparent struct fields directly.
+
+3. **PPN Track 8 (LSP integration)**: `derivation-chain` is LSP-serializable via transparent struct + `format-error` integration; LSP diagnostic payload IS the chain output; PPN 8 consumes Phase 3C delivery directly.
+
+4. **PReduce Track 6 (speculative reduction)**: inherits emission pattern (stratum handler → chain emission); cost-bounded ATMS branching errors produce chains via residual walk through cost-attribution graph.
+
+5. **PM Track 12 + PPN Track 4D (sexp-as-IR retirement multi-track arc)**: Phase 3C contributes by making on-network chain the AUTHORITATIVE diagnostic for union cases; sexp `build-derivation-chain` union-type path retires in 3C.c; non-union paths retire in Phase 11b + Track 4D arc.
+
+6. **DEFERRED.md**: capture "Sexp-as-IR retirement" multi-track target with dependency chain (PM 12 + on-network mechanism coverage + LHC self-hosting).
+
+7. **MASTER_ROADMAP.org**: surface "Propagator-First Diagnostics" framing in PPN 4C row description when next opportunity to edit; reference §9.5.1 as the canonical articulation.
+
+**Codification status (watching list, 1 data point — graduates at Phase 11b second consumer)**:
+
+> **"Propagator-First Diagnostics"** — error reporting via on-network static-walk over propagator-firing graph is a load-bearing architectural shape for compiler-IS-network (LHC). Phase 3C ships `static-reverse-walk` + `derivation-chain` struct as the first instance; Phase 11b + PPN 8 LSP + SH Track 4 LHC are named downstream consumers. Codification GRADUATES from watching list to principle (DESIGN_PRINCIPLES.org § Propagator-First Diagnostics) when Phase 11b lands the second empirical consumer — mirrors Specialized Cell Type Framework graduation precedent (codified AFTER 3 empirical cache instances landed IN-ARC).
+
+#### §9.5.1.8 Methodology notes — audit-driven scope refinement (6th data point) + Q6.x empirical falsification
+
+**Audit-driven scope refinement** (PROMOTION-READY codification, 5 data points previously; this dialogue adds the 6th):
+- Q6.x's empirical probe REFRAMED Phase 3C's value proposition from "establish silent-failure-fix" to "populate empty-chain field" — a non-trivial scope shift driven by audit-precedes-implementation discipline
+- Without the probe, Phase 3C might have implemented chain mechanism that doesn't fire for the dominant user scenario (annotated unions go through sexp path; on-network Phase 3A mechanism handles inferred unions only)
+- This is the 6th data point reinforcing the codification
+
+**Empirical falsification of audit assumption**:
+- A2 audit concluded "no user-facing error surface for on-network union all-branch-contradict"
+- Empirical probe REVEALED the actual current state: rich user-facing error via sexp path with EMPTY chain field
+- The audit was CORRECT about Phase 3A's on-network mechanism (it does only narrowing) but MISSED the driver-fallback layer that produces the user-facing error
+- **Methodology lesson**: even tier-organized audits can miss multi-layer interactions; empirical probe is the falsification step when audit conclusions are LOAD-BEARING for design decisions
+
+**Sub-codification (1 data point, watching list)**: "Audit-precedes-implementation discipline requires EMPIRICAL falsification step when audit conclusions drive load-bearing design decisions. Multi-layer interactions are the audit blind spot — pre-implementation probes verify the audit's behavioral assumptions."
+
+#### §9.5.1.9 Closure criteria
+
+Phase 3C closes per Stage 4 Per-Phase Protocol + cross-arc VAG:
+
+1. **Sub-phases 3C.a through 3C.d delivered** with each Stage 4 step completed in order (test coverage → commit → tracker → dailies → proceed)
+2. **`union-exhaustion-error.derivation-chain` field POPULATED** for both annotated-union and inferred-union scenarios with rich on-network walk data
+3. **4-axis discriminating parity tests passing** (`'union-all-contradict-error/chain-shape` + `/branch-attribution` + `/srcloc-presence` + `/non-union-no-chain`)
+4. **Probe diff verification**: post-3C run of `examples/2026-05-22-3C-Q6x-probe.prologos` shows non-empty derivation-chains; pre-3C baseline (this commit) shows empty
+5. **`build-derivation-chain` union-type code path retired** (typing-errors.rkt:70-104 for union cases; non-union path continues until Phase 11b)
+6. **All 13 D-3C-* drift risks cleared** (D-3C-10 already CLEARED by Q6.x probe; remaining 12 verified at 3C-VAG)
+7. **Full suite stable** within 109-115s baseline variance band (current baseline 111.4s)
+8. **Adversarial 3-column VAG** passes 4 questions (on-network / complete / vision-advancing / drift-risks-cleared) at Phase 3C close
+9. **Cross-track captures persisted** in §9.5.1.7 (this section) + opportunistically updated in other tracker docs
+
+#### §9.5.1.10 Status
+
+**Phase 3C mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to enter Phase 3C.a (Stage 4 implementation) following the conversational checkpoint cadence per workflow.md.
+
+#### §9.5.1.11 Cross-references
+
+- Phase 3B-VAG close (preceding state): §9.4.5 (commit `d81a04fc`)
+- Form C cross-reference (Phase 3C handoff target): §9.5.A
+- Tropical Quantale Addendum UC1/UC2/UC3: `2026-04-26_PPN_4C_TROPICAL_QUANTALE_ADDENDUM_DESIGN.md` §9.7
+- Parent D.3 §6.1.1 (provenance infrastructure): `2026-04-17_PPN_TRACK4C_DESIGN.md` §6.1.1
+- Parent D.3 Phase 11b tracker row: `2026-04-17_PPN_TRACK4C_DESIGN.md` Progress Tracker Phase 11b
+- Q6.x empirical probe: `racket/prologos/examples/2026-05-22-3C-Q6x-probe.prologos`
+- Existing union-error infrastructure: `racket/prologos/errors.rkt:115-116` (`union-exhaustion-error` struct) + `racket/prologos/typing-errors.rkt:64-152` (sexp `check/err` + `build-derivation-chain`)
+- Phase 3A integration target: `racket/prologos/typing-propagators.rkt:1288` (`process-fork-contradiction`)
+- Phase 3A request shape: `racket/prologos/typing-propagators.rkt:1108-1115` (cell-15 request-info hash structure)
+- Tropical residuation operator: `racket/prologos/tropical-fuel-primitives.rkt:105`
+- Phase 1.5 srcloc plumbing: `racket/prologos/propagator.rkt:354` (propagator struct) + `:363` (fire-propagator wrapper) + `racket/prologos/source-location.rkt:36` (current-source-loc parameter)
+- Codification graduation precedent (Specialized Cell Type Framework): `docs/tracking/principles/DESIGN_PRINCIPLES.org` § "Specialized Cell Type Framework as Cross-Track Template"
 
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 

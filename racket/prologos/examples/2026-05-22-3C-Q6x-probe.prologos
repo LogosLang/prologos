@@ -1,0 +1,32 @@
+;; PPN 4C Phase 3C — Q6.x audit probe
+;;
+;; PURPOSE: capture the CURRENT user-facing behavior when union-type
+;; all-branch-contradict occurs. Q6.x asks whether Phase 3A's on-network
+;; mechanism produces a user-facing error OR whether sexp check/err
+;; fallback produces the existing union-exhaustion-error.
+;;
+;; This probe runs THREE scenarios and observes the output:
+;;   Scenario 1 (S1): Explicit annotation union-all-contradict
+;;     def x <Nat | Bool> "hello"
+;;     — exercises check/err's with-speculative-rollback path
+;;   Scenario 2 (S2): Multi-error sequencing
+;;     def x <Nat | Bool> "hello"
+;;     def y <Int | Bool> "world"
+;;     — exercises whether each emission produces an independent chain
+;;   Scenario 3 (S3): nested union annotation
+;;     def z <<Nat | Bool> | String> 3.14
+;;     — exercises whether nested union produces nested chain structure
+;;
+;; Run: process-file on this file. Observe stderr + stdout.
+;; Diff against post-3C-implementation output to validate chain delivery.
+
+ns probe-3c-q6x
+
+;; -- Scenario 1 --
+def x <Nat | Bool> "hello"
+
+;; -- Scenario 2 --
+def y <Int | Bool> "world"
+
+;; -- Scenario 3 --
+def z <<Nat | Bool> | String> 3.14
