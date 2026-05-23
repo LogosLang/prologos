@@ -207,6 +207,59 @@ PRN is the abstract theory of propagator-rewriting networks. 4D contributes back
 
 Track 4D's eventual Stage 2 audit should measure transient allocation patterns to characterize the consolidation opportunity quantitatively.
 
+### 5.5 M1 + M3 substrate decomplection — deferred from PPN 4C Phase 3B (2026-05-22)
+
+**Source finding**: PPN 4C Phase 3B.0 mini-audit (A1-A6) surfaced an architectural debt in the substrate that Phase 3A's `process-fork-on-union` uses: classical `solver-amb` writes pairwise mutual-exclusion nogoods that are STRUCTURALLY INERT under non-committing union semantics. Phase 3B explored three resolution models:
+
+- **M0** (suppress mutex nogoods via `#:mutual-exclusion?` flag on `solver-amb`)
+- **M1** (separate active-branch-set cell + new `union-amb` primitive — substrate decomplection)
+- **M3** (first-class classifier-set type-theoretic reification — Frisch-Castagna semantic subtyping)
+
+**Decision (per PPN 4C Phase 3B §9.4.2.9)**: Option 3 hybrid — M0 lands in Phase 3B.A as the architecturally-correct minimal substrate fix; **M1 + M3 deferred to Track 4D** where they compose with the attribute-grammar substrate unification thesis.
+
+**Why deferred to Track 4D**:
+
+1. **Audit refuted the "role overload" framing**: re-reading `solver-state-with-worldview` (atms.rkt:461-469) showed worldview-cache is structurally "set of currently believed aids" under BOTH classical-ATMS and Phase 3A. No actual role overload — the mutex nogoods are the load-bearing debt, and M0 addresses them directly.
+
+2. **A6 (branch-check viability tension)**: under M1's separate-cell decomplection, the branch CHECK propagator (typing-propagators.rkt:1173) — which is NOT `:assumption aid`-tagged — would need either dual-narrowing (defeats decomplection), assumption-tagging, substrate-level filter source change (invasive), or accepting a decomplection edge. M1's "real decomplection" claim is weakened by this; doing M1 cleanly requires resolving this viability work.
+
+3. **Multi-consumer architectural symmetry**: Phase 9b γ hole-fill (D.3 §6.2.1) uses IDENTICAL mechanism as Phase 3A — non-committing ATMS branching on the same substrate. Phase 7 (parametric trait resolution), PReduce Track 1 (e-class cost extraction), and future General Residual Solver (BSP-LE Track 6) all share the at-least-one non-committing pattern. **M0 serves all 5 consumers**; M1's decomplection benefits none structurally; M1 is architectural luxury rather than necessity.
+
+4. **Track 4D thesis composes M1 + M3 cleanly**: M1's separate-cell decomplection of active-branch-set + M3's first-class classifier-set work both belong in Track 4D's substrate unification effort. The viability resolution from A6 (branch-check assumption-tagging OR filter-source change) is the same kind of cross-cutting substrate work Track 4D's unification absorbs naturally.
+
+**Forward scope for Track 4D** (research-stage; concrete designs await Track 4D's Stage 1-3 cycle):
+
+- **M1 deliverable**: separate `union-branch-set-cell-id` (or similar; cell-id allocation TBD at Track 4D scoping); per-position branch tracker with structurally-distinct merge contract; new `union-amb` primitive (alongside classical `solver-amb`) that does not write mutex nogoods AND writes to the new cell; migrate `process-fork-on-union` + `process-fork-contradiction` to consume the new cell; resolve A6's branch-check viability via assumption-tagging OR filter-source change OR substrate-level decomplection-edge documentation
+- **M3 deliverable**: `union-classifier-set` substrate concept (set-of-type-classifiers as first-class lattice value) per Frisch-Castagna semantic subtyping; composes with attribute-map `:type` facet's classify-inhabit-value CLASSIFIER layer; eliminates worldview-cache overload entirely (under M3, fork-on-union doesn't touch worldview-cache at all)
+- **Composition note**: M1 + M3 are NOT independent — M3 may subsume M1's separate cell into the classifier-set concept (classifier-set IS the per-position active-classifier tracker). Track 4D scoping determines whether M1 and M3 land as ONE deliverable (M3-superset) or TWO coordinated deliverables (M1 + M3 separately)
+
+**Why M0 is NOT scaffolding** (honest framing per workflow.md):
+
+M0 is the architecturally-correct substrate fix at THIS layer (substrate level: lattice + cell + primitive). The "more decomplected" M1 + M3 architecture lives at a HIGHER layer (substrate unification under attribute-grammar substrate). M0 is not "temporary" or "safety patch" — it's the right answer for substrate-level work, and Track 4D's unification will absorb it cleanly when M3's classifier-set work eliminates the role tension entirely.
+
+**Multi-consumer benefit catalog** (all inherit M0 substrate now; all upgrade to M1/M3 under Track 4D):
+
+| Consumer | Current substrate need | M0 inherits | M1/M3 (Track 4D) benefit |
+|---|---|---|---|
+| **PPN 4C Phase 3A** (union check) | At-least-one branching | ✓ active now (post-3B.A) | Classifier-set decomplection per Frisch-Castagna |
+| **PPN 4C Phase 7** (parametric trait resolution) | At-least-one impl candidates | ✓ inherits when 7 ships | Classifier-set composes with trait-tagged Module Theory Realization B |
+| **PPN 4C Phase 9b** (γ hole-fill) | At-least-one inhabitant candidates | ✓ inherits when 9b ships | Classifier-set composes with Hasse-registry inhabitant catalog |
+| **PReduce Track 1** (e-class substrate) | At-least-one optimal extraction | ✓ inherits via composition | Classifier-set composes with tropical-quantale cost lattice |
+| **BSP-LE Track 6 future** (General Residual Solver) | At-least-one constraint satisfaction | ✓ inherits via composition | Classifier-set composes with domain-polymorphic substrate |
+
+**Cross-references**:
+- PPN 4C Phase 9+ Addendum §9.4.1 (Phase 3B parent mini-design — historical M1 commitment)
+- PPN 4C Phase 9+ Addendum §9.4.2.7-§9.4.2.8 (Phase 3B.0 audit findings that refuted role overload framing)
+- PPN 4C Phase 9+ Addendum §9.4.2.9 (Option 3 selection + decision rationale)
+- D.3 §6.2.1 (Phase 9b γ hole-fill mechanism — confirms multi-candidate identity with Phase 3A)
+- D.3 §6.5 (Phase 7 parametric trait resolution — same mechanism)
+- This subsection (Track 4D vision-level forward-pointer for M1 + M3)
+
+**Track 4D Stage 2 audit obligation**: when Track 4D's Stage 2 audit runs, scope must include:
+- Multi-consumer (5+) survey to confirm M0 still suffices when Track 4D opens (or whether new consumers have emerged with structural M1 needs)
+- A6's branch-check viability resolution choice (assumption-tagging vs filter-source-change vs decomplection-edge) per Track 4D's substrate unification strategy
+- M3 classifier-set design (composes with classify-inhabit-value's CLASSIFIER layer per D.2 framing)
+
 ---
 
 ## 6. Proposed Track Scope (Preliminary)

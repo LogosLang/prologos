@@ -190,7 +190,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3B | Substrate decomplection + hypercube integration (Gray code) — conditional on empirical evidence | 🔄 | **Phase 3B mini-design persisted at §9.4.1** (commit `5df6745a`). OQ1 ↔ mutual-exclusion tension surfaced via Phase 3B mini-audit (Phase 3A audit gap); M1 substrate decomplection selected over M0 (safety-patch) and M3 (Track 4D premature); sub-phase structure 3B.0/3B.A/3B.B/3B-VAG refined; pre-committed falsification criteria locked (§9.4.1.6). Original terse §9.4 spec SUPERSEDED. Audit-driven scope refinement codification at **4th data point (PROMOTION-READY)** for DEVELOPMENT_LESSONS.org. `subcube-member?` reclassified as primitive-awaiting-consumer (no Phase 3A consumer under M1). |
 | 3B mini-design + mini-audit | Conversational opening of Phase 3B; surfaced OQ1 ↔ mutual-exclusion semantic tension Phase 3A's mini-design missed; explored M0/M1/M3 with adversarial 3-column; M1 selected; sub-phase partition refined; pre-committed falsification criteria locked | ✅ `5df6745a` | Persisted at §9.4.1 per Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc). 11 subsections (§9.4.1.1-§9.4.1.12) covering: audit findings, semantic exploration, architectural decision, sub-phase partition, Phase 3B.0 scope, falsification criteria, drift risks, cross-track captures (5), methodology notes, resolved Q1-Q5, status, cross-references. |
 | 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | 🔄 | **Mini-design opening persisted at §9.4.2 (commit `483957ba`)**. 8 Q-decisions resolved (Q1 all-parallel audit; Q2 concurrent harness; Q3 parameter on `main`; Q4 bench-ab.rkt where supported; Q5 closure criteria; Q6 single integrated; Q7 light checkpoints; Q8 scaffolding labeling). Audit plan A1-A6 + meta-adversarial coverage check. Harness file `benchmarks/micro/bench-fork-on-union-gray-code.rkt` planned. 6 D-3B.0-* drift risks named (§9.4.2.4). Closure criteria §9.4.2.5. **Next**: A1-A6 all-parallel sweep + harness scaffolding (forthcoming commits will populate §9.4.2.7+). |
-| 3B.A | M1 substrate decomplection — separate active-branch-set cell (cell-18 expected) + `union-amb` primitive (alongside `solver-amb`); migrate `process-fork-on-union` (typing-propagators.rkt:1139) from `solver-state-amb` to `union-amb`; `process-fork-contradiction` narrows new cell instead of worldview-cache | ⬜ | Architectural debt resolution — independent of 3B.B in correctness. See §9.4.1.3-4 for rationale + §9.4.1.5 audit task A5/A6 for primitive design. Preserves classical `solver-amb` for downstream classical-ATMS consumers (BSP-LE 2 multi-clause selection, NAF). |
+| 3B.A | **M0 substrate fix** — `#:mutual-exclusion?` flag on `solver-amb` (default `#t` preserves classical); `solver-state-amb` threads flag; `process-fork-on-union` (typing-propagators.rkt:1139) migrates to `(solver-state-amb ss alternatives #:mutual-exclusion? #f)`. **REVISED from M1 per §9.4.2.9** (audit-driven re-examination 2026-05-22). | ⬜ | **REVISED scope ~50 LoC** (was ~150-200 under M1). M1 + M3 deferred to Track 4D's substrate unification scope (captured at vision research §5.5). M0 is architecturally CORRECT at this layer per audit findings — closes load-bearing debt (mutex nogoods inert under non-committing); all multi-candidate consumers (Phase 3A + 7 + 9b + PReduce 1 + BSP-LE 6) inherit. NOT scaffolding — IS the answer at substrate layer. |
 | 3B.B | Hypercube integration (Gray-code aid ordering at `solver-amb`/`union-amb` aid-allocation layer) — **CONDITIONAL on 3B.0 measurement outcome** per §9.4.1.6 pre-committed falsification criteria | ⬜ | Pre-committed: ≥10% benefit at W4/W5 → implement; 5-10% → investigate before implementing; ±5% → documented-defer with negative finding; slower → defer + flag primitive-keepalive risk. Cell-layer/data-layer optimization (NOT scheduler-coupled per Cell/Propagator/Scheduler Orthogonality). |
 | 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ⬜ | Per §9.4.1.7. 6 drift risks named at mini-design open per Stage 4 discipline. |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. Under M1: consumes active-branch-set narrowing signal from new cell; can ALSO consume mutex nogoods from OTHER (classical-ATMS) callers if needed for error chains involving classical amb. Phase 3C inherits the architectural separation cleanly. |
@@ -6159,9 +6159,90 @@ A6's deeper finding interacts with A2's re-examination. **The integrated picture
 
 **Possible re-revised decision**: M0 may be the architecturally-correct minimal answer. M1 may be over-engineered. The discourse turn should reconcile this.
 
-#### §9.4.2.9 A/B measurement results + falsification evaluation — TO BE LANDED
+#### §9.4.2.9 Decision re-examination — M0 selected over M1 (audit-driven update 2026-05-22)
 
-Placeholder for measurement data + decision documentation per §9.4.1.6 pre-committed criteria.
+Per Stage 4 methodology: when audit findings reshape a prior design decision, the re-examination persists explicitly. §9.4.1 committed to M1 based on the strongest framing of "worldview-cache role overload"; the §9.4.2.7-§9.4.2.8 audit refuted this framing AND surfaced additional architectural tension under M1. Reconciliation here.
+
+##### §9.4.2.9.1 Audit findings that reshape §9.4.1's M1 commitment
+
+1. **A2 finding**: re-reading `solver-state-with-worldview` (atms.rkt:461-469) reveals worldview-cache is structurally "set of currently believed aids" under BOTH classical-ATMS AND Phase 3A. Multiple bits set is correct under both interpretations. **There is no role overload.** §9.4.1's framing was overstated.
+
+2. **A4 finding**: mutex nogoods written by `solver-amb` are read ONLY by `solver-explain*` + `solver-state-consistent?`. NONE invoked by Phase 3A's `process-fork-on-union` path. The nogoods are **structurally INERT**. M0 (suppress nogoods for non-committing callers) is structurally safe — zero observable behavior change beyond the suppression itself.
+
+3. **A6 finding (deeper)**: branch CHECK propagator (typing-propagators.rkt:1173-1177) is NOT `:assumption aid`-tagged; its viability comes from worldview-cache narrowing + tagged-cell-read subset filtering. Under M1, moving narrowing to a new cell while keeping the tagged-cell-read filter on worldview-cache creates a **viability tension** requiring either dual-narrowing (defeats decomplection), assumption-tagging branch checks (additional architectural work), substrate-level filter change (invasive), or accepting an architectural "decomplection edge." **M1's "real decomplection" claim is weakened by A6.**
+
+4. **Phase 9b consumer analysis** (D.3 §6.2.1 verified): Phase 9b γ hole-fill uses **identical mechanism** as Phase 3A — non-committing ATMS branching on the same substrate. Per §6.2.1: *"γ hole-fill and parametric trait resolution are the SAME architectural pattern... Both use ctor-desc decomposition, ATMS branching on ambiguity, and set-latch fan-in for downstream aggregation."* All multi-candidate consumers (Phase 3A, Phase 7, Phase 9b, PReduce 1, BSP-LE 6 future) are non-committing + at-least-one semantic. **None structurally require M1's separate cell.**
+
+##### §9.4.2.9.2 Adversarial 3-column on the re-examined options
+
+| | M0 (suppress mutex nogoods) | M1 (separate active-branch-set cell) | Option 3 (Hybrid: M0 now, M1+M3 deferred to Track 4D) |
+|---|---|---|---|
+| **Catalogue** | Closes actual debt (~50 LoC: flag + suppression branch + caller migration) | Decomplects active-branch-set as first-class concept (architectural luxury given audit) | M0 now closes debt; M1+M3 compose with Track 4D's substrate unification |
+| **Challenge** | Treats symptom not root cause — but audit shows the "root cause" framing was overstated | A6 reveals M1 requires viability resolution work (~+100 LoC); decomplection claim weakened | Deferring M1 is not avoidance because no current/near-term consumer structurally requires it; Track 4D is the architecturally-correct home |
+| **Adversarial** | Original §9.4.1 challenge ("safety patch not architectural answer") was based on overstated framing. Audit-corrected analysis: M0 addresses the load-bearing debt directly. **The "M0 is safety patch" framing was wrong.** | Original §9.4.1 challenge ("real decomplection") was weakened by A6's branch-check viability finding. Doing M1 now requires absorbing the viability work; doing M1 with M3 in Track 4D compresses that work into the unification effort. | **Test for rationalization**: would M1 be SIMPLER to implement now than later? No — A6 surfaced additional work. Track 4D's substrate unification is where the M1 decomplection naturally lands (M1's "separate cell" + M3's "classifier-set first-class" are compatible co-deliverables under the unified substrate). Option 3 reflects the audit-corrected architectural picture, not deferral-as-avoidance. |
+
+##### §9.4.2.9.3 DECISION — Option 3 selected (user-confirmed 2026-05-22)
+
+**M0 now (in 3B.A); M1 + M3 deferred to PPN Track 4D as composite substrate-unification scope.**
+
+Rationale (per audit + Phase 9b consumer analysis):
+- M0 addresses the load-bearing architectural debt (mutex nogoods)
+- All multi-candidate consumers (Phase 3A, Phase 7, Phase 9b, PReduce 1, BSP-LE 6) use the same non-committing mechanism — M0 substrate serves all
+- M1's "real decomplection" claim weakened by A6's branch-check viability finding
+- Track 4D's attribute-grammar substrate unification (vision research at [`2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md`](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md)) is the natural home for M1+M3 — they compose with the unification thesis
+
+**Deferred scope captured at**: [Track 4D vision research §5.5 "M1 + M3 substrate decomplection (deferred from PPN 4C Phase 3B)"](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md). Future Track 4D effort knows to pick up this work as part of its scope.
+
+##### §9.4.2.9.4 Implications for 3B.A scope
+
+**3B.A revised scope** (per M0 selection):
+
+| Deliverable | LoC estimate |
+|---|---|
+| Add `#:mutual-exclusion?` keyword to `solver-amb` (atms.rkt:304); default `#t` preserves classical | ~5 |
+| Conditional pairwise nogood loop (skip when flag is `#f`) | ~10 |
+| Thread flag through `solver-state-amb` wrapper (atms.rkt:440) | ~3 |
+| Migrate `process-fork-on-union` (typing-propagators.rkt:1139) to pass `#:mutual-exclusion? #f` | ~3 |
+| Documentation: explicit semantic distinction (classical exactly-one with mutex; non-committing at-least-one without) | ~30 lines comments |
+| Tests: verify mutex-suppression in test-solver-context.rkt | ~30 |
+| Honest framing: NO scaffolding labels (M0 IS the architectural answer for this layer; not "temporary") | — |
+
+**Total: ~50 LoC + documentation + tests**. Substantially smaller than M1's original ~150-200 LoC + viability resolution.
+
+**Architectural framing**: M0 is the CORRECT minimal substrate fix at this layer. The "more decomplected" M1 + M3 architecture is Track 4D scope where the unification work makes M1's branch-check viability concerns part of the broader unification refactor.
+
+##### §9.4.2.9.5 Methodology codifications surfaced
+
+Two codification candidates from this re-examination:
+
+1. **"Rigorous audit refutes initial framing"** (1 data point this session; promotion candidate)
+   - §9.4.1 committed to M1 based on overstated framing
+   - §9.4.2.7-§9.4.2.8 audit refuted the framing
+   - Re-examination at §9.4.2.9 corrects the decision
+   - **Pattern**: when audit findings reshape a prior decision, the methodology requires explicit re-examination + reversal documentation — NOT post-hoc rationalization or sticking with prior commitment for consistency
+
+2. **"Multi-consumer architectural symmetry justifies minimal-fix-now + unification-later"** (1 data point — multi-candidate consumer survey: Phase 3A + Phase 7 + Phase 9b + PReduce 1 + BSP-LE 6 all share non-committing pattern; promotion candidate)
+   - When 5+ consumers share an architectural pattern, the substrate change should serve ALL of them OR none
+   - M0 serves all 5; M1's decomplection benefits none (no consumer structurally requires it)
+   - The minimal-fix-now answer (M0) + unification-later answer (M1+M3 in Track 4D) is architecturally honest
+
+Promotion to DEVELOPMENT_LESSONS.org deferred to user direction per §9.3.9.4 pattern; flagged for next session's codification batch.
+
+##### §9.4.2.9.6 Updated §3 tracker
+
+3B.A row updated to reflect M0 selection (was implicit M1). 3B.0 row updated to reflect re-examination completed.
+
+##### §9.4.2.9.7 Cross-references
+
+- §9.4.1 (Phase 3B parent mini-design — PRESERVED as historical record showing M1 was the initial decision; this §9.4.2.9 documents the re-examination, not rewrites the history)
+- §9.4.2.7 (A1-A4 audit findings that refuted role overload framing)
+- §9.4.2.8 (A5-A6 audit findings; A6's branch-check viability discovery)
+- D.3 §6.2.1 (Phase 9b γ hole-fill mechanism — confirmed identical to Phase 3A)
+- [Track 4D vision research §5.5](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md) (deferred scope captured)
+
+#### §9.4.2.10 Phase 3B.0 close — adversarial 3-column VAG — TO BE LANDED
+
+Placeholder for 4 VAG questions × adversarial 3-column close + 6 D-3B.0-* drift risk verification + 3B.A/3B.B status documentation.
 
 #### §9.4.2.10 Phase 3B.0 close — adversarial 3-column VAG — TO BE LANDED
 
