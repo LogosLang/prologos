@@ -299,21 +299,99 @@
 
 ;; Create a choice point with N alternatives.
 ;; Creates N assumptions, adds them as components of the compound decisions cell.
-;; When #:mutual-exclusion? = #t (default, CLASSICAL ATMS semantic): records
-;; N·(N−1)/2 pairwise mutual-exclusion nogoods (exactly-one-of constraint).
-;; When #:mutual-exclusion? = #f (NON-COMMITTING semantic): NO mutex nogoods
-;; written (at-least-one-of constraint). PPN 4C Phase 3B.A M0 — see §9.4.3
-;; of the addendum design doc for full architectural rationale.
-;; Brief: full M0 documentation block lands at 3B.A.4.
 ;;
-;; Historical retirement note (Phase 3B.0, 2026-05-22): an experimental
-;; `current-gray-code-aid-ordering?` parameter (commit `98cbbc3d`) A/B tested
-;; the Hyperlattice Conjecture's CHAMP-sharing claim under Realization B; the
-;; n=10 × 5 workloads measurement produced ALL DELTAS WITHIN ±1.5% (per
-;; §9.4.2.10 falsification evaluation). Scaffolding retired at `0eaa9506`;
-;; data at `data/benchmarks/fork-on-union-gray-code-2026-05-22.txt`; resurrect
-;; from `98cbbc3d` if future tracks (Phase 9b under fork-and-rejoin, PReduce,
-;; BSP-LE 6) need similar A/B work under DIFFERENT mechanism.
+;; ============================================================================
+;; M0 — PPN 4C Phase 3B.A (2026-05-22): #:mutual-exclusion? semantic dispatch
+;; ============================================================================
+;;
+;; This primitive supports TWO architecturally-distinct semantics, selected by
+;; the #:mutual-exclusion? keyword. Both semantics share Step 1 (N fresh
+;; assumption allocation + eager worldview-cache update via solver-assume);
+;; they DIVERGE at Step 2 (whether N·(N−1)/2 pairwise mutex nogoods are
+;; recorded).
+;;
+;; (i) The two semantics:
+;;
+;;   #:mutual-exclusion? = #t (DEFAULT — CLASSICAL ATMS)
+;;     Logical: EXACTLY ONE of {h_0, h_1, ..., h_{N−1}} is true.
+;;     Constraint: disjunction + pairwise mutual exclusion.
+;;     Encoding: N aids + N·(N−1)/2 pairwise nogoods recorded.
+;;     Use cases: BSP-LE 2 multi-clause selection; NAF; classical disjunctive
+;;     choice points where the system must commit to ONE answer.
+;;
+;;   #:mutual-exclusion? = #f (NON-COMMITTING)
+;;     Logical: AT LEAST ONE of {h_0, h_1, ..., h_{N−1}} is true; multiple may.
+;;     Constraint: disjunction only (no mutual exclusion).
+;;     Encoding: N aids; NO mutex nogoods.
+;;     Use cases: union-type inhabitation (e : A | B succeeds if any branch
+;;     succeeds — multiple may); γ hole-fill multi-candidate; parametric trait
+;;     resolution candidate enumeration. All share the at-least-one semantic.
+;;
+;;   Type-theory grounding (per §9.4.1.1): non-committing inhabitation aligns
+;;   with Frisch-Castagna semantic subtyping ([[e : A | B]] = [[e]] ∈ [[A]] ∪
+;;   [[B]]); Tobin-Hochstadt-Felleisen Typed Racket occurrence typing; Scala 3
+;;   hard unions; Castagna 2022.
+;;
+;; (ii) When to use which:
+;;
+;;   Use CLASSICAL (#t) when the caller's semantic requires the system to
+;;   COMMIT to exactly one branch at quiescence — e.g., a Datalog choice rule,
+;;   classical SAT disjunction, or NAF's "exactly one of the negated facts
+;;   must fail". The pairwise nogoods enforce that any worldview claiming
+;;   multiple branches simultaneously is inconsistent.
+;;
+;;   Use NON-COMMITTING (#f) when the caller's semantic allows MULTIPLE
+;;   branches to coexist — e.g., union-type inhabitation, multi-candidate
+;;   trait resolution, γ hole-fill candidate enumeration. The absence of
+;;   mutex nogoods means worldviews with multiple branch bits set remain
+;;   consistent; per-branch isolation comes from wrap-with-worldview tagging
+;;   at the propagator layer, not from solver-state-consistent? checks.
+;;
+;; (iii) Substrate distinction:
+;;
+;;   The ONLY observable difference between the two semantics is the contents
+;;   of solver-context-nogoods-cid (the nogoods accumulator cell). Under #t,
+;;   that cell accumulates the mutex pairs; under #f, it doesn't grow from
+;;   this call. Both modes are observable via solver-state-consistent?,
+;;   solver-explain*, solver-state-solve-all, solver-state-minimal-diagnoses
+;;   — and ONLY via those readers. Under non-committing, the suppressed mutex
+;;   nogoods would have been STRUCTURALLY INERT under the current Phase 3A
+;;   reader patterns (verified §9.4.3.1 A2). M0 closes the architectural debt
+;;   of writing inert nogoods that would only become observable under a
+;;   misuse (e.g., calling solve-all on a non-committing amb-group).
+;;
+;; (iv) M0 is NOT scaffolding — it IS the architecturally-correct substrate
+;;      answer at this layer.
+;;
+;;   Per §9.4.2.9.3: "M0 is NOT scaffolding — it's the architecturally-correct
+;;   minimal substrate fix at this layer." The audit-driven re-examination
+;;   (§9.4.2.9.1) refuted the original M1 framing of "worldview-cache role
+;;   overload" (A2 finding: worldview-cache is structurally "set of currently
+;;   believed aids" under BOTH classical and non-committing — no role
+;;   overload). The real debt was the inert mutex nogoods; M0 removes them.
+;;
+;;   Multi-consumer survey (§9.4.2.9.1 finding 4): 5 multi-candidate consumers
+;;   share the at-least-one non-committing semantic: Phase 3A union-type
+;;   inhabitation, Phase 7 parametric trait resolution, Phase 9b γ hole-fill,
+;;   PReduce 1 e-class candidate extraction, BSP-LE 6 future general residual
+;;   solver. M0 serves all 5; M1's "real decomplection" claim was weakened by
+;;   §9.4.2.7-§9.4.2.8 A6 branch-check viability tension. M1 + M3 unification
+;;   deferred to PPN Track 4D (substrate unification thesis); see Track 4D
+;;   vision research §5.5 for the deferred scope capture.
+;;
+;; ============================================================================
+;; Historical retirement note (Phase 3B.0, 2026-05-22):
+;;
+;;   An experimental `current-gray-code-aid-ordering?` parameter (commit
+;;   `98cbbc3d`) A/B tested the Hyperlattice Conjecture's CHAMP-sharing claim
+;;   under Realization B; the n=10 × 5 workloads measurement produced ALL
+;;   DELTAS WITHIN ±1.5% (per §9.4.2.10 falsification evaluation). Scaffolding
+;;   retired at `0eaa9506`; data at `data/benchmarks/fork-on-union-gray-code-
+;;   2026-05-22.txt`; resurrect from `98cbbc3d` if future tracks (Phase 9b
+;;   under fork-and-rejoin, PReduce, BSP-LE 6) need similar A/B work under a
+;;   DIFFERENT mechanism (the negative result is mechanism-coupled per
+;;   §9.4.2.10.4 — bounds Conjecture's claim, doesn't refute it).
+;; ============================================================================
 ;;
 ;; Returns: (values new-network (listof assumption-id))
 (define (solver-amb ctx net alternatives #:mutual-exclusion? [mutual-exclusion? #t])
@@ -463,16 +541,22 @@
 
 ;; Amb: returns (values new-solver-state (listof assumption-id))
 ;;
-;; PPN 4C Phase 3B.A (2026-05-22): threads #:mutual-exclusion? to solver-amb.
-;; Per Q2(b) (§9.4.3.2): the amb-groups APPEND is ALSO conditional on the
-;; flag — the two semantics (classical exactly-one-with-mutex vs non-committing
-;; at-least-one-without) ARE coupled. Under non-committing (#f), the amb-group
-;; entry would be semantically misleading for `solver-state-solve-all`'s
-;; cartesian product (which treats each group as pick-one). Skipping the
-;; append keeps solve-all semantically correct for its current (classical-only)
-;; usage; future non-committing callers don't get misleading "pick-one"
-;; enumeration. See §9.4.3.4 D-3B.A-amb-groups-coupling for the drift risk
-;; mitigation discussion.
+;; PPN 4C Phase 3B.A M0 (2026-05-22): wrapper around solver-amb.
+;;
+;; Semantic dispatch via #:mutual-exclusion? — see solver-amb (atms.rkt:316+)
+;; for the full M0 architectural rationale: (i) the two semantics (classical
+;; exactly-one vs non-committing at-least-one) with type-theory citations;
+;; (ii) when to use which; (iii) substrate distinction (mutex nogoods vs
+;; none); (iv) why M0 is NOT scaffolding (multi-consumer survey).
+;;
+;; Q2(b) (§9.4.3.2): the `solver-state-amb-groups` APPEND is ALSO conditional
+;; on the flag — the two semantics ARE coupled at this API. Under non-
+;; committing (#f), the amb-group entry would be semantically misleading for
+;; `solver-state-solve-all`'s cartesian product (which treats each group as
+;; pick-one). Skipping the append keeps solve-all semantically correct for
+;; its current (classical-only) usage; future non-committing callers don't
+;; get misleading "pick-one" enumeration. See §9.4.3.4 D-3B.A-amb-groups-
+;; coupling for the drift risk mitigation discussion.
 (define (solver-state-amb ss alternatives #:mutual-exclusion? [mutual-exclusion? #t])
   (define-values (net* hyps)
     (solver-amb (solver-state-ctx ss) (solver-state-net ss) alternatives
