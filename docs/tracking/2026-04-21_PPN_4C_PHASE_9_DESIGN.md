@@ -189,7 +189,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ✅ `9e8a6c3e` | DONE 2026-05-22 per §9.3.9. Cumulative VAG passed all 4 questions adversarially (catalogue / challenge / adversarial × 4). All cross-arc D-3A-* drift risks cleared (fuel-budget via R7; typing-core-2385-residual via empirical grep; bit-budget at 167× headroom; cross-arc mantra via on-network audit; codification-debt noted with promotion candidates). User-facing behavior matrix documented (§9.3.9.2). Handoff to Phase 3B/3C/9b/Parent Phase 4/PM 12/PPN Track 5/Track 4D captured (§9.3.9.5). 3 codifications promotion-ready (§9.3.9.4); graduation deferred to user direction. |
 | 3B | Substrate decomplection + hypercube integration (Gray code) — conditional on empirical evidence | 🔄 | **Phase 3B mini-design persisted at §9.4.1** (commit `5df6745a`). OQ1 ↔ mutual-exclusion tension surfaced via Phase 3B mini-audit (Phase 3A audit gap); M1 substrate decomplection selected over M0 (safety-patch) and M3 (Track 4D premature); sub-phase structure 3B.0/3B.A/3B.B/3B-VAG refined; pre-committed falsification criteria locked (§9.4.1.6). Original terse §9.4 spec SUPERSEDED. Audit-driven scope refinement codification at **4th data point (PROMOTION-READY)** for DEVELOPMENT_LESSONS.org. `subcube-member?` reclassified as primitive-awaiting-consumer (no Phase 3A consumer under M1). |
 | 3B mini-design + mini-audit | Conversational opening of Phase 3B; surfaced OQ1 ↔ mutual-exclusion semantic tension Phase 3A's mini-design missed; explored M0/M1/M3 with adversarial 3-column; M1 selected; sub-phase partition refined; pre-committed falsification criteria locked | ✅ `5df6745a` | Persisted at §9.4.1 per Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc). 11 subsections (§9.4.1.1-§9.4.1.12) covering: audit findings, semantic exploration, architectural decision, sub-phase partition, Phase 3B.0 scope, falsification criteria, drift risks, cross-track captures (5), methodology notes, resolved Q1-Q5, status, cross-references. |
-| 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | ⬜ | **NEXT — opens with conversational mini-design + mini-audit per Stage 4 Per-Phase Protocol + deliberate/discourse turn before confirming implementation approach (per user direction 2026-05-22).** See §9.4.1.5 for full scope. Pre-0 measurement informs 3B.B go/defer decision per §9.4.1.6. |
+| 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | 🔄 | **Mini-design opening persisted at §9.4.2 (commit TBD)**. 8 Q-decisions resolved (Q1 all-parallel audit; Q2 concurrent harness; Q3 parameter on `main`; Q4 bench-ab.rkt where supported; Q5 closure criteria; Q6 single integrated; Q7 light checkpoints; Q8 scaffolding labeling). Audit plan A1-A6 + meta-adversarial coverage check. Harness file `benchmarks/micro/bench-fork-on-union-gray-code.rkt` planned. 6 D-3B.0-* drift risks named (§9.4.2.4). Closure criteria §9.4.2.5. **Next**: A1-A6 all-parallel sweep + harness scaffolding (forthcoming commits will populate §9.4.2.7+). |
 | 3B.A | M1 substrate decomplection — separate active-branch-set cell (cell-18 expected) + `union-amb` primitive (alongside `solver-amb`); migrate `process-fork-on-union` (typing-propagators.rkt:1139) from `solver-state-amb` to `union-amb`; `process-fork-contradiction` narrows new cell instead of worldview-cache | ⬜ | Architectural debt resolution — independent of 3B.B in correctness. See §9.4.1.3-4 for rationale + §9.4.1.5 audit task A5/A6 for primitive design. Preserves classical `solver-amb` for downstream classical-ATMS consumers (BSP-LE 2 multi-clause selection, NAF). |
 | 3B.B | Hypercube integration (Gray-code aid ordering at `solver-amb`/`union-amb` aid-allocation layer) — **CONDITIONAL on 3B.0 measurement outcome** per §9.4.1.6 pre-committed falsification criteria | ⬜ | Pre-committed: ≥10% benefit at W4/W5 → implement; 5-10% → investigate before implementing; ±5% → documented-defer with negative finding; slower → defer + flag primitive-keepalive risk. Cell-layer/data-layer optimization (NOT scheduler-coupled per Cell/Propagator/Scheduler Orthogonality). |
 | 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ⬜ | Per §9.4.1.7. 6 drift risks named at mini-design open per Stage 4 discipline. |
@@ -5897,6 +5897,120 @@ This continues the **audit-driven scope refinement** codification (from §9.3.9.
 - Hyperlattice Conjecture: [`DESIGN_PRINCIPLES.org`](principles/DESIGN_PRINCIPLES.org) § Hyperlattice Conjecture + § Cell/Propagator/Scheduler Orthogonality
 - Substrate primitives: `gray-code-order` (relations.rkt:1874); `subcube-member?` (decision-cell.rkt:372); `solver-amb` (atms.rkt:304); `process-fork-on-union` (typing-propagators.rkt:1120)
 - Dialogue context (audit findings + alternate models): dailies 2026-05-17 session entries 2026-05-22 (Phase 3B mini-design)
+
+### §9.4.2 Phase 3B.0 mini-design + mini-audit opening (2026-05-22)
+
+Mini-design + mini-audit opening per Stage 4 Per-Phase Protocol step 1+2 (co-dependent cycle). Conversational dialogue post-Phase-3B-parent persistence (commit `5df6745a`) confirmed 8 process + methodology decisions before audit execution begins. Outcomes persist per Stage 4 methodology.
+
+#### §9.4.2.1 Resolved process decisions (Q1-Q8)
+
+8 questions surfaced + resolved at mini-design opening:
+
+| Q | Decision | Rationale |
+|---|---|---|
+| **Q1** — Audit ordering + parallelization | **A1-A6 all-parallel** (single read-only sweep) | Adversarial check on Wave-structure revealed dependencies are lightweight (A2/A5 only need A1's caller list, not full analysis). All-parallel is structurally valid + faster. |
+| **Q2** — A/B harness timing | **Audit + harness construction concurrent** | Workload design is source-level Prologos programs (W1-W5), not implementation-level — doesn't require audit context. Independence enables parallelism. |
+| **Q3** — Variant B implementation strategy | **Parameter on `main`** (`current-gray-code-aid-ordering?` default `#f`); minimal one-line change in `solver-amb` aid-allocation loop | Branch management overhead avoided; default `#f` preserves baseline exactly; toggleable for same-process A/B; labeled Pre-0 measurement scaffolding with explicit retirement plan |
+| **Q4** — Statistical methodology | Use `tools/bench-ab.rkt` infrastructure where supported (verify parameter-variant compatibility during execution); dedicated workload file `benchmarks/micro/bench-fork-on-union-gray-code.rkt` | Existing harness handles noise/IQR; don't reinvent. Dedicated workload file = clear ownership; doesn't pollute existing bench-meta-lifecycle.rkt. |
+| **Q5** — Closure criteria | (1) A1-A6 persisted to §9.4.2.7+; (2) harness landed + Variant A baseline captured; (3) A/B measurement run (W1-W5 × {A,B}); (4) falsification evaluation + decision documented; (5) 3B.0 adversarial 3-column VAG passes 4 questions | Matches Phase-0-as-measurement-phase pattern (§9.3.2 precedent); covers BOTH audit deliverable + measurement deliverable |
+| **Q6** — Single integrated 3B.0 vs split | **Single integrated phase** | Splitting fragments dialogue between audit + measurement; integrated view at closure is architecturally more valuable. Audit findings INFORM measurement interpretation (e.g., if Variant B regresses, audit's overhead-analysis context helps explain). |
+| **Q7** — Conversational checkpoints | Light checkpoints at major milestones (audit-sweep done, harness ready, measurement run done) — NOT per individual audit task | Matches conversational cadence rule (~1h max autonomous stretch); avoids checkpoint inflation; preserves dialogue momentum at decision points |
+| **Q8** — Scaffolding labeling | Variant B implementation labeled **"Phase 3B.0 Pre-0 measurement scaffolding — retires at 3B.B close per A/B outcome"** | Honest framing per workflow.md; matches `:tier 'hot` etc. cell-meta declarations — scaffolding with explicit retirement plan, not preserved-for-future-use |
+
+#### §9.4.2.2 Audit execution plan (A1-A6 parallel sweep)
+
+Audit tasks per §9.4.1.5, executed in single all-parallel pass:
+
+| Task | Concrete action | Output target |
+|---|---|---|
+| **A1** — `solver-state-amb` caller catalog | grep `solver-state-amb` + `solver-amb` across racket/prologos/; classify each as classical-ATMS vs non-committing-union | D.3 §9.4.2.7 (forthcoming) |
+| **A2** — worldview-cache read/write site catalog | grep `worldview-cache-cell-id` across racket/prologos/; classify point-update vs bit-set-update | D.3 §9.4.2.7 (forthcoming) |
+| **A3** — wrap-with-worldview semantic audit | read `wrap-with-worldview` body (propagator.rkt); confirm parameterization-only (no worldview-cache reads inside) | D.3 §9.4.2.7 (forthcoming) |
+| **A4** — Mutex nogood storage + read site verification | grep `solver-context-nogoods-cid` reads; trace consumers; confirm no Phase-3A path consults the inert nogoods | D.3 §9.4.2.7 (forthcoming) |
+| **A5** — `union-amb` primitive design | Cell-id allocation slot (likely 18 = next after cell-17); cell shape (per-position hasheq → bitmask); API signature; migration site count | D.3 §9.4.2.8 (forthcoming) |
+| **A6** — `process-fork-contradiction` interactions under M1 | Narrowing target shift from worldview-cache to new cell; cell-16 → new-cell mapping; handler signature compatibility | D.3 §9.4.2.8 (forthcoming) |
+
+**Meta-adversarial check on audit coverage** (per D-3B.0-audit-blindspots risk): A1-A6 cover solver-amb / worldview-cache / wrap-with-worldview / nogood-store / primitive-design / handler interactions. Surfaces NOT explicitly named: (a) test coverage interactions (some tests may mock current behavior; will surface in A1 caller catalog); (b) downstream tools (lsp/, benchmarks/, tools/ may reference current substrate; surfaces in A1); (c) examples/ acceptance files (unchanged in substrate audit — they're source-level). Conclusion: A1's caller catalog will naturally surface (a)+(b)+(c); explicit A7-A9 audit tasks NOT warranted. Capture-gap risk acknowledged + mitigated by A1's grep breadth.
+
+#### §9.4.2.3 A/B harness implementation plan
+
+**Harness file**: `benchmarks/micro/bench-fork-on-union-gray-code.rkt` (NEW).
+
+**Variant B implementation** (single one-line change in `solver-amb` aid-allocation loop at atms.rkt:304-320):
+
+```racket
+;; In atms.rkt — Phase 3B.0 Pre-0 measurement scaffolding (retires at 3B.B
+;; close per A/B outcome).
+(define current-gray-code-aid-ordering? (make-parameter #f))
+
+;; Modified solver-amb aid-allocation loop:
+;; - Under #f (default): sequential i = 0, 1, 2, ..., N-1
+;; - Under #t: Gray-code-ordered i = gray-code(0), gray-code(1), gray-code(2), ...
+;;   via (gray-code-order N) from relations.rkt
+```
+
+Detailed shape lands at harness-implementation commit; the principle: bit-position assignment permutation, applied at the CELL/DATA layer (`assumption-id-n` is data), NOT scheduler-coupled.
+
+**Workloads** (W1-W5 per §9.4.1.5):
+- W1: `def x : <Int | String> := 42; x` (2 branches)
+- W2: `def x : <Int | String | Bool | Float> := 42; x` (4 branches)
+- W3: nested function `<(A1|A2) -> (B1|B2)>` with multiple call sites
+- W4: ~10-15 nested unions, aids approach ≤30 budget
+- W5: worst-case adversarial — many forks at varying depths, many touch-points
+
+**Statistical methodology**:
+- Wall time: median of 10 runs, IQR reported, with 2-run warmup per workload-variant
+- `cell_allocs`, `prop_firings`: single-run sufficient (deterministic counters)
+- Peak retained memory: single-run via Racket `vector-set-performance-stats!` / `gc-report`
+- `bench-ab.rkt` framework: verify parameter-variant support during harness construction; if supported, integrate; if not, roll dedicated harness using its statistical primitives
+
+#### §9.4.2.4 Drift risks (Phase 3B.0-specific)
+
+To be verified at Phase 3B.0 VAG close (§9.4.2.9 placeholder):
+
+- **D-3B.0-audit-blindspots**: A1-A6 might miss critical surfaces (capture-gap pattern recurrence). **Mitigation**: §9.4.2.2 meta-adversarial check; A1's grep breadth covers test/tool/example surfaces naturally.
+- **D-3B.0-harness-overhead**: Variant B impl introduces non-Gray-code overhead suppressing signal. **Mitigation**: implement as minimal parameter + one-line change; isolate dispatch cost via separate microbench if signal looks suppressed.
+- **D-3B.0-workload-non-adversarial**: workloads don't exercise predicted benefit zone. **Mitigation**: W5 explicitly designed adversarial-best-shot; if W5 shows negligible delta, that's a credible falsification (not test inadequacy).
+- **D-3B.0-pre-emption**: 3B.A (M1) work begins before audit completes. **Mitigation**: commit discipline — audit findings land in D.3 §9.4.2.7+ BEFORE any 3B.A code; this is enforced by the closure criteria (§9.4.2.1 Q5).
+- **D-3B.0-measurement-noise**: small-scale measurements may have noise ≥ signal. **Mitigation**: median + IQR; warmup runs; W4-W5 scaled to overcome noise floor.
+- **D-3B.0-statistical-methodology**: 5% threshold may need re-calibration post-measurement noise analysis. **Mitigation**: pre-committed at §9.4.1.6; if discrimination needed, document but DO NOT post-hoc revise.
+
+#### §9.4.2.5 Closure criteria
+
+Phase 3B.0 closes when:
+
+1. ✅ A1-A6 audit findings persisted to D.3 §9.4.2.7-§9.4.2.8
+2. ✅ A/B harness landed at `benchmarks/micro/bench-fork-on-union-gray-code.rkt` + Pre-0 baseline (Variant A) captured to `data/benchmarks/`
+3. ✅ A/B measurement run completed (W1-W5 × {A, B} × 10 runs); results captured to `data/benchmarks/`
+4. ✅ Falsification criteria (§9.4.1.6) evaluated; decision documented in D.3 §9.4.2.9 (forthcoming)
+5. ✅ 3B.0 adversarial 3-column VAG passing all 4 questions (§9.4.2.10 forthcoming)
+6. ✅ 3B.A go-decision (M1 is INDEPENDENT of A/B outcome; 3B.A always proceeds as architectural debt resolution); 3B.B status (implement / investigate / defer / strong-defer) determined per §9.4.1.6 + measurement data
+
+#### §9.4.2.6 Status
+
+- Mini-design opening COMPLETE — 8 Q-decisions resolved (§9.4.2.1)
+- Audit execution plan defined + meta-adversarial check applied (§9.4.2.2)
+- A/B harness implementation plan defined (§9.4.2.3)
+- 6 drift risks named (§9.4.2.4)
+- Closure criteria explicit (§9.4.2.5)
+- Ready for audit + harness construction execution
+- **Next**: A1-A6 all-parallel sweep + harness file scaffolding; persist to §9.4.2.7+
+
+#### §9.4.2.7 Audit findings (A1-A4) — TO BE LANDED
+
+Placeholder for forthcoming all-parallel audit sweep findings (A1-A4).
+
+#### §9.4.2.8 Audit findings (A5-A6) — TO BE LANDED
+
+Placeholder for `union-amb` primitive design + `process-fork-contradiction` M1 interactions audit findings.
+
+#### §9.4.2.9 A/B measurement results + falsification evaluation — TO BE LANDED
+
+Placeholder for measurement data + decision documentation per §9.4.1.6 pre-committed criteria.
+
+#### §9.4.2.10 Phase 3B.0 close — adversarial 3-column VAG — TO BE LANDED
+
+Placeholder for 4 VAG questions × adversarial 3-column close + 6 D-3B.0-* drift risk verification + 3B.A/3B.B status documentation.
 
 ### §9.5 Phase 3C deliverables
 
