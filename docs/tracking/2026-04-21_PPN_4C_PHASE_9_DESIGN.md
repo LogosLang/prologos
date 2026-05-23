@@ -190,7 +190,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3B | Substrate decomplection + hypercube integration (Gray code) — conditional on empirical evidence | 🔄 | **Phase 3B mini-design persisted at §9.4.1** (commit `5df6745a`). OQ1 ↔ mutual-exclusion tension surfaced via Phase 3B mini-audit (Phase 3A audit gap); M1 substrate decomplection selected over M0 (safety-patch) and M3 (Track 4D premature); sub-phase structure 3B.0/3B.A/3B.B/3B-VAG refined; pre-committed falsification criteria locked (§9.4.1.6). Original terse §9.4 spec SUPERSEDED. Audit-driven scope refinement codification at **4th data point (PROMOTION-READY)** for DEVELOPMENT_LESSONS.org. `subcube-member?` reclassified as primitive-awaiting-consumer (no Phase 3A consumer under M1). |
 | 3B mini-design + mini-audit | Conversational opening of Phase 3B; surfaced OQ1 ↔ mutual-exclusion semantic tension Phase 3A's mini-design missed; explored M0/M1/M3 with adversarial 3-column; M1 selected; sub-phase partition refined; pre-committed falsification criteria locked | ✅ `5df6745a` | Persisted at §9.4.1 per Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc). 11 subsections (§9.4.1.1-§9.4.1.12) covering: audit findings, semantic exploration, architectural decision, sub-phase partition, Phase 3B.0 scope, falsification criteria, drift risks, cross-track captures (5), methodology notes, resolved Q1-Q5, status, cross-references. |
 | 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | ✅ | **CLOSED 2026-05-22** per §9.4.2.11 cross-arc VAG. 5 commits: mini-design opening (`483957ba`) → A1-A6 audit (`8ca0a1a4`) → Option 3 confirmed M0 (`f2e948b5`) → harness + Variant B (`98cbbc3d`) → measurement + Variant B retirement + VAG close (`0eaa9506`). **Key outcomes**: (1) OQ1↔mutual-exclusion semantic tension surfaced + M0 selected (audit-driven re-examination of §9.4.1's M1 commitment); (2) A/B measurement falsified Hyperlattice CHAMP-sharing under Realization B (all deltas within ±1.5%); (3) Variant B scaffolding retired honestly per pre-committed Q8; (4) M1+M3 substrate decomplection captured at Track 4D vision §5.5. 4 codifications promotion-ready (rigorous-audit-refutes-framing, multi-consumer-symmetry, pre-committed-falsification, mechanism-coupled-claims). |
-| 3B.A | **M0 substrate fix** — `#:mutual-exclusion?` flag on `solver-amb` (default `#t` preserves classical); `solver-state-amb` threads flag with conditional amb-groups append (Q2(b)); `process-fork-on-union` (typing-propagators.rkt:1139) migrates to `(solver-state-amb ss alternatives #:mutual-exclusion? #f)`. **REVISED from M1 per §9.4.2.9** (audit-driven re-examination 2026-05-22). | 🔄 | **Phase 3B.A mini-design + mini-audit persisted at §9.4.3** (this commit). Q1-Q5 resolved; 6 sub-steps partitioned (3B.A.1+2+3 merged for API coupling, 3B.A.4 docs, 3B.A.5 tests, 3B.A.6 close); 5 D-3B.A-* drift risks named. A4 inertness claim verified at deeper level (every nogood reader traced). Q2 audit-surfaced: amb-groups append made conditional per Q2(b) — non-committing groups invisible to solve-all's cartesian product (semantic correctness for future callers). **Total scope** ~50 LoC production + ~30 docs + ~30-40 tests ≈ 110-130 LoC. M1 + M3 deferred to Track 4D's substrate unification scope (captured at vision research §5.5). M0 is architecturally CORRECT at this layer — NOT scaffolding. |
+| 3B.A | **M0 substrate fix** — `#:mutual-exclusion?` flag on `solver-amb` (default `#t` preserves classical); `solver-state-amb` threads flag with conditional amb-groups append (Q2(b)); `process-fork-on-union` (typing-propagators.rkt:1139) migrates to `(solver-state-amb ss alternatives #:mutual-exclusion? #f)`. **REVISED from M1 per §9.4.2.9** (audit-driven re-examination 2026-05-22). | ✅ | **CLOSED 2026-05-22** per §9.4.4 cross-arc VAG. 5 substantive commits: mini-design (`37da04b7`) → code migration (`a14557db`) → M0 doc (`8c526a1a`) → 4 discriminating axes (`42720386`) → close VAG (this). Net production ~+39 LoC; net docs ~+260 LoC; net tests +111 LoC / +5 cases (4 axes; axis 4 split). Full suite **8242 / 111.4s / 0 failures** (+10 tests, -5.9s wall vs 8232 baseline). 5/5 D-3B.A-* drift risks cleared. 5 methodology data points captured (2 reinforce promotion-ready codifications; 3 new watching-list candidates). M0 architectural commitment in source code AND design doc; multi-consumer survey (5 non-committing consumers) inherit for free; M1+M3 deferred to Track 4D per §5.5. |
 | 3B.A mini-design + mini-audit | Conversational opening of Phase 3B.A post-3B.0 close; A1-A6 mini-audit verified §9.4.2.9.4 scope + verified A4 inertness claim at deeper level; surfaced Q2 (amb-groups append conditional behavior); 5 Q-decisions resolved | ✅ | Persisted at §9.4.3 per Stage 4 methodology. 7 subsections (§9.4.3.1-§9.4.3.7) covering: audit findings, resolved Q1-Q5, sub-step partition, drift risks, closure criteria, status, cross-references. |
 | 3B.B | Hypercube integration (Gray-code aid ordering) — **DOCUMENTED-DEFER** per 3B.0 falsification (§9.4.2.10) | ✅ (defer) | **DECIDED 2026-05-22**: A/B measurement (n=10 × 5 workloads × 2 variants) showed ALL DELTAS WITHIN ±1.5% (W1 -0.2% / W2 -0.6% / W3 -1.0% / W4 +0.4% / W5 -0.6%); IQRs tight (~1-2% of median). Per pre-committed §9.4.1.6 criteria, ±5% on W4/W5 → DOCUMENTED-DEFER. Falsification narrow: Conjecture's CHAMP-sharing claim does NOT transfer to Realization B's in-place tagging; does NOT refute the Conjecture broadly. Future consumers (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) need separate per-mechanism A/B tests. Variant B scaffolding retired per pre-committed Q8 (§9.4.2.10.5). |
 | 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ⬜ | Per §9.4.1.7. 6 drift risks named at mini-design open per Stage 4 discipline. |
@@ -6539,6 +6539,132 @@ Phase 3B.A closes when:
 - atms.rkt:304-313 retired Variant B comment (documentation slot)
 - typing-propagators.rkt:1139 `process-fork-on-union` (caller migration site)
 - tests/test-solver-context.rkt:180-202 (existing test surface; new tests added per Q4)
+
+### §9.4.4 Phase 3B.A close — adversarial 3-column VAG (2026-05-22)
+
+Phase 3B.A closes per Stage 4 Per-Phase Protocol step 5 (Vision Alignment Gate) + step 7 (Phase completion). Cumulative adversarial 3-column VAG applied over the entire 3B.A arc (4 substantive sub-step commits + paired hash backfills + mini-design persistence).
+
+#### §9.4.4.1 Phase 3B.A arc summary
+
+5 substantive commits + paired dailies-hash backfills:
+
+| Sub-step | Commit | Description | Delta |
+|---|---|---|---|
+| Mini-design persistence (§9.4.3) | `37da04b7` | Audit + Q1-Q5 + sub-step partition + drift risks persisted | +151 / -1 docs |
+| 3B.A.1+2+3 (code migration) | `a14557db` | `#:mutual-exclusion?` kw on `solver-amb` + `solver-state-amb` threading + caller migration + condensed retirement note | +62 / -23 production |
+| 3B.A.4 (M0 doc block) | `8c526a1a` | Expanded ~70 lines M0 doc at `solver-amb` (4 sections) + ~15 lines mirror at `solver-state-amb` | +108 / -24 docs |
+| 3B.A.5 (4 discriminating axes) | `42720386` | `non-committing-amb-tests` suite (5 cases / 4 axes) + `racket/list` import | +111 tests |
+| 3B.A.6 (close VAG, this) | <forthcoming> | §9.4.4 cumulative close + tracker update | docs only |
+
+**Net production code**: ~+39 LoC (62 added − 23 deleted in atms.rkt + typing-propagators.rkt).
+**Net documentation**: ~+260 LoC docs (§9.4.3 + M0 doc block + §9.4.4).
+**Net tests**: +111 LoC (5 new test cases).
+
+#### §9.4.4.2 Adversarial 3-column VAG — 4 questions
+
+##### Question (a) On-network?
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ The mutex nogood suppression preserves on-network substrate (worldview-cache + tagged-cell-value + decisions-state); no new off-network state introduced; flag is data (boolean) flowing through fire functions. | Could the conditional dispatch itself be off-network or have hidden state? | **The `#:mutual-exclusion?` keyword is an immutable function parameter, not a parameter/dynamic-extent state. The conditional `cond` is pure dispatch on the argument value at call site. NO new mutable parameters, NO new registries, NO new dynamic-extent state. The architectural commitment "M0 is the substrate answer at this layer" means the flag is the SUBSTRATE-LEVEL semantic dispatch — it's WHERE the architectural decision lives. Pass.** |
+
+##### Question (b) Complete?
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ All 7 closure criteria from §9.4.3.5 met: mini-design persisted; code migration; M0 doc block; 4 discriminating test axes; VAG passes; all 5 D-3B.A-* drift risks cleared; tracker → ✅. | Shape OR shape-AND-benefit at this Phase 3B.A level? | **Shape + benefit + structural impact all delivered. SHAPE: the API surface change is exactly what §9.4.2.9.4 specified (~50 LoC ended up ~39 LoC net production); the M0 documentation makes the architectural rationale source-code-visible; 4 axes empirically discriminate the new semantic. BENEFIT: closes the load-bearing architectural debt (mutex nogoods inert under non-committing); the regression gate (axis 3) protects 5 downstream classical consumers; the multi-consumer survey (5 non-committing consumers) inherit M0 for FREE when their tracks open. STRUCTURAL IMPACT: zero behavior change at probe + acceptance + targeted + full suite verifies A4's "structurally inert" claim empirically. Pass.** |
+
+##### Question (c) Vision-advancing?
+
+| Catalogue | Challenge | **Adversarial** |
+|---|---|---|
+| ✓ Audit-driven design refinement (Q2 audit-surfaced; resolved at (b) conditional amb-groups); honest M0-NOT-scaffolding framing source-coded; multi-consumer survey explicit; Track 4D M1+M3 deferral explicit. | Could 3B.A have been MORE aligned? Did we ship the shape AND the benefit, or did we leave benefit on the table? | **The benefit is fully captured: M0 closes the inert-nogood debt; the discipline (audit + Q2 surfacing + Q4 4-axis discriminating coverage) demonstrates the methodology working as designed; the codification graduations are 5th-application data points (multi-axis parity testing → graduation-eligible). Honest framing throughout: M0 is the substrate answer (NOT scaffolding), preserved both in source code doc AND design doc. Could anything be MORE aligned? The only "more aligned" path would be M1 + M3 unification at this layer — but audit (§9.4.2.9.1) refuted M1's "real decomplection" claim AND multi-consumer symmetry argues against premature unification. M1 + M3 belong at Track 4D. 3B.A IS the architecturally-correct stopping point. Pass.** |
+
+##### Question (d) Drift-risks-cleared?
+
+Per §9.4.3.4, 5 D-3B.A-* risks named at mini-design open:
+
+| Risk | Status | Verification |
+|---|---|---|
+| D-3B.A-flag-default-regression | ✅ CLEARED | Axis 3 (regression gate) explicitly tests default `#t` writes N·(N−1)/2 = 6 mutex pairs for N=4; targeted + full suite (8242/0) preserves classical ATMS consumers (BSP-LE 2, NAF) |
+| D-3B.A-amb-groups-coupling | ✅ CLEARED | Axes 4a + 4b explicitly test BOTH directions of Q2(b) coupling; non-committing skips append; classical does append |
+| D-3B.A-doc-vs-retirement-note | ✅ CLEARED | Variant B retirement preserved via commit-hash references (`98cbbc3d`, `0eaa9506`) + data artifact path; full M0 architecture explicit in source |
+| D-3B.A-honest-framing-slip | ✅ CLEARED | Source code explicitly states "M0 is NOT scaffolding — it IS the architecturally-correct substrate answer at this layer"; multi-consumer survey is the structural justification |
+| D-3B.A-call-site-completeness | ✅ CLEARED | Only one production caller (process-fork-on-union); migrated atomically with the API change; documentation covers the M0-vs-M1 trade-off so future callers understand the explicit opt-in |
+
+All 5 drift risks cleared adversarially.
+
+#### §9.4.4.3 Suite stability
+
+- Pre-3B.A baseline: 8232 / 117.3s / 0 failures
+- Post-3B.A (this commit): **8242 / 111.4s / 0 failures**
+- Test delta: **+10** (5 from `non-committing-amb-tests` + 5 from session-discovered test additions / variance)
+- Wall delta: **-5.9s** (suite faster, well within variance band — no regression)
+- Targeted: **46/46 GREEN** throughout the arc (was 41 baseline)
+- Probe: `cell_allocs=1552` IDENTICAL to baseline throughout
+- Acceptance file: 0 errors throughout
+
+#### §9.4.4.4 Methodology data points captured
+
+5 methodology data points from this arc:
+
+1. **Audit verification IS the risk mitigation** (3B.A.1+2+3) — A4 inertness was a critical assumption for M0's safety; verification at deeper level (§9.4.3.1 A2 + probe + targeted + full suite) made the suppression provably safe. The MINI-AUDIT step (not just the design) is load-bearing discipline.
+
+2. **API-coupled sub-step merging is honest engineering** (3B.A.1+2+3) — Each of 3B.A.1/2/3 breaks the next's API contract; partitioning into separate commits would have left suite RED for 2 intermediate commits. The §9.4.3.3 partition recognized this up front; document the merge rationale explicitly.
+
+3. **Documentation IS architectural commitment** (3B.A.4 — CODIFICATION CANDIDATE, 1 data point, watching list) — Design doc captures rationale, but source code doc block is what the next developer/LLM reads first. Writing "M0 is NOT scaffolding" in source code is itself a discipline gate — forces architectural commitment into the lowest-level surface where it can't be missed. Pattern: when a design decision is load-bearing for future-track behavior, persist it both in design doc AND in source code doc.
+
+4. **5th application site for "Multi-axis parity testing for discriminating coverage"** (3B.A.5) — Cumulative application sites: 2A.c (3 axes) → 3A.c.4 (4 axes) → 3A.c.5 (6 substring discriminators) → 3B.0 (5-workload A/B harness) → **3B.A.5 (4 axes / 5 cases)**. Strong reinforcement of graduation candidacy.
+
+5. **Audit-driven scope refinement** (3B.A audit Q2 surfacing) — This is the **5th data point** (was 4 at §9.4.1.9 — graduation-ready already). The Q2 amb-groups append concern was NOT in §9.4.2.9.4 original scope; the mini-audit surfaced it; design dialogue resolved it at (b) conditional. The methodology works as designed.
+
+#### §9.4.4.5 Codifications status
+
+| Codification | Data points | Status |
+|---|---|---|
+| Audit-driven scope refinement | 5 (4 prior + this 3B.A Q2 surfacing) | **PROMOTION-READY** — was promotion-ready already at 4; this is reinforcement |
+| Multi-axis parity testing for discriminating coverage | 5 application sites | **PROMOTION-READY** — strong reinforcement |
+| Rigorous audit refutes initial framing | 1 (from 3B.0) | promotion candidate |
+| Multi-consumer architectural symmetry | 1 (from 3B.0) | promotion candidate |
+| Pre-committed falsification criteria enable honest negative findings | 1 (from 3B.0) | promotion candidate |
+| Mechanism-coupled architectural claims need mechanism-specific falsification | 1 (from 3B.0) | promotion candidate |
+| Documentation IS architectural commitment | 1 (from 3B.A.4) | watching list |
+| Audit verification IS the risk mitigation | 1 (from 3B.A.1+2+3) | watching list |
+| API-coupled sub-step merging is honest engineering | 1 (from 3B.A.1+2+3) | watching list |
+
+Promotion to DEVELOPMENT_LESSONS.org deferred to user direction per established pattern.
+
+#### §9.4.4.6 Phase 3B.A status
+
+**Phase 3B.A: CLOSED.** All 7 closure criteria from §9.4.3.5 met:
+1. ✅ Mini-design + audit persisted (§9.4.3, commit `37da04b7`)
+2. ✅ 3B.A.1+2+3 code migration (commit `a14557db`); targeted tests preserve GREEN
+3. ✅ 3B.A.4 M0 documentation (commit `8c526a1a`)
+4. ✅ 3B.A.5 4 discriminating test axes (commit `42720386`)
+5. ✅ 3B.A.6 adversarial 3-column VAG passes 4 questions (§9.4.4.2 this section)
+6. ✅ All 5 D-3B.A-* drift risks cleared (§9.4.4.2 question (d))
+7. ✅ Tracker 3B.A row → ✅; dailies arc summary; ready for cross-arc 3B-VAG
+
+#### §9.4.4.7 Handoff to next sub-phases
+
+| Track | Picks up from 3B.A |
+|---|---|
+| **Phase 3B-VAG** | Cross-arc adversarial 3-column VAG over 3B.0 + 3B.A + 3B.B (defer); verify all D-3B-* (parent) drift risks cleared (per §9.4.1.7); marks 3B parent row → ✅ |
+| **Phase 3C** | Inherits M0 substrate; future residuation error-explanation work can reason about both classical mutex nogoods AND non-committing semantic; Form C cross-reference (§9.5.A) covers UC1/UC2/UC3 |
+| **Phase 9b** (parametric trait resolution / γ hole-fill) | Inherits M0 substrate at solver-state-amb; can pass `#:mutual-exclusion? #f` for non-committing multi-candidate semantic (per multi-consumer survey at §9.4.2.9.1 finding 4) |
+| **PReduce Track 1** | Inherits M0 substrate; e-class candidate extraction at non-committing |
+| **BSP-LE 6** (future general residual solver) | Inherits M0 substrate; non-committing solving over classical-or-non-committing dispatch |
+| **Track 4D** (Attribute Grammar Substrate) | M1 + M3 deferred scope captured at vision research §5.5; future Stage 1-3 cycle picks this up as substrate unification work |
+| **Parent Phase 4** (CHAMP retirement) | M0 substrate stable; no coordination required |
+
+#### §9.4.4.8 Cross-references
+
+- 3B.A arc commits: `37da04b7` (mini-design) → `a14557db` (code migration) → `8c526a1a` (M0 doc) → `42720386` (4 axes) → this commit (close VAG)
+- Sub-phase designs + closes: §9.4.3 (mini-design) + §9.4.4 (this close)
+- Methodology data points: §9.4.4.4
+- Codifications status: §9.4.4.5
+- Handoff: §9.4.4.7
+- Parent Phase 3B mini-design: §9.4.1 (historical M1 framing); §9.4.2.9 (audit-driven M0 selection); §9.4.2.10 (3B.B documented-defer); §9.4.2.11 (3B.0 close VAG)
 
 ### §9.5 Phase 3C deliverables
 
