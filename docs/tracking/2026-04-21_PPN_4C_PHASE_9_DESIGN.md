@@ -189,9 +189,9 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3A-VAG | Adversarial 3-column cross-arc VAG for Phase 3A; verify all drift risks D-3A-*; bit-budget measurement gate (≤30 bits per command) | ✅ `9e8a6c3e` | DONE 2026-05-22 per §9.3.9. Cumulative VAG passed all 4 questions adversarially (catalogue / challenge / adversarial × 4). All cross-arc D-3A-* drift risks cleared (fuel-budget via R7; typing-core-2385-residual via empirical grep; bit-budget at 167× headroom; cross-arc mantra via on-network audit; codification-debt noted with promotion candidates). User-facing behavior matrix documented (§9.3.9.2). Handoff to Phase 3B/3C/9b/Parent Phase 4/PM 12/PPN Track 5/Track 4D captured (§9.3.9.5). 3 codifications promotion-ready (§9.3.9.4); graduation deferred to user direction. |
 | 3B | Substrate decomplection + hypercube integration (Gray code) — conditional on empirical evidence | 🔄 | **Phase 3B mini-design persisted at §9.4.1** (commit `5df6745a`). OQ1 ↔ mutual-exclusion tension surfaced via Phase 3B mini-audit (Phase 3A audit gap); M1 substrate decomplection selected over M0 (safety-patch) and M3 (Track 4D premature); sub-phase structure 3B.0/3B.A/3B.B/3B-VAG refined; pre-committed falsification criteria locked (§9.4.1.6). Original terse §9.4 spec SUPERSEDED. Audit-driven scope refinement codification at **4th data point (PROMOTION-READY)** for DEVELOPMENT_LESSONS.org. `subcube-member?` reclassified as primitive-awaiting-consumer (no Phase 3A consumer under M1). |
 | 3B mini-design + mini-audit | Conversational opening of Phase 3B; surfaced OQ1 ↔ mutual-exclusion semantic tension Phase 3A's mini-design missed; explored M0/M1/M3 with adversarial 3-column; M1 selected; sub-phase partition refined; pre-committed falsification criteria locked | ✅ `5df6745a` | Persisted at §9.4.1 per Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc). 11 subsections (§9.4.1.1-§9.4.1.12) covering: audit findings, semantic exploration, architectural decision, sub-phase partition, Phase 3B.0 scope, falsification criteria, drift risks, cross-track captures (5), methodology notes, resolved Q1-Q5, status, cross-references. |
-| 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | 🔄 | **Mini-design opening persisted at §9.4.2 (commit `483957ba`)**. 8 Q-decisions resolved (Q1 all-parallel audit; Q2 concurrent harness; Q3 parameter on `main`; Q4 bench-ab.rkt where supported; Q5 closure criteria; Q6 single integrated; Q7 light checkpoints; Q8 scaffolding labeling). Audit plan A1-A6 + meta-adversarial coverage check. Harness file `benchmarks/micro/bench-fork-on-union-gray-code.rkt` planned. 6 D-3B.0-* drift risks named (§9.4.2.4). Closure criteria §9.4.2.5. **Next**: A1-A6 all-parallel sweep + harness scaffolding (forthcoming commits will populate §9.4.2.7+). |
+| 3B.0 | Measurement + Audit phase: Pre-0 A/B harness for Gray-code aid ordering empirical question + Stage 2 audit (A1-A6) for M1 substrate decomplection design. 5 workloads (W1-W5), 5 metric tiers, pre-committed falsification criteria. | ✅ | **CLOSED 2026-05-22** per §9.4.2.11 cross-arc VAG. 5 commits: mini-design opening (`483957ba`) → A1-A6 audit (`8ca0a1a4`) → Option 3 confirmed M0 (`f2e948b5`) → harness + Variant B (`98cbbc3d`) → measurement + Variant B retirement + VAG close (commit TBD). **Key outcomes**: (1) OQ1↔mutual-exclusion semantic tension surfaced + M0 selected (audit-driven re-examination of §9.4.1's M1 commitment); (2) A/B measurement falsified Hyperlattice CHAMP-sharing under Realization B (all deltas within ±1.5%); (3) Variant B scaffolding retired honestly per pre-committed Q8; (4) M1+M3 substrate decomplection captured at Track 4D vision §5.5. 4 codifications promotion-ready (rigorous-audit-refutes-framing, multi-consumer-symmetry, pre-committed-falsification, mechanism-coupled-claims). |
 | 3B.A | **M0 substrate fix** — `#:mutual-exclusion?` flag on `solver-amb` (default `#t` preserves classical); `solver-state-amb` threads flag; `process-fork-on-union` (typing-propagators.rkt:1139) migrates to `(solver-state-amb ss alternatives #:mutual-exclusion? #f)`. **REVISED from M1 per §9.4.2.9** (audit-driven re-examination 2026-05-22). | ⬜ | **REVISED scope ~50 LoC** (was ~150-200 under M1). M1 + M3 deferred to Track 4D's substrate unification scope (captured at vision research §5.5). M0 is architecturally CORRECT at this layer per audit findings — closes load-bearing debt (mutex nogoods inert under non-committing); all multi-candidate consumers (Phase 3A + 7 + 9b + PReduce 1 + BSP-LE 6) inherit. NOT scaffolding — IS the answer at substrate layer. |
-| 3B.B | Hypercube integration (Gray-code aid ordering at `solver-amb`/`union-amb` aid-allocation layer) — **CONDITIONAL on 3B.0 measurement outcome** per §9.4.1.6 pre-committed falsification criteria | ⬜ | Pre-committed: ≥10% benefit at W4/W5 → implement; 5-10% → investigate before implementing; ±5% → documented-defer with negative finding; slower → defer + flag primitive-keepalive risk. Cell-layer/data-layer optimization (NOT scheduler-coupled per Cell/Propagator/Scheduler Orthogonality). |
+| 3B.B | Hypercube integration (Gray-code aid ordering) — **DOCUMENTED-DEFER** per 3B.0 falsification (§9.4.2.10) | ✅ (defer) | **DECIDED 2026-05-22**: A/B measurement (n=10 × 5 workloads × 2 variants) showed ALL DELTAS WITHIN ±1.5% (W1 -0.2% / W2 -0.6% / W3 -1.0% / W4 +0.4% / W5 -0.6%); IQRs tight (~1-2% of median). Per pre-committed §9.4.1.6 criteria, ±5% on W4/W5 → DOCUMENTED-DEFER. Falsification narrow: Conjecture's CHAMP-sharing claim does NOT transfer to Realization B's in-place tagging; does NOT refute the Conjecture broadly. Future consumers (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) need separate per-mechanism A/B tests. Variant B scaffolding retired per pre-committed Q8 (§9.4.2.10.5). |
 | 3B-VAG | Adversarial 3-column cross-arc VAG; verify all D-3B-* drift risks cleared (D-3B-shape-without-benefit, fork-vs-Realization-B-confusion, orphan-primitive-keepalive, scheduler-coupled-optimization, subcube-without-consumer, measurement-confound-inert-nogoods) | ⬜ | Per §9.4.1.7. 6 drift risks named at mini-design open per Stage 4 discipline. |
 | 3C | Residuation error-explanation | ⬜ | Inherits worldview/contradiction infrastructure from 3A. Under M1: consumes active-branch-set narrowing signal from new cell; can ALSO consume mutex nogoods from OTHER (classical-ATMS) callers if needed for error chains involving classical amb. Phase 3C inherits the architectural separation cleanly. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
@@ -6240,13 +6240,196 @@ Promotion to DEVELOPMENT_LESSONS.org deferred to user direction per §9.3.9.4 pa
 - D.3 §6.2.1 (Phase 9b γ hole-fill mechanism — confirmed identical to Phase 3A)
 - [Track 4D vision research §5.5](../research/2026-04-22_ATTRIBUTE_GRAMMAR_UNIFICATION_VISION.md) (deferred scope captured)
 
-#### §9.4.2.10 Phase 3B.0 close — adversarial 3-column VAG — TO BE LANDED
+#### §9.4.2.10 A/B measurement results + falsification evaluation (2026-05-22)
 
-Placeholder for 4 VAG questions × adversarial 3-column close + 6 D-3B.0-* drift risk verification + 3B.A/3B.B status documentation.
+A/B harness run via `racket benchmarks/micro/bench-fork-on-union-gray-code.rkt` (default config: warmup=2, iter=10 per variant per workload). Full results captured at `data/benchmarks/fork-on-union-gray-code-2026-05-22.txt`.
 
-#### §9.4.2.10 Phase 3B.0 close — adversarial 3-column VAG — TO BE LANDED
+##### §9.4.2.10.1 Measurement data
 
-Placeholder for 4 VAG questions × adversarial 3-column close + 6 D-3B.0-* drift risk verification + 3B.A/3B.B status documentation.
+| Workload | A (control) median±IQR | B (Gray-code) median±IQR | Δ ms | Δ % |
+|---|---|---|---|---|
+| W1 — single binary union (2 branches) | 65.7±0.9 ms | 65.6±1.1 ms | -0.1 | **-0.2%** |
+| W2 — single 4-ary union (4 branches) | 68.3±0.8 ms | 67.8±1.5 ms | -0.4 | **-0.6%** |
+| W3 — 5 sequential binary unions (10 br) | 73.3±1.6 ms | 72.6±0.8 ms | -0.7 | **-1.0%** |
+| W4 — 10 sequential 4-ary unions (40 br) | 95.9±0.6 ms | 96.3±0.9 ms | +0.4 | **+0.4%** |
+| W5 — worst-case adversarial (35 br) | 87.6±0.8 ms | 87.1±1.0 ms | -0.5 | **-0.6%** |
+
+**All deltas within ±1.5%.** IQRs are tight (0.6–1.6 ms, ~1-2% of median), indicating low measurement noise. The signal is CONSISTENT across the 5 workloads: zero detectable benefit from Gray-code aid ordering under Realization B.
+
+##### §9.4.2.10.2 Falsification evaluation per §9.4.1.6 pre-committed criteria
+
+At W4/W5 (the Conjecture's predicted benefit zone for Realization B):
+- W4 delta: **+0.4%** (Variant B slightly SLOWER; within noise floor)
+- W5 delta: **-0.6%** (Variant B negligibly faster; within noise floor)
+
+**Pre-committed criteria match**: variants within ±5% on W4/W5 → **NEGATIVE: documented-defer with negative finding**.
+
+| Outcome | Action per §9.4.1.6 | Decision |
+|---|---|---|
+| Variant B beats A by ≥10% | Implement | ✗ not met (+0.4% / -0.6%) |
+| 5-10% | Investigate | ✗ not met |
+| **±5%** | **DOCUMENTED-DEFER with negative finding** | **✓ MATCH** |
+| Variant B slower | Defer + flag primitive-keepalive risk | ✗ not met (slower only on W4 by 0.4%, within noise) |
+
+**Decision**: Phase 3B.B = **DOCUMENTED-DEFER**. Gray-code aid ordering's empirical benefit does NOT transfer to Realization B (Phase 3A's non-committing in-place tagging). Per §9.4.1.6, this is a credible falsification, not test inadequacy — W4/W5 were explicitly designed as Conjecture's best-shot workloads (≥30 aids; nested + varied widths).
+
+##### §9.4.2.10.3 Adversarial 3-column on the measurement
+
+| Catalogue | Challenge | Adversarial |
+|---|---|---|
+| ✓ Tight IQRs (1-2% of median); 5 workloads consistent; W4/W5 explicitly target Conjecture's predicted benefit zone | Is the harness genuinely measuring what we think it's measuring? | **The harness times end-to-end `run-ns-ws-all` which includes prelude setup, fork network, module loading, AND the fork-on-union elaboration. Setup overhead is constant across variants (cancels in A-B delta). The toggle ONLY affects aid bit-position assignment in `solver-amb`. So the delta DIRECTLY measures Gray-code aid ordering benefit. Confound check passed.** |
+| ✓ W4 (40 aids across 10 forks; approaches D-3A-bit-budget) explicitly targets large-N regime | Is W4 large enough to detect benefit? | **W4 has 10 forks × 4 branches = 40 total aids; well into the Conjecture's predicted benefit zone. Per Hyperlattice Conjecture's CHAMP-sharing argument, Gray-code-adjacent worldviews should share more network state. Under Realization B, branches don't fork — there's no network-state sharing to optimize. The negative result CONFIRMS the audit-driven prediction (§9.4.2.7-§9.4.2.8): the CHAMP-sharing argument is mechanism-coupled to fork-and-rejoin and does NOT transfer to in-place tagging.** |
+| ✓ All workloads negative or noise-level | Could a smarter workload reveal benefit? | **Possible — but unlikely to flip the result. The Conjecture's argument REQUIRES a forking mechanism for CHAMP sharing. Realization B structurally lacks it. A "smarter workload" can't manufacture the substrate property the Conjecture's argument depends on. Honest framing: this measurement falsifies the SPECIFIC CHAMP-sharing claim under Realization B, NOT the Conjecture's broad claim. Other use cases (fork-and-rejoin, Phase 9b multi-candidate if re-architected, PReduce e-class extraction) may STILL show benefit — and should be tested SEPARATELY when those tracks open.** |
+
+##### §9.4.2.10.4 What this falsifies and does NOT falsify
+
+**Falsified** (specific narrow claim):
+- *"Gray-code aid bit-position ordering provides measurable wall-time benefit under Phase 3A's Realization B (in-place worldview tagging on shared carrier)."*
+
+**Does NOT falsify** (broader claims that remain open):
+- *"The Hasse diagram of the worldview lattice IS the hypercube graph"* — structural identity unchanged; mathematical fact, not the measured claim
+- *"Gray code provides CHAMP-sharing benefit under fork-and-rejoin (Realization A)"* — never tested here; BSP-LE 2's original framing remains viable for fork-based mechanisms
+- *"Hyperlattice Conjecture's broader claim that Hasse diagrams give optimal parallel decomposition for SOME computations on lattices"* — this measurement bounds the claim's scope (doesn't apply to in-place tagging), doesn't refute it broadly
+- *"Future consumer (Phase 9b γ multi-candidate, PReduce e-class extraction, BSP-LE 6 general residual solver) may benefit from Gray-code under DIFFERENT mechanism"* — each needs separate A/B test when their tracks open
+
+##### §9.4.2.10.5 Phase 3B.B status & Variant B retirement
+
+Per pre-committed Q8 resolution (§9.4.2.1): *"Variant B labeled 'Phase 3B.0 Pre-0 measurement scaffolding — retires at 3B.B close per A/B outcome'."*
+
+**Phase 3B.B closes with DOCUMENTED-DEFER decision.** Therefore:
+- ✅ Variant B implementation retires from atms.rkt (`current-gray-code-aid-ordering?` parameter + `gray-code-order-local` helper + the if-branch in `solver-amb`)
+- ✅ A/B harness retires from `benchmarks/micro/` (since its sole purpose was measuring Variant B vs A)
+- ✅ `data/benchmarks/fork-on-union-gray-code-2026-05-22.txt` PRESERVED as historical artifact (measurement evidence)
+- ✅ Honest framing: NOT "preserved for future use" — the scaffolding served its measurement purpose and now retires; future tracks (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) needing similar A/B work resurrect from git history (commits `98cbbc3d` for harness + `f2e948b5` for design rationale)
+
+Cross-references for unretired primitives:
+- `gray-code-order` primitive (relations.rkt:1874) — remains as primitive-awaiting-consumer per §9.4.1.4; not affected by this retirement
+- `subcube-member?` primitive (decision-cell.rkt:372) — remains as primitive-awaiting-consumer
+- Track 4D vision research §5.5 — M1 + M3 deferred scope already captured
+
+##### §9.4.2.10.6 3B.A scope confirmed
+
+**Phase 3B.A proceeds independently** of the A/B outcome. M0 implementation (per §9.4.2.9 decision) addresses the load-bearing architectural debt (mutex nogoods inert under non-committing); the A/B test is orthogonal to M0's correctness fix. 3B.A scope unchanged: ~50 LoC for `#:mutual-exclusion?` flag + thread-through + caller migration + documentation + tests.
+
+##### §9.4.2.10.7 Methodology lessons captured (2 codifications)
+
+1. **"Pre-committed falsification criteria enable honest negative findings"** (1 data point this session; promotion candidate)
+   - §9.4.1.6 pre-committed thresholds BEFORE measurement (≥10% / 5-10% / ±5% / slower)
+   - Measurement landed at -0.6% to +0.4% (all within ±5%)
+   - Decision unambiguous: documented-defer. NO post-hoc rationalization needed.
+   - **Pattern**: pre-committing criteria turns ambiguous "well, the data is small but maybe it would help at larger scale" into mechanical "criterion match → action." Eliminates a class of motivated-reasoning failure modes.
+
+2. **"Mechanism-coupled architectural claims need mechanism-specific falsification"** (1 data point; promotion candidate; sister to "rigorous audit refutes initial framing" from §9.4.2.9.5)
+   - Hyperlattice Conjecture's CHAMP-sharing argument (BSP-LE 2 D.6 §2.1) is mechanism-coupled to fork-and-rejoin
+   - Phase 3B.0 tested it under DIFFERENT mechanism (Realization B in-place tagging)
+   - Negative result is meaningful: bounds the claim's applicability without refuting the broader Conjecture
+   - **Pattern**: architectural claims with mechanism dependencies need to be RE-TESTED when applied to a new mechanism. Don't assume transfer; verify empirically.
+
+Promotion deferred to user direction per §9.3.9.4 pattern.
+
+##### §9.4.2.10.8 Cross-references
+
+- §9.4.1.6 (pre-committed falsification criteria — the rule applied here)
+- §9.4.2.3 (A/B harness design that produced this data)
+- §9.4.2.9 (M0 selection — 3B.A scope independent of A/B outcome)
+- Track 4D vision research §5.5 (M1+M3 deferred scope; Gray-code re-evaluation per future mechanism)
+- Measurement artifact: `racket/prologos/data/benchmarks/fork-on-union-gray-code-2026-05-22.txt`
+- Retirement commit: forthcoming this session
+
+#### §9.4.2.11 Phase 3B.0 close — adversarial 3-column VAG (2026-05-22)
+
+Phase 3B.0 closes per Stage 4 Per-Phase Protocol step 5 (Vision Alignment Gate) + step 7 (Phase completion). Adversarial 3-column applied to 4 questions over the entire 3B.0 arc.
+
+##### §9.4.2.11.1 Phase 3B.0 arc summary
+
+5 commits across 3B.0:
+1. `483957ba` — Mini-design opening persisted at §9.4.2 (8 Q-decisions resolved)
+2. `8ca0a1a4` — A1-A6 audit findings + M1-vs-M0 re-examination surfaced
+3. `f2e948b5` — Option 3 confirmed (M0 selected; M1+M3 deferred to Track 4D)
+4. `98cbbc3d` — Gray-code A/B harness + Variant B implementation
+5. (this commit) — Measurement results + Variant B retirement + 3B.0 close
+
+**Net deliverable**: A1-A6 audit findings persisted, OQ1↔mutual-exclusion semantic resolved (M0 path), A/B measurement completed with credible falsification, 3B.A scope refined (~50 LoC), 3B.B status documented (defer), Variant B scaffolding retired.
+
+##### §9.4.2.11.2 Adversarial 3-column VAG
+
+**Question (a) On-network?**
+
+| Catalogue | Challenge | Adversarial |
+|---|---|---|
+| ✓ M0 selection preserves on-network substrate (worldview-cache + tagged-cell-value); no new off-network state introduced; Variant B scaffolding retired post-measurement | Any new off-network state introduced across 3B.0? | **Audit work is documentation (not code); harness was OFF-NETWORK measurement infrastructure (legitimate exception per workflow.md); Variant B's `current-gray-code-aid-ordering?` was off-network parameter (now retired). Net change in off-network surface: ZERO post-3B.0 (parameter + harness retired; only design docs + data artifact added). Pass.** |
+
+**Question (b) Complete?**
+
+| Catalogue | Challenge | Adversarial |
+|---|---|---|
+| ✓ 6 closure criteria from §9.4.2.5 all met (audit persisted; harness landed + baseline; measurement run; decision documented; VAG passes; 3B.A/3B.B status determined) | Shape OR benefit at the Phase 3B.0 level? | **Shape + benefit + cleanup all delivered. SHAPE: methodology pattern (audit-driven re-examination + pre-committed falsification + scaffolding retirement) is now reusable template. BENEFIT: (1) avoided implementing M1 (~150-200 LoC) that audit refuted; (2) avoided implementing 3B.B Gray-code wiring that empirical evidence refuted; (3) preserved Track 4D scope coherence by capturing M1+M3 at §5.5. CLEANUP: Variant B scaffolding retired per pre-committed Q8. Pass.** |
+
+**Question (c) Vision-advancing?**
+
+| Catalogue | Challenge | Adversarial |
+|---|---|---|
+| ✓ Audit-driven re-examination corrected initial framing; pre-committed falsification produced honest negative finding; M1+M3 scope captured at Track 4D vision; multi-consumer architectural symmetry recognized (Phase 3A/7/9b/PReduce 1/BSP-LE 6) | Could 3B.0 have been MORE aligned? | **The methodology demonstrated: when audit reshapes a decision, the design doc records BOTH the original commitment AND the re-examination (honest documentation, not retroactive rewriting). When measurement falsifies a claim, the pre-committed criteria produce mechanical decisions (no rationalization). When scaffolding's purpose ends, it retires honestly (not "preserved for future use" — which IS the workflow.md anti-pattern). 3B.0 IS the methodology working as designed. Cannot find a meaningfully more-aligned alternative. Pass.** |
+
+**Question (d) Drift-risks-cleared?**
+
+Per §9.4.2.4, 6 D-3B.0-* drift risks named; verify all addressed:
+
+| Risk | Status | Verification |
+|---|---|---|
+| D-3B.0-audit-blindspots | ✅ CLEARED | Audit A1-A6 surfaced the OQ1↔mutual-exclusion tension Phase 3A's audit missed (capture-gap pattern caught). |
+| D-3B.0-harness-overhead | ✅ CLEARED | Variant B implementation: parameter + one local helper + if-branch (~10 LoC; minimal). Same setup/teardown per iteration; A-B delta isolates the actual Gray-code effect. |
+| D-3B.0-workload-non-adversarial | ✅ CLEARED | W4 (40 aids) + W5 (35 aids varied widths) explicitly targeted Conjecture's predicted benefit zone. Both negligible delta. |
+| D-3B.0-pre-emption | ✅ CLEARED | Audit findings (§9.4.2.7-§9.4.2.8) persisted BEFORE any 3B.A code; 3B.A still ⬜ pending. |
+| D-3B.0-measurement-noise | ✅ CLEARED | IQRs tight (0.6-1.6 ms vs ~70-100 ms medians, ~1-2% noise); workloads consistent; no individual outlier-driven conclusion. |
+| D-3B.0-statistical-methodology | ✅ CLEARED | Pre-committed thresholds NOT revised post-measurement; ±5% rule applied mechanically; no post-hoc rationalization. |
+
+All 6 drift risks cleared adversarially.
+
+##### §9.4.2.11.3 Codifications graduated to PROMOTION-READY
+
+3B.0 surfaced 4 graduation-ready candidates (extending the codification capital from Phase 3A):
+
+1. **"Rigorous audit refutes initial framing"** (1 data point; sister to 3A's "audit-driven scope refinement" 4-data-point graduation)
+2. **"Multi-consumer architectural symmetry justifies minimal-fix-now + unification-later"** (1 data point; multi-consumer survey: 5 consumers share non-committing pattern)
+3. **"Pre-committed falsification criteria enable honest negative findings"** (1 data point; mechanical decision-making eliminates motivated-reasoning failure modes)
+4. **"Mechanism-coupled architectural claims need mechanism-specific falsification"** (1 data point; CHAMP-sharing claim is fork-and-rejoin-coupled; doesn't transfer to in-place tagging)
+
+Promotion deferred to user direction per §9.3.9.4 pattern.
+
+##### §9.4.2.11.4 Suite stability check
+
+- Full suite: **8232 tests / 117.3s / 0 failures** preserved across all 3B.0 commits (no production code changes beyond the now-retired Variant B scaffolding)
+- Targeted tests: test-solver-context.rkt (15) + test-union-types-atms.rkt (26) = 41/41 GREEN throughout
+- Probe: `examples/2026-04-22-1A-iii-probe.prologos` — semantic diff = 0 (no behavior change)
+- Acceptance file: `examples/2026-04-17-ppn-track4c.prologos` — 0 errors
+
+##### §9.4.2.11.5 Phase 3B.0 status
+
+**Phase 3B.0 CLOSED.** All 6 closure criteria from §9.4.2.5 met:
+1. ✅ A1-A6 audit findings persisted (§9.4.2.7-§9.4.2.8)
+2. ✅ A/B harness landed (`98cbbc3d`) + baseline captured (`fork-on-union-gray-code-2026-05-22.txt`)
+3. ✅ A/B measurement run completed; results in `data/benchmarks/`
+4. ✅ Falsification evaluation documented (§9.4.2.10)
+5. ✅ Adversarial 3-column VAG passes 4 questions (§9.4.2.11.2)
+6. ✅ 3B.A go-decision (M0 implementation per §9.4.2.9); 3B.B status (DOCUMENTED-DEFER per §9.4.2.10)
+
+##### §9.4.2.11.6 Handoff to next sub-phases
+
+| Track | Picks up from 3B.0 |
+|---|---|
+| **Phase 3B.A** | M0 substrate fix per §9.4.2.9.4 scope: ~50 LoC `#:mutual-exclusion?` flag + thread-through + caller migration + documentation + tests |
+| **Phase 3B.B** | DOCUMENTED-DEFER per §9.4.2.10; no code work; tracker row → "defer per A/B falsification" |
+| **Phase 3B-VAG** | Cross-arc adversarial VAG over 3B.0 + 3B.A (+ 3B.B noting defer); verify all D-3B-* drift risks cleared |
+| **Track 4D** | M1+M3 substrate decomplection deferred scope captured at vision research §5.5; future Stage 1-3 cycle picks it up |
+| **Phase 9b** | Inherits M0 substrate when 9b's mechanism analysis runs (per §9.4.2.9.1 finding 4); 9b's own A/B test if Gray-code is reconsidered under different mechanism |
+| **PReduce 1, BSP-LE 6 future** | M0 substrate inheritance; separate A/B tests per their mechanisms when those tracks open |
+
+##### §9.4.2.11.7 Cross-references
+
+- 3B.0 arc commits: `483957ba` (mini-design) → `8ca0a1a4` (audit) → `f2e948b5` (Option 3 / M0) → `98cbbc3d` (harness + Variant B) → this commit (measurement + retirement + VAG close)
+- Sub-phase designs + closes: §9.4.2 (3B.0 opening) + §9.4.2.7-§9.4.2.8 (audit findings) + §9.4.2.9 (decision re-examination) + §9.4.2.10 (measurement + falsification) + §9.4.2.11 (this VAG close)
+- Cumulative methodology data points: §9.4.2.9.5 + §9.4.2.10.7 + §9.4.2.11.3
 
 ### §9.5 Phase 3C deliverables
 

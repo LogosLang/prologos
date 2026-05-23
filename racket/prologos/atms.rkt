@@ -50,8 +50,6 @@
  solver-retract
  solver-add-nogood
  solver-amb
- ;; PPN 4C Phase 3B.0 Pre-0 measurement scaffolding — retires at 3B.B per §9.4.1.6
- current-gray-code-aid-ordering?
  solver-consistent?
  ;; Query functions (read-only, correctly off-network)
  solver-explain-hypothesis
@@ -299,55 +297,27 @@
   (net-cell-write net (solver-context-nogoods-cid ctx)
                   (nogood-add nogood-empty nogood-set)))
 
-;; PPN 4C Phase 3B.0 Pre-0 measurement scaffolding (added 2026-05-22).
-;; Retires at 3B.B close per addendum §9.4.1.6 A/B falsification outcome.
-;; When #t, permutes alternatives list via Gray-code ordering before aid
-;; allocation, so successive aid bit-positions correspond to Gray-code
-;; ordering of original alternative indices. Tests Hyperlattice Conjecture
-;; claim under Realization B (Phase 3A's non-committing in-place tagging).
-;;
-;; Cell-layer/data-layer optimization (aid's bit position is data via
-;; assumption-id-n), NOT scheduler-coupled (per Cell/Propagator/Scheduler
-;; Orthogonality principle, DESIGN_PRINCIPLES.org).
-(define current-gray-code-aid-ordering? (make-parameter #f))
-
-;; Local Gray-code-order helper (Phase 3B.0 scaffolding; avoid relations.rkt
-;; import cycle — relations.rkt depends on atms.rkt). Mirrors gray-code-order
-;; at relations.rkt:1874. Returns a permutation of 0..m-1 in Gray-code
-;; adjacency order. For m not a power of 2, skips out-of-range values.
-;; Examples: m=2 → (0 1); m=3 → (0 1 2); m=4 → (0 1 3 2).
-(define (gray-code-order-local m)
-  (cond
-    [(<= m 1) (list 0)]
-    [else
-     (define bits (let loop ([b 1]) (if (>= (arithmetic-shift 1 b) m) b (loop (add1 b)))))
-     (define total (arithmetic-shift 1 bits))
-     (for/list ([i (in-range total)]
-                #:when (< (bitwise-xor i (arithmetic-shift i -1)) m))
-       (bitwise-xor i (arithmetic-shift i -1)))]))
-
 ;; Create a choice point with N alternatives.
 ;; Creates N assumptions, adds them as components of the compound decisions cell,
 ;; records pairwise mutual-exclusion nogoods.
+;;
+;; Phase 3B.0 NOTE (2026-05-22): an experimental `current-gray-code-aid-ordering?`
+;; parameter + Gray-code permutation branch was added at commit `98cbbc3d` to
+;; A/B test the Hyperlattice Conjecture's CHAMP-sharing claim under Realization B.
+;; Measurement (n=10 × 5 workloads × 2 variants, ~70-100 ms per iter, IQRs ~1-2%)
+;; produced ALL DELTAS WITHIN ±1.5% — falls in §9.4.1.6 documented-defer range.
+;; Per pre-committed Q8 (§9.4.2.1) + falsification outcome (§9.4.2.10): the
+;; scaffolding retires HERE; data preserved at `data/benchmarks/
+;; fork-on-union-gray-code-2026-05-22.txt`; harness deletion is co-temporal.
+;; Future tracks (Phase 9b under fork-and-rejoin, PReduce, BSP-LE 6) needing
+;; similar A/B work resurrect from git history (commit `98cbbc3d`).
+;;
 ;; Returns: (values new-network (listof assumption-id))
 (define (solver-amb ctx net alternatives)
-  ;; Phase 3B.0 Variant B (current-gray-code-aid-ordering? = #t): permute
-  ;; alternatives via Gray-code ordering BEFORE aid allocation. Effect:
-  ;; original alt[i] gets aid with bit-position via gray-code-ordered offset
-  ;; rather than sequential. Cell/data-layer optimization; baseline preserved
-  ;; under default #f.
-  (define ordered-alts
-    (cond
-      [(current-gray-code-aid-ordering?)
-       (define n (length alternatives))
-       (define order (gray-code-order-local n))
-       (for/list ([gc-idx (in-list order)])
-         (list-ref alternatives gc-idx))]
-      [else alternatives]))
   ;; 1. Create fresh assumptions, one per alternative
   (define-values (net1 hyps-rev)
     (for/fold ([n net] [hs '()])
-              ([alt (in-list ordered-alts)]
+              ([alt (in-list alternatives)]
                [i (in-naturals)])
       (define-values (n2 hid) (solver-assume ctx n (string->symbol (format "h~a" i)) alt))
       (values n2 (cons hid hs))))
