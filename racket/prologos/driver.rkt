@@ -83,6 +83,7 @@
 (provide process-command
          process-file
          process-string
+         process-string/return-net    ;; PPN 4C Addendum Phase 3C.b.5.b — net-returning variant for cell-state inspection
          process-string-ws
          load-module
          install-module-loader!
@@ -1464,6 +1465,54 @@
   (parameterize ([current-prop-net-box (box (make-elaboration-network))])
     (reset-meta-store!)
     (process-string-inner s)))
+
+;; PPN 4C Addendum Phase 3C.b.5.b (2026-05-23): process-string/return-net.
+;;
+;; Net-returning variant of process-string: returns BOTH the elaboration
+;; `results` list (same as process-string) AND the final `elab-network`
+;; post-elaboration. The elab-network is suitable for cell-state inspection
+;; via `elab-cell-read` (or `(net-cell-read (elab-network-prop-net net) ...)`)
+;; — e.g., cell-19 union-derivation-chains for Phase 3C.b chain-storage
+;; assertions; cell-15 fork-on-union-request state; etc.
+;;
+;; NOTE: the returned value satisfies `elab-network?` (NOT `prop-network?`).
+;; The elab-network struct wraps a prop-network plus elaboration-layer state
+;; (per elab-network-types.rkt:62). Use `elab-cell-read` for cell access;
+;; use `elab-network-prop-net` to extract the inner prop-network when
+;; prop-network-specific APIs are needed.
+;;
+;; ARCHITECTURE — preserves Cell/Propagator/Scheduler Orthogonality
+;; (DESIGN_PRINCIPLES.org): the network is a READ-TIME view over on-network
+;; state at quiescence; no observer-set activation; no scheduler coupling.
+;; Caller receives the post-elaboration snapshot for static inspection.
+;;
+;; USE CASE (Phase 3C.b.5.c): 4-axis parity tests in test-elaboration-parity.rkt
+;; consume the returned elab-network via `(elab-cell-read net union-derivation-
+;; chains-cell-id)` to assert on cell-19 chain population shape (positive axes)
+;; or absence (negative axes). The test-substring-matching mechanism in
+;; `check-parity-equal?` is insufficient for structural state assertions.
+;;
+;; FUTURE CONSUMERS (per §9.5.1.7 cross-track captures):
+;;   - Phase 11b diagnostics — net inspection for `derivation-chain-for(position, tag)`
+;;   - PPN Track 8 LSP — diagnostic payload construction from network state
+;;   - SH Series Track 1+4 LHC — `.pnet` round-trip + native diagnostic primitive
+;;   - Track 4D substrate work — unified attribute-grammar substrate inspection
+;;
+;; IMPLEMENTATION (mirror of `process-string` body with box capture):
+;; The `current-prop-net-box` parameter is set to a FRESH box per call (same
+;; isolation semantic as `process-string`); after `process-string-inner` returns,
+;; the box is captured via `unbox` BEFORE the parameterize scope ends. Caller
+;; receives the box's value (the elaborated network) alongside results.
+;;
+;; D-3C.b.5.b-1 drift risk (per §9.5.3.9.4): if a future PM 12 / Track 4D
+;; refactor reshapes process-string's box management, this function co-evolves.
+;; Located IMMEDIATELY adjacent to process-string so refactors find both.
+(define (process-string/return-net s)
+  (define net-box (box (make-elaboration-network)))
+  (parameterize ([current-prop-net-box net-box])
+    (reset-meta-store!)
+    (let ([results (process-string-inner s)])
+      (values results (unbox net-box)))))
 
 (define (process-string-inner s)
   (define port (open-input-string s))
