@@ -210,6 +210,14 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3C.b.5.d — Q6.x probe re-run | Re-ran `examples/2026-05-22-3C-Q6x-probe.prologos` via process-file post-3C.b. Saved artifact to `data/probes/2026-05-22-3C-Q6x-post-3Cb.txt` (27 lines). §9.5.3.9.6 closed with empirical interpretation. | ✅ `0ccd248e` | Probe confirms `prop_allocs=0`, `prop_firings=0`, `CELL-METRICS: cells=42, propagators=0` for 3 WS-mode scenarios — Phase 3A does NOT fire for WS-mode. `union-exhaustion-error.derivation-chain = '(() ())` / `'(() () ())` — empty from sexp check/err path. **EVIDENCE for 3C.c sexp-bridge necessity** confirmed empirically; D-3C.b.5-6 deployment gap confirmed. |
 | **3C.b.5-close** | Full suite regression gate + §3 tracker backfill + dailies close session entry | ✅ (this commit) | **Full suite: 8265 tests / 106.1s / 0 failures** (+4 tests vs pre-3C.b.5 baseline 8261/106.0s; within 109-115s variance band; all 422 test files PASS). All 5 D-3C.b.5-* + 1 NEW D-3C.b.5-7 (bugfix-class) drift risks cleared. 3C.b.5 sub-step partition COMPLETE: 3C.b.5.a (mini-design) + 3C.b.5.b (process-string/return-net) + 3C.b.5.c-bugfix (cell-18 output) + 3C.b.5.c (4 axes) + 3C.b.5.d (probe). Ready for 3C.b-VAG cumulative cross-sub-step close. |
 | **3C.b-VAG** | Cumulative cross-sub-step adversarial 3-column VAG (per CRITIQUE_METHODOLOGY.org). 4 VAG questions × catalogue/challenge/adversarial; 6 D-3C.b-* + 7 D-3C.b.5-* drift risks verified cleared. | ✅ (this commit) | See §9.5.3.10 for the cumulative VAG application. **Phase 3C.b CLOSED end-to-end** — substrate + watcher fan-out + threshold + wrapper + chain storage + 4 E2E axes + Q6.x probe artifact + bugfix all delivered. Ready for Phase 3C.c (sexp-bridge → union-exhaustion-error.derivation-chain). |
+| **3C.c.0 mini-design + mini-audit** | Opening 3C.c sexp-bridge consumer; LHC vision reframing per user direction 2026-05-24 (cell-19 authoritative store; sexp `check/err` as temporary writer with Track 4D retirement target); 7-tier mini-audit grounded in code; Q-C.1-6 LOCKED via 3-column adversarial; NEW Q-C.6 finding (cell-19 ↔ field shape consistency) — minimal 3C.b adjustment honest correction of missed-audit; 9 D-3C.c-* drift risks named; §9.5.4.7 expected error message verbatim baseline. | ⬜ (this commit) | Persisted at §9.5.4 per Stage 4 mini-audit-precedes-implementation discipline. 12 subsections (mini-audit / vision framing / Q-C.6 new finding / Q-C.1-6 locked leans / implementation sketch / sub-phase partition / drift risks / acceptance criterion / closure criteria / cross-track captures / status / cross-references). Honest scope-up to ~270 LoC noted in §9.5.4.6 (vs original 80-150 estimate from §9.5.1.5) due to (a) per-branch-split 3C.b adjustment, (b) format-error update with ATMS state queries, (c) test site co-migration. |
+| **3C.c.1** | `derivation-chain-for/union-check` translator in error-explanation.rkt — sexp-mode translator parallel to 3C.b.3's `derivation-chain-for/union-contradict`; takes speculation-failure (root of per-branch tree); flattens DFS pre-order; translates to derivation-step (propagator-id=#f, srcloc=#f, aids from speculation-failure-hypothesis-id, names via decode-aid-name with label fallback, residual-cost=#f); targeted tests for synthetic speculation-failure input | ⬜ | ~80 LoC est. New dep on elab-speculation-bridge for speculation-failure accessors; cycle check at impl. |
+| **3C.c.2** | 3C.b per-branch-split adjustment — `make-fork-chain-threshold-fire-fn` (typing-propagators.rkt:1346) replaces single-chain write with per-branch iterative wrapper call; cell-19 value shape flips to `position → (listof derivation-chain)` per Q-C.6 (a) lean; 3C.b 4-axis tests (test-union-types-atms.rkt:724-799) updated to assert `(listof derivation-chain)` shape | ⬜ | ~10-15 LoC + test updates est. Honest correction of missed-audit point at 3C.b VAG; small adjustment to existing closed-phase code. |
+| **3C.c.3** | check/err integration in typing-errors.rkt:64-118 — replace union path (lines 70-104) chain construction with `derivation-chain-for/union-check` per-branch; write cell-19 via `net-cell-write` on (current-prop-net-box) elab-network; flip `union-exhaustion-error.derivation-chain` field type atomically; retire `build-derivation-chain` union-type code path (Q9 mandate); non-union path unchanged for type-mismatch-error (Phase 11b scope) | ⬜ | ~50 LoC est. Field type flip atomic with 3C.c.4 format-error update — no broken intermediate state. |
+| **3C.c.4** | format-error update in errors.rkt:267-287 — union-exhaustion-error case handles `derivation-chain` struct (not strings); ATMS conflict info via `solver-state-explain-hypothesis` queried at RENDER TIME (decomplection per §9.5.4.4 adversarial); minimal diagnoses via `solver-state-minimal-diagnoses` queried at render time; preserves today's diagnostic richness | ⬜ | ~30-50 LoC est. User-facing message MUST match §9.5.4.7 verbatim acceptance criterion. |
+| **3C.c.5** | Test site updates — ~10 sites across test-provenance-errors.rkt (7 sites), test-speculation-bridge.rkt (assertions on branches/branch-mismatches unchanged), test-gde-errors.rkt (2 sites); all assertions updated to check `derivation-chain?` structure instead of list-of-string | ⬜ | ~50 LoC est. Grep at impl catches all consumers via `union-exhaustion-error-derivation-chain` accessor pattern. |
+| **3C.c.6** | E2E acceptance criterion verification — re-run `examples/2026-05-22-3C-Q6x-probe.prologos` via process-file; assert post-3C.c output matches §9.5.4.7 verbatim; save artifact to `data/probes/2026-05-24-3C-Q6x-post-3Cc.txt` | ⬜ | ~30 LoC + probe artifact est. Full suite gate: stable within 109-115s variance band. |
+| **3C.c-VAG** | Cumulative cross-sub-step adversarial 3-column VAG (4 questions × catalogue/challenge/adversarial); all 9 D-3C.c-* drift risks verified cleared; Q-C.6 (NEW finding) outcome verified; multi-writer scaffolding documented + retirement target named (Track 4D) | ⬜ | Phase 3C.c CLOSED gate. Ready for Phase 3C.d (format integration + 4-axis discriminating parity tests) per §9.5.1.5. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
@@ -7506,6 +7514,446 @@ All 4 VAG questions PASS under adversarial framing. The arc produced:
 **Net adversarial finding**: the diagnostic protocol PREVENTED a vision-failure (3C.b would have shipped a non-functional mechanism without the empirical falsification). This validates the workflow.md discipline AND surfaces 2 NEW methodology codifications worth promoting.
 
 **Status**: Phase 3C.b CLOSED. §3 Progress Tracker row 3C.b-VAG → ✅ (this commit). Ready for Phase 3C.c mini-design opening.
+
+### §9.5.4 Phase 3C.c mini-design + mini-audit (2026-05-24 — opening sexp-bridge consumer)
+
+Opening conversational mini-design + mini-audit for Phase 3C.c per Stage 4 Per-Phase Protocol (mini-design + mini-audit are co-dependent activities cycling between design intent and code reality; outcomes persist to the design doc; dailies log the commit story). Context: post-3C.b CLOSED at `449faac9` (on-network Propagator-First Diagnostics for INFERRED unions; cell-19 populated by 3C.b's threshold-fire mechanism via `derivation-chain-for/union-contradict` wrapper). 3C.c bridges sexp `check/err` (the dominant user-facing path per Q6.x empirical finding) into the same on-network store, completing the Phase 3C deployment story.
+
+Methodology: **3-column adversarial framing** (catalogue / challenge / adversarial) applied throughout. The third column ACTIVELY tries to demolish each lean rather than softly improve it. User-articulated **LHC vision reframing** during dialogue (§9.5.4.2 below) inverted the original lean from "sexp-primary + cell-19 supplement" to "cell-19 authoritative + sexp as temporary writer" — empirical proof that vision-aligned framing is load-bearing for design decisions.
+
+The rigorous audit (Tier 1-7 below) also surfaced a NEW finding (Q-C.6, §9.5.4.3) — a cell-19 ↔ field shape mismatch that the original Phase 3C.b mini-design did not surface. This validates the audit-precedes-implementation discipline at the per-phase level: rigorous audit reveals tensions invisible at design time.
+
+#### §9.5.4.1 Mini-audit findings (7 tiers, grounded in code)
+
+7-tier structured audit executed pre-mini-design per Stage 4 mini-audit-precedes-implementation discipline.
+
+**Tier 1 — `check/err` integration point (typing-errors.rkt:64-118)**:
+
+- Signature: `(check/err ctx e t [loc srcloc-unknown] [names '()])` — **NO `net` parameter** in scope today
+- Two call sites only: `driver.rkt:516` (`(check expr type)` top-level form) + `driver.rkt:1234` (`def x : T := body` annotated def body check)
+- Both sites run INSIDE `parameterize ([current-prop-net-box ...])` blocks — `(current-prop-net-box)` IS reachable at check/err today via the parameter
+- Union path (lines 69-104): flattens via `flatten-union-local`; per-branch speculative `(check ctx e br)` via `with-speculative-rollback`; collects per-branch `(list mismatch-string chain)`; constructs `union-exhaustion-error` with `derivation-chain = (map cadr branch-info)` shape `(listof (listof string))`
+- Non-union path (lines 105-118): builds `type-mismatch-error` with `provenance` (also `(listof string)`) — **NOT in 3C scope** per Q9 (non-union retires at Phase 11b)
+- Q-B.2 retirement target: per-branch chain construction at lines 84-95 (the `(let* ([latest (get-latest-speculation-failure)] ...))` block)
+
+**Tier 2 — `union-exhaustion-error` struct + format-error rendering (errors.rkt)**:
+
+- Struct (lines 115-116): `(prologos-error srcloc message) + (branches branch-mismatches expr-str derivation-chain)`
+- `derivation-chain` field type: `(listof (listof string))` per docstring at 112-114
+- `format-error` rendering (lines 267-287): iterates per-branch `chain`; inner iteration checks `(string-prefix? step "[diagnosis]")` — **assumes step is STRING**. Field type flip to `(listof derivation-chain)` BREAKS this inner iteration; coordinated format-error update is REQUIRED.
+- Consumer enumeration via grep — Q-B.2 breaking-change blast radius:
+  - 1 producer (typing-errors.rkt:98)
+  - 1 format-error pattern (errors.rkt:267)
+  - ~10 test assertion sites: `test-provenance-errors.rkt` (7+ sites) + `test-speculation-bridge.rkt` (6+ sites) + `test-gde-errors.rkt` (2 sites)
+  - 1 test constructor (`test-provenance-errors.rkt:142`)
+  - **ZERO LSP / external consumers** (search clean)
+- Field type flip scope: ~12-15 sites — small + well-contained
+
+**Tier 3 — `build-derivation-chain` + speculation failure data (elab-speculation-bridge.rkt)**:
+
+- `build-derivation-chain` (typing-errors.rkt:127-152) currently RICH:
+  - Per-step `format-speculation-label` (translates `"union-branch-..."` → `"tried branch ..."`)
+  - Nested sub-failures inlined as `"(also tried: X, Y)"`
+  - ATMS conflict info appended via `format-atms-conflict` (uses `solver-state-explain-hypothesis`)
+  - Context diagnosis appended via `format-context-diagnosis` (user annotations + minimal diagnoses)
+- `speculation-failure` struct (elab-speculation-bridge.rkt:95): `(label hypothesis-id support-set sub-failures)` — TREE shape; `sub-failures` is itself a list of speculation-failures
+- `get-latest-speculation-failure` (line 143): returns LATEST recorded failure or #f
+- Available at check/err per branch: the speculation-failure for THIS branch's check (`latest`); its `sub-failures` field for nested speculation
+- Mapping to 3C.a `derivation-step` struct is feasible BUT semantics differ:
+  - On-network walk: `propagator-id` meaningful (dep-graph traversal); `srcloc` from install site
+  - Sexp speculation: `propagator-id` has NO analog (recursive `check` call chain, not a propagator); `srcloc` not tracked per-failure; `label` is the closest "structural role" analog
+  - **Resolution**: per-field semantics documented for both paradigms; `propagator-id=#f` + `srcloc=#f` graceful degradation for sexp-fed steps (per D-3C-7 existing pattern)
+
+**Tier 4 — 3C.b substrate (cell-19) read access from sexp path**:
+
+- Cell-19 = `union-derivation-chains-cell-id = (cell-id 19)` (propagator.rkt:784)
+- Merge: `union-derivation-chains-merge` registered under `'hasheq-replace` (line 926)
+- **Current value shape**: `(hasheq position derivation-chain)` — SINGLE chain per position (the 3C.b mechanism produces one walk filtered by union of branch-aids)
+- 3C.b writer: `make-fork-chain-threshold-fire-fn` (typing-propagators.rkt:1346); per-fork threshold; reads cell-18 latch; on subset met → builds chain via wrapper → writes `(hasheq position chain)` to cell-19
+- Read API for 3C.c: `(elab-cell-read net union-derivation-chains-cell-id)` → `(hasheq position ...)` → `(hash-ref ... position #f)`
+- `(current-prop-net-box)` parameter pervasively used in production: ~30+ call sites across driver.rkt + macros.rkt + supporting modules — adding ONE more consumer (sexp check/err) is consistent with existing pattern
+- `process-string/return-net` (driver.rkt:1510) already exposes net for TESTING (added at 3C.b.5.b)
+
+**Tier 5 — `error-explanation.rkt` reuse plan for 3C.c**:
+
+- Foundation (3C.a) provides:
+  - `derivation-chain` + `derivation-step` (5-field) structs — **directly reusable**
+  - `static-reverse-walk` primitive — **NOT directly applicable to sexp path** (speculation-failure tree is NOT in the propagator dep graph; lives in the `current-speculation-failures` parameter)
+  - `derivation-chain-for/union-contradict` wrapper (3C.b) — **template for body shape**, but the input data and translation logic differ
+  - `decode-aid-name` helper — **directly reusable** (sexp path also has aids via `speculation-failure-hypothesis-id`)
+- Module currently imports `current-command-atms` (already wired in 3C.b.3) — sufficient for sexp-path ATMS access
+- 3C.c adds dependency on `elab-speculation-bridge.rkt` for `speculation-failure` accessors — **NEW dep**; cycle check: error-explanation has zero dep on speculation today; elab-speculation-bridge doesn't depend on error-explanation; no cycle risk
+
+**Tier 6 — Sexp + WS-mode dispatch paths (Q6.x finding RE-CONFIRMED)**:
+
+- `process-string` (sexp, line 1461) and `process-string-ws` (WS, line 1556) BOTH parameterize `current-prop-net-box` identically
+- Both route to `process-command` which calls `check/err` at driver.rkt:1234 for `def x : T := body`
+- **Phase 3A's `process-fork-on-union` only fires for on-network typing** (via `type-map-write` → `maybe-emit-fork-on-union-request` writing cell-15)
+- Annotated `def` body checking uses kernel `check` inside `with-speculative-rollback` — does NOT route through on-network typing
+- **Cell-19 stays EMPTY for the dominant case (sexp annotated unions)** — Q6.x finding empirically verified at 3C.b.5.d probe artifact
+- **3C.c lifts this state**: by adding sexp `check/err` as a SECOND WRITER to cell-19, cell-19 becomes authoritative for ALL union all-branch-contradict events regardless of which typing path detected them
+- Q-C.5 (WS-mode coverage): automatic — both `process-string` and `process-string-ws` flow through `check/err`; both will write cell-19 post-3C.c
+
+**Tier 7 — Test surfaces for 3C.c**:
+
+- Existing axis `'union-inhabitation-all-fail` (test-elaboration-parity.rkt:483) — asserts on `"Unbound variable"` downstream symptom; does NOT assert on chain shape
+- Skip-gated `'error-provenance-chain` (line 535) for Phase 11b non-union case
+- `test-union-types-atms.rkt:724-799`: 4 axes for INFERRED-union path via synthetic E2E (cell-19 inspection via `make-test-fixture` + direct cell-15 write + `run-to-quiescence` + `net-cell-read`)
+- `test-provenance-errors.rkt:81-312`: ~7 tests assert `(list? (union-exhaustion-error-derivation-chain ...))` — break under field type flip; require co-migration
+- Test consumers shape changes mechanical: assertions updated to check struct shape (`derivation-chain?`) instead of list-of-string
+
+#### §9.5.4.2 Vision-aligned framing (per user direction 2026-05-24)
+
+User-articulated vision reframing during dialogue establishes the design center for 3C.c. The propagator network is itself the compiler ("Logos Hyperlattice Compiler" / LHC); the serialized `.pnet` is itself the language IR (PoC in experimental branch proves direct `.pnet` → LLVM lowering via a Zig scheduler). For world-class diagnostics, propagator network diagnostics will need to understand network traces natively. Eventually there should not be a sexp-IR to concern ourselves with.
+
+**Design question reframe**: not "which source dominates today" but "what migration paths advance the LHC vision?"
+
+The destination is:
+- Cell-19 is the authoritative diagnostic store
+- `static-reverse-walk` is the universal chain constructor
+- `derivation-chain` struct is part of the PNET IR
+- LSP and LHC consume cell-19 directly
+- Sexp `check/err` is temporary scaffolding feeding the on-network store
+
+**Migration trajectory** (cell-19 is the fixed point; writers come and go):
+
+```
+TODAY (post-3C.b):     cell-19 written by { 3C.b on-network handler }; authoritative for INFERRED unions only
+3C.c (THIS PHASE):     cell-19 written by { 3C.b on-network handler, sexp check/err translator }; authoritative for ALL unions
+PM 12:                 current-prop-net-box retires; cell access becomes structural (3C.c translator unchanged)
+Track 4D:              sexp check retires; ALL union checking via on-network typing; sexp writer RETIRES
+SH Track 1:            cell-19 + derivation-chain struct become part of PNET IR
+SH Track 4:            LHC native runtime reads cell-19; static-reverse-walk is the diagnostic primitive
+PPN 8 LSP:             LSP reads cell-19; serializes derivation-chain as LSP diagnostic
+```
+
+3C.c is the **inflection point**: before it, 3C.b's mechanism is validated-not-deployed (Q6.x empirical finding). After it, cell-19 is structurally authoritative even while sexp scaffolding still runs.
+
+**PNET ABI seed scope (per user clarification 2026-05-24)**: the `derivation-chain` + `derivation-step` struct shape becomes part of the PNET ABI seed. Versioning + alternative serialization formats are revisited at TWO inflection points downstream:
+- **SH Series** (working on serializing propagators alongside cells)
+- **Post-PPN 7** (grammar serializations; versioned serializations; possibly Prologos-defined formats)
+
+This frees 3C.c from over-engineering versioning NOW. Ship the structurally-honest shape today; trust the downstream gates.
+
+#### §9.5.4.3 Audit-surfaced finding — Q-C.6 cell-19 ↔ field shape consistency (NEW)
+
+The rigorous audit caught a structural tension the original Phase 3C.b mini-design did not surface:
+
+- **Cell-19's shape (3C.b)**: `position → derivation-chain` (SINGLE chain per union position; aggregated walk filtered by union of branch-aids)
+- **Q-B.2 lock on field shape**: `(listof derivation-chain)` (PER-BRANCH list of chains)
+
+3C.b's wrapper `derivation-chain-for/union-contradict` returns one chain; the chain's steps may reference any branch's aids. The sexp path naturally produces PER-BRANCH chains (each branch independently speculatively-checked).
+
+These shapes are structurally inconsistent.
+
+| Option | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| **(a) Align cell-19 to per-branch shape** — cell-19 value becomes `position → (listof derivation-chain)`; 3C.b's `make-fork-chain-threshold-fire-fn` adjusts to call wrapper N times (per branch-aid) producing per-branch list | Field shape ↔ cell shape consistent; rendering preserves per-branch nesting (matches today's UX); both paths produce same shape | Modifies 3C.b's writer slightly (small scope creep into closed Phase 3C.b); N walks per fork vs 1 (N× more work for on-network case, rare in production) | **Touching closed Phase 3C.b after VAG is scope creep — even if minor. But the alternative is preserving an inconsistency we just identified. The honest move: 3C.b VAG was performed WITHOUT surfacing this shape question; revisiting 3C.b minimally is CORRECTING A MISSED AUDIT, not scope creep. The "N walks vs 1 walk" cost is irrelevant for diagnostics — error paths are not hot paths. The work IS minimal: a few-line adjustment to call the wrapper iteratively. Adversarial pressure resolved via honest framing of the missed-audit-correction. |
+| **(b) Field shape becomes singular `derivation-chain`** — revise Q-B.2 lock; field flips from `(listof (listof string))` to `derivation-chain`; format-error renders chain at end (one block) instead of per-branch nested | Aligns naturally with cell-19 (no 3C.b touch); minimal data | Changes user-facing rendering pattern; chain location moves from "nested under each branch" to "at end after branches" | **Per-branch ATTRIBUTION (which step belongs to which branch) is encoded in `assumption-ids`; format-error can reconstruct per-branch rendering by grouping at render time. The structural simplification is real; the rendering question is solvable downstream. Counter-adversarial: rendering deferred is rendering deferred. If we ship X.1 with end-block rendering and users prefer per-branch, we ship a worse UX. The per-branch rendering is what's tested in production. UX regression risk. |
+| **(c) Check/err reshapes** — cell-19 stays singular; sexp produces per-branch via translator; check/err's writeback writes singular (flatten); read-back reshapes singular to per-branch list via aid grouping | Cell-19 unchanged | Multiple shape transformations between cell and field; ambiguity for on-network case (one step with multiple branch-aids: include in both? duplicate? drop?) | **Most complex; introduces shape-transformation logic that has to be UNDONE when format-error grows to natively consume single chains. Accumulates legacy at both layers. ✗ |
+
+**Q-C.6 LOCKED LEAN: (a) align cell-19 to per-branch shape**. Reasons:
+1. Preserves today's user-facing rendering (per-branch chain nesting)
+2. Structural consistency between cell-19 and error field
+3. Sexp path produces per-branch naturally; no shape transformation needed
+4. 3C.b adjustment is small (a few-line iterative call to existing wrapper) and is honest correction of a missed audit, not scope creep
+5. Future format-error refinement retains both rendering options (per-branch from data; alternate grouping deferred)
+
+**3C.b adjustment scope**: `make-fork-chain-threshold-fire-fn` (typing-propagators.rkt:1346) — replace single-chain build with iterative per-branch build:
+
+```racket
+;; BEFORE
+(define chain (derivation-chain-for/union-contradict net branch-aid-set request-info))
+(net-cell-write net union-derivation-chains-cell-id (hasheq position chain))
+
+;; AFTER
+(define per-branch-chains
+  (for/list ([aid (in-set branch-aid-set)])
+    (derivation-chain-for/union-contradict net (seteq aid) request-info)))
+(net-cell-write net union-derivation-chains-cell-id
+                (hasheq position per-branch-chains))
+```
+
+3C.b's existing tests (4 axes in test-union-types-atms.rkt:724-799) require updates: assert on `(listof derivation-chain)` instead of `derivation-chain`.
+
+#### §9.5.4.4 Resolved design questions (Q-C.1-6) — locked via 3-column adversarial
+
+| Q | Question | Locked Lean | Rationale |
+|---|---|---|---|
+| **Q-C.1** | Bridge strategy: how does check/err produce the chain? | **(f) Cell-19 is authoritative store; both sexp `check/err` and on-network 3C.b write to it via direct `net-cell-write` (no propagator wrapper); check/err reads back its own write for the error field** | Vision-aligned multi-writer scaffolding. Cell-19 is fixed point. Direct write (not propagator wrapper) per user direction — pretending sexp is a propagator when it isn't sets a bad precedent. |
+| **Q-C.2** | When cell-19 is empty, what does 3C.c return? | **DISSOLVED** — cell-19 is always written by check/err for sexp union check failures (per Q-C.1 (f)); on-network 3C.b writes for inferred unions | New framing eliminates the question. |
+| **Q-C.3** | Coordinated field type change timing | **(α) Atomic flip at 3C.c** — `(listof (listof string))` → `(listof derivation-chain)` per Q-B.2 spec | Coordinated with format-error update. Struct shape becomes PNET ABI seed (versioned at SH + post-PPN-7 per §9.5.4.2). |
+| **Q-C.4** | format-error update — 3C.c or 3C.d? | **(a) In 3C.c, atomic with field flip** | Otherwise broken intermediate state. format-error gains structured rendering with on-network state queries for ATMS conflicts + diagnoses (preserves today's richness while decomplecting construction from rendering). |
+| **Q-C.5** | WS-mode coverage post-3C.c | **(a) Automatic** — both `process-string` and `process-string-ws` parameterize `current-prop-net-box` identically; both flow through check/err; both write cell-19 | Verified at Tier 6 audit. |
+| **Q-C.6** | Cell-19 ↔ field shape consistency (NEW from audit) | **(a) Align cell-19 to per-branch shape** — cell-19 value becomes `position → (listof derivation-chain)`; 3C.b's writer adjusts iteratively | Per §9.5.4.3 — corrects a missed audit point in 3C.b VAG. |
+
+**Adversarial framing on multi-writer scaffolding (per Pressure 2)**: per user direction 2026-05-24, this is the reality we have to deal with until propagator-diagnostic-native typing replaces sexp `check/err`. The two-writer state is named scaffolding with retirement target (Track 4D). The mantra-aligned aspect: cell-19 IS the single source of truth (CRDT-like store); writers are temporary; readers see the cell. The mantra-violating aspect: sexp `check/err` is not a propagator and shouldn't be made to pretend otherwise (per Pressure 3 user direction). Documented honestly; retirement target explicit; no rationalization.
+
+**Adversarial framing on `propagator-id` field for sexp-fed steps (per Pressure 2)**: `propagator-id=#f` for sexp-fed steps is graceful degradation per existing D-3C-7 documentation. Post-Track-4D, always populated. Document at chain construction site. Alternative (c) — rename field — deferred to Phase 11b broader refactor.
+
+**Adversarial framing on lost richness from `build-derivation-chain` (per Pressure 3)**: STRUCTURAL IMPROVEMENT, not regression. Today `build-derivation-chain` BAKES formatting into strings; chain IS strings. Post-3C.c the chain is structured data; format-error queries `solver-state-explain-hypothesis` + `solver-state-minimal-diagnoses` at RENDER TIME to produce the rich text. Same data; transformation moves from construction-time to render-time. Decomplection: chain construction stays pure; chain rendering is the formatter's concern. LSP/LHC consumers gain restructurable data.
+
+#### §9.5.4.5 Implementation sketch
+
+**3C.c.1 — Translator in `error-explanation.rkt`** (~80 LoC):
+
+```racket
+;; PPN 4C Phase 3C.c.1 (2026-05-24): sexp-mode translator wrapper.
+;; SEXP-MODE TRANSLATOR — scaffolding; retires at Track 4D when sexp typing
+;; unifies into on-network typing per Attribute Grammar Substrate vision.
+;;
+;; Parallel API to derivation-chain-for/union-contradict (3C.b.3), but for
+;; SEXP path: takes a speculation-failure (root of per-branch speculation
+;; tree); flattens via DFS pre-order; translates each speculation-failure
+;; to a derivation-step struct. Returns a derivation-chain (struct shape
+;; identical to on-network path; field semantics documented per paradigm).
+;;
+;; Field mapping (per §9.5.4.1 Tier 3):
+;;   propagator-id    — #f (sexp speculation has no propagator)
+;;   srcloc           — #f (speculation-failure doesn't track srcloc;
+;;                          Phase 11b or Track 4D adds srcloc to speculation
+;;                          infrastructure — D-3C.c-1 capture)
+;;   assumption-ids   — (list hypothesis-id) from speculation-failure
+;;   assumption-names — decoded via decode-aid-name (3C.b.3 helper); fallback
+;;                      to speculation-failure-label when no aid available
+;;   residual-cost    — #f (3C.d may populate via tropical-quantale annotation)
+;;
+;; ATMS access via current-command-atms (same as 3C.b.3); defensive on #f
+(define (derivation-chain-for/union-check failure)
+  (cond
+    [(not failure) (derivation-chain '())]
+    [else
+     (define atms-box (current-command-atms))
+     (define assumptions
+       (cond [atms-box (solver-state-assumptions (unbox atms-box))]
+             [else (hasheq)]))
+     (define (failure-to-step sf)
+       (define hyp-id (speculation-failure-hypothesis-id sf))
+       (define aids (if hyp-id (list hyp-id) '()))
+       (define names
+         (cond
+           [(pair? aids)
+            (for/list ([aid (in-list aids)])
+              (decode-aid-name assumptions aid))]
+           [else (list (speculation-failure-label sf))]))
+       (derivation-step #f #f aids names #f))
+     ;; DFS pre-order flatten: root failure first, then recurse into sub-failures
+     (define (collect sf)
+       (cons (failure-to-step sf)
+             (apply append
+                    (map collect (speculation-failure-sub-failures sf)))))
+     (derivation-chain (collect failure))]))
+```
+
+**3C.c.2 — 3C.b per-branch-split adjustment** (~10-15 LoC + test re-validation):
+
+`make-fork-chain-threshold-fire-fn` (typing-propagators.rkt:1346) replaces single-chain write with per-branch iterative write (per §9.5.4.3). Existing 3C.b tests (4 axes in test-union-types-atms.rkt) updated to assert `(listof derivation-chain)` shape.
+
+**3C.c.3 — `check/err` integration** (~50 LoC across typing-errors.rkt + driver-side `current-prop-net-box` capture):
+
+Union path (lines 69-104) replaced. Per-branch loop builds chain via `derivation-chain-for/union-check`; cell-19 written via `net-cell-write` on `(current-prop-net-box)`'s elab-network; `union-exhaustion-error` constructed with `(listof derivation-chain)` field.
+
+```racket
+;; Inside check/err union path (replaces lines 84-95 + 96-97):
+[branch-info
+ (for/list ([br (in-list branches)])
+   (define ok?
+     (with-speculative-rollback
+       (lambda () (check ctx e br))
+       values
+       (format "union-branch-~a" (pp-expr br names))))
+   (if ok?
+       (list "matched" (derivation-chain '()))
+       (let* ([latest (get-latest-speculation-failure)]
+              [chain (derivation-chain-for/union-check latest)]
+              [actual (infer ctx e)])
+         (list (if (expr-error? actual) "<could not infer>" (pp-expr actual names))
+               chain))))]
+[branch-mismatches (map car branch-info)]
+[branch-chains (map cadr branch-info)]
+;; Write cell-19 (scaffolding — multi-writer with on-network 3C.b path)
+(define net-box (current-prop-net-box))
+(when net-box
+  (set-box! net-box
+    (elab-cell-write (unbox net-box)
+                     union-derivation-chains-cell-id
+                     (hasheq loc branch-chains))))
+;; Construct error with per-branch chains
+(union-exhaustion-error loc (pp-expr t names) branch-strs branch-mismatches
+                        (pp-expr e names) branch-chains)
+```
+
+**Q-C.6 note**: cell-19 key shape is `position`. For sexp path, `position` proxy is `loc` (srcloc). For on-network path, `position` is the union expr's attribute-map position. The shapes are compatible at the `equal?` level. **D-3C.c-2 capture**: position-key shape divergence between paths; Track 4D unification resolves.
+
+`build-derivation-chain`'s union-type path RETIRES (Q9 mandate); non-union path stays for `type-mismatch-error` use until Phase 11b.
+
+**3C.c.4 — format-error update** (~30-50 LoC across errors.rkt):
+
+```racket
+;; format-error union-exhaustion-error case — handles derivation-chain struct
+;; Renders per-branch as today; chain steps via decode-step-rendering helper.
+;; ATMS conflicts + minimal diagnoses queried at RENDER TIME (decomplection
+;; per §9.5.4.4 adversarial framing) — preserves today's richness.
+[(union-exhaustion-error _ _ branches branch-mismatches expr-str chains)
+ (string-join
+  (append
+   (list (format "error[E1006]: expression does not match any branch of union type")
+         (format "  --> ~a" loc-str))
+   (apply append
+     (for/list ([br (in-list branches)]
+                [mm (in-list branch-mismatches)]
+                [chain (in-list chains)])
+       (cons (format "  tried ~a — type mismatch (got: ~a)" br mm)
+             (for/list ([step (in-list (derivation-chain-steps chain))])
+               (format "    because: ~a" (format-derivation-step step))))))
+   (list (format "  in expression: ~a" expr-str)
+         (format "  = help: expression must match at least one branch of ~a" msg)))
+  "\n")]
+
+(define (format-derivation-step step)
+  (define names (derivation-step-assumption-names step))
+  (cond
+    [(pair? names) (string-join names ", ")]
+    [else "<unknown>"]))
+```
+
+**3C.c.5 — Test site updates** (~50 LoC across 3 test files):
+
+- `test-provenance-errors.rkt`: ~7 assertions updated to check `derivation-chain?` structure instead of `list?` of strings
+- `test-speculation-bridge.rkt`: assertions on `branches` + `branch-mismatches` unchanged (those fields not affected)
+- `test-gde-errors.rkt`: ~2 assertions
+
+**3C.c.6 — Acceptance criterion verification** (~30 LoC + verification artifact):
+
+Re-run `examples/2026-05-22-3C-Q6x-probe.prologos` via `process-file`; assert post-3C.c error message matches §9.5.4.7 expected verbatim. Capture artifact at `data/probes/2026-05-24-3C-Q6x-post-3Cc.txt`.
+
+#### §9.5.4.6 Sub-phase partition
+
+| Sub-phase | Description | Est. LoC | Key gate |
+|---|---|---|---|
+| **3C.c.0** | mini-design + mini-audit persistence (this commit) | docs | §9.5.4 lands; Q-C.1-6 LOCKED |
+| **3C.c.1** | `derivation-chain-for/union-check` translator in error-explanation.rkt + targeted tests | ~80 | Translator produces correct derivation-chain struct for synthetic speculation-failure input |
+| **3C.c.2** | 3C.b per-branch-split adjustment — `make-fork-chain-threshold-fire-fn` iterative; cell-19 shape flips to per-branch list | ~10-15 + 3C.b test updates | 4 axes in test-union-types-atms.rkt re-pass with `(listof derivation-chain)` assertions |
+| **3C.c.3** | `check/err` integration — replace union-path chain construction; write cell-19; field type flip atomic | ~50 | Q6.x probe scenario produces non-empty per-branch chains |
+| **3C.c.4** | format-error update for `derivation-chain` struct + decomplected ATMS state queries | ~30-50 | User-facing message matches §9.5.4.7 expected verbatim |
+| **3C.c.5** | Test site updates (~10 sites across 3 test files) | ~50 | All test files re-pass; no regressions |
+| **3C.c.6** | E2E acceptance criterion verification — Q6.x probe re-run + verbatim match | ~30 + probe artifact | Post-3C.c probe artifact diff against §9.5.4.7 baseline = 0 |
+| **3C.c-VAG** | Cumulative cross-sub-step adversarial 3-column VAG | docs | All 4 VAG questions PASS under adversarial framing; all D-3C.c-* drift risks verified cleared |
+
+Estimated total: **~270 LoC + tests + docs**. Honest scope-up from §9.5.1.5 original ~80-150 LoC estimate due to (a) per-branch-split 3C.b adjustment (Q-C.6 finding), (b) format-error update with ATMS state queries (Q-C.4), (c) test site co-migration (Q-C.3 field type flip blast radius).
+
+#### §9.5.4.7 Acceptance criterion — expected error message verbatim (D-3C-1 made operational)
+
+Per §9.5.1.6 D-3C-1 (shape-without-benefit), pre-write the expected user-facing error message BEFORE implementation. The message MUST preserve today's information richness or 3C.c ships a UX regression even with the field type flip.
+
+**Probe scenario** (`examples/2026-05-22-3C-Q6x-probe.prologos` scenario 1):
+
+```prologos
+(def x <Nat | Bool> "hello")
+x
+```
+
+**Pre-3C.c output (from Q6.x baseline artifact `2026-05-22-3C-Q6x-baseline.txt`)**:
+
+```
+error[E1006]: expression does not match any branch of union type
+  --> <unknown>:?:?
+  tried Nat — type mismatch (got: String)
+  tried Bool — type mismatch (got: String)
+  in expression: "hello"
+  = help: expression must match at least one branch of Nat | Bool
+```
+
+(Note: `union-exhaustion-error.derivation-chain = '(() ())` — empty per Q6.x finding; no `because:` lines render.)
+
+**Post-3C.c expected output (per §9.5.4.5 implementation sketch + format-error renderer)**:
+
+```
+error[E1006]: expression does not match any branch of union type
+  --> <unknown>:?:?
+  tried Nat — type mismatch (got: String)
+    because: union-branch-Nat
+  tried Bool — type mismatch (got: String)
+    because: union-branch-Bool
+  in expression: "hello"
+  = help: expression must match at least one branch of Nat | Bool
+```
+
+(`union-exhaustion-error.derivation-chain` is now `(list (derivation-chain (list (derivation-step #f #f '() (list "union-branch-Nat") #f))) (derivation-chain (list (derivation-step #f #f '() (list "union-branch-Bool") #f))))` — populated per-branch chains.)
+
+**Information delta**: per-branch `because:` lines added showing speculation labels. The branch identity is REDUNDANT with the `tried X` line for atomic types (acceptable — proves the on-network chain is structurally populated). For NESTED scenarios (union within union, branches with sub-speculation), the chain contains the nested failure tree — significantly richer than today's empty output.
+
+**Acceptance criterion**: 3C.c.6 verification asserts post-3C.c probe output matches this verbatim. Scenario 2 (`(def y <Int | Bool> "world")`) + scenario 3 (`(def z <<Nat | Bool> | String> 3.14)`) follow the same pattern; verbatim expectations captured at 3C.c.6 close.
+
+**For complex scenarios with user annotations** (out of Q6.x baseline scope but exercised in 3C.d's 4-axis tests): format-error queries `solver-state-explain-hypothesis` for `conflicts with: ...` lines and `solver-state-minimal-diagnoses` for `[diagnosis] retract: ...` lines — preserves today's richness via render-time queries on on-network ATMS state.
+
+#### §9.5.4.8 Drift risks named (D-3C.c-*)
+
+| # | Risk | Mitigation |
+|---|---|---|
+| **D-3C.c-1** | sexp `speculation-failure` doesn't track srcloc; sexp-fed `derivation-step.srcloc = #f` for all steps | Graceful degradation per existing D-3C-7 pattern; document at translator API; Phase 11b or Track 4D enriches when speculation infrastructure gains srcloc tracking |
+| **D-3C.c-2** | cell-19 key shape divergence — sexp path uses `loc` (srcloc) as position-key; on-network path uses attribute-map position; merge via `'hasheq-replace` may produce inconsistent reads if keys collide | `equal?` equality is well-defined for both srcloc and attribute-map positions; collision risk evaluated at 3C.c.3 mini-design — if real, introduce a tagged-position wrapper; Track 4D unification resolves structurally |
+| **D-3C.c-3** | format-error ATMS state query at render time depends on `current-command-atms` being live; if error rendering happens post-command-close, ATMS may be retracted | Render at error-emission time (immediately at check/err return) when ATMS is live; defensive #f handling for post-close rendering produces graceful degradation |
+| **D-3C.c-4** | Multi-writer scaffolding scope creep — temptation to make ALL error structs go through cell-19 pattern | LOCK 3C.c scope to `union-exhaustion-error.derivation-chain` ONLY; non-union `type-mismatch-error.provenance` is Phase 11b scope per Q9 |
+| **D-3C.c-5** | 3C.b touch is scope creep | Per §9.5.4.3 — honest correction of missed-audit at 3C.b VAG; small adjustment; existing 3C.b tests verify the post-adjustment semantics |
+| **D-3C.c-6** | Test site updates cascade — ~10 test sites + their assertions; risk of missing one and failing in CI | Grep at 3C.c.5 catches all consumers via `union-exhaustion-error-derivation-chain` accessor pattern; targeted run before full suite |
+| **D-3C.c-7** | format-error rendering UX regression — chain rendering may look different than today even with same information | §9.5.4.7 verbatim acceptance criterion catches this structurally |
+| **D-3C.c-8** | `build-derivation-chain` retirement scope ambiguity — non-union path stays; union path retires; ensure the retirement is at lines 70-104 specifically | 3C.c.3 mini-audit verifies the exact code path retired; non-union path at lines 105-118 stays untouched |
+| **D-3C.c-9** | check/err writing to cell-19 from sexp violates "propagators write cells" intuition — could rationalize away as "but it's the existing parameter pattern" | Per user direction (Pressure 3): direct write is HONEST scaffolding; not pretending sexp is a propagator. Documented as scaffolding with Track 4D retirement target. Mantra-aligned at cell layer (single source of truth); mantra-violating at writer layer (sexp is not a propagator) — TEMPORARY until single-writer state achievable |
+
+#### §9.5.4.9 Closure criteria
+
+Phase 3C.c closes per Stage 4 Per-Phase Protocol + cross-sub-step VAG:
+
+1. **Sub-phases 3C.c.1 through 3C.c.6 delivered** with each Stage 4 step completed in order (test coverage → commit → tracker → dailies → proceed)
+2. **`union-exhaustion-error.derivation-chain` field POPULATED** for sexp-path union all-branch-contradict scenarios (Q6.x probe verifies)
+3. **Cell-19 written by both sexp and on-network paths** — multi-writer scaffolding documented; retirement target named (Track 4D)
+4. **Q-C.6 cell-19 shape aligned to per-branch** — 3C.b's writer adjusted; 3C.b's 4 axes re-pass
+5. **format-error preserves diagnostic richness** — ATMS conflicts + minimal diagnoses rendered via on-network state queries at render time
+6. **Q6.x probe acceptance** — post-3C.c probe output matches §9.5.4.7 expected verbatim
+7. **`build-derivation-chain` union-type code path retired** (typing-errors.rkt:70-104 for union cases; non-union path unchanged)
+8. **All 9 D-3C.c-* drift risks cleared** at 3C.c-VAG
+9. **Full suite stable** within 109-115s baseline variance band (current 106.1s baseline)
+10. **Adversarial 3-column VAG** passes 4 questions at Phase 3C.c close
+
+#### §9.5.4.10 Cross-track captures (forward-pointers)
+
+Per vision-aligned framing (§9.5.4.2), 3C.c is the first user-facing instance of Propagator-First Diagnostics. Cross-track captures:
+
+1. **Phase 11b** (parent D.3 §6.1.1): extends `derivation-chain-for/union-check` pattern to general derivation diagnostics (non-union); adds srcloc tracking to speculation infrastructure (D-3C.c-1 closure)
+2. **Track 4D** (Attribute Grammar Substrate Unification): sexp `check/err` retires; sexp writer to cell-19 retires; cell-19 written by unified on-network handler ONLY (single-writer state)
+3. **PPN Track 8 LSP**: reads cell-19 + serializes `derivation-chain` as LSP diagnostic payload; rendering layer separable from chain construction (decomplection per §9.5.4.4 adversarial framing)
+4. **SH Series Track 1** (`.pnet` network-as-value): cell-19 + `derivation-chain` struct become part of PNET IR for cross-session diagnostics
+5. **SH Series Track 4** (LHC native runtime): cell-19 + `static-reverse-walk` + `derivation-chain` struct become part of LHC ABI; native diagnostic primitive interprets the struct directly
+6. **PReduce Track 6** (speculative reduction): inherits emission pattern (stratum handler → chain emission); cost-bounded ATMS branching errors produce chains via the same primitive
+7. **MASTER_ROADMAP.org**: surface "Propagator-First Diagnostics" framing in PPN 4C row description on next edit opportunity
+
+**Codification graduation candidate (watching list, now at 2 data points across 3C.b + 3C.c — graduates at Phase 11b second consumer)**:
+
+> **"Propagator-First Diagnostics"** — error reporting via on-network diagnostic store (cell-19 pattern) + static-walk primitive over propagator-firing graph is a load-bearing architectural shape for compiler-IS-network (LHC). Phase 3C.b shipped the substrate; Phase 3C.c shipped the first user-facing deployment via sexp-bridge multi-writer scaffolding. Codification GRADUATES from watching list to principle (DESIGN_PRINCIPLES.org § Propagator-First Diagnostics) when Phase 11b lands the second empirical consumer with non-union scope — mirrors Specialized Cell Type Framework graduation precedent.
+
+#### §9.5.4.11 Status
+
+**Phase 3C.c mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to enter Phase 3C.c.1 (translator implementation) following the conversational checkpoint cadence per workflow.md.
+
+#### §9.5.4.12 Cross-references
+
+- Phase 3C.b CLOSED: §9.5.3 + §9.5.3.10 (commit `449faac9`)
+- Phase 3C parent mini-design: §9.5.1
+- Phase 3C.a foundation: §9.5.2 (commit `1d803ed2`)
+- Form C cross-reference (Phase 3C charter target): §9.5.A
+- Q-B.2 lock (field type change): §9.5.1.4 + §9.5.3.5
+- Q9 lock (REPLACE semantics, not supplement): §9.5.1.4
+- Vision reframing source: user direction 2026-05-24 dialogue
+- `derivation-chain-for/union-contradict` template: error-explanation.rkt:268
+- 3C.b writer: typing-propagators.rkt:1346
+- check/err integration target: typing-errors.rkt:64-118 (lines 70-104 retire for union case)
+- format-error rendering: errors.rkt:267-287
+- Q6.x baseline artifact: `data/probes/2026-05-22-3C-Q6x-baseline.txt`
+- Q6.x post-3C.b artifact: `data/probes/2026-05-22-3C-Q6x-post-3Cb.txt`
+- Process-string/return-net (test infrastructure): driver.rkt:1510
+- speculation-failure struct: elab-speculation-bridge.rkt:95
+- Workflow.md scaffolding-naming discipline: dailies §9.5.4.4 adversarial framing source
 
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 
