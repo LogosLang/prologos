@@ -30,6 +30,7 @@
 (require rackunit
          racket/set
          racket/list
+         racket/string                       ;; PPN 4C Phase 3C.b.5.c — string-contains?
          "../syntax.rkt"
          "../propagator.rkt"
          "../decision-cell.rkt"
@@ -660,3 +661,141 @@
     (define added-bits (bitwise-and final-wv (bitwise-not initial-wv)))
     (check-equal? (popcount added-bits) 2
                   "Both branches succeed → 2 branch bits remain (non-committing per OQ1)")))
+
+;; ========================================
+;; Phase 3C.b — union-all-contradict-chain axes (PPN 4C 3C.b.5.c, 2026-05-23)
+;; ========================================
+;;
+;; Per addendum §9.5.3.9 Q-C.b.5.2 revised lean (b) — PIVOT post-empirical
+;; falsification: 4 structural axes verify the Propagator-First Diagnostics
+;; mechanism (3C.b.2 watcher fan-out → cell-18 latch → 3C.b.4 threshold →
+;; 3C.b.3 wrapper → cell-19 chain) end-to-end through the synthetic E2E
+;; dispatch pattern.
+;;
+;; PIVOT RATIONALE (per §9.5.3.9.4 D-3C.b.5-6 + 3C.b.5.c-bugfix arc):
+;;
+;; Q-C.b.5.2 originally locked lean (a) — axes in test-elaboration-parity.rkt
+;; via run-ns-with-net + sexp annotated `def : T := value` syntax. Empirical
+;; probe at 3C.b.5.c initial attempt revealed that sexp annotated unions go
+;; through the SEXP `check/err` path (typing-errors.rkt:64), NOT Phase 3A's
+;; on-network mechanism. Phase 3A is VALIDATED via synthetic-network tests
+;; but NOT DEPLOYED for user-facing sexp annotated unions until 3C.c bridges.
+;;
+;; Pivoted to lean (b) — synthetic E2E in test-union-types-atms.rkt using the
+;; existing E2E pattern (lines 585-662): make-test-fixture + current-command-
+;; atms parameterize + write-classify-inhabit + direct cell-15 write + run-
+;; to-quiescence + cell-19 read. This exercises the FULL on-network dispatch
+;; chain post-make-prop-network + handler-installation.
+;;
+;; The pivot ALSO surfaced a critical 3C.b.2 bugfix (committed separately at
+;; bc47e0d6): the watcher fan-out's cell-18 write was hitting the undeclared-
+;; writes bypass-merge path because cell-18 wasn't in the watcher's outputs
+;; list — silent last-write-wins. Pre-bugfix, these 4 axes would have failed
+;; (cell-18 only had ONE branch's aid). Post-bugfix, cell-18 correctly
+;; accumulates all branch aids via the merge function.
+;;
+;; DISCRIMINATING POWER per Q-C.b.5.5:
+;;   /int-bool-both-fail        → catches dispatch-chain wiring regressions
+;;                                (handler install + watcher fan-out + threshold
+;;                                install + wrapper invocation + assumption-
+;;                                name decoding) — positive baseline
+;;   /nat-string-both-fail      → discriminates against accidentally hardcoded
+;;                                type dependencies (different component types)
+;;   /int-string-int-succeeds   → catches spurious threshold fires (subset
+;;                                check broken — over-fires when ANY branch
+;;                                contradicts instead of ALL) — NEGATIVE
+;;   /nat-int-both-succeed      → catches spurious fires when NO branches
+;;                                contradict (defensive guard incorrectly
+;;                                applied) — NEGATIVE
+;;
+;; SCOPE NOTE: T-C.b.4 unit tests above test the threshold fire-fn in
+;; isolation (manually-populated cell-18). These E2E axes test the
+;; COMPOSITION: watcher fan-out + cell-18 accumulation + threshold +
+;; wrapper + cell-19. Distinct regression coverage:
+;;   T-C.b.4 catches threshold-body bugs (subset check, guards)
+;;   These 4 axes catch dispatch-chain wiring bugs (the 3C.b.5.c bugfix
+;;   class — undeclared writes bypassing merge would be caught here)
+;;
+;; ASSUMPTION-NAME assertion per D-3C.b.5-4 mitigation: `string-contains?
+;; name "branch"` substring match insulates against 3C.b.3 name-format
+;; evolution (Phase 3A's `(format "branch-~a-at-~v" i position)` shape at
+;; typing-propagators.rkt:1142-1144).
+
+(test-case "union-all-contradict-chain/int-bool-both-fail: cell-19 populated"
+  ;; Components Int + Bool; inhabitant expr-string ("hello") — fails BOTH
+  ;; branches (string is neither Int subtype nor Bool subtype).
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-string "hello")))
+    (define components (list (expr-Int) (expr-Bool)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (check-true (hash? cell-19-val) "cell-19 value is a hasheq")
+    (check-true (hash-has-key? cell-19-val position)
+                "cell-19 has chain entry for the union position")
+    (define chain (hash-ref cell-19-val position #f))
+    (check-true (derivation-chain? chain)
+                "cell-19 entry is a derivation-chain struct (3C.a foundation)")
+    (define steps (derivation-chain-steps chain))
+    (check-true (>= (length steps) 1)
+                "chain has ≥1 step (≥1 propagator writer in dep graph)")
+    ;; D-3C.b.5-4: substring match insulates against name-format evolution
+    (define names-flat
+      (apply append (map derivation-step-assumption-names steps)))
+    (check-true (ormap (lambda (n) (and (string? n) (string-contains? n "branch")))
+                       names-flat)
+                "some step's assumption-names references a 'branch' label (per 3C.b.3 enrichment)")))
+
+(test-case "union-all-contradict-chain/nat-string-both-fail: cell-19 populated (component variety)"
+  ;; Components Nat + String; inhabitant expr-true (Bool) — fails BOTH
+  ;; branches (Bool is neither Nat nor String).
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-true)))
+    (define components (list (expr-Nat) (expr-String)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (check-true (hash-has-key? cell-19-val position)
+                "cell-19 has chain entry for Nat|String all-fail position")
+    (define chain (hash-ref cell-19-val position #f))
+    (check-true (derivation-chain? chain)
+                "cell-19 entry is a derivation-chain struct")
+    (check-true (>= (length (derivation-chain-steps chain)) 1)
+                "chain has ≥1 step")))
+
+(test-case "union-all-contradict-chain/int-string-int-succeeds: cell-19 empty (partial success)"
+  ;; Components Int + String; inhabitant expr-nat-val 42 — Int succeeds
+  ;; (Nat <: Int), String fails. NEGATIVE AXIS — subset predicate never holds.
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-nat-val 42)))
+    (define components (list (expr-Int) (expr-String)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (check-false (hash-has-key? cell-19-val position)
+                 "cell-19 has NO chain entry — Int succeeded, partial success, no all-contradict")))
+
+(test-case "union-all-contradict-chain/nat-int-both-succeed: cell-19 empty (full success)"
+  ;; Components Nat + Int; inhabitant expr-nat-val 0 — both branches succeed
+  ;; (Nat <: Nat trivially; Nat <: Int via SRE Track 2H subtype lattice).
+  ;; NEGATIVE AXIS — complement of "E2E: both branches succeed" test above.
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-nat-val 0)))
+    (define components (list (expr-Nat) (expr-Int)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (check-false (hash-has-key? cell-19-val position)
+                 "cell-19 has NO chain entry — both branches succeeded, no all-contradict")))
