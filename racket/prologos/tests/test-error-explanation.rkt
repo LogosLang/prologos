@@ -14,8 +14,10 @@
 
 (require rackunit
          racket/list
+         racket/set
          "../atms.rkt"
          "../decision-cell.rkt"
+         "../elab-speculation-bridge.rkt"
          "../error-explanation.rkt"
          "../propagator.rkt"
          "../source-location.rkt")
@@ -245,3 +247,181 @@
   (check-equal? (derivation-step-propagator-id s) (prop-id 42))
   (check-equal? (derivation-step-residual-cost s) #f)
   (check-equal? (derivation-chain-steps c) (list s)))
+
+;; ============================================================
+;; PPN 4C Phase 3C.b.3 (2026-05-23): derivation-chain-for/union-contradict
+;; ============================================================
+;; Wrapper consumes 3C.a's static-reverse-walk; filters by branch-aid-set;
+;; enriches steps with assumption-names from solver-state-assumptions.
+;; D-3C.b-1 mitigation: name-decoding prefers string datum (Phase 3A amb
+;; pattern) over symbol name; falls back to name symbol for non-string datums.
+
+;; Test helper: synthetic tagged-aware merge for tests that write
+;; tagged-cell-value entries to dep-graph cells.
+(define (tagged-aware-flat-merge old new)
+  (cond [(eq? old 'bot) new]
+        [(tagged-cell-value? new) new]
+        [else new]))
+
+;; ========================================
+;; T-B.1 — Wrapper produces enriched chain for matching aids
+;; ========================================
+;;
+;; Synthetic setup: dep graph with 2 propagators (P1 → A → P2 → tm-cell).
+;; tm-cell has tagged-cell-value entry with aid-0 bit set. branch-aid-set
+;; contains aid-0. Expect chain to include the step with assumption-names
+;; populated via solver-state-assumptions lookup.
+
+(test-case "T-B.1: derivation-chain-for/union-contradict — filters by aid-set + enriches names"
+  (define net0 (make-prop-network))
+  (define-values (net1 cell-input) (net-new-cell net0 'bot tagged-aware-flat-merge))
+  (define-values (net2 tm-cell) (net-new-cell net1 'bot tagged-aware-flat-merge))
+  (define test-srcloc (srcloc "wrapper-test.rkt" 1 0 10))
+  (define-values (net3 _pid)
+    (net-add-propagator net2 (list cell-input) (list tm-cell)
+                        (lambda (n) n)
+                        #:srcloc test-srcloc))
+  ;; Write tagged-cell-value at tm-cell with bit 0 set (aid-0 tag)
+  (define tagged-val (tagged-cell-value 'base (list (cons #b001 'val))))
+  (define net4 (net-cell-write net3 tm-cell tagged-val))
+
+  ;; Set up current-command-atms with an aid that has a string datum
+  ;; (Phase 3A label pattern: `(format "branch-~a-at-~v" i position)`)
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define atms-box (current-command-atms))
+    (define-values (atms* aid-0)
+      (solver-state-assume (unbox atms-box) 'h0 "branch-0-at-position-X"))
+    (set-box! atms-box atms*)
+    ;; Verify the aid matches the bit position we wrote (assumption-id 0 → bit 0)
+    (check-equal? (assumption-id-n aid-0) 0
+                  "Test precondition: solver-state-assume returns aid-0 first")
+
+    ;; Invoke wrapper with branch-aid-set = (seteq aid-0); request-info has tm-cid
+    (define request-info (hasheq 'tm-cid tm-cell))
+    (define chain
+      (derivation-chain-for/union-contradict net4 (seteq aid-0) request-info))
+
+    (check-true (derivation-chain? chain) "Returns derivation-chain struct")
+    (define steps (derivation-chain-steps chain))
+    (check-equal? (length steps) 1 "1 step in chain (1 matching propagator)")
+    (define step (car steps))
+    ;; Step has aid-0 decoded
+    (check-equal? (derivation-step-assumption-ids step) (list aid-0)
+                  "Step's assumption-ids = (list aid-0)")
+    ;; Names ENRICHED: prefers string datum ("branch-0-at-position-X")
+    (check-equal? (derivation-step-assumption-names step) (list "branch-0-at-position-X")
+                  "Step's assumption-names populated with string datum (D-3C.b-1 mitigation)")
+    ;; Residual-cost stays #f per Q-B.4 (defer to 3C.d)
+    (check-false (derivation-step-residual-cost step)
+                 "Residual-cost stays #f (deferred to 3C.d per Q-B.4)")))
+
+;; ========================================
+;; T-B.2 — Wrapper falls back to symbol name when datum is non-string
+;; ========================================
+;;
+;; Verifies D-3C.b-1 mitigation: when assumption-datum is NOT a string
+;; (e.g., context assumption per elab-speculation-bridge.rkt:164 stores
+;; descriptive non-string values), wrapper falls back to formatting the
+;; name symbol.
+
+(test-case "T-B.2: derivation-chain-for/union-contradict — falls back to name symbol when datum is non-string"
+  (define net0 (make-prop-network))
+  (define-values (net1 cell-input) (net-new-cell net0 'bot tagged-aware-flat-merge))
+  (define-values (net2 tm-cell) (net-new-cell net1 'bot tagged-aware-flat-merge))
+  (define-values (net3 _pid)
+    (net-add-propagator net2 (list cell-input) (list tm-cell) (lambda (n) n)))
+  (define tagged-val (tagged-cell-value 'base (list (cons #b001 'val))))
+  (define net4 (net-cell-write net3 tm-cell tagged-val))
+
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define atms-box (current-command-atms))
+    ;; Datum is a symbol (NOT a string) — simulates context assumption pattern
+    (define-values (atms* aid-0)
+      (solver-state-assume (unbox atms-box) 'def-type-annotation 'some-non-string-datum))
+    (set-box! atms-box atms*)
+
+    (define request-info (hasheq 'tm-cid tm-cell))
+    (define chain
+      (derivation-chain-for/union-contradict net4 (seteq aid-0) request-info))
+    (define step (car (derivation-chain-steps chain)))
+    ;; Names fall back to formatting the name symbol
+    (check-equal? (derivation-step-assumption-names step) (list "def-type-annotation")
+                  "Step's assumption-names = list with name symbol formatted (datum non-string fallback)")))
+
+;; ========================================
+;; T-B.3 — Wrapper filters out propagators whose aids don't intersect aid-set
+;; ========================================
+;;
+;; Verifies filter-fn semantic: only steps whose aids intersect branch-aid-set
+;; are included. D-3C.b-5 verified — filter applies BEFORE recursion, pruning
+;; walk through unrelated propagators.
+
+(test-case "T-B.3: derivation-chain-for/union-contradict — filter excludes non-matching aid steps"
+  (define net0 (make-prop-network))
+  (define-values (net1 cell-input) (net-new-cell net0 'bot tagged-aware-flat-merge))
+  (define-values (net2 cell-a) (net-new-cell net1 'bot tagged-aware-flat-merge))
+  (define-values (net3 tm-cell) (net-new-cell net2 'bot tagged-aware-flat-merge))
+  ;; P1: cell-input → cell-a; tagged with aid-99 (NOT in branch-aid-set)
+  (define-values (net4 _pid-1)
+    (net-add-propagator net3 (list cell-input) (list cell-a) (lambda (n) n)))
+  ;; P2: cell-a → tm-cell; tagged with aid-0 (IN branch-aid-set)
+  (define-values (net5 _pid-2)
+    (net-add-propagator net4 (list cell-a) (list tm-cell) (lambda (n) n)))
+  ;; cell-a tagged with aid-99 bit (bit 99 would overflow 30-bit; use bit 5 as non-zero non-matching)
+  (define net6 (net-cell-write net5 cell-a (tagged-cell-value 'base (list (cons #b100000 'val)))))
+  ;; tm-cell tagged with aid-0 bit
+  (define net7 (net-cell-write net6 tm-cell (tagged-cell-value 'base (list (cons #b001 'val)))))
+
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define atms-box (current-command-atms))
+    (define-values (atms* aid-0)
+      (solver-state-assume (unbox atms-box) 'h0 "branch-0"))
+    (set-box! atms-box atms*)
+
+    (define request-info (hasheq 'tm-cid tm-cell))
+    (define chain
+      (derivation-chain-for/union-contradict net7 (seteq aid-0) request-info))
+    (define steps (derivation-chain-steps chain))
+    ;; Only P2 (aid-0-tagged) included; P1 (aid-5-tagged) excluded by filter
+    ;; AND walk pruned at P1 → cell-input doesn't get visited
+    (check-equal? (length steps) 1
+                  "Chain has only 1 step (P2 matching aid-0); P1 (aid-5) filtered + walk pruned")))
+
+;; ========================================
+;; T-B.4 — Defensive: missing tm-cid returns empty chain
+;; ========================================
+
+(test-case "T-B.4: derivation-chain-for/union-contradict — defensive on missing tm-cid"
+  (define net (make-prop-network))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define request-info (hasheq))  ;; NO 'tm-cid key
+    (define chain
+      (derivation-chain-for/union-contradict net (seteq) request-info))
+    (check-true (derivation-chain? chain) "Returns derivation-chain struct")
+    (check-equal? (derivation-chain-steps chain) '()
+                  "Empty chain when tm-cid missing from request-info")))
+
+;; ========================================
+;; T-B.5 — Defensive: no current-command-atms set → empty assumption-names
+;; ========================================
+;;
+;; Wrapper degrades gracefully when ATMS is not active (returns synthetic
+;; "aid-N" names via decode-aid-name fallback at decode point).
+
+(test-case "T-B.5: derivation-chain-for/union-contradict — graceful when no ATMS active"
+  (define net0 (make-prop-network))
+  (define-values (net1 cell-input) (net-new-cell net0 'bot tagged-aware-flat-merge))
+  (define-values (net2 tm-cell) (net-new-cell net1 'bot tagged-aware-flat-merge))
+  (define-values (net3 _pid)
+    (net-add-propagator net2 (list cell-input) (list tm-cell) (lambda (n) n)))
+  (define net4 (net-cell-write net3 tm-cell (tagged-cell-value 'base (list (cons #b001 'val)))))
+
+  ;; NO parameterize — current-command-atms = #f
+  (define aid-0 (assumption-id 0))
+  (define request-info (hasheq 'tm-cid tm-cell))
+  (define chain
+    (derivation-chain-for/union-contradict net4 (seteq aid-0) request-info))
+  (define step (car (derivation-chain-steps chain)))
+  ;; Names fall back to synthetic "aid-N" format (decode-aid-name no-asn branch)
+  (check-equal? (derivation-step-assumption-names step) (list "aid-0")
+                "Empty assumptions hash → decode falls back to \"aid-N\" format"))

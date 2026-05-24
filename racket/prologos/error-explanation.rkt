@@ -46,10 +46,12 @@
 ;;;   Q-A.7 Single atomic 3C.a commit
 
 (require racket/list
-         "atms.rkt"           ;; assumption-id struct
-         "champ.rkt"          ;; champ-fold + champ-lookup
-         "decision-cell.rkt"  ;; tagged-cell-value accessors
-         "propagator.rkt")    ;; prop-network + propagator + net-cell-read-raw + prop-id-hash
+         racket/set                       ;; set-member? (Phase 3C.b.3)
+         "atms.rkt"                       ;; assumption-id + assumption + solver-state-assumptions
+         "champ.rkt"                      ;; champ-fold + champ-lookup
+         "decision-cell.rkt"              ;; tagged-cell-value accessors
+         "elab-speculation-bridge.rkt"    ;; current-command-atms (Phase 3C.b.3)
+         "propagator.rkt")                ;; prop-network + propagator + net-cell-read-raw + prop-id-hash
 
 (provide
  ;; Core data types (transparent; LSP-ready; forward-compat with field
@@ -60,7 +62,13 @@
  ;; per §9.5.1.7 Propagator-First Diagnostics framing; pre-export with
  ;; codification-graduation discipline — codifies as Cross-Track Template
  ;; at Phase 11b second consumer per Specialized Cell Type Framework precedent)
- static-reverse-walk)
+ static-reverse-walk
+ ;; PPN 4C Phase 3C.b.3 (2026-05-23): union-contradict consumer wrapper.
+ ;; First downstream consumer of static-reverse-walk per Propagator-First
+ ;; Diagnostics framing. Phase 3C.c bridges from check/err to populate
+ ;; union-exhaustion-error.derivation-chain; Phase 11b extends the wrapper
+ ;; pattern to general derivation diagnostics.
+ derivation-chain-for/union-contradict)
 
 ;; ============================================================
 ;; Core data types (§9.5.2.2 Q-A.2)
@@ -209,3 +217,136 @@
   ;; Natural order from cons-onto-head DFS pre-order = causal reading
   ;; order (deepest cause first, symptom last) per Q-A.5
   (derivation-chain (unbox collected)))
+
+;; ============================================================
+;; PPN 4C Phase 3C.b.3 (2026-05-23): derivation-chain-for/union-contradict
+;; ============================================================
+;;
+;; Per addendum design §9.5.3.4. Wraps `static-reverse-walk` to produce a
+;; derivation chain for the union all-branch-contradict event, enriched with
+;; assumption-names decoded via solver-state-assumptions lookup.
+;;
+;; First downstream CONSUMER of `static-reverse-walk` per Propagator-First
+;; Diagnostics framing (§9.5.1.3). Phase 3C.c bridges this chain from
+;; check/err to populate `union-exhaustion-error.derivation-chain`; Phase
+;; 11b extends the wrapper pattern to general derivation diagnostics.
+;;
+;; Signature:
+;;   net              — current prop-network state
+;;   branch-aid-set   — seteq of branch assumption-ids that contradicted
+;;                      (output of per-fork threshold predicate at 3C.b.4)
+;;   request-info     — fork-on-union request hash from cell-15 (per
+;;                      typing-propagators.rkt:615 R7 emit shape:
+;;                      (hasheq 'components ... 'tm-cid CellId))
+;;
+;; Returns: derivation-chain with steps enriched via assumption-names
+;;
+;; Filter-fn semantic: include step if any of step.assumption-ids intersect
+;; branch-aid-set. Per static-reverse-walk implementation (line 204), filter
+;; applies BEFORE recursion — so the walk PRUNES through propagators whose
+;; aids don't intersect the contradicted aid-set. This is DESIRABLE: keeps
+;; chain focused on contradicted-branch lineage; unrelated propagators
+;; (elaboration scaffolding firing under outer worldview before fork) don't
+;; appear in chain. D-3C.b-5 verified.
+;;
+;; Assumption-name decoding (D-3C.b-1 mitigation per audit at atms.rkt:397+403):
+;; `solver-amb` stores synthetic symbols (`'h0`, `'h1`, ...) in the
+;; `assumption-name` field via `(string->symbol (format "h~a" i))`, and the
+;; original label STRING (Phase 3A's `"branch-N-at-position-X"` per
+;; typing-propagators.rkt:1137) in the `assumption-datum` field. Wrapper
+;; prefers `datum` when it's a string (Phase 3A pattern); else formats
+;; `name` symbol. Handles both Phase 3A amb pattern AND future consumers
+;; (e.g., context assumptions per elab-speculation-bridge.rkt:164) with
+;; non-string datums uniformly.
+;;
+;; Residual-cost: NOT populated by 3C.b.3 — primitive default `#f` preserved
+;; through enrichment per Q-B.4 lock (defer to 3C.d).
+;;
+;; ATMS access: via `current-command-atms` parameter (elab-speculation-
+;; bridge.rkt:104). Defensive on `#f` — returns empty chain (consumer should
+;; ensure ATMS is active before invoking, but graceful degradation preserved).
+(define (derivation-chain-for/union-contradict net branch-aid-set request-info)
+  (define tm-cid (hash-ref request-info 'tm-cid #f))
+  (cond
+    [(not tm-cid)
+     ;; Defensive: malformed request-info — return empty chain
+     (derivation-chain '())]
+    [else
+     (define atms-box (current-command-atms))
+     (define assumptions
+       (cond
+         [atms-box (solver-state-assumptions (unbox atms-box))]
+         [else (hasheq)]))
+     ;; D-3C.b-7 (NEW, found at impl 2026-05-23): aid IDENTITY is the integer
+     ;; `assumption-id-n` field; aid STRUCT is just a typed wrapper. Two aid
+     ;; structs with the same `n` are logically the same assumption. But
+     ;; `decode-aids-from-cell-value` (line 124+) constructs FRESH
+     ;; `(assumption-id i)` from bit positions — these are equal? but NOT eq?
+     ;; to the canonical aids passed in `branch-aid-set` (which originate from
+     ;; `solver-state-amb` and flow through cell-16/cell-18 preserving eq?
+     ;; identity within Phase 3A). `seteq` membership check fails on the eq?
+     ;; mismatch even though aids are logically the same. Fix: normalize to
+     ;; integer-keyed seteqv at the wrapper boundary; filter + decode both use
+     ;; `assumption-id-n` as canonical identity. Documented at wrapper docstring.
+     (define branch-aid-ns
+       (for/seteqv ([aid (in-set branch-aid-set)]) (assumption-id-n aid)))
+     ;; Filter-fn: include step if any of its aid-n integers intersect
+     ;; branch-aid-ns. Applied BEFORE recursion (3C.a:204 + T6 test) → prunes
+     ;; walk through propagators whose aids don't intersect contradicted set
+     ;; (D-3C.b-5).
+     (define (filter-fn step)
+       (define step-aids (derivation-step-assumption-ids step))
+       (for/or ([aid (in-list step-aids)])
+         (set-member? branch-aid-ns (assumption-id-n aid))))
+     ;; Raw walk over the union cell's dep graph (3C.a primitive)
+     (define raw-chain (static-reverse-walk net tm-cid #:filter-fn filter-fn))
+     ;; Enrich each step's assumption-names via solver-state-assumptions
+     (define enriched-steps
+       (for/list ([step (in-list (derivation-chain-steps raw-chain))])
+         (define names
+           (for/list ([aid (in-list (derivation-step-assumption-ids step))])
+             (decode-aid-name assumptions aid)))
+         (derivation-step
+          (derivation-step-propagator-id step)
+          (derivation-step-srcloc step)
+          (derivation-step-assumption-ids step)
+          names                                       ;; ENRICHED (Q-B.4: residual-cost stays #f, defer to 3C.d)
+          (derivation-step-residual-cost step))))
+     (derivation-chain enriched-steps)]))
+
+;; PPN 4C Phase 3C.b.3 (2026-05-23): D-3C.b-1 mitigation — assumption-name
+;; decoding handles SYMBOL-vs-STRING shape across consumers.
+;;
+;; Per atms.rkt:397+403 audit, `solver-amb` (the Phase 3A consumer) stores:
+;;   - `assumption-name`  = synthetic symbol (`'h0`, `'h1`, ...) via string->symbol
+;;   - `assumption-datum` = the original label (Phase 3A passes STRING per
+;;                          typing-propagators.rkt:1137 `(format "branch-~a-at-~v" ...)`)
+;;
+;; Other consumers (e.g., `add-context-assumption!` at elab-speculation-
+;; bridge.rkt:164) may store NON-STRING datums (descriptive Racket values).
+;;
+;; Decoding strategy: prefer `datum` when string (Phase 3A pattern; carries
+;; meaningful semantic info); else format `name` symbol (handles non-string
+;; datums + general fallback). Returns synthetic "aid-N" if assumption is
+;; missing (defensive; shouldn't happen if ATMS state is consistent).
+(define (decode-aid-name assumptions aid)
+  ;; D-3C.b-7 mitigation: `assumptions` is a HASHEQ (eq?-keyed) populated by
+  ;; canonical aid instances from solver-state-assume; `aid` here may be a
+  ;; FRESH struct from decode-aids-from-cell-value (constructed from bit
+  ;; position). Direct `hash-ref` would fail on eq? mismatch even though
+  ;; aids are equal?. Look up by `assumption-id-n` (canonical integer
+  ;; identity) by iterating hash entries — O(N) per lookup; N is bounded by
+  ;; active assumption count per command (typically <30 per Phase 3A's bit
+  ;; budget; D-3C-8). Acceptable for diagnostic paths (error reporting is
+  ;; not on the hot path).
+  (define target-n (assumption-id-n aid))
+  (define asn
+    (for/or ([(k v) (in-hash assumptions)])
+      (and (= (assumption-id-n k) target-n) v)))
+  (cond
+    [(not asn) (format "aid-~a" target-n)]
+    [else
+     (define datum (assumption-datum asn))
+     (cond
+       [(string? datum) datum]
+       [else (format "~a" (assumption-name asn))])]))
