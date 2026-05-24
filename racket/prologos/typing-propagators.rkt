@@ -1205,13 +1205,40 @@
              ;; propagators wrapped at per-branch worldviews matches relations.rkt
              ;; pattern and enables BSP parallel decomposition.
              ;; Step 4 — captured as n4 for Step 5's cell-17 guard write
+             ;; PPN 4C Phase 3C.b.5.c BUGFIX (2026-05-23): cell-18 added to OUTPUTS
+             ;; list. 3C.b.2's watcher fan-out writes to BOTH cell-16 + cell-18 in
+             ;; its fire-fn body, but only cell-16 was declared as output. Per
+             ;; propagator.rkt:2848-2871 + :2971-2989, writes to UNDECLARED output
+             ;; cells use `struct-copy` direct-set (bypassing merge) "to avoid
+             ;; double-merging with non-idempotent merge functions like append".
+             ;;
+             ;; This made cell-18 effectively LAST-WRITE-WINS for multiple watcher
+             ;; fires in the same BSP round: when watcher-0 + watcher-1 both fire,
+             ;; their cell-18 writes go through bulk-merge-writes's undeclared-
+             ;; writes path → for/fold applies them sequentially via direct-set →
+             ;; only the LAST write survives (typically aid-0). cell-18 was thus
+             ;; de facto last-write-wins instead of monotone accumulation,
+             ;; defeating its purpose as the threshold-fire latch.
+             ;;
+             ;; Diagnosed at 3C.b.5.c via E2E probe (cell-18 had only aid-0 even
+             ;; though worldview-cache went to 0 = both bits cleared, proving
+             ;; both watchers fired + cell-16 received both aids via the merge-
+             ;; path). Verified by reading propagator.rkt's fire-and-collect-
+             ;; writes (line 2833) + bulk-merge-writes (line 2971).
+             ;;
+             ;; The fix: declare cell-18 as a watcher output. Writes route
+             ;; through fire-result.value-writes (line 2839-2846) → applied via
+             ;; net-cell-write (line 2968) → cell-18's merge function
+             ;; (contradicted-branch-aids-merge) ACCUMULATES per-position aid-
+             ;; sets via set-union, as designed at 3C.b.1.
              (define n4
                (for/fold ([acc n3]) ([aid (in-list aids)])
                  (define bit-pos (assumption-id-n aid))
                  (define-values (acc* _pid)
                    (net-add-fire-once-propagator acc
                      (list tm-cid)
-                     (list fork-contradiction-request-cell-id)
+                     (list fork-contradiction-request-cell-id
+                           contradicted-branch-aids-cell-id)        ;; 3C.b.5.c bugfix
                      (wrap-with-worldview
                        (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
                        bit-pos)
