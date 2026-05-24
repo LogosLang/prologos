@@ -273,7 +273,12 @@
 ;; Unit: make-branch-contradiction-watcher-fire-fn — emits aid on contradiction
 ;; ========================================
 
-(test-case "make-branch-contradiction-watcher-fire-fn: writes (seteq aid) when contradiction sentinel present"
+;; PPN 4C Phase 3C.b.2 (2026-05-23): watcher fan-out — writes to BOTH cell-16
+;; (existing transient narrowing handler input) AND cell-18 (NEW persistent
+;; latch for per-fork threshold-fire-once propagator at 3C.b.4). Test verifies
+;; BOTH writes land with correct shapes (cell-16: (seteq aid); cell-18:
+;; (hasheq position (seteq aid))). Per addendum §9.5.3.3 refined option (d).
+(test-case "make-branch-contradiction-watcher-fire-fn: fan-out to cell-16 + cell-18 when contradiction sentinel present"
   (define-values (net tm-cid position) (make-test-fixture))
   ;; Write contradiction sentinel at position's :type
   (define net1 (net-cell-write net tm-cid
@@ -283,27 +288,114 @@
   (define watcher-fn (make-branch-contradiction-watcher-fire-fn tm-cid position test-aid))
   ;; Invoke directly
   (define net2 (watcher-fn net1))
-  ;; cell-16 should contain (seteq test-aid)
+  ;; cell-16 should contain (seteq test-aid) — existing 3A.b behavior unchanged
   (define cell-16-val (net-cell-read net2 fork-contradiction-request-cell-id))
   (check-true (set? cell-16-val) "cell-16 holds a set")
   (check-equal? (set-count cell-16-val) 1 "1 aid in cell-16 set")
-  (check-true (set-member? cell-16-val test-aid) "test-aid is in the set"))
+  (check-true (set-member? cell-16-val test-aid) "test-aid is in cell-16 set")
+  ;; cell-18 should contain (hasheq position (seteq test-aid)) — NEW 3C.b.2 fan-out
+  (define cell-18-val (net-cell-read net2 contradicted-branch-aids-cell-id))
+  (check-true (hash? cell-18-val) "cell-18 holds a hash")
+  (check-equal? (hash-count cell-18-val) 1 "1 position entry in cell-18 hash")
+  (define cell-18-aids (hash-ref cell-18-val position (seteq)))
+  (check-true (set? cell-18-aids) "cell-18's per-position entry is a set")
+  (check-equal? (set-count cell-18-aids) 1 "1 aid in cell-18's per-position set")
+  (check-true (set-member? cell-18-aids test-aid) "test-aid is in cell-18's per-position set"))
 
 ;; ========================================
 ;; Unit: make-branch-contradiction-watcher-fire-fn — no emit when no contradiction
 ;; ========================================
 
-(test-case "make-branch-contradiction-watcher-fire-fn: NO emit when no contradiction"
+(test-case "make-branch-contradiction-watcher-fire-fn: NO emit (cell-16 + cell-18) when no contradiction"
   (define-values (net tm-cid position) (make-test-fixture))
   ;; Write a normal (non-contradiction) classify-inhabit-value
   (define net1 (write-classify-inhabit net tm-cid position (expr-Int) (expr-nat-val 3)))
   (define test-aid (assumption-id 0))
   (define watcher-fn (make-branch-contradiction-watcher-fire-fn tm-cid position test-aid))
   (define net2 (watcher-fn net1))
-  ;; cell-16 should remain empty (no write at all)
+  ;; BOTH cells should remain empty (no fan-out at all when non-contradiction)
   (define cell-16-val (net-cell-read net2 fork-contradiction-request-cell-id))
   (check-equal? cell-16-val (seteq)
-                "cell-16 remains empty seteq when no contradiction sentinel"))
+                "cell-16 remains empty seteq when no contradiction sentinel")
+  ;; PPN 4C Phase 3C.b.2: cell-18 also untouched when no contradiction
+  (define cell-18-val (net-cell-read net2 contradicted-branch-aids-cell-id))
+  (check-equal? cell-18-val (hasheq)
+                "cell-18 remains empty hasheq when no contradiction sentinel"))
+
+;; ========================================
+;; PPN 4C Phase 3C.b.2 (2026-05-23): cell-18 set-union per-position
+;; ========================================
+;; Multiple aids contradicting at the SAME position accumulate via set-union
+;; in cell-18's per-position aid-set entry. Verifies hash-union-with-set-union
+;; merge semantic (contradicted-branch-aids-merge).
+
+(test-case "make-branch-contradiction-watcher-fire-fn: cell-18 set-union per-position across multiple aids"
+  (define-values (net tm-cid position) (make-test-fixture))
+  ;; Write contradiction sentinel at the position
+  (define net1 (net-cell-write net tm-cid
+                               (hasheq position (hasheq ':type 'classify-inhabit-contradiction))))
+  ;; Two distinct aids contradict at the same position (simulating 2 branches)
+  (define aid-0 (assumption-id 0))
+  (define aid-1 (assumption-id 1))
+  ;; Fire watcher for aid-0
+  (define watcher-0 (make-branch-contradiction-watcher-fire-fn tm-cid position aid-0))
+  (define net2 (watcher-0 net1))
+  ;; Fire watcher for aid-1 (same position, different aid — simulating second branch)
+  (define watcher-1 (make-branch-contradiction-watcher-fire-fn tm-cid position aid-1))
+  (define net3 (watcher-1 net2))
+  ;; cell-18: 1 position entry; set-union accumulated to (seteq aid-0 aid-1)
+  (define cell-18-val (net-cell-read net3 contradicted-branch-aids-cell-id))
+  (check-equal? (hash-count cell-18-val) 1 "still 1 position entry (same position)")
+  (define cell-18-aids (hash-ref cell-18-val position (seteq)))
+  (check-equal? (set-count cell-18-aids) 2 "2 aids in cell-18's per-position set (set-union)")
+  (check-true (set-member? cell-18-aids aid-0) "aid-0 in set")
+  (check-true (set-member? cell-18-aids aid-1) "aid-1 in set")
+  ;; cell-16: also accumulated (set-union); both aids present
+  (define cell-16-val (net-cell-read net3 fork-contradiction-request-cell-id))
+  (check-equal? (set-count cell-16-val) 2 "2 aids in cell-16 (set-union semantic)")
+  (check-true (set-member? cell-16-val aid-0) "aid-0 in cell-16")
+  (check-true (set-member? cell-16-val aid-1) "aid-1 in cell-16"))
+
+;; ========================================
+;; PPN 4C Phase 3C.b.2 (2026-05-23): cell-18 hash-union across positions
+;; ========================================
+;; Aids contradicting at DIFFERENT positions accumulate as distinct hash
+;; entries in cell-18. Verifies the hash-union (not per-position-merge)
+;; portion of contradicted-branch-aids-merge.
+
+(test-case "make-branch-contradiction-watcher-fire-fn: cell-18 hash-union across distinct positions"
+  ;; Two distinct synthetic positions (use different symbols)
+  (define net0 (make-prop-network))
+  (define (attr-map-merge old new)
+    (cond
+      [(not (hash? old)) new]
+      [(not (hash? new)) old]
+      [else (for/fold ([acc old]) ([(k v) (in-hash new)]) (hash-set acc k v))]))
+  (define-values (net1 tm-cid) (net-new-cell net0 (hasheq) attr-map-merge))
+  (define pos-a 'position-a)
+  (define pos-b 'position-b)
+  ;; Write contradiction sentinel at BOTH positions
+  (define net2 (net-cell-write net1 tm-cid
+                               (hasheq pos-a (hasheq ':type 'classify-inhabit-contradiction)
+                                       pos-b (hasheq ':type 'classify-inhabit-contradiction))))
+  ;; Distinct aid per position (simulating 2 separate forks)
+  (define aid-a (assumption-id 0))
+  (define aid-b (assumption-id 1))
+  ;; Fire watcher for (pos-a, aid-a)
+  (define watcher-a (make-branch-contradiction-watcher-fire-fn tm-cid pos-a aid-a))
+  (define net3 (watcher-a net2))
+  ;; Fire watcher for (pos-b, aid-b)
+  (define watcher-b (make-branch-contradiction-watcher-fire-fn tm-cid pos-b aid-b))
+  (define net4 (watcher-b net3))
+  ;; cell-18: 2 distinct position entries; each with its own aid-set
+  (define cell-18-val (net-cell-read net4 contradicted-branch-aids-cell-id))
+  (check-equal? (hash-count cell-18-val) 2 "2 position entries in cell-18 (hash-union across positions)")
+  (define pos-a-aids (hash-ref cell-18-val pos-a (seteq)))
+  (define pos-b-aids (hash-ref cell-18-val pos-b (seteq)))
+  (check-equal? (set-count pos-a-aids) 1 "pos-a has 1 aid")
+  (check-equal? (set-count pos-b-aids) 1 "pos-b has 1 aid")
+  (check-true (set-member? pos-a-aids aid-a) "aid-a tagged at pos-a")
+  (check-true (set-member? pos-b-aids aid-b) "aid-b tagged at pos-b"))
 
 ;; ========================================
 ;; Unit: process-fork-contradiction — narrows worldview-cache atomically

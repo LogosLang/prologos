@@ -1254,7 +1254,35 @@
                            classify-inhabit-bot-value))
     (cond
       [(classify-inhabit-contradiction? cinhab-val)
-       (net-cell-write net fork-contradiction-request-cell-id (seteq aid))]
+       ;; PPN 4C Phase 3C.b.2 (2026-05-23): fan-out write to cell-16
+       ;; (existing transient narrowing handler input) AND cell-18 (NEW
+       ;; persistent latch for per-fork threshold-fire-once propagator at
+       ;; 3C.b.4). Per addendum design §9.5.3.3 refined option (d).
+       ;;
+       ;; cell-16 (fork-contradiction-request-cell-id): set-union merge;
+       ;;   transient (#:reset-value (seteq) between BSP rounds); feeds the
+       ;;   process-fork-contradiction handler that atomically narrows
+       ;;   worldview-cache via AND-NOT-mask. UNCHANGED from 3A.b.
+       ;; cell-18 (contradicted-branch-aids-cell-id): hash-union with
+       ;;   set-union per-position; PERSISTS across BSP rounds within command
+       ;;   (the latch for set-latch + threshold pattern per
+       ;;   .claude/rules/propagator-design.md). Payload shape:
+       ;;   (hasheq position (seteq aid)) — hash-union merge accumulates
+       ;;   per-position aid-sets monotonically; threshold-fire-once
+       ;;   propagator (3C.b.4) reads cell-18 + fires when (subset?
+       ;;   branch-aid-set (hash-ref cell-18-val position)).
+       ;;
+       ;; Both writes are monotone (CALM-safe); order doesn't matter;
+       ;; idempotent under repeated fires (but fire-once self-cleans so this
+       ;; shouldn't recur). Existing handlers (process-fork-contradiction)
+       ;; stay SINGLE-CONCERN — fan-out is at the watcher layer, not handler.
+       ;; D-3C.b-6: watcher fan-out coupling pattern (codification candidate;
+       ;; future readers install separate propagators reading cell-16, NOT
+       ;; extending this watcher — bounded to 2-cell minimum).
+       (let* ([n1 (net-cell-write net fork-contradiction-request-cell-id (seteq aid))]
+              [n2 (net-cell-write n1 contradicted-branch-aids-cell-id
+                                  (hasheq position (seteq aid)))])
+         n2)]
       [else net])))
 
 ;; cell-16 handler: process-fork-contradiction — PPN 4C Phase 3A.b (2026-05-22).
