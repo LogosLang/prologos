@@ -112,6 +112,14 @@
  ;; request emission; prevents re-decomposition of already-forked positions)
  decomposed-positions-cell-id
  decomposed-positions-merge
+ ;; PPN 4C Phase 3C.b.1 (2026-05-23): per-position contradicted-aids LATCH
+ ;; (cell-18) + per-position chain STORAGE (cell-19) for Propagator-First
+ ;; Diagnostics. Per addendum §9.5.3.3 refined option (d) — set-latch +
+ ;; threshold-fire-once pattern (propagator-design.md canonical).
+ contradicted-branch-aids-cell-id
+ union-derivation-chains-cell-id
+ contradicted-branch-aids-merge
+ union-derivation-chains-merge
  ;; D.4 1C-ii-b: Variant B local-var fuel helpers (sequential schedulers)
  ;; Per §10.3.A + §10.0.3 + §10.0.4 F3. Exported for direct unit testing;
  ;; primary consumers are #1/#2/#4/#5 inside propagator.rkt.
@@ -743,6 +751,38 @@
 ;; SRE domain: 'monotone-set (Tier 2 registration below at line 796-block).
 (define decomposed-positions-cell-id (cell-id 17))
 
+;; PPN 4C Phase 3C.b.1 (2026-05-23): cell-18 + cell-19 for Propagator-First
+;; Diagnostics chain-emission (Phase 3C.b). Per addendum design §9.5.3.3
+;; refined option (d) — per-fork threshold-fire-once propagator + per-position
+;; monotone latch cell. See `error-explanation.rkt` (3C.a foundation) for the
+;; `static-reverse-walk` primitive these cells feed; 3C.b.3 wraps it as
+;; `derivation-chain-for/union-contradict`.
+;;
+;; cell-18: contradicted-branch-aids — per-position aid-set LATCH for the
+;;   threshold-fire-once propagator. Shape: (hasheq position → (seteq aid)).
+;;   Hash-union across positions; set-union per-position aid-set. MONOTONE
+;;   (positions only added; per-position aid-sets only grow). PERSISTS ACROSS
+;;   BSP ROUNDS within a command (NOT reset by stratum handler) — the cell IS
+;;   the latch for the set-latch + threshold pattern (propagator-design.md §
+;;   Set-Latch for Fan-In Readiness). Written by `make-branch-contradiction-
+;;   watcher-fire-fn` (3C.b.2 fan-out alongside cell-16 write); read by the
+;;   per-fork threshold propagator (3C.b.4 install at process-fork-on-union).
+;;
+;; cell-19: union-derivation-chains — per-position chain STORAGE. Shape:
+;;   (hasheq position → derivation-chain). Hash-union: each position gets ONE
+;;   chain per fork-on-union event (threshold-fire-once subsumes idempotence;
+;;   per-key "new wins" is idempotent in practice). Written by per-fork
+;;   threshold action (3C.b.4); read by 3C.c bridge in check/err to populate
+;;   union-exhaustion-error.derivation-chain. NOT a stratum-request cell
+;;   (no handler).
+;;
+;; Per Q-B.1.iii cascading simplification: NO separate emitted-chains tracker
+;; cell needed (fire-once propagator semantic subsumes per-position emit-once
+;; guard). 2 cells (cell-18 + cell-19) replace what option (c) plan envisioned
+;; as 3 (latch + chain-storage + emitted-chains tracker).
+(define contradicted-branch-aids-cell-id (cell-id 18))
+(define union-derivation-chains-cell-id (cell-id 19))
+
 ;; Merges for the 2A.0 stratum-request cells. Local definitions per
 ;; propagator.rkt's existing pattern (cf. naf-pending-merge at line 622,
 ;; topology-request-merge at line 686). Defined locally because
@@ -803,6 +843,40 @@
 (define (decomposed-positions-merge old new)
   (set-union old new))
 
+;; PPN 4C Phase 3C.b.1 (2026-05-23): merge for cell-18 contradicted-branch-aids
+;; LATCH. Hash-union across positions; set-union per-position aid-set.
+;; Per addendum §9.5.3.3 refined option (d) — cell IS the latch for the
+;; set-latch + threshold pattern. Monotone: positions only added; per-position
+;; aid-sets only grow under set-union. CALM-safe. Local definition per
+;; propagator.rkt's existing pattern (cf. fork-on-union-request-merge at line
+;; 768 — propagator.rkt cannot require infra-cell.rkt due to cycle); Tier 2
+;; reverse-lookup registration links to 'monotone-set domain below.
+(define (contradicted-branch-aids-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(position aid-set) (in-hash new)])
+       (hash-update acc position
+                    (lambda (existing) (set-union existing aid-set))
+                    (seteq)))]))
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): merge for cell-19 union-derivation-chains
+;; per-position chain STORAGE. Hash-union: each position gets ONE chain per
+;; fork-on-union event (threshold-fire-once subsumes idempotence). Per-key
+;; "new wins" is idempotent in practice (chain shape stable per position).
+;; Structurally equivalent to merge-hasheq-replace (infra-cell.rkt) —
+;; registered under 'hasheq-replace domain via Tier 2 reverse-lookup below.
+;; Local definition per propagator.rkt's existing pattern (cycle constraint
+;; with infra-cell.rkt).
+(define (union-derivation-chains-merge old new)
+  (cond
+    [(not (hash? old)) new]
+    [(not (hash? new)) old]
+    [else
+     (for/fold ([acc old]) ([(position chain) (in-hash new)])
+       (hash-set acc position chain))]))
+
 ;; PPN 4C Phase 3A.b cleanup (2026-05-22): SRE Tier 2 registrations.
 ;;
 ;; The retraction-stratum-merge + fork-contradiction-request-merge merges
@@ -836,6 +910,20 @@
 (register-merge-fn!/lattice fork-contradiction-request-merge #:for-domain 'monotone-set)
 ;; PPN 4C Phase 3A.c (2026-05-22): cell-17 guard cell's merge.
 (register-merge-fn!/lattice decomposed-positions-merge #:for-domain 'monotone-set)
+
+;; PPN 4C Phase 3C.b.1 (2026-05-23): cell-18 latch implements 'monotone-set
+;; in the per-position aid-set sense (hash-union across positions is monotone;
+;; per-position set-union is monotone). Tier 2 reverse-lookup gives cell-18
+;; the 'monotone-set classification at allocation, gaining SRE-validated
+;; algebraic properties (comm + assoc + idem) + structural classification.
+;; Mirrors cell-13/16/17 Tier 2 registration pattern.
+(register-merge-fn!/lattice contradicted-branch-aids-merge #:for-domain 'monotone-set)
+;; cell-19 chain storage: per-position new-wins. Register under existing
+;; 'hasheq-replace domain (defined at infra-cell-sre-registrations.rkt:73-83
+;; with merge-hasheq-replace as its equality merge). union-derivation-chains-
+;; merge is structurally equivalent to merge-hasheq-replace; registration links
+;; cell-19 to the 'hasheq-replace classification at allocation.
+(register-merge-fn!/lattice union-derivation-chains-merge #:for-domain 'hasheq-replace)
 
 ;; D.4 1V-6 F14 retirement (§11.X.5): the inlined duplicate
 ;; `tropical-fuel-merge-for-cell` has been RETIRED. The cycle
@@ -1085,22 +1173,47 @@
     (error 'make-prop-network
            "decomposed-positions-cell-id allocation drift: expected ~a, got ~a"
            decomposed-positions-cell-id actual-decomposed-positions-cid))
+  ;; PPN 4C Phase 3C.b.1 (2026-05-23): allocate cell-18 contradicted-branch-aids
+  ;; latch + cell-19 union-derivation-chains storage. Per addendum §9.5.3.3
+  ;; refined option (d). cell-18 init: (hasheq) — accumulates per-position
+  ;; aid-set entries as watchers fan-out (3C.b.2). cell-19 init: (hasheq) —
+  ;; populated by per-fork threshold action (3C.b.4). Until 3C.b.2 wires
+  ;; watcher fan-out + 3C.b.4 installs threshold propagator, both cells exist
+  ;; as empty accumulators (no behavior change vs pre-3C.b.1).
+  (define-values (net8 actual-contradicted-branch-aids-cid)
+    (net-register-specialized-cell net7 (hasheq) contradicted-branch-aids-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-contradicted-branch-aids-cid contradicted-branch-aids-cell-id)
+    (error 'make-prop-network
+           "contradicted-branch-aids-cell-id allocation drift: expected ~a, got ~a"
+           contradicted-branch-aids-cell-id actual-contradicted-branch-aids-cid))
+  (define-values (net9 actual-union-derivation-chains-cid)
+    (net-register-specialized-cell net8 (hasheq) union-derivation-chains-merge
+      #:tier 'warm
+      #:storage 'general
+      #:fires-on 'any-change))
+  (unless (equal? actual-union-derivation-chains-cid union-derivation-chains-cell-id)
+    (error 'make-prop-network
+           "union-derivation-chains-cell-id allocation drift: expected ~a, got ~a"
+           union-derivation-chains-cell-id actual-union-derivation-chains-cid))
   ;; D.4 1V-3 Item #1-bis (§11.X.3 step 3): set fuel-cell-cache on prop-net-warm.
   ;; D.4 1V-5 Item #1-quater (§11.X.4 step 3): set worldview-cache-cache on prop-net-warm.
   ;; Both cells now registered (worldview-cache at base-net; fuel-cell at net2);
   ;; look up each once and cache the prop-cell direct-refs. Write-through at
   ;; 8 sites (WT-1..WT-8) maintains consistency for both fields in parallel.
-  ;; 3A.c.1: latest cells CHAMP is net7 (after fork-on-union + fork-contradiction
-  ;; + decomposed-positions cell allocations); the cached fuel + worldview-cache
-  ;; prop-cells were allocated earlier (fuel at net2; worldview-cache at
-  ;; base-net) — shared via CHAMP structural sharing into net7's cells map.
-  ;; Direct-refs lookup from net7's cells CHAMP retrieves the original prop-cells.
+  ;; 3C.b.1: latest cells CHAMP is net9 (after cell-18 + cell-19 allocations);
+  ;; the cached fuel + worldview-cache prop-cells were allocated earlier
+  ;; (fuel at net2; worldview-cache at base-net) — shared via CHAMP structural
+  ;; sharing into net9's cells map. Direct-refs lookup from net9's cells CHAMP
+  ;; retrieves the original prop-cells.
   (let* ([fc-h (cell-id-hash fuel-cell-id)]
-         [fc-cell (champ-lookup (prop-network-cells net7) fc-h fuel-cell-id)]
+         [fc-cell (champ-lookup (prop-network-cells net9) fc-h fuel-cell-id)]
          [wv-h (cell-id-hash worldview-cache-cell-id)]
-         [wv-cell (champ-lookup (prop-network-cells net7) wv-h worldview-cache-cell-id)])
-    (struct-copy prop-network net7
-      [warm (struct-copy prop-net-warm (prop-network-warm net7)
+         [wv-cell (champ-lookup (prop-network-cells net9) wv-h worldview-cache-cell-id)])
+    (struct-copy prop-network net9
+      [warm (struct-copy prop-net-warm (prop-network-warm net9)
               [fuel-cell-cache fc-cell]
               [worldview-cache-cache wv-cell])])))
 
