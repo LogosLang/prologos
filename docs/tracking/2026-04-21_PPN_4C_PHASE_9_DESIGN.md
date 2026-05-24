@@ -198,6 +198,13 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | 3C | Residuation error-explanation | 🔄 | **Mini-design persisted at §9.5.1.** Phase 3C ships UC3-flavored union-type consumer + reusable `static-reverse-walk` primitive (exported per vision-forward Propagator-First Diagnostics framing); populates the EMPTY `union-exhaustion-error.derivation-chain` field (Q6.x finding: chain field exists but is empty today) for BOTH annotated-union (sexp check/err path) AND inferred-union (on-network process-fork-contradiction path) scenarios. UC1 + UC2 deferred to OE Track 4 / Phase 11b. Sub-phases: 3C.a ✅ → 3C.b (union-contradict consumer) → 3C.c (union-check consumer) → 3C.d (format + parity) → 3C-VAG. Est. ~430-700 LoC total. |
 | 3C.a mini-design + mini-audit | Opening 3C.a foundation; Q-A.1-7 + 8 test cases + 5 D-3C.a-* drift risks; LOCKED leans per dialogue + §9.5.2 persistence | ✅ `1d803ed2` | Persisted at §9.5.2 per Stage 4 mini-audit-precedes-implementation discipline. 7 subsections covering mini-audit findings, Q-A.* locked leans (3-column adversarial), test plan, drift risks, deliverables, closure criteria, status. |
 | 3C.a — Foundation (`error-explanation.rkt` + 8 tests) | NEW module + structs + `static-reverse-walk` primitive + 8 test cases T1-T8 + smoke test | ✅ `1d803ed2` | error-explanation.rkt (156 LoC): `derivation-chain` + `derivation-step` structs (transparent; LSP-ready) + `static-reverse-walk net cell-id #:max-depth 32 #:filter-fn pred → derivation-chain` primitive. Single-layer decorated walk; cycle detection (visited prop-id set); DFS pre-order cons-onto-head produces causal-reading order (deepest cause first). Decomplection: primitive sets assumption-names='() + residual-cost=#f; 3C.b/c consumers enrich. Preserves Cell/Propagator/Scheduler Orthogonality (no observer-set; static walk only). test-error-explanation.rkt (~165 LoC): 9 tests all PASS. **Full suite 8251/98.8s/0 failures** (+9 tests vs baseline 8242/111.4s). All 5 D-3C.a-* drift risks cleared. Ready for 3C.b mini-design. |
+| 3C.b mini-design + mini-audit | Opening 3C.b union-contradict consumer; Q-B.1-5 + 6 D-3C.b-* drift risks; user-articulated coupling intuition during dialogue refined option (c) handler-side detection → **option (d) per-fork threshold propagator + per-position monotone latch cell** (set-latch + threshold canonical pattern); cascading simplification: Q-B.1.iii (idempotence) STRUCTURALLY SUBSUMED by fire-once propagator (cell-19 eliminated); Q-B.1.ii γ phase-boundary restructure (3C.b builds + STORES chain on-network at cell-20; 3C.c bridges from check/err to consume); Q-B.2 β field type change to `(listof derivation-chain)`; 5 axis tests including 2 negative (no-error-no-chain + multi-success-no-chain) | ✅ (this commit) | Persisted at §9.5.3 per Stage 4 mini-audit-precedes-implementation discipline. 8 subsections covering 7-tier mini-audit, Q-B.1-5 locked leans (3-column adversarial), refined option (d) architecture, sub-step partition (3C.b.1/.2/.3/.4/.5 + 3C.b-VAG), 6 drift risks, cross-track captures, closure criteria, status. Honest scope-up to ~275-425 LoC noted in §9.5.3.4 (vs original 80-150 estimate). |
+| 3C.b.1 — Cell allocations | New cell-18 (`contradicted-branch-aids-cell-id`, monotone hash-of-sets, hash-union with set-union merge) + cell-20 (`union-derivation-chains-cell-id`, hash-union merge); allocation + drift checks (mirroring fuel-cost pattern); Tier 2 merge-fn registrations + SRE domain for cell-18 | ⬜ NEXT | ~50-80 LoC. Allocation drift checks per existing pattern (fuel-budget-cell-id at propagator.rkt:1007-1010). |
+| 3C.b.2 — Watcher fan-out | Modify `make-branch-contradiction-watcher-fire-fn` (typing-propagators.rkt:1248) to write BOTH cell-16 (existing) AND cell-18 (new) inside contradiction branch | ⬜ | ~15-25 LoC. Watcher concern unchanged; gains second cell write. |
+| 3C.b.3 — Wrapper + enrichment | Build `derivation-chain-for/union-contradict net branch-aid-set request-info → derivation-chain` in error-explanation.rkt (exported); wraps `static-reverse-walk` with filter-fn closing over aid-set; enriches steps with `assumption-names` via `solver-state-assumptions` lookup | ⬜ | ~80-120 LoC. D-3C.b-1 label-shape risk verified at impl (string→symbol coercion in solver-state-amb). |
+| 3C.b.4 — Threshold propagator install | At process-fork-on-union (between step 4 watcher install and step 5 cell-17 write), install per-fork threshold-fire-once propagator: reads cell-18; closes over (position, branch-aid-set, request-info); fires on subset; action: build chain via wrapper → write cell-20 | ⬜ | ~50-80 LoC. Single-concern preserved; structurally additive. |
+| 3C.b.5 — Tests + probe | 5 union-all-contradict-chain axes (3 positive + 2 negative) in test-elaboration-parity.rkt + Q6.x sexp-mode probe re-run showing cell-20 populated + targeted suite + full suite stable | ⬜ | ~80-120 LoC. Asserts on cell-20 state (chain structurally populated); user-facing rendering tests land in 3C.c/d. |
+| 3C.b-VAG | Cumulative adversarial 3-column VAG across 3C.b sub-steps; verify D-3C.b-1 through D-3C.b-6 cleared | ⬜ | All 4 VAG questions × 3 columns; 3C.b row → ✅. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
@@ -7185,6 +7192,162 @@ Opening conversational mini-design + mini-audit for Phase 3C.a (foundation sub-p
 #### §9.5.2.7 Status
 
 **Phase 3C.a mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to proceed to implementation per Stage 4 Per-Phase Protocol step 7 (phase completion 5-step checklist).
+
+### §9.5.3 Phase 3C.b mini-design + mini-audit (2026-05-23 — opening union-contradict consumer)
+
+Opening conversational mini-design + mini-audit for Phase 3C.b per Stage 4 Per-Phase Protocol (mini-design + mini-audit are co-dependent activities cycling between design intent and code reality; outcomes persist to the design doc; dailies log the commit story). Context: post-3C.a CLOSED at `1d803ed2` (error-explanation.rkt foundation + 9 tests + decomplection invariants preserved). 3C.b consumes 3C.a's foundation to populate `union-exhaustion-error.derivation-chain` for INFERRED-union scenarios (where Phase 3A's on-network `process-fork-contradiction` mechanism fires).
+
+Methodology: **3-column adversarial framing** applied throughout (catalogue / challenge / adversarial). User-articulated coupling intuition during dialogue surfaced a meaningful architectural refinement (option (c) → option (d); see §9.5.3.3) — empirical confirmation that the third column ACTIVELY DEMOLISHES rather than softly improves.
+
+#### §9.5.3.1 Mini-audit findings (7 tiers, grounded in code)
+
+7-tier structured audit executed pre-mini-design per Stage 4 mini-audit-precedes-implementation discipline. Findings cross-reference §9.5.1.1's parent audit; this audit drills into 3C.b-specific surfaces.
+
+**Tier 1 — 3C.a foundation (consumed by 3C.b)**:
+- `error-explanation.rkt` (211 LoC) — `derivation-chain` + `derivation-step` (5 fields) + `static-reverse-walk net cell-id #:max-depth #:filter-fn → derivation-chain` primitive. Decomplection invariant verified: primitive ALWAYS sets `assumption-names='()` + `residual-cost=#f` (line 144 `decode-step`); consumer wrappers enrich. Filter applies BEFORE recursion (line 204; T6 test confirms).
+
+**Tier 2 — Integration point (process-fork-contradiction, cells 15/16/17)**:
+- Cell-id constants verified at `propagator.rkt`: worldview-cache=1; classify-inhabit-request=10; fuel-budget=12; fork-on-union-request=15; fork-contradiction-request=16; decomposed-positions=17.
+- cell-15 request shape (typing-propagators.rkt:615 R7 emit): `(hasheq 'components (listof TypeExpr) 'tm-cid CellId)`.
+- `process-fork-contradiction` body (typing-propagators.rkt:1288-1303) is SINGLE-CONCERN (worldview narrowing only). Handler does NOT know originally-allocated per-position branch-mask — material design gap for Q-B.1.i detection.
+- Idempotence already preserved via `(= current-wv narrowed-wv)` check (line 1301-1302).
+
+**Tier 3 — ATMS substrate (aid → name decoding)**:
+- `assumption` struct (atms.rkt:113): `(struct assumption (name datum) #:transparent)` — name is SYMBOL field.
+- `solver-state-assumptions` (atms.rkt:696-698): live-reads `hasheq aid → assumption` via `net-cell-read-raw`.
+- `current-command-atms` (elab-speculation-bridge.rkt:104): parameter holds box of solver-state; initialized lazily.
+- Phase 3A's labels (typing-propagators.rkt:1137): `(format "branch-~a-at-~v" i position)` produces STRINGS. **Risk D-3C.b-1**: shape mismatch between Phase 3A's string labels and `assumption-name` symbol field — verify `solver-state-amb` coercion behavior at implementation.
+
+**Tier 4 — Error infrastructure (chain field semantics gap)**:
+- `union-exhaustion-error` struct (errors.rkt:115-116): `derivation-chain` field is `(listof (listof string))` — per-branch list of pre-formatted strings. **Critical shape gap vs 3C.a's structured `derivation-chain`**; Q-B.2 resolves.
+- format-error renders chain at lines 267-287 with "    because: ~a" prefix per step; replacement requires coordinated format-error update.
+- `build-derivation-chain` (typing-errors.rkt:127) is current sexp-mode chain builder — produces empty chain today (Q6.x finding).
+
+**Tier 5 — Tropical fuel (residual cost)**:
+- `tropical-left-residual` (tropical-fuel-primitives.rkt:105): `(if (>= b a) (- b a) 0)`. Adjunction verified.
+- Canonical fuel-cost-cell tracks CUMULATIVE remaining fuel (not per-step decrements). Per-step semantic doesn't cleanly map — Q-B.4 defers cost annotation to 3C.d.
+
+**Tier 6 — Q-B.5 inferred-union firing — what syntax exercises Phase 3A?**:
+- `'union-inhabitation-all-fail` parity test (test-elaboration-parity.rkt:483-502) ALREADY exercises sexp annotated all-fail: `(ns t) (def x : <Int | Bool> := "hello") x` → both 3A on-network AND sexp check/err fire (per parity test comment).
+- Q6.x probe used WS-mode `def x <Nat | Bool> "hello"` (no `:`, no `:=`) → DIFFERENT dispatch path; `prop_allocs=0` confirmed only sexp check/err fires for WS form.
+- **Discovery**: sexp annotated unions trigger 3A's mechanism; WS-mode form does not. 3C.b targets sexp annotated path (where 3A fires); 3C.c will cover WS path (where only sexp check/err fires).
+- **Risk D-3C.b-3**: double-emission for sexp annotated unions (both paths produce union-exhaustion-error) — Q-B.1.ii resolves via γ phase-boundary restructure.
+
+**Tier 7 — Parity test patterns**:
+- `parity-test` macro + `check-parity-equal?` (test-elaboration-parity.rkt:42-108) with `#:expected` / `#:expected-type` / `#:expected-shape` / `#:expected-warnings` — directly extensible for 3C.b's 5-axis discriminating coverage.
+- User-facing emission path (driver.rkt:1488 + 1686 + 1772): `(emit-error-diagnostic r)` when `current-emit-error-diagnostics` is true + `r` is `prologos-error?`.
+
+#### §9.5.3.2 Resolved design questions (Q-B.1 through Q-B.5) — LOCKED via 3-column adversarial
+
+| Q | LOCKED Lean | Adversarial rationale |
+|---|---|---|
+| **Q-B.1.i** Detection mechanism | **(d) refined — per-fork threshold propagator + per-position monotone latch cell** (see §9.5.3.3 for full architecture) | User-articulated coupling intuition during dialogue rejected handler-side detection (option c) as Decomplection violation: option (c) makes `process-fork-on-union` + `process-fork-contradiction` MULTI-CONCERN (decomposition + worldview-narrowing + chain-emission all mixed). Option (d) keeps handlers SINGLE-CONCERN; chain-emission gets its OWN propagator per fork; matches set-latch + threshold pattern from `.claude/rules/propagator-design.md` (canonical). Cell-18 (per-position contradicted-aids latch, monotone hash-of-sets) persists across rounds; threshold-fire-once propagator reads cell-18 + closes over `(position, branch-aid-set)` → fires when subset holds → action writes cell-20 (chain storage). |
+| **Q-B.1.ii** Avoiding double-emission | **(γ) phase-boundary restructure** — 3C.b BUILDS + STORES chain on-network (cell-20); does NOT emit user-facing error itself. 3C.c bridges from `check/err`'s `union-exhaustion-error` construction to consume the stored chain. Single emission point structurally. | (α) accept temporary double-emission violates workflow.md "all tests green before moving on"; (β) gating requires syntactic-mode awareness in on-network handler (conceptual leak); (δ) check/err depending on on-network state reverses principal/derived (creates PM 12 + Phase 4D debt). (γ) decomplects chain CONSTRUCTION from chain EMISSION — aligns with Data Orientation principle. Scope shift from §9.5.1.5 partition spec (3C.b "build + emit") to (3C.b "build + store") is honest re-scoping driven by audit. |
+| **Q-B.1.iii** Idempotence | **Structurally subsumed by threshold-fire-once propagator** — fire-once self-cleans dependents after one fire; per-position threshold fires AT MOST ONCE per fork. NO separate emitted-chains tracker cell needed (cell-19 eliminated vs option (c) plan). | Cascading simplification: option (d) refinement turns Q-B.1.iii into a structural property of the propagator pattern, not a discipline-maintained guard. 3 cells reduce to 2 (cell-18 + cell-20; no cell-19). |
+| **Q-B.2** Chain field shape | **(β) replace `union-exhaustion-error.derivation-chain` field type** from `(listof (listof string))` → `(listof derivation-chain)` (per-branch structured chains) + **(β.i) per-position chain storage cell-20** (`(hasheq position → derivation-chain)`) for on-network propagation between 3C.b's writer + 3C.c's bridge consumer | (α) string-list conversion violates Q9 (REPLACE authoritatively) + Q8 (LSP-ready structured); (γ) dual-field violates workflow.md "belt-and-suspenders"; (β) is the principled landing. Coordinated change spans 3C.b (struct field semantic + cell-20 writer) + 3C.c (consumer + format-error update). Format-error rendering updates align in 3C.d. |
+| **Q-B.3** filter-fn shape | **(a) `(step → bool)` predicate; consumer wrapper closes over branch aid-set** | Matches 3C.a primitive signature; minimal API surface; predicate is GENERAL — reusable for non-aid-set filters (Phase 11b second consumer). Consumer wrapper encapsulates aid-set filtering as a closure. |
+| **Q-B.4** residual-cost enrichment | **(d) defer to 3C.d** — 3C.b leaves `residual-cost=#f` per 3C.a primitive default | Per-step semantic doesn't map to canonical fuel-cost-cell (cumulative remaining, not per-step decrements). Chain-level annotation (option (b)) requires 3C.a struct change without demonstrated load-bearing need. Defer keeps 3C.b focused; 3C.d revisits with format-error update. |
+| **Q-B.5** Test scenarios | **5 axes** covering discriminating coverage (see §9.5.3.4) | All in sexp annotated form (where 3A fires per Tier 6 finding); positive (chain emits on all-fail) + negative (chain DOESN'T emit on partial/full success) + idempotence (repeated invocation single-emits). 4-axis discriminating gate per Q10 lock lands in 3C.d. |
+
+#### §9.5.3.3 Refined option (d) — per-fork threshold propagator architecture
+
+**Architecture summary**:
+
+| Element | Role | Lifecycle | LoC est. |
+|---|---|---|---|
+| Cell-16 (existing) | Input to narrowing handler | Transient `#:reset-value (seteq)` | unchanged |
+| **Cell-18 NEW** `contradicted-branch-aids-cell-id` | Per-position latch for threshold propagator; shape `(hasheq position → (seteq aid))`; merge: hash-union with set-union; persists across rounds (monotone) | Persists | ~20 LoC alloc + drift check + SRE registration |
+| **Cell-20 NEW** `union-derivation-chains-cell-id` | Per-position chain storage; shape `(hasheq position → derivation-chain)`; merge: hash-union (chain replacement by hash-set semantic) | Persists | ~20 LoC alloc + drift check |
+| 3A.b watcher (`make-branch-contradiction-watcher-fire-fn`, line 1248) | **Fan-out**: writes to BOTH cell-16 (narrowing handler input) AND cell-18 (threshold latch) | Fire-once self-cleans | ~10-15 LoC modification |
+| **Per-fork threshold-fire-once propagator NEW** | Reads cell-18; closes over `(position, branch-aid-set, request-info)`; fires when `(subset? branch-aid-set (hash-ref cell-18-val position (seteq)))`; action: build chain via wrapper → write cell-20 | Fire-once self-cleans | ~40-60 LoC (factory + install at process-fork-on-union step) |
+| `derivation-chain-for/union-contradict` wrapper | Calls `static-reverse-walk` with filter-fn closing over aid-set; enriches steps with `assumption-names` via `solver-state-assumptions` lookup | Read-time function | ~80-100 LoC |
+
+**What stays unchanged**:
+- `process-fork-on-union`: keeps decomposition concern (gains ONE install step for threshold per fork — structurally additive, not behaviorally invasive)
+- `process-fork-contradiction`: **LITERALLY UNTOUCHED** — single-concern (worldview narrowing) preserved
+- Cell-15, cell-16, cell-17: all keep existing shapes + lifecycles
+
+**Mantra alignment** (per-word check applied adversarially):
+
+| Word | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| **All-at-once** | Install per fork (1 threshold + N branch checks + N watchers in one process-fork-on-union pass) | Could the install itself be more parallel? | Install is the natural granularity (per-fork unit); broadcast at this layer doesn't make sense |
+| **All in parallel** | Threshold runs concurrent with sibling-fork thresholds; watcher fires concurrent with narrowing handler | Watchers write to 2 cells per fire — sequential within a fire | Within-a-fire sequentiality is acceptable (per-watcher work is bounded); BSP parallelism preserved at install layer |
+| **Structurally emergent** | Chain emission emerges from cell-18 subset relation; no imperative dispatch | Threshold predicate is closed over branch-aid-set — that's data, not code | ✓ predicate is computed from cell state at fire time; structural |
+| **Information flow** | Watchers → cell-16 (narrowing) + cell-18 (threshold); threshold → cell-20 (chain) | All through cells | ✓ no parameter threading; no return-value chains; cell-mediated throughout |
+| **ON-NETWORK** | Entirely cell-based; no off-network state; chain construction is a read-time view over on-network state | Wrapper uses `current-command-atms` parameter for assumption-name decoding | `current-command-atms` is recognized scaffolding (PM Track 12 retirement target); not introducing new off-network state |
+
+#### §9.5.3.4 Sub-step partition (revised per option (d) refinement)
+
+| Sub-step | Scope | LoC est. | Key gate |
+|---|---|---|---|
+| **3C.b.1** | New on-network cells: cell-18 (`contradicted-branch-aids-cell-id`, monotone hash-of-sets) + cell-20 (`union-derivation-chains-cell-id`, hash-union); allocation + pre-allocation drift checks (mirroring fuel-cost-cell pattern); merge-fn registrations via Tier 2 `register-merge-fn!/lattice`; SRE domain for cell-18 if not reusable | ~50-80 | Cells allocate at make-prop-network; drift check passes; no semantic regression |
+| **3C.b.2** | Modify `make-branch-contradiction-watcher-fire-fn` (typing-propagators.rkt:1248) for fan-out: write to BOTH cell-16 AND cell-18 inside contradiction branch | ~15-25 | 3A.b tests still pass; new test verifies fan-out write to cell-18 |
+| **3C.b.3** | Build `derivation-chain-for/union-contradict net branch-aid-set request-info → derivation-chain` wrapper in error-explanation.rkt (exported); enrich steps with `assumption-names` via `solver-state-assumptions` lookup using `current-command-atms` | ~80-120 | Wrapper produces chain with populated assumption-names; unit tests verify enrichment shape; D-3C.b-1 label-shape risk validated at impl |
+| **3C.b.4** | At process-fork-on-union step (between current step 4 watcher install and step 5 cell-17 write), install threshold-fire-once propagator per fork: reads cell-18; closes over (position, branch-aid-set, request-info); fires on subset; action calls `derivation-chain-for/union-contradict` then writes cell-20 | ~50-80 | Threshold propagator installs per fork; fires once per all-branch-contradict event; cell-20 populated; idempotence verified |
+| **3C.b.5** | 5 union-all-contradict-chain axis tests in test-elaboration-parity.rkt + Q6.x probe re-run with sexp-mode scenario showing chain populated (probe diff) + targeted suite + full-suite stable | ~80-120 | All 5 axes pass; probe diff shows non-empty cell-20 chain entry; full suite within 109-115s variance band |
+| **3C.b-VAG** | Adversarial 3-column VAG (catalogue + challenge + adversarial); cumulative across 3C.b sub-steps; verify D-3C.b-1 through D-3C.b-5 cleared | docs | All 4 VAG questions pass under adversarial framing; tracker row 3C.b → ✅ |
+
+**Total estimated scope**: **~275-425 LoC** + docs across 5 implementation sub-steps + 1 VAG close.
+
+This is upward from §9.5.1.5's original 80-150 LoC estimate for 3C.b. The honest scope-up is driven by:
+- Option (d) refinement adds 1 new cell + 1 new propagator-install per fork (vs option (c)'s handler-modification approach)
+- Q-B.1.ii (γ) phase-boundary restructure adds cell-20 chain storage (vs original direct-emission approach)
+- Q-B.2 (β) field type change is coordinated across 3C.b/c/d (3C.b's share is cell-20 writer + struct definition)
+
+Trade-off accepted: more LoC in 3C.b for structural cleanliness (single-concern handlers preserved; chain-emission decomplected from worldview-narrowing).
+
+**5 axis test scenarios** (3C.b.5):
+
+| Test axis | Scenario | Expected (post-3C.b) |
+|---|---|---|
+| `'union-all-contradict-chain/sexp-annotated` | `(ns t) (def x : <Int \| Bool> := "hello") x` | cell-20 populated with non-empty per-branch chains; chain references branch assumption-names |
+| `'union-all-contradict-chain/nat-bool` | `(ns t) (def x : <Nat \| Bool> := 3.14) x` (3.14 = neither Nat nor Bool) | cell-20 populated with non-empty chains |
+| `'union-all-contradict-chain/idempotent` | Run same scenario twice in sequence | Only ONE chain emission per fork-on-union event (verifies threshold fire-once subsumption of Q-B.1.iii) |
+| `'union-all-contradict-chain/no-error-no-chain` | `(ns t) (def x : <Int \| String> := 42) x` (Int succeeds) | cell-20 NOT populated for x's position (negative axis — chain doesn't fire on partial success) |
+| `'union-all-contradict-chain/multi-success-no-chain` | `(ns t) (def x : <Nat \| Int> := 0N) x` (both succeed) | cell-20 NOT populated for x's position (negative axis — chain doesn't fire on full success) |
+
+Note: 3C.b tests assert on cell-20 STATE (chain populated structurally); user-facing `union-exhaustion-error.derivation-chain` rendering tests land in 3C.c (when bridge consumes cell-20) + 3C.d (format-error update). 3C.b tests focus on the on-network mechanism in isolation.
+
+#### §9.5.3.5 Drift risks named (D-3C.b-1 through D-3C.b-5)
+
+| # | Risk | Mitigation |
+|---|---|---|
+| **D-3C.b-1** | `assumption-name` field is SYMBOL (atms.rkt:113); Phase 3A's labels are STRINGS produced via `format` (typing-propagators.rkt:1137). Coercion semantic of `solver-state-amb` unknown — needs runtime verification | Verify at 3C.b.3 impl: read `solver-state-amb` source; if coercion happens (string→symbol), document the contract; if not, adapt wrapper to handle both string and symbol shapes |
+| **D-3C.b-2** | Per-position branch-mask not currently on-network — adding cell-18 is new on-network state | Cell-18 is monotone (set-union per position; hash-union across positions) — natural lattice fingerprint; mirrors cell-17 (decomposed-positions) precedent; registered under SRE domain for Tier 2 hygiene; generalizes to Phase 9b γ multi-candidate (same shape) |
+| **D-3C.b-3** | Double-emission risk during 3C.b → 3C.c window: sexp annotated unions today fire BOTH on-network 3A AND sexp check/err. Under option (d) + Q-B.1.ii (γ), 3C.b does NOT emit user-facing error — only stores chain in cell-20. Risk: if 3C.c lags, sexp annotated unions continue producing today's empty-chain error (no regression; no improvement) | Mitigated structurally: 3C.b doesn't add a new error emission point. The chain is BUILT and STORED; user-facing emission stays at check/err's existing path (which today produces empty chain). 3C.c bridges by reading cell-20 from check/err. No double-emission possible during the gap window. |
+| **D-3C.b-4** | `union-exhaustion-error.derivation-chain` field type change ripples through format-error (errors.rkt:267-287) + typing-errors.rkt:97 chain construction (currently produces string-list) + sexp `build-derivation-chain` (typing-errors.rkt:127) | Coordinated change scoped across 3C.b/c/d: 3C.b changes the struct field type and cell-20 writer; 3C.c migrates check/err's chain construction to read cell-20 + produce structured chain; 3C.d updates format-error rendering. Field type change at 3C.b is the gate — once changed, downstream consumers MUST migrate within phase. |
+| **D-3C.b-5** | filter-fn applied BEFORE recursion (3C.a:204) → aid-set filter prunes recursion through propagators whose aids don't intersect the branch aid-set | DESIRABLE behavior: keeps chain focused on contradicted-branch lineage; unrelated propagators (elaboration scaffolding firing under outer worldview before the fork) don't appear in chain. Document at wrapper docstring; verify via test that filtered-out propagators are absent from chain. |
+| **D-3C.b-6** (NEW) | Watcher fan-out write to 2 cells (cell-16 + cell-18) creates a coupling point: if a third concern emerges (Phase 9b γ multi-candidate; Phase 11b general diagnostics), do we add a 4th cell + 3rd fan-out write? | Codify as PATTERN: "single contradiction event → multiple downstream readers via cells." For future readers (beyond 3C.b), install a separate propagator that reads cell-16 and writes derived state; keep watcher fire-fn STABLE (2-cell fan-out is the load-bearing minimum for 3C). Watching-list codification candidate; promote at 2nd data point (Phase 9b γ adoption). |
+
+#### §9.5.3.6 Cross-track captures (forward-pointers)
+
+Per §9.5.1.7 vision-forward framing (Propagator-First Diagnostics), 3C.b's deliverables extend the cross-track footprint:
+
+- **Phase 11b** (parent D.3): consumes 3C.b's per-fork threshold-fire-once pattern + cell-18 latch shape as PRECEDENT for general derivation diagnostics; extends with non-union scenarios.
+- **Phase 9b γ multi-candidate** (parent D.3): cell-18 hash-of-sets shape IS the canonical per-position-readiness latch for N-ary candidate inhabitant evaluation. Reuses the threshold-fire-once + monotone-latch pattern verbatim.
+- **PPN Track 8 LSP**: cell-20 structured `derivation-chain` storage is LSP-serializable; PPN 8 reads cell-20 directly as diagnostic payload (no string-format conversion at LSP boundary).
+- **PReduce Track 6 speculative reduction**: cost-bounded ATMS branching errors adopt 3C.b's emission pattern (stratum-handler-companion threshold-fire-once propagator + chain emission via residual walk).
+- **Cross-track template codification status**: NOT promoted yet to DESIGN_PRINCIPLES.org. Specialized Cell Type Framework precedent — graduate after 2nd-3rd empirical instance lands. 3C.b is 1st instance of "per-fork threshold propagator + monotone latch + chain storage" composition.
+
+#### §9.5.3.7 Closure criteria
+
+Phase 3C.b closes per Stage 4 Per-Phase Protocol + adversarial VAG:
+
+1. **Sub-steps 3C.b.1 through 3C.b.5 delivered** with each Stage 4 step completed in order (test coverage → commit → tracker → dailies → proceed)
+2. **Cell-18 + cell-20 allocated** with pre-allocation drift checks passing
+3. **Watcher fan-out write** to cell-18 verified by unit test
+4. **`derivation-chain-for/union-contradict` wrapper** produces chain with populated assumption-names
+5. **Threshold-fire-once propagator** installs per fork; fires once per all-branch event; populates cell-20
+6. **5 axis tests pass** (3 positive + 2 negative) verifying both emission AND non-emission paths
+7. **Probe re-run** (sexp annotated scenario) shows cell-20 populated; pre-3C.b baseline showed empty
+8. **Full suite stable** within 109-115s baseline variance band
+9. **All 6 D-3C.b-* drift risks cleared** at 3C.b-VAG
+10. **Adversarial 3-column VAG** passes 4 questions (on-network / complete / vision-advancing / drift-risks-cleared)
+
+#### §9.5.3.8 Status
+
+**Phase 3C.b mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to proceed to 3C.b.1 (cell allocations) per Stage 4 Per-Phase Protocol implementation cycle. Each sub-step ends with conversational dialogue checkpoint per workflow.md cadence rule (max autonomous stretch ~1 hour or 1 phase boundary).
 
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 
