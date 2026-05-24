@@ -37,7 +37,10 @@
          "../union-types.rkt"
          "../classify-inhabit.rkt"
          "../typing-propagators.rkt"
-         "../elab-speculation-bridge.rkt")
+         "../elab-speculation-bridge.rkt"
+         ;; PPN 4C Phase 3C.b.4 (2026-05-23): derivation-chain struct
+         ;; accessors for threshold-fire-fn unit tests (T-C.b.4-*).
+         "../error-explanation.rkt")
 
 ;; Local bot value (matches the local classify-inhabit-bot-value in
 ;; typing-propagators.rkt:349 — not exported).
@@ -166,14 +169,20 @@
     (define added-bits (bitwise-and wv-after (bitwise-not wv-before)))
     (check-equal? (popcount added-bits) 2
                   "2 branch bits set in worldview-cache after fork-on-union")
-    ;; Net should have 4 more propagators (N=2: per branch, 1 check + 1 watcher).
+    ;; Net should have 5 more propagators (N=2: per branch, 1 check + 1 watcher;
+    ;; plus 1 PER-FORK threshold-fire propagator for chain emission).
     ;; PPN 4C Phase 3A.b (2026-05-22): updated from 2 → 4 to account for the
     ;; N fire-once contradiction watchers installed alongside the N branch
     ;; check propagators (Option E per §9.3.4 — N check + N watcher pattern).
+    ;; PPN 4C Phase 3C.b.4 (2026-05-23): updated from 4 → 5 to account for the
+    ;; per-fork threshold-fire propagator (step 4.5) — closes over (position,
+    ;; branch-aid-set, request-info); reads cell-18; fires when all branches
+    ;; contradict; writes derivation-chain to cell-19. Per addendum §9.5.3.3
+    ;; refined option (d) set-latch + threshold canonical pattern.
     (check-equal? (- (prop-network-next-prop-id net1)
                      (prop-network-next-prop-id net))
-                  4
-                  "4 propagators installed (2 branch checks + 2 contradiction watchers)")))
+                  5
+                  "5 propagators installed (2 branch checks + 2 contradiction watchers + 1 threshold)")))
 
 ;; ========================================
 ;; Unit: process-fork-on-union — defensive on malformed request
@@ -436,6 +445,122 @@
   (define net2 (process-fork-contradiction net1 'malformed))
   (check-equal? (net-cell-read net2 worldview-cache-cell-id) #b00000111
                 "Non-set input → defensive no-op preserves worldview"))
+
+;; ============================================================
+;; PPN 4C Phase 3C.b.4 (2026-05-23): per-fork threshold-fire propagator
+;; ============================================================
+;; The threshold fire-fn (make-fork-chain-threshold-fire-fn) reads cell-18;
+;; checks (subset? branch-aid-set position-aids); if held, calls wrapper +
+;; writes cell-19 (chain storage). Defensive idempotence guard via cell-19
+;; emit-once check (hash-has-key?).
+
+;; ========================================
+;; Unit: make-fork-chain-threshold-fire-fn — subset met → writes cell-19
+;; ========================================
+
+(test-case "make-fork-chain-threshold-fire-fn: subset met → chain written to cell-19"
+  ;; Setup synthetic prop-network with a tm-cell that has tagged-cell-value
+  ;; entries marking aid-0 + aid-1 as having contradicted (bit 0 + bit 1 set
+  ;; in tm-cell's tagged-cell-value entries — so decode-aids-from-cell-value
+  ;; in 3C.a primitive returns those aids during the wrapper's walk).
+  (define net0 (make-prop-network))
+  (define (tagged-aware-merge old new)
+    (cond [(eq? old 'bot) new]
+          [(tagged-cell-value? new) new]
+          [else new]))
+  (define-values (net1 cell-input) (net-new-cell net0 'bot tagged-aware-merge))
+  (define-values (net2 tm-cell) (net-new-cell net1 'bot tagged-aware-merge))
+  ;; Add a writer propagator (so static-reverse-walk finds at least 1 step)
+  (define-values (net3 _writer-pid)
+    (net-add-propagator net2 (list cell-input) (list tm-cell) (lambda (n) n)))
+  ;; Write tagged-cell-value at tm-cell with bits 0+1 set (aid-0 + aid-1)
+  (define net4 (net-cell-write net3 tm-cell
+                               (tagged-cell-value 'base (list (cons #b011 'val)))))
+  ;; Manually populate cell-18 with (hasheq position (seteq aid-0 aid-1)) —
+  ;; simulating both branch contradiction watchers having fired.
+  (define test-position 'test-pos)
+  (define aid-0 (assumption-id 0))
+  (define aid-1 (assumption-id 1))
+  (define net5 (net-cell-write net4 contradicted-branch-aids-cell-id
+                                (hasheq test-position (seteq aid-0 aid-1))))
+  ;; Set up current-command-atms for assumption-name enrichment
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define atms-box (current-command-atms))
+    (define-values (atms-1 _aid-a)
+      (solver-state-assume (unbox atms-box) 'h0 "branch-0-at-pos"))
+    (define-values (atms-2 _aid-b)
+      (solver-state-assume atms-1 'h1 "branch-1-at-pos"))
+    (set-box! atms-box atms-2)
+    ;; Build threshold fire-fn for branch-aid-set = {aid-0, aid-1}
+    (define branch-aid-set (seteq aid-0 aid-1))
+    (define request-info (hasheq 'tm-cid tm-cell))
+    (define threshold-fn
+      (make-fork-chain-threshold-fire-fn test-position branch-aid-set request-info))
+    ;; Invoke threshold body
+    (define net6 (threshold-fn net5))
+    ;; Verify cell-19 has chain entry for test-position
+    (define cell-19-val (net-cell-read net6 union-derivation-chains-cell-id))
+    (check-true (hash? cell-19-val) "cell-19 is a hash")
+    (check-true (hash-has-key? cell-19-val test-position)
+                "cell-19 has entry for test-position after threshold fires")
+    (define chain (hash-ref cell-19-val test-position #f))
+    (check-true (derivation-chain? chain)
+                "cell-19's per-position entry is a derivation-chain struct")
+    (define steps (derivation-chain-steps chain))
+    (check-true (>= (length steps) 1)
+                "chain has at least 1 step (writer propagator)")))
+
+;; ========================================
+;; Unit: make-fork-chain-threshold-fire-fn — subset NOT met → no-op
+;; ========================================
+
+(test-case "make-fork-chain-threshold-fire-fn: subset NOT met → cell-19 unchanged"
+  ;; Setup: cell-18 has aid-0 ONLY; branch-aid-set requires aid-0 + aid-1.
+  (define net0 (make-prop-network))
+  (define test-position 'test-pos)
+  (define aid-0 (assumption-id 0))
+  (define aid-1 (assumption-id 1))
+  ;; Only aid-0 has contradicted (partial)
+  (define net1 (net-cell-write net0 contradicted-branch-aids-cell-id
+                                (hasheq test-position (seteq aid-0))))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define branch-aid-set (seteq aid-0 aid-1))
+    (define request-info (hasheq 'tm-cid 'dummy))  ;; tm-cid not consulted in this path
+    (define threshold-fn
+      (make-fork-chain-threshold-fire-fn test-position branch-aid-set request-info))
+    (define net2 (threshold-fn net1))
+    ;; cell-19 should remain empty (threshold not met)
+    (define cell-19-val (net-cell-read net2 union-derivation-chains-cell-id))
+    (check-equal? cell-19-val (hasheq)
+                  "cell-19 remains empty hasheq when subset NOT met (partial contradiction)")))
+
+;; ========================================
+;; Unit: make-fork-chain-threshold-fire-fn — idempotence guard (already emitted)
+;; ========================================
+
+(test-case "make-fork-chain-threshold-fire-fn: defensive idempotence guard (already-emitted position)"
+  ;; Setup: cell-18 has full subset; cell-19 already has entry for position.
+  ;; Threshold should NOT overwrite (defensive guard).
+  (define net0 (make-prop-network))
+  (define test-position 'test-pos)
+  (define aid-0 (assumption-id 0))
+  (define net1 (net-cell-write net0 contradicted-branch-aids-cell-id
+                                (hasheq test-position (seteq aid-0))))
+  ;; Pre-populate cell-19 with a marker chain for test-position (simulating
+  ;; previous emission for this position)
+  (define marker-chain (derivation-chain '()))  ;; empty marker chain
+  (define net2 (net-cell-write net1 union-derivation-chains-cell-id
+                                (hasheq test-position marker-chain)))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define branch-aid-set (seteq aid-0))
+    (define request-info (hasheq 'tm-cid 'dummy))
+    (define threshold-fn
+      (make-fork-chain-threshold-fire-fn test-position branch-aid-set request-info))
+    (define net3 (threshold-fn net2))
+    ;; cell-19's entry for test-position should STILL be the marker (unchanged)
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (check-equal? (hash-ref cell-19-val test-position #f) marker-chain
+                  "cell-19 entry unchanged when position already emitted (idempotence guard)")))
 
 ;; ========================================
 ;; E2E: Int branch succeeds, String branch fails → only 1 bit remains

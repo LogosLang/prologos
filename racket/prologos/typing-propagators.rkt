@@ -62,6 +62,11 @@
          ;; PPN 4C Phase 3A.a (2026-05-22): per-command ATMS box for fresh-aid
          ;; allocation. Per-command scope verified at audit §9.3.2.4 / driver.rkt:464.
          (only-in "elab-speculation-bridge.rkt" current-command-atms)
+         ;; PPN 4C Phase 3C.b.4 (2026-05-23): chain-construction wrapper for
+         ;; per-fork threshold-fire propagator. Wraps 3C.a's static-reverse-walk;
+         ;; enriches with assumption-names; consumed by threshold body to write
+         ;; structured derivation-chain into cell-19 (union-derivation-chains-cell-id).
+         (only-in "error-explanation.rkt" derivation-chain-for/union-contradict)
          ;; PPN 4C Phase 3A.a (2026-05-22): flatten-union for N-ary decomposition.
          (only-in "union-types.rkt" flatten-union)
          ;; PPN 4C Phase 3A.b (2026-05-22): tagged-cell-value accessors for the
@@ -128,6 +133,7 @@
  ;; (ii) future 3A.c classifier-watcher install that writes to cell-15.
  make-branch-check-fire-fn
  make-branch-contradiction-watcher-fire-fn  ;; PPN 4C Phase 3A.b — per-branch contradiction watcher
+ make-fork-chain-threshold-fire-fn          ;; PPN 4C Phase 3C.b.4 — per-fork threshold-fire (chain emission)
  process-fork-on-union
  process-fork-contradiction
  ;; PPN 4C Phase 3A.c.3-R7 (2026-05-22): union-detection lives inline in
@@ -1212,6 +1218,29 @@
                      #:component-paths (list (cons tm-cid (cons position ':type)))
                      #:assumption aid))
                  acc*))
+             ;; Step 4.5 (PPN 4C Phase 3C.b.4, 2026-05-23): per-fork threshold-fire
+             ;; propagator for chain emission. Per addendum §9.5.3.3 refined option (d).
+             ;;
+             ;; Reads cell-18 (contradicted-branch-aids latch); closes over THIS
+             ;; fork's (position, branch-aid-set, request-info); fires when all
+             ;; branch aids are in cell-18's per-position entry (subset check);
+             ;; action: build derivation chain via 3C.b.3 wrapper + write to cell-19
+             ;; (union-derivation-chains storage; 3C.c consumes from check/err).
+             ;;
+             ;; NOT fire-once: predicate may not be met on first cell-18 change
+             ;; (branches may contradict across multiple BSP rounds). Stays
+             ;; installed; structural idempotence via cell-18 stability after all
+             ;; watchers fire (each fire-once) + defensive cell-19 emit-once guard.
+             ;;
+             ;; :component-paths precision: fires only on THIS position's cell-18
+             ;; entry change (sibling positions / concurrent forks don't wake it).
+             (define branch-aid-set (apply seteq aids))
+             (define-values (n5 _chain-pid)
+               (net-add-propagator n4
+                 (list contradicted-branch-aids-cell-id)         ;; input: cell-18 latch
+                 (list union-derivation-chains-cell-id)          ;; output: cell-19 storage
+                 (make-fork-chain-threshold-fire-fn position branch-aid-set request-info)
+                 #:component-paths (list (cons contradicted-branch-aids-cell-id position))))
              ;; Step 5 (PPN 4C Phase 3A.c.3-R7, 2026-05-22): FP3 guard write.
              ;;
              ;; Mark this position as decomposed so subsequent :type writes that
@@ -1224,7 +1253,7 @@
              ;; twice is idempotent. The on-network guard makes R7's idempotence
              ;; STRUCTURAL (Correct by Construction) rather than relying on
              ;; flag-guard semantics or downstream dedup.
-             (net-cell-write n4 decomposed-positions-cell-id (seteq position))])]))]))
+             (net-cell-write n5 decomposed-positions-cell-id (seteq position))])]))]))
 
 ;; PPN 4C Phase 3A.b (2026-05-22): per-branch contradiction watcher factory.
 ;;
@@ -1245,6 +1274,79 @@
 ;; once after the check propagator writes the contradiction. Idempotent under
 ;; cell-16's set-union merge (writing the same (seteq aid) twice is a no-op
 ;; under set semantics). Self-cleans dependents after firing per fire-once.
+;; PPN 4C Phase 3C.b.4 (2026-05-23): per-fork threshold-fire propagator factory
+;; for chain emission. Per addendum §9.5.3.3 refined option (d) — set-latch +
+;; threshold canonical pattern from .claude/rules/propagator-design.md.
+;;
+;; The threshold propagator is installed PER FORK at process-fork-on-union
+;; (step 4.5, between watcher install and cell-17 guard write). It reads cell-18
+;; (contradicted-branch-aids-cell-id) — the monotone per-position aid-set
+;; LATCH populated by 3C.b.2 watcher fan-out. Closes over (position,
+;; branch-aid-set, request-info) for the specific fork it's emitted for.
+;;
+;; FIRE SEMANTICS — NOT fire-once (intentional):
+;;   The threshold uses plain `net-add-propagator` (NOT
+;;   net-add-fire-once-propagator) because the THRESHOLD CONDITION may not
+;;   be met on the first cell-18 change. fire-once would self-clean after
+;;   the first invocation regardless of whether the predicate held — but
+;;   the predicate becomes true only AFTER ALL N branches have contradicted
+;;   (which may span multiple BSP rounds if branches contradict at different
+;;   times). The threshold must STAY INSTALLED to re-evaluate as cell-18 grows.
+;;
+;; STRUCTURAL IDEMPOTENCE (Q-B.1.iii landing under option (d)):
+;;   After all watchers fire (each is fire-once + self-cleans), cell-18
+;;   STABILIZES at its position entry; no further writes trigger re-evaluation.
+;;   The threshold's body therefore fires AT MOST ONCE in practice — when
+;;   the LAST watcher completes the subset. DEFENSIVE GUARD via cell-19
+;;   emit-once check (hash-has-key?) handles the edge case where cell-18
+;;   would re-trigger (shouldn't happen given watcher fire-once + stable
+;;   monotone cell, but defensive against future fan-in extensions).
+;;
+;; COMPONENT-PATHS PRECISION:
+;;   Declares :component-paths (list (cons contradicted-branch-aids-cell-id
+;;   position)) so the threshold fires only when ITS position's aid-set
+;;   changes — sibling position changes (other concurrent forks) don't
+;;   wake it. Per §7.5.12.5 design-doc correction: flat hasheq cells emit
+;;   bare position keys in pu-value-diff; declaration uses cons-pair shape.
+;;
+;; AID IDENTITY NORMALIZATION (D-3C.b-7 precedent from 3C.b.3):
+;;   branch-aid-set contains canonical aid instances (preserved eq? identity
+;;   through closure capture in watcher); cell-18 entries contain those
+;;   same canonical instances (watcher writes (seteq aid)). For subset
+;;   check, normalize BOTH to integer aid-ns to avoid eq?-vs-equal? hazard
+;;   should the canonical-identity invariant ever break (e.g., per-command
+;;   ATMS reset between forks). Pattern mirrors the wrapper at 3C.b.3.
+(define (make-fork-chain-threshold-fire-fn position branch-aid-set request-info)
+  (define branch-aid-ns
+    (for/seteqv ([aid (in-set branch-aid-set)]) (assumption-id-n aid)))
+  (lambda (net)
+    ;; Threshold check: is the full branch-aid-set ⊆ cell-18's position entry?
+    (define cell-18-val (net-cell-read net contradicted-branch-aids-cell-id))
+    (define position-aids (hash-ref cell-18-val position (seteq)))
+    (define position-aid-ns
+      (for/seteqv ([aid (in-set position-aids)]) (assumption-id-n aid)))
+    (cond
+      [(not (subset? branch-aid-ns position-aid-ns))
+       ;; Not all branches contradicted yet — return net unchanged (threshold
+       ;; stays installed; will be re-evaluated on next cell-18 write).
+       net]
+      [else
+       ;; All branches contradicted. Defensive idempotence guard via cell-19
+       ;; presence check (subsumed by structural stability of cell-18 post-
+       ;; watcher-completion; defensive against future fan-in extensions).
+       (define cell-19-val (net-cell-read net union-derivation-chains-cell-id))
+       (cond
+         [(hash-has-key? cell-19-val position)
+          ;; Already emitted for this position — no-op (true Q-B.1.iii
+          ;; subsumption preserved + defensive)
+          net]
+         [else
+          ;; All branches contradicted + not yet emitted: build chain + write
+          (define chain
+            (derivation-chain-for/union-contradict net branch-aid-set request-info))
+          (net-cell-write net union-derivation-chains-cell-id
+                          (hasheq position chain))])])))
+
 (define (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
   (lambda (net)
     (define tm (net-cell-read net tm-cid))
