@@ -7104,6 +7104,86 @@ Phase 3C closes per Stage 4 Per-Phase Protocol + cross-arc VAG:
 - Phase 1.5 srcloc plumbing: `racket/prologos/propagator.rkt:354` (propagator struct) + `:363` (fire-propagator wrapper) + `racket/prologos/source-location.rkt:36` (current-source-loc parameter)
 - Codification graduation precedent (Specialized Cell Type Framework): `docs/tracking/principles/DESIGN_PRINCIPLES.org` § "Specialized Cell Type Framework as Cross-Track Template"
 
+### §9.5.2 Phase 3C.a mini-design + mini-audit (2026-05-22 — opening 3C.a foundation)
+
+Opening conversational mini-design + mini-audit for Phase 3C.a (foundation sub-phase per §9.5.1.5) per Stage 4 Per-Phase Protocol (mini-audit-precedes-implementation). 3C.a delivers the `error-explanation.rkt` module foundation: `derivation-chain` + `derivation-step` structs + `static-reverse-walk` primitive + primitive tests. Sub-phases 3C.b/c/d consume this foundation.
+
+#### §9.5.2.1 Mini-audit findings (API surface verified)
+
+| Item | Status | Detail |
+|---|---|---|
+| `error-explanation.rkt` exists? | ❌ NO | Clean ground to build on |
+| Champ iteration | ✅ | `champ-fold (k v acc → acc) init` at champ.rkt:365; iterates all propagators in O(N) |
+| Propagator accessors | ✅ | `(struct propagator (inputs outputs fire-fn broadcast-profile flags srcloc) #:transparent)` at propagator.rkt:354; auto-generated `propagator-inputs/-outputs/-srcloc` confirmed in use |
+| `tagged-cell-value` | ✅ | `(struct tagged-cell-value (base entries) #:transparent)` at decision-cell.rkt:397; entries = `(listof (cons bitmask value))` |
+| Raw cell read | ✅ | `net-cell-read-raw` provided at propagator.rkt:251, defined at :1506 (bypasses worldview filter) |
+| `net-add-propagator` | ✅ | `(net input-ids output-ids fire-fn ... #:srcloc srcloc-or-#f)` at propagator.rkt:2120 |
+| Network constructor | ✅ | `(make-prop-network [fuel])` at propagator.rkt:892 |
+| `assumption-id` | ✅ | `(struct assumption-id (n) #:transparent)` at atms.rkt:108 |
+| Test convention | ✅ | rackunit `test-case` + synthetic struct construction (test-trace-data.rkt + test-propagator.rkt precedents) |
+
+#### §9.5.2.2 Resolved design questions (Q-A.1 through Q-A.7) — locked via 3-column adversarial
+
+| Q | LOCKED Lean | Adversarial rationale |
+|---|---|---|
+| **Q-A.1** Signature | `(static-reverse-walk net cell-id #:max-depth 32 #:filter-fn pred) → derivation-chain` | `(step → bool)` predicate is GENERAL; consumer closes over aid-set when needed; further generalization is speculative pre-export |
+| **Q-A.2** Step field shape | 5 fields: `propagator-id` + `srcloc` + `assumption-ids` + `assumption-names` + `residual-cost` (all transparent) | input/output cell-ids NOT stored — derivable from prop-id via champ-lookup; minimal shape lowers coupling risk under Phase 11b extension |
+| **Q-A.3** Walk semantics | SINGLE-LAYER decorated walk — primitive does graph walk + step decoration in one pass | Two-layer creates two API surfaces consumers must compose; single layer with filter-fn gives customization without exposing stages; refactor IF empirical need surfaces (Phase 11b) |
+| **Q-A.4** Cycle + depth bound | BOTH — visited-set of prop-ids + `#:max-depth 32` (matches Phase 3A's 30-bit budget envelope, +2 headroom) | Unbounded-with-cycle-detection walks pathological chains; 32 is generous + natural envelope; non-coupling to specific Phase 3A cap |
+| **Q-A.5** Step ordering | Depth-first pre-order accumulator via cons-onto-head; result natural-order = causal-reading (deepest cause first) | Cons-onto-head DFS naturally gives deepest-first-at-list-head; reading order = root cause first → symptom last; deterministic given champ-fold stability per-run |
+| **Q-A.6** Aid attribution | Per-step records aids from `tagged-cell-value.entries` UNION at the OUTPUT cell (the cell the walk is at); documented as "aids the cell was tagged with at walk time" — not "aids THIS propagator wrote under" | Cell value structure doesn't preserve per-propagator-write aid attribution; the imprecision is acceptable for diagnostic chains; documented honestly |
+| **Q-A.7** Sub-step partition | SINGLE atomic 3C.a commit (module + structs + primitive + tests) | Tight coupling between structs + primitive + tests; ~150-200 LoC fits one commit; sub-split adds commit overhead without bisect benefit |
+
+**Decomplection clarification (added during dialogue)**: primitive's `assumption-names` set to `'()` always; `residual-cost` set to `#f` always. Phase 3C.b/c consumers ENRICH steps with names (via `solver-state-assumptions` lookup) and residual-cost (via tropical-quantale annotation). Primitive is GRAPH-WALK-ONLY; tropical-quantale-specific decoration lives in the per-consumer wrapper.
+
+#### §9.5.2.3 Test plan (8 cases per §9.5.1.5 key gate)
+
+| Test | Scenario | Asserts |
+|---|---|---|
+| T1 | Single propagator P outputs to target cell | chain has 1 step; step.propagator-id = P's pid; step.srcloc matches install srcloc; empty aids |
+| T2 | Linear chain: P1 outputs to A; P2 reads A, outputs to B | walk from B → 2 steps; head is P1 (deepest), tail is P2 (symptom) |
+| T3 | Multi-writer: P1, P2 both output to A | walk from A → 2 steps; set-equality assertion (champ-fold order non-deterministic across runs) |
+| T4 | Cycle: P1 ↔ P2 via shared cells | cycle detection halts; walk completes without infinite loop |
+| T5 | Depth bound: chain of 5 propagators with `#:max-depth 3` | walk truncates at depth 3; chain shorter than 5 |
+| T6 | filter-fn excludes one prop-id | chain excludes filtered step |
+| T7 | Propagator without explicit `#:srcloc` | step.srcloc = #f (graceful degradation) |
+| T8 | Cell with synthetic `(tagged-cell-value 'base (list (cons #b011 'val)))` | step.assumption-ids = `(list (assumption-id 0) (assumption-id 1))` |
+
+#### §9.5.2.4 Drift risks named (D-3C.a-*)
+
+| # | Risk | Mitigation |
+|---|---|---|
+| **D-3C.a-1** | Cell→writers reverse-index O(N) per call | Error paths are rare; O(N) acceptable; cache later if profiling shows hotspot |
+| **D-3C.a-2** | `champ-fold` traversal non-determinism → chain step order varies across runs at multi-writer cells | Tests assert SET equality where order doesn't matter; sequential traversal stable within a single run |
+| **D-3C.a-3** | Bit-position → assumption-id decoding requires per-command scope | Phase 3A's ATMS is per-command; aids valid during walk; verify at impl |
+| **D-3C.a-4** | `net-cell-read-raw` vs filtered read — primitive needs RAW | Lock RAW read in primitive; document at API signature |
+| **D-3C.a-5** | `prop-id-hash` consistency with install-time hash | Verify at impl (use `champ-lookup` with `prop-id-hash`) |
+
+#### §9.5.2.5 Implementation deliverables
+
+1. NEW `racket/prologos/error-explanation.rkt` (~180 LoC est.):
+   - `(struct derivation-chain (steps) #:transparent)`
+   - `(struct derivation-step (propagator-id srcloc assumption-ids assumption-names residual-cost) #:transparent)`
+   - `(static-reverse-walk net cell-id #:max-depth #:filter-fn) → derivation-chain`
+   - Internal helpers: `build-reverse-index`, `decode-step`, `decode-aids-from-entries`
+2. NEW `racket/prologos/tests/test-error-explanation.rkt` (~150 LoC est.):
+   - 8 test cases T1-T8
+   - Synthetic dep-graph construction via `make-prop-network` + `net-new-cell` + `net-add-propagator`
+
+#### §9.5.2.6 Closure criteria
+
+1. `error-explanation.rkt` compiles cleanly via `raco make`
+2. All 8 test cases pass via `raco test tests/test-error-explanation.rkt`
+3. Targeted suite includes `test-error-explanation.rkt` GREEN; no regressions
+4. Full suite stable within 109-115s variance band
+5. All 5 D-3C.a-* drift risks cleared at implementation close
+6. §3 Progress Tracker updated with `3C.a` row + commit hash
+7. Dailies session entry persisted
+
+#### §9.5.2.7 Status
+
+**Phase 3C.a mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to proceed to implementation per Stage 4 Per-Phase Protocol step 7 (phase completion 5-step checklist).
+
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 
 Per 4 VAG questions under adversarial 3-column framing (catalogue / challenge / adversarial):
