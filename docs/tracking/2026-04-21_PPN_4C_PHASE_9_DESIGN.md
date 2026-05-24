@@ -7418,12 +7418,44 @@ Phase 3C.b.5 closes when:
 9. **Dailies session entry** persisted with sub-step-by-sub-step commit story
 10. **Bookmark for 3C.b-VAG** — cumulative cross-sub-step adversarial close to follow
 
-##### §9.5.3.9.6 Q6.x probe re-run interpretation (will be filled at 3C.b.5.d close)
+##### §9.5.3.9.6 Q6.x probe re-run interpretation (CLOSED 2026-05-23)
 
-Post-3C.b.5.d artifact:
-- Probe output: `data/probes/2026-05-22-3C-Q6x-post-3Cb.txt`
-- Expected: cell-19 EMPTY for all 3 WS-mode scenarios (S1/S2/S3)
-- Interpretation: WS-mode does NOT trigger Phase 3A's on-network mechanism (per Q6.x finding `prop_allocs=0`); 3C.b's threshold propagator never installs for WS scenarios; cell-19 never populated. **EVIDENCE that 3C.c sexp-bridge is needed for WS-mode user-facing coverage** — annotated WS unions go through sexp `check/err` path which today produces empty `derivation-chain`; 3C.c populates that via different mechanism (sexp-bridge consuming cell-19 from the parallel-firing on-network path, OR direct sexp chain construction — TBD at 3C.c mini-design).
+**Probe artifact**: `racket/prologos/data/probes/2026-05-22-3C-Q6x-post-3Cb.txt` (27 lines)
+
+**Probe scenarios** (per `examples/2026-05-22-3C-Q6x-probe.prologos`):
+- S1: `def x <Nat | Bool> "hello"`
+- S2: `def y <Int | Bool> "world"`
+- S3: `def z <<Nat | Bool> | String> 3.14` (nested union; rational literal)
+
+**Empirical results post-3C.b**:
+
+| Counter | Value | Interpretation |
+|---|---|---|
+| `prop_allocs` | **0** | Phase 3A on-network mechanism did NOT install any propagators for WS scenarios |
+| `prop_firings` | **0** | No on-network propagators fired (consistent with `prop_allocs=0`) |
+| `CELL-METRICS cells` | **42** | Baseline cell count; no per-fork latch/threshold/chain cells added (would be cells 18+19 per fork if 3A fired) |
+| `CELL-METRICS propagators` | **0** | No 3A-installed propagators present in final network |
+| `union-exhaustion-error.derivation-chain` | **`'(() ())`** (S1, S2) / **`'(() () ())`** (S3) | Empty per-branch lists from sexp `check/err` path's `build-derivation-chain` — confirms 3C.c sexp-bridge still required |
+
+**Interpretation (D-3C.b.5-6 deployment gap CONFIRMED)**:
+
+WS-mode dispatch path does NOT route through `type-map-write` → R7 inline emit → cell-15 → process-fork-on-union. The 3 WS scenarios are handled entirely by the sexp `check/err` path (typing-errors.rkt:64-118) which:
+1. Performs per-branch speculation via `with-speculative-rollback`
+2. Constructs `union-exhaustion-error` with `derivation-chain` field populated by `build-derivation-chain`
+3. Returns empty per-branch chains (`'()` per branch) since sub-failures aren't collected for the WS path
+
+**EVIDENCE for 3C.c sexp-bridge necessity**:
+
+The empty `union-exhaustion-error.derivation-chain` field is the artifact 3C.c bridges by:
+- Reading cell-19 (populated by 3C.b's on-network mechanism for INFERRED unions; or alternative path for sexp ANNOTATED unions per 3C.c design)
+- Replacing the empty `'(() ())` payload with the structured `derivation-chain` struct from `error-explanation.rkt`
+
+**Cross-references**:
+- Q6.x baseline probe (pre-3C): same empty-chain shape (`'(() ())`) — confirming 3C.b's structural changes haven't disrupted the existing sexp path
+- Phase 3C.b.5.c-bugfix (commit `bc47e0d6`): made cell-19 actually populate for synthetic E2E scenarios; WS scenarios remain a separate gap addressed by 3C.c
+- D-3C.b.5-6 (§9.5.3.9.4): "validated but not deployed" anti-pattern explicitly applies pre-3C.c
+
+**Probe re-run status**: ✅ ARTIFACT SAVED, EVIDENCE CONFIRMED. cell-19 stays EMPTY for WS-mode as predicted. 3C.c proceeds with confirmed scope.
 
 ##### §9.5.3.9.7 Status
 
