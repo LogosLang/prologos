@@ -216,6 +216,8 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **3C.c.3 + 3C.c.4 + 3C.c.5 ATOMIC** | ATOMIC LANDING per Q-C.3 + Q-C.4 (intermediate state would break format-error rendering). (3C.c.3) check/err sexp-bridge: union path reworked via 3C.c.1 translator; cell-19 written via direct elab-cell-write per Q-C.1 (f); build-derivation-chain union-type path RETIRED per Q9 (non-union retained for Phase 11b). (3C.c.4) format-error: union-exhaustion-error case handles (listof derivation-chain) struct shape with new format-derivation-step helper; empty chains produce no "because:" lines (atomic UX parity per §9.5.4.7.1 byte-for-byte); ATMS state queries DEFERRED to Phase 11b per §9.5.4.5 (structured-data path via assumption-ids preserved for LSP/PNET). (3C.c.5) Test sites migrated: test-provenance-errors.rkt 4 sites updated for new struct shape; test-speculation-bridge.rkt + test-gde-errors.rkt unaffected (branches/branch-mismatches fields unchanged). (Cycle break) NEW leaf module derivation-chain-types.rkt extracts structs to resolve errors.rkt → error-explanation.rkt → propagator → reduction → errors cycle; error-explanation.rkt re-exports via (struct-out ...) for backward compat. | ✅ `521fd243` | +244 / -68 LoC across 5 files + new derivation-chain-types.rkt (44 LoC). Targeted suite (5 files: test-union-types-atms + test-error-explanation + test-speculation-bridge + test-provenance-errors + test-gde-errors): 123 tests / 6.0s / PASS. Cycle resolved. Mid-flight failure caught (dangling assertion from old-shape test) + fixed via failure-log read per workflow.md diagnostic protocol — NOT re-run full suite. Drift risks: D-3C.c-1/3/4/5/6/8/9/10 all addressed; D-3C.c-2 acknowledged + documented (sexp uses loc, on-network uses position; collision rare in practice; Track 4D unification resolves); D-3C.c-7 verified for atomic scenarios via dangling-assertion fix (UX preserved). NEW codification candidate (1 data point watching list): "Adding require to foundational module requires transitive cycle audit; extracting struct definitions to leaf module is standard cycle-break pattern for transparent structs (this work) — backward compat via (struct-out ...) re-export." |
 | **3C.c.6** | E2E acceptance verification — (a) atomic Q6.x probe re-run: rendered output IDENTICAL to pre-3C.c per §9.5.4.7.1 (diff vs pre-3C.c artifact: ONLY expected structural changes + run-to-run variance noise); (b) cell-19 observability test added (NEW test "3C.c: sexp check/err writes cell-19 for union all-branch-contradict" using process-string/return-net + elab-cell-read — confirms D-3C.b.5-6 deployment gap CLOSED); (c) NESTED-SCENARIO AUDIT FINDING: NO simple scenario in current codebase triggers nested speculation (post-T-2 retirements of map-assoc speculation; flat union check is atomic by construction). Richness validated STRUCTURALLY via synthetic T-C.c-1.4/1.5 unit tests (3C.c.1). Real-world E2E nested validation DEFERRED to 3C.d discriminating axes + Phase 11b general derivation infrastructure. | ✅ `59192638` | +127 / -1 LoC across tests/test-provenance-errors.rkt + 3 new files (atomic post-3C.c artifact + nested-probe.prologos + nested-probe artifact). Targeted suite (6 files including parity): 153 tests / 8.6s / PASS. Per §9.5.4.7.3 acceptance criterion table: ✓ atomic rendered output IDENTICAL; ✓ atomic structural shape flipped; ✓ atomic cell-19 written verified via on-network observability test; ⚠ nested scenario chain population not exercisable via simple scenario in current codebase (honest finding documented). |
 | **3C.c-VAG** | Cumulative cross-sub-step adversarial 3-column VAG (4 questions × catalogue/challenge/adversarial). All 10 D-3C.c-* drift risks verified cleared. NAMED drift discovered + captured at §9.5.4.13: (KR-1) UX regression for diagnosis-rich scenarios — `[diagnosis]` lines disappear under new chain shape; restoration or escalation decision pending at 3C.d open. (KR-2) derivation-step field sparsity for sexp-fed steps — 2/5 fields are #f; Track 4D enriches. (KR-3) two-shape error infrastructure — union new shape + non-union old shape coexist; Phase 11b unifies. 4 NEW methodology codification candidates surfaced (perf-risk-naming + transitive-cycle audit + acceptance-as-risk + UX-specificity); each watching-list 1 data point. Honest framing of deliverable: 3C.c is FIRST INCREMENT of Propagator-First Diagnostics with named scope qualification, NOT complete realization. | ✅ `25f4343c` | See §9.5.4.13 for cumulative VAG application; §9.5.4.14 for KR-1/2/3 known regressions documented. **Phase 3C.c CLOSED end-to-end** — translator + 3C.b alignment + check/err sexp bridge + format-error update + test sites + cell-19 observability + atomic verbatim parity + nested-scenario audit finding + named drift all delivered. Full suite 8273/113.4s/0 (within 109-115s variance band). Ready for Phase 3C.d (format integration + 4-axis discriminating parity tests + KR-1 decision: restore at 3C.d via ATMS state queries OR escalate to Phase 11b). |
+| **3C.d.0 mini-design + mini-audit** | Opening 3C.d (format integration + 4-axis discriminating parity tests + KR-1 (c) ESCALATE-with-substrate decision); 7-tier mini-audit + W1 install-site safety audit (181 sites, zero hostile values); F1 REFRAMED (srcloc threading structurally possible via W1 default); 5 design questions Q-D.1-5 LOCKED via 3-column adversarial — (c) ESCALATE-with-substrate for KR-1 + Phase 11b parent design row capture for "decision to weigh on then"; (Q-D.4.b) W1 default `#:srcloc` to `(current-source-loc)` for Phase 1.5 completion; (P2) SPLIT parity test placement across test-error-explanation.rkt + test-provenance-errors.rkt; 10 D-3C.d-* drift risks named; honest scope-down to ~80-120 LoC (vs original 100-150). | ✅ (this commit) | Persisted at §9.5.5 per Stage 4 mini-audit-precedes-implementation discipline. 12 subsections (mini-audit / vision framing / audit-surfaced findings / Q-D.1-5 locked leans / implementation sketch / sub-phase partition / acceptance criterion / drift risks / closure criteria / cross-track captures / status / cross-references). 3C.d is the HONEST-FRAMING + INFRASTRUCTURE-COMPLETION sub-phase of 3C arc — NOT KR-1 restoration. |
+| 3C-VAG | Cross-arc adversarial 3-column VAG (4 sub-phases × 4 VAG questions) | ⬜ | Conditional on 3C.a ✅ + 3C.b ✅ + 3C.c ✅ + 3C.d close. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
@@ -8195,6 +8197,312 @@ This two-shape state is intentional (Q9 lock: 3C.c retires UNION path only; non-
 - Process-string/return-net (test infrastructure): driver.rkt:1510
 - speculation-failure struct: elab-speculation-bridge.rkt:95
 - Workflow.md scaffolding-naming discipline: dailies §9.5.4.4 adversarial framing source
+
+### §9.5.5 Phase 3C.d mini-design + mini-audit (2026-05-24 — opening format integration + 4-axis discriminating parity tests + KR-1 (c) ESCALATE-with-substrate)
+
+Conversational mini-design + mini-audit opened post-3C.c-VAG close (`25f4343c`) per refined Stage 4 methodology (mini-design + mini-audit outcomes persist to design doc; co-dependent cycle; outcomes drive the design doc). Context: post-3C.c CLOSED. Cell-19 is AUTHORITATIVE on-network store; `union-exhaustion-error.derivation-chain` field shape FLIPPED to `(listof derivation-chain)`; multi-writer scaffolding active (3C.b on-network handler + sexp check/err); KR-1/2/3 named drift captured at §9.5.4.14.
+
+3C.d's load-bearing first question (Q-D.1) was framed at 3C.c-VAG close as: KR-1 (a) RESTORE at 3C.d via ATMS state queries vs (b) ESCALATE to Phase 11b with timeline commitment. Adversarial 3-column framing applied at this mini-design surfaced a third option **(c) ESCALATE-with-substrate** that survives the most scrutiny — and additionally surfaced that **F1 (initial audit conclusion that `/srcloc-presence` axis CANNOT BE SATISFIED) was over-fatalistic** — Phase 1.5 infrastructure makes srcloc threading structurally possible via a one-line default change (W1).
+
+#### §9.5.5.1 Mini-audit findings (7-tier + W1 install-site safety, grounded in code)
+
+Audit conducted across 7 tiers covering: (T1) current 3C.c shipped state, (T2) KR-1 restore-path infrastructure (ATMS state queries), (T3) old diagnosis-line behavior (pre-3C.c baseline), (T4) parity test infrastructure, (T5) nested-scenario / on-network typing landscape, (T6) Phase 11b escalation context, (T7) risk landscape + cross-references. PLUS W1 audit covering 181 production install sites of `net-add-propagator` / `net-add-fire-once-propagator` / `net-add-broadcast-propagator` for `(current-source-loc)` default safety verification.
+
+**T1 — Current 3C.c shipped state**. `derivation-chain-types.rkt` (71 LoC leaf PNET ABI seed; 2 transparent structs). `error-explanation.rkt` (418 LoC: static-reverse-walk + derivation-chain-for/union-{contradict,check} + decode-aid-name). `errors.rkt:286-321` union-exhaustion-error rendering with EXPLICIT "deferred to Phase 11b" comments at lines 294-299 + 340-344. `format-derivation-step` helper (lines 345-349) renders names only. `typing-errors.rkt:88-164` check/err union path writes cell-19 via direct elab-cell-write. `typing-propagators.rkt:1346-1388` make-fork-chain-threshold-fire-fn on-network writer.
+
+**Critical T1 observation**: format-error code currently has EXPLICIT "deferred to Phase 11b" comments at write time — 3C.c implementation ANTICIPATED KR-1 escalation. Only 3C.c-VAG dialogue surfaced (a) RESTORE as a viable alternative; the original design intent was escalation.
+
+**T2 — KR-1 restore-path infrastructure**. All ATMS query APIs confirmed present + battle-tested: `solver-state-explain-hypothesis`, `solver-state-assumptions`, `solver-state-minimal-diagnoses`, `nogood-explanation` struct, `assumption` struct, `greedy-hitting-set` algorithm. **Infrastructure NOT dormant**: `build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict` (typing-errors.rkt:173-280) ARE STILL IN PRODUCTION for the NON-union path (type-mismatch-error). Context filter logic `(memq (assumption-name asn) '(def-type-annotation check-type-annotation))` is the canonical user-annotation identifier. Restoration would be MECHANICAL GLUE — re-call existing helpers in union path — NOT new infrastructure.
+
+**T3 — Old diagnosis-line behavior**. Pre-3C.c output for `(def x <Nat | Bool> "hello")` included `[Speculation chain] — conflicts with: <names>` + `user annotated x : <Nat | Bool>` + `[diagnosis] retract: x : <Nat | Bool>` lines via `format-context-diagnosis` + `format-atms-conflict`. Post-3C.c: per-branch `tried <type>` + per-step `because: <name>` only — NO context-diagnosis. Non-union path STILL produces `[diagnosis]` lines (test-provenance-errors.rkt:347 active). Confirms dual-shape error infrastructure (KR-3).
+
+**T4 — Parity test infrastructure**. `parity-test` + `parity-test-skip` macros wrap test-case. `check-parity-equal?` accepts `#:expected` / `#:expected-type` / `#:expected-warnings` / `#:expected-shape` — ALL SUBSTRING matches against final result string. Cannot directly assert on `union-exhaustion-error.derivation-chain` STRUCTURE. Existing 3A axis pattern (`'union-inhabitation-*`): 4 active + 1 skip-gated; the all-fail axis line 500 asserts `#:expected "Unbound variable"` (downstream symptom) because harness can't see error structs.
+
+**T5 — Nested-scenario landscape**. Empirical probes (`2026-05-24-3C-Q6x-post-3Cc.txt` + `2026-05-24-3C-Cc-nested-probe.txt`): ALL chains `(derivation-chain '())` for both atomic AND nested-attempted scenarios. `with-speculative-rollback` post-T-2 has only 2 production callers: `qtt.rkt:2329` (non-union) + `typing-errors.rkt:103` (check/err's union branch test itself). The ONLY union-scenario speculation-failure tree producer IS the check/err call; sub-failures empty for atomic. Per 3C.c.6 audit-finding: "no SIMPLE nested scenario triggers nested speculation in current codebase post-T-2 retirements."
+
+**T6 — Phase 11b escalation context**. Parent D.3 Phase 11b row: ⬜ NOT STARTED. Scope: "diagnostic infrastructure — residuation-backward error reporting." API `derivation-chain-for(position, tag)` DEFERRED to phase-time mini-design. Sequencing: AFTER Phase 11 (= addendum's Phase 2 — ✅ COMPLETE; dependency satisfied). Research input: trace monoidal category theory (Joyal-Street-Verity 1996; Hasegawa 1997; Abramsky-Haghverdi-Scott 2002). DEFERRED.md has NO KR-1/2/3 entries — would need to be added for honest escalation.
+
+**T7 — Risk landscape**. 3C.c-VAG named drift KR-1/2/3 + 4 new methodology gaps (perf-risk-naming + transitive-cycle audit + acceptance-as-risk + UX-specificity). D-3C-1 (shape-without-benefit), D-3C-7 (srcloc-coverage-gap), D-3C-9 (test-discriminating-power) still relevant. PROMOTION-READY codifications include audit-precedes-implementation discipline at 6+ data points + empirical falsification at 4+ data points.
+
+**W1 install-site safety audit — 181 production sites classified**:
+- **propagator.rkt** 25 (mix of definitions + internal compound primitives with `#:srcloc` flow-through)
+- **typing-propagators.rkt** 50 (inside `install-typing-network` ← `infer-on-network` ← `driver.rkt::process-command`; current-source-loc = COMMAND-LEVEL srcloc due to Gap B: expr-* lack srcloc field)
+- **elaborator-network.rkt** 40 (elab-add-* wrappers; inherit caller's binding)
+- **relations.rkt** 10, **session-propagators.rkt** 8, **sre-core.rkt** 7, **session-runtime.rkt** 6, **constraint-propagators.rkt** 6, **wf-propagators.rkt** 5, **unify.rkt** 5 — all inside process-command parameterize; command-level srcloc
+- **elab-network-types.rkt** 4 (pass-through wrappers), **narrowing.rkt** 2, **driver.rkt** 2 (bridge installs; command-level), **bilattice.rkt** 1 (module-load OR relation-def context; #f or coarse)
+- **reduction.rkt** 1, **cap-type-bridge.rkt** 1, **effect-bridge.rkt** 1, **effect-ordering.rkt** 1, **capability-inference.rkt** 1, **sre-rewrite.rkt** 1 — bridge / rewrite installs; command-level
+- **metavar-store.rkt** 1, **infra-cell-sre-registrations.rkt** 1, **performance-counters.rkt** 1, **merge-fn-registry.rkt** 2 — all COMMENT-ONLY references, 0 real calls
+
+**W1 verdict — SAFE**. Three distinct contexts: (i) module-load-time → `srcloc=#f` (identical to today); (ii) production elaboration/execution → command-level srcloc (strict improvement over today's `#f`); (iii) fire-time-nested installs → firing propagator's srcloc (semantically correct via `fire-propagator` wrapper). **Zero hostile values across all 181 sites**. Honest caveat: granularity limited by Gap B (expr-* lack srcloc); per-sub-expression precision NOT delivered by W1 — that's Phase 11b structural fix scope.
+
+#### §9.5.5.2 Vision-aligned framing — honest completion + infrastructure-completion sub-phase
+
+Per LHC vision (user direction 2026-05-24 dialogue captured at §9.5.4.2) + 3C.c arc's "first increment of Propagator-First Diagnostics with honest scope qualification" per §9.5.4.13:
+
+**3C.d is the HONEST-FRAMING + INFRASTRUCTURE-COMPLETION sub-phase of the 3C arc — NOT a KR-1 restoration sub-phase.** The (c) ESCALATE-with-substrate decision (Q-D.1) captures the regression honestly via DEFERRED.md + skip-gated canary + Phase 11b row update — WITHOUT inverting 3C.c's explicit design intent (errors.rkt:294-299 says "ATMS state queries DEFERRED — Phase 11b scope") and WITHOUT pre-committing to a rendering shape that Phase 11b's trace-monoidal-category-theory framing will design.
+
+3C.d also COMPLETES the Phase 1.5 srcloc infrastructure via W1 default (Q-D.4) — `net-add-propagator` family defaults `#:srcloc` to `(current-source-loc)`. Phase 1.5 BUILT THE SLOTS (struct field + wrapper + parameter + kwarg) but missed the default-to-parameter step at the install layer. W1 finishes that wiring and BENEFITS ALL FUTURE TRACKS (Phase 11b consumes threaded srcloc for derivation chains; PReduce Track 6 inherits; PPN Track 8 LSP serializes; SH Track 4 LHC propagates).
+
+The 4-axis discriminating parity tests (3 synthetic in test-error-explanation.rkt + 1 integration in test-provenance-errors.rkt per Q-D.3 SPLIT) + skip-gated canary `'union-diagnosis-restoration` preserve REGRESSION-DETECTION CAPABILITY across the deferral period — ensuring Phase 11b's eventual restoration has a working acceptance signal AND that future regressions (a refactor that breaks W1 wiring; an inadvertent revert) surface immediately.
+
+**Honest scope-down**: 3C.d ships ~80-120 LoC (smaller than original 100-150 estimate at §9.5.1.5) because KR-1 restoration is NOT in scope. Net deliverables: W1 default wiring (~3-5 LoC) + 2 synthetic axes (~30-50 LoC) + 2 integration axes (~30-50 LoC) + skip-gated canary (~5-10 LoC) + test rename (~1 LoC) + DEFERRED.md entry (~20-30 LoC) + parent D.3 Phase 11b row update (~10-20 LoC).
+
+**Vision-alignment claim**: 3C.d completes the 3C arc as honest first-increment of Propagator-First Diagnostics — the chain struct shipped, the cell-19 substrate shipped, the integration test demonstrates W1 threading works, and the regression-canary preserves accountability for the named-but-deferred KR-1 restoration. Phase 11b inherits a clean substrate + well-named deferrals to design against.
+
+#### §9.5.5.3 Audit-surfaced findings (F1-F7 + W1)
+
+7 audit-surfaced findings beyond the §9.5.4.13 VAG anticipations:
+
+**F1 (REFRAMED post-W1 audit)** — `/srcloc-presence` axis is NOT structurally impossible. Initial audit conclusion that "the axis CANNOT BE SATISFIED by any current production code path" was over-fatalistic — based on `grep -c "#:srcloc" typing-propagators.rkt` = 0. But Phase 1.5 infrastructure (current-source-loc parameter + propagator struct srcloc field + surf-node-srcloc extractor + fire-propagator wrapper + #:srcloc kwarg) makes srcloc threading STRUCTURALLY POSSIBLE. The gap is the missing default — net-add-propagator family defaults `#:srcloc` to `#f` instead of `(current-source-loc)`. W1 (one-line change) closes the gap. Phase 1.5 (α)+(η) hybrid model intent preserved.
+
+**F2** — KR-1 (a) RESTORE is MECHANICAL glue, not new infrastructure. `format-context-diagnosis` + `format-atms-conflict` (typing-errors.rkt:173-280) are LIVE for non-union path. Estimated scope was overstated at ~100-150 LoC; actual is closer to ~50-100 LoC. Marginal cost over (b) ESCALATE is modest. But mechanical cheapness doesn't address the architectural debt question.
+
+**F3** — KR-1 (a) introduces NEW WRITER coupling that 3C.c's design didn't anticipate. Restoration would couple format-error (or translator) to ATMS state at render time. Options: (a1) field on derivation-step + translator-side enrichment, (a2) parameter threading into format-error, (a3) separate render-time helper. All have adversarial costs (see §9.5.5.4 Q-D.2).
+
+**F4** — Dominant user-facing scenarios produce EMPTY chains for both writers. Empirical probes confirmed. Restoration would render context-diagnosis OUTSIDE the chain (paralleling pre-3C.c flow), not via the chain mechanism — which empties for atomic scenarios anyway.
+
+**F5** — `/non-union-no-chain` (negative axis) is the only axis that meaningfully tests REGRESSION TODAY without additional infrastructure. The other 3 axes require either synthetic injection (`/chain-shape`, `/branch-attribution`) or W1 wiring (`/srcloc-presence`).
+
+**F6** — Parity test placement is architecturally significant. The 4 axes test DIFFERENT THINGS at DIFFERENT LAYERS:
+- `/chain-shape` + `/branch-attribution` — translator OUTPUT structure (synthetic, unit-test)
+- `/srcloc-presence` — INTEGRATION (verifies W1 wiring)
+- `/non-union-no-chain` — INTEGRATION negative (type-mismatch-error has no chain field)
+
+This implies SPLIT across existing files (test-error-explanation.rkt T-B.* + test-provenance-errors.rkt Suite 8+) rather than co-location.
+
+**F7** — `build-derivation-chain` + `format-context-diagnosis` + `format-atms-conflict` still live for non-union path — KR-3 retirement at Phase 11b is concrete (replace these three with general derivation-chain-for/general-position primitive). If KR-1 restoration ever lands, it should reuse these helpers structurally so the union + non-union paths produce structurally similar output, easing Phase 11b unification.
+
+**W1 audit finding** — 181 sites; zero hostile values; three context classifications; strict diagnostic-quality improvement. Granularity-limited-by-Gap-B caveat documented (per-expr-node precision is Phase 11b scope).
+
+#### §9.5.5.4 Resolved design questions (Q-D.1-5) — LOCKED via 3-column adversarial framing
+
+The dialogue applied 3-column adversarial framing (catalogue / challenge / **adversarial — where does this BREAK?**) per workflow.md + CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging extended-scope discipline. Each question's surviving option is the one that withstands all three columns.
+
+##### Q-D.1 — KR-1 decision (RESTORE vs ESCALATE vs ESCALATE-with-substrate)
+
+Principles bearing: Correct by Construction, Validated ≠ Deployed, Honest Framing, Most Generalizable Interface, First-Class by Default, Decomplection, Belt-and-Suspenders anti-pattern.
+
+**Option (a) RESTORE at 3C.d via ATMS state queries** — Catalogue: closes KR-1, eliminates UX regression, uses existing battle-tested helpers (F2). Challenge: union-only restoration creates new dual-shape diagnosis path (KR-3 grows); Phase 11b has 3 shapes to reconcile. **Adversarial**: (A1) RESTORE INVERTS 3C.c's explicit design decision (errors.rkt:294-299 "deferred to Phase 11b") mid-arc without revisiting WHY. The original reasoning — Phase 11b's general derivation framework unifies union + non-union + LSP + trace-monoidal grounding — wasn't refuted, just overridden by VAG dialogue. (A2) The 3C.c-VAG named methodology gap "design-time deliverables that might-not-materialize should be NAMED as drift risks" warned exactly about this; restoration at 3C.d is correcting a drift we ourselves codified. (A3) Render-time ATMS state query under speculation rollback boundaries may produce STALE diagnoses if solver-state at render time differs from solver-state at contradiction time. Same correctness hazard as observer-coupling (which Q3 LOCKED static walk to avoid).
+
+**Option (b) ESCALATE to Phase 11b with timeline commitment** — Catalogue: aligned with 3C.c's explicit intent; Phase 11b absorbs KR-1+2+3 coherently. Challenge: "timeline commitment" without specifics is the "Pragmatic Is a Rationalization for Incomplete" anti-pattern. **Adversarial**: (B1) Production users experience the UX regression for UNBOUNDED duration — Phase 11b currently has no target date, no sub-phase scoping, no mini-design started. (B2) DEFERRED.md has NO KR-1/2/3 entries — escalation is currently INVISIBLE TO TRACKING. (B3) Test rewrite at 3C.c.5 removed the `[diagnosis]` assertion — regression-detection capability has been DISMANTLED.
+
+**Option (c) ESCALATE-with-substrate (NEW; surfaced via Q-D.1 adversarial)** — Same direction as (b) but pays the tracking debt up-front: (i) DEFERRED.md entry for KR-1/2/3 with explicit Phase 11b tracker pointer; (ii) skip-gated parity test `'union-diagnosis-restoration` (preserves regression-detection capability); (iii) KR-3 boundary documentation in errors.rkt; (iv) chain's `assumption-ids` enrichment that Phase 11b can consume.
+
+**LOCKED LEAN — (c) ESCALATE-with-substrate**. Survives every adversarial column: not architectural debt (no new restoration code); not unbounded scaffolding (tracked + tested); not test-coverage compromise (skip-gated assertion preserves canary). Phase 11b inherits coherent substrate + named deferrals. Per user direction 2026-05-24 dialogue: **Phase 11b parent design row should also capture this decision** as "to weigh on then" — i.e., when Phase 11b's mini-design opens, re-weigh (a)/(b)/(c) variants with trace-monoidal-category-theory framing as research input.
+
+##### Q-D.2 — Format-error structure if RESTORE selected (MOOT under Q-D.1 (c))
+
+Under Q-D.1 (c), Phase 11b owns format-diagnosis-for design. Q-D.2 analysis preserved here as research input for Phase 11b's mini-design.
+
+**Option (a1) translator-side enrichment via NEW derivation-step field** — Adversarial: (a1.1) field-bloat at PNET ABI versioning (derivation-chain-types.rkt is the seed); each addition is a versioning commitment; union-specific diagnostics field is type-pollution at ABI level. (a1.2) diagnostics IS DERIVED from existing fields (assumption-ids + ATMS query); storing derived data violates Single-Source-of-Truth + introduces staleness hazards. (a1.3) Trace-monoidal grounding for Phase 11b would re-architect the struct anyway — dead-weight field.
+
+**Option (a2) parameter threading into format-error** — Adversarial: (a2.1) direct violation of "no new parameter readers" workflow.md anti-pattern; Phase 1.5 labeled `current-source-loc` as SCAFFOLDING with PM Track 12 retirement; same applies to `current-command-atms`. (a2.2) errors.rkt currently doesn't require atms.rkt — adding the require revives cycle-resolution concerns 3C.c.3 just resolved. (a2.3) Render-time staleness hazard.
+
+**Option (a3) separate render-time helper** — Adversarial: (a3.1) staleness hazard same as (a2). (a3.2) "graceful when no atms-box" is the "for safety" red flag (workflow.md). (a3.3) Cycle resurrection risk — placing helper in error-explanation.rkt may re-introduce errors.rkt → error-explanation.rkt cycle that leaf-extraction precisely solved.
+
+**LOCKED LEAN — MOOT under Q-D.1 (c)**. Phase 11b's eventual design owns the choice with trace-monoidal-category-theory framing.
+
+##### Q-D.3 — 4-axis parity test placement
+
+Principles bearing: Decomplection, Most Generalizable Interface, Single Source of Truth, Discrimination (D-3C-9).
+
+**Option (P1) extend test-elaboration-parity.rkt with harness extension** — Adversarial: (P1.1) breaks existing axis-name semantic (all current axes are STRING-based via `check-parity-equal?` substring matches); struct-shape introspection adds different mental model in same file. (P1.2) requires different entry point (process-string vs run-ns-last); two test patterns = same cognitive complexity as two test files. (P1.3) the existing `'union-inhabitation-all-fail` axis already PUNTED on struct testing (`#:expected "Unbound variable"` downstream symptom) — inverting that decision INSIDE THE SAME FILE without explanation is drift.
+
+**Option (P2) split tests across existing files** — Adversarial: (P2.1) splitting could LOSE discriminating power IF the 4 axes were cuts of one property. (P2.2) test-error-explanation.rkt's T-B.* uses SYNTHETIC networks (synthetic propagators + assumption-ids) — for axes that need REAL elaboration output, synthetic doesn't suffice. (P2.3) `/srcloc-presence` integration test belongs with `/non-union-no-chain` in test-provenance-errors.rkt — not split off to test-error-explanation.rkt.
+
+**Option (P3) new dedicated test file** — Adversarial: (P3.1) new file is methodology drift; doesn't address underlying structural fragmentation. (P3.2) "new file for 3C.d" signals tests are SPECIAL — they're not; standard machinery handles them. (P3.3) Phase 11b + PReduce Track 6 + future tracks would face the same choice; methodology accumulates.
+
+**REFRAMING**: The 4 axes are 4 PROPERTIES at 2 LAYERS, not 4 cuts of one property:
+- `/chain-shape` + `/branch-attribution` — translator output STRUCTURE (synthetic; test-error-explanation.rkt T-B.* pattern)
+- `/srcloc-presence` + `/non-union-no-chain` — INTEGRATION (verifies W1 wiring + KR-3 boundary; test-provenance-errors.rkt Suite 8+ pattern)
+
+**LOCKED LEAN — (P2) SPLIT** — synthetic axes to test-error-explanation.rkt (T-B.6+); integration axes to test-provenance-errors.rkt (Suite 8 extension). NO harness extension. NO new file. The "co-location for discrimination" framing was wrong; layered tests in layered files reflects the actual property structure.
+
+##### Q-D.4 — `/srcloc-presence` axis design (post-F1 reframe)
+
+Principles bearing: Phase 1.5 (ε) closure-capture REJECTION precedent, Correct by Construction, Most Generalizable Interface, Decomplection, Validated ≠ Deployed.
+
+**Option (Q-D.4.a) synthetic unit test only** — Adversarial: (a.1) tautology — test constructs derivation-step with non-#f srcloc; "axis ≥ 1 step has non-#f srcloc" trivially holds for the test's own construction. Verifies nothing about system behavior. (a.2) shape-without-benefit anti-pattern AT TEST LAYER. (a.3) non-discriminating — never fails for production wiring breakage.
+
+**Option (Q-D.4.b) default `#:srcloc` to `(current-source-loc)` in net-add-propagator family** — Adversarial: (b.1) "default to parameter" creates the SAME closure-state hazard the (ε) rejection avoided? — REFUTED. Phase 1.5 LANDED on storing srcloc IN THE STRUCT FIELD via (α)+(η) hybrid; (ε) was REJECTED specifically because it stored in CLOSURE. W1 stores in propagator struct field at install time — matches Phase 1.5's chosen design exactly. (b.2) fire-time `current-source-loc` IS the propagator's own srcloc (per `fire-propagator` wrapper) — install-time srcloc is preserved coherently across fires. (b.3) defaults are SILENT — readers seeing net-add-propagator calls don't see the implicit threading. But the Phase 1.5 design (α)+(η) IS THE DOCUMENTED CONTRACT; W1 implements it correctly.
+
+**Option (Q-D.4.c) explicit `#:srcloc (current-source-loc)` at typing-propagators.rkt install sites (~25-30 mechanical edits)** — Adversarial: (c.1) discipline-maintained-correctness anti-pattern; convention can be forgotten — defaults cannot. (c.2) per-site explicit override is rare — kwarg already handles it; (c) inverts default vs override. (c.3) future tracks face same boilerplate; static lint would enforce a convention defaults make unnecessary.
+
+**Option (Q-D.4.d) defer axis to Phase 11b** — Adversarial: (d.1) cumulative deferral — Q-D.1 (c) defers diagnosis restoration; (d) defers srcloc axis; 3C.d's substantive content thins. (d.2) `/srcloc-presence` was a Q10 lock chosen for discriminating power; deferring entirely reduces 3C.d to 3-of-4 axes. (d.3) assumes Phase 11b will do srcloc threading; if Phase 11b's actual scope doesn't include it, deferral is unmoored.
+
+**LOCKED LEAN — (Q-D.4.b) W1 default**. Survives every adversarial column. Is the COMPLETION of Phase 1.5's missed default-step. Strict improvement: adds non-#f srcloc where parameter is bound; leaves #f where it was already #f (zero regression). Benefits all future tracks. W1 audit (§9.5.5.1) verified safety across 181 production install sites with zero hostile values; the (b.1) closure-state-hazard concern was REFUTED by Phase 1.5 (α)+(η) design re-examination.
+
+##### Q-D.5 — Existing test management under restoration
+
+Conditional on Q-D.1 outcome. Under (c) ESCALATE-with-substrate: NO restoration in 3C.d → existing tests STABLE. Only NEW work:
+
+- ADD skip-gated parity test `'union-diagnosis-restoration` with Phase 11b reference (mirrors existing `'error-provenance-chain` Phase 11b skip-gate pattern)
+- ADD `/chain-shape` + `/branch-attribution` unit tests in test-error-explanation.rkt (T-B.6+)
+- ADD `/srcloc-presence` integration test in test-provenance-errors.rkt (validates W1 wiring)
+- ADD `/non-union-no-chain` integration test in test-provenance-errors.rkt
+- KEEP existing GDE-3 tests unchanged (test-provenance-errors.rkt:330 + :347)
+- RENAME existing test at test-provenance-errors.rkt:359 to reflect partial deferral honestly
+- KEEP probe artifacts unchanged (chains remain empty post-3C.d; honest about current state)
+
+**Adversarial considerations**: (Q-D.5.B.1) Skip-gated tests are STRUCTURALLY INERT — visibility-via-output is the only signal; methodology for tracking skip-gated canaries currently ad-hoc; DEFERRED.md entry is the other half of the tracking. (Q-D.5.B.2) DEFERRED.md entry must land — (c) explicitly requires it. (Q-D.5.B.3) existing test at line 359 has comment "deferred to Phase 11b ATMS state query infrastructure" — under (c), honest framing but test name no longer reflects full design intent; rename clarifies.
+
+**LOCKED LEAN — net-additive + skip-gated canary + honest rename + DEFERRED.md entry + parent 11b row update**.
+
+#### §9.5.5.5 Implementation sketch
+
+3C.d deliverables (~80-120 LoC across 6 sub-phases):
+
+1. **W1 wiring** (~3-5 LoC in propagator.rkt):
+   - `net-add-propagator [#:srcloc [srcloc (current-source-loc)]]` (line 2238)
+   - `net-add-fire-once-propagator [#:srcloc [srcloc (current-source-loc)]]` (line 2318)
+   - `net-add-broadcast-propagator [#:srcloc [srcloc (current-source-loc)]]` (line ~2398)
+   - Add inline comment naming W1 + cross-ref to Phase 1.5 completion
+
+2. **Synthetic axes in test-error-explanation.rkt** (~30-50 LoC, T-B.6 + T-B.7):
+   - `T-B.6: /chain-shape — derivation-chain-for/union-check produces non-empty chain for non-empty sub-failures with expected step count`
+   - `T-B.7: /branch-attribution — each step's assumption-names contains the expected assumption-datum string`
+   - Use existing synthetic-network pattern from T-B.1-5
+
+3. **Integration axes in test-provenance-errors.rkt** (~30-50 LoC, Suite 9 or extension of Suite 8):
+   - `/srcloc-presence: union-exhaustion-error chain has ≥1 step with non-#f srcloc` (validates W1 wiring; uses `process-string/return-net` per 3C.b.5.b)
+   - `/non-union-no-chain: type-mismatch-error has no derivation-chain field; provenance is (listof string)` (negative axis; KR-3 boundary)
+
+4. **Skip-gated canary in test-elaboration-parity.rkt** (~5-10 LoC):
+   - `(parity-test-skip 'union-diagnosis-restoration "Phase 11b" "(def x <Nat | Bool> \"hello\")" ...)` with expected `[diagnosis] retract:` substring assertion (preserves KR-1 regression-detection capability across deferral)
+
+5. **Test rename + comment update** in test-provenance-errors.rkt (~1-3 LoC):
+   - Test at line 359 renamed from "renders per-step assumption-names" to "renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
+   - Honest test naming reflects partial deferral
+
+6. **DEFERRED.md entry** (~20-30 LoC):
+   - NEW section "PPN 4C 3C.c-VAG named drift (KR-1/2/3)" with:
+     - KR-1 (diagnosis-line UX regression): restoration deferred to Phase 11b; tracking ref §9.5.4.14 + this §9.5.5
+     - KR-2 (derivation-step field sparsity for sexp-fed steps): Track 4D enrichment + Phase 11b
+     - KR-3 (two-shape error infrastructure): Phase 11b unification target
+
+7. **Parent D.3 Phase 11b row update** (~10-20 LoC):
+   - Capture KR-1/2/3 absorption into Phase 11b's mini-design scope
+   - Cross-link to addendum §9.5.4.14 + §9.5.5
+   - Note: Phase 11b should re-weigh (a)/(b)/(c) variants with trace-monoidal-category-theory framing
+   - Per user direction 2026-05-24 dialogue: "decision to weigh on then"
+
+#### §9.5.5.6 Sub-phase partition
+
+6 sub-phases ordered for atomic implementability with measurement checkpoints:
+
+| Sub-phase | Scope | Est. LoC | Key gate |
+|---|---|---|---|
+| **3C.d.0** | Persist this mini-design + mini-audit at §9.5.5 + add §3 Progress Tracker row | docs | Persisted per Stage 4 mini-audit-precedes-implementation discipline |
+| **3C.d.1** | W1 wiring — default `#:srcloc` to `(current-source-loc)` in 3 net-add-propagator family functions (propagator.rkt) | ~5-10 | Targeted test (test-source-loc-infrastructure + test-typing-propagators sample) GREEN; per W1 audit zero hostile values; probe diff = 0 (production behavior unchanged except srcloc field populates) |
+| **3C.d.2** | Synthetic axes T-B.6 (`/chain-shape`) + T-B.7 (`/branch-attribution`) in test-error-explanation.rkt | ~30-50 | Both tests PASS via existing synthetic-network pattern |
+| **3C.d.3** | Integration axes (`/srcloc-presence` + `/non-union-no-chain`) in test-provenance-errors.rkt | ~30-50 | `/srcloc-presence` validates W1 wiring end-to-end; `/non-union-no-chain` confirms KR-3 two-shape boundary preserved |
+| **3C.d.4** | Skip-gated canary (`'union-diagnosis-restoration`) + test rename + DEFERRED.md entry + parent D.3 Phase 11b row update | ~40-60 docs | Canary registered with KR-1 reference; DEFERRED + Phase 11b capture both land |
+| **3C.d.5** | Cumulative cross-sub-step adversarial 3-column VAG + Phase 3C.d close | docs | All 4 VAG questions pass under adversarial framing; full suite stable within 109-115s variance band |
+
+#### §9.5.5.7 Acceptance criterion
+
+3C.d delivers:
+
+- ✅ **W1 wiring active**: net-add-propagator family defaults `#:srcloc` to `(current-source-loc)`; targeted tests verify propagator structs receive non-#f srcloc when installed within elaborate's parameterize scope
+- ✅ **2 synthetic axes** (`/chain-shape` + `/branch-attribution`) pass in test-error-explanation.rkt T-B.6+ via existing synthetic-network pattern
+- ✅ **2 integration axes** (`/srcloc-presence` + `/non-union-no-chain`) pass in test-provenance-errors.rkt; `/srcloc-presence` exercises W1 wiring through `process-string/return-net`
+- ✅ **Skip-gated canary** `'union-diagnosis-restoration` registered in test-elaboration-parity.rkt with Phase 11b reference + expected `[diagnosis] retract:` substring assertion
+- ✅ **DEFERRED.md entry** for KR-1/2/3 with Phase 11b tracker pointer + cross-ref to addendum §9.5.4.14 + §9.5.5
+- ✅ **Parent D.3 Phase 11b row updated** to absorb KR-1/2/3 mini-design scope + capture (a)/(b)/(c) decision history for Phase 11b reconsideration
+- ✅ **Test rename** at test-provenance-errors.rkt:359 honestly reflects partial deferral
+- ✅ **Full suite stable** within 109-115s baseline variance band (current 113.4s post-3C.c)
+- ✅ **Adversarial 3-column VAG** passes 4 questions at Phase 3C.d close
+
+3C.d does NOT deliver (honest scope-down):
+
+- ❌ KR-1 diagnosis-line restoration — Phase 11b scope
+- ❌ format-error or format-derivation-step modifications — Phase 11b scope
+- ❌ New fields on derivation-step (Q-A.8 invariant preserved; no new ABI surface)
+- ❌ Changes to typing-errors.rkt's non-union path (Phase 11b owns)
+- ❌ Probe baseline changes — chains remain empty for dominant scenarios; honest about current state
+- ❌ Per-expression-node srcloc precision (Gap B — expr-* lack srcloc field; Phase 11b structural fix)
+
+#### §9.5.5.8 Drift risks named (D-3C.d-* per Stage 4 mini-design discipline)
+
+10 drift risks named at mini-design open:
+
+| # | Risk | Mitigation |
+|---|---|---|
+| **D-3C.d-1** | W1 default produces UNEXPECTED non-#f srcloc in test contexts that previously got #f, breaking assumption-based test assertions | Audit: tests should construct propagators OUTSIDE parameterize OR explicitly pass `#:srcloc #f`. W1 audit (§9.5.5.1) verified test contexts that synthesize propagators don't have parameter bound — they continue to produce srcloc=#f naturally. Targeted test run at 3C.d.1 verifies. |
+| **D-3C.d-2** | Skip-gated canary visibility erosion across tracks — cumulative skip-gates dilute signal | Convention: skip-gated test name MUST include phase-reference tag ("Phase 11b"); DEFERRED.md mirrors the canary; both land together (3C.d.4). Future tracks should adopt the cross-reference pattern. |
+| **D-3C.d-3** | DEFERRED.md entry drifts from Phase 11b actual scope as Phase 11b mini-design evolves | Phase 11b row update (3C.d.4) cross-links bidirectionally; DEFERRED.md entries reference §9.5.4.14 + §9.5.5; updates flow synchronously when Phase 11b opens its mini-design. |
+| **D-3C.d-4** | W1 wiring breaks scheduler / module-load-time installs that depend on `srcloc=#f` for specific semantics | W1 audit confirmed module-load contexts have `current-source-loc=#f` (not in parameterize) — W1 default produces `srcloc=#f` (identical to today). Zero-regression at module-load layer. Targeted scheduler-test sample verifies. |
+| **D-3C.d-5** | `/srcloc-presence` axis under W1 trivially satisfies (command-level srcloc trivially non-#f) — non-discriminating | The axis discriminates against REGRESSION (W1 reversion; install path bypassing parameterize) — not against Gap B (per-expr-node precision). Documented in axis docstring + cross-referenced to Gap B / Phase 11b. Honest about what axis tests vs defers. |
+| **D-3C.d-6** | Test rename at line 359 creates merge friction if parallel work has touched the test | Mechanical rename only (1-line change); commit ordering ensures rename lands AFTER any parallel test churn. Pre-impl audit verifies test stability. |
+| **D-3C.d-7** | Skip-gated canary's expected assertion (`[diagnosis] retract:`) drifts if Phase 11b's restoration shape differs | Canary's purpose is REGRESSION DETECTION across deferral period; if Phase 11b changes shape, canary must be updated at Phase 11b restoration. Canary's docstring names the shape-dependency + Phase 11b authority. |
+| **D-3C.d-8** | Parent D.3 Phase 11b row becomes a catch-all for unrelated KR scope creep | Phase 11b row update is SCOPED to KR-1/2/3 + cross-ref to §9.5.4.14 + §9.5.5; future KRs from other phases should NOT add to this row unless they share Phase 11b's derivation-chain unification target. |
+| **D-3C.d-9** | Synthetic axes (T-B.6, T-B.7) duplicate logic already covered by T-B.1-5 | T-B.6/.7 test EMITTED VALUES of the translator (chain shape + branch attribution) — T-B.1-5 test FILTER + ENRICHMENT semantics. Distinct coverage; pre-impl audit verifies by re-reading T-B.1-5 assertions before writing T-B.6/.7. |
+| **D-3C.d-10** | Adversarial framing in this mini-design itself catalogued instead of challenged (meta-risk per workflow.md) | Re-read §9.5.5.4 BEFORE 3C.d.5 VAG; verify each Q-D.* lock has an adversarial column that genuinely demolished (not softly improved); if any column reads as "could be MORE aligned" instead of "where does this BREAK," re-run with sharper framing. |
+
+#### §9.5.5.9 Closure criteria
+
+Phase 3C.d closes per Stage 4 Per-Phase Protocol + cross-sub-step adversarial VAG:
+
+1. **Sub-phases 3C.d.0 through 3C.d.5 delivered** with each Stage 4 step completed in order (test coverage → commit → tracker → dailies → proceed)
+2. **W1 wiring active** in net-add-propagator family; integration test `/srcloc-presence` confirms propagator structs receive non-#f srcloc within elaborate's parameterize scope
+3. **4-axis discriminating coverage** passes per layer (synthetic in test-error-explanation.rkt T-B.6+; integration in test-provenance-errors.rkt Suite 9 or extension)
+4. **Skip-gated canary** `'union-diagnosis-restoration` registered + DEFERRED.md entry + parent D.3 Phase 11b row updated coherently
+5. **Test rename** lands at test-provenance-errors.rkt:359 with honest framing of partial deferral
+6. **All 10 D-3C.d-* drift risks cleared** at 3C.d.5 cumulative VAG
+7. **Full suite stable** within 109-115s variance band (current baseline 113.4s post-3C.c)
+8. **Adversarial 3-column VAG** passes 4 questions (on-network / complete / vision-advancing / drift-risks-cleared) at Phase 3C.d close
+9. **Phase 3C overall** ready for cross-arc 3C-VAG (next phase after 3C.d)
+
+#### §9.5.5.10 Cross-track captures (forward-pointers)
+
+Per vision-forward framing, Phase 3C.d deliverables consumed by downstream tracks:
+
+1. **Phase 11b (parent D.3 Phase 11b row + §6.1.1 provenance infrastructure)**: KR-1/2/3 absorption documented; (a)/(b)/(c) decision history captured; trace-monoidal-category-theory framing as research input; W1 wiring DELIVERED so Phase 11b's general derivation-chain-for primitive inherits threaded srcloc.
+
+2. **PM Track 12 (parameters → cells for module loading)**: W1 wiring is a PARAMETER READER — adds to the load-bearing-ness of `current-source-loc`. PM 12 evaluates retention during its scoping phase per Phase 1.5 docstring. No immediate action; tracked in DEFERRED.md.
+
+3. **PPN Track 4D (Attribute Grammar Substrate Unification)**: KR-2 (derivation-step sexp-field sparsity) absorbs into Track 4D's typing-unification scope — when sexp typing unifies on-network, sexp-fed steps gain propagator-id + srcloc structurally.
+
+4. **SH Track 1 (`.pnet` network-as-value)**: derivation-chain + derivation-step struct shape is PNET ABI seed (per user guidance 2026-05-24); W1's srcloc threading means LLVM lowering interprets srcloc field uniformly across all chain steps (when populated).
+
+5. **PReduce Track 6 (speculative reduction)**: inherits W1 wiring for cost-attribution chain steps; future cost-bounded ATMS branching errors produce chains with srcloc populated naturally.
+
+6. **DEFERRED.md**: KR-1/2/3 entry tracks the named drift formally; cross-references §9.5.4.14 + §9.5.5 + Phase 11b row.
+
+7. **MASTER_ROADMAP.org**: 3C.d completion when it lands marks "Propagator-First Diagnostics first-increment + Phase 1.5 completion" milestone — surface in PPN 4C row description.
+
+**Codification status (watching list)**:
+
+> **"Honest scope-down via ESCALATE-with-substrate"** — when a named regression (e.g., KR-1) is discovered at VAG and restoration would inject architectural debt mid-arc, the surviving option is often (c) ESCALATE with explicit substrate (DEFERRED.md + canary + tracker capture + dependent-track scope absorption). This pattern is distinct from plain ESCALATE — pays tracking debt up-front to preserve regression-detection capability + ensure escalation target has coherent scope. Watching-list (1 data point: 3C.d Q-D.1); graduates at 2nd data point.
+
+> **"Audit-precedes-implementation REFRAMING discipline"** — when initial audit conclusion is fatalistic ("X cannot be satisfied"), the next step is to verify the underlying infrastructure rather than accept the conclusion. F1 reframe is this session's instance — Phase 1.5 audit revealed srcloc threading is structurally possible; 5-option-matrix surfaces via mempalace search. Watching-list (1 data point: F1 reframe); graduates at 2nd data point.
+
+#### §9.5.5.11 Status
+
+**Phase 3C.d mini-design + mini-audit: ✅ PERSISTED** (this commit). Ready to enter Phase 3C.d.1 (W1 wiring) following the conversational checkpoint cadence per workflow.md.
+
+#### §9.5.5.12 Cross-references
+
+- Phase 3C.c CLOSED: §9.5.4 + §9.5.4.13 cumulative VAG + §9.5.4.14 KR-1/2/3 named drift (commit `25f4343c`)
+- Phase 3C.b CLOSED: §9.5.3 + §9.5.3.10 cumulative VAG (commit `449faac9`)
+- Phase 3C.a foundation: §9.5.2 (commit `1d803ed2`)
+- Phase 3C parent mini-design: §9.5.1 (Q1-Q10 locked)
+- Form C cross-reference (Phase 3C charter target): §9.5.A
+- Parent D.3 Phase 11b tracker row (KR-1 capture target): `2026-04-17_PPN_TRACK4C_DESIGN.md` Progress Tracker Phase 11b
+- Parent D.3 §6.1.1 provenance infrastructure: `2026-04-17_PPN_TRACK4C_DESIGN.md`
+- Phase 1.5 srcloc infrastructure (W1 completion target): parent D.3 Phase 1.5 tracker row
+- `derivation-chain-for/union-{contradict,check}` translator: error-explanation.rkt:254 + :391
+- 3C.b writer (per-fork threshold): typing-propagators.rkt:1346
+- check/err integration target: typing-errors.rkt:88-164
+- format-error rendering: errors.rkt:267-321
+- format-derivation-step helper: errors.rkt:345-349
+- `(current-source-loc)` parameter: source-location.rkt:36
+- Phase 1.5 install API: propagator.rkt:2238 (`net-add-propagator`), :2318 (`net-add-fire-once-propagator`), :2398 (`net-add-broadcast-propagator`)
+- ATMS state query APIs (KR-1 restoration substrate; Phase 11b consumes): atms.rkt:688+ (`solver-state-explain-hypothesis`), :696 (`solver-state-assumptions`), :702 (`solver-state-minimal-diagnoses`)
+- Pre-3C.c diagnosis-line implementation (KR-1 reference for Phase 11b): typing-errors.rkt:173-280 (build-derivation-chain + format-context-diagnosis + format-atms-conflict)
+- Acceptance probe artifacts: data/probes/2026-05-24-3C-Q6x-post-3Cc.txt + 2026-05-24-3C-Cc-nested-probe.txt
+- 3-column adversarial framing methodology: workflow.md "VAG / principles gate / mantra audit MUST be ADVERSARIAL, not auditional" + CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging
+- Vision-forward framing source: user direction 2026-05-24 dialogue (3-column refinement: catalogue + challenge + adversarial)
 
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 
