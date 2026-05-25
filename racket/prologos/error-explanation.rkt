@@ -68,7 +68,15 @@
  ;; Diagnostics framing. Phase 3C.c bridges from check/err to populate
  ;; union-exhaustion-error.derivation-chain; Phase 11b extends the wrapper
  ;; pattern to general derivation diagnostics.
- derivation-chain-for/union-contradict)
+ derivation-chain-for/union-contradict
+ ;; PPN 4C Phase 3C.c.1 (2026-05-24): sexp-mode translator wrapper.
+ ;; Direct parallel to retired build-derivation-chain (typing-errors.rkt:127);
+ ;; takes sub-failures list, returns derivation-chain struct. SEXP-MODE
+ ;; SCAFFOLDING — retires at Track 4D when sexp typing unifies on-network.
+ ;; Per §9.5.4.5.1 audit lock (α): sub-failures input matches retired function
+ ;; shape; atomic Q6.x UX unchanged (chain empty); richness inherits structurally
+ ;; for nested scenarios.
+ derivation-chain-for/union-check)
 
 ;; ============================================================
 ;; Core data types (§9.5.2.2 Q-A.2)
@@ -325,10 +333,18 @@
 ;; Other consumers (e.g., `add-context-assumption!` at elab-speculation-
 ;; bridge.rkt:164) may store NON-STRING datums (descriptive Racket values).
 ;;
-;; Decoding strategy: prefer `datum` when string (Phase 3A pattern; carries
-;; meaningful semantic info); else format `name` symbol (handles non-string
-;; datums + general fallback). Returns synthetic "aid-N" if assumption is
-;; missing (defensive; shouldn't happen if ATMS state is consistent).
+;; Sexp consumers (Phase 3C.c.1 — `with-speculative-rollback` at
+;; elab-speculation-bridge.rkt:213-217) store:
+;;   - `assumption-name`  = `(string->symbol label)` (e.g., `'union-branch-Nat`)
+;;   - `assumption-datum` = the label STRING (e.g., `"union-branch-Nat"`)
+;; This matches Phase 3A's shape; string-datum preference path produces the
+;; semantic label naturally for sexp speculation translation.
+;;
+;; Decoding strategy: prefer `datum` when string (Phase 3A + sexp speculation
+;; pattern; carries meaningful semantic info); else format `name` symbol
+;; (handles non-string datums + general fallback). Returns synthetic "aid-N"
+;; if assumption is missing (defensive; shouldn't happen if ATMS state is
+;; consistent).
 (define (decode-aid-name assumptions aid)
   ;; D-3C.b-7 mitigation: `assumptions` is a HASHEQ (eq?-keyed) populated by
   ;; canonical aid instances from solver-state-assume; `aid` here may be a
@@ -350,3 +366,75 @@
      (cond
        [(string? datum) datum]
        [else (format "~a" (assumption-name asn))])]))
+
+;; ============================================================
+;; PPN 4C Phase 3C.c.1 (2026-05-24): derivation-chain-for/union-check
+;; ============================================================
+;;
+;; Per addendum design §9.5.4.5 + §9.5.4.5.1 lean (α). SEXP-MODE TRANSLATOR.
+;; Direct parallel to current build-derivation-chain (typing-errors.rkt:127)
+;; signature shape: takes sub-failures (LIST of speculation-failure children
+;; of the latest speculation-failure at this branch's check). Returns
+;; derivation-chain struct.
+;;
+;; SEXP-MODE TRANSLATOR — scaffolding; retires at Track 4D when sexp typing
+;; unifies into on-network typing per Attribute Grammar Substrate vision.
+;;
+;; Lean (α) sub-failures rationale (§9.5.4.5.1): preserves UX parity with
+;; retired build-derivation-chain for atomic checks (no spammy "because:"
+;; redundancy with "tried X" line). Richness lands automatically for nested
+;; speculation scenarios (where sub-failures populates). For atomic Q6.x
+;; case, chain is empty (matches today's UX byte-for-byte); for nested case,
+;; chain captures the speculation tree as structured data.
+;;
+;; Field mapping per speculation-failure → derivation-step:
+;;   propagator-id    — #f (sexp speculation has no propagator)
+;;   srcloc           — #f (speculation-failure doesn't track srcloc;
+;;                          D-3C.c-1 capture for Phase 11b / Track 4D)
+;;   assumption-ids   — (list hypothesis-id) from speculation-failure (or '()
+;;                      when hypothesis-id is #f, which would only arise for
+;;                      direct record-speculation-failure! callers without
+;;                      with-speculative-rollback)
+;;   assumption-names — decoded via decode-aid-name (3C.b.3 helper); per
+;;                      elab-speculation-bridge.rkt:213-217 with-speculative-
+;;                      rollback uses label STRING as assumption-datum →
+;;                      decode-aid-name returns it via string-datum preference;
+;;                      fallback to (list speculation-failure-label) when no aid
+;;   residual-cost    — #f (3C.d may populate via tropical-quantale annotation)
+;;
+;; ATMS access via current-command-atms (same as 3C.b.3); defensive on #f
+;; (returns synthetic "aid-N" names via decode-aid-name's no-asn branch).
+;;
+;; DFS pre-order traversal of the speculation-failure forest:
+;;   For each sf in sub-failures, emit (failure-to-step sf), then recursively
+;;   collect sf's own sub-failures. Result list is in causal reading order
+;;   (parent-failure-first, then nested-failures); parallel to
+;;   static-reverse-walk's deepest-first cons-onto-head pattern.
+(define (derivation-chain-for/union-check sub-failures)
+  (cond
+    [(or (not sub-failures) (null? sub-failures))
+     (derivation-chain '())]
+    [else
+     (define atms-box (current-command-atms))
+     (define assumptions
+       (cond [atms-box (solver-state-assumptions (unbox atms-box))]
+             [else (hasheq)]))
+     (define (failure-to-step sf)
+       (define hyp-id (speculation-failure-hypothesis-id sf))
+       (define aids (if hyp-id (list hyp-id) '()))
+       (define names
+         (cond
+           [(pair? aids)
+            (for/list ([aid (in-list aids)])
+              (decode-aid-name assumptions aid))]
+           [else (list (speculation-failure-label sf))]))
+       (derivation-step #f #f aids names #f))
+     ;; DFS pre-order flatten across the speculation-failure forest:
+     ;; for each sf in sub-failures, emit (failure-to-step sf) followed
+     ;; by recursive collection of its own sub-failures.
+     (define (collect sf)
+       (cons (failure-to-step sf)
+             (apply append
+                    (map collect (speculation-failure-sub-failures sf)))))
+     (derivation-chain
+       (apply append (map collect sub-failures)))]))

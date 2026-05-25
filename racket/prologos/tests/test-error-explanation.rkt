@@ -425,3 +425,161 @@
   ;; Names fall back to synthetic "aid-N" format (decode-aid-name no-asn branch)
   (check-equal? (derivation-step-assumption-names step) (list "aid-0")
                 "Empty assumptions hash → decode falls back to \"aid-N\" format"))
+
+;; ============================================================
+;; PPN 4C Phase 3C.c.1 (2026-05-24): derivation-chain-for/union-check
+;; ============================================================
+;;
+;; Tests for sexp-mode translator wrapper. Direct parallel to retired
+;; build-derivation-chain (typing-errors.rkt:127); takes sub-failures list
+;; (children of latest speculation-failure at branch's check); returns
+;; derivation-chain struct.
+;;
+;; Per §9.5.4.5.1 audit lock (α): sub-failures input matches retired
+;; function shape; atomic case (empty sub-failures) returns empty chain
+;; (UX parity with today); nested case (populated sub-failures) returns
+;; flattened DFS pre-order chain.
+;;
+;; Field mapping per speculation-failure → derivation-step:
+;;   propagator-id    — #f (sexp has no propagator)
+;;   srcloc           — #f (D-3C.c-1 capture for Phase 11b / Track 4D)
+;;   assumption-ids   — (list hypothesis-id) or '() when hyp-id #f
+;;   assumption-names — decoded via decode-aid-name (string-datum preferred);
+;;                      fallback to (list speculation-failure-label) when no aid
+;;   residual-cost    — #f (3C.d may populate via tropical annotation)
+
+;; ========================================
+;; T-C.c-1.1 — Empty input handling (#f + '())
+;; ========================================
+
+(test-case "T-C.c-1.1a: derivation-chain-for/union-check — #f input returns empty chain"
+  (define chain (derivation-chain-for/union-check #f))
+  (check-true (derivation-chain? chain))
+  (check-equal? (derivation-chain-steps chain) '()
+                "Empty chain for #f input (defensive — graceful degradation)"))
+
+(test-case "T-C.c-1.1b: derivation-chain-for/union-check — '() input returns empty chain"
+  (define chain (derivation-chain-for/union-check '()))
+  (check-true (derivation-chain? chain))
+  (check-equal? (derivation-chain-steps chain) '()
+                "Empty chain for '() input (matches today's build-derivation-chain semantic for atomic checks)"))
+
+;; ========================================
+;; T-C.c-1.2 — Single sub-failure WITH aid + ATMS (string datum)
+;; ========================================
+;;
+;; Verifies the with-speculative-rollback consumer shape: assumption-name is
+;; a symbol (`(string->symbol label)`), assumption-datum is the label string.
+;; decode-aid-name returns the string-datum (the label) via string-preference
+;; path. This matches sexp speculation's actual behavior at
+;; elab-speculation-bridge.rkt:213-217.
+
+(test-case "T-C.c-1.2: single sub-failure with aid → string-datum name decoded"
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define atms-box (current-command-atms))
+    ;; Mirror with-speculative-rollback: name=string->symbol of label, datum=label
+    (define-values (atms* aid-0)
+      (solver-state-assume (unbox atms-box) 'union-branch-Nat "union-branch-Nat"))
+    (set-box! atms-box atms*)
+
+    ;; Single speculation-failure with the aid; no nested sub-failures
+    (define sf (speculation-failure "union-branch-Nat" aid-0 #f '()))
+    (define chain (derivation-chain-for/union-check (list sf)))
+
+    (check-true (derivation-chain? chain))
+    (define steps (derivation-chain-steps chain))
+    (check-equal? (length steps) 1 "Single step from single speculation-failure")
+    (define step (car steps))
+    (check-false (derivation-step-propagator-id step) "propagator-id = #f for sexp")
+    (check-false (derivation-step-srcloc step) "srcloc = #f for sexp (D-3C.c-1)")
+    (check-equal? (derivation-step-assumption-ids step) (list aid-0))
+    (check-equal? (derivation-step-assumption-names step) (list "union-branch-Nat")
+                  "Name decoded via string-datum preference (matches with-speculative-rollback consumer pattern)")
+    (check-false (derivation-step-residual-cost step) "residual-cost = #f")))
+
+;; ========================================
+;; T-C.c-1.3 — Single sub-failure WITHOUT aid (hyp-id=#f)
+;; ========================================
+;;
+;; Defensive case: speculation-failure with hypothesis-id=#f. Wouldn't arise
+;; under with-speculative-rollback (which always passes hyp-id) but possible
+;; for direct record-speculation-failure! callers. Fallback to label string.
+
+(test-case "T-C.c-1.3: single sub-failure without aid → label fallback"
+  (define sf (speculation-failure "manual-label" #f #f '()))
+  (define chain (derivation-chain-for/union-check (list sf)))
+  (check-true (derivation-chain? chain))
+  (define steps (derivation-chain-steps chain))
+  (check-equal? (length steps) 1)
+  (define step (car steps))
+  (check-equal? (derivation-step-assumption-ids step) '()
+                "Empty aids when hypothesis-id is #f")
+  (check-equal? (derivation-step-assumption-names step) (list "manual-label")
+                "Name falls back to speculation-failure-label when no aid"))
+
+;; ========================================
+;; T-C.c-1.4 — Nested speculation tree (depth 2)
+;; ========================================
+;;
+;; Verifies DFS pre-order flatten: parent failure first, then nested children.
+;; This is the structurally-rich case where chain captures the speculation
+;; tree (vs atomic case where chain is empty).
+
+(test-case "T-C.c-1.4: nested sub-failure (depth 2) → DFS pre-order [parent, child]"
+  (define child (speculation-failure "child-label" #f #f '()))
+  (define parent (speculation-failure "parent-label" #f #f (list child)))
+  (define chain (derivation-chain-for/union-check (list parent)))
+  (define steps (derivation-chain-steps chain))
+  (check-equal? (length steps) 2 "2 steps: parent + child")
+  ;; DFS pre-order: parent first (head of list), then child
+  (check-equal? (derivation-step-assumption-names (first steps))
+                (list "parent-label")
+                "First step is parent (label fallback — no aid)")
+  (check-equal? (derivation-step-assumption-names (second steps))
+                (list "child-label")
+                "Second step is child"))
+
+;; ========================================
+;; T-C.c-1.5 — Multi-root forest with deeper nesting (depth 3, branching)
+;; ========================================
+;;
+;; Forest:
+;;   ROOT-A: label="A" → sub: [A1, A2]
+;;     A1: label="A1" → sub: [A1.1]
+;;       A1.1: label="A1.1" → sub: []
+;;     A2: label="A2" → sub: []
+;;   ROOT-B: label="B" → sub: []
+;;
+;; DFS pre-order across forest: [A, A1, A1.1, A2, B]
+
+(test-case "T-C.c-1.5: multi-root forest with depth 3 → DFS pre-order across all"
+  (define a1.1 (speculation-failure "A1.1" #f #f '()))
+  (define a1 (speculation-failure "A1" #f #f (list a1.1)))
+  (define a2 (speculation-failure "A2" #f #f '()))
+  (define root-a (speculation-failure "A" #f #f (list a1 a2)))
+  (define root-b (speculation-failure "B" #f #f '()))
+
+  (define chain (derivation-chain-for/union-check (list root-a root-b)))
+  (define steps (derivation-chain-steps chain))
+  (check-equal? (length steps) 5 "5 steps total across forest")
+  ;; Names in DFS pre-order across forest
+  (define names (map (lambda (s) (car (derivation-step-assumption-names s))) steps))
+  (check-equal? names '("A" "A1" "A1.1" "A2" "B")
+                "DFS pre-order traversal: root-A first, then its sub-tree (A1, A1.1, A2), then root-B"))
+
+;; ========================================
+;; T-C.c-1.6 — Defensive: no ATMS active (current-command-atms=#f)
+;; ========================================
+;;
+;; Verifies graceful degradation when ATMS isn't active: aid lookup falls
+;; back to "aid-N" format via decode-aid-name's no-asn branch.
+
+(test-case "T-C.c-1.6: no ATMS active → aid name falls back to \"aid-N\""
+  ;; NO parameterize — current-command-atms = #f
+  (define aid-0 (assumption-id 0))
+  (define sf (speculation-failure "atomic-label" aid-0 #f '()))
+  (define chain (derivation-chain-for/union-check (list sf)))
+  (define step (car (derivation-chain-steps chain)))
+  (check-equal? (derivation-step-assumption-ids step) (list aid-0))
+  (check-equal? (derivation-step-assumption-names step) (list "aid-0")
+                "Empty assumptions hash → decode falls back to \"aid-N\" format"))
