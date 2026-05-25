@@ -216,7 +216,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **3C.c.3** | check/err integration in typing-errors.rkt:64-118 — replace union path (lines 70-104) chain construction with `derivation-chain-for/union-check` per-branch; write cell-19 via `net-cell-write` on (current-prop-net-box) elab-network; flip `union-exhaustion-error.derivation-chain` field type atomically; retire `build-derivation-chain` union-type code path (Q9 mandate); non-union path unchanged for type-mismatch-error (Phase 11b scope) | ⬜ | ~50 LoC est. Field type flip atomic with 3C.c.4 format-error update — no broken intermediate state. |
 | **3C.c.4** | format-error update in errors.rkt:267-287 — union-exhaustion-error case handles `derivation-chain` struct (not strings); ATMS conflict info via `solver-state-explain-hypothesis` queried at RENDER TIME (decomplection per §9.5.4.4 adversarial); minimal diagnoses via `solver-state-minimal-diagnoses` queried at render time; preserves today's diagnostic richness | ⬜ | ~30-50 LoC est. User-facing message MUST match §9.5.4.7 verbatim acceptance criterion. |
 | **3C.c.5** | Test site updates — ~10 sites across test-provenance-errors.rkt (7 sites), test-speculation-bridge.rkt (assertions on branches/branch-mismatches unchanged), test-gde-errors.rkt (2 sites); all assertions updated to check `derivation-chain?` structure instead of list-of-string | ⬜ | ~50 LoC est. Grep at impl catches all consumers via `union-exhaustion-error-derivation-chain` accessor pattern. |
-| **3C.c.6** | E2E acceptance criterion verification — re-run `examples/2026-05-22-3C-Q6x-probe.prologos` via process-file; assert post-3C.c output matches §9.5.4.7 verbatim; save artifact to `data/probes/2026-05-24-3C-Q6x-post-3Cc.txt` | ⬜ | ~30 LoC + probe artifact est. Full suite gate: stable within 109-115s variance band. |
+| **3C.c.6** | E2E acceptance criterion verification — (a) atomic Q6.x probe re-run: rendered output IDENTICAL to pre-3C.c per §9.5.4.7.1 byte-for-byte; (b) NEW nested-scenario probe for richness validation per §9.5.4.7.2 (exact scenario selected at 3C.c.6 mini-design open via exploratory probe); (c) structural assertions on cell-19 written + field type flipped. Per §9.5.4.5.1 audit discovery: atomic chain stays empty (matches retired build-derivation-chain semantic); nested chain demonstrates richness path. Save artifacts to `data/probes/2026-05-24-3C-Q6x-post-3Cc.txt` (atomic) + `data/probes/2026-05-24-3C-Q6x-post-3Cc-nested.txt` (nested baseline). | ⬜ | ~30 LoC + 2 probe artifacts est. Full suite gate: stable within 109-115s variance band. |
 | **3C.c-VAG** | Cumulative cross-sub-step adversarial 3-column VAG (4 questions × catalogue/challenge/adversarial); all 9 D-3C.c-* drift risks verified cleared; Q-C.6 (NEW finding) outcome verified; multi-writer scaffolding documented + retirement target named (Track 4D) | ⬜ | Phase 3C.c CLOSED gate. Ready for Phase 3C.d (format integration + 4-axis discriminating parity tests) per §9.5.1.5. |
 | 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
@@ -7697,31 +7697,46 @@ These shapes are structurally inconsistent.
 
 **3C.c.1 — Translator in `error-explanation.rkt`** (~80 LoC):
 
+**(Revised per §9.5.4.5.1 post-persistence audit discovery 2026-05-24 — translator input shape locked (α) sub-failures.)**
+
 ```racket
 ;; PPN 4C Phase 3C.c.1 (2026-05-24): sexp-mode translator wrapper.
 ;; SEXP-MODE TRANSLATOR — scaffolding; retires at Track 4D when sexp typing
 ;; unifies into on-network typing per Attribute Grammar Substrate vision.
 ;;
-;; Parallel API to derivation-chain-for/union-contradict (3C.b.3), but for
-;; SEXP path: takes a speculation-failure (root of per-branch speculation
-;; tree); flattens via DFS pre-order; translates each speculation-failure
-;; to a derivation-step struct. Returns a derivation-chain (struct shape
-;; identical to on-network path; field semantics documented per paradigm).
+;; Direct parallel to current build-derivation-chain (typing-errors.rkt:127)
+;; signature shape: takes sub-failures (LIST of speculation-failure children
+;; of the latest speculation-failure at this branch's check). Returns
+;; derivation-chain struct.
 ;;
-;; Field mapping (per §9.5.4.1 Tier 3):
+;; Per audit discovery (§9.5.4.5.1): translator takes sub-failures (α) to
+;; preserve UX parity with current build-derivation-chain for atomic checks
+;; (no spammy "because: union-branch-X" redundancy with "tried X" line).
+;; Richness lands automatically for nested speculation scenarios (where
+;; sub-failures populates). For atomic Q6.x case, chain is empty (matches
+;; today's UX byte-for-byte); for nested case, chain captures the speculation
+;; tree as structured data.
+;;
+;; Field mapping per speculation-failure → derivation-step (§9.5.4.1 Tier 3):
 ;;   propagator-id    — #f (sexp speculation has no propagator)
 ;;   srcloc           — #f (speculation-failure doesn't track srcloc;
-;;                          Phase 11b or Track 4D adds srcloc to speculation
-;;                          infrastructure — D-3C.c-1 capture)
-;;   assumption-ids   — (list hypothesis-id) from speculation-failure
-;;   assumption-names — decoded via decode-aid-name (3C.b.3 helper); fallback
-;;                      to speculation-failure-label when no aid available
+;;                          Phase 11b / Track 4D adds srcloc tracking —
+;;                          D-3C.c-1 capture)
+;;   assumption-ids   — (list hypothesis-id) from speculation-failure (or '()
+;;                      when hypothesis-id is #f, which would only arise for
+;;                      direct record-speculation-failure! callers without
+;;                      with-speculative-rollback)
+;;   assumption-names — decoded via decode-aid-name (3C.b.3 helper); per audit
+;;                      at elab-speculation-bridge.rkt:213-217 with-speculative-
+;;                      rollback uses label STRING as assumption-datum →
+;;                      decode-aid-name returns it via string-datum preference;
+;;                      fallback to speculation-failure-label when no aid
 ;;   residual-cost    — #f (3C.d may populate via tropical-quantale annotation)
 ;;
-;; ATMS access via current-command-atms (same as 3C.b.3); defensive on #f
-(define (derivation-chain-for/union-check failure)
+;; ATMS access via current-command-atms (same as 3C.b.3); defensive on #f.
+(define (derivation-chain-for/union-check sub-failures)
   (cond
-    [(not failure) (derivation-chain '())]
+    [(or (not sub-failures) (null? sub-failures)) (derivation-chain '())]
     [else
      (define atms-box (current-command-atms))
      (define assumptions
@@ -7737,13 +7752,57 @@ These shapes are structurally inconsistent.
               (decode-aid-name assumptions aid))]
            [else (list (speculation-failure-label sf))]))
        (derivation-step #f #f aids names #f))
-     ;; DFS pre-order flatten: root failure first, then recurse into sub-failures
+     ;; DFS pre-order flatten across the sub-failures forest
      (define (collect sf)
        (cons (failure-to-step sf)
              (apply append
                     (map collect (speculation-failure-sub-failures sf)))))
-     (derivation-chain (collect failure))]))
+     (derivation-chain
+       (apply append (map collect sub-failures)))]))
 ```
+
+#### §9.5.4.5.1 Post-persistence audit discovery — translator input shape (α vs β) [2026-05-24]
+
+**Discovery context**: between §9.5.4 persistence (commit `c5678e29`) and 3C.c.1 implementation, a deeper read of `build-derivation-chain` (typing-errors.rkt:127-152) + `speculation-failure` accessor patterns (elab-speculation-bridge.rkt:131-134 + 200-372) revealed a semantic question the §9.5.4.5 sketch did not surface explicitly.
+
+**Current `build-derivation-chain` semantic** (the function 3C.c retires for union case per Q9):
+- Takes **`sub-failures`** (CHILDREN of the latest speculation-failure at this branch's check), NOT the branch failure itself
+- For atomic union check (Q6.x scenario `"hello"` vs `Nat`): sub-failures = `'()` → chain = `'()` → no `because:` lines render
+- For nested speculation (union within union, complex check chains): sub-failures populates → chain renders nested context
+
+**Original §9.5.4.5 sketch took the branch failure itself** (would produce `because: union-branch-Nat` for atomic Q6.x — visible UX change adding info already present in the `tried Nat` line).
+
+**Two options surfaced**:
+
+| Option | Semantic | Q6.x UX | Richness lands | Symmetry with retired function |
+|---|---|---|---|---|
+| **(α) Takes `sub-failures`** | chain = nested speculation steps only | UNCHANGED — no `because:` lines for atomic (matches today byte-for-byte) | For NESTED scenarios (union within union; complex user-annotated conflicts) | Direct parallel: same input shape as retired `build-derivation-chain` |
+| **(β) Takes branch `failure`** | chain = branch step + nested sub-failures | CHANGED — `because: union-branch-X` line under each `tried X` | For atomic AND nested — every branch gets ≥1 chain step | Different input shape; deliberate divergence |
+
+**3-column adversarial framing**:
+
+| Option | Catalogue | Challenge | Adversarial |
+|---|---|---|---|
+| **(α) sub-failures** | Preserves UX exactly; no spammy redundancy; direct parallel with retired function; honest about what 3C.c delivers (infrastructure + nested-case richness) | Q6.x has no visible UX improvement → "shipped infrastructure with no Q6.x user impact" optics; codification "first user-facing instance of Propagator-First Diagnostics" weakens to "first user-facing INFRASTRUCTURE instance" | **Q6.x is atomic; atomic cases inherently have nothing to add. The branch identity is ALREADY visible in `tried X`. Repeating it is redundancy, not richness. The honest framing: 3C.c delivers struct-shape + cell-19 authoritative + decomplected rendering for the dominant case; richness lands structurally where it can. Validates via NESTED scenario test (audit-driven scope expansion — captures real richness, not redundant labels). Forces honest validation; better test discipline. |
+| **(β) branch failure** | Every branch contributes ≥1 chain step (structural consistency); Q6.x has visible UX change (proves something happened) | Repeats the branch identity in two places (the `tried X` line AND `because: union-branch-X`); visual noise for atomic case; ranges into "diagnostic looks spammy" criticism | **Synthetic richness — adds output lines that carry NO new information for atomic case. Structural data (chain has aid for downstream consumers like LSP) is the only real value, but achievable under (α) too via the field-shape flip (empty chains are still structured `derivation-chain` instances, not empty list-of-string). The "UX change proves something" argument is theater — proving via false-positive richness is worse than honest "no atomic-case UX change; nested-case richness is the deliverable." |
+
+**LOCKED LEAN: (α) sub-failures**. Per user direction 2026-05-24 dialogue.
+
+**Rationale anchored at design level**:
+1. UX parity with current `build-derivation-chain` for atomic cases — no regression, no spammy additions
+2. Direct API parallel — `derivation-chain-for/union-check` takes the same input shape as the retired function; cleaner retirement story (replace function shape, not change shape)
+3. Honest framing of 3C.c deliverable: INFRASTRUCTURE for atomic + RICHNESS structurally inherited for nested
+4. Better test discipline — atomic Q6.x verbatim acceptance verifies the field-shape-flip + cell-19 write; NESTED scenario verifies the richness path
+
+**Implications**:
+- §9.5.4.5 translator sketch revised (above) — function takes `sub-failures` list
+- §9.5.4.7 acceptance criterion revised — atomic Q6.x output IDENTICAL to pre-3C.c byte-for-byte; STRUCTURAL change verified via field type assertion; RICHNESS validation requires nested scenario
+- §9.5.4.6 sub-phase partition unchanged in shape but 3C.c.6 scope expands to include nested-scenario acceptance test
+- D-3C.c-10 (NEW drift risk) captured below at §9.5.4.8 — "synthetic richness temptation"
+
+**Methodology lesson (1 data point — watching list)**: post-mini-design-persistence audit can surface semantic questions that mini-design-time audit missed. The discipline of "implementation pause to verify the sketch matches the function being retired" caught this before 3C.c.1 code landed. Codification candidate at 2nd data point: "Translator-mirror-of-retired-function discipline — when retiring function F via replacement F', verify F' takes the same input shape as F UNLESS a deliberate semantic divergence is named and justified."
+
+#### §9.5.4.5.2 Continuing implementation sketch
 
 **3C.c.2 — 3C.b per-branch-split adjustment** (~10-15 LoC + test re-validation):
 
@@ -7837,14 +7896,18 @@ Re-run `examples/2026-05-22-3C-Q6x-probe.prologos` via `process-file`; assert po
 | **3C.c.3** | `check/err` integration — replace union-path chain construction; write cell-19; field type flip atomic | ~50 | Q6.x probe scenario produces non-empty per-branch chains |
 | **3C.c.4** | format-error update for `derivation-chain` struct + decomplected ATMS state queries | ~30-50 | User-facing message matches §9.5.4.7 expected verbatim |
 | **3C.c.5** | Test site updates (~10 sites across 3 test files) | ~50 | All test files re-pass; no regressions |
-| **3C.c.6** | E2E acceptance criterion verification — Q6.x probe re-run + verbatim match | ~30 + probe artifact | Post-3C.c probe artifact diff against §9.5.4.7 baseline = 0 |
+| **3C.c.6** | E2E acceptance criterion verification — (a) Q6.x probe re-run + atomic verbatim match (rendered IDENTICAL to pre-3C.c per §9.5.4.7.1); (b) NEW nested scenario probe for richness validation (per §9.5.4.7.2; exact form selected at 3C.c.6 mini-design open via exploratory probe); (c) structural assertions on cell-19 + field type | ~30 + 2 probe artifacts | Atomic verbatim match (byte-for-byte) + nested chain contains ≥1 step per branch + cell-19 written |
 | **3C.c-VAG** | Cumulative cross-sub-step adversarial 3-column VAG | docs | All 4 VAG questions PASS under adversarial framing; all D-3C.c-* drift risks verified cleared |
 
 Estimated total: **~270 LoC + tests + docs**. Honest scope-up from §9.5.1.5 original ~80-150 LoC estimate due to (a) per-branch-split 3C.b adjustment (Q-C.6 finding), (b) format-error update with ATMS state queries (Q-C.4), (c) test site co-migration (Q-C.3 field type flip blast radius).
 
-#### §9.5.4.7 Acceptance criterion — expected error message verbatim (D-3C-1 made operational)
+#### §9.5.4.7 Acceptance criterion — expected error message verbatim (D-3C-1 made operational; REVISED per §9.5.4.5.1)
 
-Per §9.5.1.6 D-3C-1 (shape-without-benefit), pre-write the expected user-facing error message BEFORE implementation. The message MUST preserve today's information richness or 3C.c ships a UX regression even with the field type flip.
+**REVISED 2026-05-24** per §9.5.4.5.1 audit discovery: translator takes `sub-failures` (α lean); atomic Q6.x case has no UX change (chain remains empty matching today's `build-derivation-chain` semantic for atomic); richness validation requires nested scenario.
+
+##### §9.5.4.7.1 Atomic Q6.x scenario — VERBATIM UX PARITY (no change)
+
+Per §9.5.1.6 D-3C-1 (shape-without-benefit), pre-write the expected user-facing error message BEFORE implementation. For atomic scenarios under (α) sub-failures semantic, the rendered output is IDENTICAL to today byte-for-byte; the STRUCTURAL change is in the field shape only.
 
 **Probe scenario** (`examples/2026-05-22-3C-Q6x-probe.prologos` scenario 1):
 
@@ -7864,28 +7927,75 @@ error[E1006]: expression does not match any branch of union type
   = help: expression must match at least one branch of Nat | Bool
 ```
 
-(Note: `union-exhaustion-error.derivation-chain = '(() ())` — empty per Q6.x finding; no `because:` lines render.)
+(`union-exhaustion-error.derivation-chain = '(() ())` — empty per Q6.x finding; no `because:` lines render because chain is empty.)
 
-**Post-3C.c expected output (per §9.5.4.5 implementation sketch + format-error renderer)**:
+**Post-3C.c expected output**:
 
 ```
 error[E1006]: expression does not match any branch of union type
   --> <unknown>:?:?
   tried Nat — type mismatch (got: String)
-    because: union-branch-Nat
   tried Bool — type mismatch (got: String)
-    because: union-branch-Bool
   in expression: "hello"
   = help: expression must match at least one branch of Nat | Bool
 ```
 
-(`union-exhaustion-error.derivation-chain` is now `(list (derivation-chain (list (derivation-step #f #f '() (list "union-branch-Nat") #f))) (derivation-chain (list (derivation-step #f #f '() (list "union-branch-Bool") #f))))` — populated per-branch chains.)
+**IDENTICAL TO PRE-3C.c BYTE-FOR-BYTE.** Atomic checks have empty `sub-failures` lists → empty `derivation-chain` structs → format-error renders no `because:` lines.
 
-**Information delta**: per-branch `because:` lines added showing speculation labels. The branch identity is REDUNDANT with the `tried X` line for atomic types (acceptable — proves the on-network chain is structurally populated). For NESTED scenarios (union within union, branches with sub-speculation), the chain contains the nested failure tree — significantly richer than today's empty output.
+**STRUCTURAL change** (not visible in rendered output but verifiable via inspection):
+- Pre-3C.c: `union-exhaustion-error.derivation-chain` = `'(() ())` (empty list of empty string lists)
+- Post-3C.c: `union-exhaustion-error.derivation-chain` = `(list (derivation-chain '()) (derivation-chain '()))` (list of empty derivation-chain structs)
 
-**Acceptance criterion**: 3C.c.6 verification asserts post-3C.c probe output matches this verbatim. Scenario 2 (`(def y <Int | Bool> "world")`) + scenario 3 (`(def z <<Nat | Bool> | String> 3.14)`) follow the same pattern; verbatim expectations captured at 3C.c.6 close.
+Plus cell-19 written for the position with the same `(list (derivation-chain '()) (derivation-chain '()))` value.
 
-**For complex scenarios with user annotations** (out of Q6.x baseline scope but exercised in 3C.d's 4-axis tests): format-error queries `solver-state-explain-hypothesis` for `conflicts with: ...` lines and `solver-state-minimal-diagnoses` for `[diagnosis] retract: ...` lines — preserves today's richness via render-time queries on on-network ATMS state.
+**Acceptance assertion at 3C.c.6**: post-3C.c probe output IDENTICAL to baseline (string equality on rendered output); structural assertion via test that confirms `union-exhaustion-error-derivation-chain` returns list of `derivation-chain?` structs (not list of lists of strings).
+
+##### §9.5.4.7.2 Nested scenario — RICHNESS VALIDATION (where chain actually populates)
+
+Per §9.5.4.5.1 lean (α): richness lands when sub-failures populates (nested speculation). For 3C.c to demonstrate the richness path works end-to-end, we need a nested scenario where a branch's check itself triggers further speculation.
+
+**Candidate nested scenario** (to be validated at 3C.c.6 mini-design — exact form depends on what speculation paths exist):
+
+Option N1 — **Union within union** `(def x <<Nat | Bool> | String> 3.14)`:
+- Outer branches: `<Nat | Bool>` and `String`
+- Outer "tried <Nat | Bool>" branch's check triggers INNER union speculation for Nat and Bool
+- Inner speculations recorded as sub-failures of the outer branch's speculation-failure
+- Chain for the outer "tried <Nat | Bool>" branch should contain inner failure steps
+
+Expected (sketch — exact strings depend on how nested speculation labels record):
+```
+error[E1006]: expression does not match any branch of union type
+  --> <unknown>:?:?
+  tried Nat | Bool — type mismatch (got: Rat)
+    because: nested union left branch failed
+    because: nested union right branch failed (?)
+  tried String — type mismatch (got: Rat)
+  in expression: 3.14
+  = help: expression must match at least one branch of Nat | Bool | String
+```
+
+Option N2 — **User-annotated context that participates in conflict** (more rare; tests `format-context-diagnosis` path):
+- `(def x : Nat := 0) (def y <Int | Bool> := x)` — but `x` is Nat; Nat <: Int succeeds; Bool fails
+- Won't exhibit since Int branch succeeds
+- More elaborate setup needed to trigger context-assumption conflict in chain
+
+**3C.c.6 mini-design selects the final nested scenario** based on what speculation infrastructure actually does — exploratory probe at 3C.c.6 open determines whether N1 or N2 best exercises the richness path. Document the chosen scenario verbatim at 3C.c.6 close.
+
+**Acceptance assertion at 3C.c.6**:
+- Atomic Q6.x scenarios: rendered output byte-for-byte identical to pre-3C.c baseline
+- Nested scenario(s): chain contains ≥1 `derivation-step` per branch with non-empty `assumption-names`; verbatim rendered output captured as new baseline `2026-05-24-3C-Q6x-post-3Cc-nested.txt`
+
+**For complex scenarios with user annotations** (exercised in 3C.d's 4-axis tests but optionally previewed at 3C.c.6): format-error queries `solver-state-explain-hypothesis` for `conflicts with: ...` lines and `solver-state-minimal-diagnoses` for `[diagnosis] retract: ...` lines — preserves today's richness via render-time queries on on-network ATMS state.
+
+##### §9.5.4.7.3 Acceptance criterion summary
+
+| Scenario | Assertion | Pass condition |
+|---|---|---|
+| Atomic Q6.x (3 baseline scenarios) | Rendered output byte-for-byte identical to pre-3C.c | String equality with baseline artifact |
+| Atomic Q6.x — structural | union-exhaustion-error-derivation-chain is `(listof derivation-chain?)` not `(listof (listof string))` | Type predicate check on field access |
+| Atomic Q6.x — cell-19 write | Cell-19 hash contains per-position entry with `(listof derivation-chain?)` value | `(elab-cell-read net union-derivation-chains-cell-id)` returns hash with non-empty entry |
+| Nested scenario | Chain contains ≥1 step per branch with populated `assumption-names` | Step-shape assertion + name-string check |
+| Nested scenario — verbatim | Rendered output captured as new baseline | New artifact at `data/probes/2026-05-24-3C-Q6x-post-3Cc-nested.txt` |
 
 #### §9.5.4.8 Drift risks named (D-3C.c-*)
 
@@ -7900,6 +8010,7 @@ error[E1006]: expression does not match any branch of union type
 | **D-3C.c-7** | format-error rendering UX regression — chain rendering may look different than today even with same information | §9.5.4.7 verbatim acceptance criterion catches this structurally |
 | **D-3C.c-8** | `build-derivation-chain` retirement scope ambiguity — non-union path stays; union path retires; ensure the retirement is at lines 70-104 specifically | 3C.c.3 mini-audit verifies the exact code path retired; non-union path at lines 105-118 stays untouched |
 | **D-3C.c-9** | check/err writing to cell-19 from sexp violates "propagators write cells" intuition — could rationalize away as "but it's the existing parameter pattern" | Per user direction (Pressure 3): direct write is HONEST scaffolding; not pretending sexp is a propagator. Documented as scaffolding with Track 4D retirement target. Mantra-aligned at cell layer (single source of truth); mantra-violating at writer layer (sexp is not a propagator) — TEMPORARY until single-writer state achievable |
+| **D-3C.c-10** (NEW per §9.5.4.5.1) | "Synthetic richness" temptation — include branch failure in chain (β lean) to make Q6.x atomic look like a UX improvement, when in reality the added `because:` line REPEATS info already in the `tried X` line | Locked LEAN (α) sub-failures per §9.5.4.5.1 + user direction 2026-05-24. Translator takes `sub-failures` (matches retired `build-derivation-chain` shape). Atomic UX UNCHANGED; nested case lands rich content structurally. Honest framing of deliverable scope. Adversarial framing applied IN-AUDIT (not post-hoc) — methodology working as designed. |
 
 #### §9.5.4.9 Closure criteria
 
