@@ -356,7 +356,7 @@
   ;; Specifically, should NOT have "because: [diagnosis]"
   (check-false (string-contains? formatted "because: [diagnosis]")))
 
-(test-case "GDE-3: union error format renders per-step assumption-names"
+(test-case "GDE-3: union error format renders per-step assumption-names (diagnosis lines deferred to Phase 11b — see KR-1)"
   ;; PPN 4C 3C.c.3 (2026-05-24): under Q-B.2 + Q-C.6 (listof derivation-chain)
   ;; shape, format-error renders per-step "because: <name>" via derivation-
   ;; step-assumption-names. The OLD inline "[diagnosis]" string convention

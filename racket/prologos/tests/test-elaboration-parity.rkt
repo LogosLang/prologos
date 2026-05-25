@@ -538,6 +538,57 @@
                        "[int+ \"a\" 3]"
                        #:expected-type 'type-top))
 
+;; PPN 4C addendum Phase 3C.d.4 (2026-05-24) — KR-1 regression-detection canary
+;;
+;; Per addendum §9.5.5.5 deliverable 4 + §9.5.4.14 KR-1 + §9.5.5 (c) ESCALATE-
+;; with-substrate decision: skip-gated canary preserves regression-detection
+;; capability across Phase 11b deferral period.
+;;
+;; KR-1 named drift: pre-3C.c rendering of `(def x <Nat | Bool> "hello")`
+;; produced `[diagnosis] retract:` lines via build-derivation-chain's
+;; format-context-diagnosis. Under 3C.c's new (listof derivation-chain) shape,
+;; these diagnosis lines DISAPPEAR (the sexp translator at error-explanation.rkt:
+;; 391+ produces per-step `because:` lines only — ATMS state queries deferred
+;; per §9.5.4.4 Q-C.4 lock + §9.5.4.13 KR-1 analysis).
+;;
+;; Restoration decision history (3 options weighed at 3C.d.0 mini-design,
+;; persisted at §9.5.5.4 Q-D.1):
+;;   (a) RESTORE at 3C.d via ATMS state queries — REJECTED (inverts 3C.c
+;;       design intent; render-time staleness hazard; KR-3 grows)
+;;   (b) ESCALATE to Phase 11b with timeline commitment — REJECTED (unbounded
+;;       deferral; "pragmatic" rationalization anti-pattern)
+;;   (c) ESCALATE-with-substrate — LOCKED. Pays tracking debt up-front:
+;;       (i) DEFERRED.md entry; (ii) this skip-gated canary; (iii) Phase 11b
+;;       parent design row update; (iv) chain's assumption-ids enrichment.
+;;
+;; SHAPE DEPENDENCY (D-3C.d-7 mitigation):
+;;   The `[diagnosis] retract:` substring assertion captures the PRE-3C.c
+;;   rendering shape. Phase 11b's restoration may produce DIFFERENT diagnosis
+;;   rendering (e.g., trace-monoidal-category-theory-grounded; LSP-serialized;
+;;   structured-data path). When Phase 11b lands, this canary MUST be updated
+;;   alongside the restoration to reflect Phase 11b's chosen shape.
+;;
+;; RE-EVALUATION at Phase 11b open:
+;;   Phase 11b mini-design re-weighs (a)/(b)/(c) variants with trace-monoidal-
+;;   category-theory framing as research input. The (c)+substrate option preserved
+;;   here is NOT a commitment to Phase 11b's design; it's a RESTORATION CANARY
+;;   that captures the regression for whichever restoration shape Phase 11b
+;;   chooses.
+;;
+;; Cross-references: addendum §9.5.4.14 (KR-1 named drift) + §9.5.5
+;; (3C.d mini-design) + §9.5.5.4 Q-D.1 (3-column adversarial lock) +
+;; §9.5.5.13 (3C.d.3 empirical findings + (β.3.i) decision context).
+
+(parity-test-skip 'union-diagnosis-restoration "Phase 11b"
+                  "(def x <Nat | Bool> \"hello\")"
+  (check-parity-equal? 'union-diagnosis-restoration
+                       "(def x <Nat | Bool> \"hello\")"
+                       ;; Pre-3C.c rendering produced "[diagnosis] retract: x : <Nat | Bool>"
+                       ;; via format-context-diagnosis. KR-1 regression: this line DISAPPEARS
+                       ;; under 3C.c's new chain shape. Phase 11b restores via ATMS state
+                       ;; queries at render time (or alternative shape; see body comment).
+                       #:expected "[diagnosis] retract:"))
+
 ;; ========================================
 ;; Phase 1C-vi — tropical-fuel-counter-parity (D.4 reframed; §15 axis)
 ;; ========================================
