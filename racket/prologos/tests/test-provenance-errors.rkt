@@ -21,7 +21,11 @@
          "../errors.rkt"
          "../performance-counters.rkt"
          "../source-location.rkt"
-         "../atms.rkt")
+         "../atms.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): derivation-chain + derivation-step
+         ;; struct accessors for union-exhaustion-error.derivation-chain field
+         ;; (post-Q-B.2 flip to (listof derivation-chain) per §9.5.4.4)
+         "../error-explanation.rkt")
 
 ;; ========================================
 ;; Test Helpers
@@ -79,7 +83,11 @@
   ;; Angle-bracket union syntax works without prelude
   (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
   (check-true (union-exhaustion-error? (last result)))
-  (check-true (list? (union-exhaustion-error-derivation-chain (last result)))))
+  ;; PPN 4C 3C.c.3: field shape is (listof derivation-chain) per Q-B.2 flip
+  (define chains (union-exhaustion-error-derivation-chain (last result)))
+  (check-true (list? chains) "Field is a list (per-branch shape per Q-C.6)")
+  (check-true (andmap derivation-chain? chains)
+              "All list entries are derivation-chain structs (3C.a foundation)"))
 
 (test-case "union branch mismatch produces per-branch info"
   (define result (run-simple "(def x <Nat | Bool> \"hello\")"))
@@ -138,12 +146,18 @@
   (check-true (string-contains? formatted "because: nested union left branch failed")))
 
 (test-case "union exhaustion format includes 'because:' for non-empty chains"
+  ;; PPN 4C 3C.c.3 (2026-05-24): per Q-B.2 + Q-C.6, field shape is
+  ;; (listof derivation-chain). Construct chain with one step containing
+  ;; the speculation label as assumption-name; verify format-error renders
+  ;; "because: <name>".
+  (define step (derivation-step #f #f '() (list "tried branch Nat") #f))
   (define err
     (union-exhaustion-error srcloc-unknown "Nat | Bool"
                             '("Nat" "Bool")
                             '("Bool" "Nat")
                             "\"hello\""
-                            '(("tried branch Nat") ())))
+                            (list (derivation-chain (list step))
+                                  (derivation-chain '()))))
   (define formatted (format-error err))
   (check-true (string-contains? formatted "because: tried branch Nat"))
   (check-true (string-contains? formatted "tried Nat")))
@@ -228,9 +242,11 @@
   (define results (car pair))
   (define err (last results))
   (check-true (union-exhaustion-error? err))
-  ;; Check derivation chain — should contain ATMS-derived info
-  (define chain (union-exhaustion-error-derivation-chain err))
-  (check-true (list? chain)))
+  ;; PPN 4C 3C.c.3: field shape is (listof derivation-chain) per Q-B.2 + Q-C.6
+  (define chains (union-exhaustion-error-derivation-chain err))
+  (check-true (list? chains))
+  (check-true (andmap derivation-chain? chains)
+              "All chains are derivation-chain structs"))
 
 (test-case "GDE-1: context assumption for check command"
   ;; (check expr : Type) should also create a context assumption.
@@ -306,19 +322,34 @@
   ;; Specifically, should NOT have "because: [diagnosis]"
   (check-false (string-contains? formatted "because: [diagnosis]")))
 
-(test-case "GDE-3: union error format renders diagnosis in derivation chain"
-  ;; Construct a union-exhaustion-error with diagnosis in chain
+(test-case "GDE-3: union error format renders per-step assumption-names"
+  ;; PPN 4C 3C.c.3 (2026-05-24): under Q-B.2 + Q-C.6 (listof derivation-chain)
+  ;; shape, format-error renders per-step "because: <name>" via derivation-
+  ;; step-assumption-names. The OLD inline "[diagnosis]" string convention
+  ;; (build-derivation-chain's format-context-diagnosis appended strings to
+  ;; chain) retires alongside build-derivation-chain's union-type path per Q9.
+  ;; Diagnosis info under new architecture is queryable via ATMS state at
+  ;; render time — deferred to Phase 11b general derivation infrastructure
+  ;; (see §9.5.4.4 adversarial framing on lost richness). For 3C.c.3 minimum:
+  ;; chain renders step assumption-names; diagnosis-line testing deferred.
+  (define step-1 (derivation-step #f #f '() (list "tried branch Nat") #f))
+  (define step-2 (derivation-step #f #f '() (list "tried branch Bool") #f))
   (define err
     (union-exhaustion-error srcloc-unknown "Nat | Bool"
                             '("Nat" "Bool")
                             '("Bool" "Nat")
                             "\"hello\""
-                            '(("tried branch Nat" "[diagnosis] retract: x : Nat | Bool")
-                              ("tried branch Bool"))))
+                            (list (derivation-chain (list step-1))
+                                  (derivation-chain (list step-2)))))
   (define formatted (format-error err))
-  ;; Diagnosis line should appear without "because:" prefix
-  (check-true (string-contains? formatted "[diagnosis] retract: x : Nat | Bool"))
-  (check-false (string-contains? formatted "because: [diagnosis]")))
+  ;; Per-step "because:" lines render with assumption-names
+  (check-true (string-contains? formatted "because: tried branch Nat"))
+  (check-true (string-contains? formatted "because: tried branch Bool"))
+  ;; Old [diagnosis] inline format NOT preserved under new struct shape; testing
+  ;; deferred to Phase 11b ATMS state query infrastructure (see §9.5.4.4
+  ;; adversarial framing on lost richness — ATMS conflicts + minimal diagnoses
+  ;; queryable via solver-state at render time, structured data path)
+  )
 
 (test-case "GDE-3: successful def produces no diagnosis in provenance"
   (define result (last (run-simple "(def x : Nat 0N)")))

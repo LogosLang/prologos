@@ -23,7 +23,20 @@
          "pretty-print.rkt"
          "global-env.rkt"
          "elab-speculation-bridge.rkt"
-         "atms.rkt")
+         "atms.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): translator + struct constructor for
+         ;; union-exhaustion-error.derivation-chain field shape flip per
+         ;; §9.5.4.4 Q-B.2 + Q-C.6 lock (per-branch list of derivation-chain).
+         "error-explanation.rkt"
+         ;; PPN 4C 3C.c.3 (2026-05-24): cell-19 write per §9.5.4.4 Q-C.1 (f)
+         ;; multi-writer scaffolding (sexp check/err is the SECOND writer to
+         ;; cell-19 alongside on-network 3C.b handler; retires at Track 4D).
+         ;; Direct net-cell-write per user direction (NOT propagator wrapper).
+         "propagator.rkt"
+         "elab-network-types.rkt"
+         ;; current-prop-net-box defined in metavar-store.rkt; (only-in)
+         ;; pattern follows typing-propagators.rkt:28 precedent.
+         (only-in "metavar-store.rkt" current-prop-net-box))
 
 (provide infer/err
          check/err
@@ -61,6 +74,17 @@
 ;; Phase 7a: per-branch re-checking — each branch gets its own speculative check
 ;;           for branch-specific "got: ..." messages
 ;; Phase D3: derivation chains from sub-failures within each branch
+;; PPN 4C 3C.c.3 (2026-05-24): union path REWORKED per §9.5.4 mini-design:
+;;   - Per-branch chain now constructed via derivation-chain-for/union-check
+;;     (3C.c.1 translator); build-derivation-chain's union-type path RETIRES
+;;     per Q9 mandate (non-union path retained for type-mismatch-error /
+;;     Phase 11b scope)
+;;   - Cell-19 (union-derivation-chains-cell-id) WRITTEN via direct elab-cell-
+;;     write on (current-prop-net-box) — multi-writer scaffolding with on-
+;;     network 3C.b handler; retires at Track 4D (Q-C.1 (f) lock; D-3C.c-9
+;;     honest scaffolding framing)
+;;   - union-exhaustion-error.derivation-chain field shape FLIPS atomically
+;;     to (listof derivation-chain) per Q-B.2 + Q-C.6 locks
 (define (check/err ctx e t [loc srcloc-unknown] [names '()])
   (if (check ctx e t)
       #t
@@ -70,7 +94,8 @@
             ;; Union: produce enriched error with per-branch details
             (let* ([branches (flatten-union-local t*)]
                    [branch-strs (map (lambda (b) (pp-expr b names)) branches)]
-                   ;; Phase D3: collect per-branch mismatch AND derivation chain
+                   ;; Phase D3+3C.c.3: collect per-branch mismatch AND structured
+                   ;; derivation-chain (struct from error-explanation.rkt)
                    [branch-info
                     (for/list ([br (in-list branches)])
                       ;; Try check against this specific branch (speculatively)
@@ -80,29 +105,50 @@
                           values  ;; identity: #t = success, #f = failure
                           (format "union-branch-~a" (pp-expr br names))))
                       (if ok?
-                          (list "matched" '())
-                          ;; Per-branch failure: get sub-failures + infer actual type
+                          ;; PPN 4C 3C.c.3: "matched" branches get empty
+                          ;; derivation-chain struct (was '()). Per-branch list
+                          ;; shape (Q-C.6); empty struct semantics preserved.
+                          (list "matched" (derivation-chain '()))
+                          ;; Per-branch failure: get sub-failures + translate
+                          ;; via 3C.c.1 primitive (NOT build-derivation-chain
+                          ;; — union-type path retires per Q9). Atomic case
+                          ;; has empty sub-failures → empty chain (matches UX
+                          ;; parity per §9.5.4.7.1); nested case populates.
                           (let* ([latest (get-latest-speculation-failure)]
-                                 [sub-failures
-                                  (if latest
-                                      (speculation-failure-sub-failures latest)
-                                      '())]
-                                 [chain (build-derivation-chain sub-failures (current-command-atms))]
+                                 [sub-failures (if latest
+                                                   (speculation-failure-sub-failures latest)
+                                                   '())]
+                                 [chain (derivation-chain-for/union-check sub-failures)]
                                  [actual (infer ctx e)])
                             (list (if (expr-error? actual)
                                       "<could not infer>"
                                       (pp-expr actual names))
                                   chain))))]
                    [branch-mismatches (map car branch-info)]
-                   [derivation-chain (map cadr branch-info)])
+                   [branch-chains (map cadr branch-info)])
+              ;; PPN 4C 3C.c.3: write cell-19 (multi-writer scaffolding per
+              ;; §9.5.4.4 Q-C.1 (f) lean). Direct elab-cell-write (NOT
+              ;; propagator wrapper) per user direction — pretending sexp is
+              ;; a propagator would set bad precedent; honest scaffolding
+              ;; preferable. Defensive on missing net-box (test contexts
+              ;; without elab-network).
+              (define net-box (current-prop-net-box))
+              (when net-box
+                (set-box! net-box
+                          (elab-cell-write (unbox net-box)
+                                           union-derivation-chains-cell-id
+                                           (hasheq loc branch-chains))))
               (union-exhaustion-error
                loc
                (pp-expr t names)  ;; message field = full union type string (for help line)
                branch-strs
                branch-mismatches
                (pp-expr e names)
-               derivation-chain))
+               branch-chains))
             ;; Non-union: collect provenance from speculation failures
+            ;; (Phase 11b scope — build-derivation-chain's non-union path
+            ;; retained until Phase 11b extends static-walk-based primitive
+            ;; to non-union cases. Q9 union-only retirement.)
             (let* ([actual (infer ctx e)]
                    [latest (get-latest-speculation-failure)]
                    [sub-failures (if latest

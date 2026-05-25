@@ -50,6 +50,7 @@
          "atms.rkt"                       ;; assumption-id + assumption + solver-state-assumptions
          "champ.rkt"                      ;; champ-fold + champ-lookup
          "decision-cell.rkt"              ;; tagged-cell-value accessors
+         "derivation-chain-types.rkt"     ;; derivation-chain + derivation-step structs (3C.c.3 cycle break)
          "elab-speculation-bridge.rkt"    ;; current-command-atms (Phase 3C.b.3)
          "propagator.rkt")                ;; prop-network + propagator + net-cell-read-raw + prop-id-hash
 
@@ -81,36 +82,13 @@
 ;; ============================================================
 ;; Core data types (§9.5.2.2 Q-A.2)
 ;; ============================================================
-
-;; A derivation chain is a sequence of steps describing how a cell's
-;; contradicting state arose through propagator firings. Steps are in
-;; CAUSAL READING ORDER: deepest cause first (head of list) → symptom
-;; last (tail). Consumers wrap this struct in error structures
-;; (e.g., union-exhaustion-error.derivation-chain field) per §9.5.1.4.
-(struct derivation-chain (steps) #:transparent)
-
-;; A single step in the derivation chain represents one propagator's
-;; participation in producing the contradicting cell's state.
 ;;
-;; Field semantics:
-;;   propagator-id   — prop-id of the participating propagator (always non-#f)
-;;   srcloc          — install-time srcloc, or #f for propagators installed
-;;                     without explicit #:srcloc kwarg (graceful degradation
-;;                     per D-3C-7); see Phase 1.5 srcloc infrastructure
-;;   assumption-ids  — (listof assumption-id) — aids the OUTPUT cell was
-;;                     tagged with at walk time (per Q-A.6 documented
-;;                     attribution); '() if cell is untagged
-;;   assumption-names — (listof string) — primitive sets '(); CONSUMER
-;;                     enriches via solver-state-assumptions lookup
-;;   residual-cost   — exact-nonnegative-integer | #f — primitive sets #f;
-;;                     CONSUMER may populate via tropical-left-residual
-(struct derivation-step
-  (propagator-id
-   srcloc
-   assumption-ids
-   assumption-names
-   residual-cost)
-  #:transparent)
+;; PPN 4C 3C.c.3 (2026-05-24): structs RELOCATED to derivation-chain-types.rkt
+;; (leaf module) to break a require cycle with errors.rkt (which needs the
+;; struct accessors for format-error's union-exhaustion-error case). Backward
+;; compatibility preserved: structs still EXPORTED from this module via
+;; (struct-out ...) in the provide block above. Existing consumers don't need
+;; to change their require shape.
 
 ;; ============================================================
 ;; Internal helpers
