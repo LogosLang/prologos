@@ -499,17 +499,23 @@
       (make-fork-chain-threshold-fire-fn test-position branch-aid-set request-info))
     ;; Invoke threshold body
     (define net6 (threshold-fn net5))
-    ;; Verify cell-19 has chain entry for test-position
+    ;; Verify cell-19 has per-branch chain LIST entry for test-position
+    ;; (PPN 4C 3C.c.2 / Q-C.6: shape flipped from single chain → per-branch list)
     (define cell-19-val (net-cell-read net6 union-derivation-chains-cell-id))
     (check-true (hash? cell-19-val) "cell-19 is a hash")
     (check-true (hash-has-key? cell-19-val test-position)
                 "cell-19 has entry for test-position after threshold fires")
-    (define chain (hash-ref cell-19-val test-position #f))
-    (check-true (derivation-chain? chain)
-                "cell-19's per-position entry is a derivation-chain struct")
-    (define steps (derivation-chain-steps chain))
-    (check-true (>= (length steps) 1)
-                "chain has at least 1 step (writer propagator)")))
+    (define per-branch-chains (hash-ref cell-19-val test-position #f))
+    (check-true (list? per-branch-chains)
+                "cell-19's per-position entry is a LIST (per-branch chains; Q-C.6)")
+    (check-true (andmap derivation-chain? per-branch-chains)
+                "all entries in list are derivation-chain structs")
+    (check-equal? (length per-branch-chains) 2
+                  "per-branch list has 2 chains (one per aid in branch-aid-set)")
+    ;; Aggregate across per-branch chains: at least one step total
+    (define all-steps (apply append (map derivation-chain-steps per-branch-chains)))
+    (check-true (>= (length all-steps) 1)
+                "≥1 step across per-branch chains (writer propagator)")))
 
 ;; ========================================
 ;; Unit: make-fork-chain-threshold-fire-fn — subset NOT met → no-op
@@ -547,11 +553,11 @@
   (define aid-0 (assumption-id 0))
   (define net1 (net-cell-write net0 contradicted-branch-aids-cell-id
                                 (hasheq test-position (seteq aid-0))))
-  ;; Pre-populate cell-19 with a marker chain for test-position (simulating
-  ;; previous emission for this position)
-  (define marker-chain (derivation-chain '()))  ;; empty marker chain
+  ;; Pre-populate cell-19 with a marker per-branch-list for test-position
+  ;; (PPN 4C 3C.c.2 / Q-C.6: shape is per-branch list, not single chain)
+  (define marker-per-branch (list (derivation-chain '())))  ;; single-element list marker
   (define net2 (net-cell-write net1 union-derivation-chains-cell-id
-                                (hasheq test-position marker-chain)))
+                                (hasheq test-position marker-per-branch)))
   (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
     (define branch-aid-set (seteq aid-0))
     (define request-info (hasheq 'tm-cid 'dummy))
@@ -560,7 +566,7 @@
     (define net3 (threshold-fn net2))
     ;; cell-19's entry for test-position should STILL be the marker (unchanged)
     (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
-    (check-equal? (hash-ref cell-19-val test-position #f) marker-chain
+    (check-equal? (hash-ref cell-19-val test-position #f) marker-per-branch
                   "cell-19 entry unchanged when position already emitted (idempotence guard)")))
 
 ;; ========================================
@@ -736,15 +742,21 @@
     (check-true (hash? cell-19-val) "cell-19 value is a hasheq")
     (check-true (hash-has-key? cell-19-val position)
                 "cell-19 has chain entry for the union position")
-    (define chain (hash-ref cell-19-val position #f))
-    (check-true (derivation-chain? chain)
-                "cell-19 entry is a derivation-chain struct (3C.a foundation)")
-    (define steps (derivation-chain-steps chain))
-    (check-true (>= (length steps) 1)
-                "chain has ≥1 step (≥1 propagator writer in dep graph)")
+    (define per-branch-chains (hash-ref cell-19-val position #f))
+    ;; PPN 4C 3C.c.2 / Q-C.6: per-branch list shape (not single chain)
+    (check-true (list? per-branch-chains)
+                "cell-19 entry is a LIST of derivation-chain structs (per-branch shape)")
+    (check-true (andmap derivation-chain? per-branch-chains)
+                "all entries in per-branch list are derivation-chain structs")
+    (check-equal? (length per-branch-chains) 2
+                  "per-branch list has 2 chains (Int + Bool branches)")
+    ;; Aggregate steps across per-branch chains
+    (define all-steps (apply append (map derivation-chain-steps per-branch-chains)))
+    (check-true (>= (length all-steps) 1)
+                "≥1 step across per-branch chains (≥1 propagator writer in dep graph)")
     ;; D-3C.b.5-4: substring match insulates against name-format evolution
     (define names-flat
-      (apply append (map derivation-step-assumption-names steps)))
+      (apply append (map derivation-step-assumption-names all-steps)))
     (check-true (ormap (lambda (n) (and (string? n) (string-contains? n "branch")))
                        names-flat)
                 "some step's assumption-names references a 'branch' label (per 3C.b.3 enrichment)")))
@@ -763,11 +775,17 @@
     (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
     (check-true (hash-has-key? cell-19-val position)
                 "cell-19 has chain entry for Nat|String all-fail position")
-    (define chain (hash-ref cell-19-val position #f))
-    (check-true (derivation-chain? chain)
-                "cell-19 entry is a derivation-chain struct")
-    (check-true (>= (length (derivation-chain-steps chain)) 1)
-                "chain has ≥1 step")))
+    (define per-branch-chains (hash-ref cell-19-val position #f))
+    ;; PPN 4C 3C.c.2 / Q-C.6: per-branch list shape
+    (check-true (list? per-branch-chains)
+                "cell-19 entry is a LIST of derivation-chain structs")
+    (check-true (andmap derivation-chain? per-branch-chains)
+                "all entries are derivation-chain structs")
+    (check-equal? (length per-branch-chains) 2
+                  "per-branch list has 2 chains (Nat + String branches)")
+    (define all-steps (apply append (map derivation-chain-steps per-branch-chains)))
+    (check-true (>= (length all-steps) 1)
+                "≥1 step across per-branch chains")))
 
 (test-case "union-all-contradict-chain/int-string-int-succeeds: cell-19 empty (partial success)"
   ;; Components Int + String; inhabitant expr-nat-val 42 — Int succeeds

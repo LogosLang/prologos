@@ -1368,11 +1368,24 @@
           ;; subsumption preserved + defensive)
           net]
          [else
-          ;; All branches contradicted + not yet emitted: build chain + write
-          (define chain
-            (derivation-chain-for/union-contradict net branch-aid-set request-info))
+          ;; All branches contradicted + not yet emitted: build PER-BRANCH chain
+          ;; list (per Q-C.6 lock — addendum §9.5.4.3 lean (a)) + write.
+          ;;
+          ;; Per-branch list shape aligns cell-19 with union-exhaustion-error's
+          ;; (listof derivation-chain) field shape (Q-B.2 lock). Sexp path
+          ;; (3C.c.3 check/err writer) produces per-branch list naturally; this
+          ;; writer iterates the wrapper N times (one per branch-aid) to match.
+          ;;
+          ;; PPN 4C 3C.c.2 (2026-05-24): adjusted from single aggregated chain
+          ;; to per-branch list per §9.5.4.3 Q-C.6 audit-surfaced finding. Cost:
+          ;; N walks instead of 1 (negligible — error paths not hot; diagnostic
+          ;; richness justifies). Honest correction of missed-audit at 3C.b VAG,
+          ;; not scope creep — same wrapper API used iteratively.
+          (define per-branch-chains
+            (for/list ([aid (in-set branch-aid-set)])
+              (derivation-chain-for/union-contradict net (seteq aid) request-info)))
           (net-cell-write net union-derivation-chains-cell-id
-                          (hasheq position chain))])])))
+                          (hasheq position per-branch-chains))])])))
 
 (define (make-branch-contradiction-watcher-fire-fn tm-cid position aid)
   (lambda (net)
