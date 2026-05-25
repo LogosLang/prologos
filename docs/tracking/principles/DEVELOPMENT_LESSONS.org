@@ -1628,3 +1628,46 @@ See:
 - DEVELOPMENT_LESSONS.org § "Microbench-Claim Verification Pays Off Across
   Sub-Phase Arcs" — the post-implementation verification discipline (this
   lesson extends to per-sub-phase verification)
+
+** Empirical Falsification as Audit Complement
+
+When a mini-audit's reasoning meets a pre-implementation architectural
+decision, run a falsification test (probe / microbench / A/B comparison)
+with pre-committed criteria BEFORE locking the choice. Audit reasoning is
+inference under uncertainty; empirical tests are evidence. The pairing
+catches what either alone misses.
+
+How to apply:
+- Identify the load-bearing assumption in the audit
+- Design the smallest test that would refute it
+- Pre-commit interpretation rules (what counts as confirm/refute/inconclusive)
+- Run; document the result honestly (negative results are findings, not failures)
+
+5 data points across PPN 4C addendum Phase 3 arc: Q6.x WS-mode chain
+baseline (§9.5.1.2); 3C.b.5.c synthetic-E2E pivot (§9.5.3.9.4); 3C.c.6
+atomic verbatim parity (§9.5.4.7.2); 3C.d.0 F1 W1-status (§9.5.5.3);
+3C.d.3 Scenario B post-empirical decision flip (§9.5.5.13).
+
+Promoted at PPN 4C Phase 3V (2026-05-24).
+
+** Audit-Precedes-Implementation REFRAMING Discipline
+
+When a mini-audit surfaces a fact the mini-design didn't anticipate,
+REFRAME the design before implementing — don't power through with the
+original plan plus a footnote. The audit's job is to RESHAPE scope, not
+just confirm it.
+
+How to apply:
+- When audit reveals an unanticipated finding, STOP implementation
+- Decide: reframe (modify design intent), defer (out of scope with capture),
+  or override (with explicit rationale persisted in design doc)
+- Persist the reframe in the design doc; never bury in commit message alone
+- Re-run mini-design dialogue if scope shifts non-trivially
+
+4 data points across PPN 4C addendum Phase 3 arc: 3C.d.0 F1 reframe of
+W1-status pre-implementation; 3C.d.2 (γ+) audit-driven SKIP of synthetic
+axes already covered; 3C.d.3 (β.3.i) post-empirical decision flip from
+(β.3.ii); 3V cross-PHASE methodology drift surfacing earning 4th data
+point (§9.6.6).
+
+Promoted at PPN 4C Phase 3V (2026-05-24).

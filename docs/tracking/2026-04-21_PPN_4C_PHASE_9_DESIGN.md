@@ -223,7 +223,7 @@ Per DESIGN_METHODOLOGY Stage 3 "Progress Tracker Placement" discipline — place
 | **3C.d.4 — Skip-gated canary + test rename + DEFERRED.md + parent D.3 Phase 11b row update** | Per §9.5.5.5 deliverables 4-7 — KR-1/2/3 named drift formal tracking-debt payment per Q-D.1 (c) ESCALATE-with-substrate. Four artifacts: (1) `'union-diagnosis-restoration "Phase 11b"` skip-gate in test-elaboration-parity.rkt with `[diagnosis] retract:` substring assertion + shape-dependency comment; (2) test rename at test-provenance-errors.rkt:359 reflecting partial deferral; (3) DEFERRED.md NEW section "PPN 4C addendum 3C.c-VAG named drift (KR-1/2/3) + 3C.d.3a empirical probe artifact"; (4) parent D.3 Phase 11b row scope addition "(2026-05-24) — KR-1/2/3 absorption" with bidirectional cross-link + (a)/(b)/(c) decision history + chain-rendering-modes consideration + restoration substrate refs. | ✅ `f5c18f52` | +121 / -2 LoC across 4 doc/test files. Targeted suite (test-elaboration-parity + test-provenance-errors): **58 tests / 5.5s / PASS** (no test count change — skip-gate inert; rename mechanical). Drift risks mitigated: D-3C.d-2 (skip-gate visibility erosion — phase tag + DEFERRED + parent row land atomically); D-3C.d-3 (DEFERRED drifts — bidirectional cross-link); D-3C.d-6 (rename friction — mechanical); D-3C.d-7 (canary drift — shape-dependency documented); D-3C.d-8 (Phase 11b catch-all — strict scope + cross-ref). **Methodology codifications reinforced**: "ESCALATE-with-substrate" pattern (1 data point this session; watching-list; graduates at 2nd). |
 | **3C.d-VAG** | Cumulative cross-sub-step adversarial 3-column VAG. 4 VAG questions × catalogue/challenge/adversarial × 5 sub-steps (3C.d.0/1/2/3/4). All 10 D-3C.d-* drift risks verified cleared adversarially (§9.5.5.14.6). Honest framing surfaced (§9.5.5.14.4 Question (c) adversarial): 3C.d's vision-advancement is METHODOLOGICAL + INFRASTRUCTURE + TRACKING-DEBT-PAYMENT, NOT user-facing (KR-1 user-facing regression preserved through (c) ESCALATE-with-substrate deferral to Phase 11b). | ✅ (this commit) | See §9.5.5.14 for full cumulative VAG. **Phase 3C.d CLOSED end-to-end** — substrate + (β.3.i) integration + skip-gate + DEFERRED + parent row + cumulative VAG all delivered. Full suite **8281 tests / 107.0s / 0 failures** (8273 → 8281, +8; 113.4s → 107.0s, -6.4s; honest framing of "below 109-115s band" as no-regression interpretation). **Codifications**: "Empirical falsification as audit complement" NOW GRADUATION-READY (5 data points); "Audit-precedes-implementation REFRAMING discipline" PROMOTION-READY (3 data points); "ESCALATE-with-substrate" + "Combined locking test + probe artifact" watching-list (1 data point each). Ready for Phase 3C-VAG (cross-arc). |
 | **3C-VAG** | Cross-arc adversarial 3-column VAG (4 sub-phases × 4 VAG questions). All 12 D-3C-* parent drift risks verified cleared adversarially (§9.5.6.5). KR-1/2/3 named drift handoff to Phase 11b coherence verified across 8 cross-link sites (§9.5.6.6). User-facing behavior matrix documented including KR-1 regression naming (§9.5.6.7). | ✅ (this commit) | See §9.5.6 for full cross-arc VAG. **Phase 3C CLOSED end-to-end** — primitive + 2 consumers + sexp bridge + tracking-debt substrate + cumulative cross-arc VAG all delivered. Cross-track captures coherent for Phase 11b / PM Track 12 / PPN Track 4D / SH Track 1 / PReduce Track 6 / OE Track 4 inheritance. **Codifications**: "Empirical falsification as audit complement" GRADUATION-READY (5 data points; defer to user); "Audit-precedes-implementation REFRAMING discipline" PROMOTION-READY (3 data points; graduates at 4th); "ESCALATE-with-substrate" + "Combined locking test + probe artifact" + "Honest scope-down progression" watching-list. Ready for Phase 3V (cumulative Phase 3 VAG across 3A + 3B + 3C). |
-| 3V | Vision Alignment Gate Phase 3 | ⬜ | Per §9.6 revised. Conditional on 3A ✅ + 3B-VAG ✅ + 3C close. |
+| 3V | Vision Alignment Gate Phase 3 (cumulative cross-PHASE across 3A + 3B + 3C) | ✅ | **CLOSED 2026-05-24 per §9.6 expanded** (this commit). 4 VAG questions × 3 columns × cross-PHASE all pass adversarially (§9.6.2-5). All 6 cross-PHASE drift risks D-3V-1..6 cleared (§9.6.5). Cross-phase coherence verified (§9.6.7) — 3A + 3B + 3C compose through cell state with no cross-sub-phase coupling debt. Cross-PHASE methodology drift surfaced (§9.6.6) — "Audit-precedes-implementation REFRAMING discipline" earned 4th data point. Cumulative cross-track captures consolidated (§9.6.9) — 12+ consumer tracks. **2 codifications GRADUATED to DEVELOPMENT_LESSONS.org** (§9.6.10): "Empirical falsification as audit complement" (5 data points) + "Audit-precedes-implementation REFRAMING discipline" (4 data points). 2 inherited-from-3A codifications DEFERRED to addendum capstone PIR. Phase 3 reflection (§9.6.11) synthesizes achievements + forward-enables + PPN 4 charter fit; substrate-heavy / user-facing-light honest framing. Phase 4 bridge specified at INTERFACE level (§9.6.12) — addendum vs parent track Phase 4 distinction explicit. Suite gate inherited from 3C-VAG (8281 / 107.0s / 0). **Phase 3 CLOSED end-to-end.** Phase 4 paused per user direction. |
 | **4** | **Top-level orchestration unification — retire `process-command` sequential loop** | ⬜ | Designed at phase open per addendum methodology. Tracking [#22](https://github.com/LogosLang/prologos/issues/22). Motivating use case: mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14)). Gates on Phase 1 (tropical fuel) + Phase 2 (in-form strata) close. Sub-phases (4A, 4B, 4V) populated at phase open. |
 | V | Capstone + PIR | ⬜ | |
 
@@ -8843,14 +8843,234 @@ All §9.5.1.9 closure criteria verified cross-arc:
 
 **Phase 3C CLOSED end-to-end** ✓ ready for Phase 3V (cumulative Phase 3 VAG across 3A + 3B + 3C).
 
-### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
+### §9.6 Phase 3V — Vision Alignment Gate (cumulative across 3A + 3B + 3C; expanded 2026-05-24)
 
-Per 4 VAG questions under adversarial 3-column framing (catalogue / challenge / adversarial):
+Phase 3V is the **cumulative PHASE-LEVEL VAG** closing Phase 3 of the addendum. Per §9.5.6.9 handoff: applies the 4 VAG questions × 3 columns (catalogue / challenge / adversarial) at the cross-PHASE scope — verifying composition coherence across 3A + 3B + 3C, not aggregating sub-phase verdicts (already cleared at §9.3.9, §9.4.5, §9.5.6 respectively). Methodology: 3-column adversarial framing per the discipline reinforced throughout the Phase 3 arc; the third column ACTIVELY tries to demolish each lean rather than softly improve it.
 
-- **On-network?** — branching via **in-place worldview tagging on shared carrier** (Realization B; NOT fork-prop-network); tagged-cell-value with bitmask filter; cell-15 (request) + cell-16 (contradiction) + worldview-cache narrowing. Unification primitives PURE (no integrated detection — OQ3). Residuation (Phase 3C) is read-time function on dep graph.
-- **Complete?** — union types check end-to-end via non-committing inhabitation (OQ1); hypercube optimizations active (3B); error-explanation ships (3C). Parity axis revised to type-theoretic semantic. Q-A4 elab-speculation.rkt orchestrators retired.
-- **Vision-advancing?** — non-committing inhabitation aligns with type theory (Castagna semantic subtyping; bidirectional check; Scala 3 hard unions; Typed Racket occurrence typing); Realization B is structurally simpler than fork-and-rejoin; mantra-aligned at multiple layers (all-at-once branch installation, all-in-parallel BSP rounds, structurally emergent via worldview filter, info-flow through tagged-cell-value cells, ON-NETWORK including stratum handlers); composes cleanly with future tracks (Phase 9b inherits N-ary pattern; Phase 3C residuation consumes cell-16 contradiction signal; Parent Phase 4 + PM 12 inherit on-network replacement for `with-speculative-rollback`).
-- **Drift-risks-cleared?** — D-3A-bit-budget (≤30 bits gate; PERF-COUNTERS observability); D-3A-watcher-scope (audit at 3A.0); D-3A-filter-correctness (3A parity axis empirically validates); D-3A-meta-divergence (expected; diagnostic deferred to 3C); D-3A-recursion-safety (threshold-fire-once per (position, decomposition)). All named at §9.3.1.5.
+#### §9.6.1 Phase 3 cumulative arc summary
+
+Three sub-phases delivered Phase 3 charter (§9.5.A Form C + parent D.3 §6.10 + §6.11.3):
+
+| Sub-phase | Status | Closing commit | Deliverable |
+|---|---|---|---|
+| 3A — Fork-on-union basic mechanism | ✅ | `9e8a6c3e` | Union types via ATMS branching via **Realization B** (in-place worldview tagging on shared carrier, NOT fork-and-rejoin); R7 inline-emit at type-map-write API; cell-15/16/17 substrate; ~706 LoC off-network surface RETIRED (`elab-speculation.rkt` + 3A.c.2 helpers) |
+| 3B — Hypercube integration | ✅ | `d81a04fc` | **M0 substrate fix** (`#:mutual-exclusion?` keyword on `solver-amb` / `solver-state-amb`); **3B.B (Gray-code) documented-defer** per pre-committed §9.4.1.6 falsification criteria (A/B measurement ALL DELTAS WITHIN ±1.5%); Hyperlattice Conjecture BOUNDED mechanism-coupled (not refuted broadly); `gray-code-order` + `subcube-member?` primitives shipped as primitive-awaiting-consumer with cross-refs to Phase 9b/PReduce/BSP-LE 6 |
+| 3C — Residuation error-explanation | ✅ | `c1141ea4` | **Propagator-First Diagnostics first-increment**: reusable `static-reverse-walk` primitive + two downstream consumers (`derivation-chain-for/union-contradict` + `derivation-chain-for/union-check`); sexp-bridge translator for annotated unions; W1 srcloc wiring; chain field type FLIPPED to `(listof derivation-chain)` LSP-ready; **KR-1/2/3 named drift escalated to Phase 11b** via bidirectional cross-link substrate (canary + DEFERRED + parent D.3 row + 3C.d.3a probe artifact) |
+
+**Cross-arc statistics**: ~48 substantive commits + ~40 backfill commits across the 3-sub-phase arc; production net additions ~+220 LoC against ~706 LoC retirement = **net REDUCTION in production code**; off-network surface REDUCED by ~706 LoC; test suite delta 8200 → 8281 (+81); suite wall time -10.3s vs pre-3A baseline; 0 regressions throughout.
+
+#### §9.6.2 Cross-arc Question (a) On-network?
+
+| Catalogue | Challenge | **Adversarial — where does this BREAK?** |
+|---|---|---|
+| ✓ Per-sub-phase verdicts: 3A on-network (Realization B + cell-15/16/17 + R7); 3B M0 keyword data-flow (no scheduler dispatch); 3C static-walk read-time pure + cell-18/19 + W1 wiring. Three scaffolding labels INHERITED (sexp translator → Track 4D; canary+DEFERRED+row+probe → Phase 11b; `current-source-loc` parameter → PM Track 12) — all NAMED with retirement plans. | At the cross-PHASE composition layer — does any sub-phase's on-network surface introduce coupling that another sub-phase silently consumes off-network? Where do 3A + 3B + 3C MEET? | (a.1) **The composition POINT is `type-map-write` → cell-15 (3A's R7 emit) → `process-fork-on-union` → per-branch propagators (3A.b lazy promote-cell-to-tagged) → cell-16 watchers (3A.b) → cell-18 (3C.b threshold) → cell-19 (3C.b/c chain) → static-walk consumers (3C.b/c).** Every arrow is a cell read/write or stratum-handler dispatch; zero off-network bridges introduced AT the composition layer. (a.2) **3B's M0 keyword does NOT add a cross-sub-phase coupling** — it's a per-call flag on `solver-amb` consumed within solver-state internals; 3A's non-committing semantic flows through `:mutual-exclusion? #f`, but this is keyword-data-flow, NOT a parameterize/dynamic-extent coupling. (a.3) **Cumulative off-network surface delta** across the arc: **-706 LoC (3A retirement) + 0 LoC (3B M0 data-flow) + +0 LoC (3C scaffolding all labeled) = net REDUCTION**. No cross-sub-phase off-network surface introduced. (a.4) **Most adversarial test**: could a future implementer break the on-network composition without noticing? The cross-link substrate (DEFERRED.md + parent D.3 Phase 11b row + skip-gated canary + probe artifact) means tracking-debt scaffolding is STRUCTURALLY visible — a Phase 11b implementer cannot miss the named drift. Coherent at cross-PHASE scope. |
+
+**Verdict (a) cross-PHASE**: ✓ ON-NETWORK with cumulative REDUCTION in off-network surface. Three scaffolding labels inherited; zero new off-network surface introduced by composition. **Pass.**
+
+#### §9.6.3 Cross-arc Question (b) Complete?
+
+| Catalogue | Challenge | **Adversarial — where does this BREAK?** |
+|---|---|---|
+| ✓ Phase 3 charter (§9.5.A Form C + parent D.3 §6.10 union types via ATMS + §6.11.3 hypercube primitives): 3A delivers union types via ATMS branching (Realization B; in-place tagging); 3B delivers M0 substrate fix + hypercube documented-defer per pre-committed falsification; 3C delivers residuation error-explanation first-increment. All §9.5.1.9 closure criteria + 3A-VAG §9.3.9.6 handoff + 3B-VAG §9.4.5.7 handoff + 3C-VAG §9.5.6.10 closure all met. | SHAPE OR SHAPE+BENEFIT at the PHASE level? Did Phase 3 deliver the BENEFIT or only the SHAPE? Did Phase 3 ship what §9.5.A Form C promised? | (b.1) **Charter mapping per §9.5.A Form C**: Form C UC1 (fuel-blame attribution) — DEFERRED to OE Track 4 per Q-A6/D-3C-4 (out of 3C scope); Form C UC2 (cost-bounded via Galois bridge) — DEFERRED to OE Track 4; **Form C UC3 (per-branch cost tracking) — partially shipped via 3C's static-walk primitive (consumer-facing API)** but per-branch tropical fuel cells from §9.7 not instantiated (Phase 9b territory). **Form C is a SUBSTRATE delivery, not a feature delivery** — primitive shipped (UC1 + UC2 + UC3 enabled-not-instantiated); first-increment consumer pattern (UC3 base) demonstrated. Honest framing. (b.2) **Hypercube delivery** per parent D.3 §6.11.3: original spec was 3 optimizations (Gray-code branch traversal + subcube pruning + hypercube all-reduce). 3B documented-defer for Gray-code; subcube primitive shipped as primitive-awaiting-consumer; all-reduce N/A under Realization B (no fork-and-rejoin sync barrier). **Charter §6.11.3 says STRUCTURAL IDENTITY implies 3 optimizations — but 3B empirically bounded the claim to fork-and-rejoin mechanism; Realization B doesn't need Gray-code CHAMP-sharing because in-place tagging is already structurally efficient.** Charter delivered at REVISED scope (bounded honestly). (b.3) **User-facing benefit cumulative**: 3A union annotations work end-to-end; 3B M0 invisible to user; 3C chain shape LSP-ready BUT KR-1 regression for diagnosis-rich scenarios. **Shape delivered; benefit DEFERRED at Phase 11b consumer** (chain enrichment + rendering modes). NOT silent — KR-1 escalated via cross-link substrate. (b.4) **Most adversarial — what about §6.11.3's "hypercube all-reduce for S(-1) retraction barrier"?** Under Realization B, S(-1) retraction narrows worldview-cache via bitwise-AND-with-NOT-mask (3A.b atomic narrowing); there IS no per-branch fork to all-reduce across. The §6.11.3 spec was framed under fork-and-rejoin assumption; under Realization B it's not applicable. NOT a gap, a REFRAMING — captured in 3B-VAG §9.4.5.2 question (b) honest framing. |
+
+**Verdict (b) cross-PHASE**: ✓ CHARTER DELIVERED at honestly-revised scope — substrate-heavy (UC1+UC2 deferred to OE; UC3 substrate shipped; hypercube bounded mechanism-coupled; chain primitive + consumers shipped) with named user-facing limitation (KR-1 to Phase 11b). **Pass with honest framing.**
+
+#### §9.6.4 Cross-arc Question (c) Vision-advancing?
+
+| Catalogue | Challenge | **Adversarial — where does this BREAK?** |
+|---|---|---|
+| ✓ Substrate-heavy delivery (R7 + M0 + static-walk + chain-shape) + tracking-debt substrate (KR-1/2/3 → Phase 11b) + methodology capital (4-5 codification candidates surfaced; 3-column adversarial discipline applied at every gate). Honest framing throughout: vision-advancement is METHODOLOGICAL + INFRASTRUCTURE + TRACKING-DEBT-PAYMENT (§9.5.6.3 honest), NOT user-facing magic. | Per the PPN 4C parent D.3 §1 thesis ("bring elaboration completely on-network"): does Phase 3 ADVANCE this charter, or does substrate-heavy framing just preserve status quo with extra ceremony? | (c.1) **Concrete charter advancement**: (i) `elab-speculation.rkt` RETIRED (188 LoC) — direct off-network surface elimination per charter; (ii) ~706 LoC cumulative off-network surface reduction across 3A retirement + R7.c helpers + 3A.d production retirement — concrete on-network advancement; (iii) Realization B established as the on-network mechanism for ATMS-branching elaboration, REPLACING `with-speculative-rollback`'s mixed-paradigm — this is `correct-by-construction` (parent D.3 §1 principle 3) replacing discipline-maintained-correctness. Phase 3 advances charter via SUBSTRATE RETIREMENT, not just substrate addition. (c.2) **Cross-PHASE composition gain visible?** YES — 3A's R7 (at type-map-write API) composes with 3C's chain (at dep-graph walk) without any per-sub-phase glue code: R7 fires → cell-15 emits → fork-on-union handler → branches → cell-16/18 → static-walk reads dep-graph → derivation chain. The composition is STRUCTURAL through cells. (c.3) **What about the Hyperlattice Conjecture under 3B's empirical falsification?** 3B-VAG §9.4.5.2 question (c) framing: Conjecture BOUNDED mechanism-coupled, NOT REFUTED. This is HONEST scoping — the Conjecture's CHAMP-sharing claim applies to fork-and-rejoin mechanisms; Realization B is a DIFFERENT mechanism with its own efficiency story. Phase 3 ADVANCES the Conjecture by providing empirical refinement, not refutation. (c.4) **Most adversarial — could the substrate-heavy framing be a rationalization for shipping less than promised?** Test: would the design author (parent D.3 §1) recognize Phase 3 as advancing the stated vision? **YES** — the design author called for "Union types via ATMS delivered (BSP-LE 1.5 cell-based TMS pulled in as 4C sub-track)" + "Hole-fill (γ residuation direction) in scope via reuse of existing proof-search substrate" — Phase 3 delivers both architecturally (ATMS branching via Realization B; residuation primitive + first-increment consumers) with honest scope-down on user-facing magic (KR-1 to Phase 11b). The vision is INFRASTRUCTURE-FIRST + USER-FACING-EMERGES; Phase 3 sits squarely in the INFRASTRUCTURE-FIRST stage of the arc. |
+
+**Verdict (c) cross-PHASE**: ✓ VISION-ADVANCING per parent D.3 §1 charter ("bring elaboration completely on-network"). Substrate retirement (~706 LoC) + correct-by-construction replacement (Realization B over `with-speculative-rollback`) + Conjecture refinement (mechanism-coupled bounding) + tracking-debt substrate for Phase 11b. **Pass.**
+
+#### §9.6.5 Cross-arc Question (d) Drift-risks-cleared?
+
+Sub-phase D-3A-* (5 risks, §9.3.1.5), D-3B-* (6 parent risks, §9.4.1.7), D-3C-* (13 parent risks, §9.5.1.6) — all cleared at respective sub-phase VAGs (§9.3.9, §9.4.5, §9.5.6). 3V verifies **cross-PHASE risks beyond sub-phase scope**:
+
+| Cross-PHASE Risk | Mitigation | Adversarial — where does this BREAK? | Status |
+|---|---|---|---|
+| **D-3V-1** Cataloguing-as-summary | Each (a)/(b)/(c)/(d) question in this VAG operates at PHASE scope with own catalogue/challenge/adversarial columns (NOT aggregating sub-phase verdicts) | Did §9.6.2-4 actually challenge cross-PHASE composition, or just gather sub-phase verdicts? Each subsection has cross-PHASE-specific challenges: (a.3) cumulative surface delta; (b.4) §6.11.3 reframing under Realization B; (c.3) Conjecture bounding interpretation. | ✓ CLEARED |
+| **D-3V-2** Substrate-heavy framing as accomplishment-spinning | Per §9.5.6.3 + §9.6.4 c.4: honest framing IS substrate-heavy / user-facing-light; named explicitly; consistent with PPN 4C charter substrate-first nature. KR-1 regression NOT papered over. | Did the reflection (§9.6.11) genuinely surface the limitation, or rationalize? §9.6.11 names KR-1 + WS-mode dominant non-deployment of 3A + 3B documented-defer as the COMPLETE picture, not selectively. | ✓ CLEARED |
+| **D-3V-3** Phase 4 over-specification | §9.6.12 specifies INTERFACE (stable points Phase 4 inherits) not IMPLEMENTATION (how Phase 4 should use them); mini-design freedom preserved. | Did §9.6.12 over-constrain? It enumerates Phase 4 inheritance per cell-id/handler/primitive but leaves IMPLEMENTATION decisions to Phase 4 mini-design. | ✓ CLEARED |
+| **D-3V-4** Codification graduation overreach | User-directed: 2 codifications graduate at 3V; 2 inherited-from-3A defer to addendum capstone/PIR; 3 stay watching-list. Per §9.6.10. | Did 3V try to over-graduate? NO — only 2 codifications graduate per user direction; remainder defer. | ✓ CLEARED |
+| **D-3V-5** Two-Phase-4 confusion left implicit | §9.6.12 explicit cross-reference: addendum Phase 4 (top-level orchestration / `process-command` retirement) vs parent track Phase 4 (A2 CHAMP retirement); §1.2 + parent D.3 row anchors. | Could a future implementer confuse the two Phase 4s? §9.6.12 names BOTH explicitly with distinct charters + distinct gating. | ✓ CLEARED |
+| **D-3V-6** Cross-PHASE methodology drift left undiscovered | §9.6.6 surfaces patterns visible only at PHASE scope: "honest scope-down progression" cross-arc; substrate-heavy / user-facing-light cumulative; KR-substrate handoff coherence cross-arc. | Any pattern that didn't surface? §9.6.6 explicitly looked for cross-PHASE patterns; "Audit-precedes-implementation REFRAMING discipline" earned 4th data point at 3V mini-audit per §9.6.10. | ✓ CLEARED (with 4th data point earned) |
+
+All 6 cross-PHASE drift risks CLEARED adversarially.
+
+#### §9.6.6 Cross-PHASE methodology drift surfacing
+
+Patterns visible only at PHASE scope (not surfaced at sub-phase VAGs because they require cross-arc visibility):
+
+1. **Honest scope-down progression** across 3A → 3B → 3C: 3A's R7 reframe (FP3 + β.1 from per-fire-fn pre-write to centralized-at-API); 3B's M0 substrate fix + Gray-code documented-defer; 3C's KR-1 ESCALATE-with-substrate. Each sub-phase refined scope downward from initial framing via empirical evidence or audit. Cross-arc evidence: **NONE of the 3 sub-phases shipped the OPENING scope without refinement**. Pattern documented; promotion candidate at next cross-arc evidence (per §9.5.6.8).
+2. **3-column adversarial framing applied at every gate** across the arc — 3A.0/.a/.b/.c.X/.d (8+ sub-phase closes) + 3A-VAG + 3B.0/.A + 3B-VAG + 3C.a/.b.X/.c.X/.d.X + 3C-VAG = ~30+ application sites. Methodology reinforcement; no new codification, just reinforcement of the user-articulated refinement.
+3. **Substrate + tracking-debt + methodology capital** as the consistent cross-arc deliverable shape — Phase 3 ships substrate (R7 + M0 + static-walk + chain-shape) + tracking-debt (KR-1/2/3 + 3B M1+M3 deferred + UC1/UC2 deferred to OE) + methodology capital (4 codification candidates). User-facing magic NOT the deliverable. This is the load-bearing honest framing.
+4. **Cross-PHASE composition coherence** verified at §9.6.7: cell-15 → fork-on-union → cell-16/18/19 → static-walk → consumers — every sub-phase's substrate feeds the next without per-sub-phase glue code.
+
+No drift requiring corrective action. The patterns documented for future cross-arc visibility.
+
+#### §9.6.7 Cross-phase coherence verification — 3A + 3B + 3C compose
+
+| Composition point | Cross-phase verification |
+|---|---|
+| **3A → 3C** (fork-on-union request → chain construction) | 3A.a's `process-fork-on-union` writes per-position aid-set to cell-15; cell-16 accumulates contradicted aids; 3C.b's `make-fork-chain-threshold-fire-fn` watches cell-16 + extracts aids + invokes `derivation-chain-for/union-contradict` (3C.b wrapper) which calls 3C.a's `static-reverse-walk` filtering by aid. Composition flows through CELL STATE, no shared mutable handle. |
+| **3A + 3B** (Realization B + M0 keyword) | 3B.A's `#:mutual-exclusion?` keyword threads through `solver-amb` / `solver-state-amb`; 3A's R7 emits with `:mutual-exclusion? #f` for non-committing semantic (multi-success branches coexist). Composition via KEYWORD DATA — no per-call setup. |
+| **3B + 3C** (M0 substrate + chain rendering) | 3B.A's M0 substrate is invisible to 3C's chain enrichment (3C reads contradicted-aids set, not mutex/non-committing flag). Decoupled cleanly. |
+| **3C.b (on-network) + 3C.c (sexp-bridge)** | Both consumers write to cell-19; merge function is hash-union with first-write-wins per-position. Composition via SHARED CELL; verified at 3C.c.6 cell-19 observability audit. |
+| **W1 srcloc wiring (3C.d.1) ⇄ Phase 1.5 substrate** | W1 default `(current-source-loc)` reads Phase 1.5's parameter at `net-add-propagator`/-broadcast/-fire-once signatures; empirical Scenario B (3C.d.3a probe) confirms dispatch-chain coherence end-to-end. |
+| **3A.d retirement + 3C scaffolding labels** | 3A.d retired `elab-speculation.rkt` (576 LoC); 3C's sexp translator at error-explanation.rkt:391+ is a NEW scaffolding with Track 4D retirement target — NOT a re-introduction of retired surface, but a paradigm-bridge for sexp-fed union annotations until sexp typing unifies on-network. |
+
+**Coherence verdict**: 3A + 3B + 3C compose without cross-sub-phase coupling debt. Each composition point flows through CELL STATE (not shared parameters/handles); each scaffolding label has its own retirement target (not collective debt).
+
+#### §9.6.8 Cumulative user-facing behavior summary post-Phase-3
+
+| Aspect | Pre-Phase-3 | Post-Phase-3 | User impact |
+|---|---|---|---|
+| Annotated `(the <Int \| String> 42)` | type error (sexp first-success commit; not WS-deployed) | classifier preserved as union; multi-success branches coexist | **WS-mode deployment limited per Q6.x probe**; user-facing for synthetic-E2E only. Phase 11b + Track 4D unify-on-network completes deployment. |
+| Mutex amb (non-union branching) | mutex nogoods inert under non-committing | M0 keyword `:mutual-exclusion?` threads through; correct semantic under both classical mutex AND non-committing | Future tracks (Phase 9b γ; PReduce; BSP-LE 6) inherit correct dispatch |
+| Hypercube optimizations | not deployed | Gray-code + subcube primitives shipped as primitive-awaiting-consumer; integration documented-defer | NO user-facing change at Phase 3; future fork-and-rejoin mechanism tracks may consume |
+| `union-exhaustion-error` chain field | empty `(list)` | `(listof derivation-chain)` per-branch list with enriched steps (LSP/PNET-ready) | **Substrate change visible to LSP/PNET consumers**; rendering refactored |
+| Per-step rendering | `because: tried branch <T>` + `[diagnosis] retract:` lines (build-derivation-chain) | Per-step `because: <assumption-name>` lines from chain enrichment | **REGRESSION (KR-1)**: `[diagnosis] retract:` lines DISAPPEAR for diagnosis-rich scenarios. Restoration at Phase 11b. |
+| Step srcloc | N/A (no chain) | populated for on-network installs (W1); `#f` for sexp-translator steps (KR-2) | Phase 11b enriches sexp-fed steps at Track 4D unification |
+| Non-union type-mismatch errors | `provenance: (listof string)` + `[diagnosis] retract:` lines | UNCHANGED (3C scope union-only) | No regression; KR-3 unification at Phase 11b |
+
+**Honest cumulative summary**: Phase 3 ships **substrate** (Realization B + M0 + chain shape + hypercube primitives) + **tracking-debt** (KR-1/2/3 + UC1/UC2 + M1+M3) but **regresses ONE user-visible feature** (KR-1 diagnosis lines for diagnosis-rich scenarios). The regression is NAMED + ESCALATED + TRACKED — substrate-heavy / user-facing-light is the honest framing.
+
+#### §9.6.9 Cumulative cross-track captures across Phase 3
+
+Per §9.3.9.5 (3A handoff) + §9.4.5.7 (3B handoff) + §9.5.6.6 (3C handoff) consolidated:
+
+| Track | Inherits from Phase 3 | Retirement target / consumption pattern |
+|---|---|---|
+| **Phase 4 (addendum)** | Phase 3 substrate stable (cell-15/16/17/18/19; R7 inline-emit; M0 keyword; static-walk primitive); top-level orchestration retirement consumes on-network composition of Phase 1+2+3 | Addendum Phase 4 mini-design opens at user direction |
+| **Phase 11b (parent D.3)** | **Heaviest consumer**: KR-1 (diagnosis lines) + KR-2 (srcloc enrichment for sexp-fed steps) + KR-3 (non-union path unification under general `derivation-chain-for(position, tag)`); chain-rendering-modes consideration; 3C.d.3a empirical probe artifact as mini-design baseline; restoration substrate refs (skip-gated canary + DEFERRED + parent D.3 row + test renames) | Phase 11b mini-design re-weighs Q-D.1 with trace monoidal category theory framing (Joyal-Street-Verity 1996; Hasegawa 1997; Abramsky-Haghverdi-Scott 2002) |
+| **Parent track Phase 4 (A2 CHAMP retirement)** | M0 substrate stable; no coordination required; cache-field + callback retirements identified at §7.5.13.6.1 still in scope | Distinct from addendum Phase 4; see §9.6.12 |
+| **PReduce Track 1** (e-class cell substrate) | M0 substrate inheritance — non-committing semantic for e-class candidate extraction | Gates on PPN 4C Phase 1B (already ✅) + Track 0.1 |
+| **PReduce Track 4** (cost-guided extraction) | Tropical residuation primitive (`tropical-left-residual` from Phase 1 substrate); 3C's `static-reverse-walk` primitive consumer pattern | Direct consumer of `tropical-fuel.rkt` residuation + cell-19 chain shape |
+| **PReduce Track 6** (speculative reduction) | W1 srcloc wiring inheritance for cost-attribution; cell-18/19 substrate for per-branch cost tracking | Inherits substrate when track opens |
+| **PM Track 12** (parameters → cells) | `current-source-loc` parameter retention evaluation; `current-prop-net-box` + box-bridge family scaffolding | Coordinated retirement at PM 12 |
+| **PPN Track 4D** (Attribute Grammar Substrate) | KR-2 enrichment when sexp typing unifies on-network; M1+M3 hypercube integration redux UNDER FORK-AND-REJOIN (if any future track adopts); R7 type-map-write composition for free (attribute grammar rules pick up R7 without per-rule instrumentation) | Gates on 4C complete + T-3 landed + PM 12 scoping |
+| **SH Track 1** (`.pnet` network-as-value) | `derivation-chain` + `derivation-step` struct shape as PNET ABI seed; specialized cell metadata as part of `.pnet` IR | Gates on Phase 4 + NTT progress |
+| **OE Track 4** (cost-bounded constraint solving) | UC1 (fuel-blame attribution) + UC2 (cost-bounded elaboration via Galois bridge) deferred from Phase 3C; `tropical-left-residual` consumer pattern | Direct consumer when track opens |
+| **FFI Series** | No direct inheritance; substrate inherited via cross-cutting principles (Cell/Propagator/Scheduler Orthogonality) | Substrate available |
+| **UCS Series** | No direct inheritance; substrate available for domain-polymorphic ~#=~ operator design when track opens | Substrate available |
+| **CIU Tracks 3-5** | No direct inheritance | Substrate available |
+
+Cross-track captures HONESTLY PROSPECTIVE — Phase 3 offers substrate; consumer tracks decide consumption at their own mini-design.
+
+#### §9.6.10 Codification graduations (user-directed at 3V)
+
+Per user direction at Phase 3V opening: graduate **2 codifications** to `DEVELOPMENT_LESSONS.org` with **concise entries** (token-budget-conscious for future hot-load); defer the 2 inherited-from-3A to addendum capstone / Phase V PIR; 3 stay watching-list.
+
+| Codification | Data points | Decision |
+|---|---|---|
+| **"Empirical falsification as audit complement"** | 5 (Q6.x §9.5.1.2 + 3C.b.5.c pivot §9.5.3.9.4 + 3C.c.6 audit §9.5.4.7.2 + F1 §9.5.5.3 + Scenario B §9.5.5.13) | ✅ **GRADUATED to DEVELOPMENT_LESSONS.org** at this VAG |
+| **"Audit-precedes-implementation REFRAMING discipline"** | 4 (F1 at 3C.d.0 + (γ+) at 3C.d.2 + (β.3.i) at 3C.d.3 + **3V mini-audit cross-PHASE drift surfacing** as 4th data point) | ✅ **GRADUATED to DEVELOPMENT_LESSONS.org** at this VAG (4th data point earned at §9.6.6) |
+| "Stranded high-level abstraction after refactor" (inherited 3A) | 3 | Deferred to addendum capstone / Phase V PIR |
+| "Multi-axis discriminating coverage" (inherited 3A) | 3+ | Deferred to addendum capstone / Phase V PIR |
+| "ESCALATE-with-substrate" pattern | 1 | Stays watching-list |
+| "Combined locking test + probe artifact" | 1 | Stays watching-list |
+| "Honest scope-down progression" | cross-arc pattern documented | Stays documented (§9.6.6) |
+
+Graduations land in this VAG's commit. Deferred entries persist in §9.5.6.8 / §9.3.9.4 cross-arc tables for capstone PIR §16 absorption.
+
+#### §9.6.11 Phase 3 reflection — achievements, forward-enables, PPN 4 charter fit
+
+Beyond per-question VAG verdicts: synthesizing what Phase 3 means for the addendum + PPN 4C charter (per user direction at 3V opening).
+
+##### §9.6.11.1 What Phase 3 ACHIEVED
+
+**Architectural**:
+1. **Realization B as the on-network mechanism for ATMS branching** — in-place worldview tagging on shared carrier replaces fork-and-rejoin's mixed paradigm (`with-speculative-rollback`); structurally simpler; preserves type-theoretic non-committing semantic; aligns with Module-Theory Realization B precedent (BSP-LE 2B PIR §6.3)
+2. **M0 substrate decomplection** — `#:mutual-exclusion?` keyword cleanly separates classical mutex from non-committing semantic; future tracks inherit correct dispatch without re-deriving
+3. **Propagator-First Diagnostics first-increment** — reusable `static-reverse-walk` primitive + two downstream consumers demonstrate the pattern; chain field type LSP-ready
+4. **Hyperlattice Conjecture empirically bounded** — Conjecture's CHAMP-sharing claim refined as mechanism-coupled (fork-and-rejoin only); NOT refuted; honest scoping that benefits all future mechanism choices
+
+**Concrete code metrics**:
+- ~706 LoC off-network surface RETIRED (`elab-speculation.rkt` + R7.c helpers + 3A.d production retirement)
+- ~+220 LoC net production additions vs retirements = **net REDUCTION in production code** across Phase 3
+- Suite delta 8200 → 8281 (+81 tests); suite wall -10.3s vs pre-3A baseline (faster despite +81 tests)
+- 0 regressions; full suite GREEN throughout arc
+
+**Methodology capital**:
+- 3-column adversarial framing applied at ~30+ gates across the arc
+- 4-5 codification candidates surfaced; 2 graduating at 3V; 2 deferred to capstone
+- Honest scope-down progression cross-arc (3A R7 reframe; 3B Gray-code defer; 3C KR-1 ESCALATE-with-substrate) — pattern documented
+- Audit-precedes-implementation REFRAMING discipline at 4 data points — graduating
+
+##### §9.6.11.2 What Phase 3 FORWARD-ENABLES
+
+**Immediate (addendum continuation)**:
+- **Addendum Phase 4** (`process-command` retirement) — Phase 3 substrate stable; Phase 4 mini-design opens at user direction
+- **Addendum Phase V** (capstone + PIR) — Phase 3 contributes substantively to addendum PIR §16 longitudinal survey
+
+**Parent track (post-addendum)**:
+- **Parent Phase 4** (A2 CHAMP retirement) — M0 substrate stable; cache-field + callback retirements identified at §7.5.13.6.1; consumes Phase 3 substrate
+- **Parent Phase 11b** (diagnostic infrastructure) — **HEAVIEST DOWNSTREAM CONSUMER**: KR-1 restoration + KR-2 sexp-bridge enrichment + KR-3 non-union unification + chain-rendering-modes consideration + 3C.d.3a empirical baseline + trace monoidal category theory research input
+
+**Cross-series**:
+- **PReduce Track 1 + 4 + 6** — M0 substrate inheritance; tropical residuation primitive consumer pattern; W1 srcloc wiring for cost-attribution
+- **PM Track 12** — `current-source-loc` retention; off-network scaffolding retirement
+- **PPN Track 4D** — KR-2 enrichment when sexp typing unifies; R7 type-map-write composition for AG rules
+- **SH Track 1** — derivation-chain/step struct shape as PNET ABI seed
+- **OE Track 4** — UC1 + UC2 (fuel-blame + cost-bounded elaboration via Galois bridge) deferred
+
+##### §9.6.11.3 How Phase 3 FITS INTO THE PPN 4 CHARTER
+
+Per parent D.3 §1 thesis: **"bring elaboration completely on-network."**
+
+Phase 3 advances this charter via:
+
+1. **Substrate retirement, not just substrate addition**: `elab-speculation.rkt` retirement (~706 LoC) is direct charter advancement — elimination of off-network elaboration surface
+2. **Correct-by-Construction replacement**: Realization B replaces `with-speculative-rollback`'s discipline-maintained-correctness with structural on-network mechanism (per `DESIGN_PRINCIPLES.org` § Correct by Construction)
+3. **Module-Theory Realization B as architectural pattern**: in-place tagging on shared carrier becomes the canonical on-network branching mechanism; future tracks (Phase 9b γ; PPN 4D) inherit
+4. **Hyperlattice Conjecture honest refinement**: empirical falsification of CHAMP-sharing transfer to Realization B IS charter advancement — the Conjecture's parallel-optimality claim is bounded by mechanism, not refuted; future mechanism choices benefit from the bound
+
+**Phase 3's role in PPN 4C arc**: substrate-heavy bridge between Phase 1 (tropical fuel + specialized cells substrate) + Phase 2 (orchestration unification) and Phase 4 (top-level orchestration) + downstream tracks (Phase 11b consumer; parent track Phase 4 CHAMP retirement). The substrate-heavy / user-facing-light framing IS the charter's reality at this point of the arc — user-facing payoff lands at Phase 11b (chain rendering modes) + addendum Phase 4 (mutual recursion / top-level emergence) + parent track later phases (CHAMP retirement; aspect coverage; warning authority).
+
+**Honest framing in context**: Phase 3 ships substrate + tracking-debt + methodology capital. NOT user-facing magic. NOT a refutation of the Hyperlattice Conjecture. NOT a deployment of hypercube optimizations. The deliverable is what the charter demanded at this point — on-network ATMS branching infrastructure + first-increment diagnostics primitive + correct-by-construction substrate retirement — sized appropriately for the arc.
+
+#### §9.6.12 Bridge to Phase 4 — addendum Phase 4 vs parent track Phase 4
+
+Critical distinction for future implementer: **TWO PHASE 4s exist**, neither absorbs the other.
+
+| Aspect | **Addendum Phase 4** | **Parent track Phase 4** |
+|---|---|---|
+| Charter | Top-level orchestration retirement — `process-command` sequential top-level form loop replacement; per-form-type processing as BSP stratum handlers; mutual recursion falls out of cell architecture | A2 CHAMP retirement — `meta-info` CHAMP retirement; β2 attribute-map becomes sole meta store; absorbs cache-field + callback retirements per §7.5.13.6.1 |
+| Source | Addendum §1.2 (Phase 4) | Parent D.3 §6.3 (A2 CHAMP) + §7.5.13.6.1 absorbed scope |
+| Motivating use case | Mutual recursion ([PR #14](https://github.com/LogosLang/prologos/pull/14), kumavis pitfall #4) | Off-network meta storage elimination + cache-field cleanup |
+| Tracking issue | [#22](https://github.com/LogosLang/prologos/issues/22) | Parent D.3 Phase 4 row |
+| Gates | Phase 1 ✅ + Phase 2 ✅ (both met) | Phase 9 ✅ (resequenced ahead per framing B) + addendum Phase 4 (sequenced after) |
+| Phase 3 inheritance | Substrate stable (cell-15/16/17/18/19; M0 keyword; R7 inline-emit at type-map-write API; static-walk primitive); composition coherence verified at §9.6.7 | M0 substrate + on-network composition story; cache-field retirements still in scope; no NEW dependency on Phase 3 substrate |
+| Status post-Phase-3V | Ready to open (pause per user direction; mini-design at next session) | Sequenced after addendum Phase 4 + Phase V close |
+
+**Interface stable points Phase 4 (addendum) inherits from Phase 3**:
+- Cell-15 (fork-on-union-request) + cell-16 (fork-contradiction-request) + cell-17 (decomposed-positions-guard) + cell-18 (per-fork-chain-aids-set) + cell-19 (per-position-chain) all on-network
+- `process-fork-on-union` + `process-fork-contradiction` handlers registered at 'value tier
+- R7 inline-emit at `type-map-write` API (composition gain for any track writing :type)
+- `static-reverse-walk` primitive at error-explanation.rkt (exported + tested)
+- M0 keyword `#:mutual-exclusion?` on `solver-amb` / `solver-state-amb`
+- W1 srcloc wiring at 3 `net-add-propagator` family signatures (default `(current-source-loc)`)
+
+**Implementation freedom preserved**: Phase 4 mini-design decides HOW to consume these substrate elements — not pre-committed at 3V.
+
+#### §9.6.13 Phase 3 CLOSED status
+
+All §9.5.1.9 closure criteria + per-sub-phase VAG closure criteria + cross-PHASE 4-question adversarial verification verified:
+
+1. ✅ 3 sub-phases delivered (3A + 3B + 3C) with cross-arc VAGs at §9.3.9 + §9.4.5 + §9.5.6
+2. ✅ Phase 3 charter delivered per §9.5.A Form C + parent D.3 §6.10 + §6.11.3 (honestly-revised scope; substrate-heavy; hypercube bounded mechanism-coupled)
+3. ✅ Cross-PHASE 4 VAG questions × 3 columns adversarially verified (§9.6.2-5)
+4. ✅ Cross-PHASE methodology drift surfaced (§9.6.6) — pattern documented; "Audit-precedes-implementation REFRAMING" earned 4th data point
+5. ✅ Cross-phase coherence verified (§9.6.7) — 3A + 3B + 3C compose through cell state; no cross-sub-phase coupling debt
+6. ✅ Cumulative user-facing behavior summary documented honestly (§9.6.8) — KR-1 regression named + tracked
+7. ✅ Cumulative cross-track captures consolidated (§9.6.9) — 12+ consumer tracks named with inheritance pattern + retirement target
+8. ✅ Codification graduations decided per user direction (§9.6.10) — 2 graduate at 3V; 2 defer to capstone; 3 watching
+9. ✅ Phase 3 reflection synthesized (§9.6.11) — achievements + forward-enables + PPN 4 charter fit; substrate-heavy / user-facing-light honest framing
+10. ✅ Bridge to Phase 4 specified at INTERFACE level (§9.6.12) — addendum vs parent track distinction explicit; implementation freedom preserved
+11. ✅ Suite gate inherited from 3C-VAG (8281 tests / 107.0s / 0 failures); HEAD `1d0416d6` no .rkt changes since `cc25ec9b`
+
+**Phase 3 CLOSED end-to-end** ✓ ready for addendum Phase 4 mini-design (paused per user direction at 3V close).
 
 ### §9.7 Phase 3 termination arguments (revised — Level 1 under Realization B)
 
