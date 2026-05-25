@@ -521,6 +521,16 @@
 ;; T-C.c-1.4 — Nested speculation tree (depth 2)
 ;; ========================================
 ;;
+;; PPN 4C Phase 3C.d.2 (γ+, 2026-05-24) — AXIS-NAMING CROSS-REFERENCE:
+;; This test IS the `/chain-shape` synthetic axis per §9.5.5.4 Q-D.3 +
+;; Q10. Asserts non-empty chain + expected step count (= 2) for a
+;; depth-2 nested sub-failure tree via DFS pre-order. Audit at 3C.d.2
+;; open found this test (with T-C.c-1.5) already covers /chain-shape
+;; adequately; T-B.6 NOT added (would duplicate). When Phase 11b adds
+;; new chain rendering modes, weigh adding axis-named tests at that
+;; time vs continuing this cross-reference-comment pattern. See
+;; addendum §9.5.5.5 (γ+) rationale + §9.5.5.10 Phase 11b capture.
+;;
 ;; Verifies DFS pre-order flatten: parent failure first, then nested children.
 ;; This is the structurally-rich case where chain captures the speculation
 ;; tree (vs atomic case where chain is empty).
@@ -542,6 +552,15 @@
 ;; ========================================
 ;; T-C.c-1.5 — Multi-root forest with deeper nesting (depth 3, branching)
 ;; ========================================
+;;
+;; PPN 4C Phase 3C.d.2 (γ+, 2026-05-24) — AXIS-NAMING CROSS-REFERENCE:
+;; This test (with T-C.c-1.4) IS the `/chain-shape` synthetic axis per
+;; §9.5.5.4 Q-D.3 + Q10. Asserts step count (= 5) + DFS pre-order
+;; across a multi-root forest with depth-3 branching. /branch-attribution
+;; is co-asserted via the per-step `names` list assertion. Audit at
+;; 3C.d.2 open: T-C.c-1.4/1.5/1.6 collectively cover /chain-shape +
+;; /branch-attribution; T-B.6/T-B.7 NOT added (would duplicate). See
+;; addendum §9.5.5.5 (γ+) rationale.
 ;;
 ;; Forest:
 ;;   ROOT-A: label="A" → sub: [A1, A2]
@@ -570,6 +589,16 @@
 ;; ========================================
 ;; T-C.c-1.6 — Defensive: no ATMS active (current-command-atms=#f)
 ;; ========================================
+;;
+;; PPN 4C Phase 3C.d.2 (γ+, 2026-05-24) — AXIS-NAMING CROSS-REFERENCE:
+;; This test (with T-C.c-1.2, T-C.c-1.3) IS part of the `/branch-attribution`
+;; synthetic axis per §9.5.5.4 Q-D.3 + Q10. Specifically asserts the
+;; aid-N fallback case (no ATMS); T-C.c-1.2 asserts string-datum
+;; decoding; T-C.c-1.3 asserts label fallback. Together these cover
+;; per-step assumption-names attribution under all three decoding
+;; branches. T-B.7 NOT added (would duplicate). See addendum §9.5.5.5
+;; (γ+) rationale + §9.5.5.10 Phase 11b capture for future
+;; rendering-mode considerations.
 ;;
 ;; Verifies graceful degradation when ATMS isn't active: aid lookup falls
 ;; back to "aid-N" format via decode-aid-name's no-asn branch.
