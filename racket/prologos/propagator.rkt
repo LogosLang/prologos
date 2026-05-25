@@ -2235,7 +2235,20 @@
                             #:assumption [assumption-id #f]
                             #:decision-cell [decision-cell-id #f]
                             #:flags [flags 0]
-                            #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5: on-network srcloc
+                            ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default to
+                            ;; (current-source-loc) — Phase 1.5 completion. Phase 1.5
+                            ;; built the slots (struct field + wrapper + parameter
+                            ;; + kwarg) but missed the install-time default. W1
+                            ;; closes the wiring gap: callers within elaborate's
+                            ;; parameterize scope get AST-node srcloc; callers
+                            ;; outside (module-load, synthetic test) get #f
+                            ;; naturally (identical to pre-W1). W1 audit verified
+                            ;; safety across 181 production install sites (zero
+                            ;; hostile values) — see addendum §9.5.5.1. Phase 1.5
+                            ;; (α)+(η) hybrid preserved: srcloc stored in propagator
+                            ;; STRUCT FIELD at install time, NOT closure ((ε)
+                            ;; rejection precedent honored).
+                            #:srcloc [srcloc (current-source-loc)])
   ;; PPN 4C Phase 1f (2026-04-20): structural-enforcement check.
   ;; For each input cell whose domain is classified 'structural, require
   ;; :component-paths declared for that cell. Unclassified domains skip
@@ -2315,7 +2328,10 @@
                                       #:component-paths [cpaths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default
+                                      ;; to (current-source-loc) — see net-add-propagator
+                                      ;; for full W1 rationale + audit reference.
+                                      #:srcloc [srcloc (current-source-loc)])
   ;; Flags: scheduler implements fire-once. No closure wrapper.
   (define flags (bitwise-ior PROP-FIRE-ONCE
                              (if (null? inputs) PROP-EMPTY-INPUTS 0)))
@@ -2400,7 +2416,10 @@
                                       #:component-paths [component-paths '()]
                                       #:assumption [assumption-id #f]
                                       #:decision-cell [decision-cell-id #f]
-                                      #:srcloc [srcloc #f])  ;; PPN 4C Phase 1.5
+                                      ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): default
+                                      ;; to (current-source-loc) — see net-add-propagator
+                                      ;; for full W1 rationale + audit reference.
+                                      #:srcloc [srcloc (current-source-loc)])
   (define profile (broadcast-profile items item-fn result-merge-fn))
   (define fire-fn
     (lambda (net)

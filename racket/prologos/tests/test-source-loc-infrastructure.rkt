@@ -15,7 +15,10 @@
 (require rackunit
          "../source-location.rkt"
          "../surface-syntax.rkt"
-         "../propagator.rkt")
+         "../propagator.rkt"
+         ;; PPN 4C Phase 3C.d.1 (W1, 2026-05-24): champ-lookup needed to
+         ;; verify propagator-srcloc field is populated post-install.
+         "../champ.rkt")
 
 ;; ========================================
 ;; current-source-loc parameter
@@ -128,15 +131,81 @@
   ;; For now, just verify no error occurred — propagator installed with srcloc
   (check-true (prop-id? pid)))
 
-(test-case "net-add-propagator default #:srcloc is #f"
+;; Helper for W1 verification: look up the propagator struct via pid + read srcloc
+(define (lookup-prop-srcloc net pid)
+  (define props (prop-network-propagators net))
+  (define prop (champ-lookup props (prop-id-hash pid) pid))
+  (and (propagator? prop) (propagator-srcloc prop)))
+
+(test-case "W1 default: net-add-propagator default #:srcloc is #f when current-source-loc unbound"
+  ;; Regression test for D-3C.d-1: tests that the W1 default DOES NOT regress
+  ;; the #f case. Outside parameterize, (current-source-loc) returns #f, and
+  ;; the propagator's srcloc field should be #f.
   (define net (make-prop-network))
   (define-values (net2 cid) (net-new-cell net 'initial (lambda (o n) n)))
-  (define captured (box 'not-set))
   (define-values (net3 pid)
-    (net-add-propagator net2 (list cid) '()
-                        (lambda (net)
-                          (set-box! captured (current-source-loc))
-                          net)))
-  ;; The propagator struct has srcloc #f; fire-propagator parameterizes to #f
-  ;; Verification: the propagator was created without error
-  (check-true (prop-id? pid)))
+    (net-add-propagator net2 (list cid) '() (lambda (net) net)))
+  (check-true (prop-id? pid))
+  ;; Verify propagator-srcloc field is #f (per W1 default; current-source-loc unbound)
+  (check-false (lookup-prop-srcloc net3 pid)))
+
+;; ========================================
+;; PPN 4C Phase 3C.d.1 (W1) — default #:srcloc inherits (current-source-loc)
+;; ========================================
+;;
+;; Phase 1.5 completion: net-add-propagator family default #:srcloc changed
+;; from #f to (current-source-loc). When caller is within elaborate's
+;; parameterize scope (or driver::process-command's parameterize), the
+;; propagator's srcloc field inherits the AST-node srcloc without explicit
+;; per-call threading. Phase 1.5 (α)+(η) hybrid preserved: srcloc stored
+;; in propagator STRUCT FIELD at install time, NOT closure ((ε) rejection
+;; precedent honored).
+
+(test-case "W1 default: net-add-propagator inherits (current-source-loc) when bound"
+  (define loc (srcloc "w1.rkt" 100 5 10))
+  (define net (make-prop-network))
+  (define-values (net2 cid) (net-new-cell net 'initial (lambda (o n) n)))
+  ;; Install WITHIN parameterize — W1 default should pick up loc
+  (define-values (net3 pid)
+    (parameterize ([current-source-loc loc])
+      (net-add-propagator net2 (list cid) '() (lambda (net) net))))
+  (check-equal? (lookup-prop-srcloc net3 pid) loc
+                "W1: net-add-propagator default inherits current-source-loc"))
+
+(test-case "W1 default: net-add-fire-once-propagator inherits (current-source-loc) when bound"
+  (define loc (srcloc "w1-fire-once.rkt" 200 5 10))
+  (define net (make-prop-network))
+  (define-values (net2 cid) (net-new-cell net 'initial (lambda (o n) n)))
+  (define-values (net3 pid)
+    (parameterize ([current-source-loc loc])
+      (net-add-fire-once-propagator net2 (list cid) '() (lambda (net) net))))
+  (check-equal? (lookup-prop-srcloc net3 pid) loc
+                "W1: net-add-fire-once-propagator default inherits current-source-loc"))
+
+(test-case "W1 default: net-add-broadcast-propagator inherits (current-source-loc) when bound"
+  (define loc (srcloc "w1-broadcast.rkt" 300 5 10))
+  (define net (make-prop-network))
+  (define-values (net2 in-cid) (net-new-cell net 'initial (lambda (o n) n)))
+  (define-values (net3 out-cid) (net-new-cell net2 '() (lambda (o n) (append o n))))
+  (define-values (net4 pid)
+    (parameterize ([current-source-loc loc])
+      (net-add-broadcast-propagator net3 (list in-cid) out-cid
+                                    (list 'item-a 'item-b)
+                                    (lambda (item inputs) (list item))
+                                    (lambda (acc result) (append acc result)))))
+  (check-equal? (lookup-prop-srcloc net4 pid) loc
+                "W1: net-add-broadcast-propagator default inherits current-source-loc"))
+
+(test-case "W1 default: explicit #:srcloc kwarg overrides (current-source-loc)"
+  ;; Sanity: explicit kwarg still works as override — W1 default only applies
+  ;; when caller omits #:srcloc.
+  (define outer-loc (srcloc "outer.rkt" 1 1 1))
+  (define explicit-loc (srcloc "explicit.rkt" 2 2 2))
+  (define net (make-prop-network))
+  (define-values (net2 cid) (net-new-cell net 'initial (lambda (o n) n)))
+  (define-values (net3 pid)
+    (parameterize ([current-source-loc outer-loc])
+      (net-add-propagator net2 (list cid) '() (lambda (net) net)
+                          #:srcloc explicit-loc)))
+  (check-equal? (lookup-prop-srcloc net3 pid) explicit-loc
+                "W1: explicit #:srcloc kwarg overrides (current-source-loc) default"))
