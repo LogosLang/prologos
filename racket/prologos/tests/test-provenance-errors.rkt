@@ -388,3 +388,73 @@
 (test-case "GDE-3: successful def produces no diagnosis in provenance"
   (define result (last (run-simple "(def x : Nat 0N)")))
   (check-false (prologos-error? result)))
+
+;; ========================================
+;; Suite 9: PPN 4C 3C.d.3 — Integration axes per (β.3.i) split (2026-05-24)
+;; ========================================
+;;
+;; Per addendum §9.5.5.5 deliverable 3 + §9.5.5.13 (β.3.i) post-empirical
+;; decision: integration axes split across two test files per (β.3.i)
+;; placement.
+;;
+;; This suite holds the /non-union-no-chain integration axis (KR-3 boundary):
+;;
+;;   /non-union-no-chain — type-mismatch-error has no derivation-chain field;
+;;                         provenance is (listof string). Tests against
+;;                         `(def x : Nat true)` per probe Scenario C3.
+;;
+;; CROSS-REFERENCE — /srcloc-presence axis lives in
+;; tests/test-union-types-atms.rkt as TWO complementary tests
+;; (per (β.3.i) split + §9.5.5.13.3):
+;;
+;;   union-all-contradict-chain/srcloc-empirical-baseline
+;;       (no parameterize; asserts srcloc=#f baseline per Scenario A)
+;;
+;;   union-all-contradict-chain/srcloc-presence-via-parameterize
+;;       (parameterize-wrap; asserts srcloc=test-loc per Scenario B —
+;;        tests W1 dispatch-chain coherence through process-fork-on-union)
+;;
+;; Why /srcloc-presence is NOT here: production sexp annotated unions go
+;; through the sexp translator (derivation-chain-for/union-check at
+;; error-explanation.rkt:391+) which hardcodes srcloc=#f BY DESIGN
+;; (D-3C.c-1) AND produces empty chains for atomic checks. Empirical
+;; probe (data/probes/2026-05-24-3C-d-3-w1-empirical-{probe.rkt,output.txt})
+;; Scenario C1 + C2 confirms: production sexp path cannot satisfy
+;; /srcloc-presence today. Production-path srcloc threading via surf-node
+;; → process-command parameterize is Phase 11b scope (gated on sexp
+;; translator retirement / Track 4D unification).
+;;
+;; The synthetic-E2E layer DOES exercise the W1 dispatch chain mechanically
+;; (per Scenario B empirical confirmation); hence /srcloc-presence lives
+;; at the synthetic-E2E layer in test-union-types-atms.rkt.
+
+(test-case "PPN 4C 3C.d.3: /non-union-no-chain — type-mismatch-error has no derivation-chain field (KR-3 boundary)"
+  ;; Per probe Scenario C3 at §9.5.5.13.1 — `(def x : Nat true)` produces a
+  ;; type-mismatch-error (not a union-exhaustion-error). KR-3 boundary
+  ;; (two-shape error infrastructure named at §9.5.4.14):
+  ;;   - union path        → union-exhaustion-error (4-field struct with
+  ;;                          derivation-chain field per errors.rkt:135)
+  ;;   - non-union path    → type-mismatch-error (4-field struct WITHOUT
+  ;;                          derivation-chain field per errors.rkt:65;
+  ;;                          provenance is (listof string) instead)
+  ;;
+  ;; This test asserts the boundary preservation:
+  ;;   (a) result is a type-mismatch-error (not union shape);
+  ;;   (b) result is NOT a union-exhaustion-error (KR-3 boundary — no
+  ;;       derivation-chain field via struct-type identity);
+  ;;   (c) provenance field is a list (KR-3 old-shape: (listof string)).
+  ;;
+  ;; This is distinct from Suite 1's "type-mismatch-error has provenance
+  ;; field" (which proves field PRESENCE). Suite 9 proves the BOUNDARY
+  ;; (chain field ABSENCE under non-union path) — discriminating power
+  ;; against future regressions that might add a derivation-chain field
+  ;; to type-mismatch-error inadvertently (KR-3 unification at Phase 11b
+  ;; should be explicit, not accidental).
+  (define result (last (run-simple "(def x : Nat true)")))
+  (check-true (type-mismatch-error? result)
+              "result is a type-mismatch-error (non-union path)")
+  (check-false (union-exhaustion-error? result)
+               "result is NOT a union-exhaustion-error (KR-3 boundary: no derivation-chain field)")
+  (define prov (type-mismatch-error-provenance result))
+  (check-true (list? prov)
+              "type-mismatch-error.provenance is a list (KR-3 old-shape: (listof string))"))

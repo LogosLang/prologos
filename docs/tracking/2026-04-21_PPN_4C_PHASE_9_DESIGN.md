@@ -8365,9 +8365,14 @@ Conditional on Q-D.1 outcome. Under (c) ESCALATE-with-substrate: NO restoration 
    - **(γ+) resolution**: SKIP adding T-B.6 + T-B.7. ADD cross-reference COMMENTS above T-C.c-1.4 + T-C.c-1.5 + T-C.c-1.6 naming them as the synthetic axes (preserves discriminating-suite intent via comments-as-axes; preserves discoverability). Phase 11b INHERITS the consideration when it adds new chain rendering modes (e.g., LSP-serialized, trace-monoidal-category-theory framing for general derivation-chain-for(position, tag)) — to weigh whether to (i) add axis-named tests at THAT time, (ii) continue cross-reference-comment pattern, (iii) refactor T-C.c-1.* to axis-aligned naming. Captured in §9.5.5.10 cross-track captures + parent D.3 Phase 11b row update (alongside KR-1/2/3 capture).
    - **Methodology data point**: "Audit-driven scope refinement at sub-phase level" — PROMOTION-READY codification reinforced (data point 8 of 3A/3B/3C arc). "Capture-gap pattern" codification reinforced (3 data points this session: KR-1/2/3 to Phase 11b + chain-rendering-modes-consideration to Phase 11b + this finding's documentation).
 
-3. **Integration axes in test-provenance-errors.rkt** (~30-50 LoC, Suite 9 or extension of Suite 8):
-   - `/srcloc-presence: union-exhaustion-error chain has ≥1 step with non-#f srcloc` (validates W1 wiring; uses `process-string/return-net` per 3C.b.5.b)
-   - `/non-union-no-chain: type-mismatch-error has no derivation-chain field; provenance is (listof string)` (negative axis; KR-3 boundary)
+3. **Integration axes (REVISED at 3C.d.3 open per (β.3.i) post-empirical — see §9.5.5.13)** — ~50-80 LoC split across two files:
+   - **In `tests/test-union-types-atms.rkt`** (synthetic-E2E srcloc tests, NEW Phase 3C.d section after 3C.b.5.c axes):
+     - `union-all-contradict-chain/srcloc-empirical-baseline` — no parameterize; asserts all chain steps `srcloc=#f`. Locks no-parameterize baseline per Scenario A empirical confirmation.
+     - `union-all-contradict-chain/srcloc-presence-via-parameterize` — wrapped in `(parameterize ([current-source-loc test-loc]) ...)`; asserts all chain steps `srcloc=test-loc`. Tests W1 dispatch-chain coherence per Scenario B empirical confirmation (mechanically feasible end-to-end through `process-fork-on-union` → propagator-struct → `static-reverse-walk` → derivation-step).
+   - **In `tests/test-provenance-errors.rkt`** (KR-3 boundary integration, Suite 9):
+     - `/non-union-no-chain` — `(def x : Nat true)` scenario; asserts `type-mismatch-error?` + `(list? provenance)` + type-mismatch-error struct has no derivation-chain field. Negative axis; KR-3 boundary verified by Scenario C3.
+   - **Cross-reference comment** in Suite 9 pointing to test-union-types-atms.rkt's `srcloc-empirical-baseline` + `srcloc-presence-via-parameterize` tests (preserves discoverability under (β.3.i) split).
+   - **(β.3.i) refinement rationale (post-empirical)**: pre-empirical leaning toward (β.3.ii) skip-gated canary refuted by Scenario B's demonstrated mechanical feasibility + non-redundant integration value over 3C.d.1's unit-level coverage. The integration covers COMPOSED DISPATCH (process-fork-on-union → propagator-struct → static-reverse-walk → derivation-step), distinct from 3C.d.1's install-fn SIGNATURE coverage. See §9.5.5.13 for full empirical findings + 3-column adversarial reapplied.
 
 4. **Skip-gated canary in test-elaboration-parity.rkt** (~5-10 LoC):
    - `(parity-test-skip 'union-diagnosis-restoration "Phase 11b" "(def x <Nat | Bool> \"hello\")" ...)` with expected `[diagnosis] retract:` substring assertion (preserves KR-1 regression-detection capability across deferral)
@@ -8397,7 +8402,7 @@ Conditional on Q-D.1 outcome. Under (c) ESCALATE-with-substrate: NO restoration 
 | **3C.d.0** | Persist this mini-design + mini-audit at §9.5.5 + add §3 Progress Tracker row | docs | Persisted per Stage 4 mini-audit-precedes-implementation discipline ✅ `bd6ff11e` |
 | **3C.d.1** | W1 wiring — default `#:srcloc` to `(current-source-loc)` in 3 net-add-propagator family functions (propagator.rkt) | ~5-10 | Targeted test (test-source-loc-infrastructure + test-typing-propagators sample) GREEN; per W1 audit zero hostile values; probe diff = 0 (production behavior unchanged except srcloc field populates) ✅ `f20882eb` |
 | **3C.d.2** | ~~Synthetic axes T-B.6 + T-B.7~~ → **SKIPPED-per-audit (γ+)** at 3C.d.2 open: T-C.c-1.4 + T-C.c-1.5 + T-C.c-1.6 already cover /chain-shape + /branch-attribution. Cross-reference comments added at those test sites naming the axes; Phase 11b inherits consideration for new chain rendering modes (§9.5.5.10 + parent D.3 Phase 11b row). | ~3-5 | Cross-reference comments land at T-C.c-1.4/1.5/1.6; no new tests; audit-driven scope refinement reinforces PROMOTION-READY codification (data point 8). ✅ `3cde7ddd` |
-| **3C.d.3** | Integration axes (`/srcloc-presence` + `/non-union-no-chain`) in test-provenance-errors.rkt | ~30-50 | `/srcloc-presence` validates W1 wiring end-to-end; `/non-union-no-chain` confirms KR-3 two-shape boundary preserved |
+| **3C.d.3** | **(β.3.i) split per empirical** (see §9.5.5.13): 3C.d.3a empirical probe (data/probes/2026-05-24-3C-d-3-w1-empirical-{probe.rkt,output.txt}); 3C.d.3b synthetic-E2E srcloc tests in test-union-types-atms.rkt (baseline + parameterize-wrap); 3C.d.3c /non-union-no-chain in test-provenance-errors.rkt Suite 9 + cross-reference comment | ~50-80 (was ~30-50; expanded under (β.3.i) post-empirical) | Empirical probe artifact captured; synthetic-E2E baseline asserts srcloc=#f without parameterize; parameterize-wrap test asserts srcloc=test-loc threading through dispatch chain; /non-union-no-chain asserts type-mismatch-error has no derivation-chain field; cross-ref comment preserves discoverability under split |
 | **3C.d.4** | Skip-gated canary (`'union-diagnosis-restoration`) + test rename + DEFERRED.md entry + parent D.3 Phase 11b row update | ~40-60 docs | Canary registered with KR-1 reference; DEFERRED + Phase 11b capture both land |
 | **3C.d.5** | Cumulative cross-sub-step adversarial 3-column VAG + Phase 3C.d close | docs | All 4 VAG questions pass under adversarial framing; full suite stable within 109-115s variance band |
 
@@ -8407,7 +8412,10 @@ Conditional on Q-D.1 outcome. Under (c) ESCALATE-with-substrate: NO restoration 
 
 - ✅ **W1 wiring active**: net-add-propagator family defaults `#:srcloc` to `(current-source-loc)`; targeted tests verify propagator structs receive non-#f srcloc when installed within elaborate's parameterize scope
 - ✅ **Synthetic axes coverage** preserved via T-C.c-1.4 + T-C.c-1.5 + T-C.c-1.6 (existing 3C.c.1 tests) — cross-reference comments added at those sites naming them as `/chain-shape` (T-C.c-1.4/1.5) + `/branch-attribution` (T-C.c-1.2/1.3/1.6) per (γ+) audit-driven SKIP at 3C.d.2 open. Phase 11b inherits consideration for new chain rendering modes.
-- ✅ **2 integration axes** (`/srcloc-presence` + `/non-union-no-chain`) pass in test-provenance-errors.rkt; `/srcloc-presence` exercises W1 wiring through `process-string/return-net`
+- ✅ **Synthetic-E2E srcloc tests** in test-union-types-atms.rkt (under (β.3.i) split per empirical at §9.5.5.13): `srcloc-empirical-baseline` (no parameterize; locks `srcloc=#f` baseline per Scenario A) + `srcloc-presence-via-parameterize` (asserts `srcloc=test-loc` per Scenario B; tests W1 dispatch-chain coherence). Both pass.
+- ✅ **/non-union-no-chain integration** in test-provenance-errors.rkt Suite 9 (KR-3 boundary per Scenario C3): type-mismatch-error has no derivation-chain field; provenance is `(listof string)`. Passes.
+- ✅ **Cross-reference comment** in test-provenance-errors.rkt Suite 9 pointing to test-union-types-atms.rkt synthetic-E2E srcloc tests (discoverability under (β.3.i) split)
+- ✅ **Empirical probe artifact** at `data/probes/2026-05-24-3C-d-3-w1-empirical-{probe.rkt,output.txt}` captured; referenced from §9.5.5.13
 - ✅ **Skip-gated canary** `'union-diagnosis-restoration` registered in test-elaboration-parity.rkt with Phase 11b reference + expected `[diagnosis] retract:` substring assertion
 - ✅ **DEFERRED.md entry** for KR-1/2/3 with Phase 11b tracker pointer + cross-ref to addendum §9.5.4.14 + §9.5.5
 - ✅ **Parent D.3 Phase 11b row updated** to absorb KR-1/2/3 mini-design scope + capture (a)/(b)/(c) decision history for Phase 11b reconsideration
@@ -8505,6 +8513,80 @@ Per vision-forward framing, Phase 3C.d deliverables consumed by downstream track
 - Acceptance probe artifacts: data/probes/2026-05-24-3C-Q6x-post-3Cc.txt + 2026-05-24-3C-Cc-nested-probe.txt
 - 3-column adversarial framing methodology: workflow.md "VAG / principles gate / mantra audit MUST be ADVERSARIAL, not auditional" + CRITIQUE_METHODOLOGY.org § Cataloguing Instead of Challenging
 - Vision-forward framing source: user direction 2026-05-24 dialogue (3-column refinement: catalogue + challenge + adversarial)
+- 3C.d.3a empirical probe artifact: `data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt` + `data/probes/2026-05-24-3C-d-3-w1-empirical-output.txt` (paired source + captured output)
+
+#### §9.5.5.13 Empirical W1 srcloc check (3C.d.3a) + (β.3.i) decision
+
+Per Stage 4 mini-audit-precedes-implementation discipline + (β) refinement bookmarked at 3C.d.2 close (CHECKPOINT 2026-05-24 — see dailies session 2026-05-24 Phase 3C.d.3 mini-audit finding). Empirical probe at `data/probes/2026-05-24-3C-d-3-w1-empirical-probe.rkt` with captured output at `data/probes/2026-05-24-3C-d-3-w1-empirical-output.txt`. Three regimes across five scenarios.
+
+##### §9.5.5.13.1 Empirical findings table
+
+| Scenario | Predicted | Observed | Verdict |
+|---|---|---|---|
+| **A** — Synthetic E2E baseline (no current-source-loc parameterize) | srcloc=#f for all chain steps | All 4 steps (2 per-branch chains × 2 steps each) have `srcloc=#f`; names enriched (`"branch-0-at-'test-position"` etc.); aids = `(assumption-id 0/1)` | **CONFIRMED** |
+| **B** — Synthetic E2E WITH `(parameterize ([current-source-loc test-loc]) ...)` | Open empirical question: does W1 dispatch-chain thread the parameterized srcloc through `process-fork-on-union` → propagator-struct → `static-reverse-walk` → derivation-step? | All 4 steps have `srcloc=(srcloc "probe-test.rkt" 42 5 10)` — exactly the parameterized test-loc | **CONFIRMED — (β.3.i) IS MECHANICALLY FEASIBLE end-to-end** |
+| **C1** — Production sexp `(def x <Nat \| Bool> "hello")` | Empty chains (per Cc-nested-probe precedent + sexp translator design) | 2 per-branch chains, both with `steps=0`; results=`'(union-exhaustion-error)` | **CONFIRMED** |
+| **C2** — Production sexp `(def x <Nat \| Bool> 42)` | No cell-19 entry (partial success — Nat <: Nat trivially) | UNEXPECTED — produces `union-exhaustion-error`; cell-19 populated with 2 per-branch chains, both `steps=0`. Implies `42 : Int` doesn't satisfy `<Nat \| Bool>` (Int ≮: Nat under current sublattice). Minor observation; doesn't affect (β.3.*) — chains empty either way. | **OBSERVED-WITH-SURPRISE** (see §9.5.5.13.5) |
+| **C3** — Production sexp `(def x : Nat true)` | `type-mismatch-error?` + `(list? provenance)` + no derivation-chain field | EXACTLY as predicted: `type-mismatch-error?` ✓; `provenance='()`; `(list? '())=#t`; struct has 4 fields (per errors.rkt:65), no derivation-chain field; cell-19 empty hash | **CONFIRMED — KR-3 boundary verified** |
+
+##### §9.5.5.13.2 (β.3.i) decision under empirical evidence — 3-column adversarial reapplied
+
+Pre-probe analysis (3C.d.0 mini-design + 3C.d.2 (γ+) close) leaned toward (β.3.ii) skip-gated canary based on the assumption that (β.3.i) parameterize-wrap was a "tautology dressed as integration." **Scenario B refutes that assumption empirically** — the parameterize-wrap test exercises a real, multi-propagator dispatch chain whose srcloc threading IS distinct from 3C.d.1's install-fn unit-level coverage.
+
+| Option | Catalogue | Challenge | Adversarial — where does this BREAK? |
+|---|---|---|---|
+| **(β.3.i) parameterize-wrap fixture (post-empirical)** | Empirical: works end-to-end. Chain steps carry `srcloc=test-loc` when bound at process-fork-on-union dispatch entry. Concrete dispatch-chain coverage. | Test bound is synthetic; doesn't exercise surf-node→process-command→current-source-loc threading. 3C.d.1 unit tests cover the 3 install-fn signatures. | (a) **Catches dispatch-chain W1 coherence regressions** — if future refactor of `process-fork-on-union` (scheduler-state propagator install, closure-capture variant) bypasses W1 defaults, this test fails. 3C.d.1 covers SIGNATURES; (β.3.i) covers COMPOSED DISPATCH (3 install-fn calls in process-fork-on-union: Step 3 net-add-propagator + Step 4 net-add-fire-once-propagator + Step 4.5 net-add-propagator threshold). NEW non-redundant value. (b) **Cannot catch surf-node-srcloc binding regressions** — production path uses sexp translator (hardcoded srcloc=#f BY DESIGN per D-3C.c-1). Honest scope: tests W1 dispatch-chain; production srcloc threading via surf-node is Phase 11b scope (gated on sexp translator retirement / on-network typing unification for sexp unions per Track 4D). (c) **2 propagators in chain (not 1)** — empirical evidence shows multiple propagators exercised; the test covers the FULL dispatch chain, not just one install site. |
+| **(β.3.ii) skip-gated canary** | Forward-looking; matches KR-1's canary pattern. | Loses today's coverage. | (d) **Empirical evidence weakens this** — synthetic E2E + parameterize-wrap DOES test a meaningful dispatch chain today. Skip-gating discards that coverage in favor of a forward-looking placeholder. Pre-probe analysis assumed this was tautology; Scenario B empirically refutes that. |
+| **(β.3.iii) test W1 only at unit level (3C.d.1 done)** | Minimal. | No integration coverage. | (e) **Same as (β.3.ii) weakening** — Scenario B coverage is non-tautological; declining it forfeits dispatch-chain regression detection. |
+
+**LOCKED — (β.3.i) post-empirical**. Two complementary tests in `tests/test-union-types-atms.rkt` cover (1) no-parameterize baseline (regression lock for Scenario A) + (2) parameterize-wrap dispatch-chain coherence (Scenario B integration).
+
+##### §9.5.5.13.3 (β.3.i) implementation form
+
+Under a new "Phase 3C.d — synthetic-E2E srcloc tests (3C.d.3 per (β.3.i))" section header after the existing 3C.b.5.c axes in `tests/test-union-types-atms.rkt`:
+
+1. **`union-all-contradict-chain/srcloc-empirical-baseline`** — mirrors `/int-bool-both-fail` setup; NO current-source-loc parameterize. Asserts all chain steps have `srcloc=#f`. Regression catch for the no-parameterize default reality.
+
+2. **`union-all-contradict-chain/srcloc-presence-via-parameterize`** — same setup but wrapped in `(parameterize ([current-source-loc test-loc]) ...)` with `test-loc = (srcloc "test.rkt" 1 1 1)`. Asserts all chain steps have `srcloc=test-loc`. Tests W1 dispatch-chain coherence through `process-fork-on-union` → propagator-struct → `static-reverse-walk` → derivation-step end-to-end.
+
+The (β.3.i) split places these synthetic-E2E srcloc tests in `test-union-types-atms.rkt` (matching 3C.b.5.c precedent + on-network 3A dispatch chain reality); `/non-union-no-chain` integration remains in `test-provenance-errors.rkt` Suite 9 (KR-3 boundary; runs against `(def x : Nat true)` per Scenario C3); cross-reference comment in Suite 9 preserves discoverability under the split.
+
+##### §9.5.5.13.4 Honest scope — what (β.3.i) tests vs what it doesn't
+
+**TESTS** (in scope):
+- W1 default reads `(current-source-loc)` at install-fn signature (covered by 3C.d.1 unit level)
+- Propagator-struct preserves srcloc field at install time (3C.d.1)
+- `process-fork-on-union` dispatch-chain propagates parameterized srcloc to all installed propagators (3C.d.3b Scenario B integration — NEW)
+- `static-reverse-walk` `decode-step` reads `(propagator-srcloc prop)` correctly (3C.d.3b Scenario B chain inspection — NEW)
+- `derivation-chain-for/union-contradict` wrapper preserves srcloc through enrichment (3C.d.3b Scenario B — NEW)
+
+**DOES NOT TEST** (Phase 11b scope):
+- Production surf-node srcloc threading via `process-command` parameterize (per Cc-nested-probe + C1/C2 artifacts, production sexp annotated unions go through sexp translator which produces chains with hardcoded srcloc=#f per D-3C.c-1; chains are also empty for atomic cases)
+- General `derivation-chain-for(position, tag)` primitive (Phase 11b API per parent D.3 Phase 11b row)
+- Trace-monoidal-category-theory backward residuation enrichment (Phase 11b research input)
+- Sexp translator retirement (Track 4D / Phase 11b)
+
+##### §9.5.5.13.5 C2 surprise — Int 42 doesn't satisfy <Nat | Bool>
+
+Scenario C2 `(def x <Nat | Bool> 42)` was predicted to produce NO cell-19 entry (partial success — Nat <: Nat trivially for literal `42`). Empirical observation: produces `union-exhaustion-error` with cell-19 populated (2 per-branch chains, both `steps=0`).
+
+Implication: literal `42` parses/elaborates as `Int` (not `Nat`); current type lattice doesn't grant `Int <: Nat`; so `Int 42` doesn't satisfy `Nat`. Both `<Nat | Bool>` branches fail. Aligns with SRE Track 2H subtype lattice semantics: `Nat <: Int` (Nat is more specific) holds; `Int <: Nat` (Int is less specific; admits negatives) does NOT hold.
+
+Doesn't affect (β.3.*) decision (chains empty either way); doesn't affect /non-union-no-chain (C2 still produces a union-exhaustion-error, not a type-mismatch-error). Captured here as honest framing of empirical surprises (per "Drift risks should name SPECIFIC manifestations" methodology).
+
+##### §9.5.5.13.6 Methodology codifications reinforced
+
+1. **"Audit-precedes-implementation REFRAMING discipline"** — F1 reframe (3C.d.0) + D-3C.d-9 framing reframe (3C.d.2 γ+) + (β.3.i) post-empirical decision flip (3C.d.3a) = **3 data points this arc**. PROMOTION CANDIDATE at next data point.
+
+2. **"Empirical falsification as audit complement"** — empirical evidence FLIPPED the (β.3.*) decision tree; pre-empirical adversarial analysis chose (β.3.ii) on plausibility, empirical evidence chose (β.3.i) on demonstrated mechanical feasibility + non-redundant value. Data point added to existing 4-data-point watching list (NOW graduation-ready at 5).
+
+3. **"Combined approach (locking test + probe artifact) yields richer evidence than either alone"** (NEW codification candidate, 1 data point): Approach 2 (locking test, in-suite regression coverage) + Approach 3 (probe artifact, multi-scenario captured empirical evidence) each contributed insight neither alone would have produced. Probe's Scenario B FLIPPED (β.3.*) decision tree (couldn't have been deduced by code-reading alone); locking test gives stable regression coverage in suite. Watching-list (1 data point); graduate at 2nd instance.
+
+##### §9.5.5.13.7 Capture forwards
+
+- **Phase 11b inherits**: (a) general derivation-chain-for primitive scope; (b) production srcloc threading via surf-node → process-command (gated on sexp translator retirement / Track 4D); (c) trace-monoidal-category-theory backward residuation framing; (d) probe artifact as starting reference for Phase 11b's mini-design audit (re-runnable empirical evidence of dispatch-chain state pre-Phase-11b).
+- **DEFERRED.md** (3C.d.4 scope) gains: 3C.d.3a probe artifact entry alongside KR-1/2/3 entry.
+- **`data/probes/2026-05-24-3C-d-3-w1-empirical-*`**: standalone reproducible empirical evidence; re-runnable by Phase 11b mini-design or future tracks touching `process-fork-on-union` dispatch (regression sanity-check for the synthetic-E2E pattern).
 
 ### §9.6 Phase 3V — Vision Alignment Gate (revised post-§9.3.1)
 

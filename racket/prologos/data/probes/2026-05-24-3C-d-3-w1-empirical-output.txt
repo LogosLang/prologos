@@ -1,0 +1,83 @@
+PERF-COUNTERS:{"cell_allocs":60,"constraint_count":0,"constraint_retries":0,"elaborate_steps":4,"infer_steps":13,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":5,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":4,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":2,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":3,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":3,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":3,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":29,"mem_after_bytes":111952992,"mem_before_bytes":110923376,"mem_retained_bytes":1029616}
+CELL-METRICS:{"cells":41,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":4,"infer_steps":13,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":5,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":4,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":1,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":2,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":4,"atms_nogood_count":3,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":3,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":30,"mem_after_bytes":112461760,"mem_before_bytes":112336320,"mem_retained_bytes":125440}
+CELL-METRICS:{"cells":41,"propagators":0}
+PERF-COUNTERS:{"cell_allocs":45,"constraint_count":0,"constraint_retries":0,"elaborate_steps":2,"infer_steps":4,"meta_created":0,"meta_solved":0,"prop_allocs":0,"prop_firings":0,"reduce_steps":3,"resolution_cycles":0,"solver_backtracks":0,"solver_unifies":0,"trait_resolve_steps":0,"unify_steps":1,"zonk_steps":0}
+PHASE-TIMINGS:{"elaborate_ms":0,"parse_ms":0,"qtt_ms":0,"reduce_ms":0,"trait_resolve_ms":0,"type_check_ms":1,"zonk_ms":0}
+PROVENANCE-STATS:{"atms_hypothesis_count":1,"atms_nogood_count":0,"cell_write_mismatches":0,"constraint_shadow_mismatches":0,"gde_diagnosis_count":0,"provenance_chain_count":0,"speculation_count":0,"speculation_pruned_count":0}
+MEMORY-STATS:{"gc_ms":30,"mem_after_bytes":112513560,"mem_before_bytes":112515520,"mem_retained_bytes":0}
+CELL-METRICS:{"cells":41,"propagators":0}
+PPN 4C Phase 3C.d.3 — W1 srcloc empirical probe
+================================================
+Date: 2026-05-24
+Purpose: empirical premise for (β.3.*) decision tree at addendum §9.5.5.5
+Source: this file (probe.rkt); Output: probe-output.txt (paired artifact)
+
+===========================================================
+Scenario A — Synthetic E2E baseline (no current-source-loc parameterize)
+===========================================================
+Setup: mirrors union-all-contradict-chain/int-bool-both-fail
+  components: (Int | Bool); inhabitant: (expr-string "hello")
+  current-source-loc at probe entry = #f
+  current-source-loc INSIDE current-command-atms parameterize = #f
+    position[0]='test-position
+    per-branch chain count: 2
+    chain[0]: steps=2
+      step[0]: pid=(prop-id 0) srcloc=#f aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+      step[1]: pid=(prop-id 1) srcloc=#f aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+    chain[1]: steps=2
+      step[0]: pid=(prop-id 0) srcloc=#f aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+      step[1]: pid=(prop-id 1) srcloc=#f aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+
+===========================================================
+Scenario B — Synthetic E2E WITH (parameterize ([current-source-loc test-loc]) ...)
+===========================================================
+Setup: same as A, but with current-source-loc bound to a test srcloc
+  test-loc = (srcloc "probe-test.rkt" 42 5 10)
+  current-source-loc INSIDE parameterize = (srcloc "probe-test.rkt" 42 5 10)
+    position[0]='test-position
+    per-branch chain count: 2
+    chain[0]: steps=2
+      step[0]: pid=(prop-id 0) srcloc=(srcloc "probe-test.rkt" 42 5 10) aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+      step[1]: pid=(prop-id 1) srcloc=(srcloc "probe-test.rkt" 42 5 10) aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+    chain[1]: steps=2
+      step[0]: pid=(prop-id 0) srcloc=(srcloc "probe-test.rkt" 42 5 10) aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+      step[1]: pid=(prop-id 1) srcloc=(srcloc "probe-test.rkt" 42 5 10) aids=(list (assumption-id 0) (assumption-id 1)) names='("branch-0-at-'test-position" "branch-1-at-'test-position") residual-cost=#f
+
+===========================================================
+Scenario C — Production sexp paths via process-string/return-net
+===========================================================
+
+  --- C1: (def x <Nat | Bool> "hello") — union all-branch-contradict ---
+    results='(union-exhaustion-error)
+    position[0]=(srcloc "<unknown>" 0 0 0)
+    per-branch chain count: 2
+    chain[0]: steps=0
+    chain[1]: steps=0
+
+  --- C2: (def x <Nat | Bool> 42) — union partial-success ---
+    results='(union-exhaustion-error)
+    position[0]=(srcloc "<unknown>" 0 0 0)
+    per-branch chain count: 2
+    chain[0]: steps=0
+    chain[1]: steps=0
+
+  --- C3: (def x : Nat true) — non-union type-mismatch ---
+    results='(type-mismatch-error)
+    type-mismatch-error fields (KR-3 boundary):
+      message: "Type mismatch"
+      expected: "Nat"
+      actual: "Bool"
+      provenance: '()
+      provenance is list? #t
+      type-mismatch-error struct has NO derivation-chain field per errors.rkt:65 (4 fields total)
+    cell-19: empty hash (no chain written for any position)
+
+===========================================================
+Probe complete.

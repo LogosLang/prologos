@@ -41,7 +41,11 @@
          "../elab-speculation-bridge.rkt"
          ;; PPN 4C Phase 3C.b.4 (2026-05-23): derivation-chain struct
          ;; accessors for threshold-fire-fn unit tests (T-C.b.4-*).
-         "../error-explanation.rkt")
+         "../error-explanation.rkt"
+         ;; PPN 4C Phase 3C.d.3 (2026-05-24): srcloc struct constructor +
+         ;; current-source-loc parameter for synthetic-E2E srcloc tests
+         ;; (per (β.3.i) post-empirical decision at §9.5.5.13).
+         "../source-location.rkt")
 
 ;; Local bot value (matches the local classify-inhabit-bot-value in
 ;; typing-propagators.rkt:349 — not exported).
@@ -817,3 +821,98 @@
     (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
     (check-false (hash-has-key? cell-19-val position)
                  "cell-19 has NO chain entry — both branches succeeded, no all-contradict")))
+
+;; ========================================
+;; Phase 3C.d — synthetic-E2E srcloc tests (PPN 4C 3C.d.3 per (β.3.i), 2026-05-24)
+;; ========================================
+;;
+;; Per addendum §9.5.5.13 — empirical probe at
+;; data/probes/2026-05-24-3C-d-3-w1-empirical-{probe.rkt,output.txt} FLIPPED
+;; the pre-empirical (β.3.ii) leaning to (β.3.i) parameterize-wrap fixture
+;; variant. Two complementary tests cover the synthetic-E2E srcloc dispatch
+;; chain through process-fork-on-union → propagator-struct → static-reverse-
+;; walk → derivation-step:
+;;
+;;   /srcloc-empirical-baseline       — no current-source-loc parameterize;
+;;                                      asserts all chain steps srcloc=#f.
+;;                                      Regression catch for the no-parameterize
+;;                                      default reality per Scenario A.
+;;
+;;   /srcloc-presence-via-parameterize — wrapped in (parameterize ([current-
+;;                                      source-loc test-loc]) ...); asserts
+;;                                      all chain steps srcloc=test-loc.
+;;                                      Tests W1 dispatch-chain coherence
+;;                                      end-to-end per Scenario B empirical
+;;                                      confirmation.
+;;
+;; HONEST SCOPE per §9.5.5.13.4:
+;;   IN SCOPE  — W1 dispatch-chain coherence (test bound is synthetic; real
+;;     multi-propagator dispatch through 3 install-fn calls in process-fork-
+;;     on-union). Catches future regressions where stratum handlers or
+;;     scheduler refactors bypass W1 default.
+;;   OUT OF SCOPE — production surf-node srcloc threading via process-command.
+;;     Production sexp annotated unions go through sexp translator
+;;     (derivation-chain-for/union-check at error-explanation.rkt:391+) which
+;;     hardcodes srcloc=#f BY DESIGN (D-3C.c-1); chains are also empty for
+;;     atomic cases. Production-path testing is Phase 11b scope (gated on
+;;     sexp translator retirement / Track 4D unification).
+;;
+;; CROSS-REFERENCE:
+;;   - 3C.d.1 W1 unit tests (tests/test-source-loc-infrastructure.rkt:164-211)
+;;     cover the install-fn SIGNATURES (3 net-add-propagator family functions).
+;;   - These tests cover the COMPOSED DISPATCH through process-fork-on-union;
+;;     distinct, non-redundant coverage over 3C.d.1 unit level.
+;;   - /non-union-no-chain integration (KR-3 boundary) lives in
+;;     tests/test-provenance-errors.rkt Suite 9 with cross-reference comment.
+;;
+;; D-3C.d-5 mitigation (axis non-discriminating concern): the parameterize-
+;; wrap test discriminates against REGRESSION — if a future refactor of
+;; process-fork-on-union, scheduler-state-propagator install, or closure-
+;; capture variant bypasses W1 default, this test catches it. Doesn't
+;; discriminate against Gap B (per-expr-node precision; Phase 11b scope).
+
+(test-case "union-all-contradict-chain/srcloc-empirical-baseline: all chain steps srcloc=#f without parameterize"
+  ;; Mirrors /int-bool-both-fail setup; locks Scenario A baseline per §9.5.5.13.1.
+  ;; PPN 4C 3C.d.3 (β.3.i) — Scenario A regression lock (no parameterize).
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-string "hello")))
+    (define components (list (expr-Int) (expr-Bool)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (define per-branch-chains (hash-ref cell-19-val position #f))
+    (check-true (list? per-branch-chains) "per-branch chain list present")
+    (define all-steps (apply append (map derivation-chain-steps per-branch-chains)))
+    (check-true (positive? (length all-steps)) "≥1 step across per-branch chains")
+    ;; (β.3.i) Scenario A: all steps srcloc=#f (no parameterize → (current-source-loc)=#f)
+    (check-true (andmap (lambda (s) (not (derivation-step-srcloc s))) all-steps)
+                "all chain steps have srcloc=#f (no current-source-loc parameterize)")))
+
+(test-case "union-all-contradict-chain/srcloc-presence-via-parameterize: all chain steps srcloc=test-loc with parameterize"
+  ;; Same setup as /srcloc-empirical-baseline, but wrapped in
+  ;; (parameterize ([current-source-loc test-loc]) ...). Tests W1 dispatch-
+  ;; chain coherence per Scenario B at §9.5.5.13.1.
+  ;; PPN 4C 3C.d.3 (β.3.i) — Scenario B dispatch-chain integration.
+  (define test-loc (srcloc "test.rkt" 1 1 1))
+  (define-values (net tm-cid position) (make-test-fixture))
+  (parameterize ([current-command-atms (box (make-solver-state (make-prop-network)))]
+                 [current-source-loc test-loc])
+    (define net1 (write-classify-inhabit net tm-cid position 'bot (expr-string "hello")))
+    (define components (list (expr-Int) (expr-Bool)))
+    (define request (hasheq 'components components 'tm-cid tm-cid))
+    (define net2 (net-cell-write net1 fork-on-union-request-cell-id
+                                 (hasheq position request)))
+    (define net3 (run-to-quiescence net2))
+    (define cell-19-val (net-cell-read net3 union-derivation-chains-cell-id))
+    (define per-branch-chains (hash-ref cell-19-val position #f))
+    (check-true (list? per-branch-chains) "per-branch chain list present")
+    (define all-steps (apply append (map derivation-chain-steps per-branch-chains)))
+    (check-true (positive? (length all-steps)) "≥1 step across per-branch chains")
+    ;; (β.3.i) Scenario B: W1 dispatch-chain threads parameterized srcloc
+    ;; through process-fork-on-union → propagator-struct → static-reverse-walk
+    ;; → derivation-step end-to-end. Empirical evidence at §9.5.5.13.1.
+    (check-true (andmap (lambda (s) (equal? (derivation-step-srcloc s) test-loc)) all-steps)
+                "all chain steps have srcloc=test-loc (W1 dispatch-chain coherence)")))
