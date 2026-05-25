@@ -25,7 +25,12 @@
          ;; PPN 4C 3C.c.3 (2026-05-24): derivation-chain + derivation-step
          ;; struct accessors for union-exhaustion-error.derivation-chain field
          ;; (post-Q-B.2 flip to (listof derivation-chain) per §9.5.4.4)
-         "../error-explanation.rkt")
+         "../error-explanation.rkt"
+         ;; PPN 4C 3C.c.6 (2026-05-24): cell-19 observability test —
+         ;; net-cell-read for union-derivation-chains-cell-id; elab-cell-read
+         ;; via elab-network-types
+         (only-in "../propagator.rkt" union-derivation-chains-cell-id)
+         (only-in "../elab-network-types.rkt" elab-cell-read))
 
 ;; ========================================
 ;; Test Helpers
@@ -247,6 +252,35 @@
   (check-true (list? chains))
   (check-true (andmap derivation-chain? chains)
               "All chains are derivation-chain structs"))
+
+;; ========================================
+;; PPN 4C Phase 3C.c.6 (2026-05-24): cell-19 observability — sexp check/err
+;; writes cell-19 via direct elab-cell-write per Q-C.1 (f) multi-writer
+;; scaffolding. Verifies the on-network store is populated from the sexp
+;; path (validates D-3C.b.5-6 deployment gap closure).
+;; ========================================
+
+(test-case "3C.c: sexp check/err writes cell-19 for union all-branch-contradict"
+  ;; Use process-string/return-net (3C.b.5.b infrastructure) to inspect the
+  ;; post-elaboration network state. Cell-19 should contain a per-position
+  ;; entry with (listof derivation-chain) for the union-exhaustion scenario.
+  (define-values (_results net)
+    (process-string/return-net "(def x <Nat | Bool> \"hello\")"))
+  (define cell-19-val
+    (elab-cell-read net union-derivation-chains-cell-id))
+  (check-true (hash? cell-19-val) "cell-19 is a hash")
+  ;; The hash should have at least one entry (the union position)
+  (check-true (positive? (hash-count cell-19-val))
+              "cell-19 has at least one entry (sexp check/err wrote it)")
+  ;; The first entry's value should be (listof derivation-chain) — per Q-C.6 shape
+  (define entries (hash->list cell-19-val))
+  (define first-entry-value (cdr (first entries)))
+  (check-true (list? first-entry-value)
+              "cell-19 entry value is a list (per-branch shape per Q-C.6)")
+  (check-true (andmap derivation-chain? first-entry-value)
+              "all entries are derivation-chain structs (3C.a foundation)")
+  (check-equal? (length first-entry-value) 2
+                "binary union → 2 per-branch chains (Nat + Bool)"))
 
 (test-case "GDE-1: context assumption for check command"
   ;; (check expr : Type) should also create a context assumption.
